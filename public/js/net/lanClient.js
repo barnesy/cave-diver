@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=38');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=39');
   }
   return trysteroModulePromise;
 }
@@ -60,6 +60,9 @@ export class LanClient {
     this._p2pLastLeaveDoneAt = 0;
     this._p2pJoinTimer = null;
     this._p2pJoinRetryTimer = null;
+    this._p2pHeartbeatTimer = null;
+    this._p2pLastHostRxAt = 0;
+    this._p2pLastPeerRxAt = new Map();
     this._p2pJoinAcked = false;
     this._p2pPendingJoin = null;
     this._lastRoomSnapshot = null;
@@ -246,9 +249,15 @@ export class LanClient {
       this._p2pJoinTimer = null;
     }
     if (this._p2pJoinRetryTimer) {
-      clearTimeout(this._p2pJoinRetryTimer);
+      clearInterval(this._p2pJoinRetryTimer);
       this._p2pJoinRetryTimer = null;
     }
+    if (this._p2pHeartbeatTimer) {
+      clearInterval(this._p2pHeartbeatTimer);
+      this._p2pHeartbeatTimer = null;
+    }
+    this._p2pLastHostRxAt = 0;
+    this._p2pLastPeerRxAt.clear();
     this._migrating = false;
     this._p2pHostPeerId = null;
     this._p2pSendPkt = null;
@@ -278,6 +287,8 @@ export class LanClient {
     const [sendPkt, onPkt] = trysteroRoom.makeAction('coop');
     this._trysteroRoom = trysteroRoom;
     this._p2pSendPkt = sendPkt;
+    this._p2pLastHostRxAt = Date.now();
+    this._p2pLastPeerRxAt.clear();
 
     const sendJoinToPeer = (peerId) => {
       if (!this._p2pPendingJoin || this._p2pJoinAcked) return;
@@ -296,6 +307,7 @@ export class LanClient {
 
     trysteroRoom.onPeerJoin((peerId) => {
       if (this._p2pGen !== gen || this._trysteroRoom !== trysteroRoom) return;
+      this._p2pLastPeerRxAt.set(peerId, Date.now());
       if (this._p2pHost) {
         try {
           sendPkt({ type: 'host_announce', hostId: this.clientId, code }, peerId);
@@ -307,6 +319,7 @@ export class LanClient {
 
     trysteroRoom.onPeerLeave((peerId) => {
       if (this._p2pGen !== gen || this._trysteroRoom !== trysteroRoom) return;
+      this._p2pLastPeerRxAt.delete(peerId);
       if (this._p2pHost) {
         // Remove dropped/departed diver cleanly once so their slot can be reused on rejoin
         if (this._p2pHost.room.players.has(peerId)) {
@@ -326,12 +339,24 @@ export class LanClient {
         if (!this._p2pHost && !this._manualLeave && this.room && !this._migrating) {
           this._handleHostMigration({ departingHostId: peerId });
         }
-      }, 180);
+      }, 150);
     });
 
     onPkt((data, peerId) => {
       if (this._p2pGen !== gen || this._trysteroRoom !== trysteroRoom) return;
       if (!data || typeof data !== 'object') return;
+      const now = Date.now();
+      this._p2pLastPeerRxAt.set(peerId, now);
+      if (peerId === this._p2pHostPeerId || data.type === 'host_beat') {
+        this._p2pLastHostRxAt = now;
+      }
+
+      if (data.type === 'host_beat') {
+        if (!this._p2pHost && data.hostId && !this._p2pHostPeerId) {
+          this._p2pHostPeerId = data.hostId;
+        }
+        return;
+      }
 
       if (data.type === 'host_handoff') {
         if (this._migrateTimer) {
@@ -349,6 +374,7 @@ export class LanClient {
       if (data.type === 'host_announce') {
         if (!this._p2pHost) {
           this._p2pHostPeerId = data.hostId || peerId;
+          this._p2pLastHostRxAt = now;
           sendJoinToPeer(this._p2pHostPeerId);
         }
         return;
@@ -377,6 +403,7 @@ export class LanClient {
       if (data.type === 'room_joined') {
         this._p2pJoinAcked = true;
         this._p2pHostPeerId = peerId;
+        this._p2pLastHostRxAt = now;
         if (this._p2pJoinTimer) {
           clearTimeout(this._p2pJoinTimer);
           this._p2pJoinTimer = null;
@@ -389,10 +416,58 @@ export class LanClient {
         const hostPlayer = (data.room?.players || []).find((p) => p.isHost);
         if (hostPlayer?.id) {
           this._p2pHostPeerId = hostPlayer.id;
+          this._p2pLastHostRxAt = now;
         }
       }
       this._handleMessage(data);
     });
+
+    // Fast P2P Host beacon & dead-peer / crashed-host watchdog (avoids 15-30s WebRTC ICE wait)
+    this._p2pHeartbeatTimer = setInterval(() => {
+      if (this._p2pGen !== gen || this._trysteroRoom !== trysteroRoom || this._manualLeave) return;
+      const now = Date.now();
+      const peersMap = trysteroRoom.getPeers?.() || {};
+
+      if (this._p2pHost) {
+        try {
+          sendPkt({ type: 'host_beat', hostId: this.clientId, code });
+        } catch {}
+        for (const p of Array.from(this._p2pHost.room.players.values())) {
+          if (p.id === this.clientId) continue;
+          const pc = peersMap[p.id];
+          const silentMs = now - (this._p2pLastPeerRxAt.get(p.id) || now);
+          const pcState = pc?.connectionState || '';
+          const iceState = pc?.iceConnectionState || '';
+          const dead =
+            pcState === 'failed' ||
+            pcState === 'closed' ||
+            iceState === 'failed' ||
+            iceState === 'closed' ||
+            ((pcState === 'disconnected' || iceState === 'disconnected') && silentMs > 2500);
+          if (dead) {
+            this._p2pHost.removePlayer(p.id);
+          }
+        }
+        return;
+      }
+
+      if (this.room && !this._migrating && this._p2pHostPeerId) {
+        const pc = peersMap[this._p2pHostPeerId];
+        const silentMs = now - (this._p2pLastHostRxAt || now);
+        const pcState = pc?.connectionState || '';
+        const iceState = pc?.iceConnectionState || '';
+        const hostLost =
+          pcState === 'failed' ||
+          pcState === 'closed' ||
+          iceState === 'failed' ||
+          iceState === 'closed' ||
+          ((pcState === 'disconnected' || iceState === 'disconnected') && silentMs > 2000) ||
+          silentMs > 4200;
+        if (hostLost) {
+          this._handleHostMigration({ departingHostId: this._p2pHostPeerId });
+        }
+      }
+    }, 1000);
   }
 
   async _p2pCreateRoom(msg, preferredCode = null) {
@@ -532,6 +607,7 @@ export class LanClient {
 
     // Another survivor is promoting in-place on our shared WebRTC mesh — point sends to them
     this._p2pHostPeerId = resolvedNextHost;
+    this._p2pLastHostRxAt = Date.now();
     if (departingHostId) {
       this.peers.delete(departingHostId);
       this._syncPeerAlias();
@@ -619,7 +695,7 @@ export class LanClient {
         }
         this.emit('error', `Room "${cleanCode}" not found or host is offline.`);
       }
-    }, 14000);
+    }, 10500);
   }
 
   _flushOutbox() {

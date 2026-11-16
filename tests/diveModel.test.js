@@ -1109,3 +1109,55 @@ test('P2pRoomCoordinator manages host creation, buddy join, dive start, telemetr
   migrated.destroy();
   coord.destroy();
 });
+
+test('P2pRoomCoordinator deterministic Trystero joinSeq host selection, re-attach, and ghost eviction', () => {
+  const coord = new P2pRoomCoordinator({
+    code: 'TRY1',
+    hostId: 'zzzTrysteroHostId01',
+    hostName: 'Alpha',
+    levelId: 'cenote-el-abismo',
+    maxPlayers: 2,
+  });
+  coord.bindPlayerSender('zzzTrysteroHostId01', () => {});
+
+  const guestReplies = [];
+  const p2 = coord.handleRemoteJoin(
+    { name: 'Beta' },
+    (m) => guestReplies.push(m),
+    'mmmTrysteroGuestId2'
+  );
+  assert.equal(p2, 'mmmTrysteroGuestId2');
+  assert.equal(coord.room.players.size, 2);
+
+  // Re-attaching the same Trystero peerId does not duplicate slots or hit room-full error
+  const dupReplies = [];
+  const p2Again = coord.handleRemoteJoin(
+    { name: 'BetaRenamed' },
+    (m) => dupReplies.push(m),
+    'mmmTrysteroGuestId2'
+  );
+  assert.equal(p2Again, 'mmmTrysteroGuestId2');
+  assert.equal(coord.room.players.size, 2);
+  assert.equal(dupReplies[0].type, 'room_joined');
+
+  // Marking guest disconnected frees seat on next join when room is full
+  coord.markDisconnected('mmmTrysteroGuestId2');
+  const p3Replies = [];
+  const p3 = coord.handleRemoteJoin(
+    { name: 'Gamma' },
+    (m) => p3Replies.push(m),
+    'aaaTrysteroGuestId3'
+  );
+  assert.equal(p3, 'aaaTrysteroGuestId3');
+  assert.equal(coord.room.players.size, 2);
+  assert.equal(p3Replies[0].type, 'room_joined');
+
+  // Even when a later peer has a lexicographically smaller random Trystero ID, joinSeq elects earlier survivor
+  coord.handleMessage('zzzTrysteroHostId01', { type: 'set_max_players', maxPlayers: 3 });
+  coord.handleRemoteJoin({ name: 'BetaBack' }, () => {}, 'zzzLaterTrysteroId4');
+  const snap = coord.exportSnapshot();
+  const chosen = pickNextP2pHostId(snap.players, 'zzzTrysteroHostId01');
+  assert.equal(chosen, 'aaaTrysteroGuestId3');
+
+  coord.destroy();
+});

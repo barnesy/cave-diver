@@ -1292,6 +1292,19 @@ btnLoaderForce?.addEventListener('click', () => lan.startDive(true));
 btnLoaderCancel?.addEventListener('click', () => {
   loadSeq += 1;
   inFlightLoad = null;
+  if (directJoinToDive || pendingAutoJoinCode) {
+    directJoinToDive = false;
+    pendingAutoJoinCode = '';
+    attemptJoinAfterExpire = '';
+    lan.leaveRoom();
+    syncBrowserRoomUrl('');
+    screenLoader.classList.add('done');
+    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+    screenMenu.hidden = false;
+    lanPanel.hidden = false;
+    resetLobbyUiState('Canceled room join.');
+    return;
+  }
   screenLoader.classList.add('done');
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   if (lan.room && lan.isHost()) lan.cancelPrepare();
@@ -2102,6 +2115,10 @@ async function bootGame() {
     screenMenu.hidden = true;
     screenLoader.classList.remove('done');
     setLoaderProgress(22, `Joining co-op dive ${INITIAL_ROOM_CODE}...`);
+    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = false;
+    if (loaderCrewStatusEl) loaderCrewStatusEl.textContent = `Connecting to Room ${INITIAL_ROOM_CODE}...`;
+    if (btnLoaderForce) btnLoaderForce.hidden = true;
+    if (btnLoaderCancel) btnLoaderCancel.hidden = false;
   } else {
     screenLoader.classList.add('done');
   }

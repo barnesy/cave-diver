@@ -1860,3 +1860,64 @@ html, body {
   0% { transform: scale(0.72); opacity: 0.9; }
   100% { transform: scale(1.25); opacity: 0; }
 }
+
+@media (max-width: 720px) {
+  .hud-top-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "obj utils"
+      "buddy buddy";
+    align-items: start;
+    gap: 6px 8px;
+  }
+  .dc-objective {
+    grid-area: obj;
+    max-width: none;
+    min-width: 0;
+    padding: 5px 8px;
+  }
+  .hud-util-btns {
+    grid-area: utils;
+    justify-self: end;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    max-width: 118px;
+    gap: 4px;
+  }
+  .util-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+  .util-btn.util-pill {
+    padding: 0 9px;
+    font-size: 0.72rem;
+    order: 4;
+  }
+  #btn-hud-share {
+    order: 5;
+  }
+  .dc-team-panel {
+    grid-area: buddy;
+    max-width: none;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .mate-card {
+    flex: 1 1 135px;
+    max-width: calc(50% - 3px);
+    min-width: 120px;
+    padding: 4px 6px;
+  }
+  .mate-ekg-row {
+    display: none;
+  }
+  .coop-comms {
+    top: auto;
+    bottom: max(382px, calc(env(safe-area-inset-bottom) + 380px));
+    right: max(8px, env(safe-area-inset-right));
+  }
+}
