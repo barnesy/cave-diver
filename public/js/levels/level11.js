@@ -1,0 +1,220 @@
+import { createLevelTheme } from './themes.js';
+
+/**
+ * Level 11: Pozzo del Merro Shaft — Lazio Vertical Travertine Abyss (Italy)
+ * Steep 96m volcanic-limestone shaft north of Rome featuring sheer wall drops,
+ * eight horizontal hydrothermal vents masquerading as exits, and a razor-tight
+ * hydrothermal slot at 86m before climbing an unlined eastern chimney.
+ */
+export const LEVEL_11 = {
+  id: 'pozzo-del-merro',
+  name: 'Pozzo del Merro Shaft',
+  subtitle: 'Max Depth 96m · Vertical Travertine Shaft · 205m Reel Budget',
+  difficultyRank: 11,
+  tier: 3,
+  description:
+    'Drop straight down Lazio’s monumental travertine sinkhole with zero fixed line. Resist horizontal hydrothermal vents branching off the vertical walls, squeeze through an 86m sulfate slot to the 96m Merro sump, and ascend the blind eastern chimney.',
+  bounds: {
+    xMin: -55,
+    xMax: 430,
+    yMin: -6,
+    yMax: 106,
+  },
+  roughness: 0.48,
+  spawn: { x: 75, y: 2.0 },
+  haloclineY: 28.0,
+  reelMetersPerDiver: 205,
+  hideWaypointCompass: true,
+  turnaroundCheckpointId: 'cp5',
+  ascentSwitchCheckpointId: 'cp7',
+  ascentSwitchDepthM: 25.0,
+  theme: createLevelTheme('lazio-travertine'),
+  openBasins: [
+    { kind: 'entry', xMin: 68, xMax: 82, rimHalf: 5.2, flareAdd: 2.8, lipTilt: 0.3, floorY: 2.6, sunAngle: 1.52 },
+    { kind: 'exit', xMin: 358, xMax: 372, rimHalf: 5.0, flareAdd: 2.6, lipTilt: -0.3, floorY: 2.6, sunAngle: 1.62 },
+  ],
+  segments: [
+    // === MAIN VERTICAL SHAFT & EASTERN CHIMNEY ROUTE (1..15) ===
+    { ax: 75, ay: 0.8, bx: 75, by: 16.0, ra: 5.2, rb: 4.3 },
+    { ax: 75, ay: 16.0, bx: 72, by: 34.0, ra: 4.3, rb: 3.6 },
+    { ax: 72, ay: 34.0, bx: 78, by: 54.0, ra: 3.6, rb: 3.4 },
+    { ax: 78, ay: 54.0, bx: 74, by: 74.0, ra: 3.4, rb: 3.0 },
+    { ax: 74, ay: 74.0, bx: 98, by: 86.0, ra: 2.2, rb: 1.85 },
+    { ax: 98, ay: 86.0, bx: 134, by: 96.0, ra: 2.6, rb: 4.4 },
+    { ax: 134, ay: 96.0, bx: 172, by: 92.0, ra: 4.4, rb: 3.8 },
+    { ax: 172, ay: 92.0, bx: 206, by: 76.0, ra: 3.4, rb: 3.0 },
+    { ax: 206, ay: 76.0, bx: 234, by: 56.0, ra: 2.6, rb: 2.1 },
+    { ax: 234, ay: 56.0, bx: 268, by: 44.0, ra: 2.8, rb: 3.3 },
+    { ax: 268, ay: 44.0, bx: 302, by: 25.0, ra: 3.2, rb: 3.4 },
+    { ax: 302, ay: 25.0, bx: 334, by: 15.0, ra: 2.5, rb: 2.4 },
+    { ax: 334, ay: 15.0, bx: 352, by: 6.2, ra: 3.0, rb: 4.6 },
+    { ax: 352, ay: 6.2, bx: 365, by: 6.0, ra: 4.6, rb: 5.0 },
+    { ax: 365, ay: 6.0, bx: 365, by: 0.6, ra: 5.2, rb: 5.0 },
+
+    // === 8 DECEPTIVE HYDROTHERMAL WALL VENTS ===
+    // 1. West Crater Niche (24m -> 38m)
+    { ax: 74, ay: 24.0, bx: 44, by: 30.0, ra: 2.5, rb: 2.1 },
+    { ax: 44, ay: 30.0, bx: 20, by: 38.0, ra: 2.1, rb: 1.85 },
+    // 2. East Sulfate Alcove (42m -> 38m)
+    { ax: 76, ay: 42.0, bx: 108, by: 44.0, ra: 2.4, rb: 2.0 },
+    { ax: 108, ay: 44.0, bx: 132, by: 38.0, ra: 2.0, rb: 1.85 },
+    // 3. West Fracture Ledge (60m -> 78m)
+    { ax: 76, ay: 60.0, bx: 42, by: 66.0, ra: 2.5, rb: 2.1 },
+    { ax: 42, ay: 66.0, bx: 14, by: 78.0, ra: 2.1, rb: 1.85 },
+    // 4. Deep West Sink (74m -> 95m)
+    { ax: 76, ay: 74.0, bx: 42, by: 86.0, ra: 2.3, rb: 2.0 },
+    { ax: 42, ay: 86.0, bx: 22, by: 95.0, ra: 2.0, rb: 1.85 },
+    // 5. Blind Rising Sulfate Pipe (94m -> 62m)
+    { ax: 152, ay: 94.0, bx: 164, by: 74.0, ra: 2.5, rb: 2.1 },
+    { ax: 164, ay: 74.0, bx: 148, by: 62.0, ra: 2.1, rb: 1.9 },
+    // 6. East Floor Tectonic Pocket (76m -> 92m)
+    { ax: 206, ay: 76.0, bx: 238, by: 86.0, ra: 2.5, rb: 2.0 },
+    { ax: 238, ay: 86.0, bx: 268, by: 92.0, ra: 2.0, rb: 1.85 },
+    // 7. False Lazio Chimney (44m -> 14m)
+    { ax: 268, ay: 44.0, bx: 250, by: 22.0, ra: 2.5, rb: 2.1 },
+    { ax: 250, ay: 22.0, bx: 236, by: 14.0, ra: 2.1, rb: 1.9 },
+    // 8. Ascent Shelf Drop Trap (25m -> 56m)
+    { ax: 302, ay: 25.0, bx: 326, by: 44.0, ra: 2.4, rb: 2.0 },
+    { ax: 326, ay: 44.0, bx: 348, by: 56.0, ra: 2.0, rb: 1.85 },
+  ],
+  guideline: [],
+  checkpoints: [
+    {
+      id: 'cp1',
+      name: 'Pozzo Upper Rim (30m)',
+      x: 73,
+      y: 30.0,
+      radius: 3.8,
+      expectedGas: 'TMX1455',
+      hint: 'Switch to TMX 14/55 [2] and drop a primary reel anchor [E] above the sheer travertine throat.',
+    },
+    {
+      id: 'cp2',
+      name: 'Mid-Shaft Sulfate Bell (52m)',
+      x: 76,
+      y: 52.0,
+      radius: 3.5,
+      expectedGas: 'TMX1455',
+      hint: 'Control your vertical descent rate! Ignore warm side fissures in the travertine walls.',
+    },
+    {
+      id: 'cp3',
+      name: 'Abyssal Funnel Floor (72m)',
+      x: 75,
+      y: 72.0,
+      radius: 3.4,
+      expectedGas: 'TMX1455',
+      hint: 'Pass through the east hydrothermal squeeze at 74m — the left wall drops into a dead sink.',
+    },
+    {
+      id: 'cp4',
+      name: 'Merro Abyss Plunge (92m)',
+      x: 118,
+      y: 92.0,
+      radius: 3.8,
+      expectedGas: 'TMX1455',
+      hint: 'Approaching the 96m ROV basin — monitor helium breathing rate and preserve return thirds.',
+    },
+    {
+      id: 'cp5',
+      name: 'Merro 96m Bedrock Sump',
+      x: 154,
+      y: 94.0,
+      radius: 4.2,
+      expectedGas: 'TMX1455',
+      hint: 'Deepest point (96m)! Turn northeast toward the eastern chimney and keep climbing.',
+    },
+    {
+      id: 'cp6',
+      name: 'Eastern Chimney Squeeze (65m)',
+      x: 222,
+      y: 65.0,
+      radius: 2.8,
+      expectedGas: 'TMX1455',
+      hint: 'Slip steadily up the steep tectonic fissure — mind wall friction during neutral trim.',
+    },
+    {
+      id: 'cp7',
+      name: 'Travertine Switch Ledge (25m)',
+      x: 302,
+      y: 25.0,
+      radius: 3.6,
+      expectedGas: 'EAN32',
+      hint: 'Switch back to EAN32 [1]! Beware the false sink dropping off immediately down-right.',
+    },
+    {
+      id: 'cp8',
+      name: 'Merro East Deco Shelf (6m)',
+      x: 360,
+      y: 6.1,
+      radius: 4.8,
+      expectedGas: 'O2',
+      hint: 'Switch to O2 100% [3] on the 6m travertine ledge and clear your vertical deco ceiling.',
+    },
+  ],
+  zoneLines: [
+    {
+      id: 'zone-lazio-sulfate',
+      xMin: 68,
+      xMax: 82,
+      y: 28.0,
+      color: '#34d399',
+      title: '28m · LATIUM HYDROTHERMAL SULFATE LAYER',
+    },
+    {
+      id: 'zone-merro-tmx',
+      xMin: 66,
+      xMax: 80,
+      y: 30.0,
+      color: '#38bdf8',
+      title: '30m · SHAFT TRIMIX SWITCH (EAN32 → TMX 14/55)',
+    },
+    {
+      id: 'zone-merro-ascent',
+      xMin: 295,
+      xMax: 309,
+      y: 25.0,
+      color: '#38bdf8',
+      title: '25m · ASCENT SWITCH LEDGE (TMX 14/55 → EAN32)',
+    },
+    {
+      id: 'zone-merro-deco',
+      xMin: 352,
+      xMax: 372,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m · TRAVERTINE DECO LEDGE (O2 100%)',
+    },
+  ],
+  depthMarkers: [
+    { y: 33.7, label: '33.7m · EAN32 MOD (O2 TOX BELOW)', color: 'rgba(248, 113, 113, 0.35)' },
+    { y: 70.0, label: '70.0m · DEEP TRAVERTINE FUNNEL', color: 'rgba(52, 211, 153, 0.28)' },
+    { y: 95.0, label: '95.0m · POZZO DEL MERRO SUMP BED', color: 'rgba(248, 113, 113, 0.42)' },
+  ],
+  parTimeSec: 430,
+  collectibles: [
+    // Main shaft & chimney targets
+    { id: 'l11-rov-tether', name: '1999 Prometeo ROV Sample Tag', kind: 'survey', scale: 0.88, points: 225, x: 74.0, y: 20.0 },
+    { id: 'l11-sulfur-crust', name: 'Volcanic Travertine Sulfur Cluster', kind: 'crystal', scale: 0.94, points: 250, x: 75.0, y: 44.0 },
+    { id: 'l11-slot-arrow', name: '86m Hydrothermal Slot Arrow', kind: 'survey', scale: 0.92, points: 275, x: 86.0, y: 80.0 },
+    { id: 'l11-merro-probe', name: '96m Abyssal Bathymetry Core', kind: 'fossil', scale: 1.1, points: 350, x: 134.0, y: 95.0 },
+    { id: 'l11-chimney-marker', name: 'Lazio Karst Expedition Disk', kind: 'survey', scale: 0.92, points: 250, x: 189.0, y: 84.0 },
+    { id: 'l11-roman-seal', name: 'Sabine Hills Travertine Seal', kind: 'relic', scale: 0.96, points: 275, x: 285.0, y: 34.5 },
+    { id: 'l11-rim-quartz', name: 'Apuan Spring Opalized Shard', kind: 'crystal', scale: 0.94, points: 250, x: 343.0, y: 10.6 },
+    // 8 Deceptive vent treasures
+    { id: 'l11-west-bronze', name: 'Etruscan Votive Bronze Finial', kind: 'relic', scale: 1.46, points: 540, x: 20.0, y: 38.0 },
+    { id: 'l11-east-pyrite', name: 'Hydrothermal Marcasite Sun', kind: 'crystal', scale: 1.46, points: 550, x: 132.0, y: 38.0 },
+    { id: 'l11-fracture-skull', name: 'Pleistocene Cave Bear Tooth Bed', kind: 'fossil', scale: 1.54, points: 625, x: 14.0, y: 78.0 },
+    { id: 'l11-deep-sink-orb', name: '95m Basalt Obsidian Sphere', kind: 'crystal', scale: 1.72, points: 825, x: 22.0, y: 95.0 },
+    { id: 'l11-pipe-chalcedony', name: 'Lazio Blue Chalcedony Pipe', kind: 'crystal', scale: 1.54, points: 640, x: 148.0, y: 62.0 },
+    { id: 'l11-tectonic-bell', name: 'Sabine Hydrophone Brass Housing', kind: 'relic', scale: 1.78, points: 925, x: 268.0, y: 92.0 },
+    { id: 'l11-chimney-urn', name: 'Ancient Roman Villa Marble Plaque', kind: 'relic', scale: 1.50, points: 580, x: 236.0, y: 14.0 },
+    { id: 'l11-trap-coral', name: 'Fossilized Sulfate Stromatolite', kind: 'fossil', scale: 1.52, points: 600, x: 348.0, y: 56.0 },
+  ],
+  exitZone: {
+    name: 'Pozzo East Spring Pool',
+    x: 365,
+    y: 1.5,
+    radius: 4.8,
+  },
+};

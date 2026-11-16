@@ -1,0 +1,222 @@
+import { createLevelTheme } from './themes.js';
+
+/**
+ * Level 10: Émergence du Ressel — Quercy Phreatic Maze (Lot River, France)
+ * First upper-tier unlined French sump dive down to 88m.
+ * Zero pre-laid guideline: divers navigate two converging phreatic conduits,
+ * a tight 72m Quercy chalk restriction, and 8 misleading side galleries with reel budgets.
+ */
+export const LEVEL_10 = {
+  id: 'emergence-du-ressel',
+  name: 'Émergence du Ressel',
+  subtitle: 'Max Depth 88m · Unlined Phreatic Maze · 210m Reel Budget',
+  difficultyRank: 10,
+  tier: 4,
+  description:
+    'Enter the Célé Valley karst spring with zero fixed line. Thread twin chalk-stained phreatic galleries to the 88m Lac Isler sump, deploy reel arrows at dark junctions, and return before your Trimix thirds expire.',
+  bounds: {
+    xMin: -40,
+    xMax: 520,
+    yMin: -6,
+    yMax: 98,
+  },
+  roughness: 0.48,
+  spawn: { x: 14, y: 2.0 },
+  haloclineY: 20.0,
+  reelMetersPerDiver: 210,
+  hideWaypointCompass: true,
+  turnaroundCheckpointId: 'cp5',
+  ascentSwitchCheckpointId: 'cp7',
+  ascentSwitchDepthM: 24.0,
+  theme: createLevelTheme('ressel-cele'),
+  openBasins: [
+    { kind: 'entry', xMin: 8, xMax: 20, rimHalf: 5.0, flareAdd: 2.6, lipTilt: 0.3, floorY: 2.8, sunAngle: 1.48 },
+    { kind: 'exit', xMin: 465, xMax: 479, rimHalf: 5.0, flareAdd: 2.6, lipTilt: -0.3, floorY: 2.8, sunAngle: 1.66 },
+  ],
+  segments: [
+    // === MAIN UNLINED PHREATIC ROUTE (1..18) ===
+    { ax: 14, ay: 0.8, bx: 14, by: 12.0, ra: 5.2, rb: 3.8 },
+    { ax: 14, ay: 12.0, bx: 42, by: 22.0, ra: 3.8, rb: 3.4 },
+    { ax: 42, ay: 22.0, bx: 78, by: 32.0, ra: 3.4, rb: 3.2 },
+    { ax: 78, ay: 32.0, bx: 112, by: 46.0, ra: 3.2, rb: 3.8 },
+    { ax: 112, ay: 46.0, bx: 138, by: 42.0, ra: 2.2, rb: 1.85 },
+    { ax: 138, ay: 42.0, bx: 170, by: 58.0, ra: 2.1, rb: 3.4 },
+    { ax: 170, ay: 58.0, bx: 202, by: 74.0, ra: 3.2, rb: 2.7 },
+    { ax: 202, ay: 74.0, bx: 226, by: 72.0, ra: 1.95, rb: 1.9 },
+    { ax: 226, ay: 72.0, bx: 256, by: 88.0, ra: 2.6, rb: 4.3 },
+    { ax: 256, ay: 88.0, bx: 288, by: 86.0, ra: 4.3, rb: 3.8 },
+    { ax: 288, ay: 86.0, bx: 318, by: 64.0, ra: 3.6, rb: 3.2 },
+    { ax: 318, ay: 64.0, bx: 346, by: 48.0, ra: 3.2, rb: 3.0 },
+    { ax: 346, ay: 48.0, bx: 376, by: 36.0, ra: 2.2, rb: 1.95 },
+    { ax: 376, ay: 36.0, bx: 404, by: 24.0, ra: 2.8, rb: 3.2 },
+    { ax: 404, ay: 24.0, bx: 436, by: 16.0, ra: 3.0, rb: 2.7 },
+    { ax: 436, ay: 16.0, bx: 458, by: 6.2, ra: 2.8, rb: 4.6 },
+    { ax: 458, ay: 6.2, bx: 472, by: 6.0, ra: 4.6, rb: 5.0 },
+    { ax: 472, ay: 6.0, bx: 472, by: 0.6, ra: 5.2, rb: 5.0 },
+
+    // === 8 DECEPTIVE UNLINED QUERCY CHUTES ===
+    // 1. North Gallery false bypass
+    { ax: 42, ay: 22.0, bx: 30, by: 34.0, ra: 2.5, rb: 2.1 },
+    { ax: 30, ay: 34.0, bx: 18, by: 42.0, ra: 2.1, rb: 1.85 },
+    // 2. Shallow shelf cul-de-sac
+    { ax: 78, ay: 32.0, bx: 94, by: 18.0, ra: 2.4, rb: 2.0 },
+    { ax: 94, ay: 18.0, bx: 116, by: 22.0, ra: 2.0, rb: 1.9 },
+    // 3. Lower Célé blind sump
+    { ax: 112, ay: 46.0, bx: 96, by: 64.0, ra: 2.6, rb: 2.1 },
+    { ax: 96, ay: 64.0, bx: 82, by: 74.0, ra: 2.1, rb: 1.9 },
+    // 4. Ressel Bell Dome dead-end
+    { ax: 170, ay: 58.0, bx: 156, by: 34.0, ra: 2.5, rb: 2.1 },
+    { ax: 156, ay: 34.0, bx: 144, by: 24.0, ra: 2.1, rb: 1.9 },
+    // 5. Puits Terminal false floor
+    { ax: 202, ay: 74.0, bx: 182, by: 86.0, ra: 2.4, rb: 2.0 },
+    { ax: 182, ay: 86.0, bx: 164, by: 90.0, ra: 2.0, rb: 1.85 },
+    // 6. East blind sump annex
+    { ax: 288, ay: 86.0, bx: 314, by: 92.0, ra: 2.7, rb: 2.2 },
+    { ax: 314, ay: 92.0, bx: 336, by: 88.0, ra: 2.2, rb: 1.95 },
+    // 7. Descending Stairwell Trap
+    { ax: 346, ay: 48.0, bx: 366, by: 66.0, ra: 2.5, rb: 2.1 },
+    { ax: 366, ay: 66.0, bx: 382, by: 72.0, ra: 2.1, rb: 1.9 },
+    // 8. False resurgence siphon
+    { ax: 436, ay: 16.0, bx: 426, by: 34.0, ra: 2.3, rb: 1.95 },
+    { ax: 426, ay: 34.0, bx: 446, by: 42.0, ra: 1.95, rb: 1.8 },
+  ],
+  guideline: [],
+  checkpoints: [
+    {
+      id: 'cp1',
+      name: 'Célé Conduit Entrance (22m)',
+      x: 42,
+      y: 22.0,
+      radius: 3.6,
+      expectedGas: 'EAN32',
+      hint: 'Pin your primary reel [E] at the main Quercy arch before passing the first junction.',
+    },
+    {
+      id: 'cp2',
+      name: 'Phreatic Switch Sill (32m)',
+      x: 78,
+      y: 32.0,
+      radius: 3.4,
+      expectedGas: 'TMX1455',
+      hint: 'Switch to TMX 14/55 [2]! Shallow EAN32 exceeds safe MOD right beyond this drop.',
+    },
+    {
+      id: 'cp3',
+      name: 'Conduit Convergence (46m)',
+      x: 112,
+      y: 46.0,
+      radius: 3.8,
+      expectedGas: 'TMX1455',
+      hint: 'Avoid the deep sump drop left — slip cleanly through the upper chalk squeeze right.',
+    },
+    {
+      id: 'cp4',
+      name: 'Puits Terminal Threshold (74m)',
+      x: 202,
+      y: 74.0,
+      radius: 3.2,
+      expectedGas: 'TMX1455',
+      hint: 'Tight 72m Quercy squeeze ahead — keep low reel tension and mind silt spikes.',
+    },
+    {
+      id: 'cp5',
+      name: 'Lac Isler Sump (88m)',
+      x: 272,
+      y: 87.0,
+      radius: 4.2,
+      expectedGas: 'TMX1455',
+      hint: '88m turnaround! Verify TMX thirds and follow your own reel markers diagonally up-east.',
+    },
+    {
+      id: 'cp6',
+      name: 'Stairwell Junction (48m)',
+      x: 346,
+      y: 48.0,
+      radius: 3.2,
+      expectedGas: 'TMX1455',
+      hint: 'Climb through the chalk bed restriction diagonally up-right toward the 24m sill.',
+    },
+    {
+      id: 'cp7',
+      name: 'Ascent Switch Gallery (24m)',
+      x: 404,
+      y: 24.0,
+      radius: 3.4,
+      expectedGas: 'EAN32',
+      hint: 'Switch back to EAN32 [1]! Offgas Helium steadily across the Lot dissolution tube.',
+    },
+    {
+      id: 'cp8',
+      name: 'Lot Resurgence Deco Bench (6m)',
+      x: 466,
+      y: 6.1,
+      radius: 4.8,
+      expectedGas: 'O2',
+      hint: 'Hold 6m on O2 100% [3] until mandatory deep decompression obligations clear.',
+    },
+  ],
+  zoneLines: [
+    {
+      id: 'zone-quercy-halo',
+      xMin: 8,
+      xMax: 20,
+      y: 20.0,
+      color: '#2dd4bf',
+      title: '20m · QUERCY CHALK THERMOCLINE',
+    },
+    {
+      id: 'zone-ressel-tmx',
+      xMin: 71,
+      xMax: 85,
+      y: 32.0,
+      color: '#38bdf8',
+      title: '32m · TRIMIX SWITCH ZONE (EAN32 → TMX 14/55)',
+    },
+    {
+      id: 'zone-ressel-ascent',
+      xMin: 397,
+      xMax: 411,
+      y: 24.0,
+      color: '#38bdf8',
+      title: '24m · ASCENT GAS SWITCH (TMX 14/55 → EAN32)',
+    },
+    {
+      id: 'zone-ressel-deco',
+      xMin: 458,
+      xMax: 478,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m · LOT EMERGENCE DECO SHELF (O2 100%)',
+    },
+  ],
+  depthMarkers: [
+    { y: 33.7, label: '33.7m · EAN32 MOD (O2 TOX BELOW)', color: 'rgba(248, 113, 113, 0.34)' },
+    { y: 65.0, label: '65.0m · QUERCY PHREATIC ABYSS', color: 'rgba(45, 212, 191, 0.28)' },
+    { y: 88.0, label: '88.0m · LAC ISLER SUMP FLOOR', color: 'rgba(248, 113, 113, 0.40)' },
+  ],
+  parTimeSec: 420,
+  collectibles: [
+    // Main-route targets
+    { id: 'l10-cele-cookie', name: '1988 Célé Brass Line Cookie', kind: 'survey', scale: 0.85, points: 200, x: 28.0, y: 17.0 },
+    { id: 'l10-ammonite', name: 'Jurassic Chalk Ammonite Cast', kind: 'fossil', scale: 0.94, points: 240, x: 95.0, y: 39.0 },
+    { id: 'l10-dome-marker', name: 'Ressel Dome Depth Plaque', kind: 'survey', scale: 0.92, points: 250, x: 186.0, y: 66.0 },
+    { id: 'l10-isler-core', name: '88m Lac Isler Calcite Geode', kind: 'crystal', scale: 1.08, points: 325, x: 256.0, y: 88.0 },
+    { id: 'l10-fault-tag', name: 'East Fault Copper Arrow', kind: 'survey', scale: 0.92, points: 250, x: 303.0, y: 75.0 },
+    { id: 'l10-lot-seal', name: 'Quercy Stone Mill Emblem', kind: 'relic', scale: 0.96, points: 275, x: 420.0, y: 20.0 },
+    // 8 Deceptive blind-spur treasures
+    { id: 'l10-north-vase', name: 'Gallo-Roman Resurgence Amphora', kind: 'relic', scale: 1.44, points: 525, x: 18.0, y: 42.0 },
+    { id: 'l10-calcite-blade', name: 'Translucent Phreatic Calcite Blade', kind: 'crystal', scale: 1.46, points: 540, x: 116.0, y: 22.0 },
+    { id: 'l10-deep-reel', name: 'Vintage Hasenmayer Titanium Reel', kind: 'relic', scale: 1.54, points: 625, x: 82.0, y: 74.0 },
+    { id: 'l10-bell-fossil', name: 'Cretaceous Nautilus Phragmocone', kind: 'fossil', scale: 1.48, points: 560, x: 144.0, y: 24.0 },
+    { id: 'l10-terminal-crown', name: '90m Quercy Barite Cluster', kind: 'crystal', scale: 1.68, points: 775, x: 164.0, y: 90.0 },
+    { id: 'l10-sump-bell', name: 'Lac Isler Bronze Dive Bell', kind: 'relic', scale: 1.78, points: 925, x: 336.0, y: 88.0 },
+    { id: 'l10-trap-amber', name: 'Karst Vein Honey Onyx Shard', kind: 'crystal', scale: 1.56, points: 650, x: 382.0, y: 72.0 },
+    { id: 'l10-siphon-orb', name: 'Siphon Dolomite Mirror Geode', kind: 'crystal', scale: 1.44, points: 525, x: 446.0, y: 42.0 },
+  ],
+  exitZone: {
+    name: 'Lot River Emergence Pool',
+    x: 472,
+    y: 1.5,
+    radius: 4.8,
+  },
+};

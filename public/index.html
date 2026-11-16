@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cave Diver" />
+  <meta name="theme-color" content="#020b14" />
+  <title>Cave Diver · Technical Trimix Simulation</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
+  <link rel="stylesheet" href="./css/style.css?v=31" />
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- On-Demand Cave Geometry & Co-op Sync Loader Screen -->
+  <section id="screen-loader" class="loader-screen done" aria-live="polite" aria-label="Loading Game">
+    <div class="loader-card">
+      <div class="loader-sonar" aria-hidden="true">
+        <div class="sonar-ring outer"></div>
+        <div class="sonar-ring inner"></div>
+        <div class="sonar-sweep"></div>
+        <div class="sonar-core"></div>
+      </div>
+      <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
+      <h1 class="loader-title">CENOTE EL ABISMO</h1>
+      <p id="loader-step" class="loader-step">Initializing cave geometry engine...</p>
+      <div class="loader-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="loader-bar-track">
+        <div id="loader-bar-fill" class="loader-bar-fill"></div>
+      </div>
+      <div class="loader-meta">
+        <span>TRIMIX · 50M OVERHEAD</span>
+        <strong id="loader-pct">0%</strong>
+      </div>
+      <div id="loader-coop-sync" class="loader-coop-sync" hidden>
+        <div id="loader-crew-status" class="loader-crew-status">Syncing dive team...</div>
+        <div class="loader-sync-actions">
+          <button id="btn-loader-force" class="btn tiny primary" type="button" hidden>Force Launch Now</button>
+          <button id="btn-loader-cancel" class="btn tiny ghost" type="button" hidden>Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toast Banner -->
+  <div id="game-toast" class="game-toast" aria-live="polite"></div>
+
+  <!-- Title & LAN Lobby Screen -->
+  <section id="screen-menu" class="overlay-screen">
+    <div class="menu-card">
+      <div class="menu-eyebrow">TECHNICAL CAVE DIVING SIM</div>
+      <h1 class="menu-title">CENOTE EL ABISMO</h1>
+      <p class="menu-desc">
+        Navigate 50m overhead tunnels, manage Trimix &amp; Oxygen limits, avoid silt-outs, and clear your decompression ceiling.
+      </p>
+
+      <div class="gas-briefing" id="gas-briefing">
+        <div class="gas-chip">
+          <span class="chip-name cyan">EAN32</span>
+          <span class="chip-range" id="chip-range-ean32">0–33m Travel</span>
+        </div>
+        <div class="gas-chip">
+          <span class="chip-name purple">TMX 14/55</span>
+          <span class="chip-range" id="chip-range-tmx">3–65m Bottom</span>
+        </div>
+        <div class="gas-chip">
+          <span class="chip-name green">O2 100%</span>
+          <span class="chip-range">0–6m Deco</span>
+        </div>
+      </div>
+
+      <div class="level-picker-block">
+        <div class="level-picker-head">
+          <label for="select-level">Select Expedition Site</label>
+          <span id="campaign-progress-pill" class="campaign-progress-pill">13 / 13 Sites</span>
+          <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
+        </div>
+        <div id="level-cards" class="level-cards" role="listbox" aria-label="Expedition Dive Sites"></div>
+        <select id="select-level" class="sr-only-select" aria-label="Select Dive Site"></select>
+        <div id="inline-level-loader" class="inline-level-loader" hidden>
+          <span id="inline-level-loader-label">Loading dive site...</span>
+          <div class="inline-loader-track"><div id="inline-loader-fill" class="inline-loader-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="menu-name-row">
+        <label for="input-player-name">Diver Callsign</label>
+        <input id="input-player-name" type="text" maxlength="16" value="Diver 1" autocomplete="off" />
+      </div>
+
+      <div class="menu-actions">
+        <button id="btn-play-solo" class="btn primary" type="button" disabled>SOLO DIVE · LEVEL 1</button>
+        <button id="btn-open-lan" class="btn secondary" type="button" disabled>CO-OP DIVE (2–4 DIVERS)</button>
+        <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 INSTALL PHONE APP</button>
+      </div>
+
+      <div id="lan-panel" class="lan-panel" hidden>
+        <div class="lan-url-box">
+          <div class="lan-url-head">
+            <span>Join from phone on same Wi-Fi:</span>
+            <span id="lan-conn-badge" class="lan-conn-badge">○ Connecting...</span>
+          </div>
+          <div id="lan-urls" class="lan-urls">Loading LAN IP...</div>
+        </div>
+
+        <div id="lan-setup-controls">
+          <div class="lan-controls">
+            <div class="lan-create-group">
+              <select id="select-max-players" aria-label="Crew size">
+                <option value="2">2 Divers</option>
+                <option value="3">3 Divers</option>
+                <option value="4">4 Divers</option>
+              </select>
+              <button id="btn-create-room" class="btn accent" type="button">Create Room</button>
+            </div>
+            <div class="lan-join-row">
+              <input id="input-room-code" type="text" maxlength="4" placeholder="CODE" autocomplete="off" />
+              <button id="btn-join-room" class="btn secondary" type="button">Join</button>
+            </div>
+          </div>
+
+          <div id="lan-rooms-section" class="lan-rooms-section" hidden>
+            <div class="lan-rooms-title">ACTIVE ROOMS ON LAN</div>
+            <div id="lan-rooms-list" class="lan-rooms-list"></div>
+          </div>
+        </div>
+
+        <div id="lan-status" class="lan-status">Connect to host or join a buddy's room.</div>
+
+        <div id="lan-room-box" class="lan-room-box" hidden>
+          <div class="room-header">
+            <div class="room-code-block">
+              <span>ROOM CODE</span>
+              <strong id="lan-room-code">----</strong>
+            </div>
+            <div class="room-header-tools">
+              <span id="lan-room-site-pill" class="room-site-pill">L1</span>
+            </div>
+          </div>
+          <div class="room-invite-row">
+            <input
+              id="lan-invite-url"
+              class="room-invite-input"
+              type="text"
+              readonly
+              aria-label="Shareable room invite link"
+              value=""
+            />
+            <button id="btn-copy-invite" class="btn tiny accent" type="button" title="Copy room invite link">Copy Link</button>
+            <button id="btn-share-invite" class="btn tiny secondary" type="button" title="Share room invite link" hidden>Share</button>
+          </div>
+          <ul id="lan-roster" class="lan-roster"></ul>
+          <div class="room-actions">
+            <button id="btn-start-coop" class="btn primary" type="button" hidden>START CO-OP DIVE</button>
+            <button id="btn-ready-toggle" class="btn secondary" type="button" hidden>READY</button>
+            <button id="btn-leave-room" class="btn ghost" type="button">Leave</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-hint">
+        <span><strong>Mobile:</strong> Right thumbstick to swim · Tap tank &amp; reel buttons on Dive Computer</span>
+        <span><strong>Desktop:</strong> WASD / Arrows · 1 / 2 / 3 Gas · L Torch · G Lay Line / R Rewind</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dive Computer HUD & Mobile Controls -->
+  <section id="screen-hud" class="hud-layer" hidden>
+    <!-- Top Objective & Utility Strip -->
+    <div class="hud-top-bar">
+      <div id="dc-objective" class="dc-objective"></div>
+      <div id="dc-buddy" class="dc-team-panel" hidden></div>
+      <div class="hud-util-btns">
+        <button id="btn-torch" class="util-btn" type="button" title="Toggle Torch (L)">🔦</button>
+        <button id="btn-mute" class="util-btn" type="button" title="Mute Audio">🔊</button>
+        <button id="btn-abort" class="util-btn danger" type="button" title="Abort Dive">✕</button>
+      </div>
+    </div>
+
+    <!-- Wrist Dive Computer Bezel -->
+    <aside class="dive-computer" aria-label="Dive Computer">
+      <div id="dc-alerts" class="dc-alerts ok">SYSTEMS NOMINAL</div>
+
+      <div class="dc-primary-grid">
+        <div class="dc-cell">
+          <span class="dc-lbl">DEPTH m</span>
+          <span id="dc-depth" class="dc-val big">0.0</span>
+          <span id="dc-max-depth" class="dc-sub">MAX 0.0m</span>
+        </div>
+
+        <div class="dc-cell">
+          <span id="dc-deco-label" class="dc-lbl">NDL</span>
+          <span id="dc-deco-val" class="dc-val ok">99m</span>
+          <span id="dc-time" class="dc-sub">00:00</span>
+        </div>
+
+        <div class="dc-cell">
+          <span class="dc-lbl">PPO2</span>
+          <span id="dc-ppo2" class="dc-val ok">0.32</span>
+          <span class="dc-sub-pair">
+            <span id="dc-cns" class="dc-subval">0%</span>
+            <span id="dc-end" class="dc-subval">END 0m</span>
+          </span>
+        </div>
+
+        <div class="dc-ascent-col" title="Ascent Pace (Target 9 m/min)">
+          <span class="dc-lbl">PACE</span>
+          <div class="dc-ascent-track">
+            <div class="dc-ascent-target" title="Target 9 m/min"></div>
+            <div class="dc-ascent-limit" title="Max Safe 11 m/min"></div>
+            <div id="dc-ascent-fill" class="dc-ascent-fill ok"></div>
+          </div>
+          <span id="dc-ascent-val" class="dc-subval">0</span>
+        </div>
+      </div>
+
+      <div id="dc-ekg-row" class="dc-ekg-row" aria-label="Heart Rate EKG Monitor">
+        <div class="ekg-meta">
+          <span id="dc-ekg-heart" class="ekg-heart">♥</span>
+          <strong id="dc-ekg-bpm" class="ekg-bpm">68</strong>
+          <span class="ekg-unit">BPM</span>
+        </div>
+        <canvas id="dc-ekg-canvas" class="ekg-canvas" width="210" height="26"></canvas>
+      </div>
+
+      <div id="dc-vitals" class="dc-vitals-row" aria-label="Diver Physiological Status">
+        <div class="dc-vital" id="vital-tox"><span class="v-lbl">O2 TOX</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+        <div class="dc-vital" id="vital-dcs"><span class="v-lbl">DCS</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+        <div class="dc-vital" id="vital-narc"><span class="v-lbl">NARC</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+        <div class="dc-vital" id="vital-hyp"><span class="v-lbl">HYPOX</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+      </div>
+
+      <div id="dc-gas-rack" class="dc-gas-rack"></div>
+    </aside>
+
+    <!-- Deployable Guideline Spool Controls (Unlined Labyrinth Levels) -->
+    <div id="hud-reel-dock" class="hud-reel-dock" hidden aria-label="Guideline Spool Controls">
+      <div class="reel-dock-status">
+        <span class="reel-dot" aria-hidden="true"></span>
+        <span class="reel-tag">GUIDELINE REEL</span>
+        <strong id="dc-reel-meters">155m / 155m</strong>
+      </div>
+      <div class="reel-btns">
+        <button id="btn-reel-toggle" class="reel-btn" type="button" title="Deploy or Terminate Guideline (G)">[G] DEPLOY LINE</button>
+        <button id="btn-reel-rewind" class="reel-btn ghost" type="button" title="Rewind Last Segment (R)">[R] REWIND ↩</button>
+      </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="touch-stick" class="touch-stick" aria-label="Swim Joystick">
+      <div class="touch-ring"></div>
+      <div id="touch-knob" class="touch-knob"></div>
+    </div>
+
+    <!-- Co-op Quick Hand Signals & Surface/Spectate Sync Banner -->
+    <div id="coop-comms" class="coop-comms" hidden aria-label="Diver Hand Signals">
+      <button type="button" class="comm-btn" data-signal="OK 👌">👌 OK</button>
+      <button type="button" class="comm-btn" data-signal="HOLD UP ✋">✋ HOLD</button>
+      <button type="button" class="comm-btn" data-signal="LOW GAS ⛽">⛽ GAS</button>
+      <button type="button" class="comm-btn" data-signal="FOLLOW ME 👉">👉 GO</button>
+    </div>
+
+    <div id="coop-wait-banner" class="coop-wait-banner" hidden>
+      <div class="coop-wait-info">
+        <strong id="coop-wait-title">SURFACED SAFE</strong>
+        <span id="coop-wait-detail">Waiting for buddy to clear cave...</span>
+      </div>
+      <div class="coop-wait-actions">
+        <button id="btn-coop-spectate" class="btn tiny secondary" type="button">Watch Buddy</button>
+        <button id="btn-coop-finish-now" class="btn tiny primary" type="button">Finish Now</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Post-Dive Animated Debrief -->
+  <section id="screen-debrief" class="overlay-screen debrief-overlay" hidden>
+    <div class="menu-card debrief-card">
+      <div class="debrief-header">
+        <div>
+          <div id="debrief-badge" class="debrief-badge">DIVE COMPLETE</div>
+          <h2 id="debrief-title" class="debrief-title">Summary</h2>
+        </div>
+        <div id="debrief-grade" class="debrief-grade-seal">S</div>
+      </div>
+      <p id="debrief-detail" class="menu-desc"></p>
+
+      <div class="debrief-hero">
+        <div class="debrief-score-block">
+          <span id="debrief-score-label" class="debrief-score-label">EXPEDITION SCORE</span>
+          <strong id="debrief-total-score" class="debrief-total-score">0</strong>
+          <span id="debrief-best" class="debrief-best"></span>
+        </div>
+        <div id="debrief-breakdown" class="debrief-breakdown"></div>
+      </div>
+
+      <div id="debrief-team" class="debrief-team" hidden></div>
+      <div id="debrief-artifacts" class="debrief-artifacts"></div>
+      <div id="debrief-stats" class="debrief-stats"></div>
+
+      <div class="menu-actions">
+        <button id="btn-retry" class="btn primary" type="button">DIVE AGAIN</button>
+        <button id="btn-menu" class="btn secondary" type="button">MAIN MENU</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="./js/vendor/peerjs.min.js?v=31"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=31",
+        "./js/game/audio.js": "./js/game/audio.js?v=31",
+        "./js/game/collision.js": "./js/game/collision.js?v=31",
+        "./js/game/input.js": "./js/game/input.js?v=31",
+        "./js/game/hud.js": "./js/game/hud.js?v=31",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=31",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=31",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=31",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=31",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=31",
+        "./js/game/silt.js": "./js/game/silt.js?v=31",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=31",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=31",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=31",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=31",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=31",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=31",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=31",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=31",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=31",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=31",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=31",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=31",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=31",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=31",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=31",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=31",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=31",
+        "./js/levels/index.js": "./js/levels/index.js?v=31",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=31",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=31"
+      }
+    }
+  </script>
+  <script type="module" src="./js/main.js?v=31"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "cave-diver",
+  "version": "0.1.0",
+  "description": "Mobile-first technical cave diving game with realistic gas physics, dive computer HUD, and LAN multiplayer support.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

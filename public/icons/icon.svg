@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="74%">
+      <stop offset="0%" stop-color="#0b4668"/>
+      <stop offset="56%" stop-color="#04192b"/>
+      <stop offset="100%" stop-color="#020b14"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="gauge-clip">
+      <circle cx="256" cy="256" r="189"/>
+    </clipPath>
+  </defs>
+  <!-- Full-bleed dark ocean background so iOS/Android icon masks have zero corner artifacts -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- Clipped Cave Interior -->
+  <g clip-path="url(#gauge-clip)">
+    <path d="M40 176 Q140 122 252 146 T472 172 L472 56 L40 56 Z" fill="#050e17" opacity="0.88"/>
+    <path d="M40 348 Q162 392 278 362 T472 332 L472 460 L40 460 Z" fill="#050e17" opacity="0.92"/>
+    <circle cx="256" cy="256" r="154" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="14 14" opacity="0.45"/>
+    <!-- Torch Beam -->
+    <polygon points="292,248 452,188 452,320" fill="url(#beam)"/>
+    <!-- Guideline + Cookie -->
+    <path d="M84 304 Q190 272 288 262" fill="none" stroke="#facc15" stroke-width="6.5" stroke-linecap="round"/>
+    <circle cx="144" cy="288" r="9.5" fill="#fbbf24"/>
+    <!-- Diver Silhouette -->
+    <g transform="translate(232 252) rotate(-8)">
+      <path d="M-86 14 L-126 27 L-122 8 Z" fill="#0ea5e9"/>
+      <path d="M-86 4 L-124 -7 L-117 -19 Z" fill="#38bdf8"/>
+      <rect x="-86" y="-8" width="96" height="26" rx="13" fill="#0f172a" stroke="#38bdf8" stroke-width="3.5"/>
+      <rect x="-54" y="-26" width="52" height="16" rx="8" fill="#cbd5e1"/>
+      <circle cx="-4" cy="-18" r="5" fill="#fbbf24"/>
+      <circle cx="26" cy="2" r="18" fill="#0f172a" stroke="#38bdf8" stroke-width="3.5"/>
+      <rect x="26" y="-8" width="16" height="14" rx="4" fill="#bae6fd"/>
+      <rect x="38" y="14" width="22" height="10" rx="3" fill="#fbbf24"/>
+    </g>
+  </g>
+  <!-- Outer Dive Computer Sonar Ring -->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="url(#ring)" stroke-width="14" opacity="0.94"/>
+  <!-- Depth Gauge Ticks -->
+  <circle cx="256" cy="60" r="8" fill="#38bdf8"/>
+  <circle cx="452" cy="256" r="8" fill="#fbbf24"/>
+  <circle cx="256" cy="452" r="8" fill="#4ade80"/>
+  <circle cx="60" cy="256" r="8" fill="#38bdf8"/>
+</svg>
