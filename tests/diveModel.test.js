@@ -1083,5 +1083,14 @@ test('P2pRoomCoordinator manages host creation, buddy join, dive start, telemetr
   assert.ok(rejoinedDive && rejoinedDive.rejoined === true);
   assert.equal(rejoinedDive.bodyRecoveredBy, guestId);
 
+  // Late drop-in join after dive already started (with maxPlayers: 3) drops straight into dive!
+  coord.handleMessage(coord.hostId, { type: 'set_max_players', maxPlayers: 3 });
+  const lateMsgs = [];
+  const lateId = coord.handleRemoteJoin({ name: 'DropInThree' }, (m) => lateMsgs.push(m));
+  assert.ok(lateId);
+  const lateDive = lateMsgs.find((m) => m.type === 'dive_started');
+  assert.ok(lateDive && lateDive.lateJoin === true && lateDive.rejoined === true);
+  assert.equal(lateDive.bodyRecoveredBy, guestId);
+
   coord.destroy();
 });

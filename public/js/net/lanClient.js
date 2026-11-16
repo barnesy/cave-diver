@@ -588,6 +588,9 @@ export class LanClient {
           }
           this._syncPeerAlias();
           this.emit('room_update', msg.room);
+          if (msg.joinedMidDiveName) {
+            this.emit('peer_joined_mid_dive', msg.joinedMidDiveName);
+          }
           break;
         }
         case 'dive_preparing':

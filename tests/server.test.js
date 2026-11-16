@@ -141,13 +141,32 @@ test('LAN server serves app, reports LAN URLs, and relays 2-player room state', 
     assert.equal(relayedSilt.plume.x, 40);
     assert.equal(relayedSilt.plume.y, 20);
 
-    // 3. Reject fresh join into an active dive, allow rejoin via reconnectToken
+    // 3. Staggered mid-dive drop-in succeeds when slots remain, and rejects when full (plus rejoin via reconnectToken)
     const ws3 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     await nextMsg(ws3, 'welcome');
-    const busyErrPromise = nextMsg(ws3, 'error');
+    const ws3JoinedP = nextMsg(ws3, 'room_joined');
+    const ws3DiveP = nextMsg(ws3, 'dive_started');
+    const hostMidNotifyP = nextMsg(ws1, 'room_update');
     ws3.send(JSON.stringify({ type: 'join_room', code: created.room.code, name: 'Latecomer' }));
-    const busyErr = await busyErrPromise;
-    assert.ok(busyErr.message.includes('already underway'));
+    const [ws3Joined, ws3Dive, hostMidNotify] = await Promise.all([ws3JoinedP, ws3DiveP, hostMidNotifyP]);
+    assert.equal(ws3Joined.room.players.length, 3);
+    assert.equal(ws3Dive.lateJoin, true);
+    assert.ok(ws3Dive.collectibles.includes('l1-jade'));
+    assert.equal(hostMidNotify.joinedMidDiveName, 'Latecomer');
+
+    // Full 3/3 room rejects 4th diver
+    const ws4 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await nextMsg(ws4, 'welcome');
+    const fullErrP = nextMsg(ws4, 'error');
+    ws4.send(JSON.stringify({ type: 'join_room', code: created.room.code, name: 'Fourth' }));
+    const fullErr = await fullErrP;
+    assert.ok(fullErr.message.includes('already has 3 divers'));
+    ws4.close();
+
+    // Latecomer leaves explicitly before rejoin/prepare tests
+    const afterLateLeaveP = nextMsg(ws1, 'room_update');
+    ws3.send(JSON.stringify({ type: 'leave_room' }));
+    await afterLateLeaveP;
 
     // Simulate ws2 mid-dive drop + seamless rejoin_room
     ws2.close();

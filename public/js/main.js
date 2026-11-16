@@ -922,13 +922,13 @@ function updateOpenLanButtonBadge(rooms = lan.rooms) {
     return;
   }
   const openRooms = Array.isArray(rooms)
-    ? rooms.filter((r) => !r.started && r.playerCount < r.maxPlayers)
+    ? rooms.filter((r) => r.playerCount < r.maxPlayers)
     : [];
   if (openRooms.length > 0) {
-    btnOpenLan.textContent = `LAN CO-OP · ${openRooms.length} OPEN ROOM${openRooms.length > 1 ? 'S' : ''}`;
+    btnOpenLan.textContent = `CO-OP · ${openRooms.length} OPEN ROOM${openRooms.length > 1 ? 'S' : ''}`;
     btnOpenLan.classList.add('has-rooms');
   } else {
-    btnOpenLan.textContent = 'LAN CO-OP (2–4 DIVERS)';
+    btnOpenLan.textContent = 'CO-OP DIVE (2–4 DIVERS)';
     btnOpenLan.classList.remove('has-rooms');
   }
 }
@@ -947,8 +947,12 @@ function renderRoomsList(rooms = lan.rooms) {
       const lvl = getLevelById(r.levelId);
       const lvlIdx = LEVELS.findIndex((l) => l.id === lvl.id) + 1;
       const full = r.playerCount >= r.maxPlayers;
-      const busy = r.started || full;
-      const stateText = r.started ? 'In Dive' : full ? 'Full' : `${r.playerCount}/${r.maxPlayers} Divers`;
+      const busy = full;
+      const stateText = full
+        ? 'Full'
+        : r.started
+          ? `In Dive · ${r.playerCount}/${r.maxPlayers} Divers`
+          : `${r.playerCount}/${r.maxPlayers} Divers`;
       return `
         <div class="lan-room-row">
           <div class="lan-room-row-info">
@@ -961,7 +965,7 @@ function renderRoomsList(rooms = lan.rooms) {
             data-join-code="${r.code}"
             ${busy ? 'disabled' : ''}
           >
-            ${r.started ? 'Diving' : full ? 'Full' : 'Join'}
+            ${full ? 'Full' : r.started ? 'Drop In' : 'Join'}
           </button>
         </div>
       `;
@@ -1436,6 +1440,12 @@ lan.on('dive_preparing', async (msg) => {
   });
 });
 
+lan.on('peer_joined_mid_dive', (name) => {
+  if (mode === 'diving') {
+    showToast(`${name || 'Buddy'} dropped into the dive!`, 3.0);
+  }
+});
+
 lan.on('dive_started', async (msg) => {
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   if (msg?.levelId) {
@@ -1444,9 +1454,17 @@ lan.on('dive_started', async (msg) => {
   startDiveRun(
     true,
     msg?.rejoined
-      ? { checkpoints: msg.checkpoints, collectibles: msg.collectibles, playerLines: msg.playerLines }
+      ? {
+          checkpoints: msg.checkpoints,
+          collectibles: msg.collectibles,
+          playerLines: msg.playerLines,
+          bodyRecoveredBy: msg.bodyRecoveredBy,
+        }
       : null
   );
+  if (msg?.lateJoin) {
+    showToast('Dropped straight into the active co-op dive!', 3.6);
+  }
 });
 
 lan.on('peer_signal', (msg) => {

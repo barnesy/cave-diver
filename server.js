@@ -428,13 +428,6 @@ wss.on('connection', (ws) => {
           broadcastRoomsList();
           return;
         }
-        if (room.started) {
-          sendJson(ws, {
-            type: 'error',
-            message: `Dive in room "${code}" is already underway. Wait for return to lobby or create a new room.`,
-          });
-          return;
-        }
         if (room.players.size >= room.maxPlayers) {
           sendJson(ws, { type: 'error', message: `Room "${code}" already has ${room.maxPlayers} divers.` });
           return;
@@ -466,7 +459,39 @@ wss.on('connection', (ws) => {
           clientId: client.id,
           reconnectToken: token,
         });
-        broadcastRoom(room, { type: 'room_update', room: serializeRoom(room) }, client.id);
+        broadcastRoom(
+          room,
+          {
+            type: 'room_update',
+            room: serializeRoom(room),
+            joinedMidDiveName: room.started ? client.name : undefined,
+          },
+          client.id
+        );
+        if (room.started) {
+          sendJson(ws, {
+            type: 'dive_started',
+            levelId: room.levelId,
+            diveSeq: room.diveSeq,
+            rejoined: true,
+            lateJoin: true,
+            checkpoints: Array.from(room.sharedCheckpoints || []),
+            collectibles: Array.from(room.sharedCollectibles || []),
+            playerLines: Array.from((room.playerLines || new Map()).entries()).map(([pid, data]) => ({
+              playerId: pid,
+              ...data,
+            })),
+            bodyRecoveredBy: room.bodyRecoveredBy || null,
+            room: serializeRoom(room),
+          });
+        } else if (room.phase === 'preparing') {
+          sendJson(ws, {
+            type: 'dive_preparing',
+            levelId: room.levelId,
+            diveSeq: room.diveSeq,
+            room: serializeRoom(room),
+          });
+        }
         broadcastRoomsList();
         break;
       }

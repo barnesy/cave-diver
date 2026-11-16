@@ -217,13 +217,6 @@ export class P2pRoomCoordinator {
   }
 
   handleRemoteJoin(msg, sendFn) {
-    if (this.room.started) {
-      sendFn({
-        type: 'error',
-        message: `Dive in room "${this.room.code}" is already underway. Wait for return to lobby or create a new room.`,
-      });
-      return null;
-    }
     if (this.room.players.size >= this.room.maxPlayers) {
       sendFn({ type: 'error', message: `Room "${this.room.code}" already has ${this.room.maxPlayers} divers.` });
       return null;
@@ -256,7 +249,40 @@ export class P2pRoomCoordinator {
       clientId: playerId,
       reconnectToken: token,
     });
-    this._broadcast({ type: 'room_update', room: this.serializeRoom() }, playerId);
+    this._broadcast(
+      {
+        type: 'room_update',
+        room: this.serializeRoom(),
+        joinedMidDiveName: this.room.started ? member.name : undefined,
+      },
+      playerId
+    );
+
+    // Drop late joiners directly into the start of an active dive (or crew sync screen)
+    if (this.room.started) {
+      sendFn({
+        type: 'dive_started',
+        levelId: this.room.levelId,
+        diveSeq: this.room.diveSeq,
+        rejoined: true,
+        lateJoin: true,
+        checkpoints: Array.from(this.room.sharedCheckpoints),
+        collectibles: Array.from(this.room.sharedCollectibles),
+        playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
+          playerId: pid,
+          ...data,
+        })),
+        bodyRecoveredBy: this.room.bodyRecoveredBy || null,
+        room: this.serializeRoom(),
+      });
+    } else if (this.room.phase === 'preparing') {
+      sendFn({
+        type: 'dive_preparing',
+        levelId: this.room.levelId,
+        diveSeq: this.room.diveSeq,
+        room: this.serializeRoom(),
+      });
+    }
     return playerId;
   }
 
