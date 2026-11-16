@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=35');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=36');
   }
   return trysteroModulePromise;
 }
@@ -513,11 +513,12 @@ export class LanClient {
       if (this._activeSession) {
         this._savePersistedSession({ ...this._activeSession, isHost: true });
       }
+      this.room = coordinator.serializeRoom();
       this._migrating = false;
       this.emit('host_promoted', { code: coordinator.room.code });
       coordinator._broadcast({
         type: 'room_update',
-        room: coordinator.serializeRoom(),
+        room: this.room,
         leftPlayerId: departingHostId || undefined,
       });
       return;

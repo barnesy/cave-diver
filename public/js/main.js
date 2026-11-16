@@ -103,6 +103,7 @@ let pendingAutoJoinCode = INITIAL_ROOM_CODE;
 let directJoinToDive = Boolean(INITIAL_ROOM_CODE);
 let attemptJoinAfterExpire = '';
 let activeDiveSeq = 0;
+let lastHostPromoMs = 0;
 let copyInviteFeedbackTimer = 0;
 
 // Restore saved player callsign on phone/desktop (use unique fallback when auto-joining via link)
@@ -1255,6 +1256,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
 });
 
 lan.on('host_promoted', ({ code }) => {
+  lastHostPromoMs = Date.now();
   if (mode === 'diving' && lan.room && !lan.room.started) {
     lan.startDive(true);
   }
@@ -1502,7 +1504,7 @@ lan.on('dive_started', async (msg) => {
     if (msg.checkpoints) for (const cpId of msg.checkpoints) session.checkpointsHit.add(cpId);
     if (msg.collectibles) for (const cId of msg.collectibles) session.collectedIds.add(cId);
     if (msg.bodyRecoveredBy && !session.bodyRecovered) session.bodyRecovered = true;
-    if (wasWaiting) {
+    if (wasWaiting && !lan.isHost()) {
       showToast('Lead diver dropped into the cave!', 2.8);
     }
     return;
@@ -1578,8 +1580,8 @@ lan.on('peer_body_recovered', (msg) => {
 });
 
 lan.on('peer_left', () => {
-  if (mode === 'diving') {
-    showToast('Buddy diver disconnected from LAN.', 2.8);
+  if (mode === 'diving' && Date.now() - lastHostPromoMs > 800) {
+    showToast('Buddy diver left the dive.', 2.8);
   }
 });
 
