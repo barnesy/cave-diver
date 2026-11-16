@@ -1,0 +1,214 @@
+import { LEVELS, isValidLevelId, getLevelById } from '../levels/index.js';
+
+export const LEADERBOARD_MODES = new Set(['solo', 'team']);
+
+export function sanitizeCallsign(raw, fallback = 'Diver') {
+  const cleaned = String(raw || '')
+    .replace(/[\r\n\t<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 18);
+  return cleaned || fallback;
+}
+
+export function sanitizeIdToken(raw, maxLen = 48) {
+  return String(raw || '')
+    .replace(/[^A-Za-z0-9_:-]/g, '')
+    .slice(0, maxLen);
+}
+
+/**
+ * Deterministic maximum achievable score ceiling per level for sanity validation.
+ */
+export function computeLevelMaxScore(levelId, isTeam = false) {
+  if (!isValidLevelId(levelId)) return 0;
+  const level = getLevelById(levelId);
+  const collectiblePts = (level.collectibles || []).reduce(
+    (sum, c) => sum + (Number(c.points) || 200),
+    0
+  );
+  const allCollectiblesBonus = (level.collectibles || []).length > 0 ? 350 : 0;
+  // Health (1000) + Speed (800) + Collectibles + All Bonus (350) + Explore (350) + Cartographer (200)
+  const soloCeiling = 1800 + collectiblePts + allCollectiblesBonus + 550;
+  return isTeam ? soloCeiling + 600 : soloCeiling;
+}
+
+/**
+ * Validate and normalize a solo or co-op team dive submission.
+ * Returns { ok: true, entry } or { ok: false, error }.
+ */
+export function normalizeLeaderboardSubmission(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'Invalid submission payload.' };
+  }
+  const mode = raw.mode === 'team' ? 'team' : raw.mode === 'solo' ? 'solo' : null;
+  if (!mode) {
+    return { ok: false, error: 'Leaderboard mode must be "solo" or "team".' };
+  }
+  const levelId = typeof raw.levelId === 'string' ? raw.levelId.trim() : '';
+  if (!isValidLevelId(levelId)) {
+    return { ok: false, error: 'Unknown dive site levelId.' };
+  }
+
+  const isTeam = mode === 'team';
+  const teamSize = isTeam
+    ? Math.max(2, Math.min(4, Math.round(Number(raw.teamSize) || 2)))
+    : 1;
+  const maxAllowed = computeLevelMaxScore(levelId, isTeam);
+  const score = Math.round(Number(raw.score));
+  if (!Number.isFinite(score) || score < 0 || score > maxAllowed) {
+    return { ok: false, error: `Score out of valid bounds (0..${maxAllowed}).` };
+  }
+
+  const timeSec = Math.round(Number(raw.timeSec) * 10) / 10;
+  if (!Number.isFinite(timeSec) || timeSec < 2 || timeSec > 7200) {
+    return { ok: false, error: 'Invalid dive duration.' };
+  }
+
+  const exploredPct = Math.max(0, Math.min(100, Math.round(Number(raw.exploredPct) || 0)));
+  const level = getLevelById(levelId);
+  const maxCollect = (level.collectibles || []).length;
+  const collectiblesFound = Math.max(0, Math.min(maxCollect, Math.round(Number(raw.collectiblesFound) || 0)));
+  const allowedGrades = new Set(['S+', 'S', 'A', 'B', 'C', 'DNF']);
+  const grade = allowedGrades.has(raw.grade) ? raw.grade : 'B';
+  if (grade === 'DNF') {
+    return { ok: false, error: 'Only completed dives qualify for the global leaderboard.' };
+  }
+
+  const playerId = sanitizeIdToken(raw.playerId, 36) || `anon_${Date.now().toString(36)}`;
+  const rawCrew = Array.isArray(raw.crew) ? raw.crew.slice(0, 4) : [];
+  const crew = rawCrew
+    .map((m, idx) => ({
+      name: sanitizeCallsign(m?.name, `Diver ${idx + 1}`),
+      score: Math.max(0, Math.min(maxAllowed, Math.round(Number(m?.score) || score))),
+      alive: m?.alive !== false,
+    }));
+
+  const diverName = sanitizeCallsign(raw.diverName || crew[0]?.name, 'Diver 1');
+  if (crew.length === 0) {
+    crew.push({ name: diverName, score, alive: true });
+  }
+
+  const displayName = isTeam
+    ? crew.map((m) => m.name).join(' + ').slice(0, 64)
+    : diverName;
+
+  const runId =
+    sanitizeIdToken(raw.runId, 48) ||
+    `${playerId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+  // Solo deduplicates per (playerId, levelId) keeping PB; Team deduplicates shared co-op runId
+  const entryKey = isTeam ? runId : `${playerId}:${levelId}`;
+
+  return {
+    ok: true,
+    entry: {
+      mode,
+      levelId,
+      entryKey,
+      playerId,
+      runId,
+      displayName,
+      crew,
+      teamSize,
+      score,
+      grade,
+      timeSec,
+      exploredPct,
+      collectiblesFound,
+      collectiblesTotal: maxCollect,
+      createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
+    },
+  };
+}
+
+export function sortLeaderboardEntries(a, b) {
+  if (b.score !== a.score) return b.score - a.score;
+  if (a.timeSec !== b.timeSec) return a.timeSec - b.timeSec;
+  return a.createdAt - b.createdAt;
+}
+
+/**
+ * Aggregate best-per-level scores across all 13 sites into a campaign-wide ranking.
+ */
+export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
+  const buckets = new Map();
+  for (const e of entries || []) {
+    if (e.mode !== mode) continue;
+    const ownerKey =
+      mode === 'team'
+        ? (e.crew || []).map((c) => c.name.toLowerCase()).sort().join('|') || e.displayName.toLowerCase()
+        : e.playerId || e.displayName.toLowerCase();
+    let agg = buckets.get(ownerKey);
+    if (!agg) {
+      agg = {
+        playerId: e.playerId,
+        displayName: e.displayName,
+        teamSize: e.teamSize,
+        crew: e.crew,
+        bestByLevel: new Map(),
+        latestAt: e.createdAt,
+      };
+      buckets.set(ownerKey, agg);
+    }
+    const prev = agg.bestByLevel.get(e.levelId);
+    if (!prev || sortLeaderboardEntries(e, prev) < 0) {
+      agg.bestByLevel.set(e.levelId, e);
+    }
+    if (e.createdAt >= agg.latestAt) {
+      agg.latestAt = e.createdAt;
+      agg.displayName = e.displayName;
+    }
+  }
+
+  const rows = [];
+  for (const agg of buckets.values()) {
+    let totalScore = 0;
+    let totalTime = 0;
+    let exploredSum = 0;
+    for (const best of agg.bestByLevel.values()) {
+      totalScore += best.score;
+      totalTime += best.timeSec;
+      exploredSum += best.exploredPct;
+    }
+    const sitesCompleted = agg.bestByLevel.size;
+    rows.push({
+      mode,
+      levelId: 'overall',
+      playerId: agg.playerId,
+      displayName: agg.displayName,
+      crew: agg.crew,
+      teamSize: agg.teamSize,
+      sitesCompleted,
+      totalSites: LEVELS.length,
+      score: totalScore,
+      grade: sitesCompleted >= LEVELS.length ? 'CAMPAIGN' : `${sitesCompleted}/${LEVELS.length} SITES`,
+      timeSec: Math.round(totalTime * 10) / 10,
+      exploredPct: Math.round(exploredSum / Math.max(1, sitesCompleted)),
+      createdAt: agg.latestAt,
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.sitesCompleted !== a.sitesCompleted) return b.sitesCompleted - a.sitesCompleted;
+    return a.timeSec - b.timeSec;
+  });
+  return rows.slice(0, limit);
+}
+
+export function queryLeaderboardEntries(allEntries, { mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
+  const safeMode = mode === 'team' ? 'team' : 'solo';
+  const safeLimit = Math.max(1, Math.min(50, Math.round(Number(limit) || 20)));
+  if (levelId === 'overall') {
+    return buildOverallStandings(allEntries, safeMode, safeLimit);
+  }
+  if (!isValidLevelId(levelId)) {
+    return [];
+  }
+  return (allEntries || [])
+    .filter((e) => e.mode === safeMode && e.levelId === levelId)
+    .slice()
+    .sort(sortLeaderboardEntries)
+    .slice(0, safeLimit);
+}

@@ -407,6 +407,77 @@ test('LAN server serves app, reports LAN URLs, and relays 2-player room state', 
     wsGuestWhileAway.close();
     ws2Re3.close();
     ws3.close();
+
+    // 4. Global Leaderboard REST endpoints (Solo PB, Team deduplication, Bounds, Overall)
+    const rejectBad = await fetch(`http://127.0.0.1:${port}/api/leaderboard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'solo', levelId: 'cenote-el-abismo', score: 999999, timeSec: 60, grade: 'S+' }),
+    });
+    assert.equal(rejectBad.status, 400);
+
+    const p1 = await fetch(`http://127.0.0.1:${port}/api/leaderboard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'solo',
+        levelId: 'cenote-el-abismo',
+        playerId: 'diver_chris',
+        diverName: 'Chris',
+        score: 2700,
+        timeSec: 118.2,
+        exploredPct: 91,
+        grade: 'S',
+      }),
+    }).then((r) => r.json());
+    assert.equal(p1.ok, true);
+    assert.equal(p1.rank, 1);
+
+    // Beat own solo PB -> replaces, no duplicate row
+    await fetch(`http://127.0.0.1:${port}/api/leaderboard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'solo',
+        levelId: 'cenote-el-abismo',
+        playerId: 'diver_chris',
+        diverName: 'Chris',
+        score: 2890,
+        timeSec: 110.5,
+        exploredPct: 95,
+        grade: 'S+',
+      }),
+    });
+
+    // Team run submitted twice with identical runId (e.g. host + guest surfacing) deduplicates cleanly
+    for (const submitter of ['Chris', 'Buddy']) {
+      await fetch(`http://127.0.0.1:${port}/api/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'team',
+          levelId: 'cenote-el-abismo',
+          runId: 'ROOM4-d1-cenote-el-abismo',
+          playerId: submitter,
+          crew: [
+            { name: 'Chris', score: 2600, alive: true },
+            { name: 'Buddy', score: 2550, alive: true },
+          ],
+          teamSize: 2,
+          score: 3280,
+          timeSec: 121.0,
+          exploredPct: 96,
+          grade: 'S',
+        }),
+      });
+    }
+
+    const soloBoard = await fetch(`http://127.0.0.1:${port}/api/leaderboard?mode=solo&level=cenote-el-abismo`).then((r) => r.json());
+    const teamBoard = await fetch(`http://127.0.0.1:${port}/api/leaderboard?mode=team&level=cenote-el-abismo`).then((r) => r.json());
+    assert.equal(soloBoard.entries.length, 1);
+    assert.equal(soloBoard.entries[0].score, 2890);
+    assert.equal(teamBoard.entries.length, 1);
+    assert.equal(teamBoard.entries[0].displayName, 'Chris + Buddy');
   } finally {
     proc.kill();
   }

@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=39" />
+  <link rel="stylesheet" href="./css/style.css?v=40" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -95,7 +95,23 @@
       <div class="menu-actions">
         <button id="btn-play-solo" class="btn primary" type="button" disabled>SOLO DIVE · LEVEL 1</button>
         <button id="btn-open-lan" class="btn secondary" type="button" disabled>CO-OP DIVE (2–4 DIVERS)</button>
+        <button id="btn-open-leaderboard" class="btn ghost" type="button">🏆 LEADERBOARD</button>
         <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 INSTALL PHONE APP</button>
+      </div>
+
+      <div id="leaderboard-panel" class="lan-panel leaderboard-panel" hidden>
+        <div class="lb-head">
+          <div class="lb-tabs" role="tablist" aria-label="Leaderboard Mode">
+            <button id="btn-lb-solo" class="lb-tab active" type="button" data-lb-mode="solo">👤 Individual</button>
+            <button id="btn-lb-team" class="lb-tab" type="button" data-lb-mode="team">👥 Team</button>
+          </div>
+          <div class="lb-scope-tabs" role="tablist" aria-label="Leaderboard Scope">
+            <button id="btn-lb-site" class="lb-scope active" type="button" data-lb-scope="site">This Site</button>
+            <button id="btn-lb-overall" class="lb-scope" type="button" data-lb-scope="overall">All Sites</button>
+          </div>
+        </div>
+        <div id="leaderboard-sub" class="lb-sub">Loading global rankings...</div>
+        <div id="leaderboard-rows" class="lb-rows"></div>
       </div>
 
       <div id="lan-panel" class="lan-panel" hidden>
@@ -302,6 +318,7 @@
       </div>
 
       <div id="debrief-team" class="debrief-team" hidden></div>
+      <div id="debrief-leaderboard" class="debrief-leaderboard" hidden></div>
       <div id="debrief-artifacts" class="debrief-artifacts"></div>
       <div id="debrief-stats" class="debrief-stats"></div>
 
@@ -315,41 +332,43 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=39",
-        "./js/game/audio.js": "./js/game/audio.js?v=39",
-        "./js/game/collision.js": "./js/game/collision.js?v=39",
-        "./js/game/input.js": "./js/game/input.js?v=39",
-        "./js/game/hud.js": "./js/game/hud.js?v=39",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=39",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=39",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=39",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=39",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=39",
-        "./js/game/silt.js": "./js/game/silt.js?v=39",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=39",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=39",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=39",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=39",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=39",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=39",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=39",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=39",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=39",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=39",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=39",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=39",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=39",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=39",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=39",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=39",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=39",
-        "./js/levels/index.js": "./js/levels/index.js?v=39",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=39",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=39",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=39"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=40",
+        "./js/game/audio.js": "./js/game/audio.js?v=40",
+        "./js/game/collision.js": "./js/game/collision.js?v=40",
+        "./js/game/input.js": "./js/game/input.js?v=40",
+        "./js/game/hud.js": "./js/game/hud.js?v=40",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=40",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=40",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=40",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=40",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=40",
+        "./js/game/silt.js": "./js/game/silt.js?v=40",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=40",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=40",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=40",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=40",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=40",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=40",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=40",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=40",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=40",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=40",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=40",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=40",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=40",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=40",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=40",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=40",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=40",
+        "./js/levels/index.js": "./js/levels/index.js?v=40",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=40",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=40",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=40",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=40",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=40"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=39"></script>
+  <script type="module" src="./js/main.js?v=40"></script>
 </body>
 </html>

@@ -6,11 +6,49 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { DEFAULT_LEVEL_ID, isValidLevelId } from './public/js/levels/index.js';
+import {
+  normalizeLeaderboardSubmission,
+  queryLeaderboardEntries,
+  sortLeaderboardEntries,
+} from './public/js/game/leaderboardModel.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT || 3000);
+const LEADERBOARD_FILE = process.env.LEADERBOARD_FILE || '';
+const leaderboardStore = [];
+
+async function initLeaderboardStore() {
+  if (!LEADERBOARD_FILE) return;
+  try {
+    const raw = await fs.readFile(LEADERBOARD_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      leaderboardStore.push(...parsed);
+    }
+  } catch {
+    // fresh store
+  }
+}
+
+function upsertLeaderboardEntry(entry) {
+  const idx = leaderboardStore.findIndex(
+    (item) => item.mode === entry.mode && item.entryKey === entry.entryKey
+  );
+  if (idx >= 0) {
+    if (sortLeaderboardEntries(entry, leaderboardStore[idx]) < 0) {
+      leaderboardStore[idx] = entry;
+    }
+  } else {
+    leaderboardStore.push(entry);
+  }
+  if (LEADERBOARD_FILE) {
+    fs.writeFile(LEADERBOARD_FILE, JSON.stringify(leaderboardStore)).catch(() => {});
+  }
+}
+
+initLeaderboardStore();
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -69,6 +107,77 @@ const server = http.createServer(async (req, res) => {
     };
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
+    return;
+  }
+
+  if (urlPath === '/api/leaderboard') {
+    const corsHeaders = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, corsHeaders);
+      res.end();
+      return;
+    }
+    if (req.method === 'GET') {
+      const parsedUrl = new URL(req.url || '/api/leaderboard', `http://127.0.0.1:${PORT}`);
+      const mode = parsedUrl.searchParams.get('mode') === 'team' ? 'team' : 'solo';
+      const level = parsedUrl.searchParams.get('level') || 'overall';
+      const limit = Number(parsedUrl.searchParams.get('limit')) || 20;
+      const entries = queryLeaderboardEntries(leaderboardStore, { mode, levelId: level, limit });
+      res.writeHead(200, corsHeaders);
+      res.end(JSON.stringify({ mode, levelId: level, entries }));
+      return;
+    }
+    if (req.method === 'POST') {
+      let bodyText = '';
+      for await (const chunk of req) {
+        bodyText += chunk;
+        if (bodyText.length > 32768) {
+          res.writeHead(413, corsHeaders);
+          res.end(JSON.stringify({ error: 'Payload too large' }));
+          return;
+        }
+      }
+      let raw;
+      try {
+        raw = JSON.parse(bodyText);
+      } catch {
+        res.writeHead(400, corsHeaders);
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        return;
+      }
+      const parsed = normalizeLeaderboardSubmission(raw);
+      if (!parsed.ok) {
+        res.writeHead(400, corsHeaders);
+        res.end(JSON.stringify({ error: parsed.error }));
+        return;
+      }
+      upsertLeaderboardEntry(parsed.entry);
+      const boardAll = queryLeaderboardEntries(leaderboardStore, {
+        mode: parsed.entry.mode,
+        levelId: parsed.entry.levelId,
+        limit: 50,
+      });
+      const rank = boardAll.findIndex((e) => e.entryKey === parsed.entry.entryKey) + 1;
+      res.writeHead(200, corsHeaders);
+      res.end(
+        JSON.stringify({
+          ok: true,
+          entry: parsed.entry,
+          rank: rank > 0 ? rank : 1,
+          total: boardAll.length,
+          entries: boardAll.slice(0, 20),
+        })
+      );
+      return;
+    }
+    res.writeHead(405, corsHeaders);
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
     return;
   }
 

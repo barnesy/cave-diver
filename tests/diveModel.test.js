@@ -14,6 +14,11 @@ import {
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import {
+  computeLevelMaxScore,
+  normalizeLeaderboardSubmission,
+  queryLeaderboardEntries,
+} from '../public/js/game/leaderboardModel.js';
+import {
   LEVELS,
   DEFAULT_LEVEL_ID,
   CAMPAIGN_PLAN,
@@ -1160,4 +1165,67 @@ test('P2pRoomCoordinator deterministic Trystero joinSeq host selection, re-attac
   assert.equal(chosen, 'aaaTrysteroGuestId3');
 
   coord.destroy();
+});
+
+test('LeaderboardModel validates score ceilings, separates solo/team, and builds overall standings', () => {
+  const soloMax = computeLevelMaxScore('cenote-el-abismo', false);
+  const teamMax = computeLevelMaxScore('cenote-el-abismo', true);
+  assert.equal(teamMax, soloMax + 600);
+
+  const bad = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'cenote-el-abismo',
+    score: soloMax + 500,
+    timeSec: 120,
+    grade: 'S+',
+  });
+  assert.equal(bad.ok, false);
+
+  const solo1 = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'cenote-el-abismo',
+    playerId: 'pA',
+    diverName: 'Alice',
+    score: 2600,
+    timeSec: 112.4,
+    exploredPct: 92,
+    grade: 'S',
+  });
+  const solo2 = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'eagles-nest-sink',
+    playerId: 'pA',
+    diverName: 'Alice',
+    score: 2450,
+    timeSec: 140.0,
+    exploredPct: 88,
+    grade: 'A',
+  });
+  const team1 = normalizeLeaderboardSubmission({
+    mode: 'team',
+    levelId: 'cenote-el-abismo',
+    runId: 'AB12-d1-cenote-el-abismo',
+    crew: [
+      { name: 'Alice', score: 2550, alive: true },
+      { name: 'Bob', score: 2500, alive: true },
+    ],
+    teamSize: 2,
+    score: 3250,
+    timeSec: 125,
+    exploredPct: 96,
+    grade: 'S',
+  });
+  assert.ok(solo1.ok && solo2.ok && team1.ok);
+  assert.equal(solo1.entry.entryKey, 'pA:cenote-el-abismo');
+  assert.equal(team1.entry.entryKey, 'AB12-d1-cenote-el-abismo');
+
+  const all = [solo1.entry, solo2.entry, team1.entry];
+  const overallSolo = queryLeaderboardEntries(all, { mode: 'solo', levelId: 'overall' });
+  assert.equal(overallSolo.length, 1);
+  assert.equal(overallSolo[0].score, 5050);
+  assert.equal(overallSolo[0].sitesCompleted, 2);
+
+  const siteTeam = queryLeaderboardEntries(all, { mode: 'team', levelId: 'cenote-el-abismo' });
+  assert.equal(siteTeam.length, 1);
+  assert.equal(siteTeam[0].displayName, 'Alice + Bob');
 });

@@ -21,6 +21,7 @@ import { DiveComputerHUD } from './game/hud.js';
 import { InputController } from './game/input.js';
 import { DiveAudio } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
+import { LeaderboardClient } from './net/leaderboardClient.js';
 
 function parseRoomCodeFromLocation() {
   const params = new URLSearchParams(location.search);
@@ -47,6 +48,7 @@ const renderer = new CaveRenderer(canvas, activeLevel, { deferBuild: true });
 let ecosystem = null;
 const audio = new DiveAudio();
 const lan = new LanClient();
+const leaderboard = new LeaderboardClient();
 
 // UI Elements
 const screenLoader = document.getElementById('screen-loader');
@@ -63,6 +65,11 @@ const inlineLoaderFillEl = document.getElementById('inline-loader-fill');
 const playerNameInput = document.getElementById('input-player-name');
 const btnPlaySolo = document.getElementById('btn-play-solo');
 const btnOpenLan = document.getElementById('btn-open-lan');
+const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
+const leaderboardPanel = document.getElementById('leaderboard-panel');
+const leaderboardSubEl = document.getElementById('leaderboard-sub');
+const leaderboardRowsEl = document.getElementById('leaderboard-rows');
+const debriefLeaderboardEl = document.getElementById('debrief-leaderboard');
 const btnInstallPwa = document.getElementById('btn-install-pwa');
 const screenMenu = document.getElementById('screen-menu');
 const screenHud = document.getElementById('screen-hud');
@@ -112,6 +119,8 @@ let knownRoomCode = '';
 let knownRoomMemberIds = new Set();
 let notifyPromptedOnce = false;
 let notifyAlertsMuted = false;
+let lbMode = 'solo';
+let lbScope = 'site';
 
 // Restore saved player callsign on phone/desktop (use unique fallback when auto-joining via link)
 try {
@@ -769,6 +778,100 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     }
   };
   debriefAnimFrame = requestAnimationFrame(stepOdometer);
+
+  if (debriefLeaderboardEl) {
+    debriefLeaderboardEl.hidden = true;
+    debriefLeaderboardEl.innerHTML = '';
+  }
+  if (success) {
+    const subMode = teamSummary.isTeam ? 'team' : 'solo';
+    const subRunId =
+      teamSummary.isTeam && lan.room?.code
+        ? `${lan.room.code}-d${activeDiveSeq || 1}-${level.id}`
+        : undefined;
+    leaderboard
+      .submitRun({
+        mode: subMode,
+        levelId: level.id,
+        runId: subRunId,
+        diverName: playerNameInput?.value.trim() || 'Diver 1',
+        crew: teamSummary.roster.map((r) => ({ name: r.name, score: r.totalScore, alive: r.alive })),
+        teamSize: teamSummary.teamSize,
+        score: teamSummary.teamScore,
+        grade: teamSummary.teamRank.grade,
+        timeSec: teamSummary.avgTimeSec,
+        exploredPct: teamSummary.exploredPct,
+        collectiblesFound: teamSummary.collectiblesFound,
+      })
+      .then((res) => {
+        if (!debriefLeaderboardEl) return;
+        if (!res?.ok) return;
+        const boardLabel = subMode === 'team' ? 'TEAM LEADERBOARD' : 'INDIVIDUAL LEADERBOARD';
+        const srcTag = res.source === 'global' ? 'Global' : 'Local PB';
+        const rankText = res.rank ? `${srcTag} Rank #${res.rank} of ${res.total || res.rank}` : srcTag;
+        debriefLeaderboardEl.hidden = false;
+        debriefLeaderboardEl.innerHTML = `
+          <div class="debrief-lb-head">
+            <span class="debrief-section-title" style="margin:0">${boardLabel} · ${escapeHtml(level.name)}</span>
+            <span class="debrief-lb-rank">${escapeHtml(rankText)}</span>
+          </div>
+          ${renderLeaderboardRowsHtml((res.entries || []).slice(0, 5), { highlightKey: res.entry?.entryKey })}
+        `;
+        if (leaderboardPanel && !leaderboardPanel.hidden) {
+          refreshMenuLeaderboard();
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+function escapeHtml(raw) {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return '<div class="lb-empty">No completed expeditions recorded here yet. Finish a dive to claim #1!</div>';
+  }
+  return entries
+    .map((e, i) => {
+      const isMe =
+        (highlightKey && e.entryKey === highlightKey) ||
+        (e.playerId && e.playerId === leaderboard.playerId);
+      const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
+      return `
+        <div class="lb-row ${isMe ? 'me' : ''}">
+          <span class="lb-rank">#${i + 1}</span>
+          <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small></span>
+          <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
+          <span class="lb-grade">${escapeHtml(e.grade)}</span>
+          <span class="lb-score">${Number(e.score || 0).toLocaleString()}</span>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+async function refreshMenuLeaderboard() {
+  if (!leaderboardRowsEl || !leaderboardSubEl) return;
+  const targetLevel = lbScope === 'overall' ? 'overall' : activeLevel.id;
+  leaderboardSubEl.textContent = 'Syncing rankings...';
+  const board = await leaderboard.fetchBoard({ mode: lbMode, levelId: targetLevel, limit: 20 });
+  const modeLabel = lbMode === 'team' ? 'Co-op Teams' : 'Individual Divers';
+  const scopeLabel =
+    lbScope === 'overall'
+      ? 'Overall Campaign (All 13 Sites)'
+      : `L${Math.max(1, LEVELS.findIndex((l) => l.id === activeLevel.id) + 1)}: ${activeLevel.name}`;
+  const originNote =
+    board.source === 'global'
+      ? 'Global Rankings'
+      : 'Local Device Records (ready for cloud endpoint)';
+  leaderboardSubEl.textContent = `${modeLabel} · ${scopeLabel} · ${originNote}`;
+  leaderboardRowsEl.innerHTML = renderLeaderboardRowsHtml(board.entries);
 }
 
 // --- Menu & LAN Lobby Wiring ---
@@ -1104,6 +1207,9 @@ async function selectAndLoadLevel(chosenId) {
   if (lan.room && lan.isHost()) {
     lan.setLevel(nextLevel.id);
   }
+  if (leaderboardPanel && !leaderboardPanel.hidden && lbScope === 'site') {
+    refreshMenuLeaderboard();
+  }
   // Only restore immediately if already baked in cache; defer heavy SDF baking until player starts dive
   if (renderer.isLevelCached(nextLevel.id)) {
     await ensureLevelLoaded(nextLevel.id, { showOverlay: false });
@@ -1135,6 +1241,9 @@ btnPlaySolo.addEventListener('click', async () => {
 
 btnOpenLan.addEventListener('click', async () => {
   lanPanel.hidden = !lanPanel.hidden;
+  if (!lanPanel.hidden && leaderboardPanel) {
+    leaderboardPanel.hidden = true;
+  }
   if (!lanPanel.hidden) {
     if (!lan.connected) {
       setLanConnectionBadge('', '○ Connecting...');
@@ -1142,6 +1251,36 @@ btnOpenLan.addEventListener('click', async () => {
     lan.connect();
     lan.listRooms();
     await fetchLanUrls();
+  }
+});
+
+btnOpenLeaderboard?.addEventListener('click', () => {
+  if (!leaderboardPanel) return;
+  leaderboardPanel.hidden = !leaderboardPanel.hidden;
+  if (!leaderboardPanel.hidden) {
+    if (lanPanel) lanPanel.hidden = true;
+    refreshMenuLeaderboard();
+    leaderboardPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+});
+
+leaderboardPanel?.addEventListener('click', (e) => {
+  const modeBtn = e.target.closest('button[data-lb-mode]');
+  if (modeBtn) {
+    lbMode = modeBtn.dataset.lbMode === 'team' ? 'team' : 'solo';
+    for (const b of leaderboardPanel.querySelectorAll('button[data-lb-mode]')) {
+      b.classList.toggle('active', b === modeBtn);
+    }
+    refreshMenuLeaderboard();
+    return;
+  }
+  const scopeBtn = e.target.closest('button[data-lb-scope]');
+  if (scopeBtn) {
+    lbScope = scopeBtn.dataset.lbScope === 'overall' ? 'overall' : 'site';
+    for (const b of leaderboardPanel.querySelectorAll('button[data-lb-scope]')) {
+      b.classList.toggle('active', b === scopeBtn);
+    }
+    refreshMenuLeaderboard();
   }
 });
 
