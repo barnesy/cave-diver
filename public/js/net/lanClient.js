@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=36');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=37');
   }
   return trysteroModulePromise;
 }
@@ -55,6 +55,9 @@ export class LanClient {
     this._p2pHostPeerId = null;
     this._p2pHost = null;
     this._p2pGen = 0;
+    this._p2pJoinReqId = 0;
+    this._p2pPendingFlush = null;
+    this._p2pLastLeaveDoneAt = 0;
     this._p2pJoinTimer = null;
     this._p2pJoinRetryTimer = null;
     this._p2pJoinAcked = false;
@@ -305,8 +308,10 @@ export class LanClient {
     trysteroRoom.onPeerLeave((peerId) => {
       if (this._p2pGen !== gen || this._trysteroRoom !== trysteroRoom) return;
       if (this._p2pHost) {
-        // Remove dropped/departed diver cleanly so their slot can be reused on rejoin
-        this._p2pHost.removePlayer(peerId);
+        // Remove dropped/departed diver cleanly once so their slot can be reused on rejoin
+        if (this._p2pHost.room.players.has(peerId)) {
+          this._p2pHost.removePlayer(peerId);
+        }
         return;
       }
       if (this._manualLeave || !this.room || this._migrating) return;
@@ -392,6 +397,7 @@ export class LanClient {
 
   async _p2pCreateRoom(msg, preferredCode = null) {
     this._manualLeave = false;
+    this._p2pJoinReqId += 1;
     this._cleanupP2p();
     const gen = this._p2pGen;
     const code = preferredCode || this._genRoomCode();
@@ -536,6 +542,16 @@ export class LanClient {
 
   async _p2pJoinRoom(msg, isRejoin = false) {
     this._manualLeave = false;
+    const joinReqId = ++this._p2pJoinReqId;
+    if (this._p2pPendingFlush) {
+      await this._p2pPendingFlush;
+      if (this._manualLeave || joinReqId !== this._p2pJoinReqId) return;
+    }
+    const sinceLeft = Date.now() - this._p2pLastLeaveDoneAt;
+    if (this._p2pLastLeaveDoneAt > 0 && sinceLeft < 650) {
+      await new Promise((r) => setTimeout(r, 650 - sinceLeft));
+      if (this._manualLeave || joinReqId !== this._p2pJoinReqId) return;
+    }
     this._cleanupP2p();
     const gen = this._p2pGen;
     const cleanCode = String(msg.code || '')
@@ -1069,6 +1085,7 @@ export class LanClient {
 
   leaveRoom() {
     this._manualLeave = true;
+    this._p2pJoinReqId += 1;
     this.clearSavedSession();
     this._outbox = this._outbox.filter(
       (m) => m.type === 'list_rooms'
@@ -1076,6 +1093,16 @@ export class LanClient {
     if (this.transport === 'p2p') {
       const currentRoom = this.room;
       const myId = this.clientId;
+      const scheduleFlushClose = (delayMs) => {
+        this._p2pPendingFlush = new Promise((resolve) => {
+          this._pendingLeaveTimer = setTimeout(() => {
+            this._p2pPendingFlush = null;
+            this._cleanupP2p();
+            this._p2pLastLeaveDoneAt = Date.now();
+            resolve();
+          }, delayMs);
+        });
+      };
       if (this._p2pHost && currentRoom) {
         const nextHostId = pickNextP2pHostId(currentRoom.players, myId);
         if (nextHostId && this._p2pSendPkt) {
@@ -1094,7 +1121,7 @@ export class LanClient {
           this.peers.clear();
           this.peer = null;
           this._lastRoomSnapshot = null;
-          this._pendingLeaveTimer = setTimeout(() => this._cleanupP2p(), 160);
+          scheduleFlushClose(140);
           return;
         }
       } else if (this._p2pSendPkt && this._p2pHostPeerId) {
@@ -1105,7 +1132,7 @@ export class LanClient {
         this.peers.clear();
         this.peer = null;
         this._lastRoomSnapshot = null;
-        this._pendingLeaveTimer = setTimeout(() => this._cleanupP2p(), 120);
+        scheduleFlushClose(110);
         return;
       }
       this.room = null;
@@ -1113,6 +1140,7 @@ export class LanClient {
       this.peer = null;
       this._lastRoomSnapshot = null;
       this._cleanupP2p();
+      this._p2pLastLeaveDoneAt = Date.now();
       return;
     }
 
