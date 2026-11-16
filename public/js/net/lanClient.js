@@ -1,5 +1,5 @@
 import { stepDiverBody } from '../game/diverBody.js';
-import { P2pRoomCoordinator } from './p2pRoomHost.js';
+import { P2pRoomCoordinator, pickNextP2pHostId } from './p2pRoomHost.js';
 
 /**
  * Dual-transport Multiplayer Client (WebSocket relay when a Node server is present,
@@ -43,6 +43,11 @@ export class LanClient {
     this._p2pConn = null;
     this._p2pHost = null;
     this._p2pGuestConns = new Map();
+    this._lastRoomSnapshot = null;
+    this._manualLeave = false;
+    this._migrating = false;
+    this._pendingLeaveTimer = null;
+    this._migrateTimer = null;
   }
 
   getTransportMode() {
@@ -208,6 +213,15 @@ export class LanClient {
   }
 
   _cleanupP2p() {
+    if (this._pendingLeaveTimer) {
+      clearTimeout(this._pendingLeaveTimer);
+      this._pendingLeaveTimer = null;
+    }
+    if (this._migrateTimer) {
+      clearTimeout(this._migrateTimer);
+      this._migrateTimer = null;
+    }
+    this._migrating = false;
     if (this._p2pHost) {
       this._p2pHost.destroy();
       this._p2pHost = null;
@@ -252,9 +266,9 @@ export class LanClient {
     return peerId ? new PeerCtor(peerId, opts) : new PeerCtor(opts);
   }
 
-  _p2pCreateRoom(msg, preferredCode = null, attempt = 0) {
+  _bindHostedCoordinator(coordinator, { onRetryNewCode = null, retryOnTaken = false, attempt = 0 } = {}) {
     this._cleanupP2p();
-    const code = preferredCode || this._genRoomCode();
+    const code = coordinator.room.code;
     let peer;
     try {
       peer = this._makePeer(P2P_PREFIX + code);
@@ -268,13 +282,7 @@ export class LanClient {
       if (this._p2pPeer !== peer) return;
       this.connected = true;
       this.reconnecting = false;
-      const coordinator = new P2pRoomCoordinator({
-        code,
-        hostName: msg.name || 'Lead Diver',
-        levelId: msg.levelId,
-        maxPlayers: msg.maxPlayers || 2,
-        loadStatus: this._latestLoadStatus,
-      });
+      this._migrating = false;
       this._p2pHost = coordinator;
       coordinator.bindPlayerSender(coordinator.hostId, (outMsg) => {
         this._handleMessage(outMsg);
@@ -333,15 +341,111 @@ export class LanClient {
 
     peer.on('error', (err) => {
       if (this._p2pPeer !== peer) return;
-      if (err?.type === 'unavailable-id' && attempt < 4) {
-        this._p2pCreateRoom(msg, null, attempt + 1);
-        return;
+      if (err?.type === 'unavailable-id') {
+        if (retryOnTaken && attempt < 12) {
+          this._migrateTimer = setTimeout(() => {
+            this._bindHostedCoordinator(coordinator, { onRetryNewCode, retryOnTaken, attempt: attempt + 1 });
+          }, 380);
+          return;
+        }
+        if (onRetryNewCode && attempt < 4) {
+          onRetryNewCode(attempt + 1);
+          return;
+        }
       }
       this.emit('error', `P2P host error: ${err?.message || err?.type || 'Signaling unavailable'}`);
     });
   }
 
-  _p2pJoinRoom(msg, isRejoin = false) {
+  _p2pCreateRoom(msg, preferredCode = null, attempt = 0) {
+    this._manualLeave = false;
+    const code = preferredCode || this._genRoomCode();
+    const coordinator = new P2pRoomCoordinator({
+      code,
+      hostName: msg.name || 'Lead Diver',
+      levelId: msg.levelId,
+      maxPlayers: msg.maxPlayers || 2,
+      loadStatus: this._latestLoadStatus,
+    });
+    this._bindHostedCoordinator(coordinator, {
+      attempt,
+      retryOnTaken: false,
+      onRetryNewCode: (nextAttempt) => this._p2pCreateRoom(msg, null, nextAttempt),
+    });
+  }
+
+  _buildFallbackSnapshot(departingHostId) {
+    if (this._lastRoomSnapshot && this._lastRoomSnapshot.code === this.room?.code) {
+      return this._lastRoomSnapshot;
+    }
+    const r = this.room;
+    if (!r) return null;
+    return {
+      code: r.code,
+      levelId: r.levelId,
+      maxPlayers: r.maxPlayers,
+      started: Boolean(r.started),
+      phase: r.phase || (r.started ? 'diving' : 'lobby'),
+      diveSeq: r.diveSeq || 0,
+      seq: 10,
+      bodyRecoveredBy: null,
+      checkpoints: [],
+      collectibles: [],
+      playerLines: [],
+      players: (r.players || [])
+        .filter((p) => p.id !== departingHostId)
+        .map((p) => ({
+          ...p,
+          reconnectToken: p.id === this.clientId ? this._activeSession?.reconnectToken : undefined,
+        })),
+    };
+  }
+
+  _handleHostMigration({ snapshot = null, nextHostId = null, departingHostId = null } = {}) {
+    if (this._manualLeave || this._migrating || !this.room) return;
+    this._migrating = true;
+
+    const snap = snapshot || this._buildFallbackSnapshot(departingHostId);
+    if (!snap) {
+      this._migrating = false;
+      return;
+    }
+    const resolvedNextHost =
+      nextHostId || pickNextP2pHostId(snap.players || this.room.players, departingHostId);
+    if (!resolvedNextHost) {
+      this._migrating = false;
+      return;
+    }
+
+    if (resolvedNextHost === this.clientId) {
+      // I am the lowest-remaining survivor ("last out is the host") — seamlessly claim host!
+      const coordinator = P2pRoomCoordinator.fromSnapshot(snap, {
+        departingHostId,
+        newHostId: this.clientId,
+      });
+      this._lastRoomSnapshot = coordinator.exportSnapshot();
+      this.emit('host_promoted', { code: coordinator.room.code });
+      this._migrateTimer = setTimeout(() => {
+        this._bindHostedCoordinator(coordinator, { retryOnTaken: true, attempt: 0 });
+      }, 260);
+      return;
+    }
+
+    // Another survivor is taking over host — reconnect to them cleanly while staying in room/dive
+    const rejoinMsg = {
+      type: 'rejoin_room',
+      code: snap.code,
+      reconnectToken: this._activeSession?.reconnectToken || '',
+      name: this._activeSession?.name || 'Buddy Diver',
+    };
+    this._migrateTimer = setTimeout(() => {
+      this._migrating = false;
+      this._p2pJoinRoom(rejoinMsg, true, 0);
+    }, 650);
+  }
+
+  _p2pJoinRoom(msg, isRejoin = false, retryAttempt = 0) {
+    this._manualLeave = false;
     this._cleanupP2p();
     const cleanCode = String(msg.code || '')
       .trim()
@@ -378,6 +482,7 @@ export class LanClient {
         clearTimeout(timeout);
         this.connected = true;
         this.reconnecting = false;
+        this._migrating = false;
         conn.send({
           ...msg,
           type: isRejoin ? 'rejoin_room' : 'join_room',
@@ -389,15 +494,26 @@ export class LanClient {
       conn.on('data', (raw) => {
         if (this._p2pConn !== conn) return;
         const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (data) this._handleMessage(data);
+        if (!data || typeof data !== 'object') return;
+        if (data.type === 'host_handoff') {
+          clearTimeout(timeout);
+          this._handleHostMigration({
+            snapshot: data.snapshot,
+            nextHostId: data.nextHostId,
+            departingHostId: data.departingHostId,
+          });
+          return;
+        }
+        this._handleMessage(data);
       });
       conn.on('close', () => {
         clearTimeout(timeout);
         if (this._p2pConn !== conn) return;
         this._p2pConn = null;
-        if (this._activeSession && this.room) {
-          this.emit('disconnected');
-        }
+        if (this._manualLeave || !this.room || this._migrating) return;
+        // Host vanished abruptly -> promote surviving diver ("last out is host")
+        const oldHost = (this.room.players || []).find((p) => p.isHost);
+        this._handleHostMigration({ departingHostId: oldHost?.id || null });
       });
       conn.on('error', () => {
         clearTimeout(timeout);
@@ -407,9 +523,15 @@ export class LanClient {
     peer.on('error', (err) => {
       clearTimeout(timeout);
       if (this._p2pPeer !== peer) return;
+      if (err?.type === 'peer-unavailable' && isRejoin && retryAttempt < 8) {
+        this._migrateTimer = setTimeout(() => {
+          this._p2pJoinRoom(msg, true, retryAttempt + 1);
+        }, 550);
+        return;
+      }
       const detail =
         err?.type === 'peer-unavailable'
-          ? `Room "${cleanCode}" not found or host closed tab.`
+          ? `Room "${cleanCode}" not found or all divers left.`
           : `P2P connection error: ${err?.message || err?.type || 'Signaling error'}`;
       if (isRejoin) {
         this.clearSavedSession();
@@ -540,6 +662,9 @@ export class LanClient {
   }
 
   _handleMessage(msg) {
+      if (msg?.syncState) {
+        this._lastRoomSnapshot = msg.syncState;
+      }
 
       switch (msg.type) {
         case 'welcome':
@@ -858,17 +983,61 @@ export class LanClient {
   }
 
   leaveRoom() {
+    this._manualLeave = true;
     this.clearSavedSession();
     this._outbox = this._outbox.filter(
       (m) => m.type === 'list_rooms'
     );
+    if (this.transport === 'p2p') {
+      const currentRoom = this.room;
+      const myId = this.clientId;
+      if (this._p2pHost && currentRoom) {
+        const nextHostId = pickNextP2pHostId(currentRoom.players, myId);
+        if (nextHostId) {
+          const snapshot = this._p2pHost.exportSnapshot();
+          for (const conn of this._p2pGuestConns.values()) {
+            try {
+              if (conn.open) {
+                conn.send({
+                  type: 'host_handoff',
+                  nextHostId,
+                  departingHostId: myId,
+                  snapshot,
+                });
+              }
+            } catch {}
+          }
+          this.room = null;
+          this.peers.clear();
+          this.peer = null;
+          this._lastRoomSnapshot = null;
+          this._pendingLeaveTimer = setTimeout(() => this._cleanupP2p(), 160);
+          return;
+        }
+      } else if (this._p2pConn && this._p2pConn.open) {
+        try {
+          this._p2pConn.send({ type: 'leave_room' });
+        } catch {}
+        this.room = null;
+        this.peers.clear();
+        this.peer = null;
+        this._lastRoomSnapshot = null;
+        this._pendingLeaveTimer = setTimeout(() => this._cleanupP2p(), 90);
+        return;
+      }
+      this.room = null;
+      this.peers.clear();
+      this.peer = null;
+      this._lastRoomSnapshot = null;
+      this._cleanupP2p();
+      return;
+    }
+
     this.send({ type: 'leave_room' });
     this.room = null;
     this.peers.clear();
     this.peer = null;
-    if (this.transport === 'p2p') {
-      this._cleanupP2p();
-    }
+    this._lastRoomSnapshot = null;
   }
 
   sendPlayerState(state) {

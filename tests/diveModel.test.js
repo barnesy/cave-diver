@@ -12,7 +12,7 @@ import {
   getAscentInstruction,
 } from '../public/js/physics/diveModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
-import { P2pRoomCoordinator } from '../public/js/net/p2pRoomHost.js';
+import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import {
   LEVELS,
   DEFAULT_LEVEL_ID,
@@ -1092,5 +1092,20 @@ test('P2pRoomCoordinator manages host creation, buddy join, dive start, telemetr
   assert.ok(lateDive && lateDive.lateJoin === true && lateDive.rejoined === true);
   assert.equal(lateDive.bodyRecoveredBy, guestId);
 
+  // Host migration ("last out is host"): exporting snapshot and hydrating on next survivor keeps room & frees departed slot
+  const snap = coord.exportSnapshot();
+  const nextHostId = pickNextP2pHostId(snap.players, coord.hostId);
+  assert.equal(nextHostId, guestId);
+  const migrated = P2pRoomCoordinator.fromSnapshot(snap, {
+    departingHostId: coord.hostId,
+    newHostId: nextHostId,
+  });
+  assert.equal(migrated.room.code, 'ABCD');
+  assert.equal(migrated.room.started, true);
+  assert.equal(migrated.room.bodyRecoveredBy, guestId);
+  assert.equal(migrated.room.players.get(nextHostId).isHost, true);
+  assert.equal(migrated.room.players.size, 2, 'Departed host seat freed so former host can rejoin later');
+
+  migrated.destroy();
   coord.destroy();
 });

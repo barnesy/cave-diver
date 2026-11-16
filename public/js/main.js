@@ -101,6 +101,7 @@ let cachedLanUrls = [];
 let spectatingPeer = false;
 let pendingAutoJoinCode = INITIAL_ROOM_CODE;
 let attemptJoinAfterExpire = '';
+let activeDiveSeq = 0;
 let copyInviteFeedbackTimer = 0;
 
 // Restore saved player callsign on phone/desktop (use unique fallback when auto-joining via link)
@@ -1175,9 +1176,12 @@ btnCoopFinishNow?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-leave-room').addEventListener('click', () => {
+  const prevCode = lan.room?.code || '';
   lan.leaveRoom();
   isMultiplayer = false;
-  resetLobbyUiState('Left room.');
+  activeDiveSeq = 0;
+  resetLobbyUiState(prevCode ? `Left room ${prevCode}. Enter code or click Join to rejoin.` : 'Left room.');
+  if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   renderRoomsList();
 });
 
@@ -1194,8 +1198,10 @@ btnMute.addEventListener('click', () => {
 });
 
 document.getElementById('btn-abort').addEventListener('click', () => {
+  const prevCode = lan.room?.code || '';
   mode = 'menu';
   spectatingPeer = false;
+  activeDiveSeq = 0;
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -1203,7 +1209,9 @@ document.getElementById('btn-abort').addEventListener('click', () => {
   if (isMultiplayer) {
     lan.leaveRoom();
     isMultiplayer = false;
-    resetLobbyUiState('Aborted dive and left room.');
+    lanPanel.hidden = false;
+    resetLobbyUiState(prevCode ? `Aborted dive (Room ${prevCode} stays open for remaining divers).` : 'Aborted dive and left room.');
+    if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
   renderRoomsList();
   renderLevelCards();
@@ -1228,16 +1236,23 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 });
 
 document.getElementById('btn-menu').addEventListener('click', () => {
+  const prevCode = lan.room?.code || '';
   mode = 'menu';
+  activeDiveSeq = 0;
   screenDebrief.hidden = true;
   screenMenu.hidden = false;
   if (isMultiplayer) {
     lan.leaveRoom();
     isMultiplayer = false;
-    resetLobbyUiState('Left co-op room.');
+    resetLobbyUiState(prevCode ? `Left co-op room ${prevCode}.` : 'Left co-op room.');
+    if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
   renderRoomsList();
   renderLevelCards();
+});
+
+lan.on('host_promoted', ({ code }) => {
+  showToast(`Previous host left — you are now Host of Room ${code}!`, 3.4);
 });
 
 lan.on('transport_changed', () => {
@@ -1448,6 +1463,13 @@ lan.on('peer_joined_mid_dive', (name) => {
 
 lan.on('dive_started', async (msg) => {
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+  if (mode === 'diving' && session && msg?.rejoined && msg?.diveSeq && msg.diveSeq === activeDiveSeq) {
+    if (msg.checkpoints) for (const cpId of msg.checkpoints) session.checkpointsHit.add(cpId);
+    if (msg.collectibles) for (const cId of msg.collectibles) session.collectedIds.add(cId);
+    if (msg.bodyRecoveredBy && !session.bodyRecovered) session.bodyRecovered = true;
+    return;
+  }
+  activeDiveSeq = msg?.diveSeq || 1;
   if (msg?.levelId) {
     await ensureLevelLoaded(msg.levelId, { showOverlay: true, keepOpenAfterLoad: false });
   }

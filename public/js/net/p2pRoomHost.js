@@ -77,6 +77,18 @@ function sanitizeGuidelineChains(raw) {
   return chains;
 }
 
+export function pickNextP2pHostId(players, excludeId = null) {
+  const candidates = (players || [])
+    .filter((p) => p && p.id !== excludeId && p.connected !== false)
+    .slice()
+    .sort((a, b) => {
+      const na = parseInt(String(a.id).replace(/\D+/g, ''), 10) || 0;
+      const nb = parseInt(String(b.id).replace(/\D+/g, ''), 10) || 0;
+      return na !== nb ? na - nb : String(a.id).localeCompare(String(b.id));
+    });
+  return candidates[0]?.id || null;
+}
+
 /**
  * In-browser authoritative room coordinator for serverless WebRTC P2P co-op.
  * Implements the exact same room/dive/sync envelope protocol as server.js so
@@ -152,6 +164,87 @@ export class P2pRoomCoordinator {
     };
   }
 
+  exportSnapshot() {
+    return {
+      code: this.room.code,
+      levelId: this.room.levelId,
+      maxPlayers: this.room.maxPlayers,
+      started: this.room.started,
+      phase: this.room.phase || (this.room.started ? 'diving' : 'lobby'),
+      diveSeq: this.room.diveSeq || 0,
+      seq: this.seq,
+      bodyRecoveredBy: this.room.bodyRecoveredBy || null,
+      checkpoints: Array.from(this.room.sharedCheckpoints),
+      collectibles: Array.from(this.room.sharedCollectibles),
+      playerLines: Array.from(this.room.playerLines.entries()).map(([pid, d]) => ({
+        playerId: pid,
+        ...d,
+      })),
+      players: Array.from(this.room.players.values()).map((p) => ({
+        id: p.id,
+        name: p.name,
+        ready: Boolean(p.ready),
+        isHost: Boolean(p.isHost),
+        connected: p.connected !== false,
+        hasLoadTracking: Boolean(p.hasLoadTracking),
+        loadStatus: p.loadStatus || 'ready',
+        loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
+        loadedLevelId: p.loadedLevelId || this.room.levelId,
+        reconnectToken: p.reconnectToken,
+      })),
+    };
+  }
+
+  static fromSnapshot(snapshot, { departingHostId = null, newHostId } = {}) {
+    const coord = new P2pRoomCoordinator({
+      code: snapshot.code,
+      levelId: snapshot.levelId,
+      maxPlayers: snapshot.maxPlayers,
+    });
+    coord.room.players.clear();
+    coord.senders.clear();
+    coord.room.started = Boolean(snapshot.started);
+    coord.room.phase = snapshot.phase || (coord.room.started ? 'diving' : 'lobby');
+    coord.room.diveSeq = snapshot.diveSeq || 0;
+    coord.room.bodyRecoveredBy = snapshot.bodyRecoveredBy || null;
+    coord.room.sharedCheckpoints = new Set(snapshot.checkpoints || []);
+    coord.room.sharedCollectibles = new Set(snapshot.collectibles || []);
+    coord.room.playerLines = new Map();
+    for (const pl of snapshot.playerLines || []) {
+      if (pl?.playerId && pl.playerId !== departingHostId) {
+        coord.room.playerLines.set(pl.playerId, {
+          chains: pl.chains || [],
+          reelingActive: Boolean(pl.reelingActive),
+        });
+      }
+    }
+
+    let maxSeq = snapshot.seq || 2;
+    for (const p of snapshot.players || []) {
+      if (!p || p.id === departingHostId) continue;
+      const n = parseInt(String(p.id).replace(/\D+/g, ''), 10) || 0;
+      if (n >= maxSeq) maxSeq = n + 1;
+      const becameHost = p.id === newHostId;
+      coord.room.players.set(p.id, {
+        id: p.id,
+        name: p.name,
+        ready: becameHost ? true : Boolean(p.ready),
+        isHost: becameHost,
+        connected: becameHost ? true : p.connected !== false,
+        hasLoadTracking: Boolean(p.hasLoadTracking),
+        loadStatus: p.loadStatus || 'ready',
+        loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
+        loadedLevelId: p.loadedLevelId || coord.room.levelId,
+        reconnectToken: p.reconnectToken || randomToken(),
+        disconnectTimer: null,
+      });
+    }
+    coord.seq = maxSeq;
+    coord.hostId = newHostId;
+    coord.hostToken = coord.room.players.get(newHostId)?.reconnectToken || randomToken();
+    return coord;
+  }
+
   _sendTo(playerId, msg) {
     try {
       this.senders.get(playerId)?.(msg);
@@ -161,9 +254,19 @@ export class P2pRoomCoordinator {
   }
 
   _broadcast(msg, excludeId = null) {
+    const attachSnapshot =
+      msg?.type === 'room_update' ||
+      msg?.type === 'dive_preparing' ||
+      msg?.type === 'dive_started' ||
+      msg?.type === 'returned_to_lobby' ||
+      msg?.type === 'peer_checkpoint' ||
+      msg?.type === 'peer_collectible' ||
+      msg?.type === 'peer_body_recovered' ||
+      msg?.type === 'peer_guideline';
+    const payload = attachSnapshot ? { ...msg, syncState: this.exportSnapshot() } : msg;
     for (const pid of this.room.players.keys()) {
       if (pid !== excludeId) {
-        this._sendTo(pid, msg);
+        this._sendTo(pid, payload);
       }
     }
   }
@@ -248,6 +351,7 @@ export class P2pRoomCoordinator {
       room: this.serializeRoom(),
       clientId: playerId,
       reconnectToken: token,
+      syncState: this.exportSnapshot(),
     });
     this._broadcast(
       {
