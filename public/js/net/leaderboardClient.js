@@ -1,4 +1,7 @@
-import { queryLeaderboardEntries } from '../game/leaderboardModel.js';
+import {
+  normalizeLeaderboardSubmission,
+  queryLeaderboardEntries,
+} from '../game/leaderboardModel.js';
 
 const PLAYER_ID_KEY = 'caveDiverGlobalPlayerId_v1';
 const CUSTOM_ENDPOINT_KEY = 'caveDiverLeaderboardApiUrl_v1';
@@ -41,7 +44,11 @@ export class LeaderboardClient {
 
   _saveLocalCache(entries) {
     try {
-      globalThis.localStorage?.setItem(LOCAL_CACHE_KEY, JSON.stringify(entries.slice(-120)));
+      const trimmed =
+        entries.length > 120
+          ? entries.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 120)
+          : entries;
+      globalThis.localStorage?.setItem(LOCAL_CACHE_KEY, JSON.stringify(trimmed));
     } catch {
       // ignore storage restriction
     }
@@ -108,6 +115,7 @@ export class LeaderboardClient {
   }
 
   async fetchBoard({ mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
+    this._localEntries = this._loadLocalCache();
     const endpoint = await this.resolveEndpoint();
     if (!endpoint) {
       return {
@@ -130,6 +138,7 @@ export class LeaderboardClient {
         entries: Array.isArray(json.entries) ? json.entries : [],
       };
     } catch {
+      this._localEntries = this._loadLocalCache();
       return {
         source: 'local-fallback',
         mode,
@@ -140,34 +149,38 @@ export class LeaderboardClient {
   }
 
   async submitRun(submission) {
+    this._localEntries = this._loadLocalCache();
     const payload = {
       ...submission,
       playerId: submission.playerId || this.playerId,
     };
 
+    const parsedLocal = normalizeLeaderboardSubmission(payload);
+    if (!parsedLocal.ok) {
+      return { ok: false, error: parsedLocal.error };
+    }
+    this._cacheLocalEntry(parsedLocal.entry);
+
+    const buildLocalResult = (source = 'local') => {
+      const board = queryLeaderboardEntries(this._localEntries, {
+        mode: parsedLocal.entry.mode,
+        levelId: parsedLocal.entry.levelId,
+        limit: 50,
+      });
+      const rank = board.findIndex((e) => e.entryKey === parsedLocal.entry.entryKey) + 1;
+      return {
+        ok: true,
+        source,
+        entry: parsedLocal.entry,
+        rank: rank > 0 ? rank : 1,
+        total: board.length,
+        entries: board.slice(0, 20),
+      };
+    };
+
     const endpoint = await this.resolveEndpoint();
     if (!endpoint) {
-      // Fallback cache for local preview before global endpoint is linked
-      const { normalizeLeaderboardSubmission } = await import('../game/leaderboardModel.js');
-      const parsed = normalizeLeaderboardSubmission(payload);
-      if (parsed.ok) {
-        this._cacheLocalEntry(parsed.entry);
-        const board = queryLeaderboardEntries(this._localEntries, {
-          mode: parsed.entry.mode,
-          levelId: parsed.entry.levelId,
-          limit: 50,
-        });
-        const rank = board.findIndex((e) => e.entryKey === parsed.entry.entryKey) + 1;
-        return {
-          ok: true,
-          source: 'local',
-          entry: parsed.entry,
-          rank: rank > 0 ? rank : 1,
-          total: board.length,
-          entries: board.slice(0, 20),
-        };
-      }
-      return { ok: false, error: parsed.error };
+      return buildLocalResult('local');
     }
 
     try {
@@ -187,8 +200,8 @@ export class LeaderboardClient {
         total: json.total || null,
         entries: Array.isArray(json.entries) ? json.entries : [],
       };
-    } catch (err) {
-      return { ok: false, source: 'offline', error: err?.message || 'Network unavailable' };
+    } catch {
+      return buildLocalResult('local-fallback');
     }
   }
 }

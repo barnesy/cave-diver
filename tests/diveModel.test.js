@@ -1228,4 +1228,59 @@ test('LeaderboardModel validates score ceilings, separates solo/team, and builds
   const siteTeam = queryLeaderboardEntries(all, { mode: 'team', levelId: 'cenote-el-abismo' });
   assert.equal(siteTeam.length, 1);
   assert.equal(siteTeam[0].displayName, 'Alice + Bob');
+
+  // Verify every single campaign level's perfect Solo & Team score from scoring.js passes ceiling validation!
+  for (const lvl of LEVELS) {
+    const perfectDiveState = createDiveState();
+    const collected = new Set((lvl.collectibles || []).map((c) => c.id));
+    const localPerfect = computeDiverScoreSummary({
+      name: 'MaxDiver',
+      level: lvl,
+      diveState: perfectDiveState,
+      checkpointsHit: new Set((lvl.checkpoints || []).map((cp) => cp.id)),
+      collectedIds: collected,
+      exploredCount: 100,
+      totalExploreCells: 100,
+      diveTimeSec: 10,
+    });
+    assert.equal(
+      localPerfect.maxPossible,
+      computeLevelMaxScore(lvl.id, false),
+      `Solo max score mismatch on ${lvl.id}`
+    );
+    const soloCheck = normalizeLeaderboardSubmission({
+      mode: 'solo',
+      levelId: lvl.id,
+      playerId: 'max1',
+      diverName: 'MaxDiver',
+      score: localPerfect.totalScore,
+      timeSec: 10,
+      exploredPct: localPerfect.exploredPct,
+      collectiblesFound: localPerfect.collectiblesFound,
+      grade: localPerfect.rank.grade,
+    });
+    assert.equal(soloCheck.ok, true, `Perfect solo score rejected on ${lvl.id}: ${soloCheck.error}`);
+
+    const teamPerfect = computeTeamScoreSummary(localPerfect, [
+      { name: 'Buddy', alive: true, healthPct: 100, diveTimeSec: 10, gasRemainingPct: 100 },
+    ]);
+    assert.equal(
+      teamPerfect.teamMaxPossible,
+      computeLevelMaxScore(lvl.id, true),
+      `Team max score mismatch on ${lvl.id}`
+    );
+    const teamCheck = normalizeLeaderboardSubmission({
+      mode: 'team',
+      levelId: lvl.id,
+      runId: `MAX-${lvl.id}`,
+      crew: teamPerfect.roster.map((r) => ({ name: r.name, score: r.totalScore, alive: true })),
+      teamSize: 2,
+      score: teamPerfect.teamScore,
+      timeSec: 10,
+      exploredPct: teamPerfect.exploredPct,
+      collectiblesFound: teamPerfect.collectiblesFound,
+      grade: teamPerfect.teamRank.grade,
+    });
+    assert.equal(teamCheck.ok, true, `Perfect team score rejected on ${lvl.id}: ${teamCheck.error}`);
+  }
 });

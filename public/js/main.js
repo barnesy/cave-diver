@@ -805,7 +805,10 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       })
       .then((res) => {
         if (!debriefLeaderboardEl) return;
-        if (!res?.ok) return;
+        if (!res?.ok) {
+          console.warn('Leaderboard submit failed:', res?.error);
+          return;
+        }
         const boardLabel = subMode === 'team' ? 'TEAM LEADERBOARD' : 'INDIVIDUAL LEADERBOARD';
         const srcTag = res.source === 'global' ? 'Global' : 'Local PB';
         const rankText = res.rank ? `${srcTag} Rank #${res.rank} of ${res.total || res.rank}` : srcTag;
@@ -821,7 +824,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
           refreshMenuLeaderboard();
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('Leaderboard submit error:', err);
+      });
   }
 }
 

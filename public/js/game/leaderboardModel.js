@@ -23,13 +23,14 @@ export function sanitizeIdToken(raw, maxLen = 48) {
 export function computeLevelMaxScore(levelId, isTeam = false) {
   if (!isValidLevelId(levelId)) return 0;
   const level = getLevelById(levelId);
-  const collectiblePts = (level.collectibles || []).reduce(
+  const list = level.collectibles || [];
+  const collectiblePts = list.reduce(
     (sum, c) => sum + (Number(c.points) || 200),
     0
   );
-  const allCollectiblesBonus = (level.collectibles || []).length > 0 ? 350 : 0;
-  // Health (1000) + Speed (800) + Collectibles + All Bonus (350) + Explore (350) + Cartographer (200)
-  const soloCeiling = 1800 + collectiblePts + allCollectiblesBonus + 550;
+  const allCollectiblesBonus = list.length > 0 ? 400 : 0;
+  // Match scoring.js maxPossible: Health (1000) + Speed (800) + Collectibles + All Bonus (400) + Explore (700) + Cartographer (250)
+  const soloCeiling = 1000 + 800 + collectiblePts + allCollectiblesBonus + 700 + 250;
   return isTeam ? soloCeiling + 600 : soloCeiling;
 }
 
@@ -61,7 +62,7 @@ export function normalizeLeaderboardSubmission(raw) {
   }
 
   const timeSec = Math.round(Number(raw.timeSec) * 10) / 10;
-  if (!Number.isFinite(timeSec) || timeSec < 2 || timeSec > 7200) {
+  if (!Number.isFinite(timeSec) || timeSec < 0.1 || timeSec > 7200) {
     return { ok: false, error: 'Invalid dive duration.' };
   }
 

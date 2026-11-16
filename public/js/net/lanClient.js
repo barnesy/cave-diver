@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=40');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=42');
   }
   return trysteroModulePromise;
 }
