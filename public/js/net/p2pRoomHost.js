@@ -82,9 +82,13 @@ export function pickNextP2pHostId(players, excludeId = null) {
     .filter((p) => p && p.id !== excludeId && p.connected !== false)
     .slice()
     .sort((a, b) => {
-      const na = parseInt(String(a.id).replace(/\D+/g, ''), 10) || 0;
-      const nb = parseInt(String(b.id).replace(/\D+/g, ''), 10) || 0;
-      return na !== nb ? na - nb : String(a.id).localeCompare(String(b.id));
+      const ja = Number.isFinite(a.joinSeq) ? a.joinSeq : Number.MAX_SAFE_INTEGER;
+      const jb = Number.isFinite(b.joinSeq) ? b.joinSeq : Number.MAX_SAFE_INTEGER;
+      if (ja !== jb) return ja - jb;
+      const na = parseInt(String(a.id).replace(/\D+/g, ''), 10);
+      const nb = parseInt(String(b.id).replace(/\D+/g, ''), 10);
+      if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+      return String(a.id).localeCompare(String(b.id));
     });
   return candidates[0]?.id || null;
 }
@@ -95,9 +99,16 @@ export function pickNextP2pHostId(players, excludeId = null) {
  * UI, reconnect logic, and gameplay behave identically without a backend server.
  */
 export class P2pRoomCoordinator {
-  constructor({ code, hostName = 'Lead Diver', levelId = DEFAULT_LEVEL_ID, maxPlayers = 2, loadStatus = {} }) {
+  constructor({
+    code,
+    hostId = 'p2p-1',
+    hostName = 'Lead Diver',
+    levelId = DEFAULT_LEVEL_ID,
+    maxPlayers = 2,
+    loadStatus = {},
+  }) {
     this.seq = 2;
-    this.hostId = 'p2p-1';
+    this.hostId = hostId;
     this.room = {
       code,
       levelId: sanitizeLevelId(levelId),
@@ -116,6 +127,7 @@ export class P2pRoomCoordinator {
     const token = randomToken();
     this.room.players.set(this.hostId, {
       id: this.hostId,
+      joinSeq: 1,
       name: sanitizeName(hostName, 'Lead Diver'),
       ready: true,
       isHost: true,
@@ -182,6 +194,7 @@ export class P2pRoomCoordinator {
       })),
       players: Array.from(this.room.players.values()).map((p) => ({
         id: p.id,
+        joinSeq: p.joinSeq || 1,
         name: p.name,
         ready: Boolean(p.ready),
         isHost: Boolean(p.isHost),
@@ -198,6 +211,7 @@ export class P2pRoomCoordinator {
   static fromSnapshot(snapshot, { departingHostId = null, newHostId } = {}) {
     const coord = new P2pRoomCoordinator({
       code: snapshot.code,
+      hostId: newHostId,
       levelId: snapshot.levelId,
       maxPlayers: snapshot.maxPlayers,
     });
@@ -222,11 +236,12 @@ export class P2pRoomCoordinator {
     let maxSeq = snapshot.seq || 2;
     for (const p of snapshot.players || []) {
       if (!p || p.id === departingHostId) continue;
-      const n = parseInt(String(p.id).replace(/\D+/g, ''), 10) || 0;
-      if (n >= maxSeq) maxSeq = n + 1;
+      const js = p.joinSeq || maxSeq;
+      if (js >= maxSeq) maxSeq = js + 1;
       const becameHost = p.id === newHostId;
       coord.room.players.set(p.id, {
         id: p.id,
+        joinSeq: js,
         name: p.name,
         ready: becameHost ? true : Boolean(p.ready),
         isHost: becameHost,
@@ -319,19 +334,69 @@ export class P2pRoomCoordinator {
     this._broadcast({ type: 'room_update', leftPlayerId: playerId, room: this.serializeRoom() });
   }
 
-  handleRemoteJoin(msg, sendFn) {
+  handleRemoteJoin(msg, sendFn, explicitPlayerId = null) {
+    // Re-attach cleanly if an existing player with this peerId reconnects
+    if (explicitPlayerId && this.room.players.has(explicitPlayerId)) {
+      const existing = this.room.players.get(explicitPlayerId);
+      if (existing.disconnectTimer) {
+        clearTimeout(existing.disconnectTimer);
+        existing.disconnectTimer = null;
+      }
+      existing.connected = true;
+      existing.name = sanitizeName(msg.name, existing.name);
+      this.senders.set(explicitPlayerId, sendFn);
+      sendFn({
+        type: 'room_joined',
+        room: this.serializeRoom(),
+        clientId: explicitPlayerId,
+        reconnectToken: existing.reconnectToken,
+        syncState: this.exportSnapshot(),
+      });
+      this._broadcast({ type: 'room_update', room: this.serializeRoom() }, explicitPlayerId);
+      if (this.room.started) {
+        sendFn({
+          type: 'dive_started',
+          levelId: this.room.levelId,
+          diveSeq: this.room.diveSeq,
+          rejoined: true,
+          lateJoin: true,
+          checkpoints: Array.from(this.room.sharedCheckpoints),
+          collectibles: Array.from(this.room.sharedCollectibles),
+          playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
+            playerId: pid,
+            ...data,
+          })),
+          bodyRecoveredBy: this.room.bodyRecoveredBy || null,
+          room: this.serializeRoom(),
+        });
+      }
+      return explicitPlayerId;
+    }
+
+    // Evict stale disconnected slots if room appears full from ungraceful drops
+    if (this.room.players.size >= this.room.maxPlayers) {
+      const disconnectedEntry = Array.from(this.room.players.values()).find((m) => !m.isHost && m.connected === false);
+      if (disconnectedEntry) {
+        if (disconnectedEntry.disconnectTimer) clearTimeout(disconnectedEntry.disconnectTimer);
+        this.room.players.delete(disconnectedEntry.id);
+        this.senders.delete(disconnectedEntry.id);
+      }
+    }
+
     if (this.room.players.size >= this.room.maxPlayers) {
       sendFn({ type: 'error', message: `Room "${this.room.code}" already has ${this.room.maxPlayers} divers.` });
       return null;
     }
 
-    const playerId = `p2p-${this.seq++}`;
+    const joinSeq = this.seq++;
+    const playerId = explicitPlayerId || `p2p-${joinSeq}`;
     const token = randomToken();
     const hasJoinTracking = Boolean(msg.loadStatus || msg.loadedLevelId);
     const loadedLevelId = msg.loadedLevelId ? sanitizeLevelId(msg.loadedLevelId) : this.room.levelId;
     const loadStatus = msg.loadStatus === 'loading' ? 'loading' : 'ready';
     const member = {
       id: playerId,
+      joinSeq,
       name: sanitizeName(msg.name, 'Buddy Diver'),
       ready: true,
       isHost: false,
