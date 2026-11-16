@@ -77,6 +77,9 @@ const lanRoomBox = document.getElementById('lan-room-box');
 const lanInviteUrlInput = document.getElementById('lan-invite-url');
 const btnCopyInvite = document.getElementById('btn-copy-invite');
 const btnShareInvite = document.getElementById('btn-share-invite');
+const btnNotifyToggle = document.getElementById('btn-notify-toggle');
+const btnHudInvite = document.getElementById('btn-hud-invite');
+const btnHudShare = document.getElementById('btn-hud-share');
 const lanUrlsEl = document.getElementById('lan-urls');
 const loaderCoopSyncEl = document.getElementById('loader-coop-sync');
 const loaderCrewStatusEl = document.getElementById('loader-crew-status');
@@ -105,6 +108,10 @@ let attemptJoinAfterExpire = '';
 let activeDiveSeq = 0;
 let lastHostPromoMs = 0;
 let copyInviteFeedbackTimer = 0;
+let knownRoomCode = '';
+let knownRoomMemberIds = new Set();
+let notifyPromptedOnce = false;
+let notifyAlertsMuted = false;
 
 // Restore saved player callsign on phone/desktop (use unique fallback when auto-joining via link)
 try {
@@ -517,6 +524,12 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenDebrief.hidden = true;
   screenHud.hidden = false;
   if (coopCommsEl) coopCommsEl.hidden = !multiplayer;
+  if (multiplayer && lan.room) {
+    syncRoomInviteUi(lan.room);
+  } else {
+    if (btnHudInvite) btnHudInvite.hidden = true;
+    if (btnHudShare) btnHudShare.hidden = true;
+  }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const openMsg =
     activeLevel.reelMetersPerDiver > 0
@@ -814,11 +827,108 @@ function syncBrowserRoomUrl(code) {
 function syncRoomInviteUi(room) {
   const code = room?.code || '';
   const inviteUrl = buildRoomInviteUrl(code);
+  const maxP = room?.maxPlayers || 2;
+  const hasOpenSlots = Boolean(code && Array.isArray(room?.players) && room.players.length < maxP);
   if (lanInviteUrlInput) {
     lanInviteUrlInput.value = inviteUrl;
   }
   if (btnShareInvite) {
     btnShareInvite.hidden = !(code && typeof navigator.share === 'function');
+  }
+  if (btnHudInvite) {
+    btnHudInvite.hidden = !hasOpenSlots;
+    if (hasOpenSlots) {
+      btnHudInvite.title = `Copy invite link (${room.players.length}/${maxP} divers · Room ${code})`;
+    }
+  }
+  if (btnHudShare) {
+    btnHudShare.hidden = !(hasOpenSlots && typeof navigator.share === 'function');
+  }
+  syncNotifyToggleUi();
+}
+
+function syncNotifyToggleUi() {
+  if (!btnNotifyToggle) return;
+  if (!('Notification' in window)) {
+    btnNotifyToggle.hidden = true;
+    return;
+  }
+  btnNotifyToggle.hidden = false;
+  const perm = Notification.permission;
+  if (perm === 'denied') {
+    btnNotifyToggle.textContent = '🔕 Blocked';
+    btnNotifyToggle.title = 'Notifications blocked in browser site settings';
+  } else if (perm === 'granted') {
+    btnNotifyToggle.textContent = notifyAlertsMuted ? '🔕 Muted' : '🔔 Alerts';
+    btnNotifyToggle.title = notifyAlertsMuted
+      ? 'Tap to unmute join notifications'
+      : 'You will get a notification when a diver joins while app is in background';
+  } else {
+    btnNotifyToggle.textContent = '🔔 Alerts';
+    btnNotifyToggle.title = 'Enable notification when a diver joins';
+  }
+}
+
+async function requestDiverNotificationPermission({ userTriggered = false } = {}) {
+  if (!('Notification' in window)) return 'unsupported';
+  if (Notification.permission === 'granted') {
+    syncNotifyToggleUi();
+    return 'granted';
+  }
+  if (Notification.permission === 'denied') {
+    syncNotifyToggleUi();
+    if (userTriggered) {
+      showToast('Notifications are blocked in your browser site settings.', 3.4);
+    }
+    return 'denied';
+  }
+  if (!userTriggered && notifyPromptedOnce) return Notification.permission;
+  notifyPromptedOnce = true;
+  try {
+    const res = await Notification.requestPermission();
+    syncNotifyToggleUi();
+    if (userTriggered && res === 'granted') {
+      showToast('Join alerts enabled — you will be notified when a buddy enters!', 3.0);
+    }
+    return res;
+  } catch {
+    return Notification.permission;
+  }
+}
+
+async function showJoinOsNotification(room, joiners, siteNum, siteLevel) {
+  if (!('Notification' in window) || Notification.permission !== 'granted' || notifyAlertsMuted) return;
+  if (!document.hidden && document.hasFocus()) return;
+  const names = joiners.map((p) => p.name || 'Buddy Diver').join(', ');
+  const maxP = room.maxPlayers || 2;
+  const title = `${names} joined Room ${room.code}`;
+  const options = {
+    body: `L${siteNum}: ${siteLevel.name} (${room.players.length}/${maxP} divers)`,
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: `cave-diver-join-${room.code}`,
+    renotify: true,
+    data: { url: buildRoomInviteUrl(room.code) },
+  };
+  try {
+    if (navigator.serviceWorker?.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg?.showNotification) {
+        await reg.showNotification(title, options);
+        return;
+      }
+    }
+  } catch {
+    // Fallback to foreground Notification constructor below
+  }
+  try {
+    const n = new Notification(title, options);
+    n.onclick = () => {
+      try { window.focus(); } catch {}
+      n.close();
+    };
+  } catch {
+    // Some mobile browsers require ServiceWorkerRegistration.showNotification
   }
 }
 
@@ -909,9 +1019,13 @@ function setLanConnectionBadge(state, text) {
 
 function resetLobbyUiState(statusText = 'Connect to host or join a buddy\'s room.') {
   lanRoomBox.hidden = true;
+  knownRoomCode = '';
+  knownRoomMemberIds = new Set();
   if (lanSetupControls) lanSetupControls.hidden = false;
   if (lanInviteUrlInput) lanInviteUrlInput.value = '';
   if (btnShareInvite) btnShareInvite.hidden = true;
+  if (btnHudInvite) btnHudInvite.hidden = true;
+  if (btnHudShare) btnHudShare.hidden = true;
   syncBrowserRoomUrl('');
   setLevelSelectionLocked(false);
   lanStatus.className = 'lan-status';
@@ -1056,6 +1170,7 @@ if (lanRoomsList) {
 document.getElementById('btn-create-room').addEventListener('click', () => {
   const name = playerNameInput?.value.trim() || 'Lead Diver';
   const maxPlayers = Number(document.getElementById('select-max-players')?.value || 2);
+  requestDiverNotificationPermission();
   lanStatus.textContent = 'Creating room...';
   lan.connect();
   lan.createRoom(name, activeLevel.id, maxPlayers);
@@ -1090,33 +1205,42 @@ document.getElementById('btn-join-room').addEventListener('click', triggerJoinFr
 
 async function copyCurrentInviteLink() {
   if (!lan.room) return;
+  requestDiverNotificationPermission();
   if (cachedLanUrls.length === 0) await fetchLanUrls();
   syncRoomInviteUi(lan.room);
   const inviteUrl = lanInviteUrlInput?.value || buildRoomInviteUrl(lan.room.code);
   const ok = await copyText(inviteUrl, `Copied invite link for Room ${lan.room.code}!`, {
     selectEl: lanInviteUrlInput,
   });
-  if (ok && btnCopyInvite) {
+  if (ok) {
     clearTimeout(copyInviteFeedbackTimer);
-    btnCopyInvite.textContent = '✓ Copied!';
-    btnCopyInvite.classList.add('copied');
+    if (btnCopyInvite) {
+      btnCopyInvite.textContent = '✓ Copied!';
+      btnCopyInvite.classList.add('copied');
+    }
+    if (btnHudInvite) {
+      btnHudInvite.textContent = '✓ Copied';
+      btnHudInvite.classList.add('copied');
+    }
     copyInviteFeedbackTimer = setTimeout(() => {
-      btnCopyInvite.textContent = 'Copy Link';
-      btnCopyInvite.classList.remove('copied');
+      if (btnCopyInvite) {
+        btnCopyInvite.textContent = 'Copy Link';
+        btnCopyInvite.classList.remove('copied');
+      }
+      if (btnHudInvite) {
+        btnHudInvite.textContent = '🔗 Invite';
+        btnHudInvite.classList.remove('copied');
+      }
     }, 2000);
   }
 }
 
-btnCopyInvite?.addEventListener('click', copyCurrentInviteLink);
-
-lanInviteUrlInput?.addEventListener('click', () => {
-  lanInviteUrlInput.focus();
-  lanInviteUrlInput.select();
-  copyCurrentInviteLink();
-});
-
-btnShareInvite?.addEventListener('click', async () => {
-  if (!lan.room || typeof navigator.share !== 'function') return;
+async function shareCurrentInviteLink() {
+  if (!lan.room || typeof navigator.share !== 'function') {
+    copyCurrentInviteLink();
+    return;
+  }
+  requestDiverNotificationPermission();
   if (cachedLanUrls.length === 0) await fetchLanUrls();
   const url = buildRoomInviteUrl(lan.room.code);
   const lvl = getLevelById(lan.room.levelId);
@@ -1131,6 +1255,29 @@ btnShareInvite?.addEventListener('click', async () => {
       copyCurrentInviteLink();
     }
   }
+}
+
+btnCopyInvite?.addEventListener('click', copyCurrentInviteLink);
+btnHudInvite?.addEventListener('click', copyCurrentInviteLink);
+
+lanInviteUrlInput?.addEventListener('click', () => {
+  lanInviteUrlInput.focus();
+  lanInviteUrlInput.select();
+  copyCurrentInviteLink();
+});
+
+btnShareInvite?.addEventListener('click', shareCurrentInviteLink);
+btnHudShare?.addEventListener('click', shareCurrentInviteLink);
+
+btnNotifyToggle?.addEventListener('click', async () => {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    notifyAlertsMuted = !notifyAlertsMuted;
+    syncNotifyToggleUi();
+    showToast(notifyAlertsMuted ? 'Join notifications muted.' : 'Join notifications active!', 2.2);
+    return;
+  }
+  await requestDiverNotificationPermission({ userTriggered: true });
 });
 
 document.getElementById('btn-ready-toggle')?.addEventListener('click', () => {
@@ -1380,6 +1527,22 @@ lan.on('room_update', async (room) => {
 
   const siteLevel = getLevelById(room.levelId);
   const siteNum = Math.max(1, LEVELS.findIndex((l) => l.id === siteLevel.id) + 1);
+  if (knownRoomCode !== room.code) {
+    knownRoomCode = room.code;
+    knownRoomMemberIds = new Set((room.players || []).map((p) => p.id));
+  } else {
+    const newJoiners = (room.players || []).filter(
+      (p) => p.id !== lan.clientId && !knownRoomMemberIds.has(p.id)
+    );
+    knownRoomMemberIds = new Set((room.players || []).map((p) => p.id));
+    if (newJoiners.length > 0) {
+      showJoinOsNotification(room, newJoiners, siteNum, siteLevel);
+      if (document.hasFocus() && !document.hidden) {
+        const names = newJoiners.map((p) => p.name || 'Buddy Diver').join(', ');
+        showToast(`${names} joined Room ${room.code}!`, 3.0);
+      }
+    }
+  }
   document.getElementById('lan-room-code').textContent = room.code;
   const sitePill = document.getElementById('lan-room-site-pill');
   if (sitePill) sitePill.textContent = `L${siteNum}: ${siteLevel.name}`;

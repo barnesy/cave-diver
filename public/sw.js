@@ -1,44 +1,44 @@
-const CACHE_VERSION = 'cave-diver-v37';
+const CACHE_VERSION = 'cave-diver-v38';
 const CORE_SHELL = [
   './',
   './manifest.json',
-  './css/style.css?v=37',
+  './css/style.css?v=38',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './js/vendor/trystero-nostr.min.js?v=37',
-  './js/main.js?v=37',
-  './js/physics/diveModel.js?v=37',
-  './js/game/audio.js?v=37',
-  './js/game/collision.js?v=37',
-  './js/game/input.js?v=37',
-  './js/game/hud.js?v=37',
-  './js/game/diverBody.js?v=37',
-  './js/game/diveSession.js?v=37',
-  './js/game/scoring.js?v=37',
-  './js/game/renderer.js?v=37',
-  './js/game/artSprites.js?v=37',
-  './js/game/silt.js?v=37',
-  './js/game/lighting.js?v=37',
-  './js/game/marineLife.js?v=37',
-  './js/levels/themes.js?v=37',
-  './js/levels/campaign.js?v=37',
-  './js/levels/index.js?v=37',
-  './js/levels/level1.js?v=37',
-  './js/levels/level2.js?v=37',
-  './js/levels/level3.js?v=37',
-  './js/levels/level4.js?v=37',
-  './js/levels/level5.js?v=37',
-  './js/levels/level6.js?v=37',
-  './js/levels/level7.js?v=37',
-  './js/levels/level8.js?v=37',
-  './js/levels/level9.js?v=37',
-  './js/levels/level10.js?v=37',
-  './js/levels/level11.js?v=37',
-  './js/levels/level12.js?v=37',
-  './js/levels/level13.js?v=37',
-  './js/net/p2pRoomHost.js?v=37',
-  './js/net/lanClient.js?v=37',
+  './js/vendor/trystero-nostr.min.js?v=38',
+  './js/main.js?v=38',
+  './js/physics/diveModel.js?v=38',
+  './js/game/audio.js?v=38',
+  './js/game/collision.js?v=38',
+  './js/game/input.js?v=38',
+  './js/game/hud.js?v=38',
+  './js/game/diverBody.js?v=38',
+  './js/game/diveSession.js?v=38',
+  './js/game/scoring.js?v=38',
+  './js/game/renderer.js?v=38',
+  './js/game/artSprites.js?v=38',
+  './js/game/silt.js?v=38',
+  './js/game/lighting.js?v=38',
+  './js/game/marineLife.js?v=38',
+  './js/levels/themes.js?v=38',
+  './js/levels/campaign.js?v=38',
+  './js/levels/index.js?v=38',
+  './js/levels/level1.js?v=38',
+  './js/levels/level2.js?v=38',
+  './js/levels/level3.js?v=38',
+  './js/levels/level4.js?v=38',
+  './js/levels/level5.js?v=38',
+  './js/levels/level6.js?v=38',
+  './js/levels/level7.js?v=38',
+  './js/levels/level8.js?v=38',
+  './js/levels/level9.js?v=38',
+  './js/levels/level10.js?v=38',
+  './js/levels/level11.js?v=38',
+  './js/levels/level12.js?v=38',
+  './js/levels/level13.js?v=38',
+  './js/net/p2pRoomHost.js?v=38',
+  './js/net/lanClient.js?v=38',
 ];
 
 self.addEventListener('install', (event) => {
@@ -116,6 +116,21 @@ self.addEventListener('fetch', (event) => {
         }
         return res;
       });
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || new URL('./', self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow ? self.clients.openWindow(targetUrl) : undefined;
     })
   );
 });
