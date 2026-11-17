@@ -101,9 +101,9 @@ export class LeaderboardClient {
       return '';
     }
 
-    // On local / LAN Node server, probe same-origin /api/leaderboard
+    // On Vercel or local Node server, probe same-origin /api/healthz
     try {
-      const res = await fetch('./api/lan-info', { cache: 'no-store' });
+      const res = await fetch('./api/healthz', { cache: 'no-store' });
       if (res.ok) {
         this._resolvedEndpoint = './api/leaderboard';
         return this._resolvedEndpoint;

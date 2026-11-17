@@ -21,10 +21,13 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=42');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=43');
   }
   return trysteroModulePromise;
 }
+
+// Populated automatically once deployed to Vercel (or same-origin ./api/room on Vercel hosts)
+export const GLOBAL_ROOM_API_URL = '';
 
 export class LanClient {
   constructor() {
@@ -65,6 +68,9 @@ export class LanClient {
     this._p2pLastPeerRxAt = new Map();
     this._p2pJoinAcked = false;
     this._p2pPendingJoin = null;
+    this._trysteroMod = null;
+    this._roomApiUrlPromise = null;
+    this._lastCloudSyncAt = 0;
     this._lastRoomSnapshot = null;
     this._manualLeave = false;
     this._migrating = false;
@@ -456,18 +462,87 @@ export class LanClient {
         const silentMs = now - (this._p2pLastHostRxAt || now);
         const pcState = pc?.connectionState || '';
         const iceState = pc?.iceConnectionState || '';
+        const pcConnected = pcState === 'connected' || iceState === 'connected' || iceState === 'completed';
         const hostLost =
           pcState === 'failed' ||
           pcState === 'closed' ||
           iceState === 'failed' ||
           iceState === 'closed' ||
-          ((pcState === 'disconnected' || iceState === 'disconnected') && silentMs > 2000) ||
-          silentMs > 4200;
+          ((pcState === 'disconnected' || iceState === 'disconnected') && silentMs > 2200) ||
+          (!pcConnected && silentMs > 4200) ||
+          silentMs > 15000;
         if (hostLost) {
           this._handleHostMigration({ departingHostId: this._p2pHostPeerId });
         }
       }
     }, 1000);
+  }
+
+  async _getRoomApiUrl() {
+    if (this._roomApiUrlPromise) return this._roomApiUrlPromise;
+    this._roomApiUrlPromise = (async () => {
+      try {
+        const host = globalThis.location?.hostname || '';
+        const proto = globalThis.location?.protocol || '';
+        if (!host.endsWith('.github.io') && proto !== 'file:') {
+          const res = await fetch('./api/healthz', { cache: 'no-store' });
+          if (res.ok) {
+            const json = await res.json();
+            if (json?.platform === 'vercel') return './api/room';
+          }
+        }
+      } catch {}
+      return GLOBAL_ROOM_API_URL ? GLOBAL_ROOM_API_URL.replace(/\/+$/, '') : '';
+    })();
+    return this._roomApiUrlPromise;
+  }
+
+  async _cloudSyncRoom(force = false) {
+    if (this.transport !== 'p2p' || !this._p2pHost || !this.room) return;
+    const now = Date.now();
+    if (!force && now - this._lastCloudSyncAt < 800) return;
+    this._lastCloudSyncAt = now;
+    try {
+      const apiUrl = await this._getRoomApiUrl();
+      if (!apiUrl) return;
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync',
+          code: this.room.code,
+          room: this.room,
+          snapshot: this._p2pHost.exportSnapshot(),
+        }),
+      });
+    } catch {}
+  }
+
+  async _cloudNotifyLeave(code, playerId) {
+    if (!code) return;
+    try {
+      const apiUrl = await this._getRoomApiUrl();
+      if (!apiUrl) return;
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ action: 'leave', code, playerId }),
+      });
+    } catch {}
+  }
+
+  async _cloudFetchRoom(code) {
+    try {
+      const apiUrl = await this._getRoomApiUrl();
+      if (!apiUrl) return null;
+      const res = await fetch(`${apiUrl}?code=${encodeURIComponent(code)}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json?.ok ? json : null;
+    } catch {
+      return null;
+    }
   }
 
   async _p2pCreateRoom(msg, preferredCode = null) {
@@ -503,6 +578,7 @@ export class LanClient {
       this._handleMessage(outMsg);
     });
 
+    this._trysteroMod = trystero;
     const trysteroRoom = trystero.joinRoom(
       { appId: TRYSTERO_APP_ID, relayUrls: TRYSTERO_RELAYS },
       `room-${code}`
@@ -514,6 +590,7 @@ export class LanClient {
     this._migrating = false;
     this._handleMessage(coordinator.getHostInitEnvelope());
     this.emit('connected');
+    this._cloudSyncRoom(true);
   }
 
   _buildFallbackSnapshot(departingHostId) {
@@ -648,6 +725,7 @@ export class LanClient {
     }
     if (this._p2pGen !== gen) return;
 
+    this._trysteroMod = trystero;
     this.clientId = trystero.selfId;
     this._p2pJoinAcked = false;
     this._p2pPendingJoin = {
@@ -665,6 +743,63 @@ export class LanClient {
     this.connected = true;
     this.reconnecting = false;
     this.emit('connected');
+
+    // Cloud Room Keeper fallback: if Host's mobile OS froze their PWA while app-switching to send the link,
+    // recover the live room snapshot from Vercel Storage after 3.2s and assume coordinator on room-CODE!
+    const cloudFallbackTimer = setTimeout(async () => {
+      if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || this._manualLeave) return;
+      const peersConnected = this._trysteroRoom ? Object.keys(this._trysteroRoom.getPeers?.() || {}).length : 0;
+      if (peersConnected > 0) return;
+      const cloud = await this._cloudFetchRoom(cleanCode);
+      if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || !cloud?.snapshot) return;
+
+      const snap = cloud.snapshot;
+      const coordinator = P2pRoomCoordinator.fromSnapshot(snap, {
+        departingHostId: null,
+        newHostId: this.clientId,
+      });
+      // Ensure joining diver is added cleanly if not already in cloud snapshot
+      const existingMe = coordinator.room.players.get(this.clientId);
+      if (!existingMe) {
+        coordinator.handleRemoteJoin(
+          { name: msg.name || 'Buddy Diver', ...this._latestLoadStatus },
+          (outMsg) => this._handleMessage(outMsg),
+          this.clientId
+        );
+      } else {
+        coordinator.bindPlayerSender(this.clientId, (outMsg) => this._handleMessage(outMsg));
+        this._handleMessage({
+          type: 'room_joined',
+          room: coordinator.serializeRoom(),
+          clientId: this.clientId,
+          reconnectToken: existingMe.reconnectToken,
+          syncState: coordinator.exportSnapshot(),
+        });
+        if (coordinator.room.started) {
+          this._handleMessage({
+            type: 'dive_started',
+            levelId: coordinator.room.levelId,
+            diveSeq: coordinator.room.diveSeq,
+            rejoined: true,
+            lateJoin: true,
+            checkpoints: Array.from(coordinator.room.sharedCheckpoints),
+            collectibles: Array.from(coordinator.room.sharedCollectibles),
+            playerLines: Array.from(coordinator.room.playerLines.entries()).map(([pid, d]) => ({
+              playerId: pid,
+              ...d,
+            })),
+            bodyRecoveredBy: coordinator.room.bodyRecoveredBy || null,
+            room: coordinator.serializeRoom(),
+          });
+        }
+      }
+      this._p2pJoinAcked = true;
+      this._p2pHost = coordinator;
+      this._p2pHostPeerId = this.clientId;
+      clearTimeout(this._p2pJoinTimer);
+      clearInterval(this._p2pJoinRetryTimer);
+      this._cloudSyncRoom(true);
+    }, 3200);
 
     // Retry sending join_room to any connected mesh peers if host promotion just finished
     this._p2pJoinRetryTimer = setInterval(() => {
@@ -686,6 +821,7 @@ export class LanClient {
     }, 900);
 
     this._p2pJoinTimer = setTimeout(() => {
+      clearTimeout(cloudFallbackTimer);
       if (this._p2pGen === gen && !this._p2pJoinAcked) {
         this._cleanupP2p();
         if (isRejoin) {
@@ -869,6 +1005,9 @@ export class LanClient {
           }
           this._syncPeerAlias();
           this.emit('room_update', msg.room);
+          if (this.transport === 'p2p' && this._p2pHost) {
+            this._cloudSyncRoom(false);
+          }
           if (msg.joinedMidDiveName) {
             this.emit('peer_joined_mid_dive', msg.joinedMidDiveName);
           }
@@ -883,6 +1022,9 @@ export class LanClient {
           this.peers.clear();
           this.peer = null;
           this.emit('dive_started', msg);
+          if (this.transport === 'p2p' && this._p2pHost) {
+            this._cloudSyncRoom(true);
+          }
           break;
         case 'returned_to_lobby':
           this.room = msg.room;
@@ -1035,8 +1177,22 @@ export class LanClient {
     this.connect();
   }
 
-  listRooms() {
+  async listRooms() {
     if (this.transport === 'p2p') {
+      try {
+        const apiUrl = await this._getRoomApiUrl();
+        if (apiUrl) {
+          const res = await fetch(apiUrl, { cache: 'no-store' });
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json?.rooms)) {
+              this.rooms = json.rooms;
+              this.emit('rooms_list', this.rooms);
+              return;
+            }
+          }
+        }
+      } catch {}
       this.rooms = [];
       this.emit('rooms_list', this.rooms);
       return;
@@ -1052,6 +1208,26 @@ export class LanClient {
     if (this.transport === 'p2p') {
       if (this._activeSession && !this.room && !this._trysteroRoom) {
         this.connect();
+        return;
+      }
+      // Heal dead Nostr relay WebSockets after mobile app switch / screen sleep
+      if (this._trysteroRoom && this.room && this._trysteroMod?.getRelaySockets) {
+        try {
+          const sockets = Object.values(this._trysteroMod.getRelaySockets() || {});
+          const anyOpen = sockets.some((ws) => ws && ws.readyState === 1);
+          if (!anyOpen && !this._manualLeave) {
+            const code = this.room.code;
+            const prevGen = ++this._p2pGen;
+            try { this._trysteroRoom.leave(); } catch {}
+            const nextRoom = this._trysteroMod.joinRoom(
+              { appId: TRYSTERO_APP_ID, relayUrls: TRYSTERO_RELAYS },
+              `room-${code}`
+            );
+            this._attachTrysteroMesh(nextRoom, code, prevGen);
+            if (this._p2pHost) this._cloudSyncRoom(true);
+            this.emit('connected');
+          }
+        } catch {}
       }
       return;
     }
@@ -1169,6 +1345,9 @@ export class LanClient {
     if (this.transport === 'p2p') {
       const currentRoom = this.room;
       const myId = this.clientId;
+      if (currentRoom?.code) {
+        this._cloudNotifyLeave(currentRoom.code, myId);
+      }
       const scheduleFlushClose = (delayMs) => {
         this._p2pPendingFlush = new Promise((resolve) => {
           this._pendingLeaveTimer = setTimeout(() => {

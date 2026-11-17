@@ -2207,6 +2207,25 @@ function setupPwaSupport() {
     });
   }
 
+  let screenWakeLock = null;
+  const syncWakeLock = async () => {
+    const shouldHold = !document.hidden && (mode === 'diving' || Boolean(lan.room));
+    if (shouldHold && 'wakeLock' in navigator && !screenWakeLock) {
+      try {
+        screenWakeLock = await navigator.wakeLock.request('screen');
+        screenWakeLock.addEventListener('release', () => {
+          screenWakeLock = null;
+        });
+      } catch {}
+    } else if (!shouldHold && screenWakeLock) {
+      try { await screenWakeLock.release(); } catch {}
+      screenWakeLock = null;
+    }
+  };
+  document.addEventListener('visibilitychange', syncWakeLock);
+  window.addEventListener('focus', syncWakeLock);
+  setInterval(syncWakeLock, 5000);
+
   const isStandalone =
     window.matchMedia?.('(display-mode: standalone)').matches ||
     window.navigator?.standalone === true;
