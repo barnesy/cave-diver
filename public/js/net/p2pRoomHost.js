@@ -695,6 +695,22 @@ export class P2pRoomCoordinator {
         break;
       }
 
+      case 'gas_share': {
+        const targetPlayerId = typeof msg.targetPlayerId === 'string' ? msg.targetPlayerId.slice(0, 48) : '';
+        const gasId = ['EAN32', 'TMX1455', 'O2'].includes(msg.gasId) ? msg.gasId : 'EAN32';
+        const amountBar = Math.max(1, Math.min(40, Math.round(Number(msg.amountBar) || 0)));
+        if (!targetPlayerId || amountBar <= 0) return;
+        this._sendTo(targetPlayerId, {
+          type: 'peer_gas_share',
+          fromPlayerId: p.id,
+          fromName: p.name,
+          targetPlayerId,
+          gasId,
+          amountBar,
+        });
+        break;
+      }
+
       case 'leave_room': {
         if (!p.isHost) {
           this.removePlayer(p.id);

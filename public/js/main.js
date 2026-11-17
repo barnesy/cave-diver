@@ -1,5 +1,18 @@
 import { LEVELS, DEFAULT_LEVEL_ID, CAMPAIGN_PLAN, getLevelById, getLevelMeta, getLevelMaxDepthM } from './levels/index.js';
-import { createDiveState, switchGas, GAS_MIXES } from './physics/diveModel.js';
+import {
+  createDiveState,
+  switchGas,
+  GAS_MIXES,
+  computeSiteDivePlan,
+  donateGasFromState,
+  receiveGasIntoState,
+} from './physics/diveModel.js';
+import {
+  createEmptyLogbook,
+  recordDiveInLogbook,
+  seedLogbookFromEntries,
+  formatLogbookSummary,
+} from './game/logbookModel.js';
 import {
   createDiveSession,
   stepDiveSession,
@@ -71,6 +84,8 @@ const btnPlaySolo = document.getElementById('btn-play-solo');
 const btnOpenLan = document.getElementById('btn-open-lan');
 const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
 const leaderboardPanel = document.getElementById('leaderboard-panel');
+const lbCareerSummaryEl = document.getElementById('lb-career-summary');
+const siteDivePlanEl = document.getElementById('site-dive-plan');
 const leaderboardSubEl = document.getElementById('leaderboard-sub');
 const leaderboardRowsEl = document.getElementById('leaderboard-rows');
 const debriefLeaderboardEl = document.getElementById('debrief-leaderboard');
@@ -97,6 +112,7 @@ const loaderCrewStatusEl = document.getElementById('loader-crew-status');
 const btnLoaderForce = document.getElementById('btn-loader-force');
 const btnLoaderCancel = document.getElementById('btn-loader-cancel');
 const coopCommsEl = document.getElementById('coop-comms');
+const btnShareGas = document.getElementById('btn-share-gas');
 const coopWaitBannerEl = document.getElementById('coop-wait-banner');
 const coopWaitTitleEl = document.getElementById('coop-wait-title');
 const coopWaitDetailEl = document.getElementById('coop-wait-detail');
@@ -260,6 +276,16 @@ function syncMenuLevelLabels(level) {
   if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();
   if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle.toUpperCase();
   if (chipRangeTmx) chipRangeTmx.textContent = `3–${Math.max(65, depthNum)}m Bottom`;
+  if (siteDivePlanEl) {
+    const plan = computeSiteDivePlan(level);
+    siteDivePlanEl.innerHTML = `
+      <span>Max ${plan.maxDepthM}m</span>
+      <span>Bottom: ${plan.bottomGasName}</span>
+      <span>1/3 Turn: ${plan.turnaroundBar}b</span>
+      <span>Reserve: ${plan.reserveBar}b</span>
+      <span>${plan.lineModeLabel}</span>
+    `;
+  }
   renderLevelCards();
 }
 
@@ -392,11 +418,11 @@ function handleReelToggle() {
   if (mode !== 'diving' || !session || session.endedState) return;
   const res = toggleGuidelineReel(session);
   if (res.action === 'start_reel') {
-    audio.playGasSwitch();
+    audio.playReelClick();
     showToast(`Anchored reel! Paying out cave line (${Math.round(session.reelRemainingM)}m left).`, 2.2);
     if (isMultiplayer) lan.sendGuidelineSync(session.guidelineChains, true);
   } else if (res.action === 'tie_off') {
-    audio.playCheckpoint();
+    audio.playReelClick();
     showToast(`Line tied off (${Math.round(session.reelRemainingM)}m remaining on spool).`, 2.0);
     if (isMultiplayer) lan.sendGuidelineSync(session.guidelineChains, false);
   } else if (res.action === 'empty') {
@@ -408,7 +434,7 @@ function handleReelRewind() {
   if (mode !== 'diving' || !session || session.endedState) return;
   const res = rewindGuidelineSegment(session);
   if (res.action === 'rewound') {
-    audio.playGasSwitch();
+    audio.playReelClick();
     const msg = res.recoveredM > 0.2
       ? `Rewound +${res.recoveredM.toFixed(1)}m (${Math.round(session.reelRemainingM)}m left).`
       : 'Cleared live reel pin.';
@@ -648,6 +674,16 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   } catch {
     // ignore storage restriction
   }
+  const updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
+    levelId: level.id,
+    success,
+    score: teamSummary.teamScore,
+    grade: teamSummary.teamRank.grade,
+    maxDepthM: diveState.maxDepthM,
+    diveTimeSec: diveState.diveTimeSec,
+  });
+  saveCareerLogbook(updatedLogbook);
+  renderCareerSummary();
   bestEl.textContent =
     success && teamSummary.teamScore > prevBest
       ? 'NEW PERSONAL BEST!'
@@ -865,7 +901,37 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
     .join('');
 }
 
+const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
+
+function loadCareerLogbook() {
+  let book = createEmptyLogbook();
+  try {
+    const raw = localStorage.getItem(CAREER_LOGBOOK_KEY);
+    if (raw) book = JSON.parse(raw);
+  } catch {}
+  return seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+}
+
+function saveCareerLogbook(book) {
+  try {
+    localStorage.setItem(CAREER_LOGBOOK_KEY, JSON.stringify(book));
+  } catch {}
+}
+
+function renderCareerSummary() {
+  if (!lbCareerSummaryEl) return;
+  const s = formatLogbookSummary(loadCareerLogbook(), LEVELS.length);
+  lbCareerSummaryEl.hidden = false;
+  lbCareerSummaryEl.innerHTML = `
+    <div class="lb-career-cell"><span>Sites</span><strong>${s.clearedCount}/${s.totalSites}</strong></div>
+    <div class="lb-career-cell"><span>Dives</span><strong>${s.totalDives}</strong></div>
+    <div class="lb-career-cell"><span>Deepest</span><strong>${s.deepestM.toFixed(0)}m</strong></div>
+    <div class="lb-career-cell"><span>Rating</span><strong>${escapeHtml(s.campaignMedal)}</strong></div>
+  `;
+}
+
 async function refreshMenuLeaderboard() {
+  renderCareerSummary();
   if (!leaderboardRowsEl || !leaderboardSubEl) return;
   const targetLevel = lbScope === 'overall' ? 'overall' : activeLevel.id;
   leaderboardSubEl.textContent = 'Syncing rankings...';
@@ -1480,6 +1546,22 @@ btnLoaderCancel?.addEventListener('click', () => {
 coopCommsEl?.addEventListener('click', (e) => {
   const btn = e.target.closest('.comm-btn');
   if (!btn || !session || mode !== 'diving') return;
+  if (btn.id === 'btn-share-gas') {
+    const targetId = btn.dataset.targetId || '';
+    const targetGas = btn.dataset.targetGas || session.diveState.activeGasId;
+    const targetName = btn.dataset.targetName || 'Buddy';
+    if (!targetId) return;
+    const donation = donateGasFromState(session.diveState, targetGas, 25);
+    if (!donation) {
+      showToast('Reserve too low to share gas safely.', 2.0);
+      return;
+    }
+    lan.sendGasShare(targetId, donation.gasId, donation.donatedBar);
+    audio.playGasShare();
+    showToast(`🎁 Shared +${donation.donatedBar} bar ${GAS_MIXES[donation.gasId]?.name || donation.gasId} with ${targetName}!`, 2.6);
+    btn.hidden = true;
+    return;
+  }
   const sig = btn.dataset.signal;
   if (!sig) return;
   session.diver.signalText = sig;
@@ -1922,6 +2004,16 @@ lan.on('peer_body_recovered', (msg) => {
   showToast(`🛟 ${who} secured ${targetName}! Escort back to surface exit.`, 4.0);
 });
 
+lan.on('peer_gas_share', (msg) => {
+  if (!session || mode !== 'diving' || !msg?.amountBar) return;
+  const added = receiveGasIntoState(session.diveState, msg.gasId, msg.amountBar);
+  if (added > 0) {
+    audio.playGasShare();
+    const gName = GAS_MIXES[msg.gasId]?.name || msg.gasId || 'Gas';
+    showToast(`🎁 ${msg.fromName || 'Buddy'} shared +${Math.round(added)} bar ${gName}!`, 3.0);
+  }
+});
+
 lan.on('peer_left', () => {
   if (mode === 'diving' && Date.now() - lastHostPromoMs > 800) {
     showToast('Buddy diver left the dive.', 2.8);
@@ -1970,6 +2062,7 @@ function stepSimulation(dt) {
       onToast: showToast,
       onImpactSound: () => audio.playImpact(),
       onAlarm: (lvl) => audio.playAlarm(lvl),
+      onExhale: (ex) => audio.playRegulatorExhale(ex),
       onCheckpoint: (cp) => {
         audio.playCheckpoint();
         showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
@@ -2042,6 +2135,33 @@ function stepSimulation(dt) {
       name: diver.name,
     });
     lan.stepPeerInterpolation(dt);
+  }
+
+  if (btnShareGas) {
+    let needyPeer = null;
+    if (isMultiplayer && diveState.alive && !session.endedState) {
+      const mySpare = (diveState.tanks[diveState.activeGasId]?.bar || 0) > 38;
+      if (mySpare) {
+        let bestDist = 3.6;
+        for (const p of peers) {
+          if (!p || p.alive === false || p.surfaced) continue;
+          const d = Math.hypot(p.x - diver.x, p.y - diver.y);
+          const lowGas = (p.activeBar ?? 200) < 95 || p.condition === 'NO GAS' || p.condition === 'LOW GAS';
+          if (lowGas && d <= bestDist) {
+            bestDist = d;
+            needyPeer = p;
+          }
+        }
+      }
+    }
+    if (needyPeer) {
+      btnShareGas.hidden = false;
+      btnShareGas.dataset.targetId = needyPeer.id || '';
+      btnShareGas.dataset.targetGas = needyPeer.gasId || diveState.activeGasId;
+      btnShareGas.dataset.targetName = needyPeer.name || 'Buddy';
+    } else {
+      btnShareGas.hidden = true;
+    }
   }
 
   hud.update({

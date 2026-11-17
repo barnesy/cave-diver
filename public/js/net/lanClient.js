@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=47');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=48');
   }
   return trysteroModulePromise;
 }
@@ -1111,6 +1111,9 @@ export class LanClient {
           }
           this.emit('peer_body_recovered', msg);
           break;
+        case 'peer_gas_share':
+          this.emit('peer_gas_share', msg);
+          break;
         case 'peer_signal': {
           const pid = msg.playerId || 'peer';
           const p = this.peers.get(pid);
@@ -1340,6 +1343,11 @@ export class LanClient {
   sendSignal(signal) {
     if (!this.room || !this.connected || !signal) return;
     this.send({ type: 'diver_signal', signal });
+  }
+
+  sendGasShare(targetPlayerId, gasId, amountBar) {
+    if (!this.room || !this.connected || !targetPlayerId || !amountBar) return;
+    this.send({ type: 'gas_share', targetPlayerId, gasId, amountBar });
   }
 
   returnToLobby() {

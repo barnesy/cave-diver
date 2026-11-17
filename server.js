@@ -959,6 +959,26 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'gas_share': {
+        const room = rooms.get(client.roomCode);
+        if (!room) return;
+        const sender = room.players.get(client.id);
+        const targetPlayerId = typeof msg.targetPlayerId === 'string' ? msg.targetPlayerId.slice(0, 48) : '';
+        const target = room.players.get(targetPlayerId);
+        const gasId = ['EAN32', 'TMX1455', 'O2'].includes(msg.gasId) ? msg.gasId : 'EAN32';
+        const amountBar = Math.max(1, Math.min(40, Math.round(Number(msg.amountBar) || 0)));
+        if (!target || amountBar <= 0) return;
+        sendJson(target.ws, {
+          type: 'peer_gas_share',
+          fromPlayerId: client.id,
+          fromName: sender?.name || 'Buddy',
+          targetPlayerId,
+          gasId,
+          amountBar,
+        });
+        break;
+      }
+
       case 'leave_room': {
         leaveCurrentRoom(client, { immediate: true });
         break;

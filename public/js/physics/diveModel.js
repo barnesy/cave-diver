@@ -578,3 +578,67 @@ export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig
     targetGas: state.activeGasId,
   };
 }
+
+/**
+ * Compute pre-dive Rule-of-Thirds planning metrics for an expedition level.
+ */
+export function computeSiteDivePlan(level) {
+  let maxDepthM = 50;
+  if (Array.isArray(level?.checkpoints) && level.checkpoints.length > 0) {
+    maxDepthM = Math.max(...level.checkpoints.map((c) => Number(c.y) || 0), level.recoveryTarget?.y || 0);
+  }
+  const bottomMix = level?.gasOverrides?.TMX1455
+    ? { ...GAS_MIXES.TMX1455, ...level.gasOverrides.TMX1455 }
+    : GAS_MIXES.TMX1455;
+  const bottomGasName = maxDepthM <= 33 ? GAS_MIXES.EAN32.name : bottomMix.name;
+  const reelMeters = Math.round(Number(level?.reelMetersPerDiver) || 0);
+  const switchDepthM = Number.isFinite(level?.ascentSwitchDepthM) ? Math.round(level.ascentSwitchDepthM) : 22;
+
+  return {
+    maxDepthM: Math.round(maxDepthM),
+    bottomGasName,
+    switchDepthM,
+    turnaroundBar: 135,
+    reserveBar: 65,
+    reelMeters,
+    lineModeLabel: reelMeters > 0 ? `Unlined · ${reelMeters}m Spool` : 'Fixed Guideline',
+  };
+}
+
+/**
+ * Donate emergency cylinder gas to an out-of-gas teammate while preserving donor safety reserve.
+ */
+export function donateGasFromState(state, preferredGasId = null, maxDonateBar = 25) {
+  if (!state?.tanks || state.alive === false) return null;
+  const candidates = [];
+  if (preferredGasId && state.tanks[preferredGasId]) candidates.push(preferredGasId);
+  if (state.activeGasId && state.tanks[state.activeGasId]) candidates.push(state.activeGasId);
+  for (const id of GAS_ORDER) candidates.push(id);
+
+  const tried = new Set();
+  for (const gasId of candidates) {
+    if (tried.has(gasId)) continue;
+    tried.add(gasId);
+    const tank = state.tanks[gasId];
+    if (!tank || tank.bar <= 38) continue;
+    const donatedBar = Math.min(maxDonateBar, Math.floor(tank.bar - 25));
+    if (donatedBar < 8) continue;
+    tank.bar = Math.max(0, tank.bar - donatedBar);
+    return { gasId, donatedBar };
+  }
+  return null;
+}
+
+/**
+ * Receive emergency gas into a matching cylinder, restoring breathing reserve.
+ */
+export function receiveGasIntoState(state, gasId, amountBar) {
+  if (!state?.tanks || !Number.isFinite(amountBar) || amountBar <= 0) return 0;
+  const resolvedId = state.tanks[gasId] ? gasId : state.activeGasId || 'EAN32';
+  const tank = state.tanks[resolvedId];
+  const mix = state.mixes?.[resolvedId] || GAS_MIXES[resolvedId] || GAS_MIXES.EAN32;
+  if (!tank) return 0;
+  const prev = tank.bar;
+  tank.bar = Math.min(mix.startBar || 200, prev + amountBar);
+  return Math.max(0, Math.round((tank.bar - prev) * 10) / 10);
+}

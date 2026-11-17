@@ -10,7 +10,16 @@ import {
   computeEND,
   getRecommendedGas,
   getAscentInstruction,
+  computeSiteDivePlan,
+  donateGasFromState,
+  receiveGasIntoState,
 } from '../public/js/physics/diveModel.js';
+import {
+  createEmptyLogbook,
+  recordDiveInLogbook,
+  seedLogbookFromEntries,
+  formatLogbookSummary,
+} from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import {
@@ -1283,4 +1292,64 @@ test('LeaderboardModel validates score ceilings, separates solo/team, and builds
     });
     assert.equal(teamCheck.ok, true, `Perfect team score rejected on ${lvl.id}: ${teamCheck.error}`);
   }
+});
+
+test('Pre-dive plan, emergency gas share, P2P gas relay, and career logbook work cleanly', () => {
+  const plan1 = computeSiteDivePlan(LEVEL_1);
+  assert.equal(plan1.turnaroundBar, 135);
+  assert.equal(plan1.reserveBar, 65);
+  assert.ok(plan1.maxDepthM >= 49);
+
+  const l6 = getLevelById('orda-crystal-maze');
+  const plan6 = computeSiteDivePlan(l6);
+  assert.ok(plan6.reelMeters > 0);
+  assert.ok(plan6.lineModeLabel.includes('Spool'));
+
+  // Gas sharing honors donor safety reserve and clamps receiver to tank startBar
+  const donor = createDiveState();
+  const receiver = createDiveState();
+  receiver.tanks.EAN32.bar = 10;
+  const gift = donateGasFromState(donor, 'EAN32', 25);
+  assert.deepEqual(gift, { gasId: 'EAN32', donatedBar: 25 });
+  assert.equal(donor.tanks.EAN32.bar, 175);
+  const added = receiveGasIntoState(receiver, gift.gasId, gift.donatedBar);
+  assert.equal(added, 25);
+  assert.equal(receiver.tanks.EAN32.bar, 35);
+
+  donor.tanks.EAN32.bar = 25;
+  donor.tanks.TMX1455.bar = 25;
+  donor.tanks.O2.bar = 25;
+  assert.equal(donateGasFromState(donor, 'EAN32', 25), null);
+
+  // P2P coordinator relays emergency gas shares exclusively to intended target
+  const hostMsgs = [];
+  const buddyMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'GAS9', hostId: 'h1', hostName: 'Host' });
+  coord.bindPlayerSender('h1', (m) => hostMsgs.push(m));
+  coord.handleRemoteJoin({ name: 'Buddy' }, (m) => buddyMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'gas_share', targetPlayerId: 'b1', gasId: 'TMX1455', amountBar: 25 });
+  const gasMsg = buddyMsgs.find((m) => m.type === 'peer_gas_share');
+  assert.ok(gasMsg);
+  assert.equal(gasMsg.amountBar, 25);
+  assert.equal(gasMsg.gasId, 'TMX1455');
+  assert.equal(gasMsg.fromName, 'Host');
+
+  // Career logbook accumulates dives, seeds from legacy cache entries, and awards ratings
+  let book = createEmptyLogbook();
+  book = recordDiveInLogbook(book, {
+    levelId: 'cenote-el-abismo',
+    success: true,
+    score: 2600,
+    grade: 'S',
+    maxDepthM: 50.1,
+    diveTimeSec: 120,
+  });
+  book = seedLogbookFromEntries(book, [
+    { mode: 'solo', levelId: 'eagles-nest-sink', score: 2500, grade: 'A', timeSec: 140 },
+    { mode: 'solo', levelId: 'plura-fjord-siphon', score: 2700, grade: 'S+', timeSec: 165 },
+  ]);
+  const summary = formatLogbookSummary(book, LEVELS.length);
+  assert.equal(summary.clearedCount, 3);
+  assert.equal(summary.campaignMedal, 'FULL CAVE');
+  assert.equal(summary.bestScore, 2700);
 });

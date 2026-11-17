@@ -1,6 +1,6 @@
 import { getAscentConfig } from '../levels/index.js';
 import { createDiveState, stepDivePhysiology } from '../physics/diveModel.js';
-import { resolveDiverCollision } from './collision.js';
+import { resolveDiverCollision, evaluateCaveSDF } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary } from './scoring.js';
@@ -47,6 +47,8 @@ export function createDiveSession(
     siltClouds: [],
     siltStirTimer: { accum: 0, warnCooldown: 0 },
     hrWarnCooldown: 0,
+    restrictWarnCooldown: 0,
+    thirdWarned: false,
     stuckDuration: 0,
     reelMaxMeters: level.reelMetersPerDiver || 0,
     reelRemainingM: level.reelMetersPerDiver || 0,
@@ -169,11 +171,12 @@ export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed) {
   return spawned;
 }
 
-function stepBubbles(session, dt) {
+function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
   const { diver, bubbles } = session;
   session.bubbleTimer -= dt;
   if (session.bubbleTimer <= 0 && diver.y > 0.6) {
-    session.bubbleTimer = 0.28 + Math.random() * 0.25;
+    session.bubbleTimer = Math.max(0.18, 0.34 - Math.min(0.14, exertion * 0.1) + Math.random() * 0.18);
+    callbacks.onExhale?.(exertion);
     const faceSign = diver.body?.facingSign ?? (Math.cos(diver.angle) >= 0 ? 1 : -1);
     const mouthX = diver.x + Math.cos(diver.angle) * 0.52 + Math.sin(diver.angle) * faceSign * 0.08;
     const mouthY = diver.y + Math.sin(diver.angle) * 0.52 - Math.cos(diver.angle) * faceSign * 0.08;
@@ -229,8 +232,36 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   diver.vx += ctrlX * horizAccel * dt;
   diver.vy += ctrlY * vertAccel * dt;
 
-  // Subtle neutral-buoyancy breathing hover
+  // Subtle neutral-buoyancy breathing hover & deep-restriction karst siphon micro-current
   diver.vy += Math.sin(session.simTimeSec * 1.6) * 0.16 * dt;
+  const clearanceM = -evaluateCaveSDF(level, diver.x, diver.y);
+  if (diver.y > 10.5 && clearanceM > 0.5 && clearanceM < 2.2) {
+    const squeezeRatio = 1 - Math.max(0, clearanceM - 0.5) / 1.7;
+    const flowPhase = Math.sin(diver.x * 0.14 + session.simTimeSec * 0.85);
+    diver.vx += flowPhase * 0.26 * squeezeRatio * dt;
+    diver.vy += Math.cos(diver.x * 0.1 + session.simTimeSec * 0.6) * 0.12 * squeezeRatio * dt;
+  }
+
+  // Tight cave restriction wash penalty if thrusting aggressively in narrow squeezes
+  if (session.restrictWarnCooldown > 0) session.restrictWarnCooldown -= dt;
+  if (clearanceM > 0 && clearanceM < 1.5 && diver.y > 6 && thrustMag > 0.72 && siltClouds.length < 130) {
+    if (Math.random() < dt * 2.2) {
+      spawnSiltPlume(siltClouds, {
+        x: diver.x - Math.cos(diver.angle) * 0.45,
+        y: diver.y - Math.sin(diver.angle) * 0.45,
+        vx: -diver.vx * 0.35 + (Math.random() - 0.5) * 0.4,
+        vy: -0.25,
+        radius: 0.75,
+        maxRadius: 2.8,
+        life: 16,
+        peakAlpha: 0.62,
+      });
+    }
+    if (session.restrictWarnCooldown <= 0) {
+      session.restrictWarnCooldown = 7.0;
+      callbacks.onToast?.('Tight restriction — fin gently to keep tunnel clear!', 2.4);
+    }
+  }
 
   // Gentle auto-buoyancy hover assist when parked near 6m deco stop line during ascent
   if (
@@ -324,6 +355,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     callbacks.onToast?.('Heart rate spiking! Stop swimming & calm down to conserve gas.', 3.0);
   }
 
+  if (!session.thirdWarned && diver.y > 8 && !checkpointsHit.has(ascentConfig.turnaroundId)) {
+    const activeTank = diveState.tanks?.[diveState.activeGasId];
+    if (activeTank && diveState.activeGasId !== 'O2' && activeTank.bar <= 133) {
+      session.thirdWarned = true;
+      callbacks.onToast?.(`Rule of Thirds (${Math.round(activeTank.bar)} bar on ${diveState.activeGasId}) — verify return reserve!`, 3.2);
+    }
+  }
+
   if (diveState.criticalAlarm) {
     callbacks.onAlarm?.('critical');
   } else if (diveState.warnings.length > 0) {
@@ -411,7 +450,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  stepBubbles(session, dt);
+  stepBubbles(session, dt, callbacks, exertion);
   session.localSiltDensity = stepSiltPhysics(level, siltClouds, diver, dt);
 
   const nextCheckpoint = level.checkpoints.find((cp) => !checkpointsHit.has(cp.id)) || null;
