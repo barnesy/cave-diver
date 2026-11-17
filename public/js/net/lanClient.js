@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=50');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=51');
   }
   return trysteroModulePromise;
 }
@@ -393,6 +393,11 @@ export class LanClient {
         if (!this._p2pHost) {
           this._p2pHostPeerId = data.hostId || peerId;
           this._p2pLastHostRxAt = now;
+          this.emit('join_stage', {
+            code,
+            pct: 38,
+            message: `Host found for Room ${code} — syncing roster...`,
+          });
           sendJoinToPeer(this._p2pHostPeerId);
         }
         return;
@@ -728,6 +733,12 @@ export class LanClient {
       return;
     }
 
+    this.emit('join_stage', {
+      code: cleanCode,
+      pct: 18,
+      message: `Connecting to co-op mesh for Room ${cleanCode}...`,
+    });
+
     let trystero;
     try {
       trystero = await loadTrystero();
@@ -751,6 +762,11 @@ export class LanClient {
       `room-${cleanCode}`
     );
     this._attachTrysteroMesh(trysteroRoom, cleanCode, gen);
+    this.emit('join_stage', {
+      code: cleanCode,
+      pct: 28,
+      message: `Locating Host & active state for Room ${cleanCode}...`,
+    });
 
     this.connected = true;
     this.reconnecting = false;
@@ -762,6 +778,11 @@ export class LanClient {
       if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || this._manualLeave) return;
       const peersConnected = this._trysteroRoom ? Object.keys(this._trysteroRoom.getPeers?.() || {}).length : 0;
       if (peersConnected > 0) return;
+      this.emit('join_stage', {
+        code: cleanCode,
+        pct: 35,
+        message: `Recovering Room ${cleanCode} from Cloud Room Keeper...`,
+      });
       const cloud = await this._cloudFetchRoom(cleanCode);
       if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || !cloud?.snapshot) return;
 
@@ -1322,6 +1343,13 @@ export class LanClient {
     if (this.transport === 'p2p') {
       this._p2pJoinRoom(msg, false);
       return;
+    }
+    if (cleanCode) {
+      this.emit('join_stage', {
+        code: cleanCode,
+        pct: 24,
+        message: `Joining Room ${cleanCode} on LAN server...`,
+      });
     }
     this.sendReliable(msg, { replaceType: 'join_room' });
   }

@@ -134,6 +134,8 @@ let cachedLanUrls = [];
 let spectatingPeer = false;
 let pendingAutoJoinCode = INITIAL_ROOM_CODE;
 let directJoinToDive = Boolean(INITIAL_ROOM_CODE);
+let joiningRoomCode = INITIAL_ROOM_CODE;
+let joiningIsDropIn = false;
 let attemptJoinAfterExpire = '';
 let activeDiveSeq = 0;
 let lastHostPromoMs = 0;
@@ -339,13 +341,17 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
   syncMenuLevelLabels(nextLevel);
 
   const isCached = renderer.isLevelCached(nextLevel.id);
+  const mapPct = (rawPct) => {
+    const p = Math.max(0, Math.min(100, rawPct));
+    return joiningRoomCode ? Math.round(44 + (p / 100) * 52) : p;
+  };
   if (showOverlay && (!isCached || keepOpenAfterLoad)) {
     screenLoader.classList.remove('done');
   }
   if (!isCached && inlineLoaderEl) {
     inlineLoaderEl.hidden = false;
   }
-  setLoaderProgress(isCached ? 95 : 8, `Loading ${nextLevel.name}...`);
+  setLoaderProgress(mapPct(isCached ? 95 : 8), `Loading ${nextLevel.name}...`);
 
   let lastStatusBroadcastAt = 0;
   let lastBroadcastPct = -1;
@@ -372,16 +378,19 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
       const res = await renderer.setLevel(nextLevel, {
         onProgress: (pct, label) => {
           if (mySeq !== loadSeq) return;
-          setLoaderProgress(pct, label);
+          setLoaderProgress(mapPct(pct), label);
           if (pct < 100) broadcastLoadProgress(pct);
         },
       });
       if (res?.cancelled || mySeq !== loadSeq) return nextLevel;
-      setLoaderProgress(96, 'Populating marine life & ecosystems...');
+      setLoaderProgress(mapPct(96), 'Populating marine life & ecosystems...');
       await nextUiTick();
       if (mySeq !== loadSeq) return nextLevel;
       ecosystem = createMarineEcosystem(nextLevel);
-      setLoaderProgress(100, keepOpenAfterLoad ? 'Dive systems ready — waiting on crew...' : 'Dive systems ready.');
+      setLoaderProgress(
+        joiningRoomCode && keepOpenAfterLoad ? 98 : 100,
+        keepOpenAfterLoad ? 'Dive systems ready — syncing with crew...' : 'Dive systems ready.'
+      );
       lan.setPlayerStatus({ loadStatus: 'ready', loadPct: 100, loadedLevelId: nextLevel.id });
       renderLevelCards();
     } catch (err) {
@@ -1401,6 +1410,42 @@ if (lanUrlsEl) {
   });
 }
 
+function beginRoomJoinLoading(code, { isDropIn = false, directDive = false, statusText = '' } = {}) {
+  const cleanCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!cleanCode) return;
+  joiningRoomCode = cleanCode;
+  joiningIsDropIn = Boolean(isDropIn);
+  if (directDive) {
+    directJoinToDive = true;
+    pendingAutoJoinCode = cleanCode;
+  }
+  const eyebrowEl = screenLoader?.querySelector('.menu-eyebrow');
+  if (eyebrowEl) {
+    eyebrowEl.textContent = isDropIn ? 'CO-OP DROP-IN · SYNCING ACTIVE DIVE' : 'CO-OP JOIN · CONNECTING TO CREW';
+  }
+  screenMenu.hidden = true;
+  screenLoader.classList.remove('done');
+  setLoaderProgress(14, isDropIn ? `Dropping into Room ${cleanCode}...` : `Joining Room ${cleanCode}...`);
+  if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = false;
+  if (loaderCrewStatusEl) {
+    loaderCrewStatusEl.textContent = statusText || `Connecting to Room ${cleanCode}...`;
+  }
+  if (btnLoaderForce) btnLoaderForce.hidden = true;
+  if (btnLoaderCancel) btnLoaderCancel.hidden = false;
+}
+
+function finishRoomJoinLoading({ revealMenu = false } = {}) {
+  joiningRoomCode = '';
+  joiningIsDropIn = false;
+  const eyebrowEl = screenLoader?.querySelector('.menu-eyebrow');
+  if (eyebrowEl) eyebrowEl.textContent = 'SYSTEM CHECK · PRE-DIVE SETUP';
+  if (revealMenu) {
+    screenLoader.classList.add('done');
+    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+    screenMenu.hidden = false;
+  }
+}
+
 if (lanRoomsList) {
   lanRoomsList.addEventListener('click', (e) => {
     const joinBtn = e.target.closest('button[data-join-code]');
@@ -1409,7 +1454,10 @@ if (lanRoomsList) {
     const name = playerNameInput?.value.trim() || 'Buddy Diver';
     const roomInput = document.getElementById('input-room-code');
     if (roomInput) roomInput.value = code;
-    lanStatus.textContent = `Joining room ${code}...`;
+    const matchedRoom = Array.isArray(lan.rooms) ? lan.rooms.find((r) => r.code === code) : null;
+    const isDropIn = Boolean(matchedRoom?.started || joinBtn.textContent.toLowerCase().includes('drop'));
+    lanStatus.textContent = isDropIn ? `Dropping into Room ${code}...` : `Joining room ${code}...`;
+    beginRoomJoinLoading(code, { isDropIn });
     lan.connect();
     lan.joinRoom(code, name);
   });
@@ -1433,8 +1481,11 @@ function triggerJoinFromInput() {
     lanStatus.textContent = 'Enter a 4-letter room code or pick a room below.';
     return;
   }
+  const matchedRoom = Array.isArray(lan.rooms) ? lan.rooms.find((r) => r.code === code) : null;
+  const isDropIn = Boolean(matchedRoom?.started);
   lanStatus.className = 'lan-status';
-  lanStatus.textContent = `Joining room ${code}...`;
+  lanStatus.textContent = isDropIn ? `Dropping into Room ${code}...` : `Joining room ${code}...`;
+  beginRoomJoinLoading(code, { isDropIn });
   lan.connect();
   lan.joinRoom(code, name);
 }
@@ -1540,15 +1591,13 @@ btnLoaderForce?.addEventListener('click', () => lan.startDive(true));
 btnLoaderCancel?.addEventListener('click', () => {
   loadSeq += 1;
   inFlightLoad = null;
-  if (directJoinToDive || pendingAutoJoinCode) {
+  if (directJoinToDive || pendingAutoJoinCode || joiningRoomCode) {
     directJoinToDive = false;
     pendingAutoJoinCode = '';
     attemptJoinAfterExpire = '';
     lan.leaveRoom();
     syncBrowserRoomUrl('');
-    screenLoader.classList.add('done');
-    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
-    screenMenu.hidden = false;
+    finishRoomJoinLoading({ revealMenu: true });
     setActiveMenuTab('team');
     resetLobbyUiState('Canceled room join.');
     return;
@@ -1773,17 +1822,22 @@ lan.on('session_expired', () => {
   resetLobbyUiState('Previous room session expired. Create or join a room.');
 });
 
+lan.on('join_stage', ({ code, pct, message }) => {
+  if (!joiningRoomCode || (code && code !== joiningRoomCode)) return;
+  const curPct = parseInt(document.getElementById('loader-pct')?.textContent || '0', 10) || 0;
+  setLoaderProgress(Math.max(curPct, pct || curPct), message || `Joining Room ${joiningRoomCode}...`);
+  if (loaderCrewStatusEl && message) loaderCrewStatusEl.textContent = message;
+});
+
 lan.on('error', (msg) => {
   if (attemptJoinAfterExpire && (msg.includes('no longer active') || msg.includes('expired'))) {
     return;
   }
-  if (directJoinToDive || pendingAutoJoinCode) {
+  if (directJoinToDive || pendingAutoJoinCode || joiningRoomCode) {
     directJoinToDive = false;
     pendingAutoJoinCode = '';
     syncBrowserRoomUrl('');
-    screenLoader.classList.add('done');
-    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
-    screenMenu.hidden = false;
+    finishRoomJoinLoading({ revealMenu: true });
     setActiveMenuTab('team');
   }
   lanStatus.className = 'lan-status warn';
@@ -1821,10 +1875,11 @@ function updateLoaderCrewSyncBanner(room) {
 
 lan.on('room_update', async (room) => {
   const autoJoinedNow = Boolean(pendingAutoJoinCode && room?.code === pendingAutoJoinCode);
+  const wasJoiningThisRoom = Boolean(joiningRoomCode && room?.code === joiningRoomCode);
   const shouldEnterDirectDive = Boolean(directJoinToDive && room?.code);
   if (autoJoinedNow) {
     pendingAutoJoinCode = '';
-    if (!shouldEnterDirectDive) {
+    if (!shouldEnterDirectDive && !room?.started) {
       setActiveMenuTab('team');
     }
   }
@@ -1836,11 +1891,11 @@ lan.on('room_update', async (room) => {
 
   syncRoomInviteUi(room);
   syncBrowserRoomUrl(room.code);
-  if (!shouldEnterDirectDive && (justEnteredRoom || autoJoinedNow)) {
+  if (!shouldEnterDirectDive && !room?.started && (justEnteredRoom || autoJoinedNow)) {
     lanRoomBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-  if (autoJoinedNow && !shouldEnterDirectDive) {
-    showToast(`Joined Room ${room.code} automatically!`, 3.0);
+  if ((autoJoinedNow || wasJoiningThisRoom) && !shouldEnterDirectDive && !room?.started) {
+    showToast(`Joined Room ${room.code}!`, 3.0);
   }
 
   const siteLevel = getLevelById(room.levelId);
@@ -1941,6 +1996,21 @@ lan.on('room_update', async (room) => {
     lanStatus.textContent = `Room ${room.code} · L${siteNum}: ${siteLevel.name} (${room.players.length}/${maxP} Divers)`;
   }
 
+  // Keep loader open continuously while dropping into an active dive until dive_started + terrain load complete
+  if (wasJoiningThisRoom && room.started && mode !== 'diving') {
+    joiningIsDropIn = true;
+    const eyebrowEl = screenLoader?.querySelector('.menu-eyebrow');
+    if (eyebrowEl) eyebrowEl.textContent = 'CO-OP DROP-IN · SYNCING ACTIVE DIVE';
+    if (loaderCrewStatusEl) {
+      loaderCrewStatusEl.textContent = `Room ${room.code} active · Syncing L${siteNum}: ${siteLevel.name}...`;
+    }
+    activeLevel = siteLevel;
+    if (selectLevel) selectLevel.value = siteLevel.id;
+    syncMenuLevelLabels(siteLevel);
+    await ensureLevelLoaded(siteLevel.id, { showOverlay: true, keepOpenAfterLoad: true });
+    return;
+  }
+
   // Invited user clicking an invite link skips the lobby/join UI and drops straight into the dive!
   if (shouldEnterDirectDive && !room.started && mode !== 'diving') {
     directJoinToDive = false;
@@ -1948,10 +2018,19 @@ lan.on('room_update', async (room) => {
     if (selectLevel) selectLevel.value = siteLevel.id;
     syncMenuLevelLabels(siteLevel);
     await ensureLevelLoaded(siteLevel.id, { showOverlay: true, keepOpenAfterLoad: false });
+    finishRoomJoinLoading({ revealMenu: false });
     if (mode !== 'diving') {
       startDiveRun(true, { awaitingHostStart: true });
       showToast(`Room ${room.code} joined — diving now! Host diver will drop in shortly.`, 3.6);
     }
+    return;
+  }
+
+  // Normal lobby join (clicked Join / entered room code for a room in lobby): smoothly transition to Room Lobby once fully joined
+  if (wasJoiningThisRoom && !room.started && room.phase !== 'preparing' && !shouldEnterDirectDive) {
+    finishRoomJoinLoading({ revealMenu: true });
+    setActiveMenuTab('team');
+    lanRoomBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 });
 
@@ -1973,7 +2052,9 @@ lan.on('peer_joined_mid_dive', (name) => {
 
 lan.on('dive_started', async (msg) => {
   directJoinToDive = false;
-  if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+  if (loaderCrewStatusEl && joiningRoomCode) {
+    loaderCrewStatusEl.textContent = `Room ${joiningRoomCode} live — loading cave geometry...`;
+  }
   if (
     mode === 'diving' &&
     session &&
@@ -1994,9 +2075,10 @@ lan.on('dive_started', async (msg) => {
   if (msg?.levelId) {
     await ensureLevelLoaded(msg.levelId, { showOverlay: true, keepOpenAfterLoad: false });
   }
+  finishRoomJoinLoading({ revealMenu: false });
   startDiveRun(
     true,
-    msg?.rejoined
+    msg?.rejoined || msg?.lateJoin
       ? {
           checkpoints: msg.checkpoints,
           collectibles: msg.collectibles,
@@ -2575,13 +2657,10 @@ async function bootGame() {
   renderLevelCards();
   setupPwaSupport();
   if (INITIAL_ROOM_CODE) {
-    screenMenu.hidden = true;
-    screenLoader.classList.remove('done');
-    setLoaderProgress(22, `Joining co-op dive ${INITIAL_ROOM_CODE}...`);
-    if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = false;
-    if (loaderCrewStatusEl) loaderCrewStatusEl.textContent = `Connecting to Room ${INITIAL_ROOM_CODE}...`;
-    if (btnLoaderForce) btnLoaderForce.hidden = true;
-    if (btnLoaderCancel) btnLoaderCancel.hidden = false;
+    beginRoomJoinLoading(INITIAL_ROOM_CODE, {
+      directDive: true,
+      statusText: `Connecting to Room ${INITIAL_ROOM_CODE}...`,
+    });
   } else {
     screenLoader.classList.add('done');
   }

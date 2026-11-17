@@ -538,6 +538,7 @@ export class CaveRenderer {
     const mulG = rt ? rt[1] * 0.62 : 0.62;
     const mulB = rt ? rt[2] * 0.62 : 0.62;
     const mossKind = level.theme?.mossTint || 'emerald';
+    const isAridTopsoil = mossKind === 'sinai-coral-sandstone' || mossKind === 'kalahari-ironstone';
     const stainMap = {
       'tannin-chert': [22, 10, -20, 0.96, 18, 0.86, 6, 0.78, 0],
       'glacial-marble': [-18, 20, 28, 0.72, 0, 0.92, 8, 1.05, 14],
@@ -627,12 +628,15 @@ export class CaveRenderer {
                 const fR = fol ? fol[tIdx] : 42;
                 const fG = fol ? fol[tIdx + 1] : 78;
                 const fB = fol ? fol[tIdx + 2] : 34;
-                const leafR = fR * lRm + lRa;
-                const leafG = fG * lGm + lGa;
-                const leafB = fB * lBm + lBa;
-                const surfR = 52 * (1 - grassWeight) + leafR * grassWeight;
-                const surfG = 40 * (1 - grassWeight) + leafG * grassWeight;
-                const surfB = 28 * (1 - grassWeight) + leafB * grassWeight;
+                const leafR = isAridTopsoil ? 148 + (fR - 50) * 0.45 : fR * lRm + lRa;
+                const leafG = isAridTopsoil ? 104 + (fG - 50) * 0.35 : fG * lGm + lGa;
+                const leafB = isAridTopsoil ? 66 + (fB - 50) * 0.25 : fB * lBm + lBa;
+                const subR = isAridTopsoil ? 112 : 52;
+                const subG = isAridTopsoil ? 76 : 40;
+                const subB = isAridTopsoil ? 48 : 28;
+                const surfR = subR * (1 - grassWeight) + leafR * grassWeight;
+                const surfG = subG * (1 - grassWeight) + leafG * grassWeight;
+                const surfB = subB * (1 - grassWeight) + leafB * grassWeight;
                 const blend = Math.min(0.94, soilWeight * 1.15);
                 baseR = baseR * (1 - blend) + surfR * blend;
                 baseG = baseG * (1 - blend) + surfG * blend;
@@ -643,7 +647,7 @@ export class CaveRenderer {
             data[idx] = baseR < 10 ? 10 : baseR > 255 ? 255 : baseR;
             data[idx + 1] = baseG < 12 ? 12 : baseG > 255 ? 255 : baseG;
             data[idx + 2] = baseB < 12 ? 12 : baseB > 255 ? 255 : baseB;
-            data[idx + 3] = 255;
+            data[idx + 3] = turfDepth < 0.065 ? Math.round(255 * Math.max(0.14, turfDepth / 0.065)) : 255;
           }
         }
       }
@@ -1271,15 +1275,250 @@ export class CaveRenderer {
     return cx + side * (basin.rimHalf || 5.2);
   }
 
-  _drawGroundContactShadow(ctx, x, y, width, scale) {
-    const grad = ctx.createRadialGradient(x, y, width * 0.1, x, y, width);
+  _sampleSurfaceFooting(level, wx, halfWidthM = 1.2) {
+    const gyL = this._getHorizonGroundY(level, wx - halfWidthM);
+    const gyC = this._getHorizonGroundY(level, wx);
+    const gyR = this._getHorizonGroundY(level, wx + halfWidthM);
+    const gyHigh = Math.min(gyL, gyC, gyR);
+    const gyDeep = Math.max(gyL, gyC, gyR);
+    const slopeRad = Math.atan2(gyR - gyL, Math.max(0.05, halfWidthM * 2));
+    return { gyL, gyC, gyR, gyHigh, gyDeep, slopeRad };
+  }
+
+  _getSurfaceBiomeSoilPalette() {
+    const style = this.level.theme?.surfaceStyle || 'yucatan';
+    const palettes = {
+      'florida-cypress': { turf: '#3b4e24', soil: '#463b2d', tuft: '#5a722e', stone: '#686259' },
+      'nordic-fjord': { turf: '#2c4a3e', soil: '#36414c', tuft: '#476b5a', stone: '#64748b' },
+      'ural-birch': { turf: '#38574c', soil: '#52606d', tuft: '#5b7d6c', stone: '#9aa7b5' },
+      'provence-gorge': { turf: '#4e5f2c', soil: '#6c5c46', tuft: '#6f823e', stone: '#a69d8b' },
+      'kalahari-crater': { turf: '#7c5c28', soil: '#764128', tuft: '#b88c28', stone: '#8b4528' },
+      'bahamas-abaco': { turf: '#2f6548', soil: '#8f8b7e', tuft: '#4a855c', stone: '#c7c2b4' },
+      'budapest-bathhouse': { turf: '#41572c', soil: '#6a5d47', tuft: '#5c7838', stone: '#b5a88d' },
+      'sinai-coast': { turf: '#8e6c3f', soil: '#9c6e44', tuft: '#b88f4c', stone: '#b38354' },
+      'quercy-ressel': { turf: '#3e5932', soil: '#635e54', tuft: '#587842', stone: '#aca79a' },
+      'lazio-travertine': { turf: '#525f30', soil: '#736148', tuft: '#75823d', stone: '#b09d7c' },
+      'moravia-rift': { turf: '#2f4539', soil: '#37414b', tuft: '#476252', stone: '#546170' },
+      'oxbelha-twilight': { turf: '#233c26', soil: '#30342e', tuft: '#365a35', stone: '#4c5249' },
+      yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
+    };
+    return palettes[style] || palettes.yucatan;
+  }
+
+  _drawGroundContactShadow(ctx, x, y, width, scale, slopeRad = 0) {
+    ctx.save();
+    ctx.translate(x, y + 0.03 * scale);
+    if (slopeRad) ctx.rotate(slopeRad * 0.72);
+    const grad = ctx.createRadialGradient(0, 0, width * 0.1, 0, 0, width);
     grad.addColorStop(0, 'rgba(8, 12, 8, 0.56)');
     grad.addColorStop(0.65, 'rgba(8, 12, 8, 0.24)');
     grad.addColorStop(1, 'rgba(8, 12, 8, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.ellipse(x, y + 0.04 * scale, width, 0.19 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, width, 0.18 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  }
+
+  _drawContouredFoundation(ctx, toScreenX, toScreenY, scale, wx, halfW, floorWy, opts = {}) {
+    const xL = toScreenX(wx - halfW);
+    const xR = toScreenX(wx + halfW);
+    const yTop = toScreenY(floorWy);
+    const embedM = opts.embedM ?? 0.22;
+    const steps = opts.steps ?? 8;
+    const pal = this._getSurfaceBiomeSoilPalette();
+    const stoneTop = opts.stoneTop || '#9b9382';
+    const stoneBot = opts.stoneBot || '#575044';
+
+    ctx.save();
+    // Contoured retaining wall / masonry plinth whose base hugs the terrain curve seamlessly
+    ctx.beginPath();
+    ctx.moveTo(xL, yTop);
+    ctx.lineTo(xR, yTop);
+    const bottomPts = [];
+    for (let i = steps; i >= 0; i--) {
+      const sxWorld = wx - halfW + (halfW * 2 * i) / steps;
+      const syWorld = this._getHorizonGroundY(this.level, sxWorld) + embedM;
+      const pt = [toScreenX(sxWorld), toScreenY(Math.max(floorWy + 0.12, syWorld))];
+      bottomPts.push(pt);
+      ctx.lineTo(pt[0], pt[1]);
+    }
+    ctx.closePath();
+
+    const maxBotY = bottomPts.reduce((m, p) => Math.max(m, p[1]), yTop + 0.3 * scale);
+    const fGrad = ctx.createLinearGradient(xL, yTop, xL, maxBotY);
+    fGrad.addColorStop(0, stoneTop);
+    fGrad.addColorStop(0.32, opts.stoneMid || '#7b7365');
+    fGrad.addColorStop(1, stoneBot);
+    ctx.fillStyle = fGrad;
+    ctx.fill();
+
+    // Clip stone masonry courses & top sill shadow inside the foundation contour
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(12, 16, 12, 0.34)';
+    ctx.fillRect(xL, yTop, xR - xL, 0.08 * scale);
+    ctx.strokeStyle = 'rgba(20, 22, 18, 0.28)';
+    ctx.lineWidth = Math.max(1, 0.032 * scale);
+    const courseStep = 0.22 * scale;
+    for (let cy = yTop + courseStep; cy < maxBotY; cy += courseStep) {
+      ctx.beginPath();
+      ctx.moveTo(xL, cy);
+      ctx.lineTo(xR, cy);
+      ctx.stroke();
+      const rowIdx = Math.round((cy - yTop) / courseStep);
+      const colStep = 0.44 * scale;
+      for (let cx = xL + ((rowIdx & 1) ? colStep * 0.5 : 0); cx < xR; cx += colStep) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - courseStep);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+      }
+    }
+    // Earthy humus & grass collar along the bottom terrain intersection
+    ctx.strokeStyle = pal.soil;
+    ctx.lineWidth = Math.max(2.5, 0.18 * scale);
+    ctx.beginPath();
+    for (let i = 0; i < bottomPts.length; i++) {
+      if (i === 0) ctx.moveTo(bottomPts[i][0], bottomPts[i][1] - 0.04 * scale);
+      else ctx.lineTo(bottomPts[i][0], bottomPts[i][1] - 0.04 * scale);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Crisp stone coping / timber threshold beam along top edge of foundation
+    ctx.fillStyle = opts.capColor || 'rgba(255, 250, 238, 0.16)';
+    ctx.fillRect(xL - 0.04 * scale, yTop - 0.04 * scale, xR - xL + 0.08 * scale, 0.07 * scale);
+    ctx.restore();
+
+    // Foreground tufts & anchored base pebbles hiding the exact hill-to-wall contact line
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW * 1.06, opts);
+  }
+
+  _drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW, opts = {}) {
+    const pal = this._getSurfaceBiomeSoilPalette();
+    const tufts = opts.tufts ?? 7;
+    ctx.save();
+    for (let i = 0; i < tufts; i++) {
+      const t = tufts === 1 ? 0.5 : i / (tufts - 1);
+      const sxWorld = wx - halfW + halfW * 2 * t;
+      const syWorld = this._getHorizonGroundY(this.level, sxWorld);
+      const sx = toScreenX(sxWorld);
+      const sy = toScreenY(syWorld);
+      const hFrac = Math.abs(Math.sin(sxWorld * 12.7 + i * 3.1));
+
+      if (opts.stones !== false && (i % 2 === 0)) {
+        const rx = (0.16 + hFrac * 0.14) * scale;
+        const ry = (0.08 + hFrac * 0.06) * scale;
+        ctx.fillStyle = pal.stone;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 0.02 * scale, rx, ry, 0, Math.PI * 0.95, Math.PI * 2.05);
+        ctx.fill();
+      }
+      ctx.strokeStyle = opts.tuftColor || pal.tuft;
+      ctx.lineWidth = Math.max(1, 0.042 * scale);
+      for (let b = -1; b <= 1; b++) {
+        const bladeH = (0.18 + hFrac * 0.18) * scale;
+        ctx.beginPath();
+        ctx.moveTo(sx + b * 0.05 * scale, sy + 0.05 * scale);
+        ctx.quadraticCurveTo(
+          sx + b * 0.09 * scale,
+          sy - bladeH * 0.55,
+          sx + b * 0.14 * scale,
+          sy - bladeH
+        );
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, trunkR, scale, barkColors, opts = {}) {
+    const halfSpan = Math.max(0.55, (trunkR / Math.max(1, scale)) * 3.0);
+    const foot = this._sampleSurfaceFooting(this.level, wx, halfSpan);
+    const pal = this._getSurfaceBiomeSoilPalette();
+    this._drawGroundContactShadow(ctx, x, groundY, trunkR * 4.4, scale, foot.slopeRad);
+
+    const spread = trunkR * (opts.rootSpread ?? 2.35);
+    const downSlopeDrop = Math.max(0.14 * scale, Math.abs(Math.sin(foot.slopeRad)) * spread * 1.15 + 0.14 * scale);
+    const topFlareY = groundY - trunkR * 2.2;
+    const baseLY = groundY + (foot.gyL - foot.gyC) * scale + downSlopeDrop * 0.5;
+    const baseRY = groundY + (foot.gyR - foot.gyC) * scale + downSlopeDrop * 0.5;
+    const baseCY = groundY + downSlopeDrop * 0.65;
+
+    ctx.save();
+    const rg = ctx.createLinearGradient(x - spread, groundY, x + spread, groundY);
+    rg.addColorStop(0, barkColors[0]);
+    rg.addColorStop(0.5, barkColors[1] || barkColors[0]);
+    rg.addColorStop(1, barkColors[2] || barkColors[1] || barkColors[0]);
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.moveTo(x - trunkR * 0.96, topFlareY);
+    ctx.quadraticCurveTo(x - trunkR * 1.15, groundY - trunkR * 0.45, x - spread, baseLY);
+    ctx.quadraticCurveTo(x - spread * 0.35, baseCY + 0.04 * scale, x, baseCY);
+    ctx.quadraticCurveTo(x + spread * 0.35, baseCY + 0.04 * scale, x + spread, baseRY);
+    ctx.quadraticCurveTo(x + trunkR * 1.15, groundY - trunkR * 0.45, x + trunkR * 0.96, topFlareY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle dark root-crevasse line down center flare
+    ctx.strokeStyle = 'rgba(14, 10, 8, 0.34)';
+    ctx.lineWidth = Math.max(1, trunkR * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(x - trunkR * 0.15, topFlareY + trunkR * 0.6);
+    ctx.quadraticCurveTo(x - trunkR * 0.3, groundY - trunkR * 0.1, x - trunkR * 0.7, baseCY - 0.03 * scale);
+    ctx.stroke();
+
+    // Basal grass / humus mound hiding where root meets ground curve
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, Math.max(0.45, spread / Math.max(1, scale)), {
+      tufts: 5,
+      stones: false,
+      tuftColor: opts.tuftColor || pal.tuft,
+    });
+    ctx.restore();
+  }
+
+  _drawAnchoredBoulder(ctx, wx, rxM, ryM, toScreenX, toScreenY, scale, color) {
+    const foot = this._sampleSurfaceFooting(this.level, wx, rxM * 0.9);
+    const pal = this._getSurfaceBiomeSoilPalette();
+    const gx = toScreenX(wx);
+    const gy = toScreenY(Math.max(foot.gyC, (foot.gyL + foot.gyR) * 0.5)) + 0.14 * scale;
+    const rx = rxM * scale;
+    const ry = ryM * scale * 1.15;
+
+    this._drawGroundContactShadow(ctx, gx, gy - 0.04 * scale, rx * 1.18, scale, foot.slopeRad);
+    ctx.save();
+    ctx.translate(gx, gy);
+    ctx.rotate(foot.slopeRad * 0.78);
+    // Natural angular rock facet silhouette embedded cleanly down into soil
+    const rGrad = ctx.createLinearGradient(0, -ry, 0, 0.08 * scale);
+    rGrad.addColorStop(0, color);
+    rGrad.addColorStop(0.68, color);
+    rGrad.addColorStop(1, pal.soil);
+    ctx.fillStyle = rGrad;
+    ctx.beginPath();
+    ctx.moveTo(-rx * 0.98, 0.06 * scale);
+    ctx.lineTo(-rx * 0.84, -ry * 0.54);
+    ctx.lineTo(-rx * 0.34, -ry * 0.96);
+    ctx.lineTo(rx * 0.28, -ry * 0.92);
+    ctx.lineTo(rx * 0.82, -ry * 0.48);
+    ctx.lineTo(rx * 0.98, 0.06 * scale);
+    ctx.closePath();
+    ctx.fill();
+    // Subtle shaded bevel on left shoulder + sun catchlight on crown
+    ctx.fillStyle = 'rgba(255, 250, 236, 0.16)';
+    ctx.beginPath();
+    ctx.moveTo(-rx * 0.34, -ry * 0.96);
+    ctx.lineTo(rx * 0.28, -ry * 0.92);
+    ctx.lineTo(rx * 0.72, -ry * 0.48);
+    ctx.lineTo(-rx * 0.05, -ry * 0.52);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, rxM * 0.82, {
+      tufts: 4,
+      stones: false,
+    });
   }
 
   _fillFoliageCluster(ctx, cx, cy, rx, ry, rot, scale, tone = 'jungle', sunSide = 1) {
@@ -1375,6 +1614,12 @@ export class CaveRenderer {
     const railH = 0.72 * scale;
 
     ctx.save();
+    // Anchor stone / timber landing pad at cliff lip so stairs tie solidly into terrain
+    ctx.fillStyle = isWood ? '#574838' : '#58626e';
+    ctx.beginPath();
+    ctx.roundRect(topX - 0.34 * scale, topY - 0.04 * scale, 0.68 * scale, 0.24 * scale, 0.05 * scale);
+    ctx.fill();
+
     // Subtle dark cliff shadow behind stair stringer
     ctx.strokeStyle = 'rgba(10, 12, 10, 0.38)';
     ctx.lineWidth = Math.max(3, 0.18 * scale);
@@ -1392,7 +1637,7 @@ export class CaveRenderer {
     ctx.lineTo(botX, botY);
     ctx.stroke();
 
-    // Handrail uprights + taut hemp rope / cable handrail
+    // Handrail uprights + taut hemp rope / cable handrail (top post deeply anchored)
     ctx.strokeStyle = isWood ? '#634d39' : '#6e7985';
     ctx.lineWidth = Math.max(1.4, 0.065 * scale);
     const postCount = 4;
@@ -1401,7 +1646,7 @@ export class CaveRenderer {
       const t = p / postCount;
       const px = topX + dx * t;
       const py = topY + dy * t;
-      ctx.moveTo(px, py);
+      ctx.moveTo(px, py + (p === 0 ? 0.14 * scale : 0));
       ctx.lineTo(px, py - railH);
     }
     ctx.stroke();
@@ -1426,18 +1671,19 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawBotanicalPalm(ctx, x, groundY, scale, leanDir, sway, heightM = 4.6) {
+  _drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway, heightM = 4.6) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
     const topX = x + leanDir * (0.28 * h) + sway * 0.85;
     const topY = groundY - h;
     const ctrlX = x + leanDir * (0.04 * h);
     const ctrlY = groundY - h * 0.52;
 
-    this._drawGroundContactShadow(ctx, x, groundY, 0.72 * scale, scale);
     this._drawTaperedCurvedTrunk(
       ctx,
       x,
-      groundY + 0.08 * scale,
+      groundY + 0.06 * scale,
       ctrlX,
       ctrlY,
       topX,
@@ -1448,6 +1694,9 @@ export class CaveRenderer {
       ['#3b2b1e', '#69533f', '#8c765c'],
       true
     );
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.21 * scale, scale, ['#3b2b1e', '#594534', '#7a644e'], {
+      rootSpread: 2.1,
+    });
 
     // Shaded coconut cluster tucked into crown base
     for (let c = -1; c <= 1; c++) {
@@ -1518,11 +1767,16 @@ export class CaveRenderer {
     }
   }
 
-  _drawTropicalUnderbrush(ctx, x, groundY, scale, sway, dir) {
-    this._drawGroundContactShadow(ctx, x, groundY, 1.05 * scale, scale);
-    // Layered textured fern & jungle undergrowth mass
-    this._fillFoliageCluster(ctx, x - 0.35 * scale, groundY - 0.28 * scale, 0.75 * scale, 0.42 * scale, -0.15, scale, 'jungle', dir);
-    this._fillFoliageCluster(ctx, x + 0.38 * scale + sway * 0.4, groundY - 0.36 * scale, 0.82 * scale, 0.48 * scale, 0.14, scale, 'jungle', dir);
+  _drawTropicalUnderbrush(ctx, wx, toScreenX, toScreenY, scale, sway, dir) {
+    const foot = this._sampleSurfaceFooting(this.level, wx, 0.8);
+    const x = toScreenX(wx);
+    const groundY = toScreenY(foot.gyC);
+    const gyLeft = toScreenY(this._getHorizonGroundY(this.level, wx - 0.35));
+    const gyRight = toScreenY(this._getHorizonGroundY(this.level, wx + 0.38));
+    this._drawGroundContactShadow(ctx, x, groundY + 0.05 * scale, 1.05 * scale, scale, foot.slopeRad);
+    // Layered textured fern & jungle undergrowth mass seated gently into hillside slope
+    this._fillFoliageCluster(ctx, x - 0.35 * scale, gyLeft - 0.22 * scale, 0.75 * scale, 0.42 * scale, -0.15 + foot.slopeRad * 0.5, scale, 'jungle', dir);
+    this._fillFoliageCluster(ctx, x + 0.38 * scale + sway * 0.4, gyRight - 0.28 * scale, 0.82 * scale, 0.48 * scale, 0.14 + foot.slopeRad * 0.5, scale, 'jungle', dir);
 
     // Subtle organic arching fern fronds (no neon lines)
     for (let f = 0; f < 5; f++) {
@@ -1531,7 +1785,7 @@ export class CaveRenderer {
       ctx.strokeStyle = f % 2 === 0 ? '#274a24' : '#3a6230';
       ctx.lineWidth = Math.max(1.4, 0.065 * scale);
       ctx.beginPath();
-      ctx.moveTo(x, groundY + 0.02 * scale);
+      ctx.moveTo(x, groundY + 0.08 * scale);
       ctx.quadraticCurveTo(
         x + Math.cos(ang) * len * 0.55 + sway * 0.5,
         groundY + Math.sin(ang) * len * 0.82,
@@ -1543,50 +1797,60 @@ export class CaveRenderer {
 
     // Natural muted coral/terracotta wild heliconia blooms tucked into foliage
     for (const [ox, oy, col] of [
-      [-0.42 * dir, -0.45, '#b84a48'],
-      [0.32 * dir, -0.58, '#c26b36'],
+      [-0.42 * dir, -0.42, '#b84a48'],
+      [0.32 * dir, -0.54, '#c26b36'],
     ]) {
       ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(x + ox * scale + sway * 0.4, groundY + oy * scale, 0.095 * scale, 0, Math.PI * 2);
       ctx.fill();
     }
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, 0.85, { tufts: 5, stones: false });
   }
 
-  _drawPalapaPavilion(ctx, x, groundY, scale, variant = 'entry') {
-    const w = 3.2 * scale;
+  _drawPalapaPavilion(ctx, wx, toScreenX, toScreenY, scale, variant = 'entry') {
+    const wM = 3.2;
+    const foot = this._sampleSurfaceFooting(this.level, wx, wM * 0.52);
+    const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.05);
+    const x = toScreenX(wx);
+    const groundY = toScreenY(floorWy);
+    const w = wM * scale;
     const h = 2.05 * scale;
     const roofH = 1.5 * scale;
 
-    this._drawGroundContactShadow(ctx, x, groundY, w * 0.62, scale);
+    this._drawGroundContactShadow(ctx, x, toScreenY(foot.gyC) + 0.08 * scale, w * 0.64, scale, foot.slopeRad);
 
-    // Eroded limestone plinth foundation with mortar shadow
-    const plinthGrad = ctx.createLinearGradient(x - w * 0.52, groundY - 0.2 * scale, x - w * 0.52, groundY + 0.1 * scale);
-    plinthGrad.addColorStop(0, '#9c9484');
-    plinthGrad.addColorStop(1, '#5d5548');
-    ctx.fillStyle = plinthGrad;
-    ctx.fillRect(x - w * 0.52, groundY - 0.18 * scale, w * 1.04, 0.28 * scale);
+    // Contoured limestone retaining plinth extending solidly into uneven ground slope
+    this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, wx, wM * 0.52, floorWy - 0.14, {
+      stoneTop: '#a39b8a',
+      stoneMid: '#7d7567',
+      stoneBot: '#564f44',
+      capColor: 'rgba(255, 248, 232, 0.2)',
+    });
 
     // Recessed shaded interior beneath the thatch roof
     ctx.fillStyle = 'rgba(18, 22, 16, 0.72)';
     ctx.beginPath();
-    ctx.moveTo(x - w * 0.46, groundY - 0.16 * scale);
+    ctx.moveTo(x - w * 0.46, groundY - 0.14 * scale);
     ctx.lineTo(x - w * 0.42, groundY - h + 0.1 * scale);
     ctx.lineTo(x, groundY - h - roofH * 0.5);
     ctx.lineTo(x + w * 0.42, groundY - h + 0.1 * scale);
-    ctx.lineTo(x + w * 0.46, groundY - 0.16 * scale);
+    ctx.lineTo(x + w * 0.46, groundY - 0.14 * scale);
     ctx.closePath();
     ctx.fill();
 
-    // Shaded rough-hewn timber corner posts
+    // Shaded rough-hewn timber corner posts seated solidly on the plinth sill
     for (const px of [x - w * 0.42, x + w * 0.42 - 0.16 * scale]) {
       const pg = ctx.createLinearGradient(px, groundY, px + 0.16 * scale, groundY);
       pg.addColorStop(0, '#3a2a1d');
       pg.addColorStop(0.55, '#664d36');
       pg.addColorStop(1, '#4c3826');
       ctx.fillStyle = pg;
-      ctx.fillRect(px, groundY - h, 0.16 * scale, h);
+      ctx.fillRect(px, groundY - h, 0.16 * scale, h - 0.1 * scale);
     }
+    // Horizontal eaves tie beam across posts
+    ctx.fillStyle = '#4b3726';
+    ctx.fillRect(x - w * 0.45, groundY - h + 0.05 * scale, w * 0.9, 0.1 * scale);
 
     // Weathered timber gear table inside palapa
     ctx.fillStyle = '#5c4632';
@@ -1649,40 +1913,48 @@ export class CaveRenderer {
     ctx.fill();
   }
 
-  _drawBaldCypress(ctx, x, groundY, scale, sway, heightM = 5.4) {
+  _drawBaldCypress(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.4) {
+    const foot = this._sampleSurfaceFooting(this.level, wx, 1.05);
+    const x = toScreenX(wx);
+    const groundY = toScreenY(foot.gyC);
     const h = heightM * scale;
-    this._drawGroundContactShadow(ctx, x, groundY, 1.15 * scale, scale);
+    this._drawGroundContactShadow(ctx, x, groundY + 0.04 * scale, 1.2 * scale, scale, foot.slopeRad);
 
-    // Fluted weathered cypress knees
+    // Fluted weathered cypress knees planted directly along the hillside slope
     for (let k = -2; k <= 2; k++) {
       if (k === 0) continue;
-      const kx = x + k * 0.48 * scale;
+      const kWx = wx + k * 0.48;
+      const kx = toScreenX(kWx);
+      const kGroundY = toScreenY(this._getHorizonGroundY(this.level, kWx));
       const kh = (0.38 + (Math.abs(k) % 2) * 0.22) * scale;
-      const kg = ctx.createLinearGradient(kx - 0.1 * scale, groundY, kx + 0.1 * scale, groundY);
+      const kg = ctx.createLinearGradient(kx - 0.1 * scale, kGroundY, kx + 0.1 * scale, kGroundY);
       kg.addColorStop(0, '#3e332a');
       kg.addColorStop(1, '#756858');
       ctx.fillStyle = kg;
       ctx.beginPath();
-      ctx.moveTo(kx - 0.1 * scale, groundY + 0.1 * scale);
-      ctx.lineTo(kx, groundY - kh);
-      ctx.lineTo(kx + 0.1 * scale, groundY + 0.1 * scale);
+      ctx.moveTo(kx - 0.11 * scale, kGroundY + 0.16 * scale);
+      ctx.lineTo(kx, kGroundY - kh);
+      ctx.lineTo(kx + 0.11 * scale, kGroundY + 0.16 * scale);
       ctx.closePath();
       ctx.fill();
     }
 
-    // Wide grey-brown fibrous fluted buttress trunk
+    // Wide grey-brown fibrous fluted buttress trunk extending smoothly into slope
+    const downDrop = Math.max(0.18, foot.gyDeep - foot.gyC + 0.16) * scale;
     const tg = ctx.createLinearGradient(x - 0.6 * scale, groundY, x + 0.6 * scale, groundY);
     tg.addColorStop(0, '#362e28');
     tg.addColorStop(0.55, '#594f45');
     tg.addColorStop(1, '#7a6f62');
     ctx.fillStyle = tg;
     ctx.beginPath();
-    ctx.moveTo(x - 0.64 * scale, groundY + 0.12 * scale);
+    ctx.moveTo(x - 0.68 * scale, groundY + downDrop);
     ctx.quadraticCurveTo(x - 0.26 * scale, groundY - h * 0.3, x - 0.15 * scale, groundY - h * 0.92);
     ctx.lineTo(x + 0.15 * scale, groundY - h * 0.92);
-    ctx.quadraticCurveTo(x + 0.26 * scale, groundY - h * 0.3, x + 0.64 * scale, groundY + 0.12 * scale);
+    ctx.quadraticCurveTo(x + 0.26 * scale, groundY - h * 0.3, x + 0.68 * scale, groundY + downDrop);
     ctx.closePath();
     ctx.fill();
+
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, 0.95, { tufts: 6, stones: false });
 
     // Textured ragged olive-sage cypress boughs & delicate wispy silver-grey Spanish moss
     const tiers = [
@@ -1710,15 +1982,16 @@ export class CaveRenderer {
     }
   }
 
-  _drawLongleafPine(ctx, x, groundY, scale, sway, heightM = 5.8) {
+  _drawLongleafPine(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.8) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
     const topX = x + sway * 0.45;
     const topY = groundY - h;
-    this._drawGroundContactShadow(ctx, x, groundY, 0.68 * scale, scale);
     this._drawTaperedCurvedTrunk(
       ctx,
       x,
-      groundY + 0.1 * scale,
+      groundY + 0.06 * scale,
       x + sway * 0.2,
       groundY - h * 0.5,
       topX,
@@ -1729,6 +2002,9 @@ export class CaveRenderer {
       ['#362319', '#5a3a29', '#7d563f'],
       false
     );
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.19 * scale, scale, ['#362319', '#5a3a29', '#7d563f'], {
+      rootSpread: 2.25,
+    });
 
     const clusters = [
       { ox: -0.95, oy: 0.55, rx: 1.08, ry: 0.48 },
@@ -1752,25 +2028,41 @@ export class CaveRenderer {
     }
   }
 
-  _drawFloridaRangerKiosk(ctx, x, groundY, scale, isExit = false) {
-    const w = 2.9 * scale;
+  _drawFloridaRangerKiosk(ctx, wx, toScreenX, toScreenY, scale, isExit = false) {
+    const wM = 2.9;
+    const foot = this._sampleSurfaceFooting(this.level, wx, wM * 0.54);
+    const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.04);
+    const x = toScreenX(wx);
+    const groundY = toScreenY(floorWy);
+    const w = wM * scale;
     const h = 2.1 * scale;
-    this._drawGroundContactShadow(ctx, x, groundY, w * 0.6, scale);
+    this._drawGroundContactShadow(ctx, x, toScreenY(foot.gyC) + 0.07 * scale, w * 0.62, scale, foot.slopeRad);
 
-    ctx.fillStyle = '#4e4841';
-    ctx.fillRect(x - w * 0.54, groundY - 0.16 * scale, w * 1.08, 0.26 * scale);
-    ctx.fillStyle = 'rgba(14, 18, 16, 0.65)';
-    ctx.fillRect(x - w * 0.4, groundY - h, w * 0.8, h - 0.14 * scale);
+    // Contoured fieldstone & treated-timber terrace foundation down into slope
+    this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, wx, wM * 0.54, floorWy - 0.12, {
+      stoneTop: '#686258',
+      stoneMid: '#524c44',
+      stoneBot: '#39342e',
+      capColor: 'rgba(214, 206, 184, 0.24)',
+    });
+
+    ctx.fillStyle = 'rgba(14, 18, 16, 0.7)';
+    ctx.fillRect(x - w * 0.4, groundY - h, w * 0.8, h - 0.12 * scale);
 
     ctx.fillStyle = '#5a4330';
-    ctx.fillRect(x - w * 0.44, groundY - h, 0.16 * scale, h);
-    ctx.fillRect(x + w * 0.44 - 0.16 * scale, groundY - h, 0.16 * scale, h);
+    ctx.fillRect(x - w * 0.44, groundY - h, 0.16 * scale, h - 0.1 * scale);
+    ctx.fillRect(x + w * 0.44 - 0.16 * scale, groundY - h, 0.16 * scale, h - 0.1 * scale);
     ctx.fillStyle = '#6e523a';
-    ctx.fillRect(x - w * 0.34, groundY - h * 0.85, w * 0.68, h * 0.42);
+    ctx.fillRect(x - w * 0.34, groundY - h * 0.85, w * 0.68, h * 0.44);
     ctx.fillStyle = isExit ? '#3b7496' : '#d6ceb8';
-    ctx.fillRect(x - w * 0.28, groundY - h * 0.8, w * 0.56, h * 0.32);
+    ctx.fillRect(x - w * 0.28, groundY - h * 0.8, w * 0.56, h * 0.34);
+    // Notice header strip on board
+    ctx.fillStyle = isExit ? '#1e3a5f' : '#991b1b';
+    ctx.fillRect(x - w * 0.28, groundY - h * 0.8, w * 0.56, h * 0.075);
 
-    // Weathered galvanized standing-seam roof
+    // Weathered galvanized standing-seam roof with eave shadow
+    ctx.fillStyle = 'rgba(10, 14, 16, 0.45)';
+    ctx.fillRect(x - w * 0.52, groundY - h + 0.08 * scale, w * 1.04, 0.08 * scale);
     const rg = ctx.createLinearGradient(x - w * 0.6, groundY - h, x + w * 0.6, groundY - h - 0.85 * scale);
     rg.addColorStop(0, '#475569');
     rg.addColorStop(0.55, '#64748b');
@@ -1874,11 +2166,18 @@ export class CaveRenderer {
     ctx.strokeStyle = '#574534';
     ctx.lineWidth = Math.max(1.5, 0.08 * scale);
     ctx.beginPath();
-    ctx.moveTo(x1, y1 + 0.06 * scale);
+    ctx.moveTo(x1, y1 + 0.18 * scale);
     ctx.lineTo(x1, y1 - 0.72 * scale);
-    ctx.moveTo(x2, y2 + 0.06 * scale);
+    ctx.moveTo(x2, y2 + 0.18 * scale);
     ctx.lineTo(x2, y2 - 0.72 * scale);
     ctx.stroke();
+
+    // Base soil/pebble collar at fence post sockets
+    ctx.fillStyle = 'rgba(20, 18, 12, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(x1, y1 + 0.06 * scale, 0.13 * scale, 0.055 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(x2, y2 + 0.06 * scale, 0.13 * scale, 0.055 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.strokeStyle = isRope ? '#a6967a' : '#735b43';
     ctx.lineWidth = Math.max(1.2, (isRope ? 0.045 : 0.065) * scale);
@@ -1925,14 +2224,12 @@ export class CaveRenderer {
       const h = 4.4 + hash * 2.1;
 
       if (style === 'yucatan') {
-        // Textured coconut palms, lush jungle undergrowth & limestone trail boulders across full width
         if (hash > 0.16) {
-          this._drawBotanicalPalm(ctx, gx, gy, scale, leanDir, sway, h);
+          this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway, h);
         }
-        this._drawTropicalUnderbrush(ctx, gx + leanDir * 0.65 * scale, gy, scale, sway, leanDir);
+        this._drawTropicalUnderbrush(ctx, wx + leanDir * 0.65, toScreenX, toScreenY, scale, sway, leanDir);
 
         if ((s % 3) === 0) {
-          // Maya cliff-trail weathered timber posts + hemp rope
           const nx = wx + slotW * 0.85;
           let clearNext = true;
           for (let b = 0; b < basins.length; b++) {
@@ -1940,10 +2237,11 @@ export class CaveRenderer {
             if (Math.abs(nx - bcx) < (basins[b].rimHalf || 5.2) + 6.2) clearNext = false;
           }
           if (clearNext) {
+            const px1 = wx - 0.4;
             this._drawSurfaceTrailPostAndFence(
               ctx,
-              gx - 0.4 * scale,
-              gy,
+              toScreenX(px1),
+              toScreenY(this._getHorizonGroundY(this.level, px1)),
               toScreenX(nx),
               toScreenY(this._getHorizonGroundY(this.level, nx)),
               scale,
@@ -1951,131 +2249,108 @@ export class CaveRenderer {
             );
           }
         } else if (hash < 0.35) {
-          // Mossy weathered limestone outcrop resting on trail
-          ctx.fillStyle = '#5c5548';
-          ctx.beginPath();
-          ctx.ellipse(gx - 0.9 * scale, gy - 0.08 * scale, 0.52 * scale, 0.24 * scale, -0.08, Math.PI, Math.PI * 2);
-          ctx.fill();
+          this._drawAnchoredBoulder(ctx, wx - 0.9, 0.52, 0.24, toScreenX, toScreenY, scale, '#5c5548');
         }
       } else if (style === 'nordic-fjord' || style === 'ural-birch') {
-        // Sub-Arctic / Ural spruce & silver birch taiga ridge with pale gypsum/slate boulders
         if (style === 'ural-birch' ? hash > 0.42 : hash > 0.28) {
-          if (style === 'ural-birch') this._drawSilverBirch(ctx, gx, gy, scale, sway, h * 0.92);
-          else this._drawNorwaySpruce(ctx, gx, gy, scale, sway * 0.55, h + 1.0);
+          if (style === 'ural-birch') this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway, h * 0.92);
+          else this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.55, h + 1.0);
         } else {
-          if (style === 'ural-birch') this._drawNorwaySpruce(ctx, gx, gy, scale, sway * 0.5, h + 0.8);
-          else this._drawSilverBirch(ctx, gx, gy, scale, sway, h * 0.85);
+          if (style === 'ural-birch') this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 0.8);
+          else this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway, h * 0.85);
         }
         if ((s % 2) === 0) {
-          ctx.fillStyle = style === 'ural-birch' ? '#b8c3cf' : '#536170';
-          ctx.beginPath();
-          ctx.ellipse(gx - 0.85 * scale, gy - 0.06 * scale, 0.56 * scale, 0.22 * scale, -0.05, Math.PI, Math.PI * 2);
-          ctx.fill();
+          this._drawAnchoredBoulder(ctx, wx - 0.85, 0.56, 0.24, toScreenX, toScreenY, scale, style === 'ural-birch' ? '#b8c3cf' : '#536170');
         }
       } else if (style === 'provence-gorge') {
-        // Mediterranean cypress spires, olive groves & weathered dry-stone cliff ledges
         if ((s & 1) === 0) {
-          this._drawMediterraneanCypress(ctx, gx, gy, scale, sway * 0.5, h + 1.1);
+          this._drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 1.1);
         } else {
-          this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.35 * scale, 0.72 * scale, 0, scale, 'cypress', 1);
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.08 * scale, gx + 0.1 * scale, gy - 0.7 * scale, gx, gy - 1.2 * scale, 0.16 * scale, 0.08 * scale, 6, ['#4a3c30', '#695848', '#877664'], false);
+          this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#4a3c30', '#695848', '#877664']);
+          this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.35 * scale, 0.72 * scale, 0, scale, 'cypress', 1);
         }
-        ctx.fillStyle = '#a89f8d';
-        ctx.beginPath();
-        ctx.roundRect(gx - 1.2 * scale, gy - 0.34 * scale, 1.45 * scale, 0.36 * scale, 0.06 * scale);
-        ctx.fill();
+        this._drawAnchoredBoulder(ctx, wx - 0.48, 0.72, 0.24, toScreenX, toScreenY, scale, '#a89f8d');
       } else if (style === 'kalahari-crater') {
-        // Kalahari red-ironstone ridge with flat-topped umbrella thorn acacias & golden grass clumps
         if (hash > 0.25) {
-          this._drawUmbrellaAcacia(ctx, gx, gy, scale, sway * 0.45, h + 0.4);
+          this._drawUmbrellaAcacia(ctx, wx, toScreenX, toScreenY, scale, sway * 0.45, h + 0.4);
         }
-        ctx.fillStyle = '#8b4528';
-        ctx.beginPath();
-        ctx.roundRect(gx - 1.15 * scale, gy - 0.32 * scale, 1.4 * scale, 0.34 * scale, 0.06 * scale);
-        ctx.fill();
+        this._drawAnchoredBoulder(ctx, wx - 0.45, 0.7, 0.23, toScreenX, toScreenY, scale, '#8b4528');
         ctx.strokeStyle = '#ca8a04';
         ctx.lineWidth = Math.max(1.1, 0.045 * scale);
         for (let g = -2; g <= 2; g++) {
+          const gWx = wx + g * 0.22;
+          const gGy = toScreenY(this._getHorizonGroundY(this.level, gWx));
+          const gGx = toScreenX(gWx);
           ctx.beginPath();
-          ctx.moveTo(gx + g * 0.22 * scale, gy);
-          ctx.lineTo(gx + g * 0.28 * scale + sway * 0.5, gy - (0.55 + (Math.abs(g) % 2) * 0.25) * scale);
+          ctx.moveTo(gGx, gGy + 0.06 * scale);
+          ctx.lineTo(gGx + 0.06 * scale + sway * 0.5, gGy - (0.55 + (Math.abs(g) % 2) * 0.25) * scale);
           ctx.stroke();
         }
       } else if (style === 'bahamas-abaco') {
-        // Bahamian Abaco Caribbean pines & pale bleached coral-limestone outcrops with scrub palmetto
         if (hash > 0.22) {
-          this._drawLongleafPine(ctx, gx, gy, scale, sway * 0.85, h + 0.65);
+          this._drawLongleafPine(ctx, wx, toScreenX, toScreenY, scale, sway * 0.85, h + 0.65);
         } else {
-          this._drawBotanicalPalm(ctx, gx, gy, scale, leanDir, sway, h * 0.8);
+          this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway, h * 0.8);
         }
-        ctx.fillStyle = '#d6d3c9';
-        ctx.beginPath();
-        ctx.ellipse(gx - 0.85 * scale, gy - 0.06 * scale, 0.62 * scale, 0.24 * scale, -0.06, Math.PI, Math.PI * 2);
-        ctx.fill();
+        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.24, toScreenX, toScreenY, scale, '#d6d3c9');
         if ((s % 2) === 0) {
-          this._fillFoliageCluster(ctx, gx + 0.85 * scale, gy - 0.28 * scale, 0.72 * scale, 0.34 * scale, 0.05, scale, 'jungle', 1);
+          const sbWx = wx + 0.85;
+          const sbGy = toScreenY(this._getHorizonGroundY(this.level, sbWx));
+          this._fillFoliageCluster(ctx, toScreenX(sbWx), sbGy - 0.22 * scale, 0.72 * scale, 0.34 * scale, 0.05, scale, 'jungle', 1);
         }
       } else if (style === 'budapest-bathhouse') {
-        // Buda Hills linden/chestnut grove with warm cream stone balustrade posts & travertine ledges
-        this._fillFoliageCluster(ctx, gx, gy - 1.55 * scale, 1.45 * scale, 0.92 * scale, 0.04, scale, 'jungle', 1);
         this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.75 * scale, gx, gy - 1.35 * scale, 0.16 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
-        ctx.fillStyle = '#c4b89f';
-        ctx.beginPath();
-        ctx.roundRect(gx - 1.1 * scale, gy - 0.3 * scale, 1.35 * scale, 0.32 * scale, 0.05 * scale);
-        ctx.fill();
+        this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#46382c', '#635141', '#7d6856']);
+        this._fillFoliageCluster(ctx, gx, gy - 1.55 * scale, 1.45 * scale, 0.92 * scale, 0.04, scale, 'jungle', 1);
+        this._drawAnchoredBoulder(ctx, wx - 0.42, 0.68, 0.22, toScreenX, toScreenY, scale, '#c4b89f');
       } else if (style === 'sinai-coast') {
-        // Dahab Sinai rose-sandstone desert ridge, date palms, and arid golden boulders
         if (hash > 0.38) {
-          this._drawBotanicalPalm(ctx, gx, gy, scale, leanDir, sway * 0.85, h * 0.78);
+          this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.85, h * 0.78);
         }
-        ctx.fillStyle = '#c2925e';
-        ctx.beginPath();
-        ctx.ellipse(gx - 0.75 * scale, gy - 0.08 * scale, 0.72 * scale, 0.26 * scale, -0.05, Math.PI, Math.PI * 2);
-        ctx.fill();
+        this._drawAnchoredBoulder(ctx, wx - 0.75, 0.72, 0.26, toScreenX, toScreenY, scale, '#c2925e');
       } else if (style === 'quercy-ressel' || style === 'lazio-travertine') {
-        // European limestone canyon: cypress/olive/alder ridge + pale quarry limestone slabs
         if ((s & 1) === 0) {
-          this._drawMediterraneanCypress(ctx, gx, gy, scale, sway * 0.5, h + 0.8);
+          this._drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 0.8);
         } else {
-          this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.4 * scale, 0.8 * scale, 0, scale, 'cypress', 1);
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.08 * scale, gx + 0.08 * scale, gy - 0.7 * scale, gx, gy - 1.2 * scale, 0.16 * scale, 0.08 * scale, 6, ['#4e4135', '#6b5a4a', '#877664'], false);
+          this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#4e4135', '#6b5a4a', '#877664']);
+          this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.4 * scale, 0.8 * scale, 0, scale, 'cypress', 1);
         }
-        ctx.fillStyle = style === 'quercy-ressel' ? '#c2bdb0' : '#bda886';
-        ctx.beginPath();
-        ctx.roundRect(gx - 1.15 * scale, gy - 0.32 * scale, 1.4 * scale, 0.34 * scale, 0.06 * scale);
-        ctx.fill();
+        this._drawAnchoredBoulder(ctx, wx - 0.45, 0.68, 0.23, toScreenX, toScreenY, scale, style === 'quercy-ressel' ? '#c2bdb0' : '#bda886');
       } else if (style === 'moravia-rift') {
-        // Misty Moravian spruce & beech canyon ridge with dark karst slate outcrops
-        this._drawNorwaySpruce(ctx, gx, gy, scale, sway * 0.65, h + 1.1);
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.ellipse(gx - 0.85 * scale, gy - 0.08 * scale, 0.62 * scale, 0.25 * scale, -0.06, Math.PI, Math.PI * 2);
-        ctx.fill();
+        this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.65, h + 1.1);
+        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, '#475569');
       } else if (style === 'oxbelha-twilight') {
-        // Solemn dusk Mayan rainforest ridge over Ox Bel Ha deep rescue sinkhole
-        this._drawBotanicalPalm(ctx, gx, gy, scale, leanDir, sway * 0.75, h * 0.88);
-        this._fillFoliageCluster(ctx, gx + 0.8 * scale, gy - 0.34 * scale, 0.9 * scale, 0.42 * scale, 0.05, scale, 'jungle', 1);
+        this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.75, h * 0.88);
+        const ubWx = wx + 0.8;
+        const ubGy = toScreenY(this._getHorizonGroundY(this.level, ubWx));
+        this._fillFoliageCluster(ctx, toScreenX(ubWx), ubGy - 0.24 * scale, 0.9 * scale, 0.42 * scale, 0.05, scale, 'jungle', 1);
       } else {
         // Florida Karst: Entrance side = cypress & Spanish moss swamp; Exit side = longleaf pine flatwoods
         const isCypressZone = wx < midX;
         if (isCypressZone) {
           if (hash > 0.18) {
-            this._drawBaldCypress(ctx, gx, gy, scale, sway, h + 0.5);
+            this._drawBaldCypress(ctx, wx, toScreenX, toScreenY, scale, sway, h + 0.5);
           }
-          this._fillFoliageCluster(ctx, gx + leanDir * 0.9 * scale, gy - 0.32 * scale, 0.85 * scale, 0.42 * scale, 0.08, scale, 'cypress', leanDir);
+          const shWx = wx + leanDir * 0.9;
+          const shGy = toScreenY(this._getHorizonGroundY(this.level, shWx));
+          this._fillFoliageCluster(ctx, toScreenX(shWx), shGy - 0.24 * scale, 0.85 * scale, 0.42 * scale, 0.08, scale, 'cypress', leanDir);
         } else {
           if (hash > 0.15) {
-            this._drawLongleafPine(ctx, gx, gy, scale, sway, h + 0.8);
+            this._drawLongleafPine(ctx, wx, toScreenX, toScreenY, scale, sway, h + 0.8);
           }
-          // Sawgrass & cattail reed clumps bordering sandy pine flatwoods ridge
+          // Sawgrass & cattail reed clumps grounded smoothly along sandy flatwoods ridge
           for (let r = 0; r < 5; r++) {
-            const rx = gx + (r - 2) * 0.32 * scale;
+            const rWx = wx + (r - 2) * 0.32;
+            const rx = toScreenX(rWx);
+            const rGy = toScreenY(this._getHorizonGroundY(this.level, rWx));
             const rLen = (0.95 + (r % 2) * 0.42) * scale;
             ctx.strokeStyle = '#4e6928';
             ctx.lineWidth = Math.max(1.2, 0.048 * scale);
             ctx.beginPath();
-            ctx.moveTo(rx, gy + 0.06 * scale);
-            ctx.quadraticCurveTo(rx + sway * 0.6, gy - rLen * 0.6, rx + sway * 1.1, gy - rLen);
+            ctx.moveTo(rx, rGy + 0.08 * scale);
+            ctx.quadraticCurveTo(rx + sway * 0.6, rGy - rLen * 0.6, rx + sway * 1.1, rGy - rLen);
             ctx.stroke();
           }
         }
@@ -2102,11 +2377,12 @@ export class CaveRenderer {
     }
   }
 
-  _drawNorwaySpruce(ctx, x, groundY, scale, sway, heightM = 5.6) {
+  _drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.6) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
-    this._drawGroundContactShadow(ctx, x, groundY, 0.85 * scale, scale);
-    ctx.fillStyle = '#3f2e21';
-    ctx.fillRect(x - 0.11 * scale, groundY - h * 0.45, 0.22 * scale, h * 0.52);
+    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.06 * scale, x + sway * 0.1, groundY - h * 0.25, x + sway * 0.2, groundY - h * 0.45, 0.14 * scale, 0.08 * scale, 6, ['#2b1e15', '#3f2e21', '#5a4332'], false);
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.14 * scale, scale, ['#2b1e15', '#3f2e21', '#5a4332'], { rootSpread: 2.3 });
     for (let tier = 0; tier < 4; tier++) {
       const ty = groundY - h * (0.28 + tier * 0.2);
       const tw = (1.35 - tier * 0.24) * scale;
@@ -2126,21 +2402,24 @@ export class CaveRenderer {
     }
   }
 
-  _drawSilverBirch(ctx, x, groundY, scale, sway, heightM = 4.6) {
+  _drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 4.6) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
     const topX = x + sway * 0.5;
     const topY = groundY - h;
-    this._drawGroundContactShadow(ctx, x, groundY, 0.65 * scale, scale);
-    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.08 * scale, x + 0.08 * scale, groundY - h * 0.5, topX, topY, 0.11 * scale, 0.04 * scale, 8, ['#94a3b8', '#e2e8f0', '#f8fafc'], false);
+    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.06 * scale, x + 0.08 * scale, groundY - h * 0.5, topX, topY, 0.11 * scale, 0.04 * scale, 8, ['#94a3b8', '#e2e8f0', '#f8fafc'], false);
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.12 * scale, scale, ['#475569', '#94a3b8', '#cbd5e1'], { rootSpread: 2.15 });
     this._fillFoliageCluster(ctx, topX - 0.35 * scale, topY + 0.25 * scale, 1.05 * scale, 0.62 * scale, -0.1, scale, 'pine', -1);
     this._fillFoliageCluster(ctx, topX + 0.4 * scale, topY + 0.05 * scale, 0.95 * scale, 0.58 * scale, 0.1, scale, 'pine', 1);
   }
 
-  _drawMediterraneanCypress(ctx, x, groundY, scale, sway, heightM = 6.0) {
+  _drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 6.0) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
-    this._drawGroundContactShadow(ctx, x, groundY, 0.6 * scale, scale);
-    ctx.fillStyle = '#4f3b2b';
-    ctx.fillRect(x - 0.1 * scale, groundY - h * 0.35, 0.2 * scale, h * 0.42);
+    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.06 * scale, x + sway * 0.08, groundY - h * 0.2, x + sway * 0.15, groundY - h * 0.38, 0.13 * scale, 0.07 * scale, 6, ['#38281c', '#4f3b2b', '#6b523e'], false);
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.13 * scale, scale, ['#38281c', '#4f3b2b', '#6b523e'], { rootSpread: 2.1 });
     const cg = ctx.createLinearGradient(x - 0.6 * scale, groundY, x + 0.6 * scale, groundY - h);
     cg.addColorStop(0, '#1e3523');
     cg.addColorStop(0.6, '#2f5235');
@@ -2154,12 +2433,14 @@ export class CaveRenderer {
     ctx.fill();
   }
 
-  _drawUmbrellaAcacia(ctx, x, groundY, scale, sway, heightM = 5.2) {
+  _drawUmbrellaAcacia(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.2) {
+    const x = toScreenX(wx);
+    const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
     const topX = x + sway * 0.35;
     const topY = groundY - h * 0.86;
-    this._drawGroundContactShadow(ctx, x, groundY, 1.45 * scale, scale);
-    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.1 * scale, x - 0.2 * scale, groundY - h * 0.45, topX, topY, 0.18 * scale, 0.07 * scale, 8, ['#442d1d', '#6b472c', '#855838'], false);
+    this._drawTaperedCurvedTrunk(ctx, x, groundY + 0.06 * scale, x - 0.2 * scale, groundY - h * 0.45, topX, topY, 0.18 * scale, 0.07 * scale, 8, ['#442d1d', '#6b472c', '#855838'], false);
+    this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, x, groundY, 0.18 * scale, scale, ['#442d1d', '#6b472c', '#855838'], { rootSpread: 2.35 });
     ctx.strokeStyle = '#5a3a22';
     ctx.lineWidth = Math.max(1.5, 0.075 * scale);
     ctx.beginPath();
@@ -2359,12 +2640,11 @@ export class CaveRenderer {
         ctx.stroke();
       }
 
-      // 3. Cliff-top Yucatan jungle ridge (textured organic palms, shrubs & palapa grounded on _getHorizonGroundY)
+      // 3. Cliff-top Yucatan jungle ridge (textured organic palms, shrubs & palapa grounded on terrain curves)
       const leftTreeX = topLeftX - 3.6;
       const rightTreeX = topRightX + 3.6;
       const palapaX = basin.kind === 'entry' ? topLeftX - 2.0 : topRightX + 2.0;
-      const palapaY = toScreenY(this._getHorizonGroundY(this.level, palapaX));
-      this._drawPalapaPavilion(ctx, toScreenX(palapaX), palapaY, scale, basin.kind);
+      this._drawPalapaPavilion(ctx, palapaX, toScreenX, toScreenY, scale, basin.kind);
 
       const rims = [
         { wx: topLeftX - 0.4, dir: 1, h: 4.5 },
@@ -2374,30 +2654,29 @@ export class CaveRenderer {
       ];
       for (let e = 0; e < rims.length; e++) {
         const rw = rims[e];
-        const gy = toScreenY(this._getHorizonGroundY(this.level, rw.wx));
-        const gx = toScreenX(rw.wx);
         const sway = Math.sin(timeSec * 1.3 + e * 1.7 + cx) * 0.08 * scale;
-        this._drawBotanicalPalm(ctx, gx, gy, scale, rw.dir, sway, rw.h);
-        this._drawTropicalUnderbrush(ctx, gx + rw.dir * 0.55 * scale, gy, scale, sway, rw.dir);
+        this._drawBotanicalPalm(ctx, rw.wx, toScreenX, toScreenY, scale, rw.dir, sway, rw.h);
+        this._drawTropicalUnderbrush(ctx, rw.wx + rw.dir * 0.55, toScreenX, toScreenY, scale, sway, rw.dir);
       }
 
-      // 4. Organic hanging aerial roots & creeping vines along cliff lips
+      // 4. Organic hanging aerial roots & creeping vines hugging the sinkhole cliff lips (clear of stairs)
       const rootEdges = [
-        { wx: waterLeft + 0.35, topY: leftRimY, dir: 1 },
-        { wx: waterRight - 0.35, topY: rightRimY, dir: -1 },
+        { wx: waterLeft - 0.1, dir: 1 },
+        { wx: waterRight + 0.1, dir: -1 },
       ];
       for (let rIdx = 0; rIdx < rootEdges.length; rIdx++) {
         const edge = rootEdges[rIdx];
-        for (let v = 0; v < 4; v++) {
-          const vx = toScreenX(edge.wx + edge.dir * (v * 0.42));
-          const vyTop = toScreenY(edge.topY + 0.25);
-          const vLen = (5.4 + (v % 3) * 1.25) * scale;
-          const vSway = Math.sin(timeSec * 1.1 + v * 1.9 + rIdx) * 0.16 * scale;
-          ctx.strokeStyle = v % 2 === 0 ? 'rgba(32, 62, 34, 0.72)' : 'rgba(66, 46, 30, 0.68)';
-          ctx.lineWidth = Math.max(1.1, (v === 1 ? 0.055 : 0.036) * scale);
+        for (let v = 0; v < 3; v++) {
+          const vWx = edge.wx + edge.dir * (0.08 + v * 0.22);
+          const vx = toScreenX(vWx);
+          const vyTop = toScreenY(this._getHorizonGroundY(this.level, vWx) + 0.18);
+          const vLen = (3.8 + (v % 3) * 1.1) * scale;
+          const vSway = Math.sin(timeSec * 1.1 + v * 1.9 + rIdx) * 0.12 * scale;
+          ctx.strokeStyle = v % 2 === 0 ? 'rgba(34, 68, 36, 0.78)' : 'rgba(66, 46, 30, 0.72)';
+          ctx.lineWidth = Math.max(1.1, (v === 1 ? 0.05 : 0.034) * scale);
           ctx.beginPath();
           ctx.moveTo(vx, vyTop);
-          ctx.quadraticCurveTo(vx + vSway * 0.5, vyTop + vLen * 0.5, vx + vSway, vyTop + vLen);
+          ctx.quadraticCurveTo(vx + vSway * 0.45 - edge.dir * 0.1 * scale, vyTop + vLen * 0.5, vx + vSway, vyTop + vLen);
           ctx.stroke();
         }
       }
@@ -2473,13 +2752,13 @@ export class CaveRenderer {
           ctx.fillRect(rx - 0.15 * scale, ry, 0.32 * scale, 0.065 * scale);
         }
 
-        // Weathered yellow diamond NSS-CDS Cave Danger Sign mounted on cliff overlook
-        const signWx = topLeftX + 0.35;
+        // Weathered yellow diamond NSS-CDS Cave Danger Sign mounted beside cliff stairs
+        const signWx = topLeftX - 0.18;
         const signX = toScreenX(signWx);
         const signGround = toScreenY(this._getHorizonGroundY(this.level, signWx));
         const signY = signGround - 1.55 * scale;
         ctx.fillStyle = '#3a3733';
-        ctx.fillRect(signX - 0.055 * scale, signY, 0.11 * scale, 1.65 * scale);
+        ctx.fillRect(signX - 0.055 * scale, signY, 0.11 * scale, 1.72 * scale);
         ctx.save();
         ctx.translate(signX, signY);
         ctx.rotate(Math.PI * 0.25);
@@ -2521,13 +2800,7 @@ export class CaveRenderer {
         ctx.stroke();
 
         const kioskX = topLeftX - 2.1;
-        this._drawFloridaRangerKiosk(
-          ctx,
-          toScreenX(kioskX),
-          toScreenY(this._getHorizonGroundY(this.level, kioskX)),
-          scale,
-          false
-        );
+        this._drawFloridaRangerKiosk(ctx, kioskX, toScreenX, toScreenY, scale, false);
 
         const cypressLocs = [
           { wx: topLeftX - 5.1, h: 5.8 },
@@ -2536,9 +2809,8 @@ export class CaveRenderer {
         ];
         for (let e = 0; e < cypressLocs.length; e++) {
           const c = cypressLocs[e];
-          const gy = toScreenY(this._getHorizonGroundY(this.level, c.wx));
           const sway = Math.sin(timeSec * 1.1 + e * 2.0 + cx) * 0.06 * scale;
-          this._drawBaldCypress(ctx, toScreenX(c.wx), gy, scale, sway, c.h);
+          this._drawBaldCypress(ctx, c.wx, toScreenX, toScreenY, scale, sway, c.h);
         }
       } else {
         this._drawCliffStairs(
@@ -2588,13 +2860,7 @@ export class CaveRenderer {
         ctx.fill();
 
         const kioskX = topRightX + 2.1;
-        this._drawFloridaRangerKiosk(
-          ctx,
-          toScreenX(kioskX),
-          toScreenY(this._getHorizonGroundY(this.level, kioskX)),
-          scale,
-          true
-        );
+        this._drawFloridaRangerKiosk(ctx, kioskX, toScreenX, toScreenY, scale, true);
 
         const pineLocs = [
           { wx: topLeftX - 0.8, h: 5.4, dir: 1 },
@@ -2603,13 +2869,13 @@ export class CaveRenderer {
         ];
         for (let e = 0; e < pineLocs.length; e++) {
           const p = pineLocs[e];
-          const gy = toScreenY(this._getHorizonGroundY(this.level, p.wx));
-          const gx = toScreenX(p.wx);
           const sway = Math.sin(timeSec * 1.4 + e * 1.7 + cx) * 0.07 * scale;
-          this._drawLongleafPine(ctx, gx, gy, scale, sway, p.h);
+          this._drawLongleafPine(ctx, p.wx, toScreenX, toScreenY, scale, sway, p.h);
 
           for (let r = 0; r < 5; r++) {
-            const rx = gx + p.dir * (r - 2) * 0.32 * scale;
+            const rWx = p.wx + p.dir * (r - 2) * 0.32;
+            const rx = toScreenX(rWx);
+            const gy = toScreenY(this._getHorizonGroundY(this.level, rWx));
             const rLen = (1.05 + (r % 2) * 0.42) * scale;
             ctx.strokeStyle = '#4e6928';
             ctx.lineWidth = Math.max(1.3, 0.05 * scale);
@@ -2628,6 +2894,121 @@ export class CaveRenderer {
       }
     }
     ctx.restore();
+  }
+
+  _drawThemedSurfaceBuilding(ctx, hutX, toScreenX, toScreenY, scale, timeSec, cx, flags) {
+    const { isNordic, isUral, isKalahari, isAbaco, isBudapest, isSinai } = flags;
+    const halfW = isBudapest ? 1.65 : isSinai ? 1.55 : 1.38;
+    const foot = this._sampleSurfaceFooting(this.level, hutX, halfW);
+    const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.04);
+    const hutGx = toScreenX(hutX);
+    const hutGy = toScreenY(floorWy);
+
+    this._drawGroundContactShadow(ctx, hutGx, toScreenY(foot.gyC) + 0.08 * scale, halfW * 1.15 * scale, scale, foot.slopeRad);
+
+    if (isBudapest) {
+      // Historic 19th-century ochre Lukacs Thermal Bath cupola pavilion seated on carved travertine terrace
+      this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, hutX, halfW, floorWy - 0.14, {
+        stoneTop: '#d6ccb4',
+        stoneMid: '#b5a98f',
+        stoneBot: '#7d725c',
+      });
+      ctx.fillStyle = '#e7c97f';
+      ctx.fillRect(hutGx - 1.55 * scale, hutGy - 2.1 * scale, 3.1 * scale, 2.0 * scale);
+      // Warm cornice molding & arched thermal windows
+      ctx.fillStyle = '#f5e7bd';
+      ctx.fillRect(hutGx - 1.64 * scale, hutGy - 2.16 * scale, 3.28 * scale, 0.14 * scale);
+      ctx.fillStyle = '#2d6a62';
+      ctx.beginPath();
+      ctx.arc(hutGx, hutGy - 2.16 * scale, 1.24 * scale, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#d4b468';
+      ctx.beginPath();
+      ctx.roundRect(hutGx - 0.24 * scale, hutGy - 3.62 * scale, 0.48 * scale, 0.24 * scale, 0.08 * scale);
+      ctx.fill();
+      for (const wxOff of [-0.55, 0.1]) {
+        ctx.fillStyle = '#6e5c42';
+        ctx.beginPath();
+        ctx.roundRect(hutGx + (wxOff - 0.04) * scale, hutGy - 1.55 * scale, 0.53 * scale, 0.82 * scale, [0.24 * scale, 0.24 * scale, 0, 0]);
+        ctx.fill();
+        ctx.fillStyle = '#fde68a';
+        ctx.beginPath();
+        ctx.roundRect(hutGx + wxOff * scale, hutGy - 1.5 * scale, 0.45 * scale, 0.72 * scale, [0.2 * scale, 0.2 * scale, 0, 0]);
+        ctx.fill();
+      }
+      for (let st = 0; st < 3; st++) {
+        const sx = toScreenX(cx - 1.2 + st * 1.2 + Math.sin(timeSec * 0.9 + st) * 0.35);
+        const sy = toScreenY(-0.55 - ((timeSec * 0.55 + st * 0.33) % 1.4));
+        ctx.fillStyle = 'rgba(255, 251, 240, 0.24)';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, (0.55 + st * 0.15) * scale, 0.28 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+
+    if (isSinai) {
+      // Bedouin terracotta cliffside shade canopy grounded into sandstone terrace + anchored timber posts
+      this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, hutX, halfW, floorWy - 0.08, {
+        stoneTop: '#c49664',
+        stoneMid: '#9d7247',
+        stoneBot: '#735130',
+      });
+      const postL = toScreenY(foot.gyL);
+      const postR = toScreenY(foot.gyR);
+      const eaveY = hutGy - 1.75 * scale;
+      ctx.fillStyle = '#7c340b';
+      ctx.fillRect(hutGx - 1.45 * scale, eaveY, 0.15 * scale, Math.max(1.5 * scale, postL - eaveY + 0.14 * scale));
+      ctx.fillRect(hutGx + 1.3 * scale, eaveY, 0.15 * scale, Math.max(1.5 * scale, postR - eaveY + 0.14 * scale));
+      // Guy-line stakes anchoring tent eaves to ground boulders
+      ctx.strokeStyle = 'rgba(226, 212, 184, 0.7)';
+      ctx.lineWidth = Math.max(1, 0.035 * scale);
+      ctx.beginPath();
+      ctx.moveTo(hutGx - 1.7 * scale, eaveY + 0.12 * scale);
+      ctx.lineTo(hutGx - 2.15 * scale, postL + 0.04 * scale);
+      ctx.moveTo(hutGx + 1.7 * scale, eaveY + 0.12 * scale);
+      ctx.lineTo(hutGx + 2.15 * scale, postR + 0.04 * scale);
+      ctx.stroke();
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(hutGx - 1.75 * scale, eaveY);
+      ctx.quadraticCurveTo(hutGx, hutGy - 2.35 * scale, hutGx + 1.75 * scale, eaveY);
+      ctx.lineTo(hutGx + 1.6 * scale, hutGy - 1.42 * scale);
+      ctx.lineTo(hutGx - 1.6 * scale, hutGy - 1.42 * scale);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    }
+
+    // Expedition cabin / gauge shelter with stone masonry plinth & framed trim
+    this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, hutX, halfW, floorWy - 0.1, {
+      stoneTop: isUral ? '#9aa6b4' : isKalahari ? '#9e5c3e' : '#8d8576',
+      stoneMid: isUral ? '#707d8c' : isKalahari ? '#7a442c' : '#6b6458',
+      stoneBot: '#464139',
+    });
+
+    const wallCol = isUral ? '#d8e0e8' : isNordic ? '#473628' : isKalahari ? '#9a5b3c' : isAbaco ? '#e2e8f0' : '#b8ad9b';
+    const roofCol = isUral ? '#0284c7' : isNordic ? '#991b1b' : isKalahari ? '#cbd5e1' : isAbaco ? '#0d9488' : '#b45309';
+    ctx.fillStyle = wallCol;
+    ctx.fillRect(hutGx - 1.3 * scale, hutGy - 2.0 * scale, 2.6 * scale, 1.92 * scale);
+    // Corner trim boards & shaded roof overhang
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+    ctx.fillRect(hutGx - 1.3 * scale, hutGy - 2.0 * scale, 2.6 * scale, 0.14 * scale);
+    ctx.fillStyle = roofCol;
+    ctx.beginPath();
+    ctx.moveTo(hutGx - 1.62 * scale, hutGy - 1.95 * scale);
+    ctx.lineTo(hutGx, hutGy - 2.92 * scale);
+    ctx.lineTo(hutGx + 1.62 * scale, hutGy - 1.95 * scale);
+    ctx.closePath();
+    ctx.fill();
+    // Framed cabin window with center mullion
+    ctx.fillStyle = '#332920';
+    ctx.fillRect(hutGx - 0.47 * scale, hutGy - 1.5 * scale, 0.94 * scale, 0.66 * scale);
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(hutGx - 0.41 * scale, hutGy - 1.44 * scale, 0.82 * scale, 0.54 * scale);
+    ctx.fillStyle = '#473628';
+    ctx.fillRect(hutGx - 0.03 * scale, hutGy - 1.44 * scale, 0.06 * scale, 0.54 * scale);
+    ctx.fillRect(hutGx - 0.41 * scale, hutGy - 1.2 * scale, 0.82 * scale, 0.05 * scale);
   }
 
   /**
@@ -2695,65 +3076,32 @@ export class CaveRenderer {
 
       // Expedition dive cabin / stone gauge shelter / Budapest domed thermal bathhouse / Sinai shade camp
       const hutX = isEntry ? topLeftX - 2.2 : topRightX + 2.2;
-      const hutGx = toScreenX(hutX);
-      const hutGy = toScreenY(this._getHorizonGroundY(this.level, hutX));
-      this._drawGroundContactShadow(ctx, hutGx, hutGy, 1.8 * scale, scale);
-      if (isBudapest) {
-        // Historic 19th-century ochre Lukacs Thermal Bath cupola pavilion + rising steam wisps
-        ctx.fillStyle = '#e7c97f';
-        ctx.fillRect(hutGx - 1.55 * scale, hutGy - 2.1 * scale, 3.1 * scale, 2.1 * scale);
-        ctx.fillStyle = '#2d6a62';
-        ctx.beginPath();
-        ctx.arc(hutGx, hutGy - 2.1 * scale, 1.25 * scale, Math.PI, 0);
-        ctx.fill();
-        ctx.fillStyle = '#fde68a';
-        ctx.fillRect(hutGx - 0.55 * scale, hutGy - 1.5 * scale, 0.45 * scale, 0.72 * scale);
-        ctx.fillRect(hutGx + 0.1 * scale, hutGy - 1.5 * scale, 0.45 * scale, 0.72 * scale);
-        for (let st = 0; st < 3; st++) {
-          const sx = toScreenX(cx - 1.2 + st * 1.2 + Math.sin(timeSec * 0.9 + st) * 0.35);
-          const sy = toScreenY(-0.55 - ((timeSec * 0.55 + st * 0.33) % 1.4));
-          ctx.fillStyle = 'rgba(255, 251, 240, 0.24)';
-          ctx.beginPath();
-          ctx.ellipse(sx, sy, (0.55 + st * 0.15) * scale, 0.28 * scale, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (isSinai) {
-        // Bedouin terracotta cliffside shade canopy + desert gear bench
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(hutGx - 1.45 * scale, hutGy - 1.8 * scale, 0.14 * scale, 1.8 * scale);
-        ctx.fillRect(hutGx + 1.31 * scale, hutGy - 1.8 * scale, 0.14 * scale, 1.8 * scale);
-        ctx.fillStyle = '#d97706';
-        ctx.beginPath();
-        ctx.moveTo(hutGx - 1.75 * scale, hutGy - 1.75 * scale);
-        ctx.quadraticCurveTo(hutGx, hutGy - 2.35 * scale, hutGx + 1.75 * scale, hutGy - 1.75 * scale);
-        ctx.lineTo(hutGx + 1.6 * scale, hutGy - 1.45 * scale);
-        ctx.lineTo(hutGx - 1.6 * scale, hutGy - 1.45 * scale);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.fillStyle = isUral ? '#d8e0e8' : isNordic ? '#473628' : isKalahari ? '#9a5b3c' : isAbaco ? '#e2e8f0' : '#b8ad9b';
-        ctx.fillRect(hutGx - 1.3 * scale, hutGy - 2.0 * scale, 2.6 * scale, 2.0 * scale);
-        ctx.fillStyle = isUral ? '#0284c7' : isNordic ? '#991b1b' : isKalahari ? '#cbd5e1' : isAbaco ? '#0d9488' : '#b45309';
-        ctx.beginPath();
-        ctx.moveTo(hutGx - 1.6 * scale, hutGy - 1.95 * scale);
-        ctx.lineTo(hutGx, hutGy - 2.9 * scale);
-        ctx.lineTo(hutGx + 1.6 * scale, hutGy - 1.95 * scale);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#fde68a';
-        ctx.fillRect(hutGx - 0.42 * scale, hutGy - 1.45 * scale, 0.84 * scale, 0.56 * scale);
-      }
+      this._drawThemedSurfaceBuilding(ctx, hutX, toScreenX, toScreenY, scale, timeSec, cx, {
+        isNordic,
+        isUral,
+        isKalahari,
+        isAbaco,
+        isBudapest,
+        isSinai,
+      });
 
       if ((isKalahari || isOxBelHa) && isEntry) {
-        // Steel rescue recovery winch A-frame & trimix bottle rack
-        const wx = toScreenX(topLeftX - 0.1);
-        const wy = toScreenY(this._getHorizonGroundY(this.level, topLeftX - 0.1));
+        // Steel rescue recovery winch A-frame grounded with stone footing plates
+        const winchX = topLeftX - 0.1;
+        const footW = this._sampleSurfaceFooting(this.level, winchX, 0.75);
+        const wx = toScreenX(winchX);
+        const wy = toScreenY(footW.gyC);
+        const wyL = toScreenY(footW.gyL);
+        const wyR = toScreenY(footW.gyR);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(toScreenX(winchX - 0.75) - 0.12 * scale, wyL - 0.05 * scale, 0.24 * scale, 0.16 * scale);
+        ctx.fillRect(toScreenX(winchX + 0.75) - 0.12 * scale, wyR - 0.05 * scale, 0.24 * scale, 0.16 * scale);
         ctx.strokeStyle = isOxBelHa ? '#f59e0b' : '#d97706';
         ctx.lineWidth = Math.max(2, 0.09 * scale);
         ctx.beginPath();
-        ctx.moveTo(wx - 0.65 * scale, wy);
-        ctx.lineTo(wx + 0.1 * scale, wy - 2.35 * scale);
-        ctx.lineTo(wx + 0.85 * scale, wy);
+        ctx.moveTo(toScreenX(winchX - 0.75), wyL + 0.04 * scale);
+        ctx.lineTo(wx + 0.08 * scale, wy - 2.35 * scale);
+        ctx.lineTo(toScreenX(winchX + 0.75), wyR + 0.04 * scale);
         ctx.stroke();
       }
 
@@ -2769,20 +3117,21 @@ export class CaveRenderer {
         const gx = toScreenX(ts.wx);
         const sway = Math.sin(timeSec * 1.2 + e * 1.8 + cx) * 0.07 * scale;
         if (isNordic) {
-          if ((e & 1) === 0) this._drawNorwaySpruce(ctx, gx, gy, scale, sway, ts.h);
-          else this._drawSilverBirch(ctx, gx, gy, scale, sway, ts.h * 0.85);
+          if ((e & 1) === 0) this._drawNorwaySpruce(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h);
+          else this._drawSilverBirch(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h * 0.85);
         } else if (isKalahari) {
-          this._drawUmbrellaAcacia(ctx, gx, gy, scale, sway * 0.7, ts.h * 0.9);
+          this._drawUmbrellaAcacia(ctx, ts.wx, toScreenX, toScreenY, scale, sway * 0.7, ts.h * 0.9);
         } else if (isAbaco) {
-          if (e === 1) this._drawBotanicalPalm(ctx, gx, gy, scale, 1, sway, ts.h * 0.82);
-          else this._drawLongleafPine(ctx, gx, gy, scale, sway * 0.85, ts.h * 0.95);
+          if (e === 1) this._drawBotanicalPalm(ctx, ts.wx, toScreenX, toScreenY, scale, 1, sway, ts.h * 0.82);
+          else this._drawLongleafPine(ctx, ts.wx, toScreenX, toScreenY, scale, sway * 0.85, ts.h * 0.95);
         } else if (isSinai || isOxBelHa) {
-          this._drawBotanicalPalm(ctx, gx, gy, scale, e === 0 ? 1 : -1, sway * 0.75, ts.h * 0.78);
+          this._drawBotanicalPalm(ctx, ts.wx, toScreenX, toScreenY, scale, e === 0 ? 1 : -1, sway * 0.75, ts.h * 0.78);
         } else if (isBudapest) {
-          this._fillFoliageCluster(ctx, gx, gy - 1.8 * scale, 1.6 * scale, 1.05 * scale, 0, scale, 'jungle', 1);
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.85 * scale, gx, gy - 1.55 * scale, 0.17 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
+          this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, ts.wx, gx, gy, 0.17 * scale, scale, ['#46382c', '#635141', '#7d6856']);
+          this._fillFoliageCluster(ctx, gx, gy - 1.8 * scale, 1.6 * scale, 1.05 * scale, 0, scale, 'jungle', 1);
         } else {
-          this._drawMediterraneanCypress(ctx, gx, gy, scale, sway, ts.h);
+          this._drawMediterraneanCypress(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h);
         }
       }
 
