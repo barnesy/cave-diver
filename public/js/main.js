@@ -2109,6 +2109,11 @@ function frame(nowMs) {
 
   stepSimulation(dt);
 
+  if (typeof document !== 'undefined' && document.hidden) {
+    requestAnimationFrame(frame);
+    return;
+  }
+
   if ((mode === 'diving' || mode === 'debrief') && session) {
     if (mode === 'debrief') {
       session.simTimeSec += dt;

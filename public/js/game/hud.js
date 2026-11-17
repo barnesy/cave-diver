@@ -165,12 +165,20 @@ export class DiveComputerHUD {
     });
     this.selfEkg = createEkgState(210);
     this.mateCards = new Map();
+    const bindVital = (el) => ({
+      el,
+      fill: el?.querySelector('.v-fill') || null,
+      val: el?.querySelector('.v-val') || null,
+      lastPct: -1,
+      lastCls: '',
+    });
     this.vitalEls = {
-      tox: document.getElementById('vital-tox'),
-      dcs: document.getElementById('vital-dcs'),
-      narc: document.getElementById('vital-narc'),
-      hyp: document.getElementById('vital-hyp'),
+      tox: bindVital(document.getElementById('vital-tox')),
+      dcs: bindVital(document.getElementById('vital-dcs')),
+      narc: bindVital(document.getElementById('vital-narc')),
+      hyp: bindVital(document.getElementById('vital-hyp')),
     };
+    this._lastObjectiveHtml = '';
     this.tankButtons = {};
 
     const gasRack = document.getElementById('dc-gas-rack');
@@ -205,15 +213,19 @@ export class DiveComputerHUD {
     }
   }
 
-  _updateVitalBar(el, pct, warnAt, dangerAt) {
-    if (!el) return;
+  _updateVitalBar(vital, pct, warnAt, dangerAt) {
+    if (!vital?.el) return;
     const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
     const cls = clamped >= dangerAt ? 'danger' : clamped >= warnAt ? 'warn' : '';
-    el.className = `dc-vital ${cls}`.trim();
-    const fill = el.querySelector('.v-fill');
-    const val = el.querySelector('.v-val');
-    if (fill) fill.style.width = `${clamped}%`;
-    if (val) val.textContent = `${clamped}%`;
+    if (vital.lastCls !== cls) {
+      vital.lastCls = cls;
+      vital.el.className = cls ? `dc-vital ${cls}` : 'dc-vital';
+    }
+    if (vital.lastPct !== clamped) {
+      vital.lastPct = clamped;
+      if (vital.fill) vital.fill.style.width = `${clamped}%`;
+      if (vital.val) vital.val.textContent = `${clamped}%`;
+    }
   }
 
   update({
@@ -377,10 +389,11 @@ export class DiveComputerHUD {
           ? ' · ✓ RECOVERED'
           : ' · 🛟 BODY RECOVERY'
       : '';
+    let objectiveHtml = '';
     if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {
       const cls = ascentStep.action === 'STOP' ? 'stop' : 'move';
       const icon = ascentStep.action === 'STOP' ? '■' : '▲';
-      this.elObjective.innerHTML = `
+      objectiveHtml = `
         <div class="obj-top-row">
           <span class="obj-count">ASCENT · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
           ${gasBadge}
@@ -390,7 +403,7 @@ export class DiveComputerHUD {
       `;
     } else if (nextCheckpoint) {
       if (level?.hideWaypointCompass) {
-        this.elObjective.innerHTML = `
+        objectiveHtml = `
           <div class="obj-top-row">
             <span class="obj-count">UNLINED MAZE · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
             ${gasBadge}
@@ -402,7 +415,7 @@ export class DiveComputerHUD {
         const dist = Math.hypot(nextCheckpoint.x - diver.x, nextCheckpoint.y - diver.y);
         const dir = nextCheckpoint.x > diver.x + 1.5 ? '→' : nextCheckpoint.x < diver.x - 1.5 ? '←' : '';
         const vDir = nextCheckpoint.y > diver.y + 1.5 ? '↓' : nextCheckpoint.y < diver.y - 1.5 ? '↑' : '';
-        this.elObjective.innerHTML = `
+        objectiveHtml = `
           <div class="obj-top-row">
             <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
             ${gasBadge}
@@ -413,7 +426,7 @@ export class DiveComputerHUD {
       }
     } else {
       if (level?.hideWaypointCompass) {
-        this.elObjective.innerHTML = `
+        objectiveHtml = `
           <div class="obj-top-row">
             <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
             ${gasBadge}
@@ -423,7 +436,7 @@ export class DiveComputerHUD {
         `;
       } else {
         const dist = Math.hypot(exitZone.x - diver.x, exitZone.y - diver.y);
-        this.elObjective.innerHTML = `
+        objectiveHtml = `
           <div class="obj-top-row">
             <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
             ${gasBadge}
@@ -432,6 +445,10 @@ export class DiveComputerHUD {
           <span class="obj-hint">Ascend smoothly to surface exit</span>
         `;
       }
+    }
+    if (objectiveHtml !== this._lastObjectiveHtml) {
+      this._lastObjectiveHtml = objectiveHtml;
+      this.elObjective.innerHTML = objectiveHtml;
     }
 
     // Team Vitals & Live EKG Monitors (LAN Multiplayer, keyed DOM reuse so EKG traces sweep smoothly)

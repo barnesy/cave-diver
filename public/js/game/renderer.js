@@ -67,6 +67,8 @@ export class CaveRenderer {
     this.rockChunks = [];
     this.dustMotes = [];
     this._sunCurtainCache = new Map();
+    this._skyGradCache = null;
+    this._vignetteCache = null;
     this.ready = false;
     this.camX = level.spawn.x;
     this.camY = level.spawn.y;
@@ -884,16 +886,20 @@ export class CaveRenderer {
     const visX1 = Math.min(xMax, viewWorldRight);
     const visY1 = Math.min(yMax, viewWorldBottom);
 
-    // 1. Sky & Rich Level-Themed Water Gradient
+    // 1. Sky & Rich Level-Themed Water Gradient (cached per surfY/viewport step)
     const surfY = toScreenY(0);
     const theme = this.level.theme;
-    const skyGrad = ctx.createLinearGradient(0, Math.min(0, surfY - 80), 0, Math.max(ch, surfY + 48 * scale));
-    skyGrad.addColorStop(0, theme?.waterSurface || '#67e8f9');
-    skyGrad.addColorStop(Math.max(0.01, Math.min(0.35, surfY / ch)), theme?.waterShallow || '#06b6d4');
-    skyGrad.addColorStop(Math.max(0.02, Math.min(0.58, (surfY + 14 * scale) / ch)), theme?.waterMid || '#0e5a6f');
-    skyGrad.addColorStop(Math.max(0.03, Math.min(0.78, (surfY + 28 * scale) / ch)), theme?.waterDeep || '#072a47');
-    skyGrad.addColorStop(1, theme?.waterAbyss || '#020914');
-    ctx.fillStyle = skyGrad;
+    const skyKey = `${this.level.id}|${Math.round(surfY)}|${ch}|${Math.round(scale * 10)}`;
+    if (!this._skyGradCache || this._skyGradCache.key !== skyKey) {
+      const skyGrad = ctx.createLinearGradient(0, Math.min(0, surfY - 80), 0, Math.max(ch, surfY + 48 * scale));
+      skyGrad.addColorStop(0, theme?.waterSurface || '#67e8f9');
+      skyGrad.addColorStop(Math.max(0.01, Math.min(0.35, surfY / ch)), theme?.waterShallow || '#06b6d4');
+      skyGrad.addColorStop(Math.max(0.02, Math.min(0.58, (surfY + 14 * scale) / ch)), theme?.waterMid || '#0e5a6f');
+      skyGrad.addColorStop(Math.max(0.03, Math.min(0.78, (surfY + 28 * scale) / ch)), theme?.waterDeep || '#072a47');
+      skyGrad.addColorStop(1, theme?.waterAbyss || '#020914');
+      this._skyGradCache = { key: skyKey, grad: skyGrad };
+    }
+    ctx.fillStyle = this._skyGradCache.grad;
     ctx.fillRect(0, 0, cw, ch);
 
     // Above-water sky strip (sky, sun halo & clouds behind cliffs)
@@ -977,7 +983,22 @@ export class CaveRenderer {
     this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false);
 
     // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering
-    this._drawLighting(ctx, cw, ch, diver, peerList, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered);
+    this._drawLighting(
+      ctx,
+      cw,
+      ch,
+      diver,
+      peerList,
+      checkpointsHit,
+      siltClouds,
+      sunCurtains,
+      toScreenX,
+      toScreenY,
+      scale,
+      timeSec,
+      bodyRecovered,
+      localSiltDensity
+    );
 
     // 10b. Subtle Calcite Crystal Torch Glint & Collect Burst Floating Scores
     if (ecosystem) {
@@ -3197,14 +3218,13 @@ export class CaveRenderer {
       const nearDepth = Math.abs(diver.y - z.y) <= 1.6 && diver.x >= z.xMin && diver.x <= z.xMax;
       const pulse = 0.7 + 0.3 * Math.sin(timeSec * 4.5);
 
-      // Soft horizontal depth-band glow around the line
+      // Soft horizontal depth-band glow around the line via pre-baked 1x64 strip
       const bandH = 0.7 * scale;
-      const grad = ctx.createLinearGradient(0, sy - bandH, 0, sy + bandH);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(0.5, nearDepth ? 'rgba(74, 222, 128, 0.20)' : 'rgba(56, 189, 248, 0.11)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x0, sy - bandH, x1 - x0, bandH * 2);
+      if (this.glowStamps.bandGlow) {
+        ctx.globalAlpha = nearDepth ? 1.0 : 0.55;
+        ctx.drawImage(this.glowStamps.bandGlow, x0, sy - bandH, x1 - x0, bandH * 2);
+        ctx.globalAlpha = 1;
+      }
 
       // Crisp horizontal zone line with depth tick endcaps
       ctx.strokeStyle = z.color;
@@ -3955,7 +3975,125 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false) {
+  _drawVolumetricTorchBeam(ctx, diver, torchData, rangeM, { siltHaze = 0, isPeer = false, toScreenX, toScreenY, scale, timeSec = 0 } = {}) {
+    if (!torchData) return;
+    ctx.save();
+    const tx = toScreenX(torchData.ox);
+    const ty = toScreenY(torchData.oy);
+    const rPx = rangeM * scale;
+
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    for (let i = 0; i < torchData.rays.length; i++) {
+      const pt = torchData.rays[i];
+      ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.globalCompositeOperation = 'screen';
+    const intensity = isPeer ? 0.58 : 1.0;
+    const warmBoost = Math.min(0.18, siltHaze * 0.14);
+    const scatter = ctx.createRadialGradient(tx, ty, 0.15 * scale, tx, ty, rPx);
+    scatter.addColorStop(0, `rgba(254, 249, 195, ${(0.24 * intensity + warmBoost).toFixed(3)})`);
+    scatter.addColorStop(0.28, `rgba(186, 230, 253, ${(0.14 * intensity + warmBoost * 0.45).toFixed(3)})`);
+    scatter.addColorStop(0.7, `rgba(14, 165, 233, ${(0.05 * intensity).toFixed(3)})`);
+    scatter.addColorStop(1, 'rgba(2, 132, 199, 0)');
+    ctx.fillStyle = scatter;
+    ctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+
+    // Tight hotspot beam core
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.arc(tx, ty, rPx * 0.9, diver.angle - 0.13, diver.angle + 0.13);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(224, 242, 254, ${(0.1 * intensity).toFixed(3)})`;
+    ctx.fill();
+
+    // Smooth feathered 2D Ray-Cast Tyndall / Particulate Light Shafts (2-ray spans = 2x fewer draw calls)
+    ctx.globalCompositeOperation = 'lighter';
+    const rayLen = torchData.rays.length;
+    for (let i = 0; i < rayLen - 2; i += 2) {
+      const rA = torchData.rays[i];
+      const rB = torchData.rays[Math.min(rayLen - 1, i + 2)];
+      const centerDist = Math.abs((i + 1) / Math.max(1, rayLen - 1) - 0.5) * 2;
+      const rayAlpha = (1 - centerDist * 0.75) * 0.024 * intensity;
+      ctx.fillStyle = `rgba(186, 230, 253, ${rayAlpha.toFixed(4)})`;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(toScreenX(rA.x), toScreenY(rA.y));
+      ctx.lineTo(toScreenX(rB.x), toScreenY(rB.y));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    if (!isPeer && this.dustMotes.length > 0) {
+      // Suspended water particulates & soft bokeh plankton sparkling inside ray-cast torch polygon
+      const maxDistSq = rangeM * rangeM;
+      const moteStamp = this.glowStamps.cyan;
+      const sparks = [];
+      for (let i = 0; i < this.dustMotes.length; i++) {
+        const m = this.dustMotes[i];
+        const dx = m.x - torchData.ox;
+        const dy = m.y - torchData.oy;
+        const dSq = dx * dx + dy * dy;
+        if (dSq > maxDistSq || dSq < 0.3) continue;
+        const driftX = m.x + Math.sin(timeSec * 0.8 + m.phase) * 0.18;
+        const driftY = m.y + Math.cos(timeSec * 0.65 + m.phase) * 0.14;
+        const fade = Math.max(0, 1 - Math.sqrt(dSq) / rangeM);
+        const mx = toScreenX(driftX);
+        const my = toScreenY(driftY);
+        if (i % 5 === 0) {
+          const bokehR = Math.max(4, m.size * 6.5 * scale);
+          ctx.globalAlpha = 0.28 * fade;
+          ctx.drawImage(moteStamp, mx - bokehR, my - bokehR, bokehR * 2, bokehR * 2);
+        }
+        sparks.push(mx, my, Math.max(1, m.size * scale));
+      }
+      if (sparks.length > 0) {
+        ctx.globalAlpha = 0.42;
+        ctx.fillStyle = '#e0f2fe';
+        ctx.beginPath();
+        for (let i = 0; i < sparks.length; i += 3) {
+          const mx = sparks[i];
+          const my = sparks[i + 1];
+          const r = sparks[i + 2];
+          ctx.moveTo(mx + r, my);
+          ctx.arc(mx, my, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // Normal-weighted 2D diffuse limestone wall scatter & mineral rim glint via pre-baked glowStamps
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const warmStamp = this.glowStamps.warm;
+    const cyanStamp = this.glowStamps.cyan;
+    const wallStep = isPeer ? 2 : 1;
+    for (let i = 1; i < torchData.rays.length - 1; i += wallStep) {
+      const pt = torchData.rays[i];
+      if (!pt.hitWall || pt.dist > rangeM) continue;
+      const wx = toScreenX(pt.x + pt.nx * 0.25);
+      const wy = toScreenY(pt.y + pt.ny * 0.25);
+      const beamWeight = 1 - Math.abs(i / (torchData.rays.length - 1) - 0.5) * 1.1;
+      const strength = Math.max(0, (1 - pt.dist / rangeM) * pt.incidence * beamWeight) * 0.16 * intensity;
+      if (strength < 0.008) continue;
+      const rad = (1.0 + pt.dist * 0.06) * scale;
+      ctx.globalAlpha = Math.min(0.45, strength);
+      ctx.drawImage(pt.dist < 6.5 ? warmStamp : cyanStamp, wx - rad, wy - rad, rad * 2, rad * 2);
+
+      if (!isPeer && pt.incidence > 0.42 && i % 3 === 0) {
+        const glintR = Math.max(2, (0.28 + pt.incidence * 0.22) * scale);
+        ctx.globalAlpha = Math.min(0.32, strength * 1.15);
+        ctx.drawImage(warmStamp, toScreenX(pt.x) - glintR, toScreenY(pt.y) - glintR, glintR * 2, glintR * 2);
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0) {
     const lctx = this.lightCtx;
     const lw = this.lightCanvas.width;
     const lh = this.lightCanvas.height;
@@ -4059,20 +4197,27 @@ export class CaveRenderer {
         },
       }));
 
+    const cutoutStamp = this.glowStamps.cutout;
     const carveDiverLight = (d, torchData, rangeM) => {
       const sx = toScreenX(d.x) * rx;
       const sy = toScreenY(d.y) * ry;
 
-      // Soft personal dive-computer / gauge ambient halo
+      // Soft personal dive-computer / gauge ambient halo via pre-baked radial cutout
       const haloR = 3.4 * scale * rx;
-      const halo = lctx.createRadialGradient(sx, sy, 0.25 * scale * rx, sx, sy, haloR);
-      halo.addColorStop(0, 'rgba(0,0,0,0.9)');
-      halo.addColorStop(0.5, 'rgba(0,0,0,0.45)');
-      halo.addColorStop(1, 'rgba(0,0,0,0)');
-      lctx.fillStyle = halo;
-      lctx.beginPath();
-      lctx.arc(sx, sy, haloR, 0, Math.PI * 2);
-      lctx.fill();
+      if (cutoutStamp) {
+        lctx.globalAlpha = 0.9;
+        lctx.drawImage(cutoutStamp, sx - haloR, sy - haloR, haloR * 2, haloR * 2);
+        lctx.globalAlpha = 1;
+      } else {
+        const halo = lctx.createRadialGradient(sx, sy, 0.25 * scale * rx, sx, sy, haloR);
+        halo.addColorStop(0, 'rgba(0,0,0,0.9)');
+        halo.addColorStop(0.5, 'rgba(0,0,0,0.45)');
+        halo.addColorStop(1, 'rgba(0,0,0,0)');
+        lctx.fillStyle = halo;
+        lctx.beginPath();
+        lctx.arc(sx, sy, haloR, 0, Math.PI * 2);
+        lctx.fill();
+      }
 
       if (!torchData) return;
 
@@ -4120,35 +4265,29 @@ export class CaveRenderer {
       carveDiverLight(peerTorches[i].peer, peerTorches[i].torch, 14.0);
     }
 
-    // Faint marker glows at checkpoints so navigation feels fair in dark water
+    // Faint marker glows at visible checkpoints via pre-baked cutout stamp
+    const cpRad = 2.4 * scale * rx;
     for (const cp of this.level.checkpoints) {
       const sx = toScreenX(cp.x) * rx;
       const sy = toScreenY(cp.y) * ry;
-      const rad = 2.4 * scale * rx;
-      const g = lctx.createRadialGradient(sx, sy, 0.1 * scale * rx, sx, sy, rad);
-      g.addColorStop(0, checkpointsHit.has(cp.id) ? 'rgba(0,0,0,0.58)' : 'rgba(0,0,0,0.42)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      lctx.fillStyle = g;
-      lctx.beginPath();
-      lctx.arc(sx, sy, rad, 0, Math.PI * 2);
-      lctx.fill();
+      if (sx + cpRad < 0 || sx - cpRad > lw || sy + cpRad < 0 || sy - cpRad > lh) continue;
+      lctx.globalAlpha = checkpointsHit.has(cp.id) ? 0.58 : 0.42;
+      lctx.drawImage(cutoutStamp, sx - cpRad, sy - cpRad, cpRad * 2, cpRad * 2);
     }
+    lctx.globalAlpha = 1;
 
     // Luminous outer-reef Arch daylight apertures (e.g. Dahab Red Sea The Arch at 56m)
     if (Array.isArray(this.level.archWindows)) {
       for (const aw of this.level.archWindows) {
         const ax = toScreenX(aw.x) * rx;
         const ay = toScreenY(aw.y) * ry;
-        const rad = Math.max(aw.radiusX || 12, aw.radiusY || 8) * scale * rx;
-        const ag = lctx.createRadialGradient(ax, ay, rad * 0.1, ax, ay, rad);
-        ag.addColorStop(0, 'rgba(0,0,0,0.88)');
-        ag.addColorStop(0.55, 'rgba(0,0,0,0.48)');
-        ag.addColorStop(1, 'rgba(0,0,0,0)');
-        lctx.fillStyle = ag;
-        lctx.beginPath();
-        lctx.ellipse(ax, ay, (aw.radiusX || 12) * scale * rx, (aw.radiusY || 8) * scale * ry, 0, 0, Math.PI * 2);
-        lctx.fill();
+        const awRx = (aw.radiusX || 12) * scale * rx;
+        const awRy = (aw.radiusY || 8) * scale * ry;
+        if (ax + awRx < 0 || ax - awRx > lw || ay + awRy < 0 || ay - awRy > lh) continue;
+        lctx.globalAlpha = 0.88;
+        lctx.drawImage(cutoutStamp, ax - awRx, ay - awRy, awRx * 2, awRy * 2);
       }
+      lctx.globalAlpha = 1;
     }
 
     // Emergency locator beacon cutout around fallen diver recovery target
@@ -4157,14 +4296,11 @@ export class CaveRenderer {
       const sx = toScreenX(rt.x) * rx;
       const sy = toScreenY(rt.y) * ry;
       const rad = 3.2 * scale * rx;
-      const pulse = 0.55 + 0.35 * Math.pow(0.5 + 0.5 * Math.sin(timeSec * 5.2), 3);
-      const g = lctx.createRadialGradient(sx, sy, 0.15 * scale * rx, sx, sy, rad);
-      g.addColorStop(0, `rgba(0,0,0,${pulse.toFixed(2)})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      lctx.fillStyle = g;
-      lctx.beginPath();
-      lctx.arc(sx, sy, rad, 0, Math.PI * 2);
-      lctx.fill();
+      if (sx + rad >= 0 && sx - rad <= lw && sy + rad >= 0 && sy - rad <= lh) {
+        lctx.globalAlpha = 0.55 + 0.35 * Math.pow(0.5 + 0.5 * Math.sin(timeSec * 5.2), 3);
+        lctx.drawImage(cutoutStamp, sx - rad, sy - rad, rad * 2, rad * 2);
+        lctx.globalAlpha = 1;
+      }
     }
 
     ctx.drawImage(this.lightCanvas, 0, 0, cw, ch);
@@ -4172,144 +4308,75 @@ export class CaveRenderer {
     if (Array.isArray(this.level.archWindows)) {
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
+      const archStamp = this.glowStamps.cyan;
       for (const aw of this.level.archWindows) {
         const ax = toScreenX(aw.x);
         const ay = toScreenY(aw.y);
         const rxW = (aw.radiusX || 12) * scale;
         const ryH = (aw.radiusY || 8) * scale;
         if (ax + rxW < 0 || ax - rxW > cw || ay + ryH < 0 || ay - ryH > ch) continue;
-        const g = ctx.createRadialGradient(ax, ay, rxW * 0.08, ax, ay, Math.max(rxW, ryH));
-        g.addColorStop(0, 'rgba(56, 189, 248, 0.34)');
-        g.addColorStop(0.45, 'rgba(14, 165, 233, 0.16)');
-        g.addColorStop(1, 'rgba(2, 132, 199, 0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.ellipse(ax, ay, rxW, ryH, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.globalAlpha = 0.36;
+        ctx.drawImage(archStamp, ax - rxW, ay - ryH, rxW * 2, ryH * 2);
       }
       ctx.restore();
     }
 
-    // Volumetric scattering cone + limestone wall bounce highlights clipped to ray-cast polygon
+    // Volumetric scattering cone + limestone wall bounce highlights for local diver & peer buddies
     if (localTorch) {
-      ctx.save();
-      const tx = toScreenX(localTorch.ox);
-      const ty = toScreenY(localTorch.oy);
-      const rPx = 15.5 * scale;
-
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      for (let i = 0; i < localTorch.rays.length; i++) {
-        const pt = localTorch.rays[i];
-        ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-      }
-      ctx.closePath();
-      ctx.clip();
-
-      ctx.globalCompositeOperation = 'screen';
-      // Warm-white LED near nozzle fading to cyan-blue water scatter at distance
-      const scatter = ctx.createRadialGradient(tx, ty, 0.15 * scale, tx, ty, rPx);
-      scatter.addColorStop(0, 'rgba(254, 249, 195, 0.24)');
-      scatter.addColorStop(0.28, 'rgba(186, 230, 253, 0.14)');
-      scatter.addColorStop(0.7, 'rgba(14, 165, 233, 0.05)');
-      scatter.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      ctx.fillStyle = scatter;
-      ctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
-
-      // Tight hotspot beam scatter
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.arc(tx, ty, rPx * 0.9, diver.angle - 0.13, diver.angle + 0.13);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.10)';
-      ctx.fill();
-
-      // Smooth, gap-free 2D Ray-Cast Tyndall / Particulate Light Shafts inside clipped cone
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < localTorch.rays.length - 1; i++) {
-        const rA = localTorch.rays[i];
-        const rB = localTorch.rays[i + 1];
-        const centerDist = Math.abs((i + 0.5) / (localTorch.rays.length - 1) - 0.5) * 2;
-        const rayAlpha = (1 - centerDist * 0.75) * 0.017;
-        ctx.fillStyle = `rgba(186, 230, 253, ${rayAlpha.toFixed(4)})`;
-        ctx.beginPath();
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(toScreenX(rA.x), toScreenY(rA.y));
-        ctx.lineTo(toScreenX(rB.x), toScreenY(rB.y));
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Suspended water particulates & soft bokeh plankton sparkling inside ray-cast torch polygon
-      const maxDistSq = 15.5 * 15.5;
-      const moteStamp = this.glowStamps.cyan;
-      for (let i = 0; i < this.dustMotes.length; i++) {
-        const m = this.dustMotes[i];
-        const dx = m.x - localTorch.ox;
-        const dy = m.y - localTorch.oy;
-        const dSq = dx * dx + dy * dy;
-        if (dSq > maxDistSq || dSq < 0.3) continue;
-        const driftX = m.x + Math.sin(timeSec * 0.8 + m.phase) * 0.18;
-        const driftY = m.y + Math.cos(timeSec * 0.65 + m.phase) * 0.14;
-        const fade = Math.max(0, 1 - Math.sqrt(dSq) / 15.5);
-        const mx = toScreenX(driftX);
-        const my = toScreenY(driftY);
-        if (i % 5 === 0) {
-          // Soft bokeh plankton halo
-          const bokehR = Math.max(4, m.size * 6.5 * scale);
-          ctx.globalAlpha = 0.28 * fade;
-          ctx.drawImage(moteStamp, mx - bokehR, my - bokehR, bokehR * 2, bokehR * 2);
-        }
-        ctx.globalAlpha = 0.55 * fade;
-        ctx.fillStyle = '#e0f2fe';
-        ctx.beginPath();
-        ctx.arc(mx, my, Math.max(1, m.size * scale), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // Smooth Normal-weighted 2D diffuse wall scatter & bounce lobes via pre-baked glowStamps
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const warmStamp = this.glowStamps.warm;
-      const cyanStamp = this.glowStamps.cyan;
-      for (let i = 1; i < localTorch.rays.length - 1; i++) {
-        const pt = localTorch.rays[i];
-        if (!pt.hitWall || pt.dist > 15.5) continue;
-        const wx = toScreenX(pt.x + pt.nx * 0.25);
-        const wy = toScreenY(pt.y + pt.ny * 0.25);
-        const beamWeight = 1 - Math.abs(i / (localTorch.rays.length - 1) - 0.5) * 1.1;
-        const strength = Math.max(0, (1 - pt.dist / 15.5) * pt.incidence * beamWeight) * 0.16;
-        if (strength < 0.008) continue;
-        const rad = (1.0 + pt.dist * 0.06) * scale;
-        ctx.globalAlpha = Math.min(0.45, strength);
-        ctx.drawImage(pt.dist < 6.5 ? warmStamp : cyanStamp, wx - rad, wy - rad, rad * 2, rad * 2);
-
-        // Specular limestone & crystal mineral rim glint on perpendicular torch hits
-        if (pt.incidence > 0.42 && (i % 3 === 0)) {
-          const glintR = Math.max(2, (0.28 + pt.incidence * 0.22) * scale);
-          ctx.globalAlpha = Math.min(0.32, strength * 1.15);
-          ctx.drawImage(warmStamp, toScreenX(pt.x) - glintR, toScreenY(pt.y) - glintR, glintR * 2, glintR * 2);
-        }
-      }
-      ctx.restore();
+      this._drawVolumetricTorchBeam(ctx, diver, localTorch, 15.5, {
+        siltHaze: localSiltDensity,
+        isPeer: false,
+        toScreenX,
+        toScreenY,
+        scale,
+        timeSec,
+      });
+    }
+    for (let i = 0; i < peerTorches.length; i++) {
+      this._drawVolumetricTorchBeam(ctx, peerTorches[i].peer, peerTorches[i].torch, 13.0, {
+        siltHaze: 0,
+        isPeer: true,
+        toScreenX,
+        toScreenY,
+        scale,
+        timeSec,
+      });
     }
   }
 
   _drawBubbles(ctx, toScreenX, toScreenY, scale, bubbles) {
     if (!bubbles.length) return;
     ctx.save();
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.7)';
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.25)';
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.72)';
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.24)';
     ctx.lineWidth = 1.2;
-    for (const b of bubbles) {
+    ctx.beginPath();
+    const glints = [];
+    for (let i = 0; i < bubbles.length; i++) {
+      const b = bubbles[i];
       const sx = toScreenX(b.x);
       const sy = toScreenY(b.y);
       const r = Math.max(1.5, b.r * scale);
-      ctx.beginPath();
+      ctx.moveTo(sx + r, sy);
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      if (r >= 3) {
+        glints.push(sx - r * 0.34, sy - r * 0.34, Math.max(0.8, r * 0.24));
+      }
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    if (glints.length > 0) {
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.78)';
+      ctx.beginPath();
+      for (let i = 0; i < glints.length; i += 3) {
+        const gx = glints[i];
+        const gy = glints[i + 1];
+        const gr = glints[i + 2];
+        ctx.moveTo(gx + gr, gy);
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+      }
       ctx.fill();
-      ctx.stroke();
     }
     ctx.restore();
   }
@@ -4383,39 +4450,54 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec) {
-    // Hypoxia: grey tunnel vision closing in
-    if (diveState.hypoxiaStress > 8) {
-      const t = Math.min(1, diveState.hypoxiaStress / 100);
-      const g = ctx.createRadialGradient(cw * 0.5, ch * 0.5, cw * (0.38 - t * 0.25), cw * 0.5, ch * 0.5, cw * 0.65);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, `rgba(10, 12, 16, ${(0.45 + t * 0.52).toFixed(3)})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, cw, ch);
+  _getVignetteCache(ctx, cw, ch) {
+    if (this._vignetteCache && this._vignetteCache.cw === cw && this._vignetteCache.ch === ch) {
+      return this._vignetteCache;
     }
+    const build = (innerScale, outerScale, colorRgb) => {
+      const g = ctx.createRadialGradient(cw * 0.5, ch * 0.5, cw * innerScale, cw * 0.5, ch * 0.5, cw * outerScale);
+      g.addColorStop(0, `rgba(${colorRgb}, 0)`);
+      g.addColorStop(1, `rgba(${colorRgb}, 1)`);
+      return g;
+    };
+    this._vignetteCache = {
+      cw,
+      ch,
+      hypoxia: build(0.24, 0.65, '10, 12, 16'),
+      danger: build(0.25, 0.72, '220, 38, 38'),
+      narcosis: build(0.28, 0.75, '79, 70, 229'),
+    };
+    return this._vignetteCache;
+  }
 
-    // Hyperoxia / O2 Toxicity or DCS: progressive pulse starting from mild/moderate symptoms
+  _drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec) {
     const cnsDanger = (diveState.cnsPercent || 0) / 100;
     const dcsDanger = (diveState.dcsStress || 0) / 100;
     const danger = Math.max(cnsDanger, dcsDanger, diveState.ppo2 > 1.6 ? 0.55 : 0);
-    if (danger > 0.18) {
-      const pulse = 0.5 + 0.5 * Math.sin(timeSec * (5 + danger * 6));
-      const alpha = Math.min(0.62, danger * (0.28 + pulse * 0.3));
-      const g = ctx.createRadialGradient(cw * 0.5, ch * 0.5, cw * 0.25, cw * 0.5, ch * 0.5, cw * 0.72);
-      g.addColorStop(0, 'rgba(220, 38, 38, 0)');
-      g.addColorStop(1, `rgba(220, 38, 38, ${alpha.toFixed(3)})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, cw, ch);
-    }
+    const hasHypoxia = diveState.hypoxiaStress > 8;
+    const hasDanger = danger > 0.18;
+    const hasNarcosis = diveState.narcosisLevel > 0.2;
+    if (!hasHypoxia && !hasDanger && !hasNarcosis) return;
 
-    // Narcosis: subtle indigo periphery
-    if (diveState.narcosisLevel > 0.2) {
-      const alpha = diveState.narcosisLevel * 0.34;
-      const g = ctx.createRadialGradient(cw * 0.5, ch * 0.5, cw * 0.28, cw * 0.5, ch * 0.5, cw * 0.75);
-      g.addColorStop(0, 'rgba(99, 102, 241, 0)');
-      g.addColorStop(1, `rgba(79, 70, 229, ${alpha.toFixed(3)})`);
-      ctx.fillStyle = g;
+    const vig = this._getVignetteCache(ctx, cw, ch);
+    ctx.save();
+    if (hasHypoxia) {
+      const t = Math.min(1, diveState.hypoxiaStress / 100);
+      ctx.globalAlpha = 0.45 + t * 0.52;
+      ctx.fillStyle = vig.hypoxia;
       ctx.fillRect(0, 0, cw, ch);
     }
+    if (hasDanger) {
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * (5 + danger * 6));
+      ctx.globalAlpha = Math.min(0.62, danger * (0.28 + pulse * 0.3));
+      ctx.fillStyle = vig.danger;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    if (hasNarcosis) {
+      ctx.globalAlpha = diveState.narcosisLevel * 0.34;
+      ctx.fillStyle = vig.narcosis;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    ctx.restore();
   }
 }

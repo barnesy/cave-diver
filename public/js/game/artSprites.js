@@ -46,6 +46,20 @@ function makeSiltWispStamp(size = 128) {
   return c;
 }
 
+function makeVerticalBandStamp(width = 1, height = 64) {
+  const c = document.createElement('canvas');
+  c.width = width;
+  c.height = height;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, 'rgba(56, 189, 248, 0)');
+  g.addColorStop(0.5, 'rgba(56, 189, 248, 0.22)');
+  g.addColorStop(1, 'rgba(56, 189, 248, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+  return c;
+}
+
 export function createGlowStamps() {
   return {
     cyan: makeGlowStamp('rgba(186, 230, 253, 0.9)', 'rgba(56, 189, 248, 0.32)'),
@@ -53,6 +67,8 @@ export function createGlowStamps() {
     magenta: makeGlowStamp('rgba(245, 208, 254, 0.85)', 'rgba(217, 70, 239, 0.28)'),
     emerald: makeGlowStamp('rgba(167, 243, 208, 0.85)', 'rgba(16, 185, 129, 0.28)'),
     silt: makeGlowStamp('rgba(164, 148, 118, 0.78)', 'rgba(112, 99, 78, 0.34)'),
+    cutout: makeGlowStamp('rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 0.45)', 128),
+    bandGlow: makeVerticalBandStamp(1, 64),
     siltWisp: makeSiltWispStamp(128),
   };
 }
