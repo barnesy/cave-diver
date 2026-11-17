@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=44');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=45');
   }
   return trysteroModulePromise;
 }
@@ -205,7 +205,7 @@ export class LanClient {
         }
         const host = globalThis.location?.hostname || '';
         const proto = globalThis.location?.protocol || '';
-        if (host.endsWith('.github.io') || proto === 'file:') {
+        if (host.endsWith('.github.io') || host.endsWith('.vercel.app') || proto === 'file:') {
           this.transport = 'p2p';
           this.emit('transport_changed', 'p2p');
           return 'p2p';
@@ -214,6 +214,18 @@ export class LanClient {
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const timer = ctrl ? setTimeout(() => ctrl.abort(), 1400) : null;
         try {
+          const healthRes = await fetch('./api/healthz', {
+            cache: 'no-store',
+            signal: ctrl?.signal,
+          });
+          if (healthRes.ok) {
+            const healthJson = await healthRes.json();
+            if (healthJson?.platform === 'vercel') {
+              this.transport = 'p2p';
+              this.emit('transport_changed', 'p2p');
+              return 'p2p';
+            }
+          }
           const res = await fetch('./api/lan-info', {
             cache: 'no-store',
             signal: ctrl?.signal,
