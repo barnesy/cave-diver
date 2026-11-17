@@ -1,8 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "fluid": true,
-  "buildCommand": "",
-  "outputDirectory": "public",
   "rewrites": [
     { "source": "/join/:code", "destination": "/?room=:code" },
     { "source": "/healthz", "destination": "/api/healthz" }
