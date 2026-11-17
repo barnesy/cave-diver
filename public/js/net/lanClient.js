@@ -21,13 +21,13 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=43');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=44');
   }
   return trysteroModulePromise;
 }
 
-// Populated automatically once deployed to Vercel (or same-origin ./api/room on Vercel hosts)
-export const GLOBAL_ROOM_API_URL = '';
+// Shared Vercel + Blob room coordinator for background-resilient P2P rooms across Vercel & GitHub Pages
+export const GLOBAL_ROOM_API_URL = 'https://cave-diver.vercel.app/api/room';
 
 export class LanClient {
   constructor() {

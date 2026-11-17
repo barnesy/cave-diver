@@ -7,8 +7,8 @@ const PLAYER_ID_KEY = 'caveDiverGlobalPlayerId_v1';
 const CUSTOM_ENDPOINT_KEY = 'caveDiverLeaderboardApiUrl_v1';
 const LOCAL_CACHE_KEY = 'caveDiverLeaderboardCache_v1';
 
-// Populate once Cloudflare Worker is deployed (falls back to ./api/leaderboard on Node LAN server)
-export const GLOBAL_LEADERBOARD_URL = '';
+// Shared Vercel + Blob global backend used from GitHub Pages and static origins
+export const GLOBAL_LEADERBOARD_URL = 'https://cave-diver.vercel.app/api/leaderboard';
 
 function getOrCreatePlayerId() {
   try {
@@ -89,26 +89,23 @@ export class LeaderboardClient {
       }
     } catch {}
 
+    const host = globalThis.location?.hostname || '';
+    const proto = globalThis.location?.protocol || '';
+    if (!host.endsWith('.github.io') && proto !== 'file:') {
+      // On Vercel or local Node server, prefer same-origin /api/leaderboard when healthy
+      try {
+        const res = await fetch('./api/healthz', { cache: 'no-store' });
+        if (res.ok) {
+          this._resolvedEndpoint = './api/leaderboard';
+          return this._resolvedEndpoint;
+        }
+      } catch {}
+    }
+
     if (GLOBAL_LEADERBOARD_URL) {
       this._resolvedEndpoint = GLOBAL_LEADERBOARD_URL.replace(/\/+$/, '');
       return this._resolvedEndpoint;
     }
-
-    const host = globalThis.location?.hostname || '';
-    const proto = globalThis.location?.protocol || '';
-    if (host.endsWith('.github.io') || proto === 'file:') {
-      this._resolvedEndpoint = '';
-      return '';
-    }
-
-    // On Vercel or local Node server, probe same-origin /api/healthz
-    try {
-      const res = await fetch('./api/healthz', { cache: 'no-store' });
-      if (res.ok) {
-        this._resolvedEndpoint = './api/leaderboard';
-        return this._resolvedEndpoint;
-      }
-    } catch {}
 
     this._resolvedEndpoint = '';
     return '';

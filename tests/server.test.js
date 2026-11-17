@@ -482,3 +482,64 @@ test('LAN server serves app, reports LAN URLs, and relays 2-player room state', 
     proc.kill();
   }
 });
+
+test('Vercel API handlers validate inputs and shared clients target Vercel global URLs', async () => {
+  const { GET: healthGet, OPTIONS: healthOptions } = await import('../api/healthz.js');
+  const { POST: lbPost, OPTIONS: lbOptions } = await import('../api/leaderboard.js');
+  const { POST: roomPost, OPTIONS: roomOptions } = await import('../api/room.js');
+  const { GLOBAL_LEADERBOARD_URL, LeaderboardClient } = await import('../public/js/net/leaderboardClient.js');
+  const { GLOBAL_ROOM_API_URL } = await import('../public/js/net/lanClient.js');
+
+  assert.equal(GLOBAL_LEADERBOARD_URL, 'https://cave-diver.vercel.app/api/leaderboard');
+  assert.equal(GLOBAL_ROOM_API_URL, 'https://cave-diver.vercel.app/api/room');
+
+  assert.equal(healthOptions().status, 204);
+  assert.equal(lbOptions().status, 204);
+  assert.equal(roomOptions().status, 204);
+
+  const healthRes = healthGet();
+  assert.equal(healthRes.status, 200);
+  const healthJson = await healthRes.json();
+  assert.equal(healthJson.ok, true);
+  assert.equal(healthJson.platform, 'vercel');
+
+  const badLbJson = await lbPost(new Request('https://example.com/api/leaderboard', { method: 'POST', body: '{bad' }));
+  assert.equal(badLbJson.status, 400);
+  const badLbPayload = await lbPost(
+    new Request('https://example.com/api/leaderboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'solo', levelId: 'unknown-cave' }),
+    })
+  );
+  assert.equal(badLbPayload.status, 400);
+
+  const badRoomJson = await roomPost(new Request('https://example.com/api/room', { method: 'POST', body: 'nope' }));
+  assert.equal(badRoomJson.status, 400);
+  const missingCode = await roomPost(
+    new Request('https://example.com/api/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sync', code: '!!!' }),
+    })
+  );
+  assert.equal(missingCode.status, 400);
+
+  // Verify GitHub Pages origin falls back cleanly to GLOBAL_LEADERBOARD_URL
+  const prevLoc = globalThis.location;
+  try {
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { hostname: 'barnesy.github.io', protocol: 'https:', search: '' },
+    });
+    const client = new LeaderboardClient();
+    const resolved = await client.resolveEndpoint();
+    assert.equal(resolved, 'https://cave-diver.vercel.app/api/leaderboard');
+  } finally {
+    if (prevLoc === undefined) {
+      delete globalThis.location;
+    } else {
+      Object.defineProperty(globalThis, 'location', { configurable: true, value: prevLoc });
+    }
+  }
+});
