@@ -1,4 +1,12 @@
-import { get, put } from '@vercel/blob';
+import {
+  del,
+  get,
+  head,
+  list,
+  put,
+  BlobNotFoundError,
+  BlobPreconditionFailedError,
+} from '@vercel/blob';
 
 export const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +23,18 @@ export function jsonResponse(payload, status = 200) {
       ...CORS_HEADERS,
     },
   });
+}
+
+export async function readBlobEtag(pathname) {
+  try {
+    const meta = await head(pathname);
+    return meta?.etag || null;
+  } catch (err) {
+    if (err instanceof BlobNotFoundError || err?.name === 'BlobNotFoundError') {
+      return null;
+    }
+    return null;
+  }
 }
 
 export async function readBlobJson(pathname, fallbackValue = null) {
@@ -47,23 +67,42 @@ export async function writeBlobJson(pathname, data, { ifMatch = null } = {}) {
   return put(pathname, JSON.stringify(data), opts);
 }
 
+export async function deleteBlobPath(pathname) {
+  try {
+    await del(pathname);
+  } catch (err) {
+    if (!(err instanceof BlobNotFoundError || err?.name === 'BlobNotFoundError')) {
+      throw err;
+    }
+  }
+}
+
+export async function listBlobPaths(prefix, limit = 30) {
+  const res = await list({ prefix, limit });
+  return Array.isArray(res?.blobs) ? res.blobs : [];
+}
+
 /**
  * Optimistically read-modify-write a JSON document in Private Vercel Blob,
- * retrying cleanly if concurrent writes conflict on ETag.
+ * using canonical head().etag for ifMatch and retrying cleanly on concurrent conflicts.
  */
-export async function mutateBlobJson(pathname, makeDefaultFn, mutatorFn, maxAttempts = 4) {
+export async function mutateBlobJson(pathname, makeDefaultFn, mutatorFn, maxAttempts = 5) {
   let lastErr = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const { data, etag } = await readBlobJson(pathname, makeDefaultFn());
-    const draft = data ?? makeDefaultFn();
+    const [canonicalEtag, readRes] = await Promise.all([
+      readBlobEtag(pathname),
+      readBlobJson(pathname, makeDefaultFn()),
+    ]);
+    const draft = readRes.data ?? makeDefaultFn();
     const nextResult = await mutatorFn(draft);
     const valueToWrite = nextResult === undefined ? draft : nextResult;
     try {
-      await writeBlobJson(pathname, valueToWrite, etag ? { ifMatch: etag } : undefined);
+      await writeBlobJson(pathname, valueToWrite, canonicalEtag ? { ifMatch: canonicalEtag } : undefined);
       return valueToWrite;
     } catch (err) {
       lastErr = err;
       const isPrecondition =
+        err instanceof BlobPreconditionFailedError ||
         err?.name === 'BlobPreconditionFailedError' ||
         String(err?.message || '').toLowerCase().includes('precondition');
       if (!isPrecondition) throw err;
