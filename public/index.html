@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=46" />
+  <link rel="stylesheet" href="./css/style.css?v=47" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -49,33 +49,34 @@
   <!-- Toast Banner -->
   <div id="game-toast" class="game-toast" aria-live="polite"></div>
 
-  <!-- Title & LAN Lobby Screen -->
+  <!-- Title & Tabbed Solo / Team / Leaderboards Menu Screen -->
   <section id="screen-menu" class="overlay-screen">
     <div class="menu-card">
-      <div class="menu-eyebrow">TECHNICAL CAVE DIVING SIM</div>
-      <h1 class="menu-title">CENOTE EL ABISMO</h1>
+      <div class="menu-header">
+        <div>
+          <div class="menu-eyebrow">TECHNICAL CAVE DIVING SIM</div>
+          <h1 class="menu-title">CENOTE EL ABISMO</h1>
+        </div>
+        <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 Install App</button>
+      </div>
       <p class="menu-desc">
-        Navigate 50m overhead tunnels, manage Trimix &amp; Oxygen limits, avoid silt-outs, and clear your decompression ceiling.
+        Navigate overhead caves, manage Trimix &amp; O2 limits, avoid silt-outs, and clear decompression.
       </p>
 
-      <div class="gas-briefing" id="gas-briefing">
-        <div class="gas-chip">
-          <span class="chip-name cyan">EAN32</span>
-          <span class="chip-range" id="chip-range-ean32">0–33m Travel</span>
-        </div>
-        <div class="gas-chip">
-          <span class="chip-name purple">TMX 14/55</span>
-          <span class="chip-range" id="chip-range-tmx">3–65m Bottom</span>
-        </div>
-        <div class="gas-chip">
-          <span class="chip-name green">O2 100%</span>
-          <span class="chip-range">0–6m Deco</span>
-        </div>
+      <div id="menu-tabs" class="menu-tabs" role="tablist" aria-label="Game Modes">
+        <button id="tab-btn-solo" class="menu-tab active" type="button" role="tab" aria-selected="true" data-menu-tab="solo">🤿 Solo</button>
+        <button id="btn-open-lan" class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="team" disabled>👥 Team</button>
+        <button id="btn-open-leaderboard" class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="leaderboards">🏆 Leaderboards</button>
       </div>
 
-      <div class="level-picker-block">
+      <div id="menu-identity-row" class="menu-name-row">
+        <label for="input-player-name">Diver Callsign</label>
+        <input id="input-player-name" type="text" maxlength="16" value="Diver 1" autocomplete="off" />
+      </div>
+
+      <div id="menu-site-picker" class="level-picker-block">
         <div class="level-picker-head">
-          <label for="select-level">Select Expedition Site</label>
+          <label for="select-level">Expedition Site</label>
           <span id="campaign-progress-pill" class="campaign-progress-pill">13 / 13 Sites</span>
           <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
         </div>
@@ -87,19 +88,33 @@
         </div>
       </div>
 
-      <div class="menu-name-row">
-        <label for="input-player-name">Diver Callsign</label>
-        <input id="input-player-name" type="text" maxlength="16" value="Diver 1" autocomplete="off" />
+      <div id="solo-panel" class="menu-tab-panel" role="tabpanel" aria-labelledby="tab-btn-solo">
+        <div class="gas-briefing" id="gas-briefing">
+          <div class="gas-chip">
+            <span class="chip-name cyan">EAN32</span>
+            <span class="chip-range" id="chip-range-ean32">0–33m Travel</span>
+          </div>
+          <div class="gas-chip">
+            <span class="chip-name purple">TMX 14/55</span>
+            <span class="chip-range" id="chip-range-tmx">3–65m Bottom</span>
+          </div>
+          <div class="gas-chip">
+            <span class="chip-name green">O2 100%</span>
+            <span class="chip-range">0–6m Deco</span>
+          </div>
+        </div>
+
+        <div class="menu-actions">
+          <button id="btn-play-solo" class="btn primary" type="button" disabled>SOLO DIVE · LEVEL 1</button>
+        </div>
+
+        <div class="controls-hint">
+          <span><strong>Mobile:</strong> Right thumbstick to swim · Tap tank &amp; reel buttons on Dive Computer</span>
+          <span><strong>Desktop:</strong> WASD / Arrows · 1 / 2 / 3 Gas · L Torch · G Lay Line / R Rewind</span>
+        </div>
       </div>
 
-      <div class="menu-actions">
-        <button id="btn-play-solo" class="btn primary" type="button" disabled>SOLO DIVE · LEVEL 1</button>
-        <button id="btn-open-lan" class="btn secondary" type="button" disabled>CO-OP DIVE (2–4 DIVERS)</button>
-        <button id="btn-open-leaderboard" class="btn ghost" type="button">🏆 LEADERBOARD</button>
-        <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 INSTALL PHONE APP</button>
-      </div>
-
-      <div id="leaderboard-panel" class="lan-panel leaderboard-panel" hidden>
+      <div id="leaderboard-panel" class="lan-panel leaderboard-panel" role="tabpanel" aria-labelledby="btn-open-leaderboard" hidden>
         <div class="lb-head">
           <div class="lb-tabs" role="tablist" aria-label="Leaderboard Mode">
             <button id="btn-lb-solo" class="lb-tab active" type="button" data-lb-mode="solo">👤 Individual</button>
@@ -114,7 +129,7 @@
         <div id="leaderboard-rows" class="lb-rows"></div>
       </div>
 
-      <div id="lan-panel" class="lan-panel" hidden>
+      <div id="lan-panel" class="lan-panel" role="tabpanel" aria-labelledby="btn-open-lan" hidden>
         <div class="lan-url-box">
           <div class="lan-url-head">
             <span>Join from phone on same Wi-Fi:</span>
@@ -177,11 +192,6 @@
             <button id="btn-leave-room" class="btn ghost" type="button">Leave</button>
           </div>
         </div>
-      </div>
-
-      <div class="controls-hint">
-        <span><strong>Mobile:</strong> Right thumbstick to swim · Tap tank &amp; reel buttons on Dive Computer</span>
-        <span><strong>Desktop:</strong> WASD / Arrows · 1 / 2 / 3 Gas · L Torch · G Lay Line / R Rewind</span>
       </div>
     </div>
   </section>
@@ -332,43 +342,43 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=46",
-        "./js/game/audio.js": "./js/game/audio.js?v=46",
-        "./js/game/collision.js": "./js/game/collision.js?v=46",
-        "./js/game/input.js": "./js/game/input.js?v=46",
-        "./js/game/hud.js": "./js/game/hud.js?v=46",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=46",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=46",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=46",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=46",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=46",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=46",
-        "./js/game/silt.js": "./js/game/silt.js?v=46",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=46",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=46",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=46",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=46",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=46",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=46",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=46",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=46",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=46",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=46",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=46",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=46",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=46",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=46",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=46",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=46",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=46",
-        "./js/levels/index.js": "./js/levels/index.js?v=46",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=46",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=46",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=46",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=46"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=47",
+        "./js/game/audio.js": "./js/game/audio.js?v=47",
+        "./js/game/collision.js": "./js/game/collision.js?v=47",
+        "./js/game/input.js": "./js/game/input.js?v=47",
+        "./js/game/hud.js": "./js/game/hud.js?v=47",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=47",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=47",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=47",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=47",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=47",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=47",
+        "./js/game/silt.js": "./js/game/silt.js?v=47",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=47",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=47",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=47",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=47",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=47",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=47",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=47",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=47",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=47",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=47",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=47",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=47",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=47",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=47",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=47",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=47",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=47",
+        "./js/levels/index.js": "./js/levels/index.js?v=47",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=47",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=47",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=47",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=47"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=46"></script>
+  <script type="module" src="./js/main.js?v=47"></script>
 </body>
 </html>

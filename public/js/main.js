@@ -63,6 +63,10 @@ const inlineLoaderEl = document.getElementById('inline-level-loader');
 const inlineLoaderLabelEl = document.getElementById('inline-level-loader-label');
 const inlineLoaderFillEl = document.getElementById('inline-loader-fill');
 const playerNameInput = document.getElementById('input-player-name');
+const tabBtnSolo = document.getElementById('tab-btn-solo');
+const menuIdentityRow = document.getElementById('menu-identity-row');
+const menuSitePicker = document.getElementById('menu-site-picker');
+const soloPanel = document.getElementById('solo-panel');
 const btnPlaySolo = document.getElementById('btn-play-solo');
 const btnOpenLan = document.getElementById('btn-open-lan');
 const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
@@ -1144,7 +1148,7 @@ function resetLobbyUiState(statusText = 'Connect to host or join a buddy\'s room
 function updateOpenLanButtonBadge(rooms = lan.rooms) {
   if (!btnOpenLan) return;
   if (lan.room) {
-    btnOpenLan.textContent = `LAN CO-OP · ROOM ${lan.room.code}`;
+    btnOpenLan.textContent = `👥 Team · ${lan.room.code}`;
     btnOpenLan.classList.add('has-rooms');
     return;
   }
@@ -1152,10 +1156,10 @@ function updateOpenLanButtonBadge(rooms = lan.rooms) {
     ? rooms.filter((r) => r.playerCount < r.maxPlayers)
     : [];
   if (openRooms.length > 0) {
-    btnOpenLan.textContent = `CO-OP · ${openRooms.length} OPEN ROOM${openRooms.length > 1 ? 'S' : ''}`;
+    btnOpenLan.textContent = `👥 Team (${openRooms.length})`;
     btnOpenLan.classList.add('has-rooms');
   } else {
-    btnOpenLan.textContent = 'CO-OP DIVE (2–4 DIVERS)';
+    btnOpenLan.textContent = '👥 Team';
     btnOpenLan.classList.remove('has-rooms');
   }
 }
@@ -1244,30 +1248,48 @@ btnPlaySolo.addEventListener('click', async () => {
   }
 });
 
-btnOpenLan.addEventListener('click', async () => {
-  lanPanel.hidden = !lanPanel.hidden;
-  if (!lanPanel.hidden && leaderboardPanel) {
-    leaderboardPanel.hidden = true;
-  }
-  if (!lanPanel.hidden) {
+let activeMenuTab = 'solo';
+
+function syncSitePickerVisibility() {
+  if (!menuSitePicker) return;
+  const showSites = activeMenuTab !== 'leaderboards' || lbScope === 'site';
+  menuSitePicker.hidden = !showSites;
+}
+
+async function setActiveMenuTab(tab = 'solo') {
+  activeMenuTab = tab === 'team' ? 'team' : tab === 'leaderboards' ? 'leaderboards' : 'solo';
+  const isSolo = activeMenuTab === 'solo';
+  const isTeam = activeMenuTab === 'team';
+  const isLb = activeMenuTab === 'leaderboards';
+
+  tabBtnSolo?.classList.toggle('active', isSolo);
+  tabBtnSolo?.setAttribute('aria-selected', String(isSolo));
+  btnOpenLan?.classList.toggle('active', isTeam);
+  btnOpenLan?.setAttribute('aria-selected', String(isTeam));
+  btnOpenLeaderboard?.classList.toggle('active', isLb);
+  btnOpenLeaderboard?.setAttribute('aria-selected', String(isLb));
+
+  if (soloPanel) soloPanel.hidden = !isSolo;
+  if (lanPanel) lanPanel.hidden = !isTeam;
+  if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
+  if (menuIdentityRow) menuIdentityRow.hidden = isLb;
+  syncSitePickerVisibility();
+
+  if (isTeam) {
     if (!lan.connected) {
       setLanConnectionBadge('', '○ Connecting...');
     }
     lan.connect();
     lan.listRooms();
     await fetchLanUrls();
-  }
-});
-
-btnOpenLeaderboard?.addEventListener('click', () => {
-  if (!leaderboardPanel) return;
-  leaderboardPanel.hidden = !leaderboardPanel.hidden;
-  if (!leaderboardPanel.hidden) {
-    if (lanPanel) lanPanel.hidden = true;
+  } else if (isLb) {
     refreshMenuLeaderboard();
-    leaderboardPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-});
+}
+
+tabBtnSolo?.addEventListener('click', () => setActiveMenuTab('solo'));
+btnOpenLan.addEventListener('click', () => setActiveMenuTab('team'));
+btnOpenLeaderboard?.addEventListener('click', () => setActiveMenuTab('leaderboards'));
 
 leaderboardPanel?.addEventListener('click', (e) => {
   const modeBtn = e.target.closest('button[data-lb-mode]');
@@ -1285,6 +1307,7 @@ leaderboardPanel?.addEventListener('click', (e) => {
     for (const b of leaderboardPanel.querySelectorAll('button[data-lb-scope]')) {
       b.classList.toggle('active', b === scopeBtn);
     }
+    syncSitePickerVisibility();
     refreshMenuLeaderboard();
   }
 });
@@ -1445,7 +1468,7 @@ btnLoaderCancel?.addEventListener('click', () => {
     screenLoader.classList.add('done');
     if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
     screenMenu.hidden = false;
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
     resetLobbyUiState('Canceled room join.');
     return;
   }
@@ -1517,7 +1540,7 @@ document.getElementById('btn-abort').addEventListener('click', () => {
   if (isMultiplayer) {
     lan.leaveRoom();
     isMultiplayer = false;
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
     resetLobbyUiState(prevCode ? `Aborted dive (Room ${prevCode} stays open for remaining divers).` : 'Aborted dive and left room.');
     if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
@@ -1530,7 +1553,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     mode = 'menu';
     screenDebrief.hidden = true;
     screenMenu.hidden = false;
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
     renderLevelCards();
     if (lan.isHost()) {
       lan.returnToLobby();
@@ -1623,7 +1646,7 @@ lan.on('error', (msg) => {
     screenLoader.classList.add('done');
     if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
     screenMenu.hidden = false;
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
   }
   lanStatus.className = 'lan-status warn';
   lanStatus.textContent = msg;
@@ -1639,7 +1662,7 @@ lan.on('returned_to_lobby', () => {
     mode = 'menu';
     screenDebrief.hidden = true;
     screenMenu.hidden = false;
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
     showToast('Host returned crew to room lobby for next dive.', 2.8);
   }
   renderLevelCards();
@@ -1664,7 +1687,7 @@ lan.on('room_update', async (room) => {
   if (autoJoinedNow) {
     pendingAutoJoinCode = '';
     if (!shouldEnterDirectDive) {
-      lanPanel.hidden = false;
+      setActiveMenuTab('team');
     }
   }
   const justEnteredRoom = lanRoomBox.hidden;
@@ -2301,19 +2324,19 @@ async function bootGame() {
   window.addEventListener('focus', () => lan.ensureConnected());
   window.addEventListener('online', () => lan.ensureConnected());
 
-  // Connect WebSocket quietly so active LAN rooms badge & auto-join/restore work instantaneously
+  // Connect cleanly & backfill any prior local dive records to global Vercel Blob storage
   lan.connect();
   fetchLanUrls();
+  leaderboard.syncPendingLocalRuns().catch(() => {});
 
   const savedSession = lan.getSavedSession();
   if (savedSession && !INITIAL_ROOM_CODE) {
     pendingAutoJoinCode = savedSession.code;
     attemptJoinAfterExpire = '';
-    lanPanel.hidden = false;
+    setActiveMenuTab('team');
     if (roomCodeInput) roomCodeInput.value = savedSession.code;
     lanStatus.className = 'lan-status';
     lanStatus.textContent = `Reconnecting to room ${savedSession.code}...`;
-    lanPanel.scrollIntoView({ block: 'nearest' });
   } else if (savedSession && savedSession.code === INITIAL_ROOM_CODE && savedSession.isHost) {
     pendingAutoJoinCode = savedSession.code;
     attemptJoinAfterExpire = INITIAL_ROOM_CODE;

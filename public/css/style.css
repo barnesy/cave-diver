@@ -106,6 +106,61 @@ html, body {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
 }
 
+.menu-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  margin-bottom: 12px;
+  background: rgba(2, 8, 18, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 12px;
+}
+
+.menu-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 9px;
+  padding: 9px 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.menu-tab:hover:not(:disabled) {
+  color: #e0f2fe;
+}
+
+.menu-tab:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.menu-tab.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.22));
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #f0f9ff;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.22);
+}
+
+.menu-tab.has-rooms:not(.active) {
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.32);
+}
+
 .menu-eyebrow {
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.72rem;
@@ -383,11 +438,11 @@ html, body {
   transition: width 0.14s ease;
 }
 
-/* LAN Lobby Panel */
+/* Tab Panels (Team & Leaderboards) */
 .lan-panel {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .lan-url-box {
@@ -1967,8 +2022,8 @@ html, body {
 .lb-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 240px;
+  gap: 5px;
+  max-height: 300px;
   overflow-y: auto;
 }
 .lb-row {

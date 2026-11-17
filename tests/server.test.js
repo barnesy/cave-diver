@@ -535,6 +535,42 @@ test('Vercel API handlers validate inputs and shared clients target Vercel globa
     const client = new LeaderboardClient();
     const resolved = await client.resolveEndpoint();
     assert.equal(resolved, 'https://cave-diver.vercel.app/api/leaderboard');
+
+    // Verify local-cache entries sync cleanly to global endpoint when fetchBoard runs
+    const { normalizeLeaderboardSubmission } = await import('../public/js/game/leaderboardModel.js');
+    let posted = [];
+    const prevFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      if (opts?.method === 'POST') {
+        const norm = normalizeLeaderboardSubmission(JSON.parse(opts.body));
+        posted.push(norm.entry);
+        return new Response(JSON.stringify({ ok: true, entry: norm.entry, entries: posted }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ mode: 'solo', levelId: 'cenote-el-abismo', entries: posted }), { status: 200 });
+    };
+    try {
+      client._localEntries = [
+        normalizeLeaderboardSubmission({
+          mode: 'solo',
+          levelId: 'cenote-el-abismo',
+          playerId: 'diver_chris_local',
+          diverName: 'Chris',
+          score: 2650,
+          grade: 'S',
+          timeSec: 112.4,
+          exploredPct: 91,
+          collectiblesFound: 3,
+        }).entry,
+      ];
+      client._loadLocalCache = () => client._localEntries;
+      const syncedBoard = await client.fetchBoard({ mode: 'solo', levelId: 'cenote-el-abismo', limit: 20 });
+      assert.equal(posted.length, 1);
+      assert.equal(syncedBoard.source, 'global');
+      assert.equal(syncedBoard.entries.length, 1);
+      assert.equal(syncedBoard.entries[0].displayName, 'Chris');
+    } finally {
+      globalThis.fetch = prevFetch;
+    }
   } finally {
     if (prevLoc === undefined) {
       delete globalThis.location;

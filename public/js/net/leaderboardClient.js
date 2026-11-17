@@ -29,6 +29,8 @@ export class LeaderboardClient {
     this.playerId = getOrCreatePlayerId();
     this._resolvedEndpoint = undefined;
     this._localEntries = this._loadLocalCache();
+    this._syncedLocalKeys = new Set();
+    this._syncPromise = null;
   }
 
   _loadLocalCache() {
@@ -111,6 +113,66 @@ export class LeaderboardClient {
     return '';
   }
 
+  async syncPendingLocalRuns() {
+    const endpoint = await this.resolveEndpoint();
+    if (!endpoint) return 0;
+    return this._syncLocalCacheToGlobal(endpoint);
+  }
+
+  async _syncLocalCacheToGlobal(endpoint) {
+    if (!endpoint || !this._localEntries.length) return 0;
+    if (this._syncPromise) return this._syncPromise;
+
+    this._syncPromise = (async () => {
+      let uploaded = 0;
+      const pending = this._localEntries.filter((e) => {
+        if (!e || e.grade === 'DNF' || !(e.score > 0)) return false;
+        const sig = `${e.mode}|${e.entryKey}|${e.score}`;
+        return !this._syncedLocalKeys.has(sig);
+      });
+      if (pending.length === 0) return 0;
+
+      await Promise.all(
+        pending.map(async (entry) => {
+          const sig = `${entry.mode}|${entry.entryKey}|${entry.score}`;
+          try {
+            const res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: entry.mode,
+                levelId: entry.levelId,
+                runId: entry.mode === 'team' ? entry.entryKey : undefined,
+                playerId: entry.playerId || this.playerId,
+                diverName: entry.displayName,
+                crew: entry.crew,
+                teamSize: entry.teamSize,
+                score: entry.score,
+                grade: entry.grade,
+                timeSec: entry.timeSec,
+                exploredPct: entry.exploredPct,
+                collectiblesFound: entry.collectiblesFound,
+              }),
+            });
+            if (res.ok || res.status === 400) {
+              this._syncedLocalKeys.add(sig);
+              if (res.ok) uploaded += 1;
+            }
+          } catch {
+            // Keep pending for retry on next fetch
+          }
+        })
+      );
+      return uploaded;
+    })();
+
+    try {
+      return await this._syncPromise;
+    } finally {
+      this._syncPromise = null;
+    }
+  }
+
   async fetchBoard({ mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
     this._localEntries = this._loadLocalCache();
     const endpoint = await this.resolveEndpoint();
@@ -124,15 +186,33 @@ export class LeaderboardClient {
     }
 
     try {
+      await this._syncLocalCacheToGlobal(endpoint);
       const url = `${endpoint}?mode=${encodeURIComponent(mode)}&level=${encodeURIComponent(levelId)}&limit=${encodeURIComponent(limit)}`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      const remoteEntries = Array.isArray(json.entries) ? json.entries : [];
+      if (levelId !== 'overall' && this._localEntries.length > 0) {
+        const byKey = new Map();
+        for (const e of [...remoteEntries, ...this._localEntries]) {
+          if (!e || e.mode !== mode || e.levelId !== levelId) continue;
+          const prev = byKey.get(e.entryKey);
+          if (!prev || e.score > prev.score || (e.score === prev.score && e.timeSec < prev.timeSec)) {
+            byKey.set(e.entryKey, e);
+          }
+        }
+        return {
+          source: 'global',
+          mode: json.mode || mode,
+          levelId: json.levelId || levelId,
+          entries: queryLeaderboardEntries(Array.from(byKey.values()), { mode, levelId, limit }),
+        };
+      }
       return {
         source: 'global',
         mode: json.mode || mode,
         levelId: json.levelId || levelId,
-        entries: Array.isArray(json.entries) ? json.entries : [],
+        entries: remoteEntries,
       };
     } catch {
       this._localEntries = this._loadLocalCache();
