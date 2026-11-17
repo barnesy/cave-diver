@@ -1,6 +1,7 @@
 import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './collision.js';
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain } from './lighting.js';
+import { sampleSiltDensity } from './silt.js';
 import { getAscentInstruction } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
 import {
@@ -1006,8 +1007,8 @@ export class CaveRenderer {
     }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
-    // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter (drawn AFTER lighting so lit silt obscures vision)
-    this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, timeSec);
+    // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
+    this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
     this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, toScreenX, toScreenY, scale, timeSec);
@@ -4333,8 +4334,9 @@ export class CaveRenderer {
       });
     }
     for (let i = 0; i < peerTorches.length; i++) {
-      this._drawVolumetricTorchBeam(ctx, peerTorches[i].peer, peerTorches[i].torch, 13.0, {
-        siltHaze: 0,
+      const pt = peerTorches[i];
+      this._drawVolumetricTorchBeam(ctx, pt.peer, pt.torch, 13.0, {
+        siltHaze: sampleSiltDensity(pt.torch.ox, pt.torch.oy, siltClouds),
         isPeer: true,
         toScreenX,
         toScreenY,
@@ -4381,15 +4383,35 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, timeSec = 0) {
+  _drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList = [], timeSec = 0) {
     if (!siltClouds.length) return;
     ctx.save();
     const wispStamp = this.glowStamps.siltWisp || this.glowStamps.silt;
     const baseStamp = this.glowStamps.silt;
     const warmStamp = this.glowStamps.warm;
-    const fx = Math.cos(diver.angle);
-    const fy = Math.sin(diver.angle);
-    const torchOn = diver.torchOn !== false;
+
+    const lights = [
+      {
+        x: diver.x,
+        y: diver.y,
+        fx: Math.cos(diver.angle),
+        fy: Math.sin(diver.angle),
+        torchOn: diver.torchOn !== false,
+      },
+    ];
+    if (Array.isArray(peerList)) {
+      for (let i = 0; i < peerList.length; i++) {
+        const p = peerList[i];
+        if (!p || p.alive === false) continue;
+        lights.push({
+          x: p.x,
+          y: p.y,
+          fx: Math.cos(p.angle || 0),
+          fy: Math.sin(p.angle || 0),
+          torchOn: p.torchOn !== false,
+        });
+      }
+    }
 
     for (let i = 0; i < siltClouds.length; i++) {
       const s = siltClouds[i];
@@ -4398,10 +4420,23 @@ export class CaveRenderer {
       const r = s.radius * scale;
       if (sx + r * 1.3 < 0 || sx - r * 1.3 > cw || sy + r * 1.3 < 0 || sy - r * 1.3 > ch) continue;
 
-      const dx = s.x - diver.x;
-      const dy = s.y - diver.y;
-      const dist = Math.hypot(dx, dy);
-      const lit = Math.max(0.24, 1 - dist / 14.5);
+      let lit = 0.24;
+      let glare = 0;
+      for (let l = 0; l < lights.length; l++) {
+        const src = lights[l];
+        const dx = s.x - src.x;
+        const dy = s.y - src.y;
+        const dist = Math.hypot(dx, dy);
+        const nearLit = 1 - dist / 14.5;
+        if (nearLit > lit) lit = nearLit;
+        if (src.torchOn && dist < 13.0) {
+          const align = dist > 0.1 ? (dx * src.fx + dy * src.fy) / dist : 1;
+          if (align > 0.46) {
+            const beamGlare = (align - 0.46) * 1.95 * Math.max(0, 1 - dist / 13.0) * s.alpha;
+            if (beamGlare > glare) glare = beamGlare;
+          }
+        }
+      }
       const lifeRatio = s.maxLife > 0 ? s.life / s.maxLife : 1;
       const rot = (s.rot ?? s.seed ?? 0) + Math.sin(timeSec * 0.35 + (s.seed || 0)) * 0.25;
 
@@ -4424,25 +4459,21 @@ export class CaveRenderer {
       }
       ctx.restore();
 
-      // World-space milky torch backscatter confined to the lit portion of the cloud
-      if (torchOn && dist < 12.5) {
-        const align = dist > 0.1 ? (dx * fx + dy * fy) / dist : 1;
-        if (align > 0.48) {
-          const glare = (align - 0.48) * 1.95 * Math.max(0, 1 - dist / 12.5) * s.alpha;
-          ctx.globalCompositeOperation = 'screen';
-          ctx.globalAlpha = Math.min(0.62, glare * 0.72);
-          ctx.drawImage(warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
+      // World-space milky torch backscatter when ANY diver's beam sweeps across the silt cloud
+      if (glare > 0.01) {
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = Math.min(0.65, glare * 0.72);
+        ctx.drawImage(warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
 
-          // Suspended limestone sediment specks glinting inside the torch cone
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
-          for (let k = 0; k < 4; k++) {
-            const a = (s.seed || 0) + k * 1.65 + timeSec * 0.25;
-            const d = r * (0.25 + ((k * 37) % 10) * 0.055);
-            const px = sx + Math.cos(a) * d;
-            const py = sy + Math.sin(a * 1.2) * d * 0.75;
-            ctx.fillRect(px, py, 2.2, 2.2);
-          }
+        // Suspended limestone sediment specks glinting inside the lit beam
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
+        for (let k = 0; k < 4; k++) {
+          const a = (s.seed || 0) + k * 1.65 + timeSec * 0.25;
+          const d = r * (0.25 + ((k * 37) % 10) * 0.055);
+          const px = sx + Math.cos(a) * d;
+          const py = sy + Math.sin(a * 1.2) * d * 0.75;
+          ctx.fillRect(px, py, 2.2, 2.2);
         }
       }
     }

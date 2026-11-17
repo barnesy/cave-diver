@@ -166,7 +166,7 @@ export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed) {
       peakAlpha: 0.85,
     };
     const cloud = spawnSiltPlume(siltClouds, opts);
-    if (cloud) spawned.push(opts);
+    if (cloud) spawned.push(cloud);
   }
   return spawned;
 }
@@ -246,7 +246,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   if (session.restrictWarnCooldown > 0) session.restrictWarnCooldown -= dt;
   if (clearanceM > 0 && clearanceM < 1.5 && diver.y > 6 && thrustMag > 0.72 && siltClouds.length < 130) {
     if (Math.random() < dt * 2.2) {
-      spawnSiltPlume(siltClouds, {
+      const cloud = spawnSiltPlume(siltClouds, {
         x: diver.x - Math.cos(diver.angle) * 0.45,
         y: diver.y - Math.sin(diver.angle) * 0.45,
         vx: -diver.vx * 0.35 + (Math.random() - 0.5) * 0.4,
@@ -256,6 +256,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         life: 16,
         peakAlpha: 0.62,
       });
+      if (cloud) callbacks.onSiltSpawn?.(cloud);
     }
     if (session.restrictWarnCooldown <= 0) {
       session.restrictWarnCooldown = 7.0;
@@ -320,7 +321,12 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   if (siltStirTimer.warnCooldown > 0) siltStirTimer.warnCooldown -= dt;
-  const heavyWash = stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState: siltStirTimer });
+  const heavyWash = stirFloorSilt(level, diver, siltClouds, {
+    dt,
+    thrustMag,
+    timerState: siltStirTimer,
+    onSpawn: callbacks.onSiltSpawn,
+  });
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
     callbacks.onToast?.('Fin wash stirring floor silt! Lift off the bottom for visibility.', 2.2);
@@ -329,7 +335,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   if (hit.collided && hit.impactSpeed > 1.1) {
     callbacks.onImpactSound?.();
     const spawned = emitImpactSilt(siltClouds, diver.x, diver.y, hit.nx, hit.ny, hit.impactSpeed);
-    if (spawned.length > 0 && hit.impactSpeed > 1.8) {
+    if (spawned.length > 0) {
       callbacks.onSiltSpawn?.(spawned[0]);
     }
     if (hit.impactSpeed > 2.4 && siltStirTimer.warnCooldown <= 0) {

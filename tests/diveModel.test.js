@@ -52,7 +52,7 @@ import {
 } from '../public/js/game/scoring.js';
 import { sampleEkgWave } from '../public/js/game/hud.js';
 import { CaveRenderer } from '../public/js/game/renderer.js';
-import { stirFloorSilt, stepSiltPhysics } from '../public/js/game/silt.js';
+import { stirFloorSilt, stepSiltPhysics, spawnSiltPlume, sampleSiltDensity } from '../public/js/game/silt.js';
 import { createDiverBody, stepDiverBody } from '../public/js/game/diverBody.js';
 import { castLightRay, castTorchFan, castSunCurtain } from '../public/js/game/lighting.js';
 import { createMarineEcosystem, stepMarineEcosystem } from '../public/js/game/marineLife.js';
@@ -1352,4 +1352,41 @@ test('Pre-dive plan, emergency gas share, P2P gas relay, and career logbook work
   assert.equal(summary.clearedCount, 3);
   assert.equal(summary.campaignMedal, 'FULL CAVE');
   assert.equal(summary.bestScore, 2700);
+});
+
+test('Floor silt stir emits full shared plumes, P2P relays them cleanly, and all torch beams attenuate', () => {
+  const clouds = [];
+  const spawnedEvents = [];
+  // Near floor of Level 1 turnaround sump (~49m)
+  const floorDiver = { x: 114, y: 52.8, vx: 1.5, vy: 0, angle: 0 };
+  const timerState = { accum: 0.9 };
+  stirFloorSilt(LEVEL_1, floorDiver, clouds, {
+    dt: 0.25,
+    thrustMag: 0.9,
+    timerState,
+    onSpawn: (pl) => spawnedEvents.push(pl),
+  });
+  assert.ok(clouds.length >= 1 && spawnedEvents.length >= 1);
+  const srcPlume = spawnedEvents[0];
+  assert.ok(Number.isFinite(srcPlume.vx) && Number.isFinite(srcPlume.vy));
+  assert.ok(srcPlume.maxRadius > 1.5 && srcPlume.peakAlpha > 0.4);
+
+  // Host relays peer_silt with full velocity/opacity metadata
+  const buddyMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'SLT2', hostId: 'h1', hostName: 'Lead' });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'Buddy' }, (m) => buddyMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'silt_event', plume: srcPlume });
+  const peerEvt = buddyMsgs.find((m) => m.type === 'peer_silt');
+  assert.ok(peerEvt?.plume);
+  assert.equal(peerEvt.plume.canBud, false);
+  assert.ok(peerEvt.plume.peakAlpha >= 0.4);
+
+  // Buddy spawns received cloud cleanly; both clear and peer torch rays attenuate through it
+  const buddyClouds = [];
+  spawnSiltPlume(buddyClouds, { ...peerEvt.plume, x: 112, y: 49.0, radius: 2.2, peakAlpha: 0.85 });
+  assert.ok(sampleSiltDensity(112, 49.0, buddyClouds) > 0.5);
+  const clearRay = castLightRay(LEVEL_1, 108, 49.0, 0, 14.0, []);
+  const murkyRay = castLightRay(LEVEL_1, 108, 49.0, 0, 14.0, buddyClouds);
+  assert.ok(murkyRay.dist < clearRay.dist, `Expected shared silt to shorten light reach (${murkyRay.dist} vs ${clearRay.dist})`);
 });

@@ -635,17 +635,24 @@ export class P2pRoomCoordinator {
       }
 
       case 'silt_event': {
-        const plume = msg.plume;
-        if (!plume || !Number.isFinite(plume.x) || !Number.isFinite(plume.y)) return;
+        const pl = msg.plume;
+        if (!pl || !Number.isFinite(pl.x) || !Number.isFinite(pl.y)) return;
         this._broadcast(
           {
             type: 'peer_silt',
             playerId: p.id,
             plume: {
-              x: plume.x,
-              y: plume.y,
-              radius: Math.max(0.2, Math.min(3.5, Number(plume.radius) || 0.85)),
-              opacity: Math.max(0.05, Math.min(0.85, Number(plume.opacity) || 0.45)),
+              x: pl.x,
+              y: pl.y,
+              vx: Number.isFinite(pl.vx) ? Math.max(-4, Math.min(4, pl.vx)) : 0,
+              vy: Number.isFinite(pl.vy) ? Math.max(-4, Math.min(4, pl.vy)) : -0.22,
+              radius: Number.isFinite(pl.radius) ? Math.min(2.5, Math.max(0.4, pl.radius)) : 0.9,
+              maxRadius: Number.isFinite(pl.maxRadius) ? Math.min(5.5, Math.max(1.2, pl.maxRadius)) : 3.6,
+              life: Number.isFinite(pl.life) ? Math.min(36, Math.max(4, pl.life)) : 26,
+              peakAlpha: Number.isFinite(pl.peakAlpha ?? pl.opacity)
+                ? Math.min(0.92, Math.max(0.2, pl.peakAlpha ?? pl.opacity))
+                : 0.78,
+              canBud: false,
             },
           },
           p.id

@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=48');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=49');
   }
   return trysteroModulePromise;
 }
@@ -1457,9 +1457,21 @@ export class LanClient {
   sendSiltEvent(plume) {
     if (!this.room || !this.connected || !plume) return;
     const now = performance.now();
-    if (now - this.lastSiltAt < 250) return; // Throttle silt propagation
+    if (now - this.lastSiltAt < 140) return; // Smooth throttle for shared floor/impact silt propagation
     this.lastSiltAt = now;
-    this.send({ type: 'silt_event', plume });
+    this.send({
+      type: 'silt_event',
+      plume: {
+        x: Math.round(plume.x * 100) / 100,
+        y: Math.round(plume.y * 100) / 100,
+        vx: Math.round((plume.vx || 0) * 100) / 100,
+        vy: Math.round((plume.vy || -0.22) * 100) / 100,
+        radius: Math.round((plume.radius || 0.9) * 100) / 100,
+        maxRadius: Math.round((plume.maxRadius || 3.6) * 100) / 100,
+        life: Math.round((plume.life || 26) * 10) / 10,
+        peakAlpha: Math.round((plume.peakAlpha ?? plume.alpha ?? 0.78) * 100) / 100,
+      },
+    });
   }
 
   stepPeerInterpolation(dt) {

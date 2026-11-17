@@ -23,7 +23,8 @@ export function spawnSiltPlume(siltClouds, plume) {
     siltClouds.shift();
   }
   const life = plume.life ?? 30.0;
-  siltClouds.push({
+  const peakAlpha = plume.peakAlpha ?? plume.opacity ?? 0.85;
+  const cloud = {
     x: plume.x,
     y: plume.y,
     vx: plume.vx ?? 0,
@@ -32,13 +33,28 @@ export function spawnSiltPlume(siltClouds, plume) {
     maxRadius: plume.maxRadius ?? 4.6,
     life,
     maxLife: life,
-    peakAlpha: plume.peakAlpha ?? 0.85,
-    alpha: plume.peakAlpha ?? 0.85,
+    peakAlpha,
+    alpha: peakAlpha,
     seed: plume.seed ?? Math.random() * 6.28,
     rot: plume.rot ?? Math.random() * 6.28,
     rotVel: plume.rotVel ?? (Math.random() - 0.5) * 0.35,
     canBud: plume.canBud ?? false,
-  });
+  };
+  siltClouds.push(cloud);
+  return cloud;
+}
+
+export function sampleSiltDensity(x, y, siltClouds) {
+  if (!Array.isArray(siltClouds) || siltClouds.length === 0) return 0;
+  let density = 0;
+  for (let i = 0; i < siltClouds.length; i++) {
+    const s = siltClouds[i];
+    const dist = Math.hypot(s.x - x, s.y - y);
+    if (dist < s.radius) {
+      density += (1 - dist / s.radius) * s.alpha;
+    }
+  }
+  return Math.min(1, density);
 }
 
 /**
@@ -46,7 +62,7 @@ export function spawnSiltPlume(siltClouds, plume) {
  * stirring up billowing limestone silt plumes that obscure visibility.
  * Returns true if substantial floor silt was disturbed this tick.
  */
-export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState }) {
+export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState, onSpawn = null }) {
   if (!diver || diver.y < 5.0) return false;
 
   const kickBoost = diver.body ? 0.55 + diver.body.kickSurge * 1.45 : 1.0;
@@ -89,7 +105,7 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
     disturbed = true;
     const spread = (Math.random() - 0.5) * 1.4;
     // Prop-wash jets backward & billows upward from the limestone silt bed
-    spawnSiltPlume(siltClouds, {
+    const cloud = spawnSiltPlume(siltClouds, {
       x: stirX + spread * 0.6,
       y: stirY - Math.random() * 0.22,
       vx: -fx * (0.65 + Math.random() * 0.85) + spread * 0.6,
@@ -100,6 +116,7 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
       peakAlpha: 0.68 + proximity * 0.25,
       canBud: true,
     });
+    if (cloud && onSpawn) onSpawn(cloud);
   }
 
   return disturbed && proximity > 0.32;
@@ -110,8 +127,6 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
  * Also computes local silt density at (diver.x, diver.y) for telemetry/testing.
  */
 export function stepSiltPhysics(level, siltClouds, diver, dt) {
-  let localDensity = 0;
-
   for (let i = siltClouds.length - 1; i >= 0; i--) {
     const s = siltClouds[i];
     // Bud secondary cavern-diffusing tendrils as energetic floor plumes rise into the passage
@@ -170,14 +185,7 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
     const lifeRatio = s.life / s.maxLife;
     // Holds dense opacity for most of its lifetime, then gently thins out near end
     s.alpha = s.peakAlpha * Math.min(1, lifeRatio * 1.85);
-
-    if (diver) {
-      const dist = Math.hypot(s.x - diver.x, s.y - diver.y);
-      if (dist < s.radius) {
-        localDensity += (1 - dist / s.radius) * s.alpha;
-      }
-    }
   }
 
-  return Math.min(1, localDensity);
+  return diver ? sampleSiltDensity(diver.x, diver.y, siltClouds) : 0;
 }
