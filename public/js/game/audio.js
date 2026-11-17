@@ -3,6 +3,8 @@
  * checkpoint chimes, and subtle underwater bubble feedback.
  */
 
+import { AquaticRadio } from './aquaticRadio.js';
+
 export class DiveAudio {
   constructor() {
     this.ctx = null;
@@ -10,6 +12,7 @@ export class DiveAudio {
     this.lastAlarmAt = 0;
     this.lastExhaleAt = 0;
     this.hapticsEnabled = true;
+    this.radio = new AquaticRadio(() => this.ctx, { isMutedFn: () => this.muted });
   }
 
   vibrate(pattern) {
@@ -32,10 +35,33 @@ export class DiveAudio {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+    if (this.ctx && this.radio.trackIndex > 0 && !this.radio._timer) {
+      this.radio.start();
+    }
   }
 
   setMuted(muted) {
     this.muted = muted;
+    this.radio.syncMuted(muted);
+  }
+
+  cycleRadioTrack() {
+    if (this.muted) this.setMuted(false);
+    this.unlock();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().then(() => {
+        if (this.radio.trackIndex > 0) this.radio.start();
+      }).catch(() => {});
+    }
+    return this.radio.cycleTrack();
+  }
+
+  setRadioTrackIndex(idx) {
+    return this.radio.setTrackIndex(idx);
+  }
+
+  getRadioButtonLabel() {
+    return this.radio.getButtonLabel();
   }
 
   playTone(freq, duration, type = 'sine', gainVal = 0.08, delay = 0) {

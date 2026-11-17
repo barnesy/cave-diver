@@ -176,11 +176,19 @@ export function computeDiverScoreSummary({
 /**
  * Aggregate local diver + LAN buddies into a shared team score breakdown and averages table.
  */
-export function computeTeamScoreSummary(localSummary, peerStats = []) {
-  const roster = [localSummary];
+export function computeTeamScoreSummary(localSummary, peerStats = [], { localRescued = false } = {}) {
+  const localAlive = localSummary.alive !== false;
+  const localExtracted = localAlive || Boolean(localRescued || localSummary.rescued);
+  const roster = [
+    {
+      ...localSummary,
+      rescued: !localAlive && Boolean(localRescued || localSummary.rescued),
+    },
+  ];
   for (const p of peerStats) {
     if (!p) continue;
     const pAlive = p.alive !== false;
+    const pRescued = !pAlive && Boolean(p.rescued || p.rescuedBy);
     const pHealth = Number.isFinite(p.healthPct)
       ? p.healthPct
       : pAlive
@@ -200,7 +208,8 @@ export function computeTeamScoreSummary(localSummary, peerStats = []) {
     roster.push({
       name: p.name || 'Buddy Diver',
       alive: pAlive,
-      surfaced: Boolean(p.surfaced),
+      rescued: pRescued,
+      surfaced: Boolean(p.surfaced || pRescued),
       diveTimeSec: pTime,
       healthPct: pHealth,
       speedPct: pSpeedPct,
@@ -218,7 +227,9 @@ export function computeTeamScoreSummary(localSummary, peerStats = []) {
 
   const teamSize = roster.length;
   const survivorsCount = roster.filter((r) => r.alive).length;
-  const allSurvived = survivorsCount === teamSize;
+  const rescuedCount = roster.filter((r) => !r.alive && r.rescued).length;
+  const extractedCount = roster.filter((r) => r.alive || r.rescued).length;
+  const allSurvived = extractedCount === teamSize;
   const avgHealthPct = Math.round(roster.reduce((a, r) => a + r.healthPct, 0) / teamSize);
   const avgSpeedPct = Math.round(roster.reduce((a, r) => a + r.speedPct, 0) / teamSize);
   const avgTimeSec = roster.reduce((a, r) => a + r.diveTimeSec, 0) / teamSize;
@@ -226,22 +237,27 @@ export function computeTeamScoreSummary(localSummary, peerStats = []) {
 
   const avgHealthScore = Math.round(roster.reduce((a, r) => a + r.healthScore, 0) / teamSize);
   const avgSpeedScore = Math.round(roster.reduce((a, r) => a + r.speedScore, 0) / teamSize);
+  const rescueBonus = teamSize > 1 && rescuedCount > 0 ? rescuedCount * 450 : 0;
   const teamSurvivalBonus = teamSize > 1 && allSurvived ? 600 : 0;
 
-  const teamScore =
+  const teamMaxPossible = localSummary.maxPossible + (teamSize > 1 ? 600 : 0);
+  const rawTeamScore =
     avgHealthScore +
     avgSpeedScore +
     localSummary.collectiblesScore +
     localSummary.explorationScore +
     localSummary.cartographerBonus +
+    rescueBonus +
     teamSurvivalBonus;
-  const teamMaxPossible = localSummary.maxPossible + (teamSize > 1 ? 600 : 0);
-  const teamRank = assignScoreRank(teamScore, survivorsCount > 0 && localSummary.alive, teamMaxPossible);
+  const teamScore = Math.min(teamMaxPossible, rawTeamScore);
+  const teamRank = assignScoreRank(teamScore, survivorsCount > 0 && localExtracted, teamMaxPossible);
 
   return {
     teamSize,
     isTeam: teamSize > 1,
     survivorsCount,
+    rescuedCount,
+    extractedCount,
     allSurvived,
     roster,
     avgHealthPct,
@@ -257,6 +273,7 @@ export function computeTeamScoreSummary(localSummary, peerStats = []) {
     exploredPct: localSummary.exploredPct,
     explorationScore: localSummary.explorationScore,
     cartographerBonus: localSummary.cartographerBonus,
+    rescueBonus,
     teamSurvivalBonus,
     teamScore,
     teamMaxPossible,

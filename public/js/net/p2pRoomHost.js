@@ -55,6 +55,9 @@ function sanitizePlayerState(raw) {
     torchOn: Boolean(raw.torchOn),
     alive: raw.alive !== false,
     carryingBody: Boolean(raw.carryingBody),
+    rescueTargetId: typeof raw.rescueTargetId === 'string' ? raw.rescueTargetId.slice(0, 48) : '',
+    rescuedBy: typeof raw.rescuedBy === 'string' ? raw.rescuedBy.slice(0, 48) : '',
+    rescued: Boolean(raw.rescued),
     name: sanitizeName(raw.name, 'Diver'),
   };
 }
@@ -715,6 +718,23 @@ export class P2pRoomCoordinator {
           gasId,
           amountBar,
         });
+        break;
+      }
+
+      case 'buddy_rescue': {
+        const rescuedId = typeof msg.rescuedId === 'string' ? msg.rescuedId.slice(0, 48) : '';
+        if (!rescuedId) return;
+        this._broadcast(
+          {
+            type: 'peer_buddy_rescue',
+            rescuerId: p.id,
+            rescuerName: p.name,
+            rescuedId,
+            rescuedName: sanitizeName(msg.rescuedName, 'Buddy'),
+            status: msg.status === 'extracted' ? 'extracted' : 'towing',
+          },
+          p.id
+        );
         break;
       }
 

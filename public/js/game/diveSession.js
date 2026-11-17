@@ -39,6 +39,9 @@ export function createDiveSession(
     collectBursts: [],
     bodyRecovered: false,
     carryingBody: false,
+    rescueTargetId: '',
+    rescuedBy: '',
+    rescued: false,
     recoveryWarnCooldown: 0,
     exploreCells,
     exploredCells,
@@ -225,7 +228,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   const thrustMag = Math.min(1, Math.hypot(ctrlX, ctrlY));
   const kickPulse = thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0;
-  const towDrag = session.carryingBody ? 0.9 : 1.0;
+  const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
   const swimMult = (imp.swimMultiplier ?? 1) * towDrag;
   const horizAccel = 6.2 * kickPulse * swimMult;
   const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult;

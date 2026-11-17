@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=49');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=50');
   }
   return trysteroModulePromise;
 }
@@ -1084,6 +1084,9 @@ export class LanClient {
             p.torchOn = msg.state.torchOn;
             p.alive = msg.state.alive;
             p.carryingBody = Boolean(msg.state.carryingBody);
+            p.rescueTargetId = msg.state.rescueTargetId || '';
+            p.rescuedBy = msg.state.rescuedBy || '';
+            p.rescued = Boolean(msg.state.rescued);
             p.name = msg.state.name;
           }
           this._syncPeerAlias();
@@ -1113,6 +1116,14 @@ export class LanClient {
           break;
         case 'peer_gas_share':
           this.emit('peer_gas_share', msg);
+          break;
+        case 'peer_buddy_rescue':
+          if (msg.rescuedId && this.peers.has(msg.rescuedId)) {
+            const rp = this.peers.get(msg.rescuedId);
+            rp.rescuedBy = msg.rescuerId;
+            if (msg.status === 'extracted') rp.rescued = true;
+          }
+          this.emit('peer_buddy_rescue', msg);
           break;
         case 'peer_signal': {
           const pid = msg.playerId || 'peer';
@@ -1348,6 +1359,11 @@ export class LanClient {
   sendGasShare(targetPlayerId, gasId, amountBar) {
     if (!this.room || !this.connected || !targetPlayerId || !amountBar) return;
     this.send({ type: 'gas_share', targetPlayerId, gasId, amountBar });
+  }
+
+  sendBuddyRescue(rescuedId, rescuedName, status = 'towing') {
+    if (!this.room || !this.connected || !rescuedId) return;
+    this.send({ type: 'buddy_rescue', rescuedId, rescuedName, status });
   }
 
   returnToLobby() {

@@ -113,6 +113,9 @@ const btnLoaderForce = document.getElementById('btn-loader-force');
 const btnLoaderCancel = document.getElementById('btn-loader-cancel');
 const coopCommsEl = document.getElementById('coop-comms');
 const btnShareGas = document.getElementById('btn-share-gas');
+const btnTowBuddy = document.getElementById('btn-tow-buddy');
+const btnMenuRadio = document.getElementById('btn-menu-radio');
+const btnHudRadio = document.getElementById('btn-hud-radio');
 const coopWaitBannerEl = document.getElementById('coop-wait-banner');
 const coopWaitTitleEl = document.getElementById('coop-wait-title');
 const coopWaitDetailEl = document.getElementById('coop-wait-detail');
@@ -637,7 +640,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     });
   }
 
-  const teamSummary = computeTeamScoreSummary(localSummary, isMultiplayer ? lan.getPeers() : []);
+  const teamSummary = computeTeamScoreSummary(localSummary, isMultiplayer ? lan.getPeers() : [], {
+    localRescued: Boolean(session.rescued),
+  });
 
   if (success) {
     spawnCelebrationConfetti();
@@ -647,9 +652,11 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   const badge = document.getElementById('debrief-badge');
   badge.textContent = success
     ? teamSummary.isTeam
-      ? teamSummary.allSurvived
-        ? 'TEAM EXPEDITION COMPLETE'
-        : 'PARTIAL TEAM SURFACE'
+      ? teamSummary.rescuedCount > 0 && teamSummary.allSurvived
+        ? 'CREW RESCUE COMPLETE'
+        : teamSummary.allSurvived
+          ? 'TEAM EXPEDITION COMPLETE'
+          : 'PARTIAL TEAM SURFACE'
       : 'DIVE COMPLETE'
     : 'DIVE FATALITY';
   badge.className = `debrief-badge ${success ? 'ok' : 'danger'}`;
@@ -724,8 +731,16 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     },
   ];
   if (teamSummary.isTeam) {
+    if (teamSummary.rescueBonus > 0) {
+      rows.push({
+        label: `Buddy Rescue (${teamSummary.rescuedCount})`,
+        pts: teamSummary.rescueBonus,
+        pct: 100,
+        cls: 'gold',
+      });
+    }
     rows.push({
-      label: `Team Bonus (${teamSummary.survivorsCount}/${teamSummary.teamSize})`,
+      label: `Team Extraction (${teamSummary.extractedCount}/${teamSummary.teamSize})`,
       pts: teamSummary.teamSurvivalBonus,
       pct: teamSummary.allSurvived ? 100 : 0,
       cls: 'green',
@@ -763,7 +778,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
               (r) => `
           <div class="team-roster-row">
             <strong>${r.name}</strong>
-            <span>${r.alive ? `${r.healthPct}% HP · ${formatRunClock(r.diveTimeSec)} · ${r.gasRemainingPct}% Gas` : 'DOWN'}</span>
+            <span>${r.alive ? `${r.healthPct}% HP · ${formatRunClock(r.diveTimeSec)} · ${r.gasRemainingPct}% Gas` : r.rescued ? '🛟 RESCUED' : 'DOWN'}</span>
             <strong>${r.totalScore.toLocaleString()} pts</strong>
           </div>
         `
@@ -1562,6 +1577,12 @@ coopCommsEl?.addEventListener('click', (e) => {
     btn.hidden = true;
     return;
   }
+  if (btn.id === 'btn-tow-buddy') {
+    const peer = lan.getPeers().find((p) => p && p.id === btn.dataset.targetId);
+    if (peer) attachBuddyTow(peer);
+    btn.hidden = true;
+    return;
+  }
   const sig = btn.dataset.signal;
   if (!sig) return;
   session.diver.signalText = sig;
@@ -1609,6 +1630,41 @@ btnMute.addEventListener('click', () => {
   audio.setMuted(next);
   btnMute.textContent = next ? '🔇' : '🔊';
 });
+
+const RADIO_PREF_KEY = 'caveDiverRadioTrack_v1';
+function syncRadioUi() {
+  const tr = audio.radio.getCurrentTrack();
+  const active = tr.id !== 'off';
+  if (btnMenuRadio) {
+    btnMenuRadio.textContent = audio.getRadioButtonLabel();
+    btnMenuRadio.classList.toggle('active', active);
+  }
+  if (btnHudRadio) {
+    btnHudRadio.textContent = active ? '🎵' : '📻';
+    btnHudRadio.title = active ? `Radio: ${tr.name} (tap to switch)` : 'Radio: Off (tap for aquatic tunes)';
+    btnHudRadio.classList.toggle('active', active);
+  }
+}
+
+function handleRadioCycle() {
+  const track = audio.cycleRadioTrack();
+  if (btnMute) btnMute.textContent = audio.muted ? '🔇' : '🔊';
+  try {
+    localStorage.setItem(RADIO_PREF_KEY, String(audio.radio.trackIndex));
+  } catch {}
+  syncRadioUi();
+  showToast(track.id === 'off' ? '📻 Aquatic Radio: Off' : `📻 Aquatic Radio: ${track.name} (${track.bpm} BPM)`, 2.1);
+}
+
+try {
+  const savedIdx = Number(localStorage.getItem(RADIO_PREF_KEY));
+  if (Number.isFinite(savedIdx) && savedIdx > 0) {
+    audio.setRadioTrackIndex(savedIdx);
+  }
+} catch {}
+syncRadioUi();
+btnMenuRadio?.addEventListener('click', handleRadioCycle);
+btnHudRadio?.addEventListener('click', handleRadioCycle);
 
 document.getElementById('btn-abort').addEventListener('click', () => {
   const prevCode = lan.room?.code || '';
@@ -2004,6 +2060,41 @@ lan.on('peer_body_recovered', (msg) => {
   showToast(`🛟 ${who} secured ${targetName}! Escort back to surface exit.`, 4.0);
 });
 
+function attachBuddyTow(peer) {
+  if (!session || !peer || peer.alive !== false || peer.rescued) return false;
+  session.rescueTargetId = peer.id;
+  session.diver.rescueTargetId = peer.id;
+  peer.rescuedBy = lan.clientId || 'self';
+  audio.playCheckpoint();
+  showToast(`🛟 Towing ${peer.name || 'Buddy'}! Haul safely through deco to surface exit (+450 pts)!`, 3.6);
+  lan.sendBuddyRescue(peer.id, peer.name || 'Buddy', 'towing');
+  return true;
+}
+
+lan.on('peer_buddy_rescue', (msg) => {
+  if (!session || mode !== 'diving') return;
+  if (msg.rescuedId === lan.clientId) {
+    if (msg.status === 'extracted') {
+      session.rescued = true;
+      session.surfaced = true;
+      if (!session.localOutcome || session.endedState) {
+        finishDiveRun(
+          true,
+          `Rescued by ${msg.rescuerName || 'Buddy'}!`,
+          `${msg.rescuerName || 'Your buddy'} towed you safely back through the cave to the surface exit.`
+        );
+      }
+      return;
+    }
+    session.rescuedBy = msg.rescuerId || 'peer';
+    session.diver.rescuedBy = session.rescuedBy;
+    audio.playCheckpoint();
+    showToast(`🛟 ${msg.rescuerName || 'Buddy'} clipped a rescue tow onto you!`, 3.6);
+  } else {
+    showToast(`🛟 ${msg.rescuerName || 'Buddy'} is towing ${msg.rescuedName || 'teammate'} toward the surface!`, 3.2);
+  }
+});
+
 lan.on('peer_gas_share', (msg) => {
   if (!session || mode !== 'diving' || !msg?.amountBar) return;
   const added = receiveGasIntoState(session.diveState, msg.gasId, msg.amountBar);
@@ -2103,7 +2194,7 @@ function stepSimulation(dt) {
         }
       }
     }
-    const activeTank = diveState.tanks[diveState.activeGasId];
+      const activeTank = diveState.tanks[diveState.activeGasId];
     const healthPct = computeHealthPct(diveState);
     const gasRemainingPct = computeGasRemainingPct(diveState);
     lan.sendPlayerState({
@@ -2132,9 +2223,61 @@ function stepSimulation(dt) {
       torchOn: diver.torchOn,
       alive: diveState.alive,
       carryingBody: Boolean(session.carryingBody),
+      rescueTargetId: session.rescueTargetId || '',
+      rescuedBy: session.rescuedBy || '',
+      rescued: Boolean(session.rescued),
       name: diver.name,
     });
     lan.stepPeerInterpolation(dt);
+
+    // If downed and a rescuer is towing us, glide smoothly behind the rescuer
+    if (!diveState.alive && session.rescuedBy) {
+      const rescuer = peers.find((p) => p && (p.id === session.rescuedBy || p.rescueTargetId === lan.clientId));
+      if (rescuer) {
+        const ang = rescuer.angle || 0;
+        const tx = rescuer.x - Math.cos(ang) * 1.55;
+        const ty = rescuer.y - Math.sin(ang) * 1.55;
+        diver.x += (tx - diver.x) * Math.min(1, dt * 8);
+        diver.y += (ty - diver.y) * Math.min(1, dt * 8);
+        diver.angle = ang;
+        if (rescuer.surfaced && !session.rescued) {
+          session.rescued = true;
+          session.surfaced = true;
+          finishDiveRun(
+            true,
+            `Rescued by ${rescuer.name || 'Buddy'}!`,
+            `${rescuer.name || 'Your buddy'} towed you safely back through the cave to the surface exit.`
+          );
+          return;
+        }
+      }
+    }
+  }
+
+  if (btnTowBuddy) {
+    let downedPeer = null;
+    if (isMultiplayer && diveState.alive && !session.endedState && !session.rescueTargetId) {
+      let bestDist = 3.6;
+      for (const p of peers) {
+        if (!p || p.alive !== false || p.rescued || p.rescuedBy) continue;
+        const d = Math.hypot(p.x - diver.x, p.y - diver.y);
+        if (d <= 1.45) {
+          attachBuddyTow(p);
+          downedPeer = null;
+          break;
+        }
+        if (d <= bestDist) {
+          bestDist = d;
+          downedPeer = p;
+        }
+      }
+    }
+    if (downedPeer) {
+      btnTowBuddy.hidden = false;
+      btnTowBuddy.dataset.targetId = downedPeer.id || '';
+    } else {
+      btnTowBuddy.hidden = true;
+    }
   }
 
   if (btnShareGas) {
@@ -2190,6 +2333,15 @@ function stepSimulation(dt) {
   }
 
   if (result.outcome && !session.endedState) {
+    if (result.outcome.success && isMultiplayer && session.rescueTargetId) {
+      const towed = peers.find((p) => p && p.id === session.rescueTargetId);
+      if (towed) {
+        towed.rescued = true;
+        lan.sendBuddyRescue(towed.id, towed.name || 'Buddy', 'extracted');
+        result.outcome.title = `Buddy Rescued · ${level.name}!`;
+        result.outcome.detail = `You hauled ${towed.name || 'your buddy'} through the cave to the surface exit (+450 Rescue Bonus)!`;
+      }
+    }
     session.localOutcome = result.outcome;
     const pendingPeers = isMultiplayer
       ? peers.filter((p) => p.alive !== false && !p.surfaced)

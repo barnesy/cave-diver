@@ -977,7 +977,8 @@ export class CaveRenderer {
       this._drawSwimmers(ctx, ecosystem, visX0 - 4, visX1 + 4, visY0 - 4, visY1 + 4, toScreenX, toScreenY, scale, timeSec);
     }
 
-    // 9. Divers (Peer Buddies + Local Player)
+    // 9. Divers & Active Co-op Rescue Tow Lifelines
+    this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec);
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
     }
@@ -3543,6 +3544,54 @@ export class CaveRenderer {
         ctx.fill();
       }
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  _drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(peerList) || peerList.length === 0) return;
+    ctx.save();
+    const allDivers = [
+      { id: diver.id || '__self__', x: diver.x, y: diver.y, alive: true, rescueTargetId: diver.rescueTargetId || '' },
+      ...peerList,
+    ];
+
+    // 1. SOS distress beacon rings around untowed downed buddies
+    for (let i = 0; i < peerList.length; i++) {
+      const p = peerList[i];
+      if (!p || p.alive !== false || p.rescued) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.2);
+      const r = (0.95 + pulse * 0.45) * scale;
+      ctx.strokeStyle = p.rescuedBy ? 'rgba(74, 222, 128, 0.75)' : 'rgba(245, 158, 11, 0.82)';
+      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = `800 ${Math.max(9, Math.round(0.32 * scale))}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = p.rescuedBy ? '#86efac' : '#fde68a';
+      ctx.fillText(p.rescuedBy ? 'TOWING' : 'SOS · RESCUE', sx, sy - r - 0.25 * scale);
+    }
+
+    // 2. Umbilical tow line between rescuer and towed teammate
+    for (let i = 0; i < allDivers.length; i++) {
+      const rescuer = allDivers[i];
+      if (!rescuer?.rescueTargetId) continue;
+      const target = peerList.find((p) => p && p.id === rescuer.rescueTargetId);
+      const tPos = target || (rescuer !== allDivers[0] && diver.rescuedBy === rescuer.id ? diver : null);
+      if (!tPos) continue;
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = Math.max(2, 0.07 * scale);
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(rescuer.x), toScreenY(rescuer.y));
+      ctx.lineTo(toScreenX(tPos.x), toScreenY(tPos.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     ctx.restore();
   }

@@ -53,6 +53,7 @@ import {
 import { sampleEkgWave } from '../public/js/game/hud.js';
 import { CaveRenderer } from '../public/js/game/renderer.js';
 import { stirFloorSilt, stepSiltPhysics, spawnSiltPlume, sampleSiltDensity } from '../public/js/game/silt.js';
+import { RADIO_TRACKS, midiToFreq, AquaticRadio } from '../public/js/game/aquaticRadio.js';
 import { createDiverBody, stepDiverBody } from '../public/js/game/diverBody.js';
 import { castLightRay, castTorchFan, castSunCurtain } from '../public/js/game/lighting.js';
 import { createMarineEcosystem, stepMarineEcosystem } from '../public/js/game/marineLife.js';
@@ -1389,4 +1390,57 @@ test('Floor silt stir emits full shared plumes, P2P relays them cleanly, and all
   const clearRay = castLightRay(LEVEL_1, 108, 49.0, 0, 14.0, []);
   const murkyRay = castLightRay(LEVEL_1, 108, 49.0, 0, 14.0, buddyClouds);
   assert.ok(murkyRay.dist < clearRay.dist, `Expected shared silt to shorten light reach (${murkyRay.dist} vs ${clearRay.dist})`);
+});
+
+test('Co-op Buddy Rescue affects team score cleanly and Aquatic Radio cycles MIDI tracks', () => {
+  const ds = createDiveState();
+  const s = computeDiverScoreSummary({
+    name: 'Rescuer',
+    level: LEVEL_1,
+    diveState: ds,
+    checkpointsHit: new Set(['cp1', 'cp2', 'cp3', 'cp4', 'cp5']),
+    collectedIds: new Set(),
+    exploredCount: 80,
+    totalExploreCells: 100,
+    diveTimeSec: 150,
+  });
+
+  // Unrescued downed buddy loses Team Survival Bonus and has 0 rescue bonus
+  const leftBehind = computeTeamScoreSummary(s, [
+    { id: 'b1', name: 'DownBuddy', alive: false, rescued: false },
+  ]);
+  assert.equal(leftBehind.teamSurvivalBonus, 0);
+  assert.equal(leftBehind.rescueBonus, 0);
+  assert.equal(leftBehind.allSurvived, false);
+
+  // Rescued downed buddy earns +450 Rescue Bonus + restores +600 Team Extraction Bonus cleanly inside leaderboard ceiling
+  const rescuedTeam = computeTeamScoreSummary(s, [
+    { id: 'b1', name: 'DownBuddy', alive: false, rescued: true },
+  ]);
+  assert.equal(rescuedTeam.rescueBonus, 450);
+  assert.equal(rescuedTeam.teamSurvivalBonus, 600);
+  assert.equal(rescuedTeam.allSurvived, true);
+  assert.ok(rescuedTeam.teamScore > leftBehind.teamScore);
+  assert.ok(rescuedTeam.teamScore <= computeLevelMaxScore(LEVEL_1.id, true));
+
+  // P2P relay of buddy_rescue reaches crew cleanly
+  const buddyMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'RES2', hostId: 'h1', hostName: 'Rescuer' });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'DownBuddy' }, (m) => buddyMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'buddy_rescue', rescuedId: 'b1', rescuedName: 'DownBuddy', status: 'towing' });
+  const rMsg = buddyMsgs.find((m) => m.type === 'peer_buddy_rescue');
+  assert.equal(rMsg?.rescuerId, 'h1');
+  assert.equal(rMsg?.status, 'towing');
+
+  // MIDI frequency & track cycling
+  assert.ok(Math.abs(midiToFreq(69) - 440) < 0.001);
+  assert.ok(RADIO_TRACKS.length >= 5);
+  const radio = new AquaticRadio(() => null);
+  assert.equal(radio.getCurrentTrack().id, 'off');
+  assert.equal(radio.cycleTrack().id, 'cenote-drift');
+  assert.equal(radio.cycleTrack().id, 'halocline-haze');
+  assert.equal(radio.cycleTrack().id, 'abyssal-pulse');
+  assert.equal(radio.cycleTrack().id, 'kelp-glow');
+  assert.equal(radio.cycleTrack().id, 'off');
 });

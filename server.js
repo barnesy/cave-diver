@@ -274,6 +274,10 @@ function sanitizePlayerState(raw) {
     totalScore: Math.max(0, Math.round(num(raw.totalScore, 0))),
     torchOn: Boolean(raw.torchOn),
     alive: raw.alive !== false,
+    carryingBody: Boolean(raw.carryingBody),
+    rescueTargetId: typeof raw.rescueTargetId === 'string' ? raw.rescueTargetId.slice(0, 48) : '',
+    rescuedBy: typeof raw.rescuedBy === 'string' ? raw.rescuedBy.slice(0, 48) : '',
+    rescued: Boolean(raw.rescued),
     name: typeof raw.name === 'string' ? raw.name.slice(0, 18) : 'Diver',
   };
 }
@@ -976,6 +980,27 @@ wss.on('connection', (ws) => {
           gasId,
           amountBar,
         });
+        break;
+      }
+
+      case 'buddy_rescue': {
+        const room = rooms.get(client.roomCode);
+        if (!room) return;
+        const rescuer = room.players.get(client.id);
+        const rescuedId = typeof msg.rescuedId === 'string' ? msg.rescuedId.slice(0, 48) : '';
+        if (!rescuedId) return;
+        broadcastRoom(
+          room,
+          {
+            type: 'peer_buddy_rescue',
+            rescuerId: client.id,
+            rescuerName: rescuer?.name || 'Buddy',
+            rescuedId,
+            rescuedName: typeof msg.rescuedName === 'string' ? msg.rescuedName.slice(0, 18) : 'Buddy',
+            status: msg.status === 'extracted' ? 'extracted' : 'towing',
+          },
+          client.id
+        );
         break;
       }
 
