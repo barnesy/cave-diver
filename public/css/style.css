@@ -955,13 +955,24 @@ html, body {
   pointer-events: none;
 }
 
-/* Unified Single-Strip Top Bar */
-.hud-top-bar {
+/* Unified Single-Strip Top Bar + Sub-bar Callsign Pill */
+.hud-top-stack {
   position: fixed;
   top: max(8px, env(safe-area-inset-top));
   left: max(10px, env(safe-area-inset-left));
   right: max(10px, env(safe-area-inset-right));
   z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.hud-top-bar {
+  position: relative;
+  width: 100%;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1218,15 +1229,6 @@ html, body {
   pointer-events: none;
 }
 
-.hud-top-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-shrink: 0;
-  pointer-events: none;
-}
-
 .self-health-card {
   background: rgba(8, 15, 26, 0.88);
   border: 1px solid rgba(56, 189, 248, 0.38);
@@ -1253,20 +1255,24 @@ html, body {
 }
 
 .self-tag {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.66rem;
   font-weight: 800;
   color: #bae6fd;
-  background: rgba(14, 165, 233, 0.14);
-  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: rgba(6, 15, 29, 0.86);
+  border: 1px solid rgba(56, 189, 248, 0.34);
   border-radius: 999px;
-  padding: 3px 8px;
+  padding: 3px 9px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(6px);
   letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 145px;
-  flex-shrink: 1;
+  max-width: 210px;
 }
 
 .dc-ekg-row {
@@ -1896,19 +1902,14 @@ html, body {
   .obj-hint {
     font-size: 0.6rem;
   }
-  .hud-top-right {
-    grid-area: utils;
-    justify-self: end;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
   .self-tag {
-    max-width: 78px;
-    padding: 2px 6px;
-    font-size: 0.58rem;
+    max-width: 180px;
+    padding: 2px 8px;
+    font-size: 0.6rem;
   }
   .hud-util-btns {
+    grid-area: utils;
+    justify-self: end;
     justify-content: flex-end;
     flex-wrap: nowrap;
     gap: 4px;
