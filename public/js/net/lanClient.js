@@ -24,20 +24,23 @@ const P2P_RTC_CONFIG = {
         urls: [
           'stun:stun.l.google.com:19302',
           'stun:stun1.l.google.com:19302',
+          'stun:stun2.l.google.com:19302',
           'stun:stun.cloudflare.com:3478',
           'stun:global.stun.twilio.com:3478',
         ],
       },
     ],
+    iceCandidatePoolSize: 4,
     sdpSemantics: 'unified-plan',
   },
 };
 const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=77');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=78');
   }
   return trysteroModulePromise;
 }
@@ -89,6 +92,7 @@ export class LanClient {
     this._p2pDirectPeers = new Set();
     this._seenRelayMids = new Set();
     this._relayMidSeq = 0;
+    this._stateSeq = 0;
     this._p2pJoinAcked = false;
     this._p2pAckedHostId = null;
     this._p2pPendingJoin = null;
@@ -347,7 +351,7 @@ export class LanClient {
     const type = payload?.type || '';
     if (type === 'player_state') {
       const now = Date.now();
-      if (now - this._p2pLastRelayStateAt < 180) return true; // ~5.5Hz relay fallback telemetry
+      if (now - this._p2pLastRelayStateAt < 90) return true; // ~11Hz relay fallback telemetry
       this._p2pLastRelayStateAt = now;
     }
     const mid = `${this.clientId}-${++this._relayMidSeq}`;
@@ -1424,6 +1428,8 @@ export class LanClient {
           break;
         case 'peer_state': {
           const pid = msg.playerId || 'peer';
+          const rxSeq = Number.isFinite(msg.state?.seq) ? msg.state.seq : 0;
+          const rxNow = nowMs();
           let p = this.peers.get(pid);
           if (!p) {
             p = {
@@ -1432,9 +1438,18 @@ export class LanClient {
               targetX: msg.state.x,
               targetY: msg.state.y,
               targetAngle: msg.state.angle,
+              _rxSeq: rxSeq,
+              _lastRxMs: rxNow,
+              _smoothSpeed: Math.hypot(msg.state.vx || 0, msg.state.vy || 0),
             };
             this.peers.set(pid, p);
           } else {
+            // Discard delayed out-of-order snapshots from redundant WebSocket relays
+            if (rxSeq > 0 && p._rxSeq > 0 && rxSeq <= p._rxSeq) {
+              break;
+            }
+            p._rxSeq = rxSeq > 0 ? rxSeq : p._rxSeq;
+            p._lastRxMs = rxNow;
             p.targetX = msg.state.x;
             p.targetY = msg.state.y;
             p.targetAngle = msg.state.angle;
@@ -1880,11 +1895,23 @@ export class LanClient {
   }
 
   sendPlayerState(state) {
-    if (!this.room || !this.connected) return;
-    const now = performance.now();
-    if (now - this.lastSendAt < 50) return; // 20 Hz sync
+    if (!this.room || !this.connected || !state) return;
+    const now = nowMs();
+    if (now - this.lastSendAt < 33) return; // 30 Hz quantized sync (direct WebRTC/WS; relay self-throttles to ~11 Hz)
     this.lastSendAt = now;
-    this.send({ type: 'player_state', state });
+    const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
+    const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : 0);
+    const compact = {
+      ...state,
+      seq: ++this._stateSeq,
+      x: r2(state.x),
+      y: r2(state.y),
+      vx: r2(state.vx),
+      vy: r2(state.vy),
+      angle: r3(state.angle),
+      depthM: r2(state.depthM),
+    };
+    this.send({ type: 'player_state', state: compact });
   }
 
   sendCheckpoint(checkpointId) {
@@ -1928,17 +1955,46 @@ export class LanClient {
   }
 
   stepPeerInterpolation(dt) {
+    const safeDt = Math.min(0.1, Math.max(0, Number(dt) || 0));
+    if (safeDt <= 0) return;
+    const now = nowMs();
+    const alphaPos = 1 - Math.exp(-11 * safeDt);
+    const alphaAng = 1 - Math.exp(-12 * safeDt);
+    const alphaSpd = 1 - Math.exp(-8 * safeDt);
+
     for (const p of this.peers.values()) {
-      const alpha = Math.min(1, dt * 14);
-      p.x += (p.targetX - p.x) * alpha;
-      p.y += (p.targetY - p.y) * alpha;
-      // Shortest angle interpolation
-      let diff = p.targetAngle - p.angle;
+      const vx = Number.isFinite(p.vx) ? p.vx : 0;
+      const vy = Number.isFinite(p.vy) ? p.vy : 0;
+
+      // Velocity dead-reckoning between network packets with smooth decay after 220ms
+      const ageMs = p._lastRxMs ? Math.max(0, now - p._lastRxMs) : 0;
+      if (!p.surfaced && p.alive !== false && ageMs < 460) {
+        const extFactor = ageMs <= 220 ? 1 : Math.max(0, 1 - (ageMs - 220) / 240);
+        p.targetX += vx * extFactor * safeDt;
+        p.targetY += vy * extFactor * safeDt;
+      }
+
+      const dist = Math.hypot((p.targetX ?? p.x) - p.x, (p.targetY ?? p.y) - p.y);
+      if (dist > 8.0) {
+        // Large discontinuity (spawn/rejoin): snap cleanly instead of ghosting across cave
+        p.x = p.targetX;
+        p.y = p.targetY;
+      } else {
+        p.x += (p.targetX - p.x) * alphaPos;
+        p.y += (p.targetY - p.y) * alphaPos;
+      }
+
+      // Shortest angle exponential smoothing
+      let diff = (p.targetAngle ?? p.angle) - p.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      p.angle += diff * alpha;
-      const peerSpeed = Math.hypot(p.vx || 0, p.vy || 0);
-      stepDiverBody(p, dt, { thrustMag: Math.min(1, peerSpeed / 3.5) });
+      p.angle += diff * alphaAng;
+
+      const rawSpeed = Math.hypot(vx, vy);
+      p._smoothSpeed = Number.isFinite(p._smoothSpeed)
+        ? p._smoothSpeed + (rawSpeed - p._smoothSpeed) * alphaSpd
+        : rawSpeed;
+      stepDiverBody(p, safeDt, { thrustMag: Math.min(1, p._smoothSpeed / 3.5) });
     }
   }
 }

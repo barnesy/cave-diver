@@ -22,6 +22,7 @@ import {
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
+import { LanClient } from '../public/js/net/lanClient.js';
 import {
   GLOBAL_MAP_VIEWBOX,
   projectMapPoint,
@@ -1641,4 +1642,28 @@ test('Levels 15-17 Iceland sites (Strýtan, Kverkfjöll, Grjótagjá) gases, ven
   assert.ok(s17.diveState.ppo2 < 1.35 && s17.diveState.alive, 'Grjótagjá TMX 7/78 must survive 152m safely');
   const cp7_17 = lvl17.checkpoints.find((c) => c.id === 'cp7');
   assert.ok(Math.hypot(322 - cp7_17.x, 1.8 - cp7_17.y) <= cp7_17.radius, 'Caldera exit covers cp7');
+});
+
+test('LanClient drops out-of-order peer_state snapshots and extrapolates velocity smoothly', () => {
+  const client = new LanClient();
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'buddy-1',
+    state: { seq: 10, x: 20, y: 15, vx: 3.0, vy: 0.5, angle: 0.1, name: 'RemoteBuddy' },
+  });
+
+  // Delayed packet with older seq=8 from redundant Nostr relay must NOT snap peer backward
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'buddy-1',
+    state: { seq: 8, x: 14, y: 15, vx: 2.0, vy: 0, angle: 0, name: 'RemoteBuddy' },
+  });
+  const peer = client.peers.get('buddy-1');
+  assert.equal(peer.targetX, 20);
+  assert.equal(peer._rxSeq, 10);
+
+  // Dead-reckoning step advances target along velocity between network packets cleanly
+  client.stepPeerInterpolation(0.05);
+  assert.ok(peer.targetX > 20.1, `Expected dead-reckoning advance, got ${peer.targetX}`);
+  assert.ok(peer.x >= 20 && peer.x <= peer.targetX);
 });
