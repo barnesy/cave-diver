@@ -4,6 +4,7 @@ import {
   head,
   list,
   put,
+  BlobAccessError,
   BlobNotFoundError,
   BlobPreconditionFailedError,
 } from '@vercel/blob';
@@ -27,12 +28,15 @@ export function jsonResponse(payload, status = 200) {
 
 export const NO_BLOB_MUTATION = Symbol('NO_BLOB_MUTATION');
 
+let cachedBlobAccess = null;
+
 function isNotFoundBlobError(err) {
   return Boolean(
     err instanceof BlobNotFoundError ||
       err?.name === 'BlobNotFoundError' ||
       err?.status === 404 ||
-      String(err?.message || '').toLowerCase().includes('does not exist')
+      String(err?.message || '').toLowerCase().includes('does not exist') ||
+      String(err?.message || '').toLowerCase().includes('404')
   );
 }
 
@@ -49,6 +53,43 @@ function isConflictBlobError(err) {
   );
 }
 
+function isAccessMismatchError(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  return Boolean(
+    err instanceof BlobAccessError ||
+      err?.name === 'BlobAccessError' ||
+      err?.status === 403 ||
+      msg.includes('403') ||
+      msg.includes('forbidden') ||
+      msg.includes('private') ||
+      msg.includes('public')
+  );
+}
+
+async function detectStoreAccess() {
+  const envAccess = process.env.BLOB_ACCESS;
+  if (envAccess === 'public' || envAccess === 'private') {
+    cachedBlobAccess = envAccess;
+    return envAccess;
+  }
+  if (cachedBlobAccess) return cachedBlobAccess;
+  try {
+    const res = await list({ limit: 1 });
+    const sampleUrl = res?.blobs?.[0]?.url || '';
+    if (sampleUrl.includes('.public.blob.')) {
+      cachedBlobAccess = 'public';
+      return 'public';
+    }
+    if (sampleUrl.includes('.private.blob.')) {
+      cachedBlobAccess = 'private';
+      return 'private';
+    }
+  } catch {
+    // Fall through to trial read/write
+  }
+  return 'private';
+}
+
 export async function readBlobEtag(pathname) {
   try {
     const meta = await head(pathname);
@@ -61,44 +102,112 @@ export async function readBlobEtag(pathname) {
   }
 }
 
-export async function readBlobJson(pathname, fallbackValue = null) {
-  try {
-    const res = await get(pathname, { access: 'private', useCache: false });
-    if (!res) {
+async function readBlobWithAccess(pathname, fallbackValue, access) {
+  if (access === 'public') {
+    const meta = await head(pathname);
+    if (!meta || !meta.url) {
       return { data: fallbackValue, etag: null, notFound: true };
     }
-    if (res.statusCode === 404) {
+    const baseUrl = meta.downloadUrl || meta.url;
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    const bust = encodeURIComponent(meta.etag || Date.now());
+    const res = await fetch(`${baseUrl}${sep}v=${bust}`, { cache: 'no-store' });
+    if (res.status === 404) {
       return { data: fallbackValue, etag: null, notFound: true };
     }
-    if (res.statusCode !== 200 || !res.stream) {
-      throw new Error(`Blob read failed with status ${res.statusCode}`);
+    if (!res.ok) {
+      throw Object.assign(new Error(`Blob read failed with status ${res.status}`), {
+        status: res.status,
+      });
     }
-    const text = await new Response(res.stream).text();
+    const text = await res.text();
     const parsed = text ? JSON.parse(text) : fallbackValue;
     return {
       data: parsed ?? fallbackValue,
-      etag: res.blob?.etag || null,
+      etag: meta.etag || res.headers.get('etag') || null,
       notFound: false,
     };
+  }
+
+  const res = await get(pathname, { access: 'private', useCache: false });
+  if (!res || res.statusCode === 404) {
+    return { data: fallbackValue, etag: null, notFound: true };
+  }
+  if (res.statusCode !== 200 || !res.stream) {
+    throw Object.assign(new Error(`Blob read failed with status ${res.statusCode}`), {
+      status: res.statusCode,
+    });
+  }
+  const text = await new Response(res.stream).text();
+  const parsed = text ? JSON.parse(text) : fallbackValue;
+  return {
+    data: parsed ?? fallbackValue,
+    etag: res.blob?.etag || null,
+    notFound: false,
+  };
+}
+
+export async function readBlobJson(pathname, fallbackValue = null) {
+  const primaryAccess = await detectStoreAccess();
+  try {
+    const out = await readBlobWithAccess(pathname, fallbackValue, primaryAccess);
+    cachedBlobAccess = primaryAccess;
+    return out;
   } catch (err) {
     if (isNotFoundBlobError(err)) {
+      cachedBlobAccess = primaryAccess;
       return { data: fallbackValue, etag: null, notFound: true };
     }
-    throw err;
+    if (!isAccessMismatchError(err)) {
+      throw err;
+    }
+    const altAccess = primaryAccess === 'private' ? 'public' : 'private';
+    try {
+      const altOut = await readBlobWithAccess(pathname, fallbackValue, altAccess);
+      cachedBlobAccess = altAccess;
+      return altOut;
+    } catch (altErr) {
+      if (isNotFoundBlobError(altErr)) {
+        cachedBlobAccess = altAccess;
+        return { data: fallbackValue, etag: null, notFound: true };
+      }
+      throw altErr;
+    }
   }
 }
 
 export async function writeBlobJson(pathname, data, { ifMatch = null, allowOverwrite = true } = {}) {
-  const opts = {
-    access: 'private',
-    contentType: 'application/json',
-    allowOverwrite,
-    addRandomSuffix: false,
+  const payload = JSON.stringify(data);
+  const buildOpts = (access) => {
+    const opts = {
+      access,
+      contentType: 'application/json',
+      allowOverwrite,
+      addRandomSuffix: false,
+    };
+    if (access === 'public') {
+      opts.cacheControlMaxAge = 0;
+    }
+    if (ifMatch) {
+      opts.ifMatch = ifMatch;
+    }
+    return opts;
   };
-  if (ifMatch) {
-    opts.ifMatch = ifMatch;
+
+  const primaryAccess = await detectStoreAccess();
+  try {
+    const res = await put(pathname, payload, buildOpts(primaryAccess));
+    cachedBlobAccess = primaryAccess;
+    return res;
+  } catch (err) {
+    if (!isAccessMismatchError(err)) {
+      throw err;
+    }
+    const altAccess = primaryAccess === 'private' ? 'public' : 'private';
+    const res = await put(pathname, payload, buildOpts(altAccess));
+    cachedBlobAccess = altAccess;
+    return res;
   }
-  return put(pathname, JSON.stringify(data), opts);
 }
 
 export async function deleteBlobPath(pathname) {

@@ -136,7 +136,7 @@ export function sortLeaderboardEntries(a, b) {
 export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
   const buckets = new Map();
   for (const e of entries || []) {
-    if (e.mode !== mode) continue;
+    if (!e || e.mode !== mode) continue;
     const ownerKey =
       mode === 'team'
         ? (e.crew || []).map((c) => c.name.toLowerCase()).sort().join('|') || e.displayName.toLowerCase()
@@ -273,7 +273,7 @@ export function queryLeaderboardEntries(allEntries, { mode = 'solo', levelId = '
     return [];
   }
   return (allEntries || [])
-    .filter((e) => e.mode === safeMode && e.levelId === levelId)
+    .filter((e) => e && e.mode === safeMode && e.levelId === levelId)
     .slice()
     .sort(sortLeaderboardEntries)
     .slice(0, safeLimit);

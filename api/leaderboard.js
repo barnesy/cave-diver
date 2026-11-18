@@ -17,18 +17,31 @@ const LEADERBOARD_BLOB_PATH = 'leaderboard/entries-v1.json';
 const LEADERBOARD_BACKUP_PATH = 'leaderboard/backup-v1.json';
 
 async function readAllWithBackupFallback() {
+  let primaryErr = null;
+  let primaryNotFound = false;
   try {
     const primary = await readBlobJson(LEADERBOARD_BLOB_PATH, []);
     if (!primary.notFound && Array.isArray(primary.data)) {
       return primary.data;
     }
-  } catch {
+    primaryNotFound = Boolean(primary.notFound);
+  } catch (err) {
+    primaryErr = err;
     // Fall through to backup mirror
   }
   try {
     const backup = await readBlobJson(LEADERBOARD_BACKUP_PATH, []);
-    return Array.isArray(backup.data) ? backup.data : [];
-  } catch {
+    if (!backup.notFound && Array.isArray(backup.data)) {
+      return backup.data;
+    }
+    return [];
+  } catch (backupErr) {
+    if (primaryErr && !primaryNotFound) {
+      throw primaryErr;
+    }
+    if (backupErr && !primaryNotFound) {
+      throw backupErr;
+    }
     return [];
   }
 }

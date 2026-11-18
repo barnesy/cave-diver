@@ -678,6 +678,91 @@ test('Vercel API handlers validate inputs and shared clients target Vercel globa
     } finally {
       globalThis.fetch = prevFetch2;
     }
+
+    // Overall board ("All Sites") merges unsynced local cache when remote overall is empty or partial
+    const overallClient = new LeaderboardClient();
+    overallClient._resolvedEndpoint = 'https://cave-diver.vercel.app/api/leaderboard';
+    overallClient._localEntries = [
+      a1,
+      normalizeLeaderboardSubmission({
+        mode: 'solo',
+        levelId: 'eagles-nest-sink',
+        playerId: 'p1',
+        diverName: 'P1',
+        score: 2800,
+        grade: 'S',
+        timeSec: 110,
+        exploredPct: 85,
+        collectiblesFound: 3,
+      }).entry,
+    ];
+    overallClient._loadLocalCache = () => overallClient._localEntries;
+    const prevFetch3 = globalThis.fetch;
+    globalThis.fetch = async (_url, opts) => {
+      if (opts?.method === 'POST') {
+        return new Response(JSON.stringify({ error: 'Blob busy' }), { status: 500 });
+      }
+      return new Response(JSON.stringify({ mode: 'solo', levelId: 'overall', entries: [] }), { status: 200 });
+    };
+    try {
+      const overallEmptyRemote = await overallClient.fetchBoard({ mode: 'solo', levelId: 'overall', limit: 20 });
+      assert.equal(overallEmptyRemote.entries.length, 1);
+      assert.equal(overallEmptyRemote.entries[0].levelId, 'overall');
+      assert.equal(overallEmptyRemote.entries[0].sitesCompleted, 2);
+      assert.equal(overallEmptyRemote.entries[0].score, 4900);
+
+      // Now simulate remote returning another diver + an older lower score for p1
+      globalThis.fetch = async (_url, opts) => {
+        if (opts?.method === 'POST') {
+          return new Response(JSON.stringify({ error: 'Blob busy' }), { status: 500 });
+        }
+        return new Response(
+          JSON.stringify({
+            mode: 'solo',
+            levelId: 'overall',
+            entries: [
+              {
+                mode: 'solo',
+                levelId: 'overall',
+                playerId: 'remote_ace',
+                displayName: 'RemoteAce',
+                teamSize: 1,
+                sitesCompleted: 3,
+                totalSites: 14,
+                score: 7200,
+                grade: '3/14 SITES',
+                timeSec: 360,
+                exploredPct: 90,
+                createdAt: 1000,
+              },
+              {
+                mode: 'solo',
+                levelId: 'overall',
+                playerId: 'p1',
+                displayName: 'P1',
+                teamSize: 1,
+                sitesCompleted: 1,
+                totalSites: 14,
+                score: 2100,
+                grade: '1/14 SITES',
+                timeSec: 120,
+                exploredPct: 80,
+                createdAt: 1000,
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      };
+      const overallMerged = await overallClient.fetchBoard({ mode: 'solo', levelId: 'overall', limit: 20 });
+      assert.equal(overallMerged.entries.length, 2);
+      assert.equal(overallMerged.entries[0].displayName, 'RemoteAce');
+      assert.equal(overallMerged.entries[1].displayName, 'P1');
+      assert.equal(overallMerged.entries[1].score, 4900);
+      assert.equal(overallMerged.entries[1].sitesCompleted, 2);
+    } finally {
+      globalThis.fetch = prevFetch3;
+    }
   } finally {
     if (prevLoc === undefined) {
       delete globalThis.location;

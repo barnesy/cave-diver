@@ -24,6 +24,69 @@ function getOrCreatePlayerId() {
   }
 }
 
+function getOverallOwnerKey(row, mode) {
+  if (mode === 'team') {
+    const crewKey = Array.isArray(row?.crew)
+      ? row.crew.map((c) => String(c?.name || '').toLowerCase()).filter(Boolean).sort().join('|')
+      : '';
+    return crewKey || String(row?.displayName || '').toLowerCase();
+  }
+  return row?.playerId || String(row?.displayName || '').toLowerCase();
+}
+
+function mergeRemoteAndLocalBoard(remoteEntries, localEntries, { mode, levelId, limit }) {
+  if (!Array.isArray(localEntries) || localEntries.length === 0) {
+    return remoteEntries;
+  }
+  if (levelId === 'overall') {
+    const localOverall = queryLeaderboardEntries(localEntries, {
+      mode,
+      levelId: 'overall',
+      limit: Math.max(limit, 50),
+    });
+    if (localOverall.length === 0) return remoteEntries;
+    if (remoteEntries.length === 0) return localOverall.slice(0, limit);
+
+    const byOwner = new Map();
+    for (const row of remoteEntries) {
+      if (!row) continue;
+      byOwner.set(getOverallOwnerKey(row, mode), row);
+    }
+    for (const localRow of localOverall) {
+      const key = getOverallOwnerKey(localRow, mode);
+      const prev = byOwner.get(key);
+      if (
+        !prev ||
+        localRow.score > prev.score ||
+        (localRow.score === prev.score &&
+          ((localRow.sitesCompleted || 0) > (prev.sitesCompleted || 0) ||
+            ((localRow.sitesCompleted || 0) === (prev.sitesCompleted || 0) && localRow.timeSec < prev.timeSec)))
+      ) {
+        byOwner.set(key, localRow);
+      }
+    }
+    return Array.from(byOwner.values())
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if ((b.sitesCompleted || 0) !== (a.sitesCompleted || 0)) {
+          return (b.sitesCompleted || 0) - (a.sitesCompleted || 0);
+        }
+        return (a.timeSec || 0) - (b.timeSec || 0);
+      })
+      .slice(0, limit);
+  }
+
+  const byKey = new Map();
+  for (const e of [...remoteEntries, ...localEntries]) {
+    if (!e || e.mode !== mode || e.levelId !== levelId) continue;
+    const prev = byKey.get(e.entryKey);
+    if (!prev || e.score > prev.score || (e.score === prev.score && e.timeSec < prev.timeSec)) {
+      byKey.set(e.entryKey, e);
+    }
+  }
+  return queryLeaderboardEntries(Array.from(byKey.values()), { mode, levelId, limit });
+}
+
 export class LeaderboardClient {
   constructor() {
     this.playerId = getOrCreatePlayerId();
@@ -277,29 +340,12 @@ export class LeaderboardClient {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const remoteEntries = Array.isArray(json.entries) ? json.entries : [];
-      if (levelId !== 'overall' && this._localEntries.length > 0) {
-        const byKey = new Map();
-        for (const e of [...remoteEntries, ...this._localEntries]) {
-          if (!e || e.mode !== mode || e.levelId !== levelId) continue;
-          const prev = byKey.get(e.entryKey);
-          if (!prev || e.score > prev.score || (e.score === prev.score && e.timeSec < prev.timeSec)) {
-            byKey.set(e.entryKey, e);
-          }
-        }
-        return {
-          source: 'global',
-          mode: json.mode || mode,
-          levelId: json.levelId || levelId,
-          pendingSync: this.getPendingSyncCount(),
-          entries: queryLeaderboardEntries(Array.from(byKey.values()), { mode, levelId, limit }),
-        };
-      }
       return {
         source: 'global',
         mode: json.mode || mode,
         levelId: json.levelId || levelId,
         pendingSync: this.getPendingSyncCount(),
-        entries: remoteEntries,
+        entries: mergeRemoteAndLocalBoard(remoteEntries, this._localEntries, { mode, levelId, limit }),
       };
     } catch {
       this._localEntries = this._loadLocalCache();
