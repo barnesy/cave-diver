@@ -90,6 +90,7 @@ const btnOpenLan = document.getElementById('btn-open-lan');
 const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
 const leaderboardPanel = document.getElementById('leaderboard-panel');
 const lbCareerSummaryEl = document.getElementById('lb-career-summary');
+const selectLbSite = document.getElementById('select-lb-site');
 const siteDivePlanEl = document.getElementById('site-dive-plan');
 const leaderboardSubEl = document.getElementById('leaderboard-sub');
 const leaderboardRowsEl = document.getElementById('leaderboard-rows');
@@ -154,7 +155,7 @@ let knownRoomMemberIds = new Set();
 let notifyPromptedOnce = false;
 let notifyAlertsMuted = false;
 let lbMode = 'solo';
-let lbScope = 'site';
+let lbFilterLevelId = activeLevel.id; // 'overall' | level.id
 
 const CALLSIGN_MAX_LEN = 12;
 
@@ -1159,17 +1160,32 @@ function renderCareerSummary() {
   `;
 }
 
+function populateLbSiteSelect() {
+  if (!selectLbSite) return;
+  const opts = [
+    `<option value="overall">🌐 All ${LEVELS.length} Sites (Overall)</option>`,
+    ...LEVELS.map((lvl, idx) => `<option value="${lvl.id}">L${idx + 1}: ${lvl.name} (${getLevelMaxDepthM(lvl)}m)</option>`),
+  ];
+  selectLbSite.innerHTML = opts.join('');
+  selectLbSite.value = lbFilterLevelId || activeLevel.id;
+}
+
 async function refreshMenuLeaderboard() {
   renderCareerSummary();
   if (!leaderboardRowsEl || !leaderboardSubEl) return;
-  const targetLevel = lbScope === 'overall' ? 'overall' : activeLevel.id;
+  if (selectLbSite && selectLbSite.options.length === 0) {
+    populateLbSiteSelect();
+  }
+  const targetLevel = lbFilterLevelId || activeLevel.id;
+  if (selectLbSite) selectLbSite.value = targetLevel;
   leaderboardSubEl.textContent = 'Syncing rankings...';
   const board = await leaderboard.fetchBoard({ mode: lbMode, levelId: targetLevel, limit: 20 });
   const modeLabel = lbMode === 'team' ? 'Co-op Teams' : 'Individual Divers';
+  const lvlIdx = LEVELS.findIndex((l) => l.id === targetLevel);
   const scopeLabel =
-    lbScope === 'overall'
+    targetLevel === 'overall'
       ? `Overall Campaign (All ${LEVELS.length} Sites)`
-      : `L${Math.max(1, LEVELS.findIndex((l) => l.id === activeLevel.id) + 1)}: ${activeLevel.name}`;
+      : `L${Math.max(1, lvlIdx + 1)}: ${getLevelById(targetLevel).name}`;
   const originNote =
     board.source === 'global'
       ? (board.pendingSync > 0 ? `Global Rankings (${board.pendingSync} pending sync)` : 'Global Rankings')
@@ -1516,11 +1532,15 @@ async function selectAndLoadLevel(chosenId) {
   const nextLevel = getLevelById(chosenId);
   activeLevel = nextLevel;
   if (selectLevel) selectLevel.value = nextLevel.id;
+  if (lbFilterLevelId !== 'overall') {
+    lbFilterLevelId = nextLevel.id;
+    if (selectLbSite) selectLbSite.value = nextLevel.id;
+  }
   syncMenuLevelLabels(nextLevel);
   if (lan.room && lan.isHost()) {
     lan.setLevel(nextLevel.id);
   }
-  if (leaderboardPanel && !leaderboardPanel.hidden && lbScope === 'site') {
+  if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
   // Only restore immediately if already baked in cache; defer heavy SDF baking until player starts dive
@@ -1595,8 +1615,7 @@ let activeMenuTab = 'solo';
 
 function syncSitePickerVisibility() {
   if (!menuSitePicker) return;
-  const showSites = activeMenuTab !== 'leaderboards' || lbScope === 'site';
-  menuSitePicker.hidden = !showSites;
+  menuSitePicker.hidden = activeMenuTab === 'leaderboards';
 }
 
 async function setActiveMenuTab(tab = 'solo') {
@@ -1642,17 +1661,12 @@ leaderboardPanel?.addEventListener('click', (e) => {
       b.classList.toggle('active', b === modeBtn);
     }
     refreshMenuLeaderboard();
-    return;
   }
-  const scopeBtn = e.target.closest('button[data-lb-scope]');
-  if (scopeBtn) {
-    lbScope = scopeBtn.dataset.lbScope === 'overall' ? 'overall' : 'site';
-    for (const b of leaderboardPanel.querySelectorAll('button[data-lb-scope]')) {
-      b.classList.toggle('active', b === scopeBtn);
-    }
-    syncSitePickerVisibility();
-    refreshMenuLeaderboard();
-  }
+});
+
+selectLbSite?.addEventListener('change', () => {
+  lbFilterLevelId = selectLbSite.value || 'overall';
+  refreshMenuLeaderboard();
 });
 
 if (lanUrlsEl) {

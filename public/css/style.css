@@ -2224,6 +2224,23 @@ html, body {
   background: rgba(14, 165, 233, 0.25);
   color: #e0f2fe;
 }
+.lb-site-select {
+  flex: 1;
+  min-width: 170px;
+  max-width: 280px;
+  background: rgba(2, 8, 18, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 9px;
+  color: #e0f2fe;
+  padding: 5px 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+.lb-site-select:focus {
+  border-color: var(--cyan);
+}
 .lb-sub {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -2233,7 +2250,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 300px;
+  max-height: 360px;
   overflow-y: auto;
 }
 .lb-row {
