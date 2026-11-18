@@ -2793,6 +2793,7 @@ function stepSimulation(dt) {
     bodyRecovered: Boolean(session.bodyRecovered),
     carryingBody: Boolean(session.carryingBody),
     peers,
+    playerName: sanitizeCallsignInput(playerNameInput?.value || ''),
     level,
     ascentConfig: session.ascentConfig,
     reelMaxMeters: session.reelMaxMeters || 0,

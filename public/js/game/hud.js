@@ -139,11 +139,14 @@ export class DiveComputerHUD {
     this.elAlerts = document.getElementById('dc-alerts');
     this.elObjective = document.getElementById('dc-objective');
     this.elBuddy = document.getElementById('dc-buddy');
+    this.elSelfHealth = document.getElementById('hud-self-health');
+    this.elSelfName = document.getElementById('dc-self-name');
     this.elEkgRow = document.getElementById('dc-ekg-row');
     this.elEkgHeart = document.getElementById('dc-ekg-heart');
     this.elEkgBpm = document.getElementById('dc-ekg-bpm');
     this.elEkgCanvas = document.getElementById('dc-ekg-canvas');
     this.elReelRow = document.getElementById('hud-reel-dock');
+    this.elReelStatus = document.getElementById('hud-reel-status');
     this.elReelMeters = document.getElementById('dc-reel-meters');
     this.btnReelToggle = document.getElementById('btn-reel-toggle');
     this.btnReelRewind = document.getElementById('btn-reel-rewind');
@@ -163,7 +166,7 @@ export class DiveComputerHUD {
     this.btnReelRewind?.addEventListener('click', (e) => {
       if (e.detail === 0) onReelRewind?.();
     });
-    this.selfEkg = createEkgState(210);
+    this.selfEkg = createEkgState(128);
     this.mateCards = new Map();
     const bindVital = (el) => ({
       el,
@@ -242,6 +245,7 @@ export class DiveComputerHUD {
     carryingBody = false,
     peerDiver,
     peers,
+    playerName = '',
     level,
     ascentConfig,
     reelMaxMeters = 0,
@@ -290,9 +294,35 @@ export class DiveComputerHUD {
     this._updateVitalBar(this.vitalEls.narc, (diveState.narcosisLevel || 0) * 100, 28, 68);
     this._updateVitalBar(this.vitalEls.hyp, diveState.hypoxiaStress, 22, 65);
 
-    // Local Heartbeat & EKG Waveform Monitor
+    // Local Heartbeat, Self Name & EKG Waveform Monitor
     const myBpm = diveState.alive === false ? 0 : Math.round(diveState.heartRateBpm ?? 68);
+    if (this.elSelfName) {
+      const cleanName = typeof playerName === 'string' ? playerName.trim() : '';
+      const selfLabel = cleanName ? `YOU · ${cleanName}` : 'YOU';
+      if (this.elSelfName.textContent !== selfLabel) this.elSelfName.textContent = selfLabel;
+    }
     if (this.elEkgBpm) this.elEkgBpm.textContent = diveState.alive === false ? '--' : String(myBpm);
+    const selfSev =
+      diveState.alive === false ||
+      diveState.criticalAlarm ||
+      myBpm >= 145 ||
+      (diveState.cnsPercent || 0) >= 70 ||
+      (diveState.dcsStress || 0) >= 65 ||
+      (diveState.hypoxiaStress || 0) >= 65 ||
+      ((diveState.narcosisLevel || 0) * 100) >= 68
+        ? 'danger'
+        : myBpm >= 115 ||
+            diveState.warnings?.length > 0 ||
+            (diveState.cnsPercent || 0) >= 30 ||
+            (diveState.dcsStress || 0) >= 22 ||
+            (diveState.hypoxiaStress || 0) >= 22 ||
+            ((diveState.narcosisLevel || 0) * 100) >= 28
+          ? 'warn'
+          : '';
+    if (this.elSelfHealth) {
+      const selfCardCls = `self-health-card ${selfSev}`.trim();
+      if (this.elSelfHealth.className !== selfCardCls) this.elSelfHealth.className = selfCardCls;
+    }
     if (this.elEkgRow) {
       const hrCls = diveState.alive === false || myBpm >= 145 ? 'danger' : myBpm >= 115 ? 'warn' : '';
       this.elEkgRow.className = `dc-ekg-row ${hrCls}`.trim();
@@ -300,13 +330,18 @@ export class DiveComputerHUD {
     const qrsPeak = stepAndDrawEkg(this.elEkgCanvas, this.selfEkg, myBpm, diveState.alive !== false, dt);
     if (this.elEkgHeart) this.elEkgHeart.classList.toggle('pulse', qrsPeak);
 
-    // Deployable Guideline Spool Dock (visible on unlined labyrinth caves)
+    // Deployable Guideline Spool Dock & Bottom-Center Line Status (unlined labyrinth caves)
+    const showReel = reelMaxMeters > 0;
+    if (this.elReelStatus) this.elReelStatus.hidden = !showReel;
     if (this.elReelRow) {
-      if (reelMaxMeters > 0) {
+      if (showReel) {
         this.elReelRow.hidden = false;
         const remM = Math.max(0, Math.round(reelRemainingM));
         const rCls = remM <= 1 ? 'danger' : remM < 35 ? 'warn' : reelingActive ? 'active' : '';
         this.elReelRow.className = `hud-reel-dock ${reelingActive ? 'active' : ''} ${rCls}`.replace(/\s+/g, ' ').trim();
+        if (this.elReelStatus) {
+          this.elReelStatus.className = `reel-dock-status ${reelingActive ? 'active' : ''} ${rCls}`.replace(/\s+/g, ' ').trim();
+        }
         if (this.elReelMeters) this.elReelMeters.textContent = `${remM}m / ${reelMaxMeters}m`;
         if (this.btnReelToggle) {
           this.btnReelToggle.className = `reel-btn ${reelingActive ? 'active' : ''}`.trim();
@@ -364,18 +399,18 @@ export class DiveComputerHUD {
       this.elAlerts.textContent = ascentStep.title;
       this.elAlerts.className = `dc-alerts ${ascentStep.action === 'STOP' ? 'warn' : 'ok'}`;
     } else if (recGasId !== diveState.activeGasId) {
-      this.elAlerts.textContent = `RECOMMEND: SWITCH TO ${GAS_MIXES[recGasId].name}`;
+      this.elAlerts.textContent = `SWITCH → ${GAS_MIXES[recGasId].name}`;
       this.elAlerts.className = 'dc-alerts warn';
     } else {
-      this.elAlerts.textContent = `ON ${GAS_MIXES[diveState.activeGasId].name} · SYSTEMS NOMINAL`;
+      this.elAlerts.textContent = `${GAS_MIXES[diveState.activeGasId].name} · NOMINAL`;
       this.elAlerts.className = 'dc-alerts ok';
     }
 
-    // Objective Tracker with dead-simple STOP HERE / NOW MOVE HERE guidance
+    // Concise Objective Tracker
     const recName = GAS_MIXES[recGasId].name;
     const gasBadge = recGasId === diveState.activeGasId
-      ? `<span class="obj-gas ok">GAS ✓ ${recName}</span>`
-      : `<span class="obj-gas switch">SWITCH → ${recName}</span>`;
+      ? `<span class="obj-gas ok">✓ ${recName}</span>`
+      : `<span class="obj-gas switch">→ ${recName}</span>`;
 
     const extraStat =
       collectiblesTotal > 0
@@ -385,10 +420,10 @@ export class DiveComputerHUD {
     const isProbe = level?.recoveryTarget?.kind === 'probe';
     const recoveryTag = level?.recoveryTarget
       ? carryingBody
-        ? isProbe ? ' · 🛰 TOWING CORE' : ' · 🛟 TOWING DIVER'
+        ? isProbe ? ' · 🛰 CORE' : ' · 🛟 TOW'
         : bodyRecovered
-          ? ' · ✓ RECOVERED'
-          : isProbe ? ' · 🛰 PROBE RECOVERY' : ' · 🛟 BODY RECOVERY'
+          ? ' · ✓ REC'
+          : isProbe ? ' · 🛰 PROBE' : ' · 🛟 BODY'
       : '';
     let objectiveHtml = '';
     if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {
@@ -406,11 +441,11 @@ export class DiveComputerHUD {
       if (level?.hideWaypointCompass) {
         objectiveHtml = `
           <div class="obj-top-row">
-            <span class="obj-count">UNLINED MAZE · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+            <span class="obj-count">MAZE · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
             ${gasBadge}
           </div>
-          <span class="obj-name">${level.recoveryTarget && !bodyRecovered ? `Locate & recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `Find & tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`}</span>
-          <span class="obj-hint">No fixed line — press [G] to lay reel (${Math.round(reelRemainingM)}m left) · Avoid blind ends</span>
+          <span class="obj-name">${level.recoveryTarget && !bodyRecovered ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `Tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`}</span>
+          <span class="obj-hint">Unlined · [G] deploy reel (${Math.round(reelRemainingM)}m)</span>
         `;
       } else {
         const dist = Math.hypot(nextCheckpoint.x - diver.x, nextCheckpoint.y - diver.y);
