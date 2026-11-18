@@ -877,7 +877,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
           return;
         }
         const boardLabel = subMode === 'team' ? 'TEAM LEADERBOARD' : 'INDIVIDUAL LEADERBOARD';
-        const srcTag = res.source === 'global' ? 'Global' : 'Local PB';
+        const srcTag = res.source === 'global' ? 'Global' : res.pendingSync ? 'Saved Offline · Auto-Sync' : 'Local PB';
         const rankText = res.rank ? `${srcTag} Rank #${res.rank} of ${res.total || res.rank}` : srcTag;
         debriefLeaderboardEl.hidden = false;
         debriefLeaderboardEl.innerHTML = `
@@ -966,12 +966,12 @@ async function refreshMenuLeaderboard() {
   const modeLabel = lbMode === 'team' ? 'Co-op Teams' : 'Individual Divers';
   const scopeLabel =
     lbScope === 'overall'
-      ? 'Overall Campaign (All 13 Sites)'
+      ? `Overall Campaign (All ${LEVELS.length} Sites)`
       : `L${Math.max(1, LEVELS.findIndex((l) => l.id === activeLevel.id) + 1)}: ${activeLevel.name}`;
   const originNote =
     board.source === 'global'
-      ? 'Global Rankings'
-      : 'Local Device Records (ready for cloud endpoint)';
+      ? (board.pendingSync > 0 ? `Global Rankings (${board.pendingSync} pending sync)` : 'Global Rankings')
+      : 'Local Device Records (auto-syncs when online)';
   leaderboardSubEl.textContent = `${modeLabel} · ${scopeLabel} · ${originNote}`;
   leaderboardRowsEl.innerHTML = renderLeaderboardRowsHtml(board.entries);
 }
@@ -2761,12 +2761,20 @@ async function bootGame() {
   btnOpenLan.disabled = false;
 
   // Keep socket & room session alive seamlessly across mobile app-switching and tab navigation
+  const syncWhenReady = () => {
+    lan.ensureConnected();
+    leaderboard.syncPendingLocalRuns().then((uploaded) => {
+      if (uploaded > 0 && leaderboardPanel && !leaderboardPanel.hidden) {
+        refreshMenuLeaderboard();
+      }
+    }).catch(() => {});
+  };
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) lan.ensureConnected();
+    if (!document.hidden) syncWhenReady();
   });
   window.addEventListener('pageshow', () => lan.ensureConnected());
   window.addEventListener('focus', () => lan.ensureConnected());
-  window.addEventListener('online', () => lan.ensureConnected());
+  window.addEventListener('online', syncWhenReady);
 
   // Connect cleanly & backfill any prior local dive records to global Vercel Blob storage
   lan.connect();

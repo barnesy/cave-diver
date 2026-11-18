@@ -7,9 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { DEFAULT_LEVEL_ID, isValidLevelId } from './public/js/levels/index.js';
 import {
+  mergeLeaderboardEntries,
   normalizeLeaderboardSubmission,
+  pruneLeaderboardEntries,
   queryLeaderboardEntries,
-  sortLeaderboardEntries,
 } from './public/js/game/leaderboardModel.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +18,8 @@ const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const LEADERBOARD_FILE = process.env.LEADERBOARD_FILE || '';
-const leaderboardStore = [];
+let leaderboardStore = [];
+let persistLbChain = Promise.resolve();
 
 async function initLeaderboardStore() {
   if (!LEADERBOARD_FILE) return;
@@ -25,27 +27,32 @@ async function initLeaderboardStore() {
     const raw = await fs.readFile(LEADERBOARD_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      leaderboardStore.push(...parsed);
+      leaderboardStore = parsed;
     }
   } catch {
     // fresh store
   }
 }
 
-function upsertLeaderboardEntry(entry) {
-  const idx = leaderboardStore.findIndex(
-    (item) => item.mode === entry.mode && item.entryKey === entry.entryKey
-  );
-  if (idx >= 0) {
-    if (sortLeaderboardEntries(entry, leaderboardStore[idx]) < 0) {
-      leaderboardStore[idx] = entry;
-    }
-  } else {
-    leaderboardStore.push(entry);
+function scheduleLeaderboardPersist() {
+  if (!LEADERBOARD_FILE) return;
+  const snapshot = JSON.stringify(leaderboardStore);
+  const tmpFile = `${LEADERBOARD_FILE}.tmp.${process.pid}`;
+  persistLbChain = persistLbChain
+    .then(async () => {
+      await fs.writeFile(tmpFile, snapshot, 'utf8');
+      await fs.rename(tmpFile, LEADERBOARD_FILE);
+    })
+    .catch(() => {});
+}
+
+function upsertLeaderboardEntries(incomingEntries) {
+  const { entries, changed } = mergeLeaderboardEntries(leaderboardStore, incomingEntries);
+  if (changed) {
+    leaderboardStore = pruneLeaderboardEntries(entries);
+    scheduleLeaderboardPersist();
   }
-  if (LEADERBOARD_FILE) {
-    fs.writeFile(LEADERBOARD_FILE, JSON.stringify(leaderboardStore)).catch(() => {});
-  }
+  return changed;
 }
 
 initLeaderboardStore();
@@ -137,7 +144,7 @@ const server = http.createServer(async (req, res) => {
       let bodyText = '';
       for await (const chunk of req) {
         bodyText += chunk;
-        if (bodyText.length > 32768) {
+        if (bodyText.length > 131072) {
           res.writeHead(413, corsHeaders);
           res.end(JSON.stringify({ error: 'Payload too large' }));
           return;
@@ -151,13 +158,34 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'Invalid JSON' }));
         return;
       }
+      if (Array.isArray(raw?.entries)) {
+        if (raw.entries.length === 0 || raw.entries.length > 25) {
+          res.writeHead(400, corsHeaders);
+          res.end(JSON.stringify({ error: 'Batch entries must contain 1..25 submissions.' }));
+          return;
+        }
+        const valid = [];
+        for (const item of raw.entries) {
+          const parsedItem = normalizeLeaderboardSubmission(item);
+          if (!parsedItem.ok) {
+            res.writeHead(400, corsHeaders);
+            res.end(JSON.stringify({ error: parsedItem.error }));
+            return;
+          }
+          valid.push(parsedItem.entry);
+        }
+        const changed = upsertLeaderboardEntries(valid);
+        res.writeHead(200, corsHeaders);
+        res.end(JSON.stringify({ ok: true, count: valid.length, synced: changed }));
+        return;
+      }
       const parsed = normalizeLeaderboardSubmission(raw);
       if (!parsed.ok) {
         res.writeHead(400, corsHeaders);
         res.end(JSON.stringify({ error: parsed.error }));
         return;
       }
-      upsertLeaderboardEntry(parsed.entry);
+      upsertLeaderboardEntries([parsed.entry]);
       const boardAll = queryLeaderboardEntries(leaderboardStore, {
         mode: parsed.entry.mode,
         levelId: parsed.entry.levelId,

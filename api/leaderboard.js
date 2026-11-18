@@ -1,16 +1,37 @@
 import {
+  mergeLeaderboardEntries,
   normalizeLeaderboardSubmission,
+  pruneLeaderboardEntries,
   queryLeaderboardEntries,
-  sortLeaderboardEntries,
 } from '../public/js/game/leaderboardModel.js';
 import {
   CORS_HEADERS,
+  NO_BLOB_MUTATION,
   jsonResponse,
-  readBlobJson,
   mutateBlobJson,
+  readBlobJson,
+  writeBlobJson,
 } from './_blobJson.js';
 
 const LEADERBOARD_BLOB_PATH = 'leaderboard/entries-v1.json';
+const LEADERBOARD_BACKUP_PATH = 'leaderboard/backup-v1.json';
+
+async function readAllWithBackupFallback() {
+  try {
+    const primary = await readBlobJson(LEADERBOARD_BLOB_PATH, []);
+    if (!primary.notFound && Array.isArray(primary.data)) {
+      return primary.data;
+    }
+  } catch {
+    // Fall through to backup mirror
+  }
+  try {
+    const backup = await readBlobJson(LEADERBOARD_BACKUP_PATH, []);
+    return Array.isArray(backup.data) ? backup.data : [];
+  } catch {
+    return [];
+  }
+}
 
 export function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -23,8 +44,7 @@ export async function GET(request) {
     const level = url.searchParams.get('level') || 'overall';
     const limit = Math.max(1, Math.min(50, Number(url.searchParams.get('limit')) || 20));
 
-    const { data } = await readBlobJson(LEADERBOARD_BLOB_PATH, []);
-    const allEntries = Array.isArray(data) ? data : [];
+    const allEntries = await readAllWithBackupFallback();
     const entries = queryLeaderboardEntries(allEntries, { mode, levelId: level, limit });
     return jsonResponse({ mode, levelId: level, entries });
   } catch (err) {
@@ -40,6 +60,43 @@ export async function POST(request) {
     return jsonResponse({ error: 'Invalid JSON body.' }, 400);
   }
 
+  const isBatch = Array.isArray(raw?.entries);
+  if (isBatch) {
+    if (raw.entries.length === 0 || raw.entries.length > 25) {
+      return jsonResponse({ error: 'Batch entries must contain 1..25 submissions.' }, 400);
+    }
+    const validEntries = [];
+    for (const item of raw.entries) {
+      const parsed = normalizeLeaderboardSubmission(item);
+      if (!parsed.ok) {
+        return jsonResponse({ error: parsed.error }, 400);
+      }
+      validEntries.push(parsed.entry);
+    }
+
+    try {
+      let didWrite = false;
+      const allEntries = await mutateBlobJson(
+        LEADERBOARD_BLOB_PATH,
+        () => [],
+        (list, { notFound }) => {
+          let base = Array.isArray(list) ? list : [];
+          if (notFound) base = [];
+          const { entries, changed } = mergeLeaderboardEntries(base, validEntries);
+          if (!changed) return NO_BLOB_MUTATION;
+          didWrite = true;
+          return pruneLeaderboardEntries(entries);
+        }
+      );
+      if (didWrite) {
+        await writeBlobJson(LEADERBOARD_BACKUP_PATH, allEntries).catch(() => {});
+      }
+      return jsonResponse({ ok: true, count: validEntries.length, synced: didWrite });
+    } catch (err) {
+      return jsonResponse({ error: err?.message || 'Failed to sync leaderboard batch.' }, 500);
+    }
+  }
+
   const parsed = normalizeLeaderboardSubmission(raw);
   if (!parsed.ok) {
     return jsonResponse({ error: parsed.error }, 400);
@@ -47,29 +104,21 @@ export async function POST(request) {
 
   try {
     const entry = parsed.entry;
+    let didWrite = false;
     const allEntries = await mutateBlobJson(
       LEADERBOARD_BLOB_PATH,
       () => [],
       (list) => {
-        const items = Array.isArray(list) ? list : [];
-        const idx = items.findIndex(
-          (item) => item.mode === entry.mode && item.entryKey === entry.entryKey
-        );
-        if (idx >= 0) {
-          if (sortLeaderboardEntries(entry, items[idx]) < 0) {
-            items[idx] = entry;
-          }
-        } else {
-          items.push(entry);
-        }
-        // Keep generous sorted archive safely inside single JSON blob limits
-        if (items.length > 2000) {
-          items.sort(sortLeaderboardEntries);
-          items.length = 2000;
-        }
-        return items;
+        const { entries, changed } = mergeLeaderboardEntries(list, [entry]);
+        if (!changed) return NO_BLOB_MUTATION;
+        didWrite = true;
+        return pruneLeaderboardEntries(entries);
       }
     );
+
+    if (didWrite) {
+      await writeBlobJson(LEADERBOARD_BACKUP_PATH, allEntries).catch(() => {});
+    }
 
     const boardAll = queryLeaderboardEntries(allEntries, {
       mode: entry.mode,

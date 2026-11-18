@@ -31,6 +31,59 @@ export class LeaderboardClient {
     this._localEntries = this._loadLocalCache();
     this._syncedLocalKeys = new Set();
     this._syncPromise = null;
+    this._retryTimer = null;
+  }
+
+  async _fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
+    if (typeof AbortController === 'undefined') {
+      return fetch(url, opts);
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  _entrySig(entry) {
+    return `${entry.mode}|${entry.entryKey}|${entry.score}`;
+  }
+
+  _buildSubmissionBody(entry) {
+    return {
+      mode: entry.mode,
+      levelId: entry.levelId,
+      runId: entry.mode === 'team' ? entry.entryKey : undefined,
+      playerId: entry.playerId || this.playerId,
+      diverName: entry.displayName,
+      crew: entry.crew,
+      teamSize: entry.teamSize,
+      score: entry.score,
+      grade: entry.grade,
+      timeSec: entry.timeSec,
+      exploredPct: entry.exploredPct,
+      collectiblesFound: entry.collectiblesFound,
+      createdAt: entry.createdAt,
+    };
+  }
+
+  getPendingSyncCount() {
+    this._localEntries = this._loadLocalCache();
+    return this._localEntries.filter((e) => {
+      if (!e || e.grade === 'DNF' || !(e.score > 0)) return false;
+      return !this._syncedLocalKeys.has(this._entrySig(e));
+    }).length;
+  }
+
+  _scheduleRetry(delayMs = 15000) {
+    if (this._retryTimer || typeof setTimeout !== 'function') return;
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      this.syncPendingLocalRuns().catch(() => {});
+    }, delayMs);
+    this._retryTimer.unref?.();
   }
 
   _loadLocalCache() {
@@ -96,7 +149,7 @@ export class LeaderboardClient {
     if (!host.endsWith('.github.io') && proto !== 'file:') {
       // On Vercel or local Node server, prefer same-origin /api/leaderboard when healthy
       try {
-        const res = await fetch('./api/healthz', { cache: 'no-store' });
+        const res = await this._fetchWithTimeout('./api/healthz', { cache: 'no-store' }, 3500);
         if (res.ok) {
           this._resolvedEndpoint = './api/leaderboard';
           return this._resolvedEndpoint;
@@ -109,7 +162,6 @@ export class LeaderboardClient {
       return this._resolvedEndpoint;
     }
 
-    this._resolvedEndpoint = '';
     return '';
   }
 
@@ -117,6 +169,28 @@ export class LeaderboardClient {
     const endpoint = await this.resolveEndpoint();
     if (!endpoint) return 0;
     return this._syncLocalCacheToGlobal(endpoint);
+  }
+
+  async _postSingleEntry(endpoint, entry) {
+    const sig = this._entrySig(entry);
+    try {
+      const res = await this._fetchWithTimeout(
+        endpoint,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this._buildSubmissionBody(entry)),
+        },
+        8000
+      );
+      if (res.ok || res.status === 400) {
+        this._syncedLocalKeys.add(sig);
+        return res.ok ? 1 : 0;
+      }
+    } catch {
+      // Keep pending for retry
+    }
+    return 0;
   }
 
   async _syncLocalCacheToGlobal(endpoint) {
@@ -127,42 +201,52 @@ export class LeaderboardClient {
       let uploaded = 0;
       const pending = this._localEntries.filter((e) => {
         if (!e || e.grade === 'DNF' || !(e.score > 0)) return false;
-        const sig = `${e.mode}|${e.entryKey}|${e.score}`;
-        return !this._syncedLocalKeys.has(sig);
+        return !this._syncedLocalKeys.has(this._entrySig(e));
       });
       if (pending.length === 0) return 0;
 
-      await Promise.all(
-        pending.map(async (entry) => {
-          const sig = `${entry.mode}|${entry.entryKey}|${entry.score}`;
+      if (pending.length === 1) {
+        uploaded += await this._postSingleEntry(endpoint, pending[0]);
+      } else {
+        // Sync in atomic batches of 25 to eliminate multi-request ETag contention
+        for (let i = 0; i < pending.length; i += 25) {
+          const chunk = pending.slice(i, i + 25);
+          let batchHandled = false;
           try {
-            const res = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                mode: entry.mode,
-                levelId: entry.levelId,
-                runId: entry.mode === 'team' ? entry.entryKey : undefined,
-                playerId: entry.playerId || this.playerId,
-                diverName: entry.displayName,
-                crew: entry.crew,
-                teamSize: entry.teamSize,
-                score: entry.score,
-                grade: entry.grade,
-                timeSec: entry.timeSec,
-                exploredPct: entry.exploredPct,
-                collectiblesFound: entry.collectiblesFound,
-              }),
-            });
-            if (res.ok || res.status === 400) {
-              this._syncedLocalKeys.add(sig);
-              if (res.ok) uploaded += 1;
+            const res = await this._fetchWithTimeout(
+              endpoint,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  entries: chunk.map((e) => this._buildSubmissionBody(e)),
+                }),
+              },
+              9000
+            );
+            if (res.ok) {
+              for (const entry of chunk) this._syncedLocalKeys.add(this._entrySig(entry));
+              uploaded += chunk.length;
+              batchHandled = true;
+            } else if (res.status !== 400) {
+              // Transient server error — retry later
+              break;
             }
           } catch {
-            // Keep pending for retry on next fetch
+            // Network timeout / offline — stop batch loop cleanly
+            break;
           }
-        })
-      );
+          if (!batchHandled) {
+            // Legacy/mock endpoint rejected batch array: fall back cleanly to sequential single POSTs
+            for (const entry of chunk) {
+              uploaded += await this._postSingleEntry(endpoint, entry);
+            }
+          }
+        }
+      }
+      if (this.getPendingSyncCount() > 0) {
+        this._scheduleRetry(20000);
+      }
       return uploaded;
     })();
 
@@ -181,6 +265,7 @@ export class LeaderboardClient {
         source: 'local',
         mode,
         levelId,
+        pendingSync: this.getPendingSyncCount(),
         entries: queryLeaderboardEntries(this._localEntries, { mode, levelId, limit }),
       };
     }
@@ -188,7 +273,7 @@ export class LeaderboardClient {
     try {
       await this._syncLocalCacheToGlobal(endpoint);
       const url = `${endpoint}?mode=${encodeURIComponent(mode)}&level=${encodeURIComponent(levelId)}&limit=${encodeURIComponent(limit)}`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await this._fetchWithTimeout(url, { cache: 'no-store' }, 8000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const remoteEntries = Array.isArray(json.entries) ? json.entries : [];
@@ -205,6 +290,7 @@ export class LeaderboardClient {
           source: 'global',
           mode: json.mode || mode,
           levelId: json.levelId || levelId,
+          pendingSync: this.getPendingSyncCount(),
           entries: queryLeaderboardEntries(Array.from(byKey.values()), { mode, levelId, limit }),
         };
       }
@@ -212,6 +298,7 @@ export class LeaderboardClient {
         source: 'global',
         mode: json.mode || mode,
         levelId: json.levelId || levelId,
+        pendingSync: this.getPendingSyncCount(),
         entries: remoteEntries,
       };
     } catch {
@@ -220,6 +307,7 @@ export class LeaderboardClient {
         source: 'local-fallback',
         mode,
         levelId,
+        pendingSync: this.getPendingSyncCount(),
         entries: queryLeaderboardEntries(this._localEntries, { mode, levelId, limit }),
       };
     }
@@ -230,6 +318,7 @@ export class LeaderboardClient {
     const payload = {
       ...submission,
       playerId: submission.playerId || this.playerId,
+      createdAt: Number.isFinite(Number(submission.createdAt)) ? Number(submission.createdAt) : Date.now(),
     };
 
     const parsedLocal = normalizeLeaderboardSubmission(payload);
@@ -248,6 +337,7 @@ export class LeaderboardClient {
       return {
         ok: true,
         source,
+        pendingSync: source !== 'global',
         entry: parsedLocal.entry,
         rank: rank > 0 ? rank : 1,
         total: board.length,
@@ -260,25 +350,43 @@ export class LeaderboardClient {
       return buildLocalResult('local');
     }
 
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) return { ok: false, error: json.error || `HTTP ${res.status}` };
-      if (json.entry) this._cacheLocalEntry(json.entry);
-      return {
-        ok: true,
-        source: 'global',
-        entry: json.entry,
-        rank: json.rank || null,
-        total: json.total || null,
-        entries: Array.isArray(json.entries) ? json.entries : [],
-      };
-    } catch {
-      return buildLocalResult('local-fallback');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await this._fetchWithTimeout(
+          endpoint,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          8000
+        );
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) {
+          if (json.entry) this._cacheLocalEntry(json.entry);
+          this._syncedLocalKeys.add(this._entrySig(json.entry || parsedLocal.entry));
+          return {
+            ok: true,
+            source: 'global',
+            pendingSync: false,
+            entry: json.entry,
+            rank: json.rank || null,
+            total: json.total || null,
+            entries: Array.isArray(json.entries) ? json.entries : [],
+          };
+        }
+        if (res.status < 500) {
+          return { ok: false, error: json.error || `HTTP ${res.status}` };
+        }
+      } catch {
+        // Retry once on transient network error
+      }
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 450));
+      }
     }
+
+    this._scheduleRetry(15000);
+    return buildLocalResult('local-fallback');
   }
 }

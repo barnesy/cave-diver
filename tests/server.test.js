@@ -603,6 +603,81 @@ test('Vercel API handlers validate inputs and shared clients target Vercel globa
     } finally {
       globalThis.fetch = prevFetch;
     }
+
+    // Verify batch sync + transient 503 auto-retry + fair per-site pruning
+    const {
+      mergeLeaderboardEntries,
+      pruneLeaderboardEntries,
+    } = await import('../public/js/game/leaderboardModel.js');
+    const a1 = normalizeLeaderboardSubmission({
+      mode: 'solo',
+      levelId: 'cenote-el-abismo',
+      playerId: 'p1',
+      diverName: 'P1',
+      score: 2100,
+      grade: 'B',
+      timeSec: 120,
+      exploredPct: 80,
+      collectiblesFound: 2,
+    }).entry;
+    const dupSame = { ...a1 };
+    const { changed: dupChanged } = mergeLeaderboardEntries([a1], [dupSame]);
+    assert.equal(dupChanged, false, 'Identical duplicate entry should not trigger Blob mutation');
+
+    const overflowEntries = [];
+    for (let i = 0; i < 12; i++) {
+      overflowEntries.push(
+        normalizeLeaderboardSubmission({
+          mode: 'solo',
+          levelId: 'silfra-katla-aurora-abyss',
+          playerId: `abyss_${i}`,
+          diverName: `A${i}`,
+          score: 5000 + i,
+          grade: 'S',
+          timeSec: 300,
+          exploredPct: 90,
+          collectiblesFound: 8,
+        }).entry
+      );
+    }
+    overflowEntries.push(a1);
+    const pruned = pruneLeaderboardEntries(overflowEntries, 8, 2);
+    assert.ok(pruned.some((e) => e.levelId === 'cenote-el-abismo'), 'Fair pruning must preserve top scores on lower-point levels');
+
+    // Retry client checks: transient 503 on first POST retries once and succeeds on second attempt
+    const retryClient = new LeaderboardClient();
+    let postAttempts = 0;
+    const prevFetch2 = globalThis.fetch;
+    globalThis.fetch = async (_url, opts) => {
+      if (opts?.method === 'POST') {
+        postAttempts += 1;
+        if (postAttempts === 1) {
+          return new Response(JSON.stringify({ error: 'Blob busy' }), { status: 503 });
+        }
+        const norm = normalizeLeaderboardSubmission(JSON.parse(opts.body));
+        return new Response(JSON.stringify({ ok: true, entry: norm.entry, rank: 1, total: 1, entries: [norm.entry] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+    };
+    try {
+      const subRes = await retryClient.submitRun({
+        mode: 'solo',
+        levelId: 'cenote-el-abismo',
+        playerId: 'retry_diver',
+        diverName: 'RetryDiver',
+        score: 2500,
+        grade: 'S',
+        timeSec: 115,
+        exploredPct: 88,
+        collectiblesFound: 3,
+      });
+      assert.equal(postAttempts, 2);
+      assert.equal(subRes.ok, true);
+      assert.equal(subRes.source, 'global');
+      assert.equal(subRes.pendingSync, false);
+    } finally {
+      globalThis.fetch = prevFetch2;
+    }
   } finally {
     if (prevLoc === undefined) {
       delete globalThis.location;

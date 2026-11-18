@@ -130,7 +130,7 @@ export function sortLeaderboardEntries(a, b) {
 }
 
 /**
- * Aggregate best-per-level scores across all 13 sites into a campaign-wide ranking.
+ * Aggregate best-per-level scores across all 14 sites into a campaign-wide ranking.
  */
 export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
   const buckets = new Map();
@@ -196,6 +196,70 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
     return a.timeSec - b.timeSec;
   });
   return rows.slice(0, limit);
+}
+
+export function mergeLeaderboardEntries(existingList, incomingEntries) {
+  const items = Array.isArray(existingList) ? existingList.slice() : [];
+  const indexByKey = new Map();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it && it.mode && it.entryKey) {
+      indexByKey.set(`${it.mode}|${it.entryKey}`, i);
+    }
+  }
+  let changed = false;
+  for (const entry of incomingEntries || []) {
+    if (!entry || !entry.mode || !entry.entryKey) continue;
+    const mapKey = `${entry.mode}|${entry.entryKey}`;
+    const idx = indexByKey.get(mapKey);
+    if (idx !== undefined) {
+      if (sortLeaderboardEntries(entry, items[idx]) < 0) {
+        items[idx] = entry;
+        changed = true;
+      }
+    } else {
+      indexByKey.set(mapKey, items.length);
+      items.push(entry);
+      changed = true;
+    }
+  }
+  return { entries: items, changed };
+}
+
+export function pruneLeaderboardEntries(entries, maxTotal = 2500, minPerBoard = 60) {
+  const list = Array.isArray(entries) ? entries.slice() : [];
+  if (list.length <= maxTotal) return list;
+
+  // Preserve at least top minPerBoard entries per (mode, levelId) so one popular cave cannot evict another
+  const byBoard = new Map();
+  for (const e of list) {
+    if (!e) continue;
+    const bKey = `${e.mode}|${e.levelId}`;
+    let bucket = byBoard.get(bKey);
+    if (!bucket) {
+      bucket = [];
+      byBoard.set(bKey, bucket);
+    }
+    bucket.push(e);
+  }
+
+  const protectedSet = new Set();
+  for (const bucket of byBoard.values()) {
+    bucket.sort(sortLeaderboardEntries);
+    for (let i = 0; i < Math.min(minPerBoard, bucket.length); i++) {
+      protectedSet.add(bucket[i]);
+    }
+  }
+
+  const kept = Array.from(protectedSet).sort(sortLeaderboardEntries);
+  if (kept.length >= maxTotal) {
+    return kept.slice(0, maxTotal);
+  }
+
+  const extras = list
+    .filter((e) => e && !protectedSet.has(e))
+    .sort(sortLeaderboardEntries);
+  return kept.concat(extras.slice(0, maxTotal - kept.length));
 }
 
 export function queryLeaderboardEntries(allEntries, { mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
