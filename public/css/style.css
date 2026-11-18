@@ -1463,6 +1463,7 @@ html, body {
 }
 
 .hud-util-btns {
+  position: relative;
   display: flex;
   gap: 5px;
   pointer-events: auto;
@@ -1477,22 +1478,79 @@ html, body {
   font-size: 0.96rem;
   cursor: pointer;
 }
-.util-btn.util-pill {
-  width: auto;
-  padding: 0 10px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  border-color: rgba(56, 189, 248, 0.45);
+.util-btn.active {
+  border-color: rgba(56, 189, 248, 0.72);
+  background: rgba(14, 116, 144, 0.42);
   color: #bae6fd;
-  white-space: nowrap;
-}
-.util-btn.util-pill.copied {
-  border-color: rgba(52, 211, 153, 0.7);
-  color: #6ee7b7;
 }
 .util-btn.danger {
   color: var(--danger);
+}
+
+.hud-menu-wrap {
+  display: inline-flex;
+}
+.hud-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 178px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(6, 15, 29, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(8px);
+  z-index: 45;
+  pointer-events: auto;
+}
+.hud-menu-popover[hidden] {
+  display: none !important;
+}
+.hud-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.88);
+  color: var(--text-main);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hud-menu-item[hidden] {
+  display: none !important;
+}
+.hud-menu-item:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(15, 33, 58, 0.95);
+}
+.hud-menu-item.util-pill {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #bae6fd;
+}
+.hud-menu-item.util-pill.copied {
+  border-color: rgba(52, 211, 153, 0.75);
+  color: #6ee7b7;
+  background: rgba(6, 78, 59, 0.42);
+}
+.hud-menu-item.radio-hud-btn.active {
+  border-color: rgba(56, 189, 248, 0.72);
+  color: #7dd3fc;
+  background: rgba(14, 116, 144, 0.34);
+}
+.hud-menu-item.muted {
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.45);
 }
 
 /* Bottom-Center Symmetrical Dive Controls Cluster:
@@ -1821,23 +1879,14 @@ html, body {
   }
   .hud-util-btns {
     justify-content: flex-end;
-    flex-wrap: wrap;
-    max-width: 112px;
-    gap: 3px;
+    flex-wrap: nowrap;
+    gap: 4px;
   }
   .util-btn {
-    width: 30px;
-    height: 30px;
-    font-size: 0.84rem;
+    width: 32px;
+    height: 32px;
+    font-size: 0.88rem;
     border-radius: 8px;
-  }
-  .util-btn.util-pill {
-    padding: 0 7px;
-    font-size: 0.64rem;
-    order: 4;
-  }
-  #btn-hud-share {
-    order: 5;
   }
   .hud-divers-group {
     grid-area: divers;

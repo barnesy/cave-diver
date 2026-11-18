@@ -110,6 +110,8 @@ const lanInviteUrlInput = document.getElementById('lan-invite-url');
 const btnCopyInvite = document.getElementById('btn-copy-invite');
 const btnShareInvite = document.getElementById('btn-share-invite');
 const btnNotifyToggle = document.getElementById('btn-notify-toggle');
+const btnHudMenu = document.getElementById('btn-hud-menu');
+const hudMenuPopover = document.getElementById('hud-menu-popover');
 const btnHudInvite = document.getElementById('btn-hud-invite');
 const btnHudShare = document.getElementById('btn-hud-share');
 const lanUrlsEl = document.getElementById('lan-urls');
@@ -783,6 +785,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
 
   screenLoader.classList.add('done');
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+  setHudMenuOpen(false);
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
   screenHud.hidden = false;
@@ -804,6 +807,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (!session) return;
   mode = 'debrief';
   spectatingPeer = false;
+  setHudMenuOpen(false);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -2042,11 +2046,44 @@ document.getElementById('btn-torch').addEventListener('pointerdown', (e) => {
   if (session?.diver) session.diver.torchOn = !session.diver.torchOn;
 });
 
+function setHudMenuOpen(open) {
+  if (!hudMenuPopover || !btnHudMenu) return;
+  const next = Boolean(open);
+  hudMenuPopover.hidden = !next;
+  btnHudMenu.setAttribute('aria-expanded', String(next));
+  btnHudMenu.classList.toggle('active', next);
+}
+
+btnHudMenu?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setHudMenuOpen(Boolean(hudMenuPopover?.hidden));
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (!hudMenuPopover || hudMenuPopover.hidden) return;
+  const wrap = btnHudMenu?.closest('.hud-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    setHudMenuOpen(false);
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && hudMenuPopover && !hudMenuPopover.hidden) {
+    setHudMenuOpen(false);
+  }
+});
+
 const btnMute = document.getElementById('btn-mute');
+function syncMuteUi() {
+  if (!btnMute) return;
+  btnMute.textContent = audio.muted ? '🔇 Sound: Off' : '🔊 Sound: On';
+  btnMute.classList.toggle('muted', Boolean(audio.muted));
+}
+syncMuteUi();
 btnMute.addEventListener('click', () => {
   const next = !audio.muted;
   audio.setMuted(next);
-  btnMute.textContent = next ? '🔇' : '🔊';
+  syncMuteUi();
 });
 
 const RADIO_PREF_KEY = 'caveDiverRadioTrack_v1';
@@ -2058,7 +2095,7 @@ function syncRadioUi() {
     btnMenuRadio.classList.toggle('active', active);
   }
   if (btnHudRadio) {
-    btnHudRadio.textContent = active ? '🎵' : '📻';
+    btnHudRadio.textContent = active ? `🎵 Radio: ${tr.name}` : '📻 Radio: Off';
     btnHudRadio.title = active ? `Radio: ${tr.name} (tap to switch)` : 'Radio: Off (tap for aquatic tunes)';
     btnHudRadio.classList.toggle('active', active);
   }
@@ -2066,7 +2103,7 @@ function syncRadioUi() {
 
 function handleRadioCycle() {
   const track = audio.cycleRadioTrack();
-  if (btnMute) btnMute.textContent = audio.muted ? '🔇' : '🔊';
+  syncMuteUi();
   try {
     localStorage.setItem(RADIO_PREF_KEY, String(audio.radio.trackIndex));
   } catch {}
@@ -2089,6 +2126,7 @@ document.getElementById('btn-abort').addEventListener('click', () => {
   mode = 'menu';
   spectatingPeer = false;
   activeDiveSeq = 0;
+  setHudMenuOpen(false);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -2423,6 +2461,7 @@ lan.on('dive_preparing', async (msg) => {
   }
   if (mode === 'diving') {
     mode = 'menu';
+    setHudMenuOpen(false);
     screenHud.hidden = true;
   }
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = false;
