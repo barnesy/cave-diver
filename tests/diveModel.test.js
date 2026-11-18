@@ -954,6 +954,7 @@ test('All 14 campaign levels validate cleanly and scale monotonically to 128m Au
     assert.ok(!seenIds.has(slot.id), `Duplicate campaign id: ${slot.id}`);
     seenIds.add(slot.id);
     assert.equal(slot.implemented, true, `Level slot ${slot.rank} (${slot.id}) should be implemented`);
+    assert.ok(Number.isFinite(slot.lat) && Number.isFinite(slot.lng), `Level slot ${slot.rank} must define map coordinates`);
     assert.equal(LEVELS[i].id, slot.id);
   }
 

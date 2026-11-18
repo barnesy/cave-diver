@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=55" />
+  <link rel="stylesheet" href="./css/style.css?v=56" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -84,11 +84,31 @@
 
       <div id="menu-site-picker" class="level-picker-block">
         <div class="level-picker-head">
-          <label for="select-level">Expedition Site</label>
-          <span id="campaign-progress-pill" class="campaign-progress-pill">14 / 14 Sites</span>
-          <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
+          <div class="level-picker-title-wrap">
+            <label for="select-level">Expedition Site</label>
+            <span id="campaign-progress-pill" class="campaign-progress-pill">14 / 14 Sites</span>
+            <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
+          </div>
+          <div id="site-view-tabs" class="site-view-tabs" role="tablist" aria-label="Site Selector Layout">
+            <button type="button" class="site-view-btn active" data-site-view="split" title="Map &amp; List">Split</button>
+            <button type="button" class="site-view-btn" data-site-view="map" title="Map View">Map</button>
+            <button type="button" class="site-view-btn" data-site-view="list" title="List View">List</button>
+          </div>
         </div>
-        <div id="level-cards" class="level-cards" role="listbox" aria-label="Expedition Dive Sites"></div>
+        <div id="site-browser" class="site-browser view-split">
+          <div id="site-map-panel" class="site-map-panel">
+            <svg id="site-world-map" class="site-world-map" viewBox="0 0 360 220" role="listbox" aria-label="Global Expedition Map"></svg>
+            <div class="site-map-overlay-top">
+              <span id="site-map-region-badge" class="site-map-region-badge">L1 · Yucatan, Mexico</span>
+              <button id="btn-map-zoom" class="site-map-zoom-btn" type="button" title="Toggle Global / Europe Zoom">🌍 All</button>
+            </div>
+            <div class="site-map-legend">
+              <span><i class="legend-dot lined"></i>Fixed Line</span>
+              <span><i class="legend-dot reel"></i>Unlined Reel</span>
+            </div>
+          </div>
+          <div id="level-cards" class="level-cards" role="listbox" aria-label="Expedition Dive Sites"></div>
+        </div>
         <select id="select-level" class="sr-only-select" aria-label="Select Dive Site"></select>
         <div id="site-dive-plan" class="site-dive-plan"></div>
         <div id="inline-level-loader" class="inline-level-loader" hidden>
@@ -357,46 +377,46 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=55",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=55",
-        "./js/game/audio.js": "./js/game/audio.js?v=55",
-        "./js/game/collision.js": "./js/game/collision.js?v=55",
-        "./js/game/input.js": "./js/game/input.js?v=55",
-        "./js/game/hud.js": "./js/game/hud.js?v=55",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=55",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=55",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=55",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=55",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=55",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=55",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=55",
-        "./js/game/silt.js": "./js/game/silt.js?v=55",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=55",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=55",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=55",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=55",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=55",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=55",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=55",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=55",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=55",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=55",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=55",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=55",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=55",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=55",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=55",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=55",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=55",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=55",
-        "./js/levels/index.js": "./js/levels/index.js?v=55",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=55",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=55",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=55",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=55"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=56",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=56",
+        "./js/game/audio.js": "./js/game/audio.js?v=56",
+        "./js/game/collision.js": "./js/game/collision.js?v=56",
+        "./js/game/input.js": "./js/game/input.js?v=56",
+        "./js/game/hud.js": "./js/game/hud.js?v=56",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=56",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=56",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=56",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=56",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=56",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=56",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=56",
+        "./js/game/silt.js": "./js/game/silt.js?v=56",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=56",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=56",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=56",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=56",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=56",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=56",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=56",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=56",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=56",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=56",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=56",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=56",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=56",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=56",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=56",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=56",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=56",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=56",
+        "./js/levels/index.js": "./js/levels/index.js?v=56",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=56",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=56",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=56",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=56"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=55"></script>
+  <script type="module" src="./js/main.js?v=56"></script>
 </body>
 </html>

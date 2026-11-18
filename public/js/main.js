@@ -80,6 +80,11 @@ const tabBtnSolo = document.getElementById('tab-btn-solo');
 const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
+const siteBrowserEl = document.getElementById('site-browser');
+const siteViewTabsEl = document.getElementById('site-view-tabs');
+const siteWorldMapEl = document.getElementById('site-world-map');
+const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
+const btnMapZoom = document.getElementById('btn-map-zoom');
 const btnPlaySolo = document.getElementById('btn-play-solo');
 const btnOpenLan = document.getElementById('btn-open-lan');
 const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
@@ -287,6 +292,133 @@ function setLevelSelectionLocked(locked) {
       btn.disabled = locked;
     }
   }
+  if (siteWorldMapEl) {
+    for (const pin of siteWorldMapEl.querySelectorAll('.map-pin-btn')) {
+      pin.classList.toggle('locked', locked);
+    }
+  }
+}
+
+const MAP_LANDMASS_POLYGONS = [
+  // North & Central America + Florida + Yucatan
+  [[-108, 62], [-96, 63], [-82, 62], [-78, 53], [-64, 59], [-55, 52], [-66, 44], [-71, 41], [-76, 35], [-81, 31], [-80, 25], [-82.5, 26], [-83, 29], [-85, 30], [-90, 29], [-97, 26], [-96, 19], [-91, 18.5], [-90, 21.3], [-87, 21.5], [-87.4, 18.4], [-88.4, 15.8], [-83.5, 14.5], [-82.5, 9], [-78, 8], [-84, 10], [-94, 15], [-105, 20], [-108, 28]],
+  // Cuba & Hispaniola / Bahamas bank
+  [[-84.8, 22], [-79, 23], [-74.3, 20.1], [-77.5, 19.9], [-83, 21.5]],
+  [[-74, 19.8], [-68.5, 18.5], [-71.5, 17.8], [-74.3, 18.5]],
+  // Northern South America
+  [[-78, 9], [-70, 12], [-61, 10.5], [-50, 1.5], [-35, -6], [-38, -14], [-40, -23], [-49, -28], [-54, -34], [-63, -38], [-74, -38], [-71, -18], [-81, -5], [-79, 2]],
+  // Greenland tip (east)
+  [[-52, 60], [-42, 60], [-22, 70], [-40, 72], [-55, 68]],
+  // Iceland
+  [[-24.4, 65.5], [-18.2, 66.5], [-13.5, 65.0], [-14.8, 63.6], [-22.6, 63.8]],
+  // Great Britain & Ireland
+  [[-6.0, 50.1], [-5.2, 58.6], [-1.8, 57.6], [1.6, 52.5], [1.2, 51.0]],
+  [[-10.2, 52.0], [-9.4, 55.2], [-6.1, 54.6], [-6.2, 52.2]],
+  // Continental Europe, Italy, Iberia, Balkans & Urals
+  [[-9.2, 37.0], [-9.1, 43.2], [-1.8, 43.4], [-4.6, 48.4], [2.2, 51.0], [7.8, 53.9], [9.8, 57.2], [13.8, 54.0], [21.0, 54.8], [28.0, 60.2], [44.0, 66.0], [72.0, 68.0], [72.0, 42.0], [52.0, 40.0], [40.0, 42.0], [28.5, 41.2], [23.8, 37.9], [19.8, 40.4], [18.2, 40.1], [16.0, 38.0], [13.5, 41.2], [11.0, 43.4], [13.6, 45.6], [12.3, 42.0], [9.2, 44.3], [4.5, 43.3], [3.1, 42.3], [-0.4, 38.4], [-5.5, 36.1]],
+  // Scandinavia
+  [[5.1, 59.0], [6.8, 62.6], [12.0, 66.2], [16.5, 69.2], [28.5, 71.0], [28.0, 60.4], [20.2, 60.0], [18.0, 59.0], [12.8, 55.6], [10.8, 58.2]],
+  // Africa & Red Sea / Arabian Peninsula
+  [[-17.2, 14.8], [-13.2, 27.6], [-5.8, 35.8], [10.6, 37.2], [24.5, 31.8], [32.5, 31.4], [35.0, 29.4], [43.2, 12.6], [51.2, 11.9], [40.6, -2.5], [35.4, -24.5], [27.9, -33.2], [18.4, -34.4], [14.8, -24.0], [12.0, -15.5], [9.2, 3.8], [2.4, 6.3], [-8.0, 4.6], [-15.8, 11.4]],
+  // Arabia / Levant
+  [[34.8, 29.5], [35.5, 36.8], [48.0, 38.0], [60.0, 25.0], [56.2, 22.5], [43.5, 12.8], [35.0, 27.5]],
+];
+
+const SITE_COORDS_BY_ID = new Map(CAMPAIGN_PLAN.map((s) => [s.id, s]));
+let siteViewMode = 'split'; // 'split' | 'map' | 'list'
+let mapEuropeZoom = false;
+
+function projectMapPoint(lng, lat) {
+  return {
+    x: (lng + 108) * 2,
+    y: (72 - lat) * 2,
+  };
+}
+
+function renderSiteWorldMap() {
+  if (!siteWorldMapEl) return;
+  const locked = Boolean(lan.room && !lan.isHost());
+  siteWorldMapEl.setAttribute('viewBox', mapEuropeZoom ? '194 24 96 72' : '0 -22 360 246');
+  if (btnMapZoom) {
+    btnMapZoom.textContent = mapEuropeZoom ? '🇪🇺 EU' : '🌍 All';
+  }
+  const k = mapEuropeZoom ? 0.36 : 1;
+
+  // Graticule grid
+  const gridParts = [];
+  for (let lng = -90; lng <= 60; lng += 30) {
+    const gx = (lng + 108) * 2;
+    gridParts.push(`<line x1="${gx}" y1="0" x2="${gx}" y2="220" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`);
+  }
+  for (let lat = -30; lat <= 60; lat += 30) {
+    const gy = (72 - lat) * 2;
+    gridParts.push(`<line x1="0" y1="${gy}" x2="360" y2="${gy}" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`);
+  }
+  for (let lng = -90; lng <= 60; lng += 30) {
+    const gx = (lng + 108) * 2;
+    gridParts[Math.floor((lng + 90) / 30)] = `<line x1="${gx}" y1="-22" x2="${gx}" y2="224" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`;
+  }
+
+  // Continental polygons
+  const landPaths = MAP_LANDMASS_POLYGONS.map((poly) => {
+    const d = poly
+      .map(([lng, lat], i) => {
+        const pt = projectMapPoint(lng, lat);
+        return `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+      })
+      .join(' ') + ' Z';
+    return `<path d="${d}" fill="rgba(16, 48, 74, 0.92)" stroke="rgba(56, 189, 248, 0.28)" stroke-width="${(0.75 * k).toFixed(2)}" />`;
+  }).join('');
+
+  // Pin coordinates with slight decluster offsets for Yucatan & Central EU neighbors
+  const pins = LEVELS.map((lvl, idx) => {
+    const slot = SITE_COORDS_BY_ID.get(lvl.id);
+    const pt = projectMapPoint(slot?.lng ?? 0, slot?.lat ?? 20);
+    if (lvl.id === 'ox-bel-ha-grand-traverse') pt.y += 4.2 * k;
+    if (lvl.id === 'cenote-el-abismo') pt.y -= 2.2 * k;
+    return { lvl, idx, slot, x: pt.x, y: pt.y };
+  });
+
+  // Subtle campaign progression route polyline
+  const routePts = pins.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const routeLine = `<polyline points="${routePts}" fill="none" stroke="rgba(56, 189, 248, 0.22)" stroke-width="${(0.75 * k).toFixed(2)}" stroke-dasharray="${(2.5 * k).toFixed(2)},${(2.2 * k).toFixed(2)}" />`;
+
+  const pinMarkup = pins
+    .map(({ lvl, idx, slot, x, y }) => {
+      const isSelected = lvl.id === activeLevel.id;
+      const isUnlined = lvl.reelMetersPerDiver > 0;
+      const best = getSavedBestScore(lvl.id);
+      const pinColor = isUnlined ? '#fbbf24' : '#38bdf8';
+      const r = (isSelected ? 4.3 : 3.0) * k;
+      const halo = isSelected
+        ? `<circle class="map-pin-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7.5 * k).toFixed(1)}" />`
+        : '';
+      const ring = best > 0
+        ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 1.6 * k).toFixed(1)}" fill="none" stroke="#34d399" stroke-width="${(0.85 * k).toFixed(2)}" />`
+        : '';
+      const numLabel = isSelected || mapEuropeZoom
+        ? `<text x="${(x + 4.8 * k).toFixed(1)}" y="${(y + 1.8 * k).toFixed(1)}" fill="#e0f2fe" font-size="${(6.2 * k).toFixed(2)}" font-weight="700" font-family="ui-monospace, monospace">L${idx + 1}</text>`
+        : '';
+      return `
+        <g class="map-pin-btn ${isSelected ? 'active' : ''} ${locked ? 'locked' : ''}" data-level-id="${lvl.id}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" tabindex="0">
+          <title>L${idx + 1}: ${lvl.name} (${slot?.region || ''} · ${getLevelMaxDepthM(lvl)}m)</title>
+          ${halo}
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7.5 * k).toFixed(1)}" fill="transparent" />
+          ${ring}
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${pinColor}" stroke="#020b14" stroke-width="${(0.9 * k).toFixed(2)}" />
+          ${numLabel}
+        </g>
+      `;
+    })
+    .join('');
+
+  siteWorldMapEl.innerHTML = `${gridParts.join('')}${landPaths}${routeLine}${pinMarkup}`;
+
+  const activeIdx = Math.max(0, LEVELS.findIndex((l) => l.id === activeLevel.id));
+  const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
+  if (siteMapRegionBadgeEl) {
+    siteMapRegionBadgeEl.textContent = `L${activeIdx + 1} · ${activeSlot?.region || activeLevel.name} · ${getLevelMaxDepthM(activeLevel)}m`;
+  }
 }
 
 function renderLevelCards() {
@@ -301,15 +433,16 @@ function renderLevelCards() {
     const isCached = renderer.isLevelCached(lvl.id) || (renderer.ready && renderer.level?.id === lvl.id);
     const best = getSavedBestScore(lvl.id);
     const meta = getLevelMeta(lvl, idx);
+    const slot = SITE_COORDS_BY_ID.get(lvl.id);
     const depth = `${meta.maxDepthM}m`;
     const metaText = isCached
       ? best > 0
         ? `✓ ${best.toLocaleString()}`
         : lvl.reelMetersPerDiver > 0
-          ? `✓ Ready · ${lvl.reelMetersPerDiver}m Reel`
+          ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
           : `✓ Ready`
       : lvl.reelMetersPerDiver > 0
-        ? `No Line · ${lvl.reelMetersPerDiver}m Reel`
+        ? `No Line · ${lvl.reelMetersPerDiver}m`
         : getLevelDifficultyLabel(idx, lvl);
     const tierTag = lvl.reelMetersPerDiver > 0 ? `L${idx + 1} · T${meta.tier}` : `L${idx + 1}`;
     return `
@@ -322,7 +455,7 @@ function renderLevelCards() {
         ${locked ? 'disabled' : ''}
       >
         <div class="lvl-card-top">
-          <span>${tierTag}</span>
+          <span>${tierTag} · ${slot?.region || ''}</span>
           <span class="lvl-card-depth">${depth}</span>
         </div>
         <span class="lvl-card-name">${lvl.name}</span>
@@ -330,6 +463,10 @@ function renderLevelCards() {
       </button>
     `;
   }).join('');
+
+  const activeBtn = levelCardsEl.querySelector('.level-card-btn.active');
+  activeBtn?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  renderSiteWorldMap();
 }
 
 function syncMenuLevelLabels(level) {
@@ -1402,6 +1539,43 @@ if (levelCardsEl) {
     if (!btn || btn.disabled) return;
     const chosenId = btn.dataset.levelId;
     if (chosenId) selectAndLoadLevel(chosenId);
+  });
+}
+
+if (siteWorldMapEl) {
+  siteWorldMapEl.addEventListener('click', (e) => {
+    const pin = e.target.closest('.map-pin-btn');
+    if (!pin || pin.classList.contains('locked')) return;
+    const chosenId = pin.dataset.levelId;
+    if (chosenId) selectAndLoadLevel(chosenId);
+  });
+  siteWorldMapEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const pin = e.target.closest('.map-pin-btn');
+    if (!pin || pin.classList.contains('locked')) return;
+    e.preventDefault();
+    const chosenId = pin.dataset.levelId;
+    if (chosenId) selectAndLoadLevel(chosenId);
+  });
+}
+
+if (btnMapZoom) {
+  btnMapZoom.addEventListener('click', () => {
+    mapEuropeZoom = !mapEuropeZoom;
+    renderSiteWorldMap();
+  });
+}
+
+if (siteViewTabsEl && siteBrowserEl) {
+  siteViewTabsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-site-view]');
+    if (!btn) return;
+    const v = btn.dataset.siteView;
+    siteViewMode = v === 'map' || v === 'list' ? v : 'split';
+    siteBrowserEl.className = `site-browser view-${siteViewMode}`;
+    for (const b of siteViewTabsEl.querySelectorAll('button[data-site-view]')) {
+      b.classList.toggle('active', b === btn);
+    }
   });
 }
 
