@@ -103,33 +103,12 @@ export async function readBlobEtag(pathname) {
 }
 
 async function readBlobWithAccess(pathname, fallbackValue, access) {
-  if (access === 'public') {
-    const meta = await head(pathname);
-    if (!meta || !meta.url) {
-      return { data: fallbackValue, etag: null, notFound: true };
-    }
-    const baseUrl = meta.downloadUrl || meta.url;
-    const sep = baseUrl.includes('?') ? '&' : '?';
-    const bust = encodeURIComponent(meta.etag || Date.now());
-    const res = await fetch(`${baseUrl}${sep}v=${bust}`, { cache: 'no-store' });
-    if (res.status === 404) {
-      return { data: fallbackValue, etag: null, notFound: true };
-    }
-    if (!res.ok) {
-      throw Object.assign(new Error(`Blob read failed with status ${res.status}`), {
-        status: res.status,
-      });
-    }
-    const text = await res.text();
-    const parsed = text ? JSON.parse(text) : fallbackValue;
-    return {
-      data: parsed ?? fallbackValue,
-      etag: meta.etag || res.headers.get('etag') || null,
-      notFound: false,
-    };
-  }
+  const opts =
+    access === 'public'
+      ? { access: 'public', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }
+      : { access: 'private', useCache: false };
 
-  const res = await get(pathname, { access: 'private', useCache: false });
+  const res = await get(pathname, opts);
   if (!res || res.statusCode === 404) {
     return { data: fallbackValue, etag: null, notFound: true };
   }
