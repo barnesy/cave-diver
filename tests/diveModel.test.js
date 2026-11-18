@@ -1303,8 +1303,8 @@ test('LeaderboardModel validates score ceilings, separates solo/team, and builds
     grade: 'A',
   });
   assert.equal(soloOverLen.ok, true);
-  assert.equal(soloOverLen.entry.displayName.length, 12);
-  assert.equal(soloOverLen.entry.displayName, 'SuperLongCal');
+  assert.equal(soloOverLen.entry.displayName.length, 16);
+  assert.equal(soloOverLen.entry.displayName, 'SuperLongCallsig');
 
   assert.ok(solo1.ok && solo2.ok && team1.ok);
   assert.equal(solo1.entry.entryKey, 'pA:cenote-el-abismo');

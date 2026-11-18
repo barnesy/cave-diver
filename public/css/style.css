@@ -927,15 +927,6 @@ html, body {
   flex: 1;
 }
 
-.controls-hint {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
-}
-
 /* HUD Layer */
 .hud-layer {
   position: fixed;

@@ -1,7 +1,7 @@
 import { LEVELS, isValidLevelId, getLevelById } from '../levels/index.js';
 
 export const LEADERBOARD_MODES = new Set(['solo', 'team']);
-export const CALLSIGN_MAX_LEN = 12;
+export const CALLSIGN_MAX_LEN = 16;
 
 export function sanitizeCallsign(raw, fallback = 'Diver', maxLen = CALLSIGN_MAX_LEN) {
   const cleaned = String(raw || '')
@@ -92,7 +92,7 @@ export function normalizeLeaderboardSubmission(raw) {
   }
 
   const displayName = isTeam
-    ? crew.map((m) => m.name).join(' + ').slice(0, 64)
+    ? crew.map((m) => m.name).join(' + ').slice(0, 80)
     : diverName;
 
   const runId =

@@ -164,7 +164,7 @@ let notifyAlertsMuted = false;
 let lbMode = 'solo';
 let lbFilterLevelId = activeLevel.id; // 'overall' | level.id
 
-const CALLSIGN_MAX_LEN = 12;
+const CALLSIGN_MAX_LEN = 16;
 
 function sanitizeCallsignInput(raw) {
   return String(raw || '')

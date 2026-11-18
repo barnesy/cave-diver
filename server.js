@@ -268,7 +268,7 @@ function sanitizeName(raw, fallback = 'Diver') {
     .replace(/[\r\n\t<>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 12);
+    .slice(0, 16);
   return trimmed || fallback;
 }
 
