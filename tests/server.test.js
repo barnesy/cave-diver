@@ -800,3 +800,26 @@ test('P2P coordinator arbitration, token migration, and large WS payloads remain
     proc.kill();
   }
 });
+
+test('PWA Service Worker and index.html cache versions stay in lockstep and support SKIP_WAITING', async () => {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const rootDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+  const [swSrc, htmlSrc, lanSrc] = await Promise.all([
+    fs.readFile(path.join(rootDir, 'public/sw.js'), 'utf8'),
+    fs.readFile(path.join(rootDir, 'public/index.html'), 'utf8'),
+    fs.readFile(path.join(rootDir, 'public/js/net/lanClient.js'), 'utf8'),
+  ]);
+  const swVer = swSrc.match(/CACHE_VERSION\s*=\s*['"]cave-diver-v(\d+)['"]/)?.[1];
+  const metaVer = htmlSrc.match(/<meta\s+name="app-version"\s+content="(\d+)"/)?.[1];
+  const htmlMainVer = htmlSrc.match(/\.\/js\/main\.js\?v=(\d+)/)?.[1];
+  const lanTrysteroVer = lanSrc.match(/trystero-nostr\.min\.js\?v=(\d+)/)?.[1];
+
+  assert.ok(swVer && Number(swVer) >= 61);
+  assert.equal(metaVer, swVer, 'index.html app-version meta must match sw.js CACHE_VERSION');
+  assert.equal(htmlMainVer, swVer, 'index.html main.js ?v= query must match sw.js CACHE_VERSION');
+  assert.equal(lanTrysteroVer, swVer, 'lanClient.js trystero ?v= query must match sw.js CACHE_VERSION');
+  assert.ok(swSrc.includes('SKIP_WAITING'), 'sw.js must listen for SKIP_WAITING messages');
+  assert.ok(htmlSrc.includes('pwa-update-banner') && htmlSrc.includes('btn-pwa-update'));
+});

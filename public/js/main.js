@@ -126,6 +126,10 @@ const btnShareGas = document.getElementById('btn-share-gas');
 const btnTowBuddy = document.getElementById('btn-tow-buddy');
 const btnMenuRadio = document.getElementById('btn-menu-radio');
 const btnHudRadio = document.getElementById('btn-hud-radio');
+const btnPwaUpdate = document.getElementById('btn-pwa-update');
+const pwaUpdateBanner = document.getElementById('pwa-update-banner');
+const pwaUpdateText = document.getElementById('pwa-update-text');
+const btnApplyPwaUpdate = document.getElementById('btn-apply-pwa-update');
 const coopWaitBannerEl = document.getElementById('coop-wait-banner');
 const coopWaitTitleEl = document.getElementById('coop-wait-title');
 const coopWaitDetailEl = document.getElementById('coop-wait-detail');
@@ -2970,23 +2974,217 @@ function frame(nowMs) {
 }
 
 function setupPwaSupport() {
+  const localVersion = parseInt(document.querySelector('meta[name="app-version"]')?.content || '61', 10) || 61;
+  if (btnPwaUpdate) {
+    btnPwaUpdate.textContent = `v${localVersion}`;
+  }
+
+  let swReg = null;
+  let updateAvailable = false;
+  let detectedRemoteVer = null;
+  let applyingUpdate = false;
+  let swReloading = false;
+  let announcedDiveToast = false;
+  let lastUpdateCheckAt = 0;
+
+  const reloadApp = () => {
+    if (swReloading) return;
+    swReloading = true;
+    location.reload();
+  };
+
+  const markUpdateAvailable = (nextVer = null) => {
+    updateAvailable = true;
+    if (nextVer && (!detectedRemoteVer || nextVer > detectedRemoteVer)) {
+      detectedRemoteVer = nextVer;
+    }
+    const verLabel = detectedRemoteVer ? `v${detectedRemoteVer}` : 'new build';
+    if (pwaUpdateText) {
+      pwaUpdateText.textContent = `New version (${verLabel}) ready — tap Update to apply.`;
+    }
+    if (pwaUpdateBanner) {
+      pwaUpdateBanner.hidden = false;
+    }
+    if (btnPwaUpdate && !applyingUpdate) {
+      btnPwaUpdate.textContent = detectedRemoteVer ? `⬆ v${detectedRemoteVer}` : '⬆ Update';
+      btnPwaUpdate.classList.add('has-update');
+      btnPwaUpdate.title = `Update Cave Diver to ${verLabel}`;
+    }
+    if (mode === 'diving' && !announcedDiveToast) {
+      announcedDiveToast = true;
+      showToast(`⬆ Update (${verLabel}) ready — open Menu after surfacing to apply.`, 3.8);
+    }
+  };
+
+  const watchInstallingWorker = (worker) => {
+    if (!worker) return;
+    if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
+      markUpdateAvailable(detectedRemoteVer);
+      return;
+    }
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
+        markUpdateAvailable(detectedRemoteVer);
+      }
+    });
+  };
+
+  const fetchRemoteSwVersion = async () => {
+    try {
+      const res = await fetch(`./sw.js?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const text = await res.text();
+      const m = text.match(/CACHE_VERSION\s*=\s*['"]cave-diver-v(\d+)['"]/);
+      return m ? parseInt(m[1], 10) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const checkForPwaUpdate = async ({ manual = false } = {}) => {
+    if (applyingUpdate) return;
+    if (manual && updateAvailable) {
+      applyPwaUpdate();
+      return;
+    }
+    const now = Date.now();
+    if (!manual && now - lastUpdateCheckAt < 15000) return;
+    lastUpdateCheckAt = now;
+
+    if (manual && btnPwaUpdate) {
+      btnPwaUpdate.disabled = true;
+      btnPwaUpdate.textContent = '↻ ...';
+    }
+    try {
+      const [regRes, remoteVer] = await Promise.all([
+        'serviceWorker' in navigator
+          ? (swReg || (await navigator.serviceWorker.getRegistration('./').catch(() => null)))
+          : Promise.resolve(null),
+        fetchRemoteSwVersion(),
+      ]);
+      if (regRes) {
+        swReg = regRes;
+        await regRes.update().catch(() => {});
+      }
+      if (regRes?.installing) {
+        watchInstallingWorker(regRes.installing);
+      }
+      if (remoteVer && remoteVer > localVersion) {
+        markUpdateAvailable(remoteVer);
+        if (manual) {
+          showToast(`⬆ Cave Diver v${remoteVer} is ready — tap Update Now!`, 3.2);
+        }
+        return;
+      }
+      if (regRes?.waiting) {
+        markUpdateAvailable(remoteVer);
+        if (manual) {
+          showToast('⬆ New update is ready — tap Update Now!', 3.2);
+        }
+        return;
+      }
+      if (manual) {
+        showToast(`✓ Cave Diver v${localVersion} is up to date!`, 2.4);
+      }
+    } finally {
+      if (manual && btnPwaUpdate && !applyingUpdate) {
+        btnPwaUpdate.disabled = false;
+        if (!updateAvailable) {
+          btnPwaUpdate.textContent = `v${localVersion}`;
+        }
+      }
+    }
+  };
+
+  const applyPwaUpdate = async () => {
+    if (applyingUpdate) return;
+    applyingUpdate = true;
+    if (btnApplyPwaUpdate) {
+      btnApplyPwaUpdate.disabled = true;
+      btnApplyPwaUpdate.textContent = 'Updating...';
+    }
+    if (btnPwaUpdate) {
+      btnPwaUpdate.disabled = true;
+      btnPwaUpdate.textContent = 'Updating...';
+    }
+    setTimeout(reloadApp, 2800);
+
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = swReg || (await navigator.serviceWorker.getRegistration('./'));
+        if (reg) {
+          await reg.update().catch(() => {});
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            return;
+          }
+          if (reg.installing) {
+            await new Promise((resolve) => {
+              const w = reg.installing;
+              const tm = setTimeout(resolve, 1800);
+              w.addEventListener('statechange', () => {
+                if (w.state === 'installed' || w.state === 'redundant') {
+                  clearTimeout(tm);
+                  resolve();
+                }
+              });
+            });
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              return;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {}
+    reloadApp();
+  };
+
+  btnPwaUpdate?.addEventListener('click', () => checkForPwaUpdate({ manual: true }));
+  btnApplyPwaUpdate?.addEventListener('click', applyPwaUpdate);
+
   if ('serviceWorker' in navigator) {
     const hadController = Boolean(navigator.serviceWorker.controller);
-    let swReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || swReloading) return;
-      if (mode === 'menu' && !document.hidden) {
-        swReloading = true;
-        location.reload();
+      if (!hadController) return;
+      if (applyingUpdate || (mode === 'menu' && !lan.room && !joiningRoomCode && !INITIAL_ROOM_CODE && !document.hidden)) {
+        reloadApp();
+      } else {
+        markUpdateAvailable(detectedRemoteVer);
       }
     });
     navigator.serviceWorker
       .register('./sw.js', { updateViaCache: 'none' })
-      .then((reg) => reg?.update?.().catch(() => {}))
+      .then((reg) => {
+        swReg = reg;
+        if (reg.waiting) markUpdateAvailable(detectedRemoteVer);
+        if (reg.installing) watchInstallingWorker(reg.installing);
+        reg.addEventListener('updatefound', () => watchInstallingWorker(reg.installing));
+        checkForPwaUpdate({ manual: false });
+      })
       .catch(() => {
-        // ignore registration issues on non-HTTPS custom LAN hosts
+        checkForPwaUpdate({ manual: false });
       });
+  } else {
+    checkForPwaUpdate({ manual: false });
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkForPwaUpdate({ manual: false });
+  });
+  window.addEventListener('pageshow', () => checkForPwaUpdate({ manual: false }));
+  window.addEventListener('focus', () => checkForPwaUpdate({ manual: false }));
+  window.addEventListener('online', () => checkForPwaUpdate({ manual: false }));
+  setInterval(() => {
+    if (!document.hidden) checkForPwaUpdate({ manual: false });
+  }, 5 * 60 * 1000);
 
   let screenWakeLock = null;
   const syncWakeLock = async () => {
