@@ -77,7 +77,7 @@ export async function GET(request) {
           levelId: rec.levelId,
           started: Boolean(rec.started),
           playerCount: rec.players.length,
-          maxPlayers: rec.maxPlayers || 2,
+          maxPlayers: rec.maxPlayers || 4,
           hostName: host?.name || 'Diver 1',
           updatedAt: rec.updatedAt,
         };
@@ -169,7 +169,7 @@ export async function POST(request) {
     }
 
     const levelId = isValidLevelId(r.levelId) ? r.levelId : DEFAULT_LEVEL_ID;
-    const maxPlayers = Math.max(2, Math.min(4, Number(r.maxPlayers) || 2));
+    const maxPlayers = Math.max(2, Math.min(4, Number(r.maxPlayers) || 4));
     const hostEpoch = Number.isFinite(r.hostEpoch)
       ? r.hostEpoch
       : Number.isFinite(body.snapshot?.hostEpoch)

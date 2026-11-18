@@ -94,7 +94,6 @@ const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
 const siteMapCoordsEl = document.getElementById('site-map-coords');
 const btnMapZoom = document.getElementById('btn-map-zoom');
 const btnPlaySolo = document.getElementById('btn-play-solo');
-const btnOpenLan = document.getElementById('btn-open-lan');
 const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
 const leaderboardPanel = document.getElementById('leaderboard-panel');
 const lbCareerSummaryEl = document.getElementById('lb-career-summary');
@@ -107,7 +106,6 @@ const btnInstallPwa = document.getElementById('btn-install-pwa');
 const screenMenu = document.getElementById('screen-menu');
 const screenHud = document.getElementById('screen-hud');
 const screenDebrief = document.getElementById('screen-debrief');
-const lanPanel = document.getElementById('lan-panel');
 const lanStatus = document.getElementById('lan-status');
 const lanConnBadge = document.getElementById('lan-conn-badge');
 const lanSetupControls = document.getElementById('lan-setup-controls');
@@ -607,7 +605,7 @@ function renderLevelCards() {
 function syncMenuLevelLabels(level) {
   const idx = LEVELS.findIndex((l) => l.id === level.id);
   const lvlNum = idx >= 0 ? idx + 1 : 1;
-  btnPlaySolo.textContent = `SOLO DIVE · LEVEL ${lvlNum}`;
+  btnPlaySolo.textContent = `DIVE · LEVEL ${lvlNum}`;
   const menuTitle = screenMenu.querySelector('.menu-title');
   const menuDesc = screenMenu.querySelector('.menu-desc');
   const loaderTitle = screenLoader.querySelector('.loader-title');
@@ -916,7 +914,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
   screenHud.hidden = false;
-  if (coopCommsEl) coopCommsEl.hidden = !multiplayer;
+  if (coopCommsEl) coopCommsEl.hidden = !(multiplayer && lan.getPeers().length > 0);
   if (multiplayer && lan.room) {
     syncRoomInviteUi(lan.room);
   } else {
@@ -942,9 +940,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
 
   const btnRetry = document.getElementById('btn-retry');
   const btnMenu = document.getElementById('btn-menu');
-  const inCoopRoom = Boolean(isMultiplayer && lan.room);
-  if (btnRetry) btnRetry.textContent = inCoopRoom ? 'CO-OP ROOM LOBBY' : 'DIVE AGAIN';
-  if (btnMenu) btnMenu.textContent = inCoopRoom ? 'LEAVE CO-OP ROOM' : 'MAIN MENU';
+  const inCoopCrew = Boolean(isMultiplayer && lan.room && lan.getPeers().length > 0);
+  if (btnRetry) btnRetry.textContent = inCoopCrew ? 'CO-OP ROOM LOBBY' : 'DIVE AGAIN';
+  if (btnMenu) btnMenu.textContent = inCoopCrew ? 'LEAVE CO-OP ROOM' : 'MAIN MENU';
 
   const { diver, diveState, checkpointsHit, level } = session;
   const localSummary =
@@ -1590,7 +1588,7 @@ function setLanConnectionBadge(state, text) {
   lanConnBadge.textContent = text;
 }
 
-function resetLobbyUiState(statusText = 'Connect to host or join a buddy\'s room.') {
+function resetLobbyUiState(statusText = '') {
   lanRoomBox.hidden = true;
   knownRoomCode = '';
   knownRoomMemberIds = new Set();
@@ -1601,28 +1599,16 @@ function resetLobbyUiState(statusText = 'Connect to host or join a buddy\'s room
   if (btnHudShare) btnHudShare.hidden = true;
   syncBrowserRoomUrl('');
   setLevelSelectionLocked(false);
-  lanStatus.className = 'lan-status';
-  lanStatus.textContent = statusText;
+  if (lanStatus) {
+    lanStatus.className = 'lan-status';
+    lanStatus.textContent = statusText;
+    lanStatus.hidden = !statusText;
+  }
   renderLevelCards();
 }
 
-function updateOpenLanButtonBadge(rooms = lan.rooms) {
-  if (!btnOpenLan) return;
-  if (lan.room) {
-    btnOpenLan.textContent = `👥 Team · ${lan.room.code}`;
-    btnOpenLan.classList.add('has-rooms');
-    return;
-  }
-  const openRooms = Array.isArray(rooms)
-    ? rooms.filter((r) => r.playerCount < r.maxPlayers)
-    : [];
-  if (openRooms.length > 0) {
-    btnOpenLan.textContent = `👥 Team (${openRooms.length})`;
-    btnOpenLan.classList.add('has-rooms');
-  } else {
-    btnOpenLan.textContent = '👥 Team';
-    btnOpenLan.classList.remove('has-rooms');
-  }
+function updateOpenLanButtonBadge() {
+  // Unified Dive tab handles open co-op rooms inline
 }
 
 function renderRoomsList(rooms = lan.rooms) {
@@ -1743,20 +1729,49 @@ if (siteViewTabsEl && siteBrowserEl) {
   });
 }
 
-btnPlaySolo.addEventListener('click', async () => {
+async function launchOpenCoopDive() {
   const diverName = requireCallsign();
-  if (!diverName) return;
+  if (!diverName) return false;
   if (lan.room) {
     lan.leaveRoom();
     resetLobbyUiState();
   }
   btnPlaySolo.disabled = true;
   try {
-    await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
-    startDiveRun(false);
+    lan.connect();
+    const roomPromise =
+      typeof navigator !== 'undefined' && navigator.onLine === false
+        ? Promise.resolve(null)
+        : Promise.race([
+            lan
+              .createRoom(diverName, activeLevel.id, 4, {
+                checkpoints: [],
+                collectibles: [],
+                bodyRecovered: false,
+                playerLines: [],
+              })
+              .catch(() => null),
+            new Promise((resolve) => setTimeout(() => resolve(null), 2200)),
+          ]);
+    const [, room] = await Promise.all([
+      ensureLevelLoaded(activeLevel.id, { showOverlay: true }),
+      roomPromise,
+    ]);
+    if (room?.code) {
+      activeDiveSeq = room.diveSeq || 1;
+      syncBrowserRoomUrl(room.code);
+      startDiveRun(true);
+    } else {
+      startDiveRun(false);
+    }
+    return true;
   } finally {
     btnPlaySolo.disabled = false;
   }
+}
+
+btnPlaySolo.addEventListener('click', () => {
+  launchOpenCoopDive();
 });
 
 let activeMenuTab = 'solo';
@@ -1767,38 +1782,29 @@ function syncSitePickerVisibility() {
 }
 
 async function setActiveMenuTab(tab = 'solo') {
-  activeMenuTab = tab === 'team' ? 'team' : tab === 'leaderboards' ? 'leaderboards' : 'solo';
+  activeMenuTab = tab === 'leaderboards' ? 'leaderboards' : 'solo';
   const isSolo = activeMenuTab === 'solo';
-  const isTeam = activeMenuTab === 'team';
   const isLb = activeMenuTab === 'leaderboards';
 
   tabBtnSolo?.classList.toggle('active', isSolo);
   tabBtnSolo?.setAttribute('aria-selected', String(isSolo));
-  btnOpenLan?.classList.toggle('active', isTeam);
-  btnOpenLan?.setAttribute('aria-selected', String(isTeam));
   btnOpenLeaderboard?.classList.toggle('active', isLb);
   btnOpenLeaderboard?.setAttribute('aria-selected', String(isLb));
 
   if (soloPanel) soloPanel.hidden = !isSolo;
-  if (lanPanel) lanPanel.hidden = !isTeam;
   if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
   if (menuIdentityRow) menuIdentityRow.hidden = isLb;
   syncSitePickerVisibility();
 
-  if (isTeam) {
-    if (!lan.connected) {
-      setLanConnectionBadge('', '○ Connecting...');
-    }
-    lan.connect();
+  if (isSolo) {
+    lan.ensureConnected();
     lan.listRooms();
-    await fetchLanUrls();
   } else if (isLb) {
     refreshMenuLeaderboard();
   }
 }
 
 tabBtnSolo?.addEventListener('click', () => setActiveMenuTab('solo'));
-btnOpenLan.addEventListener('click', () => setActiveMenuTab('team'));
 btnOpenLeaderboard?.addEventListener('click', () => setActiveMenuTab('leaderboards'));
 
 leaderboardPanel?.addEventListener('click', (e) => {
@@ -1879,48 +1885,7 @@ if (lanRoomsList) {
   });
 }
 
-const btnQuickCoop = document.getElementById('btn-quick-coop');
-if (btnQuickCoop) {
-  btnQuickCoop.addEventListener('click', async () => {
-    const name = requireCallsign();
-    if (!name) return;
-    btnQuickCoop.disabled = true;
-    const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
-    requestDiverNotificationPermission();
-    try {
-      lanStatus.className = 'lan-status';
-      lanStatus.textContent = 'Opening drop-in co-op room...';
-      lan.connect();
-      const room = await lan.createRoom(name, activeLevel.id, maxPlayers, {
-        checkpoints: [],
-        collectibles: [],
-        bodyRecovered: false,
-        playerLines: [],
-      });
-      if (!room?.code) {
-        showToast('Could not open co-op room right now — try again.', 2.8);
-        return;
-      }
-      activeDiveSeq = room.diveSeq || 1;
-      await copyCurrentInviteLink();
-      await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
-      startDiveRun(true);
-      showToast(`Room ${room.code} live & link copied! Friends drop straight in.`, 3.8);
-    } finally {
-      btnQuickCoop.disabled = false;
-    }
-  });
-}
-
-document.getElementById('btn-create-room').addEventListener('click', () => {
-  const name = requireCallsign();
-  if (!name) return;
-  const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
-  requestDiverNotificationPermission();
-  lanStatus.textContent = 'Creating room...';
-  lan.connect();
-  lan.createRoom(name, activeLevel.id, maxPlayers);
-});
+const btnQuickCoop = null;
 
 const roomCodeInput = document.getElementById('input-room-code');
 function triggerJoinFromInput() {
@@ -1928,14 +1893,20 @@ function triggerJoinFromInput() {
   if (!name) return;
   const code = (roomCodeInput?.value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!code) {
-    lanStatus.className = 'lan-status warn';
-    lanStatus.textContent = 'Enter a 4-letter room code or pick a room below.';
+    if (lanStatus) {
+      lanStatus.hidden = false;
+      lanStatus.className = 'lan-status warn';
+      lanStatus.textContent = 'Enter a 4-letter room code or pick an active dive below.';
+    }
     return;
   }
   const matchedRoom = Array.isArray(lan.rooms) ? lan.rooms.find((r) => r.code === code) : null;
   const isDropIn = Boolean(matchedRoom?.started);
-  lanStatus.className = 'lan-status';
-  lanStatus.textContent = isDropIn ? `Dropping into Room ${code}...` : `Joining room ${code}...`;
+  if (lanStatus) {
+    lanStatus.hidden = false;
+    lanStatus.className = 'lan-status';
+    lanStatus.textContent = isDropIn ? `Dropping into Room ${code}...` : `Joining room ${code}...`;
+  }
   beginRoomJoinLoading(code, { isDropIn });
   lan.connect();
   lan.joinRoom(code, name);
@@ -2273,11 +2244,11 @@ document.getElementById('btn-abort').addEventListener('click', () => {
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
-  if (isMultiplayer && lan.room) {
+  if (isMultiplayer && lan.room && lan.getPeers().length > 0) {
     mode = 'menu';
     screenDebrief.hidden = true;
     screenMenu.hidden = false;
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
     renderLevelCards();
     if (lan.isHost()) {
       lan.returnToLobby();
@@ -2287,7 +2258,8 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     }
     return;
   }
-  startDiveRun(false);
+  screenDebrief.hidden = true;
+  launchOpenCoopDive();
 });
 
 document.getElementById('btn-menu').addEventListener('click', () => {
@@ -2322,11 +2294,8 @@ lan.on('connected', () => {
   const isP2p = lan.getTransportMode() === 'p2p';
   setLanConnectionBadge('ok', isP2p ? '● P2P Ready' : '● LAN Connected');
   fetchLanUrls();
-  if (!lan.room && !pendingAutoJoinCode) {
-    lanStatus.className = 'lan-status ok';
-    lanStatus.textContent = isP2p
-      ? 'WebRTC P2P ready (zero server). Create a room or enter a code.'
-      : 'Connected to LAN server. Create or join a room.';
+  if (!lan.room && !pendingAutoJoinCode && lanStatus) {
+    lanStatus.hidden = true;
   }
 });
 
@@ -2384,8 +2353,11 @@ lan.on('error', (msg) => {
     finishRoomJoinLoading({ revealMenu: true });
     setActiveMenuTab('team');
   }
-  lanStatus.className = 'lan-status warn';
-  lanStatus.textContent = msg;
+  if (lanStatus) {
+    lanStatus.hidden = false;
+    lanStatus.className = 'lan-status warn';
+    lanStatus.textContent = msg;
+  }
   showToast(msg, 3.0);
 });
 
@@ -2530,6 +2502,7 @@ lan.on('room_update', async (room) => {
   }
 
   const maxP = room.maxPlayers || 2;
+  if (lanStatus) lanStatus.hidden = false;
   if (loadingPlayer) {
     lanStatus.className = 'lan-status warn';
     lanStatus.textContent = `Loading L${siteNum} (${siteLevel.name}): ${loadingPlayer.name} ${loadingPlayer.loadPct ?? 0}%...`;
@@ -2825,6 +2798,9 @@ function stepSimulation(dt) {
   }
 
   const peers = isMultiplayer ? lan.getPeers() : [];
+  if (coopCommsEl && mode === 'diving') {
+    coopCommsEl.hidden = !(isMultiplayer && peers.length > 0);
+  }
   if (isMultiplayer) {
     // Share cave exploration coverage across LAN buddies
     if (session.exploreCells && session.exploredCells) {
@@ -3432,7 +3408,6 @@ async function bootGame() {
     screenLoader.classList.add('done');
   }
   btnPlaySolo.disabled = false;
-  btnOpenLan.disabled = false;
 
   // Keep socket & room session alive seamlessly across mobile app-switching and tab navigation
   const syncWhenReady = () => {
@@ -3470,8 +3445,11 @@ async function bootGame() {
     attemptJoinAfterExpire = '';
     setActiveMenuTab('team');
     if (roomCodeInput) roomCodeInput.value = savedSession.code;
-    lanStatus.className = 'lan-status';
-    lanStatus.textContent = `Reconnecting to room ${savedSession.code}...`;
+    if (lanStatus) {
+      lanStatus.hidden = false;
+      lanStatus.className = 'lan-status';
+      lanStatus.textContent = `Reconnecting to room ${savedSession.code}...`;
+    }
   } else if (savedSession && savedSession.code === INITIAL_ROOM_CODE && savedSession.isHost) {
     pendingAutoJoinCode = savedSession.code;
     attemptJoinAfterExpire = INITIAL_ROOM_CODE;

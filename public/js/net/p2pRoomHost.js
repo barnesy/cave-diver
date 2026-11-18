@@ -130,7 +130,7 @@ export class P2pRoomCoordinator {
     hostId = 'p2p-1',
     hostName = 'Lead Diver',
     levelId = DEFAULT_LEVEL_ID,
-    maxPlayers = 2,
+    maxPlayers = 4,
     loadStatus = {},
     initialDiveState = null,
     hostEpoch = 1,
@@ -141,7 +141,7 @@ export class P2pRoomCoordinator {
     this.room = {
       code,
       levelId: sanitizeLevelId(levelId),
-      maxPlayers: Math.max(2, Math.min(4, Number(maxPlayers) || 2)),
+      maxPlayers: Math.max(2, Math.min(4, Number(maxPlayers) || 4)),
       started: initStarted,
       phase: initStarted ? 'diving' : 'lobby',
       diveSeq: initStarted ? 1 : 0,
@@ -645,7 +645,7 @@ export class P2pRoomCoordinator {
 
       case 'set_max_players': {
         if (!p.isHost) return;
-        const nextMax = Math.max(2, Math.min(4, Number(msg.maxPlayers) || 2));
+        const nextMax = Math.max(2, Math.min(4, Number(msg.maxPlayers) || 4));
         this.room.maxPlayers = Math.max(nextMax, this.room.players.size);
         this._broadcast({ type: 'room_update', room: this.serializeRoom() });
         break;

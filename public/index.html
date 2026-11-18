@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Cave Diver" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="72" />
+  <meta name="app-version" content="73" />
   <title>Cave Diver · Technical Trimix Simulation</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=72" />
+  <link rel="stylesheet" href="./css/style.css?v=73" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -65,7 +65,7 @@
         </div>
         <div class="menu-header-tools">
           <button id="btn-menu-radio" class="btn tiny ghost radio-btn" type="button" title="Cycle Chill Aquatic Radio">📻 Off</button>
-          <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" title="Check for app updates">v72</button>
+          <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" title="Check for app updates">v73</button>
           <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 Install</button>
         </div>
       </div>
@@ -77,9 +77,8 @@
         Navigate overhead caves, manage Trimix &amp; O2 limits, avoid silt-outs, and clear decompression.
       </p>
 
-      <div id="menu-tabs" class="menu-tabs" role="tablist" aria-label="Game Modes">
-        <button id="tab-btn-solo" class="menu-tab active" type="button" role="tab" aria-selected="true" data-menu-tab="solo">🤿 Solo</button>
-        <button id="btn-open-lan" class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="team" disabled>👥 Team</button>
+      <div id="menu-tabs" class="menu-tabs" role="tablist" aria-label="Menu Views">
+        <button id="tab-btn-solo" class="menu-tab active" type="button" role="tab" aria-selected="true" data-menu-tab="solo">🤿 Dive</button>
         <button id="btn-open-leaderboard" class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="leaderboards">🏆 Leaders</button>
       </div>
 
@@ -143,56 +142,25 @@
         </div>
 
         <div class="menu-actions">
-          <button id="btn-play-solo" class="btn primary" type="button" disabled>SOLO DIVE · LEVEL 1</button>
+          <button id="btn-play-solo" class="btn primary" type="button" disabled>DIVE · LEVEL 1</button>
         </div>
-      </div>
 
-      <div id="leaderboard-panel" class="lan-panel leaderboard-panel" role="tabpanel" aria-labelledby="btn-open-leaderboard" hidden>
-        <div class="lb-head">
-          <div class="lb-tabs" role="tablist" aria-label="Leaderboard Mode">
-            <button id="btn-lb-solo" class="lb-tab active" type="button" data-lb-mode="solo">👤 Individual</button>
-            <button id="btn-lb-team" class="lb-tab" type="button" data-lb-mode="team">👥 Team</button>
-          </div>
-          <select id="select-lb-site" class="lb-site-select" aria-label="Leaderboard Dive Location"></select>
-        </div>
-        <div id="lb-career-summary" class="lb-career-summary" hidden></div>
-        <div id="leaderboard-sub" class="lb-sub">Loading global rankings...</div>
-        <div id="leaderboard-rows" class="lb-rows"></div>
-      </div>
-
-      <div id="lan-panel" class="lan-panel" role="tabpanel" aria-labelledby="btn-open-lan" hidden>
-        <div class="lan-url-box">
-          <div class="lan-url-head">
-            <span>Join from phone on same Wi-Fi:</span>
+        <div id="lan-setup-controls" class="dive-coop-dock">
+          <div class="dive-coop-meta">
+            <span>Starts solo · Up to 4 co-divers can drop in</span>
             <span id="lan-conn-badge" class="lan-conn-badge">○ Connecting...</span>
           </div>
-          <div id="lan-urls" class="lan-urls">Loading LAN IP...</div>
-        </div>
-
-        <div id="lan-setup-controls">
-          <button id="btn-quick-coop" class="btn primary quick-coop-btn" type="button">🚀 DIVE NOW &amp; COPY INVITE LINK</button>
-          <div class="lan-controls">
-            <div class="lan-create-group">
-              <select id="select-max-players" aria-label="Crew size">
-                <option value="2">2 Divers</option>
-                <option value="3">3 Divers</option>
-                <option value="4" selected>4 Divers</option>
-              </select>
-              <button id="btn-create-room" class="btn accent" type="button">Create Lobby</button>
-            </div>
-            <div class="lan-join-row">
-              <input id="input-room-code" type="text" maxlength="4" placeholder="CODE" autocomplete="off" />
-              <button id="btn-join-room" class="btn secondary" type="button">Join</button>
-            </div>
+          <div class="lan-join-row">
+            <input id="input-room-code" type="text" maxlength="4" placeholder="CODE" autocomplete="off" />
+            <button id="btn-join-room" class="btn secondary" type="button">Join Dive</button>
           </div>
-
           <div id="lan-rooms-section" class="lan-rooms-section" hidden>
-            <div class="lan-rooms-title">ACTIVE ROOMS ON LAN</div>
+            <div class="lan-rooms-title">ACTIVE DIVES</div>
             <div id="lan-rooms-list" class="lan-rooms-list"></div>
           </div>
         </div>
 
-        <div id="lan-status" class="lan-status">Connect to host or join a buddy's room.</div>
+        <div id="lan-status" class="lan-status" hidden></div>
 
         <div id="lan-room-box" class="lan-room-box" hidden>
           <div class="room-header">
@@ -224,6 +192,19 @@
             <button id="btn-leave-room" class="btn ghost" type="button">Leave</button>
           </div>
         </div>
+      </div>
+
+      <div id="leaderboard-panel" class="lan-panel leaderboard-panel" role="tabpanel" aria-labelledby="btn-open-leaderboard" hidden>
+        <div class="lb-head">
+          <div class="lb-tabs" role="tablist" aria-label="Leaderboard Mode">
+            <button id="btn-lb-solo" class="lb-tab active" type="button" data-lb-mode="solo">👤 Individual</button>
+            <button id="btn-lb-team" class="lb-tab" type="button" data-lb-mode="team">👥 Team</button>
+          </div>
+          <select id="select-lb-site" class="lb-site-select" aria-label="Leaderboard Dive Location"></select>
+        </div>
+        <div id="lb-career-summary" class="lb-career-summary" hidden></div>
+        <div id="leaderboard-sub" class="lb-sub">Loading global rankings...</div>
+        <div id="leaderboard-rows" class="lb-rows"></div>
       </div>
     </div>
   </section>
@@ -395,47 +376,47 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=72",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=72",
-        "./js/game/audio.js": "./js/game/audio.js?v=72",
-        "./js/game/collision.js": "./js/game/collision.js?v=72",
-        "./js/game/input.js": "./js/game/input.js?v=72",
-        "./js/game/hud.js": "./js/game/hud.js?v=72",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=72",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=72",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=72",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=72",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=72",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=72",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=72",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=72",
-        "./js/game/silt.js": "./js/game/silt.js?v=72",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=72",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=72",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=72",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=72",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=72",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=72",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=72",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=72",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=72",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=72",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=72",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=72",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=72",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=72",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=72",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=72",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=72",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=72",
-        "./js/levels/index.js": "./js/levels/index.js?v=72",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=72",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=72",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=72",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=72"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=73",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=73",
+        "./js/game/audio.js": "./js/game/audio.js?v=73",
+        "./js/game/collision.js": "./js/game/collision.js?v=73",
+        "./js/game/input.js": "./js/game/input.js?v=73",
+        "./js/game/hud.js": "./js/game/hud.js?v=73",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=73",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=73",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=73",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=73",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=73",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=73",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=73",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=73",
+        "./js/game/silt.js": "./js/game/silt.js?v=73",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=73",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=73",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=73",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=73",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=73",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=73",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=73",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=73",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=73",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=73",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=73",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=73",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=73",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=73",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=73",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=73",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=73",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=73",
+        "./js/levels/index.js": "./js/levels/index.js?v=73",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=73",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=73",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=73",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=73"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=72"></script>
+  <script type="module" src="./js/main.js?v=73"></script>
 </body>
 </html>

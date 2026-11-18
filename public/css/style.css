@@ -132,7 +132,7 @@ html, body {
 
 .menu-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
   padding: 4px;
   margin-bottom: 12px;
@@ -674,7 +674,22 @@ html, body {
   transition: width 0.14s ease;
 }
 
-/* Tab Panels (Team & Leaderboards) */
+.dive-coop-dock {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+.dive-coop-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* Tab Panels (Leaderboards & Co-op Room Dock) */
 .lan-panel {
   margin-top: 8px;
   padding-top: 10px;

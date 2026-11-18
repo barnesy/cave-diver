@@ -519,7 +519,7 @@ wss.on('connection', (ws) => {
         leaveCurrentRoom(client, { immediate: true });
         const code = makeRoomCode();
         client.name = sanitizeName(msg.name, 'Lead Diver');
-        const requestedMax = Number.isInteger(msg.maxPlayers) ? msg.maxPlayers : 2;
+        const requestedMax = Number.isInteger(msg.maxPlayers) ? msg.maxPlayers : 4;
         const maxPlayers = Math.max(2, Math.min(4, requestedMax));
         const levelId = sanitizeLevelId(msg.levelId);
         const token = crypto.randomBytes(8).toString('hex');

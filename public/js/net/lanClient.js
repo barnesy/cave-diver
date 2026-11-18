@@ -37,7 +37,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=72');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=73');
   }
   return trysteroModulePromise;
 }
@@ -827,7 +827,7 @@ export class LanClient {
           hostId: myId,
           hostName: msg.name || 'Lead Diver',
           levelId: msg.levelId,
-          maxPlayers: msg.maxPlayers || 2,
+          maxPlayers: msg.maxPlayers || 4,
           loadStatus: this._latestLoadStatus,
           initialDiveState: msg.initialDiveState || null,
         });
