@@ -1,9 +1,7 @@
 import { DEFAULT_LEVEL_ID, isValidLevelId } from '../public/js/levels/index.js';
 import {
   CORS_HEADERS,
-  NO_BLOB_MUTATION,
   jsonResponse,
-  mutateBlobJson,
   readBlobJson,
   writeBlobJson,
   deleteBlobPath,
@@ -128,37 +126,26 @@ export async function POST(request) {
     }
 
     if (action === 'leave') {
+      const { data: existing } = await readBlobJson(blobPath, null);
+      if (!isLiveRoomRecord(existing, now)) {
+        return jsonResponse({ ok: true, code });
+      }
       const pid = String(body.playerId || '');
-      let deleted = false;
-      const updated = await mutateBlobJson(
-        blobPath,
-        () => null,
-        (existing) => {
-          if (!isLiveRoomRecord(existing, now)) {
-            return NO_BLOB_MUTATION;
-          }
-          const remaining = (existing.players || []).filter((p) => p.id !== pid);
-          if (remaining.length === 0) {
-            deleted = true;
-            return NO_BLOB_MUTATION;
-          }
-          if (!remaining.some((p) => p.isHost)) {
-            remaining[0].isHost = true;
-          }
-          existing.players = remaining;
-          if (existing.room) existing.room.players = remaining;
-          if (existing.snapshot?.room) existing.snapshot.room.players = remaining;
-          if (existing.snapshot?.players) existing.snapshot.players = remaining;
-          existing.updatedAt = now;
-          return existing;
-        },
-        4
-      );
-      if (deleted) {
+      const remaining = (existing.players || []).filter((p) => p.id !== pid);
+      if (remaining.length === 0) {
         await deleteBlobPath(blobPath);
         return jsonResponse({ ok: true, code });
       }
-      return jsonResponse({ ok: true, code, room: updated?.room || null, snapshot: updated?.snapshot || null });
+      if (!remaining.some((p) => p.isHost)) {
+        remaining[0].isHost = true;
+      }
+      existing.players = remaining;
+      if (existing.room) existing.room.players = remaining;
+      if (existing.snapshot?.room) existing.snapshot.room.players = remaining;
+      if (existing.snapshot?.players) existing.snapshot.players = remaining;
+      existing.updatedAt = now;
+      await writeBlobJson(blobPath, existing);
+      return jsonResponse({ ok: true, code, room: existing.room, snapshot: existing.snapshot });
     }
 
     // 'sync': host creates or updates room + snapshot metadata cleanly
@@ -209,20 +196,7 @@ export async function POST(request) {
       snapshot: body.snapshot || null,
       updatedAt: now,
     };
-    await mutateBlobJson(
-      blobPath,
-      () => record,
-      (existing, { notFound }) => {
-        if (!notFound && isLiveRoomRecord(existing, now)) {
-          const prevEpoch = Number.isFinite(existing.hostEpoch) ? existing.hostEpoch : 1;
-          if (hostEpoch < prevEpoch) {
-            return NO_BLOB_MUTATION;
-          }
-        }
-        return record;
-      },
-      4
-    );
+    await writeBlobJson(blobPath, record);
     return jsonResponse({ ok: true, room: roomClean });
   } catch (err) {
     return jsonResponse({ error: err?.message || 'Failed to update cloud room.' }, 500);
