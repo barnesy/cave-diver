@@ -1,5 +1,5 @@
 /**
- * Reusable regional karst biome presets & theme builder for cave levels (L1-L13).
+ * Reusable regional karst biome presets & theme builder for cave levels (L1-L14).
  */
 
 export const BIOME_THEMES = {
@@ -205,6 +205,30 @@ export const BIOME_THEMES = {
     surfaceStyle: 'oxbelha-twilight',
     sunbeamTop: 'rgba(254, 215, 170, 0.28)',
     sunbeamMid: 'rgba(56, 189, 248, 0.12)',
+  },
+  'aurora-glacial': {
+    id: 'aurora-glacial',
+    rockTexture: '/assets/tex-limestone-wall.jpg',
+    backTexture: '/assets/tex-cave-backwall.jpg',
+    skyBackdrop: '/assets/sky-aurora.jpg',
+    skyTop: '#030816',
+    skyMid: '#0f2847',
+    skyGlow: '#2dd4bf',
+    skyHorizon: '#4c1d95',
+    waterSurface: '#5eead4',
+    waterShallow: '#0284c7',
+    waterMid: '#1e3a8a',
+    waterDeep: '#0c1338',
+    waterAbyss: '#020410',
+    haloclineLabel: 'Subglacial Thermal Shear (2°C ↔ 28°C)',
+    haloclineColor: 'rgba(94, 234, 212, 0.30)',
+    mossTint: 'katla-basalt',
+    rockTint: [0.22, 0.27, 0.36],
+    backTint: [0.14, 0.22, 0.38],
+    surfaceStyle: 'aurora-basalt',
+    bioluminescent: true,
+    sunbeamTop: 'rgba(94, 234, 212, 0.34)',
+    sunbeamMid: 'rgba(139, 92, 246, 0.16)',
   },
 };
 

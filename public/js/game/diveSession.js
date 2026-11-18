@@ -245,6 +245,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     diver.vy += Math.cos(diver.x * 0.1 + session.simTimeSec * 0.6) * 0.12 * squeezeRatio * dt;
   }
 
+  // Geothermal hydrothermal vent updraft columns (buoyant warm thermal chimneys)
+  if (Array.isArray(level.geothermalVents)) {
+    for (let v = 0; v < level.geothermalVents.length; v++) {
+      const vent = level.geothermalVents[v];
+      const hw = vent.halfWidth || 2.8;
+      const vh = vent.height || 14;
+      const dx = Math.abs(diver.x - vent.x);
+      if (dx <= hw && diver.y <= vent.y && diver.y >= vent.y - vh) {
+        const horizFalloff = 1 - dx / hw;
+        const vertFalloff = 1 - (vent.y - diver.y) / (vh * 1.15);
+        const lift = (vent.updraft || 2.8) * Math.max(0.18, horizFalloff * vertFalloff);
+        diver.vy -= lift * dt;
+        diver.vx += Math.sin(session.simTimeSec * 2.2 + v + diver.y * 0.3) * 0.24 * horizFalloff * dt;
+      }
+    }
+  }
+
   // Tight cave restriction wash penalty if thrusting aggressively in narrow squeezes
   if (session.restrictWarnCooldown > 0) session.restrictWarnCooldown -= dt;
   if (clearanceM > 0 && clearanceM < 1.5 && diver.y > 6 && thrustMag > 0.72 && siltClouds.length < 130) {
@@ -513,7 +530,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         success: true,
         title: level.recoveryTarget ? `${level.recoveryTarget.name} Recovered!` : `${level.name} Traversed!`,
         detail: level.recoveryTarget
-          ? `You reached ${Math.round(level.recoveryTarget.y)}m, secured ${level.recoveryTarget.name} on tow, completed deep trimix & oxygen decompression, and brought them home to the surface.`
+          ? level.recoveryTarget.kind === 'probe'
+            ? `You reached ${Math.round(level.recoveryTarget.y)}m beneath the aurora, recovered ${level.recoveryTarget.name}, rode geothermal updrafts through Trimix & O2 deco, and surfaced safely.`
+            : `You reached ${Math.round(level.recoveryTarget.y)}m, secured ${level.recoveryTarget.name} on tow, completed deep trimix & oxygen decompression, and brought them home to the surface.`
           : 'You managed trimix bottom gas, avoided silt-outs, completed your oxygen decompression stop, and surfaced safely.',
         scoreSummary: buildSummary(),
       },

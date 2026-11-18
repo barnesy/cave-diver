@@ -382,12 +382,13 @@ export class DiveComputerHUD {
         ? `<span class="obj-extra">💎${collectedCount}/${collectiblesTotal} · 🧭${exploredPct}%</span>`
         : '';
 
+    const isProbe = level?.recoveryTarget?.kind === 'probe';
     const recoveryTag = level?.recoveryTarget
       ? carryingBody
-        ? ' · 🛟 TOWING DIVER'
+        ? isProbe ? ' · 🛰 TOWING CORE' : ' · 🛟 TOWING DIVER'
         : bodyRecovered
           ? ' · ✓ RECOVERED'
-          : ' · 🛟 BODY RECOVERY'
+          : isProbe ? ' · 🛰 PROBE RECOVERY' : ' · 🛟 BODY RECOVERY'
       : '';
     let objectiveHtml = '';
     if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {

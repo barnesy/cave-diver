@@ -40,6 +40,7 @@ export function createMarineEcosystem(level) {
   const isProvence = themeId === 'provence-gorge';
   const isKalahari = themeId === 'kalahari-dolomite';
   const isUral = themeId === 'ural-gypsum-karst';
+  const isAurora = themeId === 'aurora-glacial';
 
   // 1. Sunlit Surface Basins
   for (let bIdx = 0; bIdx < level.openBasins.length; bIdx++) {
@@ -47,40 +48,44 @@ export function createMarineEcosystem(level) {
     const cx = (basin.xMin + basin.xMax) * 0.5;
     const width = basin.xMax - basin.xMin;
 
-    // Hanging surface aquatic roots / water-moss tendrils stratified by biome
-    for (let i = 0; i < 9; i++) {
-      const rx = basin.xMin + 1.2 + (i / 8) * Math.max(2, width - 2.4);
-      anchored.push({
-        kind: 'vine',
-        x: rx,
-        y: 0.05,
-        nx: 0,
-        ny: 1,
-        size: isFlorida || isNordic || isKalahari || isUral ? 0.95 + randHash(rx * 2.7) * 1.3 : 1.3 + randHash(rx * 3.1) * 1.9,
-        color: isFlorida
-          ? (i % 2 === 0 ? '#78350f' : '#3f6212')
-          : isNordic || isUral
-            ? (i % 2 === 0 ? '#115e59' : '#0f766e')
-            : isKalahari
-              ? (i % 2 === 0 ? '#92400e' : '#65a30d')
-              : isProvence
-                ? (i % 2 === 0 ? '#3f6212' : '#4d7c0f')
-                : (i % 3 === 0 ? '#15803d' : '#16a34a'),
-        accent: isFlorida ? '#fde047' : isNordic || isUral ? '#a5f3fc' : isKalahari ? '#fdba74' : isProvence ? '#bef264' : (i % 3 === 0 ? '#fef9c3' : '#86efac'),
-        phase: randHash(rx) * Math.PI * 2,
-      });
+    // Hanging surface aquatic roots / water-moss tendrils (omitted in crystal sub-glacial Aurora pool)
+    if (!isAurora) {
+      for (let i = 0; i < 9; i++) {
+        const rx = basin.xMin + 1.2 + (i / 8) * Math.max(2, width - 2.4);
+        anchored.push({
+          kind: 'vine',
+          x: rx,
+          y: 0.05,
+          nx: 0,
+          ny: 1,
+          size: isFlorida || isNordic || isKalahari || isUral ? 0.95 + randHash(rx * 2.7) * 1.3 : 1.3 + randHash(rx * 3.1) * 1.9,
+          color: isFlorida
+            ? (i % 2 === 0 ? '#78350f' : '#3f6212')
+            : isNordic || isUral
+              ? (i % 2 === 0 ? '#115e59' : '#0f766e')
+              : isKalahari
+                ? (i % 2 === 0 ? '#92400e' : '#65a30d')
+                : isProvence
+                  ? (i % 2 === 0 ? '#3f6212' : '#4d7c0f')
+                  : (i % 3 === 0 ? '#15803d' : '#16a34a'),
+          accent: isFlorida ? '#fde047' : isNordic || isUral ? '#a5f3fc' : isKalahari ? '#fdba74' : isProvence ? '#bef264' : (i % 3 === 0 ? '#fef9c3' : '#86efac'),
+          phase: randHash(rx) * Math.PI * 2,
+        });
+      }
     }
 
     // Sunlit Basin Fish adapted by region
     const fishPalette = isFlorida
       ? ['#f59e0b', '#fb923c', '#84cc16', '#38bdf8']
-      : isNordic || isUral
-        ? ['#7dd3fc', '#cbd5e1', '#38bdf8', '#fb7185']
-        : isKalahari
-          ? ['#fbbf24', '#fb7185', '#a78bfa', '#38bdf8']
-          : isProvence
-            ? ['#fde047', '#93c5fd', '#bef264', '#cbd5e1']
-            : ['#5eead4', '#38bdf8', '#a3e635', '#fbbf24'];
+      : isAurora
+        ? ['#5eead4', '#38bdf8', '#cbd5e1', '#c084fc']
+        : isNordic || isUral
+          ? ['#7dd3fc', '#cbd5e1', '#38bdf8', '#fb7185']
+          : isKalahari
+            ? ['#fbbf24', '#fb7185', '#a78bfa', '#38bdf8']
+            : isProvence
+              ? ['#fde047', '#93c5fd', '#bef264', '#cbd5e1']
+              : ['#5eead4', '#38bdf8', '#a3e635', '#fbbf24'];
     for (let i = 0; i < 14; i++) {
       const fx = cx + (randHash(i * 11 + cx) - 0.5) * Math.min(8.2, width * 0.82);
       const fy = 1.4 + randHash(i * 19 + cx) * 7.8;
@@ -97,23 +102,25 @@ export function createMarineEcosystem(level) {
           size: isLarger ? 0.24 + randHash(i * 5) * 0.08 : 0.14 + randHash(i * 5) * 0.09,
           color: isFlorida
             ? (isLarger ? '#b45309' : fishPalette[i % fishPalette.length])
-            : isNordic
-              ? (isLarger ? '#64748b' : fishPalette[i % fishPalette.length])
-              : isKalahari
-                ? (isLarger ? '#d97706' : fishPalette[i % fishPalette.length])
-                : isProvence
-                  ? (isLarger ? '#94a3b8' : fishPalette[i % fishPalette.length])
-                  : (isLarger ? '#ca8a04' : fishPalette[i % fishPalette.length]),
-          stripe: isFlorida ? '#fde68a' : isNordic ? '#e0f2fe' : isKalahari ? '#fef08a' : isProvence ? '#fef3c7' : (isLarger ? '#0f766e' : '#fef08a'),
+            : isAurora
+              ? (isLarger ? '#334155' : fishPalette[i % fishPalette.length])
+              : isNordic
+                ? (isLarger ? '#64748b' : fishPalette[i % fishPalette.length])
+                : isKalahari
+                  ? (isLarger ? '#d97706' : fishPalette[i % fishPalette.length])
+                  : isProvence
+                    ? (isLarger ? '#94a3b8' : fishPalette[i % fishPalette.length])
+                    : (isLarger ? '#ca8a04' : fishPalette[i % fishPalette.length]),
+          stripe: isFlorida ? '#fde68a' : isAurora ? '#67e8f9' : isNordic ? '#e0f2fe' : isKalahari ? '#fef08a' : isProvence ? '#fef3c7' : (isLarger ? '#0f766e' : '#fef08a'),
           phase: i * 0.7,
         });
       }
     }
 
-    // Freshwater Slider Turtle in warm-water karst basins (omitted in sub-arctic Norway)
+    // Freshwater Slider Turtle in warm-water karst basins (omitted in sub-arctic Norway & Iceland)
     const tx = cx + (bIdx === 0 ? -0.6 : -1.5);
     const ty = bIdx === 0 ? 3.2 : 3.6;
-    if (!isNordic && evaluateCaveSDF(level, tx, ty) < -0.9) {
+    if (!isNordic && !isAurora && evaluateCaveSDF(level, tx, ty) < -0.9) {
       turtles.push({
         kind: 'slider',
         x: tx,
@@ -219,7 +226,7 @@ export function createMarineEcosystem(level) {
             phase: h * 6.28,
           });
         } else if (anchor.y >= 26) {
-          // Phreatic dogtooth calcite / aragonite mineral crystal clusters (non-neon!)
+          // Phreatic dogtooth calcite / aragonite or volcanic silica quartz crystal clusters
           anchored.push({
             kind: 'crystal',
             x: anchor.x,
@@ -227,8 +234,8 @@ export function createMarineEcosystem(level) {
             nx: anchor.nx,
             ny: anchor.ny,
             size: 0.32 + randHash(seed + 4) * 0.36,
-            color: '#e2e8f0',
-            accent: '#bae6fd',
+            color: isAurora ? '#99f6e4' : '#e2e8f0',
+            accent: isAurora ? '#c4b5fd' : '#bae6fd',
             phase: h * 6.28,
           });
         }

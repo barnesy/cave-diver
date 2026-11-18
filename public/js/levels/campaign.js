@@ -168,4 +168,16 @@ export const CAMPAIGN_PLAN = [
     reelMetersPerDiver: 240,
     implemented: true,
   },
+  {
+    rank: 14,
+    id: 'silfra-katla-aurora-abyss',
+    name: 'Silfra & Katla Aurora Abyss',
+    region: 'Silfra & Katla, Iceland',
+    tier: 4,
+    badge: 'Aurora 128m',
+    targetDepthM: 128,
+    lined: false,
+    reelMetersPerDiver: 265,
+    implemented: true,
+  },
 ];

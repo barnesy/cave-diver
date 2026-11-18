@@ -552,6 +552,7 @@ export class CaveRenderer {
       'lazio-travertine': [18, 14, -12, 0.9, 8, 0.92, 6, 0.74, 0],
       'moravia-carbonic': [-16, 8, 10, 0.78, 0, 0.84, 6, 0.86, 10],
       'oxbelha-dusk': [-18, 22, -8, 0.82, 0, 0.9, 4, 0.82, 6],
+      'katla-basalt': [-18, 12, 26, 0.54, 4, 0.62, 10, 0.76, 22],
     };
     const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = stainMap[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
@@ -748,25 +749,27 @@ export class CaveRenderer {
       }
     }
 
-      // Hanging tree roots along Cenote Alpha & Beta basin rims
-      for (const basin of level.openBasins) {
-        if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
-        for (let i = 0; i < 8; i++) {
-          const rx = basin.xMin + 1.4 + (i / 7) * (basin.xMax - basin.xMin - 2.8);
-          if (rx < cx0 - 1 || rx > cx1 + 1) continue;
-          const rootLen = 1.6 + ((i * 37) % 10) * 0.24;
-          ctx.strokeStyle = i % 2 === 0 ? 'rgba(63, 98, 42, 0.82)' : 'rgba(113, 63, 18, 0.72)';
-          ctx.lineWidth = i % 2 === 0 ? 2.4 : 1.8;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(toCacheX(rx), toCacheY(0));
-          ctx.quadraticCurveTo(
-            toCacheX(rx + (i % 2 === 0 ? 0.35 : -0.35)),
-            toCacheY(rootLen * 0.55),
-            toCacheX(rx + (i % 2 === 0 ? -0.15 : 0.2)),
-            toCacheY(rootLen)
-          );
-          ctx.stroke();
+      // Hanging tree roots along Cenote basin rims (omitted in crystal glacial Aurora Silfra pool)
+      if (level.theme?.id !== 'aurora-glacial') {
+        for (const basin of level.openBasins) {
+          if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
+          for (let i = 0; i < 8; i++) {
+            const rx = basin.xMin + 1.4 + (i / 7) * (basin.xMax - basin.xMin - 2.8);
+            if (rx < cx0 - 1 || rx > cx1 + 1) continue;
+            const rootLen = 1.6 + ((i * 37) % 10) * 0.24;
+            ctx.strokeStyle = i % 2 === 0 ? 'rgba(63, 98, 42, 0.82)' : 'rgba(113, 63, 18, 0.72)';
+            ctx.lineWidth = i % 2 === 0 ? 2.4 : 1.8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(toCacheX(rx), toCacheY(0));
+            ctx.quadraticCurveTo(
+              toCacheX(rx + (i % 2 === 0 ? 0.35 : -0.35)),
+              toCacheY(rootLen * 0.55),
+              toCacheX(rx + (i % 2 === 0 ? -0.15 : 0.2)),
+              toCacheY(rootLen)
+            );
+            ctx.stroke();
+          }
         }
       }
 
@@ -956,7 +959,7 @@ export class CaveRenderer {
     // 5. Guideline (Fixed gold cave line + player-deployed reel lines & directional pins)
     this._drawGuideline(ctx, toScreenX, toScreenY, scale, playerLines);
 
-    // 6. Checkpoints, Collectables, Fallen Diver Recovery Target & Exit Beacon
+    // 6. Checkpoints, Collectables & Recovery Target
     this._drawCheckpoints(ctx, toScreenX, toScreenY, scale, checkpointsHit, nextCheckpoint, timeSec);
     this._drawCollectibles(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, collectedIds, timeSec);
     if (this.level.recoveryTarget) {
@@ -1006,7 +1009,13 @@ export class CaveRenderer {
       localSiltDensity
     );
 
-    // 10b. Subtle Calcite Crystal Torch Glint & Collect Burst Floating Scores
+    // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint & Collect Bursts
+    if (Array.isArray(this.level.geothermalVents) && this.level.geothermalVents.length > 0) {
+      this._drawGeothermalVents(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (this.level.theme?.bioluminescent) {
+      this._drawBioluminescence(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
+    }
     if (ecosystem) {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
     }
@@ -1075,6 +1084,7 @@ export class CaveRenderer {
       'lazio-travertine': ['#3b75b2', '#9bc5e8', '#f5e4c3', 'rgba(253, 230, 138, 0.24)', 'rgba(254, 249, 235, 0.14)', 'rgba(54, 48, 42, 0.42)'],
       'moravia-rift': ['#475569', '#94a3b8', '#cbd5e1', 'rgba(226, 232, 240, 0.20)', 'rgba(203, 213, 225, 0.26)', 'rgba(30, 41, 59, 0.48)'],
       'oxbelha-twilight': ['#172554', '#475569', '#f59e0b', 'rgba(251, 191, 36, 0.22)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.56)'],
+      'aurora-basalt': ['#030816', '#0f2847', '#2dd4bf', 'rgba(45, 212, 191, 0.26)', 'rgba(165, 243, 252, 0.16)', 'rgba(15, 23, 42, 0.45)'],
       yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
     };
     const [skyA, skyB, skyC, bloomCol, mistCol, birdCol] = skyPalettes[style] || skyPalettes.yucatan;
@@ -1122,6 +1132,37 @@ export class CaveRenderer {
         }
         ctx.restore();
       }
+    }
+
+    // 1b. Animated shimmering Northern Lights (Aurora Borealis) ribbons for Silfra & Katla Aurora Abyss
+    if (style === 'aurora-basalt') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const bandTop = Math.max(4, horizonY - 8 * scale);
+      const bandBot = Math.min(skyBotY, horizonY + 0.4 * scale);
+      const cols = Math.max(12, Math.floor(cw / 28));
+      for (let ribbon = 0; ribbon < 2; ribbon++) {
+        const phase = timeSec * (0.45 + ribbon * 0.2) + ribbon * 2.1;
+        for (let c = 0; c < cols; c++) {
+          const sx = (c / cols) * cw - ((parallaxCam * (0.08 + ribbon * 0.04) * scale) % 28);
+          const wave = Math.sin(c * 0.34 + phase) * 0.5 + 0.5;
+          if (wave < 0.22) continue;
+          const h = (bandBot - bandTop) * (0.38 + wave * 0.52);
+          const y0 = bandTop + Math.sin(c * 0.26 - phase * 0.8) * 14;
+          const ag = ctx.createLinearGradient(sx, y0 + h, sx, y0);
+          if (ribbon === 0) {
+            ag.addColorStop(0, `rgba(45, 212, 191, ${(0.04 + wave * 0.16).toFixed(3)})`);
+            ag.addColorStop(0.5, `rgba(74, 222, 128, ${(0.02 + wave * 0.11).toFixed(3)})`);
+          } else {
+            ag.addColorStop(0, `rgba(56, 189, 248, ${(0.03 + wave * 0.11).toFixed(3)})`);
+            ag.addColorStop(0.55, `rgba(167, 139, 250, ${(0.02 + wave * 0.09).toFixed(3)})`);
+          }
+          ag.addColorStop(1, 'rgba(15, 23, 42, 0)');
+          ctx.fillStyle = ag;
+          ctx.fillRect(sx, y0, 32, h);
+        }
+      }
+      ctx.restore();
     }
 
     // 2. Soft photographic sunlight bloom & delicate diagonal atmospheric light rays
@@ -1300,6 +1341,7 @@ export class CaveRenderer {
       'lazio-travertine': { turf: '#525f30', soil: '#736148', tuft: '#75823d', stone: '#b09d7c' },
       'moravia-rift': { turf: '#2f4539', soil: '#37414b', tuft: '#476252', stone: '#546170' },
       'oxbelha-twilight': { turf: '#233c26', soil: '#30342e', tuft: '#365a35', stone: '#4c5249' },
+      'aurora-basalt': { turf: '#1c313f', soil: '#1e242d', tuft: '#2dd4bf', stone: '#334155' },
       yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
     };
     return palettes[style] || palettes.yucatan;
@@ -2113,6 +2155,7 @@ export class CaveRenderer {
       'lazio-travertine': ['#7b6c55', '#5a6332'],
       'moravia-carbonic': ['#3e4752', '#354b3e'],
       'oxbelha-dusk': ['#323934', '#26422b'],
+      'katla-basalt': ['#232c38', '#2a4a5e'],
     };
     const [marginBase, ridgeBase] = marginMap[mossKind] || ['#4a3d2e', '#2e592d'];
     if (!this._rockPattern && this.rockTex?.canvas && ctx.createPattern) {
@@ -2321,6 +2364,14 @@ export class CaveRenderer {
       } else if (style === 'moravia-rift') {
         this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.65, h + 1.1);
         this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, '#475569');
+      } else if (style === 'aurora-basalt') {
+        if ((s & 1) === 0) {
+          this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.55, h * 0.88);
+        } else {
+          this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h * 0.72);
+        }
+        this._drawAnchoredBoulder(ctx, wx - 0.78, 0.68, 0.28, toScreenX, toScreenY, scale, '#334155');
+        this._drawAnchoredBoulder(ctx, wx + 0.72, 0.44, 0.2, toScreenX, toScreenY, scale, '#1e293b');
       } else if (style === 'oxbelha-twilight') {
         this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.75, h * 0.88);
         const ubWx = wx + 0.8;
@@ -2471,7 +2522,8 @@ export class CaveRenderer {
       surfaceStyle === 'quercy-ressel' ||
       surfaceStyle === 'lazio-travertine' ||
       surfaceStyle === 'moravia-rift' ||
-      surfaceStyle === 'oxbelha-twilight'
+      surfaceStyle === 'oxbelha-twilight' ||
+      surfaceStyle === 'aurora-basalt'
     ) {
       this._drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, surfaceStyle);
       return;
@@ -2897,14 +2949,51 @@ export class CaveRenderer {
   }
 
   _drawThemedSurfaceBuilding(ctx, hutX, toScreenX, toScreenY, scale, timeSec, cx, flags) {
-    const { isNordic, isUral, isKalahari, isAbaco, isBudapest, isSinai } = flags;
-    const halfW = isBudapest ? 1.65 : isSinai ? 1.55 : 1.38;
+    const { isNordic, isUral, isKalahari, isAbaco, isBudapest, isSinai, isAurora } = flags;
+    const halfW = isBudapest || isAurora ? 1.65 : isSinai ? 1.55 : 1.38;
     const foot = this._sampleSurfaceFooting(this.level, hutX, halfW);
     const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.04);
     const hutGx = toScreenX(hutX);
     const hutGy = toScreenY(floorWy);
 
     this._drawGroundContactShadow(ctx, hutGx, toScreenY(foot.gyC) + 0.08 * scale, halfW * 1.15 * scale, scale, foot.slopeRad);
+
+    if (isAurora) {
+      // Silfra Geothermal Research Dome perched on black volcanic basalt terrace + rising caldera steam
+      this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, hutX, halfW, floorWy - 0.14, {
+        stoneTop: '#475569',
+        stoneMid: '#334155',
+        stoneBot: '#1e293b',
+        capColor: 'rgba(94, 234, 212, 0.28)',
+      });
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(hutGx - 1.48 * scale, hutGy - 1.75 * scale, 2.96 * scale, 1.68 * scale);
+      // Illuminated teal-cyan glass observatory cupola dome & beacon antenna
+      const dg = ctx.createRadialGradient(hutGx, hutGy - 2.0 * scale, 0.12 * scale, hutGx, hutGy - 1.75 * scale, 1.38 * scale);
+      dg.addColorStop(0, '#a5f3fc');
+      dg.addColorStop(0.55, '#0284c7');
+      dg.addColorStop(1, '#0f172a');
+      ctx.fillStyle = dg;
+      ctx.beginPath();
+      ctx.arc(hutGx, hutGy - 1.75 * scale, 1.32 * scale, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      // Panoramic warm laboratory window
+      ctx.fillStyle = '#fde68a';
+      ctx.fillRect(hutGx - 0.85 * scale, hutGy - 1.25 * scale, 1.7 * scale, 0.56 * scale);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(hutGx - 0.04 * scale, hutGy - 1.25 * scale, 0.08 * scale, 0.56 * scale);
+      // Geothermal vapor plumes rising from volcanic fracture vents
+      for (let st = 0; st < 3; st++) {
+        const sx = toScreenX(cx - 1.1 + st * 1.1 + Math.sin(timeSec * 0.85 + st) * 0.4);
+        const sy = toScreenY(-0.55 - ((timeSec * 0.6 + st * 0.35) % 1.6));
+        ctx.fillStyle = 'rgba(165, 243, 252, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, (0.62 + st * 0.16) * scale, 0.3 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
 
     if (isBudapest) {
       // Historic 19th-century ochre Lukacs Thermal Bath cupola pavilion seated on carved travertine terrace
@@ -3015,13 +3104,14 @@ export class CaveRenderer {
    * Shared themed expedition surface renderer for Nordic, Provence, Kalahari, Ural, & Abaco biomes.
    */
   _drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, style) {
-    const isNordic = style === 'nordic-fjord' || style === 'ural-birch' || style === 'moravia-rift';
+    const isNordic = style === 'nordic-fjord' || style === 'ural-birch' || style === 'moravia-rift' || style === 'aurora-basalt';
     const isUral = style === 'ural-birch';
     const isKalahari = style === 'kalahari-crater';
     const isAbaco = style === 'bahamas-abaco';
     const isBudapest = style === 'budapest-bathhouse';
     const isSinai = style === 'sinai-coast';
     const isOxBelHa = style === 'oxbelha-twilight';
+    const isAurora = style === 'aurora-basalt';
     ctx.save();
     this._drawHorizonForestSpan(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, style);
 
@@ -3083,9 +3173,10 @@ export class CaveRenderer {
         isAbaco,
         isBudapest,
         isSinai,
+        isAurora,
       });
 
-      if ((isKalahari || isOxBelHa) && isEntry) {
+      if ((isKalahari || isOxBelHa || isAurora) && isEntry) {
         // Steel rescue recovery winch A-frame grounded with stone footing plates
         const winchX = topLeftX - 0.1;
         const footW = this._sampleSurfaceFooting(this.level, winchX, 0.75);
@@ -3953,6 +4044,83 @@ export class CaveRenderer {
     if (!bodyRecovered) {
       const sx = toScreenX(rt.x);
       const sy = toScreenY(rt.y);
+      if (rt.kind === 'probe') {
+        // Titanium Katla Bathysphere Seismic Core: beacon halo, tripod stabilizer, pressure sphere & viewport
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.6);
+        const halo = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, (2.2 + pulse * 0.65) * scale);
+        halo.addColorStop(0, 'rgba(45, 212, 191, 0.34)');
+        halo.addColorStop(0.55, 'rgba(56, 189, 248, 0.14)');
+        halo.addColorStop(1, 'rgba(45, 212, 191, 0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(sx, sy, (2.2 + pulse * 0.65) * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        // Anchoring skid legs + vertical stabilizing fins
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-0.55 * scale, 0.65 * scale);
+        ctx.lineTo(0, 0.12 * scale);
+        ctx.lineTo(0.55 * scale, 0.65 * scale);
+        ctx.moveTo(-0.75 * scale, 0.65 * scale);
+        ctx.lineTo(0.75 * scale, 0.65 * scale);
+        ctx.stroke();
+
+        // Titanium pressure hull
+        const hullGrad = ctx.createRadialGradient(-0.18 * scale, -0.18 * scale, 0.08 * scale, 0, 0, 0.62 * scale);
+        hullGrad.addColorStop(0, '#e2e8f0');
+        hullGrad.addColorStop(0.5, '#64748b');
+        hullGrad.addColorStop(1, '#1e293b');
+        ctx.fillStyle = hullGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.58 * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Equatorial clamp ring & tow lug
+        ctx.strokeStyle = '#2dd4bf';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 0.58 * scale, 0.17 * scale, -0.15, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Glowing sapphire sensor viewport + top transponder mast
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0.16 * scale, -0.04 * scale, 0.2 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(94, 234, 212, ${(0.72 + pulse * 0.28).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(0.16 * scale, -0.04 * scale, 0.14 * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mast + strobe
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -0.58 * scale);
+        ctx.lineTo(0, -1.08 * scale);
+        ctx.stroke();
+        const strobe = Math.pow(0.5 + 0.5 * Math.sin(timeSec * 6.0), 3);
+        ctx.fillStyle = `rgba(251, 146, 60, ${(0.35 + strobe * 0.65).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(0, -1.1 * scale, (0.09 + strobe * 0.09) * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const dist = Math.hypot(diver.x - rt.x, diver.y - rt.y);
+        if (dist < 26) {
+          ctx.font = `800 ${Math.max(10, Math.round(0.32 * scale))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#5eead4';
+          ctx.fillText(`🛰 ${rt.name.toUpperCase()} (${Math.round(rt.y)}m)`, sx, sy - 1.45 * scale);
+        }
+        ctx.restore();
+        return;
+      }
+
       // Resting fallen cave diver silhouette on rocky cavern shelf + blinking amber locator strobe
       ctx.save();
       ctx.translate(sx, sy);
@@ -3989,14 +4157,14 @@ export class CaveRenderer {
       return;
     }
 
-    // Recovered diver towed gently behind carrier diver (local player or co-op buddy)
+    // Recovered target towed gently behind carrier diver (local player or co-op buddy)
     let carrier = carryingBody ? diver : null;
     if (!carrier && Array.isArray(peerList)) {
       carrier = peerList.find((p) => p && p.carryingBody);
     }
     if (carrier) {
       const ang = carrier.angle || 0;
-      const towDist = 1.65;
+      const towDist = rt.kind === 'probe' ? 1.8 : 1.65;
       const sway = Math.sin(timeSec * 2.2) * 0.12;
       const bx = carrier.x - Math.cos(ang) * towDist - Math.sin(ang) * sway;
       const by = carrier.y - Math.sin(ang) * towDist + Math.cos(ang) * sway;
@@ -4005,7 +4173,7 @@ export class CaveRenderer {
       const tx = toScreenX(bx);
       const ty = toScreenY(by);
 
-      ctx.strokeStyle = 'rgba(251, 191, 36, 0.88)';
+      ctx.strokeStyle = rt.kind === 'probe' ? 'rgba(94, 234, 212, 0.9)' : 'rgba(251, 191, 36, 0.88)';
       ctx.lineWidth = Math.max(1.5, 0.055 * scale);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -4015,17 +4183,181 @@ export class CaveRenderer {
       ctx.save();
       ctx.translate(tx, ty);
       ctx.rotate(ang);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-0.62 * scale, -0.14 * scale, 1.1 * scale, 0.28 * scale);
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-0.35 * scale, -0.25 * scale, 0.65 * scale, 0.14 * scale);
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-0.82 * scale, -0.14 * scale, 0.24 * scale, 0.24 * scale);
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.arc(0.48 * scale, 0, 0.16 * scale, 0, Math.PI * 2);
-      ctx.fill();
+      if (rt.kind === 'probe') {
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.0);
+        const g = ctx.createRadialGradient(-0.12 * scale, -0.12 * scale, 0.05 * scale, 0, 0, 0.44 * scale);
+        g.addColorStop(0, '#e2e8f0');
+        g.addColorStop(0.55, '#64748b');
+        g.addColorStop(1, '#1e293b');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.42 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2dd4bf';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(94, 234, 212, ${(0.7 + pulse * 0.3).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(0.14 * scale, 0, 0.12 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-0.62 * scale, -0.14 * scale, 1.1 * scale, 0.28 * scale);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-0.35 * scale, -0.25 * scale, 0.65 * scale, 0.14 * scale);
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(-0.82 * scale, -0.14 * scale, 0.24 * scale, 0.24 * scale);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(0.48 * scale, 0, 0.16 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  _drawGeothermalVents(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const vents = this.level.geothermalVents;
+    if (!vents || vents.length === 0) return;
+    ctx.save();
+    for (let vIdx = 0; vIdx < vents.length; vIdx++) {
+      const v = vents[vIdx];
+      const hw = v.halfWidth || 3.4;
+      const height = v.height || 18;
+      if (v.x + hw < visX0 - 4 || v.x - hw > visX1 + 4) continue;
+      if (v.y < visY0 - 4 || v.y - height > visY1 + 4) continue;
+
+      const sx = toScreenX(v.x);
+      const sy = toScreenY(v.y);
+      const throatY = sy - 0.95 * scale;
+
+      // Soft feathered hydrothermal convection plume puffs (no hard polygon edges!)
+      const puffCount = 7;
+      for (let p = 0; p < puffCount; p++) {
+        const t = p / (puffCount - 1);
+        const py = toScreenY(v.y - 1.2 - t * (height * 0.88));
+        const swayX = sx + Math.sin(timeSec * 2.4 - t * 3.6 + vIdx * 1.7) * (0.18 + t * 0.65) * scale;
+        const rx = (0.75 + t * hw * 0.52) * scale;
+        const ry = (1.6 + t * 1.9) * scale;
+        const rMax = Math.max(rx, ry);
+        ctx.save();
+        ctx.translate(swayX, py);
+        ctx.scale(rx / rMax, ry / rMax);
+        const g = ctx.createRadialGradient(0, 0, rMax * 0.05, 0, 0, rMax);
+        const fade = Math.max(0, 1 - t * 0.92);
+        if (t < 0.25) {
+          g.addColorStop(0, `rgba(251, 146, 60, ${(0.22 * fade).toFixed(3)})`);
+          g.addColorStop(0.55, `rgba(45, 212, 191, ${(0.11 * fade).toFixed(3)})`);
+        } else {
+          g.addColorStop(0, `rgba(45, 212, 191, ${(0.14 * fade).toFixed(3)})`);
+          g.addColorStop(0.6, `rgba(56, 189, 248, ${(0.07 * fade).toFixed(3)})`);
+        }
+        g.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, rMax, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Craggy basalt black-smoker chimney silhouette (jagged volcanic spire, not a flat box)
+      ctx.fillStyle = '#070b14';
+      ctx.beginPath();
+      ctx.moveTo(sx - 1.55 * scale, sy + 0.7 * scale);
+      ctx.lineTo(sx - 1.15 * scale, sy - 0.1 * scale);
+      ctx.lineTo(sx - 0.85 * scale, sy - 0.55 * scale);
+      ctx.lineTo(sx - 0.52 * scale, sy - 1.15 * scale);
+      ctx.lineTo(sx - 0.18 * scale, sy - 0.95 * scale);
+      ctx.lineTo(sx + 0.16 * scale, sy - 1.2 * scale);
+      ctx.lineTo(sx + 0.56 * scale, sy - 1.08 * scale);
+      ctx.lineTo(sx + 0.95 * scale, sy - 0.45 * scale);
+      ctx.lineTo(sx + 1.5 * scale, sy + 0.7 * scale);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing magma vent fissure halo + inner molten cracks
+      const glowPulse = 0.74 + 0.26 * Math.sin(timeSec * 4.4 + vIdx * 2.1);
+      const ventGlow = ctx.createRadialGradient(sx, throatY, 0.08 * scale, sx, throatY, 2.9 * scale);
+      ventGlow.addColorStop(0, `rgba(254, 240, 138, ${(0.95 * glowPulse).toFixed(2)})`);
+      ventGlow.addColorStop(0.22, `rgba(251, 146, 60, ${(0.65 * glowPulse).toFixed(2)})`);
+      ventGlow.addColorStop(0.58, `rgba(234, 88, 12, ${(0.22 * glowPulse).toFixed(2)})`);
+      ventGlow.addColorStop(1, 'rgba(249, 115, 22, 0)');
+      ctx.fillStyle = ventGlow;
+      ctx.beginPath();
+      ctx.arc(sx, throatY, 2.9 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(253, 186, 116, ${(0.82 * glowPulse).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.2, 0.055 * scale);
+      ctx.beginPath();
+      ctx.moveTo(sx - 0.38 * scale, throatY + 0.05 * scale);
+      ctx.lineTo(sx - 0.08 * scale, throatY - 0.08 * scale);
+      ctx.lineTo(sx + 0.28 * scale, throatY + 0.04 * scale);
+      ctx.moveTo(sx - 0.12 * scale, throatY + 0.12 * scale);
+      ctx.lineTo(sx + 0.08 * scale, throatY + 0.55 * scale);
+      ctx.stroke();
+
+      // Rising mineral bubbles & glowing thermal embers inside the updraft column (clipped inside open cave water)
+      for (let b = 0; b < 14; b++) {
+        const phase = ((timeSec * (0.42 + (b % 3) * 0.14) + vIdx * 0.31 + b / 14) % 1);
+        const by = v.y - 1.0 - phase * height;
+        const bx = v.x + Math.sin(phase * 9.0 + b * 2.1 + timeSec * 2.5) * hw * (0.26 + phase * 0.36);
+        if (evaluateCaveSDF(this.level, bx, by) >= -0.25) continue;
+        const bsx = toScreenX(bx);
+        const bsy = toScreenY(by);
+        const alpha = (1 - phase) * (b % 3 === 0 ? 0.85 : 0.58);
+        const er = Math.max(1.3, (0.045 + (1 - phase) * 0.065) * scale);
+        ctx.fillStyle = b % 3 === 0
+          ? `rgba(253, 186, 116, ${alpha.toFixed(2)})`
+          : `rgba(94, 234, 212, ${alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(bsx, bsy, er, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawBioluminescence(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    if (visY1 < 34) return;
+    const cellSize = 10;
+    const cx0 = Math.floor(visX0 / cellSize);
+    const cx1 = Math.ceil(visX1 / cellSize);
+    const cy0 = Math.max(Math.floor(34 / cellSize), Math.floor(visY0 / cellSize));
+    const cy1 = Math.ceil(visY1 / cellSize);
+    ctx.save();
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let k = 0; k < 6; k++) {
+          const h1 = Math.sin(cx * 127.1 + cy * 311.7 + k * 74.7) * 43758.5453;
+          const r1 = h1 - Math.floor(h1);
+          const h2 = Math.sin(cx * 269.5 + cy * 183.3 + k * 41.9) * 43758.5453;
+          const r2 = h2 - Math.floor(h2);
+          const wx = (cx + r1) * cellSize + Math.sin(timeSec * 0.55 + r2 * 6.28) * 0.75;
+          const wy = (cy + r2) * cellSize + Math.cos(timeSec * 0.45 + r1 * 6.28) * 0.55;
+          if (wy < 34 || evaluateCaveSDF(this.level, wx, wy) >= -0.35) continue;
+          const twinkle = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(timeSec * 1.9 + r1 * 12 + k), 2);
+          const sx = toScreenX(wx);
+          const sy = toScreenY(wy);
+          const haloR = Math.max(4.5, (0.2 + r2 * 0.16) * scale);
+          const isTeal = k % 2 === 0;
+          const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
+          if (isTeal) {
+            g.addColorStop(0, `rgba(153, 246, 228, ${(0.9 * twinkle).toFixed(2)})`);
+            g.addColorStop(0.28, `rgba(45, 212, 191, ${(0.42 * twinkle).toFixed(2)})`);
+            g.addColorStop(1, 'rgba(45, 212, 191, 0)');
+          } else {
+            g.addColorStop(0, `rgba(221, 214, 254, ${(0.85 * twinkle).toFixed(2)})`);
+            g.addColorStop(0.28, `rgba(167, 139, 250, ${(0.38 * twinkle).toFixed(2)})`);
+            g.addColorStop(1, 'rgba(167, 139, 250, 0)');
+          }
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(sx, sy, haloR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.restore();
   }

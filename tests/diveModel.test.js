@@ -944,9 +944,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 13 campaign levels validate cleanly and scale monotonically to 115m recovery', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 13, 'Campaign roadmap should chart all 13 levels');
-  assert.equal(LEVELS.length, 13, 'All 13 campaign levels should be registered');
+test('All 14 campaign levels validate cleanly and scale monotonically to 128m Aurora Abyss', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 14, 'Campaign roadmap should chart all 14 levels');
+  assert.equal(LEVELS.length, 14, 'All 14 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -965,6 +965,7 @@ test('All 13 campaign levels validate cleanly and scale monotonically to 115m re
   const lvl11 = getLevelById('pozzo-del-merro');
   const lvl12 = getLevelById('hranicka-propast-rift');
   const lvl13 = getLevelById('ox-bel-ha-grand-traverse');
+  const lvl14 = getLevelById('silfra-katla-aurora-abyss');
 
   const meta7 = getLevelMeta(lvl7);
   const check = validateLevel(lvl7, { checkGeometry: true });
@@ -984,8 +985,8 @@ test('All 13 campaign levels validate cleanly and scale monotonically to 115m re
     assert.ok(Math.abs(g - l) < 0.05, `Chunk SDF drift too large at (${tx},${ty}): ${g} vs ${l}`);
   }
 
-  // Levels 8-13 validate cleanly, ramp depth monotonically, and remain unlined
-  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13]) {
+  // Levels 8-14 validate cleanly, ramp depth monotonically, and remain unlined
+  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13, lvl14]) {
     const c = validateLevel(lvl, { checkGeometry: true });
     assert.equal(c.valid, true, `${lvl.id}: ${c.errors.join(', ')}`);
     assert.equal(lvl.guideline.length, 0, `${lvl.id} must be unlined`);
@@ -997,6 +998,7 @@ test('All 13 campaign levels validate cleanly and scale monotonically to 115m re
   assert.ok(Array.isArray(lvl9.archWindows) && lvl9.archWindows.length >= 1, 'Level 9 must highlight The Arch subsea light aperture');
   assert.ok(getLevelMeta(lvl10).maxDepthM >= 88 && getLevelMeta(lvl11).maxDepthM >= 96);
   assert.ok(getLevelMeta(lvl12).maxDepthM >= 104 && getLevelMeta(lvl13).maxDepthM >= 114);
+  assert.ok(getLevelMeta(lvl14).maxDepthM >= 128, `Level 14 must reach >=128m (got ${getLevelMeta(lvl14).maxDepthM})`);
 });
 
 test('Level 12/13 hypoxic TMX 11/65 survives 115m PPO2 and Level 13 requires fallen-diver recovery before surfacing', () => {
@@ -1052,6 +1054,44 @@ test('Level 12/13 hypoxic TMX 11/65 survives 115m PPO2 and Level 13 requires fal
   const doneRes = stepDiveSession(session, { x: 0, y: 0 }, 0.1);
   assert.ok(doneRes.outcome && doneRes.outcome.success === true, 'Should succeed once body is recovered and deco is clear');
   assert.ok(doneRes.outcome.title.includes('Recovered'));
+});
+
+test('Level 14 TMX 9/70 survives 128m, geothermal vents impart upward lift, and Katla Bathysphere Core recovery completes mission', () => {
+  const lvl14 = getLevelById('silfra-katla-aurora-abyss');
+  assert.ok(lvl14, 'Level 14 should be registered');
+  const session = createDiveSession(lvl14);
+  assert.equal(session.diveState.mixes.TMX1455.name, 'TMX 9/70');
+  assert.equal(session.diveState.mixes.TMX1455.modM, 145.0);
+
+  // At 128m depth on TMX 9/70, PPO2 remains under 1.60 bar O2 toxicity threshold
+  session.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(session.diveState, { depthM: 128.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(session.diveState.ppo2 > 1.2 && session.diveState.ppo2 < 1.35, `Unexpected 128m PPO2: ${session.diveState.ppo2}`);
+  assert.equal(session.diveState.alive, true);
+
+  // Geothermal vent column accelerates diver upward (negative vy) when positioned inside plume
+  const vent = lvl14.geothermalVents[2];
+  session.diver.x = vent.x;
+  session.diver.y = vent.y - 6.0;
+  session.diver.vx = 0;
+  session.diver.vy = 0;
+  stepDiveSession(session, { x: 0, y: 0 }, 0.2);
+  assert.ok(session.diver.vy < -0.2, `Expected geothermal updraft (vy < -0.2), got vy=${session.diver.vy}`);
+
+  // Swimming onto Katla Bathysphere Core secures the probe & surfacing completes with probe title
+  for (const cp of lvl14.checkpoints) session.checkpointsHit.add(cp.id);
+  session.diver.x = lvl14.recoveryTarget.x;
+  session.diver.y = lvl14.recoveryTarget.y;
+  stepDiveSession(session, { x: 0, y: 0 }, 0.1);
+  assert.equal(session.bodyRecovered, true);
+
+  session.diveState.activeGasId = 'EAN32';
+  session.diveState.ceilingM = 0;
+  session.diver.x = lvl14.exitZone.x;
+  session.diver.y = 1.0;
+  const doneRes = stepDiveSession(session, { x: 0, y: 0 }, 0.1);
+  assert.ok(doneRes.outcome && doneRes.outcome.success === true, 'Level 14 should succeed after Bathysphere recovery');
+  assert.ok(doneRes.outcome.title.includes('Katla Bathysphere Core'), `Unexpected title: ${doneRes.outcome.title}`);
 });
 
 test('P2pRoomCoordinator manages host creation, buddy join, dive start, telemetry, recovery, and rejoin cleanly', () => {

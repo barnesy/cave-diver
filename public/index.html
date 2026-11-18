@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=51" />
+  <link rel="stylesheet" href="./css/style.css?v=52" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -81,7 +81,7 @@
       <div id="menu-site-picker" class="level-picker-block">
         <div class="level-picker-head">
           <label for="select-level">Expedition Site</label>
-          <span id="campaign-progress-pill" class="campaign-progress-pill">13 / 13 Sites</span>
+          <span id="campaign-progress-pill" class="campaign-progress-pill">14 / 14 Sites</span>
           <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
         </div>
         <div id="level-cards" class="level-cards" role="listbox" aria-label="Expedition Dive Sites"></div>
@@ -100,7 +100,7 @@
             <span class="chip-range" id="chip-range-ean32">0–33m Travel</span>
           </div>
           <div class="gas-chip">
-            <span class="chip-name purple">TMX 14/55</span>
+            <span class="chip-name purple" id="chip-name-tmx">TMX 14/55</span>
             <span class="chip-range" id="chip-range-tmx">3–65m Bottom</span>
           </div>
           <div class="gas-chip">
@@ -351,45 +351,46 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=51",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=51",
-        "./js/game/audio.js": "./js/game/audio.js?v=51",
-        "./js/game/collision.js": "./js/game/collision.js?v=51",
-        "./js/game/input.js": "./js/game/input.js?v=51",
-        "./js/game/hud.js": "./js/game/hud.js?v=51",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=51",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=51",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=51",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=51",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=51",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=51",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=51",
-        "./js/game/silt.js": "./js/game/silt.js?v=51",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=51",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=51",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=51",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=51",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=51",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=51",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=51",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=51",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=51",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=51",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=51",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=51",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=51",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=51",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=51",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=51",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=51",
-        "./js/levels/index.js": "./js/levels/index.js?v=51",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=51",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=51",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=51",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=51"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=52",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=52",
+        "./js/game/audio.js": "./js/game/audio.js?v=52",
+        "./js/game/collision.js": "./js/game/collision.js?v=52",
+        "./js/game/input.js": "./js/game/input.js?v=52",
+        "./js/game/hud.js": "./js/game/hud.js?v=52",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=52",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=52",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=52",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=52",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=52",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=52",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=52",
+        "./js/game/silt.js": "./js/game/silt.js?v=52",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=52",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=52",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=52",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=52",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=52",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=52",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=52",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=52",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=52",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=52",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=52",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=52",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=52",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=52",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=52",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=52",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=52",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=52",
+        "./js/levels/index.js": "./js/levels/index.js?v=52",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=52",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=52",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=52",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=52"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=51"></script>
+  <script type="module" src="./js/main.js?v=52"></script>
 </body>
 </html>
