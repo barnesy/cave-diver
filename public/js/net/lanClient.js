@@ -21,7 +21,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=52');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=53');
   }
   return trysteroModulePromise;
 }
@@ -76,6 +76,7 @@ export class LanClient {
     this._migrating = false;
     this._pendingLeaveTimer = null;
     this._migrateTimer = null;
+    this._pendingCreateResolvers = [];
   }
 
   getTransportMode() {
@@ -589,6 +590,7 @@ export class LanClient {
       levelId: msg.levelId,
       maxPlayers: msg.maxPlayers || 2,
       loadStatus: this._latestLoadStatus,
+      initialDiveState: msg.initialDiveState || null,
     });
     this._p2pHost = coordinator;
     coordinator.bindPlayerSender(myId, (outMsg) => {
@@ -893,6 +895,7 @@ export class LanClient {
 
     const mode = await this._detectTransport();
     if (mode === 'p2p') {
+      loadTrystero().catch(() => {});
       this.connected = true;
       this.reconnecting = false;
       this.emit('connected');
@@ -1023,6 +1026,9 @@ export class LanClient {
             });
           }
           this.emit('room_update', msg.room);
+          if (this._pendingCreateResolvers.length > 0) {
+            for (const res of this._pendingCreateResolvers.splice(0)) res(msg.room);
+          }
           break;
         }
         case 'room_update': {
@@ -1065,6 +1071,9 @@ export class LanClient {
           this.peer = null;
           this.emit('returned_to_lobby', msg.room);
           this.emit('room_update', msg.room);
+          if (this._pendingCreateResolvers.length > 0) {
+            for (const res of this._pendingCreateResolvers.splice(0)) res(msg.room);
+          }
           break;
         case 'peer_state': {
           const pid = msg.playerId || 'peer';
@@ -1302,20 +1311,38 @@ export class LanClient {
     this.connect();
   }
 
-  createRoom(name, levelId = 'cenote-el-abismo', maxPlayers = 2) {
+  async createRoom(name, levelId = 'cenote-el-abismo', maxPlayers = 4, initialDiveState = null) {
     this.clearSavedSession();
+    if (this.transport === 'auto') {
+      await this._detectTransport();
+    }
     const msg = {
       type: 'create_room',
       name,
       levelId,
       maxPlayers,
+      initialDiveState,
       ...this._latestLoadStatus,
     };
     if (this.transport === 'p2p') {
-      this._p2pCreateRoom(msg);
-      return;
+      await this._p2pCreateRoom(msg);
+      return this.room;
     }
-    this.sendReliable(msg, { replaceType: 'create_room' });
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (room) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(room || this.room);
+      };
+      const timer = setTimeout(() => {
+        this._pendingCreateResolvers = this._pendingCreateResolvers.filter((fn) => fn !== done);
+        done(this.room);
+      }, 5000);
+      this._pendingCreateResolvers.push(done);
+      this.sendReliable(msg, { replaceType: 'create_room' });
+    });
   }
 
   setLevel(levelId) {

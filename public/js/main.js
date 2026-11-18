@@ -153,7 +153,8 @@ try {
   if (savedName && playerNameInput) {
     playerNameInput.value = savedName;
   } else if (INITIAL_ROOM_CODE && playerNameInput && playerNameInput.value === 'Diver 1') {
-    playerNameInput.value = 'Buddy Diver';
+    const tagNum = 10 + Math.floor(Math.random() * 89);
+    playerNameInput.value = `Diver ${tagNum}`;
   }
   playerNameInput?.addEventListener('change', () => {
     const clean = playerNameInput.value.trim();
@@ -581,8 +582,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (multiplayer && lan.room) {
     syncRoomInviteUi(lan.room);
   } else {
-    if (btnHudInvite) btnHudInvite.hidden = true;
-    if (btnHudShare) btnHudShare.hidden = true;
+    syncRoomInviteUi(null);
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const openMsg =
@@ -1032,8 +1032,9 @@ function syncBrowserRoomUrl(code) {
 function syncRoomInviteUi(room) {
   const code = room?.code || '';
   const inviteUrl = buildRoomInviteUrl(code);
-  const maxP = room?.maxPlayers || 2;
+  const maxP = room?.maxPlayers || 4;
   const hasOpenSlots = Boolean(code && Array.isArray(room?.players) && room.players.length < maxP);
+  const showInSoloDive = !code && mode === 'diving' && Boolean(session);
   if (lanInviteUrlInput) {
     lanInviteUrlInput.value = inviteUrl;
   }
@@ -1041,13 +1042,21 @@ function syncRoomInviteUi(room) {
     btnShareInvite.hidden = !(code && typeof navigator.share === 'function');
   }
   if (btnHudInvite) {
-    btnHudInvite.hidden = !hasOpenSlots;
+    btnHudInvite.hidden = !(hasOpenSlots || showInSoloDive);
+    if (!copyInviteFeedbackTimer) {
+      btnHudInvite.textContent = code ? `🔗 ${code}` : '🔗 Invite';
+    }
     if (hasOpenSlots) {
-      btnHudInvite.title = `Copy invite link (${room.players.length}/${maxP} divers · Room ${code})`;
+      btnHudInvite.title = `Copy drop-in link (${room.players.length}/${maxP} divers · Room ${code})`;
+    } else if (showInSoloDive) {
+      btnHudInvite.title = 'Open Co-op Room & copy drop-in invite link for friends';
     }
   }
   if (btnHudShare) {
-    btnHudShare.hidden = !(hasOpenSlots && typeof navigator.share === 'function');
+    btnHudShare.hidden = !((hasOpenSlots || showInSoloDive) && typeof navigator.share === 'function');
+    if (showInSoloDive) {
+      btnHudShare.title = 'Open Co-op Room & share invite link';
+    }
   }
   syncNotifyToggleUi();
 }
@@ -1466,9 +1475,41 @@ if (lanRoomsList) {
   });
 }
 
+const btnQuickCoop = document.getElementById('btn-quick-coop');
+if (btnQuickCoop) {
+  btnQuickCoop.addEventListener('click', async () => {
+    btnQuickCoop.disabled = true;
+    const name = playerNameInput?.value.trim() || 'Lead Diver';
+    const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
+    requestDiverNotificationPermission();
+    try {
+      lanStatus.className = 'lan-status';
+      lanStatus.textContent = 'Opening drop-in co-op room...';
+      lan.connect();
+      const room = await lan.createRoom(name, activeLevel.id, maxPlayers, {
+        checkpoints: [],
+        collectibles: [],
+        bodyRecovered: false,
+        playerLines: [],
+      });
+      if (room?.code) {
+        activeDiveSeq = room.diveSeq || 1;
+        await copyCurrentInviteLink();
+      }
+      await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
+      startDiveRun(true);
+      if (room?.code) {
+        showToast(`Room ${room.code} live & link copied! Friends drop straight in.`, 3.8);
+      }
+    } finally {
+      btnQuickCoop.disabled = false;
+    }
+  });
+}
+
 document.getElementById('btn-create-room').addEventListener('click', () => {
   const name = playerNameInput?.value.trim() || 'Lead Diver';
-  const maxPlayers = Number(document.getElementById('select-max-players')?.value || 2);
+  const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
   requestDiverNotificationPermission();
   lanStatus.textContent = 'Creating room...';
   lan.connect();
@@ -1525,19 +1566,62 @@ async function copyCurrentInviteLink() {
       btnHudInvite.classList.add('copied');
     }
     copyInviteFeedbackTimer = setTimeout(() => {
+      copyInviteFeedbackTimer = 0;
       if (btnCopyInvite) {
         btnCopyInvite.textContent = 'Copy Link';
         btnCopyInvite.classList.remove('copied');
       }
       if (btnHudInvite) {
-        btnHudInvite.textContent = '🔗 Invite';
+        btnHudInvite.textContent = lan.room?.code ? `🔗 ${lan.room.code}` : '🔗 Invite';
         btnHudInvite.classList.remove('copied');
       }
     }, 2000);
   }
 }
 
+let upgradingDiveRoom = false;
+async function upgradeDiveToCoopRoom({ share = false } = {}) {
+  if (lan.room) {
+    return share ? shareCurrentInviteLink() : copyCurrentInviteLink();
+  }
+  if (mode !== 'diving' || !session || upgradingDiveRoom) return;
+  upgradingDiveRoom = true;
+  if (btnHudInvite) btnHudInvite.disabled = true;
+  try {
+    const diverName = playerNameInput?.value.trim() || 'Lead Diver';
+    requestDiverNotificationPermission();
+    lan.connect();
+    const room = await lan.createRoom(diverName, activeLevel.id, 4, {
+      checkpoints: Array.from(session.checkpointsHit || []),
+      collectibles: Array.from(session.collectedIds || []),
+      bodyRecovered: Boolean(session.bodyRecovered),
+      playerLines: session.guidelineChains || [],
+    });
+    if (!room?.code) {
+      showToast('Could not open co-op room right now — try again.', 2.8);
+      return;
+    }
+    isMultiplayer = true;
+    activeDiveSeq = room.diveSeq || 1;
+    if (coopCommsEl) coopCommsEl.hidden = false;
+    syncBrowserRoomUrl(room.code);
+    syncRoomInviteUi(room);
+    if (share && typeof navigator.share === 'function') {
+      await shareCurrentInviteLink();
+    } else {
+      await copyCurrentInviteLink();
+    }
+    showToast(`Co-op Room ${room.code} live! Share link — friends drop straight in.`, 3.8);
+  } finally {
+    upgradingDiveRoom = false;
+    if (btnHudInvite) btnHudInvite.disabled = false;
+  }
+}
+
 async function shareCurrentInviteLink() {
+  if (!lan.room && mode === 'diving' && session) {
+    return upgradeDiveToCoopRoom({ share: true });
+  }
   if (!lan.room || typeof navigator.share !== 'function') {
     copyCurrentInviteLink();
     return;
@@ -1560,7 +1644,13 @@ async function shareCurrentInviteLink() {
 }
 
 btnCopyInvite?.addEventListener('click', copyCurrentInviteLink);
-btnHudInvite?.addEventListener('click', copyCurrentInviteLink);
+btnHudInvite?.addEventListener('click', () => {
+  if (!lan.room && mode === 'diving' && session) {
+    upgradeDiveToCoopRoom({ share: false });
+  } else {
+    copyCurrentInviteLink();
+  }
+});
 
 lanInviteUrlInput?.addEventListener('click', () => {
   lanInviteUrlInput.focus();

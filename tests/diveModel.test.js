@@ -1163,6 +1163,32 @@ test('P2pRoomCoordinator manages host creation, buddy join, dive start, telemetr
 
   migrated.destroy();
   coord.destroy();
+
+  // Mid-dive room creation (starting a Solo dive then sharing a link) drops joiners directly into the active dive
+  const liveCoord = new P2pRoomCoordinator({
+    code: 'LIVE',
+    hostName: 'SoloTurnedHost',
+    levelId: 'silfra-katla-aurora-abyss',
+    maxPlayers: 4,
+    initialDiveState: {
+      checkpoints: ['cp1', 'cp2'],
+      collectibles: ['col-1'],
+      bodyRecovered: true,
+      playerLines: [[{ x: -3, y: 12 }, { x: 12, y: 26 }]],
+    },
+  });
+  assert.equal(liveCoord.room.started, true);
+  assert.equal(liveCoord.room.diveSeq, 1);
+  const buddyMsgs = [];
+  const buddyId = liveCoord.handleRemoteJoin({ name: 'LinkBuddy' }, (m) => buddyMsgs.push(m));
+  assert.ok(buddyId);
+  const buddyStart = buddyMsgs.find((m) => m.type === 'dive_started');
+  assert.ok(buddyStart && buddyStart.lateJoin === true);
+  assert.deepEqual(buddyStart.checkpoints, ['cp1', 'cp2']);
+  assert.deepEqual(buddyStart.collectibles, ['col-1']);
+  assert.equal(buddyStart.bodyRecoveredBy, liveCoord.hostId);
+  assert.equal(buddyStart.playerLines[0].chains[0].length, 2);
+  liveCoord.destroy();
 });
 
 test('P2pRoomCoordinator deterministic Trystero joinSeq host selection, re-attach, and ghost eviction', () => {

@@ -109,22 +109,42 @@ export class P2pRoomCoordinator {
     levelId = DEFAULT_LEVEL_ID,
     maxPlayers = 2,
     loadStatus = {},
+    initialDiveState = null,
   }) {
     this.seq = 2;
     this.hostId = hostId;
+    const initStarted = Boolean(initialDiveState && typeof initialDiveState === 'object');
     this.room = {
       code,
       levelId: sanitizeLevelId(levelId),
       maxPlayers: Math.max(2, Math.min(4, Number(maxPlayers) || 2)),
-      started: false,
-      phase: 'lobby',
-      diveSeq: 0,
-      sharedCheckpoints: new Set(),
-      sharedCollectibles: new Set(),
+      started: initStarted,
+      phase: initStarted ? 'diving' : 'lobby',
+      diveSeq: initStarted ? 1 : 0,
+      sharedCheckpoints: new Set(
+        initStarted && Array.isArray(initialDiveState.checkpoints)
+          ? initialDiveState.checkpoints.filter((id) => typeof id === 'string').slice(0, 64)
+          : []
+      ),
+      sharedCollectibles: new Set(
+        initStarted && Array.isArray(initialDiveState.collectibles)
+          ? initialDiveState.collectibles.filter((id) => typeof id === 'string').slice(0, 64)
+          : []
+      ),
       playerLines: new Map(),
-      bodyRecoveredBy: null,
+      bodyRecoveredBy: initStarted && initialDiveState.bodyRecovered ? hostId : null,
       players: new Map(),
     };
+    if (initStarted && Array.isArray(initialDiveState.playerLines)) {
+      const chains = sanitizeGuidelineChains(initialDiveState.playerLines);
+      if (chains.length > 0) {
+        this.room.playerLines.set(hostId, {
+          name: sanitizeName(hostName, 'Lead Diver'),
+          chains,
+          reelingActive: false,
+        });
+      }
+    }
     this.senders = new Map(); // playerId -> (msg) => void
 
     const token = randomToken();

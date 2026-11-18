@@ -403,6 +403,38 @@ test('LAN server serves app, reports LAN URLs, and relays 2-player room state', 
     assert.equal(meHost.connected, true);
     assert.equal(guestNotified.room.players.find((p) => p.id === hostBackMsg.clientId).connected, true);
 
+    // Mid-dive room creation over LAN WS drops joining guest straight into started dive with carried state
+    const wsLiveHost = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await nextMsg(wsLiveHost, 'welcome');
+    wsLiveHost.send(
+      JSON.stringify({
+        type: 'create_room',
+        name: 'LiveHost',
+        levelId: 'silfra-katla-aurora-abyss',
+        maxPlayers: 4,
+        initialDiveState: {
+          checkpoints: ['cp1'],
+          collectibles: ['col-1'],
+          bodyRecovered: false,
+          playerLines: [[{ x: -3, y: 12 }, { x: 12, y: 26 }]],
+        },
+      })
+    );
+    const liveCreated = await nextMsg(wsLiveHost, 'room_joined');
+    assert.equal(liveCreated.room.started, true);
+    assert.equal(liveCreated.room.maxPlayers, 4);
+    const wsLiveGuest = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await nextMsg(wsLiveGuest, 'welcome');
+    const liveGuestStartP = nextMsg(wsLiveGuest, 'dive_started');
+    wsLiveGuest.send(JSON.stringify({ type: 'join_room', code: liveCreated.room.code, name: 'LinkGuest' }));
+    const liveGuestStart = await liveGuestStartP;
+    assert.equal(liveGuestStart.lateJoin, true);
+    assert.deepEqual(liveGuestStart.checkpoints, ['cp1']);
+    assert.deepEqual(liveGuestStart.collectibles, ['col-1']);
+    assert.equal(liveGuestStart.playerLines[0].chains[0].length, 2);
+    wsLiveGuest.close();
+    wsLiveHost.close();
+
     wsHostBack.close();
     wsGuestWhileAway.close();
     ws2Re3.close();

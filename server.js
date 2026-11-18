@@ -491,17 +491,40 @@ wss.on('connection', (ws) => {
         const maxPlayers = Math.max(2, Math.min(4, requestedMax));
         const levelId = sanitizeLevelId(msg.levelId);
         const token = crypto.randomBytes(8).toString('hex');
+        const initDive =
+          msg.initialDiveState && typeof msg.initialDiveState === 'object' ? msg.initialDiveState : null;
+        const initStarted = Boolean(initDive);
         const room = {
           code,
           levelId,
           maxPlayers,
-          started: false,
-          phase: 'lobby',
-          diveSeq: 0,
-          sharedCheckpoints: new Set(),
-          sharedCollectibles: new Set(),
+          started: initStarted,
+          phase: initStarted ? 'diving' : 'lobby',
+          diveSeq: initStarted ? 1 : 0,
+          sharedCheckpoints: new Set(
+            initStarted && Array.isArray(initDive.checkpoints)
+              ? initDive.checkpoints.filter((id) => typeof id === 'string').slice(0, 64)
+              : []
+          ),
+          sharedCollectibles: new Set(
+            initStarted && Array.isArray(initDive.collectibles)
+              ? initDive.collectibles.filter((id) => typeof id === 'string').slice(0, 64)
+              : []
+          ),
+          playerLines: new Map(),
+          bodyRecoveredBy: initStarted && initDive.bodyRecovered ? client.id : null,
           players: new Map(),
         };
+        if (initStarted && Array.isArray(initDive.playerLines)) {
+          const chains = sanitizeGuidelineChains(initDive.playerLines);
+          if (chains.length > 0) {
+            room.playerLines.set(client.id, {
+              name: client.name,
+              chains,
+              reelingActive: false,
+            });
+          }
+        }
         const hasHostTracking = Boolean(msg.loadStatus || msg.loadedLevelId);
         room.players.set(client.id, {
           id: client.id,

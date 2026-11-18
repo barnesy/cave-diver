@@ -519,13 +519,23 @@ html, body {
   cursor: pointer;
 }
 
+.quick-coop-btn {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 .lan-controls {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 8px;
 }
 @media (max-width: 480px) {
-  .lan-controls {
+  .quick-coop-btn {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.lan-controls {
     grid-template-columns: 1fr;
   }
 }
