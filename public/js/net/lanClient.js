@@ -37,7 +37,7 @@ const P2P_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=59');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=60');
   }
   return trysteroModulePromise;
 }
@@ -1087,17 +1087,10 @@ export class LanClient {
     // Broadcast initial join request via relay fallback right away (beats WebRTC cold start & bypasses symmetric NAT!)
     this._sendJoinToPeer(cleanCode, null, true);
 
-    // Cloud Room Keeper fallback: only recover from Vercel Storage after 7.0s if NO live Host responded
-    // over WebRTC or Nostr WS Relay (prevents premature split-brain when NAT/Signaling takes 3-6s)
+    // Cloud Room Keeper fallback: recover from Vercel Storage after 5.0s if Host has not replied
+    // with room_joined over WebRTC or Nostr WS Relay (even if stale announcements arrived from cache)
     const cloudFallbackTimer = setTimeout(async () => {
-      if (
-        this._p2pGen !== gen ||
-        this._p2pJoinAcked ||
-        this._p2pHost ||
-        this._manualLeave ||
-        this._p2pHostPeerId ||
-        this._p2pDirectPeers.size > 0
-      ) {
+      if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || this._manualLeave) {
         return;
       }
       this.emit('join_stage', {
@@ -1106,13 +1099,7 @@ export class LanClient {
         message: `Recovering Room ${cleanCode} from Cloud Room Keeper...`,
       });
       const cloud = await this._cloudFetchRoom(cleanCode);
-      if (
-        this._p2pGen !== gen ||
-        this._p2pJoinAcked ||
-        this._p2pHost ||
-        this._p2pHostPeerId ||
-        !cloud?.snapshot
-      ) {
+      if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || !cloud?.snapshot) {
         return;
       }
 
@@ -1168,7 +1155,7 @@ export class LanClient {
         ...coordinator.getAuthorityInfo(),
       });
       this._cloudSyncRoom(true);
-    }, 7000);
+    }, 5000);
 
     // Retry sending join_room over both connected WebRTC peers & Nostr WS relay until Host acks
     this._p2pJoinRetryTimer = setInterval(() => {
