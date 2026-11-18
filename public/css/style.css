@@ -82,12 +82,16 @@ html, body {
   inset: 0;
   z-index: 40;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  padding: max(28px, calc(env(safe-area-inset-top) + 18px))
+           max(16px, env(safe-area-inset-right))
+           max(32px, calc(env(safe-area-inset-bottom) + 22px))
+           max(16px, env(safe-area-inset-left));
   background: radial-gradient(circle at 50% 35%, rgba(6, 35, 58, 0.72), rgba(2, 11, 20, 0.9));
   backdrop-filter: blur(6px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
 
@@ -98,12 +102,12 @@ html, body {
 
 .menu-card {
   width: min(640px, 100%);
-  max-height: calc(100dvh - 24px);
-  overflow-y: auto;
+  margin: auto 0;
+  flex-shrink: 0;
   background: linear-gradient(180deg, rgba(9, 19, 34, 0.95), rgba(6, 13, 24, 0.96));
   border: 1px solid rgba(56, 189, 248, 0.28);
   border-radius: 18px;
-  padding: 18px 20px 20px;
+  padding: 20px 20px 24px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(186, 230, 253, 0.08);
 }
 
@@ -2109,8 +2113,6 @@ html, body {
 }
 .debrief-card {
   max-width: 680px;
-  max-height: 92vh;
-  overflow-y: auto;
   animation: debriefSlideIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .debrief-header {
