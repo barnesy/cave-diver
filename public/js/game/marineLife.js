@@ -40,7 +40,11 @@ export function createMarineEcosystem(level) {
   const isProvence = themeId === 'provence-gorge';
   const isKalahari = themeId === 'kalahari-dolomite';
   const isUral = themeId === 'ural-gypsum-karst';
-  const isAurora = themeId === 'aurora-glacial';
+  const isAurora =
+    themeId === 'aurora-glacial' ||
+    themeId === 'strytan-hydrothermal' ||
+    themeId === 'kverkfjoll-glacier' ||
+    themeId === 'grjotagja-lava';
 
   // 1. Sunlit Surface Basins
   for (let bIdx = 0; bIdx < level.openBasins.length; bIdx++) {

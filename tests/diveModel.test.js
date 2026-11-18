@@ -950,9 +950,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 14 campaign levels validate cleanly and scale monotonically to 128m Aurora Abyss', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 14, 'Campaign roadmap should chart all 14 levels');
-  assert.equal(LEVELS.length, 14, 'All 14 campaign levels should be registered');
+test('All 17 campaign levels validate cleanly and scale monotonically to 152m Grjótagjá Magma Fissure', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 17, 'Campaign roadmap should chart all 17 levels');
+  assert.equal(LEVELS.length, 17, 'All 17 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -973,6 +973,9 @@ test('All 14 campaign levels validate cleanly and scale monotonically to 128m Au
   const lvl12 = getLevelById('hranicka-propast-rift');
   const lvl13 = getLevelById('ox-bel-ha-grand-traverse');
   const lvl14 = getLevelById('silfra-katla-aurora-abyss');
+  const lvl15 = getLevelById('strytan-hydrothermal-chimneys');
+  const lvl16 = getLevelById('kverkfjoll-subglacial-caves');
+  const lvl17 = getLevelById('grjotagja-kleifarvatn-rift');
 
   const meta7 = getLevelMeta(lvl7);
   const check = validateLevel(lvl7, { checkGeometry: true });
@@ -992,8 +995,8 @@ test('All 14 campaign levels validate cleanly and scale monotonically to 128m Au
     assert.ok(Math.abs(g - l) < 0.05, `Chunk SDF drift too large at (${tx},${ty}): ${g} vs ${l}`);
   }
 
-  // Levels 8-14 validate cleanly, ramp depth monotonically, and remain unlined
-  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13, lvl14]) {
+  // Levels 8-17 validate cleanly, ramp depth monotonically, and remain unlined
+  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13, lvl14, lvl15, lvl16, lvl17]) {
     const c = validateLevel(lvl, { checkGeometry: true });
     assert.equal(c.valid, true, `${lvl.id}: ${c.errors.join(', ')}`);
     assert.equal(lvl.guideline.length, 0, `${lvl.id} must be unlined`);
@@ -1006,6 +1009,9 @@ test('All 14 campaign levels validate cleanly and scale monotonically to 128m Au
   assert.ok(getLevelMeta(lvl10).maxDepthM >= 88 && getLevelMeta(lvl11).maxDepthM >= 96);
   assert.ok(getLevelMeta(lvl12).maxDepthM >= 104 && getLevelMeta(lvl13).maxDepthM >= 114);
   assert.ok(getLevelMeta(lvl14).maxDepthM >= 128, `Level 14 must reach >=128m (got ${getLevelMeta(lvl14).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl15).maxDepthM >= 136, `Level 15 must reach >=136m (got ${getLevelMeta(lvl15).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl16).maxDepthM >= 144, `Level 16 must reach >=144m (got ${getLevelMeta(lvl16).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl17).maxDepthM >= 152, `Level 17 must reach >=152m (got ${getLevelMeta(lvl17).maxDepthM})`);
 });
 
 test('Level 12/13 hypoxic TMX 11/65 survives 115m PPO2 and Level 13 requires fallen-diver recovery before surfacing', () => {
@@ -1599,4 +1605,40 @@ test('Level 9 Blue Hole checkpoints cover main shaft & Bells exit without exit s
   });
   assert.equal(res.outcome, null, 'Surface completion must remain gated until all checkpoints are tagged');
   assert.ok(toasts.some((m) => m.includes('Exit blocked (7/8)') && m.includes('Bells 6m Deco Chasm')));
+});
+
+test('Levels 15-17 Iceland sites (Strýtan, Kverkfjöll, Grjótagjá) gases, vents, and exit checkpoints behave cleanly', () => {
+  const lvl15 = getLevelById('strytan-hydrothermal-chimneys');
+  const lvl16 = getLevelById('kverkfjoll-subglacial-caves');
+  const lvl17 = getLevelById('grjotagja-kleifarvatn-rift');
+
+  // L15 Strýtan TMX 8/74 survives 136m PPO2 and Arnarnes exit tags cp7
+  const s15 = createDiveSession(lvl15);
+  assert.equal(s15.diveState.mixes.TMX1455.name, 'TMX 8/74');
+  s15.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s15.diveState, { depthM: 136.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s15.diveState.ppo2 < 1.35 && s15.diveState.alive, 'Strýtan TMX 8/74 must survive 136m safely');
+  const cp7_15 = lvl15.checkpoints.find((c) => c.id === 'cp7');
+  assert.ok(Math.hypot(306 - cp7_15.x, 1.8 - cp7_15.y) <= cp7_15.radius, 'Arnarnes exit covers cp7');
+
+  // L16 Kverkfjöll TMX 8/75 survives 144m & gates exit until Melt Logger recovered
+  const s16 = createDiveSession(lvl16);
+  assert.equal(s16.diveState.mixes.TMX1455.name, 'TMX 8/75');
+  s16.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s16.diveState, { depthM: 144.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s16.diveState.ppo2 < 1.35 && s16.diveState.alive, 'Kverkfjöll TMX 8/75 must survive 144m safely');
+  for (const cp of lvl16.checkpoints) s16.checkpointsHit.add(cp.id);
+  s16.diver.x = lvl16.exitZone.x;
+  s16.diver.y = 1.0;
+  const resBlocked = stepDiveSession(s16, { x: 0, y: 0 }, 0.016);
+  assert.equal(resBlocked.outcome, null, 'Kverkfjöll exit must require recovering Melt Logger first');
+
+  // L17 Grjótagjá TMX 7/78 survives 152m & Caldera exit tags cp7
+  const s17 = createDiveSession(lvl17);
+  assert.equal(s17.diveState.mixes.TMX1455.name, 'TMX 7/78');
+  s17.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s17.diveState, { depthM: 152.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s17.diveState.ppo2 < 1.35 && s17.diveState.alive, 'Grjótagjá TMX 7/78 must survive 152m safely');
+  const cp7_17 = lvl17.checkpoints.find((c) => c.id === 'cp7');
+  assert.ok(Math.hypot(322 - cp7_17.x, 1.8 - cp7_17.y) <= cp7_17.radius, 'Caldera exit covers cp7');
 });

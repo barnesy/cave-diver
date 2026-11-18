@@ -214,7 +214,10 @@ export function computeSiteFocusViewBox(levelId, slot) {
     'blue-hole-dahab-arch': { lng: 34.4, lat: 28.4, w: 66, h: 43.3 },
     'boesmansgat-abyss': { lng: 23.6, lat: -28.4, w: 86, h: 56.4 },
     'orda-crystal-maze': { lng: 55.0, lat: 56.5, w: 88, h: 57.7 },
-    'silfra-katla-aurora-abyss': { lng: -19.2, lat: 64.8, w: 60, h: 39.4 },
+    'silfra-katla-aurora-abyss': { lng: -19.0, lat: 64.9, w: 60, h: 39.4 },
+    'strytan-hydrothermal-chimneys': { lng: -18.8, lat: 65.1, w: 60, h: 39.4 },
+    'kverkfjoll-subglacial-caves': { lng: -18.5, lat: 64.9, w: 60, h: 39.4 },
+    'grjotagja-kleifarvatn-rift': { lng: -18.5, lat: 65.1, w: 60, h: 39.4 },
   };
 
   const frame = CUSTOM_FRAMING[levelId];

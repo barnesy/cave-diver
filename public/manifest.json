@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Cave Diver · Technical Trimix Sim",
   "short_name": "Cave Diver",
-  "description": "Mobile-first 13-level technical cave diving simulation with Trimix physics, deployable guideline reels, and multiplayer P2P co-op.",
+  "description": "Mobile-first 17-level technical cave diving simulation with Trimix physics, deployable guideline reels, and multiplayer P2P co-op.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

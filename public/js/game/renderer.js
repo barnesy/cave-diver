@@ -749,8 +749,8 @@ export class CaveRenderer {
       }
     }
 
-      // Hanging tree roots along Cenote basin rims (omitted in crystal glacial Aurora Silfra pool)
-      if (level.theme?.id !== 'aurora-glacial') {
+      // Hanging tree roots along Cenote basin rims (omitted in crystal Icelandic basalt & glacial pools)
+      if (!['aurora-glacial', 'strytan-hydrothermal', 'kverkfjoll-glacier', 'grjotagja-lava'].includes(level.theme?.id)) {
         for (const basin of level.openBasins) {
           if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
           for (let i = 0; i < 8; i++) {
@@ -1085,6 +1085,9 @@ export class CaveRenderer {
       'moravia-rift': ['#475569', '#94a3b8', '#cbd5e1', 'rgba(226, 232, 240, 0.20)', 'rgba(203, 213, 225, 0.26)', 'rgba(30, 41, 59, 0.48)'],
       'oxbelha-twilight': ['#172554', '#475569', '#f59e0b', 'rgba(251, 191, 36, 0.22)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.56)'],
       'aurora-basalt': ['#030816', '#0f2847', '#2dd4bf', 'rgba(45, 212, 191, 0.26)', 'rgba(165, 243, 252, 0.16)', 'rgba(15, 23, 42, 0.45)'],
+      'strytan-fjord': ['#0b2242', '#24527a', '#cbd5e1', 'rgba(186, 230, 253, 0.24)', 'rgba(203, 213, 225, 0.18)', 'rgba(15, 23, 42, 0.46)'],
+      'kverkfjoll-glacier': ['#163859', '#4f8eb8', '#e0f2fe', 'rgba(207, 250, 254, 0.28)', 'rgba(224, 242, 254, 0.22)', 'rgba(30, 41, 59, 0.44)'],
+      'grjotagja-rift': ['#0f172a', '#312e81', '#fb923c', 'rgba(251, 146, 60, 0.26)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.52)'],
       yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
     };
     const [skyA, skyB, skyC, bloomCol, mistCol, birdCol] = skyPalettes[style] || skyPalettes.yucatan;
@@ -1134,8 +1137,8 @@ export class CaveRenderer {
       }
     }
 
-    // 1b. Animated shimmering Northern Lights (Aurora Borealis) ribbons for Silfra & Katla Aurora Abyss
-    if (style === 'aurora-basalt') {
+    // 1b. Animated shimmering Northern Lights (Aurora Borealis) ribbons for Silfra & Grjotagja
+    if (style === 'aurora-basalt' || style === 'grjotagja-rift') {
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       const bandTop = Math.max(4, horizonY - 8 * scale);
@@ -1342,6 +1345,9 @@ export class CaveRenderer {
       'moravia-rift': { turf: '#2f4539', soil: '#37414b', tuft: '#476252', stone: '#546170' },
       'oxbelha-twilight': { turf: '#233c26', soil: '#30342e', tuft: '#365a35', stone: '#4c5249' },
       'aurora-basalt': { turf: '#1c313f', soil: '#1e242d', tuft: '#2dd4bf', stone: '#334155' },
+      'strytan-fjord': { turf: '#243b4a', soil: '#27303d', tuft: '#7dd3fc', stone: '#475569' },
+      'kverkfjoll-glacier': { turf: '#3b6b8f', soil: '#1f334a', tuft: '#a5f3fc', stone: '#7dd3fc' },
+      'grjotagja-rift': { turf: '#24292e', soil: '#1c1917', tuft: '#fb923c', stone: '#292524' },
       yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
     };
     return palettes[style] || palettes.yucatan;
@@ -2364,14 +2370,18 @@ export class CaveRenderer {
       } else if (style === 'moravia-rift') {
         this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.65, h + 1.1);
         this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, '#475569');
-      } else if (style === 'aurora-basalt') {
-        if ((s & 1) === 0) {
-          this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.55, h * 0.88);
-        } else {
-          this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h * 0.72);
+      } else if (style === 'aurora-basalt' || style === 'strytan-fjord' || style === 'kverkfjoll-glacier' || style === 'grjotagja-rift') {
+        if (style === 'strytan-fjord' || style === 'aurora-basalt') {
+          if ((s & 1) === 0) {
+            this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.55, h * 0.88);
+          } else {
+            this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h * 0.72);
+          }
         }
-        this._drawAnchoredBoulder(ctx, wx - 0.78, 0.68, 0.28, toScreenX, toScreenY, scale, '#334155');
-        this._drawAnchoredBoulder(ctx, wx + 0.72, 0.44, 0.2, toScreenX, toScreenY, scale, '#1e293b');
+        const bCol1 = style === 'kverkfjoll-glacier' ? '#7dd3fc' : style === 'grjotagja-rift' ? '#292524' : '#334155';
+        const bCol2 = style === 'kverkfjoll-glacier' ? '#38bdf8' : style === 'grjotagja-rift' ? '#44403c' : '#1e293b';
+        this._drawAnchoredBoulder(ctx, wx - 0.78, 0.68, 0.28, toScreenX, toScreenY, scale, bCol1);
+        this._drawAnchoredBoulder(ctx, wx + 0.72, 0.44, 0.2, toScreenX, toScreenY, scale, bCol2);
       } else if (style === 'oxbelha-twilight') {
         this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.75, h * 0.88);
         const ubWx = wx + 0.8;
@@ -2523,7 +2533,10 @@ export class CaveRenderer {
       surfaceStyle === 'lazio-travertine' ||
       surfaceStyle === 'moravia-rift' ||
       surfaceStyle === 'oxbelha-twilight' ||
-      surfaceStyle === 'aurora-basalt'
+      surfaceStyle === 'aurora-basalt' ||
+      surfaceStyle === 'strytan-fjord' ||
+      surfaceStyle === 'kverkfjoll-glacier' ||
+      surfaceStyle === 'grjotagja-rift'
     ) {
       this._drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, surfaceStyle);
       return;
@@ -3104,14 +3117,25 @@ export class CaveRenderer {
    * Shared themed expedition surface renderer for Nordic, Provence, Kalahari, Ural, & Abaco biomes.
    */
   _drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, style) {
-    const isNordic = style === 'nordic-fjord' || style === 'ural-birch' || style === 'moravia-rift' || style === 'aurora-basalt';
+    const isNordic =
+      style === 'nordic-fjord' ||
+      style === 'ural-birch' ||
+      style === 'moravia-rift' ||
+      style === 'aurora-basalt' ||
+      style === 'strytan-fjord' ||
+      style === 'kverkfjoll-glacier' ||
+      style === 'grjotagja-rift';
     const isUral = style === 'ural-birch';
     const isKalahari = style === 'kalahari-crater';
     const isAbaco = style === 'bahamas-abaco';
     const isBudapest = style === 'budapest-bathhouse';
     const isSinai = style === 'sinai-coast';
     const isOxBelHa = style === 'oxbelha-twilight';
-    const isAurora = style === 'aurora-basalt';
+    const isAurora =
+      style === 'aurora-basalt' ||
+      style === 'strytan-fjord' ||
+      style === 'kverkfjoll-glacier' ||
+      style === 'grjotagja-rift';
     ctx.save();
     this._drawHorizonForestSpan(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, style);
 

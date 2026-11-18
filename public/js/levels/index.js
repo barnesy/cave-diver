@@ -12,6 +12,9 @@ import { LEVEL_11 } from './level11.js';
 import { LEVEL_12 } from './level12.js';
 import { LEVEL_13 } from './level13.js';
 import { LEVEL_14 } from './level14.js';
+import { LEVEL_15 } from './level15.js';
+import { LEVEL_16 } from './level16.js';
+import { LEVEL_17 } from './level17.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
 
@@ -19,7 +22,7 @@ export { CAMPAIGN_PLAN, CAMPAIGN_TIERS };
 
 /**
  * Registry of all playable cave dive levels, ordered by increasing campaign difficulty.
- * All 14 campaign sites (L1-L14 matching CAMPAIGN_PLAN) are registered here.
+ * All 17 campaign sites (L1-L17 matching CAMPAIGN_PLAN) are registered here.
  */
 export const LEVELS = [
   LEVEL_1,
@@ -36,6 +39,9 @@ export const LEVELS = [
   LEVEL_12,
   LEVEL_13,
   LEVEL_14,
+  LEVEL_15,
+  LEVEL_16,
+  LEVEL_17,
 ];
 
 export const DEFAULT_LEVEL_ID = LEVEL_1.id;
