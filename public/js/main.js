@@ -29,8 +29,6 @@ import {
 } from './game/scoring.js';
 import {
   GLOBAL_MAP_VIEWBOX,
-  MAP_LANDMASS_POLYGONS,
-  MAP_INLAND_WATERS,
   MAP_CONTOUR_LINES,
   projectMapPoint,
   computeSiteFocusViewBox,
@@ -372,17 +370,6 @@ function animateMapViewBox(targetVb, instant = false) {
   mapAnimFrameId = requestAnimationFrame(tick);
 }
 
-function polygonToSvgPath(poly) {
-  return (
-    poly
-      .map(([lng, lat], i) => {
-        const pt = projectMapPoint(lng, lat);
-        return `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(2)},${pt.y.toFixed(2)}`;
-      })
-      .join(' ') + ' Z'
-  );
-}
-
 function polylineToSvgPoints(coords) {
   return coords
     .map(([lng, lat]) => {
@@ -445,29 +432,18 @@ function ensureSiteWorldMapBase() {
     }
   }
 
-  // Continental shelf halo + coastlines + inland water cutouts
-  const shelfPaths = MAP_LANDMASS_POLYGONS.map(
-    (poly) =>
-      `<path d="${polygonToSvgPath(poly)}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(14, 165, 233, 0.16)" stroke-width="4.5" stroke-linejoin="round" />`
-  ).join('');
-  const landPaths = MAP_LANDMASS_POLYGONS.map(
-    (poly) =>
-      `<path d="${polygonToSvgPath(poly)}" fill="url(#mapLandFill)" vector-effect="non-scaling-stroke" stroke="rgba(125, 211, 252, 0.42)" stroke-width="1" stroke-linejoin="round" />`
-  ).join('');
-  const inlandWaterPaths = MAP_INLAND_WATERS.map(
-    (poly) =>
-      `<path d="${polygonToSvgPath(poly)}" fill="#05182b" vector-effect="non-scaling-stroke" stroke="rgba(125, 211, 252, 0.34)" stroke-width="0.85" stroke-linejoin="round" />`
-  ).join('');
+  // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=72" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
-  // Mountain / karst ridges & mid-ocean ridge lines
-  const contourPaths = MAP_CONTOUR_LINES.map(({ kind, coords }) => {
-    const isTrench = kind === 'trench';
-    return `<polyline points="${polylineToSvgPoints(coords)}" fill="none" vector-effect="non-scaling-stroke" stroke="${
-      isTrench ? 'rgba(56, 189, 248, 0.24)' : 'rgba(148, 197, 235, 0.26)'
-    }" stroke-width="${isTrench ? 0.9 : 1.05}" stroke-dasharray="${isTrench ? '3,3' : '1.5,1.5'}" stroke-linecap="round" stroke-linejoin="round" />`;
-  }).join('');
+  // Mid-Atlantic tectonic rift ridge overlay
+  const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
+    .map(
+      ({ coords }) =>
+        `<polyline points="${polylineToSvgPoints(coords)}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="0.95" stroke-dasharray="3,3" stroke-linecap="round" stroke-linejoin="round" />`
+    )
+    .join('');
 
-  siteWorldMapEl.innerHTML = `${defs}<g id="map-base-layer">${oceanRect}${gridParts.join('')}${shelfPaths}${landPaths}${inlandWaterPaths}${contourPaths}</g><g id="map-overlay-layer"></g>`;
+  siteWorldMapEl.innerHTML = `${defs}<g id="map-base-layer">${oceanRect}${mapRaster}${gridParts.join('')}${trenchPaths}</g><g id="map-overlay-layer"></g>`;
   siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
 }
 
