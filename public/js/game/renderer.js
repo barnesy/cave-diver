@@ -1115,7 +1115,7 @@ export class CaveRenderer {
       const anchorY = Math.min(skyBotY, Math.max(drawH * 0.56, horizonY + 1.4 * scale));
       const drawY = Math.min(0, anchorY - drawH * 0.72);
       const finalDrawH = Math.max(drawH, skyBotY - drawY + 4);
-      const scrollX = -parallaxCam * 0.22 * scale;
+      const scrollX = -parallaxCam * 0.06 * scale;
       const firstTile = Math.floor(-scrollX / tileW) - 1;
       const lastTile = Math.ceil((cw - scrollX) / tileW) + 1;
 
@@ -1144,7 +1144,7 @@ export class CaveRenderer {
       for (let ribbon = 0; ribbon < 2; ribbon++) {
         const phase = timeSec * (0.45 + ribbon * 0.2) + ribbon * 2.1;
         for (let c = 0; c < cols; c++) {
-          const sx = (c / cols) * cw - ((parallaxCam * (0.08 + ribbon * 0.04) * scale) % 28);
+          const sx = (c / cols) * cw - ((parallaxCam * (0.025 + ribbon * 0.015) * scale) % 28);
           const wave = Math.sin(c * 0.34 + phase) * 0.5 + 0.5;
           if (wave < 0.22) continue;
           const h = (bandBot - bandTop) * (0.38 + wave * 0.52);
@@ -1166,7 +1166,7 @@ export class CaveRenderer {
     }
 
     // 2. Soft photographic sunlight bloom & delicate diagonal atmospheric light rays
-    const sunScreenX = cw * 0.72 - parallaxCam * 0.14 * scale;
+    const sunScreenX = cw * 0.72 - parallaxCam * 0.03 * scale;
     const sunScreenY = Math.max(18, Math.min(horizonY - 2.2 * scale, skyBotY * 0.26));
     const sunHalo = ctx.createRadialGradient(sunScreenX, sunScreenY, 0.2 * scale, sunScreenX, sunScreenY, 12 * scale);
     sunHalo.addColorStop(0, 'rgba(255, 252, 238, 0.42)');
@@ -1191,7 +1191,7 @@ export class CaveRenderer {
     }
 
     // 3. Low-lying humid forest mist wisps drifting gently above the sinkhole waterline
-    const mistDrift = -parallaxCam * 0.32 * scale + timeSec * 5.2;
+    const mistDrift = -parallaxCam * 0.10 * scale + timeSec * 5.2;
     const mistBaseY = Math.max(horizonY + 0.4 * scale, skyBotY - 2.6 * scale);
     for (let m = 0; m < 7; m++) {
       const mx = ((m * 260 + mistDrift) % (cw + 380)) - 190;
@@ -1210,7 +1210,7 @@ export class CaveRenderer {
     ctx.strokeStyle = birdCol;
     ctx.lineWidth = 1.25;
     for (let b = 0; b < 4; b++) {
-      const bx = ((cw * 0.25 + b * 145 + timeSec * (11 + b * 2.5) - parallaxCam * 0.18 * scale) % (cw + 120)) - 60;
+      const bx = ((cw * 0.25 + b * 145 + timeSec * (11 + b * 2.5) - parallaxCam * 0.05 * scale) % (cw + 120)) - 60;
       const by = Math.max(18, horizonY * (0.34 + b * 0.1) + Math.sin(timeSec * 1.8 + b) * 5);
       const wing = Math.sin(timeSec * 4.8 + b * 1.9) * 3.2;
       ctx.beginPath();
