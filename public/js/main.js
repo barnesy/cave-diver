@@ -3,7 +3,6 @@ import {
   createDiveState,
   switchGas,
   GAS_MIXES,
-  computeSiteDivePlan,
   donateGasFromState,
   receiveGasIntoState,
 } from './physics/diveModel.js';
@@ -98,7 +97,6 @@ const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
 const leaderboardPanel = document.getElementById('leaderboard-panel');
 const lbCareerSummaryEl = document.getElementById('lb-career-summary');
 const selectLbSite = document.getElementById('select-lb-site');
-const siteDivePlanEl = document.getElementById('site-dive-plan');
 const leaderboardSubEl = document.getElementById('leaderboard-sub');
 const leaderboardRowsEl = document.getElementById('leaderboard-rows');
 const debriefLeaderboardEl = document.getElementById('debrief-leaderboard');
@@ -610,26 +608,10 @@ function syncMenuLevelLabels(level) {
   const menuDesc = screenMenu.querySelector('.menu-desc');
   const loaderTitle = screenLoader.querySelector('.loader-title');
   const loaderMetaSpan = screenLoader.querySelector('.loader-meta span');
-  const chipNameTmx = document.getElementById('chip-name-tmx');
-  const chipRangeTmx = document.getElementById('chip-range-tmx');
-  const depthNum = parseInt(getLevelDepthLabel(level), 10) || 50;
   if (menuTitle) menuTitle.textContent = level.name.toUpperCase();
   if (menuDesc && level.description) menuDesc.textContent = level.description;
   if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();
   if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle.toUpperCase();
-  const plan = siteDivePlanEl || chipRangeTmx || chipNameTmx ? computeSiteDivePlan(level) : null;
-  const tmxMinM = Math.max(3, Math.ceil(level.gasOverrides?.TMX1455?.minM ?? 3));
-  if (chipNameTmx && plan) chipNameTmx.textContent = plan.bottomGasName;
-  if (chipRangeTmx) chipRangeTmx.textContent = `${tmxMinM}–${Math.max(65, depthNum)}m Bottom`;
-  if (siteDivePlanEl && plan) {
-    siteDivePlanEl.innerHTML = `
-      <span>Max ${plan.maxDepthM}m</span>
-      <span>Bottom: ${plan.bottomGasName}</span>
-      <span>1/3 Turn: ${plan.turnaroundBar}b</span>
-      <span>Reserve: ${plan.reserveBar}b</span>
-      <span>${plan.lineModeLabel}</span>
-    `;
-  }
   renderLevelCards();
 }
 
