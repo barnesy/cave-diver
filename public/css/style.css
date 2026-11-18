@@ -41,7 +41,7 @@ html, body {
 /* Toast Banner (sits cleanly above bottom-center controls dock) */
 .game-toast {
   position: fixed;
-  bottom: max(142px, calc(env(safe-area-inset-bottom) + 136px));
+  bottom: max(148px, calc(env(safe-area-inset-bottom) + 142px));
   top: auto;
   left: 50%;
   transform: translate(-50%, 16px);
@@ -66,7 +66,7 @@ html, body {
 }
 @media (max-width: 760px) {
   .game-toast {
-    bottom: max(184px, calc(env(safe-area-inset-bottom) + 178px));
+    bottom: max(198px, calc(env(safe-area-inset-bottom) + 192px));
     top: auto;
     transform: translate(-50%, 14px);
     font-size: 0.78rem;
@@ -1199,7 +1199,7 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* Unified Top Divers Health Strip (Self + Team) */
+/* Top Teammate Health Strip */
 .hud-divers-group {
   display: flex;
   flex-wrap: wrap;
@@ -1213,12 +1213,14 @@ html, body {
 .self-health-card {
   background: rgba(8, 15, 26, 0.88);
   border: 1px solid rgba(56, 189, 248, 0.38);
-  border-radius: 10px;
+  border-radius: 11px;
   padding: 5px 8px;
-  width: clamp(195px, 22vw, 248px);
+  width: clamp(212px, 24vw, 258px);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   backdrop-filter: blur(5px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  overflow: hidden;
 }
 .self-health-card.warn {
   border-color: rgba(251, 191, 36, 0.7);
@@ -1298,9 +1300,9 @@ html, body {
   color: var(--text-muted);
 }
 .ekg-canvas {
-  flex: 1;
-  min-width: 44px;
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
   height: 18px;
   display: block;
 }
@@ -1494,13 +1496,13 @@ html, body {
 }
 
 /* Bottom-Center Symmetrical Dive Controls Cluster:
-   Line Controls (Left) | Line Status + Joystick (Center) | Tank Controls (Right) */
+   Line Controls + Health Block (Left) | Line Status + Joystick (Center) | Tank Controls (Right) */
 .hud-bottom-dock {
   position: fixed;
   bottom: max(10px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(calc(100vw - 16px), 840px);
+  width: min(calc(100vw - 16px), 900px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: end;
@@ -1509,15 +1511,25 @@ html, body {
   pointer-events: none;
 }
 
-/* Left Wing: Line Deployment Controls */
-.hud-reel-dock {
+/* Left Wing: Guideline Controls above Self Health Block */
+.hud-left-wing {
   grid-column: 1;
   justify-self: end;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 5px;
-  padding: 5px;
-  border-radius: 13px;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+.hud-reel-dock {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 4px;
+  border-radius: 11px;
   background: rgba(6, 15, 29, 0.9);
   border: 1.5px solid rgba(56, 189, 248, 0.4);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -1832,22 +1844,8 @@ html, body {
     justify-content: flex-start;
     width: 100%;
   }
-  .self-health-card {
-    flex: 1 1 170px;
-    width: auto;
-    padding: 4px 6px;
-  }
-  .self-health-top {
-    margin-bottom: 3px;
-  }
-  .self-health-card .ekg-unit {
-    display: none;
-  }
-  .ekg-canvas {
-    height: 14px;
-  }
   .dc-team-panel {
-    flex: 1 1 155px;
+    width: 100%;
   }
   .mate-card {
     flex: 1 1 135px;
@@ -1864,21 +1862,59 @@ html, body {
     bottom: max(8px, env(safe-area-inset-bottom));
     gap: 6px;
   }
-  .touch-stick {
-    width: 88px;
-    height: 88px;
-  }
-  .touch-knob {
-    width: 38px;
-    height: 38px;
-  }
-  .hud-reel-dock {
-    padding: 4px;
+  .hud-left-wing {
+    width: min(136px, 100%);
     gap: 4px;
   }
+  .self-health-card {
+    width: 100%;
+    padding: 4px 5px;
+    border-radius: 9px;
+  }
+  .self-health-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    margin-bottom: 3px;
+  }
+  .self-tag {
+    max-width: 100%;
+    font-size: 0.56rem;
+  }
+  .dc-ekg-row {
+    width: 100%;
+    overflow: hidden;
+  }
+  .self-health-card .ekg-unit {
+    display: none;
+  }
+  .ekg-canvas {
+    height: 13px;
+  }
+  .dc-vitals-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2.5px;
+  }
+  .dc-vital {
+    padding: 1.5px 4px;
+  }
+  .touch-stick {
+    width: 82px;
+    height: 82px;
+  }
+  .touch-knob {
+    width: 36px;
+    height: 36px;
+  }
+  .hud-reel-dock {
+    flex-direction: column;
+    padding: 3px;
+    gap: 3px;
+    border-radius: 9px;
+  }
   .reel-btn {
-    padding: 5px 7px;
-    font-size: 0.58rem;
+    padding: 4px 6px;
+    font-size: 0.56rem;
   }
   .reel-dock-status {
     padding: 2px 7px;
@@ -2394,7 +2430,7 @@ html, body {
   .coop-comms {
     position: fixed;
     right: max(8px, env(safe-area-inset-right));
-    bottom: max(138px, calc(env(safe-area-inset-bottom) + 132px));
+    bottom: max(164px, calc(env(safe-area-inset-bottom) + 158px));
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: flex-end;

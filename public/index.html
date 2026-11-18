@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Cave Diver" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="62" />
+  <meta name="app-version" content="63" />
   <title>Cave Diver · Technical Trimix Simulation</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=62" />
+  <link rel="stylesheet" href="./css/style.css?v=63" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -65,7 +65,7 @@
         </div>
         <div class="menu-header-tools">
           <button id="btn-menu-radio" class="btn tiny ghost radio-btn" type="button" title="Cycle Chill Aquatic Radio">📻 Off</button>
-          <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" title="Check for app updates">v62</button>
+          <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" title="Check for app updates">v63</button>
           <button id="btn-install-pwa" class="btn tiny ghost" type="button" hidden>📲 Install</button>
         </div>
       </div>
@@ -272,27 +272,8 @@
         <div id="dc-objective" class="dc-objective"></div>
       </div>
 
-      <!-- Center Group: All Divers Health Monitoring (Self + Co-op Team) -->
-      <div class="hud-divers-group" aria-label="Divers Physiological Monitoring">
-        <div id="hud-self-health" class="self-health-card">
-          <div class="self-health-top">
-            <span id="dc-self-name" class="self-tag">YOU</span>
-            <div id="dc-ekg-row" class="dc-ekg-row" aria-label="Heart Rate EKG Monitor">
-              <div class="ekg-meta">
-                <span id="dc-ekg-heart" class="ekg-heart">♥</span>
-                <strong id="dc-ekg-bpm" class="ekg-bpm">68</strong>
-                <span class="ekg-unit">BPM</span>
-              </div>
-              <canvas id="dc-ekg-canvas" class="ekg-canvas" width="128" height="20"></canvas>
-            </div>
-          </div>
-          <div id="dc-vitals" class="dc-vitals-row" aria-label="Diver Physiological Status">
-            <div class="dc-vital" id="vital-tox"><span class="v-lbl">TOX</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
-            <div class="dc-vital" id="vital-dcs"><span class="v-lbl">DCS</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
-            <div class="dc-vital" id="vital-narc"><span class="v-lbl">NARC</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
-            <div class="dc-vital" id="vital-hyp"><span class="v-lbl">HYP</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
-          </div>
-        </div>
+      <!-- Center Group: Co-op Teammate Health Cards -->
+      <div class="hud-divers-group" aria-label="Teammates Physiological Monitoring">
         <div id="dc-buddy" class="dc-team-panel" hidden></div>
       </div>
 
@@ -318,12 +299,34 @@
       </div>
     </div>
 
-    <!-- Bottom Center Controls Cluster: Line Controls | Joystick + Line Status | Tank Controls -->
+    <!-- Bottom Center Controls Cluster: (Line Controls / Health Block) | Line Status + Joystick | Tank Controls -->
     <div class="hud-bottom-dock" aria-label="Dive & Navigation Controls">
-      <!-- Left Wing: Guideline Controls -->
-      <div id="hud-reel-dock" class="hud-reel-dock" hidden aria-label="Guideline Spool Controls">
-        <button id="btn-reel-toggle" class="reel-btn" type="button" title="Deploy or Terminate Guideline (G)">[G] DEPLOY LINE</button>
-        <button id="btn-reel-rewind" class="reel-btn ghost" type="button" title="Rewind Last Segment (R)">[R] REWIND ↩</button>
+      <!-- Left Wing: Guideline Controls stacked above Diver Health Block -->
+      <div class="hud-left-wing">
+        <div id="hud-reel-dock" class="hud-reel-dock" hidden aria-label="Guideline Spool Controls">
+          <button id="btn-reel-toggle" class="reel-btn" type="button" title="Deploy or Terminate Guideline (G)">[G] DEPLOY LINE</button>
+          <button id="btn-reel-rewind" class="reel-btn ghost" type="button" title="Rewind Last Segment (R)">[R] REWIND ↩</button>
+        </div>
+
+        <div id="hud-self-health" class="self-health-card" aria-label="Diver Health & Vitals">
+          <div class="self-health-top">
+            <span id="dc-self-name" class="self-tag">YOU</span>
+            <div id="dc-ekg-row" class="dc-ekg-row" aria-label="Heart Rate EKG Monitor">
+              <div class="ekg-meta">
+                <span id="dc-ekg-heart" class="ekg-heart">♥</span>
+                <strong id="dc-ekg-bpm" class="ekg-bpm">68</strong>
+                <span class="ekg-unit">BPM</span>
+              </div>
+              <canvas id="dc-ekg-canvas" class="ekg-canvas" width="128" height="20"></canvas>
+            </div>
+          </div>
+          <div id="dc-vitals" class="dc-vitals-row" aria-label="Diver Physiological Status">
+            <div class="dc-vital" id="vital-tox"><span class="v-lbl">TOX</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+            <div class="dc-vital" id="vital-dcs"><span class="v-lbl">DCS</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+            <div class="dc-vital" id="vital-narc"><span class="v-lbl">NARC</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+            <div class="dc-vital" id="vital-hyp"><span class="v-lbl">HYP</span><div class="v-track"><div class="v-fill"></div></div><span class="v-val">0%</span></div>
+          </div>
+        </div>
       </div>
 
       <!-- Center: Line Deployment Status + Swim Joystick -->
@@ -391,46 +394,46 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=62",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=62",
-        "./js/game/audio.js": "./js/game/audio.js?v=62",
-        "./js/game/collision.js": "./js/game/collision.js?v=62",
-        "./js/game/input.js": "./js/game/input.js?v=62",
-        "./js/game/hud.js": "./js/game/hud.js?v=62",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=62",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=62",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=62",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=62",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=62",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=62",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=62",
-        "./js/game/silt.js": "./js/game/silt.js?v=62",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=62",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=62",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=62",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=62",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=62",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=62",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=62",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=62",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=62",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=62",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=62",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=62",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=62",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=62",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=62",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=62",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=62",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=62",
-        "./js/levels/index.js": "./js/levels/index.js?v=62",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=62",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=62",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=62",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=62"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=63",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=63",
+        "./js/game/audio.js": "./js/game/audio.js?v=63",
+        "./js/game/collision.js": "./js/game/collision.js?v=63",
+        "./js/game/input.js": "./js/game/input.js?v=63",
+        "./js/game/hud.js": "./js/game/hud.js?v=63",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=63",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=63",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=63",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=63",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=63",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=63",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=63",
+        "./js/game/silt.js": "./js/game/silt.js?v=63",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=63",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=63",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=63",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=63",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=63",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=63",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=63",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=63",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=63",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=63",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=63",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=63",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=63",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=63",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=63",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=63",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=63",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=63",
+        "./js/levels/index.js": "./js/levels/index.js?v=63",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=63",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=63",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=63",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=63"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=62"></script>
+  <script type="module" src="./js/main.js?v=63"></script>
 </body>
 </html>
