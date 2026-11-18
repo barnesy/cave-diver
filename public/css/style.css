@@ -469,18 +469,36 @@ html, body {
   border-color: var(--cyan);
   color: #ffffff;
 }
-.site-map-legend {
+.site-map-overlay-bottom {
   position: absolute;
   left: 6px;
+  right: 6px;
   bottom: 5px;
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.site-map-legend {
+  display: flex;
   gap: 10px;
-  background: rgba(2, 11, 20, 0.78);
+  background: rgba(2, 11, 20, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   padding: 2px 7px;
   border-radius: 6px;
   font-size: 0.64rem;
   color: var(--text-muted);
-  pointer-events: none;
+}
+.site-map-coords {
+  background: rgba(2, 11, 20, 0.82);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #7dd3fc;
 }
 .site-map-legend span {
   display: inline-flex;
@@ -508,12 +526,14 @@ html, body {
   opacity: 0.65;
 }
 .map-pin-halo {
-  fill: rgba(56, 189, 248, 0.25);
+  fill: rgba(56, 189, 248, 0.28);
+  transform-box: fill-box;
+  transform-origin: center;
   animation: pinPulse 1.8s ease-in-out infinite;
 }
 @keyframes pinPulse {
-  0%, 100% { r: 7.5; opacity: 0.55; }
-  50% { r: 10.5; opacity: 0.2; }
+  0%, 100% { transform: scale(0.95); opacity: 0.6; }
+  50% { transform: scale(1.45); opacity: 0.16; }
 }
 .campaign-progress-pill {
   font-family: ui-monospace, monospace;

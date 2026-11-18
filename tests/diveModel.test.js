@@ -23,6 +23,12 @@ import {
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import {
+  GLOBAL_MAP_VIEWBOX,
+  projectMapPoint,
+  computeSiteFocusViewBox,
+  formatLatLng,
+} from '../public/js/game/worldMapData.js';
+import {
   computeLevelMaxScore,
   normalizeLeaderboardSubmission,
   queryLeaderboardEntries,
@@ -1524,4 +1530,31 @@ test('Co-op Buddy Rescue affects team score cleanly and Aquatic Radio cycles MID
   assert.equal(radio.cycleTrack().id, 'abyssal-pulse');
   assert.equal(radio.cycleTrack().id, 'kelp-glow');
   assert.equal(radio.cycleTrack().id, 'off');
+});
+
+test('Expedition worldMapData projects all 14 dive sites cleanly inside global & site focus viewBoxes', () => {
+  for (const slot of CAMPAIGN_PLAN) {
+    const pt = projectMapPoint(slot.lng, slot.lat);
+    assert.ok(
+      pt.x >= GLOBAL_MAP_VIEWBOX.x && pt.x <= GLOBAL_MAP_VIEWBOX.x + GLOBAL_MAP_VIEWBOX.w,
+      `${slot.id} x=${pt.x} outside global map width`
+    );
+    assert.ok(
+      pt.y >= GLOBAL_MAP_VIEWBOX.y && pt.y <= GLOBAL_MAP_VIEWBOX.y + GLOBAL_MAP_VIEWBOX.h,
+      `${slot.id} y=${pt.y} outside global map height`
+    );
+
+    const vb = computeSiteFocusViewBox(slot.id, slot);
+    assert.ok(vb.w < GLOBAL_MAP_VIEWBOX.w * 0.35, `${slot.id} focus viewBox should zoom significantly`);
+    assert.ok(
+      pt.x >= vb.x + 2 && pt.x <= vb.x + vb.w - 2,
+      `${slot.id} x=${pt.x} outside focus box [${vb.x}..${vb.x + vb.w}]`
+    );
+    assert.ok(
+      pt.y >= vb.y + 2 && pt.y <= vb.y + vb.h - 2,
+      `${slot.id} y=${pt.y} outside focus box [${vb.y}..${vb.y + vb.h}]`
+    );
+  }
+  assert.equal(formatLatLng(20.4, -87.3), '20.4°N · 87.3°W');
+  assert.equal(formatLatLng(-27.9, 23.6), '27.9°S · 23.6°E');
 });

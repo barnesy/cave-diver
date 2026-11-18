@@ -27,6 +27,15 @@ import {
   computeGasRemainingPct,
   markExploredAround,
 } from './game/scoring.js';
+import {
+  GLOBAL_MAP_VIEWBOX,
+  MAP_LANDMASS_POLYGONS,
+  MAP_INLAND_WATERS,
+  MAP_CONTOUR_LINES,
+  projectMapPoint,
+  computeSiteFocusViewBox,
+  formatLatLng,
+} from './game/worldMapData.js';
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
@@ -84,6 +93,7 @@ const siteBrowserEl = document.getElementById('site-browser');
 const siteViewTabsEl = document.getElementById('site-view-tabs');
 const siteWorldMapEl = document.getElementById('site-world-map');
 const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
+const siteMapCoordsEl = document.getElementById('site-map-coords');
 const btnMapZoom = document.getElementById('btn-map-zoom');
 const btnPlaySolo = document.getElementById('btn-play-solo');
 const btnOpenLan = document.getElementById('btn-open-lan');
@@ -307,89 +317,199 @@ function setLevelSelectionLocked(locked) {
   }
 }
 
-const MAP_LANDMASS_POLYGONS = [
-  // North & Central America + Florida + Yucatan
-  [[-108, 62], [-96, 63], [-82, 62], [-78, 53], [-64, 59], [-55, 52], [-66, 44], [-71, 41], [-76, 35], [-81, 31], [-80, 25], [-82.5, 26], [-83, 29], [-85, 30], [-90, 29], [-97, 26], [-96, 19], [-91, 18.5], [-90, 21.3], [-87, 21.5], [-87.4, 18.4], [-88.4, 15.8], [-83.5, 14.5], [-82.5, 9], [-78, 8], [-84, 10], [-94, 15], [-105, 20], [-108, 28]],
-  // Cuba & Hispaniola / Bahamas bank
-  [[-84.8, 22], [-79, 23], [-74.3, 20.1], [-77.5, 19.9], [-83, 21.5]],
-  [[-74, 19.8], [-68.5, 18.5], [-71.5, 17.8], [-74.3, 18.5]],
-  // Northern South America
-  [[-78, 9], [-70, 12], [-61, 10.5], [-50, 1.5], [-35, -6], [-38, -14], [-40, -23], [-49, -28], [-54, -34], [-63, -38], [-74, -38], [-71, -18], [-81, -5], [-79, 2]],
-  // Greenland tip (east)
-  [[-52, 60], [-42, 60], [-22, 70], [-40, 72], [-55, 68]],
-  // Iceland
-  [[-24.4, 65.5], [-18.2, 66.5], [-13.5, 65.0], [-14.8, 63.6], [-22.6, 63.8]],
-  // Great Britain & Ireland
-  [[-6.0, 50.1], [-5.2, 58.6], [-1.8, 57.6], [1.6, 52.5], [1.2, 51.0]],
-  [[-10.2, 52.0], [-9.4, 55.2], [-6.1, 54.6], [-6.2, 52.2]],
-  // Continental Europe, Italy, Iberia, Balkans & Urals
-  [[-9.2, 37.0], [-9.1, 43.2], [-1.8, 43.4], [-4.6, 48.4], [2.2, 51.0], [7.8, 53.9], [9.8, 57.2], [13.8, 54.0], [21.0, 54.8], [28.0, 60.2], [44.0, 66.0], [72.0, 68.0], [72.0, 42.0], [52.0, 40.0], [40.0, 42.0], [28.5, 41.2], [23.8, 37.9], [19.8, 40.4], [18.2, 40.1], [16.0, 38.0], [13.5, 41.2], [11.0, 43.4], [13.6, 45.6], [12.3, 42.0], [9.2, 44.3], [4.5, 43.3], [3.1, 42.3], [-0.4, 38.4], [-5.5, 36.1]],
-  // Scandinavia
-  [[5.1, 59.0], [6.8, 62.6], [12.0, 66.2], [16.5, 69.2], [28.5, 71.0], [28.0, 60.4], [20.2, 60.0], [18.0, 59.0], [12.8, 55.6], [10.8, 58.2]],
-  // Africa & Red Sea / Arabian Peninsula
-  [[-17.2, 14.8], [-13.2, 27.6], [-5.8, 35.8], [10.6, 37.2], [24.5, 31.8], [32.5, 31.4], [35.0, 29.4], [43.2, 12.6], [51.2, 11.9], [40.6, -2.5], [35.4, -24.5], [27.9, -33.2], [18.4, -34.4], [14.8, -24.0], [12.0, -15.5], [9.2, 3.8], [2.4, 6.3], [-8.0, 4.6], [-15.8, 11.4]],
-  // Arabia / Levant
-  [[34.8, 29.5], [35.5, 36.8], [48.0, 38.0], [60.0, 25.0], [56.2, 22.5], [43.5, 12.8], [35.0, 27.5]],
-];
+// Removed legacy inline MAP_LANDMASS_POLYGONS (moved to ./game/worldMapData.js)
 
 const SITE_COORDS_BY_ID = new Map(CAMPAIGN_PLAN.map((s) => [s.id, s]));
 let siteViewMode = 'split'; // 'split' | 'map' | 'list'
-let mapEuropeZoom = false;
+let mapZoomMode = 'global'; // 'global' | 'site'
+let currentMapViewBox = { ...GLOBAL_MAP_VIEWBOX };
+let mapAnimFrameId = 0;
+let mapBaseInitialized = false;
 
-function projectMapPoint(lng, lat) {
-  return {
-    x: (lng + 108) * 2,
-    y: (72 - lat) * 2,
-  };
+function formatViewBox(vb) {
+  return `${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`;
 }
 
-function renderSiteWorldMap() {
+function animateMapViewBox(targetVb, instant = false) {
   if (!siteWorldMapEl) return;
-  const locked = Boolean(lan.room && !lan.isHost());
-  siteWorldMapEl.setAttribute('viewBox', mapEuropeZoom ? '194 24 96 72' : '0 -22 360 246');
-  if (btnMapZoom) {
-    btnMapZoom.textContent = mapEuropeZoom ? '🇪🇺 EU' : '🌍 All';
+  if (mapAnimFrameId) {
+    cancelAnimationFrame(mapAnimFrameId);
+    mapAnimFrameId = 0;
   }
-  const k = mapEuropeZoom ? 0.36 : 1;
-
-  // Graticule grid
-  const gridParts = [];
-  for (let lng = -90; lng <= 60; lng += 30) {
-    const gx = (lng + 108) * 2;
-    gridParts.push(`<line x1="${gx}" y1="0" x2="${gx}" y2="220" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`);
-  }
-  for (let lat = -30; lat <= 60; lat += 30) {
-    const gy = (72 - lat) * 2;
-    gridParts.push(`<line x1="0" y1="${gy}" x2="360" y2="${gy}" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`);
-  }
-  for (let lng = -90; lng <= 60; lng += 30) {
-    const gx = (lng + 108) * 2;
-    gridParts[Math.floor((lng + 90) / 30)] = `<line x1="${gx}" y1="-22" x2="${gx}" y2="224" stroke="rgba(56,189,248,0.08)" stroke-width="${(0.6 * k).toFixed(2)}" />`;
+  if (
+    instant ||
+    (Math.abs(currentMapViewBox.x - targetVb.x) < 0.05 &&
+      Math.abs(currentMapViewBox.y - targetVb.y) < 0.05 &&
+      Math.abs(currentMapViewBox.w - targetVb.w) < 0.05 &&
+      Math.abs(currentMapViewBox.h - targetVb.h) < 0.05)
+  ) {
+    currentMapViewBox = { ...targetVb };
+    siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
+    return;
   }
 
-  // Continental polygons
-  const landPaths = MAP_LANDMASS_POLYGONS.map((poly) => {
-    const d = poly
+  const startVb = { ...currentMapViewBox };
+  const startTime = performance.now();
+  const durationMs = 480;
+
+  const tick = (now) => {
+    const rawT = Math.min(1, (now - startTime) / durationMs);
+    const ease = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+    currentMapViewBox = {
+      x: startVb.x + (targetVb.x - startVb.x) * ease,
+      y: startVb.y + (targetVb.y - startVb.y) * ease,
+      w: startVb.w + (targetVb.w - startVb.w) * ease,
+      h: startVb.h + (targetVb.h - startVb.h) * ease,
+    };
+    siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
+    if (rawT < 1) {
+      mapAnimFrameId = requestAnimationFrame(tick);
+    } else {
+      mapAnimFrameId = 0;
+      currentMapViewBox = { ...targetVb };
+    }
+  };
+  mapAnimFrameId = requestAnimationFrame(tick);
+}
+
+function polygonToSvgPath(poly) {
+  return (
+    poly
       .map(([lng, lat], i) => {
         const pt = projectMapPoint(lng, lat);
-        return `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+        return `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(2)},${pt.y.toFixed(2)}`;
       })
-      .join(' ') + ' Z';
-    return `<path d="${d}" fill="rgba(16, 48, 74, 0.92)" stroke="rgba(56, 189, 248, 0.28)" stroke-width="${(0.75 * k).toFixed(2)}" />`;
+      .join(' ') + ' Z'
+  );
+}
+
+function polylineToSvgPoints(coords) {
+  return coords
+    .map(([lng, lat]) => {
+      const pt = projectMapPoint(lng, lat);
+      return `${pt.x.toFixed(2)},${pt.y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function ensureSiteWorldMapBase() {
+  if (!siteWorldMapEl || mapBaseInitialized) return;
+  mapBaseInitialized = true;
+
+  const defs = `
+    <defs>
+      <radialGradient id="mapOceanGlow" cx="55%" cy="42%" r="68%">
+        <stop offset="0%" stop-color="#0a2540" />
+        <stop offset="65%" stop-color="#041425" />
+        <stop offset="100%" stop-color="#020a14" />
+      </radialGradient>
+      <linearGradient id="mapLandFill" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#174469" />
+        <stop offset="100%" stop-color="#0d2a44" />
+      </linearGradient>
+    </defs>
+  `;
+
+  const oceanRect = `<rect x="-80" y="-120" width="540" height="440" fill="url(#mapOceanGlow)" />`;
+
+  // Graticule (15° minor + 30° major + axis labels)
+  const gridParts = [];
+  for (let lng = -105; lng <= 75; lng += 15) {
+    const gx = (lng + 108) * 2;
+    const isMajor = lng % 30 === 0;
+    gridParts.push(
+      `<line x1="${gx}" y1="-40" x2="${gx}" y2="230" vector-effect="non-scaling-stroke" stroke="${
+        isMajor ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.05)'
+      }" stroke-width="${isMajor ? 0.8 : 0.5}" ${isMajor ? '' : 'stroke-dasharray="2,3"'} />`
+    );
+    if (isMajor && lng >= -90 && lng <= 60) {
+      const lbl = lng === 0 ? '0°' : `${Math.abs(lng)}°${lng > 0 ? 'E' : 'W'}`;
+      gridParts.push(
+        `<text x="${(gx + 1.5).toFixed(1)}" y="213" fill="rgba(125,211,252,0.34)" font-size="4.4" font-family="ui-monospace, monospace">${lbl}</text>`
+      );
+    }
+  }
+  for (let lat = -45; lat <= 75; lat += 15) {
+    const gy = projectMapPoint(0, lat).y;
+    const isMajor = lat % 30 === 0;
+    gridParts.push(
+      `<line x1="-20" y1="${gy.toFixed(2)}" x2="380" y2="${gy.toFixed(2)}" vector-effect="non-scaling-stroke" stroke="${
+        isMajor ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.05)'
+      }" stroke-width="${isMajor ? 0.8 : 0.5}" ${isMajor ? '' : 'stroke-dasharray="2,3"'} />`
+    );
+    if (isMajor && lat >= -30 && lat <= 60) {
+      const lbl = lat === 0 ? 'EQ' : `${Math.abs(lat)}°${lat > 0 ? 'N' : 'S'}`;
+      gridParts.push(
+        `<text x="-7" y="${(gy - 1.5).toFixed(1)}" fill="rgba(125,211,252,0.34)" font-size="4.4" font-family="ui-monospace, monospace">${lbl}</text>`
+      );
+    }
+  }
+
+  // Continental shelf halo + coastlines + inland water cutouts
+  const shelfPaths = MAP_LANDMASS_POLYGONS.map(
+    (poly) =>
+      `<path d="${polygonToSvgPath(poly)}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(14, 165, 233, 0.16)" stroke-width="4.5" stroke-linejoin="round" />`
+  ).join('');
+  const landPaths = MAP_LANDMASS_POLYGONS.map(
+    (poly) =>
+      `<path d="${polygonToSvgPath(poly)}" fill="url(#mapLandFill)" vector-effect="non-scaling-stroke" stroke="rgba(125, 211, 252, 0.42)" stroke-width="1" stroke-linejoin="round" />`
+  ).join('');
+  const inlandWaterPaths = MAP_INLAND_WATERS.map(
+    (poly) =>
+      `<path d="${polygonToSvgPath(poly)}" fill="#05182b" vector-effect="non-scaling-stroke" stroke="rgba(125, 211, 252, 0.34)" stroke-width="0.85" stroke-linejoin="round" />`
+  ).join('');
+
+  // Mountain / karst ridges & mid-ocean ridge lines
+  const contourPaths = MAP_CONTOUR_LINES.map(({ kind, coords }) => {
+    const isTrench = kind === 'trench';
+    return `<polyline points="${polylineToSvgPoints(coords)}" fill="none" vector-effect="non-scaling-stroke" stroke="${
+      isTrench ? 'rgba(56, 189, 248, 0.24)' : 'rgba(148, 197, 235, 0.26)'
+    }" stroke-width="${isTrench ? 0.9 : 1.05}" stroke-dasharray="${isTrench ? '3,3' : '1.5,1.5'}" stroke-linecap="round" stroke-linejoin="round" />`;
   }).join('');
 
-  // Pin coordinates with slight decluster offsets for Yucatan & Central EU neighbors
+  siteWorldMapEl.innerHTML = `${defs}<g id="map-base-layer">${oceanRect}${gridParts.join('')}${shelfPaths}${landPaths}${inlandWaterPaths}${contourPaths}</g><g id="map-overlay-layer"></g>`;
+  siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
+}
+
+function renderSiteWorldMap({ instantZoom = false } = {}) {
+  if (!siteWorldMapEl) return;
+  ensureSiteWorldMapBase();
+
+  const locked = Boolean(lan.room && !lan.isHost());
+  const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
+  const targetVb =
+    mapZoomMode === 'site'
+      ? computeSiteFocusViewBox(activeLevel.id, activeSlot)
+      : { ...GLOBAL_MAP_VIEWBOX };
+
+  if (btnMapZoom) {
+    btnMapZoom.textContent = mapZoomMode === 'site' ? '🌍 World' : '🎯 Focus';
+    btnMapZoom.title =
+      mapZoomMode === 'site' ? 'Zoom out to full global map' : 'Zoom & pan to active dive site';
+  }
+
+  const k = Math.max(0.14, Math.min(1, targetVb.w / GLOBAL_MAP_VIEWBOX.w));
+  const isZoomed = mapZoomMode === 'site';
+
+  // Pin coordinates (with slight declustering only when in wide global view)
   const pins = LEVELS.map((lvl, idx) => {
     const slot = SITE_COORDS_BY_ID.get(lvl.id);
     const pt = projectMapPoint(slot?.lng ?? 0, slot?.lat ?? 20);
-    if (lvl.id === 'ox-bel-ha-grand-traverse') pt.y += 4.2 * k;
-    if (lvl.id === 'cenote-el-abismo') pt.y -= 2.2 * k;
+    if (!isZoomed) {
+      if (lvl.id === 'ox-bel-ha-grand-traverse') {
+        pt.y += 2.6;
+        pt.x -= 1.2;
+      }
+      if (lvl.id === 'cenote-el-abismo') {
+        pt.y -= 2.2;
+        pt.x += 1.0;
+      }
+    }
     return { lvl, idx, slot, x: pt.x, y: pt.y };
   });
 
-  // Subtle campaign progression route polyline
-  const routePts = pins.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const routeLine = `<polyline points="${routePts}" fill="none" stroke="rgba(56, 189, 248, 0.22)" stroke-width="${(0.75 * k).toFixed(2)}" stroke-dasharray="${(2.5 * k).toFixed(2)},${(2.2 * k).toFixed(2)}" />`;
+  const routePts = pins.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const routeLine = `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`;
 
   const pinMarkup = pins
     .map(({ lvl, idx, slot, x, y }) => {
@@ -397,35 +517,66 @@ function renderSiteWorldMap() {
       const isUnlined = lvl.reelMetersPerDiver > 0;
       const best = getSavedBestScore(lvl.id);
       const pinColor = isUnlined ? '#fbbf24' : '#38bdf8';
-      const r = (isSelected ? 4.3 : 3.0) * k;
+      const r = (isSelected ? 5.2 : 3.4) * k;
+
       const halo = isSelected
-        ? `<circle class="map-pin-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7.5 * k).toFixed(1)}" />`
+        ? `<circle class="map-pin-halo" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" />`
         : '';
-      const ring = best > 0
-        ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 1.6 * k).toFixed(1)}" fill="none" stroke="#34d399" stroke-width="${(0.85 * k).toFixed(2)}" />`
+      const crosshair = isSelected
+        ? `<g stroke="rgba(224,242,254,0.62)" vector-effect="non-scaling-stroke" stroke-width="1">
+             <line x1="${(x - 12 * k).toFixed(2)}" y1="${y.toFixed(2)}" x2="${(x - 6.6 * k).toFixed(2)}" y2="${y.toFixed(2)}" />
+             <line x1="${(x + 6.6 * k).toFixed(2)}" y1="${y.toFixed(2)}" x2="${(x + 12 * k).toFixed(2)}" y2="${y.toFixed(2)}" />
+             <line x1="${x.toFixed(2)}" y1="${(y - 12 * k).toFixed(2)}" x2="${x.toFixed(2)}" y2="${(y - 6.6 * k).toFixed(2)}" />
+             <line x1="${x.toFixed(2)}" y1="${(y + 6.6 * k).toFixed(2)}" x2="${x.toFixed(2)}" y2="${(y + 12 * k).toFixed(2)}" />
+           </g>`
         : '';
-      const numLabel = isSelected || mapEuropeZoom
-        ? `<text x="${(x + 4.8 * k).toFixed(1)}" y="${(y + 1.8 * k).toFixed(1)}" fill="#e0f2fe" font-size="${(6.2 * k).toFixed(2)}" font-weight="700" font-family="ui-monospace, monospace">L${idx + 1}</text>`
-        : '';
+      const ring =
+        best > 0
+          ? `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(r + 2.0 * k).toFixed(2)}" fill="none" vector-effect="non-scaling-stroke" stroke="#34d399" stroke-width="1.4" />`
+          : '';
+
+      // Show short L# tag on selected or nearby zoomed pins; place to the left if near right viewport edge
+      let labelMarkup = '';
+      if (isSelected || isZoomed) {
+        const placeLeft = x > targetVb.x + targetVb.w * 0.6;
+        const anchor = placeLeft ? 'end' : 'start';
+        const lx = x + (placeLeft ? -7.2 * k : 7.2 * k);
+        const ly = y + 3.4 * k;
+        const labelText = isSelected && isZoomed ? `L${idx + 1} · ${lvl.name}` : `L${idx + 1}`;
+        labelMarkup = `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" fill="${
+          isSelected ? '#f0f9ff' : '#bae6fd'
+        }" stroke="#020b14" stroke-width="${(3.4 * k).toFixed(2)}" paint-order="stroke" font-size="${(
+          (isSelected ? 11.0 : 9.2) * k
+        ).toFixed(2)}" font-weight="700" font-family="ui-monospace, monospace">${escapeHtml(labelText)}</text>`;
+      }
+
       return `
         <g class="map-pin-btn ${isSelected ? 'active' : ''} ${locked ? 'locked' : ''}" data-level-id="${lvl.id}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" tabindex="0">
-          <title>L${idx + 1}: ${lvl.name} (${slot?.region || ''} · ${getLevelMaxDepthM(lvl)}m)</title>
+          <title>L${idx + 1}: ${escapeHtml(lvl.name)} (${escapeHtml(slot?.region || '')} · ${getLevelMaxDepthM(lvl)}m)</title>
           ${halo}
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7.5 * k).toFixed(1)}" fill="transparent" />
+          ${crosshair}
+          <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" fill="transparent" />
           ${ring}
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${pinColor}" stroke="#020b14" stroke-width="${(0.9 * k).toFixed(2)}" />
-          ${numLabel}
+          <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${pinColor}" stroke="#020b14" vector-effect="non-scaling-stroke" stroke-width="1.4" />
+          ${labelMarkup}
         </g>
       `;
     })
     .join('');
 
-  siteWorldMapEl.innerHTML = `${gridParts.join('')}${landPaths}${routeLine}${pinMarkup}`;
+  const overlayLayer = siteWorldMapEl.querySelector('#map-overlay-layer');
+  if (overlayLayer) {
+    overlayLayer.innerHTML = `${routeLine}${pinMarkup}`;
+  }
+
+  animateMapViewBox(targetVb, instantZoom);
 
   const activeIdx = Math.max(0, LEVELS.findIndex((l) => l.id === activeLevel.id));
-  const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
   if (siteMapRegionBadgeEl) {
     siteMapRegionBadgeEl.textContent = `L${activeIdx + 1} · ${activeSlot?.region || activeLevel.name} · ${getLevelMaxDepthM(activeLevel)}m`;
+  }
+  if (siteMapCoordsEl && activeSlot) {
+    siteMapCoordsEl.textContent = formatLatLng(activeSlot.lat, activeSlot.lng);
   }
 }
 
@@ -1538,13 +1689,16 @@ function renderRoomsList(rooms = lan.rooms) {
     .join('');
 }
 
-async function selectAndLoadLevel(chosenId) {
+async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (lan.room && !lan.isHost()) {
     showToast('Host selects the expedition site in co-op.', 2.0);
     return;
   }
   const nextLevel = getLevelById(chosenId);
   activeLevel = nextLevel;
+  if (focusMap) {
+    mapZoomMode = 'site';
+  }
   if (selectLevel) selectLevel.value = nextLevel.id;
   if (lbFilterLevelId !== 'overall') {
     lbFilterLevelId = nextLevel.id;
@@ -1595,7 +1749,7 @@ if (siteWorldMapEl) {
 
 if (btnMapZoom) {
   btnMapZoom.addEventListener('click', () => {
-    mapEuropeZoom = !mapEuropeZoom;
+    mapZoomMode = mapZoomMode === 'site' ? 'global' : 'site';
     renderSiteWorldMap();
   });
 }
