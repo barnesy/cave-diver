@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
-  <link rel="stylesheet" href="./css/style.css?v=54" />
+  <link rel="stylesheet" href="./css/style.css?v=55" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -36,6 +36,10 @@
       </div>
       <div id="loader-coop-sync" class="loader-coop-sync" hidden>
         <div id="loader-crew-status" class="loader-crew-status">Syncing dive team...</div>
+        <div id="loader-callsign-gate" class="loader-callsign-gate" hidden>
+          <input id="input-loader-callsign" type="text" maxlength="12" placeholder="Your callsign (max 12)" autocomplete="off" />
+          <button id="btn-loader-join" class="btn tiny primary" type="button">DROP IN</button>
+        </div>
         <div class="loader-sync-actions">
           <button id="btn-loader-force" class="btn tiny primary" type="button" hidden>Force Launch Now</button>
           <button id="btn-loader-cancel" class="btn tiny ghost" type="button" hidden>Cancel</button>
@@ -74,8 +78,8 @@
       </div>
 
       <div id="menu-identity-row" class="menu-name-row">
-        <label for="input-player-name">Diver Callsign</label>
-        <input id="input-player-name" type="text" maxlength="16" value="Diver 1" autocomplete="off" />
+        <label for="input-player-name">Diver Callsign <span id="callsign-count" class="callsign-count">0/12</span></label>
+        <input id="input-player-name" type="text" maxlength="12" placeholder="Enter callsign (max 12)" required autocomplete="off" />
       </div>
 
       <div id="menu-site-picker" class="level-picker-block">
@@ -353,46 +357,46 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=54",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=54",
-        "./js/game/audio.js": "./js/game/audio.js?v=54",
-        "./js/game/collision.js": "./js/game/collision.js?v=54",
-        "./js/game/input.js": "./js/game/input.js?v=54",
-        "./js/game/hud.js": "./js/game/hud.js?v=54",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=54",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=54",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=54",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=54",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=54",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=54",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=54",
-        "./js/game/silt.js": "./js/game/silt.js?v=54",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=54",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=54",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=54",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=54",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=54",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=54",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=54",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=54",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=54",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=54",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=54",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=54",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=54",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=54",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=54",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=54",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=54",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=54",
-        "./js/levels/index.js": "./js/levels/index.js?v=54",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=54",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=54",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=54",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=54"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=55",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=55",
+        "./js/game/audio.js": "./js/game/audio.js?v=55",
+        "./js/game/collision.js": "./js/game/collision.js?v=55",
+        "./js/game/input.js": "./js/game/input.js?v=55",
+        "./js/game/hud.js": "./js/game/hud.js?v=55",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=55",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=55",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=55",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=55",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=55",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=55",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=55",
+        "./js/game/silt.js": "./js/game/silt.js?v=55",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=55",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=55",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=55",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=55",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=55",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=55",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=55",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=55",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=55",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=55",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=55",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=55",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=55",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=55",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=55",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=55",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=55",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=55",
+        "./js/levels/index.js": "./js/levels/index.js?v=55",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=55",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=55",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=55",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=55"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=54"></script>
+  <script type="module" src="./js/main.js?v=55"></script>
 </body>
 </html>

@@ -111,6 +111,10 @@ const loaderCoopSyncEl = document.getElementById('loader-coop-sync');
 const loaderCrewStatusEl = document.getElementById('loader-crew-status');
 const btnLoaderForce = document.getElementById('btn-loader-force');
 const btnLoaderCancel = document.getElementById('btn-loader-cancel');
+const loaderCallsignGateEl = document.getElementById('loader-callsign-gate');
+const loaderCallsignInput = document.getElementById('input-loader-callsign');
+const btnLoaderJoin = document.getElementById('btn-loader-join');
+const callsignCountEl = document.getElementById('callsign-count');
 const coopCommsEl = document.getElementById('coop-comms');
 const btnShareGas = document.getElementById('btn-share-gas');
 const btnTowBuddy = document.getElementById('btn-tow-buddy');
@@ -147,22 +151,83 @@ let notifyAlertsMuted = false;
 let lbMode = 'solo';
 let lbScope = 'site';
 
-// Restore saved player callsign on phone/desktop (use unique fallback when auto-joining via link)
+const CALLSIGN_MAX_LEN = 12;
+
+function sanitizeCallsignInput(raw) {
+  return String(raw || '')
+    .replace(/[\r\n\t<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CALLSIGN_MAX_LEN);
+}
+
+function syncCallsignCount() {
+  if (!callsignCountEl || !playerNameInput) return;
+  const len = playerNameInput.value.trim().length;
+  callsignCountEl.textContent = `${len}/${CALLSIGN_MAX_LEN}`;
+}
+
+function getEnteredCallsign() {
+  return sanitizeCallsignInput(playerNameInput?.value || '');
+}
+
+function requireCallsign() {
+  const clean = getEnteredCallsign();
+  if (clean) {
+    if (playerNameInput && playerNameInput.value !== clean) {
+      playerNameInput.value = clean;
+    }
+    syncCallsignCount();
+    playerNameInput?.classList.remove('invalid');
+    try {
+      localStorage.setItem('caveDiverCallsign', clean);
+    } catch {}
+    return clean;
+  }
+  if (activeMenuTab === 'leaderboards') {
+    setActiveMenuTab('solo');
+  }
+  playerNameInput?.classList.add('invalid');
+  playerNameInput?.focus();
+  playerNameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast(`Enter your diver callsign (1–${CALLSIGN_MAX_LEN} chars) to dive!`, 3.0);
+  if (lanStatus && !lanPanel?.hidden) {
+    lanStatus.className = 'lan-status warn';
+    lanStatus.textContent = `Enter a diver callsign (1–${CALLSIGN_MAX_LEN} chars) above first.`;
+  }
+  return '';
+}
+
+// Restore saved player callsign on phone/desktop (no anonymous auto-fill; every diver enters a 1–12 char callsign)
 try {
-  const savedName = localStorage.getItem('caveDiverCallsign');
+  const savedName = sanitizeCallsignInput(localStorage.getItem('caveDiverCallsign'));
   if (savedName && playerNameInput) {
     playerNameInput.value = savedName;
-  } else if (INITIAL_ROOM_CODE && playerNameInput && playerNameInput.value === 'Diver 1') {
-    const tagNum = 10 + Math.floor(Math.random() * 89);
-    playerNameInput.value = `Diver ${tagNum}`;
+  } else if (playerNameInput) {
+    playerNameInput.value = '';
   }
-  playerNameInput?.addEventListener('change', () => {
-    const clean = playerNameInput.value.trim();
-    if (clean) localStorage.setItem('caveDiverCallsign', clean);
-  });
 } catch {
-  // ignore storage restriction
+  if (playerNameInput) playerNameInput.value = '';
 }
+syncCallsignCount();
+
+playerNameInput?.addEventListener('input', () => {
+  if (playerNameInput.value.length > CALLSIGN_MAX_LEN) {
+    playerNameInput.value = playerNameInput.value.slice(0, CALLSIGN_MAX_LEN);
+  }
+  syncCallsignCount();
+  const clean = getEnteredCallsign();
+  if (clean) {
+    playerNameInput.classList.remove('invalid');
+    try {
+      localStorage.setItem('caveDiverCallsign', clean);
+    } catch {}
+  } else {
+    try {
+      localStorage.removeItem('caveDiverCallsign');
+    } catch {}
+  }
+});
 
 const nextUiTick = () =>
   new Promise((resolve) => {
@@ -1341,6 +1406,8 @@ if (levelCardsEl) {
 }
 
 btnPlaySolo.addEventListener('click', async () => {
+  const diverName = requireCallsign();
+  if (!diverName) return;
   btnPlaySolo.disabled = true;
   try {
     await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
@@ -1463,7 +1530,8 @@ if (lanRoomsList) {
     const joinBtn = e.target.closest('button[data-join-code]');
     if (!joinBtn || joinBtn.disabled) return;
     const code = joinBtn.dataset.joinCode;
-    const name = playerNameInput?.value.trim() || 'Buddy Diver';
+    const name = requireCallsign();
+    if (!name) return;
     const roomInput = document.getElementById('input-room-code');
     if (roomInput) roomInput.value = code;
     const matchedRoom = Array.isArray(lan.rooms) ? lan.rooms.find((r) => r.code === code) : null;
@@ -1478,8 +1546,9 @@ if (lanRoomsList) {
 const btnQuickCoop = document.getElementById('btn-quick-coop');
 if (btnQuickCoop) {
   btnQuickCoop.addEventListener('click', async () => {
+    const name = requireCallsign();
+    if (!name) return;
     btnQuickCoop.disabled = true;
-    const name = playerNameInput?.value.trim() || 'Lead Diver';
     const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
     requestDiverNotificationPermission();
     try {
@@ -1508,7 +1577,8 @@ if (btnQuickCoop) {
 }
 
 document.getElementById('btn-create-room').addEventListener('click', () => {
-  const name = playerNameInput?.value.trim() || 'Lead Diver';
+  const name = requireCallsign();
+  if (!name) return;
   const maxPlayers = Number(document.getElementById('select-max-players')?.value || 4);
   requestDiverNotificationPermission();
   lanStatus.textContent = 'Creating room...';
@@ -1518,8 +1588,9 @@ document.getElementById('btn-create-room').addEventListener('click', () => {
 
 const roomCodeInput = document.getElementById('input-room-code');
 function triggerJoinFromInput() {
+  const name = requireCallsign();
+  if (!name) return;
   const code = (roomCodeInput?.value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const name = playerNameInput?.value.trim() || 'Buddy Diver';
   if (!code) {
     lanStatus.className = 'lan-status warn';
     lanStatus.textContent = 'Enter a 4-letter room code or pick a room below.';
@@ -2796,10 +2867,55 @@ async function bootGame() {
   } else if (INITIAL_ROOM_CODE) {
     pendingAutoJoinCode = INITIAL_ROOM_CODE;
     if (roomCodeInput) roomCodeInput.value = INITIAL_ROOM_CODE;
-    const diverName = playerNameInput?.value.trim() || 'Buddy Diver';
-    lanStatus.className = 'lan-status';
-    lanStatus.textContent = `Auto-joining room ${INITIAL_ROOM_CODE}...`;
-    lan.joinRoom(INITIAL_ROOM_CODE, diverName);
+    const savedCallsign = getEnteredCallsign();
+    if (savedCallsign) {
+      lanStatus.className = 'lan-status';
+      lanStatus.textContent = `Auto-joining room ${INITIAL_ROOM_CODE}...`;
+      lan.joinRoom(INITIAL_ROOM_CODE, savedCallsign);
+    } else if (loaderCallsignGateEl && loaderCallsignInput && btnLoaderJoin) {
+      setLoaderProgress(18, `Room ${INITIAL_ROOM_CODE} ready`);
+      if (loaderCrewStatusEl) {
+        loaderCrewStatusEl.textContent = `Enter a callsign (1–${CALLSIGN_MAX_LEN} chars) to join Room ${INITIAL_ROOM_CODE}`;
+      }
+      loaderCallsignGateEl.hidden = false;
+      loaderCallsignInput.focus();
+      const submitGateJoin = () => {
+        const clean = sanitizeCallsignInput(loaderCallsignInput.value);
+        if (!clean) {
+          loaderCallsignInput.classList.add('invalid');
+          loaderCallsignInput.focus();
+          showToast(`Enter a callsign (1–${CALLSIGN_MAX_LEN} chars) first!`, 2.6);
+          return;
+        }
+        loaderCallsignInput.classList.remove('invalid');
+        loaderCallsignGateEl.hidden = true;
+        if (playerNameInput) {
+          playerNameInput.value = clean;
+          syncCallsignCount();
+        }
+        try {
+          localStorage.setItem('caveDiverCallsign', clean);
+        } catch {}
+        setLoaderProgress(28, `Joining Room ${INITIAL_ROOM_CODE}...`);
+        if (loaderCrewStatusEl) {
+          loaderCrewStatusEl.textContent = `Connecting to Room ${INITIAL_ROOM_CODE} as ${clean}...`;
+        }
+        lan.joinRoom(INITIAL_ROOM_CODE, clean);
+      };
+      btnLoaderJoin.addEventListener('click', submitGateJoin);
+      loaderCallsignInput.addEventListener('input', () => {
+        if (loaderCallsignInput.value.length > CALLSIGN_MAX_LEN) {
+          loaderCallsignInput.value = loaderCallsignInput.value.slice(0, CALLSIGN_MAX_LEN);
+        }
+        loaderCallsignInput.classList.remove('invalid');
+      });
+      loaderCallsignInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitGateJoin();
+        }
+      });
+    }
   }
 
   requestAnimationFrame(frame);

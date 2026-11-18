@@ -1,13 +1,14 @@
 import { LEVELS, isValidLevelId, getLevelById } from '../levels/index.js';
 
 export const LEADERBOARD_MODES = new Set(['solo', 'team']);
+export const CALLSIGN_MAX_LEN = 12;
 
-export function sanitizeCallsign(raw, fallback = 'Diver') {
+export function sanitizeCallsign(raw, fallback = 'Diver', maxLen = CALLSIGN_MAX_LEN) {
   const cleaned = String(raw || '')
     .replace(/[\r\n\t<>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 18);
+    .slice(0, maxLen);
   return cleaned || fallback;
 }
 

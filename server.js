@@ -264,7 +264,11 @@ function sanitizeRoomCode(raw) {
 }
 
 function sanitizeName(raw, fallback = 'Diver') {
-  const trimmed = String(raw || '').trim().slice(0, 18);
+  const trimmed = String(raw || '')
+    .replace(/[\r\n\t<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 12);
   return trimmed || fallback;
 }
 

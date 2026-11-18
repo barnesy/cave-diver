@@ -1291,6 +1291,20 @@ test('LeaderboardModel validates score ceilings, separates solo/team, and builds
     exploredPct: 96,
     grade: 'S',
   });
+  const soloOverLen = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'cenote-el-abismo',
+    playerId: 'pLen',
+    diverName: 'SuperLongCallsign123',
+    score: 2400,
+    timeSec: 130,
+    exploredPct: 85,
+    grade: 'A',
+  });
+  assert.equal(soloOverLen.ok, true);
+  assert.equal(soloOverLen.entry.displayName.length, 12);
+  assert.equal(soloOverLen.entry.displayName, 'SuperLongCal');
+
   assert.ok(solo1.ok && solo2.ok && team1.ok);
   assert.equal(solo1.entry.entryKey, 'pA:cenote-el-abismo');
   assert.equal(team1.entry.entryKey, 'AB12-d1-cenote-el-abismo');

@@ -274,6 +274,33 @@ html, body {
 .lan-join-row input:focus {
   border-color: var(--cyan);
 }
+.callsign-count {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: rgba(148, 163, 184, 0.75);
+  margin-left: 6px;
+}
+.menu-name-row input.invalid,
+.loader-callsign-gate input.invalid {
+  border-color: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25);
+}
+.loader-callsign-gate {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.loader-callsign-gate input {
+  flex: 1;
+  min-width: 0;
+  background: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  outline: none;
+}
 
 .menu-actions {
   display: grid;
