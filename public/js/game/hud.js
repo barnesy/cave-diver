@@ -373,7 +373,7 @@ export class DiveComputerHUD {
     const resolvedAscent = ascentConfig || getAscentConfig(level);
     const ascending = checkpointsHit.has(resolvedAscent.turnaroundId);
     const recGasId = getRecommendedGas(diveState, { ascending });
-    const ascentStep = getAscentInstruction(diveState, diver.y, checkpointsHit, resolvedAscent);
+    const ascentStep = getAscentInstruction(diveState, diver.y, checkpointsHit, resolvedAscent, nextCheckpoint);
 
     const mixMap = diveState.mixes || GAS_MIXES;
     for (const id of GAS_ORDER) {

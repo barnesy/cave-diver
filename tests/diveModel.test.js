@@ -1558,3 +1558,45 @@ test('Expedition worldMapData projects all 14 dive sites cleanly inside global &
   assert.equal(formatLatLng(20.4, -87.3), '20.4°N · 87.3°W');
   assert.equal(formatLatLng(-27.9, 23.6), '27.9°S · 23.6°E');
 });
+
+test('Level 9 Blue Hole checkpoints cover main shaft & Bells exit without exit soft-lock', () => {
+  const lvl9 = getLevelById('blue-hole-dahab-arch');
+  assert.equal(validateLevel(lvl9).valid, true);
+
+  const cp2 = lvl9.checkpoints.find((c) => c.id === 'cp2');
+  const cp8 = lvl9.checkpoints.find((c) => c.id === 'cp8');
+  assert.ok(cp2 && cp8);
+
+  // Descending straight down Blue Hole shaft at x=14, y=20 hits cp2 even without Saddle detour
+  assert.ok(Math.hypot(14 - cp2.x, 20.0 - cp2.y) <= cp2.radius, 'Main Blue Hole pit must tag cp2');
+  // Ascending straight up Bells exit chasm along x=306 hits cp8 across 6m -> exit
+  assert.ok(Math.hypot(306 - cp8.x, 5.8 - cp8.y) <= cp8.radius, 'Bells exit shaft center must tag cp8');
+  assert.ok(Math.hypot(306 - cp8.x, 1.5 - cp8.y) <= cp8.radius, 'Floating inside Bells exit should still tag cp8');
+
+  // getAscentInstruction must warn to tag unhit checkpoint instead of prematurely directing to surface exit
+  const state = createDiveState();
+  switchGas(state, 'O2');
+  state.stopDepthM = 0;
+  const partialHits = new Set(['cp1', 'cp2', 'cp3', 'cp4', 'cp5', 'cp6', 'cp7']);
+  const blockedStep = getAscentInstruction(state, 1.0, partialHits, getAscentConfig(lvl9), cp8);
+  assert.equal(blockedStep.action, 'STOP');
+  assert.match(blockedStep.title, /BELLS 6M DECO CHASM/);
+
+  // stepDiveSession warns instead of failing silently if an unhit checkpoint blocks surface exit
+  const lvl9Custom = {
+    ...lvl9,
+    checkpoints: lvl9.checkpoints.map((c) => (c.id === 'cp8' ? { ...c, x: 280, radius: 1.5 } : c)),
+  };
+  const session = createDiveSession(lvl9Custom);
+  for (const c of lvl9Custom.checkpoints) {
+    if (c.id !== 'cp8') session.checkpointsHit.add(c.id);
+  }
+  session.diver.x = lvl9Custom.exitZone.x;
+  session.diver.y = 0.8;
+  const toasts = [];
+  const res = stepDiveSession(session, { x: 0, y: 0 }, 0.016, {
+    onToast: (msg) => toasts.push(msg),
+  });
+  assert.equal(res.outcome, null, 'Surface completion must remain gated until all checkpoints are tagged');
+  assert.ok(toasts.some((m) => m.includes('Exit blocked (7/8)') && m.includes('Bells 6m Deco Chasm')));
+});

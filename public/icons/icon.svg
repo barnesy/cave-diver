@@ -1,33 +1,83 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bg" cx="52%" cy="42%" r="70%">
-      <stop offset="0%" stop-color="#0d4b73"/>
-      <stop offset="60%" stop-color="#04192b"/>
-      <stop offset="100%" stop-color="#020b14"/>
-    </radialGradient>
-    <linearGradient id="beam" x1="0" y1="0.45" x2="1" y2="0.5">
-      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.92"/>
-      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    <linearGradient id="oceanBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#020e1c"/>
+      <stop offset="55%" stop-color="#062844"/>
+      <stop offset="100%" stop-color="#0a4668"/>
     </linearGradient>
-    <clipPath id="portal">
-      <circle cx="256" cy="256" r="184"/>
-    </clipPath>
+    <radialGradient id="hoodGrad" cx="44%" cy="30%" r="68%">
+      <stop offset="0%" stop-color="#3a4c62"/>
+      <stop offset="65%" stop-color="#1e2c3d"/>
+      <stop offset="100%" stop-color="#111a26"/>
+    </radialGradient>
+    <linearGradient id="trimBlue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="lensGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#bae6fd"/>
+      <stop offset="52%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="skinGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7ad7b"/>
+      <stop offset="100%" stop-color="#e38654"/>
+    </linearGradient>
+    <radialGradient id="bubbleGrad" cx="32%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </radialGradient>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <g clip-path="url(#portal)">
-    <path d="M56 172 Q178 106 308 148 T464 166 L464 56 L56 56 Z" fill="#030d17"/>
-    <path d="M56 346 Q188 398 322 356 T464 334 L464 464 L56 464 Z" fill="#030d17"/>
-    <polygon points="290,250 456,184 456,316" fill="url(#beam)"/>
-    <g transform="translate(208 256) rotate(-7)">
-      <path d="M-74 20 L-122 36 L-108 14 L-66 10 Z" fill="#38bdf8"/>
-      <path d="M-74 4 L-116 -14 L-102 -26 L-64 -6 Z" fill="#0ea5e9"/>
-      <rect x="-74" y="-8" width="90" height="26" rx="13" fill="#f8fafc"/>
-      <rect x="-38" y="-27" width="46" height="14" rx="7" fill="#38bdf8"/>
-      <path d="M10 10 L62 18 L66 8 L18 -2 Z" fill="#e2e8f0"/>
-      <circle cx="38" cy="-10" r="16" fill="#f8fafc"/>
-      <rect x="40" y="-17" width="14" height="10" rx="4" fill="#0284c7"/>
-      <rect x="64" y="5" width="18" height="9" rx="4" fill="#fef08a"/>
-    </g>
-  </g>
-  <circle cx="256" cy="256" r="186" fill="none" stroke="#38bdf8" stroke-width="18"/>
+
+  <rect width="512" height="512" fill="url(#oceanBg)"/>
+
+  <!-- Neck & Dive Hood -->
+  <path d="M188 378 L194 426 Q256 446 318 426 L324 378 Z" fill="#182433"/>
+  <ellipse cx="256" cy="242" rx="146" ry="158" fill="url(#hoodGrad)"/>
+  <path d="M196 106 Q186 138 190 166" fill="none" stroke="#141e2b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M316 106 Q326 138 322 166" fill="none" stroke="#141e2b" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Hood Sky-Blue Trim & Face Opening -->
+  <ellipse cx="256" cy="258" rx="116" ry="118" fill="url(#trimBlue)"/>
+  <ellipse cx="256" cy="260" rx="103" ry="105" fill="url(#skinGrad)"/>
+
+  <!-- Regulator Hose -->
+  <path d="M214 352 C164 360 116 346 118 308 C119 294 134 290 144 300 C150 326 178 334 214 334" fill="none" stroke="#1e293b" stroke-width="20" stroke-linecap="round"/>
+  <path d="M214 348 C166 355 122 342 124 308" fill="none" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+  <rect x="192" y="330" width="22" height="24" rx="5" fill="#e2e8f0"/>
+
+  <!-- Diving Mask Frame -->
+  <path d="M132 214 C132 184 156 176 256 176 C356 176 380 184 380 214 L374 268 C370 294 346 306 314 302 C286 298 274 270 256 270 C238 270 226 298 198 302 C166 306 142 294 138 268 Z" fill="#1e293b"/>
+
+  <!-- Mask Glossy Aqua Lens -->
+  <path d="M148 214 C148 196 168 190 256 190 C344 190 364 196 364 214 L359 262 C356 281 336 290 310 286 C286 282 276 254 256 254 C236 254 226 282 202 286 C176 290 156 281 153 262 Z" fill="url(#lensGrad)"/>
+
+  <!-- Friendly Eyes & Eyebrows Inside Mask -->
+  <path d="M188 210 Q204 202 220 210" fill="none" stroke="#1e293b" stroke-width="7" stroke-linecap="round"/>
+  <path d="M292 210 Q308 202 324 210" fill="none" stroke="#1e293b" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="206" cy="240" rx="14" ry="17" fill="#0f172a"/>
+  <ellipse cx="306" cy="240" rx="14" ry="17" fill="#0f172a"/>
+  <circle cx="201" cy="233" r="5" fill="#ffffff"/>
+  <circle cx="301" cy="233" r="5" fill="#ffffff"/>
+
+  <!-- Mask Glass Reflection Diagonal -->
+  <path d="M168 193 L228 193 L172 280 L152 268 Z" fill="#ffffff" opacity="0.28"/>
+  <path d="M250 192 L286 192 L238 264 L218 264 Z" fill="#ffffff" opacity="0.18"/>
+
+  <!-- Nose Pocket -->
+  <path d="M244 268 Q256 254 268 268 L272 292 Q256 300 240 292 Z" fill="#f59e6b"/>
+
+  <!-- Circular Scuba Regulator / Respirator -->
+  <circle cx="256" cy="342" r="46" fill="#0f172a"/>
+  <circle cx="256" cy="342" r="40" fill="#f8fafc"/>
+  <circle cx="256" cy="342" r="28" fill="#1e293b"/>
+  <path d="M256 318 A24 24 0 0 1 256 366" fill="none" stroke="#f59e0b" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M256 366 A24 24 0 0 1 256 318" fill="none" stroke="#f59e0b" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="14 6"/>
+  <circle cx="256" cy="342" r="14" fill="#38bdf8"/>
+
+  <!-- Cute Rising Bubbles -->
+  <circle cx="338" cy="322" r="9" fill="url(#bubbleGrad)"/>
+  <circle cx="386" cy="296" r="16" fill="url(#bubbleGrad)"/>
+  <circle cx="416" cy="250" r="9.5" fill="url(#bubbleGrad)"/>
 </svg>

@@ -1033,7 +1033,7 @@ export class CaveRenderer {
     if (celebrationParticles && celebrationParticles.length > 0) {
       this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
     }
-    this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale);
+    this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint);
 
     // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS)
     this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
@@ -3747,8 +3747,8 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale) {
-    const step = getAscentInstruction(diveState, diver.y, checkpointsHit, getAscentConfig(this.level));
+  _drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint = null) {
+    const step = getAscentInstruction(diveState, diver.y, checkpointsHit, getAscentConfig(this.level), nextCheckpoint);
     if (!step) return;
 
     const sx = toScreenX(diver.x);

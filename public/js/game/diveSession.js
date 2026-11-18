@@ -513,6 +513,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       session.recoveryWarnCooldown = 3.5;
       callbacks.onToast?.(`Mission incomplete! Recover ${level.recoveryTarget.name} at ${Math.round(level.recoveryTarget.y)}m first.`, 3.2);
     }
+  } else if (inExit && diver.y <= 1.2 && !allHit) {
+    if (session.recoveryWarnCooldown <= 0) {
+      session.recoveryWarnCooldown = 3.5;
+      const missedCp = level.checkpoints.find((c) => !checkpointsHit.has(c.id));
+      const cpDetail = missedCp ? `${missedCp.name} (${Math.round(missedCp.y)}m)` : 'remaining checkpoint';
+      callbacks.onToast?.(`Exit blocked (${checkpointsHit.size}/${level.checkpoints.length})! Tag ${cpDetail} first.`, 3.5);
+    }
   }
   const recoveryReady = !level.recoveryTarget || session.bodyRecovered;
   if (allHit && recoveryReady && inExit && diver.y <= 1.2) {

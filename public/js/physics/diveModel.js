@@ -512,7 +512,7 @@ export function getRecommendedGas(state, { ascending = false } = {}) {
 /**
  * Produces a dead-simple "STOP HERE / NOW MOVE HERE" instruction for the ascent phase.
  */
-export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig = {}) {
+export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig = {}, nextCheckpoint = null) {
   const turnaroundId = ascentConfig?.turnaroundId ?? 'cp4';
   const switchId = ascentConfig?.switchId ?? 'cp5';
   const switchDepthM = Number.isFinite(ascentConfig?.switchDepthM) ? ascentConfig.switchDepthM : 22.0;
@@ -567,6 +567,17 @@ export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig
       detail: 'Hover at 6m line until ceiling clears',
       targetY: 6.0,
       targetGas: 'O2',
+    };
+  }
+
+  if (nextCheckpoint) {
+    const cpDepth = Number.isFinite(nextCheckpoint.y) ? `${Math.round(nextCheckpoint.y)}m` : '';
+    return {
+      action: 'STOP',
+      title: `TAG ${nextCheckpoint.name.toUpperCase()}`,
+      detail: cpDepth ? `Required checkpoint at ${cpDepth} before surfacing` : 'Tag remaining checkpoint before surfacing',
+      targetY: Number.isFinite(nextCheckpoint.y) ? nextCheckpoint.y : 6.0,
+      targetGas: state.activeGasId,
     };
   }
 
