@@ -1218,12 +1218,25 @@ html, body {
   pointer-events: none;
 }
 
+.hud-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .self-health-card {
   background: rgba(8, 15, 26, 0.88);
   border: 1px solid rgba(56, 189, 248, 0.38);
   border-radius: 11px;
-  padding: 5px 8px;
+  padding: 5px 7px;
   width: clamp(212px, 24vw, 258px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   backdrop-filter: blur(5px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
@@ -1239,33 +1252,34 @@ html, body {
   animation: pulseFlash 0.65s infinite alternate;
 }
 
-.self-health-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 4px;
-}
 .self-tag {
-  font-size: 0.64rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.66rem;
   font-weight: 800;
   color: #bae6fd;
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 999px;
+  padding: 3px 8px;
   letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 92px;
+  max-width: 145px;
+  flex-shrink: 1;
 }
 
 .dc-ekg-row {
   background: rgba(2, 8, 18, 0.86);
   border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: 6px;
-  padding: 2px 5px;
+  border-radius: 7px;
+  padding: 4px 6px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex: 1;
+  gap: 7px;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 38px;
   min-width: 0;
 }
 .dc-ekg-row.warn {
@@ -1291,8 +1305,9 @@ html, body {
   transform: scale(1.28);
 }
 .ekg-bpm {
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.98rem;
+  font-weight: 900;
+  line-height: 1;
   color: var(--ok);
 }
 .dc-ekg-row.warn .ekg-heart,
@@ -1304,14 +1319,15 @@ html, body {
   color: var(--danger);
 }
 .ekg-unit {
-  font-size: 0.5rem;
+  font-size: 0.54rem;
   color: var(--text-muted);
 }
 .ekg-canvas {
   flex: 1 1 0;
   min-width: 0;
   width: 0;
-  height: 18px;
+  height: 100%;
+  min-height: 28px;
   display: block;
 }
 
@@ -1880,9 +1896,19 @@ html, body {
   .obj-hint {
     font-size: 0.6rem;
   }
-  .hud-util-btns {
+  .hud-top-right {
     grid-area: utils;
     justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .self-tag {
+    max-width: 78px;
+    padding: 2px 6px;
+    font-size: 0.58rem;
+  }
+  .hud-util-btns {
     justify-content: flex-end;
     flex-wrap: nowrap;
     gap: 4px;
@@ -1964,26 +1990,23 @@ html, body {
     width: 100%;
     padding: 3px 4px;
     border-radius: 9px;
-  }
-  .self-health-top {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    margin-bottom: 2.5px;
-  }
-  .self-tag {
-    max-width: 100%;
-    font-size: 0.54rem;
+    gap: 3px;
   }
   .dc-ekg-row {
     width: 100%;
+    min-height: 28px;
+    padding: 2px 5px;
     overflow: hidden;
   }
   .self-health-card .ekg-unit {
     display: none;
   }
+  .ekg-bpm {
+    font-size: 0.86rem;
+  }
   .ekg-canvas {
-    height: 12px;
+    height: 22px;
+    min-height: 22px;
   }
   .dc-vitals-row {
     grid-template-columns: repeat(2, 1fr);
@@ -2065,6 +2088,11 @@ html, body {
   .self-health-card {
     width: 152px;
     padding: 3px 5px;
+    gap: 3px;
+  }
+  .self-health-card .dc-ekg-row {
+    min-height: 30px;
+    padding: 2px 5px;
   }
   .self-health-card .ekg-unit {
     display: none;

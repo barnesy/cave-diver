@@ -52,6 +52,12 @@ function stepAndDrawEkg(canvas, state, bpm, alive, dt = 0.016) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return false;
 
+  const layoutW = Math.round(canvas.clientWidth || 0);
+  const layoutH = Math.round(canvas.clientHeight || 0);
+  if (layoutW > 0 && layoutH > 0 && (canvas.width !== layoutW || canvas.height !== layoutH)) {
+    canvas.width = layoutW;
+    canvas.height = layoutH;
+  }
   const w = canvas.width;
   const h = canvas.height;
   if (state.samples.length !== w) {
