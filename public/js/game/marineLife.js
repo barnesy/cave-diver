@@ -44,7 +44,9 @@ export function createMarineEcosystem(level) {
     themeId === 'aurora-glacial' ||
     themeId === 'strytan-hydrothermal' ||
     themeId === 'kverkfjoll-glacier' ||
-    themeId === 'grjotagja-lava';
+    themeId === 'grjotagja-lava' ||
+    themeId === 'atlantida-volcanic' ||
+    themeId === 'boybulok-alpine';
 
   // 1. Sunlit Surface Basins
   for (let bIdx = 0; bIdx < level.openBasins.length; bIdx++) {

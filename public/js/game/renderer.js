@@ -556,6 +556,9 @@ export class CaveRenderer {
       'strytan-smectite': [-14, 18, 28, 0.62, 6, 0.74, 12, 0.84, 20],
       'kverkfjoll-ice': [-10, 24, 42, 0.68, 10, 0.88, 22, 1.06, 36],
       'grjotagja-obsidian': [10, -6, 18, 0.52, 8, 0.48, 2, 0.64, 14],
+      'atlantida-basalt': [-10, 14, 24, 0.58, 6, 0.66, 10, 0.80, 18],
+      'lagoa-cerrado': [-22, 30, -4, 0.84, 0, 0.94, 4, 0.82, 4],
+      'boybulok-steppe': [14, 10, -10, 0.86, 10, 0.84, 4, 0.74, 0],
     };
     const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = stainMap[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
@@ -752,8 +755,8 @@ export class CaveRenderer {
       }
     }
 
-      // Hanging tree roots along Cenote basin rims (omitted in crystal Icelandic basalt & glacial pools)
-      if (!['aurora-glacial', 'strytan-hydrothermal', 'kverkfjoll-glacier', 'grjotagja-lava'].includes(level.theme?.id)) {
+      // Hanging tree roots along Cenote basin rims (omitted in crystal Icelandic, volcanic, and alpine rock pools)
+      if (!['aurora-glacial', 'strytan-hydrothermal', 'kverkfjoll-glacier', 'grjotagja-lava', 'atlantida-volcanic', 'boybulok-alpine'].includes(level.theme?.id)) {
         for (const basin of level.openBasins) {
           if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
           for (let i = 0; i < 8; i++) {
@@ -1091,6 +1094,9 @@ export class CaveRenderer {
       'strytan-fjord': ['#0b2242', '#24527a', '#cbd5e1', 'rgba(186, 230, 253, 0.24)', 'rgba(203, 213, 225, 0.18)', 'rgba(15, 23, 42, 0.46)'],
       'kverkfjoll-glacier': ['#163859', '#4f8eb8', '#e0f2fe', 'rgba(207, 250, 254, 0.28)', 'rgba(224, 242, 254, 0.22)', 'rgba(30, 41, 59, 0.44)'],
       'grjotagja-rift': ['#0f172a', '#312e81', '#fb923c', 'rgba(251, 146, 60, 0.26)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.52)'],
+      'atlantida-lava': ['#0c4a6e', '#38bdf8', '#fed7aa', 'rgba(254, 215, 170, 0.28)', 'rgba(224, 242, 254, 0.14)', 'rgba(15, 23, 42, 0.48)'],
+      'lagoa-cerrado': ['#1d6fa3', '#67b7dc', '#fef08a', 'rgba(254, 240, 138, 0.22)', 'rgba(220, 252, 231, 0.16)', 'rgba(30, 48, 42, 0.44)'],
+      'boybulok-steppe': ['#14233c', '#3c5a80', '#cbd5e1', 'rgba(226, 232, 240, 0.24)', 'rgba(203, 213, 225, 0.20)', 'rgba(30, 41, 59, 0.48)'],
       yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
     };
     const [skyA, skyB, skyC, bloomCol, mistCol, birdCol] = skyPalettes[style] || skyPalettes.yucatan;
@@ -1351,6 +1357,9 @@ export class CaveRenderer {
       'strytan-fjord': { turf: '#243b4a', soil: '#27303d', tuft: '#7dd3fc', stone: '#475569' },
       'kverkfjoll-glacier': { turf: '#3b6b8f', soil: '#1f334a', tuft: '#a5f3fc', stone: '#7dd3fc' },
       'grjotagja-rift': { turf: '#24292e', soil: '#1c1917', tuft: '#fb923c', stone: '#292524' },
+      'atlantida-lava': { turf: '#3b2b24', soil: '#1e1b18', tuft: '#fdba74', stone: '#44403c' },
+      'lagoa-cerrado': { turf: '#2f6532', soil: '#524432', tuft: '#4ade80', stone: '#8c8370' },
+      'boybulok-steppe': { turf: '#5c5340', soil: '#463f33', tuft: '#cbd5e1', stone: '#78716c' },
       yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
     };
     return palettes[style] || palettes.yucatan;
@@ -2168,6 +2177,9 @@ export class CaveRenderer {
       'strytan-smectite': ['#263544', '#2c5a70'],
       'kverkfjoll-ice': ['#2e5272', '#67d4f5'],
       'grjotagja-obsidian': ['#1f1c26', '#7c3aed'],
+      'atlantida-basalt': ['#262328', '#ea580c'],
+      'lagoa-cerrado': ['#5c5444', '#2f6d34'],
+      'boybulok-steppe': ['#6b5d4d', '#64748b'],
     };
     const [marginBase, ridgeBase] = marginMap[mossKind] || ['#4a3d2e', '#2e592d'];
     if (!this._rockPattern && this.rockTex?.canvas && ctx.createPattern) {
@@ -2359,12 +2371,12 @@ export class CaveRenderer {
         this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#46382c', '#635141', '#7d6856']);
         this._fillFoliageCluster(ctx, gx, gy - 1.55 * scale, 1.45 * scale, 0.92 * scale, 0.04, scale, 'jungle', 1);
         this._drawAnchoredBoulder(ctx, wx - 0.42, 0.68, 0.22, toScreenX, toScreenY, scale, '#c4b89f');
-      } else if (style === 'sinai-coast') {
+      } else if (style === 'sinai-coast' || style === 'atlantida-lava') {
         if (hash > 0.38) {
           this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.85, h * 0.78);
         }
-        this._drawAnchoredBoulder(ctx, wx - 0.75, 0.72, 0.26, toScreenX, toScreenY, scale, '#c2925e');
-      } else if (style === 'quercy-ressel' || style === 'lazio-travertine') {
+        this._drawAnchoredBoulder(ctx, wx - 0.75, 0.72, 0.26, toScreenX, toScreenY, scale, style === 'atlantida-lava' ? '#292524' : '#c2925e');
+      } else if (style === 'quercy-ressel' || style === 'lazio-travertine' || style === 'boybulok-steppe') {
         if ((s & 1) === 0) {
           this._drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 0.8);
         } else {
@@ -2372,7 +2384,7 @@ export class CaveRenderer {
           this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#4e4135', '#6b5a4a', '#877664']);
           this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.4 * scale, 0.8 * scale, 0, scale, 'cypress', 1);
         }
-        this._drawAnchoredBoulder(ctx, wx - 0.45, 0.68, 0.23, toScreenX, toScreenY, scale, style === 'quercy-ressel' ? '#c2bdb0' : '#bda886');
+        this._drawAnchoredBoulder(ctx, wx - 0.45, 0.68, 0.23, toScreenX, toScreenY, scale, style === 'quercy-ressel' ? '#c2bdb0' : style === 'boybulok-steppe' ? '#8c7e6d' : '#bda886');
       } else if (style === 'moravia-rift') {
         this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.65, h + 1.1);
         this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, '#475569');
@@ -2388,7 +2400,7 @@ export class CaveRenderer {
         const bCol2 = style === 'kverkfjoll-glacier' ? '#38bdf8' : style === 'grjotagja-rift' ? '#44403c' : '#1e293b';
         this._drawAnchoredBoulder(ctx, wx - 0.78, 0.68, 0.28, toScreenX, toScreenY, scale, bCol1);
         this._drawAnchoredBoulder(ctx, wx + 0.72, 0.44, 0.2, toScreenX, toScreenY, scale, bCol2);
-      } else if (style === 'oxbelha-twilight') {
+      } else if (style === 'oxbelha-twilight' || style === 'lagoa-cerrado') {
         this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway * 0.75, h * 0.88);
         const ubWx = wx + 0.8;
         const ubGy = toScreenY(this._getHorizonGroundY(this.level, ubWx));
@@ -2542,7 +2554,10 @@ export class CaveRenderer {
       surfaceStyle === 'aurora-basalt' ||
       surfaceStyle === 'strytan-fjord' ||
       surfaceStyle === 'kverkfjoll-glacier' ||
-      surfaceStyle === 'grjotagja-rift'
+      surfaceStyle === 'grjotagja-rift' ||
+      surfaceStyle === 'atlantida-lava' ||
+      surfaceStyle === 'lagoa-cerrado' ||
+      surfaceStyle === 'boybulok-steppe'
     ) {
       this._drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, surfaceStyle);
       return;
@@ -3130,13 +3145,14 @@ export class CaveRenderer {
       style === 'aurora-basalt' ||
       style === 'strytan-fjord' ||
       style === 'kverkfjoll-glacier' ||
-      style === 'grjotagja-rift';
+      style === 'grjotagja-rift' ||
+      style === 'boybulok-steppe';
     const isUral = style === 'ural-birch';
     const isKalahari = style === 'kalahari-crater';
     const isAbaco = style === 'bahamas-abaco';
     const isBudapest = style === 'budapest-bathhouse';
-    const isSinai = style === 'sinai-coast';
-    const isOxBelHa = style === 'oxbelha-twilight';
+    const isSinai = style === 'sinai-coast' || style === 'atlantida-lava';
+    const isOxBelHa = style === 'oxbelha-twilight' || style === 'lagoa-cerrado';
     const isAurora =
       style === 'aurora-basalt' ||
       style === 'strytan-fjord' ||

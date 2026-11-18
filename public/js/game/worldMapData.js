@@ -218,6 +218,9 @@ export function computeSiteFocusViewBox(levelId, slot) {
     'strytan-hydrothermal-chimneys': { lng: -18.8, lat: 65.1, w: 60, h: 39.4 },
     'kverkfjoll-subglacial-caves': { lng: -18.5, lat: 64.9, w: 60, h: 39.4 },
     'grjotagja-kleifarvatn-rift': { lng: -18.5, lat: 65.1, w: 60, h: 39.4 },
+    'tunel-de-la-atlantida': { lng: -13.4, lat: 29.2, w: 66, h: 43.3 },
+    'lagoa-misteriosa-abyss': { lng: -56.5, lat: -21.5, w: 76, h: 49.8 },
+    'boy-bulok-asian-sump': { lng: 64.0, lat: 38.4, w: 72, h: 47.2 },
   };
 
   const frame = CUSTOM_FRAMING[levelId];

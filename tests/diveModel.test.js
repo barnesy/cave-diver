@@ -951,9 +951,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 17 campaign levels validate cleanly and scale monotonically to 152m Grjótagjá Magma Fissure', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 17, 'Campaign roadmap should chart all 17 levels');
-  assert.equal(LEVELS.length, 17, 'All 17 campaign levels should be registered');
+test('All 20 campaign levels validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 20, 'Campaign roadmap should chart all 20 levels');
+  assert.equal(LEVELS.length, 20, 'All 20 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -977,6 +977,9 @@ test('All 17 campaign levels validate cleanly and scale monotonically to 152m Gr
   const lvl15 = getLevelById('strytan-hydrothermal-chimneys');
   const lvl16 = getLevelById('kverkfjoll-subglacial-caves');
   const lvl17 = getLevelById('grjotagja-kleifarvatn-rift');
+  const lvl18 = getLevelById('tunel-de-la-atlantida');
+  const lvl19 = getLevelById('lagoa-misteriosa-abyss');
+  const lvl20 = getLevelById('boy-bulok-asian-sump');
 
   const meta7 = getLevelMeta(lvl7);
   const check = validateLevel(lvl7, { checkGeometry: true });
@@ -996,8 +999,8 @@ test('All 17 campaign levels validate cleanly and scale monotonically to 152m Gr
     assert.ok(Math.abs(g - l) < 0.05, `Chunk SDF drift too large at (${tx},${ty}): ${g} vs ${l}`);
   }
 
-  // Levels 8-17 validate cleanly, ramp depth monotonically, and remain unlined
-  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13, lvl14, lvl15, lvl16, lvl17]) {
+  // Levels 8-20 validate cleanly, ramp depth monotonically, and remain unlined
+  for (const lvl of [lvl8, lvl9, lvl10, lvl11, lvl12, lvl13, lvl14, lvl15, lvl16, lvl17, lvl18, lvl19, lvl20]) {
     const c = validateLevel(lvl, { checkGeometry: true });
     assert.equal(c.valid, true, `${lvl.id}: ${c.errors.join(', ')}`);
     assert.equal(lvl.guideline.length, 0, `${lvl.id} must be unlined`);
@@ -1013,6 +1016,9 @@ test('All 17 campaign levels validate cleanly and scale monotonically to 152m Gr
   assert.ok(getLevelMeta(lvl15).maxDepthM >= 136, `Level 15 must reach >=136m (got ${getLevelMeta(lvl15).maxDepthM})`);
   assert.ok(getLevelMeta(lvl16).maxDepthM >= 144, `Level 16 must reach >=144m (got ${getLevelMeta(lvl16).maxDepthM})`);
   assert.ok(getLevelMeta(lvl17).maxDepthM >= 152, `Level 17 must reach >=152m (got ${getLevelMeta(lvl17).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl18).maxDepthM >= 160, `Level 18 must reach >=160m (got ${getLevelMeta(lvl18).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl19).maxDepthM >= 172, `Level 19 must reach >=172m (got ${getLevelMeta(lvl19).maxDepthM})`);
+  assert.ok(getLevelMeta(lvl20).maxDepthM >= 185, `Level 20 must reach >=185m (got ${getLevelMeta(lvl20).maxDepthM})`);
 });
 
 test('Level 12/13 hypoxic TMX 11/65 survives 115m PPO2 and Level 13 requires fallen-diver recovery before surfacing', () => {
@@ -1539,7 +1545,7 @@ test('Co-op Buddy Rescue affects team score cleanly and Aquatic Radio cycles MID
   assert.equal(radio.cycleTrack().id, 'off');
 });
 
-test('Expedition worldMapData projects all 17 dive sites cleanly inside global & site focus viewBoxes', () => {
+test('Expedition worldMapData projects all 20 dive sites cleanly inside global & site focus viewBoxes', () => {
   for (const slot of CAMPAIGN_PLAN) {
     const pt = projectMapPoint(slot.lng, slot.lat);
     assert.ok(
@@ -1697,4 +1703,40 @@ test('LanClient drops out-of-order peer_state snapshots and extrapolates velocit
   const deepStep = getAscentInstruction(deepState, 140, new Set(['cp1', 'cp6']), getAscentConfig(lvl16));
   assert.equal(deepStep.targetGas, 'TMX1455');
   assert.match(deepStep.title, /45m/);
+});
+
+test('Levels 18-20 global finale sites (Lanzarote, Lagoa Misteriosa, Boy-Bulok) gases, recovery, and exit checkpoints behave cleanly', () => {
+  const lvl18 = getLevelById('tunel-de-la-atlantida');
+  const lvl19 = getLevelById('lagoa-misteriosa-abyss');
+  const lvl20 = getLevelById('boy-bulok-asian-sump');
+
+  // L18 Túnel de la Atlántida TMX 7/79 survives 160m & Seamount exit covers cp7
+  const s18 = createDiveSession(lvl18);
+  assert.equal(s18.diveState.mixes.TMX1455.name, 'TMX 7/79');
+  s18.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s18.diveState, { depthM: 160.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s18.diveState.ppo2 < 1.35 && s18.diveState.alive);
+  const cp7_18 = lvl18.checkpoints.find((c) => c.id === 'cp7');
+  assert.ok(Math.hypot(336 - cp7_18.x, 1.8 - cp7_18.y) <= cp7_18.radius);
+
+  // L19 Lagoa Misteriosa TMX 6/80 survives 172m & gates exit until Sunken ROV Magnetometer recovered
+  const s19 = createDiveSession(lvl19);
+  assert.equal(s19.diveState.mixes.TMX1455.name, 'TMX 6/80');
+  s19.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s19.diveState, { depthM: 172.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s19.diveState.ppo2 < 1.35 && s19.diveState.alive);
+  for (const cp of lvl19.checkpoints) s19.checkpointsHit.add(cp.id);
+  s19.diver.x = lvl19.exitZone.x;
+  s19.diver.y = 1.0;
+  const blocked19 = stepDiveSession(s19, { x: 0, y: 0 }, 0.016);
+  assert.equal(blocked19.outcome, null, 'Lagoa Misteriosa must block exit until ROV Magnetometer recovered');
+
+  // L20 Boy-Bulok TMX 6/82 survives 185m & East Alpine exit covers cp7
+  const s20 = createDiveSession(lvl20);
+  assert.equal(s20.diveState.mixes.TMX1455.name, 'TMX 6/82');
+  s20.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(s20.diveState, { depthM: 185.0, swimSpeed: 0, dt: 0.5, activeDiverCount: 1 });
+  assert.ok(s20.diveState.ppo2 < 1.35 && s20.diveState.alive);
+  const cp7_20 = lvl20.checkpoints.find((c) => c.id === 'cp7');
+  assert.ok(Math.hypot(356 - cp7_20.x, 1.8 - cp7_20.y) <= cp7_20.radius);
 });
