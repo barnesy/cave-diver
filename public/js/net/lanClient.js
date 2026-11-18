@@ -1,4 +1,5 @@
 import { stepDiverBody } from '../game/diverBody.js';
+import { evaluateCaveSDF } from '../game/collision.js';
 import { P2pRoomCoordinator, pickNextP2pHostId, compareHostAuthority } from './p2pRoomHost.js';
 
 /**
@@ -40,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=78');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=79');
   }
   return trysteroModulePromise;
 }
@@ -58,6 +59,7 @@ export class LanClient {
     this.connected = false;
     this.reconnecting = false;
     this.peers = new Map(); // playerId -> interpolated diver state
+    this._peersCache = [];
     this.peer = null; // Primary peer diver alias for 2-player HUD/renderer
     this.handlers = {};
     this.lastSendAt = 0;
@@ -88,6 +90,7 @@ export class LanClient {
     this._p2pLastHostRxAt = 0;
     this._p2pLastRelayBeatAt = 0;
     this._p2pLastRelayStateAt = 0;
+    this._p2pLastRelayPeerAt = new Map();
     this._p2pLastPeerRxAt = new Map();
     this._p2pDirectPeers = new Set();
     this._seenRelayMids = new Set();
@@ -167,12 +170,12 @@ export class LanClient {
   }
 
   _syncPeerAlias() {
-    const first = this.peers.values().next();
-    this.peer = first.done ? null : first.value;
+    this._peersCache = Array.from(this.peers.values());
+    this.peer = this._peersCache[0] || null;
   }
 
   getPeers() {
-    return Array.from(this.peers.values());
+    return this._peersCache;
   }
 
   on(event, fn) {
@@ -311,6 +314,7 @@ export class LanClient {
     this._p2pLastHostRxAt = 0;
     this._p2pLastRelayBeatAt = 0;
     this._p2pLastRelayStateAt = 0;
+    this._p2pLastRelayPeerAt.clear();
     this._p2pLastPeerRxAt.clear();
     this._p2pDirectPeers.clear();
     this._seenRelayMids.clear();
@@ -353,6 +357,12 @@ export class LanClient {
       const now = Date.now();
       if (now - this._p2pLastRelayStateAt < 90) return true; // ~11Hz relay fallback telemetry
       this._p2pLastRelayStateAt = now;
+    } else if (type === 'peer_state') {
+      const now = Date.now();
+      const key = `${targetPeerId}:${payload.playerId || ''}`;
+      const lastAt = this._p2pLastRelayPeerAt.get(key) || 0;
+      if (now - lastAt < 90) return true; // Coalesce host->fallback peer_state to ~11Hz per peer
+      this._p2pLastRelayPeerAt.set(key, now);
     }
     const mid = `${this.clientId}-${++this._relayMidSeq}`;
     try {
@@ -1373,6 +1383,13 @@ export class LanClient {
             this.emit('peer_left', msg.leftPlayerId);
           }
           const activeIds = new Set((msg.room?.players || []).map((p) => p.id));
+          for (const rp of msg.room?.players || []) {
+            const existingPeer = this.peers.get(rp.id);
+            if (existingPeer && rp.connected && existingPeer._wasDisconnected) {
+              existingPeer._rxSeq = 0;
+            }
+            if (existingPeer) existingPeer._wasDisconnected = !rp.connected;
+          }
           for (const pid of this.peers.keys()) {
             if (!activeIds.has(pid)) this.peers.delete(pid);
           }
@@ -1409,7 +1426,7 @@ export class LanClient {
           this.room = msg.room;
           if (!msg?.preserveDive) {
             this.peers.clear();
-            this.peer = null;
+            this._syncPeerAlias();
           }
           this.emit('dive_started', msg);
           if (this.transport === 'p2p' && this._p2pHost) {
@@ -1419,7 +1436,7 @@ export class LanClient {
         case 'returned_to_lobby':
           this.room = msg.room;
           this.peers.clear();
-          this.peer = null;
+          this._syncPeerAlias();
           this.emit('returned_to_lobby', msg.room);
           this.emit('room_update', msg.room);
           if (this._pendingCreateResolvers.length > 0) {
@@ -1444,8 +1461,10 @@ export class LanClient {
             };
             this.peers.set(pid, p);
           } else {
-            // Discard delayed out-of-order snapshots from redundant WebSocket relays
-            if (rxSeq > 0 && p._rxSeq > 0 && rxSeq <= p._rxSeq) {
+            // Discard delayed out-of-order snapshots, while allowing clean mid-dive reconnect seq resets
+            const elapsedMs = p._lastRxMs ? rxNow - p._lastRxMs : 0;
+            const looksLikeRestart = elapsedMs > 2500 || (rxSeq > 0 && rxSeq <= 5 && p._rxSeq > 20);
+            if (rxSeq > 0 && p._rxSeq > 0 && rxSeq <= p._rxSeq && !looksLikeRestart) {
               break;
             }
             p._rxSeq = rxSeq > 0 ? rxSeq : p._rxSeq;
@@ -1894,11 +1913,17 @@ export class LanClient {
     this._lastRoomSnapshot = null;
   }
 
+  shouldSendPlayerState() {
+    if (!this.room || !this.connected) return false;
+    return nowMs() - this.lastSendAt >= 33;
+  }
+
   sendPlayerState(state) {
     if (!this.room || !this.connected || !state) return;
     const now = nowMs();
     if (now - this.lastSendAt < 33) return; // 30 Hz quantized sync (direct WebRTC/WS; relay self-throttles to ~11 Hz)
     this.lastSendAt = now;
+    const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
     const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
     const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : 0);
     const compact = {
@@ -1910,6 +1935,15 @@ export class LanClient {
       vy: r2(state.vy),
       angle: r3(state.angle),
       depthM: r2(state.depthM),
+      activeBar: r1(state.activeBar ?? 200),
+      cnsPercent: r1(state.cnsPercent ?? 0),
+      dcsStress: r1(state.dcsStress ?? 0),
+      hypoxiaStress: r1(state.hypoxiaStress ?? 0),
+      narcosisLevel: r2(state.narcosisLevel ?? 0),
+      heartRateBpm: Math.round(state.heartRateBpm ?? 70),
+      cardiacStress: r1(state.cardiacStress ?? 0),
+      ceilingM: r1(state.ceilingM ?? 0),
+      diveTimeSec: r1(state.diveTimeSec ?? 0),
     };
     this.send({ type: 'player_state', state: compact });
   }
@@ -1954,7 +1988,7 @@ export class LanClient {
     });
   }
 
-  stepPeerInterpolation(dt) {
+  stepPeerInterpolation(dt, level = null) {
     const safeDt = Math.min(0.1, Math.max(0, Number(dt) || 0));
     if (safeDt <= 0) return;
     const now = nowMs();
@@ -1966,12 +2000,16 @@ export class LanClient {
       const vx = Number.isFinite(p.vx) ? p.vx : 0;
       const vy = Number.isFinite(p.vy) ? p.vy : 0;
 
-      // Velocity dead-reckoning between network packets with smooth decay after 220ms
+      // Velocity dead-reckoning between network packets (full lead up to 140ms, tapers to 0 by 300ms)
       const ageMs = p._lastRxMs ? Math.max(0, now - p._lastRxMs) : 0;
-      if (!p.surfaced && p.alive !== false && ageMs < 460) {
-        const extFactor = ageMs <= 220 ? 1 : Math.max(0, 1 - (ageMs - 220) / 240);
-        p.targetX += vx * extFactor * safeDt;
-        p.targetY += vy * extFactor * safeDt;
+      if (!p.surfaced && p.alive !== false && ageMs < 300) {
+        const extFactor = ageMs <= 140 ? 1 : Math.max(0, 1 - (ageMs - 140) / 160);
+        const nextTx = p.targetX + vx * extFactor * safeDt;
+        const nextTy = p.targetY + vy * extFactor * safeDt;
+        if (!level || evaluateCaveSDF(level, nextTx, nextTy) <= -0.52) {
+          p.targetX = nextTx;
+          p.targetY = nextTy;
+        }
       }
 
       const dist = Math.hypot((p.targetX ?? p.x) - p.x, (p.targetY ?? p.y) - p.y);

@@ -1539,7 +1539,7 @@ test('Co-op Buddy Rescue affects team score cleanly and Aquatic Radio cycles MID
   assert.equal(radio.cycleTrack().id, 'off');
 });
 
-test('Expedition worldMapData projects all 14 dive sites cleanly inside global & site focus viewBoxes', () => {
+test('Expedition worldMapData projects all 17 dive sites cleanly inside global & site focus viewBoxes', () => {
   for (const slot of CAMPAIGN_PLAN) {
     const pt = projectMapPoint(slot.lng, slot.lat);
     assert.ok(
@@ -1662,8 +1662,39 @@ test('LanClient drops out-of-order peer_state snapshots and extrapolates velocit
   assert.equal(peer.targetX, 20);
   assert.equal(peer._rxSeq, 10);
 
-  // Dead-reckoning step advances target along velocity between network packets cleanly
-  client.stepPeerInterpolation(0.05);
+  // Dead-reckoning step advances target along velocity between network packets cleanly (clamped safely off rock)
+  client.stepPeerInterpolation(0.05, LEVEL_1);
   assert.ok(peer.targetX > 20.1, `Expected dead-reckoning advance, got ${peer.targetX}`);
   assert.ok(peer.x >= 20 && peer.x <= peer.targetX);
+
+  // Mid-dive reconnect (connected=true transition + seq restarting at 1) must NOT lock peer updates
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'buddy-1',
+    state: { seq: 1000, x: 25, y: 15, vx: 0, vy: 0, angle: 0, name: 'RemoteBuddy' },
+  });
+  client._handleMessage({
+    type: 'room_update',
+    room: { code: 'TEST', started: true, players: [{ id: 'buddy-1', name: 'RemoteBuddy', connected: false }] },
+  });
+  client._handleMessage({
+    type: 'room_update',
+    room: { code: 'TEST', started: true, players: [{ id: 'buddy-1', name: 'RemoteBuddy', connected: true }] },
+  });
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'buddy-1',
+    state: { seq: 1, x: 10, y: 8, vx: 1.0, vy: 0, angle: 0, name: 'RemoteBuddy' },
+  });
+  assert.equal(peer.targetX, 10, 'Reconnected peer seq=1 must update target instead of freezing');
+
+  // Out-and-back deep dive (L16 at 144m with cp1 already tagged) must NEVER command toxic EAN32 switch at depth
+  const lvl16 = getLevelById('kverkfjoll-subglacial-caves');
+  const deepState = createDiveState({ mixOverrides: lvl16.gasOverrides });
+  switchGas(deepState, 'TMX1455');
+  deepState.stopDepthM = 45;
+  deepState.stopRemainingSec = 20;
+  const deepStep = getAscentInstruction(deepState, 140, new Set(['cp1', 'cp6']), getAscentConfig(lvl16));
+  assert.equal(deepStep.targetGas, 'TMX1455');
+  assert.match(deepStep.title, /45m/);
 });

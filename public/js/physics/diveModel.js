@@ -519,13 +519,25 @@ export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig
 
   if (!checkpointsHit || !checkpointsHit.has(turnaroundId)) return null;
 
-  if (!checkpointsHit.has(switchId) && depthM > switchDepthM + 0.8) {
+  const eanSafeMaxM = Math.max(26.0, switchDepthM + 3.0);
+  if ((!checkpointsHit.has(switchId) || depthM > eanSafeMaxM) && depthM > switchDepthM + 0.8) {
     const deepName = state.mixes?.TMX1455?.name || 'TMX 14/55';
+    if (state.stopDepthM > switchDepthM + 1.0 && depthM <= state.stopDepthM + 2.2) {
+      const rem = Math.max(1, Math.ceil(state.stopRemainingSec));
+      return {
+        action: 'STOP',
+        title: `HOLD ${state.stopDepthM}m DECO · ${rem}s`,
+        detail: `Hold ${state.stopDepthM}m ceiling · Stay on ${deepName}`,
+        targetY: state.stopDepthM,
+        targetGas: 'TMX1455',
+      };
+    }
+    const targetStop = state.stopDepthM > switchDepthM + 1.0 ? state.stopDepthM : Math.round(switchDepthM);
     return {
       action: 'MOVE',
-      title: `MOVE TO ${Math.round(switchDepthM)}m LINE`,
+      title: `MOVE TO ${targetStop}m LINE`,
       detail: `Target pace ~9 m/min · Stay on ${deepName}`,
-      targetY: 22.0,
+      targetY: targetStop,
       targetGas: 'TMX1455',
     };
   }
@@ -535,17 +547,29 @@ export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig
       action: 'STOP',
       title: 'STOP HERE · SWITCH TO EAN32',
       detail: 'Tap EAN32 on dive computer before ascending',
-      targetY: 22.0,
+      targetY: switchDepthM,
       targetGas: 'EAN32',
     };
   }
 
-  if (state.stopDepthM > 0 && depthM > 7.4) {
+  if (state.stopDepthM > 6 && depthM <= state.stopDepthM + 2.2) {
+    const rem = Math.max(1, Math.ceil(state.stopRemainingSec));
+    return {
+      action: 'STOP',
+      title: `HOLD ${state.stopDepthM}m DECO · ${rem}s`,
+      detail: 'Hold depth on EAN32 until intermediate stop clears',
+      targetY: state.stopDepthM,
+      targetGas: 'EAN32',
+    };
+  }
+
+  if (state.stopDepthM > 0 && depthM > Math.max(7.4, state.stopDepthM + 1.4)) {
+    const stepTarget = state.stopDepthM > 6 ? state.stopDepthM : 6.0;
     return {
       action: 'MOVE',
-      title: 'NOW MOVE TO 6m LINE',
+      title: `NOW MOVE TO ${stepTarget}m LINE`,
       detail: 'Target pace ~9 m/min · On EAN32',
-      targetY: 6.0,
+      targetY: stepTarget,
       targetGas: 'EAN32',
     };
   }

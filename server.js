@@ -279,28 +279,31 @@ function sanitizeLoadStatus(raw) {
 function sanitizePlayerState(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const num = (v, fallback = 0) => (Number.isFinite(v) ? v : fallback);
-  const pct = (v) => Math.max(0, Math.min(100, num(v, 0)));
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  const pct = (v) => Math.round(Math.max(0, Math.min(100, num(v, 0))) * 10) / 10;
   return {
-    x: num(raw.x),
-    y: num(raw.y),
-    vx: num(raw.vx),
-    vy: num(raw.vy),
-    angle: num(raw.angle),
-    depthM: Math.max(0, num(raw.depthM)),
+    seq: Number.isFinite(raw.seq) ? Math.max(0, Math.round(raw.seq)) : 0,
+    x: r2(num(raw.x)),
+    y: r2(num(raw.y)),
+    vx: r2(num(raw.vx)),
+    vy: r2(num(raw.vy)),
+    angle: r3(num(raw.angle)),
+    depthM: Math.max(0, r2(num(raw.depthM))),
     gasId: typeof raw.gasId === 'string' ? raw.gasId.slice(0, 12) : 'EAN32',
-    activeBar: Math.max(0, Math.min(250, num(raw.activeBar, 200))),
+    activeBar: Math.max(0, Math.min(250, Math.round(num(raw.activeBar, 200) * 10) / 10)),
     cnsPercent: pct(raw.cnsPercent),
     dcsStress: pct(raw.dcsStress),
     hypoxiaStress: pct(raw.hypoxiaStress),
-    narcosisLevel: Math.max(0, Math.min(1, num(raw.narcosisLevel, 0))),
+    narcosisLevel: Math.max(0, Math.min(1, r2(num(raw.narcosisLevel, 0)))),
     heartRateBpm: Math.max(0, Math.min(220, Math.round(num(raw.heartRateBpm, 68)))),
     cardiacStress: pct(raw.cardiacStress),
-    ceilingM: Math.max(0, num(raw.ceilingM, 0)),
+    ceilingM: Math.max(0, Math.round(num(raw.ceilingM, 0) * 10) / 10),
     condition: typeof raw.condition === 'string' ? raw.condition.slice(0, 16) : 'NOMINAL',
     surfaced: Boolean(raw.surfaced),
     healthPct: pct(raw.healthPct ?? 100),
     gasRemainingPct: pct(raw.gasRemainingPct ?? 100),
-    diveTimeSec: Math.max(0, num(raw.diveTimeSec, 0)),
+    diveTimeSec: Math.max(0, Math.round(num(raw.diveTimeSec, 0) * 10) / 10),
     collectiblesFound: Math.max(0, Math.round(num(raw.collectiblesFound, 0))),
     exploredPct: pct(raw.exploredPct ?? 0),
     totalScore: Math.max(0, Math.round(num(raw.totalScore, 0))),

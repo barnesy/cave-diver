@@ -13,9 +13,12 @@ export const LEVEL_14 = {
   lined: false,
   reelMetersPerDiver: 265,
   hideWaypointCompass: true,
+  turnaroundCheckpointId: 'cp7',
+  ascentSwitchCheckpointId: 'cp1',
+  ascentSwitchDepthM: 26.0,
   bounds: { xMin: -52, xMax: 320, yMin: -6, yMax: 138 },
   spawn: { x: -6.0, y: 1.8 },
-  exitZone: { x: -6.0, y: 1.8, radius: 7.0 },
+  exitZone: { x: -6.0, y: 1.8, radius: 7.0, name: 'Aurora Glacial Pool' },
   haloclineY: 48.0,
   theme: createLevelTheme('aurora-glacial'),
 
@@ -116,7 +119,7 @@ export const LEVEL_14 = {
       y: 26,
       radius: 3.2,
       expectedGas: 'EAN32',
-      hint: 'Anchor your unlined reel [E] at the basalt fracture rim before crossing the 48m thermal shear.',
+      hint: 'Anchor your unlined reel [G] at the basalt fracture rim before crossing the 48m thermal shear.',
     },
     {
       id: 'cp2',

@@ -553,6 +553,9 @@ export class CaveRenderer {
       'moravia-carbonic': [-16, 8, 10, 0.78, 0, 0.84, 6, 0.86, 10],
       'oxbelha-dusk': [-18, 22, -8, 0.82, 0, 0.9, 4, 0.82, 6],
       'katla-basalt': [-18, 12, 26, 0.54, 4, 0.62, 10, 0.76, 22],
+      'strytan-smectite': [-14, 18, 28, 0.62, 6, 0.74, 12, 0.84, 20],
+      'kverkfjoll-ice': [-10, 24, 42, 0.68, 10, 0.88, 22, 1.06, 36],
+      'grjotagja-obsidian': [10, -6, 18, 0.52, 8, 0.48, 2, 0.64, 14],
     };
     const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = stainMap[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
@@ -2162,6 +2165,9 @@ export class CaveRenderer {
       'moravia-carbonic': ['#3e4752', '#354b3e'],
       'oxbelha-dusk': ['#323934', '#26422b'],
       'katla-basalt': ['#232c38', '#2a4a5e'],
+      'strytan-smectite': ['#263544', '#2c5a70'],
+      'kverkfjoll-ice': ['#2e5272', '#67d4f5'],
+      'grjotagja-obsidian': ['#1f1c26', '#7c3aed'],
     };
     const [marginBase, ridgeBase] = marginMap[mossKind] || ['#4a3d2e', '#2e592d'];
     if (!this._rockPattern && this.rockTex?.canvas && ctx.createPattern) {

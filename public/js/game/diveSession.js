@@ -255,7 +255,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       if (dx <= hw && diver.y <= vent.y && diver.y >= vent.y - vh) {
         const horizFalloff = 1 - dx / hw;
         const vertFalloff = 1 - (vent.y - diver.y) / (vh * 1.15);
-        const lift = (vent.updraft || 2.8) * Math.max(0.18, horizFalloff * vertFalloff);
+        const lift = (vent.strength ?? vent.updraft ?? 2.8) * Math.max(0.18, horizFalloff * vertFalloff);
         diver.vy -= lift * dt;
         diver.vx += Math.sin(session.simTimeSec * 2.2 + v + diver.y * 0.3) * 0.24 * horizFalloff * dt;
       }

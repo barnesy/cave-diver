@@ -468,13 +468,14 @@ export class DiveComputerHUD {
       }
     } else {
       if (level?.hideWaypointCompass) {
+        const needsRecovery = Boolean(level?.recoveryTarget && !bodyRecovered);
         objectiveHtml = `
           <div class="obj-top-row">
-            <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
+            <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
             ${gasBadge}
           </div>
-          <span class="obj-name">↑ Locate Resurgence Exit</span>
-          <span class="obj-hint">Follow your deployed line or ascend to East Karst Spring</span>
+          <span class="obj-name">${needsRecovery ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `↑ Locate ${exitZone?.name || 'Resurgence Exit'}`}</span>
+          <span class="obj-hint">${needsRecovery ? `Recovery required before surfacing at ${exitZone?.name || 'exit'}` : `Follow your deployed line or ascend to ${exitZone?.name || 'surface exit'}`}</span>
         `;
       } else {
         const dist = Math.hypot(exitZone.x - diver.x, exitZone.y - diver.y);

@@ -429,7 +429,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=72" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=79" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -476,6 +476,22 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
         pt.y -= 2.2;
         pt.x += 1.0;
       }
+      if (lvl.id === 'strytan-hydrothermal-chimneys') {
+        pt.x -= 2.4;
+        pt.y -= 1.6;
+      }
+      if (lvl.id === 'grjotagja-kleifarvatn-rift') {
+        pt.x += 2.4;
+        pt.y -= 0.4;
+      }
+      if (lvl.id === 'kverkfjoll-subglacial-caves') {
+        pt.x += 2.2;
+        pt.y += 2.0;
+      }
+      if (lvl.id === 'silfra-katla-aurora-abyss') {
+        pt.x -= 2.0;
+        pt.y += 1.4;
+      }
     }
     return { lvl, idx, slot, x: pt.x, y: pt.y };
   });
@@ -507,10 +523,13 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
           ? `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(r + 2.0 * k).toFixed(2)}" fill="none" vector-effect="non-scaling-stroke" stroke="#34d399" stroke-width="1.4" />`
           : '';
 
-      // Show short L# tag on selected or nearby zoomed pins; place to the left if near right viewport edge
+      // Show short L# tag on selected or nearby zoomed pins; place to the left if near right edge or clustered west (Strytan L15)
       let labelMarkup = '';
       if (isSelected || isZoomed) {
-        const placeLeft = x > targetVb.x + targetVb.w * 0.6;
+        const placeLeft =
+          x > targetVb.x + targetVb.w * 0.6 ||
+          lvl.id === 'strytan-hydrothermal-chimneys' ||
+          lvl.id === 'silfra-katla-aurora-abyss';
         const anchor = placeLeft ? 'end' : 'start';
         const lx = x + (placeLeft ? -7.2 * k : 7.2 * k);
         const ly = y + 3.4 * k;
@@ -2784,9 +2803,15 @@ function stepSimulation(dt) {
     coopCommsEl.hidden = !(isMultiplayer && peers.length > 0);
   }
   if (isMultiplayer) {
-    // Share cave exploration coverage across LAN buddies
+    // Share cave exploration coverage across buddies only when they move >= 1.2m (avoids 60Hz O(cells) scans)
     if (session.exploreCells && session.exploredCells) {
       for (const p of peers) {
+        if (!p || p.surfaced || p.alive === false) continue;
+        if (p._lastExploreX !== undefined && Math.hypot(p.x - p._lastExploreX, p.y - p._lastExploreY) < 1.2) {
+          continue;
+        }
+        p._lastExploreX = p.x;
+        p._lastExploreY = p.y;
         if (markExploredAround(session.exploreCells, session.exploredCells, p.x, p.y, 4.4) > 0) {
           session.exploredPct = Math.round(
             (session.exploredCells.size / Math.max(1, session.exploreCells.length)) * 100
@@ -2794,41 +2819,43 @@ function stepSimulation(dt) {
         }
       }
     }
+    if (lan.shouldSendPlayerState()) {
       const activeTank = diveState.tanks[diveState.activeGasId];
-    const healthPct = computeHealthPct(diveState);
-    const gasRemainingPct = computeGasRemainingPct(diveState);
-    lan.sendPlayerState({
-      x: diver.x,
-      y: diver.y,
-      vx: diver.vx,
-      vy: diver.vy,
-      angle: diver.angle,
-      gasId: diveState.activeGasId,
-      activeBar: activeTank ? activeTank.bar : 0,
-      cnsPercent: diveState.cnsPercent,
-      dcsStress: diveState.dcsStress,
-      hypoxiaStress: diveState.hypoxiaStress,
-      narcosisLevel: diveState.narcosisLevel,
-      heartRateBpm: diveState.heartRateBpm,
-      cardiacStress: diveState.cardiacStress,
-      ceilingM: diveState.ceilingM,
-      condition: diveState.impairment?.primaryCondition || 'NOMINAL',
-      surfaced: Boolean(session.surfaced),
-      healthPct,
-      gasRemainingPct,
-      diveTimeSec: diveState.diveTimeSec,
-      collectiblesFound: session.collectedIds?.size || 0,
-      exploredPct: session.exploredPct || 0,
-      depthM: diveState.depthM,
-      torchOn: diver.torchOn,
-      alive: diveState.alive,
-      carryingBody: Boolean(session.carryingBody),
-      rescueTargetId: session.rescueTargetId || '',
-      rescuedBy: session.rescuedBy || '',
-      rescued: Boolean(session.rescued),
-      name: diver.name,
-    });
-    lan.stepPeerInterpolation(dt);
+      const healthPct = computeHealthPct(diveState);
+      const gasRemainingPct = computeGasRemainingPct(diveState);
+      lan.sendPlayerState({
+        x: diver.x,
+        y: diver.y,
+        vx: diver.vx,
+        vy: diver.vy,
+        angle: diver.angle,
+        gasId: diveState.activeGasId,
+        activeBar: activeTank ? activeTank.bar : 0,
+        cnsPercent: diveState.cnsPercent,
+        dcsStress: diveState.dcsStress,
+        hypoxiaStress: diveState.hypoxiaStress,
+        narcosisLevel: diveState.narcosisLevel,
+        heartRateBpm: diveState.heartRateBpm,
+        cardiacStress: diveState.cardiacStress,
+        ceilingM: diveState.ceilingM,
+        condition: diveState.impairment?.primaryCondition || 'NOMINAL',
+        surfaced: Boolean(session.surfaced),
+        healthPct,
+        gasRemainingPct,
+        diveTimeSec: diveState.diveTimeSec,
+        collectiblesFound: session.collectedIds?.size || 0,
+        exploredPct: session.exploredPct || 0,
+        depthM: diveState.depthM,
+        torchOn: diver.torchOn,
+        alive: diveState.alive,
+        carryingBody: Boolean(session.carryingBody),
+        rescueTargetId: session.rescueTargetId || '',
+        rescuedBy: session.rescuedBy || '',
+        rescued: Boolean(session.rescued),
+        name: diver.name,
+      });
+    }
+    lan.stepPeerInterpolation(dt, level);
 
     // If downed and a rescuer is towing us, glide smoothly behind the rescuer
     if (!diveState.alive && session.rescuedBy) {
