@@ -1740,3 +1740,48 @@ test('Levels 18-20 global finale sites (Lanzarote, Lagoa Misteriosa, Boy-Bulok) 
   const cp7_20 = lvl20.checkpoints.find((c) => c.id === 'cp7');
   assert.ok(Math.hypot(356 - cp7_20.x, 1.8 - cp7_20.y) <= cp7_20.radius);
 });
+
+test('Leaderboard entries sanitize detailed dive telemetry stats and overall siteRuns breakdown', () => {
+  const norm = normalizeLeaderboardSubmission({
+    mode: 'team',
+    levelId: 'cenote-el-abismo',
+    diverName: 'LeadDiver',
+    crew: [
+      { name: 'LeadDiver', score: 3100, alive: true, healthPct: 96, gasRemainingPct: 58, diveTimeSec: 175.4 },
+      { name: 'BuddyTwo', score: 2950, alive: true, healthPct: 91, gasRemainingPct: 52, diveTimeSec: 178.1 },
+    ],
+    teamSize: 2,
+    score: 3025,
+    grade: 'S',
+    timeSec: 176.8,
+    exploredPct: 88,
+    collectiblesFound: 7,
+    stats: {
+      maxDepthM: 51.4,
+      avgHealthPct: 93.5,
+      avgSpeedPct: 84,
+      avgGasRemainingPct: 55,
+      peakHeartRateBpm: 112,
+      checkpointsHit: 5,
+      totalCheckpoints: 5,
+      healthScore: 935,
+      speedScore: 672,
+      collectiblesScore: 1100,
+      explorationScore: 616,
+      teamSurvivalBonus: 350,
+      eanBar: 120,
+      tmxBar: 95,
+      o2Bar: 185,
+    },
+  });
+  assert.equal(norm.ok, true);
+  assert.equal(norm.entry.stats.maxDepthM, 51.4);
+  assert.equal(norm.entry.stats.peakHeartRateBpm, 112);
+  assert.equal(norm.entry.crew[0].healthPct, 96);
+
+  const overall = queryLeaderboardEntries([norm.entry], { mode: 'team', levelId: 'overall', limit: 10 });
+  assert.equal(overall.length, 1);
+  assert.equal(overall[0].siteRuns.length, 1);
+  assert.equal(overall[0].siteRuns[0].levelId, 'cenote-el-abismo');
+  assert.equal(overall[0].siteRuns[0].stats.maxDepthM, 51.4);
+});

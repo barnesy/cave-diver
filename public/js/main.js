@@ -100,6 +100,12 @@ const selectLbSite = document.getElementById('select-lb-site');
 const leaderboardSubEl = document.getElementById('leaderboard-sub');
 const leaderboardRowsEl = document.getElementById('leaderboard-rows');
 const debriefLeaderboardEl = document.getElementById('debrief-leaderboard');
+const lbStatsModalEl = document.getElementById('lb-stats-modal');
+const lbStatsKickerEl = document.getElementById('lb-stats-kicker');
+const lbStatsTitleEl = document.getElementById('lb-stats-title');
+const lbStatsSubEl = document.getElementById('lb-stats-sub');
+const lbStatsBodyEl = document.getElementById('lb-stats-body');
+const btnLbStatsClose = document.getElementById('btn-lb-stats-close');
 const btnInstallPwa = document.getElementById('btn-install-pwa');
 const screenMenu = document.getElementById('screen-menu');
 const screenHud = document.getElementById('screen-hud');
@@ -429,7 +435,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=80" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=81" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1200,13 +1206,39 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         levelId: level.id,
         runId: subRunId,
         diverName: playerNameInput?.value.trim() || 'Diver 1',
-        crew: teamSummary.roster.map((r) => ({ name: r.name, score: r.totalScore, alive: r.alive })),
+        crew: teamSummary.roster.map((r) => ({
+          name: r.name,
+          score: r.totalScore,
+          alive: r.alive,
+          healthPct: r.healthPct,
+          gasRemainingPct: r.gasRemainingPct,
+          diveTimeSec: r.diveTimeSec,
+          rescued: Boolean(r.rescued),
+        })),
         teamSize: teamSummary.teamSize,
         score: teamSummary.teamScore,
         grade: teamSummary.teamRank.grade,
         timeSec: teamSummary.avgTimeSec,
         exploredPct: teamSummary.exploredPct,
         collectiblesFound: teamSummary.collectiblesFound,
+        stats: {
+          maxDepthM: diveState.maxDepthM,
+          avgHealthPct: teamSummary.avgHealthPct,
+          avgSpeedPct: teamSummary.avgSpeedPct,
+          avgGasRemainingPct: teamSummary.avgGasRemainingPct,
+          peakHeartRateBpm: Math.round(diveState.maxHeartRateBpm || diveState.heartRateBpm || 68),
+          checkpointsHit: checkpointsHit.size,
+          totalCheckpoints: (level.checkpoints || []).length,
+          healthScore: teamSummary.avgHealthScore,
+          speedScore: teamSummary.avgSpeedScore,
+          collectiblesScore: teamSummary.collectiblesScore,
+          explorationScore: teamSummary.explorationScore + teamSummary.cartographerBonus,
+          rescueBonus: teamSummary.rescueBonus || 0,
+          teamSurvivalBonus: teamSummary.teamSurvivalBonus || 0,
+          eanBar: Math.round(diveState.tanks.EAN32.bar),
+          tmxBar: Math.round(diveState.tanks.TMX1455.bar),
+          o2Bar: Math.round(diveState.tanks.O2.bar),
+        },
       })
       .then((res) => {
         if (!debriefLeaderboardEl) return;
@@ -1217,13 +1249,14 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         const boardLabel = subMode === 'team' ? 'TEAM LEADERBOARD' : 'INDIVIDUAL LEADERBOARD';
         const srcTag = res.source === 'global' ? 'Global' : res.pendingSync ? 'Saved Offline · Auto-Sync' : 'Local PB';
         const rankText = res.rank ? `${srcTag} Rank #${res.rank} of ${res.total || res.rank}` : srcTag;
+        lastDebriefLbEntries = (res.entries || []).slice(0, 5);
         debriefLeaderboardEl.hidden = false;
         debriefLeaderboardEl.innerHTML = `
           <div class="debrief-lb-head">
             <span class="debrief-section-title" style="margin:0">${boardLabel} · ${escapeHtml(level.name)}</span>
             <span class="debrief-lb-rank">${escapeHtml(rankText)}</span>
           </div>
-          ${renderLeaderboardRowsHtml((res.entries || []).slice(0, 5), { highlightKey: res.entry?.entryKey })}
+          ${renderLeaderboardRowsHtml(lastDebriefLbEntries, { highlightKey: res.entry?.entryKey })}
         `;
         if (leaderboardPanel && !leaderboardPanel.hidden) {
           refreshMenuLeaderboard();
@@ -1243,6 +1276,176 @@ function escapeHtml(raw) {
     .replace(/"/g, '&quot;');
 }
 
+let lastMenuLbEntries = [];
+let lastDebriefLbEntries = [];
+
+function formatLbDate(ts) {
+  if (!Number.isFinite(Number(ts)) || Number(ts) <= 0) return 'Recorded Dive';
+  try {
+    return new Date(Number(ts)).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Recorded Dive';
+  }
+}
+
+function closeLeaderboardStatsModal() {
+  if (lbStatsModalEl) lbStatsModalEl.hidden = true;
+}
+
+function openLeaderboardStatsModal(entry, rankNum = 1) {
+  if (!entry || !lbStatsModalEl || !lbStatsBodyEl) return;
+  const isOverall = entry.levelId === 'overall';
+  const lvl = !isOverall ? getLevelById(entry.levelId) : null;
+  const lvlIdx = lvl ? LEVELS.findIndex((l) => l.id === lvl.id) + 1 : 0;
+  const meta = lvl ? getLevelMeta(lvl, Math.max(0, lvlIdx - 1)) : null;
+  const modeLabel = entry.mode === 'team' ? 'CO-OP TEAM' : 'SOLO DIVER';
+  const siteTitle = isOverall
+    ? `Overall Campaign (${entry.sitesCompleted || 0}/${entry.totalSites || LEVELS.length} Sites)`
+    : `L${lvlIdx}: ${lvl?.name || entry.levelId}`;
+
+  if (lbStatsKickerEl) {
+    lbStatsKickerEl.textContent = `${modeLabel} · RANK #${rankNum}`;
+  }
+  if (lbStatsTitleEl) {
+    lbStatsTitleEl.textContent = entry.displayName || 'Diver';
+  }
+  if (lbStatsSubEl) {
+    const regionPart = meta?.region ? ` · ${meta.region}` : '';
+    lbStatsSubEl.textContent = `${siteTitle}${regionPart} · ${formatLbDate(entry.createdAt)}`;
+  }
+
+  const st = entry.stats || null;
+  const collectMax = entry.collectiblesTotal ?? (lvl?.collectibles?.length || 0);
+  const cells = [
+    ['Dive Time', formatRunClock(entry.timeSec || 0)],
+    ['Cave Explored', `${entry.exploredPct ?? 0}%`],
+    ['Collectables', `${entry.collectiblesFound ?? 0} / ${collectMax}`],
+    [
+      isOverall ? 'Sites Cleared' : 'Max Depth',
+      isOverall
+        ? `${entry.sitesCompleted || 0} / ${entry.totalSites || LEVELS.length}`
+        : `${(st?.maxDepthM ?? meta?.maxDepthM ?? getLevelMaxDepthM(lvl)).toFixed?.(1) ?? (st?.maxDepthM ?? meta?.maxDepthM)} m`,
+    ],
+  ];
+  if (st?.avgHealthPct !== undefined) cells.push(['Avg Health', `${st.avgHealthPct}%`]);
+  if (st?.avgSpeedPct !== undefined) cells.push(['Speed Rating', `${st.avgSpeedPct}%`]);
+  if (st?.avgGasRemainingPct !== undefined) cells.push(['Gas Reserve', `${st.avgGasRemainingPct}%`]);
+  if (st?.peakHeartRateBpm !== undefined) cells.push(['Peak Heart Rate', `${st.peakHeartRateBpm} BPM`]);
+  if (st?.checkpointsHit !== undefined) {
+    cells.push(['Checkpoints', `${st.checkpointsHit} / ${st.totalCheckpoints ?? (lvl?.checkpoints?.length || 0)}`]);
+  }
+  if (st?.eanBar !== undefined || st?.tmxBar !== undefined) {
+    cells.push(['Tanks Left', `${st.eanBar ?? '-'} / ${st.tmxBar ?? '-'} / ${st.o2Bar ?? '-'}b`]);
+  }
+
+  let breakdownHtml = '';
+  if (st && (st.healthScore !== undefined || st.speedScore !== undefined)) {
+    const barRows = [
+      { label: 'Survival & Health', pts: st.healthScore || 0, pct: Math.round(((st.healthScore || 0) / 1000) * 100), cls: 'green' },
+      { label: `Speed (${formatRunClock(entry.timeSec || 0)})`, pts: st.speedScore || 0, pct: Math.round(((st.speedScore || 0) / 800) * 100), cls: '' },
+      { label: `Collectables (${entry.collectiblesFound ?? 0}/${collectMax})`, pts: st.collectiblesScore || 0, pct: Math.round(((entry.collectiblesFound ?? 0) / Math.max(1, collectMax)) * 100), cls: 'gold' },
+      { label: `Exploration (${entry.exploredPct ?? 0}%)`, pts: st.explorationScore || 0, pct: entry.exploredPct ?? 0, cls: 'purple' },
+    ];
+    if (st.rescueBonus > 0) {
+      barRows.push({ label: 'Buddy Rescue', pts: st.rescueBonus, pct: 100, cls: 'gold' });
+    }
+    if (entry.mode === 'team' && st.teamSurvivalBonus !== undefined) {
+      barRows.push({ label: 'Team Extraction', pts: st.teamSurvivalBonus, pct: st.teamSurvivalBonus > 0 ? 100 : 0, cls: 'green' });
+    }
+    breakdownHtml = `
+      <div class="lb-stats-section">
+        <div class="lb-stats-section-title">Score Breakdown</div>
+        ${barRows
+          .map(
+            (r) => `
+          <div class="score-bar-row">
+            <span class="score-bar-lbl">${escapeHtml(r.label)}</span>
+            <div class="score-bar-track"><div class="score-bar-fill ${r.cls}" style="width:${Math.max(0, Math.min(100, r.pct))}%"></div></div>
+            <span class="score-bar-pts">+${r.pts}</span>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+    `;
+  }
+
+  let crewHtml = '';
+  if (Array.isArray(entry.crew) && entry.crew.length > 0 && (entry.teamSize > 1 || entry.crew[0]?.healthPct !== undefined)) {
+    crewHtml = `
+      <div class="lb-stats-section">
+        <div class="lb-stats-section-title">${entry.teamSize > 1 ? `Dive Crew (${entry.teamSize} Divers)` : 'Diver Telemetry'}</div>
+        ${entry.crew
+          .map((m) => {
+            const parts = [];
+            if (m.healthPct !== undefined) parts.push(`${m.healthPct}% HP`);
+            if (m.diveTimeSec !== undefined) parts.push(formatRunClock(m.diveTimeSec));
+            if (m.gasRemainingPct !== undefined) parts.push(`${m.gasRemainingPct}% Gas`);
+            const detail = m.alive === false ? (m.rescued ? '🛟 RESCUED' : 'DOWN') : parts.join(' · ') || 'Surfaced';
+            return `
+              <div class="team-roster-row">
+                <strong>${escapeHtml(m.name)}</strong>
+                <span>${escapeHtml(detail)}</span>
+                <strong>${Number(m.score || 0).toLocaleString()} pts</strong>
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+    `;
+  }
+
+  let siteRunsHtml = '';
+  if (isOverall && Array.isArray(entry.siteRuns) && entry.siteRuns.length > 0) {
+    siteRunsHtml = `
+      <div class="lb-stats-section">
+        <div class="lb-stats-section-title">Cleared Expedition Sites (${entry.siteRuns.length})</div>
+        <div class="lb-stats-sitelist">
+          ${entry.siteRuns
+            .map((sr) => {
+              const idx = LEVELS.findIndex((l) => l.id === sr.levelId) + 1;
+              const name = getLevelById(sr.levelId)?.name || sr.levelId;
+              return `
+                <div class="lb-stats-siterow">
+                  <span class="lb-name">L${Math.max(1, idx)}: ${escapeHtml(name)}</span>
+                  <span class="lb-meta">${formatRunClock(sr.timeSec)} · ${sr.exploredPct}%</span>
+                  <span class="lb-grade">${escapeHtml(sr.grade)}</span>
+                  <span class="lb-score">${Number(sr.score || 0).toLocaleString()}</span>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  const legacyNote = !st && !isOverall ? '<div class="lb-stats-note">Detailed physiology & score breakdown is recorded on new dives completed in v81+.</div>' : '';
+
+  lbStatsBodyEl.innerHTML = `
+    <div class="lb-stats-hero">
+      <div>
+        <div class="lb-stats-score-lbl">Total Score</div>
+        <div class="lb-stats-score-val">${Number(entry.score || 0).toLocaleString()}</div>
+      </div>
+      <div class="lb-stats-grade-pill">${escapeHtml(entry.grade || 'B')}</div>
+    </div>
+    <div class="lb-stats-grid">
+      ${cells.map(([k, v]) => `<div class="lb-stats-cell"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join('')}
+    </div>
+    ${breakdownHtml}
+    ${crewHtml}
+    ${siteRunsHtml}
+    ${legacyNote}
+  `;
+
+  lbStatsModalEl.hidden = false;
+}
+
 function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
   if (!Array.isArray(entries) || entries.length === 0) {
     return '<div class="lb-empty">No completed expeditions recorded here yet. Finish a dive to claim #1!</div>';
@@ -1254,13 +1457,14 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
         (e.playerId && e.playerId === leaderboard.playerId);
       const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
       return `
-        <div class="lb-row ${isMe ? 'me' : ''}">
+        <button type="button" class="lb-row ${isMe ? 'me' : ''}" data-lb-idx="${i}" title="View full dive stats">
           <span class="lb-rank">#${i + 1}</span>
           <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small></span>
           <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
           <span class="lb-grade">${escapeHtml(e.grade)}</span>
           <span class="lb-score">${Number(e.score || 0).toLocaleString()}</span>
-        </div>
+          <span class="lb-chevron" aria-hidden="true">›</span>
+        </button>
       `;
     })
     .join('');
@@ -1331,7 +1535,8 @@ async function refreshMenuLeaderboard() {
       ? (board.pendingSync > 0 ? `Global Rankings (${board.pendingSync} pending sync)` : 'Global Rankings')
       : 'Local Device Records (auto-syncs when online)';
   leaderboardSubEl.textContent = `${modeLabel} · ${scopeLabel} · ${originNote}`;
-  leaderboardRowsEl.innerHTML = renderLeaderboardRowsHtml(board.entries);
+  lastMenuLbEntries = board.entries || [];
+  leaderboardRowsEl.innerHTML = renderLeaderboardRowsHtml(lastMenuLbEntries);
 }
 
 // --- Menu & LAN Lobby Wiring ---
@@ -1816,6 +2021,31 @@ leaderboardPanel?.addEventListener('click', (e) => {
       b.classList.toggle('active', b === modeBtn);
     }
     refreshMenuLeaderboard();
+    return;
+  }
+  const rowBtn = e.target.closest('button[data-lb-idx]');
+  if (rowBtn) {
+    const idx = Number(rowBtn.dataset.lbIdx);
+    const entry = Number.isInteger(idx) ? lastMenuLbEntries[idx] : null;
+    if (entry) openLeaderboardStatsModal(entry, idx + 1);
+  }
+});
+
+debriefLeaderboardEl?.addEventListener('click', (e) => {
+  const rowBtn = e.target.closest('button[data-lb-idx]');
+  if (!rowBtn) return;
+  const idx = Number(rowBtn.dataset.lbIdx);
+  const entry = Number.isInteger(idx) ? lastDebriefLbEntries[idx] : null;
+  if (entry) openLeaderboardStatsModal(entry, idx + 1);
+});
+
+btnLbStatsClose?.addEventListener('click', closeLeaderboardStatsModal);
+lbStatsModalEl?.addEventListener('click', (e) => {
+  if (e.target === lbStatsModalEl) closeLeaderboardStatsModal();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && lbStatsModalEl && !lbStatsModalEl.hidden) {
+    closeLeaderboardStatsModal();
   }
 });
 

@@ -79,12 +79,26 @@ export function normalizeLeaderboardSubmission(raw) {
 
   const playerId = sanitizeIdToken(raw.playerId, 36) || `anon_${Date.now().toString(36)}`;
   const rawCrew = Array.isArray(raw.crew) ? raw.crew.slice(0, 4) : [];
-  const crew = rawCrew
-    .map((m, idx) => ({
+  const crew = rawCrew.map((m, idx) => {
+    const member = {
       name: sanitizeCallsign(m?.name, `Diver ${idx + 1}`),
       score: Math.max(0, Math.min(maxAllowed, Math.round(Number(m?.score) || score))),
       alive: m?.alive !== false,
-    }));
+    };
+    if (Number.isFinite(Number(m?.healthPct))) {
+      member.healthPct = Math.max(0, Math.min(100, Math.round(Number(m.healthPct))));
+    }
+    if (Number.isFinite(Number(m?.gasRemainingPct))) {
+      member.gasRemainingPct = Math.max(0, Math.min(100, Math.round(Number(m.gasRemainingPct))));
+    }
+    if (Number.isFinite(Number(m?.diveTimeSec))) {
+      member.diveTimeSec = Math.max(0, Math.min(7200, Math.round(Number(m.diveTimeSec) * 10) / 10));
+    }
+    if (m?.rescued) member.rescued = true;
+    return member;
+  });
+
+  const stats = sanitizeLeaderboardStats(raw.stats, level);
 
   const diverName = sanitizeCallsign(raw.diverName || crew[0]?.name, 'Diver 1');
   if (crew.length === 0) {
@@ -119,9 +133,44 @@ export function normalizeLeaderboardSubmission(raw) {
       exploredPct,
       collectiblesFound,
       collectiblesTotal: maxCollect,
+      ...(stats ? { stats } : {}),
       createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
     },
   };
+}
+
+function sanitizeLeaderboardStats(raw, level) {
+  if (!raw || typeof raw !== 'object') return null;
+  const clamp = (v, min, max, dec = 0) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return undefined;
+    const bounded = Math.max(min, Math.min(max, n));
+    if (dec <= 0) return Math.round(bounded);
+    const f = Math.pow(10, dec);
+    return Math.round(bounded * f) / f;
+  };
+  const cpTotal = Math.max(0, (level?.checkpoints || []).length);
+  const out = {};
+  const assign = (k, val) => {
+    if (val !== undefined) out[k] = val;
+  };
+  assign('maxDepthM', clamp(raw.maxDepthM, 0, 300, 1));
+  assign('avgHealthPct', clamp(raw.avgHealthPct, 0, 100));
+  assign('avgSpeedPct', clamp(raw.avgSpeedPct, 0, 100));
+  assign('avgGasRemainingPct', clamp(raw.avgGasRemainingPct, 0, 100));
+  assign('peakHeartRateBpm', clamp(raw.peakHeartRateBpm, 40, 220));
+  assign('checkpointsHit', clamp(raw.checkpointsHit, 0, cpTotal || 20));
+  assign('totalCheckpoints', clamp(raw.totalCheckpoints ?? cpTotal, 0, cpTotal || 20));
+  assign('healthScore', clamp(raw.healthScore, 0, 1200));
+  assign('speedScore', clamp(raw.speedScore, 0, 1000));
+  assign('collectiblesScore', clamp(raw.collectiblesScore, 0, 12000));
+  assign('explorationScore', clamp(raw.explorationScore, 0, 1200));
+  assign('rescueBonus', clamp(raw.rescueBonus, 0, 1200));
+  assign('teamSurvivalBonus', clamp(raw.teamSurvivalBonus, 0, 1200));
+  assign('eanBar', clamp(raw.eanBar, 0, 260));
+  assign('tmxBar', clamp(raw.tmxBar, 0, 260));
+  assign('o2Bar', clamp(raw.o2Bar, 0, 260));
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 export function sortLeaderboardEntries(a, b) {
@@ -168,10 +217,29 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
     let totalScore = 0;
     let totalTime = 0;
     let exploredSum = 0;
+    let totalCollectFound = 0;
+    let totalCollectAvail = 0;
+    const rankOrder = new Map(LEVELS.map((l, i) => [l.id, i]));
+    const siteRuns = Array.from(agg.bestByLevel.values())
+      .map((best) => ({
+        levelId: best.levelId,
+        score: best.score,
+        grade: best.grade,
+        timeSec: best.timeSec,
+        exploredPct: best.exploredPct,
+        collectiblesFound: best.collectiblesFound || 0,
+        collectiblesTotal: best.collectiblesTotal || 0,
+        createdAt: best.createdAt,
+        ...(best.stats ? { stats: best.stats } : {}),
+      }))
+      .sort((a, b) => (rankOrder.get(a.levelId) ?? 999) - (rankOrder.get(b.levelId) ?? 999));
+
     for (const best of agg.bestByLevel.values()) {
       totalScore += best.score;
       totalTime += best.timeSec;
       exploredSum += best.exploredPct;
+      totalCollectFound += best.collectiblesFound || 0;
+      totalCollectAvail += best.collectiblesTotal || 0;
     }
     const sitesCompleted = agg.bestByLevel.size;
     rows.push({
@@ -183,6 +251,9 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
       teamSize: agg.teamSize,
       sitesCompleted,
       totalSites: LEVELS.length,
+      collectiblesFound: totalCollectFound,
+      collectiblesTotal: totalCollectAvail,
+      siteRuns,
       score: totalScore,
       grade: sitesCompleted >= LEVELS.length ? 'CAMPAIGN' : `${sitesCompleted}/${LEVELS.length} SITES`,
       timeSec: Math.round(totalTime * 10) / 10,
