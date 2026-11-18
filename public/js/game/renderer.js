@@ -4992,8 +4992,17 @@ export class CaveRenderer {
     };
 
     carveDiverLight(diver, localTorch, 16.5);
+    const torchPeerIds = new Set();
     for (let i = 0; i < peerTorches.length; i++) {
-      carveDiverLight(peerTorches[i].peer, peerTorches[i].torch, 14.0);
+      const pt = peerTorches[i];
+      if (pt.peer?.id) torchPeerIds.add(pt.peer.id);
+      carveDiverLight(pt.peer, pt.torch, 14.0);
+    }
+    // Always carve a soft personal ambient halo around dark/downed buddies so they stay visible
+    for (let i = 0; i < peerList.length; i++) {
+      const p = peerList[i];
+      if (!p || (p.id && torchPeerIds.has(p.id)) || p.alive !== false && p.torchOn !== false) continue;
+      carveDiverLight(p, null, 0);
     }
 
     // Faint marker glows at visible checkpoints via pre-baked cutout stamp

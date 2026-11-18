@@ -84,6 +84,25 @@ function sanitizeGuidelineChains(raw) {
   return chains;
 }
 
+export function compareHostAuthority(a = {}, b = {}) {
+  const aStarted = Boolean(a.started);
+  const bStarted = Boolean(b.started);
+  if (aStarted !== bStarted) return aStarted ? 1 : -1;
+
+  const aEpoch = Number.isFinite(a.hostEpoch) ? a.hostEpoch : 1;
+  const bEpoch = Number.isFinite(b.hostEpoch) ? b.hostEpoch : 1;
+  if (aEpoch !== bEpoch) return aEpoch - bEpoch;
+
+  const aCount = Number.isFinite(a.playerCount) ? a.playerCount : 0;
+  const bCount = Number.isFinite(b.playerCount) ? b.playerCount : 0;
+  if (aCount !== bCount) return aCount - bCount;
+
+  const aid = String(a.hostId || '');
+  const bid = String(b.hostId || '');
+  if (aid === bid) return 0;
+  return aid.localeCompare(bid) < 0 ? 1 : -1;
+}
+
 export function pickNextP2pHostId(players, excludeId = null) {
   const candidates = (players || [])
     .filter((p) => p && p.id !== excludeId && p.connected !== false)
@@ -114,6 +133,7 @@ export class P2pRoomCoordinator {
     maxPlayers = 2,
     loadStatus = {},
     initialDiveState = null,
+    hostEpoch = 1,
   }) {
     this.seq = 2;
     this.hostId = hostId;
@@ -125,6 +145,7 @@ export class P2pRoomCoordinator {
       started: initStarted,
       phase: initStarted ? 'diving' : 'lobby',
       diveSeq: initStarted ? 1 : 0,
+      hostEpoch: Number.isFinite(hostEpoch) ? hostEpoch : 1,
       sharedCheckpoints: new Set(
         initStarted && Array.isArray(initialDiveState.checkpoints)
           ? initialDiveState.checkpoints.filter((id) => typeof id === 'string').slice(0, 64)
@@ -182,6 +203,19 @@ export class P2pRoomCoordinator {
     };
   }
 
+  getAuthorityInfo() {
+    let connectedCount = 0;
+    for (const p of this.room.players.values()) {
+      if (p.connected !== false) connectedCount += 1;
+    }
+    return {
+      hostId: this.hostId,
+      hostEpoch: this.room.hostEpoch || 1,
+      started: Boolean(this.room.started),
+      playerCount: connectedCount || this.room.players.size,
+    };
+  }
+
   serializeRoom() {
     return {
       code: this.room.code,
@@ -190,6 +224,7 @@ export class P2pRoomCoordinator {
       started: this.room.started,
       phase: this.room.phase || (this.room.started ? 'diving' : 'lobby'),
       diveSeq: this.room.diveSeq || 0,
+      hostEpoch: this.room.hostEpoch || 1,
       players: Array.from(this.room.players.values()).map((p) => ({
         id: p.id,
         name: p.name,
@@ -211,6 +246,7 @@ export class P2pRoomCoordinator {
       started: this.room.started,
       phase: this.room.phase || (this.room.started ? 'diving' : 'lobby'),
       diveSeq: this.room.diveSeq || 0,
+      hostEpoch: this.room.hostEpoch || 1,
       seq: this.seq,
       bodyRecoveredBy: this.room.bodyRecoveredBy || null,
       checkpoints: Array.from(this.room.sharedCheckpoints),
@@ -235,12 +271,15 @@ export class P2pRoomCoordinator {
     };
   }
 
-  static fromSnapshot(snapshot, { departingHostId = null, newHostId } = {}) {
+  static fromSnapshot(snapshot, { departingHostId = null, newHostId, newHostName = 'Lead Diver', bumpEpoch = false } = {}) {
+    const baseEpoch = Number.isFinite(snapshot.hostEpoch) ? snapshot.hostEpoch : 1;
     const coord = new P2pRoomCoordinator({
       code: snapshot.code,
       hostId: newHostId,
+      hostName: newHostName,
       levelId: snapshot.levelId,
       maxPlayers: snapshot.maxPlayers,
+      hostEpoch: bumpEpoch ? baseEpoch + 1 : baseEpoch,
     });
     coord.room.players.clear();
     coord.senders.clear();
@@ -269,7 +308,7 @@ export class P2pRoomCoordinator {
       coord.room.players.set(p.id, {
         id: p.id,
         joinSeq: js,
-        name: p.name,
+        name: becameHost && newHostName && newHostName !== 'Lead Diver' ? sanitizeName(newHostName, p.name) : p.name,
         ready: becameHost ? true : Boolean(p.ready),
         isHost: becameHost,
         connected: becameHost ? true : p.connected !== false,
@@ -278,6 +317,22 @@ export class P2pRoomCoordinator {
         loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
         loadedLevelId: p.loadedLevelId || coord.room.levelId,
         reconnectToken: p.reconnectToken || randomToken(),
+        disconnectTimer: null,
+      });
+    }
+    if (newHostId && !coord.room.players.has(newHostId)) {
+      coord.room.players.set(newHostId, {
+        id: newHostId,
+        joinSeq: maxSeq++,
+        name: sanitizeName(newHostName, 'Lead Diver'),
+        ready: true,
+        isHost: true,
+        connected: true,
+        hasLoadTracking: true,
+        loadStatus: 'ready',
+        loadPct: 100,
+        loadedLevelId: coord.room.levelId,
+        reconnectToken: randomToken(),
         disconnectTimer: null,
       });
     }
@@ -362,6 +417,25 @@ export class P2pRoomCoordinator {
   }
 
   handleRemoteJoin(msg, sendFn, explicitPlayerId = null) {
+    // Migrate existing slot seamlessly if a refreshed client presents its reconnectToken under a new peerId
+    const reqToken = typeof msg.reconnectToken === 'string' && msg.reconnectToken ? msg.reconnectToken : '';
+    if (explicitPlayerId && reqToken && !this.room.players.has(explicitPlayerId)) {
+      for (const [oldId, oldMember] of this.room.players.entries()) {
+        if (!oldMember.isHost && oldMember.reconnectToken === reqToken) {
+          if (oldMember.disconnectTimer) {
+            clearTimeout(oldMember.disconnectTimer);
+            oldMember.disconnectTimer = null;
+          }
+          this.room.players.delete(oldId);
+          this.senders.delete(oldId);
+          oldMember.id = explicitPlayerId;
+          oldMember.connected = true;
+          this.room.players.set(explicitPlayerId, oldMember);
+          break;
+        }
+      }
+    }
+
     // Re-attach cleanly if an existing player with this peerId reconnects
     if (explicitPlayerId && this.room.players.has(explicitPlayerId)) {
       const existing = this.room.players.get(explicitPlayerId);
@@ -584,11 +658,22 @@ export class P2pRoomCoordinator {
       }
 
       case 'set_player_status': {
+        const prevStatus = p.loadStatus;
+        const prevPct = p.loadPct;
+        const prevLvl = p.loadedLevelId;
+        const prevTracked = p.hasLoadTracking;
         p.hasLoadTracking = true;
         if (typeof msg.loadStatus === 'string') p.loadStatus = sanitizeLoadStatus(msg.loadStatus);
         if (Number.isFinite(msg.loadPct)) p.loadPct = Math.max(0, Math.min(100, Math.round(msg.loadPct)));
         if (typeof msg.loadedLevelId === 'string') p.loadedLevelId = sanitizeLevelId(msg.loadedLevelId);
-        this._broadcast({ type: 'room_update', room: this.serializeRoom() });
+        if (
+          !prevTracked ||
+          prevStatus !== p.loadStatus ||
+          prevPct !== p.loadPct ||
+          prevLvl !== p.loadedLevelId
+        ) {
+          this._broadcast({ type: 'room_update', room: this.serializeRoom() });
+        }
         if (this.room.phase === 'preparing' && !this._getConnectedLoadingMember()) {
           this._launchDive();
         }

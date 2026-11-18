@@ -244,7 +244,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // --- LAN Multiplayer Room Manager (2-4 Player Co-op) ---
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 256 * 1024 });
 const rooms = new Map(); // code -> { code, levelId, maxPlayers, started, diveSeq, players: Map<clientId, playerMeta> }
 let nextClientSeq = 1;
 const REJOIN_GRACE_MS = 60000;
@@ -595,6 +595,15 @@ wss.on('connection', (ws) => {
           sendJson(ws, { type: 'error', message: `Room "${code}" not found on LAN.` });
           broadcastRoomsList();
           return;
+        }
+        if (room.players.size >= room.maxPlayers) {
+          const disconnectedEntry = Array.from(room.players.values()).find(
+            (m) => !m.isHost && m.connected === false
+          );
+          if (disconnectedEntry) {
+            if (disconnectedEntry.disconnectTimer) clearTimeout(disconnectedEntry.disconnectTimer);
+            room.players.delete(disconnectedEntry.id);
+          }
         }
         if (room.players.size >= room.maxPlayers) {
           sendJson(ws, { type: 'error', message: `Room "${code}" already has ${room.maxPlayers} divers.` });
@@ -1071,10 +1080,27 @@ wss.on('connection', (ws) => {
     }
   });
 
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
   ws.on('close', () => {
     leaveCurrentRoom(client, { immediate: false });
   });
 });
+
+const wsPingSweep = setInterval(() => {
+  for (const sock of wss.clients) {
+    if (sock.isAlive === false) {
+      try { sock.terminate(); } catch {}
+      continue;
+    }
+    sock.isAlive = false;
+    try { sock.ping(); } catch {}
+  }
+}, 20000);
+wsPingSweep.unref?.();
 
 server.listen(PORT, '0.0.0.0', () => {
   const lan = getLanAddresses();

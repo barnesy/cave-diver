@@ -147,6 +147,7 @@ let directJoinToDive = Boolean(INITIAL_ROOM_CODE);
 let joiningRoomCode = INITIAL_ROOM_CODE;
 let joiningIsDropIn = false;
 let attemptJoinAfterExpire = '';
+let suppressNextExpiredError = false;
 let activeDiveSeq = 0;
 let lastHostPromoMs = 0;
 let copyInviteFeedbackTimer = 0;
@@ -1607,6 +1608,10 @@ if (siteViewTabsEl && siteBrowserEl) {
 btnPlaySolo.addEventListener('click', async () => {
   const diverName = requireCallsign();
   if (!diverName) return;
+  if (lan.room) {
+    lan.leaveRoom();
+    resetLobbyUiState();
+  }
   btnPlaySolo.disabled = true;
   try {
     await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
@@ -1754,15 +1759,15 @@ if (btnQuickCoop) {
         bodyRecovered: false,
         playerLines: [],
       });
-      if (room?.code) {
-        activeDiveSeq = room.diveSeq || 1;
-        await copyCurrentInviteLink();
+      if (!room?.code) {
+        showToast('Could not open co-op room right now — try again.', 2.8);
+        return;
       }
+      activeDiveSeq = room.diveSeq || 1;
+      await copyCurrentInviteLink();
       await ensureLevelLoaded(activeLevel.id, { showOverlay: true });
       startDiveRun(true);
-      if (room?.code) {
-        showToast(`Room ${room.code} live & link copied! Friends drop straight in.`, 3.8);
-      }
+      showToast(`Room ${room.code} live & link copied! Friends drop straight in.`, 3.8);
     } finally {
       btnQuickCoop.disabled = false;
     }
@@ -1845,10 +1850,13 @@ async function copyCurrentInviteLink() {
 
 let upgradingDiveRoom = false;
 async function upgradeDiveToCoopRoom({ share = false } = {}) {
-  if (lan.room) {
+  if (lan.room && isMultiplayer) {
     return share ? shareCurrentInviteLink() : copyCurrentInviteLink();
   }
   if (mode !== 'diving' || !session || upgradingDiveRoom) return;
+  if (lan.room && !isMultiplayer) {
+    lan.leaveRoom();
+  }
   upgradingDiveRoom = true;
   if (btnHudInvite) btnHudInvite.disabled = true;
   try {
@@ -1883,7 +1891,7 @@ async function upgradeDiveToCoopRoom({ share = false } = {}) {
 }
 
 async function shareCurrentInviteLink() {
-  if (!lan.room && mode === 'diving' && session) {
+  if ((!lan.room || !isMultiplayer) && mode === 'diving' && session) {
     return upgradeDiveToCoopRoom({ share: true });
   }
   if (!lan.room || typeof navigator.share !== 'function') {
@@ -1909,7 +1917,7 @@ async function shareCurrentInviteLink() {
 
 btnCopyInvite?.addEventListener('click', copyCurrentInviteLink);
 btnHudInvite?.addEventListener('click', () => {
-  if (!lan.room && mode === 'diving' && session) {
+  if ((!lan.room || !isMultiplayer) && mode === 'diving' && session) {
     upgradeDiveToCoopRoom({ share: false });
   } else {
     copyCurrentInviteLink();
@@ -2169,6 +2177,7 @@ lan.on('session_expired', () => {
   if (attemptJoinAfterExpire) {
     const code = attemptJoinAfterExpire;
     attemptJoinAfterExpire = '';
+    suppressNextExpiredError = true;
     const diverName = playerNameInput?.value.trim() || 'Buddy Diver';
     pendingAutoJoinCode = code;
     lanStatus.className = 'lan-status';
@@ -2187,6 +2196,12 @@ lan.on('join_stage', ({ code, pct, message }) => {
 });
 
 lan.on('error', (msg) => {
+  if (suppressNextExpiredError) {
+    suppressNextExpiredError = false;
+    if (typeof msg === 'string' && (msg.includes('no longer active') || msg.includes('expired'))) {
+      return;
+    }
+  }
   if (attemptJoinAfterExpire && (msg.includes('no longer active') || msg.includes('expired'))) {
     return;
   }
@@ -2233,7 +2248,8 @@ function updateLoaderCrewSyncBanner(room) {
 lan.on('room_update', async (room) => {
   const autoJoinedNow = Boolean(pendingAutoJoinCode && room?.code === pendingAutoJoinCode);
   const wasJoiningThisRoom = Boolean(joiningRoomCode && room?.code === joiningRoomCode);
-  const shouldEnterDirectDive = Boolean(directJoinToDive && room?.code);
+  const matchesTargetRoom = !INITIAL_ROOM_CODE || room?.code === INITIAL_ROOM_CODE;
+  const shouldEnterDirectDive = Boolean(directJoinToDive && room?.code && matchesTargetRoom && !lan.isHost());
   if (autoJoinedNow) {
     pendingAutoJoinCode = '';
     if (!shouldEnterDirectDive && !room?.started) {
@@ -2355,6 +2371,11 @@ lan.on('room_update', async (room) => {
 
   // Keep loader open continuously while dropping into an active dive until dive_started + terrain load complete
   if (wasJoiningThisRoom && room.started && mode !== 'diving') {
+    const alreadyReadyOnSite =
+      renderer.ready && renderer.level?.id === siteLevel.id && ecosystem && !inFlightLoad;
+    if (joiningIsDropIn && (inFlightLoad?.levelId === siteLevel.id || alreadyReadyOnSite)) {
+      return;
+    }
     joiningIsDropIn = true;
     const eyebrowEl = screenLoader?.querySelector('.menu-eyebrow');
     if (eyebrowEl) eyebrowEl.textContent = 'CO-OP DROP-IN · SYNCING ACTIVE DIVE';
@@ -2392,10 +2413,17 @@ lan.on('room_update', async (room) => {
 });
 
 lan.on('dive_preparing', async (msg) => {
-  if (mode === 'diving') return;
+  const nextLevelId = msg?.levelId || activeLevel.id;
+  if (mode === 'diving' && (!session?._awaitingHostStart || session?.level?.id === nextLevelId)) {
+    return;
+  }
+  if (mode === 'diving') {
+    mode = 'menu';
+    screenHud.hidden = true;
+  }
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = false;
   updateLoaderCrewSyncBanner(msg.room);
-  await ensureLevelLoaded(msg.levelId || activeLevel.id, {
+  await ensureLevelLoaded(nextLevelId, {
     showOverlay: true,
     keepOpenAfterLoad: true,
   });
@@ -2412,10 +2440,12 @@ lan.on('dive_started', async (msg) => {
   if (loaderCrewStatusEl && joiningRoomCode) {
     loaderCrewStatusEl.textContent = `Room ${joiningRoomCode} live — loading cave geometry...`;
   }
+  const sameLevel = !msg?.levelId || msg.levelId === session?.level?.id;
   if (
     mode === 'diving' &&
     session &&
-    ((msg?.rejoined && msg?.diveSeq && msg.diveSeq === activeDiveSeq) || session._awaitingHostStart)
+    sameLevel &&
+    (msg?.preserveDive || (msg?.rejoined && msg?.diveSeq && msg.diveSeq === activeDiveSeq) || session._awaitingHostStart)
   ) {
     const wasWaiting = Boolean(session._awaitingHostStart);
     session._awaitingHostStart = false;
@@ -3052,12 +3082,21 @@ async function bootGame() {
   window.addEventListener('focus', () => lan.ensureConnected());
   window.addEventListener('online', syncWhenReady);
 
+  // Clear stale session from a different room before connecting to URL invite room
+  let savedSession = lan.getSavedSession();
+  if (INITIAL_ROOM_CODE && savedSession && savedSession.code !== INITIAL_ROOM_CODE) {
+    lan.clearSavedSession();
+    savedSession = null;
+  }
+  if (savedSession && savedSession.code === INITIAL_ROOM_CODE && savedSession.isHost) {
+    directJoinToDive = false;
+  }
+
   // Connect cleanly & backfill any prior local dive records to global Vercel Blob storage
   lan.connect();
   fetchLanUrls();
   leaderboard.syncPendingLocalRuns().catch(() => {});
 
-  const savedSession = lan.getSavedSession();
   if (savedSession && !INITIAL_ROOM_CODE) {
     pendingAutoJoinCode = savedSession.code;
     attemptJoinAfterExpire = '';
@@ -3073,10 +3112,11 @@ async function bootGame() {
     pendingAutoJoinCode = INITIAL_ROOM_CODE;
     if (roomCodeInput) roomCodeInput.value = INITIAL_ROOM_CODE;
     const savedCallsign = getEnteredCallsign();
+    const rejoinToken = savedSession?.code === INITIAL_ROOM_CODE ? savedSession.reconnectToken : '';
     if (savedCallsign) {
       lanStatus.className = 'lan-status';
       lanStatus.textContent = `Auto-joining room ${INITIAL_ROOM_CODE}...`;
-      lan.joinRoom(INITIAL_ROOM_CODE, savedCallsign);
+      lan.joinRoom(INITIAL_ROOM_CODE, savedCallsign, { reconnectToken: rejoinToken });
     } else if (loaderCallsignGateEl && loaderCallsignInput && btnLoaderJoin) {
       setLoaderProgress(18, `Room ${INITIAL_ROOM_CODE} ready`);
       if (loaderCrewStatusEl) {
@@ -3105,7 +3145,7 @@ async function bootGame() {
         if (loaderCrewStatusEl) {
           loaderCrewStatusEl.textContent = `Connecting to Room ${INITIAL_ROOM_CODE} as ${clean}...`;
         }
-        lan.joinRoom(INITIAL_ROOM_CODE, clean);
+        lan.joinRoom(INITIAL_ROOM_CODE, clean, { reconnectToken: rejoinToken });
       };
       btnLoaderJoin.addEventListener('click', submitGateJoin);
       loaderCallsignInput.addEventListener('input', () => {

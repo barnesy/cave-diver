@@ -686,3 +686,117 @@ test('Vercel API handlers validate inputs and shared clients target Vercel globa
     }
   }
 });
+
+test('P2P coordinator arbitration, token migration, and large WS payloads remain solid', async () => {
+  const { P2pRoomCoordinator, compareHostAuthority } = await import('../public/js/net/p2pRoomHost.js');
+
+  // 1. Deterministic symmetric host arbitration: started > higher hostEpoch > more players > smaller hostId
+  const aStarted = { hostId: 'zzz', hostEpoch: 1, started: true, playerCount: 1 };
+  const bLobby = { hostId: 'aaa', hostEpoch: 2, started: false, playerCount: 2 };
+  assert.ok(compareHostAuthority(aStarted, bLobby) > 0);
+  assert.ok(compareHostAuthority(bLobby, aStarted) < 0);
+
+  const aEpoch2 = { hostId: 'zzz', hostEpoch: 2, started: true, playerCount: 1 };
+  const bEpoch1 = { hostId: 'aaa', hostEpoch: 1, started: true, playerCount: 2 };
+  assert.ok(compareHostAuthority(aEpoch2, bEpoch1) > 0);
+  assert.ok(compareHostAuthority(bEpoch1, aEpoch2) < 0);
+
+  const tieA = { hostId: 'peerA', hostEpoch: 1, started: true, playerCount: 1 };
+  const tieB = { hostId: 'peerB', hostEpoch: 1, started: true, playerCount: 1 };
+  assert.ok(compareHostAuthority(tieA, tieB) > 0);
+  assert.ok(compareHostAuthority(tieB, tieA) < 0);
+
+  // 2. Cloud snapshot recovery adds missing guest as proper Host with bumped epoch & preserves dive state
+  const orig = new P2pRoomCoordinator({
+    code: 'ABCD',
+    hostId: 'host-1',
+    hostName: 'Mako',
+    levelId: 'silfra-katla-aurora-abyss',
+    maxPlayers: 2,
+    initialDiveState: { checkpoints: ['cp1'], collectibles: ['c1'] },
+  });
+  const snap = orig.exportSnapshot();
+  const recovered = P2pRoomCoordinator.fromSnapshot(snap, {
+    departingHostId: null,
+    newHostId: 'guest-2',
+    newHostName: 'Vex',
+    bumpEpoch: true,
+  });
+  assert.equal(recovered.room.hostEpoch, 2);
+  assert.equal(recovered.room.started, true);
+  assert.equal(recovered.room.players.get('guest-2')?.isHost, true);
+  assert.equal(recovered.room.players.get('host-1')?.isHost, false);
+  assert.ok(recovered.room.sharedCheckpoints.has('cp1'));
+
+  // 3. Reconnect token migration replaces old disconnected peerId in a 2/2 full room cleanly
+  const room2p = new P2pRoomCoordinator({ code: 'WXYZ', hostId: 'h1', hostName: 'Host', maxPlayers: 2 });
+  const joinMsgs = [];
+  room2p.handleRemoteJoin({ name: 'Buddy' }, (m) => joinMsgs.push(m), 'peer-old');
+  const firstToken = joinMsgs.find((m) => m.type === 'room_joined').reconnectToken;
+  room2p.markDisconnected('peer-old');
+  const rejoinMsgs = [];
+  const migratedId = room2p.handleRemoteJoin(
+    { name: 'Buddy', reconnectToken: firstToken },
+    (m) => rejoinMsgs.push(m),
+    'peer-refreshed'
+  );
+  assert.equal(migratedId, 'peer-refreshed');
+  assert.equal(room2p.room.players.size, 2);
+  assert.equal(room2p.room.players.has('peer-old'), false);
+  assert.equal(room2p.room.players.get('peer-refreshed')?.connected, true);
+
+  // 4. WebSocket server handles >16KB guideline payloads and evicts disconnected non-host slots cleanly on join
+  const port = 3459;
+  const proc = spawn(process.execPath, ['server.js'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('WS server timeout')), 5000);
+      proc.stdout.on('data', (c) => { if (c.toString().includes('LAN Server Ready')) { clearTimeout(t); resolve(); } });
+    });
+    const nextMsg = (ws, type) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${type}`)), 4000);
+        const fn = (raw) => {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === type) { clearTimeout(timer); ws.off('message', fn); resolve(msg); }
+        };
+        ws.on('message', fn);
+      });
+    const wsH = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const wsG1 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await Promise.all([nextMsg(wsH, 'welcome'), nextMsg(wsG1, 'welcome')]);
+    wsH.send(JSON.stringify({ type: 'create_room', name: 'H', maxPlayers: 2 }));
+    const hJoined = await nextMsg(wsH, 'room_joined');
+    wsG1.send(JSON.stringify({ type: 'join_room', code: hJoined.room.code, name: 'G1' }));
+    await nextMsg(wsG1, 'room_joined');
+    wsH.send(JSON.stringify({ type: 'start_dive' }));
+    await Promise.all([nextMsg(wsH, 'dive_started'), nextMsg(wsG1, 'dive_started')]);
+
+    // >20KB guideline payload should relay without closing WebSocket (maxPayload 256KB)
+    const hugeChains = Array.from({ length: 12 }, (_, ci) =>
+      Array.from({ length: 80 }, (_, pi) => ({ x: ci + pi * 0.5, y: 10 + pi * 0.25 }))
+    );
+    const bigLineP = nextMsg(wsH, 'peer_guideline');
+    wsG1.send(JSON.stringify({ type: 'guideline_sync', chains: hugeChains, reelingActive: false }));
+    const bigLine = await bigLineP;
+    assert.equal(bigLine.chains.length, 12);
+
+    // G1 drops ungracefully -> new G2 joins full 2/2 room cleanly by evicting disconnected G1 slot
+    wsG1.close();
+    await nextMsg(wsH, 'room_update');
+    const wsG2 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await nextMsg(wsG2, 'welcome');
+    const g2JoinedP = nextMsg(wsG2, 'room_joined');
+    wsG2.send(JSON.stringify({ type: 'join_room', code: hJoined.room.code, name: 'G2' }));
+    const g2Joined = await g2JoinedP;
+    assert.equal(g2Joined.room.players.length, 2);
+    wsH.close();
+    wsG2.close();
+  } finally {
+    proc.kill();
+  }
+});
