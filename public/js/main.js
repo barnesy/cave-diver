@@ -1134,12 +1134,17 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
 const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
 
 function loadCareerLogbook() {
-  let book = createEmptyLogbook();
   try {
+    let book = createEmptyLogbook();
     const raw = localStorage.getItem(CAREER_LOGBOOK_KEY);
-    if (raw) book = JSON.parse(raw);
-  } catch {}
-  return seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') book = parsed;
+    }
+    return seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+  } catch {
+    return createEmptyLogbook();
+  }
 }
 
 function saveCareerLogbook(book) {
@@ -2936,9 +2941,21 @@ function frame(nowMs) {
 
 function setupPwaSupport() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {
-      // ignore registration issues on non-HTTPS custom LAN hosts
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let swReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || swReloading) return;
+      if (mode === 'menu' && !document.hidden) {
+        swReloading = true;
+        location.reload();
+      }
     });
+    navigator.serviceWorker
+      .register('./sw.js', { updateViaCache: 'none' })
+      .then((reg) => reg?.update?.().catch(() => {}))
+      .catch(() => {
+        // ignore registration issues on non-HTTPS custom LAN hosts
+      });
   }
 
   let screenWakeLock = null;

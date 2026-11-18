@@ -1,56 +1,60 @@
-const CACHE_VERSION = 'cave-diver-v57';
+const CACHE_VERSION = 'cave-diver-v58';
 const CORE_SHELL = [
   './',
   './manifest.json',
-  './css/style.css?v=57',
+  './css/style.css?v=58',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './js/vendor/trystero-nostr.min.js?v=57',
-  './js/main.js?v=57',
-  './js/physics/diveModel.js?v=57',
-  './js/game/aquaticRadio.js?v=57',
-  './js/game/audio.js?v=57',
-  './js/game/collision.js?v=57',
-  './js/game/input.js?v=57',
-  './js/game/hud.js?v=57',
-  './js/game/diverBody.js?v=57',
-  './js/game/diveSession.js?v=57',
-  './js/game/scoring.js?v=57',
-  './js/game/leaderboardModel.js?v=57',
-  './js/game/logbookModel.js?v=57',
-  './js/game/renderer.js?v=57',
-  './js/game/artSprites.js?v=57',
-  './js/game/silt.js?v=57',
-  './js/game/lighting.js?v=57',
-  './js/game/marineLife.js?v=57',
-  './js/levels/themes.js?v=57',
-  './js/levels/campaign.js?v=57',
-  './js/levels/index.js?v=57',
-  './js/levels/level1.js?v=57',
-  './js/levels/level2.js?v=57',
-  './js/levels/level3.js?v=57',
-  './js/levels/level4.js?v=57',
-  './js/levels/level5.js?v=57',
-  './js/levels/level6.js?v=57',
-  './js/levels/level7.js?v=57',
-  './js/levels/level8.js?v=57',
-  './js/levels/level9.js?v=57',
-  './js/levels/level10.js?v=57',
-  './js/levels/level11.js?v=57',
-  './js/levels/level12.js?v=57',
-  './js/levels/level13.js?v=57',
-  './js/levels/level14.js?v=57',
-  './js/net/leaderboardClient.js?v=57',
-  './js/net/p2pRoomHost.js?v=57',
-  './js/net/lanClient.js?v=57',
+  './js/vendor/trystero-nostr.min.js?v=58',
+  './js/main.js?v=58',
+  './js/physics/diveModel.js?v=58',
+  './js/game/aquaticRadio.js?v=58',
+  './js/game/audio.js?v=58',
+  './js/game/collision.js?v=58',
+  './js/game/input.js?v=58',
+  './js/game/hud.js?v=58',
+  './js/game/diverBody.js?v=58',
+  './js/game/diveSession.js?v=58',
+  './js/game/scoring.js?v=58',
+  './js/game/leaderboardModel.js?v=58',
+  './js/game/logbookModel.js?v=58',
+  './js/game/renderer.js?v=58',
+  './js/game/artSprites.js?v=58',
+  './js/game/silt.js?v=58',
+  './js/game/lighting.js?v=58',
+  './js/game/marineLife.js?v=58',
+  './js/levels/themes.js?v=58',
+  './js/levels/campaign.js?v=58',
+  './js/levels/index.js?v=58',
+  './js/levels/level1.js?v=58',
+  './js/levels/level2.js?v=58',
+  './js/levels/level3.js?v=58',
+  './js/levels/level4.js?v=58',
+  './js/levels/level5.js?v=58',
+  './js/levels/level6.js?v=58',
+  './js/levels/level7.js?v=58',
+  './js/levels/level8.js?v=58',
+  './js/levels/level9.js?v=58',
+  './js/levels/level10.js?v=58',
+  './js/levels/level11.js?v=58',
+  './js/levels/level12.js?v=58',
+  './js/levels/level13.js?v=58',
+  './js/levels/level14.js?v=58',
+  './js/net/leaderboardClient.js?v=58',
+  './js/net/p2pRoomHost.js?v=58',
+  './js/net/lanClient.js?v=58',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((cache) => cache.addAll(CORE_SHELL))
+      .then((cache) =>
+        Promise.all(
+          CORE_SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' })))
+        )
+      )
       .then(() => self.skipWaiting())
   );
 });
@@ -88,10 +92,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigations: network-first so updates land immediately, offline fallback to cached shell
+  // Navigations: always bypass HTTP CDN/disk cache so HTML + importmap versions stay in lockstep
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
