@@ -466,7 +466,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=92" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=93" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2540,8 +2540,8 @@ async function shareCurrentInviteLink() {
   const lvl = getLevelById(lan.room.levelId);
   try {
     await navigator.share({
-      title: `Cave Diver Co-op · Room ${lan.room.code}`,
-      text: `Join my Cave Diver co-op dive (${lvl.name}) — Room ${lan.room.code}`,
+      title: `Techno Dive Co-op · Room ${lan.room.code}`,
+      text: `Join my Techno Dive co-op dive (${lvl.name}) — Room ${lan.room.code}`,
       url,
     });
   } catch (err) {
@@ -3857,7 +3857,7 @@ function setupPwaSupport() {
     if (btnPwaUpdate && !applyingUpdate) {
       btnPwaUpdate.textContent = detectedRemoteVer ? `⬆ v${detectedRemoteVer}` : '⬆ Update';
       btnPwaUpdate.classList.add('has-update');
-      btnPwaUpdate.title = `Update Cave Diver to ${verLabel}`;
+      btnPwaUpdate.title = `Update Techno Dive to ${verLabel}`;
     }
     if (mode === 'diving' && !announcedDiveToast) {
       announcedDiveToast = true;
@@ -3923,7 +3923,7 @@ function setupPwaSupport() {
       if (remoteVer && remoteVer > localVersion) {
         markUpdateAvailable(remoteVer);
         if (manual) {
-          showToast(`⬆ Cave Diver v${remoteVer} is ready — tap Update Now!`, 3.2);
+          showToast(`⬆ Techno Dive v${remoteVer} is ready — tap Update Now!`, 3.2);
         }
         return;
       }
@@ -3935,7 +3935,7 @@ function setupPwaSupport() {
         return;
       }
       if (manual) {
-        showToast(`✓ Cave Diver v${localVersion} is up to date!`, 2.4);
+        showToast(`✓ Techno Dive v${localVersion} is up to date!`, 2.4);
       }
     } finally {
       if (manual && btnPwaUpdate && !applyingUpdate) {
@@ -4076,7 +4076,7 @@ function setupPwaSupport() {
   window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
     if (btnInstallPwa) btnInstallPwa.hidden = true;
-    showToast('Cave Diver installed to Home Screen!', 3.0);
+    showToast('Techno Dive installed to Home Screen!', 3.0);
   });
 
   btnInstallPwa?.addEventListener('click', async () => {

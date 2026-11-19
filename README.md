@@ -1,6 +1,6 @@
-# Cave Diver — Cenote El Abismo
+# Techno Dive
 
-A mobile-first technical cave diving web game with realistic trimix/nitrox gas physics, decompression physiology, a dive computer HUD, and a WebSocket LAN server ready for 2-player real-time co-op.
+A mobile-first technical cave and shipwreck diving web game with realistic trimix/nitrox gas physics, decompression physiology, a dive computer HUD, and real-time co-op multiplayer across 25 real-world expeditions.
 
 ## Quick Start (Play on PC & Mobile over Wi-Fi)
 

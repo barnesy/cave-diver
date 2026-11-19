@@ -1,7 +1,7 @@
 {
   "name": "cave-diver",
   "version": "0.1.0",
-  "description": "Mobile-first technical cave diving game with realistic gas physics, dive computer HUD, and LAN multiplayer support.",
+  "description": "Techno Dive — mobile-first technical cave and shipwreck diving simulation with realistic gas physics, dive computer HUD, and co-op multiplayer.",
   "type": "module",
   "main": "server.js",
   "scripts": {

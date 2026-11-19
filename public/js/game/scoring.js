@@ -89,9 +89,9 @@ export function assignScoreRank(totalScore, alive = true, maxPossible = 3200) {
   if (!alive) return { grade: 'DNF', label: 'DIVE INCIDENT' };
   const ratio = totalScore / Math.max(1, maxPossible);
   if (ratio >= 0.92) return { grade: 'S+', label: 'MASTER EXPLORER' };
-  if (ratio >= 0.80) return { grade: 'S', label: 'ELITE CAVE DIVER' };
+  if (ratio >= 0.80) return { grade: 'S', label: 'ELITE TECH DIVER' };
   if (ratio >= 0.66) return { grade: 'A', label: 'TECH EXPEDITIONIST' };
-  if (ratio >= 0.50) return { grade: 'B', label: 'CERTIFIED CAVER' };
+  if (ratio >= 0.50) return { grade: 'B', label: 'CERTIFIED TECH DIVER' };
   return { grade: 'C', label: 'SAFE SURVIVOR' };
 }
 

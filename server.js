@@ -1107,7 +1107,7 @@ wsPingSweep.unref?.();
 
 server.listen(PORT, '0.0.0.0', () => {
   const lan = getLanAddresses();
-  console.log('\n🤿  CAVE DIVER — LAN Server Ready');
+  console.log('\n🤿  TECHNO DIVE — LAN Server Ready');
   console.log(`   Local:   http://localhost:${PORT}`);
   for (const item of lan) {
     console.log(`   LAN (${item.interface}): http://${item.address}:${PORT}`);
