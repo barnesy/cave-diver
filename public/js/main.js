@@ -92,6 +92,8 @@ const homeMenuPopover = document.getElementById('home-menu-popover');
 const homeMenuUpdateDot = document.getElementById('home-menu-update-dot');
 const homeMenuLbLabel = document.getElementById('home-menu-lb-label');
 const btnLbBack = document.getElementById('btn-lb-back');
+const menuDescEl = document.getElementById('menu-desc');
+const btnDescToggle = document.getElementById('btn-desc-toggle');
 const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
@@ -463,7 +465,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=88" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=89" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -664,12 +666,42 @@ function retriggerAnim(el, className) {
   el.addEventListener('animationend', cleanup, { once: true });
 }
 
+let menuDescExpanded = false;
+
+function syncMenuDescToggle() {
+  if (!menuDescEl || !btnDescToggle) return;
+  if (menuDescExpanded) {
+    menuDescEl.classList.remove('clamped');
+    btnDescToggle.hidden = false;
+    btnDescToggle.textContent = 'Less ▴';
+    btnDescToggle.setAttribute('aria-expanded', 'true');
+    return;
+  }
+  menuDescEl.classList.add('clamped');
+  const overflows = menuDescEl.clientHeight > 0 && menuDescEl.scrollHeight > menuDescEl.clientHeight + 2;
+  btnDescToggle.hidden = !overflows;
+  btnDescToggle.textContent = 'More ▾';
+  btnDescToggle.setAttribute('aria-expanded', 'false');
+}
+
+btnDescToggle?.addEventListener('click', () => {
+  menuDescExpanded = !menuDescExpanded;
+  syncMenuDescToggle();
+  if (menuDescExpanded) {
+    retriggerAnim(menuDescEl, 'anim-telemetry-swap');
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (!screenMenu.hidden) syncMenuDescToggle();
+});
+
 function syncMenuLevelLabels(level, { animate = false } = {}) {
   const idx = LEVELS.findIndex((l) => l.id === level.id);
   const lvlNum = idx >= 0 ? idx + 1 : 1;
   btnPlaySolo.textContent = `DIVE · LEVEL ${lvlNum}`;
   const menuTitle = screenMenu.querySelector('.menu-title');
-  const menuDesc = screenMenu.querySelector('.menu-desc');
+  const menuDesc = menuDescEl || screenMenu.querySelector('.menu-desc');
   const loaderTitle = screenLoader.querySelector('.loader-title');
   const loaderMetaSpan = screenLoader.querySelector('.loader-meta span');
   if (menuTitle) {
@@ -677,7 +709,9 @@ function syncMenuLevelLabels(level, { animate = false } = {}) {
     if (animate) retriggerAnim(menuTitle, 'anim-telemetry-swap');
   }
   if (menuDesc && level.description) {
+    menuDescExpanded = false;
     menuDesc.textContent = level.description;
+    requestAnimationFrame(syncMenuDescToggle);
     if (animate) retriggerAnim(menuDesc, 'anim-telemetry-swap');
   }
   if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();

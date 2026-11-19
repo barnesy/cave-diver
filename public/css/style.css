@@ -212,11 +212,50 @@ html, body {
   }
 }
 
-.menu-desc {
+.menu-desc-wrap {
   margin: 0 0 12px;
+}
+
+.menu-desc {
+  margin: 0;
   color: var(--text-muted);
   font-size: 0.86rem;
   line-height: 1.42;
+}
+
+.menu-desc.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.menu-desc-toggle {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(14, 165, 233, 0.1);
+  color: #7dd3fc;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+
+.menu-desc-toggle:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(14, 165, 233, 0.2);
+  color: #e0f2fe;
+}
+
+.menu-desc-toggle:active {
+  transform: scale(0.96);
 }
 
 .menu-name-row {
@@ -3369,7 +3408,7 @@ select:focus-visible {
 #screen-menu:not([hidden]) .menu-header {
   animation: sectionRise 0.38s var(--ease-buoyant) 0.04s both;
 }
-#screen-menu:not([hidden]) .menu-desc {
+#screen-menu:not([hidden]) .menu-desc-wrap {
   animation: sectionRise 0.38s var(--ease-buoyant) 0.08s both;
 }
 #screen-menu:not([hidden]) .menu-tabs {
