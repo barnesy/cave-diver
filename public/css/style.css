@@ -112,6 +112,8 @@ html, body {
 }
 
 .menu-header {
+  position: relative;
+  z-index: 60;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3209,7 +3211,7 @@ select:focus-visible {
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
@@ -3220,7 +3222,7 @@ select:focus-visible {
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -3318,7 +3320,7 @@ select:focus-visible {
   flex-direction: column;
   gap: 3px;
   transform-origin: top right;
-  z-index: 45;
+  z-index: 100;
 }
 .home-menu-popover:not([hidden]) {
   animation: popoverDropIn 0.24s var(--ease-spring) both;
