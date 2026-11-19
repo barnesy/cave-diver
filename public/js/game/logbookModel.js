@@ -90,7 +90,7 @@ export function seedLogbookFromEntries(rawBook, entries) {
   return book;
 }
 
-export function formatLogbookSummary(rawBook, totalSites = 20) {
+export function formatLogbookSummary(rawBook, totalSites = 25) {
   const book = normalizeBook(rawBook);
   const clearedCount = Object.keys(book.cleared).length;
   let campaignMedal = 'TRAINEE';

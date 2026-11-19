@@ -98,6 +98,7 @@ const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
 const siteBrowserEl = document.getElementById('site-browser');
+const siteCatTabsEl = document.getElementById('site-cat-tabs');
 const siteViewTabsEl = document.getElementById('site-view-tabs');
 const siteWorldMapEl = document.getElementById('site-world-map');
 const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
@@ -465,7 +466,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=91" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=92" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -479,11 +480,20 @@ function ensureSiteWorldMapBase() {
   siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
 }
 
+let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck'
+
+function getFilteredLevels() {
+  if (siteCategoryFilter === 'wreck') return LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck'));
+  if (siteCategoryFilter === 'cave') return LEVELS.filter((l) => !l.isWreck && l.category !== 'wreck');
+  return LEVELS;
+}
+
 function renderSiteWorldMap({ instantZoom = false } = {}) {
   if (!siteWorldMapEl) return;
   ensureSiteWorldMapBase();
 
   const locked = Boolean(lan.room && !lan.isHost());
+  const visibleLevels = getFilteredLevels();
   const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
   const targetVb =
     mapZoomMode === 'site'
@@ -500,7 +510,8 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
   const isZoomed = mapZoomMode === 'site';
 
   // Pin coordinates (with slight declustering only when in wide global view)
-  const pins = LEVELS.map((lvl, idx) => {
+  const pins = visibleLevels.map((lvl) => {
+    const idx = Math.max(0, LEVELS.findIndex((l) => l.id === lvl.id));
     const slot = SITE_COORDS_BY_ID.get(lvl.id);
     const pt = projectMapPoint(slot?.lng ?? 0, slot?.lat ?? 20);
     if (!isZoomed) {
@@ -528,6 +539,10 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
         pt.x -= 2.0;
         pt.y += 1.4;
       }
+      if (lvl.id === 'uss-oriskany-carrier') {
+        pt.x -= 2.0;
+        pt.y -= 1.6;
+      }
     }
     return { lvl, idx, slot, x: pt.x, y: pt.y };
   });
@@ -538,9 +553,10 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
   const pinMarkup = pins
     .map(({ lvl, idx, slot, x, y }) => {
       const isSelected = lvl.id === activeLevel.id;
+      const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
       const isUnlined = lvl.reelMetersPerDiver > 0;
       const best = getSavedBestScore(lvl.id);
-      const pinColor = isUnlined ? '#fbbf24' : '#38bdf8';
+      const pinColor = isWreck ? '#fb923c' : isUnlined ? '#fbbf24' : '#38bdf8';
       const r = (isSelected ? 5.2 : 3.4) * k;
 
       const halo = isSelected
@@ -611,12 +627,20 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
 function renderLevelCards() {
   if (!levelCardsEl) return;
   const locked = Boolean(lan.room && !lan.isHost());
+  const visibleLevels = getFilteredLevels();
   const pill = document.getElementById('campaign-progress-pill');
   if (pill) {
-    pill.textContent = `${LEVELS.length} / ${CAMPAIGN_PLAN.length} Sites`;
+    pill.textContent =
+      siteCategoryFilter === 'wreck'
+        ? `${visibleLevels.length} Wrecks`
+        : siteCategoryFilter === 'cave'
+          ? `${visibleLevels.length} Caves`
+          : `${LEVELS.length} / ${CAMPAIGN_PLAN.length} Sites`;
   }
-  levelCardsEl.innerHTML = LEVELS.map((lvl, idx) => {
+  levelCardsEl.innerHTML = visibleLevels.map((lvl) => {
+    const idx = Math.max(0, LEVELS.findIndex((l) => l.id === lvl.id));
     const isSelected = lvl.id === activeLevel.id;
+    const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
     const isCached = renderer.isLevelCached(lvl.id) || (renderer.ready && renderer.level?.id === lvl.id);
     const best = getSavedBestScore(lvl.id);
     const meta = getLevelMeta(lvl, idx);
@@ -630,13 +654,16 @@ function renderLevelCards() {
             ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
             : `✓ Ready`
           : lvl.reelMetersPerDiver > 0
-            ? `No Line · ${lvl.reelMetersPerDiver}m`
-            : getLevelDifficultyLabel(idx, lvl);
-    const tierTag = lvl.reelMetersPerDiver > 0 ? `L${idx + 1} · T${meta.tier}` : `L${idx + 1}`;
+            ? `${isWreck ? 'Wreck Reel' : 'No Line'} · ${lvl.reelMetersPerDiver}m`
+            : isWreck
+              ? 'Wreck · Fixed Line'
+              : getLevelDifficultyLabel(idx, lvl);
+    const prefix = isWreck ? '🚢 ' : '';
+    const tierTag = lvl.reelMetersPerDiver > 0 ? `${prefix}L${idx + 1} · T${meta.tier}` : `${prefix}L${idx + 1}`;
     return `
       <button
         type="button"
-        class="level-card-btn ${isSelected ? 'active' : ''}"
+        class="level-card-btn ${isWreck ? 'is-wreck' : ''} ${isSelected ? 'active' : ''}"
         data-level-id="${lvl.id}"
         role="option"
         aria-selected="${isSelected ? 'true' : 'false'}"
@@ -1097,8 +1124,11 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const bottomMixName = getActiveGasName('TMX1455');
-  const openMsg =
-    activeLevel.reelMetersPerDiver > 0
+  const openMsg = activeLevel.isWreck
+    ? activeLevel.reelMetersPerDiver > 0
+      ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
+      : `🚢 Descend the boat shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m before entering the hull.`
+    : activeLevel.reelMetersPerDiver > 0
       ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
       : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
   showToast(openMsg, 4.8);
@@ -2113,6 +2143,28 @@ if (btnMapZoom) {
   btnMapZoom.addEventListener('click', () => {
     mapZoomMode = mapZoomMode === 'site' ? 'global' : 'site';
     renderSiteWorldMap();
+  });
+}
+
+if (siteCatTabsEl) {
+  siteCatTabsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-site-cat]');
+    if (!btn) return;
+    const nextCat = btn.dataset.siteCat === 'wreck' || btn.dataset.siteCat === 'cave' ? btn.dataset.siteCat : 'all';
+    if (nextCat === siteCategoryFilter) return;
+    siteCategoryFilter = nextCat;
+    const catIdx = nextCat === 'cave' ? 1 : nextCat === 'wreck' ? 2 : 0;
+    siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
+    for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
+      b.classList.toggle('active', b === btn);
+    }
+    const visible = getFilteredLevels();
+    if (visible.length > 0 && !visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
+      selectAndLoadLevel(visible[0].id, { focusMap: mapZoomMode === 'site' });
+    } else {
+      renderLevelCards();
+    }
+    retriggerAnim(siteBrowserEl, 'anim-view-morph');
   });
 }
 

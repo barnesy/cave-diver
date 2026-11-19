@@ -955,9 +955,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 20 campaign levels validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 20, 'Campaign roadmap should chart all 20 levels');
-  assert.equal(LEVELS.length, 20, 'All 20 campaign levels should be registered');
+test('All 25 campaign levels (20 caves + 5 shipwrecks) validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 25, 'Campaign roadmap should chart all 25 levels');
+  assert.equal(LEVELS.length, 25, 'All 25 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -1987,4 +1987,51 @@ test('Realistic breathing patterns follow inhale/hold/exhale/rest cadence and in
     stepPeerBubbles(peerBubbles, [peer], 0.05);
   }
   assert.ok(peerBubbles.length > 5, `Expected remote peer breathing bubbles, got ${peerBubbles.length}`);
+});
+
+test('5 technical shipwreck expeditions validate cleanly, support drift currents & snag zones, and have safe hypoxic gas mixes', () => {
+  const wreckIds = [
+    'uss-oriskany-carrier',
+    'ss-andrea-doria',
+    'hmhs-britannic',
+    'hms-victoria-battleship',
+    'ss-edmund-fitzgerald',
+  ];
+  const wrecks = wreckIds.map((id) => getLevelById(id));
+  assert.equal(wrecks.filter((w) => w.isWreck && w.category === 'wreck').length, 5);
+
+  for (const w of wrecks) {
+    const check = validateLevel(w, { checkGeometry: true });
+    assert.equal(check.valid, true, `Wreck ${w.id} geometry check failed: ${check.errors.join('; ')}`);
+    assert.ok(w.collectibles.length >= 6, `Wreck ${w.id} should have >=6 collectibles`);
+    // Open water around dive boat spawn must be unobstructed
+    assert.ok(evaluateCaveSDF(w, w.spawn.x, w.spawn.y) < -1.0, `Wreck ${w.id} spawn should be open ocean`);
+    // Check bottom mix survives max depth safely (PPO2 <= 1.35)
+    const s = createDiveSession(w).diveState;
+    switchGas(s, 'TMX1455');
+    const maxD = Math.max(...w.checkpoints.map((c) => c.y));
+    const ppo2 = computePPO2(maxD, s.mixes.TMX1455);
+    assert.ok(ppo2 >= 0.25 && ppo2 <= 1.38, `Wreck ${w.id} TMX PPO2 at ${maxD}m out of range: ${ppo2}`);
+  }
+
+  // Verify SS Andrea Doria drift current pushes diver in open water & fishing net snag spikes HR/panic
+  const doria = getLevelById('ss-andrea-doria');
+  const sess = createDiveSession(doria);
+  sess.diver.x = 12;
+  sess.diver.y = 20; // inside surface drift current (10m-32m, vx = +0.95)
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.25);
+  assert.ok(sess.diver.vx > 0.05, `Expected positive Atlantic drift velocity, got ${sess.diver.vx}`);
+
+  // Move directly into fishing net snag zone & verify drag + panic/HR elevation
+  const snag = doria.snagZones[0];
+  sess.diver.x = snag.x;
+  sess.diver.y = snag.y;
+  sess.diver.vx = 2.0;
+  const hrBefore = sess.diveState.heartRateBpm;
+  let snagToast = '';
+  for (let i = 0; i < 6; i++) {
+    stepDiveSession(sess, { x: 0, y: 0 }, 0.1, { onToast: (m) => { if (m.includes('🕸️')) snagToast = m; } });
+  }
+  assert.ok(sess.diveState.heartRateBpm > hrBefore + 2, `Expected snag to spike HR (${sess.diveState.heartRateBpm} > ${hrBefore})`);
+  assert.ok(snagToast.includes('🕸️'), `Expected snag warning toast, got "${snagToast}"`);
 });

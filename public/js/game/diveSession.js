@@ -103,6 +103,7 @@ export function createDiveSession(
     siltStirTimer: { accum: 0, warnCooldown: 0 },
     hrWarnCooldown: 0,
     restrictWarnCooldown: 0,
+    snagWarnCooldown: 0,
     thirdWarned: false,
     stuckDuration: 0,
     reelMaxMeters: level.reelMetersPerDiver || 0,
@@ -597,6 +598,52 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         diver.vy -= lift * dt;
         diver.vx += Math.sin(session.simTimeSec * 2.2 + v + diver.y * 0.3) * 0.24 * horizFalloff * dt;
       }
+    }
+  }
+
+  // Layered open-ocean drift currents on shipwreck dives (sheltered when tucked inside steel hull)
+  if (Array.isArray(level.driftCurrents) && clearanceM > 1.75) {
+    const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
+    for (let c = 0; c < level.driftCurrents.length; c++) {
+      const cur = level.driftCurrents[c];
+      if (diver.y >= cur.yMin && diver.y <= cur.yMax) {
+        const pulse = 0.82 + 0.18 * Math.sin(session.simTimeSec * 0.65 + c * 1.9);
+        diver.vx += (cur.vx || 0) * shelter * pulse * dt;
+        diver.vy += (cur.vy || 0) * shelter * pulse * dt;
+      }
+    }
+  }
+
+  // Shipwreck fishing-net & dangling cable entanglement hazards (drag + HR/panic spike)
+  if (session.snagWarnCooldown > 0) session.snagWarnCooldown -= dt;
+  if (Array.isArray(level.snagZones)) {
+    for (let s = 0; s < level.snagZones.length; s++) {
+      const snag = level.snagZones[s];
+      const sr = snag.radius || 2.4;
+      const dist = Math.hypot(diver.x - snag.x, diver.y - snag.y);
+      if (dist <= sr) {
+        const grip = 1 - dist / sr;
+        const drag = Math.exp(-(2.4 + grip * 2.2) * dt);
+        diver.vx *= drag;
+        diver.vy *= drag;
+        diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * (0.22 + grip * 0.25));
+        diveState.heartRateBpm = Math.min(192, (diveState.heartRateBpm || 68) + dt * (11 + grip * 12));
+        if (session.snagWarnCooldown <= 0) {
+          session.snagWarnCooldown = 5.5;
+          callbacks.onToast?.(`🕸️ ${snag.label || 'Fishing net snag'} — stay calm & pull clear!`, 2.8);
+        }
+        break;
+      }
+    }
+  }
+
+  // Soft open-ocean lateral boundary nudge on shipwrecks so divers stay near the boat & wreck site
+  if (level.isWreck && level.bounds) {
+    const padX = 5.5;
+    if (diver.x < level.bounds.xMin + padX) {
+      diver.vx += (level.bounds.xMin + padX - diver.x) * 2.4 * dt;
+    } else if (diver.x > level.bounds.xMax - padX) {
+      diver.vx -= (diver.x - (level.bounds.xMax - padX)) * 2.4 * dt;
     }
   }
 

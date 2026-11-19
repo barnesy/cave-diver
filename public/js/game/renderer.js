@@ -620,6 +620,23 @@ export class CaveRenderer {
   }
 
   _getHorizonGroundY(level, wx) {
+    if (level?.isWreck) {
+      if (typeof level.hullTopY === 'function') {
+        return level.hullTopY(wx);
+      }
+      const deckY = level.wreckDeckY ?? 40;
+      const seabedY = level.wreckSeabedY ?? (level.bounds?.yMax ?? 70) - 4;
+      const hMin = level.wreckHullXMin ?? -20;
+      const hMax = level.wreckHullXMax ?? 20;
+      const slopeW = 8;
+      if (wx >= hMin && wx <= hMax) {
+        return deckY + Math.sin(wx * 0.22) * 0.25;
+      }
+      const dist = wx < hMin ? hMin - wx : wx - hMax;
+      const t = Math.min(1, dist / slopeW);
+      const ease = t * t * (3 - 2 * t);
+      return deckY + (seabedY - deckY) * ease + Math.sin(wx * 0.14) * 0.35 * ease;
+    }
     const base = (level.bounds?.yMin ?? -6) + 0.72;
     return base + Math.sin(wx * 0.17 + 0.6) * 0.42 + Math.cos(wx * 0.43 - 0.4) * 0.22;
   }
@@ -1030,7 +1047,10 @@ export class CaveRenderer {
 
     ctx.putImageData(img, 0, 0);
 
-    // Paint theme-tinted bitmap-textured speleothems & layered boulders (using local chunk SDF normals)
+    // Paint theme-tinted bitmap-textured speleothems & layered boulders (skip cave stalactites on steel shipwrecks)
+    if (level.isWreck) {
+      return { x0: cx0, x1: cx1, y0: cy0, y1: cy1, canvas: c };
+    }
     const pat = this._getTintedRockPattern(ctx, level, rockTexOverride);
     const toCacheX = (wx) => (wx - cx0) * ppm;
     const toCacheY = (wy) => (wy - cy0) * ppm;
@@ -1408,6 +1428,11 @@ export class CaveRenderer {
       }
     }
 
+    // 4b. Shipwreck Open-Water Shot Line, 6m O2 Deco Bar, Drift Currents & Architectural Props
+    if (this.level.isWreck) {
+      this._drawWreckBackdropDetails(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
+    }
+
     // 5. Guideline (Fixed gold cave line + player-deployed reel lines & directional pins)
     this._drawGuideline(ctx, toScreenX, toScreenY, scale, playerLines);
 
@@ -1428,6 +1453,11 @@ export class CaveRenderer {
     // 8a. Top-Level Surface Environment: Full-width jungle/cypress ridge, cenote rims, stairways & docks
     if (visY0 < 4.5) {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
+    }
+
+    // 8a-ii. Shipwreck Foreground Steel Beams, Porthole Rims & Fishing-Net Snag Zones
+    if (this.level.isWreck) {
+      this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
     }
 
     // 8b. Authentic Cenote & Cave Flora, Calcite Formations, Fishes, Slider Turtles & Remipedes
@@ -1660,6 +1690,19 @@ export class CaveRenderer {
 
   _drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec) {
     ctx.save();
+    if (this.level.isWreck) {
+      // Continuous open-ocean / Great Lakes surface swells across the entire viewport
+      const stepPx = Math.max(12, Math.round(cw / 42));
+      const pts = [];
+      for (let sx = -stepPx; sx <= cw + stepPx; sx += stepPx) {
+        const wx = this.camX + (sx - cw * 0.5) / scale;
+        const wy = Math.sin(wx * 0.65 + timeSec * 2.1) * 0.14 + Math.cos(wx * 1.45 - timeSec * 1.55) * 0.065;
+        pts.push([sx, toScreenY(wy), wx]);
+      }
+      this._strokeWaterMeniscus(ctx, pts, scale, false, timeSec);
+      ctx.restore();
+      return;
+    }
     const isFlorida = this.level.theme?.id === 'florida-karst';
     for (let b = 0; b < this.level.openBasins.length; b++) {
       const basin = this.level.openBasins[b];
@@ -2930,8 +2973,408 @@ export class CaveRenderer {
     this._fillFoliageCluster(ctx, topX + 1.15 * scale, topY + 0.1 * scale, 1.3 * scale, 0.34 * scale, 0.05, scale, 'cypress', 1);
   }
 
+  _drawWreckSurfaceBoat(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
+    const boatX = this.level.spawn?.x ?? 0;
+    if (boatX + 14 < visX0 || boatX - 14 > visX1) return;
+    const bobY = Math.sin(timeSec * 1.7) * 0.14;
+    const pitch = Math.sin(timeSec * 1.35 + 0.6) * 0.025;
+    const bx = toScreenX(boatX);
+    const by = toScreenY(bobY);
+
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(pitch);
+
+    // Soft dark hull reflection in water beneath the charter vessel
+    ctx.fillStyle = 'rgba(2, 12, 26, 0.42)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0.55 * scale, 5.4 * scale, 0.55 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main dive boat hull (deep-water fiberglass charter boat, ~10m long)
+    ctx.fillStyle = '#0f2942';
+    ctx.beginPath();
+    ctx.moveTo(-4.8 * scale, 0.35 * scale);
+    ctx.lineTo(4.6 * scale, 0.35 * scale);
+    ctx.lineTo(5.6 * scale, -0.75 * scale);
+    ctx.lineTo(-4.9 * scale, -0.65 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    // White upper freeboard & cyan sheer stripe
+    ctx.fillStyle = '#f1f5f9';
+    ctx.beginPath();
+    ctx.moveTo(-4.9 * scale, -0.1 * scale);
+    ctx.lineTo(5.15 * scale, -0.1 * scale);
+    ctx.lineTo(5.65 * scale, -0.95 * scale);
+    ctx.lineTo(-4.95 * scale, -0.82 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(-4.85 * scale, -0.42 * scale, 10.1 * scale, 0.18 * scale);
+
+    // Wheelhouse cabin & warm lit bridge windows
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(-1.3 * scale, -2.25 * scale, 4.1 * scale, 1.42 * scale);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-0.9 * scale, -2.0 * scale, 3.25 * scale, 0.68 * scale);
+    ctx.fillStyle = 'rgba(253, 224, 71, 0.42)';
+    ctx.fillRect(0.6 * scale, -1.94 * scale, 1.55 * scale, 0.56 * scale);
+
+    // Cabin roof, radar mast & beacon light
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-1.55 * scale, -2.38 * scale, 4.55 * scale, 0.16 * scale);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+    ctx.beginPath();
+    ctx.moveTo(0.8 * scale, -2.38 * scale);
+    ctx.lineTo(0.45 * scale, -3.75 * scale);
+    ctx.stroke();
+
+    // Fluttering red-and-white Diver Down flag on stern staff
+    const flagWave = Math.sin(timeSec * 5.2) * 0.12 * scale;
+    const fx = -3.8 * scale;
+    const fy = -2.45 * scale;
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(fx, -0.82 * scale);
+    ctx.lineTo(fx, fy - 0.1 * scale);
+    ctx.stroke();
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(fx - 1.1 * scale, fy + 0.08 * scale + flagWave);
+    ctx.lineTo(fx - 1.1 * scale, fy + 0.72 * scale + flagWave);
+    ctx.lineTo(fx, fy + 0.68 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.6, 0.11 * scale);
+    ctx.beginPath();
+    ctx.moveTo(fx - 0.05 * scale, fy + 0.05 * scale);
+    ctx.lineTo(fx - 1.05 * scale, fy + 0.66 * scale + flagWave);
+    ctx.stroke();
+
+    // Stern dive platform & boarding ladder descending into open water
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-5.45 * scale, -0.12 * scale, 0.7 * scale, 0.22 * scale);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = Math.max(1.5, 0.075 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-5.15 * scale, 0.08 * scale);
+    ctx.lineTo(-5.35 * scale, 1.85 * scale);
+    ctx.moveTo(-4.75 * scale, 0.08 * scale);
+    ctx.lineTo(-4.95 * scale, 1.85 * scale);
+    for (let r = 0; r < 4; r++) {
+      const ry = (0.42 + r * 0.38) * scale;
+      ctx.moveTo(-5.2 * scale, ry);
+      ctx.lineTo(-4.8 * scale, ry);
+    }
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  _drawWreckBackdropDetails(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const level = this.level;
+    ctx.save();
+
+    // 1. Layered Ocean Drift Current flow filaments
+    if (Array.isArray(level.driftCurrents)) {
+      ctx.lineCap = 'round';
+      for (let c = 0; c < level.driftCurrents.length; c++) {
+        const cur = level.driftCurrents[c];
+        if (cur.yMax < visY0 || cur.yMin > visY1) continue;
+        const dir = (cur.vx || 0) >= 0 ? 1 : -1;
+        const spd = Math.max(0.4, Math.abs(cur.vx || 0.8));
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.22)';
+        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        ctx.beginPath();
+        for (let k = 0; k < 14; k++) {
+          const frac = (k + 0.5) / 14;
+          const wy = cur.yMin + (cur.yMax - cur.yMin) * frac;
+          if (wy < visY0 - 1 || wy > visY1 + 1) continue;
+          const span = Math.max(24, visX1 - visX0 + 14);
+          const rawX = ((timeSec * spd * 3.2 * dir + k * 9.7) % span + span) % span;
+          const wx = visX0 - 7 + rawX;
+          const sx = toScreenX(wx);
+          const sy = toScreenY(wy);
+          const len = (1.6 + (k % 3) * 0.7) * scale * dir;
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + len, sy + Math.sin(timeSec * 1.4 + k) * 0.14 * scale);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 2. Weighted Anchor / Shot Line from Dive Boat to Wreck Deck + 6m O2 Deco Trapeze Bar
+    const shotX = level.shotLine?.x ?? level.spawn?.x ?? 0;
+    const shotY0 = 0.35;
+    const shotY1 = level.shotLine?.bottomY ?? level.wreckDeckY ?? 40;
+    if (shotX + 8 >= visX0 && shotX - 8 <= visX1 && shotY1 >= visY0 && shotY0 <= visY1) {
+      const sway = (y) => Math.sin(y * 0.11 + timeSec * 1.1) * 0.28 * Math.sin(Math.min(1, y / Math.max(1, shotY1)) * Math.PI);
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.78)';
+      ctx.lineWidth = Math.max(1.6, 0.075 * scale);
+      ctx.beginPath();
+      const segs = Math.max(8, Math.ceil((shotY1 - shotY0) / 3));
+      for (let i = 0; i <= segs; i++) {
+        const wy = shotY0 + ((shotY1 - shotY0) * i) / segs;
+        const sx = toScreenX(shotX + sway(wy));
+        const sy = toScreenY(wy);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+
+      // 6m O2 Deco Trapeze Bar suspended beneath the dive boat
+      const barY = 5.4;
+      if (barY >= visY0 - 4 && barY <= visY1 + 4) {
+        const bx = toScreenX(shotX + sway(barY));
+        const by = toScreenY(barY);
+        // Twin support ropes from boat
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
+        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.moveTo(bx - 1.9 * scale, toScreenY(0.3));
+        ctx.lineTo(bx - 1.9 * scale, by);
+        ctx.moveTo(bx + 1.9 * scale, toScreenY(0.3));
+        ctx.lineTo(bx + 1.9 * scale, by);
+        ctx.stroke();
+
+        // Trapeze steel bar
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = Math.max(3, 0.16 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(bx - 2.2 * scale, by);
+        ctx.lineTo(bx + 2.2 * scale, by);
+        ctx.stroke();
+
+        // Hanging spare green O2 stage cylinders on trapeze bar
+        for (const ox of [-1.25, 1.25]) {
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(bx + (ox - 0.15) * scale, by + 0.12 * scale, 0.3 * scale, 0.92 * scale);
+          ctx.fillStyle = '#ecfdf5';
+          ctx.fillRect(bx + (ox - 0.15) * scale, by + 0.25 * scale, 0.3 * scale, 0.16 * scale);
+        }
+        ctx.font = `700 ${Math.max(10, Math.round(scale * 0.36))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(167, 243, 208, 0.92)';
+        ctx.fillText('6m O₂ DECO BAR', bx, by - 0.34 * scale);
+      }
+
+      // 22m Trimix Switch Marker Buoy clipped to shot line
+      const tmxY = Math.min(shotY1 - 2, level.ascentSwitchDepthM || 22);
+      if (tmxY >= visY0 - 3 && tmxY <= visY1 + 3) {
+        const mx = toScreenX(shotX + sway(tmxY));
+        const my = toScreenY(tmxY);
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(mx, my, 0.32 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+    }
+
+    // 3. Shipwreck Architectural Landmarks & Glowing Porthole Light Cones
+    if (Array.isArray(level.wreckProps)) {
+      for (let i = 0; i < level.wreckProps.length; i++) {
+        const prop = level.wreckProps[i];
+        const margin = (prop.scale || 1) * 10;
+        if (prop.x + margin < visX0 || prop.x - margin > visX1 || prop.y + margin < visY0 || prop.y - margin > visY1) continue;
+        const sx = toScreenX(prop.x);
+        const sy = toScreenY(prop.y);
+        const ps = (prop.scale || 1) * scale;
+
+        if (prop.kind === 'porthole') {
+          // Volumetric blue ocean light shaft spilling through riveted brass porthole
+          const ang = prop.angle ?? 0.65;
+          const beamLen = (prop.beamLen || 5.8) * scale;
+          const grad = ctx.createLinearGradient(sx, sy, sx + Math.cos(ang) * beamLen, sy + Math.sin(ang) * beamLen);
+          grad.addColorStop(0, 'rgba(125, 211, 252, 0.34)');
+          grad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.moveTo(sx - Math.sin(ang) * 0.32 * scale, sy + Math.cos(ang) * 0.32 * scale);
+          ctx.lineTo(sx + Math.sin(ang) * 0.32 * scale, sy - Math.cos(ang) * 0.32 * scale);
+          ctx.lineTo(sx + Math.cos(ang) * beamLen + Math.sin(ang) * 1.45 * scale, sy + Math.sin(ang) * beamLen - Math.cos(ang) * 1.45 * scale);
+          ctx.lineTo(sx + Math.cos(ang) * beamLen - Math.sin(ang) * 1.45 * scale, sy + Math.sin(ang) * beamLen + Math.cos(ang) * 1.45 * scale);
+          ctx.closePath();
+          ctx.fill();
+        } else if (prop.kind === 'propeller') {
+          // Massive weathered bronze 3-blade ocean-liner / battleship propeller
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          for (let b = 0; b < 3; b++) {
+            ctx.save();
+            ctx.rotate((b * Math.PI * 2) / 3);
+            ctx.fillStyle = '#8b6f47';
+            ctx.strokeStyle = '#4a3721';
+            ctx.lineWidth = Math.max(1.2, 0.08 * scale);
+            ctx.beginPath();
+            ctx.ellipse(0, -1.55 * ps, 0.62 * ps, 1.48 * ps, 0.16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
+          ctx.fillStyle = '#b08d57';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.55 * ps, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (prop.kind === 'funnel') {
+          // Fallen iconic ocean-liner funnel / smokestack
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0.35);
+          ctx.fillStyle = '#5c3c28';
+          ctx.fillRect(-1.8 * ps, -4.2 * ps, 3.6 * ps, 8.4 * ps);
+          ctx.fillStyle = '#9a5b32';
+          ctx.fillRect(-1.8 * ps, -2.5 * ps, 3.6 * ps, 1.5 * ps);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-1.8 * ps, -4.2 * ps, 3.6 * ps, 1.1 * ps);
+          ctx.restore();
+        } else if (prop.kind === 'island') {
+          // Aircraft carrier bridge island & radar mast rising above flight deck (USS Oriskany)
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = '#364152';
+          ctx.fillRect(-3.6 * ps, -9.5 * ps, 7.2 * ps, 10.5 * ps);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(-2.4 * ps, -13.5 * ps, 4.8 * ps, 4.2 * ps);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(1.5, 0.12 * ps);
+          ctx.beginPath();
+          ctx.moveTo(0, -13.5 * ps);
+          ctx.lineTo(0, -19.5 * ps);
+          ctx.moveTo(-2.6 * ps, -16.8 * ps);
+          ctx.lineTo(2.6 * ps, -16.8 * ps);
+          ctx.stroke();
+          // Bridge windows
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.fillRect(-2.9 * ps, -8.2 * ps, 5.8 * ps, 1.2 * ps);
+          ctx.restore();
+        } else if (prop.kind === 'turret') {
+          // Battleship armored 110-ton twin-barrel gun turret (HMS Victoria)
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(0.6 * ps, -0.58 * ps, 6.2 * ps, 0.42 * ps);
+          ctx.fillRect(0.6 * ps, 0.16 * ps, 6.2 * ps, 0.42 * ps);
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.arc(0, 0, 2.2 * ps, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(1.5, 0.1 * ps);
+          ctx.stroke();
+          ctx.restore();
+        } else if (prop.kind === 'pilothouse') {
+          // Great Lakes freighter pilot house & memorial bronze bell (SS Edmund Fitzgerald)
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = '#3b4a5e';
+          ctx.fillRect(-3.8 * ps, -4.4 * ps, 7.6 * ps, 4.8 * ps);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-3.1 * ps, -3.5 * ps, 6.2 * ps, 1.4 * ps);
+          // Golden replica memorial bell on pilot house roof
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(0, -5.0 * ps, 0.65 * ps, Math.PI, 0);
+          ctx.lineTo(0.85 * ps, -4.4 * ps);
+          ctx.lineTo(-0.85 * ps, -4.4 * ps);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawWreckForegroundHazards(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const level = this.level;
+    ctx.save();
+
+    // Riveted steel beams & brass porthole rims
+    if (Array.isArray(level.wreckProps)) {
+      for (let i = 0; i < level.wreckProps.length; i++) {
+        const prop = level.wreckProps[i];
+        if (prop.x + 8 < visX0 || prop.x - 8 > visX1 || prop.y + 8 < visY0 || prop.y - 8 > visY1) continue;
+        const sx = toScreenX(prop.x);
+        const sy = toScreenY(prop.y);
+        if (prop.kind === 'porthole') {
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.55)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 0.36 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#b47b3a';
+          ctx.lineWidth = Math.max(2, 0.12 * scale);
+          ctx.stroke();
+        } else if (prop.kind === 'beam') {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          const len = (prop.len || 4.2) * scale;
+          ctx.fillStyle = '#4a3525';
+          ctx.fillRect(-len * 0.5, -0.18 * scale, len, 0.36 * scale);
+          ctx.strokeStyle = '#7c4a26';
+          ctx.lineWidth = Math.max(1, 0.05 * scale);
+          ctx.strokeRect(-len * 0.5, -0.18 * scale, len, 0.36 * scale);
+          ctx.restore();
+        }
+      }
+    }
+
+    // Swaying translucent fishing-net & cable entanglement zones
+    if (Array.isArray(level.snagZones)) {
+      for (let s = 0; s < level.snagZones.length; s++) {
+        const snag = level.snagZones[s];
+        const r = snag.radius || 2.4;
+        if (snag.x + r + 2 < visX0 || snag.x - r - 2 > visX1 || snag.y + r + 2 < visY0 || snag.y - r - 2 > visY1) continue;
+        const sx = toScreenX(snag.x);
+        const sy = toScreenY(snag.y);
+        const sr = r * scale;
+        const sway = Math.sin(timeSec * 1.45 + s * 2.1) * 0.22 * scale;
+
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.36)';
+        ctx.lineWidth = Math.max(1, 0.04 * scale);
+        ctx.beginPath();
+        for (let k = -3; k <= 3; k++) {
+          const ox = (k / 3.2) * sr;
+          ctx.moveTo(sx + ox, sy - sr * 0.85);
+          ctx.quadraticCurveTo(sx + ox + sway, sy, sx + ox * 0.85 + sway * 1.4, sy + sr * 0.85);
+          ctx.moveTo(sx - sr * 0.85, sy + ox);
+          ctx.quadraticCurveTo(sx + sway * 0.5, sy + ox + sway * 0.4, sx + sr * 0.85 + sway * 0.8, sy + ox);
+        }
+        ctx.stroke();
+
+        // Subtle warning perimeter shimmer
+        ctx.strokeStyle = 'rgba(251, 146, 60, 0.25)';
+        ctx.setLineDash([4, 5]);
+        ctx.beginPath();
+        ctx.arc(sx + sway * 0.35, sy, sr * 0.92, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    ctx.restore();
+  }
+
   _drawSurfaceTopEnvironment(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
     const surfaceStyle = this.level.theme?.surfaceStyle;
+    if (surfaceStyle === 'open-ocean-wreck') {
+      this._drawWreckSurfaceBoat(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec);
+      return;
+    }
     if (surfaceStyle === 'florida-cypress') {
       this._drawFloridaSurfaceEnvironment(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec);
       return;

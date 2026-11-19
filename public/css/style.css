@@ -533,6 +533,75 @@ html, body {
 .legend-dot.reel {
   background: #fbbf24;
 }
+.legend-dot.wreck {
+  background: #fb923c;
+}
+.site-picker-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.site-cat-tabs {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  --cat-index: 0;
+}
+.site-cat-tabs::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 8px) / 3);
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.34), rgba(14, 165, 233, 0.28));
+  border: 1px solid rgba(251, 146, 60, 0.45);
+  transform: translateX(calc(var(--cat-index, 0) * (100% + 2px)));
+  transition: transform 0.3s var(--ease-spring);
+  pointer-events: none;
+  z-index: 0;
+}
+.site-cat-btn {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.18s ease;
+}
+.site-cat-btn:hover {
+  color: #e0f2fe;
+}
+.site-cat-btn.active {
+  color: #fff7ed;
+}
+.level-card-btn.is-wreck {
+  border-color: rgba(251, 146, 60, 0.32);
+}
+.level-card-btn.is-wreck .lvl-card-top {
+  color: #fdba74;
+}
+.level-card-btn.is-wreck.active {
+  border-color: #fb923c;
+  background: rgba(249, 115, 22, 0.2);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.22), 0 0 0 1px rgba(251, 146, 60, 0.38);
+}
+.level-card-btn.is-wreck.active::before {
+  background: linear-gradient(180deg, #fed7aa, #fb923c, #ea580c);
+}
 .map-pin-btn {
   cursor: pointer;
   outline: none;

@@ -18,34 +18,44 @@ import { LEVEL_17 } from './level17.js';
 import { LEVEL_18 } from './level18.js';
 import { LEVEL_19 } from './level19.js';
 import { LEVEL_20 } from './level20.js';
+import { WRECK_ORISKANY } from './wreck1_oriskany.js';
+import { WRECK_ANDREA_DORIA } from './wreck2_andrea_doria.js';
+import { WRECK_BRITANNIC } from './wreck3_britannic.js';
+import { WRECK_HMS_VICTORIA } from './wreck4_hms_victoria.js';
+import { WRECK_EDMUND_FITZGERALD } from './wreck5_edmund_fitzgerald.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
 
 export { CAMPAIGN_PLAN, CAMPAIGN_TIERS };
 
 /**
- * Registry of all playable cave dive levels, ordered by increasing campaign difficulty.
- * All 20 campaign sites (L1-L20 matching CAMPAIGN_PLAN) are registered here.
+ * Registry of all playable cave & shipwreck dive levels, ordered by increasing campaign difficulty.
+ * All 25 campaign sites (20 Caves + 5 Technical Shipwrecks matching CAMPAIGN_PLAN) are registered here.
  */
 export const LEVELS = [
   LEVEL_1,
   LEVEL_2,
+  WRECK_ORISKANY,
   LEVEL_3,
   LEVEL_4,
   LEVEL_5,
   LEVEL_6,
   LEVEL_7,
+  WRECK_ANDREA_DORIA,
   LEVEL_8,
   LEVEL_9,
   LEVEL_10,
   LEVEL_11,
   LEVEL_12,
   LEVEL_13,
+  WRECK_BRITANNIC,
   LEVEL_14,
   LEVEL_15,
   LEVEL_16,
+  WRECK_HMS_VICTORIA,
   LEVEL_17,
   LEVEL_18,
+  WRECK_EDMUND_FITZGERALD,
   LEVEL_19,
   LEVEL_20,
 ];
@@ -103,6 +113,7 @@ export function getLevelMeta(levelOrId, fallbackIndex = 0) {
     rank,
     tier,
     badge,
+    category: lvl?.category || plan?.category || (lvl?.isWreck ? 'wreck' : 'cave'),
     region: plan?.region || '',
     maxDepthM,
     lined: reelM <= 0 && (lvl?.guideline?.length ?? 0) > 0,
