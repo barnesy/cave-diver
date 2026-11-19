@@ -17,6 +17,112 @@ const BACK_PX_PER_M = 12;
 const CHUNK_W_M = 24;
 const TEX_SIZE = 512;
 const MAX_CACHED_LEVELS = 5;
+const BAKE_FRAME_BUDGET_MS = 12;
+
+const _nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
+const NO_HANGING_ROOTS_THEMES = new Set([
+  'aurora-glacial',
+  'strytan-hydrothermal',
+  'kverkfjoll-glacier',
+  'grjotagja-lava',
+  'atlantida-volcanic',
+  'boybulok-alpine',
+  'dahab-red-sea',
+  'kalahari-dolomite',
+  'nordic-marble',
+  'ural-gypsum-karst',
+]);
+
+const STAIN_MAP = {
+  'tannin-chert': [22, 10, -20, 0.96, 18, 0.86, 6, 0.78, 0],
+  'glacial-marble': [-18, 20, 28, 0.72, 0, 0.92, 8, 1.05, 14],
+  'provence-ivory': [6, 22, -12, 0.88, 10, 0.9, 4, 0.72, 0],
+  'kalahari-ironstone': [28, 10, -18, 1.08, 22, 0.82, 4, 0.56, 0],
+  'ural-gypsum': [-10, 18, 24, 0.84, 18, 0.94, 16, 1.04, 22],
+  'abaco-aragonite': [-14, 26, 18, 0.82, 0, 0.96, 8, 0.86, 4],
+  'buda-thermal-marl': [16, 14, -14, 0.88, 12, 0.92, 6, 0.72, 0],
+  'sinai-coral-sandstone': [24, 8, -18, 1.02, 18, 0.86, 8, 0.62, 0],
+  'quercy-chalk': [-8, 16, 12, 0.84, 4, 0.9, 6, 0.88, 6],
+  'lazio-travertine': [18, 14, -12, 0.9, 8, 0.92, 6, 0.74, 0],
+  'moravia-carbonic': [-16, 8, 10, 0.78, 0, 0.84, 6, 0.86, 10],
+  'oxbelha-dusk': [-18, 22, -8, 0.82, 0, 0.9, 4, 0.82, 6],
+  'katla-basalt': [-18, 12, 26, 0.54, 4, 0.62, 10, 0.76, 22],
+  'strytan-smectite': [-14, 18, 28, 0.62, 6, 0.74, 12, 0.84, 20],
+  'kverkfjoll-ice': [-10, 24, 42, 0.68, 10, 0.88, 22, 1.06, 36],
+  'grjotagja-obsidian': [10, -6, 18, 0.52, 8, 0.48, 2, 0.64, 14],
+  'atlantida-basalt': [-10, 14, 24, 0.58, 6, 0.66, 10, 0.8, 18],
+  'lagoa-cerrado': [-22, 30, -4, 0.84, 0, 0.94, 4, 0.82, 4],
+  'boybulok-steppe': [14, 10, -10, 0.86, 10, 0.84, 4, 0.74, 0],
+};
+
+const SKY_PALETTES = {
+  'florida-cypress': ['#8aa6bd', '#dfd3bc', '#e6c999', 'rgba(253, 224, 158, 0.20)', 'rgba(252, 244, 224, 0.14)', 'rgba(48, 52, 58, 0.48)'],
+  'nordic-fjord': ['#5c82a3', '#b8cede', '#d8e6ee', 'rgba(224, 242, 254, 0.22)', 'rgba(226, 240, 248, 0.17)', 'rgba(34, 48, 62, 0.46)'],
+  'provence-gorge': ['#688bb5', '#dfd0c2', '#f4d9b5', 'rgba(254, 215, 170, 0.22)', 'rgba(254, 244, 232, 0.14)', 'rgba(56, 48, 42, 0.44)'],
+  'kalahari-crater': ['#2e5b9e', '#d6975c', '#f5cb86', 'rgba(253, 224, 71, 0.25)', 'rgba(254, 235, 200, 0.14)', 'rgba(54, 38, 28, 0.50)'],
+  'ural-birch': ['#4f7da8', '#bfd5e6', '#eef4f8', 'rgba(248, 250, 252, 0.28)', 'rgba(241, 245, 249, 0.20)', 'rgba(38, 52, 68, 0.46)'],
+  'bahamas-abaco': ['#0284c7', '#67e8f9', '#fef08a', 'rgba(254, 240, 138, 0.24)', 'rgba(224, 242, 254, 0.16)', 'rgba(15, 38, 48, 0.44)'],
+  'budapest-bathhouse': ['#507294', '#c5d4df', '#efe2c7', 'rgba(254, 243, 199, 0.24)', 'rgba(255, 247, 232, 0.22)', 'rgba(42, 46, 54, 0.44)'],
+  'sinai-coast': ['#0369a1', '#38bdf8', '#fde68a', 'rgba(254, 215, 170, 0.28)', 'rgba(254, 243, 214, 0.14)', 'rgba(54, 38, 28, 0.46)'],
+  'quercy-ressel': ['#52799e', '#c8dce6', '#ece7da', 'rgba(254, 243, 199, 0.20)', 'rgba(236, 248, 250, 0.18)', 'rgba(44, 52, 60, 0.44)'],
+  'lazio-travertine': ['#3b75b2', '#9bc5e8', '#f5e4c3', 'rgba(253, 230, 138, 0.24)', 'rgba(254, 249, 235, 0.14)', 'rgba(54, 48, 42, 0.42)'],
+  'moravia-rift': ['#475569', '#94a3b8', '#cbd5e1', 'rgba(226, 232, 240, 0.20)', 'rgba(203, 213, 225, 0.26)', 'rgba(30, 41, 59, 0.48)'],
+  'oxbelha-twilight': ['#172554', '#475569', '#f59e0b', 'rgba(251, 191, 36, 0.22)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.56)'],
+  'aurora-basalt': ['#030816', '#0f2847', '#2dd4bf', 'rgba(45, 212, 191, 0.26)', 'rgba(165, 243, 252, 0.16)', 'rgba(15, 23, 42, 0.45)'],
+  'strytan-fjord': ['#0b2242', '#24527a', '#cbd5e1', 'rgba(186, 230, 253, 0.24)', 'rgba(203, 213, 225, 0.18)', 'rgba(15, 23, 42, 0.46)'],
+  'kverkfjoll-glacier': ['#163859', '#4f8eb8', '#e0f2fe', 'rgba(207, 250, 254, 0.28)', 'rgba(224, 242, 254, 0.22)', 'rgba(30, 41, 59, 0.44)'],
+  'grjotagja-rift': ['#0f172a', '#312e81', '#fb923c', 'rgba(251, 146, 60, 0.26)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.52)'],
+  'atlantida-lava': ['#0c4a6e', '#38bdf8', '#fed7aa', 'rgba(254, 215, 170, 0.28)', 'rgba(224, 242, 254, 0.14)', 'rgba(15, 23, 42, 0.48)'],
+  'lagoa-cerrado': ['#1d6fa3', '#67b7dc', '#fef08a', 'rgba(254, 240, 138, 0.22)', 'rgba(220, 252, 231, 0.16)', 'rgba(30, 48, 42, 0.44)'],
+  'boybulok-steppe': ['#14233c', '#3c5a80', '#cbd5e1', 'rgba(226, 232, 240, 0.24)', 'rgba(203, 213, 225, 0.20)', 'rgba(30, 41, 59, 0.48)'],
+  yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
+};
+
+const SURFACE_SOIL_PALETTES = {
+  'florida-cypress': { turf: '#3b4e24', soil: '#463b2d', tuft: '#5a722e', stone: '#686259' },
+  'nordic-fjord': { turf: '#2c4a3e', soil: '#36414c', tuft: '#476b5a', stone: '#64748b' },
+  'ural-birch': { turf: '#38574c', soil: '#52606d', tuft: '#5b7d6c', stone: '#9aa7b5' },
+  'provence-gorge': { turf: '#4e5f2c', soil: '#6c5c46', tuft: '#6f823e', stone: '#a69d8b' },
+  'kalahari-crater': { turf: '#7c5c28', soil: '#764128', tuft: '#b88c28', stone: '#8b4528' },
+  'bahamas-abaco': { turf: '#2f6548', soil: '#8f8b7e', tuft: '#4a855c', stone: '#c7c2b4' },
+  'budapest-bathhouse': { turf: '#41572c', soil: '#6a5d47', tuft: '#5c7838', stone: '#b5a88d' },
+  'sinai-coast': { turf: '#8e6c3f', soil: '#9c6e44', tuft: '#b88f4c', stone: '#b38354' },
+  'quercy-ressel': { turf: '#3e5932', soil: '#635e54', tuft: '#587842', stone: '#aca79a' },
+  'lazio-travertine': { turf: '#525f30', soil: '#736148', tuft: '#75823d', stone: '#b09d7c' },
+  'moravia-rift': { turf: '#2f4539', soil: '#37414b', tuft: '#476252', stone: '#546170' },
+  'oxbelha-twilight': { turf: '#233c26', soil: '#30342e', tuft: '#365a35', stone: '#4c5249' },
+  'aurora-basalt': { turf: '#1c313f', soil: '#1e242d', tuft: '#2dd4bf', stone: '#334155' },
+  'strytan-fjord': { turf: '#243b4a', soil: '#27303d', tuft: '#7dd3fc', stone: '#475569' },
+  'kverkfjoll-glacier': { turf: '#3b6b8f', soil: '#1f334a', tuft: '#a5f3fc', stone: '#7dd3fc' },
+  'grjotagja-rift': { turf: '#24292e', soil: '#1c1917', tuft: '#fb923c', stone: '#292524' },
+  'atlantida-lava': { turf: '#3b2b24', soil: '#1e1b18', tuft: '#fdba74', stone: '#44403c' },
+  'lagoa-cerrado': { turf: '#2f6532', soil: '#524432', tuft: '#4ade80', stone: '#8c8370' },
+  'boybulok-steppe': { turf: '#5c5340', soil: '#463f33', tuft: '#cbd5e1', stone: '#78716c' },
+  yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
+};
+
+const MARGIN_MAP = {
+  'tannin-chert': ['#4e4535', '#4f5d2a'],
+  'glacial-marble': ['#3b4856', '#34524a'],
+  'provence-ivory': ['#6b604e', '#4d5d2b'],
+  'kalahari-ironstone': ['#784730', '#8c6932'],
+  'ural-gypsum': ['#6b7785', '#4b6b63'],
+  'abaco-aragonite': ['#5d6b6e', '#2f6d5a'],
+  'buda-thermal-marl': ['#6f624c', '#455931'],
+  'sinai-coral-sandstone': ['#8d6644', '#b58d52'],
+  'quercy-chalk': ['#6b6b64', '#415c36'],
+  'lazio-travertine': ['#7b6c55', '#5a6332'],
+  'moravia-carbonic': ['#3e4752', '#354b3e'],
+  'oxbelha-dusk': ['#323934', '#26422b'],
+  'katla-basalt': ['#232c38', '#2a4a5e'],
+  'strytan-smectite': ['#263544', '#2c5a70'],
+  'kverkfjoll-ice': ['#2e5272', '#67d4f5'],
+  'grjotagja-obsidian': ['#1f1c26', '#7c3aed'],
+  'atlantida-basalt': ['#262328', '#ea580c'],
+  'lagoa-cerrado': ['#5c5444', '#2f6d34'],
+  'boybulok-steppe': ['#6b5d4d', '#64748b'],
+};
 
 const nextFrame = () =>
   new Promise((resolve) => {
@@ -57,6 +163,7 @@ export class CaveRenderer {
     this.foliageTex = this._defaultFoliageTex;
     this.foliagePattern = null;
     this._rockPattern = null;
+    this._tintedRockPatternCache = new Map();
     this.skyBackdropImg = null;
 
     this._rawImageCache = new Map();
@@ -68,12 +175,35 @@ export class CaveRenderer {
     this.rockChunks = [];
     this.dustMotes = [];
     this._sunCurtainCache = new Map();
+    this._basinEdgeCache = new Map();
+    this._waterMeniscusCache = new Map();
+    this._biolumMotes = null;
     this._skyGradCache = null;
     this._vignetteCache = null;
+    this._siltGlareScratch = [];
+    this._needsResize = true;
+    this._cachedDpr = 1;
     this.ready = false;
     this.camX = level.spawn.x;
     this.camY = level.spawn.y;
     this.pxPerM = 28; // Dynamically adjusted by viewport size
+
+    // Mark resize dirty via ResizeObserver / window events instead of forcing layout reflow every frame
+    if (typeof ResizeObserver !== 'undefined' && canvas && typeof canvas.getBoundingClientRect === 'function') {
+      try {
+        this._resizeObserver = new ResizeObserver(() => {
+          this._needsResize = true;
+        });
+        this._resizeObserver.observe(canvas);
+      } catch (_) {}
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      this._onWindowResize = () => {
+        this._needsResize = true;
+      };
+      window.addEventListener('resize', this._onWindowResize, { passive: true });
+      window.addEventListener('orientationchange', this._onWindowResize, { passive: true });
+    }
 
     if (!deferBuild) {
       this.backChunks = this._buildBackChunks(level);
@@ -97,8 +227,21 @@ export class CaveRenderer {
     this._bakedLevelCache.set(id, entry);
     while (this._bakedLevelCache.size > MAX_CACHED_LEVELS) {
       const oldestKey = this._bakedLevelCache.keys().next().value;
-      if (oldestKey) this._bakedLevelCache.delete(oldestKey);
-      else break;
+      if (oldestKey) {
+        const evicted = this._bakedLevelCache.get(oldestKey);
+        this._bakedLevelCache.delete(oldestKey);
+        // Zero canvas backing stores immediately so mobile WebKit releases GPU memory
+        if (evicted) {
+          for (const ch of evicted.backChunks || []) {
+            if (ch?.canvas) { ch.canvas.width = 0; ch.canvas.height = 0; }
+          }
+          for (const ch of evicted.rockChunks || []) {
+            if (ch?.canvas) { ch.canvas.width = 0; ch.canvas.height = 0; }
+          }
+        }
+      } else {
+        break;
+      }
     }
   }
 
@@ -114,6 +257,10 @@ export class CaveRenderer {
     this.rockChunks = entry.rockChunks;
     this.dustMotes = entry.dustMotes;
     this._sunCurtainCache.clear();
+    this._basinEdgeCache.clear();
+    this._waterMeniscusCache.clear();
+    this._biolumMotes = null;
+    this._skyGradCache = null;
     this.camX = entry.level.spawn.x;
     this.camY = entry.level.spawn.y;
     this.ready = true;
@@ -363,8 +510,12 @@ export class CaveRenderer {
     }
 
     const nextBackChunks = [];
+    let frameStartMs = _nowMs();
     for (let i = 0; i < spans.length; i++) {
-      await nextFrame();
+      if (i === 0 || _nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
+        await nextFrame();
+        frameStartMs = _nowMs();
+      }
       if (epoch !== this._loadEpoch) return { cancelled: true };
       report(24 + Math.round(((i + 1) / spans.length) * 26), `Carving cavern backdrop (${i + 1}/${spans.length})...`);
       nextBackChunks.push(this._buildBackChunk(targetLevel, spans[i][0], spans[i][1], backTex));
@@ -372,13 +523,18 @@ export class CaveRenderer {
 
     const nextRockChunks = [];
     for (let i = 0; i < spans.length; i++) {
-      await nextFrame();
+      if (i === 0 || _nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
+        await nextFrame();
+        frameStartMs = _nowMs();
+      }
       if (epoch !== this._loadEpoch) return { cancelled: true };
       report(50 + Math.round(((i + 1) / spans.length) * 38), `Sculpting high-res limestone walls (${i + 1}/${spans.length})...`);
       nextRockChunks.push(this._buildRockChunk(targetLevel, spans[i][0], spans[i][1], rockTex, foliageTex));
     }
 
-    await nextFrame();
+    if (_nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
+      await nextFrame();
+    }
     if (epoch !== this._loadEpoch) return { cancelled: true };
     report(92, 'Seeding suspended cenote water particulates...');
     const nextDustMotes = this._buildDustMotes(targetLevel);
@@ -413,6 +569,57 @@ export class CaveRenderer {
     return base + Math.sin(wx * 0.17 + 0.6) * 0.42 + Math.cos(wx * 0.43 - 0.4) * 0.22;
   }
 
+  _getTintedRockPattern(ctx, level, rockTexOverride) {
+    if (!ctx?.createPattern || !rockTexOverride?.canvas) return null;
+    const rt = level?.theme?.rockTint;
+    if (!rt) {
+      if (!this._rockPattern) {
+        this._rockPattern = ctx.createPattern(rockTexOverride.canvas, 'repeat');
+      }
+      return this._rockPattern;
+    }
+    const key = `${level.theme?.id || level.id}|${rt[0]}|${rt[1]}|${rt[2]}|${rockTexOverride === this._defaultRockTex ? 'fb' : 'img'}`;
+    let pat = this._tintedRockPatternCache.get(key);
+    if (pat !== undefined) return pat;
+
+    const src = rockTexOverride.data;
+    const tileSize = 128;
+    const tc = document.createElement('canvas');
+    tc.width = tileSize;
+    tc.height = tileSize;
+    const tctx = tc.getContext('2d');
+    if (src && tctx?.createImageData && tctx?.putImageData) {
+      const img = tctx.createImageData(tileSize, tileSize);
+      const out = img.data;
+      const mR = rt[0] * 0.56;
+      const mG = rt[1] * 0.56;
+      const mB = rt[2] * 0.56;
+      const step = TEX_SIZE / tileSize;
+      for (let y = 0; y < tileSize; y++) {
+        const sy = (y * step) & (TEX_SIZE - 1);
+        for (let x = 0; x < tileSize; x++) {
+          const sx = (x * step) & (TEX_SIZE - 1);
+          const sIdx = (sy * TEX_SIZE + sx) * 4;
+          const dIdx = (y * tileSize + x) * 4;
+          const r = src[sIdx] * mR;
+          const g = src[sIdx + 1] * mG;
+          const b = src[sIdx + 2] * mB;
+          out[dIdx] = r < 10 ? 10 : r > 255 ? 255 : r;
+          out[dIdx + 1] = g < 12 ? 12 : g > 255 ? 255 : g;
+          out[dIdx + 2] = b < 12 ? 12 : b > 255 ? 255 : b;
+          out[dIdx + 3] = 255;
+        }
+      }
+      tctx.putImageData(img, 0, 0);
+      pat = ctx.createPattern(tc, 'repeat');
+    } else {
+      pat = ctx.createPattern(rockTexOverride.canvas, 'repeat');
+    }
+    if (this._tintedRockPatternCache.size > 16) this._tintedRockPatternCache.clear();
+    this._tintedRockPatternCache.set(key, pat);
+    return pat;
+  }
+
   _buildBackChunk(level, cx0, cx1, backTexOverride = this.backTex) {
     const { xMin, yMin, yMax } = level.bounds;
     const h = Math.ceil((yMax - yMin) * BACK_PX_PER_M);
@@ -432,34 +639,78 @@ export class CaveRenderer {
     const fixedBtG = bt ? bt[1] : 0;
     const fixedBtB = bt ? bt[2] : 0;
     const STEP = 8;
+    const invPpm = 1 / BACK_PX_PER_M;
+    const gxBase = Math.floor((cx0 - xMin) * BACK_PX_PER_M);
+
+    // Precompute 1D horizon ground curve once per chunk (eliminates ~250k redundant sin/cos calls)
+    const topGroundYByPx = new Float32Array(w);
+    let maxTopGroundY = -Infinity;
+    for (let px = 0; px < w; px++) {
+      const gy = this._getHorizonGroundY(level, cx0 + px * invPpm);
+      topGroundYByPx[px] = gy;
+      if (gy > maxTopGroundY) maxTopGroundY = gy;
+    }
 
     for (let by = 0; by < h; by += STEP) {
       const pyEnd = Math.min(h, by + STEP);
-      const midWy = yMin + (by + (pyEnd - by) * 0.5) / BACK_PX_PER_M;
+      const midWy = yMin + (by + (pyEnd - by) * 0.5) * invPpm;
+      const belowHorizon = yMin + by * invPpm >= maxTopGroundY + 0.05;
       for (let bx = 0; bx < w; bx += STEP) {
         const pxEnd = Math.min(w, bx + STEP);
-        const midWx = cx0 + (bx + (pxEnd - bx) * 0.5) / BACK_PX_PER_M;
+        const midWx = cx0 + (bx + (pxEnd - bx) * 0.5) * invPpm;
         // 8x8 coarse skip: blocks strictly deep inside foreground rock or high in open air have alpha=0
-        if (midWy + 1.0 < this._getHorizonGroundY(level, midWx)) continue;
-        if (evalChunkSdf(midWx, midWy) > 1.25) continue;
+        if (!belowHorizon && midWy + 1.0 < topGroundYByPx[Math.min(w - 1, bx + 4)]) continue;
+        const cSdf = evalChunkSdf(midWx, midWy);
+        if (cSdf > 1.25) continue;
+
+        // Deep open-cavern fast path: strictly inside tunnel (wallDist===1) and below skylight band
+        if (belowHorizon && midWy > 12.2 && cSdf < -4.2) {
+          for (let py = by; py < pyEnd; py++) {
+            const wy = yMin + py * invPpm;
+            const ty = (py * 2) & (TEX_SIZE - 1);
+            const haloShift = wy > level.haloclineY ? Math.min(1, (wy - level.haloclineY) / 14) : 0;
+            const depthShade = Math.max(0.45, 0.92 - Math.max(0, wy) * 0.008);
+            const mulR = depthShade * (bt ? fixedBtR : 0.72 + haloShift * 0.18);
+            const mulG = depthShade * (bt ? fixedBtG : 0.86 - haloShift * 0.06);
+            const mulB = depthShade * (bt ? fixedBtB : 0.94 - haloShift * 0.14);
+            const rowTexBase = ty * TEX_SIZE;
+            const rowOutBase = py * w;
+            for (let px = bx; px < pxEnd; px++) {
+              const idx = (rowOutBase + px) * 4;
+              const tx = ((gxBase + px) * 2) & (TEX_SIZE - 1);
+              const tIdx = (rowTexBase + tx) * 4;
+              const r = tex[tIdx] * mulR;
+              const g = tex[tIdx + 1] * mulG;
+              const b = tex[tIdx + 2] * mulB;
+              data[idx] = r > 255 ? 255 : r;
+              data[idx + 1] = g > 255 ? 255 : g;
+              data[idx + 2] = b > 255 ? 255 : b;
+              data[idx + 3] = 246;
+            }
+          }
+          continue;
+        }
 
         for (let py = by; py < pyEnd; py++) {
-          const wy = yMin + py / BACK_PX_PER_M;
+          const wy = yMin + py * invPpm;
           const ty = (py * 2) & (TEX_SIZE - 1);
           const haloShift = wy > level.haloclineY ? Math.min(1, (wy - level.haloclineY) / 14) : 0;
           const depthShade = Math.max(0.45, 0.92 - Math.max(0, wy) * 0.008);
           const tintR = bt ? fixedBtR : 0.72 + haloShift * 0.18;
           const tintG = bt ? fixedBtG : 0.86 - haloShift * 0.06;
           const tintB = bt ? fixedBtB : 0.94 - haloShift * 0.14;
+          const checkSkylight = wy < 11.5;
+          const rowTexBase = ty * TEX_SIZE;
+          const rowOutBase = py * w;
 
           for (let px = bx; px < pxEnd; px++) {
-            const wx = cx0 + px / BACK_PX_PER_M;
-            if (wy < this._getHorizonGroundY(level, wx)) continue;
+            if (!belowHorizon && wy < topGroundYByPx[px]) continue;
+            const wx = cx0 + px * invPpm;
             const sdf = evalChunkSdf(wx, wy);
             if (sdf >= 0.45) continue;
 
             let skylight = 0;
-            if (wy < 11.5) {
+            if (checkSkylight) {
               for (let b = 0; b < basins.length; b++) {
                 const basin = basins[b];
                 const bcx = (basin.xMin + basin.xMax) * 0.5;
@@ -471,16 +722,15 @@ export class CaveRenderer {
                 }
                 const distX = Math.abs(wx - bcx) / (rim + 0.8);
                 const distY = Math.max(0, wy) / 11.5;
-                const hole = Math.max(0, 1 - Math.hypot(distX * 0.82, distY));
+                const hole = Math.max(0, 1 - Math.sqrt(distX * distX * 0.6724 + distY * distY));
                 if (hole > skylight) skylight = hole;
               }
+              if (skylight >= 0.995) continue;
             }
-            if (skylight >= 0.995) continue;
 
-            const idx = (py * w + px) * 4;
-            const gpx = Math.floor((wx - xMin) * BACK_PX_PER_M);
-            const tx = (gpx * 2) & (TEX_SIZE - 1);
-            const tIdx = (ty * TEX_SIZE + tx) * 4;
+            const idx = (rowOutBase + px) * 4;
+            const tx = ((gxBase + px) * 2) & (TEX_SIZE - 1);
+            const tIdx = (rowTexBase + tx) * 4;
 
             const wallDist = Math.min(1, Math.max(0, -sdf) / 3.4);
             const tubeShade = 0.44 + 0.56 * Math.sqrt(wallDist);
@@ -528,7 +778,7 @@ export class CaveRenderer {
 
     const evalChunkSdf = createChunkSDFEvaluator(level, cx0, cx1);
     const basins = level.openBasins || [];
-    const basinCenters = new Array(basins.length);
+    const basinCenters = new Float32Array(basins.length);
     for (let b = 0; b < basins.length; b++) {
       basinCenters[b] = (basins[b].xMin + basins[b].xMax) * 0.5;
     }
@@ -539,64 +789,86 @@ export class CaveRenderer {
     const mulB = rt ? rt[2] * 0.62 : 0.62;
     const mossKind = level.theme?.mossTint || 'emerald';
     const isAridTopsoil = mossKind === 'sinai-coral-sandstone' || mossKind === 'kalahari-ironstone';
-    const stainMap = {
-      'tannin-chert': [22, 10, -20, 0.96, 18, 0.86, 6, 0.78, 0],
-      'glacial-marble': [-18, 20, 28, 0.72, 0, 0.92, 8, 1.05, 14],
-      'provence-ivory': [6, 22, -12, 0.88, 10, 0.9, 4, 0.72, 0],
-      'kalahari-ironstone': [28, 10, -18, 1.08, 22, 0.82, 4, 0.56, 0],
-      'ural-gypsum': [-10, 18, 24, 0.84, 18, 0.94, 16, 1.04, 22],
-      'abaco-aragonite': [-14, 26, 18, 0.82, 0, 0.96, 8, 0.86, 4],
-      'buda-thermal-marl': [16, 14, -14, 0.88, 12, 0.92, 6, 0.72, 0],
-      'sinai-coral-sandstone': [24, 8, -18, 1.02, 18, 0.86, 8, 0.62, 0],
-      'quercy-chalk': [-8, 16, 12, 0.84, 4, 0.9, 6, 0.88, 6],
-      'lazio-travertine': [18, 14, -12, 0.9, 8, 0.92, 6, 0.74, 0],
-      'moravia-carbonic': [-16, 8, 10, 0.78, 0, 0.84, 6, 0.86, 10],
-      'oxbelha-dusk': [-18, 22, -8, 0.82, 0, 0.9, 4, 0.82, 6],
-      'katla-basalt': [-18, 12, 26, 0.54, 4, 0.62, 10, 0.76, 22],
-      'strytan-smectite': [-14, 18, 28, 0.62, 6, 0.74, 12, 0.84, 20],
-      'kverkfjoll-ice': [-10, 24, 42, 0.68, 10, 0.88, 22, 1.06, 36],
-      'grjotagja-obsidian': [10, -6, 18, 0.52, 8, 0.48, 2, 0.64, 14],
-      'atlantida-basalt': [-10, 14, 24, 0.58, 6, 0.66, 10, 0.80, 18],
-      'lagoa-cerrado': [-22, 30, -4, 0.84, 0, 0.94, 4, 0.82, 4],
-      'boybulok-steppe': [14, 10, -10, 0.86, 10, 0.84, 4, 0.74, 0],
-    };
-    const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = stainMap[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
+    const isIceVein = mossKind === 'kverkfjoll-ice' || mossKind === 'glacial-marble' || mossKind === 'ural-gypsum';
+    const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = STAIN_MAP[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
     const STEP = 8;
+    const invPpm = 1 / CACHE_PX_PER_M;
     const gxBase = Math.floor((cx0 - xMin) * CACHE_PX_PER_M);
+
+    // Precompute 1D horizon ground curve once per chunk (eliminates ~1M redundant sin/cos calls/chunk)
+    const topGroundYByPx = new Float32Array(w);
+    let maxTopGroundY = -Infinity;
+    for (let px = 0; px < w; px++) {
+      const gy = this._getHorizonGroundY(level, cx0 + px * invPpm);
+      topGroundYByPx[px] = gy;
+      if (gy > maxTopGroundY) maxTopGroundY = gy;
+    }
 
     for (let by = 0; by < h; by += STEP) {
       const pyEnd = Math.min(h, by + STEP);
-      const midWy = yMin + (by + (pyEnd - by) * 0.5) / CACHE_PX_PER_M;
+      const byWy = yMin + by * invPpm;
+      const midWy = yMin + (by + (pyEnd - by) * 0.5) * invPpm;
+      const blockBelowTurf = byWy > maxTopGroundY + 1.2;
+
       for (let bx = 0; bx < w; bx += STEP) {
         const pxEnd = Math.min(w, bx + STEP);
-        const midWx = cx0 + (bx + (pxEnd - bx) * 0.5) / CACHE_PX_PER_M;
-        const midTopY = this._getHorizonGroundY(level, midWx);
-        if (midWy + 0.8 < midTopY) continue;
+        const midWx = cx0 + (bx + (pxEnd - bx) * 0.5) * invPpm;
+        const midTopY = topGroundYByPx[Math.min(w - 1, bx + 4)];
+        if (!blockBelowTurf && midWy + 0.8 < midTopY) continue;
 
         const cSdf = evalChunkSdf(midWx, midWy);
         // 8x8 coarse skip: strictly inside open tunnel water (alpha stays 0)
         if (cSdf < -0.95) continue;
-        // 8x8 fast interior fill: far from walls, no rim highlights or moss stain needed
-        const deepRockBlock = cSdf > 1.75 && (yMin + by / CACHE_PX_PER_M) >= midTopY + 0.5;
+
+        // 8x8 ultra-fast deep rock interior fill: zero SDF calls, zero topsoil checks
+        if (cSdf > 1.75 && blockBelowTurf) {
+          for (let py = by; py < pyEnd; py++) {
+            const wy = yMin + py * invPpm;
+            const ty = py & (TEX_SIZE - 1);
+            const depthDarken = Math.max(0.42, 0.88 - Math.max(0, wy) * 0.0085);
+            const mR = mulR * depthDarken;
+            const mG = mulG * depthDarken;
+            const mB = mulB * depthDarken;
+            const rowTexBase = ty * TEX_SIZE;
+            const rowOutBase = py * w;
+            for (let px = bx; px < pxEnd; px++) {
+              const idx = (rowOutBase + px) * 4;
+              const tx = (gxBase + px) & (TEX_SIZE - 1);
+              const tIdx = (rowTexBase + tx) * 4;
+              const r = tex[tIdx] * mR;
+              const g = tex[tIdx + 1] * mG;
+              const b = tex[tIdx + 2] * mB;
+              data[idx] = r < 10 ? 10 : r > 255 ? 255 : r;
+              data[idx + 1] = g < 12 ? 12 : g > 255 ? 255 : g;
+              data[idx + 2] = b < 12 ? 12 : b > 255 ? 255 : b;
+              data[idx + 3] = 255;
+            }
+          }
+          continue;
+        }
+
+        const deepRockBlock = cSdf > 1.75 && byWy >= midTopY + 0.5;
 
         for (let py = by; py < pyEnd; py++) {
-          const wy = yMin + py / CACHE_PX_PER_M;
+          const wy = yMin + py * invPpm;
           const ty = py & (TEX_SIZE - 1);
           const depthDarken = Math.max(0.42, 0.88 - Math.max(0, wy) * 0.0085);
           const inVerticalMossBand = wy > -5.5 && wy < 13.5;
+          const rowTexBase = ty * TEX_SIZE;
+          const rowOutBase = py * w;
 
           for (let px = bx; px < pxEnd; px++) {
-            const wx = cx0 + px / CACHE_PX_PER_M;
-            const topGroundY = this._getHorizonGroundY(level, wx);
-            if (wy < topGroundY) continue;
+            const topGroundY = topGroundYByPx[px];
+            if (!blockBelowTurf && wy < topGroundY) continue;
 
+            const wx = cx0 + px * invPpm;
             const sdf = deepRockBlock ? 2.0 : evalChunkSdf(wx, wy);
             if (sdf < 0) continue;
 
-            const idx = (py * w + px) * 4;
+            const idx = (rowOutBase + px) * 4;
             const tx = (gxBase + px) & (TEX_SIZE - 1);
-            const tIdx = (ty * TEX_SIZE + tx) * 4;
+            const tIdx = (rowTexBase + tx) * 4;
 
             let baseR;
             let baseG;
@@ -608,7 +880,21 @@ export class CaveRenderer {
               baseB = tex[tIdx + 2] * mulB * depthDarken;
             } else {
               const edgeShadow = sdf < 0.42 ? 0.56 + (sdf / 0.42) * 0.44 : 1.0;
-              const rimCatchlight = sdf < 0.1 ? (1 - sdf / 0.1) * 24 : 0;
+              let rimCatchlight = sdf < 0.1 ? (1 - sdf / 0.1) * 22 : 0;
+              // Sculpted 2.5D top-lit wall bevel using 2-sample local SDF normal (0ms runtime cost)
+              let bevelShade = 1.0;
+              if (sdf < 0.36) {
+                const gx = evalChunkSdf(wx + 0.14, wy) - sdf;
+                const gy = evalChunkSdf(wx, wy + 0.14) - sdf;
+                const gLen = Math.sqrt(gx * gx + gy * gy) || 1;
+                // Outward-into-water normal is (-gx/gLen, -gy/gLen); light from upper-left (-0.35, -0.94)
+                const ndotl = (gx * 0.35 + gy * 0.94) / gLen;
+                const rimWeight = 1 - sdf / 0.36;
+                bevelShade = 1 + ndotl * 0.24 * rimWeight;
+                if (ndotl > 0.25 && sdf < 0.14) {
+                  rimCatchlight += ndotl * (1 - sdf / 0.14) * 16;
+                }
+              }
               let wallMoss = 0;
               if (inVerticalMossBand && sdf < 0.85) {
                 let minBasinDx = Infinity;
@@ -620,41 +906,55 @@ export class CaveRenderer {
                   wallMoss = (1 - sdf / 0.85) * Math.max(0, 1 - Math.max(0, wy) / 13.5);
                 }
               }
-              const edgeMul = edgeShadow * depthDarken;
+              const edgeMul = edgeShadow * bevelShade * depthDarken;
               baseR = (tex[tIdx] * mulR + rimCatchlight) * edgeMul + wallMoss * wR;
-              baseG = (tex[tIdx + 1] * mulG + rimCatchlight * 0.95) * edgeMul + wallMoss * wG;
-              baseB = (tex[tIdx + 2] * mulB + rimCatchlight * 0.85) * edgeMul + wallMoss * wB;
+              baseG = (tex[tIdx + 1] * mulG + rimCatchlight * 0.96) * edgeMul + wallMoss * wG;
+              baseB = (tex[tIdx + 2] * mulB + rimCatchlight * (isIceVein ? 1.15 : 0.88)) * edgeMul + wallMoss * wB;
+              // Subtle mineral/ice strata veins along rock edges
+              if (sdf < 0.9) {
+                const strata = Math.sin(wy * 3.1 + Math.sin(wx * 0.55) * 1.8);
+                if (strata > 0.88) {
+                  const vein = (strata - 0.88) * 120 * (1 - sdf / 0.9);
+                  baseR += isIceVein ? vein * 0.55 : vein * 0.9;
+                  baseG += isIceVein ? vein * 0.95 : vein * 0.86;
+                  baseB += isIceVein ? vein * 1.25 : vein * 0.72;
+                }
+              }
             }
 
-            const turfDepth = wy - topGroundY;
-            if (turfDepth < 1.16) {
-              const loamLimit = 0.92 + Math.sin(wx * 2.1) * 0.16 + Math.cos(wx * 4.7) * 0.08;
-              if (turfDepth < loamLimit) {
-                const soilWeight = 1 - Math.max(0, turfDepth) / loamLimit;
-                const grassWeight = Math.max(0, 1 - turfDepth / 0.42);
-                const fR = fol ? fol[tIdx] : 42;
-                const fG = fol ? fol[tIdx + 1] : 78;
-                const fB = fol ? fol[tIdx + 2] : 34;
-                const leafR = isAridTopsoil ? 148 + (fR - 50) * 0.45 : fR * lRm + lRa;
-                const leafG = isAridTopsoil ? 104 + (fG - 50) * 0.35 : fG * lGm + lGa;
-                const leafB = isAridTopsoil ? 66 + (fB - 50) * 0.25 : fB * lBm + lBa;
-                const subR = isAridTopsoil ? 112 : 52;
-                const subG = isAridTopsoil ? 76 : 40;
-                const subB = isAridTopsoil ? 48 : 28;
-                const surfR = subR * (1 - grassWeight) + leafR * grassWeight;
-                const surfG = subG * (1 - grassWeight) + leafG * grassWeight;
-                const surfB = subB * (1 - grassWeight) + leafB * grassWeight;
-                const blend = Math.min(0.94, soilWeight * 1.15);
-                baseR = baseR * (1 - blend) + surfR * blend;
-                baseG = baseG * (1 - blend) + surfG * blend;
-                baseB = baseB * (1 - blend) + surfB * blend;
+            if (!blockBelowTurf) {
+              const turfDepth = wy - topGroundY;
+              if (turfDepth < 1.16) {
+                const loamLimit = 0.92 + Math.sin(wx * 2.1) * 0.16 + Math.cos(wx * 4.7) * 0.08;
+                if (turfDepth < loamLimit) {
+                  const soilWeight = 1 - Math.max(0, turfDepth) / loamLimit;
+                  const grassWeight = Math.max(0, 1 - turfDepth / 0.42);
+                  const fR = fol ? fol[tIdx] : 42;
+                  const fG = fol ? fol[tIdx + 1] : 78;
+                  const fB = fol ? fol[tIdx + 2] : 34;
+                  const leafR = isAridTopsoil ? 148 + (fR - 50) * 0.45 : fR * lRm + lRa;
+                  const leafG = isAridTopsoil ? 104 + (fG - 50) * 0.35 : fG * lGm + lGa;
+                  const leafB = isAridTopsoil ? 66 + (fB - 50) * 0.25 : fB * lBm + lBa;
+                  const subR = isAridTopsoil ? 112 : 52;
+                  const subG = isAridTopsoil ? 76 : 40;
+                  const subB = isAridTopsoil ? 48 : 28;
+                  const surfR = subR * (1 - grassWeight) + leafR * grassWeight;
+                  const surfG = subG * (1 - grassWeight) + leafG * grassWeight;
+                  const surfB = subB * (1 - grassWeight) + leafB * grassWeight;
+                  const blend = Math.min(0.94, soilWeight * 1.15);
+                  baseR = baseR * (1 - blend) + surfR * blend;
+                  baseG = baseG * (1 - blend) + surfG * blend;
+                  baseB = baseB * (1 - blend) + surfB * blend;
+                }
               }
+              data[idx + 3] = turfDepth < 0.065 ? Math.round(255 * Math.max(0.14, turfDepth / 0.065)) : 255;
+            } else {
+              data[idx + 3] = 255;
             }
 
             data[idx] = baseR < 10 ? 10 : baseR > 255 ? 255 : baseR;
             data[idx + 1] = baseG < 12 ? 12 : baseG > 255 ? 255 : baseG;
             data[idx + 2] = baseB < 12 ? 12 : baseB > 255 ? 255 : baseB;
-            data[idx + 3] = turfDepth < 0.065 ? Math.round(255 * Math.max(0.14, turfDepth / 0.065)) : 255;
           }
         }
       }
@@ -662,13 +962,17 @@ export class CaveRenderer {
 
     ctx.putImageData(img, 0, 0);
 
-    // Paint bitmap-textured speleothems (no flat solid vector triangles!) & layered boulders
-    if (!this._rockPattern && ctx.createPattern) {
-      this._rockPattern = ctx.createPattern(rockTexOverride.canvas, 'repeat');
-    }
-    const pat = this._rockPattern || ctx.createPattern(rockTexOverride.canvas, 'repeat');
+    // Paint theme-tinted bitmap-textured speleothems & layered boulders (using local chunk SDF normals)
+    const pat = this._getTintedRockPattern(ctx, level, rockTexOverride);
     const toCacheX = (wx) => (wx - cx0) * CACHE_PX_PER_M;
     const toCacheY = (wy) => (wy - yMin) * CACHE_PX_PER_M;
+    const localNormalY = (wx, wy) => {
+      const e = 0.1;
+      const gx = evalChunkSdf(wx + e, wy) - evalChunkSdf(wx - e, wy);
+      const gy = evalChunkSdf(wx, wy + e) - evalChunkSdf(wx, wy - e);
+      const len = Math.sqrt(gx * gx + gy * gy) || 1;
+      return -gy / len;
+    };
 
     for (let sIdx = 0; sIdx < level.segments.length; sIdx++) {
       const seg = level.segments[sIdx];
@@ -686,12 +990,11 @@ export class CaveRenderer {
         const seed = Math.sin(sIdx * 31.7 + k * 17.3) * 43758.5453;
         const hash = seed - Math.floor(seed);
 
-        // Probe ceiling wall straight up for eroded limestone stalactite formations
+        // Probe ceiling wall straight up for eroded stalactite / icicle formations
         for (let step = 0; step < 32; step++) {
           const py = cy - step * 0.28;
           if (evalChunkSdf(cx, py) >= 0) {
-            const n = evaluateCaveNormal(level, cx, py);
-            if (n.ny < -0.35 && hash > 0.24) {
+            if (localNormalY(cx, py) < -0.35 && hash > 0.24) {
               const len = (0.5 + hash * 0.85) * CACHE_PX_PER_M;
               const baseW = (0.16 + (1 - hash) * 0.16) * CACHE_PX_PER_M;
               const sx = toCacheX(cx);
@@ -705,9 +1008,9 @@ export class CaveRenderer {
               ctx.closePath();
               ctx.fillStyle = pat || '#47433e';
               ctx.fill();
-              ctx.fillStyle = 'rgba(20, 22, 26, 0.45)';
+              ctx.fillStyle = isIceVein ? 'rgba(186, 230, 253, 0.14)' : 'rgba(20, 22, 26, 0.30)';
               ctx.fill();
-              ctx.strokeStyle = 'rgba(226, 232, 240, 0.16)';
+              ctx.strokeStyle = isIceVein ? 'rgba(224, 242, 254, 0.32)' : 'rgba(226, 232, 240, 0.16)';
               ctx.lineWidth = 1.2;
               ctx.stroke();
               ctx.restore();
@@ -720,8 +1023,7 @@ export class CaveRenderer {
         for (let step = 0; step < 32; step++) {
           const py = cy + step * 0.28;
           if (evalChunkSdf(cx, py) >= 0) {
-            const n = evaluateCaveNormal(level, cx, py);
-            if (n.ny > 0.35) {
+            if (localNormalY(cx, py) > 0.35) {
               const sx = toCacheX(cx);
               const sy = toCacheY(py) + 3;
               ctx.save();
@@ -742,9 +1044,9 @@ export class CaveRenderer {
               }
               ctx.fillStyle = pat || '#3f3c38';
               ctx.fill();
-              ctx.fillStyle = 'rgba(18, 20, 24, 0.42)';
+              ctx.fillStyle = isIceVein ? 'rgba(186, 230, 253, 0.12)' : 'rgba(18, 20, 24, 0.28)';
               ctx.fill();
-              ctx.strokeStyle = 'rgba(245, 245, 244, 0.14)';
+              ctx.strokeStyle = isIceVein ? 'rgba(224, 242, 254, 0.28)' : 'rgba(245, 245, 244, 0.14)';
               ctx.lineWidth = 1.2;
               ctx.stroke();
               ctx.restore();
@@ -755,44 +1057,53 @@ export class CaveRenderer {
       }
     }
 
-      // Hanging tree roots along Cenote basin rims (omitted in crystal Icelandic, volcanic, and alpine rock pools)
-      if (!['aurora-glacial', 'strytan-hydrothermal', 'kverkfjoll-glacier', 'grjotagja-lava', 'atlantida-volcanic', 'boybulok-alpine'].includes(level.theme?.id)) {
-        for (const basin of level.openBasins) {
-          if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
-          for (let i = 0; i < 8; i++) {
-            const rx = basin.xMin + 1.4 + (i / 7) * (basin.xMax - basin.xMin - 2.8);
-            if (rx < cx0 - 1 || rx > cx1 + 1) continue;
-            const rootLen = 1.6 + ((i * 37) % 10) * 0.24;
-            ctx.strokeStyle = i % 2 === 0 ? 'rgba(63, 98, 42, 0.82)' : 'rgba(113, 63, 18, 0.72)';
-            ctx.lineWidth = i % 2 === 0 ? 2.4 : 1.8;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(toCacheX(rx), toCacheY(0));
-            ctx.quadraticCurveTo(
-              toCacheX(rx + (i % 2 === 0 ? 0.35 : -0.35)),
-              toCacheY(rootLen * 0.55),
-              toCacheX(rx + (i % 2 === 0 ? -0.15 : 0.2)),
-              toCacheY(rootLen)
-            );
-            ctx.stroke();
-          }
+    // Hanging tree roots along forested Cenote/Karst basin rims (omitted in arid, arctic, volcanic & alpine basins)
+    if (!NO_HANGING_ROOTS_THEMES.has(level.theme?.id)) {
+      for (const basin of level.openBasins) {
+        if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
+        for (let i = 0; i < 8; i++) {
+          const rx = basin.xMin + 1.4 + (i / 7) * (basin.xMax - basin.xMin - 2.8);
+          if (rx < cx0 - 1 || rx > cx1 + 1) continue;
+          const rootLen = 1.6 + ((i * 37) % 10) * 0.24;
+          ctx.strokeStyle = i % 2 === 0 ? 'rgba(63, 98, 42, 0.82)' : 'rgba(113, 63, 18, 0.72)';
+          ctx.lineWidth = i % 2 === 0 ? 2.4 : 1.8;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(toCacheX(rx), toCacheY(0));
+          ctx.quadraticCurveTo(
+            toCacheX(rx + (i % 2 === 0 ? 0.35 : -0.35)),
+            toCacheY(rootLen * 0.55),
+            toCacheX(rx + (i % 2 === 0 ? -0.15 : 0.2)),
+            toCacheY(rootLen)
+          );
+          ctx.stroke();
         }
       }
+    }
 
     return { x0: cx0, x1: cx1, y0: yMin, y1: yMax, canvas: c };
   }
 
-  resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = this.canvas.clientWidth || window.innerWidth;
-    const h = this.canvas.clientHeight || window.innerHeight;
-    if (this.canvas.width !== Math.floor(w * dpr) || this.canvas.height !== Math.floor(h * dpr)) {
-      this.canvas.width = Math.floor(w * dpr);
-      this.canvas.height = Math.floor(h * dpr);
+  resize(force = false) {
+    if (!force && !this._needsResize && this.canvas.width > 0 && this.canvas.height > 0) {
+      return;
+    }
+    this._needsResize = false;
+    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2);
+    const w = this.canvas.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1280) || 1280;
+    const h = this.canvas.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 720) || 720;
+    const targetW = Math.max(1, Math.floor(w * dpr));
+    const targetH = Math.max(1, Math.floor(h * dpr));
+    if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+      this.canvas.width = targetW;
+      this.canvas.height = targetH;
       // 0.35x lightmap resolution gives soft penumbras and fast mobile fill-rate
       this.lightCanvas.width = Math.max(1, Math.floor(this.canvas.width * 0.35));
       this.lightCanvas.height = Math.max(1, Math.floor(this.canvas.height * 0.35));
+      this._skyGradCache = null;
+      this._vignetteCache = null;
     }
+    this._cachedDpr = this.canvas.width / w;
     // Scale pixels-per-meter so ~20–26m vertical span is visible on mobile & desktop
     const minDim = Math.min(w, h);
     this.pxPerM = Math.max(18, Math.min(34, minDim / 18));
@@ -864,7 +1175,7 @@ export class CaveRenderer {
     const ctx = this.ctx;
     const cw = this.canvas.width;
     const ch = this.canvas.height;
-    const dpr = cw / (this.canvas.clientWidth || window.innerWidth);
+    const dpr = this._cachedDpr || 1;
     const scale = this.pxPerM * dpr;
 
     // Smooth camera follow (defaults to local diver, or spectated buddy target)
@@ -900,10 +1211,10 @@ export class CaveRenderer {
     const visX1 = Math.min(xMax, viewWorldRight);
     const visY1 = Math.min(yMax, viewWorldBottom);
 
-    // 1. Sky & Rich Level-Themed Water Gradient (cached per surfY/viewport step)
+    // 1. Sky & Rich Level-Themed Water Gradient (cached per quantized surfY/viewport step)
     const surfY = toScreenY(0);
     const theme = this.level.theme;
-    const skyKey = `${this.level.id}|${Math.round(surfY)}|${ch}|${Math.round(scale * 10)}`;
+    const skyKey = `${this.level.id}|${Math.round(surfY / 8)}|${ch}|${Math.round(scale * 10)}`;
     if (!this._skyGradCache || this._skyGradCache.key !== skyKey) {
       const skyGrad = ctx.createLinearGradient(0, Math.min(0, surfY - 80), 0, Math.max(ch, surfY + 48 * scale));
       skyGrad.addColorStop(0, theme?.waterSurface || '#67e8f9');
@@ -1077,29 +1388,7 @@ export class CaveRenderer {
   _drawSurfaceSky(ctx, cw, surfY, toScreenX, toScreenY, scale, timeSec) {
     const theme = this.level.theme;
     const style = theme?.surfaceStyle || 'yucatan';
-    const skyPalettes = {
-      'florida-cypress': ['#8aa6bd', '#dfd3bc', '#e6c999', 'rgba(253, 224, 158, 0.20)', 'rgba(252, 244, 224, 0.14)', 'rgba(48, 52, 58, 0.48)'],
-      'nordic-fjord': ['#5c82a3', '#b8cede', '#d8e6ee', 'rgba(224, 242, 254, 0.22)', 'rgba(226, 240, 248, 0.17)', 'rgba(34, 48, 62, 0.46)'],
-      'provence-gorge': ['#688bb5', '#dfd0c2', '#f4d9b5', 'rgba(254, 215, 170, 0.22)', 'rgba(254, 244, 232, 0.14)', 'rgba(56, 48, 42, 0.44)'],
-      'kalahari-crater': ['#2e5b9e', '#d6975c', '#f5cb86', 'rgba(253, 224, 71, 0.25)', 'rgba(254, 235, 200, 0.14)', 'rgba(54, 38, 28, 0.50)'],
-      'ural-birch': ['#4f7da8', '#bfd5e6', '#eef4f8', 'rgba(248, 250, 252, 0.28)', 'rgba(241, 245, 249, 0.20)', 'rgba(38, 52, 68, 0.46)'],
-      'bahamas-abaco': ['#0284c7', '#67e8f9', '#fef08a', 'rgba(254, 240, 138, 0.24)', 'rgba(224, 242, 254, 0.16)', 'rgba(15, 38, 48, 0.44)'],
-      'budapest-bathhouse': ['#507294', '#c5d4df', '#efe2c7', 'rgba(254, 243, 199, 0.24)', 'rgba(255, 247, 232, 0.22)', 'rgba(42, 46, 54, 0.44)'],
-      'sinai-coast': ['#0369a1', '#38bdf8', '#fde68a', 'rgba(254, 215, 170, 0.28)', 'rgba(254, 243, 214, 0.14)', 'rgba(54, 38, 28, 0.46)'],
-      'quercy-ressel': ['#52799e', '#c8dce6', '#ece7da', 'rgba(254, 243, 199, 0.20)', 'rgba(236, 248, 250, 0.18)', 'rgba(44, 52, 60, 0.44)'],
-      'lazio-travertine': ['#3b75b2', '#9bc5e8', '#f5e4c3', 'rgba(253, 230, 138, 0.24)', 'rgba(254, 249, 235, 0.14)', 'rgba(54, 48, 42, 0.42)'],
-      'moravia-rift': ['#475569', '#94a3b8', '#cbd5e1', 'rgba(226, 232, 240, 0.20)', 'rgba(203, 213, 225, 0.26)', 'rgba(30, 41, 59, 0.48)'],
-      'oxbelha-twilight': ['#172554', '#475569', '#f59e0b', 'rgba(251, 191, 36, 0.22)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.56)'],
-      'aurora-basalt': ['#030816', '#0f2847', '#2dd4bf', 'rgba(45, 212, 191, 0.26)', 'rgba(165, 243, 252, 0.16)', 'rgba(15, 23, 42, 0.45)'],
-      'strytan-fjord': ['#0b2242', '#24527a', '#cbd5e1', 'rgba(186, 230, 253, 0.24)', 'rgba(203, 213, 225, 0.18)', 'rgba(15, 23, 42, 0.46)'],
-      'kverkfjoll-glacier': ['#163859', '#4f8eb8', '#e0f2fe', 'rgba(207, 250, 254, 0.28)', 'rgba(224, 242, 254, 0.22)', 'rgba(30, 41, 59, 0.44)'],
-      'grjotagja-rift': ['#0f172a', '#312e81', '#fb923c', 'rgba(251, 146, 60, 0.26)', 'rgba(254, 215, 170, 0.16)', 'rgba(15, 23, 42, 0.52)'],
-      'atlantida-lava': ['#0c4a6e', '#38bdf8', '#fed7aa', 'rgba(254, 215, 170, 0.28)', 'rgba(224, 242, 254, 0.14)', 'rgba(15, 23, 42, 0.48)'],
-      'lagoa-cerrado': ['#1d6fa3', '#67b7dc', '#fef08a', 'rgba(254, 240, 138, 0.22)', 'rgba(220, 252, 231, 0.16)', 'rgba(30, 48, 42, 0.44)'],
-      'boybulok-steppe': ['#14233c', '#3c5a80', '#cbd5e1', 'rgba(226, 232, 240, 0.24)', 'rgba(203, 213, 225, 0.20)', 'rgba(30, 41, 59, 0.48)'],
-      yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
-    };
-    const [skyA, skyB, skyC, bloomCol, mistCol, birdCol] = skyPalettes[style] || skyPalettes.yucatan;
+    const [skyA, skyB, skyC, bloomCol, mistCol, birdCol] = SKY_PALETTES[style] || SKY_PALETTES.yucatan;
     const skyBotY = Math.max(0, surfY + 2);
     const horizonY = toScreenY(this.level.bounds.yMin + 1.15);
     const parallaxCam = this.camX;
@@ -1246,20 +1535,31 @@ export class CaveRenderer {
       const sx1 = toScreenX(xEnd);
       if (sx1 < 0 || sx0 > cw) continue;
 
-      const pts = [];
-      for (let wx = xStart; wx <= xEnd; wx += 0.28) {
-        const sdf = evaluateCaveSDF(this.level, wx, 0.05);
-        if (sdf < 0.04) {
-          const wy = Math.sin(wx * 1.15 + timeSec * 2.2) * 0.065 + Math.cos(wx * 2.4 - timeSec * 1.6) * 0.032;
-          pts.push([toScreenX(wx), toScreenY(wy), wx]);
-        } else if (pts.length > 1) {
-          this._strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec);
-          pts.length = 0;
-        } else {
-          pts.length = 0;
+      // Cached static open-water meniscus X-runs per basin (eliminates ~250 static SDF calls/frame)
+      let runs = this._waterMeniscusCache.get(b);
+      if (!runs) {
+        runs = [];
+        let cur = [];
+        for (let wx = xStart; wx <= xEnd; wx += 0.28) {
+          if (evaluateCaveSDF(this.level, wx, 0.05) < 0.04) {
+            cur.push(wx);
+          } else {
+            if (cur.length > 1) runs.push(cur);
+            cur = [];
+          }
         }
+        if (cur.length > 1) runs.push(cur);
+        this._waterMeniscusCache.set(b, runs);
       }
-      if (pts.length > 1) {
+
+      for (let rIdx = 0; rIdx < runs.length; rIdx++) {
+        const xs = runs[rIdx];
+        const pts = new Array(xs.length);
+        for (let i = 0; i < xs.length; i++) {
+          const wx = xs[i];
+          const wy = Math.sin(wx * 1.15 + timeSec * 2.2) * 0.065 + Math.cos(wx * 2.4 - timeSec * 1.6) * 0.032;
+          pts[i] = [toScreenX(wx), toScreenY(wy), wx];
+        }
         this._strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec);
       }
 
@@ -1317,15 +1617,21 @@ export class CaveRenderer {
   }
 
   _findBasinCliffEdgeX(basin, wy, side) {
+    const key = `${basin.xMin}|${Math.round(wy * 20)}|${side}`;
+    const cached = this._basinEdgeCache.get(key);
+    if (cached !== undefined) return cached;
     const cx = (basin.xMin + basin.xMax) * 0.5;
     const maxOffset = (basin.rimHalf || 5.2) + 6.5;
+    let found = cx + side * (basin.rimHalf || 5.2);
     for (let off = 1.0; off <= maxOffset; off += 0.25) {
       const wx = cx + side * off;
       if (evaluateCaveSDF(this.level, wx, wy) > 0.05) {
-        return wx;
+        found = wx;
+        break;
       }
     }
-    return cx + side * (basin.rimHalf || 5.2);
+    this._basinEdgeCache.set(key, found);
+    return found;
   }
 
   _sampleSurfaceFooting(level, wx, halfWidthM = 1.2) {
@@ -1340,29 +1646,7 @@ export class CaveRenderer {
 
   _getSurfaceBiomeSoilPalette() {
     const style = this.level.theme?.surfaceStyle || 'yucatan';
-    const palettes = {
-      'florida-cypress': { turf: '#3b4e24', soil: '#463b2d', tuft: '#5a722e', stone: '#686259' },
-      'nordic-fjord': { turf: '#2c4a3e', soil: '#36414c', tuft: '#476b5a', stone: '#64748b' },
-      'ural-birch': { turf: '#38574c', soil: '#52606d', tuft: '#5b7d6c', stone: '#9aa7b5' },
-      'provence-gorge': { turf: '#4e5f2c', soil: '#6c5c46', tuft: '#6f823e', stone: '#a69d8b' },
-      'kalahari-crater': { turf: '#7c5c28', soil: '#764128', tuft: '#b88c28', stone: '#8b4528' },
-      'bahamas-abaco': { turf: '#2f6548', soil: '#8f8b7e', tuft: '#4a855c', stone: '#c7c2b4' },
-      'budapest-bathhouse': { turf: '#41572c', soil: '#6a5d47', tuft: '#5c7838', stone: '#b5a88d' },
-      'sinai-coast': { turf: '#8e6c3f', soil: '#9c6e44', tuft: '#b88f4c', stone: '#b38354' },
-      'quercy-ressel': { turf: '#3e5932', soil: '#635e54', tuft: '#587842', stone: '#aca79a' },
-      'lazio-travertine': { turf: '#525f30', soil: '#736148', tuft: '#75823d', stone: '#b09d7c' },
-      'moravia-rift': { turf: '#2f4539', soil: '#37414b', tuft: '#476252', stone: '#546170' },
-      'oxbelha-twilight': { turf: '#233c26', soil: '#30342e', tuft: '#365a35', stone: '#4c5249' },
-      'aurora-basalt': { turf: '#1c313f', soil: '#1e242d', tuft: '#2dd4bf', stone: '#334155' },
-      'strytan-fjord': { turf: '#243b4a', soil: '#27303d', tuft: '#7dd3fc', stone: '#475569' },
-      'kverkfjoll-glacier': { turf: '#3b6b8f', soil: '#1f334a', tuft: '#a5f3fc', stone: '#7dd3fc' },
-      'grjotagja-rift': { turf: '#24292e', soil: '#1c1917', tuft: '#fb923c', stone: '#292524' },
-      'atlantida-lava': { turf: '#3b2b24', soil: '#1e1b18', tuft: '#fdba74', stone: '#44403c' },
-      'lagoa-cerrado': { turf: '#2f6532', soil: '#524432', tuft: '#4ade80', stone: '#8c8370' },
-      'boybulok-steppe': { turf: '#5c5340', soil: '#463f33', tuft: '#cbd5e1', stone: '#78716c' },
-      yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
-    };
-    return palettes[style] || palettes.yucatan;
+    return SURFACE_SOIL_PALETTES[style] || SURFACE_SOIL_PALETTES.yucatan;
   }
 
   _drawGroundContactShadow(ctx, x, y, width, scale, slopeRad = 0) {
@@ -2160,28 +2444,7 @@ export class CaveRenderer {
     if (spans.length === 0) return;
 
     const mossKind = this.level.theme?.mossTint || 'emerald';
-    const marginMap = {
-      'tannin-chert': ['#4e4535', '#4f5d2a'],
-      'glacial-marble': ['#3b4856', '#34524a'],
-      'provence-ivory': ['#6b604e', '#4d5d2b'],
-      'kalahari-ironstone': ['#784730', '#8c6932'],
-      'ural-gypsum': ['#6b7785', '#4b6b63'],
-      'abaco-aragonite': ['#5d6b6e', '#2f6d5a'],
-      'buda-thermal-marl': ['#6f624c', '#455931'],
-      'sinai-coral-sandstone': ['#8d6644', '#b58d52'],
-      'quercy-chalk': ['#6b6b64', '#415c36'],
-      'lazio-travertine': ['#7b6c55', '#5a6332'],
-      'moravia-carbonic': ['#3e4752', '#354b3e'],
-      'oxbelha-dusk': ['#323934', '#26422b'],
-      'katla-basalt': ['#232c38', '#2a4a5e'],
-      'strytan-smectite': ['#263544', '#2c5a70'],
-      'kverkfjoll-ice': ['#2e5272', '#67d4f5'],
-      'grjotagja-obsidian': ['#1f1c26', '#7c3aed'],
-      'atlantida-basalt': ['#262328', '#ea580c'],
-      'lagoa-cerrado': ['#5c5444', '#2f6d34'],
-      'boybulok-steppe': ['#6b5d4d', '#64748b'],
-    };
-    const [marginBase, ridgeBase] = marginMap[mossKind] || ['#4a3d2e', '#2e592d'];
+    const [marginBase, ridgeBase] = MARGIN_MAP[mossKind] || ['#4a3d2e', '#2e592d'];
     if (!this._rockPattern && this.rockTex?.canvas && ctx.createPattern) {
       this._rockPattern = ctx.createPattern(this.rockTex.canvas, 'repeat');
     }
@@ -3151,7 +3414,9 @@ export class CaveRenderer {
     const isKalahari = style === 'kalahari-crater';
     const isAbaco = style === 'bahamas-abaco';
     const isBudapest = style === 'budapest-bathhouse';
-    const isSinai = style === 'sinai-coast' || style === 'atlantida-lava';
+    const isSinai = style === 'sinai-coast';
+    const isAtlantida = style === 'atlantida-lava';
+    const isBarrenVolcanicOrGlacier = style === 'kverkfjoll-glacier' || style === 'grjotagja-rift';
     const isOxBelHa = style === 'oxbelha-twilight' || style === 'lagoa-cerrado';
     const isAurora =
       style === 'aurora-basalt' ||
@@ -3242,7 +3507,7 @@ export class CaveRenderer {
         ctx.stroke();
       }
 
-      // Flanking regional trees (spruce/birch, Mediterranean cypress, palms, or Kalahari umbrella acacia)
+      // Flanking regional trees (or volcanic basalt/ice cairns on barren glacier/lava rims)
       const treeSpecs = [
         { wx: topLeftX - 5.0, h: 5.8 },
         { wx: topRightX + 1.0, h: 5.4 },
@@ -3253,7 +3518,10 @@ export class CaveRenderer {
         const gy = toScreenY(this._getHorizonGroundY(this.level, ts.wx));
         const gx = toScreenX(ts.wx);
         const sway = Math.sin(timeSec * 1.2 + e * 1.8 + cx) * 0.07 * scale;
-        if (isNordic) {
+        if (isBarrenVolcanicOrGlacier) {
+          const rockCol = style === 'kverkfjoll-glacier' ? '#67b7dc' : '#292524';
+          this._drawAnchoredBoulder(ctx, ts.wx, 0.72 + e * 0.14, 0.34 + (e & 1) * 0.12, toScreenX, toScreenY, scale, rockCol);
+        } else if (isNordic) {
           if ((e & 1) === 0) this._drawNorwaySpruce(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h);
           else this._drawSilverBirch(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h * 0.85);
         } else if (isKalahari) {
@@ -3261,7 +3529,7 @@ export class CaveRenderer {
         } else if (isAbaco) {
           if (e === 1) this._drawBotanicalPalm(ctx, ts.wx, toScreenX, toScreenY, scale, 1, sway, ts.h * 0.82);
           else this._drawLongleafPine(ctx, ts.wx, toScreenX, toScreenY, scale, sway * 0.85, ts.h * 0.95);
-        } else if (isSinai || isOxBelHa) {
+        } else if (isSinai || isOxBelHa || isAtlantida) {
           this._drawBotanicalPalm(ctx, ts.wx, toScreenX, toScreenY, scale, e === 0 ? 1 : -1, sway * 0.75, ts.h * 0.78);
         } else if (isBudapest) {
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.85 * scale, gx, gy - 1.55 * scale, 0.17 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
@@ -3370,6 +3638,8 @@ export class CaveRenderer {
     if (!sunCurtains.length) return;
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
+    const cyanStamp = this.glowStamps.cyan;
+    const warmStamp = this.glowStamps.warm;
     for (const { rays } of sunCurtains) {
       for (let i = 0; i < rays.length - 1; i += 2) {
         const a = rays[i];
@@ -3391,6 +3661,21 @@ export class CaveRenderer {
         ctx.lineTo(toScreenX(a.xBot), toScreenY(a.yBot));
         ctx.closePath();
         ctx.fill();
+
+        // Projected shimmering wall-hit sun caustic pools where daylight strikes rock ledges
+        if (cyanStamp && a.hitWall && a.yBot < 16.5) {
+          const depthAtten = Math.max(0, 1 - a.yBot / 16.5);
+          const inc = Math.max(0.25, a.incidence || 0.5);
+          const cAlpha = depthAtten * inc * (0.14 + shimmer * 0.2);
+          if (cAlpha > 0.025) {
+            const wx = toScreenX(a.xBot + Math.sin(timeSec * 2.8 + i) * 0.14);
+            const wy = toScreenY(a.yBot);
+            const rad = (0.75 + shimmer * 0.42) * scale;
+            ctx.globalAlpha = Math.min(0.42, cAlpha);
+            ctx.drawImage(a.yBot < 7.5 && warmStamp ? warmStamp : cyanStamp, wx - rad, wy - rad * 0.65, rad * 2, rad * 1.3);
+            ctx.globalAlpha = 1;
+          }
+        }
       }
     }
     ctx.restore();
@@ -3924,9 +4209,9 @@ export class CaveRenderer {
       const r = 0.36 * scale * itemScale;
 
       const stamp =
-        item.kind === 'relic'
+        item.kind === 'relic' || item.kind === 'gear'
           ? this.glowStamps.warm
-          : item.kind === 'crystal'
+          : item.kind === 'crystal' || item.kind === 'pearl'
             ? this.glowStamps.magenta
             : item.kind === 'fossil'
               ? this.glowStamps.emerald
@@ -4014,6 +4299,52 @@ export class CaveRenderer {
           if (s === 0) ctx.moveTo(px, py);
           else ctx.lineTo(px, py);
         }
+        ctx.stroke();
+      } else if (item.kind === 'pearl') {
+        // Iridescent nacre oyster pearl nestled in a fluted dark shell
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+        ctx.beginPath();
+        ctx.ellipse(0, r * 0.36, r * 0.88, r * 0.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#e0e7ff';
+        ctx.beginPath();
+        ctx.arc(0, -r * 0.06, r * 0.56, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(244, 114, 182, 0.32)';
+        ctx.beginPath();
+        ctx.arc(r * 0.14, r * 0.08, r * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.beginPath();
+        ctx.arc(-r * 0.18, -r * 0.24, r * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (item.kind === 'gear') {
+        // Vintage brass submersible pressure gauge (SPG) / expedition compass
+        ctx.fillStyle = '#b45309';
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = Math.max(1.3, 0.05 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.52, -Math.PI * 0.85, Math.PI * 0.35);
+        ctx.stroke();
+        ctx.strokeStyle = '#f87171';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(r * 0.42, -r * 0.24);
         ctx.stroke();
       } else {
         // Survey exploration reel / brass marker tag
@@ -4365,44 +4696,62 @@ export class CaveRenderer {
     ctx.restore();
   }
 
+  _ensureBiolumMotes() {
+    if (this._biolumMotes) return this._biolumMotes;
+    const motes = [];
+    const { xMin, xMax, yMax } = this.level.bounds;
+    if (yMax >= 34) {
+      const cellSize = 10;
+      const cx0 = Math.floor(xMin / cellSize);
+      const cx1 = Math.ceil(xMax / cellSize);
+      const cy0 = Math.floor(34 / cellSize);
+      const cy1 = Math.ceil(yMax / cellSize);
+      for (let cx = cx0; cx <= cx1; cx++) {
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let k = 0; k < 6; k++) {
+            const h1 = Math.sin(cx * 127.1 + cy * 311.7 + k * 74.7) * 43758.5453;
+            const r1 = h1 - Math.floor(h1);
+            const h2 = Math.sin(cx * 269.5 + cy * 183.3 + k * 41.9) * 43758.5453;
+            const r2 = h2 - Math.floor(h2);
+            const bx = (cx + r1) * cellSize;
+            const by = (cy + r2) * cellSize;
+            if (by < 34 || evaluateCaveSDF(this.level, bx, by) >= -0.45) continue;
+            motes.push({ bx, by, r1, r2, k, isTeal: (k & 1) === 0 });
+          }
+        }
+      }
+    }
+    this._biolumMotes = motes;
+    return motes;
+  }
+
   _drawBioluminescence(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
     if (visY1 < 34) return;
-    const cellSize = 10;
-    const cx0 = Math.floor(visX0 / cellSize);
-    const cx1 = Math.ceil(visX1 / cellSize);
-    const cy0 = Math.max(Math.floor(34 / cellSize), Math.floor(visY0 / cellSize));
-    const cy1 = Math.ceil(visY1 / cellSize);
+    const motes = this._ensureBiolumMotes();
+    if (!motes.length) return;
+    const cyanStamp = this.glowStamps.cyan;
+    const magStamp = this.glowStamps.magenta;
     ctx.save();
-    for (let cx = cx0; cx <= cx1; cx++) {
-      for (let cy = cy0; cy <= cy1; cy++) {
-        for (let k = 0; k < 6; k++) {
-          const h1 = Math.sin(cx * 127.1 + cy * 311.7 + k * 74.7) * 43758.5453;
-          const r1 = h1 - Math.floor(h1);
-          const h2 = Math.sin(cx * 269.5 + cy * 183.3 + k * 41.9) * 43758.5453;
-          const r2 = h2 - Math.floor(h2);
-          const wx = (cx + r1) * cellSize + Math.sin(timeSec * 0.55 + r2 * 6.28) * 0.75;
-          const wy = (cy + r2) * cellSize + Math.cos(timeSec * 0.45 + r1 * 6.28) * 0.55;
-          if (wy < 34 || evaluateCaveSDF(this.level, wx, wy) >= -0.35) continue;
-          const twinkle = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(timeSec * 1.9 + r1 * 12 + k), 2);
-          const sx = toScreenX(wx);
-          const sy = toScreenY(wy);
-          const haloR = Math.max(4.5, (0.2 + r2 * 0.16) * scale);
-          const isTeal = k % 2 === 0;
-          const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
-          if (isTeal) {
-            g.addColorStop(0, `rgba(153, 246, 228, ${(0.9 * twinkle).toFixed(2)})`);
-            g.addColorStop(0.28, `rgba(45, 212, 191, ${(0.42 * twinkle).toFixed(2)})`);
-            g.addColorStop(1, 'rgba(45, 212, 191, 0)');
-          } else {
-            g.addColorStop(0, `rgba(221, 214, 254, ${(0.85 * twinkle).toFixed(2)})`);
-            g.addColorStop(0.28, `rgba(167, 139, 250, ${(0.38 * twinkle).toFixed(2)})`);
-            g.addColorStop(1, 'rgba(167, 139, 250, 0)');
-          }
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(sx, sy, haloR, 0, Math.PI * 2);
-          ctx.fill();
-        }
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < motes.length; i++) {
+      const m = motes[i];
+      if (m.bx < visX0 - 1.5 || m.bx > visX1 + 1.5 || m.by < visY0 - 1.5 || m.by > visY1 + 1.5) continue;
+      const wx = m.bx + Math.sin(timeSec * 0.55 + m.r2 * 6.28) * 0.72;
+      const wy = m.by + Math.cos(timeSec * 0.45 + m.r1 * 6.28) * 0.52;
+      const s = 0.5 + 0.5 * Math.sin(timeSec * 1.9 + m.r1 * 12 + m.k);
+      const twinkle = 0.25 + 0.75 * s * s;
+      const sx = toScreenX(wx);
+      const sy = toScreenY(wy);
+      const haloR = Math.max(5.5, (0.24 + m.r2 * 0.18) * scale);
+      const stamp = m.isTeal ? cyanStamp : magStamp;
+      ctx.globalAlpha = 0.65 * twinkle;
+      if (stamp) {
+        ctx.drawImage(stamp, sx - haloR, sy - haloR, haloR * 2, haloR * 2);
+      } else {
+        ctx.fillStyle = m.isTeal ? '#5eead4' : '#c4b5fd';
+        ctx.beginPath();
+        ctx.arc(sx, sy, haloR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     ctx.restore();
@@ -4616,6 +4965,13 @@ export class CaveRenderer {
     ctx.fill();
     ctx.fillStyle = isPeer ? '#fdba74' : '#22d3ee';
     ctx.fillRect(-0.045 * scale, -0.032 * scale, 0.09 * scale, 0.064 * scale);
+    const wrGlow = isPeer ? this.glowStamps.warm : this.glowStamps.cyan;
+    if (wrGlow) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.42;
+      const gR = 0.22 * scale;
+      ctx.drawImage(wrGlow, -gR, -gR, gR * 2, gR * 2);
+    }
     ctx.restore();
 
     // Torch body at hand
@@ -4631,6 +4987,12 @@ export class CaveRenderer {
       ctx.beginPath();
       ctx.arc(0.18 * scale, 0, 0.05 * scale, 0, Math.PI * 2);
       ctx.fill();
+      if (this.glowStamps.warm) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55;
+        const lR = 0.26 * scale;
+        ctx.drawImage(this.glowStamps.warm, 0.18 * scale - lR, -lR, lR * 2, lR * 2);
+      }
     }
     ctx.restore();
 
@@ -4804,31 +5166,49 @@ export class CaveRenderer {
       ctx.fill();
     }
 
-    if (!isPeer && this.dustMotes.length > 0) {
+    if (!isPeer) {
       // Suspended water particulates & soft bokeh plankton sparkling inside ray-cast torch polygon
+      // Uses deterministic 6m world grid tiling so every tunnel across all 20 levels has rich marine snow
       const maxDistSq = rangeM * rangeM;
       const moteStamp = this.glowStamps.cyan;
       const sparks = [];
-      for (let i = 0; i < this.dustMotes.length; i++) {
-        const m = this.dustMotes[i];
-        const dx = m.x - torchData.ox;
-        const dy = m.y - torchData.oy;
-        const dSq = dx * dx + dy * dy;
-        if (dSq > maxDistSq || dSq < 0.3) continue;
-        const driftX = m.x + Math.sin(timeSec * 0.8 + m.phase) * 0.18;
-        const driftY = m.y + Math.cos(timeSec * 0.65 + m.phase) * 0.14;
-        const fade = Math.max(0, 1 - Math.sqrt(dSq) / rangeM);
-        const mx = toScreenX(driftX);
-        const my = toScreenY(driftY);
-        if (i % 5 === 0) {
-          const bokehR = Math.max(4, m.size * 6.5 * scale);
-          ctx.globalAlpha = 0.28 * fade;
-          ctx.drawImage(moteStamp, mx - bokehR, my - bokehR, bokehR * 2, bokehR * 2);
+      const cell = 6;
+      const gx0 = Math.floor((torchData.ox - rangeM) / cell);
+      const gx1 = Math.ceil((torchData.ox + rangeM) / cell);
+      const gy0 = Math.floor((torchData.oy - rangeM) / cell);
+      const gy1 = Math.ceil((torchData.oy + rangeM) / cell);
+      for (let gx = gx0; gx <= gx1; gx++) {
+        for (let gy = gy0; gy <= gy1; gy++) {
+          for (let k = 0; k < 4; k++) {
+            const h1 = Math.sin(gx * 127.1 + gy * 311.7 + k * 74.7) * 43758.5453;
+            const r1 = h1 - Math.floor(h1);
+            const h2 = Math.sin(gx * 269.5 + gy * 183.3 + k * 41.9) * 43758.5453;
+            const r2 = h2 - Math.floor(h2);
+            const wx = (gx + r1) * cell;
+            const wy = (gy + r2) * cell;
+            if (wy < 0.25) continue;
+            const dx = wx - torchData.ox;
+            const dy = wy - torchData.oy;
+            const dSq = dx * dx + dy * dy;
+            if (dSq > maxDistSq || dSq < 0.35) continue;
+            const phase = r1 * 6.283;
+            const driftX = wx + Math.sin(timeSec * 0.78 + phase) * 0.19;
+            const driftY = wy + Math.cos(timeSec * 0.62 + phase) * 0.14;
+            const mx = toScreenX(driftX);
+            const my = toScreenY(driftY);
+            const size = 0.028 + r2 * 0.036;
+            if (k === 0 && moteStamp) {
+              const fade = Math.max(0, 1 - Math.sqrt(dSq) / rangeM);
+              const bokehR = Math.max(3.5, size * 6.2 * scale);
+              ctx.globalAlpha = 0.26 * fade;
+              ctx.drawImage(moteStamp, mx - bokehR, my - bokehR, bokehR * 2, bokehR * 2);
+            }
+            sparks.push(mx, my, Math.max(1, size * scale));
+          }
         }
-        sparks.push(mx, my, Math.max(1, m.size * scale));
       }
       if (sparks.length > 0) {
-        ctx.globalAlpha = 0.42;
+        ctx.globalAlpha = 0.44;
         ctx.fillStyle = '#e0f2fe';
         ctx.beginPath();
         for (let i = 0; i < sparks.length; i += 3) {
@@ -5076,6 +5456,21 @@ export class CaveRenderer {
       lctx.globalAlpha = 1;
     }
 
+    // Geothermal vent illumination cutouts (lights up surrounding volcanic basalt/chimney walls)
+    if (cutoutStamp && Array.isArray(this.level.geothermalVents)) {
+      for (let i = 0; i < this.level.geothermalVents.length; i++) {
+        const v = this.level.geothermalVents[i];
+        const vx = toScreenX(v.x) * rx;
+        const vy = toScreenY(v.y - (v.plumeHeight ? v.plumeHeight * 0.18 : 1.0)) * ry;
+        const rad = (4.2 + (v.radius || 1.2) * 1.4) * scale * rx;
+        if (vx + rad < 0 || vx - rad > lw || vy + rad < 0 || vy - rad > lh) continue;
+        const pulse = 0.62 + 0.22 * Math.sin(timeSec * 3.4 + i * 1.7);
+        lctx.globalAlpha = Math.min(0.88, pulse * (0.75 + (v.strength || 0.7) * 0.25));
+        lctx.drawImage(cutoutStamp, vx - rad, vy - rad, rad * 2, rad * 2);
+      }
+      lctx.globalAlpha = 1;
+    }
+
     // Emergency locator beacon cutout around fallen diver recovery target
     if (this.level.recoveryTarget && !bodyRecovered) {
       const rt = this.level.recoveryTarget;
@@ -5198,6 +5593,11 @@ export class CaveRenderer {
       }
     }
 
+    // Pass 1: all source-over silt bodies & wispy tendrils; collect lit glare records for Pass 2
+    const glareList = this._siltGlareScratch;
+    glareList.length = 0;
+    ctx.globalCompositeOperation = 'source-over';
+
     for (let i = 0; i < siltClouds.length; i++) {
       const s = siltClouds[i];
       const sx = toScreenX(s.x);
@@ -5211,7 +5611,9 @@ export class CaveRenderer {
         const src = lights[l];
         const dx = s.x - src.x;
         const dy = s.y - src.y;
-        const dist = Math.hypot(dx, dy);
+        const dSq = dx * dx + dy * dy;
+        if (dSq >= 210.25) continue; // 14.5^2
+        const dist = Math.sqrt(dSq);
         const nearLit = 1 - dist / 14.5;
         if (nearLit > lit) lit = nearLit;
         if (src.torchOn && dist < 13.0) {
@@ -5226,7 +5628,6 @@ export class CaveRenderer {
       const rot = (s.rot ?? s.seed ?? 0) + Math.sin(timeSec * 0.35 + (s.seed || 0)) * 0.25;
 
       // Soft ambient silt body + multi-lobed rotating wispy cloud layers in world space
-      ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = Math.min(0.68, s.alpha * (0.34 + lit * 0.38));
       ctx.drawImage(baseStamp, sx - r * 0.92, sy - r * 0.92, r * 1.84, r * 1.84);
 
@@ -5244,21 +5645,36 @@ export class CaveRenderer {
       }
       ctx.restore();
 
-      // World-space milky torch backscatter when ANY diver's beam sweeps across the silt cloud
       if (glare > 0.01) {
-        ctx.globalCompositeOperation = 'screen';
+        glareList.push(sx, sy, r, glare, s.seed || 0);
+      }
+    }
+
+    // Pass 2: single batched 'screen' milky torch backscatter across all lit silt clouds
+    if (glareList.length > 0) {
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < glareList.length; i += 5) {
+        const sx = glareList[i];
+        const sy = glareList[i + 1];
+        const r = glareList[i + 2];
+        const glare = glareList[i + 3];
         ctx.globalAlpha = Math.min(0.65, glare * 0.72);
         ctx.drawImage(warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
+      }
 
-        // Suspended limestone sediment specks glinting inside the lit beam
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
+      // Pass 3: single batched 'source-over' suspended limestone sediment glints
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
+      for (let i = 0; i < glareList.length; i += 5) {
+        const sx = glareList[i];
+        const sy = glareList[i + 1];
+        const r = glareList[i + 2];
+        const seed = glareList[i + 4];
         for (let k = 0; k < 4; k++) {
-          const a = (s.seed || 0) + k * 1.65 + timeSec * 0.25;
+          const a = seed + k * 1.65 + timeSec * 0.25;
           const d = r * (0.25 + ((k * 37) % 10) * 0.055);
-          const px = sx + Math.cos(a) * d;
-          const py = sy + Math.sin(a * 1.2) * d * 0.75;
-          ctx.fillRect(px, py, 2.2, 2.2);
+          ctx.fillRect(sx + Math.cos(a) * d, sy + Math.sin(a * 1.2) * d * 0.75, 2.2, 2.2);
         }
       }
     }

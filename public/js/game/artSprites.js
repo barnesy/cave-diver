@@ -428,6 +428,45 @@ export function drawStyledRemipede(ctx, r, sx, sy, scale, timeSec) {
   ctx.restore();
 }
 
+const _rigGradByCtx = new WeakMap();
+
+function _getRigGradients(ctx, u) {
+  let ctxMap = _rigGradByCtx.get(ctx);
+  if (!ctxMap) {
+    ctxMap = new Map();
+    _rigGradByCtx.set(ctx, ctxMap);
+  }
+  const uKey = Math.round(u * 2); // 0.5px quantization keeps crisp shading with high hit-rate
+  let cached = ctxMap.get(uKey);
+  if (cached) return cached;
+
+  const q = uKey * 0.5 || 1;
+  const suitGrad = ctx.createLinearGradient(0, -q * 0.4, 0, q * 0.45);
+  suitGrad.addColorStop(0, '#1e293b');
+  suitGrad.addColorStop(0.55, '#0f172a');
+  suitGrad.addColorStop(1, '#020617');
+
+  const tankGrad = ctx.createLinearGradient(0, -q * 0.62, 0, -q * 0.24);
+  tankGrad.addColorStop(0, '#f8fafc');
+  tankGrad.addColorStop(0.4, '#cbd5e1');
+  tankGrad.addColorStop(1, '#64748b');
+
+  const stageGrad = ctx.createLinearGradient(0, q * 0.24, 0, q * 0.52);
+  stageGrad.addColorStop(0, '#e2e8f0');
+  stageGrad.addColorStop(0.5, '#94a3b8');
+  stageGrad.addColorStop(1, '#475569');
+
+  const glassGrad = ctx.createLinearGradient(q * 0.5, -q * 0.2, q * 0.75, q * 0.06);
+  glassGrad.addColorStop(0, '#cffafe');
+  glassGrad.addColorStop(0.45, '#22d3ee');
+  glassGrad.addColorStop(1, '#0e7490');
+
+  cached = { suitGrad, tankGrad, stageGrad, glassGrad };
+  if (ctxMap.size > 24) ctxMap.clear();
+  ctxMap.set(uKey, cached);
+  return cached;
+}
+
 /**
  * Draws the Life Aquatic / technical cave diver rig details (drysuit seam, Zissou accent,
  * brushed twinset, glass mask glint, glowing cyan wrist dive computer).
@@ -435,12 +474,9 @@ export function drawStyledRemipede(ctx, r, sx, sy, scale, timeSec) {
 export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   const accent = isPeer ? '#fb923c' : '#ef4444'; // Classic Zissou red cap/accent vs buddy orange
   const trim = isPeer ? '#fdba74' : '#38bdf8';
+  const { suitGrad, tankGrad, stageGrad, glassGrad } = _getRigGradients(ctx, u);
 
   // Sculpted drysuit torso shell with shading
-  const suitGrad = ctx.createLinearGradient(0, -u * 0.4, 0, u * 0.45);
-  suitGrad.addColorStop(0, '#1e293b');
-  suitGrad.addColorStop(0.55, '#0f172a');
-  suitGrad.addColorStop(1, '#020617');
   ctx.fillStyle = suitGrad;
   ctx.beginPath();
   ctx.ellipse(-u * 0.22, u * 0.02, u * 0.72, u * 0.31, 0, 0, Math.PI * 2);
@@ -455,10 +491,6 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.stroke();
 
   // Twin Backgas Cylinders (brushed aluminum metallic gradient)
-  const tankGrad = ctx.createLinearGradient(0, -u * 0.62, 0, -u * 0.24);
-  tankGrad.addColorStop(0, '#f8fafc');
-  tankGrad.addColorStop(0.4, '#cbd5e1');
-  tankGrad.addColorStop(1, '#64748b');
   ctx.fillStyle = tankGrad;
   ctx.beginPath();
   ctx.roundRect(-u * 0.9, -u * 0.58, u * 1.15, u * 0.35, u * 0.15);
@@ -475,10 +507,6 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.fillRect(-u * 0.66, -u * 0.58, u * 0.1, u * 0.35);
 
   // Slung Stage Cylinder (Deco / Travel bottle) with color band
-  const stageGrad = ctx.createLinearGradient(0, u * 0.24, 0, u * 0.52);
-  stageGrad.addColorStop(0, '#e2e8f0');
-  stageGrad.addColorStop(0.5, '#94a3b8');
-  stageGrad.addColorStop(1, '#475569');
   ctx.fillStyle = stageGrad;
   ctx.beginPath();
   ctx.roundRect(-u * 0.58, u * 0.26, u * 0.9, u * 0.24, u * 0.11);
@@ -486,7 +514,7 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.fillStyle = isPeer ? '#fb923c' : '#22c55e';
   ctx.fillRect(-u * 0.2, u * 0.26, u * 0.14, u * 0.24);
 
-  // Hood / Helmet with subtle Zissou-inspired stripe accent
+  // Hood / Helmet with subtle Zissou-inspired stripe accent & top rim catchlight
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
   ctx.arc(u * 0.44, -u * 0.02 * Math.sign(rollScale || 1), u * 0.32, 0, Math.PI * 2);
@@ -495,23 +523,30 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.beginPath();
   ctx.arc(u * 0.40, -u * 0.14, u * 0.22, Math.PI * 1.05, Math.PI * 1.95);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(224, 242, 254, 0.28)';
+  ctx.lineWidth = Math.max(1, u * 0.032);
+  ctx.beginPath();
+  ctx.arc(u * 0.44, -u * 0.02 * Math.sign(rollScale || 1), u * 0.30, Math.PI * 1.15, Math.PI * 1.82);
+  ctx.stroke();
 
-  // Frameless Dive Mask with Cyan Glass Reflection & Visible Eye
+  // Frameless Dive Mask with Cyan Glass Reflection & Curved Specular Glint
   ctx.fillStyle = '#083344';
   ctx.beginPath();
   ctx.roundRect(u * 0.50, -u * 0.2, u * 0.25, u * 0.26, u * 0.07);
   ctx.fill();
-  const glassGrad = ctx.createLinearGradient(u * 0.5, -u * 0.2, u * 0.75, u * 0.06);
-  glassGrad.addColorStop(0, '#a5f3fc');
-  glassGrad.addColorStop(0.5, '#22d3ee');
-  glassGrad.addColorStop(1, '#0e7490');
   ctx.fillStyle = glassGrad;
   ctx.beginPath();
   ctx.roundRect(u * 0.53, -u * 0.18, u * 0.20, u * 0.21, u * 0.05);
   ctx.fill();
-  // Specular glint on mask glass
-  ctx.fillStyle = 'rgba(255,255,255,0.72)';
-  ctx.fillRect(u * 0.56, -u * 0.15, u * 0.11, u * 0.04);
+  // Diagonal curved lens specular highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.78)';
+  ctx.beginPath();
+  ctx.moveTo(u * 0.56, -u * 0.155);
+  ctx.quadraticCurveTo(u * 0.62, -u * 0.165, u * 0.685, -u * 0.125);
+  ctx.lineTo(u * 0.655, -u * 0.095);
+  ctx.quadraticCurveTo(u * 0.60, -u * 0.128, u * 0.555, -u * 0.12);
+  ctx.closePath();
+  ctx.fill();
 
   // Regulator 2nd Stage & Curved Long Hose
   ctx.fillStyle = '#facc15';

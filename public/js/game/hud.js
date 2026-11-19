@@ -44,32 +44,57 @@ function createEkgState(width = 160) {
     cursor: 0,
     phase: Math.random(),
     accumX: 0,
+    ctx: null,
+    layoutW: width,
+    layoutH: 22,
+    measured: false,
+    visible: true,
   };
+}
+
+function measureEkgCanvas(canvas, state) {
+  if (!canvas || !state) return;
+  const w = Math.round(canvas.clientWidth || 0);
+  const h = Math.round(canvas.clientHeight || 0);
+  state.measured = true;
+  if (w > 0 && h > 0) {
+    state.visible = true;
+    state.layoutW = w;
+    state.layoutH = h;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  } else {
+    // Hidden canvas (e.g. mobile compact card) — skip expensive 2D strokes until visible
+    state.visible = canvas.offsetParent !== null && canvas.width > 0 && canvas.height > 0;
+  }
 }
 
 function stepAndDrawEkg(canvas, state, bpm, alive, dt = 0.016) {
   if (!canvas) return false;
-  const ctx = canvas.getContext('2d');
+  if (!state.measured) {
+    measureEkgCanvas(canvas, state);
+  }
+  const effectiveBpm = alive ? Math.max(40, Math.min(210, bpm || 68)) : 0;
+  const beatHz = effectiveBpm / 60;
+  if (!state.visible) {
+    state.phase = (state.phase + beatHz * dt) % 1;
+    return alive && state.phase >= 0.22 && state.phase <= 0.34;
+  }
+  const ctx = state.ctx || (state.ctx = canvas.getContext('2d'));
   if (!ctx) return false;
 
-  const layoutW = Math.round(canvas.clientWidth || 0);
-  const layoutH = Math.round(canvas.clientHeight || 0);
-  if (layoutW > 0 && layoutH > 0 && (canvas.width !== layoutW || canvas.height !== layoutH)) {
-    canvas.width = layoutW;
-    canvas.height = layoutH;
-  }
   const w = canvas.width;
   const h = canvas.height;
+  if (w <= 0 || h <= 0) return false;
   if (state.samples.length !== w) {
     state.samples = new Float32Array(w);
     state.cursor = 0;
   }
 
-  const effectiveBpm = alive ? Math.max(40, Math.min(210, bpm || 68)) : 0;
-  const beatHz = effectiveBpm / 60;
   const sweepPxPerSec = 48;
   const stepPx = sweepPxPerSec * dt;
-  const prevCursor = state.cursor;
   state.accumX += stepPx;
 
   const pxAdvance = Math.min(8, Math.floor(state.accumX));
@@ -130,6 +155,48 @@ function stepAndDrawEkg(canvas, state, bpm, alive, dt = 0.016) {
   return alive && state.phase >= 0.22 && state.phase <= 0.34;
 }
 
+const _domState = new WeakMap();
+function _getCache(el) {
+  let c = _domState.get(el);
+  if (!c) {
+    c = {};
+    _domState.set(el, c);
+  }
+  return c;
+}
+function setText(el, val) {
+  if (!el) return;
+  const c = _getCache(el);
+  if (c.t !== val) {
+    c.t = val;
+    el.textContent = val;
+  }
+}
+function setClass(el, cls) {
+  if (!el) return;
+  const c = _getCache(el);
+  if (c.c !== cls) {
+    c.c = cls;
+    el.className = cls;
+  }
+}
+function setHidden(el, hidden) {
+  if (!el) return;
+  const c = _getCache(el);
+  if (c.h !== hidden) {
+    c.h = hidden;
+    el.hidden = hidden;
+  }
+}
+function setStyleProp(el, prop, val) {
+  if (!el) return;
+  const c = _getCache(el);
+  if (c[prop] !== val) {
+    c[prop] = val;
+    el.style[prop] = val;
+  }
+}
+
 export class DiveComputerHUD {
   constructor({ onGasSelect, onReelToggle, onReelRewind }) {
     this.elDepth = document.getElementById('dc-depth');
@@ -174,6 +241,32 @@ export class DiveComputerHUD {
     });
     this.selfEkg = createEkgState(128);
     this.mateCards = new Map();
+    this._seenPeerIds = new Set();
+    this._ekgStateByCanvas = new WeakMap();
+    this._ekgResizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      try {
+        this._ekgResizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const st = this._ekgStateByCanvas.get(entry.target);
+            if (st) st.measured = false;
+          }
+        });
+      } catch (_) {}
+    }
+    if (this.elEkgCanvas) {
+      this._ekgStateByCanvas.set(this.elEkgCanvas, this.selfEkg);
+      this._ekgResizeObserver?.observe(this.elEkgCanvas);
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      this._onHudResize = () => {
+        this.selfEkg.measured = false;
+        for (const ui of this.mateCards.values()) {
+          if (ui?.ekg) ui.ekg.measured = false;
+        }
+      };
+      window.addEventListener('resize', this._onHudResize, { passive: true });
+    }
     const bindVital = (el) => ({
       el,
       fill: el?.querySelector('.v-fill') || null,
@@ -259,41 +352,41 @@ export class DiveComputerHUD {
     reelingActive = false,
     dt = 0.016,
   }) {
-    this.elDepth.textContent = diveState.depthM.toFixed(1);
-    this.elMaxDepth.textContent = `MAX ${diveState.maxDepthM.toFixed(1)}m`;
-    this.elTime.textContent = formatClock(diveState.diveTimeSec);
+    setText(this.elDepth, diveState.depthM.toFixed(1));
+    setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
+    setText(this.elTime, formatClock(diveState.diveTimeSec));
 
     // NDL vs Mandatory Deco Stop
     if (diveState.stopDepthM > 0) {
       const violating = diveState.depthM < diveState.ceilingM - 0.5;
-      this.elDecoLabel.textContent = violating ? 'BELOW CEIL!' : `STOP ${diveState.stopDepthM}m`;
-      this.elDecoVal.textContent = formatClock(diveState.stopRemainingSec);
-      this.elDecoVal.className = `dc-val ${violating ? 'danger blink' : 'warn'}`;
-      this.elDecoLabel.className = `dc-lbl ${violating ? 'danger' : 'warn'}`;
+      setText(this.elDecoLabel, violating ? 'BELOW CEIL!' : `STOP ${diveState.stopDepthM}m`);
+      setText(this.elDecoVal, formatClock(diveState.stopRemainingSec));
+      setClass(this.elDecoVal, `dc-val ${violating ? 'danger blink' : 'warn'}`);
+      setClass(this.elDecoLabel, `dc-lbl ${violating ? 'danger' : 'warn'}`);
     } else {
-      this.elDecoLabel.textContent = 'NDL';
-      this.elDecoLabel.className = 'dc-lbl';
-      this.elDecoVal.textContent = `${diveState.ndlMin}m`;
-      this.elDecoVal.className = `dc-val ${diveState.ndlMin <= 2 ? 'warn' : 'ok'}`;
+      setText(this.elDecoLabel, 'NDL');
+      setClass(this.elDecoLabel, 'dc-lbl');
+      setText(this.elDecoVal, `${diveState.ndlMin}m`);
+      setClass(this.elDecoVal, `dc-val ${diveState.ndlMin <= 2 ? 'warn' : 'ok'}`);
     }
 
     // PPO2 color grading
-    this.elPPO2.textContent = diveState.ppo2.toFixed(2);
+    setText(this.elPPO2, diveState.ppo2.toFixed(2));
     if (diveState.ppo2 < 0.16 && diveState.depthM > 0.2) {
-      this.elPPO2.className = 'dc-val cyan blink';
+      setClass(this.elPPO2, 'dc-val cyan blink');
     } else if (diveState.ppo2 > 1.6) {
-      this.elPPO2.className = 'dc-val danger blink';
+      setClass(this.elPPO2, 'dc-val danger blink');
     } else if (diveState.ppo2 > 1.4) {
-      this.elPPO2.className = 'dc-val warn';
+      setClass(this.elPPO2, 'dc-val warn');
     } else {
-      this.elPPO2.className = 'dc-val ok';
+      setClass(this.elPPO2, 'dc-val ok');
     }
 
     // CNS & END & Self Vitals Bars
-    this.elCNS.textContent = `${Math.round(diveState.cnsPercent)}%`;
-    this.elCNS.className = `dc-subval ${diveState.cnsPercent >= 80 ? 'danger' : diveState.cnsPercent >= 40 ? 'warn' : ''}`;
-    this.elEND.textContent = `END ${Math.round(diveState.endM)}m`;
-    this.elEND.className = `dc-subval ${diveState.narcosisLevel > 0.35 ? 'warn' : ''}`;
+    setText(this.elCNS, `${Math.round(diveState.cnsPercent)}%`);
+    setClass(this.elCNS, `dc-subval ${diveState.cnsPercent >= 80 ? 'danger' : diveState.cnsPercent >= 40 ? 'warn' : ''}`);
+    setText(this.elEND, `END ${Math.round(diveState.endM)}m`);
+    setClass(this.elEND, `dc-subval ${diveState.narcosisLevel > 0.35 ? 'warn' : ''}`);
 
     this._updateVitalBar(this.vitalEls.tox, diveState.cnsPercent, 30, 70);
     this._updateVitalBar(this.vitalEls.dcs, diveState.dcsStress, 22, 65);
@@ -304,10 +397,9 @@ export class DiveComputerHUD {
     const myBpm = diveState.alive === false ? 0 : Math.round(diveState.heartRateBpm ?? 68);
     if (this.elSelfName) {
       const cleanName = typeof playerName === 'string' ? playerName.trim() : '';
-      const selfLabel = cleanName ? `YOU · ${cleanName}` : 'YOU';
-      if (this.elSelfName.textContent !== selfLabel) this.elSelfName.textContent = selfLabel;
+      setText(this.elSelfName, cleanName ? `YOU · ${cleanName}` : 'YOU');
     }
-    if (this.elEkgBpm) this.elEkgBpm.textContent = diveState.alive === false ? '--' : String(myBpm);
+    setText(this.elEkgBpm, diveState.alive === false ? '--' : String(myBpm));
     const selfSev =
       diveState.alive === false ||
       diveState.criticalAlarm ||
@@ -325,49 +417,51 @@ export class DiveComputerHUD {
             ((diveState.narcosisLevel || 0) * 100) >= 28
           ? 'warn'
           : '';
-    if (this.elSelfHealth) {
-      const selfCardCls = `self-health-card ${selfSev}`.trim();
-      if (this.elSelfHealth.className !== selfCardCls) this.elSelfHealth.className = selfCardCls;
-    }
+    setClass(this.elSelfHealth, selfSev ? `self-health-card ${selfSev}` : 'self-health-card');
     if (this.elEkgRow) {
       const hrCls = diveState.alive === false || myBpm >= 145 ? 'danger' : myBpm >= 115 ? 'warn' : '';
-      this.elEkgRow.className = `dc-ekg-row ${hrCls}`.trim();
+      setClass(this.elEkgRow, hrCls ? `dc-ekg-row ${hrCls}` : 'dc-ekg-row');
     }
     const qrsPeak = stepAndDrawEkg(this.elEkgCanvas, this.selfEkg, myBpm, diveState.alive !== false, dt);
-    if (this.elEkgHeart) this.elEkgHeart.classList.toggle('pulse', qrsPeak);
+    if (this.elEkgHeart && this._lastQrsPeak !== qrsPeak) {
+      this._lastQrsPeak = qrsPeak;
+      this.elEkgHeart.classList.toggle('pulse', qrsPeak);
+    }
 
     // Deployable Guideline Spool Dock & Bottom-Center Line Status (unlined labyrinth caves)
     const showReel = reelMaxMeters > 0;
-    if (this.elReelStatus) this.elReelStatus.hidden = !showReel;
+    setHidden(this.elReelStatus, !showReel);
     if (this.elReelRow) {
       if (showReel) {
-        this.elReelRow.hidden = false;
+        setHidden(this.elReelRow, false);
         const remM = Math.max(0, Math.round(reelRemainingM));
         const rCls = remM <= 1 ? 'danger' : remM < 35 ? 'warn' : reelingActive ? 'active' : '';
-        this.elReelRow.className = `hud-reel-dock ${reelingActive ? 'active' : ''} ${rCls}`.replace(/\s+/g, ' ').trim();
-        if (this.elReelStatus) {
-          this.elReelStatus.className = `reel-dock-status ${reelingActive ? 'active' : ''} ${rCls}`.replace(/\s+/g, ' ').trim();
-        }
-        if (this.elReelMeters) this.elReelMeters.textContent = `${remM}m / ${reelMaxMeters}m`;
+        const dockStateCls = `${reelingActive ? 'active ' : ''}${rCls}`.trim();
+        setClass(this.elReelRow, dockStateCls ? `hud-reel-dock ${dockStateCls}` : 'hud-reel-dock');
+        setClass(this.elReelStatus, dockStateCls ? `reel-dock-status ${dockStateCls}` : 'reel-dock-status');
+        setText(this.elReelMeters, `${remM}m / ${reelMaxMeters}m`);
         if (this.btnReelToggle) {
-          this.btnReelToggle.className = `reel-btn ${reelingActive ? 'active' : ''}`.trim();
-          this.btnReelToggle.textContent = reelingActive
-            ? '[G] TERMINATE LINE'
-            : remM < 1
-              ? 'SPOOL EMPTY'
-              : '[G] DEPLOY LINE';
+          setClass(this.btnReelToggle, reelingActive ? 'reel-btn active' : 'reel-btn');
+          setText(
+            this.btnReelToggle,
+            reelingActive
+              ? '[G] TERMINATE LINE'
+              : remM < 1
+                ? 'SPOOL EMPTY'
+                : '[G] DEPLOY LINE'
+          );
         }
       } else {
-        this.elReelRow.hidden = true;
+        setHidden(this.elReelRow, true);
       }
     }
 
     // Ascent rate meter (0 to 18 m/min)
     const upRate = Math.max(0, diveState.ascentRateMPerMin);
-    const pct = Math.min(100, (upRate / 18) * 100);
-    this.elAscentFill.style.height = `${pct}%`;
-    this.elAscentFill.className = `dc-ascent-fill ${upRate > 12 ? 'danger' : upRate > 9 ? 'warn' : 'ok'}`;
-    this.elAscentVal.textContent = `${Math.round(upRate)}`;
+    const pct = Math.min(100, Math.round((upRate / 18) * 100));
+    setStyleProp(this.elAscentFill, 'height', `${pct}%`);
+    setClass(this.elAscentFill, `dc-ascent-fill ${upRate > 12 ? 'danger' : upRate > 9 ? 'warn' : 'ok'}`);
+    setText(this.elAscentVal, `${Math.round(upRate)}`);
 
     // Gas Tank Selectors & Optimal Depth Recommendation
     const resolvedAscent = ascentConfig || getAscentConfig(level);
@@ -380,40 +474,38 @@ export class DiveComputerHUD {
       const tank = diveState.tanks[id];
       const mix = mixMap[id];
       const ui = this.tankButtons[id];
-      if (ui.nameEl) ui.nameEl.textContent = mix.name;
-      if (ui.metaEl) ui.metaEl.textContent = mix.role;
+      setText(ui.nameEl, mix.name);
+      setText(ui.metaEl, mix.role);
       const isActive = diveState.activeGasId === id;
       const isRec = recGasId === id && !isActive;
       const futurePPO2 = computePPO2(diveState.depthM, mix);
       const unsafeAtDepth = (futurePPO2 > 1.6 || (futurePPO2 < 0.16 && diveState.depthM > 0.2));
-
-      ui.btn.classList.toggle('active', isActive);
-      ui.btn.classList.toggle('recommended', isRec);
-      ui.btn.classList.toggle('unsafe', unsafeAtDepth);
-      ui.btn.classList.toggle('empty', tank.bar <= 0.5);
-      ui.barTxt.textContent = isRec ? 'USE!' : `${Math.round(tank.bar)}b`;
-      const fillPct = Math.max(0, Math.min(100, (tank.bar / mix.startBar) * 100));
-      ui.fill.style.width = `${fillPct}%`;
-      ui.fill.style.backgroundColor = tank.bar < 45 ? '#ef4444' : mix.color;
+      const isEmpty = tank.bar <= 0.5;
+      const btnCls = `dc-tank-btn${isActive ? ' active' : ''}${isRec ? ' recommended' : ''}${unsafeAtDepth ? ' unsafe' : ''}${isEmpty ? ' empty' : ''}`;
+      setClass(ui.btn, btnCls);
+      setText(ui.barTxt, isRec ? 'USE!' : `${Math.round(tank.bar)}b`);
+      const fillPct = Math.max(0, Math.min(100, Math.round((tank.bar / mix.startBar) * 200) * 0.5));
+      setStyleProp(ui.fill, 'width', `${fillPct}%`);
+      setStyleProp(ui.fill, 'backgroundColor', tank.bar < 45 ? '#ef4444' : mix.color);
     }
 
-    // Alerts Strip
+    // Alerts Strip (uses active level mixMap so gasOverrides on L12–L20 display accurately)
     if (diveState.warnings.length > 0) {
-      this.elAlerts.textContent = diveState.warnings[0];
-      this.elAlerts.className = `dc-alerts ${diveState.criticalAlarm ? 'danger' : 'warn'}`;
+      setText(this.elAlerts, diveState.warnings[0]);
+      setClass(this.elAlerts, `dc-alerts ${diveState.criticalAlarm ? 'danger' : 'warn'}`);
     } else if (ascentStep) {
-      this.elAlerts.textContent = ascentStep.title;
-      this.elAlerts.className = `dc-alerts ${ascentStep.action === 'STOP' ? 'warn' : 'ok'}`;
+      setText(this.elAlerts, ascentStep.title);
+      setClass(this.elAlerts, `dc-alerts ${ascentStep.action === 'STOP' ? 'warn' : 'ok'}`);
     } else if (recGasId !== diveState.activeGasId) {
-      this.elAlerts.textContent = `SWITCH → ${GAS_MIXES[recGasId].name}`;
-      this.elAlerts.className = 'dc-alerts warn';
+      setText(this.elAlerts, `SWITCH → ${(mixMap[recGasId] || GAS_MIXES[recGasId]).name}`);
+      setClass(this.elAlerts, 'dc-alerts warn');
     } else {
-      this.elAlerts.textContent = `${GAS_MIXES[diveState.activeGasId].name} · NOMINAL`;
-      this.elAlerts.className = 'dc-alerts ok';
+      setText(this.elAlerts, `${(mixMap[diveState.activeGasId] || GAS_MIXES[diveState.activeGasId]).name} · NOMINAL`);
+      setClass(this.elAlerts, 'dc-alerts ok');
     }
 
     // Concise Objective Tracker
-    const recName = GAS_MIXES[recGasId].name;
+    const recName = (mixMap[recGasId] || GAS_MIXES[recGasId]).name;
     const gasBadge = recGasId === diveState.activeGasId
       ? `<span class="obj-gas ok">✓ ${recName}</span>`
       : `<span class="obj-gas switch">→ ${recName}</span>`;
@@ -497,8 +589,9 @@ export class DiveComputerHUD {
     // Team Vitals & Live EKG Monitors (LAN Multiplayer, keyed DOM reuse so EKG traces sweep smoothly)
     const teamList = Array.isArray(peers) ? peers : (peerDiver ? [peerDiver] : []);
     if (teamList.length > 0) {
-      this.elBuddy.hidden = false;
-      const seenIds = new Set();
+      setHidden(this.elBuddy, false);
+      const seenIds = this._seenPeerIds;
+      seenIds.clear();
       for (const p of teamList) {
         const pid = p.id || p.name || 'peer';
         seenIds.add(pid);
@@ -525,6 +618,12 @@ export class DiveComputerHUD {
             </div>
           `;
           this.elBuddy.appendChild(card);
+          const canvasEl = card.querySelector('.mate-ekg-canvas');
+          const ekg = createEkgState(110);
+          if (canvasEl) {
+            this._ekgStateByCanvas.set(canvasEl, ekg);
+            this._ekgResizeObserver?.observe(canvasEl);
+          }
           ui = {
             card,
             nameEl: card.querySelector('.mate-name'),
@@ -534,15 +633,17 @@ export class DiveComputerHUD {
             gasFill: card.querySelector('.mate-gas-fill'),
             stressFill: card.querySelector('.mate-stress-fill'),
             hrEl: card.querySelector('.mate-hr'),
-            canvasEl: card.querySelector('.mate-ekg-canvas'),
-            ekg: createEkgState(110),
+            canvasEl,
+            ekg,
           };
           this.mateCards.set(pid, ui);
         }
 
         const dist = Math.hypot(p.x - diver.x, p.y - diver.y);
         const bar = Math.round(p.activeBar ?? 200);
-        const gasPct = Math.max(0, Math.min(100, (bar / 200) * 100));
+        const mateMix = mixMap[p.gasId] || GAS_MIXES[p.gasId];
+        const startBar = mateMix?.startBar || 200;
+        const gasPct = Math.max(0, Math.min(100, Math.round((bar / startBar) * 100)));
         const stress = Math.round(
           Math.max(
             p.cnsPercent || 0,
@@ -565,38 +666,50 @@ export class DiveComputerHUD {
             : cond !== 'NOMINAL' || bar < 50 || stress >= 25 || mateBpm >= 118
               ? 'warn'
               : '';
-        const gasColor = bar < 45 ? '#ef4444' : (GAS_MIXES[p.gasId]?.color || '#38bdf8');
+        const gasColor = bar < 45 ? '#ef4444' : (mateMix?.color || '#38bdf8');
         const stressColor = stress >= 65 ? '#ef4444' : stress >= 25 ? '#fbbf24' : '#4ade80';
 
-        ui.card.className = `mate-card ${sevCls}`.trim();
-        ui.nameEl.textContent = p.name || 'Buddy';
-        ui.condEl.className = `mate-cond ${sevCls}`.trim();
-        ui.condEl.textContent = cond;
-        ui.posEl.textContent = `${(p.depthM ?? 0).toFixed(1)}m · ${Math.round(dist)}m away`;
-        ui.gasEl.textContent = `${p.gasId || 'EAN32'} ${bar}b`;
-        ui.gasFill.style.width = `${gasPct}%`;
-        ui.gasFill.style.background = gasColor;
-        ui.stressFill.style.width = `${stress}%`;
-        ui.stressFill.style.background = stressColor;
+        setClass(ui.card, sevCls ? `mate-card ${sevCls}` : 'mate-card');
+        setText(ui.nameEl, p.name || 'Buddy');
+        setClass(ui.condEl, sevCls ? `mate-cond ${sevCls}` : 'mate-cond');
+        setText(ui.condEl, cond);
+        setText(ui.posEl, `${(p.depthM ?? 0).toFixed(1)}m · ${Math.round(dist)}m away`);
+        setText(ui.gasEl, `${mateMix?.name || p.gasId || 'EAN32'} ${bar}b`);
+        setStyleProp(ui.gasFill, 'width', `${gasPct}%`);
+        setStyleProp(ui.gasFill, 'background', gasColor);
+        setStyleProp(ui.stressFill, 'width', `${stress}%`);
+        setStyleProp(ui.stressFill, 'background', stressColor);
 
         const hrCls = p.alive === false || mateBpm >= 145 ? 'danger' : mateBpm >= 115 ? 'warn' : '';
-        ui.hrEl.className = `mate-hr ${hrCls}`.trim();
-        ui.hrEl.textContent = p.alive === false ? '♥ --' : `♥ ${mateBpm}`;
+        setClass(ui.hrEl, hrCls ? `mate-hr ${hrCls}` : 'mate-hr');
+        setText(ui.hrEl, p.alive === false ? '♥ --' : `♥ ${mateBpm}`);
         stepAndDrawEkg(ui.canvasEl, ui.ekg, mateBpm, p.alive !== false, dt);
       }
 
       for (const [pid, ui] of this.mateCards.entries()) {
         if (!seenIds.has(pid)) {
+          if (ui.canvasEl) {
+            this._ekgResizeObserver?.unobserve(ui.canvasEl);
+            ui.canvasEl.width = 0;
+            ui.canvasEl.height = 0;
+          }
           ui.card.remove();
           this.mateCards.delete(pid);
         }
       }
     } else {
-      this.elBuddy.hidden = true;
-      for (const ui of this.mateCards.values()) {
-        ui.card.remove();
+      setHidden(this.elBuddy, true);
+      if (this.mateCards.size > 0) {
+        for (const ui of this.mateCards.values()) {
+          if (ui.canvasEl) {
+            this._ekgResizeObserver?.unobserve(ui.canvasEl);
+            ui.canvasEl.width = 0;
+            ui.canvasEl.height = 0;
+          }
+          ui.card.remove();
+        }
+        this.mateCards.clear();
       }
-      this.mateCards.clear();
     }
   }
 }

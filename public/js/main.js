@@ -124,7 +124,7 @@ const btnHudMenu = document.getElementById('btn-hud-menu');
 const hudMenuPopover = document.getElementById('hud-menu-popover');
 const btnHudInvite = document.getElementById('btn-hud-invite');
 const btnHudShare = document.getElementById('btn-hud-share');
-const lanUrlsEl = document.getElementById('lan-urls');
+const gameToastEl = document.getElementById('game-toast');
 const loaderCoopSyncEl = document.getElementById('loader-coop-sync');
 const loaderCrewStatusEl = document.getElementById('loader-crew-status');
 const btnLoaderForce = document.getElementById('btn-loader-force');
@@ -214,7 +214,8 @@ function requireCallsign() {
   playerNameInput?.focus();
   playerNameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   showToast(`Enter your diver callsign (1–${CALLSIGN_MAX_LEN} chars) to dive!`, 3.0);
-  if (lanStatus && !lanPanel?.hidden) {
+  if (lanStatus && (!soloPanel || !soloPanel.hidden)) {
+    lanStatus.hidden = false;
     lanStatus.className = 'lan-status warn';
     lanStatus.textContent = `Enter a diver callsign (1–${CALLSIGN_MAX_LEN} chars) above first.`;
   }
@@ -269,10 +270,15 @@ const nextUiTick = () =>
   });
 
 function showToast(text, duration = 2.6) {
-  const el = document.getElementById('game-toast');
-  el.textContent = text;
-  el.classList.add('visible');
+  if (!gameToastEl) return;
+  gameToastEl.textContent = text;
+  gameToastEl.classList.add('visible');
   toastTimer = duration;
+}
+
+function getActiveGasName(gasId, diveState = session?.diveState) {
+  const mixMap = diveState?.mixes || GAS_MIXES;
+  return mixMap[gasId]?.name || GAS_MIXES[gasId]?.name || gasId || 'Gas';
 }
 
 function getLevelDepthLabel(level) {
@@ -810,9 +816,9 @@ const hud = new DiveComputerHUD({
     if (mode !== 'diving' || !session) return;
     if (switchGas(session.diveState, gasId)) {
       audio.playGasSwitch();
-      showToast(`Switched regulator to ${GAS_MIXES[gasId].name}`, 1.8);
+      showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
     } else {
-      showToast(`${GAS_MIXES[gasId].name} cylinder empty!`, 1.8);
+      showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
     }
   },
   onReelToggle: handleReelToggle,
@@ -825,7 +831,7 @@ const input = new InputController({
   onGasSelect: (gasId) => {
     if (mode === 'diving' && session && switchGas(session.diveState, gasId)) {
       audio.playGasSwitch();
-      showToast(`Regulator: ${GAS_MIXES[gasId].name}`, 1.6);
+      showToast(`Regulator: ${getActiveGasName(gasId)}`, 1.6);
     }
   },
   onTorchToggle: () => {
@@ -837,6 +843,15 @@ const input = new InputController({
 
 let celebrationParticles = [];
 let debriefAnimFrame = 0;
+let syncWakeLockFn = null;
+
+function cancelDebriefAnimations() {
+  if (debriefAnimFrame) {
+    cancelAnimationFrame(debriefAnimFrame);
+    debriefAnimFrame = 0;
+  }
+  celebrationParticles.length = 0;
+}
 
 function spawnCelebrationConfetti() {
   const palette = ['#fde047', '#38bdf8', '#4ade80', '#f472b6', '#fb923c', '#ffffff'];
@@ -917,10 +932,12 @@ function startDiveRun(multiplayer = false, restoredState = null) {
 
   screenLoader.classList.add('done');
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
+  cancelDebriefAnimations();
   setHudMenuOpen(false);
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
   screenHud.hidden = false;
+  syncWakeLockFn?.();
   if (coopCommsEl) coopCommsEl.hidden = !(multiplayer && lan.getPeers().length > 0);
   if (multiplayer && lan.room) {
     syncRoomInviteUi(lan.room);
@@ -928,15 +945,17 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     syncRoomInviteUi(null);
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
+  const bottomMixName = getActiveGasName('TMX1455');
   const openMsg =
     activeLevel.reelMetersPerDiver > 0
       ? `No fixed guideline! Press [G] to deploy your ${activeLevel.reelMetersPerDiver}m reel, [R] to rewind.`
-      : 'Descend on EAN32. Switch to TMX 14/55 at the Halocline!';
+      : `Descend on ${getActiveGasName('EAN32')}. Switch to ${bottomMixName} at the Halocline!`;
   showToast(openMsg, 4.2);
 }
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (!session) return;
+  cancelDebriefAnimations();
   mode = 'debrief';
   spectatingPeer = false;
   setHudMenuOpen(false);
@@ -944,6 +963,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   screenDebrief.hidden = false;
+  syncWakeLockFn?.();
 
   const btnRetry = document.getElementById('btn-retry');
   const btnMenu = document.getElementById('btn-menu');
@@ -1133,7 +1153,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
             .map(
               (r) => `
           <div class="team-roster-row">
-            <strong>${r.name}</strong>
+            <strong>${escapeHtml(r.name)}</strong>
             <span>${r.alive ? `${r.healthPct}% HP · ${formatRunClock(r.diveTimeSec)} · ${r.gasRemainingPct}% Gas` : r.rescued ? '🛟 RESCUED' : 'DOWN'}</span>
             <strong>${r.totalScore.toLocaleString()} pts</strong>
           </div>
@@ -1711,10 +1731,7 @@ async function showJoinOsNotification(room, joiners, siteNum, siteLevel) {
 
 async function fetchLanUrls() {
   const transport = lan.getTransportMode();
-  const urlHeadSpan = document.querySelector('.lan-url-head span:first-child');
   if (transport === 'p2p') {
-    if (urlHeadSpan) urlHeadSpan.textContent = 'Direct WebRTC P2P Co-op (Zero Server):';
-    if (lanUrlsEl) lanUrlsEl.textContent = 'Share your Room Link with buddies on Wi-Fi or cellular!';
     if (lan.room) syncRoomInviteUi(lan.room);
     return;
   }
@@ -1723,17 +1740,9 @@ async function fetchLanUrls() {
     if (!res.ok) throw new Error('no lan-info');
     const info = await res.json();
     cachedLanUrls = Array.isArray(info.urls) ? info.urls : [];
-    if (cachedLanUrls.length > 0) {
-      lanUrlsEl.innerHTML = cachedLanUrls
-        .map((u) => `<code data-copy-url="${u}" title="Tap to copy LAN URL">${u}</code>`)
-        .join(' ');
-    } else {
-      lanUrlsEl.textContent = `${location.origin}${getAppBasePath()}`;
-    }
     if (lan.room) syncRoomInviteUi(lan.room);
   } catch {
-    if (urlHeadSpan) urlHeadSpan.textContent = 'Direct WebRTC P2P Co-op:';
-    if (lanUrlsEl) lanUrlsEl.textContent = 'Share your Room Link with buddies on Wi-Fi or cellular!';
+    cachedLanUrls = [];
   }
 }
 
@@ -1813,12 +1822,7 @@ function resetLobbyUiState(statusText = '') {
   renderLevelCards();
 }
 
-function updateOpenLanButtonBadge() {
-  // Unified Dive tab handles open co-op rooms inline
-}
-
 function renderRoomsList(rooms = lan.rooms) {
-  updateOpenLanButtonBadge(rooms);
   if (!lanRoomsSection || !lanRoomsList) return;
   if (lan.room || !Array.isArray(rooms) || rooms.length === 0) {
     lanRoomsSection.hidden = true;
@@ -1837,16 +1841,17 @@ function renderRoomsList(rooms = lan.rooms) {
         : r.started
           ? `In Dive · ${r.playerCount}/${r.maxPlayers} Divers`
           : `${r.playerCount}/${r.maxPlayers} Divers`;
+      const safeCode = escapeHtml(r.code);
       return `
         <div class="lan-room-row">
           <div class="lan-room-row-info">
-            <span><strong>${r.code}</strong> · Host: ${r.hostName}</span>
-            <span class="lan-room-row-sub">L${lvlIdx}: ${lvl.name} · ${stateText}</span>
+            <span><strong>${safeCode}</strong> · Host: ${escapeHtml(r.hostName)}</span>
+            <span class="lan-room-row-sub">L${lvlIdx}: ${escapeHtml(lvl.name)} · ${stateText}</span>
           </div>
           <button
             type="button"
             class="btn tiny ${busy ? 'ghost' : 'primary'}"
-            data-join-code="${r.code}"
+            data-join-code="${safeCode}"
             ${busy ? 'disabled' : ''}
           >
             ${full ? 'Full' : r.started ? 'Drop In' : 'Join'}
@@ -2054,14 +2059,6 @@ selectLbSite?.addEventListener('change', () => {
   refreshMenuLeaderboard();
 });
 
-if (lanUrlsEl) {
-  lanUrlsEl.addEventListener('click', (e) => {
-    const codeEl = e.target.closest('code[data-copy-url]');
-    if (!codeEl) return;
-    copyText(codeEl.dataset.copyUrl, `Copied LAN URL: ${codeEl.dataset.copyUrl}`);
-  });
-}
-
 function beginRoomJoinLoading(code, { isDropIn = false, directDive = false, statusText = '' } = {}) {
   const cleanCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!cleanCode) return;
@@ -2115,8 +2112,6 @@ if (lanRoomsList) {
     lan.joinRoom(code, name);
   });
 }
-
-const btnQuickCoop = null;
 
 const roomCodeInput = document.getElementById('input-room-code');
 function triggerJoinFromInput() {
@@ -2303,7 +2298,7 @@ btnLoaderCancel?.addEventListener('click', () => {
     lan.leaveRoom();
     syncBrowserRoomUrl('');
     finishRoomJoinLoading({ revealMenu: true });
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
     resetLobbyUiState('Canceled room join.');
     return;
   }
@@ -2327,7 +2322,7 @@ coopCommsEl?.addEventListener('click', (e) => {
     }
     lan.sendGasShare(targetId, donation.gasId, donation.donatedBar);
     audio.playGasShare();
-    showToast(`🎁 Shared +${donation.donatedBar} bar ${GAS_MIXES[donation.gasId]?.name || donation.gasId} with ${targetName}!`, 2.6);
+    showToast(`🎁 Shared +${donation.donatedBar} bar ${getActiveGasName(donation.gasId)} with ${targetName}!`, 2.6);
     btn.hidden = true;
     return;
   }
@@ -2455,7 +2450,9 @@ btnHudRadio?.addEventListener('click', handleRadioCycle);
 
 document.getElementById('btn-abort').addEventListener('click', () => {
   const prevCode = lan.room?.code || '';
+  cancelDebriefAnimations();
   mode = 'menu';
+  session = null;
   spectatingPeer = false;
   activeDiveSeq = 0;
   setHudMenuOpen(false);
@@ -2466,20 +2463,24 @@ document.getElementById('btn-abort').addEventListener('click', () => {
   if (isMultiplayer) {
     lan.leaveRoom();
     isMultiplayer = false;
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
     resetLobbyUiState(prevCode ? `Aborted dive (Room ${prevCode} stays open for remaining divers).` : 'Aborted dive and left room.');
     if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
+  syncWakeLockFn?.();
   renderRoomsList();
   renderLevelCards();
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
+  cancelDebriefAnimations();
   if (isMultiplayer && lan.room && lan.getPeers().length > 0) {
     mode = 'menu';
+    session = null;
     screenDebrief.hidden = true;
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
+    syncWakeLockFn?.();
     renderLevelCards();
     if (lan.isHost()) {
       lan.returnToLobby();
@@ -2495,7 +2496,9 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 
 document.getElementById('btn-menu').addEventListener('click', () => {
   const prevCode = lan.room?.code || '';
+  cancelDebriefAnimations();
   mode = 'menu';
+  session = null;
   activeDiveSeq = 0;
   screenDebrief.hidden = true;
   screenMenu.hidden = false;
@@ -2505,6 +2508,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
     resetLobbyUiState(prevCode ? `Left co-op room ${prevCode}.` : 'Left co-op room.');
     if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
+  syncWakeLockFn?.();
   renderRoomsList();
   renderLevelCards();
 });
@@ -2562,7 +2566,7 @@ lan.on('session_expired', () => {
 
 lan.on('join_stage', ({ code, pct, message }) => {
   if (!joiningRoomCode || (code && code !== joiningRoomCode)) return;
-  const curPct = parseInt(document.getElementById('loader-pct')?.textContent || '0', 10) || 0;
+  const curPct = parseInt(loaderPctEl?.textContent || '0', 10) || 0;
   setLoaderProgress(Math.max(curPct, pct || curPct), message || `Joining Room ${joiningRoomCode}...`);
   if (loaderCrewStatusEl && message) loaderCrewStatusEl.textContent = message;
 });
@@ -2582,7 +2586,7 @@ lan.on('error', (msg) => {
     pendingAutoJoinCode = '';
     syncBrowserRoomUrl('');
     finishRoomJoinLoading({ revealMenu: true });
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
   }
   if (lanStatus) {
     lanStatus.hidden = false;
@@ -2595,13 +2599,16 @@ lan.on('error', (msg) => {
 lan.on('returned_to_lobby', () => {
   loadSeq += 1;
   inFlightLoad = null;
+  cancelDebriefAnimations();
   screenLoader.classList.add('done');
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   if (mode === 'debrief') {
     mode = 'menu';
+    session = null;
     screenDebrief.hidden = true;
     screenMenu.hidden = false;
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
+    syncWakeLockFn?.();
     showToast('Host returned crew to room lobby for next dive.', 2.8);
   }
   renderLevelCards();
@@ -2628,11 +2635,10 @@ lan.on('room_update', async (room) => {
   if (autoJoinedNow) {
     pendingAutoJoinCode = '';
     if (!shouldEnterDirectDive && !room?.started) {
-      setActiveMenuTab('team');
+      setActiveMenuTab('solo');
     }
   }
   const justEnteredRoom = lanRoomBox.hidden;
-  updateOpenLanButtonBadge(lan.rooms);
   lanRoomBox.hidden = false;
   if (lanSetupControls) lanSetupControls.hidden = true;
   if (lanRoomsSection) lanRoomsSection.hidden = true;
@@ -2687,7 +2693,7 @@ lan.on('room_update', async (room) => {
       }
       return `
         <li>
-          <span><strong>${p.name}</strong> <small>(${roleTag})</small></span>
+          <span><strong>${escapeHtml(p.name)}</strong> <small>(${roleTag})</small></span>
           <span class="roster-badges">${loadBadge}</span>
         </li>
       `;
@@ -2783,7 +2789,7 @@ lan.on('room_update', async (room) => {
   // Normal lobby join (clicked Join / entered room code for a room in lobby): smoothly transition to Room Lobby once fully joined
   if (wasJoiningThisRoom && !room.started && room.phase !== 'preparing' && !shouldEnterDirectDive) {
     finishRoomJoinLoading({ revealMenu: true });
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
     lanRoomBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 });
@@ -2946,7 +2952,7 @@ lan.on('peer_gas_share', (msg) => {
   const added = receiveGasIntoState(session.diveState, msg.gasId, msg.amountBar);
   if (added > 0) {
     audio.playGasShare();
-    const gName = GAS_MIXES[msg.gasId]?.name || msg.gasId || 'Gas';
+    const gName = getActiveGasName(msg.gasId);
     showToast(`🎁 ${msg.fromName || 'Buddy'} shared +${Math.round(added)} bar ${gName}!`, 3.0);
   }
 });
@@ -2960,15 +2966,50 @@ lan.on('peer_left', () => {
 // --- Main Simulation Loop ---
 let menuTimeSec = 0;
 
+// Persistent zero-GC scratch objects for 60fps simulation & menu preview rendering
+const MENU_PREVIEW_DIVE_STATE = createDiveState();
+const EMPTY_SET = new Set();
+const EMPTY_ARR = [];
+const menuPreviewDiver = { x: 0, y: 0, vx: 0, vy: 0, angle: 0.2, torchOn: true };
+const _framePlayerLines = [];
+const _frameHandledPeerIds = new Set();
+const sessionStepCallbacks = {
+  onToast: showToast,
+  onImpactSound: () => audio.playImpact(),
+  onAlarm: (lvl) => audio.playAlarm(lvl),
+  onExhale: (ex) => audio.playRegulatorExhale(ex),
+  onCheckpoint: (cp) => {
+    audio.playCheckpoint();
+    showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
+    if (isMultiplayer) lan.sendCheckpoint(cp.id);
+  },
+  onCollect: (item) => {
+    audio.playCollect();
+    showToast(`💎 Collected ${item.name} (+${item.points} pts)!`, 2.6);
+    if (isMultiplayer) lan.sendCollectible(item.id);
+  },
+  onBodyRecovered: (rt) => {
+    audio.playCheckpoint();
+    showToast(`🛟 Secured ${rt.name}! Tow carefully back through deep deco to the surface!`, 4.2);
+    if (isMultiplayer) lan.sendBodyRecovered();
+  },
+  onSiltSpawn: (plume) => {
+    if (isMultiplayer) lan.sendSiltEvent(plume);
+  },
+  onGuidelineSync: (chains) => {
+    if (isMultiplayer && session) lan.sendGuidelineSync(chains, session.reelingActive);
+  },
+};
+
 function stepSimulation(dt) {
   if (toastTimer > 0) {
     toastTimer -= dt;
-    if (toastTimer <= 0) {
-      document.getElementById('game-toast').classList.remove('visible');
+    if (toastTimer <= 0 && gameToastEl) {
+      gameToastEl.classList.remove('visible');
     }
   }
 
-  const activeTimeSec = session ? session.simTimeSec : menuTimeSec;
+  const activeTimeSec = mode === 'diving' && session ? session.simTimeSec : menuTimeSec;
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
     stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel);
   }
@@ -2995,33 +3036,7 @@ function stepSimulation(dt) {
   };
 
   if (!session.endedState) {
-    result = stepDiveSession(session, input.getThrust(), dt, {
-      onToast: showToast,
-      onImpactSound: () => audio.playImpact(),
-      onAlarm: (lvl) => audio.playAlarm(lvl),
-      onExhale: (ex) => audio.playRegulatorExhale(ex),
-      onCheckpoint: (cp) => {
-        audio.playCheckpoint();
-        showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
-        if (isMultiplayer) lan.sendCheckpoint(cp.id);
-      },
-      onCollect: (item) => {
-        audio.playCollect();
-        showToast(`💎 Collected ${item.name} (+${item.points} pts)!`, 2.6);
-        if (isMultiplayer) lan.sendCollectible(item.id);
-      },
-      onBodyRecovered: (rt) => {
-        audio.playCheckpoint();
-        showToast(`🛟 Secured ${rt.name}! Tow carefully back through deep deco to the surface!`, 4.2);
-        if (isMultiplayer) lan.sendBodyRecovered();
-      },
-      onSiltSpawn: (plume) => {
-        if (isMultiplayer) lan.sendSiltEvent(plume);
-      },
-      onGuidelineSync: (chains) => {
-        if (isMultiplayer) lan.sendGuidelineSync(chains, session.reelingActive);
-      },
-    });
+    result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
   } else {
     session.simTimeSec += dt;
     diver.vx = 0;
@@ -3177,7 +3192,7 @@ function stepSimulation(dt) {
     bodyRecovered: Boolean(session.bodyRecovered),
     carryingBody: Boolean(session.carryingBody),
     peers,
-    playerName: sanitizeCallsignInput(playerNameInput?.value || ''),
+    playerName: diver.name || '',
     level,
     ascentConfig: session.ascentConfig,
     reelMaxMeters: session.reelMaxMeters || 0,
@@ -3278,7 +3293,8 @@ function frame(nowMs) {
       spectatingPeer && peers.length > 0
         ? peers.find((p) => p.alive !== false && !p.surfaced) || peers[0]
         : null;
-    const playerLines = [];
+    const playerLines = _framePlayerLines;
+    playerLines.length = 0;
     if (session.guidelineChains?.length > 0) {
       playerLines.push({
         isSelf: true,
@@ -3289,7 +3305,8 @@ function frame(nowMs) {
       });
     }
     if (isMultiplayer) {
-      const handledIds = new Set();
+      const handledIds = _frameHandledPeerIds;
+      handledIds.clear();
       for (const p of peers) {
         handledIds.add(p.id);
         const chains = p.guidelineChains || session.restoredPeerLines?.get(p.id);
@@ -3332,21 +3349,16 @@ function frame(nowMs) {
       dt,
     });
   } else if (renderer.ready && renderer.level?.id === activeLevel.id) {
+    menuPreviewDiver.x = activeLevel.spawn.x + 7 + Math.sin(nowMs * 0.0003) * 4;
+    menuPreviewDiver.y = Math.min(activeLevel.spawn.y + 6.5, 9);
     renderer.render({
-      diver: {
-        x: activeLevel.spawn.x + 7 + Math.sin(nowMs * 0.0003) * 4,
-        y: Math.min(activeLevel.spawn.y + 6.5, 9),
-        vx: 0,
-        vy: 0,
-        angle: 0.2,
-        torchOn: true,
-      },
-      diveState: createDiveState(),
+      diver: menuPreviewDiver,
+      diveState: MENU_PREVIEW_DIVE_STATE,
       peerDiver: null,
-      checkpointsHit: new Set(),
+      checkpointsHit: EMPTY_SET,
       nextCheckpoint: activeLevel.checkpoints[0],
-      siltClouds: [],
-      bubbles: [],
+      siltClouds: EMPTY_ARR,
+      bubbles: EMPTY_ARR,
       ecosystem,
       timeSec: menuTimeSec,
       dt,
@@ -3401,8 +3413,10 @@ function setupPwaSupport() {
     }
   };
 
+  const watchedWorkers = new WeakSet();
   const watchInstallingWorker = (worker) => {
-    if (!worker) return;
+    if (!worker || watchedWorkers.has(worker)) return;
+    watchedWorkers.add(worker);
     if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
       markUpdateAvailable(detectedRemoteVer);
       return;
@@ -3586,9 +3600,11 @@ function setupPwaSupport() {
       screenWakeLock = null;
     }
   };
+  syncWakeLockFn = syncWakeLock;
   document.addEventListener('visibilitychange', syncWakeLock);
   window.addEventListener('focus', syncWakeLock);
-  setInterval(syncWakeLock, 5000);
+  lan.on('room_update', syncWakeLock);
+  syncWakeLock();
 
   const isStandalone =
     window.matchMedia?.('(display-mode: standalone)').matches ||
@@ -3682,7 +3698,7 @@ async function bootGame() {
   if (savedSession && !INITIAL_ROOM_CODE) {
     pendingAutoJoinCode = savedSession.code;
     attemptJoinAfterExpire = '';
-    setActiveMenuTab('team');
+    setActiveMenuTab('solo');
     if (roomCodeInput) roomCodeInput.value = savedSession.code;
     if (lanStatus) {
       lanStatus.hidden = false;

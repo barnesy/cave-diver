@@ -671,20 +671,6 @@ html, body {
   border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
-.lan-url-box {
-  background: rgba(2, 132, 199, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 0.78rem;
-  margin-bottom: 10px;
-}
-.lan-url-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
 .lan-conn-badge {
   font-family: ui-monospace, monospace;
   font-size: 0.7rem;
@@ -697,26 +683,6 @@ html, body {
 .lan-conn-badge.danger {
   color: var(--danger);
 }
-.lan-urls {
-  margin-top: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.lan-urls code {
-  background: rgba(15, 23, 42, 0.9);
-  padding: 2px 6px;
-  border-radius: 6px;
-  color: #7dd3fc;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: pointer;
-}
-
-.quick-coop-btn {
-  width: 100%;
-  margin-bottom: 10px;
-}
 
 .lan-controls {
   display: grid;
@@ -724,12 +690,7 @@ html, body {
   gap: 8px;
 }
 @media (max-width: 480px) {
-  .quick-coop-btn {
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-.lan-controls {
+  .lan-controls {
     grid-template-columns: 1fr;
   }
 }
@@ -969,22 +930,22 @@ html, body {
   gap: 10px;
   padding: 5px 8px;
   border-radius: 13px;
-  background: rgba(6, 15, 29, 0.88);
+  background: rgba(6, 15, 29, 0.93);
   border: 1.5px solid rgba(56, 189, 248, 0.3);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.48), inset 0 0 10px rgba(14, 165, 233, 0.08);
-  backdrop-filter: blur(8px);
+  contain: layout style;
   pointer-events: none;
 }
 
 /* Bottom Dive Telemetry Card */
 .dive-telemetry {
-  background: rgba(6, 15, 29, 0.9);
+  background: rgba(6, 15, 29, 0.94);
   border: 1.5px solid var(--bezel-border);
   border-radius: 11px;
   padding: 5px 7px 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(14, 165, 233, 0.1);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  backdrop-filter: blur(8px);
+  contain: layout style;
   width: clamp(238px, 23vw, 285px);
 }
 
@@ -1208,19 +1169,9 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* Top Teammate Health Strip */
-.hud-divers-group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  pointer-events: none;
-}
-
+/* Self & Teammate Health Cards */
 .self-health-card {
-  background: rgba(8, 15, 26, 0.88);
+  background: rgba(8, 15, 26, 0.94);
   border: 1px solid rgba(56, 189, 248, 0.38);
   border-radius: 11px;
   padding: 5px 7px;
@@ -1230,7 +1181,7 @@ html, body {
   justify-content: space-between;
   gap: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  backdrop-filter: blur(5px);
+  contain: layout style;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   overflow: hidden;
@@ -1240,7 +1191,7 @@ html, body {
 }
 .self-health-card.danger {
   border-color: rgba(239, 68, 68, 0.85);
-  background: rgba(69, 10, 10, 0.82);
+  background: rgba(69, 10, 10, 0.9);
   animation: pulseFlash 0.65s infinite alternate;
 }
 
@@ -1252,12 +1203,11 @@ html, body {
   font-size: 0.66rem;
   font-weight: 800;
   color: #bae6fd;
-  background: rgba(6, 15, 29, 0.86);
+  background: rgba(6, 15, 29, 0.92);
   border: 1px solid rgba(56, 189, 248, 0.34);
   border-radius: 999px;
   padding: 3px 9px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(6px);
   letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
@@ -1388,7 +1338,7 @@ html, body {
   width: clamp(168px, 18vw, 212px);
   font-family: ui-monospace, monospace;
   font-size: 0.66rem;
-  backdrop-filter: blur(4px);
+  contain: layout style;
 }
 .mate-card.warn {
   border-color: rgba(251, 191, 36, 0.65);
@@ -1474,14 +1424,6 @@ html, body {
   display: block;
 }
 
-.hud-top-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  pointer-events: none;
-}
-
 .hud-util-btns {
   position: relative;
   display: flex;
@@ -1523,7 +1465,6 @@ html, body {
   background: rgba(6, 15, 29, 0.96);
   border: 1px solid rgba(56, 189, 248, 0.38);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.68);
-  backdrop-filter: blur(8px);
   z-index: 45;
   pointer-events: auto;
 }
@@ -1620,10 +1561,10 @@ html, body {
   gap: 5px;
   padding: 4px;
   border-radius: 11px;
-  background: rgba(6, 15, 29, 0.9);
+  background: rgba(6, 15, 29, 0.94);
   border: 1.5px solid rgba(56, 189, 248, 0.4);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
+  contain: layout style;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   pointer-events: auto;
 }
@@ -1661,10 +1602,9 @@ html, body {
   white-space: nowrap;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(6, 15, 29, 0.92);
+  background: rgba(6, 15, 29, 0.94);
   border: 1px solid rgba(56, 189, 248, 0.45);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .reel-dock-status[hidden] {
@@ -1774,10 +1714,10 @@ html, body {
   gap: 5px;
   padding: 5px;
   border-radius: 12px;
-  background: rgba(6, 15, 29, 0.9);
+  background: rgba(6, 15, 29, 0.94);
   border: 1.5px solid var(--bezel-border);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
+  contain: layout style;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   pointer-events: auto;
 }
@@ -2403,6 +2343,9 @@ html, body {
   border: 1.5px solid rgba(56, 189, 248, 0.42);
   animation: sonarPulse 1.8s ease-out infinite;
 }
+.loader-screen.done .loader-emblem-pulse {
+  animation: none;
+}
 .loader-emblem-icon {
   width: 58px;
   height: 58px;
@@ -2481,10 +2424,6 @@ html, body {
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
   color: #e0f2fe;
 }
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* Co-op Quick Hand Signals Bar */
 .coop-comms {
@@ -2499,7 +2438,7 @@ html, body {
   z-index: 25;
 }
 .comm-btn {
-  background: rgba(8, 15, 26, 0.85);
+  background: rgba(8, 15, 26, 0.92);
   border: 1px solid rgba(56, 189, 248, 0.35);
   color: #e0f2fe;
   border-radius: 999px;
@@ -2508,7 +2447,6 @@ html, body {
   font-size: 0.66rem;
   font-weight: 700;
   cursor: pointer;
-  backdrop-filter: blur(4px);
 }
 .comm-btn:active {
   transform: scale(0.95);
@@ -2522,7 +2460,7 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   width: min(94vw, 470px);
-  background: rgba(8, 17, 30, 0.92);
+  background: rgba(8, 17, 30, 0.95);
   border: 1px solid rgba(74, 222, 128, 0.45);
   border-radius: 14px;
   padding: 9px 12px;
@@ -2532,7 +2470,6 @@ html, body {
   gap: 10px;
   pointer-events: auto;
   z-index: 30;
-  backdrop-filter: blur(6px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 .coop-wait-banner.down {
@@ -2565,9 +2502,6 @@ html, body {
   flex-shrink: 0;
 }
 
-@keyframes sonarSpin {
-  to { transform: rotate(360deg); }
-}
 @keyframes sonarPulse {
   0% { transform: scale(0.72); opacity: 0.9; }
   100% { transform: scale(1.25); opacity: 0; }
@@ -2839,8 +2773,8 @@ html, body {
   animation: gasPulse 1.4s ease-in-out infinite;
 }
 @keyframes gasPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
-  50% { box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.55); }
+  0%, 100% { transform: scale(1); opacity: 0.94; }
+  50% { transform: scale(1.035); opacity: 1; }
 }
 
 .lb-stats-modal {

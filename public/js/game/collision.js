@@ -20,26 +20,6 @@ export function rockDisplacement(x, y, roughness = 0.42) {
 }
 
 /**
- * Distance from point (px, py) to a tapered capsule segment.
- * Negative = inside open tunnel, Positive = inside rock.
- */
-function distToTaperedCapsule(px, py, seg) {
-  const vx = seg.bx - seg.ax;
-  const vy = seg.by - seg.ay;
-  const lenSq = vx * vx + vy * vy;
-  let t = 0;
-  if (lenSq > 1e-6) {
-    t = clamp(((px - seg.ax) * vx + (py - seg.ay) * vy) / lenSq, 0, 1);
-  }
-  const cx = seg.ax + vx * t;
-  const cy = seg.ay + vy * t;
-  const radius = seg.ra + (seg.rb - seg.ra) * t;
-  const dx = px - cx;
-  const dy = py - cy;
-  return Math.hypot(dx, dy) - radius;
-}
-
-/**
  * Smooth minimum for organic cave intersections.
  */
 function smoothMin(a, b, k = 1.4) {
@@ -128,10 +108,10 @@ function evalPreparedSDF(segs, basins, level, x, y) {
     const t = seg.invLenSq > 0
       ? clamp(((x - seg.ax) * seg.vx + (y - seg.ay) * seg.vy) * seg.invLenSq, 0, 1)
       : 0;
-    const cx = seg.ax + seg.vx * t;
-    const cy = seg.ay + seg.vy * t;
+    const dx = x - (seg.ax + seg.vx * t);
+    const dy = y - (seg.ay + seg.vy * t);
     const radius = seg.ra + seg.dr * t;
-    const segD = Math.hypot(x - cx, y - cy) - radius;
+    const segD = Math.sqrt(dx * dx + dy * dy) - radius;
     d = d === Infinity ? segD : smoothMin(d, segD, kSeg);
   }
 
@@ -142,7 +122,13 @@ function evalPreparedSDF(segs, basins, level, x, y) {
     const tilt = b.lipTilt * Math.sin(clamp((y + 3.0) / 6.0, -1, 1));
     const dx = Math.abs(x - (b.cx + tilt)) - targetHalf;
     const dy = y - b.floorY;
-    const sinkholeD = dy > 0 ? Math.hypot(Math.max(0, dx), dy) : dx;
+    let sinkholeD;
+    if (dy > 0) {
+      const mx = dx > 0 ? dx : 0;
+      sinkholeD = Math.sqrt(mx * mx + dy * dy);
+    } else {
+      sinkholeD = dx;
+    }
     d = d === Infinity ? sinkholeD : smoothMin(d, sinkholeD, 1.9);
   }
 
@@ -168,6 +154,38 @@ export function createChunkSDFEvaluator(level, cx0, cx1, marginM = 8.0) {
 }
 
 /**
+ * Returns a 2D-bounded SDF evaluator pruned in both X and Y for torch raycasts and vertical baking strips.
+ */
+export function createBoxSDFEvaluator(level, xMin, xMax, yMin, yMax, marginM = 4.0) {
+  const { segs, basins } = getPreparedGeometry(level);
+  const loX = xMin - marginM;
+  const hiX = xMax + marginM;
+  const loY = yMin - marginM;
+  const hiY = yMax + marginM;
+  const localSegs = [];
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    if (
+      s.maxX + s.maxR >= loX &&
+      s.minX - s.maxR <= hiX &&
+      s.maxY + s.maxR >= loY &&
+      s.minY - s.maxR <= hiY
+    ) {
+      localSegs.push(s);
+    }
+  }
+  const localBasins = [];
+  for (let i = 0; i < basins.length; i++) {
+    const b = basins[i];
+    const half = b.rimHalf + b.flareAdd + Math.abs(b.lipTilt) + 3.0;
+    if (b.cx + half >= loX && b.cx - half <= hiX && b.floorY + 3.5 >= loY && -8.0 <= hiY) {
+      localBasins.push(b);
+    }
+  }
+  return (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+}
+
+/**
  * Evaluates signed distance to rock wall at (x, y).
  * < 0 means open water; >= 0 means solid rock.
  */
@@ -179,12 +197,24 @@ export function evaluateCaveSDF(level, x, y) {
 /**
  * Computes unit normal pointing from open water INTO rock (i.e., gradient of SDF).
  */
-export function evaluateCaveNormal(level, x, y) {
+export function evaluateCaveNormal(level, x, y, out = null) {
+  const { segs, basins } = getPreparedGeometry(level);
   const eps = 0.08;
-  const gx = evaluateCaveSDF(level, x + eps, y) - evaluateCaveSDF(level, x - eps, y);
-  const gy = evaluateCaveSDF(level, x, y + eps) - evaluateCaveSDF(level, x, y - eps);
-  const len = Math.hypot(gx, gy) || 1;
-  return { nx: gx / len, ny: gy / len };
+  const gx =
+    evalPreparedSDF(segs, basins, level, x + eps, y) -
+    evalPreparedSDF(segs, basins, level, x - eps, y);
+  const gy =
+    evalPreparedSDF(segs, basins, level, x, y + eps) -
+    evalPreparedSDF(segs, basins, level, x, y - eps);
+  const len = Math.sqrt(gx * gx + gy * gy) || 1;
+  const nx = gx / len;
+  const ny = gy / len;
+  if (out) {
+    out.nx = nx;
+    out.ny = ny;
+    return out;
+  }
+  return { nx, ny };
 }
 
 /**

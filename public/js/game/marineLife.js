@@ -317,20 +317,31 @@ export function createMarineEcosystem(level) {
  */
 export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
   if (!eco) return;
+  const lerp = Math.min(1, dt * 2.2);
+  const cullDistSq = 42 * 42;
+  const hasDiver = Boolean(diver);
+  const divX = hasDiver ? diver.x : 0;
+  const divY = hasDiver ? diver.y : 0;
 
-  // Fish schooling + gentle swim-away near diver
+  // Fish schooling + gentle swim-away near diver (distance-culled for distant chambers)
   for (let i = 0; i < eco.fish.length; i++) {
     const f = eco.fish[i];
+    if (hasDiver) {
+      const cdx = f.x - divX;
+      const cdy = f.y - divY;
+      if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+    }
     const targetVx = Math.cos(timeSec * 0.7 + f.phase) * 0.8 + (f.homeX - f.x) * 0.34;
     const targetVy = Math.sin(timeSec * 1.2 + f.phase) * 0.24 + (f.homeY - f.y) * 0.45;
-    f.vx += (targetVx - f.vx) * Math.min(1, dt * 2.2);
-    f.vy += (targetVy - f.vy) * Math.min(1, dt * 2.2);
+    f.vx += (targetVx - f.vx) * lerp;
+    f.vy += (targetVy - f.vy) * lerp;
 
-    if (diver) {
-      const dx = f.x - diver.x;
-      const dy = f.y - diver.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.05 && dist < 3.0) {
+    if (hasDiver) {
+      const dx = f.x - divX;
+      const dy = f.y - divY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > 0.0025 && distSq < 9.0) {
+        const dist = Math.sqrt(distSq);
         const push = ((3.0 - dist) / 3.0) * 4.2;
         f.vx += (dx / dist) * push * dt;
         f.vy += (dy / dist) * push * dt;
@@ -351,6 +362,11 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
   // Sinuous Blind Cave Remipedes & Cave Prawns
   for (let i = 0; i < eco.remipedes.length; i++) {
     const r = eco.remipedes[i];
+    if (hasDiver) {
+      const cdx = r.homeX - divX;
+      const cdy = r.homeY - divY;
+      if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+    }
     const prevX = r.x;
     const prevY = r.y;
     const nx = r.homeX + Math.sin(timeSec * 0.5 + r.phase) * 1.15;
@@ -365,6 +381,11 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
   // Freshwater Cenote Slider Turtles patrolling sunlit surface pools
   for (let i = 0; i < eco.turtles.length; i++) {
     const t = eco.turtles[i];
+    if (hasDiver) {
+      const cdx = t.homeX - divX;
+      const cdy = t.homeY - divY;
+      if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+    }
     t.phase += dt * 0.44;
     const tx = t.homeX + Math.cos(t.phase) * 3.1;
     const ty = t.homeY + Math.sin(t.phase * 2) * 0.7;

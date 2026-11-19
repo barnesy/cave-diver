@@ -49,13 +49,18 @@ export function sampleSiltDensity(x, y, siltClouds) {
   let density = 0;
   for (let i = 0; i < siltClouds.length; i++) {
     const s = siltClouds[i];
-    const dist = Math.hypot(s.x - x, s.y - y);
-    if (dist < s.radius) {
-      density += (1 - dist / s.radius) * s.alpha;
+    const r = s.radius;
+    const dx = s.x - x;
+    const dy = s.y - y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < r * r) {
+      density += (1 - Math.sqrt(distSq) / r) * s.alpha;
     }
   }
-  return Math.min(1, density);
+  return density > 1 ? 1 : density;
 }
+
+const _siltNormalTmp = { nx: 0, ny: 0 };
 
 /**
  * Checks diver fin tips & body proximity to cavern floors during swimming / frog kicks,
@@ -66,27 +71,32 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
   if (!diver || diver.y < 5.0) return false;
 
   const kickBoost = diver.body ? 0.55 + diver.body.kickSurge * 1.45 : 1.0;
-  const speed = Math.hypot(diver.vx || 0, diver.vy || 0);
+  const vx = diver.vx || 0;
+  const vy = diver.vy || 0;
+  const speed = Math.sqrt(vx * vx + vy * vy);
   const activity = Math.min(1.5, thrustMag * 0.95 * kickBoost + speed * 0.35);
   if (activity < 0.12) return false;
 
-  // Sample clearance beneath pelvis and both articulated fin tips
-  const probes = [{ x: diver.x, y: diver.y + 0.15, weight: 0.7 }];
-  if (diver.body?.legs) {
-    for (const leg of diver.body.legs) {
-      probes.push({ x: leg.finTip.x, y: leg.finTip.y, weight: 1.25 });
-    }
-  }
-
+  // Sample clearance beneath pelvis and both articulated fin tips (zero allocations)
   let minClearance = Infinity;
   let stirX = diver.x;
   let stirY = diver.y;
-  for (const p of probes) {
-    const c = sampleFloorClearance(level, p.x, p.y, 1.65);
-    if (c !== null && c < minClearance) {
-      minClearance = c;
-      stirX = p.x;
-      stirY = p.y + c - 0.14;
+  const c0 = sampleFloorClearance(level, diver.x, diver.y + 0.15, 1.65);
+  if (c0 !== null && c0 < minClearance) {
+    minClearance = c0;
+    stirX = diver.x;
+    stirY = diver.y + 0.15 + c0 - 0.14;
+  }
+  const legs = diver.body?.legs;
+  if (legs) {
+    for (let i = 0; i < legs.length; i++) {
+      const tip = legs[i].finTip;
+      const c = sampleFloorClearance(level, tip.x, tip.y, 1.65);
+      if (c !== null && c < minClearance) {
+        minClearance = c;
+        stirX = tip.x;
+        stirY = tip.y + c - 0.14;
+      }
     }
   }
 
@@ -127,6 +137,8 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
  * Also computes local silt density at (diver.x, diver.y) for telemetry/testing.
  */
 export function stepSiltPhysics(level, siltClouds, diver, dt) {
+  const dampX = Math.exp(-0.48 * dt);
+  const dampY = Math.exp(-0.58 * dt);
   for (let i = siltClouds.length - 1; i >= 0; i--) {
     const s = siltClouds[i];
     // Bud secondary cavern-diffusing tendrils as energetic floor plumes rise into the passage
@@ -158,7 +170,7 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
       s.x = nx;
       s.y = ny;
     } else {
-      const n = evaluateCaveNormal(level, nx, ny);
+      const n = evaluateCaveNormal(level, nx, ny, _siltNormalTmp);
       const vn = s.vx * n.nx + s.vy * n.ny;
       if (vn > 0) {
         s.vx -= n.nx * vn * 1.3;
@@ -169,8 +181,8 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
     }
 
     // Cavern eddy curls & broad diffusion throughout the chamber
-    s.vx = (s.vx + Math.sin(s.life * 1.15 + s.seed) * 0.26 * dt) * Math.exp(-0.48 * dt);
-    s.vy = (s.vy + Math.cos(s.life * 0.95 + s.seed) * 0.16 * dt) * Math.exp(-0.58 * dt);
+    s.vx = (s.vx + Math.sin(s.life * 1.15 + s.seed) * 0.26 * dt) * dampX;
+    s.vy = (s.vy + Math.cos(s.life * 0.95 + s.seed) * 0.16 * dt) * dampY;
     s.rot = (s.rot ?? 0) + (s.rotVel ?? 0) * dt;
     if (s.radius < s.maxRadius) {
       s.radius = Math.min(s.maxRadius, s.radius + dt * (0.38 + (s.maxRadius - s.radius) * 0.24));
@@ -178,7 +190,9 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
 
     s.life -= dt;
     if (s.life <= 0) {
-      siltClouds.splice(i, 1);
+      const last = siltClouds.length - 1;
+      if (i !== last) siltClouds[i] = siltClouds[last];
+      siltClouds.pop();
       continue;
     }
 

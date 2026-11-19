@@ -43,7 +43,7 @@ import {
   getAscentConfig,
   validateLevel,
 } from '../public/js/levels/index.js';
-import { evaluateCaveSDF, resolveDiverCollision, createChunkSDFEvaluator } from '../public/js/game/collision.js';
+import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision, createChunkSDFEvaluator, createBoxSDFEvaluator } from '../public/js/game/collision.js';
 import {
   createDiveSession,
   stepDiveSession,
@@ -1784,4 +1784,25 @@ test('Leaderboard entries sanitize detailed dive telemetry stats and overall sit
   assert.equal(overall[0].siteRuns.length, 1);
   assert.equal(overall[0].siteRuns[0].levelId, 'cenote-el-abismo');
   assert.equal(overall[0].siteRuns[0].stats.maxDepthM, 51.4);
+});
+
+test('createBoxSDFEvaluator matches global SDF and evaluateCaveNormal reuses out object', () => {
+  const lvl = getLevelById('blue-hole-dahab-arch');
+  const cx = lvl.spawn.x;
+  const cy = lvl.spawn.y + 12;
+  const boxSdf = createBoxSDFEvaluator(lvl, cx - 18, cx + 18, cy - 18, cy + 18, 4.0);
+  for (let dx = -12; dx <= 12; dx += 4) {
+    for (let dy = -12; dy <= 12; dy += 4) {
+      const wx = cx + dx;
+      const wy = cy + dy;
+      const full = evaluateCaveSDF(lvl, wx, wy);
+      const boxed = boxSdf(wx, wy);
+      assert.ok(Math.abs(full - boxed) < 1e-6, `Box SDF mismatch at (${wx},${wy}): ${full} vs ${boxed}`);
+    }
+  }
+  const reusable = { nx: 0, ny: 0 };
+  const ret = evaluateCaveNormal(lvl, cx + 6, cy, reusable);
+  assert.equal(ret, reusable);
+  const mag = Math.hypot(reusable.nx, reusable.ny);
+  assert.ok(Math.abs(mag - 1) < 1e-5, `Expected unit normal, got magnitude ${mag}`);
 });

@@ -419,12 +419,18 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     callbacks.onBodyRecovered?.(rt);
   }
 
-  // Cave exploration grid completeness (shared vision/light sweep)
+  // Cave exploration grid completeness (shared vision/light sweep, movement-gated to avoid 60Hz O(cells) scans)
   if (session.exploreCells && session.exploredCells) {
-    if (markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 4.4) > 0) {
-      session.exploredPct = Math.round(
-        (session.exploredCells.size / Math.max(1, session.exploreCells.length)) * 100
-      );
+    const dxExp = diver.x - (session._lastExploreX ?? -9999);
+    const dyExp = diver.y - (session._lastExploreY ?? -9999);
+    if (dxExp * dxExp + dyExp * dyExp >= 1.0) {
+      session._lastExploreX = diver.x;
+      session._lastExploreY = diver.y;
+      if (markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 4.4) > 0) {
+        session.exploredPct = Math.round(
+          (session.exploredCells.size / Math.max(1, session.exploreCells.length)) * 100
+        );
+      }
     }
   }
 
