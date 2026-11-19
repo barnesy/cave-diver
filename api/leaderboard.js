@@ -89,19 +89,26 @@ export async function POST(request) {
 
     try {
       let didWrite = false;
+      let backupSeed = null;
       const allEntries = await mutateBlobJson(
         LEADERBOARD_BLOB_PATH,
         () => [],
-        (list, { notFound }) => {
+        async (list, { notFound }) => {
           let base = Array.isArray(list) ? list : [];
-          if (notFound) base = [];
+          if (notFound) {
+            if (!backupSeed) {
+              const bk = await readBlobJson(LEADERBOARD_BACKUP_PATH, []).catch(() => ({ data: [] }));
+              backupSeed = Array.isArray(bk.data) ? bk.data : [];
+            }
+            base = backupSeed;
+          }
           const { entries, changed } = mergeLeaderboardEntries(base, validEntries);
-          if (!changed) return NO_BLOB_MUTATION;
+          if (!changed && !notFound) return NO_BLOB_MUTATION;
           didWrite = true;
           return pruneLeaderboardEntries(entries);
         }
       );
-      if (didWrite) {
+      if (didWrite && Array.isArray(allEntries) && allEntries.length > 0) {
         await writeBlobJson(LEADERBOARD_BACKUP_PATH, allEntries).catch(() => {});
       }
       return jsonResponse({ ok: true, count: validEntries.length, synced: didWrite });
@@ -118,18 +125,27 @@ export async function POST(request) {
   try {
     const entry = parsed.entry;
     let didWrite = false;
+    let backupSeed = null;
     const allEntries = await mutateBlobJson(
       LEADERBOARD_BLOB_PATH,
       () => [],
-      (list) => {
-        const { entries, changed } = mergeLeaderboardEntries(list, [entry]);
-        if (!changed) return NO_BLOB_MUTATION;
+      async (list, { notFound }) => {
+        let base = Array.isArray(list) ? list : [];
+        if (notFound) {
+          if (!backupSeed) {
+            const bk = await readBlobJson(LEADERBOARD_BACKUP_PATH, []).catch(() => ({ data: [] }));
+            backupSeed = Array.isArray(bk.data) ? bk.data : [];
+          }
+          base = backupSeed;
+        }
+        const { entries, changed } = mergeLeaderboardEntries(base, [entry]);
+        if (!changed && !notFound) return NO_BLOB_MUTATION;
         didWrite = true;
         return pruneLeaderboardEntries(entries);
       }
     );
 
-    if (didWrite) {
+    if (didWrite && Array.isArray(allEntries) && allEntries.length > 0) {
       await writeBlobJson(LEADERBOARD_BACKUP_PATH, allEntries).catch(() => {});
     }
 

@@ -3,9 +3,13 @@ import {
   createDiveState,
   switchGas,
   GAS_MIXES,
+  computePPO2,
+  getRecommendedGas,
+  getShareableGasCandidate,
   donateGasFromState,
   receiveGasIntoState,
 } from './physics/diveModel.js';
+import { resolveDiverCollision } from './game/collision.js';
 import {
   createEmptyLogbook,
   recordDiveInLogbook,
@@ -136,6 +140,11 @@ const callsignCountEl = document.getElementById('callsign-count');
 const coopCommsEl = document.getElementById('coop-comms');
 const btnShareGas = document.getElementById('btn-share-gas');
 const btnTowBuddy = document.getElementById('btn-tow-buddy');
+const btnDropTow = document.getElementById('btn-drop-tow');
+const hudPauseOverlay = document.getElementById('hud-pause-overlay');
+const btnPauseResume = document.getElementById('btn-pause-resume');
+const btnPauseAbort = document.getElementById('btn-pause-abort');
+const btnNextLevel = document.getElementById('btn-next-level');
 const btnMenuRadio = document.getElementById('btn-menu-radio');
 const btnHudRadio = document.getElementById('btn-hud-radio');
 const btnPwaUpdate = document.getElementById('btn-pwa-update');
@@ -158,6 +167,12 @@ let loadSeq = 0;
 let inFlightLoad = null; // { seq, levelId, promise }
 let cachedLanUrls = [];
 let spectatingPeer = false;
+let spectatePeerIdx = 0;
+let divePaused = false;
+let pendingUnsafeGasId = '';
+let pendingUnsafeGasAt = 0;
+let pendingAbortAt = 0;
+let rewindHoldTimer = 0;
 let pendingAutoJoinCode = INITIAL_ROOM_CODE;
 let directJoinToDive = Boolean(INITIAL_ROOM_CODE);
 let joiningRoomCode = INITIAL_ROOM_CODE;
@@ -441,7 +456,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=81" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=84" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -597,15 +612,16 @@ function renderLevelCards() {
     const meta = getLevelMeta(lvl, idx);
     const slot = SITE_COORDS_BY_ID.get(lvl.id);
     const depth = `${meta.maxDepthM}m`;
-    const metaText = isCached
-      ? best > 0
+    const metaText =
+      best > 0
         ? `✓ ${best.toLocaleString()}`
-        : lvl.reelMetersPerDiver > 0
-          ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
-          : `✓ Ready`
-      : lvl.reelMetersPerDiver > 0
-        ? `No Line · ${lvl.reelMetersPerDiver}m`
-        : getLevelDifficultyLabel(idx, lvl);
+        : isCached
+          ? lvl.reelMetersPerDiver > 0
+            ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
+            : `✓ Ready`
+          : lvl.reelMetersPerDiver > 0
+            ? `No Line · ${lvl.reelMetersPerDiver}m`
+            : getLevelDifficultyLabel(idx, lvl);
     const tierTag = lvl.reelMetersPerDiver > 0 ? `L${idx + 1} · T${meta.tier}` : `L${idx + 1}`;
     return `
       <button
@@ -621,7 +637,7 @@ function renderLevelCards() {
           <span class="lvl-card-depth">${depth}</span>
         </div>
         <span class="lvl-card-name">${lvl.name}</span>
-        <span class="lvl-card-meta ${isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
+        <span class="lvl-card-meta ${best > 0 || isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
       </button>
     `;
   }).join('');
@@ -811,31 +827,95 @@ function handleReelRewind() {
   }
 }
 
-const hud = new DiveComputerHUD({
-  onGasSelect: (gasId) => {
-    if (mode !== 'diving' || !session) return;
-    if (switchGas(session.diveState, gasId)) {
-      audio.playGasSwitch();
-      showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
-    } else {
-      showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
+function setDivePaused(paused) {
+  const next = Boolean(paused) && mode === 'diving' && !isMultiplayer && Boolean(session && !session.endedState);
+  divePaused = next;
+  if (hudPauseOverlay) hudPauseOverlay.hidden = !next;
+}
+
+function trySwitchGas(gasId, { bypassSafety = false } = {}) {
+  if (mode !== 'diving' || !session || divePaused) return false;
+  const ds = session.diveState;
+  const tank = ds?.tanks?.[gasId];
+  const mix = GAS_MIXES[gasId];
+  if (!tank || !mix) return false;
+  if (ds.activeGasId === gasId) return true;
+  if (tank.bar <= 0.1) {
+    showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
+    return false;
+  }
+
+  // Double-tap safety guard against accidental lethal O2 or hypoxic switches
+  const now = performance.now();
+  const futurePPO2 = computePPO2(ds.depthM, mix);
+  const isHyperoxic = futurePPO2 > 1.65;
+  const isHypoxic = futurePPO2 < 0.16 && ds.depthM > 0.2;
+  if (!bypassSafety && (isHyperoxic || isHypoxic)) {
+    const confirmed = pendingUnsafeGasId === gasId && now - pendingUnsafeGasAt <= 2500;
+    if (!confirmed) {
+      pendingUnsafeGasId = gasId;
+      pendingUnsafeGasAt = now;
+      audio.playAlarm('warn');
+      const reason = isHyperoxic
+        ? `TOXIC PPO2 ${futurePPO2.toFixed(2)}`
+        : `HYPOXIC PPO2 ${futurePPO2.toFixed(2)}`;
+      showToast(
+        `⚠️ ${getActiveGasName(gasId)} UNSAFE at ${Math.round(ds.depthM)}m (${reason})! Tap again to force`,
+        2.6
+      );
+      return false;
     }
-  },
+  }
+  pendingUnsafeGasId = '';
+  pendingUnsafeGasAt = 0;
+
+  if (switchGas(ds, gasId)) {
+    audio.playGasSwitch();
+    showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
+    return true;
+  }
+  showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
+  return false;
+}
+
+const hud = new DiveComputerHUD({
+  onGasSelect: (gasId) => trySwitchGas(gasId),
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
+  onHeartbeatPulse: (bpm) => {
+    if (mode === 'diving' && !divePaused) audio.playHeartbeat(bpm);
+  },
 });
 
 const input = new InputController({
   stickBaseEl: document.getElementById('touch-stick'),
   stickKnobEl: document.getElementById('touch-knob'),
-  onGasSelect: (gasId) => {
-    if (mode === 'diving' && session && switchGas(session.diveState, gasId)) {
-      audio.playGasSwitch();
-      showToast(`Regulator: ${getActiveGasName(gasId)}`, 1.6);
+  onGasSelect: (gasId) => trySwitchGas(gasId),
+  onRecommendedGasSwitch: () => {
+    if (mode !== 'diving' || !session || divePaused) return false;
+    const ds = session.diveState;
+    const ascending =
+      session.checkpointsHit.size >= (session.level.checkpoints?.length || 1) ||
+      Boolean(session.carryingBody || session.bodyRecovered) ||
+      ds.stopDepthM > 0;
+    const rec = getRecommendedGas(ds, { ascending });
+    if (rec && rec !== ds.activeGasId) {
+      return trySwitchGas(rec);
     }
+    showToast(`Optimal gas already active (${getActiveGasName(ds.activeGasId)})`, 1.5);
+    return true;
+  },
+  onPauseToggle: () => {
+    if (mode !== 'diving' || !session || session.endedState) return false;
+    if (isMultiplayer) {
+      showToast('Co-op dives run live — pause is solo-only.', 1.8);
+      return true;
+    }
+    setDivePaused(!divePaused);
+    return true;
   },
   onTorchToggle: () => {
-    if (session?.diver) session.diver.torchOn = !session.diver.torchOn;
+    if (session?.diver && !divePaused) session.diver.torchOn = !session.diver.torchOn;
   },
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
@@ -887,7 +967,15 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   directJoinToDive = false;
   isMultiplayer = multiplayer;
   mode = 'diving';
+  divePaused = false;
   spectatingPeer = false;
+  spectatePeerIdx = 0;
+  pendingUnsafeGasId = '';
+  pendingUnsafeGasAt = 0;
+  pendingAbortAt = 0;
+  rewindHoldTimer = 0;
+  if (hudPauseOverlay) hudPauseOverlay.hidden = true;
+  if (btnDropTow) btnDropTow.hidden = true;
   celebrationParticles = [];
   if (debriefAnimFrame) {
     cancelAnimationFrame(debriefAnimFrame);
@@ -957,8 +1045,10 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (!session) return;
   cancelDebriefAnimations();
   mode = 'debrief';
+  divePaused = false;
   spectatingPeer = false;
   setHudMenuOpen(false);
+  if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -970,6 +1060,16 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   const inCoopCrew = Boolean(isMultiplayer && lan.room && lan.getPeers().length > 0);
   if (btnRetry) btnRetry.textContent = inCoopCrew ? 'CO-OP ROOM LOBBY' : 'DIVE AGAIN';
   if (btnMenu) btnMenu.textContent = inCoopCrew ? 'LEAVE CO-OP ROOM' : 'MAIN MENU';
+  if (btnNextLevel) {
+    const curIdx = LEVELS.findIndex((l) => l.id === session.level?.id);
+    const hasNext = curIdx >= 0 && curIdx + 1 < LEVELS.length;
+    const canAdvance = Boolean(success && hasNext && (!inCoopCrew || lan.isHost()));
+    btnNextLevel.hidden = !canAdvance;
+    if (canAdvance) {
+      const nextLvl = LEVELS[curIdx + 1];
+      btnNextLevel.textContent = `NEXT: L${curIdx + 2} ${nextLvl.name} →`;
+    }
+  }
 
   const { diver, diveState, checkpointsHit, level } = session;
   const localSummary =
@@ -1023,6 +1123,8 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (success) {
     spawnCelebrationConfetti();
     audio.playVictoryFanfare();
+  } else {
+    audio.playFatality();
   }
 
   const badge = document.getElementById('debrief-badge');
@@ -1220,46 +1322,54 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       teamSummary.isTeam && lan.room?.code
         ? `${lan.room.code}-d${activeDiveSeq || 1}-${level.id}`
         : undefined;
-    leaderboard
-      .submitRun({
-        mode: subMode,
-        levelId: level.id,
-        runId: subRunId,
-        diverName: playerNameInput?.value.trim() || 'Diver 1',
-        crew: teamSummary.roster.map((r) => ({
-          name: r.name,
-          score: r.totalScore,
-          alive: r.alive,
-          healthPct: r.healthPct,
-          gasRemainingPct: r.gasRemainingPct,
-          diveTimeSec: r.diveTimeSec,
-          rescued: Boolean(r.rescued),
-        })),
-        teamSize: teamSummary.teamSize,
-        score: teamSummary.teamScore,
-        grade: teamSummary.teamRank.grade,
-        timeSec: teamSummary.avgTimeSec,
-        exploredPct: teamSummary.exploredPct,
-        collectiblesFound: teamSummary.collectiblesFound,
-        stats: {
-          maxDepthM: diveState.maxDepthM,
-          avgHealthPct: teamSummary.avgHealthPct,
-          avgSpeedPct: teamSummary.avgSpeedPct,
-          avgGasRemainingPct: teamSummary.avgGasRemainingPct,
-          peakHeartRateBpm: Math.round(diveState.maxHeartRateBpm || diveState.heartRateBpm || 68),
-          checkpointsHit: checkpointsHit.size,
-          totalCheckpoints: (level.checkpoints || []).length,
-          healthScore: teamSummary.avgHealthScore,
-          speedScore: teamSummary.avgSpeedScore,
-          collectiblesScore: teamSummary.collectiblesScore,
-          explorationScore: teamSummary.explorationScore + teamSummary.cartographerBonus,
-          rescueBonus: teamSummary.rescueBonus || 0,
-          teamSurvivalBonus: teamSummary.teamSurvivalBonus || 0,
-          eanBar: Math.round(diveState.tanks.EAN32.bar),
-          tmxBar: Math.round(diveState.tanks.TMX1455.bar),
-          o2Bar: Math.round(diveState.tanks.O2.bar),
-        },
-      })
+    const shouldSubmitToServer = !teamSummary.isTeam || !lan.room || lan.isHost();
+    const lbPromise = shouldSubmitToServer
+      ? leaderboard.submitRun({
+          mode: subMode,
+          levelId: level.id,
+          runId: subRunId,
+          diverName: playerNameInput?.value.trim() || 'Diver 1',
+          crew: teamSummary.roster.map((r) => ({
+            name: r.name,
+            score: r.totalScore,
+            alive: r.alive,
+            healthPct: r.healthPct,
+            gasRemainingPct: r.gasRemainingPct,
+            diveTimeSec: r.diveTimeSec,
+            rescued: Boolean(r.rescued),
+          })),
+          teamSize: teamSummary.teamSize,
+          score: teamSummary.teamScore,
+          grade: teamSummary.teamRank.grade,
+          timeSec: teamSummary.avgTimeSec,
+          exploredPct: teamSummary.exploredPct,
+          collectiblesFound: teamSummary.collectiblesFound,
+          stats: {
+            maxDepthM: diveState.maxDepthM,
+            avgHealthPct: teamSummary.avgHealthPct,
+            avgSpeedPct: teamSummary.avgSpeedPct,
+            avgGasRemainingPct: teamSummary.avgGasRemainingPct,
+            peakHeartRateBpm: Math.round(diveState.maxHeartRateBpm || diveState.heartRateBpm || 68),
+            checkpointsHit: checkpointsHit.size,
+            totalCheckpoints: (level.checkpoints || []).length,
+            healthScore: teamSummary.avgHealthScore,
+            speedScore: teamSummary.avgSpeedScore,
+            collectiblesScore: teamSummary.collectiblesScore,
+            explorationScore: teamSummary.explorationScore + teamSummary.cartographerBonus,
+            rescueBonus: teamSummary.rescueBonus || 0,
+            teamSurvivalBonus: teamSummary.teamSurvivalBonus || 0,
+            eanBar: Math.round(diveState.tanks.EAN32.bar),
+            tmxBar: Math.round(diveState.tanks.TMX1455.bar),
+            o2Bar: Math.round(diveState.tanks.O2.bar),
+          },
+        })
+      : leaderboard.fetchBoard({ mode: subMode, levelId: level.id, limit: 10 }).then((b) => ({
+          ok: true,
+          source: b.source,
+          entries: b.entries || [],
+        }));
+
+    lbPromise
       .then((res) => {
         if (!debriefLeaderboardEl) return;
         if (!res?.ok) {
@@ -2315,7 +2425,12 @@ coopCommsEl?.addEventListener('click', (e) => {
     const targetGas = btn.dataset.targetGas || session.diveState.activeGasId;
     const targetName = btn.dataset.targetName || 'Buddy';
     if (!targetId) return;
-    const donation = donateGasFromState(session.diveState, targetGas, 25);
+    const candidate = getShareableGasCandidate(session.diveState, targetGas, 25, session.diveState.depthM);
+    if (!candidate) {
+      showToast('No safe gas cylinder with enough reserve to share here.', 2.2);
+      return;
+    }
+    const donation = donateGasFromState(session.diveState, candidate.gasId, candidate.donatedBar);
     if (!donation) {
       showToast('Reserve too low to share gas safely.', 2.0);
       return;
@@ -2332,19 +2447,52 @@ coopCommsEl?.addEventListener('click', (e) => {
     btn.hidden = true;
     return;
   }
+  if (btn.id === 'btn-drop-tow') {
+    if (session.rescueTargetId) {
+      const dropped = lan.getPeers().find((p) => p && p.id === session.rescueTargetId);
+      const droppedId = session.rescueTargetId;
+      const droppedName = dropped?.name || 'Buddy';
+      if (dropped) dropped.rescuedBy = '';
+      session.rescueTargetId = null;
+      session.diver.rescueTargetId = '';
+      lan.sendBuddyRescue(droppedId, droppedName, 'dropped');
+      audio.playReelClick();
+      showToast(`🔓 Released tow line on ${droppedName}.`, 2.2);
+    }
+    btn.hidden = true;
+    return;
+  }
   const sig = btn.dataset.signal;
   if (!sig) return;
   session.diver.signalText = sig;
   session.diver.signalExpiresAt = performance.now() + 4000;
   lan.sendSignal(sig);
-  audio.playCheckpoint();
+  audio.playSignal();
   showToast(`Signaled crew: ${sig}`, 1.8);
 });
 
 btnCoopSpectate?.addEventListener('click', () => {
-  spectatingPeer = !spectatingPeer;
+  const activePeers = isMultiplayer
+    ? lan.getPeers().filter((p) => p && p.alive !== false && !p.surfaced)
+    : [];
+  if (!spectatingPeer) {
+    spectatingPeer = true;
+    spectatePeerIdx = 0;
+  } else if (activePeers.length > 1 && spectatePeerIdx < activePeers.length - 1) {
+    spectatePeerIdx += 1;
+  } else {
+    spectatingPeer = false;
+    spectatePeerIdx = 0;
+  }
   if (btnCoopSpectate) {
-    btnCoopSpectate.textContent = spectatingPeer ? 'My Diver' : 'Watch Buddy';
+    if (!spectatingPeer) {
+      btnCoopSpectate.textContent = 'Watch Buddy';
+    } else if (activePeers.length > 1) {
+      const target = activePeers[spectatePeerIdx % activePeers.length];
+      btnCoopSpectate.textContent = `Next (${target?.name || 'Buddy'})`;
+    } else {
+      btnCoopSpectate.textContent = 'My Diver';
+    }
   }
 });
 
@@ -2448,14 +2596,19 @@ syncRadioUi();
 btnMenuRadio?.addEventListener('click', handleRadioCycle);
 btnHudRadio?.addEventListener('click', handleRadioCycle);
 
-document.getElementById('btn-abort').addEventListener('click', () => {
+function abortActiveDiveToMenu() {
   const prevCode = lan.room?.code || '';
   cancelDebriefAnimations();
+  divePaused = false;
+  pendingAbortAt = 0;
   mode = 'menu';
   session = null;
   spectatingPeer = false;
+  spectatePeerIdx = 0;
   activeDiveSeq = 0;
   setHudMenuOpen(false);
+  if (hudPauseOverlay) hudPauseOverlay.hidden = true;
+  if (btnDropTow) btnDropTow.hidden = true;
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -2470,6 +2623,44 @@ document.getElementById('btn-abort').addEventListener('click', () => {
   syncWakeLockFn?.();
   renderRoomsList();
   renderLevelCards();
+}
+
+btnPauseResume?.addEventListener('click', () => setDivePaused(false));
+btnPauseAbort?.addEventListener('click', abortActiveDiveToMenu);
+
+document.getElementById('btn-abort').addEventListener('click', () => {
+  const inLiveDive = mode === 'diving' && session && !session.endedState && !divePaused;
+  const elapsed = session?.diveState?.diveTimeSec || 0;
+  if (inLiveDive && elapsed > 15) {
+    const now = performance.now();
+    if (now - pendingAbortAt > 3000) {
+      pendingAbortAt = now;
+      showToast('Tap ✕ again within 3s to abort dive', 2.8);
+      return;
+    }
+  }
+  abortActiveDiveToMenu();
+});
+
+btnNextLevel?.addEventListener('click', async () => {
+  const curIdx = LEVELS.findIndex((l) => l.id === activeLevel.id);
+  if (curIdx < 0 || curIdx + 1 >= LEVELS.length) return;
+  const nextLvl = LEVELS[curIdx + 1];
+  cancelDebriefAnimations();
+  await selectAndLoadLevel(nextLvl.id);
+  if (isMultiplayer && lan.room && lan.getPeers().length > 0 && lan.isHost()) {
+    mode = 'menu';
+    session = null;
+    screenDebrief.hidden = true;
+    screenMenu.hidden = false;
+    setActiveMenuTab('solo');
+    syncWakeLockFn?.();
+    lan.returnToLobby();
+    showToast(`Selected L${curIdx + 2}: ${nextLvl.name} — ready for crew launch!`, 2.8);
+    return;
+  }
+  screenDebrief.hidden = true;
+  launchOpenCoopDive();
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
@@ -2863,7 +3054,7 @@ lan.on('dive_started', async (msg) => {
 });
 
 lan.on('peer_signal', (msg) => {
-  audio.playCheckpoint();
+  audio.playSignal();
   showToast(`${msg.name || 'Buddy'}: ${msg.signal}`, 3.0);
 });
 
@@ -2908,7 +3099,7 @@ lan.on('peer_body_recovered', (msg) => {
   session.bodyRecovered = true;
   const who = msg?.name || 'Buddy';
   const targetName = session.level.recoveryTarget?.name || 'fallen diver';
-  audio.playCheckpoint();
+  audio.playRecovery();
   showToast(`🛟 ${who} secured ${targetName}! Escort back to surface exit.`, 4.0);
 });
 
@@ -2917,7 +3108,7 @@ function attachBuddyTow(peer) {
   session.rescueTargetId = peer.id;
   session.diver.rescueTargetId = peer.id;
   peer.rescuedBy = lan.clientId || 'self';
-  audio.playCheckpoint();
+  audio.playRecovery();
   showToast(`🛟 Towing ${peer.name || 'Buddy'}! Haul safely through deco to surface exit (+450 pts)!`, 3.6);
   lan.sendBuddyRescue(peer.id, peer.name || 'Buddy', 'towing');
   return true;
@@ -2925,6 +3116,17 @@ function attachBuddyTow(peer) {
 
 lan.on('peer_buddy_rescue', (msg) => {
   if (!session || mode !== 'diving') return;
+  if (msg.status === 'dropped') {
+    if (msg.rescuedId === lan.clientId) {
+      session.rescuedBy = '';
+      session.diver.rescuedBy = '';
+      showToast(`🔓 ${msg.rescuerName || 'Buddy'} released your rescue tow line.`, 2.6);
+    } else {
+      const peer = lan.getPeers().find((p) => p && p.id === msg.rescuedId);
+      if (peer) peer.rescuedBy = '';
+    }
+    return;
+  }
   if (msg.rescuedId === lan.clientId) {
     if (msg.status === 'extracted') {
       session.rescued = true;
@@ -2940,7 +3142,7 @@ lan.on('peer_buddy_rescue', (msg) => {
     }
     session.rescuedBy = msg.rescuerId || 'peer';
     session.diver.rescuedBy = session.rescuedBy;
-    audio.playCheckpoint();
+    audio.playRecovery();
     showToast(`🛟 ${msg.rescuerName || 'Buddy'} clipped a rescue tow onto you!`, 3.6);
   } else {
     showToast(`🛟 ${msg.rescuerName || 'Buddy'} is towing ${msg.rescuedName || 'teammate'} toward the surface!`, 3.2);
@@ -2957,7 +3159,17 @@ lan.on('peer_gas_share', (msg) => {
   }
 });
 
-lan.on('peer_left', () => {
+lan.on('peer_left', (peerId) => {
+  if (session && peerId) {
+    if (session.rescuedBy === peerId) {
+      session.rescuedBy = '';
+      session.diver.rescuedBy = '';
+    }
+    if (session.rescueTargetId === peerId) {
+      session.rescueTargetId = null;
+      session.diver.rescueTargetId = '';
+    }
+  }
   if (mode === 'diving' && Date.now() - lastHostPromoMs > 800) {
     showToast('Buddy diver left the dive.', 2.8);
   }
@@ -2975,7 +3187,7 @@ const _framePlayerLines = [];
 const _frameHandledPeerIds = new Set();
 const sessionStepCallbacks = {
   onToast: showToast,
-  onImpactSound: () => audio.playImpact(),
+  onImpactSound: (spd) => audio.playImpact(spd),
   onAlarm: (lvl) => audio.playAlarm(lvl),
   onExhale: (ex) => audio.playRegulatorExhale(ex),
   onCheckpoint: (cp) => {
@@ -2989,7 +3201,7 @@ const sessionStepCallbacks = {
     if (isMultiplayer) lan.sendCollectible(item.id);
   },
   onBodyRecovered: (rt) => {
-    audio.playCheckpoint();
+    audio.playRecovery();
     showToast(`🛟 Secured ${rt.name}! Tow carefully back through deep deco to the surface!`, 4.2);
     if (isMultiplayer) lan.sendBodyRecovered();
   },
@@ -3027,6 +3239,7 @@ function stepSimulation(dt) {
   }
 
   if (mode !== 'diving' || !session) return;
+  if (divePaused && !isMultiplayer) return;
 
   const { diver, diveState, checkpointsHit, level } = session;
   let result = {
@@ -3036,7 +3249,22 @@ function stepSimulation(dt) {
   };
 
   if (!session.endedState) {
+    // Continuous hold-[R] guideline rewind
+    if (input.isRewindHeld() && !session.reelingActive && session.reelMaxMeters > 0) {
+      rewindHoldTimer += dt;
+      if (rewindHoldTimer >= 0.28) {
+        rewindHoldTimer = 0;
+        const rw = rewindGuidelineSegment(session);
+        if (rw.action === 'rewound') {
+          audio.playReelClick();
+          if (isMultiplayer) lan.sendGuidelineSync(session.guidelineChains, false);
+        }
+      }
+    } else {
+      rewindHoldTimer = 0;
+    }
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
+    audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
   } else {
     session.simTimeSec += dt;
     diver.vx = 0;
@@ -3102,15 +3330,21 @@ function stepSimulation(dt) {
     }
     lan.stepPeerInterpolation(dt, level);
 
-    // If downed and a rescuer is towing us, glide smoothly behind the rescuer
+    // If downed and a rescuer is towing us, glide smoothly behind the rescuer (respecting cave rock SDF)
     if (!diveState.alive && session.rescuedBy) {
       const rescuer = peers.find((p) => p && (p.id === session.rescuedBy || p.rescueTargetId === lan.clientId));
-      if (rescuer) {
+      if (!rescuer || rescuer.alive === false) {
+        session.rescuedBy = '';
+        session.diver.rescuedBy = '';
+      } else {
         const ang = rescuer.angle || 0;
         const tx = rescuer.x - Math.cos(ang) * 1.55;
         const ty = rescuer.y - Math.sin(ang) * 1.55;
-        diver.x += (tx - diver.x) * Math.min(1, dt * 8);
-        diver.y += (ty - diver.y) * Math.min(1, dt * 8);
+        const nextX = diver.x + (tx - diver.x) * Math.min(1, dt * 8);
+        const nextY = diver.y + (ty - diver.y) * Math.min(1, dt * 8);
+        const col = resolveDiverCollision(level, nextX, nextY, 0.55);
+        diver.x = col.x;
+        diver.y = col.y;
         diver.angle = ang;
         if (rescuer.surfaced && !session.rescued) {
           session.rescued = true;
@@ -3124,6 +3358,20 @@ function stepSimulation(dt) {
         }
       }
     }
+    // Clear stale rescuedBy flags on peers whose rescuer died or dropped tow
+    for (const p of peers) {
+      if (!p || !p.rescuedBy || p.rescued) continue;
+      if (p.rescuedBy === lan.clientId) {
+        if (!diveState.alive || session.rescueTargetId !== p.id) p.rescuedBy = '';
+      } else {
+        const otherRescuer = peers.find((r) => r && r.id === p.rescuedBy);
+        if (!otherRescuer || otherRescuer.alive === false) p.rescuedBy = '';
+      }
+    }
+  }
+
+  if (btnDropTow) {
+    btnDropTow.hidden = !(isMultiplayer && diveState.alive && !session.endedState && session.rescueTargetId);
   }
 
   if (btnTowBuddy) {
@@ -3154,26 +3402,29 @@ function stepSimulation(dt) {
 
   if (btnShareGas) {
     let needyPeer = null;
+    let shareCand = null;
     if (isMultiplayer && diveState.alive && !session.endedState) {
-      const mySpare = (diveState.tanks[diveState.activeGasId]?.bar || 0) > 38;
-      if (mySpare) {
-        let bestDist = 3.6;
-        for (const p of peers) {
-          if (!p || p.alive === false || p.surfaced) continue;
-          const d = Math.hypot(p.x - diver.x, p.y - diver.y);
-          const lowGas = (p.activeBar ?? 200) < 95 || p.condition === 'NO GAS' || p.condition === 'LOW GAS';
-          if (lowGas && d <= bestDist) {
+      let bestDist = 3.6;
+      for (const p of peers) {
+        if (!p || p.alive === false || p.surfaced) continue;
+        const d = Math.hypot(p.x - diver.x, p.y - diver.y);
+        const lowGas = (p.activeBar ?? 200) < 95 || p.condition === 'NO GAS' || p.condition === 'LOW GAS';
+        if (lowGas && d <= bestDist) {
+          const cand = getShareableGasCandidate(diveState, p.gasId || diveState.activeGasId, 25, diveState.depthM);
+          if (cand) {
             bestDist = d;
             needyPeer = p;
+            shareCand = cand;
           }
         }
       }
     }
-    if (needyPeer) {
+    if (needyPeer && shareCand) {
       btnShareGas.hidden = false;
       btnShareGas.dataset.targetId = needyPeer.id || '';
-      btnShareGas.dataset.targetGas = needyPeer.gasId || diveState.activeGasId;
+      btnShareGas.dataset.targetGas = shareCand.gasId;
       btnShareGas.dataset.targetName = needyPeer.name || 'Buddy';
+      btnShareGas.textContent = `🎁 +${shareCand.donatedBar}b ${shareCand.gasName}`;
     } else {
       btnShareGas.hidden = true;
     }
@@ -3289,9 +3540,14 @@ function frame(nowMs) {
     const nextCheckpoint =
       session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
     const peers = isMultiplayer ? lan.getPeers() : [];
+    const activeSpectatePeers = spectatingPeer
+      ? peers.filter((p) => p && p.alive !== false && !p.surfaced)
+      : [];
     const spectateTarget =
       spectatingPeer && peers.length > 0
-        ? peers.find((p) => p.alive !== false && !p.surfaced) || peers[0]
+        ? activeSpectatePeers.length > 0
+          ? activeSpectatePeers[spectatePeerIdx % activeSpectatePeers.length]
+          : peers[0]
         : null;
     const playerLines = _framePlayerLines;
     playerLines.length = 0;
@@ -3506,7 +3762,7 @@ function setupPwaSupport() {
       btnPwaUpdate.disabled = true;
       btnPwaUpdate.textContent = 'Updating...';
     }
-    setTimeout(reloadApp, 2800);
+    setTimeout(reloadApp, 4500);
 
     if ('serviceWorker' in navigator) {
       try {
@@ -3520,7 +3776,7 @@ function setupPwaSupport() {
           if (reg.installing) {
             await new Promise((resolve) => {
               const w = reg.installing;
-              const tm = setTimeout(resolve, 1800);
+              const tm = setTimeout(resolve, 3200);
               w.addEventListener('statechange', () => {
                 if (w.state === 'installed' || w.state === 'redundant') {
                   clearTimeout(tm);
@@ -3537,12 +3793,7 @@ function setupPwaSupport() {
       } catch {}
     }
 
-    try {
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-    } catch {}
+    // Never wipe offline caches destructively; let the new SW activate cleanly on reload
     reloadApp();
   };
 

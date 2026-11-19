@@ -108,18 +108,31 @@ export const LEVEL_17 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -20, xMax: 44, yMin: -2, yMax: 58, label: 'Grjótagjá Cobalt Lava Pool' },
-    { xMin: 44, xMax: 225, yMin: 20, yMax: 160, label: 'Mývatn Obsidian Mantle Rift' },
-    { xMin: 225, xMax: 350, yMin: -2, yMax: 130, label: 'East Caldera Spring Exit' },
+    {
+      id: 'zone-switch',
+      xMin: 295,
+      xMax: 313,
+      y: 22,
+      color: '#38bdf8',
+      title: '22m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: 312,
+      xMax: 332,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 12, y: 18, label: '18m • Grjótagjá Sill' },
-    { x: 46, y: 48, label: '48m • 58°C Lava Shear' },
-    { x: 126, y: 92, label: '92m • Magma Skylight' },
-    { x: 196, y: 150, label: '152m • Hverfjall Floor' },
-    { x: 264, y: 78, label: '78m • Caldera Vent Spire' },
-    { x: 304, y: 22, label: '22m • Caldera Deco Shelf' },
+    { x: 12, y: 18, label: '18m • Grjótagjá Sill', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 46, y: 48, label: '48m • 58°C Lava Shear', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 126, y: 92, label: '92m • Magma Skylight', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 196, y: 150, label: '152m • Hverfjall Floor', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 264, y: 78, label: '78m • Caldera Vent Spire', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 304, y: 22, label: '22m • Caldera Deco Shelf', color: 'rgba(251, 191, 36, 0.52)' },
   ],
 
   checkpoints: [

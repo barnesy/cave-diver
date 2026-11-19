@@ -109,18 +109,31 @@ export const LEVEL_18 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -20, xMax: 44, yMin: -2, yMax: 52, label: 'Jameos Basalt Crater' },
-    { xMin: 44, xMax: 240, yMin: 18, yMax: 166, label: 'Subsea Atlantic Lava Tube' },
-    { xMin: 240, xMax: 365, yMin: -2, yMax: 132, label: 'Outer Seamount Chimney' },
+    {
+      id: 'zone-switch',
+      xMin: 309,
+      xMax: 327,
+      y: 24,
+      color: '#38bdf8',
+      title: '24m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: 326,
+      xMax: 346,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 10, y: 18, label: '18m • Jameos Arch' },
-    { x: 46, y: 42, label: '42m • Ocean Tide Shear' },
-    { x: 134, y: 98, label: '98m • Sea-Cave Dome' },
-    { x: 204, y: 158, label: '160m • Montaña de Arena' },
-    { x: 276, y: 82, label: '82m • Seamount Squeeze' },
-    { x: 318, y: 24, label: '24m • Atlantic Deco Stage' },
+    { x: 10, y: 18, label: '18m • Jameos Arch', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 46, y: 42, label: '42m • Ocean Tide Shear', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 134, y: 98, label: '98m • Sea-Cave Dome', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 204, y: 158, label: '160m • Montaña de Arena', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 276, y: 82, label: '82m • Seamount Squeeze', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 318, y: 24, label: '24m • Atlantic Deco Stage', color: 'rgba(251, 191, 36, 0.52)' },
   ],
 
   checkpoints: [

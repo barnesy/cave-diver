@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=83');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=84');
   }
   return trysteroModulePromise;
 }
@@ -179,11 +179,33 @@ export class LanClient {
   }
 
   on(event, fn) {
-    this.handlers[event] = fn;
+    if (typeof fn !== 'function') return () => {};
+    let set = this.handlers[event];
+    if (!set) {
+      set = new Set();
+      this.handlers[event] = set;
+    }
+    set.add(fn);
+    return () => set.delete(fn);
+  }
+
+  off(event, fn) {
+    const set = this.handlers[event];
+    if (!set) return;
+    if (fn) set.delete(fn);
+    else set.clear();
   }
 
   emit(event, payload) {
-    this.handlers[event]?.(payload);
+    const set = this.handlers[event];
+    if (!set || set.size === 0) return;
+    for (const fn of set) {
+      try {
+        fn(payload);
+      } catch (err) {
+        console.error?.(`[LanClient] listener error on "${event}":`, err);
+      }
+    }
   }
 
   _startHeartbeat() {
@@ -298,6 +320,10 @@ export class LanClient {
     if (this._p2pJoinTimer) {
       clearTimeout(this._p2pJoinTimer);
       this._p2pJoinTimer = null;
+    }
+    if (this._p2pCloudFallbackTimer) {
+      clearTimeout(this._p2pCloudFallbackTimer);
+      this._p2pCloudFallbackTimer = null;
     }
     if (this._p2pJoinRetryTimer) {
       clearInterval(this._p2pJoinRetryTimer);
@@ -1101,9 +1127,11 @@ export class LanClient {
     // Broadcast initial join request via relay fallback right away (beats WebRTC cold start & bypasses symmetric NAT!)
     this._sendJoinToPeer(cleanCode, null, true);
 
-    // Cloud Room Keeper fallback: recover from Vercel Storage after 5.0s if Host has not replied
+    // Cloud Room Keeper fallback: recover from Vercel Storage after 5.5s if Host has not replied
     // with room_joined over WebRTC or Nostr WS Relay (even if stale announcements arrived from cache)
-    const cloudFallbackTimer = setTimeout(async () => {
+    clearTimeout(this._p2pCloudFallbackTimer);
+    this._p2pCloudFallbackTimer = setTimeout(async () => {
+      this._p2pCloudFallbackTimer = null;
       if (this._p2pGen !== gen || this._p2pJoinAcked || this._p2pHost || this._manualLeave) {
         return;
       }
@@ -1132,6 +1160,14 @@ export class LanClient {
           coordinator.markDisconnected(p.id);
         }
       }
+      // Bind coordinator BEFORE dispatching room_joined so immediate set_player_status updates it cleanly
+      this._p2pJoinAcked = true;
+      this._p2pAckedHostId = this.clientId;
+      this._p2pHost = coordinator;
+      this._p2pHostPeerId = this.clientId;
+      clearTimeout(this._p2pJoinTimer);
+      clearInterval(this._p2pJoinRetryTimer);
+
       const me = coordinator.room.players.get(this.clientId);
       this._handleMessage({
         type: 'room_joined',
@@ -1157,19 +1193,13 @@ export class LanClient {
           room: coordinator.serializeRoom(),
         });
       }
-      this._p2pJoinAcked = true;
-      this._p2pAckedHostId = this.clientId;
-      this._p2pHost = coordinator;
-      this._p2pHostPeerId = this.clientId;
-      clearTimeout(this._p2pJoinTimer);
-      clearInterval(this._p2pJoinRetryTimer);
       this._sendToPeerOrBroadcast({
         type: 'host_announce',
         code: cleanCode,
         ...coordinator.getAuthorityInfo(),
       });
       this._cloudSyncRoom(true);
-    }, 5000);
+    }, 5500);
 
     // Retry sending join_room over both connected WebRTC peers & Nostr WS relay until Host acks
     this._p2pJoinRetryTimer = setInterval(() => {
@@ -1883,7 +1913,7 @@ export class LanClient {
           this._p2pHost = null;
           this.room = null;
           this.peers.clear();
-          this.peer = null;
+          this._syncPeerAlias();
           this._lastRoomSnapshot = null;
           scheduleFlushClose(160);
           return;
@@ -1892,14 +1922,14 @@ export class LanClient {
         this._sendToPeerOrBroadcast({ type: 'leave_room' }, this._p2pHostPeerId);
         this.room = null;
         this.peers.clear();
-        this.peer = null;
+        this._syncPeerAlias();
         this._lastRoomSnapshot = null;
         scheduleFlushClose(140);
         return;
       }
       this.room = null;
       this.peers.clear();
-      this.peer = null;
+      this._syncPeerAlias();
       this._lastRoomSnapshot = null;
       this._cleanupP2p();
       this._p2pLastLeaveDoneAt = Date.now();
@@ -1909,7 +1939,7 @@ export class LanClient {
     this.send({ type: 'leave_room' });
     this.room = null;
     this.peers.clear();
-    this.peer = null;
+    this._syncPeerAlias();
     this._lastRoomSnapshot = null;
   }
 

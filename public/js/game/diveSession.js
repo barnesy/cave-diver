@@ -123,7 +123,8 @@ export function rewindGuidelineSegment(session) {
   if (!session || session.reelMaxMeters <= 0) return { action: 'none' };
   if (session.guidelineChains.length === 0) return { action: 'empty' };
 
-  const chain = session.guidelineChains[session.guidelineChains.length - 1];
+  let targetIdx = session.guidelineChains.length - 1;
+  let chain = session.guidelineChains[targetIdx];
   if (session.reelingActive) {
     session.reelingActive = false;
     if (chain.length <= 1) {
@@ -132,8 +133,19 @@ export function rewindGuidelineSegment(session) {
     return { action: 'rewound', recoveredM: 0, chains: session.guidelineChains };
   }
 
-  const tail = chain[chain.length - 1];
-  const distToTail = tail ? Math.hypot(session.diver.x - tail.x, session.diver.y - tail.y) : Infinity;
+  // Pick whichever chain tail is nearest to the diver so multi-branch lines rewind intuitively
+  let distToTail = Infinity;
+  for (let i = session.guidelineChains.length - 1; i >= 0; i--) {
+    const ch = session.guidelineChains[i];
+    const t = ch && ch[ch.length - 1];
+    if (!t) continue;
+    const d = Math.hypot(session.diver.x - t.x, session.diver.y - t.y);
+    if (d < distToTail) {
+      distToTail = d;
+      targetIdx = i;
+      chain = ch;
+    }
+  }
   if (distToTail > 14.0) {
     return { action: 'too_far', dist: distToTail };
   }
@@ -146,7 +158,7 @@ export function rewindGuidelineSegment(session) {
     session.reelRemainingM = Math.min(session.reelMaxMeters, session.reelRemainingM + recoveredM);
   }
   if (chain.length <= 1) {
-    session.guidelineChains.pop();
+    session.guidelineChains.splice(targetIdx, 1);
   }
   return { action: 'rewound', recoveredM, chains: session.guidelineChains };
 }
@@ -284,15 +296,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Gentle auto-buoyancy hover assist when parked near 6m deco stop line during ascent
-  if (
-    checkpointsHit.has(ascentConfig.turnaroundId) &&
-    diveState.stopDepthM > 0 &&
-    Math.abs(diver.y - 6.0) < 1.35 &&
-    thrustMag < 0.15
-  ) {
-    diver.vy += (6.0 - diver.y) * 1.6 * dt;
-    diver.vy *= Math.exp(-3.0 * dt);
+  // Gentle auto-buoyancy hover assist at ANY active deco stop depth (5.4m for 6m O2 stops for safe PPO2 1.54)
+  if (diveState.stopDepthM > 0 && thrustMag < 0.15) {
+    const hoverTargetY = diveState.stopDepthM <= 6 ? 5.4 : diveState.stopDepthM - 0.35;
+    if (Math.abs(diver.y - hoverTargetY) < 1.5) {
+      diver.vy += (hoverTargetY - diver.y) * 1.85 * dt;
+      diver.vy *= Math.exp(-3.2 * dt);
+    }
   }
 
   // Hydrodynamic anisotropic drag (glides smoothly along body axis, resists sideways drift)
@@ -353,7 +363,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   if (hit.collided && hit.impactSpeed > 1.1) {
-    callbacks.onImpactSound?.();
+    callbacks.onImpactSound?.(hit.impactSpeed);
     const spawned = emitImpactSilt(siltClouds, diver.x, diver.y, hit.nx, hit.ny, hit.impactSpeed);
     if (spawned.length > 0) {
       callbacks.onSiltSpawn?.(spawned[0]);
@@ -457,7 +467,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   // Cave collectibles pickup & burst popup particles
   const collectibles = level.collectibles || [];
   for (const item of collectibles) {
-    if (!session.collectedIds.has(item.id) && Math.hypot(diver.x - item.x, diver.y - item.y) <= 1.35) {
+    const pickupR = Number.isFinite(item.radius) ? item.radius : 1.35;
+    if (!session.collectedIds.has(item.id) && Math.hypot(diver.x - item.x, diver.y - item.y) <= pickupR) {
       session.collectedIds.add(item.id);
       session.collectBursts.push({
         x: item.x,
@@ -494,7 +505,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         session.reelingActive = false;
         callbacks.onToast?.('Guideline spool empty! End anchor set.', 2.8);
         callbacks.onGuidelineSync?.(session.guidelineChains);
-      } else if (segLen >= 4.2) {
+      } else if (segLen >= 4.2 || (segLen >= 1.6 && evaluateCaveSDF(level, (last.x + diver.x) * 0.5, (last.y + diver.y) * 0.5) > -0.55)) {
         chain.push({ x: diver.x, y: diver.y });
         session.reelRemainingM = Math.max(0, session.reelRemainingM - segLen);
         callbacks.onGuidelineSync?.(session.guidelineChains);

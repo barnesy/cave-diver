@@ -86,7 +86,7 @@ export const LEVEL_11 = {
       y: 30.0,
       radius: 3.8,
       expectedGas: 'TMX1455',
-      hint: 'Switch to TMX 14/55 [2] and drop a primary reel anchor [E] above the sheer travertine throat.',
+      hint: 'Switch to TMX 14/55 [2] and drop a primary reel anchor [G] above the sheer travertine throat.',
     },
     {
       id: 'cp2',

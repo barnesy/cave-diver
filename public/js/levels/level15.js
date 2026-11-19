@@ -105,18 +105,31 @@ export const LEVEL_15 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -20, xMax: 85, yMin: -2, yMax: 78, label: 'Big Strýtan Smectite Cone' },
-    { xMin: 85, xMax: 215, yMin: 70, yMax: 144, label: 'Eyjafjörður Hydrothermal Feeder' },
-    { xMin: 215, xMax: 330, yMin: -2, yMax: 120, label: 'Arnarnesstrýtur Ascent Spires' },
+    {
+      id: 'zone-switch',
+      xMin: 279,
+      xMax: 297,
+      y: 24,
+      color: '#38bdf8',
+      title: '24m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: 296,
+      xMax: 316,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 14, y: 18, label: '18m • Strýtan Summit' },
-    { x: 26, y: 38, label: '38m • Vent Plume Halocline' },
-    { x: 44, y: 65, label: '65m • Smectite Base' },
-    { x: 176, y: 136, label: '136m • Tectonic Feeder Rift' },
-    { x: 244, y: 82, label: '82m • Arnarnes Base' },
-    { x: 288, y: 24, label: '24m • Fjord Deco Stage' },
+    { x: 14, y: 18, label: '18m • Strýtan Summit', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 26, y: 38, label: '38m • Vent Plume Halocline', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 44, y: 65, label: '65m • Smectite Base', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 176, y: 136, label: '136m • Tectonic Feeder Rift', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 244, y: 82, label: '82m • Arnarnes Base', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 288, y: 24, label: '24m • Fjord Deco Stage', color: 'rgba(251, 191, 36, 0.52)' },
   ],
 
   checkpoints: [

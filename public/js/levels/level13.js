@@ -121,7 +121,7 @@ export const LEVEL_13 = {
       y: 26.0,
       radius: 3.8,
       expectedGas: 'EAN32',
-      hint: 'Anchor your reel [E] at the amber halocline before committing to the mega-deep traverse.',
+      hint: 'Anchor your reel [G] at the amber halocline before committing to the mega-deep traverse.',
     },
     {
       id: 'cp2',

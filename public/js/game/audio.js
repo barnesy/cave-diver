@@ -11,8 +11,32 @@ export class DiveAudio {
     this.muted = false;
     this.lastAlarmAt = 0;
     this.lastExhaleAt = 0;
+    this.lastHeartAt = 0;
+    this._noiseBuffer = null;
     this.hapticsEnabled = true;
     this.radio = new AquaticRadio(() => this.ctx, { isMutedFn: () => this.muted });
+  }
+
+  _getNoiseBuffer() {
+    if (!this.ctx) return null;
+    if (this._noiseBuffer) return this._noiseBuffer;
+    const len = Math.floor(this.ctx.sampleRate * 0.55);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let b0 = 0;
+    let b1 = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.96 * b0 + white * 0.04;
+      b1 = 0.82 * b1 + white * 0.18;
+      data[i] = (b0 + b1) * 1.4;
+    }
+    this._noiseBuffer = buf;
+    return buf;
+  }
+
+  setEnvironmentFilter(depthM = 0, narcosisLevel = 0) {
+    this.radio.setDepthMuffle?.(depthM, narcosisLevel);
   }
 
   vibrate(pattern) {
@@ -105,9 +129,62 @@ export class DiveAudio {
     const now = performance.now();
     if (now - this.lastExhaleAt < 950) return;
     this.lastExhaleAt = now;
-    const pitch = 190 + Math.min(120, exertion * 85);
-    this.playTone(pitch, 0.09, 'sine', 0.022, 0);
-    this.playTone(pitch * 1.45, 0.08, 'triangle', 0.016, 0.045);
+    const noise = this._getNoiseBuffer();
+    if (!noise) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = noise;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    const centerFreq = 380 + Math.min(240, exertion * 180);
+    filter.frequency.setValueAtTime(centerFreq, t);
+    filter.frequency.exponentialRampToValueAtTime(centerFreq * 0.62, t + 0.34);
+    filter.Q.value = 1.8;
+    const gain = this.ctx.createGain();
+    const peak = 0.045 + Math.min(0.035, exertion * 0.03);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start(t);
+    src.stop(t + 0.42);
+  }
+
+  playHeartbeat(bpm = 135) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running' || bpm < 130) return;
+    const now = performance.now();
+    const minMs = Math.max(260, (60000 / bpm) * 0.85);
+    if (now - this.lastHeartAt < minMs) return;
+    this.lastHeartAt = now;
+    const stress = Math.min(1, (bpm - 125) / 60);
+    const vol = 0.035 + stress * 0.045;
+    this.playTone(58, 0.09, 'sine', vol, 0);
+    this.playTone(46, 0.11, 'sine', vol * 0.82, 0.12);
+  }
+
+  playSignal() {
+    this.unlock();
+    this.playTone(987.77, 0.08, 'sine', 0.075, 0);
+    this.playTone(1318.5, 0.12, 'sine', 0.065, 0.08);
+    this.vibrate(15);
+  }
+
+  playRecovery() {
+    this.unlock();
+    this.playTone(392.0, 0.18, 'triangle', 0.09, 0);
+    this.playTone(523.25, 0.2, 'sine', 0.09, 0.12);
+    this.playTone(783.99, 0.32, 'sine', 0.095, 0.24);
+    this.vibrate([24, 30, 36]);
+  }
+
+  playFatality() {
+    this.unlock();
+    this.playTone(146.83, 0.42, 'triangle', 0.11, 0);
+    this.playTone(98.0, 0.65, 'sine', 0.12, 0.24);
+    this.playTone(440.0, 0.55, 'sine', 0.04, 0.55);
+    this.vibrate([90, 60, 140]);
   }
 
   playCheckpoint() {
@@ -136,11 +213,30 @@ export class DiveAudio {
     this.vibrate([25, 35, 25, 45]);
   }
 
-  playImpact() {
+  playImpact(impactSpeed = 1.8) {
     this.unlock();
-    this.playTone(95, 0.18, 'triangle', 0.12, 0);
-    this.playTone(62, 0.22, 'sine', 0.1, 0.04);
-    this.vibrate(38);
+    const intensity = Math.max(0.4, Math.min(1.5, impactSpeed / 2.2));
+    this.playTone(88 + intensity * 18, 0.16, 'triangle', 0.09 * intensity, 0);
+    this.playTone(56, 0.22, 'sine', 0.085 * intensity, 0.035);
+    // Short filtered limestone scrape/crunch transient
+    const noise = this._getNoiseBuffer();
+    if (noise && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime;
+      const src = this.ctx.createBufferSource();
+      src.buffer = noise;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 320 + intensity * 260;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.05 * intensity, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      src.connect(filt);
+      filt.connect(g);
+      g.connect(this.ctx.destination);
+      src.start(t);
+      src.stop(t + 0.16);
+    }
+    this.vibrate(Math.round(24 + intensity * 18));
   }
 
   playAlarm(level) {

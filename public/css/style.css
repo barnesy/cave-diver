@@ -1610,9 +1610,10 @@ html, body {
 .hud-bottom-dock {
   position: fixed;
   bottom: max(10px, env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(calc(100vw - 16px), 1080px);
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  max-width: 1080px;
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: end;
@@ -1966,26 +1967,27 @@ html, body {
   }
 }
 
-@media (max-width: 600px) and (orientation: portrait) {
+@media (max-width: 600px) and (min-height: 461px) {
   .hud-bottom-dock {
     bottom: max(8px, env(safe-area-inset-bottom));
-    width: calc(100vw - 12px);
-    gap: 5px;
+    left: max(6px, env(safe-area-inset-left));
+    right: max(6px, env(safe-area-inset-right));
+    gap: 6px;
   }
   .hud-left-wing {
     flex-direction: column;
-    width: min(144px, 100%);
+    width: min(142px, 100%);
     gap: 4px;
   }
   .dive-telemetry {
     width: 100%;
-    padding: 3px 4px;
+    padding: 3px 5px;
     border-radius: 9px;
   }
   .dc-alerts {
     margin-bottom: 3px;
-    padding: 1px 4px;
-    font-size: 0.54rem;
+    padding: 1.5px 4px;
+    font-size: 0.58rem;
   }
   .dc-primary-grid {
     grid-template-columns: 1fr 1fr;
@@ -1996,30 +1998,30 @@ html, body {
     border-radius: 6px;
   }
   .dc-lbl {
-    font-size: 0.48rem;
+    font-size: 0.54rem;
   }
   .dc-val {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
   }
   .dc-val.big {
-    font-size: 0.9rem;
+    font-size: 0.94rem;
   }
   .dc-sub,
   .dc-sub-pair {
-    font-size: 0.49rem;
+    font-size: 0.54rem;
   }
   .dc-ascent-col {
     padding: 2px 4px;
     border-radius: 6px;
   }
   .dc-ascent-track {
-    width: 7px;
-    min-height: 12px;
+    width: 8px;
+    min-height: 18px;
     margin: 1px 0;
   }
   .self-health-card {
     width: 100%;
-    padding: 3px 4px;
+    padding: 3px 5px;
     border-radius: 9px;
     gap: 3px;
   }
@@ -2047,15 +2049,15 @@ html, body {
     padding: 1px 3px;
   }
   .touch-stick {
-    width: 78px;
-    height: 78px;
+    width: 88px;
+    height: 88px;
   }
   .touch-knob {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
   }
   .hud-right-wing {
-    width: min(144px, 100%);
+    width: min(142px, 100%);
     gap: 4px;
   }
   .hud-reel-dock {
@@ -2065,11 +2067,12 @@ html, body {
     border-radius: 9px;
   }
   .reel-btn {
-    padding: 4px 5px;
-    font-size: 0.54rem;
+    padding: 6px 6px;
+    min-height: 30px;
+    font-size: 0.58rem;
   }
   .reel-dock-status {
-    padding: 2px 6px;
+    padding: 2px 7px;
   }
   .reel-dock-status .reel-tag {
     display: none;
@@ -2077,13 +2080,14 @@ html, body {
   .dc-gas-rack {
     grid-template-columns: 1fr;
     width: 100%;
-    gap: 3px;
-    padding: 3px;
+    gap: 4px;
+    padding: 4px;
     border-radius: 9px;
   }
   .dc-tank-btn {
-    padding: 2.5px 5px;
-    gap: 1px;
+    padding: 6px 6px;
+    min-height: 36px;
+    gap: 2px;
   }
   .tank-meta {
     display: none;
@@ -2098,12 +2102,17 @@ html, body {
   .obj-hint {
     display: none;
   }
+  .hud-bottom-dock {
+    grid-template-columns: auto auto auto;
+    justify-content: space-between;
+    gap: 6px;
+  }
   .hud-left-wing {
     flex-direction: row;
-    gap: 5px;
+    gap: 4px;
   }
   .dive-telemetry {
-    width: 196px;
+    width: 172px;
     padding: 3px 5px;
   }
   .dc-alerts {
@@ -2111,18 +2120,18 @@ html, body {
     font-size: 0.56rem;
   }
   .dc-val {
-    font-size: 0.88rem;
+    font-size: 0.86rem;
   }
   .dc-val.big {
-    font-size: 1rem;
+    font-size: 0.96rem;
   }
   .self-health-card {
-    width: 152px;
+    width: 126px;
     padding: 3px 5px;
     gap: 3px;
   }
   .self-health-card .dc-ekg-row {
-    min-height: 30px;
+    min-height: 28px;
     padding: 2px 5px;
   }
   .self-health-card .ekg-unit {
@@ -2133,16 +2142,83 @@ html, body {
     gap: 2px;
   }
   .touch-stick {
-    width: 80px;
-    height: 80px;
+    width: 78px;
+    height: 78px;
   }
   .touch-knob {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
   .dc-gas-rack {
-    grid-template-columns: repeat(3, minmax(74px, 88px));
+    grid-template-columns: repeat(3, minmax(66px, 80px));
     padding: 4px;
+  }
+  .coop-comms {
+    top: max(56px, calc(env(safe-area-inset-top) + 48px));
+    bottom: auto;
+  }
+}
+
+/* Solo Dive Pause Overlay */
+.hud-pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 18, 0.72);
+  pointer-events: auto;
+}
+.hud-pause-overlay[hidden] {
+  display: none !important;
+}
+.hud-pause-card {
+  width: min(400px, 100%);
+  border-radius: 16px;
+  padding: 18px;
+  background: linear-gradient(160deg, rgba(10, 23, 44, 0.97), rgba(4, 10, 24, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+.hud-pause-card h3 {
+  margin: 4px 0 12px;
+  font-size: 1.25rem;
+  color: #f8fafc;
+}
+.pause-keys {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: 0.72rem;
+  text-align: left;
+  color: #cbd5e1;
+}
+.pause-keys strong {
+  color: #7dd3fc;
+  display: block;
+  font-family: ui-monospace, monospace;
+}
+
+/* Keyboard Focus Visibility & Reduced-Motion Accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

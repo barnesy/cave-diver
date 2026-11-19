@@ -57,7 +57,7 @@ export const LEVEL_14 = {
   ],
 
   openBasins: [
-    { name: 'Aurora Glacial Pool', xMin: -18, xMax: 6, yTop: -2, yBottom: 12 },
+    { kind: 'entry', name: 'Aurora Glacial Pool', xMin: -18, xMax: 6, rimHalf: 7.5, flareAdd: 2.8, lipTilt: 0.2, floorY: 3.0, sunAngle: 1.54 },
   ],
 
   segments: [
@@ -97,18 +97,31 @@ export const LEVEL_14 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -25, xMax: 30, yMin: -2, yMax: 34, label: 'Aurora Pool & Basalt Throat' },
-    { xMin: 30, xMax: 130, yMin: 20, yMax: 118, label: 'Twin Tectonic Bifurcation' },
-    { xMin: 130, xMax: 220, yMin: 78, yMax: 134, label: 'Katla Mantle Abyss' },
+    {
+      id: 'zone-switch',
+      xMin: 3,
+      xMax: 21,
+      y: 26,
+      color: '#38bdf8',
+      title: '26m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: -16,
+      xMax: 4,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: -1, y: 12, label: '12m • Aurora Sill' },
-    { x: 25, y: 46, label: '48m • Thermal Shear' },
-    { x: 78, y: 51, label: '54m • Ice-Organ Squeeze' },
-    { x: 76, y: 84, label: '86m • Vent Field Alpha' },
-    { x: 130, y: 100, label: '102m • Convergence Dome' },
-    { x: 178, y: 123, label: '126m • Katla Core Vault' },
+    { x: -1, y: 12, label: '12m • Aurora Sill', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 25, y: 46, label: '48m • Thermal Shear', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 78, y: 51, label: '54m • Ice-Organ Squeeze', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 76, y: 84, label: '86m • Vent Field Alpha', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 130, y: 100, label: '102m • Convergence Dome', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 178, y: 123, label: '126m • Katla Core Vault', color: 'rgba(192, 132, 252, 0.55)' },
   ],
 
   checkpoints: [

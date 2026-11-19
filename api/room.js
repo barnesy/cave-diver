@@ -4,12 +4,28 @@ import {
   jsonResponse,
   readBlobJson,
   writeBlobJson,
+  mutateBlobJson,
+  NO_BLOB_MUTATION,
   deleteBlobPath,
   listBlobPaths,
 } from './_blobJson.js';
 
 const ROOMS_PREFIX = 'rooms/';
-const ROOM_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
+const ROOM_TTL_MS = 25 * 60 * 1000; // 25 minutes — prevents dead tabs polluting Active Dives
+const MAX_ROOM_BODY_BYTES = 128 * 1024;
+
+function stripSnapshotSecrets(snap) {
+  if (!snap || typeof snap !== 'object') return null;
+  const copy = { ...snap };
+  if (Array.isArray(copy.players)) {
+    copy.players = copy.players.map((p) => {
+      if (!p || typeof p !== 'object') return p;
+      const { reconnectToken, ...safe } = p;
+      return safe;
+    });
+  }
+  return copy;
+}
 
 function cleanCode(raw) {
   return String(raw || '')
@@ -58,16 +74,25 @@ export async function GET(request) {
       });
     }
 
-    const blobs = await listBlobPaths(ROOMS_PREFIX, 40);
+    const blobs = await listBlobPaths(ROOMS_PREFIX, 60);
     const roomBlobs = blobs.filter((b) => /^rooms\/[A-Z0-9]{4,8}\.json$/i.test(b.pathname));
+    const expiredPaths = [];
     const records = await Promise.all(
       roomBlobs.map(async (b) => {
         const { data } = await readBlobJson(b.pathname, null);
+        if (!isLiveRoomRecord(data, now)) {
+          expiredPaths.push(b.pathname);
+          return null;
+        }
         return data;
       })
     );
+    // Opportunistically clean up expired room blobs so list cap never starves new rooms
+    if (expiredPaths.length > 0) {
+      await Promise.all(expiredPaths.slice(0, 12).map((p) => deleteBlobPath(p).catch(() => {})));
+    }
     const list = records
-      .filter((rec) => isLiveRoomRecord(rec, now))
+      .filter(Boolean)
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
       .slice(0, 20)
       .map((rec) => {
@@ -89,9 +114,14 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  let rawText;
   let body;
   try {
-    body = await request.json();
+    rawText = await request.text();
+    if (rawText.length > MAX_ROOM_BODY_BYTES) {
+      return jsonResponse({ error: 'Room payload too large.' }, 413);
+    }
+    body = JSON.parse(rawText);
   } catch {
     return jsonResponse({ error: 'Invalid JSON body.' }, 400);
   }
@@ -126,29 +156,47 @@ export async function POST(request) {
     }
 
     if (action === 'leave') {
-      const { data: existing } = await readBlobJson(blobPath, null);
-      if (!isLiveRoomRecord(existing, now)) {
-        return jsonResponse({ ok: true, code });
-      }
+      let deleted = false;
       const pid = String(body.playerId || '');
-      const remaining = (existing.players || []).filter((p) => p.id !== pid);
-      if (remaining.length === 0) {
+      const updated = await mutateBlobJson(
+        blobPath,
+        () => null,
+        (existing) => {
+          if (!isLiveRoomRecord(existing, now)) return NO_BLOB_MUTATION;
+          const remaining = (existing.players || []).filter((p) => p.id !== pid);
+          if (remaining.length === 0) {
+            deleted = true;
+            return NO_BLOB_MUTATION;
+          }
+          if (!remaining.some((p) => p.isHost)) {
+            remaining[0].isHost = true;
+          }
+          const next = {
+            ...existing,
+            players: remaining,
+            updatedAt: now,
+          };
+          if (next.room) next.room = { ...next.room, players: remaining };
+          if (next.snapshot?.room) {
+            next.snapshot = {
+              ...next.snapshot,
+              room: { ...next.snapshot.room, players: remaining },
+              players: Array.isArray(next.snapshot.players)
+                ? next.snapshot.players.filter((p) => p.id !== pid)
+                : remaining,
+            };
+          }
+          return next;
+        }
+      );
+      if (deleted) {
         await deleteBlobPath(blobPath);
         return jsonResponse({ ok: true, code });
       }
-      if (!remaining.some((p) => p.isHost)) {
-        remaining[0].isHost = true;
-      }
-      existing.players = remaining;
-      if (existing.room) existing.room.players = remaining;
-      if (existing.snapshot?.room) existing.snapshot.room.players = remaining;
-      if (existing.snapshot?.players) existing.snapshot.players = remaining;
-      existing.updatedAt = now;
-      await writeBlobJson(blobPath, existing);
-      return jsonResponse({ ok: true, code, room: existing.room, snapshot: existing.snapshot });
+      return jsonResponse({ ok: true, code, room: updated?.room || null, snapshot: updated?.snapshot || null });
     }
 
-    // 'sync': host creates or updates room + snapshot metadata cleanly
+    // 'sync': host creates or updates room + snapshot metadata cleanly with monotonic hostEpoch guard
     const r = body.room || {};
     const players = Array.isArray(r.players)
       ? r.players.slice(0, 4).map((p, i) => ({
@@ -193,11 +241,20 @@ export async function POST(request) {
       hostEpoch,
       players,
       room: roomClean,
-      snapshot: body.snapshot || null,
+      snapshot: stripSnapshotSecrets(body.snapshot),
       updatedAt: now,
     };
-    await writeBlobJson(blobPath, record);
-    return jsonResponse({ ok: true, room: roomClean });
+    const saved = await mutateBlobJson(
+      blobPath,
+      () => null,
+      (existing) => {
+        if (isLiveRoomRecord(existing, now) && (existing.hostEpoch || 1) > hostEpoch) {
+          return NO_BLOB_MUTATION;
+        }
+        return record;
+      }
+    );
+    return jsonResponse({ ok: true, room: saved?.room || roomClean });
   } catch (err) {
     return jsonResponse({ error: err?.message || 'Failed to update cloud room.' }, 500);
   }

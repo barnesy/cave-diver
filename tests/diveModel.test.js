@@ -12,6 +12,7 @@ import {
   getAscentInstruction,
   getGasSwitchCoach,
   computeSiteDivePlan,
+  getShareableGasCandidate,
   donateGasFromState,
   receiveGasIntoState,
 } from '../public/js/physics/diveModel.js';
@@ -530,7 +531,7 @@ test('CaveRenderer.initialize and setLevel complete cleanly without stalling at 
     assert.equal(renderer.ready, true);
     assert.equal(renderer.level.id, 'eagles-nest-sink');
     assert.ok(p2.includes(92));
-    assert.ok(renderer.rockChunks.length > 0 && renderer.dustMotes.length > 0);
+    assert.ok(renderer.rockChunks.length > 0 && renderer.rockChunks.every((c) => Number.isFinite(c.y0) && Number.isFinite(c.y1) && (c.y1 - c.y0) <= 64.01));
     assert.equal(renderer.isLevelCached(LEVEL_1.id), true);
 
     // Switching back to LEVEL_1 restores from baked cache immediately
@@ -1808,14 +1809,21 @@ test('createBoxSDFEvaluator matches global SDF and evaluateCaveNormal reuses out
   assert.ok(Math.abs(mag - 1) < 1e-5, `Expected unit normal, got magnitude ${mag}`);
 });
 
-test('getGasSwitchCoach warns at 21m descent on EAN32, escalates at 28m, and clears on TMX', () => {
+test('getGasSwitchCoach warns at 21m descent on EAN32, escalates at 28m, avoids hypoxic ping-pong on L20, and clears on TMX', () => {
+  // Standard TMX 14/55 level warns at 21.5m
+  const stdState = createDiveSession(LEVEL_1).diveState;
+  assert.equal(getGasSwitchCoach(stdState, 12, { ascending: false }), null);
+  const stdWarn = getGasSwitchCoach(stdState, 21.5, { ascending: false });
+  assert.ok(stdWarn);
+  assert.equal(stdWarn.severity, 'warn');
+  assert.equal(stdWarn.targetGas, 'TMX1455');
+  assert.equal(stdWarn.hotkey, '2');
+
+  // Ultra-deep hypoxic L20 (TMX 6/82) delays descent switch above hypoxic floor (23.5m) to avoid ping-pong
   const lvl20 = getLevelById('boy-bulok-asian-sump');
   const state = createDiveSession(lvl20).diveState;
-  // Shallow on EAN32 -> no prompt
-  assert.equal(getGasSwitchCoach(state, 12, { ascending: false }), null);
-
-  // Approaching 22m switch line on EAN32 -> amber stop-and-switch prompt using level mix name
-  const warn = getGasSwitchCoach(state, 21.5, { ascending: false });
+  assert.equal(getGasSwitchCoach(state, 21.5, { ascending: false }), null);
+  const warn = getGasSwitchCoach(state, 24.5, { ascending: false });
   assert.ok(warn);
   assert.equal(warn.severity, 'warn');
   assert.equal(warn.targetGas, 'TMX1455');
@@ -1837,4 +1845,73 @@ test('getGasSwitchCoach warns at 21m descent on EAN32, escalates at 28m, and cle
   switchGas(state, 'O2');
   const o2Danger = getGasSwitchCoach(state, 9.0, { ascending: false });
   assert.ok(o2Danger && o2Danger.severity === 'danger' && o2Danger.targetGas === 'EAN32');
+});
+
+test('v84 P0 regressions: LanClient multi-listener on/off, leaveRoom clears peers, gas-share persists litersRemaining, and L20 deco/gas is winnable', () => {
+  // 1. LanClient.on supports multiple independent listeners on the same event (fixes syncWakeLock clobber)
+  const client = new LanClient();
+  const fired = [];
+  const fnA = (v) => fired.push(`A:${v}`);
+  const fnB = (v) => fired.push(`B:${v}`);
+  client.on('room_update', fnA);
+  client.on('room_update', fnB);
+  client.emit('room_update', 'ok');
+  assert.deepEqual(fired, ['A:ok', 'B:ok']);
+  client.off('room_update', fnA);
+  client.emit('room_update', 'second');
+  assert.deepEqual(fired, ['A:ok', 'B:ok', 'B:second']);
+
+  // 2. leaveRoom clears peer alias so getPeers() is immediately empty
+  client.peers.set('p1', { id: 'p1', name: 'Buddy', x: 5, y: 10 });
+  client._syncPeerAlias();
+  assert.equal(client.getPeers().length, 1);
+  client.leaveRoom();
+  assert.equal(client.getPeers().length, 0);
+
+  // 3. donateGasFromState / receiveGasIntoState update litersRemaining so transfers persist across stepDivePhysiology
+  const donor = createDiveState();
+  const receiver = createDiveState();
+  receiver.tanks.TMX1455.bar = 40;
+  receiver.tanks.TMX1455.litersRemaining = 40 * receiver.tanks.TMX1455.capacityLiters;
+  const candDeep = getShareableGasCandidate(donor, 'O2', 25, 35);
+  assert.ok(candDeep && candDeep.gasId !== 'O2', 'Must never suggest O2 donation at 35m');
+  const don = donateGasFromState(donor, 'TMX1455', 25);
+  assert.ok(don && don.donatedBar === 25);
+  const added = receiveGasIntoState(receiver, don.gasId, don.donatedBar);
+  assert.equal(added, 25);
+  switchGas(donor, 'TMX1455');
+  switchGas(receiver, 'TMX1455');
+  stepDivePhysiology(donor, { depthM: 35, prevDepthM: 35, dt: 0.1, exertion: 0.1 });
+  stepDivePhysiology(receiver, { depthM: 35, prevDepthM: 35, dt: 0.1, exertion: 0.1 });
+  assert.ok(donor.tanks.TMX1455.bar < 180, `Donor bar should stay reduced after step, got ${donor.tanks.TMX1455.bar}`);
+  assert.ok(receiver.tanks.TMX1455.bar > 60, `Receiver bar should stay boosted after step, got ${receiver.tanks.TMX1455.bar}`);
+
+  // 4. L14-L20 schema check & L20 180m deep dive has surviving TMX gas reserve + suppressed O2 deco alarm at 5.4m
+  for (const lvl of LEVELS) {
+    const v = validateLevel(lvl);
+    assert.equal(v.valid, true, `Level ${lvl.id} must validate cleanly: ${(v.errors || []).join('; ')}`);
+    for (const z of lvl.zoneLines || []) {
+      assert.ok(Number.isFinite(z.y), `Level ${lvl.id} zoneLine ${z.id} must have finite y`);
+    }
+    for (const dm of lvl.depthMarkers || []) {
+      assert.ok(typeof dm.color === 'string' && dm.color.length > 0, `Level ${lvl.id} depthMarker must have color`);
+    }
+  }
+  const lvl20 = getLevelById('boy-bulok-asian-sump');
+  const s20 = createDiveSession(lvl20).diveState;
+  switchGas(s20, 'TMX1455');
+  for (let i = 0; i < 240; i++) {
+    stepDivePhysiology(s20, { depthM: 175, prevDepthM: 175, dt: 0.5, exertion: 0.35 });
+  }
+  assert.equal(s20.alive, true, 'Diver must survive 2min at 175m on L20 TMX 6/82');
+  assert.ok(s20.tanks.TMX1455.bar > 40, `Expected usable TMX reserve after 2min at 175m, got ${s20.tanks.TMX1455.bar}`);
+  // Planned O2 deco at 5.4m must not spam PPO2 ELEVATED warning
+  switchGas(s20, 'O2');
+  s20.ceilingM = 5.0;
+  s20.stopDepthM = 6;
+  stepDivePhysiology(s20, { depthM: 5.4, prevDepthM: 5.4, dt: 0.5, exertion: 0.05 });
+  assert.ok(
+    !s20.warnings.some((w) => w.code === 'PPO2_WARN'),
+    `Expected no PPO2_WARN during planned 5.4m O2 deco, got ${JSON.stringify(s20.warnings)}`
+  );
 });

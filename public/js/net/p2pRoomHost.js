@@ -463,7 +463,8 @@ export class P2pRoomCoordinator {
           levelId: this.room.levelId,
           diveSeq: this.room.diveSeq,
           rejoined: true,
-          lateJoin: true,
+          lateJoin: !msg.preserveDive,
+          preserveDive: Boolean(msg.preserveDive),
           checkpoints: Array.from(this.room.sharedCheckpoints),
           collectibles: Array.from(this.room.sharedCollectibles),
           playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({

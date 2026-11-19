@@ -92,9 +92,35 @@ export class LeaderboardClient {
     this.playerId = getOrCreatePlayerId();
     this._resolvedEndpoint = undefined;
     this._localEntries = this._loadLocalCache();
-    this._syncedLocalKeys = new Set();
+    this._syncedLocalKeys = this._loadSyncedKeys();
     this._syncPromise = null;
     this._retryTimer = null;
+  }
+
+  _loadSyncedKeys() {
+    try {
+      const raw = globalThis.localStorage?.getItem('caveDiverLeaderboardSynced_v1');
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? new Set(arr.slice(-300)) : new Set();
+    } catch {
+      return new Set();
+    }
+  }
+
+  _saveSyncedKeys() {
+    try {
+      globalThis.localStorage?.setItem(
+        'caveDiverLeaderboardSynced_v1',
+        JSON.stringify(Array.from(this._syncedLocalKeys).slice(-300))
+      );
+    } catch {}
+  }
+
+  _markEntrySynced(entry) {
+    if (!entry) return;
+    this._syncedLocalKeys.add(this._entrySig(entry));
+    this._saveSyncedKeys();
   }
 
   async _fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
@@ -128,6 +154,7 @@ export class LeaderboardClient {
       timeSec: entry.timeSec,
       exploredPct: entry.exploredPct,
       collectiblesFound: entry.collectiblesFound,
+      stats: entry.stats || null,
       createdAt: entry.createdAt,
     };
   }
@@ -289,6 +316,7 @@ export class LeaderboardClient {
             );
             if (res.ok) {
               for (const entry of chunk) this._syncedLocalKeys.add(this._entrySig(entry));
+              this._saveSyncedKeys();
               uploaded += chunk.length;
               batchHandled = true;
             } else if (res.status !== 400) {
@@ -322,6 +350,15 @@ export class LeaderboardClient {
 
   async fetchBoard({ mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
     this._localEntries = this._loadLocalCache();
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return {
+        source: 'local-fallback',
+        mode,
+        levelId,
+        pendingSync: this.getPendingSyncCount(),
+        entries: queryLeaderboardEntries(this._localEntries, { mode, levelId, limit }),
+      };
+    }
     const endpoint = await this.resolveEndpoint();
     if (!endpoint) {
       return {
@@ -333,8 +370,12 @@ export class LeaderboardClient {
       };
     }
 
+    // Fire pending local sync in the background so opening Leaderboards never stalls for 9-17s
+    if (this.getPendingSyncCount() > 0) {
+      this._syncLocalCacheToGlobal(endpoint).catch(() => {});
+    }
+
     try {
-      await this._syncLocalCacheToGlobal(endpoint);
       const url = `${endpoint}?mode=${encodeURIComponent(mode)}&level=${encodeURIComponent(levelId)}&limit=${encodeURIComponent(limit)}`;
       const res = await this._fetchWithTimeout(url, { cache: 'no-store' }, 8000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -410,7 +451,7 @@ export class LeaderboardClient {
         const json = await res.json().catch(() => ({}));
         if (res.ok) {
           if (json.entry) this._cacheLocalEntry(json.entry);
-          this._syncedLocalKeys.add(this._entrySig(json.entry || parsedLocal.entry));
+          this._markEntrySynced(json.entry || parsedLocal.entry);
           return {
             ok: true,
             source: 'global',

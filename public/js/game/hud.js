@@ -58,14 +58,18 @@ function measureEkgCanvas(canvas, state) {
   if (!canvas || !state) return;
   const w = Math.round(canvas.clientWidth || 0);
   const h = Math.round(canvas.clientHeight || 0);
+  const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2);
   state.measured = true;
+  state.dpr = dpr;
   if (w > 0 && h > 0) {
     state.visible = true;
     state.layoutW = w;
     state.layoutH = h;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
+    const bw = Math.round(w * dpr);
+    const bh = Math.round(h * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
     }
   } else {
     // Hidden canvas (e.g. mobile compact card) — skip expensive 2D strokes until visible
@@ -87,12 +91,16 @@ function stepAndDrawEkg(canvas, state, bpm, alive, dt = 0.016) {
   const ctx = state.ctx || (state.ctx = canvas.getContext('2d'));
   if (!ctx) return false;
 
-  const w = canvas.width;
-  const h = canvas.height;
+  const dpr = state.dpr || 1;
+  const w = state.layoutW || Math.round(canvas.width / dpr);
+  const h = state.layoutH || Math.round(canvas.height / dpr);
   if (w <= 0 || h <= 0) return false;
   if (state.samples.length !== w) {
     state.samples = new Float32Array(w);
     state.cursor = 0;
+  }
+  if (ctx.setTransform) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   const sweepPxPerSec = 48;
@@ -200,7 +208,10 @@ function setStyleProp(el, prop, val) {
 }
 
 export class DiveComputerHUD {
-  constructor({ onGasSelect, onReelToggle, onReelRewind }) {
+  constructor({ onGasSelect, onReelToggle, onReelRewind, onHeartbeatPulse }) {
+    this.onHeartbeatPulse = onHeartbeatPulse;
+    this._isTouchDevice =
+      typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
     this.elDepth = document.getElementById('dc-depth');
     this.elMaxDepth = document.getElementById('dc-max-depth');
     this.elTime = document.getElementById('dc-time');
@@ -318,6 +329,9 @@ export class DiveComputerHUD {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         onGasSelect(id);
+      });
+      btn.addEventListener('click', (e) => {
+        if (e.detail === 0) onGasSelect(id);
       });
       gasRack.appendChild(btn);
       this.tankButtons[id] = {
@@ -441,6 +455,9 @@ export class DiveComputerHUD {
     if (this.elEkgHeart && this._lastQrsPeak !== qrsPeak) {
       this._lastQrsPeak = qrsPeak;
       this.elEkgHeart.classList.toggle('pulse', qrsPeak);
+      if (qrsPeak && myBpm >= 130) {
+        this.onHeartbeatPulse?.(myBpm);
+      }
     }
 
     // Deployable Guideline Spool Dock & Bottom-Center Line Status (unlined labyrinth caves)
@@ -457,14 +474,18 @@ export class DiveComputerHUD {
         setText(this.elReelMeters, `${remM}m / ${reelMaxMeters}m`);
         if (this.btnReelToggle) {
           setClass(this.btnReelToggle, reelingActive ? 'reel-btn active' : 'reel-btn');
+          const prefix = this._isTouchDevice ? '' : '[G] ';
           setText(
             this.btnReelToggle,
             reelingActive
-              ? '[G] TERMINATE LINE'
+              ? `${prefix}TIE OFF`
               : remM < 1
                 ? 'SPOOL EMPTY'
-                : '[G] DEPLOY LINE'
+                : `${prefix}DEPLOY LINE`
           );
+        }
+        if (this.btnReelRewind) {
+          setText(this.btnReelRewind, this._isTouchDevice ? 'REWIND ↩' : '[R] REWIND ↩');
         }
       } else {
         setHidden(this.elReelRow, true);
@@ -506,7 +527,10 @@ export class DiveComputerHUD {
         setClass(this.elGasCallout, `hud-gas-callout ${calloutPrompt.severity === 'danger' ? 'danger' : 'warn'}`);
         setText(this.elGasCalloutTitle, `${calloutPrompt.severity === 'danger' ? '⛔' : '■'} ${calloutPrompt.title}`);
         setText(this.elGasCalloutDetail, calloutPrompt.detail);
-        setText(this.elGasCalloutCta, `TAP ${calloutPrompt.gasName} [${calloutPrompt.hotkey}]`);
+        setText(
+          this.elGasCalloutCta,
+          this._isTouchDevice ? `TAP ${calloutPrompt.gasName}` : `TAP ${calloutPrompt.gasName} [${calloutPrompt.hotkey}]`
+        );
       } else {
         this._gasCalloutTargetId = null;
         setHidden(this.elGasCallout, true);
@@ -524,11 +548,12 @@ export class DiveComputerHUD {
       const isRec = (recGasId === id || calloutPrompt?.targetGas === id) && !isActive;
       const isUrgentRec = isRec && calloutPrompt?.severity === 'danger';
       const futurePPO2 = computePPO2(diveState.depthM, mix);
-      const unsafeAtDepth = (futurePPO2 > 1.6 || (futurePPO2 < 0.16 && diveState.depthM > 0.2));
+      const unsafeAtDepth = (futurePPO2 > 1.65 || (futurePPO2 < 0.16 && diveState.depthM > 0.2));
       const isEmpty = tank.bar <= 0.5;
       const btnCls = `dc-tank-btn${isActive ? ' active' : ''}${isRec ? ' recommended' : ''}${isUrgentRec ? ' urgent' : ''}${unsafeAtDepth ? ' unsafe' : ''}${isEmpty ? ' empty' : ''}`;
       setClass(ui.btn, btnCls);
-      setText(ui.barTxt, isRec ? `TAP [${GAS_HOTKEY_LABELS[id]}]` : `${Math.round(tank.bar)}b`);
+      const recBadge = this._isTouchDevice ? 'TAP!' : `TAP [${GAS_HOTKEY_LABELS[id]}]`;
+      setText(ui.barTxt, isRec ? recBadge : `${Math.round(tank.bar)}b`);
       const fillPct = Math.max(0, Math.min(100, Math.round((tank.bar / mix.startBar) * 200) * 0.5));
       setStyleProp(ui.fill, 'width', `${fillPct}%`);
       setStyleProp(ui.fill, 'backgroundColor', tank.bar < 45 ? '#ef4444' : mix.color);
@@ -541,6 +566,9 @@ export class DiveComputerHUD {
     } else if (diveState.warnings.length > 0) {
       setText(this.elAlerts, diveState.warnings[0]);
       setClass(this.elAlerts, `dc-alerts ${diveState.criticalAlarm ? 'danger' : 'warn'}`);
+    } else if (myBpm >= 138) {
+      setText(this.elAlerts, `♥ ${myBpm} BPM — RELEASE CONTROLS TO CALM`);
+      setClass(this.elAlerts, 'dc-alerts warn');
     } else if (gasCoach) {
       setText(this.elAlerts, gasCoach.title);
       setClass(this.elAlerts, 'dc-alerts warn');

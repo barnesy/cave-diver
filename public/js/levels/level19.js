@@ -97,18 +97,31 @@ export const LEVEL_19 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -30, xMax: 46, yMin: -2, yMax: 66, label: 'Cerrado Sunlit Sinkhole' },
-    { xMin: 46, xMax: 136, yMin: 26, yMax: 140, label: 'Bodoquena Twin Chimneys' },
-    { xMin: 136, xMax: 256, yMin: 110, yMax: 178, label: '172m Bottomless Karst Conduit' },
+    {
+      id: 'zone-switch',
+      xMin: -1,
+      xMax: 17,
+      y: 26,
+      color: '#38bdf8',
+      title: '26m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: -10,
+      xMax: 10,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 8, y: 24, label: '24m • Sapphire Funnel' },
-    { x: 50, y: 60, label: '56m • Karst Thermocline' },
-    { x: 126, y: 106, label: '106m • Deep Funnel Neck' },
-    { x: 162, y: 144, label: '144m • Crystalline Vault' },
-    { x: 214, y: 168, label: '168m • ROV Magnetometer' },
-    { x: 236, y: 172, label: '172m • Deep Conduit Wall' },
+    { x: 8, y: 24, label: '24m • Sapphire Funnel', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 50, y: 60, label: '56m • Karst Thermocline', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 126, y: 106, label: '106m • Deep Funnel Neck', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 162, y: 144, label: '144m • Crystalline Vault', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 214, y: 168, label: '168m • ROV Magnetometer', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 236, y: 172, label: '172m • Deep Conduit Wall', color: 'rgba(192, 132, 252, 0.55)' },
   ],
 
   checkpoints: [

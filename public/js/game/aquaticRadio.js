@@ -148,6 +148,10 @@ export class AquaticRadio {
     const ctx = this.getAudioCtx?.();
     if (!ctx) return;
     this._ensureBus(ctx);
+    if (this._busGain && !this.isMutedFn()) {
+      this._busGain.gain.cancelScheduledValues?.(ctx.currentTime);
+      this._busGain.gain.setTargetAtTime(0.16, ctx.currentTime, 0.08);
+    }
     this._step = 0;
     this._nextStepTime = Math.max(ctx.currentTime + 0.04, this._nextStepTime);
     if (!this._timer) {
@@ -161,6 +165,20 @@ export class AquaticRadio {
       clearInterval(this._timer);
       this._timer = null;
     }
+    const ctx = this.getAudioCtx?.();
+    if (this._busGain && ctx) {
+      this._busGain.gain.cancelScheduledValues?.(ctx.currentTime);
+      this._busGain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.06);
+    }
+  }
+
+  setDepthMuffle(depthM = 0, narcosisLevel = 0) {
+    const ctx = this.getAudioCtx?.();
+    if (!this._filter || !ctx) return;
+    const depthRatio = Math.max(0, Math.min(1, depthM / 120));
+    const narcRatio = Math.max(0, Math.min(1, narcosisLevel || 0));
+    const targetHz = Math.max(460, 1450 - depthRatio * 550 - narcRatio * 480);
+    this._filter.frequency.setTargetAtTime(targetHz, ctx.currentTime, 0.25);
   }
 
   _playVoice(ctx, bus, freq, when, duration, type, peakGain) {

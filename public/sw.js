@@ -1,68 +1,83 @@
-const CACHE_VERSION = 'cave-diver-v83';
+const CACHE_VERSION = 'cave-diver-v84';
 const CORE_SHELL = [
   './',
   './manifest.json',
-  './css/style.css?v=83',
-  './icons/icon.svg?v=83',
-  './icons/icon-192.png?v=83',
-  './icons/icon-512.png?v=83',
-  './assets/map-expedition.jpg?v=83',
-  './js/vendor/trystero-nostr.min.js?v=83',
-  './js/main.js?v=83',
-  './js/physics/diveModel.js?v=83',
-  './js/game/aquaticRadio.js?v=83',
-  './js/game/audio.js?v=83',
-  './js/game/collision.js?v=83',
-  './js/game/input.js?v=83',
-  './js/game/hud.js?v=83',
-  './js/game/diverBody.js?v=83',
-  './js/game/diveSession.js?v=83',
-  './js/game/scoring.js?v=83',
-  './js/game/leaderboardModel.js?v=83',
-  './js/game/logbookModel.js?v=83',
-  './js/game/worldMapData.js?v=83',
-  './js/game/renderer.js?v=83',
-  './js/game/artSprites.js?v=83',
-  './js/game/silt.js?v=83',
-  './js/game/lighting.js?v=83',
-  './js/game/marineLife.js?v=83',
-  './js/levels/themes.js?v=83',
-  './js/levels/campaign.js?v=83',
-  './js/levels/index.js?v=83',
-  './js/levels/level1.js?v=83',
-  './js/levels/level2.js?v=83',
-  './js/levels/level3.js?v=83',
-  './js/levels/level4.js?v=83',
-  './js/levels/level5.js?v=83',
-  './js/levels/level6.js?v=83',
-  './js/levels/level7.js?v=83',
-  './js/levels/level8.js?v=83',
-  './js/levels/level9.js?v=83',
-  './js/levels/level10.js?v=83',
-  './js/levels/level11.js?v=83',
-  './js/levels/level12.js?v=83',
-  './js/levels/level13.js?v=83',
-  './js/levels/level14.js?v=83',
-  './js/levels/level15.js?v=83',
-  './js/levels/level16.js?v=83',
-  './js/levels/level17.js?v=83',
-  './js/levels/level18.js?v=83',
-  './js/levels/level19.js?v=83',
-  './js/levels/level20.js?v=83',
-  './js/net/leaderboardClient.js?v=83',
-  './js/net/p2pRoomHost.js?v=83',
-  './js/net/lanClient.js?v=83',
+  './css/style.css?v=84',
+  './icons/icon.svg?v=84',
+  './icons/icon-192.png?v=84',
+  './icons/icon-512.png?v=84',
+  './assets/map-expedition.jpg?v=84',
+  './js/vendor/trystero-nostr.min.js?v=84',
+  './js/main.js?v=84',
+  './js/physics/diveModel.js?v=84',
+  './js/game/aquaticRadio.js?v=84',
+  './js/game/audio.js?v=84',
+  './js/game/collision.js?v=84',
+  './js/game/input.js?v=84',
+  './js/game/hud.js?v=84',
+  './js/game/diverBody.js?v=84',
+  './js/game/diveSession.js?v=84',
+  './js/game/scoring.js?v=84',
+  './js/game/leaderboardModel.js?v=84',
+  './js/game/logbookModel.js?v=84',
+  './js/game/worldMapData.js?v=84',
+  './js/game/renderer.js?v=84',
+  './js/game/artSprites.js?v=84',
+  './js/game/silt.js?v=84',
+  './js/game/lighting.js?v=84',
+  './js/game/marineLife.js?v=84',
+  './js/levels/themes.js?v=84',
+  './js/levels/campaign.js?v=84',
+  './js/levels/index.js?v=84',
+  './js/levels/level1.js?v=84',
+  './js/levels/level2.js?v=84',
+  './js/levels/level3.js?v=84',
+  './js/levels/level4.js?v=84',
+  './js/levels/level5.js?v=84',
+  './js/levels/level6.js?v=84',
+  './js/levels/level7.js?v=84',
+  './js/levels/level8.js?v=84',
+  './js/levels/level9.js?v=84',
+  './js/levels/level10.js?v=84',
+  './js/levels/level11.js?v=84',
+  './js/levels/level12.js?v=84',
+  './js/levels/level13.js?v=84',
+  './js/levels/level14.js?v=84',
+  './js/levels/level15.js?v=84',
+  './js/levels/level16.js?v=84',
+  './js/levels/level17.js?v=84',
+  './js/levels/level18.js?v=84',
+  './js/levels/level19.js?v=84',
+  './js/levels/level20.js?v=84',
+  './js/net/leaderboardClient.js?v=84',
+  './js/net/p2pRoomHost.js?v=84',
+  './js/net/lanClient.js?v=84',
 ];
+
+const MEDIA_CACHE = 'cave-diver-media-v1';
+const MAX_MEDIA_ENTRIES = 16;
+
+async function trimMediaCache(cache) {
+  try {
+    const keys = await cache.keys();
+    if (keys.length <= MAX_MEDIA_ENTRIES) return;
+    const excess = keys.slice(0, keys.length - MAX_MEDIA_ENTRIES);
+    await Promise.all(excess.map((k) => cache.delete(k)));
+  } catch {}
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((cache) =>
-        Promise.all(
-          CORE_SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' })))
-        )
-      )
+      .then(async (cache) => {
+        // Batch precache fetches (concurrency 8) to avoid 53-request bursts stalling mobile cellular installs
+        const batchSize = 8;
+        for (let i = 0; i < CORE_SHELL.length; i += batchSize) {
+          const slice = CORE_SHELL.slice(i, i + batchSize);
+          await Promise.all(slice.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
+        }
+      })
       .then(async () => {
         // Activate immediately if no open tabs are controlled yet; otherwise wait cleanly for user Update tap
         if (!self.registration.active) {
@@ -87,7 +102,11 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
+        Promise.all(
+          keys
+            .filter((k) => k !== CACHE_VERSION && k !== MEDIA_CACHE)
+            .map((k) => caches.delete(k))
+        )
       )
       .then(() => self.clients.claim())
   );
@@ -131,23 +150,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Versioned modules, styles, icons & artwork: cache-first with runtime caching backfill
+  // Versioned modules, styles, icons & artwork: cache-first with persistent LRU MEDIA_CACHE for large artwork
+  const isMedia = relPath.startsWith('assets/');
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (
-          res.ok &&
-          (relPath.startsWith('assets/') ||
-            relPath.startsWith('js/') ||
-            relPath.startsWith('css/') ||
-            relPath.startsWith('icons/'))
-        ) {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
+      return fetch(req)
+        .then((res) => {
+          if (
+            res.ok &&
+            (isMedia ||
+              relPath.startsWith('js/') ||
+              relPath.startsWith('css/') ||
+              relPath.startsWith('icons/'))
+          ) {
+            const copy = res.clone();
+            const targetCache = isMedia ? MEDIA_CACHE : CACHE_VERSION;
+            caches.open(targetCache).then(async (c) => {
+              await c.put(req, copy);
+              if (isMedia) await trimMediaCache(c);
+            });
+          }
+          return res;
+        })
+        .catch(() => Response.error());
     })
   );
 });

@@ -161,6 +161,20 @@ export function validateLevel(level, { checkGeometry = false } = {}) {
   if (!hasFixedLine && !(Number(level.reelMetersPerDiver) > 0)) {
     errors.push('Unlined levels (guideline.length === 0) must set positive reelMetersPerDiver');
   }
+  if (Array.isArray(level.zoneLines)) {
+    for (const z of level.zoneLines) {
+      if (!Number.isFinite(z?.y) || !Number.isFinite(z?.xMin) || !Number.isFinite(z?.xMax)) {
+        errors.push(`zoneLine "${z?.id || z?.title || '?'}" missing numeric y/xMin/xMax`);
+      }
+    }
+  }
+  if (Array.isArray(level.depthMarkers)) {
+    for (const dm of level.depthMarkers) {
+      if (!Number.isFinite(dm?.y) || !dm?.color) {
+        errors.push(`depthMarker "${dm?.label || '?'}" missing numeric y or color`);
+      }
+    }
+  }
 
   if (checkGeometry && errors.length === 0) {
     if (evaluateCaveSDF(level, level.spawn.x, level.spawn.y) >= -0.3) {

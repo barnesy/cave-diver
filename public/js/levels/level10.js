@@ -89,7 +89,7 @@ export const LEVEL_10 = {
       y: 22.0,
       radius: 3.6,
       expectedGas: 'EAN32',
-      hint: 'Pin your primary reel [E] at the main Quercy arch before passing the first junction.',
+      hint: 'Pin your primary reel [G] at the main Quercy arch before passing the first junction.',
     },
     {
       id: 'cp2',

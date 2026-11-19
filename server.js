@@ -101,7 +101,7 @@ function getLanAddresses() {
 const server = http.createServer(async (req, res) => {
   const urlPath = (req.url || '/').split('?')[0];
 
-  if (urlPath === '/healthz') {
+  if (urlPath === '/healthz' || urlPath === '/api/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size, uptimeSec: Math.round(process.uptime()) }));
     return;

@@ -108,18 +108,31 @@ export const LEVEL_16 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -28, xMax: 44, yMin: -2, yMax: 58, label: 'Vatnajökull Ice Moulin' },
-    { xMin: 44, xMax: 130, yMin: 22, yMax: 125, label: 'Ice-Basalt Twin Bifurcation' },
-    { xMin: 130, xMax: 248, yMin: 88, yMax: 150, label: 'Kverkfjöll Basal Magma Vault' },
+    {
+      id: 'zone-switch',
+      xMin: -1,
+      xMax: 17,
+      y: 26,
+      color: '#38bdf8',
+      title: '26m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: -10,
+      xMax: 10,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 8, y: 18, label: '18m • Moulin Throat' },
-    { x: 46, y: 56, label: '56m • Ice-Magma Shear' },
-    { x: 72, y: 46, label: '46m • Blue-Ice Arcade' },
-    { x: 118, y: 92, label: '92m • Crystal Convergence' },
-    { x: 158, y: 120, label: '120m • Subglacial Geyser' },
-    { x: 212, y: 141, label: '144m • Logger Abyss' },
+    { x: 8, y: 18, label: '18m • Moulin Throat', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 46, y: 56, label: '56m • Ice-Magma Shear', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 72, y: 46, label: '46m • Blue-Ice Arcade', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 118, y: 92, label: '92m • Crystal Convergence', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 158, y: 120, label: '120m • Subglacial Geyser', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 212, y: 141, label: '144m • Logger Abyss', color: 'rgba(192, 132, 252, 0.55)' },
   ],
 
   checkpoints: [

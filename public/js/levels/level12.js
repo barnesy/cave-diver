@@ -113,7 +113,7 @@ export const LEVEL_12 = {
       y: 48.0,
       radius: 3.4,
       expectedGas: 'TMX1455',
-      hint: 'Set an arrow [E] below the dissolution bell before descending into the acidic rift.',
+      hint: 'Set an arrow [G] below the dissolution bell before descending into the acidic rift.',
     },
     {
       id: 'cp3',

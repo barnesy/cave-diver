@@ -69,7 +69,8 @@ export function computeHealthPct(diveState) {
   const hyp = diveState.hypoxiaStress || 0;
   const narc = (diveState.narcosisLevel || 0) * 100;
   const cardiac = diveState.cardiacStress || 0;
-  const penalty = tox * 0.45 + dcs * 0.45 + hyp * 0.48 + narc * 0.22 + cardiac * 0.25;
+  const peak = (diveState.peakStress || 0) * 0.22;
+  const penalty = Math.max(peak, tox * 0.45 + dcs * 0.45 + hyp * 0.48 + narc * 0.22 + cardiac * 0.25);
   return Math.round(clamp(0, 100, 100 - penalty));
 }
 
@@ -188,7 +189,7 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
   for (const p of peerStats) {
     if (!p) continue;
     const pAlive = p.alive !== false;
-    const pRescued = !pAlive && Boolean(p.rescued || p.rescuedBy);
+    const pRescued = !pAlive && Boolean(p.rescued);
     const pHealth = Number.isFinite(p.healthPct)
       ? p.healthPct
       : pAlive

@@ -108,18 +108,31 @@ export const LEVEL_20 = {
   guideline: [],
 
   zoneLines: [
-    { xMin: -20, xMax: 48, yMin: -2, yMax: 62, label: 'Baisuntau Snowmelt Gorge' },
-    { xMin: 48, xMax: 262, yMin: 20, yMax: 192, label: 'Tectonic Triple-Sump System' },
-    { xMin: 262, xMax: 388, yMin: -2, yMax: 150, label: 'East Alpine Resurgence Chimney' },
+    {
+      id: 'zone-switch',
+      xMin: 329,
+      xMax: 347,
+      y: 24,
+      color: '#38bdf8',
+      title: '24m ASCENT SWITCH · TAP EAN32 [1]',
+    },
+    {
+      id: 'zone-deco',
+      xMin: 346,
+      xMax: 366,
+      y: 6.0,
+      color: '#4ade80',
+      title: '6m O2 DECO SHELF · TAP O2 100% [3]',
+    },
   ],
 
   depthMarkers: [
-    { x: 10, y: 20, label: '20m • Snowmelt Rim' },
-    { x: 52, y: 54, label: '54m • Sump Shear' },
-    { x: 148, y: 114, label: '114m • Pamir Vault' },
-    { x: 226, y: 184, label: '185m • Terminal Asian Sump' },
-    { x: 294, y: 94, label: '94m • East Chimney Base' },
-    { x: 338, y: 24, label: '24m • Alpine Stage Shelf' },
+    { x: 10, y: 20, label: '20m • Snowmelt Rim', color: 'rgba(251, 191, 36, 0.52)' },
+    { x: 52, y: 54, label: '54m • Sump Shear', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 148, y: 114, label: '114m • Pamir Vault', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 226, y: 184, label: '185m • Terminal Asian Sump', color: 'rgba(192, 132, 252, 0.55)' },
+    { x: 294, y: 94, label: '94m • East Chimney Base', color: 'rgba(56, 189, 248, 0.50)' },
+    { x: 338, y: 24, label: '24m • Alpine Stage Shelf', color: 'rgba(251, 191, 36, 0.52)' },
   ],
 
   checkpoints: [

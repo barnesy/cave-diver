@@ -13,8 +13,10 @@ import {
 } from './artSprites.js';
 
 const CACHE_PX_PER_M = 24;
+const MOBILE_CACHE_PX_PER_M = 16;
 const BACK_PX_PER_M = 12;
 const CHUNK_W_M = 24;
+const CHUNK_H_M = 64; // Caps every canvas tile <= 1536px tall (avoids >4096px GPU overflow on L14-L20)
 const TEX_SIZE = 512;
 const MAX_CACHED_LEVELS = 5;
 const BAKE_FRAME_BUDGET_MS = 12;
@@ -177,12 +179,23 @@ export class CaveRenderer {
     this._sunCurtainCache = new Map();
     this._basinEdgeCache = new Map();
     this._waterMeniscusCache = new Map();
+    this._ventCeilingCache = new Map();
     this._biolumMotes = null;
     this._skyGradCache = null;
     this._vignetteCache = null;
     this._siltGlareScratch = [];
+    this._torchSparksScratch = [];
+    this._auroraStamps = this._buildAuroraStamps();
     this._needsResize = true;
     this._cachedDpr = 1;
+    const isCoarseMobile =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(pointer: coarse)').matches || (typeof navigator !== 'undefined' && navigator.deviceMemory && navigator.deviceMemory <= 4));
+    this._rockPxPerM = isCoarseMobile ? MOBILE_CACHE_PX_PER_M : CACHE_PX_PER_M;
+    this._maxCachedLevels = isCoarseMobile ? 2 : MAX_CACHED_LEVELS;
+    this._maxCacheBytes = isCoarseMobile ? 120 * 1024 * 1024 : 320 * 1024 * 1024;
+    this._reducedMotion =
+      typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     this.ready = false;
     this.camX = level.spawn.x;
     this.camY = level.spawn.y;
@@ -208,10 +221,43 @@ export class CaveRenderer {
     if (!deferBuild) {
       this.backChunks = this._buildBackChunks(level);
       this.rockChunks = this._buildRockChunks(level);
-      this.dustMotes = this._buildDustMotes(level);
+      this.dustMotes = [];
       this.ready = true;
       this._loadBitmapTextures();
     }
+  }
+
+  _buildAuroraStamps() {
+    if (typeof document === 'undefined') return null;
+    const makeCol = (c0, c1) => {
+      const c = document.createElement('canvas');
+      c.width = 2;
+      c.height = 128;
+      const gctx = c.getContext('2d');
+      if (!gctx?.createLinearGradient) return null;
+      const g = gctx.createLinearGradient(0, 128, 0, 0);
+      g.addColorStop(0, c0);
+      g.addColorStop(0.52, c1);
+      g.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      gctx.fillStyle = g;
+      gctx.fillRect(0, 0, 2, 128);
+      return c;
+    };
+    return [
+      makeCol('rgba(45, 212, 191, 0.24)', 'rgba(74, 222, 128, 0.14)'),
+      makeCol('rgba(56, 189, 248, 0.18)', 'rgba(167, 139, 250, 0.13)'),
+    ];
+  }
+
+  _estimateEntryBytes(entry) {
+    let bytes = 0;
+    for (const ch of entry?.backChunks || []) {
+      if (ch?.canvas) bytes += (ch.canvas.width || 0) * (ch.canvas.height || 0) * 4;
+    }
+    for (const ch of entry?.rockChunks || []) {
+      if (ch?.canvas) bytes += (ch.canvas.width || 0) * (ch.canvas.height || 0) * 4;
+    }
+    return bytes;
   }
 
   isLevelCached(levelId) {
@@ -221,13 +267,22 @@ export class CaveRenderer {
   _saveBakedLevel(entry) {
     const id = entry?.level?.id;
     if (!id) return;
+    entry.bytes = this._estimateEntryBytes(entry);
     if (this._bakedLevelCache.has(id)) {
       this._bakedLevelCache.delete(id);
     }
     this._bakedLevelCache.set(id, entry);
-    while (this._bakedLevelCache.size > MAX_CACHED_LEVELS) {
+    const totalBytes = () => {
+      let sum = 0;
+      for (const e of this._bakedLevelCache.values()) sum += e.bytes || 0;
+      return sum;
+    };
+    while (
+      this._bakedLevelCache.size > 1 &&
+      (this._bakedLevelCache.size > this._maxCachedLevels || totalBytes() > this._maxCacheBytes)
+    ) {
       const oldestKey = this._bakedLevelCache.keys().next().value;
-      if (oldestKey) {
+      if (oldestKey && oldestKey !== id) {
         const evicted = this._bakedLevelCache.get(oldestKey);
         this._bakedLevelCache.delete(oldestKey);
         // Zero canvas backing stores immediately so mobile WebKit releases GPU memory
@@ -255,10 +310,11 @@ export class CaveRenderer {
     this.skyBackdropImg = entry.skyBackdropImg;
     this.backChunks = entry.backChunks;
     this.rockChunks = entry.rockChunks;
-    this.dustMotes = entry.dustMotes;
+    this.dustMotes = entry.dustMotes || [];
     this._sunCurtainCache.clear();
     this._basinEdgeCache.clear();
     this._waterMeniscusCache.clear();
+    this._ventCeilingCache.clear();
     this._biolumMotes = null;
     this._skyGradCache = null;
     this.camX = entry.level.spawn.x;
@@ -522,22 +578,21 @@ export class CaveRenderer {
     }
 
     const nextRockChunks = [];
+    const { yMin: lvlYMin, yMax: lvlYMax } = targetLevel.bounds;
     for (let i = 0; i < spans.length; i++) {
       if (i === 0 || _nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
         await nextFrame();
         frameStartMs = _nowMs();
       }
       if (epoch !== this._loadEpoch) return { cancelled: true };
-      report(50 + Math.round(((i + 1) / spans.length) * 38), `Sculpting high-res limestone walls (${i + 1}/${spans.length})...`);
-      nextRockChunks.push(this._buildRockChunk(targetLevel, spans[i][0], spans[i][1], rockTex, foliageTex));
+      report(50 + Math.round(((i + 1) / spans.length) * 42), `Sculpting high-res limestone walls (${i + 1}/${spans.length})...`);
+      for (let cy0 = lvlYMin; cy0 < lvlYMax; cy0 += CHUNK_H_M) {
+        const cy1 = Math.min(lvlYMax, cy0 + CHUNK_H_M);
+        nextRockChunks.push(this._buildRockChunk(targetLevel, spans[i][0], spans[i][1], rockTex, foliageTex, cy0, cy1));
+      }
     }
 
-    if (_nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
-      await nextFrame();
-    }
     if (epoch !== this._loadEpoch) return { cancelled: true };
-    report(92, 'Seeding suspended cenote water particulates...');
-    const nextDustMotes = this._buildDustMotes(targetLevel);
 
     const entry = {
       level: targetLevel,
@@ -548,7 +603,7 @@ export class CaveRenderer {
       skyBackdropImg,
       backChunks: nextBackChunks,
       rockChunks: nextRockChunks,
-      dustMotes: nextDustMotes,
+      dustMotes: [],
     };
     this._saveBakedLevel(entry);
     this._applyBakedLevel(entry);
@@ -754,20 +809,32 @@ export class CaveRenderer {
   }
 
   _buildRockChunks(level) {
-    const { xMin, xMax } = level.bounds;
+    const { xMin, xMax, yMin, yMax } = level.bounds;
     const chunks = [];
     for (let cx0 = xMin; cx0 < xMax; cx0 += CHUNK_W_M) {
-      chunks.push(this._buildRockChunk(level, cx0, Math.min(xMax, cx0 + CHUNK_W_M)));
+      const cx1 = Math.min(xMax, cx0 + CHUNK_W_M);
+      for (let cy0 = yMin; cy0 < yMax; cy0 += CHUNK_H_M) {
+        chunks.push(this._buildRockChunk(level, cx0, cx1, this.rockTex, this.foliageTex, cy0, Math.min(yMax, cy0 + CHUNK_H_M)));
+      }
     }
     return chunks;
   }
 
-  _buildRockChunk(level, cx0, cx1, rockTexOverride = this.rockTex, foliageTexOverride = this.foliageTex) {
-    const { xMin, yMin, yMax } = level.bounds;
-    const h = Math.ceil((yMax - yMin) * CACHE_PX_PER_M);
+  _buildRockChunk(
+    level,
+    cx0,
+    cx1,
+    rockTexOverride = this.rockTex,
+    foliageTexOverride = this.foliageTex,
+    cy0 = level.bounds.yMin,
+    cy1 = level.bounds.yMax
+  ) {
+    const { xMin, yMin } = level.bounds;
+    const ppm = this._rockPxPerM || CACHE_PX_PER_M;
+    const h = Math.ceil((cy1 - cy0) * ppm);
     const tex = rockTexOverride.data;
     const fol = foliageTexOverride?.data;
-    const w = Math.ceil((cx1 - cx0) * CACHE_PX_PER_M);
+    const w = Math.ceil((cx1 - cx0) * ppm);
 
     const c = document.createElement('canvas');
     c.width = w;
@@ -793,8 +860,9 @@ export class CaveRenderer {
     const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = STAIN_MAP[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
     const STEP = 8;
-    const invPpm = 1 / CACHE_PX_PER_M;
-    const gxBase = Math.floor((cx0 - xMin) * CACHE_PX_PER_M);
+    const invPpm = 1 / ppm;
+    const gxBase = Math.floor((cx0 - xMin) * ppm);
+    const gyBase = Math.floor((cy0 - yMin) * ppm);
 
     // Precompute 1D horizon ground curve once per chunk (eliminates ~1M redundant sin/cos calls/chunk)
     const topGroundYByPx = new Float32Array(w);
@@ -807,8 +875,8 @@ export class CaveRenderer {
 
     for (let by = 0; by < h; by += STEP) {
       const pyEnd = Math.min(h, by + STEP);
-      const byWy = yMin + by * invPpm;
-      const midWy = yMin + (by + (pyEnd - by) * 0.5) * invPpm;
+      const byWy = cy0 + by * invPpm;
+      const midWy = cy0 + (by + (pyEnd - by) * 0.5) * invPpm;
       const blockBelowTurf = byWy > maxTopGroundY + 1.2;
 
       for (let bx = 0; bx < w; bx += STEP) {
@@ -824,8 +892,8 @@ export class CaveRenderer {
         // 8x8 ultra-fast deep rock interior fill: zero SDF calls, zero topsoil checks
         if (cSdf > 1.75 && blockBelowTurf) {
           for (let py = by; py < pyEnd; py++) {
-            const wy = yMin + py * invPpm;
-            const ty = py & (TEX_SIZE - 1);
+            const wy = cy0 + py * invPpm;
+            const ty = (gyBase + py) & (TEX_SIZE - 1);
             const depthDarken = Math.max(0.42, 0.88 - Math.max(0, wy) * 0.0085);
             const mR = mulR * depthDarken;
             const mG = mulG * depthDarken;
@@ -851,8 +919,8 @@ export class CaveRenderer {
         const deepRockBlock = cSdf > 1.75 && byWy >= midTopY + 0.5;
 
         for (let py = by; py < pyEnd; py++) {
-          const wy = yMin + py * invPpm;
-          const ty = py & (TEX_SIZE - 1);
+          const wy = cy0 + py * invPpm;
+          const ty = (gyBase + py) & (TEX_SIZE - 1);
           const depthDarken = Math.max(0.42, 0.88 - Math.max(0, wy) * 0.0085);
           const inVerticalMossBand = wy > -5.5 && wy < 13.5;
           const rowTexBase = ty * TEX_SIZE;
@@ -964,8 +1032,8 @@ export class CaveRenderer {
 
     // Paint theme-tinted bitmap-textured speleothems & layered boulders (using local chunk SDF normals)
     const pat = this._getTintedRockPattern(ctx, level, rockTexOverride);
-    const toCacheX = (wx) => (wx - cx0) * CACHE_PX_PER_M;
-    const toCacheY = (wy) => (wy - yMin) * CACHE_PX_PER_M;
+    const toCacheX = (wx) => (wx - cx0) * ppm;
+    const toCacheY = (wy) => (wy - cy0) * ppm;
     const localNormalY = (wx, wy) => {
       const e = 0.1;
       const gx = evalChunkSdf(wx + e, wy) - evalChunkSdf(wx - e, wy);
@@ -985,7 +1053,7 @@ export class CaveRenderer {
         if (cx < cx0 - 2.5 || cx > cx1 + 2.5) continue;
         const cy = seg.ay + (seg.by - seg.ay) * t;
         const r = seg.ra + (seg.rb - seg.ra) * t;
-        if (r < 2.55 || cy < 2.5) continue;
+        if (r < 2.55 || cy < 2.5 || cy + r + 9 < cy0 || cy - r - 9 > cy1) continue;
 
         const seed = Math.sin(sIdx * 31.7 + k * 17.3) * 43758.5453;
         const hash = seed - Math.floor(seed);
@@ -994,9 +1062,9 @@ export class CaveRenderer {
         for (let step = 0; step < 32; step++) {
           const py = cy - step * 0.28;
           if (evalChunkSdf(cx, py) >= 0) {
-            if (localNormalY(cx, py) < -0.35 && hash > 0.24) {
-              const len = (0.5 + hash * 0.85) * CACHE_PX_PER_M;
-              const baseW = (0.16 + (1 - hash) * 0.16) * CACHE_PX_PER_M;
+            if (py >= cy0 - 2 && py <= cy1 + 2 && localNormalY(cx, py) < -0.35 && hash > 0.24) {
+              const len = (0.5 + hash * 0.85) * ppm;
+              const baseW = (0.16 + (1 - hash) * 0.16) * ppm;
               const sx = toCacheX(cx);
               const sy = toCacheY(py) - 3;
 
@@ -1023,20 +1091,20 @@ export class CaveRenderer {
         for (let step = 0; step < 32; step++) {
           const py = cy + step * 0.28;
           if (evalChunkSdf(cx, py) >= 0) {
-            if (localNormalY(cx, py) > 0.35) {
+            if (py >= cy0 - 2 && py <= cy1 + 2 && localNormalY(cx, py) > 0.35) {
               const sx = toCacheX(cx);
               const sy = toCacheY(py) + 3;
               ctx.save();
               if (hash < 0.5) {
-                const len = (0.44 + hash * 0.8) * CACHE_PX_PER_M;
-                const baseW = (0.18 + hash * 0.16) * CACHE_PX_PER_M;
+                const len = (0.44 + hash * 0.8) * ppm;
+                const baseW = (0.18 + hash * 0.16) * ppm;
                 ctx.beginPath();
                 ctx.moveTo(sx - baseW, sy);
                 ctx.bezierCurveTo(sx - baseW * 0.55, sy - len * 0.36, sx - baseW * 0.22, sy - len * 0.72, sx - baseW * 0.05, sy - len);
                 ctx.bezierCurveTo(sx + baseW * 0.25, sy - len * 0.7, sx + baseW * 0.6, sy - len * 0.32, sx + baseW, sy);
                 ctx.closePath();
               } else {
-                const bw = (0.38 + (hash - 0.5) * 0.85) * CACHE_PX_PER_M;
+                const bw = (0.38 + (hash - 0.5) * 0.85) * ppm;
                 const bh = bw * (0.52 + hash * 0.18);
                 const by = sy - bh * 0.3;
                 ctx.beginPath();
@@ -1057,8 +1125,8 @@ export class CaveRenderer {
       }
     }
 
-    // Hanging tree roots along forested Cenote/Karst basin rims (omitted in arid, arctic, volcanic & alpine basins)
-    if (!NO_HANGING_ROOTS_THEMES.has(level.theme?.id)) {
+    // Hanging tree roots along forested Cenote/Karst basin rims (only in top tile containing y=0)
+    if (cy0 <= 4 && cy1 >= 0 && !NO_HANGING_ROOTS_THEMES.has(level.theme?.id)) {
       for (const basin of level.openBasins) {
         if (basin.xMax < cx0 - 2 || basin.xMin > cx1 + 2) continue;
         for (let i = 0; i < 8; i++) {
@@ -1081,7 +1149,7 @@ export class CaveRenderer {
       }
     }
 
-    return { x0: cx0, x1: cx1, y0: yMin, y1: yMax, canvas: c };
+    return { x0: cx0, x1: cx1, y0: cy0, y1: cy1, canvas: c };
   }
 
   resize(force = false) {
@@ -1186,16 +1254,18 @@ export class CaveRenderer {
     this.camX += (lookX - this.camX) * camAlpha;
     this.camY += (lookY - this.camY) * camAlpha;
 
-    // Narcosis gentle camera drift
+    // Narcosis gentle camera drift (suppressed under prefers-reduced-motion or when spectating a buddy)
     let narcX = 0;
     let narcY = 0;
-    if (diveState.narcosisLevel > 0.15) {
+    const isSpectating = Boolean(cameraTarget && cameraTarget !== diver);
+    if (!isSpectating && !this._reducedMotion && diveState.narcosisLevel > 0.15) {
       narcX = Math.sin(timeSec * 1.7) * diveState.narcosisLevel * 0.45;
       narcY = Math.cos(timeSec * 1.3) * diveState.narcosisLevel * 0.35;
     }
 
     const viewCenterX = cw * 0.5;
-    const viewCenterY = ch * 0.46;
+    // On narrow portrait phones, shift framing slightly higher so the diver sits centered above the bottom dock
+    const viewCenterY = cw < ch ? ch * 0.39 : ch * 0.46;
 
     const toScreenX = (wx) => viewCenterX + (wx - (this.camX + narcX)) * scale;
     const toScreenY = (wy) => viewCenterY + (wy - (this.camY + narcY)) * scale;
@@ -1232,8 +1302,15 @@ export class CaveRenderer {
       this._drawSurfaceSky(ctx, cw, surfY, toScreenX, toScreenY, scale, timeSec);
     }
 
-    // 1b. 1:1 World-Locked Carved Cave Backwall (zero parallax — tube/cavern interior rock)
+    // 1b. 1:1 World-Locked Carved Cave Backwall + subtle atmospheric depth-fog veil separating backwall from foreground rock
     this._drawChunks(ctx, this.backChunks, BACK_PX_PER_M, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale);
+    if (surfY < ch) {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = theme?.waterDeep || '#072a47';
+      ctx.fillRect(0, Math.max(0, surfY), cw, ch - Math.max(0, surfY));
+      ctx.restore();
+    }
 
     // 2. Physical 2D Ray-Cast Cenote Daylight Sunbeams & Shimmering Caustics
     const sunCurtains = this._computeVisibleSunCurtains(visX0, visX1, visY0, siltClouds);
@@ -1249,14 +1326,15 @@ export class CaveRenderer {
     if (Number.isFinite(this.level.haloclineY)) {
       const haloY = toScreenY(this.level.haloclineY);
       if (haloY > -60 && haloY < ch + 60) {
-        const haloCol = theme?.haloclineColor || 'rgba(165, 243, 252, 0.22)';
         ctx.save();
-        const hg = ctx.createLinearGradient(0, haloY - 1.65 * scale, 0, haloY + 1.65 * scale);
-        hg.addColorStop(0, 'rgba(56, 189, 248, 0)');
-        hg.addColorStop(0.5, haloCol);
-        hg.addColorStop(1, 'rgba(56, 189, 248, 0)');
-        ctx.fillStyle = hg;
-        ctx.fillRect(0, haloY - 1.65 * scale, cw, 3.3 * scale);
+        if (this.glowStamps.bandGlow) {
+          ctx.globalAlpha = 0.55;
+          ctx.drawImage(this.glowStamps.bandGlow, 0, haloY - 1.65 * scale, cw, 3.3 * scale);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = theme?.haloclineColor || 'rgba(165, 243, 252, 0.22)';
+          ctx.fillRect(0, haloY - 1.1 * scale, cw, 2.2 * scale);
+        }
 
         ctx.strokeStyle = 'rgba(224, 242, 254, 0.36)';
         ctx.lineWidth = Math.max(1, 0.045 * scale);
@@ -1286,8 +1364,8 @@ export class CaveRenderer {
     // 7. Bubbles
     this._drawBubbles(ctx, toScreenX, toScreenY, scale, bubbles);
 
-    // 8. High-Res Bitmap Cutaway Cave Limestone Walls (24 px/m, sliced per visible chunk)
-    this._drawChunks(ctx, this.rockChunks, CACHE_PX_PER_M, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale);
+    // 8. High-Res Bitmap Cutaway Cave Limestone Walls (2D vertical+horizontal tiles, mobile VRAM-capped)
+    this._drawChunks(ctx, this.rockChunks, this._rockPxPerM || CACHE_PX_PER_M, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale);
     this._drawInfiniteRockMargin(ctx, viewWorldLeft, viewWorldRight, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale);
 
     // 8a. Top-Level Surface Environment: Full-width jungle/cypress ridge, cenote rims, stairways & docks
@@ -1352,16 +1430,14 @@ export class CaveRenderer {
     }
     this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
 
-    // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS)
-    this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
+    // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS — skipped while spectating a buddy)
+    if (!isSpectating) {
+      this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
+    }
   }
 
   _drawChunks(ctx, chunks, pxPerM, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale) {
     if (visX1 <= visX0 || visY1 <= visY0 || !chunks) return;
-    const sy0 = (visY0 - yMin) * pxPerM;
-    const sh = (visY1 - visY0) * pxPerM;
-    const dy = toScreenY(visY0);
-    const dh = (visY1 - visY0) * scale;
 
     for (let i = 0; i < chunks.length; i++) {
       const chnk = chunks[i];
@@ -1369,8 +1445,16 @@ export class CaveRenderer {
       const cx1 = Math.min(visX1, chnk.x1);
       if (cx1 <= cx0) continue;
 
+      const tileY0 = chnk.y0 ?? yMin;
+      const tileY1 = chnk.y1 ?? visY1;
+      const cy0 = Math.max(visY0, tileY0);
+      const cy1 = Math.min(visY1, tileY1);
+      if (cy1 <= cy0) continue;
+
       const sx0 = (cx0 - chnk.x0) * pxPerM;
       const sw = (cx1 - cx0) * pxPerM;
+      const sy0 = (cy0 - tileY0) * pxPerM;
+      const sh = (cy1 - cy0) * pxPerM;
       ctx.drawImage(
         chnk.canvas,
         sx0,
@@ -1378,9 +1462,9 @@ export class CaveRenderer {
         sw,
         sh,
         toScreenX(cx0),
-        dy,
+        toScreenY(cy0),
         (cx1 - cx0) * scale,
-        dh
+        (cy1 - cy0) * scale
       );
     }
   }
@@ -1435,14 +1519,17 @@ export class CaveRenderer {
       }
     }
 
-    // 1b. Animated shimmering Northern Lights (Aurora Borealis) ribbons for Silfra & Grjotagja
-    if (style === 'aurora-basalt' || style === 'grjotagja-rift') {
+    // 1b. Animated shimmering Northern Lights (Aurora Borealis) via pre-baked 1x128 stamps (0 gradients/frame)
+    if ((style === 'aurora-basalt' || style === 'grjotagja-rift') && this._auroraStamps) {
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       const bandTop = Math.max(4, horizonY - 8 * scale);
       const bandBot = Math.min(skyBotY, horizonY + 0.4 * scale);
-      const cols = Math.max(12, Math.floor(cw / 28));
+      const cols = Math.max(12, Math.min(48, Math.floor(cw / 36)));
+      const colW = Math.ceil(cw / cols) + 6;
       for (let ribbon = 0; ribbon < 2; ribbon++) {
+        const stamp = this._auroraStamps[ribbon];
+        if (!stamp) continue;
         const phase = timeSec * (0.45 + ribbon * 0.2) + ribbon * 2.1;
         for (let c = 0; c < cols; c++) {
           const sx = (c / cols) * cw - ((parallaxCam * (0.025 + ribbon * 0.015) * scale) % 28);
@@ -1450,39 +1537,29 @@ export class CaveRenderer {
           if (wave < 0.22) continue;
           const h = (bandBot - bandTop) * (0.38 + wave * 0.52);
           const y0 = bandTop + Math.sin(c * 0.26 - phase * 0.8) * 14;
-          const ag = ctx.createLinearGradient(sx, y0 + h, sx, y0);
-          if (ribbon === 0) {
-            ag.addColorStop(0, `rgba(45, 212, 191, ${(0.04 + wave * 0.16).toFixed(3)})`);
-            ag.addColorStop(0.5, `rgba(74, 222, 128, ${(0.02 + wave * 0.11).toFixed(3)})`);
-          } else {
-            ag.addColorStop(0, `rgba(56, 189, 248, ${(0.03 + wave * 0.11).toFixed(3)})`);
-            ag.addColorStop(0.55, `rgba(167, 139, 250, ${(0.02 + wave * 0.09).toFixed(3)})`);
-          }
-          ag.addColorStop(1, 'rgba(15, 23, 42, 0)');
-          ctx.fillStyle = ag;
-          ctx.fillRect(sx, y0, 32, h);
+          ctx.globalAlpha = 0.24 + wave * 0.72;
+          ctx.drawImage(stamp, sx, y0, colW, h);
         }
       }
       ctx.restore();
     }
 
-    // 2. Soft photographic sunlight bloom & delicate diagonal atmospheric light rays
+    // 2. Soft photographic sunlight bloom & delicate diagonal atmospheric light rays (using pre-baked warm stamp)
     const sunScreenX = cw * 0.72 - parallaxCam * 0.03 * scale;
     const sunScreenY = Math.max(18, Math.min(horizonY - 2.2 * scale, skyBotY * 0.26));
-    const sunHalo = ctx.createRadialGradient(sunScreenX, sunScreenY, 0.2 * scale, sunScreenX, sunScreenY, 12 * scale);
-    sunHalo.addColorStop(0, 'rgba(255, 252, 238, 0.42)');
-    sunHalo.addColorStop(0.22, bloomCol);
-    sunHalo.addColorStop(1, 'rgba(255, 248, 220, 0)');
-    ctx.fillStyle = sunHalo;
-    ctx.beginPath();
-    ctx.arc(sunScreenX, sunScreenY, 12 * scale, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.glowStamps.warm) {
+      const sunR = 12 * scale;
+      ctx.save();
+      ctx.globalAlpha = 0.52;
+      ctx.drawImage(this.glowStamps.warm, sunScreenX - sunR, sunScreenY - sunR, sunR * 2, sunR * 2);
+      ctx.restore();
+    }
 
+    const rayGrad = ctx.createLinearGradient(sunScreenX, sunScreenY, sunScreenX, skyBotY);
+    rayGrad.addColorStop(0, 'rgba(255, 249, 224, 0.065)');
+    rayGrad.addColorStop(1, 'rgba(255, 249, 224, 0)');
+    ctx.fillStyle = rayGrad;
     for (let r = -2; r <= 2; r++) {
-      const rayGrad = ctx.createLinearGradient(sunScreenX, sunScreenY, sunScreenX + r * 65, skyBotY);
-      rayGrad.addColorStop(0, 'rgba(255, 249, 224, 0.065)');
-      rayGrad.addColorStop(1, 'rgba(255, 249, 224, 0)');
-      ctx.fillStyle = rayGrad;
       ctx.beginPath();
       ctx.moveTo(sunScreenX, sunScreenY);
       ctx.lineTo(sunScreenX + (r - 0.32) * 85 - 45, skyBotY);
@@ -1491,20 +1568,20 @@ export class CaveRenderer {
       ctx.fill();
     }
 
-    // 3. Low-lying humid forest mist wisps drifting gently above the sinkhole waterline
+    // 3. Low-lying humid forest mist wisps drifting gently above the sinkhole waterline (stamp-based, 0 gradients/frame)
     const mistDrift = -parallaxCam * 0.10 * scale + timeSec * 5.2;
     const mistBaseY = Math.max(horizonY + 0.4 * scale, skyBotY - 2.6 * scale);
-    for (let m = 0; m < 7; m++) {
-      const mx = ((m * 260 + mistDrift) % (cw + 380)) - 190;
-      const my = mistBaseY + ((m * 29) % 42) - 18;
-      const mw = 115 + (m % 3) * 45;
-      const mg = ctx.createRadialGradient(mx, my, 4, mx, my, mw);
-      mg.addColorStop(0, mistCol);
-      mg.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = mg;
-      ctx.beginPath();
-      ctx.ellipse(mx, my, mw, 22, 0, 0, Math.PI * 2);
-      ctx.fill();
+    const mistStamp = this.glowStamps.cyan;
+    if (mistStamp) {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      for (let m = 0; m < 7; m++) {
+        const mx = ((m * 260 + mistDrift) % (cw + 380)) - 190;
+        const my = mistBaseY + ((m * 29) % 42) - 18;
+        const mw = 115 + (m % 3) * 45;
+        ctx.drawImage(mistStamp, mx - mw, my - 22, mw * 2, 44);
+      }
+      ctx.restore();
     }
 
     // 4. Subtle distant gliding birds in aerial perspective
@@ -3963,9 +4040,11 @@ export class CaveRenderer {
       ctx.font = `700 ${Math.max(9, Math.round(0.32 * scale))}px ui-monospace, monospace`;
       ctx.textAlign = 'left';
       for (const dm of this.level.depthMarkers) {
+        if (!Number.isFinite(dm?.y)) continue;
         const sy = toScreenY(dm.y);
         if (sy < 0 || sy > ch) continue;
-        ctx.strokeStyle = dm.color;
+        const col = dm.color || 'rgba(148, 163, 184, 0.55)';
+        ctx.strokeStyle = col;
         ctx.lineWidth = 1.25;
         ctx.setLineDash([7, 7]);
         ctx.beginPath();
@@ -3973,7 +4052,10 @@ export class CaveRenderer {
         ctx.lineTo(cw, sy);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = dm.color;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(2, 6, 23, 0.72)';
+        ctx.strokeText(dm.label, 12, sy - 5);
+        ctx.fillStyle = col;
         ctx.fillText(dm.label, 12, sy - 5);
       }
       ctx.restore();
@@ -4039,6 +4121,7 @@ export class CaveRenderer {
     if (!this.level.zoneLines) return;
     ctx.save();
     for (const z of this.level.zoneLines) {
+      if (!Number.isFinite(z?.y) || !Number.isFinite(z?.xMin) || !Number.isFinite(z?.xMax)) continue;
       const x0 = toScreenX(z.xMin);
       const x1 = toScreenX(z.xMax);
       const sy = toScreenY(z.y);
@@ -4115,8 +4198,12 @@ export class CaveRenderer {
     const orbitR = Math.max(38, 2.2 * scale);
     const ax = sx + Math.cos(ang) * orbitR;
     const ay = sy + Math.sin(ang) * orbitR;
-    const clampedX = Math.max(26, Math.min(cw - 26, ax));
-    const clampedY = Math.max(66, Math.min(ch - 26, ay));
+    const dpr = this._cachedDpr || 1;
+    const padX = Math.round(28 * dpr);
+    const padTop = Math.round(86 * dpr);
+    const padBot = Math.round((cw < ch ? 220 : 120) * dpr);
+    const clampedX = Math.max(padX, Math.min(cw - padX, ax));
+    const clampedY = Math.max(padTop, Math.min(ch - padBot, ay));
 
     ctx.save();
     ctx.translate(clampedX, clampedY);
@@ -4685,33 +4772,22 @@ export class CaveRenderer {
       const sy = toScreenY(v.y);
       const throatY = sy - 0.95 * scale;
 
-      // Soft feathered hydrothermal convection plume puffs (no hard polygon edges!)
-      const puffCount = 7;
-      for (let p = 0; p < puffCount; p++) {
-        const t = p / (puffCount - 1);
-        const py = toScreenY(v.y - 1.2 - t * (height * 0.88));
-        const swayX = sx + Math.sin(timeSec * 2.4 - t * 3.6 + vIdx * 1.7) * (0.18 + t * 0.65) * scale;
-        const rx = (0.75 + t * hw * 0.52) * scale;
-        const ry = (1.6 + t * 1.9) * scale;
-        const rMax = Math.max(rx, ry);
-        ctx.save();
-        ctx.translate(swayX, py);
-        ctx.scale(rx / rMax, ry / rMax);
-        const g = ctx.createRadialGradient(0, 0, rMax * 0.05, 0, 0, rMax);
-        const fade = Math.max(0, 1 - t * 0.92);
-        if (t < 0.25) {
-          g.addColorStop(0, `rgba(251, 146, 60, ${(0.22 * fade).toFixed(3)})`);
-          g.addColorStop(0.55, `rgba(45, 212, 191, ${(0.11 * fade).toFixed(3)})`);
-        } else {
-          g.addColorStop(0, `rgba(45, 212, 191, ${(0.14 * fade).toFixed(3)})`);
-          g.addColorStop(0.6, `rgba(56, 189, 248, ${(0.07 * fade).toFixed(3)})`);
+      // Soft feathered hydrothermal convection plume puffs via pre-baked glowStamps (0 gradients/frame)
+      const cyanStamp = this.glowStamps.cyan;
+      const warmStamp = this.glowStamps.warm;
+      if (cyanStamp && warmStamp) {
+        const puffCount = 6;
+        for (let p = 0; p < puffCount; p++) {
+          const t = p / (puffCount - 1);
+          const py = toScreenY(v.y - 1.2 - t * (height * 0.88));
+          const swayX = sx + Math.sin(timeSec * 2.4 - t * 3.6 + vIdx * 1.7) * (0.18 + t * 0.65) * scale;
+          const rx = (0.75 + t * hw * 0.52) * scale;
+          const ry = (1.6 + t * 1.9) * scale;
+          const fade = Math.max(0, 1 - t * 0.9);
+          ctx.globalAlpha = (t < 0.25 ? 0.34 : 0.22) * fade;
+          ctx.drawImage(t < 0.25 ? warmStamp : cyanStamp, swayX - rx, py - ry, rx * 2, ry * 2);
         }
-        g.addColorStop(1, 'rgba(56, 189, 248, 0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(0, 0, rMax, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        ctx.globalAlpha = 1;
       }
 
       // Craggy basalt black-smoker chimney silhouette (jagged volcanic spire, not a flat box)
@@ -4729,17 +4805,14 @@ export class CaveRenderer {
       ctx.closePath();
       ctx.fill();
 
-      // Glowing magma vent fissure halo + inner molten cracks
+      // Glowing magma vent fissure halo + inner molten cracks via pre-baked warmStamp
       const glowPulse = 0.74 + 0.26 * Math.sin(timeSec * 4.4 + vIdx * 2.1);
-      const ventGlow = ctx.createRadialGradient(sx, throatY, 0.08 * scale, sx, throatY, 2.9 * scale);
-      ventGlow.addColorStop(0, `rgba(254, 240, 138, ${(0.95 * glowPulse).toFixed(2)})`);
-      ventGlow.addColorStop(0.22, `rgba(251, 146, 60, ${(0.65 * glowPulse).toFixed(2)})`);
-      ventGlow.addColorStop(0.58, `rgba(234, 88, 12, ${(0.22 * glowPulse).toFixed(2)})`);
-      ventGlow.addColorStop(1, 'rgba(249, 115, 22, 0)');
-      ctx.fillStyle = ventGlow;
-      ctx.beginPath();
-      ctx.arc(sx, throatY, 2.9 * scale, 0, Math.PI * 2);
-      ctx.fill();
+      if (warmStamp) {
+        const gr = 2.9 * scale;
+        ctx.globalAlpha = 0.92 * glowPulse;
+        ctx.drawImage(warmStamp, sx - gr, throatY - gr, gr * 2, gr * 2);
+        ctx.globalAlpha = 1;
+      }
 
       ctx.strokeStyle = `rgba(253, 186, 116, ${(0.82 * glowPulse).toFixed(2)})`;
       ctx.lineWidth = Math.max(1.2, 0.055 * scale);
@@ -4751,12 +4824,25 @@ export class CaveRenderer {
       ctx.lineTo(sx + 0.08 * scale, throatY + 0.55 * scale);
       ctx.stroke();
 
-      // Rising mineral bubbles & glowing thermal embers inside the updraft column (clipped inside open cave water)
+      // Precompute ceiling clamp once per vent (eliminates 14 static SDF calls/vent/frame)
+      let ceilY = this._ventCeilingCache.get(vIdx);
+      if (ceilY === undefined) {
+        ceilY = v.y - height;
+        for (let step = 1.0; step <= height; step += 0.6) {
+          if (evaluateCaveSDF(this.level, v.x, v.y - step) >= -0.25) {
+            ceilY = v.y - step + 0.35;
+            break;
+          }
+        }
+        this._ventCeilingCache.set(vIdx, ceilY);
+      }
+
+      // Rising mineral bubbles & glowing thermal embers inside the updraft column
       for (let b = 0; b < 14; b++) {
         const phase = ((timeSec * (0.42 + (b % 3) * 0.14) + vIdx * 0.31 + b / 14) % 1);
         const by = v.y - 1.0 - phase * height;
+        if (by <= ceilY) continue;
         const bx = v.x + Math.sin(phase * 9.0 + b * 2.1 + timeSec * 2.5) * hw * (0.26 + phase * 0.36);
-        if (evaluateCaveSDF(this.level, bx, by) >= -0.25) continue;
         const bsx = toScreenX(bx);
         const bsy = toScreenY(by);
         const alpha = (1 - phase) * (b % 3 === 0 ? 0.85 : 0.58);
@@ -5143,25 +5229,34 @@ export class CaveRenderer {
 
   _drawPeerEdgeIndicators(ctx, cw, ch, diver, peers, toScreenX, toScreenY, timeSec) {
     if (!peers || peers.length === 0) return;
+    const dpr = this._cachedDpr || 1;
+    const marginX = Math.round(28 * dpr);
+    const topSafe = Math.round((cw < ch ? 116 : 92) * dpr);
+    const botSafe = Math.round((cw < ch ? 225 : 138) * dpr);
+    const fontPx = Math.round(11 * dpr);
+    const arrowSz = Math.round(8 * dpr);
     ctx.save();
+    ctx.font = `800 ${fontPx}px ui-monospace, monospace`;
+    ctx.textBaseline = 'middle';
     for (let i = 0; i < peers.length; i++) {
       const p = peers[i];
       const px = toScreenX(p.x);
       const py = toScreenY(p.y);
-      const margin = 34;
-      const onScreen = px >= margin && px <= cw - margin && py >= 66 && py <= ch - margin;
+      const onScreen = px >= marginX && px <= cw - marginX && py >= topSafe && py <= ch - botSafe;
       if (onScreen) continue;
 
       const distM = Math.round(Math.hypot(p.x - diver.x, p.y - diver.y));
+      const dDepth = Math.round((p.y || 0) - (diver.y || 0));
+      const depthTag = Math.abs(dDepth) >= 3 ? (dDepth > 0 ? ` ▼${dDepth}m` : ` ▲${Math.abs(dDepth)}m`) : '';
       const ang = Math.atan2(py - ch * 0.5, px - cw * 0.5);
-      const rx = Math.max(margin, Math.min(cw - margin, cw * 0.5 + Math.cos(ang) * (cw * 0.5 - margin)));
-      const ry = Math.max(76, Math.min(ch - margin, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - margin)));
+      const rx = Math.max(marginX, Math.min(cw - marginX, cw * 0.5 + Math.cos(ang) * (cw * 0.5 - marginX)));
+      const ry = Math.max(topSafe, Math.min(ch - botSafe, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - Math.max(topSafe, botSafe) * 0.5)));
 
       const cond = p.alive === false ? 'DOWN' : (p.condition || 'NOMINAL');
       const distressed = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'DCS';
-      const pulse = distressed ? 0.65 + 0.35 * Math.sin(timeSec * 8) : 0.9;
+      const pulse = distressed ? 0.65 + 0.35 * Math.sin(timeSec * 8) : 0.94;
       const col = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX'
-        ? '#ef4444'
+        ? '#f87171'
         : cond !== 'NOMINAL'
           ? '#fbbf24'
           : '#fdba74';
@@ -5172,20 +5267,35 @@ export class CaveRenderer {
       ctx.rotate(ang);
       ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.moveTo(10, 0);
-      ctx.lineTo(-7, -6);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-7, 6);
+      ctx.moveTo(arrowSz, 0);
+      ctx.lineTo(-arrowSz * 0.7, -arrowSz * 0.6);
+      ctx.lineTo(-arrowSz * 0.38, 0);
+      ctx.lineTo(-arrowSz * 0.7, arrowSz * 0.6);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
 
-      ctx.font = '700 10px ui-monospace, monospace';
-      ctx.textAlign = rx > cw * 0.5 ? 'right' : 'left';
+      const label = cond === 'NOMINAL'
+        ? `${p.name || 'Buddy'} ${distM}m${depthTag}`
+        : `${p.name || 'Buddy'} ${cond} ${distM}m`;
+      const textW = ctx.measureText(label).width;
+      const pillPadX = Math.round(7 * dpr);
+      const pillW = textW + pillPadX * 2;
+      const pillH = Math.round(20 * dpr);
+      const onRight = rx > cw * 0.5;
+      const pillX = onRight ? rx - arrowSz - Math.round(5 * dpr) - pillW : rx + arrowSz + Math.round(5 * dpr);
+
+      ctx.fillStyle = distressed ? 'rgba(69, 10, 10, 0.9)' : 'rgba(6, 15, 29, 0.88)';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.2, 1.3 * dpr);
+      ctx.beginPath();
+      ctx.roundRect(pillX, ry - pillH * 0.5, pillW, pillH, 999);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
       ctx.fillStyle = col;
-      const lx = rx > cw * 0.5 ? rx - 14 : rx + 14;
-      const label = cond === 'NOMINAL' ? `${p.name || 'Buddy'} ${distM}m` : `${p.name || 'Buddy'} ${cond} ${distM}m`;
-      ctx.fillText(label, lx, ry + 3);
+      ctx.fillText(label, pillX + pillW * 0.5, ry + 0.5);
     }
     ctx.restore();
   }
@@ -5243,11 +5353,13 @@ export class CaveRenderer {
     }
 
     if (!isPeer) {
-      // Suspended water particulates & soft bokeh plankton sparkling inside ray-cast torch polygon
-      // Uses deterministic 6m world grid tiling so every tunnel across all 20 levels has rich marine snow
+      // Suspended water particulates & soft bokeh plankton inside ray-cast torch polygon (cone-culled + zero-alloc scratch)
       const maxDistSq = rangeM * rangeM;
       const moteStamp = this.glowStamps.cyan;
-      const sparks = [];
+      const sparks = this._torchSparksScratch;
+      sparks.length = 0;
+      const beamFx = Math.cos(diver.angle || 0);
+      const beamFy = Math.sin(diver.angle || 0);
       const cell = 6;
       const gx0 = Math.floor((torchData.ox - rangeM) / cell);
       const gx1 = Math.ceil((torchData.ox + rangeM) / cell);
@@ -5267,6 +5379,8 @@ export class CaveRenderer {
             const dy = wy - torchData.oy;
             const dSq = dx * dx + dy * dy;
             if (dSq > maxDistSq || dSq < 0.35) continue;
+            const invDist = 1 / Math.sqrt(dSq);
+            if ((dx * beamFx + dy * beamFy) * invDist < 0.72) continue; // Outside torch cone
             const phase = r1 * 6.283;
             const driftX = wx + Math.sin(timeSec * 0.78 + phase) * 0.19;
             const driftY = wy + Math.cos(timeSec * 0.62 + phase) * 0.14;
@@ -5274,7 +5388,7 @@ export class CaveRenderer {
             const my = toScreenY(driftY);
             const size = 0.028 + r2 * 0.036;
             if (k === 0 && moteStamp) {
-              const fade = Math.max(0, 1 - Math.sqrt(dSq) / rangeM);
+              const fade = Math.max(0, 1 - (dSq * invDist) / rangeM);
               const bokehR = Math.max(3.5, size * 6.2 * scale);
               ctx.globalAlpha = 0.26 * fade;
               ctx.drawImage(moteStamp, mx - bokehR, my - bokehR, bokehR * 2, bokehR * 2);
@@ -5299,7 +5413,7 @@ export class CaveRenderer {
     }
     ctx.restore();
 
-    // Normal-weighted 2D diffuse limestone wall scatter & mineral rim glint via pre-baked glowStamps
+    // Normal-weighted 2D diffuse limestone wall scatter + Snell's-window underside surface reflection
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const warmStamp = this.glowStamps.warm;
@@ -5307,7 +5421,19 @@ export class CaveRenderer {
     const wallStep = isPeer ? 2 : 1;
     for (let i = 1; i < torchData.rays.length - 1; i += wallStep) {
       const pt = torchData.rays[i];
-      if (!pt.hitWall || pt.dist > rangeM) continue;
+      if (pt.dist > rangeM) continue;
+      if (pt.hitSurface && cyanStamp) {
+        const strength = Math.max(0, (1 - pt.dist / rangeM) * (pt.incidence || 0.6)) * 0.24 * intensity;
+        if (strength > 0.01) {
+          const sx = toScreenX(pt.x);
+          const sy = toScreenY(0.05);
+          const rad = (0.95 + pt.dist * 0.08) * scale;
+          ctx.globalAlpha = Math.min(0.45, strength);
+          ctx.drawImage(cyanStamp, sx - rad * 1.4, sy - rad * 0.35, rad * 2.8, rad * 0.7);
+        }
+        continue;
+      }
+      if (!pt.hitWall) continue;
       const wx = toScreenX(pt.x + pt.nx * 0.25);
       const wy = toScreenY(pt.y + pt.ny * 0.25);
       const beamWeight = 1 - Math.abs(i / (torchData.rays.length - 1) - 0.5) * 1.1;
@@ -5346,7 +5472,11 @@ export class CaveRenderer {
 
     lctx.globalCompositeOperation = 'source-over';
     lctx.clearRect(0, 0, lw, lh);
-    lctx.fillStyle = `rgba(2, 6, 14, ${darknessAlpha.toFixed(3)})`;
+    // Subtle depth-driven spectral absorption tint (shallow teal-navy -> abyssal indigo)
+    const ambR = this.level.theme?.id === 'florida-karst' ? 8 : 2;
+    const ambG = Math.round(11 - depthFactor * 6);
+    const ambB = Math.round(18 + depthFactor * 4);
+    lctx.fillStyle = `rgba(${ambR}, ${ambG}, ${ambB}, ${darknessAlpha.toFixed(3)})`;
     lctx.fillRect(0, 0, lw, lh);
 
     // Cut out open-sky daylight, physical ray-cast cenote sun shafts, and torch cones
@@ -5410,25 +5540,25 @@ export class CaveRenderer {
       : null;
 
     const peerList = Array.isArray(peersInput) ? peersInput : (peersInput ? [peersInput] : []);
-    const peerTorches = peerList
-      .filter((p) => p && p.alive !== false && p.torchOn !== false)
-      .map((p) => ({
+    const peerTorches = [];
+    const maxTorchCullX = (cw / Math.max(1, scale)) * 0.5 + 16;
+    const maxTorchCullY = (ch / Math.max(1, scale)) * 0.55 + 16;
+    for (let i = 0; i < peerList.length; i++) {
+      const p = peerList[i];
+      if (!p || p.alive === false || p.torchOn === false) continue;
+      // Frustum-cull offscreen buddies before raycasting their torch fan
+      if (Math.abs(p.x - this.camX) > maxTorchCullX || Math.abs(p.y - this.camY) > maxTorchCullY) continue;
+      const ox = p.body?.hand ? p.body.hand.x : p.x;
+      const oy = p.body?.hand ? p.body.hand.y : p.y;
+      peerTorches.push({
         peer: p,
         torch: {
-          ox: p.body?.hand ? p.body.hand.x : p.x,
-          oy: p.body?.hand ? p.body.hand.y : p.y,
-          rays: castTorchFan(
-            this.level,
-            p.body?.hand ? p.body.hand.x : p.x,
-            p.body?.hand ? p.body.hand.y : p.y,
-            p.angle,
-            0.4,
-            14.0,
-            32,
-            siltClouds
-          ),
+          ox,
+          oy,
+          rays: castTorchFan(this.level, ox, oy, p.angle, 0.4, 14.0, 32, siltClouds),
         },
-      }));
+      });
+    }
 
     const cutoutStamp = this.glowStamps.cutout;
     const carveDiverLight = (d, torchData, rangeM) => {

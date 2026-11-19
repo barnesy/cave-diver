@@ -329,10 +329,12 @@ export function stepDivePhysiology(
   state.ascentRateMPerMin = state.ascentRateMPerMin * 0.84 + instantRateMPerMin * 0.16;
 
   // Gas consumption coupled directly to Heart Rate / breathing exertion (rest 16 L/min -> panic ~47 L/min)
+  // Above 90m (10 ATA), taper pressure multiplier slightly (semi-closed expedition gas efficiency) so 150–185m traverses stay viable
   const hrNorm = Math.max(0, (state.heartRateBpm - 68) / 100);
   const baseSacLPerMin = (16 + exertion * 11.5) * (1 + hrNorm * 0.85);
   const gasCompressionScale = 5.0;
-  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * pAmb * dt;
+  const effAmb = pAmb <= 10.0 ? pAmb : 10.0 + (pAmb - 10.0) * 0.48;
+  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * effAmb * dt;
 
   if (clampedDepth > 0.3) {
     tank.litersRemaining = Math.max(0, tank.litersRemaining - litersBurned);
@@ -359,14 +361,14 @@ export function stepDivePhysiology(
   }
 
   // 2. HYPEROXIA / O2 TOXICITY (High HR increases cardiac perfusion / O2 sensitivity slightly)
+  // 1.65 bar grace cutoff keeps hovering at 6.0m on O2 safe; cap max burn rate at 28%/s (~3.5s panic-recovery window)
   const hrToxMult = 1 + hrExcess * 0.3;
-  if (ppo2 > 1.605) {
-    const excess = ppo2 - 1.605;
-    // Rapidly spikes above 1.60 bar MOD (e.g., O2 at 12m is 2.2 bar -> ~22%/sec -> fatal in ~4.5s)
-    const rate = 6 + Math.pow(excess * 4.5, 2) * 8;
+  if (ppo2 > 1.65) {
+    const excess = ppo2 - 1.65;
+    const rate = Math.min(28, 8.5 + Math.pow(excess * 4.8, 2) * 10);
     state.cnsPercent = Math.min(100, state.cnsPercent + dt * rate * hrToxMult);
   } else if (ppo2 > 1.4) {
-    // Working 1.4-1.60 bar O2 deco window (realistic slow NOAA CNS clock so deep O2 deco is viable)
+    // Working 1.4-1.65 bar O2 deco window (realistic slow NOAA CNS clock so deep O2 deco is viable)
     state.cnsPercent = Math.min(100, state.cnsPercent + dt * 0.28 * hrToxMult);
   } else if (ppo2 <= 1.25) {
     state.cnsPercent = Math.max(0, state.cnsPercent - dt * 1.4);
@@ -383,11 +385,14 @@ export function stepDivePhysiology(
   const pAlvN2 = Math.max(0, pAmb - WATER_VAPOR_BAR) * gas.fN2;
   const pAlvHe = Math.max(0, pAmb - WATER_VAPOR_BAR) * gas.fHe;
 
+  // Gameplay-paced deep helium off-gassing above 9m keeps 120-185m deco stops engaging (1-2 min) rather than 8-11 min idle waiting
+  const deepHeOffgasMult = clampedDepth > 9.0 ? 2.2 : 1.0;
   for (let i = 0; i < state.compartments.length; i++) {
     const c = state.compartments[i];
     const spec = COMPARTMENTS[i];
     c.pN2 = schrienerUpdate(c.pN2, pAlvN2, dt, spec.halfN2);
-    c.pHe = schrienerUpdate(c.pHe, pAlvHe, dt, spec.halfHe);
+    const heDt = pAlvHe < c.pHe ? dt * deepHeOffgasMult : dt;
+    c.pHe = schrienerUpdate(c.pHe, pAlvHe, heDt, spec.halfHe);
   }
 
   const rawCeilingM = barToDepth(calcCeilingBar(state.compartments, GF_HIGH));
@@ -423,6 +428,16 @@ export function stepDivePhysiology(
     state.dcsStress = Math.min(100, state.dcsStress + dt * hrExcess * 1.4);
   }
 
+  // Track peak physiological stress across dive for honest health scoring
+  const curStress = Math.max(
+    state.cnsPercent || 0,
+    state.dcsStress || 0,
+    state.hypoxiaStress || 0,
+    state.cardiacStress || 0,
+    (state.narcosisLevel || 0) * 60
+  );
+  if (curStress > (state.peakStress || 0)) state.peakStress = curStress;
+
   // Warnings & Alarms
   const warnings = [];
   let critical = null;
@@ -434,13 +449,14 @@ export function stepDivePhysiology(
     warnings.push(`LOW GAS (${Math.round(tank.bar)} BAR)`);
   }
 
+  const onPlannedO2Deco = state.activeGasId === 'O2' && state.stopDepthM > 0 && ppo2 <= 1.65;
   if (ppo2 < 0.16 && clampedDepth > 0.2) {
     warnings.push('HYPOXIC MIX — SWITCH TO EAN32');
     critical = 'HYPOXIA';
-  } else if (ppo2 > 1.605) {
+  } else if (ppo2 > 1.65) {
     warnings.push(`HIGH PPO2 (${ppo2.toFixed(2)}) — O2 TOX!`);
     critical = 'O2 TOXICITY';
-  } else if (ppo2 > 1.4) {
+  } else if (ppo2 > 1.4 && !onPlannedO2Deco) {
     warnings.push(`PPO2 ELEVATED (${ppo2.toFixed(2)})`);
   }
 
@@ -564,10 +580,13 @@ export function getGasSwitchCoach(state, depthM, { ascending = false } = {}) {
     };
   }
 
-  // 3. Descending (or deep) on EAN32 past 20.5m: stop & switch to bottom Trimix well before 33.7m MOD
-  if (activeId === 'EAN32' && state.tanks.TMX1455.bar > 1 && ((!ascending && d >= 20.5) || d >= 26.0)) {
+  // 3. Descending (or deep) on EAN32 past safe TMX switch depth (dynamically raised above hypoxic floor for ultra-deep blends like TMX 6/82)
+  const tmxMinNormoxicM = Math.max(0, Math.ceil((0.19 / Math.max(0.05, tmxMix.fO2) - 1) * 10));
+  const descentSwitchM = Math.max(20.5, Math.min(25.5, tmxMinNormoxicM + 1.5));
+  if (activeId === 'EAN32' && state.tanks.TMX1455.bar > 1 && ((!ascending && d >= descentSwitchM) || d >= 26.5)) {
     const urgent = d >= 27.5 || state.ppo2 >= 1.32;
     const ppo2Str = Number.isFinite(state.ppo2) ? state.ppo2.toFixed(2) : '';
+    const lineLabelM = Math.round(Math.max(22, descentSwitchM));
     return {
       severity: urgent ? 'danger' : 'warn',
       action: 'STOP',
@@ -578,7 +597,7 @@ export function getGasSwitchCoach(state, depthM, { ascending = false } = {}) {
       shortLabel: urgent ? `⛔ STOP! SWITCH TO ${tmxMix.name} [2]` : `■ STOP · SWITCH TO ${tmxMix.name} [2]`,
       detail: urgent
         ? `${eanMix.name} toxic below 33m (PPO2 ${ppo2Str}) — tap here or press [2] NOW!`
-        : `Pause at 22m & switch from ${eanMix.name} to ${tmxMix.name} before descending deeper`,
+        : `Pause at ${lineLabelM}m & switch from ${eanMix.name} to ${tmxMix.name} before descending deeper`,
     };
   }
 
@@ -717,10 +736,11 @@ export function computeSiteDivePlan(level) {
 }
 
 /**
- * Donate emergency cylinder gas to an out-of-gas teammate while preserving donor safety reserve.
+ * Find the best safe cylinder a donor can share with a teammate without risking toxic fallback gas.
  */
-export function donateGasFromState(state, preferredGasId = null, maxDonateBar = 25) {
+export function getShareableGasCandidate(state, preferredGasId = null, maxDonateBar = 25, depthM = state?.depthM || 0) {
   if (!state?.tanks || state.alive === false) return null;
+  const mixes = state.mixes || GAS_MIXES;
   const candidates = [];
   if (preferredGasId && state.tanks[preferredGasId]) candidates.push(preferredGasId);
   if (state.activeGasId && state.tanks[state.activeGasId]) candidates.push(state.activeGasId);
@@ -732,12 +752,30 @@ export function donateGasFromState(state, preferredGasId = null, maxDonateBar = 
     tried.add(gasId);
     const tank = state.tanks[gasId];
     if (!tank || tank.bar <= 38) continue;
+    // Never donate O2 100% below 6.5m (hyperoxic seizure risk at depth)
+    if (gasId === 'O2' && depthM > 6.5) continue;
     const donatedBar = Math.min(maxDonateBar, Math.floor(tank.bar - 25));
     if (donatedBar < 8) continue;
-    tank.bar = Math.max(0, tank.bar - donatedBar);
-    return { gasId, donatedBar };
+    const mix = mixes[gasId] || GAS_MIXES[gasId];
+    return { gasId, donatedBar, gasName: mix?.name || gasId };
   }
   return null;
+}
+
+/**
+ * Donate emergency cylinder gas to an out-of-gas teammate while preserving donor safety reserve.
+ */
+export function donateGasFromState(state, preferredGasId = null, maxDonateBar = 25) {
+  const candidate = getShareableGasCandidate(state, preferredGasId, maxDonateBar, state?.depthM || 0);
+  if (!candidate) return null;
+  const tank = state.tanks[candidate.gasId];
+  const mix = state.mixes?.[candidate.gasId] || GAS_MIXES[candidate.gasId] || GAS_MIXES.EAN32;
+  const startBar = mix.startBar || 200;
+  tank.bar = Math.max(0, tank.bar - candidate.donatedBar);
+  if (Number.isFinite(tank.maxLiters) && tank.maxLiters > 0) {
+    tank.litersRemaining = Math.max(0, (tank.bar / startBar) * tank.maxLiters);
+  }
+  return { gasId: candidate.gasId, donatedBar: candidate.donatedBar };
 }
 
 /**
@@ -749,7 +787,11 @@ export function receiveGasIntoState(state, gasId, amountBar) {
   const tank = state.tanks[resolvedId];
   const mix = state.mixes?.[resolvedId] || GAS_MIXES[resolvedId] || GAS_MIXES.EAN32;
   if (!tank) return 0;
+  const startBar = mix.startBar || 200;
   const prev = tank.bar;
-  tank.bar = Math.min(mix.startBar || 200, prev + amountBar);
+  tank.bar = Math.min(startBar, prev + amountBar);
+  if (Number.isFinite(tank.maxLiters) && tank.maxLiters > 0) {
+    tank.litersRemaining = Math.min(tank.maxLiters, (tank.bar / startBar) * tank.maxLiters);
+  }
   return Math.max(0, Math.round((tank.bar - prev) * 10) / 10);
 }
