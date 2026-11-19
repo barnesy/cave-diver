@@ -746,6 +746,55 @@ html, body {
   }
 }
 
+/* Larger Expedition Map & Menu Layout on Tablet, Foldable & Desktop screens (> phone width) */
+@media (min-width: 641px) {
+  .menu-card {
+    width: min(920px, 100%);
+  }
+  .site-browser {
+    grid-template-columns: 1.65fr 1fr;
+    gap: 10px;
+  }
+  .site-map-panel,
+  .site-world-map {
+    min-height: clamp(300px, 38dvh, 430px);
+  }
+  .level-cards {
+    max-height: clamp(300px, 38dvh, 430px);
+  }
+  .site-browser.view-map .site-map-panel,
+  .site-browser.view-map .site-world-map {
+    min-height: clamp(360px, 48dvh, 540px);
+  }
+  .site-browser.view-list .level-cards {
+    max-height: clamp(320px, 42dvh, 460px);
+  }
+}
+
+@media (min-width: 1080px) {
+  .menu-card {
+    width: min(1060px, 100%);
+  }
+  #screen-menu.is-leaderboard .menu-card {
+    width: min(920px, 100%);
+  }
+  .site-browser {
+    grid-template-columns: 1.85fr 1fr;
+    gap: 12px;
+  }
+  .site-map-panel,
+  .site-world-map {
+    min-height: clamp(340px, 42dvh, 480px);
+  }
+  .level-cards {
+    max-height: clamp(340px, 42dvh, 480px);
+  }
+  .site-browser.view-map .site-map-panel,
+  .site-browser.view-map .site-world-map {
+    min-height: clamp(420px, 54dvh, 620px);
+  }
+}
+
 .sr-only-select {
   position: absolute;
   width: 1px;
