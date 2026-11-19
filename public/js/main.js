@@ -465,7 +465,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=90" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=91" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2228,6 +2228,7 @@ async function setActiveMenuTab(tab = 'solo') {
   const isLb = activeMenuTab === 'leaderboards';
 
   setHomeMenuOpen(false);
+  screenMenu.classList.toggle('is-leaderboard', isLb);
   btnOpenLeaderboard?.classList.toggle('active', isLb);
   if (homeMenuLbLabel) {
     homeMenuLbLabel.textContent = isLb ? '🤿 Back to Dive' : '🏆 Leaderboard';
@@ -2237,6 +2238,9 @@ async function setActiveMenuTab(tab = 'solo') {
   if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
   if (menuIdentityRow) menuIdentityRow.hidden = isLb;
   syncSitePickerVisibility();
+  if (isSolo) {
+    requestAnimationFrame(syncMenuDescToggle);
+  }
 
   if (changed) {
     if (isLb) {
