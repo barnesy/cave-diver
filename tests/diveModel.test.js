@@ -21,6 +21,7 @@ import {
   recordDiveInLogbook,
   seedLogbookFromEntries,
   formatLogbookSummary,
+  computeCertifications,
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
@@ -56,6 +57,8 @@ import {
   getEffectiveReelRemainingM,
   triggerWreckAction,
   computeSurgeWave,
+  sampleGhostPose,
+  applyPeerWreckAction,
 } from '../public/js/game/diveSession.js';
 import {
   buildExploreCells,
@@ -2125,4 +2128,70 @@ test('Shipwreck overhaul mechanics: shot-line zip, active net-cut, watertight ha
   assert.equal(fitzEco.jellies.length, 0, 'Freshwater Lake Superior wreck should not spawn ocean jellyfish');
   assert.ok(!fitzEco.anchored.some((a) => a.kind === 'seafan'), 'Freshwater wreck should not spawn ocean gorgonians');
   assert.ok(fitzEco.anchored.some((a) => a.kind === 'rusticle'), 'Fitzgerald should still have iron rusticles');
+});
+
+test('v96 bundles: co-op wreck sync & buddy net rescue, dive profile & PB ghost interpolation, certifications, and difficulty modes', () => {
+  const oriskany = getLevelById('uss-oriskany-carrier');
+
+  // 1. Co-op Buddy Net Rescue & Peer Wreck Action Sync
+  const sA = createDiveSession(oriskany, { diverName: 'Rescuer' });
+  const sB = createDiveSession(oriskany, { diverName: 'Buddy' });
+  const snag = oriskany.snagZones[0];
+  sA.diver.x = snag.x + snag.radius + 1.5; // nearby, NOT inside snag
+  sA.diver.y = snag.y;
+  const fakePeers = [{ id: 'p2', name: 'Buddy', x: snag.x, y: snag.y, alive: true }];
+  stepDiveSession(sA, { x: 0, y: 0 }, 0.05, { peers: fakePeers });
+  assert.equal(sA.buddySnagIndex, 0, 'Should detect tangled buddy inside nearby net');
+  assert.ok(sA.wreckActionPrompt?.label.includes('CUT Buddy FREE'), `Unexpected prompt: ${sA.wreckActionPrompt?.label}`);
+
+  let syncedEvt = null;
+  const rescueRes = triggerWreckAction(sA, {
+    onWreckSync: (actionKind, targetId) => { syncedEvt = { actionKind, targetId }; },
+  });
+  assert.equal(rescueRes.handled, true);
+  assert.equal(rescueRes.buddyRescue, true);
+  assert.deepEqual(syncedEvt, { actionKind: 'snag', targetId: snag.id });
+
+  // Apply synced wreck actions onto remote buddy's session
+  assert.equal(applyPeerWreckAction(sB, { by: 'Rescuer', actionKind: 'snag', targetId: snag.id }), true);
+  assert.ok(sB.cutSnagIds.has(snag.id), 'Remote buddy session should mark net cut');
+  const hatch = oriskany.watertightHatches[0];
+  assert.equal(applyPeerWreckAction(sB, { by: 'Rescuer', actionKind: 'hatch', targetId: hatch.id }), true);
+  assert.ok(sB.openedHatchIds.has(hatch.id), 'Remote buddy session should mark hatch unsealed');
+
+  // 2. Dive Computer Depth Profile & Compact PB Ghost Interpolation
+  const sProf = createDiveSession(oriskany);
+  for (let i = 0; i < 20; i++) {
+    stepDiveSession(sProf, { x: 0.4, y: 0.9 }, 0.2);
+  }
+  switchGas(sProf.diveState, 'TMX1455');
+  stepDiveSession(sProf, { x: 0.2, y: 0.5 }, 0.2);
+  assert.ok(sProf.diveProfile.length >= 3, 'Should record time/depth/gas dive profile samples');
+  assert.ok(sProf.diveProfile.some((p) => p.gas === 'TMX1455'), 'Should capture gas switch point in profile');
+  assert.ok(sProf.ghostTrack.length >= 4, 'Should record compact ghost breadcrumb track');
+  const pose = sampleGhostPose(sProf.ghostTrack, 1.5);
+  assert.ok(pose && Number.isFinite(pose.x) && Number.isFinite(pose.y), 'sampleGhostPose should interpolate cleanly');
+
+  // 3. Technical Certification Ladder
+  let book = createEmptyLogbook();
+  book = recordDiveInLogbook(book, { levelId: 'cenote-el-abismo', success: true, score: 2500, grade: 'A', maxDepthM: 50, diveTimeSec: 180 });
+  book = recordDiveInLogbook(book, { levelId: 'uss-oriskany-carrier', success: true, score: 2900, grade: 'S', maxDepthM: 65, diveTimeSec: 260 });
+  book = recordDiveInLogbook(book, { levelId: 'hmhs-britannic', success: true, score: 3400, grade: 'S', maxDepthM: 121, diveTimeSec: 440 });
+  const certs = computeCertifications(book, LEVELS);
+  const earnedIds = new Set(certs.earned.map((c) => c.id));
+  assert.ok(earnedIds.has('open-water'));
+  assert.ok(earnedIds.has('cavern'));
+  assert.ok(earnedIds.has('trimix-normoxic'));
+  assert.ok(earnedIds.has('wreck-penetration'));
+  assert.ok(earnedIds.has('hypoxic-120'));
+  assert.ok(certs.next && certs.next.id === 'full-cave', `Expected next cert full-cave, got ${certs.next?.id}`);
+
+  // 4. Difficulty Modes scale open-ocean drift currents appropriately (hardcore > guided)
+  const sGuided = createDiveSession(oriskany, { difficulty: 'guided' });
+  const sHard = createDiveSession(oriskany, { difficulty: 'hardcore' });
+  sGuided.diver.x = 20; sGuided.diver.y = 18;
+  sHard.diver.x = 20; sHard.diver.y = 18;
+  stepDiveSession(sGuided, { x: 0, y: 0 }, 0.25);
+  stepDiveSession(sHard, { x: 0, y: 0 }, 0.25);
+  assert.ok(sHard.diver.vx > sGuided.diver.vx * 1.5, `Hardcore drift (${sHard.diver.vx}) should exceed guided (${sGuided.diver.vx})`);
 });

@@ -809,6 +809,18 @@ export class P2pRoomCoordinator {
         break;
       }
 
+      case 'wreck_action': {
+        const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
+        const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
+        if (actionKind && targetId) {
+          this._broadcast(
+            { type: 'peer_wreck_action', playerId: p.id, by: p.name, actionKind, targetId },
+            p.id
+          );
+        }
+        break;
+      }
+
       case 'body_recovered': {
         if (!this.room.bodyRecoveredBy) this.room.bodyRecoveredBy = p.id;
         this._broadcast(

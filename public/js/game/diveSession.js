@@ -62,7 +62,7 @@ export function computeBreathProfile(diveState, exertion = 0) {
  */
 export function createDiveSession(
   level,
-  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0 } = {}
+  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard' } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
@@ -70,9 +70,11 @@ export function createDiveSession(
   const exploredCells = new Set();
   markExploredAround(exploreCells, exploredCells, spawnX, spawnY, 5.2);
   const exploredPct = Math.round((exploredCells.size / Math.max(1, exploreCells.length)) * 100);
+  const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
 
   return {
     level,
+    difficulty: cleanDiff,
     ascentConfig: getAscentConfig(level),
     diver: {
       x: spawnX,
@@ -86,6 +88,11 @@ export function createDiveSession(
       body: createDiverBody(spawnX, spawnY),
     },
     diveState: createDiveState({ mixOverrides: level.gasOverrides }),
+    diveProfile: [{ t: 0, d: Math.max(0, Number(spawnY.toFixed(1))), gas: 'EAN32', deco: 0 }],
+    _lastProfileSampleAt: 0,
+    _lastProfileGas: 'EAN32',
+    ghostTrack: [[0, Math.round(spawnX * 10), Math.round(spawnY * 10), 2]],
+    _lastGhostSampleAt: 0,
     checkpointsHit: new Set(),
     collectedIds: new Set(),
     collectBursts: [],
@@ -110,6 +117,8 @@ export function createDiveSession(
     clippedToShotLine: false,
     cutSnagIds: new Set(),
     activeSnagIndex: -1,
+    buddySnagIndex: -1,
+    buddySnagName: '',
     openedHatchIds: new Set(),
     crankingHatchId: null,
     crankingHatchProgress: 0,
@@ -153,8 +162,79 @@ export function computeSurgeWave(zone, timeSec = 0) {
 }
 
 /**
+ * Smoothly interpolates a compact PB ghost track [[t10, x10, y10, a10], ...] at timeSec.
+ * Returns null if track is empty or finished.
+ */
+export function sampleGhostPose(track, timeSec) {
+  if (!Array.isArray(track) || track.length < 2) return null;
+  const t10 = Math.max(0, timeSec * 10);
+  const last = track[track.length - 1];
+  if (t10 >= last[0]) {
+    if (t10 > last[0] + 60) return null; // Fade out 6s after PB surfaced
+    return { x: last[1] / 10, y: last[2] / 10, angle: last[3] / 10, finished: true };
+  }
+  // Binary search for bracketing frames
+  let lo = 0;
+  let hi = track.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if (track[mid][0] <= t10) lo = mid;
+    else hi = mid;
+  }
+  const a = track[lo];
+  const b = track[hi];
+  const span = Math.max(1, b[0] - a[0]);
+  const f = Math.min(1, Math.max(0, (t10 - a[0]) / span));
+  const angA = a[3] / 10;
+  const angB = b[3] / 10;
+  let dAng = angB - angA;
+  while (dAng > Math.PI) dAng -= Math.PI * 2;
+  while (dAng < -Math.PI) dAng += Math.PI * 2;
+  return {
+    x: (a[1] + (b[1] - a[1]) * f) / 10,
+    y: (a[2] + (b[2] - a[2]) * f) / 10,
+    angle: angA + dAng * f,
+    finished: false,
+  };
+}
+
+/**
+ * Applies a remote co-op buddy's wreck action (opening a hatch or slicing a net) to local state.
+ */
+export function applyPeerWreckAction(session, msg, callbacks = {}) {
+  if (!session || !msg || !msg.actionKind || !msg.targetId) return false;
+  const by = msg.by || 'Buddy';
+  if (msg.actionKind === 'hatch') {
+    if (session.openedHatchIds.has(msg.targetId)) return false;
+    session.openedHatchIds.add(msg.targetId);
+    if (session.crankingHatchId === msg.targetId) {
+      session.crankingHatchId = null;
+      session.crankingHatchProgress = 0;
+    }
+    const hatch = session.level?.watertightHatches?.find((h) => h.id === msg.targetId);
+    callbacks.onHatchOpen?.(hatch);
+    callbacks.onToast?.(`🔓 ${by} unsealed ${hatch?.label || 'Watertight Hatch'}!`, 2.6);
+    return true;
+  }
+  if (msg.actionKind === 'snag') {
+    if (session.cutSnagIds.has(msg.targetId)) return false;
+    session.cutSnagIds.add(msg.targetId);
+    const snIdx = session.level?.snagZones?.findIndex((s, i) => (s.id || `snag_${i}`) === msg.targetId);
+    if (snIdx === session.activeSnagIndex) {
+      session.activeSnagIndex = -1;
+      session.diveState.panicLevel = Math.max(0, (session.diveState.panicLevel || 0) - 0.25);
+    }
+    const snag = snIdx >= 0 ? session.level.snagZones[snIdx] : null;
+    callbacks.onLineCut?.(snag);
+    callbacks.onToast?.(`✂️ ${by} cut ${snag?.label || 'fishing net'} clear!`, 2.6);
+    return true;
+  }
+  return false;
+}
+
+/**
  * Triggers the active contextual shipwreck action:
- * 1) Slice free from a tangled fishing net / cable (permanently clears snag)
+ * 1) Slice free from a tangled fishing net / cable (or rescue a tangled co-op buddy!)
  * 2) Crank open a sealed watertight bulkhead hatch (unlocks shortcut/vault + bonus)
  * 3) Clip onto or unclip from the open-water shot line for fast controlled zip-descent/ascent
  */
@@ -164,19 +244,27 @@ export function triggerWreckAction(session, callbacks = {}) {
   }
   const { level, diver, diveState, siltClouds, bubbles } = session;
 
-  // 1. Priority 1: Slice free from active fishing-net / cable snag
-  if (session.activeSnagIndex >= 0 && Array.isArray(level.snagZones)) {
-    const idx = session.activeSnagIndex;
-    const snag = level.snagZones[idx];
+  // 1. Priority 1: Slice free from active fishing-net / cable snag (self or tangled co-op buddy!)
+  const snagIdx = session.activeSnagIndex >= 0 ? session.activeSnagIndex : session.buddySnagIndex;
+  if (snagIdx >= 0 && Array.isArray(level.snagZones)) {
+    const isBuddyRescue = session.activeSnagIndex < 0 && session.buddySnagIndex >= 0;
+    const snag = level.snagZones[snagIdx];
     if (snag) {
-      const snagKey = snag.id || `snag_${idx}`;
+      const snagKey = snag.id || `snag_${snagIdx}`;
       session.cutSnagIds.add(snagKey);
       session.activeSnagIndex = -1;
+      session.buddySnagIndex = -1;
       diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.28);
       diveState.heartRateBpm = Math.max(72, (diveState.heartRateBpm || 80) - 14);
       callbacks.onLineCut?.(snag);
-      callbacks.onToast?.(`✂️ Cut free from ${snag.label || 'net snag'}! Path cleared.`, 2.6);
-      return { handled: true, kind: 'cut-net', targetId: snagKey };
+      callbacks.onWreckSync?.('snag', snagKey);
+      callbacks.onToast?.(
+        isBuddyRescue
+          ? `✂️ Cut ${session.buddySnagName || 'your buddy'} free from ${snag.label || 'net snag'}!`
+          : `✂️ Cut free from ${snag.label || 'net snag'}! Path cleared.`,
+        2.6
+      );
+      return { handled: true, kind: 'cut-net', targetId: snagKey, buddyRescue: isBuddyRescue };
     }
   }
 
@@ -235,6 +323,7 @@ function _completeHatchOpen(session, hatch, callbacks, siltClouds, bubbles) {
   session.crankTickAccum = 0;
   session.hatchBonusScore = (session.hatchBonusScore || 0) + (hatch.bonusPoints || 150);
   callbacks.onHatchOpen?.(hatch);
+  callbacks.onWreckSync?.('hatch', hatch.id);
   callbacks.onToast?.(`🔓 ${hatch.label || 'Watertight Hatch'} unsealed! (+${hatch.bonusPoints || 150} pts)`, 3.0);
 
   // Dramatic burst of trapped pressurized bubbles & rust silt when the seal breaks
@@ -634,11 +723,12 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
           session.siltClouds.length < 132 &&
           (session.rustPercolateCooldown || 0) <= 0
         ) {
+          const diffMult = session.difficulty === 'hardcore' ? 1.38 : session.difficulty === 'guided' ? 0.55 : 1.0;
           const panicBoost = diveState?.panicLevel || 0;
           const intensity = profile.intensity || 0.3;
           // Calm breathing rarely dislodges rust; heavy/panicked exhaust drops steady curtains
-          if (Math.random() < 0.18 + panicBoost * 0.45 + intensity * 0.22) {
-            session.rustPercolateCooldown = Math.max(0.42, 1.55 - panicBoost * 0.95 - intensity * 0.35);
+          if (Math.random() < (0.18 + panicBoost * 0.45 + intensity * 0.22) * diffMult) {
+            session.rustPercolateCooldown = Math.max(0.32, (1.55 - panicBoost * 0.95 - intensity * 0.35) / diffMult);
             const rustCloud = spawnSiltPlume(session.siltClouds, {
               x: b.x + (Math.random() - 0.5) * 0.35,
               y: b.y + 0.18,
@@ -783,14 +873,15 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   // Layered open-ocean drift currents on shipwreck dives (sheltered inside steel hull or when clipped to shot line)
+  const diffCurrentMult = session.difficulty === 'hardcore' ? 1.28 : session.difficulty === 'guided' ? 0.7 : 1.0;
   if (Array.isArray(level.driftCurrents) && clearanceM > 1.75 && !session.clippedToShotLine) {
     const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
     for (let c = 0; c < level.driftCurrents.length; c++) {
       const cur = level.driftCurrents[c];
       if (diver.y >= cur.yMin && diver.y <= cur.yMax) {
         const pulse = 0.82 + 0.18 * Math.sin(session.simTimeSec * 0.65 + c * 1.9);
-        diver.vx += (cur.vx || 0) * shelter * pulse * dt;
-        diver.vy += (cur.vy || 0) * shelter * pulse * dt;
+        diver.vx += (cur.vx || 0) * shelter * pulse * diffCurrentMult * dt;
+        diver.vy += (cur.vy || 0) * shelter * pulse * diffCurrentMult * dt;
       }
     }
   }
@@ -806,8 +897,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         const wave = computeSurgeWave(zone, session.simTimeSec);
         if (wave !== 0) {
           const falloff = 0.45 + 0.55 * (1 - dist / zr);
-          diver.vx += (zone.vx || 0) * wave * falloff * dt;
-          diver.vy += (zone.vy || 0) * wave * falloff * dt;
+          diver.vx += (zone.vx || 0) * wave * falloff * diffCurrentMult * dt;
+          diver.vy += (zone.vy || 0) * wave * falloff * diffCurrentMult * dt;
           if (Math.abs(wave) > 0.65 && session.surgeWarnCooldown <= 0) {
             session.surgeWarnCooldown = 6.0;
             callbacks.onToast?.(`🌊 ${zone.label || 'Hull-breach surge'} — wait for the lull or ride the flow!`, 2.6);
@@ -817,9 +908,12 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Shipwreck fishing-net & dangling cable entanglement hazards (cuttable with shears [E]!)
+  // Shipwreck fishing-net & dangling cable entanglement hazards (cuttable with shears [E] — self or co-op buddy!)
   if (session.snagWarnCooldown > 0) session.snagWarnCooldown -= dt;
   session.activeSnagIndex = -1;
+  session.buddySnagIndex = -1;
+  session.buddySnagName = '';
+  const peerList = Array.isArray(callbacks.peers) ? callbacks.peers : null;
   if (Array.isArray(level.snagZones)) {
     for (let s = 0; s < level.snagZones.length; s++) {
       const snag = level.snagZones[s];
@@ -833,13 +927,26 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         const drag = Math.exp(-(2.6 + grip * 2.5) * dt);
         diver.vx *= drag;
         diver.vy *= drag;
-        diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * (0.22 + grip * 0.25));
-        diveState.heartRateBpm = Math.min(192, (diveState.heartRateBpm || 68) + dt * (11 + grip * 12));
+        const panicScale = session.difficulty === 'hardcore' ? 1.25 : session.difficulty === 'guided' ? 0.65 : 1.0;
+        diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * (0.22 + grip * 0.25) * panicScale);
+        diveState.heartRateBpm = Math.min(192, (diveState.heartRateBpm || 68) + dt * (11 + grip * 12) * panicScale);
         if (session.snagWarnCooldown <= 0) {
           session.snagWarnCooldown = 5.5;
           callbacks.onToast?.(`🕸️ Tangled in ${snag.label || 'fishing net'} — press [E] / Cut Net!`, 2.8);
         }
         break;
+      }
+      // Buddy Net Rescue: check if a co-op buddy is tangled inside this snag and we're close enough to slice them free!
+      if (peerList && session.buddySnagIndex < 0 && dist <= sr + 3.4) {
+        for (let pIdx = 0; pIdx < peerList.length; pIdx++) {
+          const peer = peerList[pIdx];
+          if (!peer || peer.alive === false) continue;
+          if (Math.hypot(peer.x - snag.x, peer.y - snag.y) <= sr + 0.3) {
+            session.buddySnagIndex = s;
+            session.buddySnagName = peer.name || 'Buddy';
+            break;
+          }
+        }
       }
     }
   }
@@ -951,6 +1058,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         kind: 'cut-net',
         label: `✂️ CUT FREE [E]`,
         detail: sn?.label || 'Tangled Net',
+        progress: 0,
+      };
+    } else if (session.buddySnagIndex >= 0) {
+      const sn = level.snagZones?.[session.buddySnagIndex];
+      session.wreckActionPrompt = {
+        kind: 'cut-net',
+        label: `✂️ CUT ${session.buddySnagName || 'BUDDY'} FREE [E]`,
+        detail: sn?.label || 'Buddy Tangled in Net',
         progress: 0,
       };
     } else if (nearbyHatch) {
@@ -1233,6 +1348,31 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   stepBubbles(session, dt, callbacks, exertion);
   session.localSiltDensity = stepSiltPhysics(level, siltClouds, diver, dt);
+
+  // Record Dive Computer Depth Profile (every 1.5s or immediately on gas switch) & PB Ghost track (every 0.6s)
+  const tDive = diveState.diveTimeSec || session.simTimeSec;
+  if (session.diveProfile && session.diveProfile.length < 450) {
+    const gasChanged = diveState.activeGasId !== session._lastProfileGas;
+    if (gasChanged || tDive - (session._lastProfileSampleAt || 0) >= 1.5) {
+      session._lastProfileSampleAt = tDive;
+      session._lastProfileGas = diveState.activeGasId;
+      session.diveProfile.push({
+        t: Number(tDive.toFixed(1)),
+        d: Number(Math.max(0, diver.y).toFixed(1)),
+        gas: diveState.activeGasId,
+        deco: diveState.stopDepthM || 0,
+      });
+    }
+  }
+  if (session.ghostTrack && session.ghostTrack.length < 280 && session.simTimeSec - (session._lastGhostSampleAt || 0) >= 0.6) {
+    session._lastGhostSampleAt = session.simTimeSec;
+    session.ghostTrack.push([
+      Math.round(session.simTimeSec * 10),
+      Math.round(diver.x * 10),
+      Math.round(diver.y * 10),
+      Math.round(diver.angle * 10),
+    ]);
+  }
 
   const nextCheckpoint = level.checkpoints.find((cp) => !checkpointsHit.has(cp.id)) || null;
   const buildSummary = () =>

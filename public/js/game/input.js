@@ -29,6 +29,8 @@ export class InputController {
     this.onReelRewind = onReelRewind;
     this.onWreckAction = onWreckAction;
     this.onPauseToggle = onPauseToggle;
+    this._prevGpButtons = [];
+    this._gpRewindHeld = false;
 
     this._bindKeyboard();
     this._bindTouchStick();
@@ -142,7 +144,77 @@ export class InputController {
   }
 
   isRewindHeld() {
-    return this.keys.has('KeyR');
+    return this.keys.has('KeyR') || this._gpRewindHeld;
+  }
+
+  _pollGamepad() {
+    if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') {
+      this._gpRewindHeld = false;
+      return { x: 0, y: 0 };
+    }
+    let pads;
+    try {
+      pads = navigator.getGamepads();
+    } catch {
+      return { x: 0, y: 0 };
+    }
+    let gp = null;
+    if (pads) {
+      for (let i = 0; i < pads.length; i++) {
+        if (pads[i] && pads[i].connected) {
+          gp = pads[i];
+          break;
+        }
+      }
+    }
+    if (!gp) {
+      this._gpRewindHeld = false;
+      this._prevGpButtons.length = 0;
+      return { x: 0, y: 0 };
+    }
+
+    const pressed = (idx) => Boolean(gp.buttons?.[idx]?.pressed);
+    const justPressed = (idx) => pressed(idx) && !this._prevGpButtons[idx];
+
+    // Standard Gamepad mapping (Xbox / PS / Backbone / Steam Deck)
+    if (justPressed(0)) {
+      // A / Cross: contextual Wreck Action if available, else Recommended Gas Switch
+      if (!this.onWreckAction?.()) this.onRecommendedGasSwitch?.();
+    }
+    if (justPressed(1)) this.onReelToggle?.(); // B / Circle
+    if (justPressed(2)) this.onRecommendedGasSwitch?.(); // X / Square
+    if (justPressed(3)) this.onTorchToggle?.(); // Y / Triangle
+    if (justPressed(5)) this.onWreckAction?.(); // RB / R1
+    if (justPressed(9)) this.onPauseToggle?.(); // Start / Options
+    if (justPressed(4)) this.onReelRewind?.(); // LB / L1
+    this._gpRewindHeld = pressed(4);
+
+    // Save button states for edge detection
+    const bLen = gp.buttons?.length || 0;
+    for (let i = 0; i < bLen; i++) {
+      this._prevGpButtons[i] = Boolean(gp.buttons[i]?.pressed);
+    }
+
+    // Left stick + D-pad swimming with 0.14 deadzone & LT slow frog-kick precision
+    let gx = gp.axes?.[0] || 0;
+    let gy = gp.axes?.[1] || 0;
+    const rawMag = Math.hypot(gx, gy);
+    if (rawMag <= 0.14) {
+      gx = 0;
+      gy = 0;
+    } else {
+      const scaled = Math.pow(Math.min(1, (rawMag - 0.14) / 0.86), 1.35);
+      gx = (gx / rawMag) * scaled;
+      gy = (gy / rawMag) * scaled;
+    }
+    if (pressed(12)) gy -= 1; // D-pad Up
+    if (pressed(13)) gy += 1; // D-pad Down
+    if (pressed(14)) gx -= 1; // D-pad Left
+    if (pressed(15)) gx += 1; // D-pad Right
+
+    const ltVal = gp.buttons?.[6]?.value ?? (pressed(6) ? 1 : 0);
+    const precision = ltVal > 0.35 ? 0.45 : 1.0;
+    return { x: gx * precision, y: gy * precision };
   }
 
   getThrust() {
@@ -162,6 +234,10 @@ export class InputController {
       x += kx * precision;
       y += ky * precision;
     }
+
+    const gpVec = this._pollGamepad();
+    x += gpVec.x;
+    y += gpVec.y;
 
     const mag = Math.hypot(x, y);
     if (mag > 1) {

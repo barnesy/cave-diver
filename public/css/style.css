@@ -4064,3 +4064,128 @@ select:focus-visible {
   0%, 100% { transform: translateX(-50%) scale(1); }
   50% { transform: translateX(-50%) scale(1.045); }
 }
+
+/* Post-Dive Real Dive Computer Depth Profile Graph */
+.debrief-profile-wrap {
+  margin: 10px 0 8px;
+  padding: 9px 11px 8px;
+  border-radius: 11px;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  background: linear-gradient(180deg, rgba(6, 18, 34, 0.9), rgba(3, 10, 20, 0.94));
+}
+.debrief-profile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.debrief-profile-title {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+}
+.debrief-profile-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+.debrief-profile-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.prof-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.prof-dot.ean { background: #38bdf8; }
+.prof-dot.tmx { background: #fbbf24; }
+.prof-dot.o2 { background: #34d399; }
+.debrief-profile-svg {
+  display: block;
+  width: 100%;
+  height: 116px;
+}
+
+/* Technical Certification Badges Strip (Debrief + Career Logbook) */
+.debrief-certs,
+.lb-cert-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+.cert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  background: rgba(14, 165, 233, 0.14);
+  color: #e0f2fe;
+}
+.cert-pill.locked {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: rgba(148, 163, 184, 0.72);
+  font-weight: 600;
+}
+
+/* First-Dive Quick Briefing Modal */
+.dive-guide-card {
+  max-width: 520px;
+}
+.dive-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.dive-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: rgba(15, 23, 42, 0.72);
+}
+.dive-guide-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.24);
+  border: 1px solid rgba(56, 189, 248, 0.58);
+  color: #7dd3fc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.dive-guide-step strong {
+  display: block;
+  font-size: 0.84rem;
+  color: #f8fafc;
+  margin-bottom: 2px;
+}
+.dive-guide-step p {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.42;
+  color: #cbd5e1;
+}

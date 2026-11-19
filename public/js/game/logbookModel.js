@@ -109,3 +109,86 @@ export function formatLogbookSummary(rawBook, totalSites = 25) {
     campaignMedal,
   };
 }
+
+/**
+ * Technical Diving Certification Ladder computed from the player's career logbook.
+ */
+export function computeCertifications(rawBook, levels = []) {
+  const book = normalizeBook(rawBook);
+  const clearedIds = Object.keys(book.cleared);
+  const clearedCount = clearedIds.length;
+
+  const levelMap = new Map();
+  for (const lvl of levels || []) {
+    if (lvl?.id) levelMap.set(lvl.id, lvl);
+  }
+  let wrecksCleared = 0;
+  let unlinedCleared = 0;
+  let sGrades = 0;
+  for (const lid of clearedIds) {
+    const rec = book.cleared[lid];
+    if (rec?.grade === 'S' || rec?.grade === 'S+') sGrades++;
+    const lvl = levelMap.get(lid);
+    if (lvl?.isWreck || lid.includes('oriskany') || lid.includes('andrea-doria') || lid.includes('britannic') || lid.includes('victoria') || lid.includes('fitzgerald')) {
+      wrecksCleared++;
+    }
+    if (lvl && !lvl.lined) unlinedCleared++;
+  }
+
+  const certs = [
+    {
+      id: 'open-water',
+      icon: '🤿',
+      title: 'Open Water',
+      requirement: 'Clear 1 expedition',
+      earned: clearedCount >= 1,
+    },
+    {
+      id: 'cavern',
+      icon: '🕳️',
+      title: 'Cavern Diver',
+      requirement: 'Clear 3 sites',
+      earned: clearedCount >= 3,
+    },
+    {
+      id: 'trimix-normoxic',
+      icon: '🧪',
+      title: 'Normoxic Trimix',
+      requirement: 'Reach 60m+ depth',
+      earned: book.deepestM >= 60,
+    },
+    {
+      id: 'full-cave',
+      icon: '🔦',
+      title: 'Full Cave',
+      requirement: 'Clear 6 sites (incl. unlined reel)',
+      earned: clearedCount >= 6 && (unlinedCleared >= 1 || levels.length === 0),
+    },
+    {
+      id: 'wreck-penetration',
+      icon: '🚢',
+      title: 'Wreck Penetration',
+      requirement: 'Clear 2 shipwrecks',
+      earned: wrecksCleared >= 2,
+    },
+    {
+      id: 'hypoxic-120',
+      icon: '🌊',
+      title: 'Hypoxic 120m',
+      requirement: 'Reach 120m+ depth',
+      earned: book.deepestM >= 120,
+    },
+    {
+      id: 'master-explorer',
+      icon: '🧭',
+      title: 'Master Explorer',
+      requirement: 'Clear 15+ sites & 5+ S-ranks',
+      earned: clearedCount >= 15 && sGrades >= 5,
+    },
+  ];
+
+  const earned = certs.filter((c) => c.earned);
+  const next = certs.find((c) => !c.earned) || null;
+  const highest = earned.length > 0 ? earned[earned.length - 1] : null;
+  return { certs, earned, highest, next, wrecksCleared, sGrades };
+}

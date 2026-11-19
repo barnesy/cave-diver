@@ -15,6 +15,7 @@ import {
   recordDiveInLogbook,
   seedLogbookFromEntries,
   formatLogbookSummary,
+  computeCertifications,
 } from './game/logbookModel.js';
 import {
   createDiveSession,
@@ -24,6 +25,8 @@ import {
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
   triggerWreckAction,
+  sampleGhostPose,
+  applyPeerWreckAction,
 } from './game/diveSession.js';
 import {
   computeDiverScoreSummary,
@@ -467,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=95" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=96" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1017,6 +1020,198 @@ const wreckActionDetailEl = document.getElementById('wreck-action-detail');
 const wreckActionProgressEl = document.getElementById('wreck-action-progress');
 let lastWreckActionKey = '';
 
+// Difficulty Realism Mode (Guided / Standard Tech / Hardcore), PB Ghost Replay & First-Dive Guide
+const DIFFICULTY_PREF_KEY = 'caveDiverDifficulty_v1';
+const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
+const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
+const DIFFICULTY_MODES = [
+  { id: 'guided', label: 'Guided', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
+  { id: 'standard', label: 'Standard Tech', btnText: '🎚️ Mode: Standard Tech', tag: '' },
+  { id: 'hardcore', label: 'Hardcore', btnText: '🎚️ Mode: Hardcore 🔥', tag: ' · HARDCORE' },
+];
+let activeDifficulty = 'standard';
+let ghostEnabled = true;
+let activeGhostTrack = null;
+let pendingGuideLaunch = false;
+
+try {
+  const savedDiff = localStorage.getItem(DIFFICULTY_PREF_KEY);
+  if (savedDiff === 'guided' || savedDiff === 'standard' || savedDiff === 'hardcore') {
+    activeDifficulty = savedDiff;
+  }
+  const savedGhost = localStorage.getItem(GHOST_PREF_KEY);
+  if (savedGhost === '0') ghostEnabled = false;
+} catch {}
+
+const btnDifficultyCycle = document.getElementById('btn-difficulty-cycle');
+const btnGhostToggle = document.getElementById('btn-ghost-toggle');
+const btnOpenGuide = document.getElementById('btn-open-guide');
+const modalDiveGuide = document.getElementById('modal-dive-guide');
+const btnDiveGuideClose = document.getElementById('btn-dive-guide-close');
+const btnDiveGuideStart = document.getElementById('btn-dive-guide-start');
+
+function syncPreferenceMenuButtons() {
+  const diffMeta = DIFFICULTY_MODES.find((d) => d.id === activeDifficulty) || DIFFICULTY_MODES[1];
+  if (btnDifficultyCycle) btnDifficultyCycle.textContent = diffMeta.btnText;
+  if (btnGhostToggle) btnGhostToggle.textContent = ghostEnabled ? '👻 PB Ghost: On' : '👻 PB Ghost: Off';
+}
+syncPreferenceMenuButtons();
+
+btnDifficultyCycle?.addEventListener('click', () => {
+  const idx = DIFFICULTY_MODES.findIndex((d) => d.id === activeDifficulty);
+  const next = DIFFICULTY_MODES[(idx + 1) % DIFFICULTY_MODES.length];
+  activeDifficulty = next.id;
+  try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
+  syncPreferenceMenuButtons();
+  showToast(
+    activeDifficulty === 'hardcore'
+      ? '🔥 Hardcore Mode: No compass, stronger surges & heavy percolation!'
+      : activeDifficulty === 'guided'
+        ? '🧭 Guided Mode: Always-on compass & gentler silt-outs.'
+        : '🤿 Standard Tech Mode active.',
+    2.6
+  );
+});
+
+btnGhostToggle?.addEventListener('click', () => {
+  ghostEnabled = !ghostEnabled;
+  try { localStorage.setItem(GHOST_PREF_KEY, ghostEnabled ? '1' : '0'); } catch {}
+  syncPreferenceMenuButtons();
+  showToast(ghostEnabled ? '👻 Personal Best Ghost Diver enabled.' : '👻 Personal Best Ghost Diver hidden.', 2.0);
+});
+
+function openDiveGuideModal(launchAfter = false) {
+  pendingGuideLaunch = Boolean(launchAfter);
+  if (modalDiveGuide) modalDiveGuide.hidden = false;
+  setHomeMenuOpen(false);
+}
+
+function closeDiveGuideModal(startNow = false) {
+  if (modalDiveGuide) modalDiveGuide.hidden = true;
+  try { localStorage.setItem(BRIEFED_PREF_KEY, '1'); } catch {}
+  const shouldLaunch = startNow && pendingGuideLaunch;
+  pendingGuideLaunch = false;
+  if (shouldLaunch) launchOpenCoopDive();
+}
+
+btnOpenGuide?.addEventListener('click', () => openDiveGuideModal(false));
+btnDiveGuideClose?.addEventListener('click', () => closeDiveGuideModal(false));
+btnDiveGuideStart?.addEventListener('click', () => closeDiveGuideModal(true));
+modalDiveGuide?.addEventListener('click', (e) => {
+  if (e.target === modalDiveGuide) closeDiveGuideModal(false);
+});
+
+function loadGhostTrack(levelId) {
+  if (!levelId) return null;
+  try {
+    const raw = localStorage.getItem(`caveDiverGhost_${levelId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length >= 2 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGhostTrack(levelId, track) {
+  if (!levelId || !Array.isArray(track) || track.length < 2) return;
+  try {
+    localStorage.setItem(`caveDiverGhost_${levelId}`, JSON.stringify(track.slice(0, 280)));
+  } catch {}
+}
+
+function renderDebriefDepthProfile(profile, maxDepthM, success) {
+  const wrap = document.getElementById('debrief-profile-wrap');
+  const svg = document.getElementById('debrief-profile-svg');
+  if (!wrap || !svg) return;
+  if (!Array.isArray(profile) || profile.length < 2) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const W = 420;
+  const H = 124;
+  const padL = 34;
+  const padR = 12;
+  const padT = 12;
+  const padB = 20;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const maxT = Math.max(10, profile[profile.length - 1].t || 10);
+  const maxD = Math.max(12, Math.ceil((maxDepthM || Math.max(...profile.map((p) => p.d))) / 10) * 10);
+
+  const sx = (t) => padL + (t / maxT) * plotW;
+  const sy = (d) => padT + (d / maxD) * plotH;
+
+  const gasColor = (g) => (g === 'O2' ? '#34d399' : g === 'TMX1455' ? '#fbbf24' : '#38bdf8');
+
+  let markup = '';
+  // Subtle depth horizontal grid lines (0m, 50%, 100%)
+  for (const frac of [0, 0.5, 1]) {
+    const dVal = Math.round(maxD * frac);
+    const y = sy(dVal).toFixed(1);
+    markup += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(148,163,184,0.16)" stroke-dasharray="${frac === 0 ? '' : '3 3'}"/>`;
+    markup += `<text x="${padL - 5}" y="${Number(y) + 3}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${dVal}m</text>`;
+  }
+
+  // Soft translucent area fill under profile curve
+  let areaPts = `${sx(profile[0].t).toFixed(1)},${padT} `;
+  for (const p of profile) {
+    areaPts += `${sx(p.t).toFixed(1)},${sy(p.d).toFixed(1)} `;
+  }
+  areaPts += `${sx(profile[profile.length - 1].t).toFixed(1)},${padT}`;
+  markup += `<polygon points="${areaPts}" fill="rgba(14,165,233,0.12)"/>`;
+
+  // Highlight deco-stop segments with soft emerald shading
+  for (let i = 1; i < profile.length; i++) {
+    const a = profile[i - 1];
+    const b = profile[i];
+    const x1 = sx(a.t).toFixed(1);
+    const y1 = sy(a.d).toFixed(1);
+    const x2 = sx(b.t).toFixed(1);
+    const y2 = sy(b.d).toFixed(1);
+    if (b.deco > 0 && Math.abs(b.d - b.deco) <= 2.2) {
+      markup += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(52,211,153,0.35)" stroke-width="6" stroke-linecap="round"/>`;
+    }
+    markup += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${gasColor(b.gas)}" stroke-width="2.3" stroke-linecap="round"/>`;
+  }
+
+  // Peak depth marker pin
+  let peak = profile[0];
+  for (const p of profile) {
+    if (p.d > peak.d) peak = p;
+  }
+  const px = sx(peak.t).toFixed(1);
+  const py = sy(peak.d).toFixed(1);
+  markup += `<circle cx="${px}" cy="${py}" r="3.4" fill="#f87171" stroke="#0f172a" stroke-width="1.2"/>`;
+  markup += `<text x="${Math.min(W - 44, Math.max(padL + 24, Number(px)))}" y="${Math.min(H - 5, Number(py) + 12)}" text-anchor="middle" fill="#fca5a5" font-size="9" font-weight="700" font-family="ui-monospace,monospace">MAX ${peak.d.toFixed(0)}m</text>`;
+
+  // Final point (surface or incident marker)
+  const endP = profile[profile.length - 1];
+  markup += `<circle cx="${sx(endP.t).toFixed(1)}" cy="${sy(endP.d).toFixed(1)}" r="3.4" fill="${success ? '#34d399' : '#ef4444'}" stroke="#0f172a" stroke-width="1.2"/>`;
+  markup += `<text x="${W - padR}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${formatRunClock(maxT)}</text>`;
+  svg.innerHTML = markup;
+}
+
+function renderDebriefCertifications(logbook) {
+  const el = document.getElementById('debrief-certs');
+  if (!el) return;
+  const info = computeCertifications(logbook, LEVELS);
+  if (info.earned.length === 0 && !info.next) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  let html = '';
+  for (const c of info.earned) {
+    html += `<span class="cert-pill" title="${escapeHtml(c.requirement)}">${c.icon} ${escapeHtml(c.title)}</span>`;
+  }
+  if (info.next) {
+    html += `<span class="cert-pill locked" title="${escapeHtml(info.next.requirement)}">🔒 Next: ${escapeHtml(info.next.title)} (${escapeHtml(info.next.requirement)})</span>`;
+  }
+  el.innerHTML = html;
+}
+
 function handleWreckAction() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
   const res = triggerWreckAction(session, sessionStepCallbacks);
@@ -1115,7 +1310,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   const diverName = playerNameInput?.value.trim() || 'Diver 1';
   const slotOffsets = [0, -1.35, 1.35, -2.5];
   const spawnOffsetX = multiplayer ? (slotOffsets[lan.getPlayerSlotIndex()] ?? 0) : 0;
-  session = createDiveSession(activeLevel, { diverName, spawnOffsetX });
+  session = createDiveSession(activeLevel, { diverName, spawnOffsetX, difficulty: activeDifficulty });
+  activeGhostTrack = ghostEnabled ? loadGhostTrack(activeLevel.id) : null;
   session.endedState = null;
   session.localOutcome = null;
   session._awaitingHostStart = Boolean(restoredState?.awaitingHostStart);
@@ -1290,10 +1486,24 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     prevBest = Number(localStorage.getItem(bestKey) || 0);
     if (success && teamSummary.teamScore > prevBest) {
       localStorage.setItem(bestKey, String(teamSummary.teamScore));
+      if (session?.ghostTrack?.length >= 2) {
+        saveGhostTrack(level.id, session.ghostTrack);
+      }
     }
   } catch {
     // ignore storage restriction
   }
+  // Append final profile point and render the Dive Computer Depth Profile Graph + Earned Certifications
+  if (session?.diveProfile) {
+    session.diveProfile.push({
+      t: Number((diveState.diveTimeSec || session.simTimeSec || 0).toFixed(1)),
+      d: Number(Math.max(0, diver.y).toFixed(1)),
+      gas: diveState.activeGasId,
+      deco: diveState.stopDepthM || 0,
+    });
+  }
+  renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success);
+
   const updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
     levelId: level.id,
     success,
@@ -1304,6 +1514,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   });
   saveCareerLogbook(updatedLogbook);
   renderCareerSummary();
+  renderDebriefCertifications(updatedLogbook);
   bestEl.textContent =
     success && teamSummary.teamScore > prevBest
       ? 'NEW PERSONAL BEST!'
@@ -1775,13 +1986,16 @@ function saveCareerLogbook(book) {
 
 function renderCareerSummary() {
   if (!lbCareerSummaryEl) return;
-  const s = formatLogbookSummary(loadCareerLogbook(), LEVELS.length);
+  const book = loadCareerLogbook();
+  const s = formatLogbookSummary(book, LEVELS.length);
+  const certInfo = computeCertifications(book, LEVELS);
+  const certLabel = certInfo.highest ? `${certInfo.highest.icon} ${certInfo.highest.title}` : s.campaignMedal;
   lbCareerSummaryEl.hidden = false;
   lbCareerSummaryEl.innerHTML = `
     <div class="lb-career-cell"><span>Sites</span><strong>${s.clearedCount}/${s.totalSites}</strong></div>
     <div class="lb-career-cell"><span>Dives</span><strong>${s.totalDives}</strong></div>
     <div class="lb-career-cell"><span>Deepest</span><strong>${s.deepestM.toFixed(0)}m</strong></div>
-    <div class="lb-career-cell"><span>Rating</span><strong>${escapeHtml(s.campaignMedal)}</strong></div>
+    <div class="lb-career-cell"><span>Cert</span><strong>${escapeHtml(certLabel)}</strong></div>
   `;
 }
 
@@ -2277,6 +2491,16 @@ async function launchOpenCoopDive() {
 }
 
 btnPlaySolo.addEventListener('click', () => {
+  // Show a skippable 3-step technical quick briefing on a brand-new diver's very first launch
+  let briefed = true;
+  try {
+    const book = loadCareerLogbook();
+    briefed = Boolean(localStorage.getItem(BRIEFED_PREF_KEY)) || (book.totalDives || 0) > 0;
+  } catch {}
+  if (!briefed && modalDiveGuide) {
+    openDiveGuideModal(true);
+    return;
+  }
   launchOpenCoopDive();
 });
 
@@ -3304,6 +3528,11 @@ lan.on('peer_checkpoint', (msg) => {
   showToast('Buddy tagged checkpoint!', 2.0);
 });
 
+lan.on('peer_wreck_action', (msg) => {
+  if (!session) return;
+  applyPeerWreckAction(session, msg, sessionStepCallbacks);
+});
+
 lan.on('peer_collectible', (msg) => {
   if (!session || !msg?.collectibleId || session.collectedIds.has(msg.collectibleId)) return;
   session.collectedIds.add(msg.collectibleId);
@@ -3429,6 +3658,9 @@ const sessionStepCallbacks = {
   onHatchOpen: () => audio.playHatchOpen(),
   onLineCut: () => audio.playLineCut(),
   onClipLine: (clipped) => audio.playClipLine(clipped),
+  onWreckSync: (actionKind, targetId) => {
+    if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
+  },
   onCheckpoint: (cp) => {
     audio.playCheckpoint();
     showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
@@ -3502,6 +3734,7 @@ function stepSimulation(dt) {
     } else {
       rewindHoldTimer = 0;
     }
+    sessionStepCallbacks.peers = isMultiplayer ? lan.getPeers() : null;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
     syncWreckActionHud(session.wreckActionPrompt);
@@ -3853,6 +4086,8 @@ function frame(nowMs) {
             crankingHatchProgress: session.crankingHatchProgress,
           }
         : null,
+      ghostPose: ghostEnabled && activeGhostTrack ? sampleGhostPose(activeGhostTrack, session.simTimeSec) : null,
+      difficulty: session.difficulty || activeDifficulty,
       timeSec: session.simTimeSec,
       dt,
     });

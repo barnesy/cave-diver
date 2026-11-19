@@ -1013,6 +1013,26 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'wreck_action': {
+        const room = rooms.get(client.roomCode);
+        if (!room) return;
+        const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
+        const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
+        if (!actionKind || !targetId) break;
+        broadcastRoom(
+          room,
+          {
+            type: 'peer_wreck_action',
+            playerId: client.id,
+            by: client.name,
+            actionKind,
+            targetId,
+          },
+          client.id
+        );
+        break;
+      }
+
       case 'body_recovered': {
         const room = rooms.get(client.roomCode);
         if (!room) return;

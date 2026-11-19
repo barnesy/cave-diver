@@ -108,16 +108,20 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
     ctx.fill();
     ctx.restore();
 
-    const grad = ctx.createLinearGradient(0, -sz * 0.25, 0, sz * 0.25);
-    grad.addColorStop(0, '#64748b');
-    grad.addColorStop(0.5, '#e2e8f0');
-    grad.addColorStop(1, '#f8fafc');
-    ctx.fillStyle = grad;
+    ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
     ctx.moveTo(sz * 1.35, 0);
     ctx.quadraticCurveTo(sz * 0.35, -sz * 0.24, -sz * 1.18, -sz * 0.08);
     ctx.lineTo(-sz * 1.18, sz * 0.08);
     ctx.quadraticCurveTo(sz * 0.35, sz * 0.24, sz * 1.35, 0);
+    ctx.closePath();
+    ctx.fill();
+    // Counter-shaded silver-slate dorsal ridge
+    ctx.fillStyle = 'rgba(71, 85, 105, 0.52)';
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.3, -sz * 0.01);
+    ctx.quadraticCurveTo(sz * 0.35, -sz * 0.24, -sz * 1.16, -sz * 0.08);
+    ctx.lineTo(-sz * 1.16, 0);
     ctx.closePath();
     ctx.fill();
 
@@ -187,11 +191,7 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
     ctx.fill();
     ctx.restore();
 
-    const catGrad = ctx.createLinearGradient(0, -sz * 0.36, 0, sz * 0.36);
-    catGrad.addColorStop(0, '#94a3b8');
-    catGrad.addColorStop(0.5, '#cbd5e1');
-    catGrad.addColorStop(1, '#f1f5f9');
-    ctx.fillStyle = catGrad;
+    ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
     ctx.moveTo(sz * 0.92, 0.05 * sz);
     ctx.bezierCurveTo(sz * 0.5, -sz * 0.4, -sz * 0.4, -sz * 0.34, -sz * 0.88, 0);
@@ -237,16 +237,18 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
   ctx.closePath();
   ctx.fill();
 
-  // Sculpted gradient body
-  const bodyGrad = ctx.createLinearGradient(0, -sz * 0.52, 0, sz * 0.52);
-  bodyGrad.addColorStop(0, f.color);
-  bodyGrad.addColorStop(0.58, f.color);
-  bodyGrad.addColorStop(1, f.kind === 'cichlid' ? '#fb7185' : '#ecfeff');
-  ctx.fillStyle = bodyGrad;
+  // Sculpted two-tone body (zero per-frame gradient allocation)
+  ctx.fillStyle = f.color;
   ctx.beginPath();
   ctx.moveTo(sz * 0.96, 0.04 * sz);
   ctx.bezierCurveTo(sz * 0.55, -sz * 0.58, -sz * 0.45, -sz * 0.5, -sz * 0.84, 0);
   ctx.bezierCurveTo(-sz * 0.45, sz * 0.5, sz * 0.55, sz * 0.55, sz * 0.96, 0.04 * sz);
+  ctx.fill();
+  ctx.fillStyle = f.kind === 'cichlid' ? 'rgba(251, 113, 133, 0.42)' : 'rgba(236, 254, 255, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(sz * 0.84, 0.08 * sz);
+  ctx.quadraticCurveTo(sz * 0.1, sz * 0.46, -sz * 0.72, 0.04 * sz);
+  ctx.quadraticCurveTo(sz * 0.1, sz * 0.18, sz * 0.84, 0.08 * sz);
   ctx.fill();
 
   if (f.kind === 'cichlid') {
@@ -336,10 +338,7 @@ export function drawStyledTurtle(ctx, t, sx, sy, scale, timeSec) {
   ctx.fill();
 
   // Head & neck with orange/crimson cenote slider ear stripe
-  const headGrad = ctx.createRadialGradient(sz * 0.85, -sz * 0.02, 0, sz * 0.85, 0, sz * 0.3);
-  headGrad.addColorStop(0, '#65a30d');
-  headGrad.addColorStop(1, '#365314');
-  ctx.fillStyle = headGrad;
+  ctx.fillStyle = '#4d7c0f';
   ctx.beginPath();
   ctx.ellipse(sz * 0.82, 0.02 * sz, sz * 0.26, sz * 0.17, -0.06, 0, Math.PI * 2);
   ctx.fill();
@@ -363,11 +362,7 @@ export function drawStyledTurtle(ctx, t, sx, sy, scale, timeSec) {
   ctx.fill();
 
   // Sculpted Domed Carapace Shell
-  const shellGrad = ctx.createLinearGradient(0, -sz * 0.44, 0, sz * 0.28);
-  shellGrad.addColorStop(0, '#84cc16');
-  shellGrad.addColorStop(0.4, '#3f6212');
-  shellGrad.addColorStop(1, '#1a2e05');
-  ctx.fillStyle = shellGrad;
+  ctx.fillStyle = '#3f6212';
   ctx.beginPath();
   ctx.moveTo(sz * 0.65, 0.08 * sz);
   ctx.bezierCurveTo(sz * 0.45, -sz * 0.5, -sz * 0.48, -sz * 0.46, -sz * 0.82, 0.1 * sz);
@@ -704,16 +699,18 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.closePath();
     ctx.fill();
 
-    // Counter-shaded torpedo torso
-    const grad = ctx.createLinearGradient(0, -sz * 0.32, 0, sz * 0.28);
-    grad.addColorStop(0, '#475569');
-    grad.addColorStop(0.58, '#64748b');
-    grad.addColorStop(1, '#cbd5e1');
-    ctx.fillStyle = grad;
+    // Counter-shaded torpedo torso (two-tone, zero per-frame gradient allocation)
+    ctx.fillStyle = '#5a6b80';
     ctx.beginPath();
     ctx.moveTo(sz * 1.45, sz * 0.02);
     ctx.bezierCurveTo(sz * 0.85, -sz * 0.34, -sz * 0.4, -sz * 0.28, -sz * 1.25, 0);
     ctx.bezierCurveTo(-sz * 0.4, sz * 0.24, sz * 0.82, sz * 0.28, sz * 1.45, sz * 0.02);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(203, 213, 225, 0.58)';
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.25, sz * 0.04);
+    ctx.quadraticCurveTo(sz * 0.2, sz * 0.25, -sz * 1.05, sz * 0.03);
+    ctx.quadraticCurveTo(sz * 0.2, sz * 0.08, sz * 1.25, sz * 0.04);
     ctx.fill();
 
     // Gill slits & dark eye
@@ -749,16 +746,18 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.closePath();
     ctx.fill();
 
-    // Heavy mottled body
-    const bodyGrad = ctx.createLinearGradient(0, -sz * 0.48, 0, sz * 0.48);
-    bodyGrad.addColorStop(0, isTrout ? '#475569' : '#4a3525');
-    bodyGrad.addColorStop(0.55, isTrout ? '#64748b' : '#78563a');
-    bodyGrad.addColorStop(1, isTrout ? '#94a3b8' : '#a8896c');
-    ctx.fillStyle = bodyGrad;
+    // Heavy mottled body (zero per-frame gradient allocation)
+    ctx.fillStyle = isTrout ? '#5c6c80' : '#6c4d34';
     ctx.beginPath();
     ctx.moveTo(sz * 1.05, sz * 0.06);
     ctx.bezierCurveTo(sz * 0.65, -sz * 0.56, -sz * 0.45, -sz * 0.5, -sz * 0.92, 0);
     ctx.bezierCurveTo(-sz * 0.45, sz * 0.48, sz * 0.58, sz * 0.52, sz * 1.05, sz * 0.06);
+    ctx.fill();
+    ctx.fillStyle = isTrout ? 'rgba(148, 163, 184, 0.48)' : 'rgba(168, 137, 108, 0.44)';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.92, sz * 0.12);
+    ctx.quadraticCurveTo(sz * 0.1, sz * 0.46, -sz * 0.78, sz * 0.06);
+    ctx.quadraticCurveTo(sz * 0.1, sz * 0.18, sz * 0.92, sz * 0.12);
     ctx.fill();
 
     // Mottled spots + glowing reflective eye in torchlight

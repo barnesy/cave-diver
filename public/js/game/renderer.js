@@ -1316,6 +1316,8 @@ export class CaveRenderer {
     bubbles,
     ecosystem,
     wreckState = null,
+    ghostPose = null,
+    difficulty = 'standard',
     timeSec,
     dt,
   }) {
@@ -1505,6 +1507,9 @@ export class CaveRenderer {
     if (ecosystem) {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
     }
+    if (ghostPose) {
+      this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec);
+    }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
@@ -1512,7 +1517,8 @@ export class CaveRenderer {
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
     this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
-    if (!this.level.hideWaypointCompass) {
+    const showCompass = difficulty === 'guided' ? true : difficulty === 'hardcore' ? false : !this.level.hideWaypointCompass;
+    if (showCompass) {
       this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
     }
     this._drawPeerEdgeIndicators(ctx, cw, ch, diver, peerList, toScreenX, toScreenY, timeSec);
@@ -4972,6 +4978,64 @@ export class CaveRenderer {
         drawStyledMegafauna(ctx, m, toScreenX(m.x), toScreenY(m.y), scale, timeSec);
       }
     }
+    ctx.restore();
+  }
+
+  _drawGhostDiver(ctx, ghost, toScreenX, toScreenY, scale, timeSec) {
+    if (!ghost) return;
+    const sx = toScreenX(ghost.x);
+    const sy = toScreenY(ghost.y);
+    const u = scale;
+    const pulse = 0.72 + 0.28 * Math.sin(timeSec * 3.4);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // Subtle holographic cyan aura
+    const stamp = this.glowStamps?.cyan;
+    if (stamp) {
+      ctx.globalAlpha = 0.24 * pulse;
+      const gr = u * 1.15;
+      ctx.drawImage(stamp, -gr, -gr, gr * 2, gr * 2);
+    }
+
+    // Translucent diver silhouette oriented along PB travel angle
+    ctx.save();
+    ctx.rotate(ghost.angle || 0);
+    if (Math.cos(ghost.angle || 0) < 0) ctx.scale(1, -1);
+    ctx.globalAlpha = (ghost.finished ? 0.25 : 0.48) * pulse;
+    ctx.strokeStyle = '#67e8f9';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+    ctx.lineWidth = Math.max(1.2, u * 0.045);
+
+    // Torso & twinset cylinder outline
+    ctx.beginPath();
+    ctx.ellipse(0, 0, u * 0.44, u * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Head
+    ctx.beginPath();
+    ctx.arc(u * 0.52, -u * 0.04, u * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Sweeping animated fin stroke
+    const kick = Math.sin(timeSec * 6.5) * u * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.42, 0);
+    ctx.lineTo(-u * 0.85, -u * 0.08 + kick);
+    ctx.lineTo(-u * 1.08, -u * 0.14 + kick);
+    ctx.moveTo(-u * 0.42, 0);
+    ctx.lineTo(-u * 0.85, u * 0.08 - kick);
+    ctx.lineTo(-u * 1.08, u * 0.14 - kick);
+    ctx.stroke();
+    ctx.restore();
+
+    // Crisp floating PB GHOST label
+    ctx.globalAlpha = 0.78;
+    ctx.font = `700 ${Math.max(9, Math.round(u * 0.28))}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#a5f3fc';
+    ctx.fillText('👻 PB GHOST', 0, -u * 0.55);
     ctx.restore();
   }
 
