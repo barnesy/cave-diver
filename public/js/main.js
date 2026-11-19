@@ -87,8 +87,11 @@ const inlineLoaderEl = document.getElementById('inline-level-loader');
 const inlineLoaderLabelEl = document.getElementById('inline-level-loader-label');
 const inlineLoaderFillEl = document.getElementById('inline-loader-fill');
 const playerNameInput = document.getElementById('input-player-name');
-const menuTabsEl = document.getElementById('menu-tabs');
-const tabBtnSolo = document.getElementById('tab-btn-solo');
+const btnHomeMenu = document.getElementById('btn-home-menu');
+const homeMenuPopover = document.getElementById('home-menu-popover');
+const homeMenuUpdateDot = document.getElementById('home-menu-update-dot');
+const homeMenuLbLabel = document.getElementById('home-menu-lb-label');
+const btnLbBack = document.getElementById('btn-lb-back');
 const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
@@ -460,7 +463,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=87" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=88" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1046,6 +1049,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   cancelDebriefAnimations();
   setHudMenuOpen(false);
+  setHomeMenuOpen(false);
   screenMenu.classList.remove('menu-submerging');
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
@@ -2155,6 +2159,33 @@ function syncSitePickerVisibility() {
   menuSitePicker.hidden = activeMenuTab === 'leaderboards';
 }
 
+function setHomeMenuOpen(open) {
+  if (!homeMenuPopover || !btnHomeMenu) return;
+  const next = Boolean(open);
+  homeMenuPopover.hidden = !next;
+  btnHomeMenu.setAttribute('aria-expanded', String(next));
+  btnHomeMenu.classList.toggle('active', next);
+}
+
+btnHomeMenu?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setHomeMenuOpen(Boolean(homeMenuPopover?.hidden));
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (!homeMenuPopover || homeMenuPopover.hidden) return;
+  const wrap = btnHomeMenu?.closest('.home-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    setHomeMenuOpen(false);
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && homeMenuPopover && !homeMenuPopover.hidden) {
+    setHomeMenuOpen(false);
+  }
+});
+
 async function setActiveMenuTab(tab = 'solo') {
   const prevTab = activeMenuTab;
   activeMenuTab = tab === 'leaderboards' ? 'leaderboards' : 'solo';
@@ -2162,11 +2193,11 @@ async function setActiveMenuTab(tab = 'solo') {
   const isSolo = activeMenuTab === 'solo';
   const isLb = activeMenuTab === 'leaderboards';
 
-  menuTabsEl?.style.setProperty('--tab-index', isLb ? '1' : '0');
-  tabBtnSolo?.classList.toggle('active', isSolo);
-  tabBtnSolo?.setAttribute('aria-selected', String(isSolo));
+  setHomeMenuOpen(false);
   btnOpenLeaderboard?.classList.toggle('active', isLb);
-  btnOpenLeaderboard?.setAttribute('aria-selected', String(isLb));
+  if (homeMenuLbLabel) {
+    homeMenuLbLabel.textContent = isLb ? '🤿 Back to Dive' : '🏆 Leaderboard';
+  }
 
   if (soloPanel) soloPanel.hidden = !isSolo;
   if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
@@ -2191,8 +2222,10 @@ async function setActiveMenuTab(tab = 'solo') {
   }
 }
 
-tabBtnSolo?.addEventListener('click', () => setActiveMenuTab('solo'));
-btnOpenLeaderboard?.addEventListener('click', () => setActiveMenuTab('leaderboards'));
+btnOpenLeaderboard?.addEventListener('click', () => {
+  setActiveMenuTab(activeMenuTab === 'leaderboards' ? 'solo' : 'leaderboards');
+});
+btnLbBack?.addEventListener('click', () => setActiveMenuTab('solo'));
 
 leaderboardPanel?.addEventListener('click', (e) => {
   const modeBtn = e.target.closest('button[data-lb-mode]');
@@ -2634,7 +2667,7 @@ function syncRadioUi() {
   const tr = audio.radio.getCurrentTrack();
   const active = tr.id !== 'off';
   if (btnMenuRadio) {
-    btnMenuRadio.textContent = audio.getRadioButtonLabel();
+    btnMenuRadio.textContent = active ? `🎵 Music: ${tr.name}` : '📻 Music: Off';
     btnMenuRadio.classList.toggle('active', active);
   }
   if (btnHudRadio) {
@@ -3727,6 +3760,9 @@ function setupPwaSupport() {
     }
     if (pwaUpdateBanner) {
       pwaUpdateBanner.hidden = false;
+    }
+    if (homeMenuUpdateDot) {
+      homeMenuUpdateDot.hidden = false;
     }
     if (btnPwaUpdate && !applyingUpdate) {
       btnPwaUpdate.textContent = detectedRemoteVer ? `⬆ v${detectedRemoteVer}` : '⬆ Update';

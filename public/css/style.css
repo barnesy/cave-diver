@@ -3192,9 +3192,167 @@ select:focus-visible {
 
 .menu-card {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   animation: menuCardSurface 0.48s var(--ease-buoyant) both;
   transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s var(--ease-buoyant), opacity 0.25s ease;
+}
+
+/* Home Header Popover Menu (Leaderboard, Music, Version, Install) */
+.home-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 30;
+}
+.home-menu-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  background: rgba(15, 23, 42, 0.86);
+  color: #e0f2fe;
+  font-size: 1.05rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 11, 20, 0.45);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s var(--ease-spring), box-shadow 0.2s ease;
+}
+.home-menu-btn:hover {
+  border-color: rgba(56, 189, 248, 0.72);
+  background: rgba(14, 116, 144, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.28);
+}
+.home-menu-btn:active {
+  transform: scale(0.95);
+}
+.home-menu-btn.active {
+  border-color: var(--cyan);
+  background: rgba(14, 165, 233, 0.26);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.22);
+}
+.home-menu-glyph {
+  line-height: 1;
+  transition: transform 0.24s var(--ease-spring);
+}
+.home-menu-btn.active .home-menu-glyph {
+  transform: rotate(90deg);
+}
+.home-menu-update-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 1.5px solid #081222;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.85);
+  animation: gasPulse 1.4s ease-in-out infinite;
+}
+@keyframes popoverDropIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.home-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 224px;
+  padding: 6px;
+  border-radius: 13px;
+  background: linear-gradient(175deg, rgba(10, 22, 42, 0.98), rgba(5, 12, 24, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(186, 230, 253, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transform-origin: top right;
+  z-index: 45;
+}
+.home-menu-popover:not([hidden]) {
+  animation: popoverDropIn 0.24s var(--ease-spring) both;
+}
+.home-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e2e8f0;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.14s ease;
+}
+.home-menu-item:hover {
+  background: rgba(14, 165, 233, 0.18);
+  border-color: rgba(56, 189, 248, 0.34);
+  color: #f8fafc;
+}
+.home-menu-item:active {
+  transform: scale(0.98);
+}
+.home-menu-item.active {
+  background: rgba(14, 116, 144, 0.28);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
+}
+.home-menu-chevron {
+  font-size: 1rem;
+  color: #7dd3fc;
+  line-height: 1;
+}
+.home-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(148, 163, 184, 0.18);
+}
+.home-menu-ver-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 4px 10px;
+}
+.home-menu-ver-lbl {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+.lb-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.lb-nav-title {
+  font-family: ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #7dd3fc;
+}
+.lb-back-btn {
+  font-weight: 800;
 }
 .menu-card::before {
   content: '';
