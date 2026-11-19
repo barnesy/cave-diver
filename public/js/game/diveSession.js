@@ -1,9 +1,61 @@
 import { getAscentConfig } from '../levels/index.js';
 import { createDiveState, stepDivePhysiology } from '../physics/diveModel.js';
-import { resolveDiverCollision, evaluateCaveSDF } from './collision.js';
+import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary } from './scoring.js';
+
+const MAX_BUBBLES = 240;
+const _bubbleNormalScratch = { nx: 0, ny: -1 };
+
+/**
+ * Compute realistic scuba breathing cadence & intensity from heart rate, panic, stress, and exertion.
+ * Calm divers breathe slowly (~10.5 breaths/min with a relaxed pause); elevated HR or panic accelerates
+ * into rapid, high-volume gasps (~28-40 breaths/min) with minimal rest between breaths.
+ */
+export function computeBreathProfile(diveState, exertion = 0) {
+  const hrBpm = diveState?.heartRateBpm ?? 68;
+  const panicLevel = diveState?.panicLevel ?? 0;
+  const hypoxiaStress = diveState?.hypoxiaStress ?? 0;
+  const dcsStress = diveState?.dcsStress ?? 0;
+  const cardiacStress = diveState?.cardiacStress ?? 0;
+
+  const hrNorm = Math.max(0, Math.min(1, (hrBpm - 65) / 115));
+  const panicStress = Math.max(
+    0,
+    Math.min(1, Math.max(panicLevel, hypoxiaStress / 75, dcsStress / 115, cardiacStress / 90))
+  );
+  const exNorm = Math.max(0, Math.min(1.2, exertion));
+  const drive = Math.max(0, Math.min(1.35, hrNorm * 0.62 + panicStress * 0.56 + exNorm * 0.24));
+  const clampedDrive = Math.min(1, drive);
+
+  // Calm: ~10.5 BPM (5.7s cycle) -> Hard finning: ~18 BPM -> Elevated HR/panic: 26-39 BPM (1.5-2.3s cycle)
+  const breathsPerMin = 10.5 + drive * 21.5;
+  const cycleSec = 60 / breathsPerMin;
+
+  // Phase boundaries over [0, 1): inhale -> brief hold -> exhale -> end-expiratory rest
+  const inhaleEnd = 0.27 + clampedDrive * 0.08;
+  const holdDur = 0.08 - clampedDrive * 0.06;
+  const holdEnd = inhaleEnd + holdDur;
+  const exhaleDur = 0.42 + clampedDrive * 0.12;
+  const exhaleEnd = Math.min(0.95, holdEnd + exhaleDur);
+
+  const intensity = Math.max(0.32, Math.min(1.4, 0.35 + drive * 0.78));
+
+  return {
+    breathsPerMin,
+    cycleSec,
+    inhaleEnd,
+    holdEnd,
+    exhaleEnd,
+    inhaleSec: cycleSec * inhaleEnd,
+    exhaleSec: cycleSec * (exhaleEnd - holdEnd),
+    intensity,
+    drive,
+    panic: panicStress,
+    hrBpm,
+  };
+}
 
 /**
  * Create a self-contained dive simulation session for any registered level.
@@ -60,6 +112,16 @@ export function createDiveSession(
     localSiltDensity: 0,
     bubbles: [],
     bubbleTimer: 0,
+    breath: {
+      phase: 0.34, // starts near end of first inhale/hold so diver exhales soon after submerging
+      state: 'hold', // 'inhale' | 'hold' | 'exhale' | 'rest'
+      breathsPerMin: 10.5,
+      intensity: 0.35,
+      lungFill: 0.85,
+      emitAccum: 0,
+      exhaleCount: 0,
+      inhaleCount: 0,
+    },
     simTimeSec: 0,
   };
 }
@@ -186,33 +248,296 @@ export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed) {
   return spawned;
 }
 
+function spawnExhaustBubble(bubbles, x, y, vx, vy, { primary = true, panic = 0, intensity = 0.5, depthM = 10, portSign = 1 } = {}) {
+  if (bubbles.length >= MAX_BUBBLES) {
+    // Drop oldest bubble cleanly to keep particle count bounded during frantic panic bursts
+    bubbles.shift();
+  }
+  const baseR = primary
+    ? 0.068 + Math.random() * (0.056 + panic * 0.028)
+    : 0.024 + Math.random() * 0.032;
+  const targetVy = primary
+    ? -(1.45 + (baseR - 0.06) * 8.5 + Math.random() * 0.45)
+    : -(0.62 + Math.random() * 0.58);
+  const spread = (primary ? 0.42 : 0.68) * (1 + panic * 0.65);
+  bubbles.push({
+    x: x + (Math.random() - 0.5) * 0.08,
+    y: y + (Math.random() - 0.5) * 0.07,
+    vx: vx + portSign * (0.28 + Math.random() * 0.38) * (0.75 + intensity * 0.45) + (Math.random() - 0.5) * spread,
+    vy: vy - (0.35 + Math.random() * 0.55) * (0.8 + intensity * 0.35),
+    targetVy,
+    baseR,
+    r: baseR,
+    maxR: Math.min(0.24, baseR * 1.95),
+    spawnDepth: Math.max(0.5, depthM),
+    wobbleFreq: primary ? 5.2 + Math.random() * 3.8 : 3.2 + Math.random() * 2.5,
+    wobbleAmp: primary ? 0.34 + Math.random() * 0.36 : 0.16 + Math.random() * 0.18,
+    wobblePhase: Math.random() * Math.PI * 2,
+    age: 0,
+    maxLife: primary ? 4.4 + Math.random() * 2.0 : 3.0 + Math.random() * 1.8,
+    life: primary ? 4.4 + Math.random() * 2.0 : 3.0 + Math.random() * 1.8,
+    trapped: false,
+    primary,
+  });
+}
+
+function getDiverMouthPos(diver) {
+  const angle = diver.angle || 0;
+  const faceSign = diver.body?.facingSign ?? (Math.cos(angle) >= 0 ? 1 : -1);
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const mouthX = diver.x + cosA * 0.52 + sinA * faceSign * 0.06;
+  const mouthY = diver.y + sinA * 0.52 - cosA * faceSign * 0.06;
+  // Perpendicular axis for twin-port regulator exhaust tee
+  const perpX = -sinA;
+  const perpY = cosA;
+  return { mouthX, mouthY, perpX, perpY };
+}
+
 function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
-  const { diver, bubbles } = session;
-  session.bubbleTimer -= dt;
-  if (session.bubbleTimer <= 0 && diver.y > 0.6) {
-    session.bubbleTimer = Math.max(0.18, 0.34 - Math.min(0.14, exertion * 0.1) + Math.random() * 0.18);
-    callbacks.onExhale?.(exertion);
-    const faceSign = diver.body?.facingSign ?? (Math.cos(diver.angle) >= 0 ? 1 : -1);
-    const mouthX = diver.x + Math.cos(diver.angle) * 0.52 + Math.sin(diver.angle) * faceSign * 0.08;
-    const mouthY = diver.y + Math.sin(diver.angle) * 0.52 - Math.cos(diver.angle) * faceSign * 0.08;
-    for (let i = 0; i < 2; i++) {
-      bubbles.push({
-        x: mouthX + (Math.random() - 0.5) * 0.14,
-        y: mouthY + (Math.random() - 0.5) * 0.14,
-        vy: -1.6 - Math.random() * 0.8,
-        vx: (Math.random() - 0.5) * 0.25,
-        r: 0.055 + Math.random() * 0.055,
-        life: 3.5,
+  const { diver, diveState, bubbles, level } = session;
+  if (!session.breath) {
+    session.breath = {
+      phase: 0.34,
+      state: 'hold',
+      breathsPerMin: 10.5,
+      intensity: 0.35,
+      lungFill: 0.85,
+      emitAccum: 0,
+      exhaleCount: 0,
+      inhaleCount: 0,
+    };
+  }
+  const breath = session.breath;
+  const profile = computeBreathProfile(diveState, exertion);
+  breath.breathsPerMin = profile.breathsPerMin;
+  breath.intensity = profile.intensity;
+
+  const activeTank = diveState?.tanks?.[diveState?.activeGasId];
+  const hasGas = !activeTank || activeTank.bar > 0.05;
+  const canBreathe = diveState?.alive !== false && diver.y > 0.55 && hasGas;
+
+  if (canBreathe) {
+    const prevState = breath.state;
+    const prevPhase = breath.phase;
+    breath.phase = (breath.phase + dt / profile.cycleSec) % 1.0;
+
+    let nextState = 'rest';
+    if (breath.phase < profile.inhaleEnd) {
+      nextState = 'inhale';
+      const u = breath.phase / Math.max(0.05, profile.inhaleEnd);
+      breath.lungFill = 0.15 + 0.85 * Math.sin(u * Math.PI * 0.5);
+    } else if (breath.phase < profile.holdEnd) {
+      nextState = 'hold';
+      breath.lungFill = 1.0;
+    } else if (breath.phase < profile.exhaleEnd) {
+      nextState = 'exhale';
+      const u = (breath.phase - profile.holdEnd) / Math.max(0.05, profile.exhaleEnd - profile.holdEnd);
+      breath.lungFill = 0.15 + 0.85 * Math.cos(u * Math.PI * 0.5);
+    } else {
+      nextState = 'rest';
+      breath.lungFill = 0.15;
+    }
+    breath.state = nextState;
+
+    const audioPayload = {
+      intensity: profile.intensity,
+      panic: profile.panic,
+      hrBpm: profile.hrBpm,
+      depthM: Math.max(0, diver.y),
+      exertion,
+    };
+
+    // Detect clean cycle transition into inhale (including wrap-around)
+    if (nextState === 'inhale' && (prevState !== 'inhale' || breath.phase < prevPhase)) {
+      breath.inhaleCount += 1;
+      callbacks.onInhale?.({ ...audioPayload, durationSec: profile.inhaleSec });
+    }
+
+    // Detect transition into exhale -> trigger regulator exhaust sound & initial twin-port burst
+    if (nextState === 'exhale' && prevState !== 'exhale') {
+      breath.exhaleCount += 1;
+      breath.emitAccum = 0;
+      callbacks.onExhale?.({ ...audioPayload, durationSec: profile.exhaleSec });
+
+      const { mouthX, mouthY, perpX, perpY } = getDiverMouthPos(diver);
+      const initCount = Math.round(2 + profile.drive * 2.6);
+      for (let i = 0; i < initCount; i++) {
+        const portSign = i % 2 === 0 ? 1 : -1;
+        spawnExhaustBubble(
+          bubbles,
+          mouthX + perpX * portSign * 0.06,
+          mouthY + perpY * portSign * 0.06,
+          (diver.vx || 0) * 0.34,
+          (diver.vy || 0) * 0.18,
+          {
+            primary: i < Math.ceil(initCount * 0.65),
+            panic: profile.panic,
+            intensity: profile.intensity,
+            depthM: diver.y,
+            portSign,
+          }
+        );
+      }
+    }
+
+    // Continuous shaped bubble plume during exhale phase (bell-curve flow envelope)
+    if (nextState === 'exhale') {
+      const exhaleProgress = Math.max(
+        0,
+        Math.min(1, (breath.phase - profile.holdEnd) / Math.max(0.05, profile.exhaleEnd - profile.holdEnd))
+      );
+      const flowEnvelope = Math.pow(Math.sin(Math.PI * exhaleProgress), 0.72) * (1.18 - 0.32 * exhaleProgress);
+      // Calm exhale: ~9-12 bubbles/sec peak (~13-16/breath); Panic/high HR: up to ~34 bubbles/sec dense frothy blast
+      const emitRate = (8.5 + profile.drive * 22.0) * flowEnvelope;
+      breath.emitAccum += emitRate * dt;
+
+      if (breath.emitAccum >= 1) {
+        const { mouthX, mouthY, perpX, perpY } = getDiverMouthPos(diver);
+        while (breath.emitAccum >= 1) {
+          breath.emitAccum -= 1;
+          const portSign = Math.random() < 0.5 ? 1 : -1;
+          // Early-to-mid exhale produces larger primary lens bubbles; tail end produces trailing micro-bubbles
+          const primaryChance = (0.58 - exhaleProgress * 0.32) + profile.panic * 0.14;
+          spawnExhaustBubble(
+            bubbles,
+            mouthX + perpX * portSign * (0.05 + Math.random() * 0.04),
+            mouthY + perpY * portSign * (0.05 + Math.random() * 0.04),
+            (diver.vx || 0) * 0.32,
+            (diver.vy || 0) * 0.18,
+            {
+              primary: Math.random() < primaryChance,
+              panic: profile.panic,
+              intensity: profile.intensity,
+              depthM: diver.y,
+              portSign,
+            }
+          );
+        }
+      }
+    } else if (nextState === 'inhale' && profile.panic > 0.35 && Math.random() < dt * (1.2 + profile.panic * 2.5)) {
+      // Occasional tiny mask-skirt/valve micro-bubble leak under panicked breathing
+      const { mouthX, mouthY } = getDiverMouthPos(diver);
+      spawnExhaustBubble(bubbles, mouthX, mouthY, (diver.vx || 0) * 0.25, (diver.vy || 0) * 0.15, {
+        primary: false,
+        panic: profile.panic,
+        intensity: 0.4,
+        depthM: diver.y,
+        portSign: Math.random() < 0.5 ? 1 : -1,
       });
     }
+  } else {
+    breath.state = 'rest';
+    breath.lungFill += (0.2 - breath.lungFill) * Math.min(1, dt * 3);
   }
 
+  // Advance bubble buoyancy, sinusoidal vortex wobble, Boyle's law expansion, and cave ceiling trapping
+  const vents = Array.isArray(level?.geothermalVents) ? level.geothermalVents : null;
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
+    b.age = (b.age || 0) + dt;
+
+    if (!b.trapped) {
+      // Water drag damps horizontal jet velocity; buoyancy accelerates toward terminal rise speed
+      b.vx *= Math.exp(-3.4 * dt);
+      const tVy = b.targetVy ?? -1.6;
+      b.vy += (tVy - b.vy) * Math.min(1, dt * 4.5);
+
+      // Geothermal vent updraft acceleration
+      if (vents) {
+        for (let v = 0; v < vents.length; v++) {
+          const vent = vents[v];
+          const hw = vent.halfWidth || 2.8;
+          const vh = vent.height || 14;
+          if (Math.abs(b.x - vent.x) <= hw && b.y <= vent.y && b.y >= vent.y - vh) {
+            b.vy -= 1.8 * dt;
+            break;
+          }
+        }
+      }
+
+      const wobbleVx = b.wobbleFreq
+        ? Math.sin(b.age * b.wobbleFreq + (b.wobblePhase || 0)) * (b.wobbleAmp || 0.2)
+        : 0;
+      b.x += (b.vx + wobbleVx) * dt;
+      b.y += b.vy * dt;
+
+      // Boyle's law expansion as ambient hydrostatic pressure drops during ascent
+      if (b.baseR && b.spawnDepth) {
+        const pressureRatio = (b.spawnDepth + 10) / (Math.max(0.1, b.y) + 10);
+        b.r = Math.min(b.maxR || b.baseR * 1.9, b.baseR * Math.cbrt(Math.max(0.5, pressureRatio)));
+      }
+
+      // Ceiling rock trap: flatten & percolate sideways along overhead cave limestone instead of clipping through rock
+      if (level && b.y > 0.45 && evaluateCaveSDF(level, b.x, b.y) > -0.08) {
+        const norm = evaluateCaveNormal(level, b.x, b.y, _bubbleNormalScratch);
+        // Push gently back into open water below ceiling
+        b.x -= norm.nx * 0.08;
+        b.y -= norm.ny * 0.08;
+        b.trapped = true;
+        // Slide along ceiling slope toward shallower pocket
+        const tx = -norm.ny;
+        const ty = norm.nx;
+        const slopeDir = ty <= 0 ? 1 : -1;
+        b.vx = tx * slopeDir * (0.28 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.14;
+        b.vy = ty * slopeDir * 0.14;
+        b.life = Math.min(b.life, 0.9 + Math.random() * 0.85);
+      }
+    } else {
+      // Silver ceiling-trapped percolation slide
+      b.vx *= Math.exp(-1.5 * dt);
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (level && evaluateCaveSDF(level, b.x, b.y) > -0.02) {
+        b.vx *= -0.35;
+        b.vy = 0;
+      }
+    }
+
     b.life -= dt;
     if (b.life <= 0 || b.y <= 0.1) bubbles.splice(i, 1);
+  }
+}
+
+/**
+ * Emit realistic breathing-pattern bubbles for remote co-op peers driven by their synced heart rate.
+ */
+export function stepPeerBubbles(bubbles, peers, dt) {
+  if (!Array.isArray(bubbles) || !Array.isArray(peers) || peers.length === 0 || dt <= 0) return;
+  for (let i = 0; i < peers.length; i++) {
+    const p = peers[i];
+    if (!p || p.alive === false || p.surfaced || (p.y ?? 0) <= 0.6) continue;
+    const hrBpm = p.heartRateBpm ?? 78;
+    const hrNorm = Math.max(0, Math.min(1, (hrBpm - 65) / 115));
+    const panic = p.condition && p.condition !== 'NOMINAL' ? 0.55 : hrNorm * 0.6;
+    const drive = Math.max(0, Math.min(1.2, hrNorm * 0.72 + panic * 0.45));
+    const cycleSec = 60 / (10.5 + drive * 20);
+    if (!Number.isFinite(p._breathPhase)) p._breathPhase = (i * 0.37) % 1;
+    p._breathPhase = (p._breathPhase + dt / cycleSec) % 1.0;
+
+    const holdEnd = 0.34;
+    const exhaleEnd = 0.78 + Math.min(0.14, drive * 0.12);
+    if (p._breathPhase >= holdEnd && p._breathPhase < exhaleEnd) {
+      const exU = (p._breathPhase - holdEnd) / Math.max(0.05, exhaleEnd - holdEnd);
+      const env = Math.sin(Math.PI * exU);
+      const rate = (5.5 + drive * 14) * env;
+      p._bubbleAccum = (p._bubbleAccum || 0) + rate * dt;
+      if (p._bubbleAccum >= 1) {
+        const ang = p.angle || 0;
+        const mx = p.x + Math.cos(ang) * 0.5;
+        const my = p.y + Math.sin(ang) * 0.5;
+        while (p._bubbleAccum >= 1) {
+          p._bubbleAccum -= 1;
+          spawnExhaustBubble(bubbles, mx, my, (p.vx || 0) * 0.25, (p.vy || 0) * 0.15, {
+            primary: Math.random() < 0.48,
+            panic,
+            intensity: 0.35 + drive * 0.65,
+            depthM: p.y,
+            portSign: Math.random() < 0.5 ? 1 : -1,
+          });
+        }
+      }
+    }
   }
 }
 
@@ -247,8 +572,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   diver.vx += ctrlX * horizAccel * dt;
   diver.vy += ctrlY * vertAccel * dt;
 
-  // Subtle neutral-buoyancy breathing hover & deep-restriction karst siphon micro-current
-  diver.vy += Math.sin(session.simTimeSec * 1.6) * 0.16 * dt;
+  // Subtle lung-volume neutral buoyancy oscillation (rises slightly on inhale, settles on exhale)
+  const lungFill = session.breath?.lungFill ?? 0.5;
+  diver.vy -= (lungFill - 0.5) * 0.28 * dt;
   const clearanceM = -evaluateCaveSDF(level, diver.x, diver.y);
   if (diver.y > 10.5 && clearanceM > 0.5 && clearanceM < 2.2) {
     const squeezeRatio = 1 - Math.max(0, clearanceM - 0.5) / 1.7;
@@ -333,7 +659,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   // Cave Wall Collision & Floor/Impact Silt-Out + Stuck / Head-Bump Stress Detection
   const hit = resolveDiverCollision(level, diver, 0.52);
-  stepDiverBody(diver, dt, { thrustMag, level });
+  stepDiverBody(diver, dt, { thrustMag, level, lungFill: session.breath?.lungFill });
 
   const netSpeed = dt > 0 ? Math.hypot(diver.x - prevX, diver.y - prevDepthM) / dt : 0;
   const pushingAgainstRock = hit.collided && thrustMag > 0.2 && netSpeed < 1.25 * thrustMag;

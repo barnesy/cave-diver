@@ -19,6 +19,7 @@ import {
 import {
   createDiveSession,
   stepDiveSession,
+  stepPeerBubbles,
   toggleGuidelineReel,
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
@@ -456,7 +457,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=84" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=85" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -3189,7 +3190,8 @@ const sessionStepCallbacks = {
   onToast: showToast,
   onImpactSound: (spd) => audio.playImpact(spd),
   onAlarm: (lvl) => audio.playAlarm(lvl),
-  onExhale: (ex) => audio.playRegulatorExhale(ex),
+  onInhale: (ev) => audio.playRegulatorInhale(ev),
+  onExhale: (ev) => audio.playRegulatorExhale(ev),
   onCheckpoint: (cp) => {
     audio.playCheckpoint();
     showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
@@ -3329,6 +3331,7 @@ function stepSimulation(dt) {
       });
     }
     lan.stepPeerInterpolation(dt, level);
+    stepPeerBubbles(session.bubbles, peers, dt);
 
     // If downed and a rescuer is towing us, glide smoothly behind the rescuer (respecting cave rock SDF)
     if (!diveState.alive && session.rescuedBy) {

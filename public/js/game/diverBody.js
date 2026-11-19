@@ -138,7 +138,7 @@ function constrainJoint(
 /**
  * Advances articulated limbs with a cave-diver frog kick cycle and wall deflection.
  */
-export function stepDiverBody(diver, dt, { thrustMag = 0, level = null } = {}) {
+export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill = null } = {}) {
   if (!diver.body) {
     diver.body = createDiverBody(diver.x, diver.y, diver.angle);
   }
@@ -157,7 +157,11 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null } = {}) {
 
   const cycleSpeed = body.kickPower > 0.08 ? 0.95 + body.kickPower * 0.85 : 0.25;
   body.kickPhase = (body.kickPhase + cycleSpeed * dt) % 1.0;
-  body.breathPhase += dt * 1.4;
+  if (Number.isFinite(lungFill)) {
+    body.breathPhase = (lungFill - 0.5) * Math.PI;
+  } else {
+    body.breathPhase += dt * 1.4;
+  }
 
   // Frog kick envelope over normalized cycle u in [0, 1)
   const u = body.kickPhase;

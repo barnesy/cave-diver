@@ -1362,7 +1362,7 @@ export class CaveRenderer {
     }
 
     // 7. Bubbles
-    this._drawBubbles(ctx, toScreenX, toScreenY, scale, bubbles);
+    this._drawBubbles(ctx, cw, ch, toScreenX, toScreenY, scale, bubbles);
 
     // 8. High-Res Bitmap Cutaway Cave Limestone Walls (2D vertical+horizontal tiles, mobile VRAM-capped)
     this._drawChunks(ctx, this.rockChunks, this._rockPxPerM || CACHE_PX_PER_M, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale);
@@ -5732,30 +5732,88 @@ export class CaveRenderer {
     }
   }
 
-  _drawBubbles(ctx, toScreenX, toScreenY, scale, bubbles) {
-    if (!bubbles.length) return;
+  _drawBubbles(ctx, cw, ch, toScreenX, toScreenY, scale, bubbles) {
+    if (!bubbles || !bubbles.length) return;
     ctx.save();
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.72)';
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.24)';
-    ctx.lineWidth = 1.2;
+
+    // Pass 1: Fast batched micro-bubbles (< 2.5px)
+    let hasMicro = false;
+    ctx.fillStyle = 'rgba(210, 240, 255, 0.56)';
     ctx.beginPath();
-    const glints = [];
     for (let i = 0; i < bubbles.length; i++) {
       const b = bubbles[i];
+      if (b.trapped) continue;
+      const r = Math.max(1.1, b.r * scale);
+      if (r >= 2.5) continue;
       const sx = toScreenX(b.x);
       const sy = toScreenY(b.y);
-      const r = Math.max(1.5, b.r * scale);
+      if (sx < -12 || sx > cw + 12 || sy < -12 || sy > ch + 12) continue;
       ctx.moveTo(sx + r, sy);
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
-      if (r >= 3) {
-        glints.push(sx - r * 0.34, sy - r * 0.34, Math.max(0.8, r * 0.24));
+      hasMicro = true;
+    }
+    if (hasMicro) ctx.fill();
+
+    // Pass 2: Oblate wobbling primary bubbles & silver ceiling-trapped mercury bubbles
+    const glints = [];
+    let hasRising = false;
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.74)';
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.22)';
+    ctx.lineWidth = 1.15;
+    ctx.beginPath();
+    for (let i = 0; i < bubbles.length; i++) {
+      const b = bubbles[i];
+      if (b.trapped) continue;
+      const r = b.r * scale;
+      if (r < 2.5) continue;
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      if (sx < -24 || sx > cw + 24 || sy < -24 || sy > ch + 24) continue;
+      const wobble = b.wobbleFreq ? Math.sin((b.age || 0) * b.wobbleFreq + (b.wobblePhase || 0)) : 0;
+      const oblate = Math.min(0.28, (r / 14) * 0.22) + Math.abs(wobble) * 0.06;
+      const rx = r * (1 + oblate);
+      const ry = r * (1 - oblate * 0.65);
+      const tilt = wobble * 0.24;
+      ctx.moveTo(sx + Math.cos(tilt) * rx, sy + Math.sin(tilt) * rx);
+      ctx.ellipse(sx, sy, rx, ry, tilt, 0, Math.PI * 2);
+      hasRising = true;
+      if (r >= 3.0) {
+        glints.push(sx - rx * 0.34, sy - ry * 0.34, Math.max(0.85, r * 0.24));
       }
     }
-    ctx.fill();
-    ctx.stroke();
+    if (hasRising) {
+      ctx.fill();
+      ctx.stroke();
+    }
 
+    // Pass 3: Silver ceiling-trapped percolation bubbles hugging overhead rock
+    let hasTrapped = false;
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.44)';
+    ctx.strokeStyle = 'rgba(248, 250, 252, 0.78)';
+    ctx.lineWidth = 1.05;
+    ctx.beginPath();
+    for (let i = 0; i < bubbles.length; i++) {
+      const b = bubbles[i];
+      if (!b.trapped) continue;
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      if (sx < -24 || sx > cw + 24 || sy < -24 || sy > ch + 24) continue;
+      const fade = Math.max(0.2, Math.min(1, b.life / 0.85));
+      const r = Math.max(1.6, b.r * scale * (0.75 + 0.25 * fade));
+      const rx = r * 1.48;
+      const ry = Math.max(1.1, r * 0.46);
+      ctx.moveTo(sx + rx, sy);
+      ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2);
+      hasTrapped = true;
+    }
+    if (hasTrapped) {
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Pass 4: Specular highlights on primary bubbles
     if (glints.length > 0) {
-      ctx.fillStyle = 'rgba(248, 250, 252, 0.78)';
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.82)';
       ctx.beginPath();
       for (let i = 0; i < glints.length; i += 3) {
         const gx = glints[i];

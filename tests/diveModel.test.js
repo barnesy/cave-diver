@@ -49,6 +49,8 @@ import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision, createChunk
 import {
   createDiveSession,
   stepDiveSession,
+  computeBreathProfile,
+  stepPeerBubbles,
   toggleGuidelineReel,
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
@@ -1914,4 +1916,75 @@ test('v84 P0 regressions: LanClient multi-listener on/off, leaveRoom clears peer
     !s20.warnings.some((w) => w.code === 'PPO2_WARN'),
     `Expected no PPO2_WARN during planned 5.4m O2 deco, got ${JSON.stringify(s20.warnings)}`
   );
+});
+
+test('Realistic breathing patterns follow inhale/hold/exhale/rest cadence and intensify under panic & high HR', () => {
+  const calmState = createDiveState();
+  calmState.heartRateBpm = 68;
+  calmState.panicLevel = 0;
+  const calmProf = computeBreathProfile(calmState, 0);
+
+  const panicState = createDiveState();
+  panicState.heartRateBpm = 168;
+  panicState.panicLevel = 0.85;
+  const panicProf = computeBreathProfile(panicState, 0.8);
+
+  assert.ok(calmProf.breathsPerMin >= 9 && calmProf.breathsPerMin <= 13, `Calm rate out of range: ${calmProf.breathsPerMin}`);
+  assert.ok(panicProf.breathsPerMin >= 28, `Panicked rate should surge >=28 BPM, got ${panicProf.breathsPerMin}`);
+  assert.ok(panicProf.intensity > calmProf.intensity * 1.8, 'Panic intensity should be substantially higher than calm');
+  assert.ok(1 - calmProf.exhaleEnd > 1 - panicProf.exhaleEnd, 'Calm diver should have longer quiet rest between breaths');
+
+  // Compare 12 seconds of calm diving vs panicked/high-HR diving in open water
+  const runSim = (panicked) => {
+    const sess = createDiveSession(LEVEL_1);
+    sess.diver.x = LEVEL_1.checkpoints[1].x;
+    sess.diver.y = Math.max(12, LEVEL_1.checkpoints[1].y);
+    let inhales = 0;
+    let exhales = 0;
+    let peakBubbles = 0;
+    let sawRest = false;
+    let sawInhale = false;
+    let sawExhale = false;
+    const cbs = {
+      onInhale: (ev) => {
+        inhales += 1;
+        assert.ok(ev && Number.isFinite(ev.durationSec) && ev.durationSec > 0);
+      },
+      onExhale: (ev) => {
+        exhales += 1;
+        assert.ok(ev && Number.isFinite(ev.durationSec) && ev.durationSec > 0);
+      },
+    };
+    for (let i = 0; i < 240; i++) {
+      if (panicked) {
+        sess.diveState.heartRateBpm = 172;
+        sess.diveState.panicLevel = 0.9;
+      } else {
+        sess.diveState.heartRateBpm = 68;
+        sess.diveState.panicLevel = 0;
+      }
+      stepDiveSession(sess, { x: 0, y: 0 }, 0.05, cbs);
+      if (sess.breath.state === 'rest') sawRest = true;
+      if (sess.breath.state === 'inhale') sawInhale = true;
+      if (sess.breath.state === 'exhale') sawExhale = true;
+      if (sess.bubbles.length > peakBubbles) peakBubbles = sess.bubbles.length;
+    }
+    return { inhales, exhales, peakBubbles, sawRest, sawInhale, sawExhale, bubbles: sess.bubbles };
+  };
+
+  const calm = runSim(false);
+  const panic = runSim(true);
+
+  assert.ok(calm.sawInhale && calm.sawExhale && calm.sawRest, 'Calm diver must cycle through inhale, exhale, and rest');
+  assert.ok(calm.exhales >= 2 && calm.inhales >= 1, `Expected calm breaths, got ${calm.inhales}/${calm.exhales}`);
+  assert.ok(panic.exhales > calm.exhales * 2, `Panic should trigger >2x exhales (${panic.exhales} vs ${calm.exhales})`);
+  assert.ok(panic.peakBubbles > calm.peakBubbles * 1.4, `Panic should produce denser bubble clouds (${panic.peakBubbles} vs ${calm.peakBubbles})`);
+
+  // Co-op peer bubble emission scales with peer heart rate
+  const peerBubbles = [];
+  const peer = { id: 'p1', x: LEVEL_1.checkpoints[1].x, y: 14, vx: 0, vy: 0, angle: 0, alive: true, surfaced: false, heartRateBpm: 165, condition: 'HIGH HR' };
+  for (let i = 0; i < 60; i++) {
+    stepPeerBubbles(peerBubbles, [peer], 0.05);
+  }
+  assert.ok(peerBubbles.length > 5, `Expected remote peer breathing bubbles, got ${peerBubbles.length}`);
 });

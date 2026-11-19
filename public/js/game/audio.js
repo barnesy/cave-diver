@@ -10,6 +10,7 @@ export class DiveAudio {
     this.ctx = null;
     this.muted = false;
     this.lastAlarmAt = 0;
+    this.lastInhaleAt = 0;
     this.lastExhaleAt = 0;
     this.lastHeartAt = 0;
     this._noiseBuffer = null;
@@ -20,7 +21,7 @@ export class DiveAudio {
   _getNoiseBuffer() {
     if (!this.ctx) return null;
     if (this._noiseBuffer) return this._noiseBuffer;
-    const len = Math.floor(this.ctx.sampleRate * 0.55);
+    const len = Math.floor(this.ctx.sampleRate * 1.85);
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = buf.getChannelData(0);
     let b0 = 0;
@@ -124,32 +125,120 @@ export class DiveAudio {
     this.vibrate([20, 25, 20]);
   }
 
-  playRegulatorExhale(exertion = 0) {
+  playRegulatorInhale(ev = {}) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const intensity = typeof ev === 'number' ? Math.max(0.3, Math.min(1.4, ev)) : (ev.intensity ?? 0.5);
+    const panic = typeof ev === 'object' && ev ? (ev.panic ?? 0) : 0;
+    const dur = Math.max(0.32, Math.min(1.35, (ev?.durationSec ?? 0.85) * 0.92));
+    const depthM = ev?.depthM ?? 10;
     const now = performance.now();
-    if (now - this.lastExhaleAt < 950) return;
-    this.lastExhaleAt = now;
+    if (now - this.lastInhaleAt < Math.max(240, dur * 600)) return;
+    this.lastInhaleAt = now;
+
     const noise = this._getNoiseBuffer();
     if (!noise) return;
     const t = this.ctx.currentTime;
+
+    // Crisp demand-valve diaphragm hiss (higher & sharper during rapid panicked gasps)
     const src = this.ctx.createBufferSource();
     src.buffer = noise;
+    src.loop = true;
+
+    const depthMuffle = Math.max(0.72, 1 - Math.min(120, depthM) / 380);
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    const centerFreq = 380 + Math.min(240, exertion * 180);
-    filter.frequency.setValueAtTime(centerFreq, t);
-    filter.frequency.exponentialRampToValueAtTime(centerFreq * 0.62, t + 0.34);
-    filter.Q.value = 1.8;
+    const baseFreq = (1480 + intensity * 460 + panic * 420) * depthMuffle;
+    filter.frequency.setValueAtTime(baseFreq * 0.88, t);
+    filter.frequency.exponentialRampToValueAtTime(baseFreq * 1.12, t + dur * 0.35);
+    filter.frequency.exponentialRampToValueAtTime(baseFreq * 0.78, t + dur);
+    filter.Q.value = 2.4 + panic * 0.8;
+
     const gain = this.ctx.createGain();
-    const peak = 0.045 + Math.min(0.035, exertion * 0.03);
+    const peak = Math.min(0.052, 0.016 + intensity * 0.018 + panic * 0.014);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(peak, t + 0.06);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    gain.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.11, dur * 0.22));
+    gain.gain.setValueAtTime(peak * 0.92, t + dur * 0.72);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
     src.connect(filter);
     filter.connect(gain);
     gain.connect(this.ctx.destination);
-    src.start(t);
-    src.stop(t + 0.42);
+    src.start(t, Math.random() * 0.6);
+    src.stop(t + dur + 0.04);
+  }
+
+  playRegulatorExhale(ev = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const isObj = typeof ev === 'object' && ev !== null;
+    const intensity = isObj ? (ev.intensity ?? 0.5) : Math.max(0.35, Math.min(1.4, 0.4 + ev * 0.7));
+    const panic = isObj ? (ev.panic ?? 0) : 0;
+    const depthM = isObj ? (ev.depthM ?? 15) : 15;
+    const dur = Math.max(0.45, Math.min(1.8, (isObj && ev.durationSec ? ev.durationSec : 0.95) * 0.95));
+    const now = performance.now();
+    if (now - this.lastExhaleAt < Math.max(280, dur * 550)) return;
+    this.lastExhaleAt = now;
+
+    const noise = this._getNoiseBuffer();
+    if (!noise) return;
+    const t = this.ctx.currentTime;
+    const depthMuffle = Math.max(0.68, 1 - Math.min(150, depthM) / 420);
+
+    // Layer 1: Low-mid pressurized bubble exhaust rumble with organic LFO burble modulation
+    const src = this.ctx.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    const centerFreq = (300 + intensity * 140 + panic * 110) * depthMuffle;
+    filter.frequency.setValueAtTime(centerFreq * 1.15, t);
+    filter.frequency.exponentialRampToValueAtTime(centerFreq * 0.62, t + dur);
+    filter.Q.value = 1.6;
+
+    // LFO creates distinct underwater bubble-pocket cadence (faster & rougher under panic)
+    const lfo = this.ctx.createOscillator();
+    lfo.type = 'sine';
+    const lfoRate = 12.5 + intensity * 5.5 + panic * 6.0;
+    lfo.frequency.setValueAtTime(lfoRate * 1.15, t);
+    lfo.frequency.linearRampToValueAtTime(lfoRate * 0.72, t + dur);
+
+    const lfoGain = this.ctx.createGain();
+    const peak = Math.min(0.088, 0.036 + intensity * 0.026 + panic * 0.02);
+    lfoGain.gain.setValueAtTime(peak * 0.34, t);
+
+    const envGain = this.ctx.createGain();
+    envGain.gain.setValueAtTime(0.0001, t);
+    envGain.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.09, dur * 0.14));
+    envGain.gain.setValueAtTime(peak * 0.86, t + dur * 0.55);
+    envGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    // Layer 2: Higher effervescent bubble-pop fizz band
+    const fizzFilter = this.ctx.createBiquadFilter();
+    fizzFilter.type = 'bandpass';
+    fizzFilter.frequency.setValueAtTime((780 + panic * 320) * depthMuffle, t);
+    fizzFilter.frequency.exponentialRampToValueAtTime((520 + panic * 160) * depthMuffle, t + dur);
+    fizzFilter.Q.value = 3.2;
+
+    const fizzGain = this.ctx.createGain();
+    const fizzPeak = peak * (0.34 + panic * 0.22);
+    fizzGain.gain.setValueAtTime(0.0001, t);
+    fizzGain.gain.exponentialRampToValueAtTime(fizzPeak, t + Math.min(0.12, dur * 0.2));
+    fizzGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(filter);
+    filter.connect(envGain);
+    lfo.connect(lfoGain);
+    lfoGain.connect(envGain.gain);
+    envGain.connect(this.ctx.destination);
+
+    src.connect(fizzFilter);
+    fizzFilter.connect(fizzGain);
+    fizzGain.connect(this.ctx.destination);
+
+    src.start(t, Math.random() * 0.8);
+    lfo.start(t);
+    src.stop(t + dur + 0.05);
+    lfo.stop(t + dur + 0.05);
   }
 
   playHeartbeat(bpm = 135) {
