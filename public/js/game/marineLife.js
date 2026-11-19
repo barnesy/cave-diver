@@ -30,11 +30,194 @@ function findWallAnchor(level, ox, oy, dx, dy, maxDist = 8) {
  * Generates authentic Yucatan karst cenote & flooded cave flora/fauna stratified by light & halocline depth.
  */
 export function createMarineEcosystem(level) {
-  const anchored = []; // Roots / eelgrass, Chara stonewort, calcite soda straws, biofilms, calcite crystals
-  const fish = []; // Sunlit fish, pale catfish, Dama Blanca blind cavefish
+  const anchored = []; // Roots / eelgrass, Chara stonewort, calcite soda straws, biofilms, calcite crystals (or wreck rusticles & sea fans)
+  const fish = []; // Sunlit fish, pale catfish, Dama Blanca blind cavefish (or pelagic baitballs & barracuda)
   const remipedes = []; // Cave crustaceans (remipedes, white prawns, Florida blind cave crayfish)
   const turtles = []; // Freshwater sliders / turtles in sunlit surface pools
+  const jellies = []; // Pelagic drifting moon jellyfish along shipwreck shot lines
+  const megafauna = []; // Goliath groupers & cruising pelagic reef sharks on shipwrecks
   const themeId = level.theme?.id || 'yucatan-cenote';
+
+  // Dedicated Artificial-Reef & Pelagic Shipwreck Ecosystem (no cenote vines, turtles, or blind cavefish!)
+  if (level.isWreck) {
+    const isFreshwater = themeId === 'superior-memorial-wreck';
+    const isWarmReef = themeId === 'gulf-carrier-wreck' || themeId === 'aegean-britannic-wreck';
+    const shotX = level.shotLine?.x ?? level.spawn?.x ?? 10;
+    const deckY = level.wreckDeckY ?? 42;
+    const hMin = level.wreckHullXMin ?? -24;
+    const hMax = level.wreckHullXMax ?? 96;
+
+    // 1. Pelagic Baitball Schools along the shot line & above the wreck superstructure
+    const schoolDepths = [];
+    const span = Math.max(16, deckY - 10);
+    const schoolCount = Math.min(5, Math.max(3, Math.floor(span / 16) + 1));
+    for (let sc = 0; sc < schoolCount; sc++) {
+      const sy = 7 + ((sc + 0.5) / schoolCount) * Math.max(12, deckY - 9);
+      const sx = shotX + (sc % 2 === 0 ? -4.5 : 5.5) + (randHash(sc * 17 + shotX) - 0.5) * 4;
+      schoolDepths.push({ x: sx, y: sy });
+    }
+    // Additional schools cruising over deck landmarks
+    schoolDepths.push({ x: (hMin + hMax) * 0.5, y: Math.max(10, deckY - 4.5) });
+    schoolDepths.push({ x: hMax - 12, y: Math.max(12, deckY - 6.0) });
+
+    for (let sc = 0; sc < schoolDepths.length; sc++) {
+      const center = schoolDepths[sc];
+      const count = isFreshwater ? 5 : 9;
+      for (let i = 0; i < count; i++) {
+        const fx = center.x + (randHash(sc * 31 + i * 7) - 0.5) * 7.5;
+        const fy = center.y + (randHash(sc * 43 + i * 13) - 0.5) * 3.8;
+        if (evaluateCaveSDF(level, fx, fy) < -0.6) {
+          fish.push({
+            kind: isFreshwater ? 'catfish' : (i % 4 === 0 ? 'barracuda' : 'molly'),
+            x: fx,
+            y: fy,
+            homeX: center.x + (randHash(sc * 19 + i) - 0.5) * 3.5,
+            homeY: center.y + (randHash(sc * 23 + i) - 0.5) * 2.0,
+            vx: (sc % 2 === 0 ? 1 : -1) * (0.65 + randHash(i * 5) * 0.55),
+            vy: 0,
+            size: isFreshwater ? 0.24 : (i % 4 === 0 ? 0.36 : 0.17 + randHash(i * 9) * 0.07),
+            color: isFreshwater ? '#94a3b8' : (i % 4 === 0 ? '#cbd5e1' : (isWarmReef ? '#7dd3fc' : '#93c5fd')),
+            stripe: isFreshwater ? '#64748b' : (isWarmReef ? '#fde047' : '#e0f2fe'),
+            phase: sc * 1.7 + i * 0.35,
+          });
+        }
+      }
+    }
+
+    // 2. Translucent Drifting Pelagic Moon Jellyfish along open-water shot line (ocean wrecks only)
+    if (!isFreshwater) {
+      const jellyCount = Math.min(10, Math.max(5, Math.floor(deckY / 11)));
+      for (let j = 0; j < jellyCount; j++) {
+        const jy = 6 + ((j + 0.4) / jellyCount) * Math.max(10, deckY - 8);
+        const jx = shotX + (randHash(j * 29 + deckY) - 0.5) * 22;
+        if (evaluateCaveSDF(level, jx, jy) < -1.0) {
+          jellies.push({
+            x: jx,
+            y: jy,
+            homeX: jx,
+            homeY: jy,
+            size: 0.38 + randHash(j * 11) * 0.34,
+            hue: isWarmReef ? (j % 2 === 0 ? '#f472b6' : '#38bdf8') : '#a5b4fc',
+            phase: randHash(j * 41) * Math.PI * 2,
+          });
+        }
+      }
+    }
+
+    // 3. Iconic Wreck Megafauna: Cruising Reef Sharks in the blue + Giant Goliath Groupers in dark holds
+    if (!isFreshwater) {
+      const sharkY1 = Math.max(14, deckY * 0.58);
+      const sharkX1 = (hMin + hMax) * 0.45;
+      if (evaluateCaveSDF(level, sharkX1, sharkY1) < -2.0) {
+        megafauna.push({
+          kind: 'shark',
+          x: sharkX1,
+          y: sharkY1,
+          homeX: sharkX1,
+          homeY: sharkY1,
+          patrolRx: Math.min(28, Math.max(14, (hMax - hMin) * 0.28)),
+          patrolRy: 3.2,
+          vx: 1.6,
+          vy: 0,
+          size: 1.45,
+          phase: 0.4,
+        });
+      }
+      if (isWarmReef && deckY > 36) {
+        const sharkY2 = Math.max(18, deckY - 8);
+        const sharkX2 = shotX + 18;
+        if (evaluateCaveSDF(level, sharkX2, sharkY2) < -2.0) {
+          megafauna.push({
+            kind: 'shark',
+            x: sharkX2,
+            y: sharkY2,
+            homeX: sharkX2,
+            homeY: sharkY2,
+            patrolRx: 22,
+            patrolRy: 2.6,
+            vx: -1.4,
+            vy: 0,
+            size: 1.25,
+            phase: 3.2,
+          });
+        }
+      }
+    }
+
+    // Lurking Goliath Groupers (or giant Lake Trout on Fitzgerald) inside large dark interior holds
+    let grouperCount = 0;
+    for (let sIdx = 0; sIdx < level.segments.length && grouperCount < 3; sIdx++) {
+      const seg = level.segments[sIdx];
+      const mx = (seg.ax + seg.bx) * 0.5;
+      const my = (seg.ay + seg.by) * 0.5;
+      if (my > deckY + 4 && Math.min(seg.ra, seg.rb) >= 3.1 && evaluateCaveSDF(level, mx, my) < -1.4) {
+        megafauna.push({
+          kind: isFreshwater ? 'laketrout' : 'grouper',
+          x: mx,
+          y: my + 0.5,
+          homeX: mx,
+          homeY: my + 0.5,
+          patrolRx: 2.8,
+          patrolRy: 0.7,
+          vx: grouperCount % 2 === 0 ? 0.35 : -0.35,
+          vy: 0,
+          size: isFreshwater ? 0.72 : 1.05 + grouperCount * 0.12,
+          phase: grouperCount * 2.1,
+        });
+        grouperCount++;
+      }
+    }
+
+    // 4. Rusticles hanging from interior steel ceilings & vibrant sea fans on upper hull walls
+    for (let sIdx = 0; sIdx < level.segments.length; sIdx++) {
+      const seg = level.segments[sIdx];
+      const segLen = Math.hypot(seg.bx - seg.ax, seg.by - seg.ay);
+      const steps = Math.max(3, Math.floor(segLen / 2.2));
+      for (let k = 0; k <= steps; k++) {
+        const t = k / Math.max(1, steps);
+        const cx = seg.ax + (seg.bx - seg.ax) * t;
+        const cy = seg.ay + (seg.by - seg.ay) * t;
+        const r = seg.ra + (seg.rb - seg.ra) * t;
+        for (let p = 0; p < 2; p++) {
+          const seed = sIdx * 83 + k * 19 + p * 11;
+          const h = randHash(seed);
+          if (h < 0.28) continue;
+          const probeAng = p === 0 ? -Math.PI * 0.5 + (h - 0.5) * 0.9 : (h * Math.PI * 2);
+          const anchor = findWallAnchor(level, cx, cy, Math.cos(probeAng), Math.sin(probeAng), r + 2.2);
+          if (!anchor || anchor.y < deckY - 3) continue;
+          if (anchor.ny > 0.35) {
+            // Iconic icicle-like iron-oxide rusticles dripping from rusted steel ceilings!
+            anchored.push({
+              kind: 'rusticle',
+              x: anchor.x,
+              y: anchor.y,
+              nx: 0,
+              ny: 1,
+              size: 0.45 + randHash(seed + 2) * 0.65,
+              color: h > 0.5 ? '#9a3412' : '#7c2d12',
+              accent: '#ea580c',
+              phase: h * 6.28,
+            });
+          } else if (!isFreshwater && anchor.y < deckY + 18 && h > 0.55) {
+            // Gorgonian sea fan corals & red encrusting sponges on sunlit/upper steelwork
+            anchored.push({
+              kind: 'seafan',
+              x: anchor.x,
+              y: anchor.y,
+              nx: anchor.nx,
+              ny: anchor.ny,
+              size: 0.48 + randHash(seed + 3) * 0.52,
+              color: isWarmReef ? (h > 0.76 ? '#f97316' : '#e11d48') : '#d97706',
+              accent: '#fde68a',
+              phase: h * 6.28,
+            });
+          }
+        }
+      }
+    }
+
+    return { anchored, fish, remipedes, turtles, jellies, megafauna };
+  }
   const isFlorida = themeId === 'florida-karst';
   const isNordic = themeId === 'nordic-marble';
   const isProvence = themeId === 'provence-gorge';
@@ -309,7 +492,7 @@ export function createMarineEcosystem(level) {
     }
   }
 
-  return { anchored, fish, remipedes, turtles };
+  return { anchored, fish, remipedes, turtles, jellies, megafauna };
 }
 
 /**
@@ -395,6 +578,44 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
       t.angle = Math.atan2(ty - t.y, tx - t.x);
       t.x = tx;
       t.y = ty;
+    }
+  }
+
+  // Pelagic Drifting Jellyfish (gentle pulsing climb & drift along shipwreck shot lines)
+  if (Array.isArray(eco.jellies)) {
+    for (let i = 0; i < eco.jellies.length; i++) {
+      const j = eco.jellies[i];
+      if (hasDiver) {
+        const cdx = j.homeX - divX;
+        const cdy = j.homeY - divY;
+        if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+      }
+      j.x = j.homeX + Math.sin(timeSec * 0.28 + j.phase) * 2.2;
+      j.y = j.homeY + Math.cos(timeSec * 0.65 + j.phase) * 1.1;
+    }
+  }
+
+  // Shipwreck Megafauna: Cruising Reef Sharks & Territorial Goliath Groupers
+  if (Array.isArray(eco.megafauna)) {
+    for (let i = 0; i < eco.megafauna.length; i++) {
+      const m = eco.megafauna[i];
+      if (hasDiver) {
+        const cdx = m.homeX - divX;
+        const cdy = m.homeY - divY;
+        if (cdx * cdx + cdy * cdy > 60 * 60) continue;
+      }
+      const speed = m.kind === 'shark' ? 0.16 : 0.22;
+      m.phase += dt * speed;
+      const tx = m.homeX + Math.cos(m.phase) * (m.patrolRx || 6);
+      const ty = m.homeY + Math.sin(m.phase * 2) * (m.patrolRy || 1.2);
+      const nx = m.x + (tx - m.x) * Math.min(1, dt * 1.5);
+      const ny = m.y + (ty - m.y) * Math.min(1, dt * 1.5);
+      if (evaluateCaveSDF(level, nx, ny) < -0.8) {
+        m.vx = (nx - m.x) / Math.max(0.01, dt);
+        m.vy = (ny - m.y) / Math.max(0.01, dt);
+        m.x = nx;
+        m.y = ny;
+      }
     }
   }
 }

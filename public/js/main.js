@@ -23,6 +23,7 @@ import {
   toggleGuidelineReel,
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
+  triggerWreckAction,
 } from './game/diveSession.js';
 import {
   computeDiverScoreSummary,
@@ -466,7 +467,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=93" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=94" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1007,7 +1008,48 @@ const input = new InputController({
   },
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
+  onWreckAction: () => handleWreckAction(),
 });
+
+const btnWreckAction = document.getElementById('btn-wreck-action');
+const wreckActionLabelEl = document.getElementById('wreck-action-label');
+const wreckActionDetailEl = document.getElementById('wreck-action-detail');
+const wreckActionProgressEl = document.getElementById('wreck-action-progress');
+let lastWreckActionKey = '';
+
+function handleWreckAction() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  const res = triggerWreckAction(session, sessionStepCallbacks);
+  return Boolean(res?.handled);
+}
+
+btnWreckAction?.addEventListener('click', (e) => {
+  e.preventDefault();
+  handleWreckAction();
+});
+
+function syncWreckActionHud(prompt) {
+  if (!btnWreckAction) return;
+  if (!prompt || mode !== 'diving' || divePaused || session?.endedState) {
+    if (!btnWreckAction.hidden) {
+      btnWreckAction.hidden = true;
+      lastWreckActionKey = '';
+    }
+    return;
+  }
+  const pct = Math.round((prompt.progress || 0) * 100);
+  const key = `${prompt.kind}|${prompt.label}|${prompt.detail}|${pct}`;
+  if (btnWreckAction.hidden) btnWreckAction.hidden = false;
+  if (key === lastWreckActionKey) return;
+  lastWreckActionKey = key;
+  btnWreckAction.classList.toggle('is-cut', prompt.kind === 'cut-net');
+  btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch');
+  btnWreckAction.classList.toggle('is-clip', prompt.kind === 'clip-line');
+  btnWreckAction.classList.toggle('is-unclip', prompt.kind === 'unclip-line');
+  if (wreckActionLabelEl) wreckActionLabelEl.textContent = prompt.label;
+  if (wreckActionDetailEl) wreckActionDetailEl.textContent = prompt.detail || '';
+  if (wreckActionProgressEl) wreckActionProgressEl.style.width = `${pct}%`;
+}
 
 let celebrationParticles = [];
 let debriefAnimFrame = 0;
@@ -3382,6 +3424,11 @@ const sessionStepCallbacks = {
   onAlarm: (lvl) => audio.playAlarm(lvl),
   onInhale: (ev) => audio.playRegulatorInhale(ev),
   onExhale: (ev) => audio.playRegulatorExhale(ev),
+  onHullGroan: (depthRatio) => audio.playHullGroan(depthRatio),
+  onHatchCrank: (progress) => audio.playHatchCrank(progress),
+  onHatchOpen: () => audio.playHatchOpen(),
+  onLineCut: () => audio.playLineCut(),
+  onClipLine: (clipped) => audio.playClipLine(clipped),
   onCheckpoint: (cp) => {
     audio.playCheckpoint();
     showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
@@ -3457,10 +3504,12 @@ function stepSimulation(dt) {
     }
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
+    syncWreckActionHud(session.wreckActionPrompt);
   } else {
     session.simTimeSec += dt;
     diver.vx = 0;
     diver.vy = 0;
+    syncWreckActionHud(null);
   }
 
   const peers = isMultiplayer ? lan.getPeers() : [];
@@ -3794,6 +3843,16 @@ function frame(nowMs) {
       localSiltDensity: session.localSiltDensity,
       bubbles: session.bubbles,
       ecosystem,
+      wreckState: session.level?.isWreck
+        ? {
+            clippedToShotLine: session.clippedToShotLine,
+            cutSnagIds: session.cutSnagIds,
+            activeSnagIndex: session.activeSnagIndex,
+            openedHatchIds: session.openedHatchIds,
+            crankingHatchId: session.crankingHatchId,
+            crankingHatchProgress: session.crankingHatchProgress,
+          }
+        : null,
       timeSec: session.simTimeSec,
       dt,
     });

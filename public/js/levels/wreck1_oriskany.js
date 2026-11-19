@@ -35,7 +35,8 @@ export const WRECK_ORISKANY = {
   wreckSeabedY: 67.0,
   wreckHullXMin: -28,
   wreckHullXMax: 98,
-  shotLine: { x: 10.0, bottomY: 42.0 },
+  shipProfile: 'oriskany-carrier',
+  shotLine: { x: 10.0, bottomY: 42.0, decoStagesY: [22.0, 6.0] },
   theme: createLevelTheme('gulf-carrier-wreck'),
 
   openBasins: [
@@ -43,21 +44,39 @@ export const WRECK_ORISKANY = {
   ],
 
   driftCurrents: [
-    { yMin: 8.0, yMax: 34.0, vx: 0.55, vy: 0, label: 'Gulf Surface Drift' },
+    { yMin: 8.0, yMax: 34.0, vx: 0.65, vy: 0, label: 'Gulf Surface Drift' },
+  ],
+
+  surgeZones: [
+    { id: 'ori_surge1', x: 8.0, y: 45.0, radius: 4.2, vx: 0, vy: 3.1, periodSec: 7.4, phase: 0.3, label: 'Forward Elevator Swell' },
+    { id: 'ori_surge2', x: 80.0, y: 45.5, radius: 4.2, vx: 0, vy: -3.2, periodSec: 7.0, phase: 2.1, label: 'Stern Elevator Updraft' },
   ],
 
   snagZones: [
-    { x: 48.0, y: 51.0, radius: 2.1, label: 'Hanging Hangar Conduit' },
+    { id: 'ori_snag1', x: 48.0, y: 51.2, radius: 2.2, label: 'Hanging Hangar Conduit' },
+    { id: 'ori_snag2', x: 70.0, y: 62.5, radius: 2.1, label: 'Engine Room Cable Snarl' },
+  ],
+
+  watertightHatches: [
+    { id: 'ori_hatch_bow', x: -3.5, y: 52.5, radius: 1.85, label: 'Armory Vault Bulkhead', bonusPoints: 150 },
+    { id: 'ori_hatch_cic', x: 52.0, y: 57.5, radius: 1.8, label: 'CIC Shortcut Hatch', bonusPoints: 150 },
   ],
 
   wreckProps: [
-    { kind: 'island', x: 24.0, y: 42.0, scale: 1.05 },
-    { kind: 'porthole', x: -8.0, y: 50.0, angle: 0.55, beamLen: 6.0 },
-    { kind: 'porthole', x: 34.0, y: 51.0, angle: 0.72, beamLen: 5.5 },
-    { kind: 'porthole', x: 74.0, y: 51.0, angle: 2.45, beamLen: 5.5 },
-    { kind: 'beam', x: 16.0, y: 49.0, len: 5.2, angle: 0 },
-    { kind: 'beam', x: 58.0, y: 58.0, len: 5.0, angle: 0.08 },
-    { kind: 'propeller', x: 96.0, y: 61.0, scale: 1.25, angle: 0.3 },
+    { kind: 'island', x: 26.0, y: 42.0, scale: 1.15 },
+    { kind: 'mast', x: 26.0, y: 24.0, scale: 1.0 },
+    { kind: 'anchor', x: -24.0, y: 42.0, chainLen: 24.0 },
+    { kind: 'railing', x: -16.0, y: 42.0, len: 18.0 },
+    { kind: 'railing', x: 44.0, y: 42.0, len: 28.0 },
+    { kind: 'porthole', x: -8.0, y: 50.0, angle: 0.55, beamLen: 6.4 },
+    { kind: 'porthole', x: 24.0, y: 50.0, angle: 0.72, beamLen: 6.0 },
+    { kind: 'porthole', x: 54.0, y: 50.5, angle: 0.85, beamLen: 6.0 },
+    { kind: 'porthole', x: 74.0, y: 51.0, angle: 2.45, beamLen: 5.8 },
+    { kind: 'beam', x: 16.0, y: 49.0, len: 5.4, angle: 0 },
+    { kind: 'beam', x: 42.0, y: 49.0, len: 5.6, angle: 0.04 },
+    { kind: 'beam', x: 58.0, y: 59.5, len: 5.2, angle: 0.06 },
+    { kind: 'pipe', x: 44.0, y: 62.0, len: 14.0, angle: 0.05 },
+    { kind: 'propeller', x: 96.0, y: 61.0, scale: 1.35, angle: 0.3 },
   ],
 
   segments: [
@@ -68,8 +87,11 @@ export const WRECK_ORISKANY = {
     { ax: 8, ay: 52.0, bx: 36, by: 52.0, ra: 4.0, rb: 4.2 },
     { ax: 36, ay: 52.0, bx: 68, by: 52.0, ra: 4.2, rb: 3.8 },
 
-    // Forward Bow Storage Alcove (dead-end artifact bay)
-    { ax: 8, ay: 52.0, bx: -14, by: 53.0, ra: 3.2, rb: 2.6 },
+    // Forward Bow Armory Vault (guarded by watertight hatch!)
+    { ax: 8, ay: 52.0, bx: -14, by: 53.0, ra: 3.2, rb: 2.7 },
+
+    // Direct CIC Bypass Shortcut Drop (guarded by watertight hatch!)
+    { ax: 52, ay: 52.0, bx: 54, by: 63.5, ra: 2.5, rb: 2.7 },
 
     // Central Companionway Drop -> CIC & Lower Machinery Deck (64m)
     { ax: 36, ay: 52.0, bx: 34, by: 62.5, ra: 2.8, rb: 3.0 },

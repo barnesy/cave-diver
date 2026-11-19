@@ -37,6 +37,7 @@ export const WRECK_HMS_VICTORIA = {
   wreckSeabedY: 145.0,
   wreckHullXMin: 4,
   wreckHullXMax: 44,
+  shipProfile: 'victoria-vertical-battleship',
   hullTopY(wx) {
     // Dramatic vertical battleship tower standing nose-down out of the 145m flat seabed!
     if (wx >= 4 && wx <= 44) return 74.0 + Math.abs(wx - 24) * 0.12;
@@ -45,7 +46,7 @@ export const WRECK_HMS_VICTORIA = {
     const ease = t * t * (3 - 2 * t);
     return 76.4 + (145.0 - 76.4) * ease;
   },
-  shotLine: { x: 22.0, bottomY: 74.0 },
+  shotLine: { x: 22.0, bottomY: 74.0, decoStagesY: [42.0, 22.0, 6.0] },
   theme: createLevelTheme('aegean-britannic-wreck'),
 
   gasOverrides: {
@@ -70,24 +71,36 @@ export const WRECK_HMS_VICTORIA = {
   ],
 
   driftCurrents: [
-    { yMin: 18.0, yMax: 64.0, vx: 0.7, vy: 0, label: 'Levantine Current' },
+    { yMin: 18.0, yMax: 64.0, vx: 0.85, vy: 0, label: 'Levantine Current' },
+  ],
+
+  surgeZones: [
+    { id: 'vic_surge1', x: 23.0, y: 80.0, radius: 4.3, vx: 0, vy: 3.5, periodSec: 7.4, phase: 0.2, label: 'Stern Companionway Surge' },
+    { id: 'vic_surge2', x: 24.0, y: 118.0, radius: 4.2, vx: 2.8, vy: -2.2, periodSec: 6.9, phase: 1.8, label: 'Conning Tower Cross-Surge' },
   ],
 
   snagZones: [
-    { x: 24.0, y: 102.0, radius: 2.2, label: 'Tangled Mast Rigging' },
-    { x: 32.0, y: 131.0, radius: 2.2, label: 'Shattered Turret Chains' },
+    { id: 'vic_snag1', x: 14.0, y: 104.0, radius: 2.2, label: 'Tangled Mast Rigging' },
+    { id: 'vic_snag2', x: 36.0, y: 126.0, radius: 2.2, label: 'Shattered Turret Chains' },
+  ],
+
+  watertightHatches: [
+    { id: 'vic_hatch_mag', x: 19.5, y: 126.5, radius: 1.85, label: 'Armored Magazine Hatch', bonusPoints: 200 },
+    { id: 'vic_hatch_turret', x: 33.5, y: 140.0, radius: 1.85, label: '110-Ton Turret Breech Door', bonusPoints: 220 },
   ],
 
   wreckProps: [
     // Iconic twin stern bronze propellers pointing straight toward the surface at 74m!
-    { kind: 'propeller', x: 13.0, y: 72.5, scale: 1.45, angle: 0.2 },
-    { kind: 'propeller', x: 34.0, y: 72.5, scale: 1.45, angle: -0.35 },
-    { kind: 'porthole', x: 10.0, y: 90.0, angle: 0.25, beamLen: 6.0 },
-    { kind: 'porthole', x: 38.0, y: 112.0, angle: 2.85, beamLen: 6.0 },
+    { kind: 'propeller', x: 13.0, y: 72.5, scale: 1.5, angle: 0.2 },
+    { kind: 'propeller', x: 34.0, y: 72.5, scale: 1.5, angle: -0.35 },
+    { kind: 'turret', x: 3.5, y: 104.0, scale: 0.85, angle: Math.PI + 0.08 },
+    { kind: 'porthole', x: 10.0, y: 90.0, angle: 0.25, beamLen: 6.2 },
+    { kind: 'porthole', x: 38.0, y: 112.0, angle: 2.85, beamLen: 6.2 },
     { kind: 'beam', x: 24.0, y: 88.0, len: 6.0, angle: 0 },
     { kind: 'beam', x: 24.0, y: 118.0, len: 6.4, angle: 0 },
+    { kind: 'pipe', x: 24.0, y: 134.0, len: 10.0, angle: 1.52 },
     // Iconic 110-ton armored twin gun turret sticking horizontally from the vertical hull at 136m!
-    { kind: 'turret', x: 44.0, y: 136.0, scale: 1.35, angle: -0.12 },
+    { kind: 'turret', x: 44.0, y: 136.0, scale: 1.4, angle: -0.12 },
   ],
 
   segments: [

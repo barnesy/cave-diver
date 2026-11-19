@@ -2,6 +2,7 @@ import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain } from './lighting.js';
 import { sampleSiltDensity } from './silt.js';
+import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
 import {
@@ -10,6 +11,8 @@ import {
   drawStyledTurtle,
   drawStyledRemipede,
   drawStyledDiverRig,
+  drawStyledJellyfish,
+  drawStyledMegafauna,
 } from './artSprites.js';
 
 const CACHE_PX_PER_M = 24;
@@ -1312,6 +1315,7 @@ export class CaveRenderer {
     localSiltDensity = 0,
     bubbles,
     ecosystem,
+    wreckState = null,
     timeSec,
     dt,
   }) {
@@ -1428,9 +1432,9 @@ export class CaveRenderer {
       }
     }
 
-    // 4b. Shipwreck Open-Water Shot Line, 6m O2 Deco Bar, Drift Currents & Architectural Props
+    // 4b. Shipwreck Open-Water Shot Line, Multi-Stage Deco Rig, Ship Silhouette, Drift Currents & Props
     if (this.level.isWreck) {
-      this._drawWreckBackdropDetails(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
+      this._drawWreckBackdropDetails(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
 
     // 5. Guideline (Fixed gold cave line + player-deployed reel lines & directional pins)
@@ -1455,9 +1459,9 @@ export class CaveRenderer {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
 
-    // 8a-ii. Shipwreck Foreground Steel Beams, Porthole Rims & Fishing-Net Snag Zones
+    // 8a-ii. Shipwreck Foreground Steel Bulkhead Ribs, Watertight Hatches, Surge Breaches & Cuttable Nets
     if (this.level.isWreck) {
-      this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
+      this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
     }
 
     // 8b. Authentic Cenote & Cave Flora, Calcite Formations, Fishes, Slider Turtles & Remipedes
@@ -3077,9 +3081,197 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawWreckBackdropDetails(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+  _drawWreckShipArchitecture(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const level = this.level;
+    const deckY = level.wreckDeckY ?? 42;
+    const seabedY = level.wreckSeabedY ?? 70;
+    const hMin = level.wreckHullXMin ?? -24;
+    const hMax = level.wreckHullXMax ?? 96;
+    if (hMax + 18 < visX0 || hMin - 18 > visX1 || seabedY + 8 < visY0 || deckY - 24 > visY1) return;
+
+    const profile = level.shipProfile || 'default';
+    ctx.save();
+
+    if (profile === 'victoria-vertical-battleship') {
+      // Dramatic vertical Victorian ironclad battleship spire standing nose-down from 74m to 145m!
+      const xL = toScreenX(hMin);
+      const xR = toScreenX(hMax);
+      const yTop = toScreenY(deckY);
+      const yBot = toScreenY(seabedY);
+      // Armored steel hull plating band & rivet lines along vertical column
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.24)';
+      ctx.lineWidth = Math.max(1.2, 0.08 * scale);
+      for (let wy = Math.ceil(deckY / 6) * 6; wy <= seabedY; wy += 6) {
+        if (wy < visY0 - 2 || wy > visY1 + 2) continue;
+        const sy = toScreenY(wy);
+        ctx.beginPath();
+        ctx.moveTo(xL, sy);
+        ctx.lineTo(xR, sy);
+        ctx.stroke();
+      }
+      // Armored casemate gun ports along both outer sides of the vertical spire
+      for (let wy = deckY + 14; wy <= seabedY - 12; wy += 10) {
+        if (wy < visY0 - 3 || wy > visY1 + 3) continue;
+        const sy = toScreenY(wy);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(xL - 0.5 * scale, sy - 0.55 * scale, 1.4 * scale, 1.1 * scale);
+        ctx.fillRect(xR - 0.9 * scale, sy - 0.55 * scale, 1.4 * scale, 1.1 * scale);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(1, 0.06 * scale);
+        ctx.strokeRect(xL - 0.5 * scale, sy - 0.55 * scale, 1.4 * scale, 1.1 * scale);
+        ctx.strokeRect(xR - 0.9 * scale, sy - 0.55 * scale, 1.4 * scale, 1.1 * scale);
+      }
+      // Upright stern keel rudder blade rising into the blue above 74m
+      ctx.fillStyle = '#475569';
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = Math.max(1.2, 0.09 * scale);
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(22), yTop);
+      ctx.lineTo(toScreenX(25.5), yTop);
+      ctx.lineTo(toScreenX(24.8), toScreenY(deckY - 6.5));
+      ctx.lineTo(toScreenX(21.8), toScreenY(deckY - 5.2));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // Standard horizontal/capsized/split hull silhouette backdrop & bow/stern prow shapes
+    const xBow = toScreenX(hMin);
+    const xStern = toScreenX(hMax);
+    const yDeck = toScreenY(deckY);
+    const yBase = toScreenY(seabedY);
+    const hullH = Math.max(4, yBase - yDeck);
+
+    // Raked Steel Bow Prow jutting into the deep blue at left end
+    if (hMin + 10 >= visX0 && hMin - 18 <= visX1) {
+      const bowCol =
+        profile === 'fitzgerald-split-freighter'
+          ? '#6e2321'
+          : profile === 'britannic-hospital-liner'
+            ? '#cbd5e1'
+            : profile === 'andrea-doria-capsized'
+              ? '#334155'
+              : '#3b4a5e';
+      ctx.fillStyle = bowCol;
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      ctx.moveTo(xBow + 2 * scale, yDeck);
+      ctx.lineTo(xBow - 9.5 * scale, yDeck - 1.8 * scale);
+      ctx.quadraticCurveTo(xBow - 5.5 * scale, yDeck + hullH * 0.55, xBow + 1.5 * scale, yBase);
+      ctx.closePath();
+      ctx.fill();
+      // Anti-fouling red oxide lower bow hull stripe
+      ctx.fillStyle = '#7f1d1d';
+      ctx.globalAlpha = 0.58;
+      ctx.beginPath();
+      ctx.moveTo(xBow - 5.2 * scale, yDeck + hullH * 0.55);
+      ctx.lineTo(xBow + 2 * scale, yDeck + hullH * 0.55);
+      ctx.lineTo(xBow + 2 * scale, yBase);
+      ctx.lineTo(xBow - 1.2 * scale, yBase);
+      ctx.closePath();
+      ctx.fill();
+      // Hawsepipe oval & Plimsoll draft marks
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(xBow - 3.6 * scale, yDeck + 2.4 * scale, 0.7 * scale, 0.45 * scale, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = Math.max(1.2, 0.08 * scale);
+      ctx.stroke();
+    }
+
+    // Counter-stern overhang & rudder post at right end
+    if (hMax + 18 >= visX0 && hMax - 10 <= visX1) {
+      ctx.fillStyle = profile === 'fitzgerald-split-freighter' ? '#6e2321' : '#334155';
+      ctx.globalAlpha = 0.68;
+      ctx.beginPath();
+      ctx.moveTo(xStern - 2 * scale, yDeck);
+      ctx.lineTo(xStern + 7.5 * scale, yDeck - 0.6 * scale);
+      ctx.quadraticCurveTo(xStern + 4.5 * scale, yDeck + hullH * 0.45, xStern - 1.5 * scale, yBase);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Ship-specific iconic exterior livery & superstructure details
+    ctx.globalAlpha = 1;
+    if (profile === 'oriskany-carrier') {
+      // Flight Deck angled yellow/white catapult tracks & deck edge stripes
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.42)';
+      ctx.lineWidth = Math.max(2, 0.14 * scale);
+      ctx.setLineDash([1.6 * scale, 1.1 * scale]);
+      ctx.beginPath();
+      ctx.moveTo(xBow, yDeck - 0.25 * scale);
+      ctx.lineTo(xStern, yDeck - 0.25 * scale);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (profile === 'britannic-hospital-liner') {
+      // Iconic HMHS Britannic faded green hospital stripe & Red Cross hull emblem
+      const stripeY = yDeck + 3.2 * scale;
+      ctx.fillStyle = 'rgba(22, 163, 74, 0.28)';
+      ctx.fillRect(xBow, stripeY, xStern - xBow, 2.2 * scale);
+      const crossX = toScreenX(42);
+      const crossY = yDeck + 4.3 * scale;
+      if (42 + 12 >= visX0 && 42 - 12 <= visX1) {
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.26)';
+        ctx.beginPath();
+        ctx.arc(crossX, crossY, 2.7 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.48)';
+        ctx.fillRect(crossX - 0.55 * scale, crossY - 1.8 * scale, 1.1 * scale, 3.6 * scale);
+        ctx.fillRect(crossX - 1.8 * scale, crossY - 0.55 * scale, 3.6 * scale, 1.1 * scale);
+      }
+    } else if (profile === 'fitzgerald-split-freighter') {
+      // Catastrophic jagged midships break & dark iron-ore taconite pellet mounds in the 161m trench
+      const breakX1 = toScreenX(48);
+      const breakX2 = toScreenX(84);
+      const trenchY = toScreenY(161.5);
+      if (86 >= visX0 && 44 <= visX1) {
+        ctx.fillStyle = 'rgba(30, 27, 24, 0.72)';
+        ctx.beginPath();
+        ctx.moveTo(breakX1, trenchY + 2 * scale);
+        ctx.quadraticCurveTo((breakX1 + breakX2) * 0.5, trenchY - 4.2 * scale, breakX2, trenchY + 2 * scale);
+        ctx.closePath();
+        ctx.fill();
+        // Jagged torn steel hull plates facing inward across the split
+        ctx.strokeStyle = 'rgba(180, 83, 9, 0.55)';
+        ctx.lineWidth = Math.max(2, 0.14 * scale);
+        ctx.beginPath();
+        ctx.moveTo(breakX1, toScreenY(134));
+        ctx.lineTo(breakX1 + 2.8 * scale, toScreenY(141));
+        ctx.lineTo(breakX1 - 0.8 * scale, toScreenY(148));
+        ctx.lineTo(breakX1 + 3.2 * scale, toScreenY(155));
+        ctx.moveTo(breakX2, toScreenY(142));
+        ctx.lineTo(breakX2 - 3.0 * scale, toScreenY(148));
+        ctx.lineTo(breakX2 + 1.0 * scale, toScreenY(154));
+        ctx.stroke();
+      }
+    }
+
+    // Subtle riveted vertical hull frame seams along the exterior backdrop
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+    ctx.lineWidth = Math.max(1, 0.05 * scale);
+    const seamStart = Math.max(hMin, Math.floor(visX0 / 8) * 8);
+    const seamEnd = Math.min(hMax, visX1 + 8);
+    for (let wx = seamStart; wx <= seamEnd; wx += 8) {
+      const sx = toScreenX(wx);
+      ctx.beginPath();
+      ctx.moveTo(sx, yDeck);
+      ctx.lineTo(sx, yBase);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  _drawWreckBackdropDetails(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null) {
     const level = this.level;
     ctx.save();
+
+    // 0. Bespoke Exterior Ship Hull Silhouette, Bow/Stern Prow, Paint Livery & Plate Seams
+    this._drawWreckShipArchitecture(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
 
     // 1. Layered Ocean Drift Current flow filaments
     if (Array.isArray(level.driftCurrents)) {
@@ -3089,19 +3281,19 @@ export class CaveRenderer {
         if (cur.yMax < visY0 || cur.yMin > visY1) continue;
         const dir = (cur.vx || 0) >= 0 ? 1 : -1;
         const spd = Math.max(0.4, Math.abs(cur.vx || 0.8));
-        ctx.strokeStyle = 'rgba(186, 230, 253, 0.22)';
-        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.25)';
+        ctx.lineWidth = Math.max(1, 0.048 * scale);
         ctx.beginPath();
         for (let k = 0; k < 14; k++) {
           const frac = (k + 0.5) / 14;
           const wy = cur.yMin + (cur.yMax - cur.yMin) * frac;
           if (wy < visY0 - 1 || wy > visY1 + 1) continue;
           const span = Math.max(24, visX1 - visX0 + 14);
-          const rawX = ((timeSec * spd * 3.2 * dir + k * 9.7) % span + span) % span;
+          const rawX = ((timeSec * spd * 3.4 * dir + k * 9.7) % span + span) % span;
           const wx = visX0 - 7 + rawX;
           const sx = toScreenX(wx);
           const sy = toScreenY(wy);
-          const len = (1.6 + (k % 3) * 0.7) * scale * dir;
+          const len = (1.8 + (k % 3) * 0.75) * scale * dir;
           ctx.moveTo(sx, sy);
           ctx.lineTo(sx + len, sy + Math.sin(timeSec * 1.4 + k) * 0.14 * scale);
         }
@@ -3109,14 +3301,30 @@ export class CaveRenderer {
       }
     }
 
-    // 2. Weighted Anchor / Shot Line from Dive Boat to Wreck Deck + 6m O2 Deco Trapeze Bar
+    // 2. Weighted Anchor / Shot Line from Dive Boat to Wreck Deck + Multi-Stage Deco Bottles & 6m O2 Trapeze Bar
     const shotX = level.shotLine?.x ?? level.spawn?.x ?? 0;
     const shotY0 = 0.35;
     const shotY1 = level.shotLine?.bottomY ?? level.wreckDeckY ?? 40;
+    const isClipped = Boolean(wreckState?.clippedToShotLine);
     if (shotX + 8 >= visX0 && shotX - 8 <= visX1 && shotY1 >= visY0 && shotY0 <= visY1) {
       const sway = (y) => Math.sin(y * 0.11 + timeSec * 1.1) * 0.28 * Math.sin(Math.min(1, y / Math.max(1, shotY1)) * Math.PI);
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.78)';
-      ctx.lineWidth = Math.max(1.6, 0.075 * scale);
+      // Glowing cyan sheath when diver is clipped on for zip-descent/ascent
+      if (isClipped) {
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.42)';
+        ctx.lineWidth = Math.max(5, 0.26 * scale);
+        ctx.beginPath();
+        const segs = Math.max(8, Math.ceil((shotY1 - shotY0) / 3));
+        for (let i = 0; i <= segs; i++) {
+          const wy = shotY0 + ((shotY1 - shotY0) * i) / segs;
+          const sx = toScreenX(shotX + sway(wy));
+          const sy = toScreenY(wy);
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+      ctx.strokeStyle = isClipped ? 'rgba(125, 211, 252, 0.95)' : 'rgba(250, 204, 21, 0.82)';
+      ctx.lineWidth = Math.max(1.8, 0.08 * scale);
       ctx.beginPath();
       const segs = Math.max(8, Math.ceil((shotY1 - shotY0) / 3));
       for (let i = 0; i <= segs; i++) {
@@ -3128,12 +3336,45 @@ export class CaveRenderer {
       }
       ctx.stroke();
 
+      // Depth distance tick marks every 10m along the shot line so vertical descent has crisp speed feel!
+      ctx.font = `600 ${Math.max(9, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+      ctx.textAlign = 'left';
+      for (let wy = 10; wy < shotY1 - 3; wy += 10) {
+        if (wy < visY0 - 2 || wy > visY1 + 2) continue;
+        const tx = toScreenX(shotX + sway(wy));
+        const ty = toScreenY(wy);
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.55)';
+        ctx.fillRect(tx - 0.16 * scale, ty - 0.04 * scale, 0.32 * scale, 0.08 * scale);
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.68)';
+        ctx.fillText(`${wy}m`, tx + 0.35 * scale, ty + 0.1 * scale);
+      }
+
+      // Staged spare bailout/deco cylinders clipped along deep shot line (e.g. 22m, 42m, 60m)
+      const stages = Array.isArray(level.shotLine?.decoStagesY) ? level.shotLine.decoStagesY : [22.0, 6.0];
+      for (let st = 0; st < stages.length; st++) {
+        const syW = stages[st];
+        if (syW <= 7 || syW >= shotY1 - 2 || syW < visY0 - 3 || syW > visY1 + 3) continue;
+        const mx = toScreenX(shotX + sway(syW));
+        const my = toScreenY(syW);
+        // Hanging AL80 stage bottle clipped to shot line
+        ctx.fillStyle = syW <= 25 ? '#fbbf24' : '#38bdf8';
+        ctx.fillRect(mx + 0.32 * scale, my - 0.42 * scale, 0.32 * scale, 0.98 * scale);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(mx + 0.32 * scale, my - 0.22 * scale, 0.32 * scale, 0.18 * scale);
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(mx, my, 0.26 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+
       // 6m O2 Deco Trapeze Bar suspended beneath the dive boat
       const barY = 5.4;
       if (barY >= visY0 - 4 && barY <= visY1 + 4) {
         const bx = toScreenX(shotX + sway(barY));
         const by = toScreenY(barY);
-        // Twin support ropes from boat
         ctx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
         ctx.lineWidth = Math.max(1, 0.045 * scale);
         ctx.beginPath();
@@ -3143,7 +3384,6 @@ export class CaveRenderer {
         ctx.lineTo(bx + 1.9 * scale, by);
         ctx.stroke();
 
-        // Trapeze steel bar
         ctx.strokeStyle = '#34d399';
         ctx.lineWidth = Math.max(3, 0.16 * scale);
         ctx.lineCap = 'round';
@@ -3152,7 +3392,6 @@ export class CaveRenderer {
         ctx.lineTo(bx + 2.2 * scale, by);
         ctx.stroke();
 
-        // Hanging spare green O2 stage cylinders on trapeze bar
         for (const ox of [-1.25, 1.25]) {
           ctx.fillStyle = '#10b981';
           ctx.fillRect(bx + (ox - 0.15) * scale, by + 0.12 * scale, 0.3 * scale, 0.92 * scale);
@@ -3164,38 +3403,103 @@ export class CaveRenderer {
         ctx.fillStyle = 'rgba(167, 243, 208, 0.92)';
         ctx.fillText('6m O₂ DECO BAR', bx, by - 0.34 * scale);
       }
-
-      // 22m Trimix Switch Marker Buoy clipped to shot line
-      const tmxY = Math.min(shotY1 - 2, level.ascentSwitchDepthM || 22);
-      if (tmxY >= visY0 - 3 && tmxY <= visY1 + 3) {
-        const mx = toScreenX(shotX + sway(tmxY));
-        const my = toScreenY(tmxY);
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath();
-        ctx.arc(mx, my, 0.32 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      }
     }
 
-    // 3. Shipwreck Architectural Landmarks & Glowing Porthole Light Cones
+    // 3. Shipwreck Architectural Landmarks, Chains, Railings, Davits & Glowing Porthole Light Cones
     if (Array.isArray(level.wreckProps)) {
       for (let i = 0; i < level.wreckProps.length; i++) {
         const prop = level.wreckProps[i];
-        const margin = (prop.scale || 1) * 10;
+        const margin = Math.max((prop.scale || 1) * 14, prop.len || 0, prop.chainLen || 0);
         if (prop.x + margin < visX0 || prop.x - margin > visX1 || prop.y + margin < visY0 || prop.y - margin > visY1) continue;
         const sx = toScreenX(prop.x);
         const sy = toScreenY(prop.y);
         const ps = (prop.scale || 1) * scale;
 
-        if (prop.kind === 'porthole') {
-          // Volumetric blue ocean light shaft spilling through riveted brass porthole
+        if (prop.kind === 'anchor') {
+          // Heavy iron anchor chain draped down from bow hawsepipe toward seabed gloom
+          const clen = (prop.chainLen || 22) * scale;
+          ctx.strokeStyle = 'rgba(71, 85, 105, 0.78)';
+          ctx.lineWidth = Math.max(2.2, 0.16 * scale);
+          ctx.setLineDash([0.35 * scale, 0.16 * scale]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.quadraticCurveTo(sx - 2.4 * scale, sy + clen * 0.55, sx - 1.2 * scale, sy + clen);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (prop.kind === 'railing') {
+          // Weathered ship deck stanchions & partially broken handrail
+          const rlen = (prop.len || 16) * scale;
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.52)';
+          ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - 1.05 * scale);
+          ctx.lineTo(sx + rlen, sy - 1.05 * scale);
+          ctx.moveTo(sx, sy - 0.55 * scale);
+          ctx.lineTo(sx + rlen * 0.85, sy - 0.55 * scale);
+          const posts = Math.max(3, Math.floor((prop.len || 16) / 2.2));
+          for (let p = 0; p <= posts; p++) {
+            const px = sx + (p / posts) * rlen;
+            ctx.moveTo(px, sy);
+            ctx.lineTo(px, sy - 1.1 * scale);
+          }
+          ctx.stroke();
+        } else if (prop.kind === 'davit') {
+          // Curved steel ocean-liner lifeboat davit arm jutting out into the blue
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(2.5, 0.22 * ps);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(-0.4 * ps, -3.2 * ps, 1.8 * ps, -4.4 * ps);
+          ctx.stroke();
+          // Dangling pulley fall rope
+          ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
+          ctx.lineWidth = Math.max(1, 0.05 * ps);
+          ctx.beginPath();
+          ctx.moveTo(1.8 * ps, -4.4 * ps);
+          ctx.lineTo(1.8 * ps + Math.sin(timeSec * 1.1 + i) * 0.35 * ps, -1.2 * ps);
+          ctx.stroke();
+          ctx.restore();
+        } else if (prop.kind === 'mast') {
+          // Tall lattice radar mast rising into sunlit upper water
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.72)';
+          ctx.lineWidth = Math.max(1.5, 0.1 * ps);
+          ctx.beginPath();
+          ctx.moveTo(-1.1 * ps, 0);
+          ctx.lineTo(0, -10.5 * ps);
+          ctx.lineTo(1.1 * ps, 0);
+          ctx.moveTo(-3.4 * ps, -6.5 * ps);
+          ctx.lineTo(3.4 * ps, -6.5 * ps);
+          ctx.moveTo(-2.1 * ps, -9.2 * ps);
+          ctx.lineTo(2.1 * ps, -9.2 * ps);
+          ctx.stroke();
+          ctx.restore();
+        } else if (prop.kind === 'pipe') {
+          // Overhead riveted engine-room steam pipe run
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          const plen = (prop.len || 10) * scale;
+          ctx.fillStyle = '#523a28';
+          ctx.fillRect(-plen * 0.5, -0.22 * scale, plen, 0.44 * scale);
+          ctx.fillStyle = 'rgba(251, 146, 60, 0.22)';
+          ctx.fillRect(-plen * 0.5, -0.18 * scale, plen, 0.12 * scale);
+          // Pipe flange rings
+          ctx.fillStyle = '#334155';
+          for (let f = -plen * 0.4; f <= plen * 0.4; f += 2.8 * scale) {
+            ctx.fillRect(f - 0.09 * scale, -0.32 * scale, 0.18 * scale, 0.64 * scale);
+          }
+          ctx.restore();
+        } else if (prop.kind === 'porthole') {
           const ang = prop.angle ?? 0.65;
           const beamLen = (prop.beamLen || 5.8) * scale;
           const grad = ctx.createLinearGradient(sx, sy, sx + Math.cos(ang) * beamLen, sy + Math.sin(ang) * beamLen);
-          grad.addColorStop(0, 'rgba(125, 211, 252, 0.34)');
+          grad.addColorStop(0, 'rgba(125, 211, 252, 0.36)');
           grad.addColorStop(1, 'rgba(14, 165, 233, 0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
@@ -3206,89 +3510,99 @@ export class CaveRenderer {
           ctx.closePath();
           ctx.fill();
         } else if (prop.kind === 'propeller') {
-          // Massive weathered bronze 3-blade ocean-liner / battleship propeller
           ctx.save();
           ctx.translate(sx, sy);
           ctx.rotate(prop.angle || 0);
           for (let b = 0; b < 3; b++) {
             ctx.save();
             ctx.rotate((b * Math.PI * 2) / 3);
-            ctx.fillStyle = '#8b6f47';
+            ctx.fillStyle = '#9a7b4f';
             ctx.strokeStyle = '#4a3721';
             ctx.lineWidth = Math.max(1.2, 0.08 * scale);
             ctx.beginPath();
-            ctx.ellipse(0, -1.55 * ps, 0.62 * ps, 1.48 * ps, 0.16, 0, Math.PI * 2);
+            ctx.ellipse(0, -1.55 * ps, 0.64 * ps, 1.52 * ps, 0.16, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
             ctx.restore();
           }
-          ctx.fillStyle = '#b08d57';
+          ctx.fillStyle = '#c29e65';
           ctx.beginPath();
-          ctx.arc(0, 0, 0.55 * ps, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.58 * ps, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         } else if (prop.kind === 'funnel') {
-          // Fallen iconic ocean-liner funnel / smokestack
           ctx.save();
           ctx.translate(sx, sy);
           ctx.rotate(prop.angle || 0.35);
-          ctx.fillStyle = '#5c3c28';
-          ctx.fillRect(-1.8 * ps, -4.2 * ps, 3.6 * ps, 8.4 * ps);
-          ctx.fillStyle = '#9a5b32';
-          ctx.fillRect(-1.8 * ps, -2.5 * ps, 3.6 * ps, 1.5 * ps);
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-1.8 * ps, -4.2 * ps, 3.6 * ps, 1.1 * ps);
+          ctx.fillStyle = '#6b4226';
+          ctx.fillRect(-2.0 * ps, -4.5 * ps, 4.0 * ps, 9.0 * ps);
+          ctx.fillStyle = '#b46534';
+          ctx.fillRect(-2.0 * ps, -2.5 * ps, 4.0 * ps, 1.6 * ps);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-2.0 * ps, -4.5 * ps, 4.0 * ps, 1.2 * ps);
+          // Steam whistle pipe alongside funnel
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(1.2, 0.14 * ps);
+          ctx.beginPath();
+          ctx.moveTo(2.25 * ps, -4.0 * ps);
+          ctx.lineTo(2.25 * ps, 4.2 * ps);
+          ctx.stroke();
           ctx.restore();
         } else if (prop.kind === 'island') {
-          // Aircraft carrier bridge island & radar mast rising above flight deck (USS Oriskany)
           ctx.save();
           ctx.translate(sx, sy);
-          ctx.fillStyle = '#364152';
-          ctx.fillRect(-3.6 * ps, -9.5 * ps, 7.2 * ps, 10.5 * ps);
+          // Tiered Essex-class carrier bridge superstructure with Pri-Fly & hull number "34"
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(-4.2 * ps, -9.8 * ps, 8.4 * ps, 10.6 * ps);
           ctx.fillStyle = '#475569';
-          ctx.fillRect(-2.4 * ps, -13.5 * ps, 4.8 * ps, 4.2 * ps);
-          ctx.strokeStyle = '#64748b';
-          ctx.lineWidth = Math.max(1.5, 0.12 * ps);
-          ctx.beginPath();
-          ctx.moveTo(0, -13.5 * ps);
-          ctx.lineTo(0, -19.5 * ps);
-          ctx.moveTo(-2.6 * ps, -16.8 * ps);
-          ctx.lineTo(2.6 * ps, -16.8 * ps);
-          ctx.stroke();
+          ctx.fillRect(-2.8 * ps, -14.0 * ps, 5.6 * ps, 4.4 * ps);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(1.6 * ps, -12.6 * ps, 2.2 * ps, 3.2 * ps); // Funnel stack
           // Bridge windows
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-          ctx.fillRect(-2.9 * ps, -8.2 * ps, 5.8 * ps, 1.2 * ps);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+          ctx.fillRect(-3.4 * ps, -8.5 * ps, 6.4 * ps, 1.15 * ps);
+          ctx.fillRect(-2.2 * ps, -12.8 * ps, 3.2 * ps, 0.95 * ps);
+          // Hull number "34" painted on the island side
+          ctx.font = `800 ${Math.max(10, Math.round(1.9 * ps))}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.fillStyle = 'rgba(226, 232, 240, 0.45)';
+          ctx.textAlign = 'center';
+          ctx.fillText('34', -1.2 * ps, -3.5 * ps);
           ctx.restore();
         } else if (prop.kind === 'turret') {
-          // Battleship armored 110-ton twin-barrel gun turret (HMS Victoria)
           ctx.save();
           ctx.translate(sx, sy);
           ctx.rotate(prop.angle || 0);
           ctx.fillStyle = '#475569';
-          ctx.fillRect(0.6 * ps, -0.58 * ps, 6.2 * ps, 0.42 * ps);
-          ctx.fillRect(0.6 * ps, 0.16 * ps, 6.2 * ps, 0.42 * ps);
+          ctx.fillRect(0.6 * ps, -0.6 * ps, 6.6 * ps, 0.44 * ps);
+          ctx.fillRect(0.6 * ps, 0.16 * ps, 6.6 * ps, 0.44 * ps);
           ctx.fillStyle = '#334155';
           ctx.beginPath();
-          ctx.arc(0, 0, 2.2 * ps, 0, Math.PI * 2);
+          ctx.arc(0, 0, 2.3 * ps, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = '#64748b';
-          ctx.lineWidth = Math.max(1.5, 0.1 * ps);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(1.5, 0.11 * ps);
           ctx.stroke();
           ctx.restore();
         } else if (prop.kind === 'pilothouse') {
-          // Great Lakes freighter pilot house & memorial bronze bell (SS Edmund Fitzgerald)
           ctx.save();
           ctx.translate(sx, sy);
-          ctx.fillStyle = '#3b4a5e';
-          ctx.fillRect(-3.8 * ps, -4.4 * ps, 7.6 * ps, 4.8 * ps);
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-3.1 * ps, -3.5 * ps, 6.2 * ps, 1.4 * ps);
-          // Golden replica memorial bell on pilot house roof
+          // White Great Lakes forecastle & open Pilot House windows + glowing memorial bronze bell
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(-4.2 * ps, -4.6 * ps, 8.4 * ps, 5.0 * ps);
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillRect(-4.5 * ps, -5.0 * ps, 9.0 * ps, 0.6 * ps);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-3.4 * ps, -3.6 * ps, 6.8 * ps, 1.5 * ps);
+          // Warm memorial halo around 1995 replica bronze bell
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.24)';
+          ctx.beginPath();
+          ctx.arc(0, -5.6 * ps, 1.45 * ps, 0, Math.PI * 2);
+          ctx.fill();
           ctx.fillStyle = '#f59e0b';
           ctx.beginPath();
-          ctx.arc(0, -5.0 * ps, 0.65 * ps, Math.PI, 0);
-          ctx.lineTo(0.85 * ps, -4.4 * ps);
-          ctx.lineTo(-0.85 * ps, -4.4 * ps);
+          ctx.arc(0, -5.6 * ps, 0.68 * ps, Math.PI, 0);
+          ctx.lineTo(0.88 * ps, -4.95 * ps);
+          ctx.lineTo(-0.88 * ps, -4.95 * ps);
           ctx.closePath();
           ctx.fill();
           ctx.restore();
@@ -3299,11 +3613,53 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawWreckForegroundHazards(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+  _drawWreckForegroundHazards(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null) {
     const level = this.level;
     ctx.save();
 
-    // Riveted steel beams & brass porthole rims
+    // 1. Interior Steel Bulkhead Rib Frames along wreck corridors (so interiors read as steel rooms!)
+    if (Array.isArray(level.segments)) {
+      ctx.strokeStyle = 'rgba(120, 74, 44, 0.34)';
+      ctx.lineWidth = Math.max(1.4, 0.11 * scale);
+      for (let i = 0; i < level.segments.length; i++) {
+        const s = level.segments[i];
+        const minX = Math.min(s.ax, s.bx) - 5;
+        const maxX = Math.max(s.ax, s.bx) + 5;
+        const minY = Math.min(s.ay, s.by) - 5;
+        const maxY = Math.max(s.ay, s.by) + 5;
+        if (maxX < visX0 || minX > visX1 || maxY < visY0 || minY > visY1) continue;
+        const dx = s.bx - s.ax;
+        const dy = s.by - s.ay;
+        const len = Math.hypot(dx, dy);
+        if (len < 4) continue;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const ribs = Math.max(2, Math.floor(len / 7.5));
+        for (let r = 1; r < ribs; r++) {
+          const t = r / ribs;
+          const cx = s.ax + dx * t;
+          const cy = s.ay + dy * t;
+          const rad = s.ra + (s.rb - s.ra) * t;
+          // Draw crisp steel frame brackets on both walls of the corridor
+          const p1x = toScreenX(cx + nx * (rad * 0.92));
+          const p1y = toScreenY(cy + ny * (rad * 0.92));
+          const p2x = toScreenX(cx + nx * (rad * 0.62));
+          const p2y = toScreenY(cy + ny * (rad * 0.62));
+          const q1x = toScreenX(cx - nx * (rad * 0.92));
+          const q1y = toScreenY(cy - ny * (rad * 0.92));
+          const q2x = toScreenX(cx - nx * (rad * 0.62));
+          const q2y = toScreenY(cy - ny * (rad * 0.62));
+          ctx.beginPath();
+          ctx.moveTo(p1x, p1y);
+          ctx.lineTo(p2x, p2y);
+          ctx.moveTo(q1x, q1y);
+          ctx.lineTo(q2x, q2y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 2. Riveted steel beams & brass porthole rims
     if (Array.isArray(level.wreckProps)) {
       for (let i = 0; i < level.wreckProps.length; i++) {
         const prop = level.wreckProps[i];
@@ -3325,27 +3681,185 @@ export class CaveRenderer {
           const len = (prop.len || 4.2) * scale;
           ctx.fillStyle = '#4a3525';
           ctx.fillRect(-len * 0.5, -0.18 * scale, len, 0.36 * scale);
-          ctx.strokeStyle = '#7c4a26';
+          ctx.strokeStyle = '#8b5328';
           ctx.lineWidth = Math.max(1, 0.05 * scale);
           ctx.strokeRect(-len * 0.5, -0.18 * scale, len, 0.36 * scale);
+          // Rivet dots along I-beam web
+          ctx.fillStyle = '#b47b3a';
+          for (let rv = -len * 0.42; rv <= len * 0.42; rv += 0.55 * scale) {
+            ctx.beginPath();
+            ctx.arc(rv, 0, Math.max(1, 0.04 * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
           ctx.restore();
         }
       }
     }
 
-    // Swaying translucent fishing-net & cable entanglement zones
+    // 3. Timed Hull-Breach Surge Current Jet Streams (pulsing in exact phase with physics!)
+    if (Array.isArray(level.surgeZones)) {
+      for (let z = 0; z < level.surgeZones.length; z++) {
+        const zone = level.surgeZones[z];
+        const zr = zone.radius || 4.0;
+        if (zone.x + zr + 2 < visX0 || zone.x - zr - 2 > visX1 || zone.y + zr + 2 < visY0 || zone.y - zr - 2 > visY1) continue;
+        const wave = computeSurgeWave(zone, timeSec);
+        const sx = toScreenX(zone.x);
+        const sy = toScreenY(zone.y);
+        const sr = zr * scale;
+        const mag = Math.hypot(zone.vx || 0, zone.vy || 0) || 1;
+        const dirX = (zone.vx || 0) / mag;
+        const dirY = (zone.vy || 0) / mag;
+        const flowSign = wave >= 0 ? 1 : -1;
+        const strength = Math.abs(wave);
+
+        if (strength > 0.05) {
+          // Active surging water jets & directional chevrons
+          const ang = Math.atan2(dirY * flowSign, dirX * flowSign);
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(ang);
+          ctx.strokeStyle = `rgba(125, 211, 252, ${0.22 + strength * 0.58})`;
+          ctx.lineWidth = Math.max(1.5, (0.06 + strength * 0.06) * scale);
+          ctx.lineCap = 'round';
+          for (let k = -2; k <= 2; k++) {
+            const oy = k * sr * 0.32;
+            const travel = ((timeSec * 5.2 + k * 0.7) % 1.0) * 2 - 1;
+            const ox = travel * sr * 0.55;
+            const segLen = sr * (0.35 + strength * 0.25);
+            ctx.beginPath();
+            ctx.moveTo(ox - segLen * 0.5, oy);
+            ctx.lineTo(ox + segLen * 0.5, oy);
+            // Directional chevron tip
+            ctx.lineTo(ox + segLen * 0.5 - 0.28 * scale, oy - 0.2 * scale);
+            ctx.moveTo(ox + segLen * 0.5, oy);
+            ctx.lineTo(ox + segLen * 0.5 - 0.28 * scale, oy + 0.2 * scale);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          // Safe calm lull window indicator
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.32)';
+          ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+          ctx.setLineDash([5, 6]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr * 0.72, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    // 4. Interactive Watertight Bulkhead Hatches (heavy steel door + spinning brass handwheel!)
+    if (Array.isArray(level.watertightHatches)) {
+      const openedSet = wreckState?.openedHatchIds;
+      const crankId = wreckState?.crankingHatchId;
+      const crankProg = wreckState?.crankingHatchProgress || 0;
+
+      for (let h = 0; h < level.watertightHatches.length; h++) {
+        const hatch = level.watertightHatches[h];
+        const hr = hatch.radius || 1.9;
+        if (hatch.x + hr + 3 < visX0 || hatch.x - hr - 3 > visX1 || hatch.y + hr + 3 < visY0 || hatch.y - hr - 3 > visY1) continue;
+        const sx = toScreenX(hatch.x);
+        const sy = toScreenY(hatch.y);
+        const sr = hr * scale;
+        const isOpen = openedSet?.has(hatch.id);
+        const isCranking = !isOpen && crankId === hatch.id;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        if (isOpen) {
+          // Swung-open steel hatch frame (emerald glow showing passage is clear!)
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.65)';
+          ctx.lineWidth = Math.max(2.5, 0.14 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.86, 0, Math.PI * 2);
+          ctx.stroke();
+          // Open door leaf hinged to side
+          ctx.fillStyle = 'rgba(51, 65, 85, 0.62)';
+          ctx.fillRect(sr * 0.75, -sr * 0.7, sr * 0.28, sr * 1.4);
+        } else {
+          // Sealed circular riveted steel bulkhead door
+          ctx.fillStyle = '#293548';
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.92, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = isCranking ? '#38bdf8' : '#f59e0b';
+          ctx.lineWidth = Math.max(2.4, 0.14 * scale);
+          ctx.stroke();
+
+          // Outer bolts around steel rim
+          ctx.fillStyle = '#94a3b8';
+          for (let b = 0; b < 8; b++) {
+            const ba = (b / 8) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(Math.cos(ba) * sr * 0.76, Math.sin(ba) * sr * 0.76, Math.max(1.4, 0.06 * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Spinning brass 6-spoke handwheel
+          ctx.save();
+          const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.06;
+          ctx.rotate(wheelRot);
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = Math.max(2, 0.11 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.44, 0, Math.PI * 2);
+          for (let sp = 0; sp < 6; sp++) {
+            const sa = (sp / 6) * Math.PI * 2;
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(sa) * sr * 0.44, Math.sin(sa) * sr * 0.44);
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.14 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Live cranking progress ring!
+          if (isCranking && crankProg > 0) {
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = Math.max(3, 0.16 * scale);
+            ctx.beginPath();
+            ctx.arc(0, 0, sr * 1.08, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // 5. Cuttable Fishing-Net & Cable Entanglement Zones (with taut snare strands when hooked!)
     if (Array.isArray(level.snagZones)) {
+      const cutSet = wreckState?.cutSnagIds;
+      const activeIdx = wreckState?.activeSnagIndex ?? -1;
       for (let s = 0; s < level.snagZones.length; s++) {
         const snag = level.snagZones[s];
+        const snagKey = snag.id || `snag_${s}`;
         const r = snag.radius || 2.4;
-        if (snag.x + r + 2 < visX0 || snag.x - r - 2 > visX1 || snag.y + r + 2 < visY0 || snag.y - r - 2 > visY1) continue;
+        if (snag.x + r + 3 < visX0 || snag.x - r - 3 > visX1 || snag.y + r + 3 < visY0 || snag.y - r - 3 > visY1) continue;
         const sx = toScreenX(snag.x);
         const sy = toScreenY(snag.y);
         const sr = r * scale;
         const sway = Math.sin(timeSec * 1.45 + s * 2.1) * 0.22 * scale;
+        const isCut = cutSet?.has(snagKey);
 
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.36)';
-        ctx.lineWidth = Math.max(1, 0.04 * scale);
+        if (isCut) {
+          // Sliced & parted harmless frayed net remnants hanging on outer edges
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
+          ctx.lineWidth = Math.max(1, 0.035 * scale);
+          ctx.beginPath();
+          for (const side of [-1, 1]) {
+            ctx.moveTo(sx + side * sr * 0.85, sy - sr * 0.75);
+            ctx.quadraticCurveTo(sx + side * sr * 0.6 + sway, sy, sx + side * sr * 0.72 + sway, sy + sr * 0.7);
+          }
+          ctx.stroke();
+          continue;
+        }
+
+        const isHooked = activeIdx === s;
+        ctx.strokeStyle = isHooked ? 'rgba(248, 113, 113, 0.72)' : 'rgba(251, 191, 36, 0.42)';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
         ctx.beginPath();
         for (let k = -3; k <= 3; k++) {
           const ox = (k / 3.2) * sr;
@@ -3356,8 +3870,22 @@ export class CaveRenderer {
         }
         ctx.stroke();
 
+        // Taut snare monofilament strands pulled tight from net to hooked diver!
+        if (isHooked && diver) {
+          const dx = toScreenX(diver.x);
+          const dy = toScreenY(diver.y);
+          ctx.strokeStyle = 'rgba(251, 146, 60, 0.88)';
+          ctx.lineWidth = Math.max(1.6, 0.055 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx - sr * 0.35, sy - sr * 0.25);
+          ctx.lineTo(dx, dy);
+          ctx.moveTo(sx + sr * 0.35, sy + sr * 0.22);
+          ctx.lineTo(dx, dy);
+          ctx.stroke();
+        }
+
         // Subtle warning perimeter shimmer
-        ctx.strokeStyle = 'rgba(251, 146, 60, 0.25)';
+        ctx.strokeStyle = isHooked ? 'rgba(248, 113, 113, 0.55)' : 'rgba(251, 146, 60, 0.28)';
         ctx.setLineDash([4, 5]);
         ctx.beginPath();
         ctx.arc(sx + sway * 0.35, sy, sr * 0.92, 0, Math.PI * 2);
@@ -4339,6 +4867,41 @@ export class CaveRenderer {
           ctx.arc(k * 0.11 * scale + sway * 1.6, -sz * 0.95, 0.03 * scale, 0, Math.PI * 2);
           ctx.fill();
         }
+      } else if (a.kind === 'rusticle') {
+        // Hanging icicle-like iron-oxide rusticles dripping from sunken steel ceilings
+        for (let s = -1; s <= 1; s++) {
+          const sh = sz * (s === 0 ? 1.15 : 0.72);
+          const ox = s * 0.14 * scale;
+          ctx.fillStyle = a.color;
+          ctx.beginPath();
+          ctx.moveTo(ox - 0.065 * scale, 0);
+          ctx.lineTo(ox + 0.065 * scale, 0);
+          ctx.lineTo(ox + 0.015 * scale, -sh);
+          ctx.lineTo(ox - 0.015 * scale, -sh);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = a.accent;
+          ctx.beginPath();
+          ctx.arc(ox, -sh, 0.032 * scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (a.kind === 'seafan') {
+        // Branching gorgonian sea fan corals & red sponges colonizing upper ship steel
+        ctx.strokeStyle = a.color;
+        ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(sway * 0.6, -sz * 0.5, sway * 1.1, -sz);
+        ctx.moveTo(sway * 0.3, -sz * 0.35);
+        ctx.lineTo(-sz * 0.42 + sway * 0.8, -sz * 0.78);
+        ctx.moveTo(sway * 0.3, -sz * 0.4);
+        ctx.lineTo(sz * 0.42 + sway * 0.9, -sz * 0.82);
+        ctx.moveTo(sway * 0.6, -sz * 0.65);
+        ctx.lineTo(-sz * 0.25 + sway * 1.1, -sz * 0.96);
+        ctx.moveTo(sway * 0.6, -sz * 0.65);
+        ctx.lineTo(sz * 0.25 + sway * 1.2, -sz * 0.98);
+        ctx.stroke();
       } else if (a.kind === 'crystal') {
         // Phreatic dogtooth calcite/aragonite mineral crystal cluster
         for (let c = -1; c <= 1; c++) {
@@ -4390,6 +4953,24 @@ export class CaveRenderer {
       const r = eco.remipedes[i];
       if (r.x < xMin || r.x > xMax || r.y < yMin || r.y > yMax) continue;
       drawStyledRemipede(ctx, r, toScreenX(r.x), toScreenY(r.y), scale, timeSec);
+    }
+
+    // 4. Pelagic Moon Jellyfish pulsing along open-water shipwreck shot lines
+    if (Array.isArray(eco.jellies)) {
+      for (let i = 0; i < eco.jellies.length; i++) {
+        const j = eco.jellies[i];
+        if (j.x < xMin - 2 || j.x > xMax + 2 || j.y < yMin - 3 || j.y > yMax + 2) continue;
+        drawStyledJellyfish(ctx, j, toScreenX(j.x), toScreenY(j.y), scale, timeSec);
+      }
+    }
+
+    // 5. Shipwreck Megafauna (Cruising Oceanic Reef Sharks & Lurking Goliath Groupers)
+    if (Array.isArray(eco.megafauna)) {
+      for (let i = 0; i < eco.megafauna.length; i++) {
+        const m = eco.megafauna[i];
+        if (m.x < xMin - 6 || m.x > xMax + 6 || m.y < yMin - 4 || m.y > yMax + 4) continue;
+        drawStyledMegafauna(ctx, m, toScreenX(m.x), toScreenY(m.y), scale, timeSec);
+      }
     }
     ctx.restore();
   }
@@ -6332,6 +6913,7 @@ export class CaveRenderer {
     ctx.save();
     const wispStamp = this.glowStamps.siltWisp || this.glowStamps.silt;
     const baseStamp = this.glowStamps.silt;
+    const rustStamp = this.glowStamps.rustSilt || baseStamp;
     const warmStamp = this.glowStamps.warm;
 
     const lights = [
@@ -6392,20 +6974,21 @@ export class CaveRenderer {
       const rot = (s.rot ?? s.seed ?? 0) + Math.sin(timeSec * 0.35 + (s.seed || 0)) * 0.25;
 
       // Soft ambient silt body + multi-lobed rotating wispy cloud layers in world space
-      ctx.globalAlpha = Math.min(0.68, s.alpha * (0.34 + lit * 0.38));
-      ctx.drawImage(baseStamp, sx - r * 0.92, sy - r * 0.92, r * 1.84, r * 1.84);
+      const cloudBase = s.isRust ? rustStamp : baseStamp;
+      ctx.globalAlpha = Math.min(0.72, s.alpha * (0.36 + lit * 0.4));
+      ctx.drawImage(cloudBase, sx - r * 0.92, sy - r * 0.92, r * 1.84, r * 1.84);
 
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(rot);
       ctx.globalAlpha = Math.min(0.88, s.alpha * (0.48 + lit * 0.44));
-      ctx.drawImage(wispStamp, -r * 1.15, -r * 1.05, r * 2.3, r * 2.1);
+      ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 1.15, -r * 1.05, r * 2.3, r * 2.1);
 
       // Counter-rotating secondary billowing tendril as cloud expands & diffuses
       if (lifeRatio < 0.96) {
         ctx.rotate(-rot * 1.7 + 1.1);
         ctx.globalAlpha = Math.min(0.54, s.alpha * 0.42);
-        ctx.drawImage(wispStamp, -r * 0.85, -r * 0.95, r * 1.9, r * 1.75);
+        ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 0.85, -r * 0.95, r * 1.9, r * 1.75);
       }
       ctx.restore();
 

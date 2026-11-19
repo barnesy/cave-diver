@@ -104,6 +104,18 @@ export function createDiveSession(
     hrWarnCooldown: 0,
     restrictWarnCooldown: 0,
     snagWarnCooldown: 0,
+    surgeWarnCooldown: 0,
+    rustPercolateCooldown: 0,
+    hullGroanTimer: 8.5 + Math.random() * 9.0,
+    clippedToShotLine: false,
+    cutSnagIds: new Set(),
+    activeSnagIndex: -1,
+    openedHatchIds: new Set(),
+    crankingHatchId: null,
+    crankingHatchProgress: 0,
+    crankTickAccum: 0,
+    hatchBonusScore: 0,
+    wreckActionPrompt: null,
     thirdWarned: false,
     stuckDuration: 0,
     reelMaxMeters: level.reelMetersPerDiver || 0,
@@ -125,6 +137,135 @@ export function createDiveSession(
     },
     simTimeSec: 0,
   };
+}
+
+/**
+ * Deterministic hull-breach surge wave (-1..+1) shared between physics and renderer.
+ * Returns 0 during the calm lull window (|raw| <= 0.35) so divers can time clean crossings.
+ */
+export function computeSurgeWave(zone, timeSec = 0) {
+  const period = Math.max(2.5, zone?.periodSec || 7.5);
+  const phase = zone?.phase || 0;
+  const raw = Math.sin((timeSec * Math.PI * 2) / period + phase);
+  if (Math.abs(raw) <= 0.35) return 0;
+  const sign = raw >= 0 ? 1 : -1;
+  return sign * ((Math.abs(raw) - 0.35) / 0.65);
+}
+
+/**
+ * Triggers the active contextual shipwreck action:
+ * 1) Slice free from a tangled fishing net / cable (permanently clears snag)
+ * 2) Crank open a sealed watertight bulkhead hatch (unlocks shortcut/vault + bonus)
+ * 3) Clip onto or unclip from the open-water shot line for fast controlled zip-descent/ascent
+ */
+export function triggerWreckAction(session, callbacks = {}) {
+  if (!session || !session.level?.isWreck || session.diveState?.alive === false) {
+    return { handled: false, kind: null };
+  }
+  const { level, diver, diveState, siltClouds, bubbles } = session;
+
+  // 1. Priority 1: Slice free from active fishing-net / cable snag
+  if (session.activeSnagIndex >= 0 && Array.isArray(level.snagZones)) {
+    const idx = session.activeSnagIndex;
+    const snag = level.snagZones[idx];
+    if (snag) {
+      const snagKey = snag.id || `snag_${idx}`;
+      session.cutSnagIds.add(snagKey);
+      session.activeSnagIndex = -1;
+      diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.28);
+      diveState.heartRateBpm = Math.max(72, (diveState.heartRateBpm || 80) - 14);
+      callbacks.onLineCut?.(snag);
+      callbacks.onToast?.(`✂️ Cut free from ${snag.label || 'net snag'}! Path cleared.`, 2.6);
+      return { handled: true, kind: 'cut-net', targetId: snagKey };
+    }
+  }
+
+  // 2. Priority 2: Crank open a nearby sealed watertight bulkhead hatch
+  if (Array.isArray(level.watertightHatches)) {
+    for (let i = 0; i < level.watertightHatches.length; i++) {
+      const hatch = level.watertightHatches[i];
+      if (!hatch || session.openedHatchIds.has(hatch.id)) continue;
+      const dist = Math.hypot(diver.x - hatch.x, diver.y - hatch.y);
+      const reach = (hatch.radius || 2.0) + 2.5;
+      if (dist <= reach) {
+        if (session.crankingHatchId !== hatch.id) {
+          session.crankingHatchId = hatch.id;
+          session.crankingHatchProgress = Math.max(0.18, session.crankingHatchProgress || 0);
+          session.crankTickAccum = 0;
+          callbacks.onHatchCrank?.(session.crankingHatchProgress, hatch);
+          callbacks.onToast?.(`⚙️ Cranking ${hatch.label || 'Watertight Hatch'}... hold steady!`, 2.0);
+        } else {
+          // Repeated taps boost cranking speed!
+          session.crankingHatchProgress = Math.min(1, session.crankingHatchProgress + 0.24);
+          callbacks.onHatchCrank?.(session.crankingHatchProgress, hatch);
+        }
+        if (session.crankingHatchProgress >= 1) {
+          _completeHatchOpen(session, hatch, callbacks, siltClouds, bubbles);
+        }
+        return { handled: true, kind: 'open-hatch', targetId: hatch.id };
+      }
+    }
+  }
+
+  // 3. Priority 3: Clip onto / unclip from the open-water shot line
+  if (level.shotLine) {
+    if (session.clippedToShotLine) {
+      session.clippedToShotLine = false;
+      callbacks.onClipLine?.(false);
+      callbacks.onToast?.('🔓 Unclipped from shot line — free swimming.', 1.8);
+      return { handled: true, kind: 'unclip-line' };
+    }
+    const shotX = level.shotLine.x ?? level.spawn?.x ?? 0;
+    const shotBottom = level.shotLine.bottomY ?? level.wreckDeckY ?? 40;
+    if (Math.abs(diver.x - shotX) <= 5.0 && diver.y >= 1.8 && diver.y <= shotBottom - 0.8) {
+      session.clippedToShotLine = true;
+      callbacks.onClipLine?.(true);
+      callbacks.onToast?.('⚓ Clipped to shot line! Hold Down to zip-descend or Up for steady ascent.', 2.8);
+      return { handled: true, kind: 'clip-line' };
+    }
+  }
+
+  return { handled: false, kind: null };
+}
+
+function _completeHatchOpen(session, hatch, callbacks, siltClouds, bubbles) {
+  session.openedHatchIds.add(hatch.id);
+  session.crankingHatchId = null;
+  session.crankingHatchProgress = 0;
+  session.crankTickAccum = 0;
+  session.hatchBonusScore = (session.hatchBonusScore || 0) + (hatch.bonusPoints || 150);
+  callbacks.onHatchOpen?.(hatch);
+  callbacks.onToast?.(`🔓 ${hatch.label || 'Watertight Hatch'} unsealed! (+${hatch.bonusPoints || 150} pts)`, 3.0);
+
+  // Dramatic burst of trapped pressurized bubbles & rust silt when the seal breaks
+  if (Array.isArray(bubbles)) {
+    for (let k = 0; k < 14; k++) {
+      spawnExhaustBubble(
+        bubbles,
+        hatch.x + (Math.random() - 0.5) * 1.1,
+        hatch.y + (Math.random() - 0.5) * 0.9,
+        (Math.random() - 0.5) * 1.4,
+        -0.8 - Math.random() * 1.1,
+        { primary: k < 8, intensity: 0.9, depthM: hatch.y, portSign: k % 2 === 0 ? 1 : -1 }
+      );
+    }
+  }
+  if (Array.isArray(siltClouds) && siltClouds.length < 135) {
+    for (let k = 0; k < 3; k++) {
+      const cloud = spawnSiltPlume(siltClouds, {
+        x: hatch.x + (Math.random() - 0.5) * 0.9,
+        y: hatch.y + (Math.random() - 0.5) * 0.7,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: 0.15 + Math.random() * 0.25,
+        radius: 0.75,
+        maxRadius: 2.9,
+        life: 16,
+        peakAlpha: 0.65,
+        isRust: true,
+      });
+      if (cloud) callbacks.onSiltSpawn?.(cloud);
+    }
+  }
 }
 
 /**
@@ -483,6 +624,35 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
         b.vx = tx * slopeDir * (0.28 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.14;
         b.vy = ty * slopeDir * 0.14;
         b.life = Math.min(b.life, 0.9 + Math.random() * 0.85);
+
+        // Shipwreck "Percolation": exhaust bubbles striking overhead rusted steel plates dislodge
+        // sinking orange-brown rust-snow plumes that cloud visibility behind panicked divers!
+        if (
+          level.isWreck &&
+          b.y > (level.wreckDeckY ?? 30) - 2.0 &&
+          session.siltClouds &&
+          session.siltClouds.length < 132 &&
+          (session.rustPercolateCooldown || 0) <= 0
+        ) {
+          const panicBoost = diveState?.panicLevel || 0;
+          const intensity = profile.intensity || 0.3;
+          // Calm breathing rarely dislodges rust; heavy/panicked exhaust drops steady curtains
+          if (Math.random() < 0.18 + panicBoost * 0.45 + intensity * 0.22) {
+            session.rustPercolateCooldown = Math.max(0.42, 1.55 - panicBoost * 0.95 - intensity * 0.35);
+            const rustCloud = spawnSiltPlume(session.siltClouds, {
+              x: b.x + (Math.random() - 0.5) * 0.35,
+              y: b.y + 0.18,
+              vx: (Math.random() - 0.5) * 0.22,
+              vy: 0.28 + Math.random() * 0.24,
+              radius: 0.55 + panicBoost * 0.35,
+              maxRadius: 2.3 + panicBoost * 1.4,
+              life: 16 + Math.random() * 8,
+              peakAlpha: 0.48 + panicBoost * 0.28,
+              isRust: true,
+            });
+            if (rustCloud) callbacks.onSiltSpawn?.(rustCloud);
+          }
+        }
       }
     } else {
       // Silver ceiling-trapped percolation slide
@@ -601,8 +771,19 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Layered open-ocean drift currents on shipwreck dives (sheltered when tucked inside steel hull)
-  if (Array.isArray(level.driftCurrents) && clearanceM > 1.75) {
+  // Rust percolation throttle & eerie periodic sunken-hull metallic groans
+  if (session.rustPercolateCooldown > 0) session.rustPercolateCooldown -= dt;
+  if (level.isWreck && diver.y > 12) {
+    session.hullGroanTimer = (session.hullGroanTimer ?? 12) - dt;
+    if (session.hullGroanTimer <= 0) {
+      session.hullGroanTimer = 15 + Math.random() * 14;
+      const depthRatio = Math.min(1, diver.y / Math.max(40, level.wreckSeabedY || 90));
+      callbacks.onHullGroan?.(depthRatio);
+    }
+  }
+
+  // Layered open-ocean drift currents on shipwreck dives (sheltered inside steel hull or when clipped to shot line)
+  if (Array.isArray(level.driftCurrents) && clearanceM > 1.75 && !session.clippedToShotLine) {
     const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
     for (let c = 0; c < level.driftCurrents.length; c++) {
       const cur = level.driftCurrents[c];
@@ -614,27 +795,191 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Shipwreck fishing-net & dangling cable entanglement hazards (drag + HR/panic spike)
+  // Timed hull-breach surge currents (rhythmic ocean swell pulsing through torn hatches — time the calm lull!)
+  if (session.surgeWarnCooldown > 0) session.surgeWarnCooldown -= dt;
+  if (Array.isArray(level.surgeZones)) {
+    for (let z = 0; z < level.surgeZones.length; z++) {
+      const zone = level.surgeZones[z];
+      const zr = zone.radius || 4.0;
+      const dist = Math.hypot(diver.x - zone.x, diver.y - zone.y);
+      if (dist <= zr) {
+        const wave = computeSurgeWave(zone, session.simTimeSec);
+        if (wave !== 0) {
+          const falloff = 0.45 + 0.55 * (1 - dist / zr);
+          diver.vx += (zone.vx || 0) * wave * falloff * dt;
+          diver.vy += (zone.vy || 0) * wave * falloff * dt;
+          if (Math.abs(wave) > 0.65 && session.surgeWarnCooldown <= 0) {
+            session.surgeWarnCooldown = 6.0;
+            callbacks.onToast?.(`🌊 ${zone.label || 'Hull-breach surge'} — wait for the lull or ride the flow!`, 2.6);
+          }
+        }
+      }
+    }
+  }
+
+  // Shipwreck fishing-net & dangling cable entanglement hazards (cuttable with shears [E]!)
   if (session.snagWarnCooldown > 0) session.snagWarnCooldown -= dt;
+  session.activeSnagIndex = -1;
   if (Array.isArray(level.snagZones)) {
     for (let s = 0; s < level.snagZones.length; s++) {
       const snag = level.snagZones[s];
+      const snagKey = snag.id || `snag_${s}`;
+      if (session.cutSnagIds?.has(snagKey)) continue;
       const sr = snag.radius || 2.4;
       const dist = Math.hypot(diver.x - snag.x, diver.y - snag.y);
       if (dist <= sr) {
+        session.activeSnagIndex = s;
         const grip = 1 - dist / sr;
-        const drag = Math.exp(-(2.4 + grip * 2.2) * dt);
+        const drag = Math.exp(-(2.6 + grip * 2.5) * dt);
         diver.vx *= drag;
         diver.vy *= drag;
         diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * (0.22 + grip * 0.25));
         diveState.heartRateBpm = Math.min(192, (diveState.heartRateBpm || 68) + dt * (11 + grip * 12));
         if (session.snagWarnCooldown <= 0) {
           session.snagWarnCooldown = 5.5;
-          callbacks.onToast?.(`🕸️ ${snag.label || 'Fishing net snag'} — stay calm & pull clear!`, 2.8);
+          callbacks.onToast?.(`🕸️ Tangled in ${snag.label || 'fishing net'} — press [E] / Cut Net!`, 2.8);
         }
         break;
       }
     }
+  }
+
+  // Interactive Watertight Bulkhead Hatches (physical barrier until cranked open + smooth progress)
+  let nearbyHatch = null;
+  if (Array.isArray(level.watertightHatches)) {
+    for (let h = 0; h < level.watertightHatches.length; h++) {
+      const hatch = level.watertightHatches[h];
+      if (!hatch || session.openedHatchIds?.has(hatch.id)) continue;
+      const hr = hatch.radius || 2.0;
+      const dx = diver.x - hatch.x;
+      const dy = diver.y - hatch.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < hr + 0.45 && dist > 0.001) {
+        // Push diver cleanly back from the sealed steel door
+        const push = hr + 0.45 - dist;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        diver.x += nx * push;
+        diver.y += ny * push;
+        const vn = diver.vx * nx + diver.vy * ny;
+        if (vn < 0) {
+          diver.vx -= nx * vn * 1.1;
+          diver.vy -= ny * vn * 1.1;
+        }
+      }
+      if (dist <= hr + 2.5 && !nearbyHatch) {
+        nearbyHatch = hatch;
+      }
+    }
+  }
+
+  if (session.crankingHatchId) {
+    const activeHatch = Array.isArray(level.watertightHatches)
+      ? level.watertightHatches.find((h) => h.id === session.crankingHatchId)
+      : null;
+    if (!activeHatch || session.openedHatchIds?.has(activeHatch.id)) {
+      session.crankingHatchId = null;
+      session.crankingHatchProgress = 0;
+    } else {
+      const dist = Math.hypot(diver.x - activeHatch.x, diver.y - activeHatch.y);
+      if (dist > (activeHatch.radius || 2.0) + 3.2) {
+        // Swam away before unsealing
+        session.crankingHatchId = null;
+        session.crankingHatchProgress = 0;
+      } else {
+        session.crankingHatchProgress = Math.min(1, (session.crankingHatchProgress || 0) + dt / 1.35);
+        session.crankTickAccum = (session.crankTickAccum || 0) + dt;
+        if (session.crankTickAccum >= 0.28) {
+          session.crankTickAccum = 0;
+          callbacks.onHatchCrank?.(session.crankingHatchProgress, activeHatch);
+        }
+        if (session.crankingHatchProgress >= 1) {
+          _completeHatchOpen(session, activeHatch, callbacks, siltClouds, session.bubbles);
+        }
+      }
+    }
+  }
+
+  // Open-Water Shot-Line Clip & Fast Controlled Zip-Descent / Safe-Rate Ascent
+  let nearShotLine = false;
+  if (level.isWreck && level.shotLine) {
+    const shotX = level.shotLine.x ?? level.spawn?.x ?? 0;
+    const shotBottom = level.shotLine.bottomY ?? level.wreckDeckY ?? 40;
+    const dxLine = Math.abs(diver.x - shotX);
+    const inDepthSpan = diver.y >= 1.8 && diver.y <= shotBottom - 0.8;
+    nearShotLine = dxLine <= 5.0 && inDepthSpan;
+
+    if (session.clippedToShotLine) {
+      // Unclip automatically if steering hard laterally or reaching deck / surface
+      if (Math.abs(ctrlX) > 0.62 || diver.y < 1.5 || diver.y >= shotBottom - 0.7) {
+        session.clippedToShotLine = false;
+        callbacks.onClipLine?.(false);
+      } else {
+        // Lock cleanly onto shot line X (immune to drift current!)
+        diver.x += (shotX - diver.x) * Math.min(1, dt * 8.0);
+        diver.vx *= Math.exp(-9.0 * dt);
+
+        if (ctrlY > 0.15) {
+          // Fast zip-descent (up to 7.2 m/s), auto-braking gently at gas switch buoy if still on EAN32
+          const switchDepth = level.ascentSwitchDepthM ?? 22.0;
+          const needTmxBrake = diveState.activeGasId === 'EAN32' && diver.y >= switchDepth - 1.5 && diver.y <= switchDepth + 3.5;
+          const targetVy = needTmxBrake ? 0.25 : Math.min(7.2, 2.2 + ctrlY * 5.2);
+          diver.vy += (targetVy - diver.vy) * Math.min(1, dt * 7.5);
+        } else if (ctrlY < -0.15) {
+          // Controlled safe-rate ascent (~9.6 m/min = 2.0 m/s), auto-holding at any active deco ceiling!
+          const decoFloor = diveState.stopDepthM > 0 ? (diveState.stopDepthM <= 6 ? 5.3 : diveState.stopDepthM - 0.2) : 0;
+          if (decoFloor > 0 && diver.y <= decoFloor + 0.5) {
+            diver.vy += (decoFloor - diver.y) * 2.4 * dt;
+            diver.vy *= Math.exp(-5.0 * dt);
+          } else {
+            const targetVy = Math.max(-2.05, ctrlY * 2.05);
+            diver.vy += (targetVy - diver.vy) * Math.min(1, dt * 6.5);
+          }
+        } else {
+          // Clipped hover hold against current
+          diver.vy *= Math.exp(-6.5 * dt);
+        }
+      }
+    }
+  }
+
+  // Publish contextual wreck action prompt for HUD button (zero-allocation when unchanged)
+  if (level.isWreck) {
+    if (session.activeSnagIndex >= 0) {
+      const sn = level.snagZones?.[session.activeSnagIndex];
+      session.wreckActionPrompt = {
+        kind: 'cut-net',
+        label: `✂️ CUT FREE [E]`,
+        detail: sn?.label || 'Tangled Net',
+        progress: 0,
+      };
+    } else if (nearbyHatch) {
+      const isCranking = session.crankingHatchId === nearbyHatch.id;
+      session.wreckActionPrompt = {
+        kind: 'open-hatch',
+        label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
+        detail: nearbyHatch.label || 'Watertight Hatch',
+        progress: isCranking ? session.crankingHatchProgress : 0,
+      };
+    } else if (session.clippedToShotLine) {
+      session.wreckActionPrompt = {
+        kind: 'unclip-line',
+        label: '🔓 UNCLIP LINE [E]',
+        detail: 'Shot Line Zip Active',
+        progress: 0,
+      };
+    } else if (nearShotLine) {
+      session.wreckActionPrompt = {
+        kind: 'clip-line',
+        label: '⚓ CLIP SHOT LINE [E]',
+        detail: 'Fast Zip Descent / Deco Hold',
+        progress: 0,
+      };
+    } else {
+      session.wreckActionPrompt = null;
+    }
+  } else {
+    session.wreckActionPrompt = null;
   }
 
   // Soft open-ocean lateral boundary nudge on shipwrecks so divers stay near the boat & wreck site

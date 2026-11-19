@@ -344,4 +344,113 @@ export class DiveAudio {
       this.vibrate(25);
     }
   }
+
+  /**
+   * Deep resonant metallic ship-hull groan caused by ocean currents flexing sunken steel.
+   */
+  playHullGroan(depthRatio = 0.5) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const dur = 1.9 + Math.random() * 1.1;
+    const baseFreq = 46 + (1 - Math.min(1, Math.max(0, depthRatio))) * 22 + Math.random() * 10;
+
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const filt = this.ctx.createBiquadFilter();
+    const g = this.ctx.createGain();
+
+    osc1.type = 'sawtooth';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(baseFreq, t);
+    osc1.frequency.exponentialRampToValueAtTime(baseFreq * 0.78, t + dur);
+    osc2.frequency.setValueAtTime(baseFreq * 1.51, t);
+    osc2.frequency.exponentialRampToValueAtTime(baseFreq * 1.19, t + dur);
+
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(165, t);
+    filt.frequency.exponentialRampToValueAtTime(92, t + dur);
+    filt.Q.value = 4.2;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.055, t + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc1.connect(filt);
+    osc2.connect(filt);
+    filt.connect(g);
+    g.connect(this.masterFilter || this.ctx.destination);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + dur + 0.05);
+    osc2.stop(t + dur + 0.05);
+  }
+
+  /**
+   * Rhythmic brass ratchet tick while cranking a rusted watertight bulkhead hatch wheel.
+   */
+  playHatchCrank(progress = 0.5) {
+    this.unlock();
+    const pitch = 210 + progress * 160;
+    this.playTone(pitch, 0.055, 'sawtooth', 0.05, 0);
+    this.playTone(pitch * 1.48, 0.04, 'triangle', 0.04, 0.03);
+    this.vibrate(14);
+  }
+
+  /**
+   * Heavy iron bulkhead door unsealing + pressurized trapped bubble burst.
+   */
+  playHatchOpen() {
+    this.unlock();
+    this.playTone(112, 0.28, 'sawtooth', 0.08, 0);
+    this.playTone(74, 0.38, 'triangle', 0.09, 0.06);
+    this.playTone(440, 0.16, 'sine', 0.06, 0.18);
+    this.playTone(587.3, 0.24, 'sine', 0.065, 0.26);
+    const noise = this._getNoiseBuffer();
+    if (noise && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime;
+      const src = this.ctx.createBufferSource();
+      src.buffer = noise;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(520, t);
+      filt.frequency.exponentialRampToValueAtTime(190, t + 0.42);
+      filt.Q.value = 1.6;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.075, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+      src.connect(filt);
+      filt.connect(g);
+      g.connect(this.masterFilter || this.ctx.destination);
+      src.start(t);
+      src.stop(t + 0.45);
+    }
+    this.vibrate([26, 20, 35]);
+  }
+
+  /**
+   * Crisp titanium shears snip when cutting free from a trawler net or cable snag.
+   */
+  playLineCut() {
+    this.unlock();
+    this.playTone(1480, 0.045, 'sawtooth', 0.07, 0);
+    this.playTone(2150, 0.06, 'triangle', 0.065, 0.025);
+    this.playTone(620, 0.11, 'sine', 0.055, 0.06);
+    this.vibrate([18, 15, 22]);
+  }
+
+  /**
+   * Stainless bolt-snap clack when clipping onto or unclipping from the open-water shot line.
+   */
+  playClipLine(clipped = true) {
+    this.unlock();
+    if (clipped) {
+      this.playTone(860, 0.045, 'triangle', 0.065, 0);
+      this.playTone(1240, 0.065, 'sine', 0.06, 0.035);
+    } else {
+      this.playTone(1040, 0.045, 'triangle', 0.055, 0);
+      this.playTone(720, 0.06, 'sine', 0.05, 0.03);
+    }
+    this.vibrate(16);
+  }
 }

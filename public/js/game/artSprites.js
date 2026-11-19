@@ -67,6 +67,7 @@ export function createGlowStamps() {
     magenta: makeGlowStamp('rgba(245, 208, 254, 0.85)', 'rgba(217, 70, 239, 0.28)'),
     emerald: makeGlowStamp('rgba(167, 243, 208, 0.85)', 'rgba(16, 185, 129, 0.28)'),
     silt: makeGlowStamp('rgba(164, 148, 118, 0.78)', 'rgba(112, 99, 78, 0.34)'),
+    rustSilt: makeGlowStamp('rgba(186, 84, 30, 0.85)', 'rgba(124, 45, 18, 0.38)'),
     cutout: makeGlowStamp('rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 0.45)', 128),
     bandGlow: makeVerticalBandStamp(1, 64),
     siltWisp: makeSiltWispStamp(128),
@@ -91,6 +92,56 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
   ctx.translate(sx, sy);
   ctx.rotate(ang);
   if (facingLeft) ctx.scale(1, -1);
+
+  if (f.kind === 'barracuda') {
+    // Sleek silver pelagic Great Barracuda patrolling shipwreck superstructures
+    ctx.save();
+    ctx.translate(-sz * 1.15, 0);
+    ctx.rotate(wag * 0.7);
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-sz * 0.58, -sz * 0.38);
+    ctx.lineTo(-sz * 0.32, 0);
+    ctx.lineTo(-sz * 0.58, sz * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    const grad = ctx.createLinearGradient(0, -sz * 0.25, 0, sz * 0.25);
+    grad.addColorStop(0, '#64748b');
+    grad.addColorStop(0.5, '#e2e8f0');
+    grad.addColorStop(1, '#f8fafc');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.35, 0);
+    ctx.quadraticCurveTo(sz * 0.35, -sz * 0.24, -sz * 1.18, -sz * 0.08);
+    ctx.lineTo(-sz * 1.18, sz * 0.08);
+    ctx.quadraticCurveTo(sz * 0.35, sz * 0.24, sz * 1.35, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Characteristic dark chevron stripes along upper flank
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+    ctx.lineWidth = Math.max(1, sz * 0.055);
+    for (let k = -3; k <= 2; k++) {
+      const bx = k * sz * 0.26;
+      ctx.beginPath();
+      ctx.moveTo(bx, -sz * 0.16);
+      ctx.lineTo(bx - sz * 0.08, 0.04 * sz);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(sz * 0.88, -sz * 0.05, Math.max(1.2, sz * 0.065), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(sz * 0.9, -sz * 0.05, Math.max(0.7, sz * 0.035), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   if (f.kind === 'cavefish') {
     // Dama Blanca (Typhliasina pearsei) - translucent pearl-pink eyeless cavefish
@@ -559,4 +610,173 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.moveTo(u * 0.2, -u * 0.38);
   ctx.quadraticCurveTo(u * 0.62, u * 0.42, u * 0.68, u * 0.14);
   ctx.stroke();
+}
+
+/**
+ * Translucent pelagic moon jellyfish pulsing gently along open-water shipwreck shot lines.
+ */
+export function drawStyledJellyfish(ctx, j, sx, sy, scale, timeSec) {
+  const r = (j.size || 0.45) * scale;
+  const pulse = Math.sin(timeSec * 2.4 + (j.phase || 0));
+  const rx = r * (1.0 + pulse * 0.12);
+  const ry = r * (0.62 - pulse * 0.1);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Trailing gossamer tentacles
+  ctx.strokeStyle = 'rgba(224, 242, 254, 0.34)';
+  ctx.lineWidth = Math.max(1, r * 0.06);
+  for (let t = -2; t <= 2; t++) {
+    const ox = t * rx * 0.32;
+    const len = r * (1.55 + (t % 2 === 0 ? 0.45 : 0.15));
+    const sway = Math.sin(timeSec * 2.1 + t + (j.phase || 0)) * r * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(ox, ry * 0.2);
+    ctx.quadraticCurveTo(ox + sway, len * 0.55, ox - sway * 0.7, len);
+    ctx.stroke();
+  }
+
+  // Translucent bioluminescent bell
+  ctx.fillStyle = j.hue || '#38bdf8';
+  ctx.globalAlpha = 0.26;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, Math.PI, Math.PI * 2);
+  ctx.quadraticCurveTo(0, ry * 0.45, -rx, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.globalAlpha = 0.58;
+  ctx.strokeStyle = '#e0f2fe';
+  ctx.lineWidth = Math.max(1.1, r * 0.06);
+  ctx.stroke();
+
+  // Inner four-leaf gonad ring
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.36)';
+  ctx.beginPath();
+  ctx.arc(0, -ry * 0.28, rx * 0.26, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * Shipwreck megafauna silhouettes & reef giants:
+ * - shark: Sleek oceanic reef shark patrolling the blue above deep wrecks
+ * - grouper: Massive territorial Goliath Grouper lurking inside dark ship holds
+ * - laketrout: Deep cold-water Lake Superior trout gliding past Edmund Fitzgerald
+ */
+export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
+  const sz = (m.size || 1.2) * scale;
+  const facingLeft = (m.vx || 0) < 0;
+  const swim = Math.sin(timeSec * (m.kind === 'shark' ? 4.2 : 3.2) + (m.phase || 0));
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  if (facingLeft) ctx.scale(-1, 1);
+
+  if (m.kind === 'shark') {
+    // Sleek grey oceanic reef shark silhouette with dorsal & sweeping caudal fin
+    ctx.globalAlpha = 0.78;
+    // Tail fin (asymmetric heterocercal caudal fin)
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.moveTo(-sz * 1.15, 0);
+    ctx.lineTo(-sz * 1.95, -sz * 0.68 + swim * sz * 0.14);
+    ctx.lineTo(-sz * 1.52, swim * sz * 0.08);
+    ctx.lineTo(-sz * 1.78, sz * 0.36 + swim * sz * 0.1);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sweeping dorsal fin
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.25, -sz * 0.22);
+    ctx.quadraticCurveTo(-sz * 0.08, -sz * 0.82, -sz * 0.35, -sz * 0.18);
+    ctx.closePath();
+    ctx.fill();
+
+    // Pectoral fin
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.45, sz * 0.14);
+    ctx.quadraticCurveTo(sz * 0.15, sz * 0.65, -sz * 0.2, sz * 0.16);
+    ctx.closePath();
+    ctx.fill();
+
+    // Counter-shaded torpedo torso
+    const grad = ctx.createLinearGradient(0, -sz * 0.32, 0, sz * 0.28);
+    grad.addColorStop(0, '#475569');
+    grad.addColorStop(0.58, '#64748b');
+    grad.addColorStop(1, '#cbd5e1');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.45, sz * 0.02);
+    ctx.bezierCurveTo(sz * 0.85, -sz * 0.34, -sz * 0.4, -sz * 0.28, -sz * 1.25, 0);
+    ctx.bezierCurveTo(-sz * 0.4, sz * 0.24, sz * 0.82, sz * 0.28, sz * 1.45, sz * 0.02);
+    ctx.fill();
+
+    // Gill slits & dark eye
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
+    ctx.lineWidth = Math.max(1, sz * 0.03);
+    for (let g = 0; g < 4; g++) {
+      const gx = sz * (0.58 - g * 0.075);
+      ctx.beginPath();
+      ctx.moveTo(gx, -sz * 0.06);
+      ctx.lineTo(gx - sz * 0.02, sz * 0.08);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(sz * 1.02, -sz * 0.05, Math.max(1.5, sz * 0.045), 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Massive Goliath Grouper (or deep Lake Trout) lurking in dark ship holds
+    const isTrout = m.kind === 'laketrout';
+    ctx.fillStyle = isTrout ? '#475569' : '#574332';
+    // Broad paddle tail
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.85, 0);
+    ctx.quadraticCurveTo(-sz * 1.35, -sz * 0.44 + swim * sz * 0.14, -sz * 1.38, swim * sz * 0.12);
+    ctx.quadraticCurveTo(-sz * 1.35, sz * 0.44 + swim * sz * 0.14, -sz * 0.85, 0);
+    ctx.fill();
+
+    // Spiny dorsal ridge
+    ctx.fillStyle = isTrout ? '#64748b' : '#71533b';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.32, -sz * 0.34);
+    ctx.quadraticCurveTo(-sz * 0.25, -sz * 0.64, -sz * 0.72, -sz * 0.22);
+    ctx.closePath();
+    ctx.fill();
+
+    // Heavy mottled body
+    const bodyGrad = ctx.createLinearGradient(0, -sz * 0.48, 0, sz * 0.48);
+    bodyGrad.addColorStop(0, isTrout ? '#475569' : '#4a3525');
+    bodyGrad.addColorStop(0.55, isTrout ? '#64748b' : '#78563a');
+    bodyGrad.addColorStop(1, isTrout ? '#94a3b8' : '#a8896c');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.05, sz * 0.06);
+    ctx.bezierCurveTo(sz * 0.65, -sz * 0.56, -sz * 0.45, -sz * 0.5, -sz * 0.92, 0);
+    ctx.bezierCurveTo(-sz * 0.45, sz * 0.48, sz * 0.58, sz * 0.52, sz * 1.05, sz * 0.06);
+    ctx.fill();
+
+    // Mottled spots + glowing reflective eye in torchlight
+    ctx.fillStyle = isTrout ? 'rgba(226, 232, 240, 0.32)' : 'rgba(28, 25, 23, 0.35)';
+    for (let k = -2; k <= 2; k++) {
+      ctx.beginPath();
+      ctx.arc(k * sz * 0.24, -sz * 0.12 + (k % 2) * sz * 0.14, sz * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(sz * 0.68, -sz * 0.1, Math.max(1.8, sz * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(sz * 0.7, -sz * 0.1, Math.max(1, sz * 0.038), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }

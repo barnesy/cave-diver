@@ -54,6 +54,8 @@ import {
   toggleGuidelineReel,
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
+  triggerWreckAction,
+  computeSurgeWave,
 } from '../public/js/game/diveSession.js';
 import {
   buildExploreCells,
@@ -2034,4 +2036,93 @@ test('5 technical shipwreck expeditions validate cleanly, support drift currents
   }
   assert.ok(sess.diveState.heartRateBpm > hrBefore + 2, `Expected snag to spike HR (${sess.diveState.heartRateBpm} > ${hrBefore})`);
   assert.ok(snagToast.includes('🕸️'), `Expected snag warning toast, got "${snagToast}"`);
+});
+
+test('Shipwreck overhaul mechanics: shot-line zip, active net-cut, watertight hatches, surge lulls, rust percolation & reef ecosystem', () => {
+  const oriskany = getLevelById('uss-oriskany-carrier');
+  const fitz = getLevelById('ss-edmund-fitzgerald');
+
+  // 1. Shot-line clip & fast zip-descent (with automatic EAN32 switch brake at 22m!)
+  const s1 = createDiveSession(oriskany);
+  s1.diver.x = oriskany.shotLine.x + 1.5;
+  s1.diver.y = 8.0;
+  stepDiveSession(s1, { x: 0, y: 0 }, 0.05);
+  assert.equal(s1.wreckActionPrompt?.kind, 'clip-line', 'Expected clip-line prompt near shot line');
+  let clippedEvents = 0;
+  const clipRes = triggerWreckAction(s1, { onClipLine: () => { clippedEvents++; } });
+  assert.equal(clipRes.handled, true);
+  assert.equal(s1.clippedToShotLine, true);
+  assert.equal(clippedEvents, 1);
+
+  // Switch to TMX and zip down fast
+  switchGas(s1.diveState, 'TMX1455');
+  for (let i = 0; i < 15; i++) {
+    stepDiveSession(s1, { x: 0, y: 1 }, 0.1);
+  }
+  assert.ok(s1.diver.vy > 4.0, `Expected fast zip descent on shot line (>4 m/s), got ${s1.diver.vy}`);
+  assert.ok(Math.abs(s1.diver.x - oriskany.shotLine.x) < 0.35, 'Shot line clip should hold X against drift');
+
+  // 2. Active fishing-net cut clears snag permanently & drops panic
+  const s2 = createDiveSession(oriskany);
+  switchGas(s2.diveState, 'TMX1455');
+  const snag = oriskany.snagZones[0];
+  s2.diver.x = snag.x;
+  s2.diver.y = snag.y;
+  s2.diveState.panicLevel = 0.6;
+  stepDiveSession(s2, { x: 0, y: 0 }, 0.05);
+  assert.equal(s2.activeSnagIndex, 0);
+  assert.equal(s2.wreckActionPrompt?.kind, 'cut-net');
+  let cutSound = 0;
+  const cutRes = triggerWreckAction(s2, { onLineCut: () => { cutSound++; } });
+  assert.equal(cutRes.handled, true);
+  assert.equal(cutSound, 1);
+  assert.ok(s2.cutSnagIds.has(snag.id), 'Snag should be marked permanently cut');
+  stepDiveSession(s2, { x: 0, y: 0 }, 0.05);
+  assert.equal(s2.activeSnagIndex, -1, 'Cut snag should no longer tangle diver');
+
+  // 3. Interactive watertight bulkhead hatch blocks until cranked open, vents rust silt & awards bonus
+  const s3 = createDiveSession(oriskany);
+  switchGas(s3.diveState, 'TMX1455');
+  const hatch = oriskany.watertightHatches[0];
+  s3.diver.x = hatch.x + hatch.radius + 1.2;
+  s3.diver.y = hatch.y;
+  stepDiveSession(s3, { x: 0, y: 0 }, 0.05);
+  assert.equal(s3.wreckActionPrompt?.kind, 'open-hatch', 'Expected open-hatch prompt near sealed bulkhead');
+  let hatchOpened = 0;
+  triggerWreckAction(s3, { onHatchOpen: () => { hatchOpened++; } });
+  for (let i = 0; i < 20; i++) {
+    stepDiveSession(s3, { x: 0, y: 0 }, 0.1, { onHatchOpen: () => { hatchOpened++; } });
+  }
+  assert.equal(hatchOpened, 1, 'Hatch should complete opening after cranking');
+  assert.ok(s3.openedHatchIds.has(hatch.id), 'Hatch ID should be recorded as opened');
+  assert.ok(s3.hatchBonusScore >= 150, 'Opening hatch should award bonus points');
+  assert.ok(s3.siltClouds.some((c) => c.isRust), 'Unsealing hatch should vent rust silt plumes');
+
+  // 4. Timed hull-breach surge wave alternates active flow and calm 0 lull window
+  const surge = oriskany.surgeZones[0];
+  let sawCalm = false;
+  let sawPos = false;
+  let sawNeg = false;
+  for (let t = 0; t < surge.periodSec; t += 0.2) {
+    const w = computeSurgeWave(surge, t);
+    if (w === 0) sawCalm = true;
+    if (w > 0.5) sawPos = true;
+    if (w < -0.5) sawNeg = true;
+  }
+  assert.ok(sawCalm && sawPos && sawNeg, 'Surge zone must cycle through positive surge, calm lull, and reverse surge');
+
+  // 5. Shipwreck reef ecosystem replaces cenote vines/turtles/remipedes with rusticles, jellies & megafauna
+  const oriEco = createMarineEcosystem(oriskany);
+  assert.equal(oriEco.turtles.length, 0, 'Ocean shipwreck must not spawn freshwater cenote slider turtles');
+  assert.equal(oriEco.remipedes.length, 0, 'Ocean shipwreck must not spawn blind cave remipedes');
+  assert.ok(!oriEco.anchored.some((a) => a.kind === 'vine' || a.kind === 'sodastraw'), 'No cenote vines/stalactites on steel wreck');
+  assert.ok(oriEco.anchored.some((a) => a.kind === 'rusticle'), 'Shipwreck should grow hanging iron rusticles');
+  assert.ok(oriEco.jellies.length >= 3, 'Ocean shipwreck should spawn pelagic jellyfish along shot line');
+  assert.ok(oriEco.megafauna.length >= 2, 'Ocean shipwreck should spawn sharks & Goliath groupers');
+
+  // Cold freshwater Fitzgerald skips tropical corals & ocean jellyfish
+  const fitzEco = createMarineEcosystem(fitz);
+  assert.equal(fitzEco.jellies.length, 0, 'Freshwater Lake Superior wreck should not spawn ocean jellyfish');
+  assert.ok(!fitzEco.anchored.some((a) => a.kind === 'seafan'), 'Freshwater wreck should not spawn ocean gorgonians');
+  assert.ok(fitzEco.anchored.some((a) => a.kind === 'rusticle'), 'Fitzgerald should still have iron rusticles');
 });

@@ -39,6 +39,7 @@ export function spawnSiltPlume(siltClouds, plume) {
     rot: plume.rot ?? Math.random() * 6.28,
     rotVel: plume.rotVel ?? (Math.random() - 0.5) * 0.35,
     canBud: plume.canBud ?? false,
+    isRust: Boolean(plume.isRust),
   };
   siltClouds.push(cloud);
   return cloud;
@@ -180,9 +181,13 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
       s.y -= n.ny * 0.06;
     }
 
-    // Cavern eddy curls & broad diffusion throughout the chamber
+    // Cavern eddy curls & broad diffusion throughout the chamber (rust percolation gently rains downward)
     s.vx = (s.vx + Math.sin(s.life * 1.15 + s.seed) * 0.26 * dt) * dampX;
-    s.vy = (s.vy + Math.cos(s.life * 0.95 + s.seed) * 0.16 * dt) * dampY;
+    if (s.isRust) {
+      s.vy = (s.vy + (0.28 + Math.cos(s.life * 0.85 + s.seed) * 0.08) * dt) * dampY;
+    } else {
+      s.vy = (s.vy + Math.cos(s.life * 0.95 + s.seed) * 0.16 * dt) * dampY;
+    }
     s.rot = (s.rot ?? 0) + (s.rotVel ?? 0) * dt;
     if (s.radius < s.maxRadius) {
       s.radius = Math.min(s.maxRadius, s.radius + dt * (0.38 + (s.maxRadius - s.radius) * 0.24));

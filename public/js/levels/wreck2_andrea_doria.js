@@ -35,7 +35,8 @@ export const WRECK_ANDREA_DORIA = {
   wreckSeabedY: 77.0,
   wreckHullXMin: -28,
   wreckHullXMax: 106,
-  shotLine: { x: 12.0, bottomY: 53.0 },
+  shipProfile: 'andrea-doria-capsized',
+  shotLine: { x: 12.0, bottomY: 53.0, decoStagesY: [22.0, 6.0] },
   theme: createLevelTheme('atlantic-liner-wreck'),
 
   openBasins: [
@@ -43,24 +44,40 @@ export const WRECK_ANDREA_DORIA = {
   ],
 
   driftCurrents: [
-    { yMin: 10.0, yMax: 32.0, vx: 0.95, vy: 0, label: 'Surface Atlantic Drift' },
-    { yMin: 35.0, yMax: 52.0, vx: -0.85, vy: 0, label: 'Opposing Cold-Wall Current' },
+    { yMin: 10.0, yMax: 32.0, vx: 1.05, vy: 0, label: 'Surface Atlantic Drift' },
+    { yMin: 35.0, yMax: 52.0, vx: -0.95, vy: 0, label: 'Opposing Cold-Wall Current' },
+  ],
+
+  surgeZones: [
+    { id: 'dor_surge1', x: 13.0, y: 56.0, radius: 4.2, vx: 0.4, vy: 3.6, periodSec: 7.2, phase: 0.0, label: "Gimbel's Hole Atlantic Surge" },
+    { id: 'dor_surge2', x: 89.0, y: 56.5, radius: 4.3, vx: 0.5, vy: -3.5, periodSec: 6.8, phase: 1.9, label: 'Aft Hull Tear Surge' },
   ],
 
   snagZones: [
-    { x: 28.0, y: 58.0, radius: 2.3, label: 'Commercial Fishing Net' },
-    { x: 64.0, y: 66.0, radius: 2.2, label: 'Collapsed Promenade Cables' },
-    { x: 82.0, y: 55.5, radius: 2.3, label: 'Drifting Trawler Monofilament' },
+    { id: 'dor_snag1', x: 28.0, y: 62.5, radius: 2.3, label: 'Commercial Fishing Net' },
+    { id: 'dor_snag2', x: 64.0, y: 75.0, radius: 2.2, label: 'Collapsed Promenade Cables' },
+    { id: 'dor_snag3', x: 82.0, y: 66.0, radius: 2.3, label: 'Drifting Trawler Monofilament' },
+  ],
+
+  watertightHatches: [
+    { id: 'dor_hatch_bow', x: 0.0, y: 65.5, radius: 1.8, label: 'First-Class Stateroom Door', bonusPoints: 150 },
+    { id: 'dor_hatch_vault', x: 68.0, y: 75.2, radius: 1.8, label: 'Banco di Roma Vault Bulkhead', bonusPoints: 200 },
   ],
 
   wreckProps: [
-    { kind: 'funnel', x: 52.0, y: 51.0, scale: 1.1, angle: 1.25 },
-    { kind: 'porthole', x: 4.0, y: 58.0, angle: 0.85, beamLen: 6.0 },
-    { kind: 'porthole', x: 42.0, y: 59.0, angle: 1.1, beamLen: 5.5 },
-    { kind: 'porthole', x: 88.0, y: 59.0, angle: 2.1, beamLen: 5.5 },
-    { kind: 'beam', x: 18.0, y: 62.0, len: 4.8, angle: 1.48 },
-    { kind: 'beam', x: 52.0, y: 71.0, len: 5.2, angle: 0.12 },
-    { kind: 'propeller', x: 104.0, y: 71.0, scale: 1.2, angle: 0.5 },
+    { kind: 'funnel', x: 52.0, y: 51.0, scale: 1.2, angle: 1.32 },
+    { kind: 'davit', x: 28.0, y: 52.5, scale: 1.05, angle: 0.45 },
+    { kind: 'davit', x: 74.0, y: 52.5, scale: 1.05, angle: -0.35 },
+    { kind: 'anchor', x: -24.0, y: 53.0, chainLen: 24.0 },
+    { kind: 'railing', x: -12.0, y: 53.0, len: 20.0 },
+    { kind: 'porthole', x: 4.0, y: 59.0, angle: 0.85, beamLen: 6.2 },
+    { kind: 'porthole', x: 42.0, y: 59.0, angle: 1.1, beamLen: 6.0 },
+    { kind: 'porthole', x: 88.0, y: 59.0, angle: 2.1, beamLen: 5.8 },
+    { kind: 'beam', x: 18.0, y: 62.0, len: 5.0, angle: 1.48 },
+    { kind: 'beam', x: 46.0, y: 67.0, len: 4.8, angle: 1.52 },
+    { kind: 'beam', x: 52.0, y: 72.5, len: 5.4, angle: 0.1 },
+    { kind: 'pipe', x: 26.0, y: 61.5, len: 12.0, angle: -0.08 },
+    { kind: 'propeller', x: 104.0, y: 71.0, scale: 1.3, angle: 0.5 },
   ],
 
   segments: [

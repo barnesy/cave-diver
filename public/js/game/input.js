@@ -11,6 +11,7 @@ export class InputController {
     onTorchToggle,
     onReelToggle,
     onReelRewind,
+    onWreckAction,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -26,6 +27,7 @@ export class InputController {
     this.onTorchToggle = onTorchToggle;
     this.onReelToggle = onReelToggle;
     this.onReelRewind = onReelRewind;
+    this.onWreckAction = onWreckAction;
     this.onPauseToggle = onPauseToggle;
 
     this._bindKeyboard();
@@ -47,6 +49,9 @@ export class InputController {
       if (code === 'KeyL') this.onTorchToggle?.();
       if (code === 'KeyG') this.onReelToggle?.();
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
+      if ((code === 'KeyE' || code === 'KeyF') && !e.repeat) {
+        if (this.onWreckAction?.()) e.preventDefault();
+      }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();
       }

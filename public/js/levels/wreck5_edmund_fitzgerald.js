@@ -36,6 +36,7 @@ export const WRECK_EDMUND_FITZGERALD = {
   wreckSeabedY: 162.0,
   wreckHullXMin: -28,
   wreckHullXMax: 152,
+  shipProfile: 'fitzgerald-split-freighter',
   hullTopY(wx) {
     // Two distinct hull halves separated by the catastrophic midships taconite trench!
     if (wx >= -24 && wx <= 48) return 134.0; // Upright Bow & Pilot House section
@@ -51,7 +52,7 @@ export const WRECK_EDMUND_FITZGERALD = {
     const edgeY = wx < -24 ? 134.0 : 142.0;
     return edgeY + (162.0 - edgeY) * ease;
   },
-  shotLine: { x: 16.0, bottomY: 134.0 },
+  shotLine: { x: 16.0, bottomY: 134.0, decoStagesY: [60.0, 23.0, 6.0] },
   theme: createLevelTheme('superior-memorial-wreck'),
 
   gasOverrides: {
@@ -75,23 +76,38 @@ export const WRECK_EDMUND_FITZGERALD = {
   ],
 
   driftCurrents: [
-    { yMin: 16.0, yMax: 52.0, vx: -0.65, vy: 0, label: 'Superior Lake Seiche' },
+    { yMin: 16.0, yMax: 52.0, vx: -0.75, vy: 0, label: 'Superior Lake Seiche' },
+  ],
+
+  surgeZones: [
+    { id: 'fitz_surge1', x: 66.0, y: 159.0, radius: 5.0, vx: 3.1, vy: -1.4, periodSec: 8.4, phase: 0.5, label: 'Deep Lake Superior Seiche Pulse' },
+    { id: 'fitz_surge2', x: 133.0, y: 144.0, radius: 4.5, vx: 0.4, vy: -3.2, periodSec: 7.6, phase: 2.2, label: 'Inverted Stern Draft' },
   ],
 
   snagZones: [
-    { x: 66.0, y: 157.0, radius: 2.5, label: 'Twisted Midships Hatch Coaming' },
-    { x: 112.0, y: 152.0, radius: 2.3, label: 'Inverted Stern Cables' },
+    { id: 'fitz_snag1', x: 66.0, y: 157.0, radius: 2.5, label: 'Twisted Midships Hatch Coaming' },
+    { id: 'fitz_snag2', x: 112.0, y: 154.5, radius: 2.3, label: 'Inverted Stern Cables' },
+  ],
+
+  watertightHatches: [
+    { id: 'fitz_hatch_bow', x: 2.0, y: 148.0, radius: 1.9, label: 'Forepeak Anchor Locker Door', bonusPoints: 180 },
+    { id: 'fitz_hatch_eng', x: 100.0, y: 156.5, radius: 1.9, label: 'Stern Engine Casing Bulkhead', bonusPoints: 220 },
   ],
 
   wreckProps: [
     // Iconic upright Bow Pilot House & 1995 Replica Memorial Bell
-    { kind: 'pilothouse', x: 8.0, y: 134.0, scale: 1.25 },
-    { kind: 'porthole', x: -8.0, y: 143.0, angle: 0.5, beamLen: 5.5 },
-    { kind: 'porthole', x: 34.0, y: 145.0, angle: 0.85, beamLen: 5.5 },
-    { kind: 'beam', x: 66.0, y: 159.0, len: 6.4, angle: -0.22 },
-    { kind: 'beam', x: 108.0, y: 154.0, len: 5.8, angle: 0.12 },
+    { kind: 'pilothouse', x: 8.0, y: 134.0, scale: 1.35 },
+    { kind: 'anchor', x: -20.0, y: 134.0, chainLen: 28.0 },
+    { kind: 'railing', x: 20.0, y: 134.0, len: 24.0 },
+    { kind: 'porthole', x: -8.0, y: 143.0, angle: 0.5, beamLen: 5.8 },
+    { kind: 'porthole', x: 34.0, y: 145.0, angle: 0.85, beamLen: 5.8 },
+    { kind: 'beam', x: 52.0, y: 153.0, len: 6.2, angle: 0.35 },
+    { kind: 'beam', x: 66.0, y: 159.0, len: 6.8, angle: -0.22 },
+    { kind: 'beam', x: 82.0, y: 155.0, len: 5.8, angle: -0.35 },
+    { kind: 'beam', x: 108.0, y: 154.0, len: 6.0, angle: 0.12 },
+    { kind: 'pipe', x: 114.0, y: 155.5, len: 14.0, angle: -0.1 },
     // Inverted Stern Giant Freighter Propeller sticking upward into the dark lake
-    { kind: 'propeller', x: 144.0, y: 141.0, scale: 1.55, angle: -0.25 },
+    { kind: 'propeller', x: 144.0, y: 141.0, scale: 1.65, angle: -0.25 },
   ],
 
   segments: [

@@ -37,7 +37,8 @@ export const WRECK_BRITANNIC = {
   wreckSeabedY: 121.0,
   wreckHullXMin: -36,
   wreckHullXMax: 146,
-  shotLine: { x: 14.0, bottomY: 84.0 },
+  shipProfile: 'britannic-hospital-liner',
+  shotLine: { x: 14.0, bottomY: 84.0, decoStagesY: [42.0, 22.0, 6.0] },
   theme: createLevelTheme('aegean-britannic-wreck'),
 
   gasOverrides: {
@@ -61,24 +62,39 @@ export const WRECK_BRITANNIC = {
   ],
 
   driftCurrents: [
-    { yMin: 14.0, yMax: 42.0, vx: 0.85, vy: 0, label: 'Kea Channel Current' },
-    { yMin: 52.0, yMax: 80.0, vx: -0.75, vy: 0, label: 'Deep Aegean Shear' },
+    { yMin: 14.0, yMax: 42.0, vx: 0.95, vy: 0, label: 'Kea Channel Current' },
+    { yMin: 52.0, yMax: 80.0, vx: -0.85, vy: 0, label: 'Deep Aegean Shear' },
+  ],
+
+  surgeZones: [
+    { id: 'bri_surge1', x: 15.0, y: 88.0, radius: 4.5, vx: 0.6, vy: 3.4, periodSec: 7.8, phase: 0.4, label: 'Mine-Blast Bow Breach Surge' },
+    { id: 'bri_surge2', x: 132.0, y: 88.5, radius: 4.5, vx: 0.8, vy: -3.5, periodSec: 7.2, phase: 2.3, label: 'Turbine Casing Vent Surge' },
   ],
 
   snagZones: [
-    { x: 42.0, y: 95.0, radius: 2.4, label: 'Shattered C-Deck Davit Wires' },
-    { x: 102.0, y: 109.0, radius: 2.3, label: 'Collapsed Funnel Rigging' },
+    { id: 'bri_snag1', x: 42.0, y: 95.5, radius: 2.4, label: 'Shattered C-Deck Davit Wires' },
+    { id: 'bri_snag2', x: 108.0, y: 115.5, radius: 2.3, label: 'Collapsed Funnel Rigging' },
+  ],
+
+  watertightHatches: [
+    { id: 'bri_hatch_bow', x: 0.0, y: 99.0, radius: 1.9, label: 'Mine-Damaged Bow Bulkhead', bonusPoints: 180 },
+    { id: 'bri_hatch_boiler', x: 75.0, y: 118.0, radius: 1.9, label: 'Boiler Room #1 Watertight Door', bonusPoints: 200 },
   ],
 
   wreckProps: [
-    { kind: 'funnel', x: 56.0, y: 82.0, scale: 1.25, angle: 1.38 },
-    { kind: 'funnel', x: 104.0, y: 82.0, scale: 1.2, angle: 1.52 },
-    { kind: 'porthole', x: 6.0, y: 92.0, angle: 0.65, beamLen: 6.5 },
-    { kind: 'porthole', x: 52.0, y: 94.0, angle: 0.85, beamLen: 6.0 },
-    { kind: 'porthole', x: 116.0, y: 94.0, angle: 2.25, beamLen: 6.0 },
-    { kind: 'beam', x: 26.0, y: 98.0, len: 5.5, angle: 1.52 },
-    { kind: 'beam', x: 78.0, y: 115.0, len: 5.8, angle: 0.06 },
-    { kind: 'propeller', x: 144.0, y: 107.0, scale: 1.65, angle: 0.25 },
+    { kind: 'funnel', x: 56.0, y: 82.0, scale: 1.35, angle: 1.38 },
+    { kind: 'funnel', x: 104.0, y: 82.0, scale: 1.3, angle: 1.52 },
+    { kind: 'davit', x: 32.0, y: 83.5, scale: 1.2, angle: 0.32 },
+    { kind: 'davit', x: 82.0, y: 83.5, scale: 1.2, angle: -0.22 },
+    { kind: 'anchor', x: -30.0, y: 84.0, chainLen: 36.0 },
+    { kind: 'railing', x: -14.0, y: 84.0, len: 24.0 },
+    { kind: 'porthole', x: 6.0, y: 92.0, angle: 0.65, beamLen: 6.8 },
+    { kind: 'porthole', x: 52.0, y: 94.0, angle: 0.85, beamLen: 6.4 },
+    { kind: 'porthole', x: 116.0, y: 94.0, angle: 2.25, beamLen: 6.4 },
+    { kind: 'beam', x: 26.0, y: 98.0, len: 5.8, angle: 1.52 },
+    { kind: 'beam', x: 78.0, y: 115.0, len: 6.0, angle: 0.06 },
+    { kind: 'pipe', x: 76.0, y: 117.5, len: 16.0, angle: 0.04 },
+    { kind: 'propeller', x: 144.0, y: 107.0, scale: 1.75, angle: 0.25 },
   ],
 
   segments: [

@@ -1,4 +1,4 @@
-name: Deploy Cave Diver PWA to GitHub Pages
+name: Deploy Techno Dive PWA to GitHub Pages
 
 on:
   push:
