@@ -2,7 +2,7 @@ import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain } from './lighting.js';
 import { sampleSiltDensity } from './silt.js';
-import { getAscentInstruction } from '../physics/diveModel.js';
+import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
 import {
   createGlowStamps,
@@ -1342,7 +1342,7 @@ export class CaveRenderer {
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
-    this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, toScreenX, toScreenY, scale, timeSec);
+    this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
     if (!this.level.hideWaypointCompass) {
       this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
     }
@@ -1350,7 +1350,7 @@ export class CaveRenderer {
     if (celebrationParticles && celebrationParticles.length > 0) {
       this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
     }
-    this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint);
+    this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
 
     // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS)
     this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
@@ -3956,7 +3956,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawZonesAndMarkers(ctx, cw, ch, diver, diveState, toScreenX, toScreenY, scale, timeSec) {
+  _drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec) {
     // 1. Subtle horizontal depth boundary lines (e.g., 33.7m EAN32 MOD)
     if (this.level.depthMarkers) {
       ctx.save();
@@ -3977,6 +3977,62 @@ export class CaveRenderer {
         ctx.fillText(dm.label, 12, sy - 5);
       }
       ctx.restore();
+    }
+
+    // 1b. Universal Descent 22m TMX Gas-Switch Line (makes stopping & switching to Trimix unmistakable)
+    const ascentCfg = getAscentConfig(this.level);
+    const ascending = Boolean(checkpointsHit && checkpointsHit.has(ascentCfg.turnaroundId));
+    if (!ascending && diveState && (this.level.bounds?.yMax || 0) > 28 && diver.y > 4 && diver.y < 38) {
+      const switchY = toScreenY(22.0);
+      if (switchY > -36 && switchY < ch + 36) {
+        const needsTmx = diveState.activeGasId === 'EAN32' && diveState.tanks?.TMX1455?.bar > 1;
+        const overdue = needsTmx && diver.y >= 24.5;
+        const deepName = diveState.mixes?.TMX1455?.name || 'TMX 14/55';
+        const pulse = 0.65 + 0.35 * Math.sin(timeSec * (overdue ? 9.0 : 5.0));
+        const lineCol = overdue ? '#f87171' : needsTmx ? '#fbbf24' : '#4ade80';
+
+        ctx.save();
+        ctx.strokeStyle = lineCol;
+        ctx.globalAlpha = needsTmx ? 0.62 + pulse * 0.34 : 0.42;
+        ctx.lineWidth = needsTmx ? 2.6 : 1.5;
+        ctx.setLineDash([12, 7]);
+        ctx.beginPath();
+        ctx.moveTo(0, switchY);
+        ctx.lineTo(cw, switchY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const label = overdue
+          ? `⛔ PASSED 22m LINE · STOP & SWITCH TO ${deepName} [2]`
+          : needsTmx
+            ? `▼ 22m GAS SWITCH LINE · STOP & SWITCH TO ${deepName} [2]`
+            : `✓ 22m SWITCH COMPLETE · ON ${deepName}`;
+        ctx.font = `800 ${Math.max(10, Math.round(0.35 * scale))}px ui-monospace, monospace`;
+        const textW = ctx.measureText(label).width;
+        const boxW = textW + 18;
+        const boxH = Math.max(20, 0.64 * scale);
+        const cx = Math.max(boxW * 0.5 + 10, Math.min(cw - boxW * 0.5 - 10, toScreenX(diver.x)));
+        const pillY = switchY - boxH * 0.5 - 5;
+
+        ctx.globalAlpha = needsTmx ? 0.96 : 0.72;
+        ctx.fillStyle = overdue
+          ? 'rgba(127, 29, 29, 0.92)'
+          : needsTmx
+            ? 'rgba(120, 53, 15, 0.92)'
+            : 'rgba(6, 78, 59, 0.85)';
+        ctx.strokeStyle = lineCol;
+        ctx.lineWidth = needsTmx ? 1.8 : 1.2;
+        ctx.beginPath();
+        ctx.roundRect(cx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = overdue ? '#fecaca' : needsTmx ? '#fef08a' : '#bbf7d0';
+        ctx.fillText(label, cx, pillY + 0.5);
+        ctx.restore();
+      }
     }
 
     // 2. Horizontal Gas Switch & 6m Deco Stop Zone Lines (not boxes)
@@ -4078,27 +4134,47 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint = null) {
-    const step = getAscentInstruction(diveState, diver.y, checkpointsHit, getAscentConfig(this.level), nextCheckpoint);
+  _drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint = null, timeSec = 0) {
+    const ascentCfg = getAscentConfig(this.level);
+    const ascending = Boolean(checkpointsHit && checkpointsHit.has(ascentCfg.turnaroundId));
+    const ascentStep = getAscentInstruction(diveState, diver.y, checkpointsHit, ascentCfg, nextCheckpoint);
+    const gasCoach = getGasSwitchCoach(diveState, diver.y, { ascending });
+    const step = gasCoach && (gasCoach.severity === 'danger' || !ascentStep) ? gasCoach : ascentStep;
     if (!step) return;
 
     const sx = toScreenX(diver.x);
     const sy = toScreenY(diver.y);
-    const pillY = sy - 1.55 * scale;
+    const pillY = sy - 1.65 * scale;
 
     ctx.save();
-    // Compact floating action badge above diver: STOP HERE or NOW MOVE TO ...
+    const isDanger = step.severity === 'danger';
     const isStop = step.action === 'STOP';
-    const label = isStop ? `■ ${step.title}` : `▲ ${step.title}`;
-    ctx.font = `800 ${Math.max(10, Math.round(0.34 * scale))}px ui-monospace, monospace`;
-    const padX = 8;
+    const pulse = 0.65 + 0.35 * Math.sin(timeSec * (isDanger ? 10 : 5.5));
+
+    // Urgent pulsing ring around the diver when breathing an unsafe/wrong gas
+    if (gasCoach && step === gasCoach) {
+      ctx.strokeStyle = isDanger ? `rgba(248, 113, 113, ${0.45 + pulse * 0.5})` : `rgba(251, 191, 36, ${0.35 + pulse * 0.45})`;
+      ctx.lineWidth = isDanger ? 3.0 : 2.0;
+      ctx.beginPath();
+      ctx.arc(sx, sy, (1.15 + (isDanger ? 0.14 * pulse : 0.06 * pulse)) * scale, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Compact floating action badge above diver: STOP · SWITCH TO TMX ... or NOW MOVE TO ...
+    const label = step.shortLabel || (isStop ? `■ ${step.title}` : `▲ ${step.title}`);
+    ctx.font = `800 ${Math.max(10, Math.round((isDanger ? 0.37 : 0.34) * scale))}px ui-monospace, monospace`;
+    const padX = 9;
     const textW = ctx.measureText(label).width;
     const boxW = textW + padX * 2;
-    const boxH = Math.max(20, 0.62 * scale);
+    const boxH = Math.max(22, 0.66 * scale);
 
-    ctx.fillStyle = isStop ? 'rgba(120, 53, 15, 0.88)' : 'rgba(8, 47, 73, 0.88)';
-    ctx.strokeStyle = isStop ? '#fbbf24' : '#38bdf8';
-    ctx.lineWidth = 1.5;
+    ctx.fillStyle = isDanger
+      ? `rgba(153, 27, 27, ${0.88 + pulse * 0.1})`
+      : isStop
+        ? 'rgba(120, 53, 15, 0.92)'
+        : 'rgba(8, 47, 73, 0.88)';
+    ctx.strokeStyle = isDanger ? '#f87171' : isStop ? '#fbbf24' : '#38bdf8';
+    ctx.lineWidth = isDanger ? 2.2 : 1.6;
     ctx.beginPath();
     ctx.roundRect(sx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
     ctx.fill();
@@ -4106,7 +4182,7 @@ export class CaveRenderer {
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = isStop ? '#fde68a' : '#e0f2fe';
+    ctx.fillStyle = isDanger ? '#fef2f2' : isStop ? '#fde68a' : '#e0f2fe';
     ctx.fillText(label, sx, pillY + 0.5);
 
     // Inline vertical Target Pace Bar right beside diver during MOVE steps

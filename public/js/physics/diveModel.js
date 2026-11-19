@@ -500,13 +500,89 @@ export function stepDivePhysiology(
  */
 export function getRecommendedGas(state, { ascending = false } = {}) {
   const d = state.depthM;
-  if (d > 24.5) {
+  const tmxThresholdM = ascending ? 24.5 : 21.5;
+  if (d > tmxThresholdM) {
     return state.tanks.TMX1455.bar > 1 ? 'TMX1455' : 'EAN32';
   }
   if (d <= 6.2 && (state.stopDepthM > 0 || ascending) && state.tanks.O2.bar > 1) {
     return 'O2';
   }
   return state.tanks.EAN32.bar > 1 ? 'EAN32' : 'TMX1455';
+}
+
+const GAS_HOTKEY = { EAN32: '1', TMX1455: '2', O2: '3' };
+
+/**
+ * Returns an unmistakable gas-switch prompt whenever the diver needs to pause
+ * and switch regulators (e.g., crossing 21m on EAN32 during descent, taking
+ * O2 100% below 6m, or breathing hypoxic Trimix too shallow).
+ */
+export function getGasSwitchCoach(state, depthM, { ascending = false } = {}) {
+  if (!state || state.alive === false) return null;
+  const d = Number.isFinite(depthM) ? depthM : state.depthM || 0;
+  const mixes = state.mixes || GAS_MIXES;
+  const eanMix = mixes.EAN32 || GAS_MIXES.EAN32;
+  const tmxMix = mixes.TMX1455 || GAS_MIXES.TMX1455;
+  const o2Mix = mixes.O2 || GAS_MIXES.O2;
+  const activeId = state.activeGasId;
+
+  // 1. Acute O2 100% toxicity below 5.8m — immediate stop & switch
+  if (activeId === 'O2' && d > 5.8) {
+    const targetGas = d > 21.5 && state.tanks.TMX1455.bar > 1
+      ? 'TMX1455'
+      : state.tanks.EAN32.bar > 1
+        ? 'EAN32'
+        : 'TMX1455';
+    const targetName = (mixes[targetGas] || GAS_MIXES[targetGas]).name;
+    const hotkey = GAS_HOTKEY[targetGas];
+    return {
+      severity: 'danger',
+      action: 'STOP',
+      targetGas,
+      gasName: targetName,
+      hotkey,
+      title: `STOP NOW! SWITCH TO ${targetName}`,
+      shortLabel: `⛔ STOP! TAP ${targetName} [${hotkey}]`,
+      detail: `${o2Mix.name} turns toxic below 6m — tap here or press [${hotkey}] immediately!`,
+    };
+  }
+
+  // 2. Hypoxic Trimix too shallow (PPO2 < 0.18 bar)
+  if (activeId === 'TMX1455' && d > 0.2 && state.ppo2 < 0.18 && state.tanks.EAN32.bar > 1) {
+    const targetGas = d <= 6.0 && state.stopDepthM > 0 && state.tanks.O2.bar > 1 ? 'O2' : 'EAN32';
+    const targetName = (mixes[targetGas] || GAS_MIXES[targetGas]).name;
+    const hotkey = GAS_HOTKEY[targetGas];
+    return {
+      severity: 'danger',
+      action: 'STOP',
+      targetGas,
+      gasName: targetName,
+      hotkey,
+      title: `HYPOXIC GAS! SWITCH TO ${targetName}`,
+      shortLabel: `⛔ HYPOXIC! TAP ${targetName} [${hotkey}]`,
+      detail: `${tmxMix.name} has too little O2 shallow — switch to ${targetName} [${hotkey}] now!`,
+    };
+  }
+
+  // 3. Descending (or deep) on EAN32 past 20.5m: stop & switch to bottom Trimix well before 33.7m MOD
+  if (activeId === 'EAN32' && state.tanks.TMX1455.bar > 1 && ((!ascending && d >= 20.5) || d >= 26.0)) {
+    const urgent = d >= 27.5 || state.ppo2 >= 1.32;
+    const ppo2Str = Number.isFinite(state.ppo2) ? state.ppo2.toFixed(2) : '';
+    return {
+      severity: urgent ? 'danger' : 'warn',
+      action: 'STOP',
+      targetGas: 'TMX1455',
+      gasName: tmxMix.name,
+      hotkey: '2',
+      title: urgent ? `STOP NOW! SWITCH TO ${tmxMix.name}` : `STOP · SWITCH TO ${tmxMix.name}`,
+      shortLabel: urgent ? `⛔ STOP! SWITCH TO ${tmxMix.name} [2]` : `■ STOP · SWITCH TO ${tmxMix.name} [2]`,
+      detail: urgent
+        ? `${eanMix.name} toxic below 33m (PPO2 ${ppo2Str}) — tap here or press [2] NOW!`
+        : `Pause at 22m & switch from ${eanMix.name} to ${tmxMix.name} before descending deeper`,
+    };
+  }
+
+  return null;
 }
 
 /**

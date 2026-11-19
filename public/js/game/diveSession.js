@@ -381,7 +381,27 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     callbacks.onToast?.('Heart rate spiking! Stop swimming & calm down to conserve gas.', 3.0);
   }
 
-  if (!session.thirdWarned && diver.y > 8 && !checkpointsHit.has(ascentConfig.turnaroundId)) {
+  const curDepthM = Math.max(0, diver.y);
+  const ascendingPhase = checkpointsHit.has(ascentConfig.turnaroundId);
+
+  // Early descent gas-switch coaching (well before 33.7m EAN32 MOD / 40m acute O2 toxicity)
+  if (curDepthM < 16.0) {
+    session.tmxSwitchWarned = false;
+    session.tmxDangerWarned = false;
+  } else if (!ascendingPhase && diveState.activeGasId === 'EAN32' && diveState.tanks?.TMX1455?.bar > 1) {
+    const deepMixName = diveState.mixes?.TMX1455?.name || 'TMX 14/55';
+    if (!session.tmxSwitchWarned && curDepthM >= 21.0) {
+      session.tmxSwitchWarned = true;
+      callbacks.onAlarm?.('warn');
+      callbacks.onToast?.(`⛔ STOP at 22m! Switch to ${deepMixName} [2] before descending deeper!`, 4.2);
+    } else if (!session.tmxDangerWarned && curDepthM >= 27.5) {
+      session.tmxDangerWarned = true;
+      callbacks.onAlarm?.('critical');
+      callbacks.onToast?.(`⚠️ DANGER at ${Math.round(curDepthM)}m on EAN32! Tap ${deepMixName} [2] NOW!`, 4.2);
+    }
+  }
+
+  if (!session.thirdWarned && diver.y > 8 && !ascendingPhase) {
     const activeTank = diveState.tanks?.[diveState.activeGasId];
     if (activeTank && diveState.activeGasId !== 'O2' && activeTank.bar <= 133) {
       session.thirdWarned = true;

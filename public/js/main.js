@@ -948,9 +948,9 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   const bottomMixName = getActiveGasName('TMX1455');
   const openMsg =
     activeLevel.reelMetersPerDiver > 0
-      ? `No fixed guideline! Press [G] to deploy your ${activeLevel.reelMetersPerDiver}m reel, [R] to rewind.`
-      : `Descend on ${getActiveGasName('EAN32')}. Switch to ${bottomMixName} at the Halocline!`;
-  showToast(openMsg, 4.2);
+      ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
+      : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
+  showToast(openMsg, 4.8);
 }
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {

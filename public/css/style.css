@@ -1147,10 +1147,101 @@ html, body {
   border: 1px solid rgba(251, 191, 36, 0.6);
   color: #fde68a;
 }
+.obj-action.danger {
+  background: rgba(239, 68, 68, 0.32);
+  border: 1px solid rgba(248, 113, 113, 0.85);
+  color: #fee2e2;
+  animation: pulseFlash 0.55s infinite alternate;
+}
 .obj-action.move {
   background: rgba(56, 189, 248, 0.2);
   border: 1px solid rgba(56, 189, 248, 0.55);
   color: #bae6fd;
+}
+
+/* One-Tap Floating Gas-Switch Coaching Banner */
+.hud-gas-callout {
+  align-self: center;
+  width: min(94vw, 490px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  border: 1.8px solid rgba(251, 191, 36, 0.88);
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.94), rgba(69, 26, 3, 0.96));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 22px rgba(251, 191, 36, 0.28);
+  color: #fef3c7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: gasPulse 1.15s ease-in-out infinite;
+}
+.hud-gas-callout[hidden] {
+  display: none !important;
+}
+.hud-gas-callout.danger {
+  border-color: rgba(248, 113, 113, 0.95);
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.96), rgba(69, 10, 10, 0.98));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.62), 0 0 26px rgba(239, 68, 68, 0.45);
+  color: #fef2f2;
+  animation: gasPulse 0.72s ease-in-out infinite;
+}
+.hud-gas-callout:active {
+  transform: scale(0.98);
+}
+.gas-callout-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gas-callout-copy strong {
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+}
+.gas-callout-copy span {
+  font-size: 0.65rem;
+  color: rgba(254, 243, 199, 0.88);
+  line-height: 1.25;
+}
+.hud-gas-callout.danger .gas-callout-copy span {
+  color: rgba(254, 226, 226, 0.92);
+}
+.gas-callout-cta {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #fbbf24;
+  color: #1c1917;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.hud-gas-callout.danger .gas-callout-cta {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+@media (max-width: 680px) {
+  .hud-gas-callout {
+    padding: 6px 9px;
+    gap: 8px;
+  }
+  .gas-callout-copy strong {
+    font-size: 0.72rem;
+  }
+  .gas-callout-copy span {
+    font-size: 0.6rem;
+  }
+  .gas-callout-cta {
+    padding: 4px 7px;
+    font-size: 0.62rem;
+  }
 }
 .obj-name {
   font-size: 0.78rem;
@@ -1743,13 +1834,22 @@ html, body {
 }
 .dc-tank-btn.recommended {
   border-color: var(--warn);
-  background: rgba(251, 191, 36, 0.18);
-  box-shadow: 0 0 14px rgba(251, 191, 36, 0.4);
-  animation: pulseFlash 0.7s infinite alternate;
+  background: rgba(251, 191, 36, 0.28);
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.55);
+  animation: gasPulse 0.9s ease-in-out infinite;
 }
 .dc-tank-btn.recommended .tank-bar-txt {
-  color: var(--warn);
+  color: #fef08a;
   font-weight: 900;
+}
+.dc-tank-btn.recommended.urgent {
+  border-color: #f87171;
+  background: rgba(220, 38, 38, 0.38);
+  box-shadow: 0 0 22px rgba(239, 68, 68, 0.68);
+  animation: gasPulse 0.6s ease-in-out infinite;
+}
+.dc-tank-btn.recommended.urgent .tank-bar-txt {
+  color: #fecaca;
 }
 .dc-tank-btn.unsafe {
   border-color: rgba(248, 113, 113, 0.55);

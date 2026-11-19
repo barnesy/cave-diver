@@ -1,5 +1,7 @@
-import { GAS_MIXES, GAS_ORDER, computePPO2, getRecommendedGas, getAscentInstruction } from '../physics/diveModel.js';
+import { GAS_MIXES, GAS_ORDER, computePPO2, getRecommendedGas, getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
+
+const GAS_HOTKEY_LABELS = { EAN32: '1', TMX1455: '2', O2: '3' };
 
 function formatClock(sec) {
   const s = Math.max(0, Math.floor(sec));
@@ -214,6 +216,19 @@ export class DiveComputerHUD {
     this.elBuddy = document.getElementById('dc-buddy');
     this.elSelfHealth = document.getElementById('hud-self-health');
     this.elSelfName = document.getElementById('dc-self-name');
+    this.elGasCallout = document.getElementById('hud-gas-callout');
+    this.elGasCalloutTitle = document.getElementById('hud-gas-callout-title');
+    this.elGasCalloutDetail = document.getElementById('hud-gas-callout-detail');
+    this.elGasCalloutCta = document.getElementById('hud-gas-callout-cta');
+    this._gasCalloutTargetId = null;
+    this.elGasCallout?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this._gasCalloutTargetId) onGasSelect?.(this._gasCalloutTargetId);
+    });
+    this.elGasCallout?.addEventListener('click', (e) => {
+      if (e.detail === 0 && this._gasCalloutTargetId) onGasSelect?.(this._gasCalloutTargetId);
+    });
     this.elEkgRow = document.getElementById('dc-ekg-row');
     this.elEkgHeart = document.getElementById('dc-ekg-heart');
     this.elEkgBpm = document.getElementById('dc-ekg-bpm');
@@ -468,6 +483,35 @@ export class DiveComputerHUD {
     const ascending = checkpointsHit.has(resolvedAscent.turnaroundId);
     const recGasId = getRecommendedGas(diveState, { ascending });
     const ascentStep = getAscentInstruction(diveState, diver.y, checkpointsHit, resolvedAscent, nextCheckpoint);
+    const gasCoach = getGasSwitchCoach(diveState, diver.y, { ascending });
+
+    // One-tap interactive gas-switch callout banner (descent 22m TMX switch, wrong O2/hypoxic gas, or ascent switch)
+    let calloutPrompt = gasCoach;
+    if (!calloutPrompt && ascentStep && ascentStep.action === 'STOP' && ascentStep.targetGas && ascentStep.targetGas !== diveState.activeGasId) {
+      const tMix = (diveState.mixes || GAS_MIXES)[ascentStep.targetGas] || GAS_MIXES[ascentStep.targetGas];
+      const hk = GAS_HOTKEY_LABELS[ascentStep.targetGas] || '';
+      calloutPrompt = {
+        severity: 'warn',
+        targetGas: ascentStep.targetGas,
+        gasName: tMix?.name || ascentStep.targetGas,
+        hotkey: hk,
+        title: ascentStep.title,
+        detail: ascentStep.detail,
+      };
+    }
+    if (this.elGasCallout) {
+      if (calloutPrompt) {
+        this._gasCalloutTargetId = calloutPrompt.targetGas;
+        setHidden(this.elGasCallout, false);
+        setClass(this.elGasCallout, `hud-gas-callout ${calloutPrompt.severity === 'danger' ? 'danger' : 'warn'}`);
+        setText(this.elGasCalloutTitle, `${calloutPrompt.severity === 'danger' ? '⛔' : '■'} ${calloutPrompt.title}`);
+        setText(this.elGasCalloutDetail, calloutPrompt.detail);
+        setText(this.elGasCalloutCta, `TAP ${calloutPrompt.gasName} [${calloutPrompt.hotkey}]`);
+      } else {
+        this._gasCalloutTargetId = null;
+        setHidden(this.elGasCallout, true);
+      }
+    }
 
     const mixMap = diveState.mixes || GAS_MIXES;
     for (const id of GAS_ORDER) {
@@ -477,22 +521,29 @@ export class DiveComputerHUD {
       setText(ui.nameEl, mix.name);
       setText(ui.metaEl, mix.role);
       const isActive = diveState.activeGasId === id;
-      const isRec = recGasId === id && !isActive;
+      const isRec = (recGasId === id || calloutPrompt?.targetGas === id) && !isActive;
+      const isUrgentRec = isRec && calloutPrompt?.severity === 'danger';
       const futurePPO2 = computePPO2(diveState.depthM, mix);
       const unsafeAtDepth = (futurePPO2 > 1.6 || (futurePPO2 < 0.16 && diveState.depthM > 0.2));
       const isEmpty = tank.bar <= 0.5;
-      const btnCls = `dc-tank-btn${isActive ? ' active' : ''}${isRec ? ' recommended' : ''}${unsafeAtDepth ? ' unsafe' : ''}${isEmpty ? ' empty' : ''}`;
+      const btnCls = `dc-tank-btn${isActive ? ' active' : ''}${isRec ? ' recommended' : ''}${isUrgentRec ? ' urgent' : ''}${unsafeAtDepth ? ' unsafe' : ''}${isEmpty ? ' empty' : ''}`;
       setClass(ui.btn, btnCls);
-      setText(ui.barTxt, isRec ? 'USE!' : `${Math.round(tank.bar)}b`);
+      setText(ui.barTxt, isRec ? `TAP [${GAS_HOTKEY_LABELS[id]}]` : `${Math.round(tank.bar)}b`);
       const fillPct = Math.max(0, Math.min(100, Math.round((tank.bar / mix.startBar) * 200) * 0.5));
       setStyleProp(ui.fill, 'width', `${fillPct}%`);
       setStyleProp(ui.fill, 'backgroundColor', tank.bar < 45 ? '#ef4444' : mix.color);
     }
 
     // Alerts Strip (uses active level mixMap so gasOverrides on L12–L20 display accurately)
-    if (diveState.warnings.length > 0) {
+    if (gasCoach && gasCoach.severity === 'danger') {
+      setText(this.elAlerts, gasCoach.title);
+      setClass(this.elAlerts, 'dc-alerts danger');
+    } else if (diveState.warnings.length > 0) {
       setText(this.elAlerts, diveState.warnings[0]);
       setClass(this.elAlerts, `dc-alerts ${diveState.criticalAlarm ? 'danger' : 'warn'}`);
+    } else if (gasCoach) {
+      setText(this.elAlerts, gasCoach.title);
+      setClass(this.elAlerts, 'dc-alerts warn');
     } else if (ascentStep) {
       setText(this.elAlerts, ascentStep.title);
       setClass(this.elAlerts, `dc-alerts ${ascentStep.action === 'STOP' ? 'warn' : 'ok'}`);
@@ -524,7 +575,18 @@ export class DiveComputerHUD {
           : isProbe ? ' · 🛰 PROBE' : ' · 🛟 BODY'
       : '';
     let objectiveHtml = '';
-    if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {
+    if (gasCoach && (gasCoach.severity === 'danger' || !ascentStep)) {
+      const cls = gasCoach.severity === 'danger' ? 'danger' : 'stop';
+      const icon = gasCoach.severity === 'danger' ? '⛔' : '■';
+      objectiveHtml = `
+        <div class="obj-top-row">
+          <span class="obj-count">GAS SWITCH · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+          ${gasBadge}
+        </div>
+        <div class="obj-action ${cls}">${icon} ${gasCoach.title}</div>
+        <span class="obj-hint">${gasCoach.detail}</span>
+      `;
+    } else if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {
       const cls = ascentStep.action === 'STOP' ? 'stop' : 'move';
       const icon = ascentStep.action === 'STOP' ? '■' : '▲';
       objectiveHtml = `

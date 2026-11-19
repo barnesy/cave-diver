@@ -10,6 +10,7 @@ import {
   computeEND,
   getRecommendedGas,
   getAscentInstruction,
+  getGasSwitchCoach,
   computeSiteDivePlan,
   donateGasFromState,
   receiveGasIntoState,
@@ -1805,4 +1806,35 @@ test('createBoxSDFEvaluator matches global SDF and evaluateCaveNormal reuses out
   assert.equal(ret, reusable);
   const mag = Math.hypot(reusable.nx, reusable.ny);
   assert.ok(Math.abs(mag - 1) < 1e-5, `Expected unit normal, got magnitude ${mag}`);
+});
+
+test('getGasSwitchCoach warns at 21m descent on EAN32, escalates at 28m, and clears on TMX', () => {
+  const lvl20 = getLevelById('boy-bulok-asian-sump');
+  const state = createDiveSession(lvl20).diveState;
+  // Shallow on EAN32 -> no prompt
+  assert.equal(getGasSwitchCoach(state, 12, { ascending: false }), null);
+
+  // Approaching 22m switch line on EAN32 -> amber stop-and-switch prompt using level mix name
+  const warn = getGasSwitchCoach(state, 21.5, { ascending: false });
+  assert.ok(warn);
+  assert.equal(warn.severity, 'warn');
+  assert.equal(warn.targetGas, 'TMX1455');
+  assert.equal(warn.hotkey, '2');
+  assert.ok(warn.title.includes('TMX 6/82'), `Expected level-specific mix name, got ${warn.title}`);
+
+  // Past 27.5m still on EAN32 -> urgent danger prompt
+  const danger = getGasSwitchCoach(state, 28.5, { ascending: false });
+  assert.ok(danger);
+  assert.equal(danger.severity, 'danger');
+  assert.equal(danger.targetGas, 'TMX1455');
+
+  // Once switched to TMX at 28.5m -> prompt clears
+  switchGas(state, 'TMX1455');
+  state.ppo2 = computePPO2(28.5, state.mixes.TMX1455);
+  assert.equal(getGasSwitchCoach(state, 28.5, { ascending: false }), null);
+
+  // Breathing O2 100% below 6m -> immediate danger switch
+  switchGas(state, 'O2');
+  const o2Danger = getGasSwitchCoach(state, 9.0, { ascending: false });
+  assert.ok(o2Danger && o2Danger.severity === 'danger' && o2Danger.targetGas === 'EAN32');
 });
