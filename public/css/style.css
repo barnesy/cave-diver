@@ -531,11 +531,12 @@ html, body {
 .level-cards {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  max-height: 214px;
+  gap: 6px;
+  max-height: 224px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   scroll-padding-block: 6px;
-  padding-right: 3px;
+  padding: 2px 3px 2px 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(56, 189, 248, 0.38) transparent;
 }
@@ -543,26 +544,19 @@ html, body {
   color: #fbbf24;
   font-weight: 700;
 }
-@media (max-width: 640px) {
-  .site-browser {
-    grid-template-columns: 1fr;
-  }
-  .level-cards {
-    max-height: 158px;
-  }
-  .site-browser.view-list .level-cards {
-    grid-template-columns: 1fr;
-  }
-}
 .level-card-btn {
+  flex-shrink: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 3px;
   background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
-  padding: 7px 8px;
+  padding: 8px 10px;
+  min-height: 58px;
   color: var(--text-main);
   cursor: pointer;
   text-align: left;
@@ -596,9 +590,9 @@ html, body {
   font-weight: 600;
 }
 .lvl-card-name {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.2;
   color: var(--text-main);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -607,11 +601,39 @@ html, body {
 }
 .lvl-card-meta {
   font-family: ui-monospace, monospace;
-  font-size: 0.63rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
 }
 .lvl-card-meta.cached {
   color: var(--ok);
+}
+@media (max-width: 640px) {
+  .site-browser {
+    grid-template-columns: 1fr;
+  }
+  .level-cards {
+    max-height: 230px;
+    gap: 7px;
+  }
+  .site-browser.view-list .level-cards {
+    grid-template-columns: 1fr;
+    max-height: 340px;
+  }
+  .level-card-btn {
+    padding: 10px 12px;
+    gap: 4px;
+    min-height: 66px;
+  }
+  .lvl-card-top {
+    font-size: 0.75rem;
+  }
+  .lvl-card-name {
+    font-size: 0.85rem;
+    line-height: 1.24;
+  }
+  .lvl-card-meta {
+    font-size: 0.7rem;
+  }
 }
 
 .sr-only-select {
@@ -2765,21 +2787,30 @@ select:focus-visible {
   overflow-y: auto;
 }
 .lb-row {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto auto auto 14px;
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-height: 40px;
   text-align: left;
   font-family: inherit;
   color: inherit;
   cursor: pointer;
-  padding: 7px 8px;
+  padding: 8px 9px;
   border-radius: 8px;
   background: rgba(8, 16, 32, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.14);
   font-size: 0.76rem;
   transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
+}
+@media (max-width: 640px) {
+  .lb-row {
+    min-height: 44px;
+    padding: 9px 10px;
+    font-size: 0.8rem;
+  }
 }
 .lb-row:hover,
 .lb-row:focus-visible {
@@ -3503,6 +3534,7 @@ select:focus-visible {
 }
 .lan-roster li,
 .lan-room-row {
+  flex-shrink: 0;
   animation: rowWaterfall 0.28s var(--ease-buoyant) both;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s var(--ease-buoyant);
 }

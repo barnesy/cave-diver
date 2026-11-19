@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=86');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=87');
   }
   return trysteroModulePromise;
 }
