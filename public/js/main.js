@@ -87,6 +87,7 @@ const inlineLoaderEl = document.getElementById('inline-level-loader');
 const inlineLoaderLabelEl = document.getElementById('inline-level-loader-label');
 const inlineLoaderFillEl = document.getElementById('inline-loader-fill');
 const playerNameInput = document.getElementById('input-player-name');
+const menuTabsEl = document.getElementById('menu-tabs');
 const tabBtnSolo = document.getElementById('tab-btn-solo');
 const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
@@ -226,6 +227,8 @@ function requireCallsign() {
   if (activeMenuTab === 'leaderboards') {
     setActiveMenuTab('solo');
   }
+  playerNameInput?.classList.remove('invalid');
+  void playerNameInput?.offsetWidth;
   playerNameInput?.classList.add('invalid');
   playerNameInput?.focus();
   playerNameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -457,7 +460,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=85" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=86" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -536,7 +539,8 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
       const r = (isSelected ? 5.2 : 3.4) * k;
 
       const halo = isSelected
-        ? `<circle class="map-pin-halo" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" />`
+        ? `<circle class="map-pin-sonar" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(7.5 * k).toFixed(2)}" vector-effect="non-scaling-stroke" />
+           <circle class="map-pin-halo" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" />`
         : '';
       const crosshair = isSelected
         ? `<g stroke="rgba(224,242,254,0.62)" vector-effect="non-scaling-stroke" stroke-width="1">
@@ -648,7 +652,16 @@ function renderLevelCards() {
   renderSiteWorldMap();
 }
 
-function syncMenuLevelLabels(level) {
+function retriggerAnim(el, className) {
+  if (!el) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+  const cleanup = () => el.classList.remove(className);
+  el.addEventListener('animationend', cleanup, { once: true });
+}
+
+function syncMenuLevelLabels(level, { animate = false } = {}) {
   const idx = LEVELS.findIndex((l) => l.id === level.id);
   const lvlNum = idx >= 0 ? idx + 1 : 1;
   btnPlaySolo.textContent = `DIVE · LEVEL ${lvlNum}`;
@@ -656,11 +669,21 @@ function syncMenuLevelLabels(level) {
   const menuDesc = screenMenu.querySelector('.menu-desc');
   const loaderTitle = screenLoader.querySelector('.loader-title');
   const loaderMetaSpan = screenLoader.querySelector('.loader-meta span');
-  if (menuTitle) menuTitle.textContent = level.name.toUpperCase();
-  if (menuDesc && level.description) menuDesc.textContent = level.description;
+  if (menuTitle) {
+    menuTitle.textContent = level.name.toUpperCase();
+    if (animate) retriggerAnim(menuTitle, 'anim-telemetry-swap');
+  }
+  if (menuDesc && level.description) {
+    menuDesc.textContent = level.description;
+    if (animate) retriggerAnim(menuDesc, 'anim-telemetry-swap');
+  }
   if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();
   if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle.toUpperCase();
   renderLevelCards();
+  if (animate) {
+    retriggerAnim(siteMapRegionBadgeEl, 'anim-badge-lock');
+    retriggerAnim(siteMapCoordsEl, 'anim-badge-lock');
+  }
 }
 
 function populateLevelSelect() {
@@ -707,7 +730,7 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
   const mySeq = ++loadSeq;
   activeLevel = nextLevel;
   if (selectLevel) selectLevel.value = nextLevel.id;
-  syncMenuLevelLabels(nextLevel);
+  syncMenuLevelLabels(nextLevel, { animate: true });
 
   const isCached = renderer.isLevelCached(nextLevel.id);
   const mapPct = (rawPct) => {
@@ -1023,6 +1046,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   cancelDebriefAnimations();
   setHudMenuOpen(false);
+  screenMenu.classList.remove('menu-submerging');
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
   screenHud.hidden = false;
@@ -1423,12 +1447,23 @@ function formatLbDate(ts) {
   }
 }
 
+let lbStatsCloseTimer = 0;
 function closeLeaderboardStatsModal() {
-  if (lbStatsModalEl) lbStatsModalEl.hidden = true;
+  if (!lbStatsModalEl || lbStatsModalEl.hidden) return;
+  clearTimeout(lbStatsCloseTimer);
+  lbStatsModalEl.classList.add('is-closing');
+  lbStatsCloseTimer = setTimeout(() => {
+    lbStatsCloseTimer = 0;
+    lbStatsModalEl.classList.remove('is-closing');
+    lbStatsModalEl.hidden = true;
+  }, 190);
 }
 
 function openLeaderboardStatsModal(entry, rankNum = 1) {
   if (!entry || !lbStatsModalEl || !lbStatsBodyEl) return;
+  clearTimeout(lbStatsCloseTimer);
+  lbStatsCloseTimer = 0;
+  lbStatsModalEl.classList.remove('is-closing');
   const isOverall = entry.levelId === 'overall';
   const lvl = !isOverall ? getLevelById(entry.levelId) : null;
   const lvlIdx = lvl ? LEVELS.findIndex((l) => l.id === lvl.id) + 1 : 0;
@@ -1492,10 +1527,10 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
         <div class="lb-stats-section-title">Score Breakdown</div>
         ${barRows
           .map(
-            (r) => `
+            (r, idx) => `
           <div class="score-bar-row">
             <span class="score-bar-lbl">${escapeHtml(r.label)}</span>
-            <div class="score-bar-track"><div class="score-bar-fill ${r.cls}" style="width:${Math.max(0, Math.min(100, r.pct))}%"></div></div>
+            <div class="score-bar-track"><div class="score-bar-fill ${r.cls}" data-target-w="${Math.max(0, Math.min(100, r.pct))}%" style="width:0%;transition-delay:${idx * 70}ms"></div></div>
             <span class="score-bar-pts">+${r.pts}</span>
           </div>
         `
@@ -1575,6 +1610,11 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
   `;
 
   lbStatsModalEl.hidden = false;
+  requestAnimationFrame(() => {
+    for (const fill of lbStatsBodyEl.querySelectorAll('.score-bar-fill[data-target-w]')) {
+      fill.style.width = fill.dataset.targetW || '0%';
+    }
+  });
 }
 
 function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
@@ -1588,7 +1628,7 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
         (e.playerId && e.playerId === leaderboard.playerId);
       const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
       return `
-        <button type="button" class="lb-row ${isMe ? 'me' : ''}" data-lb-idx="${i}" title="View full dive stats">
+        <button type="button" class="lb-row ${isMe ? 'me' : ''}" style="--row-i:${i}" data-lb-idx="${i}" title="View full dive stats">
           <span class="lb-rank">#${i + 1}</span>
           <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small></span>
           <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
@@ -1988,7 +2028,7 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
     lbFilterLevelId = nextLevel.id;
     if (selectLbSite) selectLbSite.value = nextLevel.id;
   }
-  syncMenuLevelLabels(nextLevel);
+  syncMenuLevelLabels(nextLevel, { animate: true });
   if (lan.room && lan.isHost()) {
     lan.setLevel(nextLevel.id);
   }
@@ -2043,10 +2083,18 @@ if (siteViewTabsEl && siteBrowserEl) {
     const btn = e.target.closest('button[data-site-view]');
     if (!btn) return;
     const v = btn.dataset.siteView;
-    siteViewMode = v === 'map' || v === 'list' ? v : 'split';
+    const nextMode = v === 'map' || v === 'list' ? v : 'split';
+    if (nextMode === siteViewMode) return;
+    siteViewMode = nextMode;
+    const viewIdx = nextMode === 'map' ? 1 : nextMode === 'list' ? 2 : 0;
+    siteViewTabsEl.style.setProperty('--view-index', String(viewIdx));
     siteBrowserEl.className = `site-browser view-${siteViewMode}`;
+    retriggerAnim(siteBrowserEl, 'anim-view-morph');
     for (const b of siteViewTabsEl.querySelectorAll('button[data-site-view]')) {
       b.classList.toggle('active', b === btn);
+    }
+    if (nextMode !== 'list') {
+      renderSiteWorldMap({ instantZoom: false });
     }
   });
 }
@@ -2059,6 +2107,9 @@ async function launchOpenCoopDive() {
     resetLobbyUiState();
   }
   btnPlaySolo.disabled = true;
+  if (!screenMenu.hidden) {
+    screenMenu.classList.add('menu-submerging');
+  }
   try {
     lan.connect();
     const roomPromise =
@@ -2089,6 +2140,7 @@ async function launchOpenCoopDive() {
     return true;
   } finally {
     btnPlaySolo.disabled = false;
+    screenMenu.classList.remove('menu-submerging');
   }
 }
 
@@ -2104,10 +2156,13 @@ function syncSitePickerVisibility() {
 }
 
 async function setActiveMenuTab(tab = 'solo') {
+  const prevTab = activeMenuTab;
   activeMenuTab = tab === 'leaderboards' ? 'leaderboards' : 'solo';
+  const changed = prevTab !== activeMenuTab;
   const isSolo = activeMenuTab === 'solo';
   const isLb = activeMenuTab === 'leaderboards';
 
+  menuTabsEl?.style.setProperty('--tab-index', isLb ? '1' : '0');
   tabBtnSolo?.classList.toggle('active', isSolo);
   tabBtnSolo?.setAttribute('aria-selected', String(isSolo));
   btnOpenLeaderboard?.classList.toggle('active', isLb);
@@ -2117,6 +2172,16 @@ async function setActiveMenuTab(tab = 'solo') {
   if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
   if (menuIdentityRow) menuIdentityRow.hidden = isLb;
   syncSitePickerVisibility();
+
+  if (changed) {
+    if (isLb) {
+      retriggerAnim(leaderboardPanel, 'anim-glide-right');
+    } else {
+      retriggerAnim(menuIdentityRow, 'anim-glide-left');
+      retriggerAnim(menuSitePicker, 'anim-glide-left');
+      retriggerAnim(soloPanel, 'anim-glide-left');
+    }
+  }
 
   if (isSolo) {
     lan.ensureConnected();
@@ -2133,6 +2198,8 @@ leaderboardPanel?.addEventListener('click', (e) => {
   const modeBtn = e.target.closest('button[data-lb-mode]');
   if (modeBtn) {
     lbMode = modeBtn.dataset.lbMode === 'team' ? 'team' : 'solo';
+    const tabsWrap = modeBtn.closest('.lb-tabs');
+    tabsWrap?.style.setProperty('--lb-index', lbMode === 'team' ? '1' : '0');
     for (const b of leaderboardPanel.querySelectorAll('button[data-lb-mode]')) {
       b.classList.toggle('active', b === modeBtn);
     }
