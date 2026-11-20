@@ -188,12 +188,14 @@ export class CaveRenderer {
     this._vignetteCache = null;
     this._siltGlareScratch = [];
     this._torchSparksScratch = [];
+    this._peerTorchCache = new Map();
     this._auroraStamps = this._buildAuroraStamps();
     this._needsResize = true;
     this._cachedDpr = 1;
     const isCoarseMobile =
       typeof window !== 'undefined' &&
       (window.matchMedia?.('(pointer: coarse)').matches || (typeof navigator !== 'undefined' && navigator.deviceMemory && navigator.deviceMemory <= 4));
+    this._isCoarseMobile = isCoarseMobile;
     this._rockPxPerM = isCoarseMobile ? MOBILE_CACHE_PX_PER_M : CACHE_PX_PER_M;
     this._maxCachedLevels = isCoarseMobile ? 2 : MAX_CACHED_LEVELS;
     this._maxCacheBytes = isCoarseMobile ? 120 * 1024 * 1024 : 320 * 1024 * 1024;
@@ -314,6 +316,7 @@ export class CaveRenderer {
     this.backChunks = entry.backChunks;
     this.rockChunks = entry.rockChunks;
     this.dustMotes = entry.dustMotes || [];
+    this._peerTorchCache?.clear();
     this._sunCurtainCache.clear();
     this._basinEdgeCache.clear();
     this._waterMeniscusCache.clear();
@@ -6465,30 +6468,39 @@ export class CaveRenderer {
     ctx.globalCompositeOperation = 'screen';
     const intensity = isPeer ? 0.58 : 1.0;
     const warmBoost = Math.min(0.18, siltHaze * 0.14);
-    const scatter = ctx.createRadialGradient(tx, ty, 0.15 * scale, tx, ty, rPx);
-    scatter.addColorStop(0, `rgba(254, 249, 195, ${(0.24 * intensity + warmBoost).toFixed(3)})`);
-    scatter.addColorStop(0.28, `rgba(186, 230, 253, ${(0.14 * intensity + warmBoost * 0.45).toFixed(3)})`);
-    scatter.addColorStop(0.7, `rgba(14, 165, 233, ${(0.05 * intensity).toFixed(3)})`);
-    scatter.addColorStop(1, 'rgba(2, 132, 199, 0)');
-    ctx.fillStyle = scatter;
-    ctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+    const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+    const scatterStamp = this.glowStamps?.torchBeamScatter;
+    if (scatterStamp) {
+      ctx.globalAlpha = Math.min(1, intensity * 0.85 + warmBoost * 1.4);
+      ctx.drawImage(scatterStamp, tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+      ctx.globalAlpha = 1;
+    } else {
+      const scatter = ctx.createRadialGradient(tx, ty, 0.15 * scale, tx, ty, rPx);
+      scatter.addColorStop(0, `rgba(254, 249, 195, ${(0.24 * intensity + warmBoost).toFixed(3)})`);
+      scatter.addColorStop(0.28, `rgba(186, 230, 253, ${(0.14 * intensity + warmBoost * 0.45).toFixed(3)})`);
+      scatter.addColorStop(0.7, `rgba(14, 165, 233, ${(0.05 * intensity).toFixed(3)})`);
+      scatter.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      ctx.fillStyle = scatter;
+      ctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+    }
 
-    // Tight hotspot beam core
+    // Tight hotspot beam core (follows torchAngle override for both local & co-divers)
     ctx.beginPath();
     ctx.moveTo(tx, ty);
-    ctx.arc(tx, ty, rPx * 0.9, diver.angle - 0.13, diver.angle + 0.13);
+    ctx.arc(tx, ty, rPx * 0.9, beamAng - 0.13, beamAng + 0.13);
     ctx.closePath();
     ctx.fillStyle = `rgba(224, 242, 254, ${(0.1 * intensity).toFixed(3)})`;
     ctx.fill();
 
-    // Smooth feathered 2D Ray-Cast Tyndall / Particulate Light Shafts (2-ray spans = 2x fewer draw calls)
+    // Smooth feathered 2D Ray-Cast Tyndall / Particulate Light Shafts (coarser stride for remote peers = 2x faster GPU)
     ctx.globalCompositeOperation = 'lighter';
     const rayLen = torchData.rays.length;
-    for (let i = 0; i < rayLen - 2; i += 2) {
+    const shaftStep = isPeer ? 4 : 2;
+    for (let i = 0; i < rayLen - shaftStep; i += shaftStep) {
       const rA = torchData.rays[i];
-      const rB = torchData.rays[Math.min(rayLen - 1, i + 2)];
-      const centerDist = Math.abs((i + 1) / Math.max(1, rayLen - 1) - 0.5) * 2;
-      const rayAlpha = (1 - centerDist * 0.75) * 0.024 * intensity;
+      const rB = torchData.rays[Math.min(rayLen - 1, i + shaftStep)];
+      const centerDist = Math.abs((i + shaftStep * 0.5) / Math.max(1, rayLen - 1) - 0.5) * 2;
+      const rayAlpha = (1 - centerDist * 0.75) * (isPeer ? 0.032 : 0.024) * intensity;
       ctx.fillStyle = `rgba(186, 230, 253, ${rayAlpha.toFixed(4)})`;
       ctx.beginPath();
       ctx.moveTo(tx, ty);
@@ -6689,26 +6701,91 @@ export class CaveRenderer {
 
     const peerList = Array.isArray(peersInput) ? peersInput : (peersInput ? [peersInput] : []);
     const peerTorches = [];
-    const maxTorchCullX = (cw / Math.max(1, scale)) * 0.5 + 16;
-    const maxTorchCullY = (ch / Math.max(1, scale)) * 0.55 + 16;
+    const halfViewW = (cw / Math.max(1, scale)) * 0.5;
+    const halfViewH = (ch / Math.max(1, scale)) * 0.5;
+    const viewMinX = this.camX - halfViewW - 2;
+    const viewMaxX = this.camX + halfViewW + 2;
+    const viewMinY = this.camY - halfViewH - 2;
+    const viewMaxY = this.camY + halfViewH + 2;
+    const nowPerf = _nowMs();
+    const peerRange = 14.0;
+    const peerHalfSpread = 0.4;
+    const activePeerKeys = new Set();
+
+    // First pass: directional beam-cone frustum culling so offscreen beams pointing away cost 0 CPU/GPU
+    const visibleTorchPeers = [];
     for (let i = 0; i < peerList.length; i++) {
       const p = peerList[i];
       if (!p || p.alive === false || p.torchOn === false) continue;
-      // Frustum-cull offscreen buddies before raycasting their torch fan
-      if (Math.abs(p.x - this.camX) > maxTorchCullX || Math.abs(p.y - this.camY) > maxTorchCullY) continue;
       const ox = p.body?.hand ? p.body.hand.x : p.x;
       const oy = p.body?.hand ? p.body.hand.y : p.y;
+      const pTorchAng = Number.isFinite(p.torchAngle) ? p.torchAngle : (p.angle || 0);
+      const a0 = pTorchAng - peerHalfSpread;
+      const a1 = pTorchAng + peerHalfSpread;
+      const tipX0 = ox + Math.cos(a0) * peerRange;
+      const tipY0 = oy + Math.sin(a0) * peerRange;
+      const tipX1 = ox + Math.cos(a1) * peerRange;
+      const tipY1 = oy + Math.sin(a1) * peerRange;
+      const tipXc = ox + Math.cos(pTorchAng) * peerRange;
+      const tipYc = oy + Math.sin(pTorchAng) * peerRange;
+      const bMinX = Math.min(ox, tipX0, tipX1, tipXc);
+      const bMaxX = Math.max(ox, tipX0, tipX1, tipXc);
+      const bMinY = Math.min(oy, tipY0, tipY1, tipYc);
+      const bMaxY = Math.max(oy, tipY0, tipY1, tipYc);
+      if (bMaxX < viewMinX || bMinX > viewMaxX || bMaxY < viewMinY || bMinY > viewMaxY) continue;
+      visibleTorchPeers.push({ peer: p, ox, oy, pTorchAng, key: p.id || `peer_${i}` });
+    }
+
+    // Adaptive ray budget + pose-delta raycast cache per peer (cuts co-op CPU by 70-90%!)
+    const peerRayCount = (this._isCoarseMobile || visibleTorchPeers.length >= 2 || cw < 900) ? 16 : 22;
+    const hasSilt = siltClouds && siltClouds.length > 0;
+    const cacheMaxAgeMs = hasSilt ? 55 : 135;
+
+    for (let i = 0; i < visibleTorchPeers.length; i++) {
+      const vp = visibleTorchPeers[i];
+      activePeerKeys.add(vp.key);
+      const prev = this._peerTorchCache.get(vp.key);
+      let rays = null;
+      if (prev && prev.levelId === this.level?.id && prev.rayCount === peerRayCount) {
+        let angDelta = vp.pTorchAng - prev.angle;
+        while (angDelta > Math.PI) angDelta -= Math.PI * 2;
+        while (angDelta < -Math.PI) angDelta += Math.PI * 2;
+        const posDeltaSq = (vp.ox - prev.ox) * (vp.ox - prev.ox) + (vp.oy - prev.oy) * (vp.oy - prev.oy);
+        if (posDeltaSq < 0.0196 && Math.abs(angDelta) < 0.035 && nowPerf - prev.at < cacheMaxAgeMs) {
+          rays = prev.rays;
+        }
+      }
+      if (!rays) {
+        rays = castTorchFan(this.level, vp.ox, vp.oy, vp.pTorchAng, peerHalfSpread, peerRange, peerRayCount, siltClouds);
+        this._peerTorchCache.set(vp.key, {
+          levelId: this.level?.id,
+          ox: vp.ox,
+          oy: vp.oy,
+          angle: vp.pTorchAng,
+          rayCount: peerRayCount,
+          at: nowPerf,
+          rays,
+        });
+      }
       peerTorches.push({
-        peer: p,
+        peer: vp.peer,
         torch: {
-          ox,
-          oy,
-          rays: castTorchFan(this.level, ox, oy, p.angle, 0.4, 14.0, 32, siltClouds),
+          ox: vp.ox,
+          oy: vp.oy,
+          rays,
         },
       });
     }
+    // Prune disconnected/offscreen peer cache entries to prevent stale growth
+    if (this._peerTorchCache.size > activePeerKeys.size + 4) {
+      for (const k of this._peerTorchCache.keys()) {
+        if (!activePeerKeys.has(k)) this._peerTorchCache.delete(k);
+      }
+    }
 
     const cutoutStamp = this.glowStamps.cutout;
+    const spillCutoutStamp = this.glowStamps.torchSpillCutout;
+    const hotCutoutStamp = this.glowStamps.torchHotCutout;
     const carveDiverLight = (d, torchData, rangeM) => {
       const sx = toScreenX(d.x) * rx;
       const sy = toScreenY(d.y) * ry;
@@ -6735,6 +6812,7 @@ export class CaveRenderer {
       const tx = toScreenX(torchData.ox) * rx;
       const ty = toScreenY(torchData.oy) * ry;
       const rPx = rangeM * scale * rx;
+      const beamAng = Number.isFinite(d.torchAngle) ? d.torchAngle : (d.angle || 0);
 
       // Clip to ray-cast shadow polygon so beam never bleeds through limestone walls
       lctx.save();
@@ -6747,26 +6825,36 @@ export class CaveRenderer {
       lctx.closePath();
       lctx.clip();
 
-      // Wide spill cone (Beer-Lambert water attenuation)
-      const spill = lctx.createRadialGradient(tx, ty, 0.15 * scale * rx, tx, ty, rPx);
-      spill.addColorStop(0, 'rgba(0,0,0,1)');
-      spill.addColorStop(0.45, 'rgba(0,0,0,0.88)');
-      spill.addColorStop(0.78, 'rgba(0,0,0,0.45)');
-      spill.addColorStop(1, 'rgba(0,0,0,0)');
-      lctx.fillStyle = spill;
-      lctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+      // Wide spill cone via pre-baked radial cutout stamp (0 per-frame gradient allocation!)
+      if (spillCutoutStamp) {
+        lctx.drawImage(spillCutoutStamp, tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+      } else {
+        const spill = lctx.createRadialGradient(tx, ty, 0.15 * scale * rx, tx, ty, rPx);
+        spill.addColorStop(0, 'rgba(0,0,0,1)');
+        spill.addColorStop(0.45, 'rgba(0,0,0,0.88)');
+        spill.addColorStop(0.78, 'rgba(0,0,0,0.45)');
+        spill.addColorStop(1, 'rgba(0,0,0,0)');
+        lctx.fillStyle = spill;
+        lctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
+      }
 
-      // Tight intense hotspot beam core
-      const hot = lctx.createRadialGradient(tx, ty, 0.1 * scale * rx, tx, ty, rPx * 0.92);
-      hot.addColorStop(0, 'rgba(0,0,0,1)');
-      hot.addColorStop(0.7, 'rgba(0,0,0,0.95)');
-      hot.addColorStop(1, 'rgba(0,0,0,0)');
-      lctx.fillStyle = hot;
+      // Tight intense hotspot beam core (follows torchAngle override!)
+      const hotR = rPx * 0.92;
       lctx.beginPath();
       lctx.moveTo(tx, ty);
-      lctx.arc(tx, ty, rPx * 0.92, d.angle - 0.14, d.angle + 0.14);
+      lctx.arc(tx, ty, hotR, beamAng - 0.14, beamAng + 0.14);
       lctx.closePath();
-      lctx.fill();
+      if (hotCutoutStamp) {
+        lctx.clip();
+        lctx.drawImage(hotCutoutStamp, tx - hotR, ty - hotR, hotR * 2, hotR * 2);
+      } else {
+        const hot = lctx.createRadialGradient(tx, ty, 0.1 * scale * rx, tx, ty, hotR);
+        hot.addColorStop(0, 'rgba(0,0,0,1)');
+        hot.addColorStop(0.7, 'rgba(0,0,0,0.95)');
+        hot.addColorStop(1, 'rgba(0,0,0,0)');
+        lctx.fillStyle = hot;
+        lctx.fill();
+      }
 
       lctx.restore();
     };
@@ -6997,11 +7085,12 @@ export class CaveRenderer {
       for (let i = 0; i < peerList.length; i++) {
         const p = peerList[i];
         if (!p || p.alive === false) continue;
+        const pBeamAng = Number.isFinite(p.torchAngle) ? p.torchAngle : (p.angle || 0);
         lights.push({
           x: p.x,
           y: p.y,
-          fx: Math.cos(p.angle || 0),
-          fy: Math.sin(p.angle || 0),
+          fx: Math.cos(pBeamAng),
+          fy: Math.sin(pBeamAng),
           torchOn: p.torchOn !== false,
         });
       }

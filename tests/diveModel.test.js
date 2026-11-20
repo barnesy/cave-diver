@@ -2224,3 +2224,58 @@ test('Left flashlight joystick temporarily overrides diver torchAngle & hand aim
   assert.equal(sess.diver.torchManualAim, false);
   assert.ok(Math.abs(sess.diver.torchAngle - sess.diver.angle) < 0.15, 'Torch should return to diver heading after release');
 });
+
+test('Co-diver torchAngle & torchManualAim relay over P2P and interpolate smoothly on remote clients', () => {
+  const peerPkts = [];
+  const coord = new P2pRoomCoordinator({
+    code: 'LITE',
+    hostId: 'h1',
+    hostName: 'Host',
+    levelId: 'cenote-el-abismo',
+  });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'Buddy' }, (m) => peerPkts.push(m), 'p2');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+
+  // Host aims left flashlight stick straight up (-PI/2) while swimming horizontally (angle = 0)
+  coord.handleMessage('h1', {
+    type: 'player_state',
+    state: {
+      seq: 1,
+      x: 12,
+      y: 16,
+      vx: 1.2,
+      vy: 0,
+      angle: 0,
+      torchOn: true,
+      torchAngle: -1.57,
+      torchManualAim: true,
+      alive: true,
+    },
+  });
+
+  const relayed = peerPkts.find((m) => m.type === 'peer_state');
+  assert.ok(relayed, 'Expected peer_state broadcast to buddy');
+  assert.equal(relayed.state.torchManualAim, true);
+  assert.ok(Math.abs(relayed.state.torchAngle - -1.57) < 0.02, `Expected relayed torchAngle ~-1.57, got ${relayed.state.torchAngle}`);
+
+  // Verify LanClient smoothly interpolates remote buddy's torchAngle
+  const client = new LanClient();
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'h1',
+    state: { seq: 1, x: 12, y: 16, vx: 0, vy: 0, angle: 0, torchOn: true, torchAngle: 0, torchManualAim: false, alive: true },
+  });
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'h1',
+    state: { seq: 2, x: 12, y: 16, vx: 0, vy: 0, angle: 0, torchOn: true, torchAngle: 1.5, torchManualAim: true, alive: true },
+  });
+  const lvl = getLevelById('cenote-el-abismo');
+  for (let i = 0; i < 12; i++) {
+    client.stepPeerInterpolation(0.05, lvl);
+  }
+  const peer = client.getPeers().find((p) => p.id === 'h1');
+  assert.ok(peer && peer.torchManualAim === true);
+  assert.ok(peer.torchAngle > 1.2 && peer.torchAngle <= 1.55, `Expected interpolated peer torchAngle near 1.5, got ${peer?.torchAngle}`);
+});

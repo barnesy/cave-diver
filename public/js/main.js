@@ -470,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=97" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=98" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -3823,6 +3823,8 @@ function stepSimulation(dt) {
         exploredPct: session.exploredPct || 0,
         depthM: diveState.depthM,
         torchOn: diver.torchOn,
+        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
+        torchManualAim: Boolean(diver.torchManualAim),
         alive: diveState.alive,
         carryingBody: Boolean(session.carryingBody),
         rescueTargetId: session.rescueTargetId || '',

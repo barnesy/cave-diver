@@ -60,6 +60,21 @@ function makeVerticalBandStamp(width = 1, height = 64) {
   return c;
 }
 
+function makeRadialStamp(stops, size = 128) {
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  const half = size * 0.5;
+  const g = ctx.createRadialGradient(half, half, 0, half, half, half);
+  for (let i = 0; i < stops.length; i++) {
+    g.addColorStop(stops[i][0], stops[i][1]);
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return c;
+}
+
 export function createGlowStamps() {
   return {
     cyan: makeGlowStamp('rgba(186, 230, 253, 0.9)', 'rgba(56, 189, 248, 0.32)'),
@@ -69,6 +84,32 @@ export function createGlowStamps() {
     silt: makeGlowStamp('rgba(164, 148, 118, 0.78)', 'rgba(112, 99, 78, 0.34)'),
     rustSilt: makeGlowStamp('rgba(186, 84, 30, 0.85)', 'rgba(124, 45, 18, 0.38)'),
     cutout: makeGlowStamp('rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 0.45)', 128),
+    torchSpillCutout: makeRadialStamp(
+      [
+        [0, 'rgba(0,0,0,1)'],
+        [0.45, 'rgba(0,0,0,0.88)'],
+        [0.78, 'rgba(0,0,0,0.45)'],
+        [1, 'rgba(0,0,0,0)'],
+      ],
+      160
+    ),
+    torchHotCutout: makeRadialStamp(
+      [
+        [0, 'rgba(0,0,0,1)'],
+        [0.7, 'rgba(0,0,0,0.95)'],
+        [1, 'rgba(0,0,0,0)'],
+      ],
+      128
+    ),
+    torchBeamScatter: makeRadialStamp(
+      [
+        [0, 'rgba(254, 249, 195, 0.32)'],
+        [0.28, 'rgba(186, 230, 253, 0.18)'],
+        [0.7, 'rgba(14, 165, 233, 0.065)'],
+        [1, 'rgba(2, 132, 199, 0)'],
+      ],
+      160
+    ),
     bandGlow: makeVerticalBandStamp(1, 64),
     siltWisp: makeSiltWispStamp(128),
   };

@@ -60,6 +60,8 @@ function sanitizePlayerState(raw) {
     exploredPct: pct(raw.exploredPct ?? 0),
     totalScore: Math.max(0, Math.round(num(raw.totalScore, 0))),
     torchOn: Boolean(raw.torchOn),
+    torchAngle: Number.isFinite(Number(raw.torchAngle)) ? r2(Number(raw.torchAngle)) : r2(num(raw.angle, 0)),
+    torchManualAim: Boolean(raw.torchManualAim),
     alive: raw.alive !== false,
     carryingBody: Boolean(raw.carryingBody),
     rescueTargetId: typeof raw.rescueTargetId === 'string' ? raw.rescueTargetId.slice(0, 48) : '',

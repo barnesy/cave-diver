@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=97');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=98');
   }
   return trysteroModulePromise;
 }
@@ -1479,12 +1479,16 @@ export class LanClient {
           const rxNow = nowMs();
           let p = this.peers.get(pid);
           if (!p) {
+            const initTorchAng = Number.isFinite(msg.state.torchAngle) ? msg.state.torchAngle : msg.state.angle;
             p = {
               id: pid,
               ...msg.state,
+              torchAngle: initTorchAng,
+              torchManualAim: Boolean(msg.state.torchManualAim),
               targetX: msg.state.x,
               targetY: msg.state.y,
               targetAngle: msg.state.angle,
+              targetTorchAngle: initTorchAng,
               _rxSeq: rxSeq,
               _lastRxMs: rxNow,
               _smoothSpeed: Math.hypot(msg.state.vx || 0, msg.state.vy || 0),
@@ -1502,6 +1506,8 @@ export class LanClient {
             p.targetX = msg.state.x;
             p.targetY = msg.state.y;
             p.targetAngle = msg.state.angle;
+            p.targetTorchAngle = Number.isFinite(msg.state.torchAngle) ? msg.state.torchAngle : msg.state.angle;
+            p.torchManualAim = Boolean(msg.state.torchManualAim);
             p.vx = msg.state.vx;
             p.vy = msg.state.vy;
             p.gasId = msg.state.gasId;
@@ -2065,6 +2071,13 @@ export class LanClient {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       p.angle += diff * alphaAng;
+
+      const curTAng = Number.isFinite(p.torchAngle) ? p.torchAngle : p.angle;
+      const tarTAng = Number.isFinite(p.targetTorchAngle) ? p.targetTorchAngle : p.angle;
+      let tDiff = tarTAng - curTAng;
+      while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+      while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+      p.torchAngle = curTAng + tDiff * alphaAng;
 
       const rawSpeed = Math.hypot(vx, vy);
       p._smoothSpeed = Number.isFinite(p._smoothSpeed)
