@@ -129,6 +129,43 @@ const MARGIN_MAP = {
   'boybulok-steppe': ['#6b5d4d', '#64748b'],
 };
 
+const SURFACE_PROP_ASSETS = {
+  boat: '/assets/surf-dive-boat.webp',
+  palapa: '/assets/surf-palapa.webp',
+  cabin: '/assets/surf-cabin.webp',
+  bathhouse: '/assets/surf-bathhouse.webp',
+  research: '/assets/surf-research-dome.webp',
+  palm: '/assets/surf-tree-palm.webp',
+  cypress: '/assets/surf-tree-cypress.webp',
+  spruce: '/assets/surf-tree-spruce.webp',
+  med: '/assets/surf-tree-med.webp',
+  acacia: '/assets/surf-tree-acacia.webp',
+};
+
+const SURFACE_STYLE_PROPS = {
+  'open-ocean-wreck': ['boat'],
+  'florida-cypress': ['cabin', 'cypress', 'spruce'],
+  'nordic-fjord': ['cabin', 'spruce'],
+  'ural-birch': ['cabin', 'spruce'],
+  'moravia-rift': ['cabin', 'spruce'],
+  'provence-gorge': ['cabin', 'med'],
+  'quercy-ressel': ['cabin', 'med'],
+  'lazio-travertine': ['cabin', 'med'],
+  'boybulok-steppe': ['cabin', 'med'],
+  'kalahari-crater': ['cabin', 'acacia'],
+  'bahamas-abaco': ['palapa', 'palm', 'spruce'],
+  'budapest-bathhouse': ['bathhouse', 'med'],
+  'sinai-coast': ['palapa', 'palm'],
+  'atlantida-lava': ['palapa', 'palm'],
+  'oxbelha-twilight': ['palapa', 'palm'],
+  'lagoa-cerrado': ['palapa', 'palm'],
+  'aurora-basalt': ['research', 'spruce'],
+  'strytan-fjord': ['research', 'spruce'],
+  'kverkfjoll-glacier': ['research'],
+  'grjotagja-rift': ['research'],
+  yucatan: ['palapa', 'palm'],
+};
+
 const nextFrame = () =>
   new Promise((resolve) => {
     if (typeof document !== 'undefined' && document.hidden) {
@@ -172,6 +209,7 @@ export class CaveRenderer {
     this.skyBackdropImg = null;
 
     this._rawImageCache = new Map();
+    this._surfaceSprites = new Map();
     this._bitmapAssetCache = new Map();
     this._bakedLevelCache = new Map();
     this._loadEpoch = 0;
@@ -440,6 +478,46 @@ export class CaveRenderer {
     return p;
   }
 
+  _getSurfaceProp(key) {
+    const existing = this._surfaceSprites.get(key);
+    if (existing) {
+      return existing !== 'loading' && (existing.naturalWidth || existing.width) > 0 ? existing : null;
+    }
+    const src = SURFACE_PROP_ASSETS[key];
+    if (!src) return null;
+    this._surfaceSprites.set(key, 'loading');
+    this._loadRawImageAsset(src).then((img) => {
+      if (img && (img.naturalWidth || img.width) > 0) {
+        this._surfaceSprites.set(key, img);
+      } else {
+        this._surfaceSprites.delete(key);
+      }
+    });
+    return null;
+  }
+
+  _preloadLevelSurfaceProps(level = this.level) {
+    const style = level?.theme?.surfaceStyle || (level?.isWreck ? 'open-ocean-wreck' : 'yucatan');
+    const keys = SURFACE_STYLE_PROPS[style] || SURFACE_STYLE_PROPS.yucatan;
+    return Promise.all(
+      keys.map((key) => {
+        const cur = this._surfaceSprites.get(key);
+        if (cur && cur !== 'loading') return Promise.resolve(cur);
+        const src = SURFACE_PROP_ASSETS[key];
+        if (!src) return Promise.resolve(null);
+        this._surfaceSprites.set(key, 'loading');
+        return this._loadRawImageAsset(src).then((img) => {
+          if (img && (img.naturalWidth || img.width) > 0) {
+            this._surfaceSprites.set(key, img);
+            return img;
+          }
+          this._surfaceSprites.delete(key);
+          return null;
+        });
+      })
+    );
+  }
+
   _getSurfaceAssetPaths(level = this.level) {
     const isFlorida = level?.theme?.surfaceStyle === 'florida-cypress' || level?.theme?.id === 'florida-karst';
     return {
@@ -482,6 +560,7 @@ export class CaveRenderer {
     const rockSrc = level?.theme?.rockTexture || '/assets/tex-limestone-wall.jpg';
     const backSrc = level?.theme?.backTexture || '/assets/tex-cave-backwall.jpg';
     const { skySrc, foliageSrc } = this._getSurfaceAssetPaths(level);
+    this._preloadLevelSurfaceProps(level);
     Promise.all([
       this._loadBitmapAsset(rockSrc),
       this._loadBitmapAsset(backSrc),
@@ -554,6 +633,7 @@ export class CaveRenderer {
         onAsset('Loaded atmospheric sky panorama');
         return img;
       }),
+      this._preloadLevelSurfaceProps(targetLevel),
     ]);
 
     if (epoch !== this._loadEpoch) return { cancelled: true };
@@ -1790,18 +1870,52 @@ export class CaveRenderer {
   }
 
   _strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec) {
-    // Soft underwater Fresnel sky-mirror band immediately under the water surface
-    ctx.fillStyle = isFlorida ? 'rgba(245, 224, 180, 0.14)' : 'rgba(218, 242, 252, 0.18)';
+    // Soft underwater Fresnel sky-mirror reflection immediately under the wavy water surface
+    const minX = pts[0][0];
+    const maxX = pts[pts.length - 1][0];
+    const reflDepth = 1.45 * scale;
+    ctx.save();
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1] + 0.55 * scale);
-    ctx.lineTo(pts[0][0], pts[0][1] + 0.55 * scale);
+    ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1] + reflDepth);
+    ctx.lineTo(pts[0][0], pts[0][1] + reflDepth);
     ctx.closePath();
-    ctx.fill();
+    ctx.clip();
+
+    const skyImg = this.skyBackdropImg;
+    if (skyImg && (skyImg.naturalWidth || skyImg.width) > 0 && maxX > minX + 4) {
+      const iw = skyImg.naturalWidth || skyImg.width;
+      const ih = skyImg.naturalHeight || skyImg.height;
+      const waveShift = Math.sin(timeSec * 2.1 + minX * 0.03) * 0.14 * scale;
+      ctx.save();
+      ctx.globalAlpha = isFlorida ? 0.17 : 0.24;
+      ctx.translate(0, pts[0][1] * 2 + reflDepth);
+      ctx.scale(1, -1);
+      ctx.drawImage(
+        skyImg,
+        0,
+        ih * 0.56,
+        iw,
+        ih * 0.44,
+        minX - 6 + waveShift,
+        pts[0][1],
+        maxX - minX + 12,
+        reflDepth
+      );
+      ctx.restore();
+    }
+
+    const fresnelGrad = ctx.createLinearGradient(0, pts[0][1], 0, pts[0][1] + reflDepth);
+    fresnelGrad.addColorStop(0, isFlorida ? 'rgba(245, 224, 180, 0.22)' : 'rgba(218, 242, 252, 0.24)');
+    fresnelGrad.addColorStop(0.5, isFlorida ? 'rgba(220, 198, 152, 0.08)' : 'rgba(125, 211, 252, 0.09)');
+    fresnelGrad.addColorStop(1, 'rgba(14, 116, 144, 0)');
+    ctx.fillStyle = fresnelGrad;
+    ctx.fillRect(minX - 4, pts[0][1] - 4, maxX - minX + 8, reflDepth + 8);
+    ctx.restore();
 
     // Fine broken specular sky/sun glints instead of a thick uniform solid stripe
-    ctx.strokeStyle = isFlorida ? 'rgba(255, 244, 214, 0.48)' : 'rgba(240, 250, 255, 0.54)';
+    ctx.strokeStyle = isFlorida ? 'rgba(255, 244, 214, 0.52)' : 'rgba(240, 250, 255, 0.58)';
     ctx.lineWidth = Math.max(1.2, 0.065 * scale);
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -1809,11 +1923,11 @@ export class CaveRenderer {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255, 255, 250, 0.72)';
+    ctx.fillStyle = 'rgba(255, 255, 250, 0.74)';
     for (let i = 0; i < pts.length - 1; i += 2) {
       const shimmer = Math.sin(pts[i][2] * 3.1 + timeSec * 4.5);
-      if (shimmer > 0.25) {
-        ctx.fillRect(pts[i][0], pts[i][1] - 0.025 * scale, (0.28 + shimmer * 0.25) * scale, Math.max(1, 0.045 * scale));
+      if (shimmer > 0.22) {
+        ctx.fillRect(pts[i][0], pts[i][1] - 0.025 * scale, (0.28 + shimmer * 0.26) * scale, Math.max(1, 0.045 * scale));
       }
     }
   }
@@ -1899,9 +2013,21 @@ export class CaveRenderer {
     ctx.fillStyle = fGrad;
     ctx.fill();
 
-    // Clip stone masonry courses & top sill shadow inside the foundation contour
+    // Clip stone masonry courses & real photographic stone grain inside the foundation contour
     ctx.save();
     ctx.clip();
+    const rockPat = this._getTintedRockPattern(ctx, this.level, this.rockTex);
+    if (rockPat) {
+      ctx.save();
+      if (typeof DOMMatrix !== 'undefined' && rockPat.setTransform) {
+        const ps = Math.max(0.08, scale / (CACHE_PX_PER_M * 1.4));
+        rockPat.setTransform(new DOMMatrix().translate(xL, yTop).scale(ps, ps));
+      }
+      ctx.globalAlpha = 0.48;
+      ctx.fillStyle = rockPat;
+      ctx.fillRect(xL, yTop, xR - xL, maxBotY - yTop + 4);
+      ctx.restore();
+    }
     ctx.fillStyle = 'rgba(12, 16, 12, 0.34)';
     ctx.fillRect(xL, yTop, xR - xL, 0.08 * scale);
     ctx.strokeStyle = 'rgba(20, 22, 18, 0.28)';
@@ -2051,6 +2177,20 @@ export class CaveRenderer {
     ctx.lineTo(rx * 0.98, 0.06 * scale);
     ctx.closePath();
     ctx.fill();
+    // Photographic stone texture overlay so surface boulders match cliff limestone/basalt
+    const rockPat = this._getTintedRockPattern(ctx, this.level, this.rockTex);
+    if (rockPat) {
+      ctx.save();
+      ctx.clip();
+      if (typeof DOMMatrix !== 'undefined' && rockPat.setTransform) {
+        const ps = Math.max(0.08, scale / (CACHE_PX_PER_M * 1.35));
+        rockPat.setTransform(new DOMMatrix().scale(ps, ps));
+      }
+      ctx.globalAlpha = 0.52;
+      ctx.fillStyle = rockPat;
+      ctx.fillRect(-rx, -ry, rx * 2, ry + 0.12 * scale);
+      ctx.restore();
+    }
     // Subtle shaded bevel on left shoulder + sun catchlight on crown
     ctx.fillStyle = 'rgba(255, 250, 236, 0.16)';
     ctx.beginPath();
@@ -2217,7 +2357,95 @@ export class CaveRenderer {
     ctx.restore();
   }
 
+  /**
+   * Renders a photorealistic transparent botanical tree cutout planted into terrain slope
+   * with natural contact shadow, subtle wind-sway shear around the trunk base, and optional flip.
+   */
+  _drawPhotoTree(ctx, key, wx, toScreenX, toScreenY, scale, sway, heightM = 5.4, opts = {}) {
+    const img = this._getSurfaceProp(key);
+    if (!img) return false;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return false;
+
+    const foot = this._sampleSurfaceFooting(this.level, wx, 0.85);
+    const gx = toScreenX(wx);
+    const groundY = toScreenY(foot.gyC);
+    const h = heightM * scale * (opts.heightScale || 1.0);
+    const w = h * (iw / ih) * (opts.widthScale || 1.0);
+    const embed = (opts.embedM ?? 0.22) * scale + Math.abs(Math.sin(foot.slopeRad)) * 0.22 * scale;
+    const flip = opts.flipX ? -1 : 1;
+    const shear = Math.max(-0.075, Math.min(0.075, (sway / Math.max(24, h)) * 0.72));
+
+    this._drawGroundContactShadow(ctx, gx, groundY + 0.06 * scale, Math.max(0.75 * scale, w * 0.28), scale, foot.slopeRad);
+
+    ctx.save();
+    ctx.translate(gx, groundY + embed);
+    ctx.transform(1, 0, shear, 1, 0, 0);
+    if (flip < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w * 0.5, -h, w, h);
+    ctx.restore();
+
+    if (opts.berm !== false) {
+      this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, Math.min(1.0, Math.max(0.45, (w / Math.max(1, scale)) * 0.22)), {
+        tufts: 4,
+        stones: false,
+      });
+    }
+    return true;
+  }
+
+  /**
+   * Renders a photorealistic transparent surface structure (palapa, cabin, bathhouse, research dome)
+   * anchored onto a stone-textured contoured retaining plinth matching the uneven cliff slope.
+   */
+  _drawPhotoBuilding(ctx, key, wx, toScreenX, toScreenY, scale, widthM = 4.2, opts = {}) {
+    const img = this._getSurfaceProp(key);
+    if (!img) return false;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return false;
+
+    const halfW = widthM * 0.48;
+    const foot = this._sampleSurfaceFooting(this.level, wx, halfW);
+    const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.05);
+    const gx = toScreenX(wx);
+    const groundY = toScreenY(floorWy);
+    const w = widthM * scale;
+    const h = w * (ih / iw);
+    const embed = (opts.embedM ?? 0.14) * scale;
+
+    this._drawGroundContactShadow(ctx, gx, toScreenY(foot.gyC) + 0.08 * scale, w * 0.56, scale, foot.slopeRad);
+    if (opts.foundation !== false) {
+      this._drawContouredFoundation(ctx, toScreenX, toScreenY, scale, wx, halfW * 0.94, floorWy - 0.06, {
+        stoneTop: opts.stoneTop || '#8f8778',
+        stoneMid: opts.stoneMid || '#6c6558',
+        stoneBot: opts.stoneBot || '#464139',
+        capColor: opts.capColor || 'rgba(255, 248, 232, 0.16)',
+        tufts: 5,
+      });
+    }
+
+    ctx.save();
+    ctx.drawImage(img, gx - w * 0.5, groundY - h + embed, w, h);
+    ctx.restore();
+
+    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW * 0.96, {
+      tufts: 6,
+      stones: true,
+    });
+    return true;
+  }
+
   _drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway, heightM = 4.6) {
+    if (
+      this._drawPhotoTree(ctx, 'palm', wx, toScreenX, toScreenY, scale, sway, heightM * 1.18, {
+        flipX: leanDir < 0,
+        embedM: 0.24,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -2317,6 +2545,12 @@ export class CaveRenderer {
     const foot = this._sampleSurfaceFooting(this.level, wx, 0.8);
     const x = toScreenX(wx);
     const groundY = toScreenY(foot.gyC);
+    if (this._getSurfaceProp('palm')) {
+      // Photorealistic palms already carry rich fern/bromeliad root clusters; add subtle textured ground cover only
+      this._drawGroundContactShadow(ctx, x, groundY + 0.05 * scale, 0.85 * scale, scale, foot.slopeRad);
+      this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, 0.9, { tufts: 6, stones: true });
+      return;
+    }
     const gyLeft = toScreenY(this._getHorizonGroundY(this.level, wx - 0.35));
     const gyRight = toScreenY(this._getHorizonGroundY(this.level, wx + 0.38));
     this._drawGroundContactShadow(ctx, x, groundY + 0.05 * scale, 1.05 * scale, scale, foot.slopeRad);
@@ -2355,6 +2589,16 @@ export class CaveRenderer {
   }
 
   _drawPalapaPavilion(ctx, wx, toScreenX, toScreenY, scale, variant = 'entry') {
+    if (
+      this._drawPhotoBuilding(ctx, 'palapa', wx, toScreenX, toScreenY, scale, 4.4, {
+        stoneTop: '#a39b8a',
+        stoneMid: '#7d7567',
+        stoneBot: '#564f44',
+        embedM: 0.16,
+      })
+    ) {
+      return;
+    }
     const wM = 3.2;
     const foot = this._sampleSurfaceFooting(this.level, wx, wM * 0.52);
     const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.05);
@@ -2460,6 +2704,14 @@ export class CaveRenderer {
   }
 
   _drawBaldCypress(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.4) {
+    if (
+      this._drawPhotoTree(ctx, 'cypress', wx, toScreenX, toScreenY, scale, sway, heightM * 1.15, {
+        flipX: (Math.round(wx) & 1) === 1,
+        embedM: 0.2,
+      })
+    ) {
+      return;
+    }
     const foot = this._sampleSurfaceFooting(this.level, wx, 1.05);
     const x = toScreenX(wx);
     const groundY = toScreenY(foot.gyC);
@@ -2529,6 +2781,15 @@ export class CaveRenderer {
   }
 
   _drawLongleafPine(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.8) {
+    if (
+      this._drawPhotoTree(ctx, 'spruce', wx, toScreenX, toScreenY, scale, sway, heightM * 1.14, {
+        flipX: (Math.round(wx) & 1) === 1,
+        widthScale: 0.92,
+        embedM: 0.18,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -2575,6 +2836,16 @@ export class CaveRenderer {
   }
 
   _drawFloridaRangerKiosk(ctx, wx, toScreenX, toScreenY, scale, isExit = false) {
+    if (
+      this._drawPhotoBuilding(ctx, 'cabin', wx, toScreenX, toScreenY, scale, 4.15, {
+        stoneTop: '#686258',
+        stoneMid: '#524c44',
+        stoneBot: '#39342e',
+        embedM: 0.14,
+      })
+    ) {
+      return;
+    }
     const wM = 2.9;
     const foot = this._sampleSurfaceFooting(this.level, wx, wM * 0.54);
     const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.04);
@@ -2797,7 +3068,7 @@ export class CaveRenderer {
       } else if (style === 'provence-gorge') {
         if ((s & 1) === 0) {
           this._drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 1.1);
-        } else {
+        } else if (!this._drawPhotoTree(ctx, 'med', wx, toScreenX, toScreenY, scale, sway * 0.45, h * 0.84, { flipX: true, widthScale: 1.15 })) {
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.08 * scale, gx + 0.1 * scale, gy - 0.7 * scale, gx, gy - 1.2 * scale, 0.16 * scale, 0.08 * scale, 6, ['#4a3c30', '#695848', '#877664'], false);
           this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#4a3c30', '#695848', '#877664']);
           this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.35 * scale, 0.72 * scale, 0, scale, 'cypress', 1);
@@ -2832,9 +3103,11 @@ export class CaveRenderer {
           this._fillFoliageCluster(ctx, toScreenX(sbWx), sbGy - 0.22 * scale, 0.72 * scale, 0.34 * scale, 0.05, scale, 'jungle', 1);
         }
       } else if (style === 'budapest-bathhouse') {
-        this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.75 * scale, gx, gy - 1.35 * scale, 0.16 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
-        this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#46382c', '#635141', '#7d6856']);
-        this._fillFoliageCluster(ctx, gx, gy - 1.55 * scale, 1.45 * scale, 0.92 * scale, 0.04, scale, 'jungle', 1);
+        if (!this._drawPhotoTree(ctx, 'med', wx, toScreenX, toScreenY, scale, sway * 0.45, h * 0.92, { flipX: (s & 1) === 1, widthScale: 1.1 })) {
+          this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.75 * scale, gx, gy - 1.35 * scale, 0.16 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
+          this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#46382c', '#635141', '#7d6856']);
+          this._fillFoliageCluster(ctx, gx, gy - 1.55 * scale, 1.45 * scale, 0.92 * scale, 0.04, scale, 'jungle', 1);
+        }
         this._drawAnchoredBoulder(ctx, wx - 0.42, 0.68, 0.22, toScreenX, toScreenY, scale, '#c4b89f');
       } else if (style === 'sinai-coast' || style === 'atlantida-lava') {
         if (hash > 0.38) {
@@ -2844,7 +3117,7 @@ export class CaveRenderer {
       } else if (style === 'quercy-ressel' || style === 'lazio-travertine' || style === 'boybulok-steppe') {
         if ((s & 1) === 0) {
           this._drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h + 0.8);
-        } else {
+        } else if (!this._drawPhotoTree(ctx, 'med', wx, toScreenX, toScreenY, scale, sway * 0.45, h * 0.84, { flipX: true, widthScale: 1.15 })) {
           this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.08 * scale, gx + 0.08 * scale, gy - 0.7 * scale, gx, gy - 1.2 * scale, 0.16 * scale, 0.08 * scale, 6, ['#4e4135', '#6b5a4a', '#877664'], false);
           this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, wx, gx, gy, 0.16 * scale, scale, ['#4e4135', '#6b5a4a', '#877664']);
           this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.4 * scale, 0.8 * scale, 0, scale, 'cypress', 1);
@@ -2922,6 +3195,14 @@ export class CaveRenderer {
   }
 
   _drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.6) {
+    if (
+      this._drawPhotoTree(ctx, 'spruce', wx, toScreenX, toScreenY, scale, sway, heightM * 1.16, {
+        flipX: (Math.round(wx) & 1) === 1,
+        embedM: 0.2,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -2947,6 +3228,15 @@ export class CaveRenderer {
   }
 
   _drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 4.6) {
+    if (
+      this._drawPhotoTree(ctx, 'spruce', wx, toScreenX, toScreenY, scale, sway, heightM * 1.05, {
+        flipX: (Math.round(wx) & 1) === 0,
+        widthScale: 0.84,
+        embedM: 0.18,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -2959,6 +3249,14 @@ export class CaveRenderer {
   }
 
   _drawMediterraneanCypress(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 6.0) {
+    if (
+      this._drawPhotoTree(ctx, 'med', wx, toScreenX, toScreenY, scale, sway, heightM * 1.12, {
+        flipX: (Math.round(wx) & 1) === 1,
+        embedM: 0.22,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -2978,6 +3276,14 @@ export class CaveRenderer {
   }
 
   _drawUmbrellaAcacia(ctx, wx, toScreenX, toScreenY, scale, sway, heightM = 5.2) {
+    if (
+      this._drawPhotoTree(ctx, 'acacia', wx, toScreenX, toScreenY, scale, sway, heightM * 0.96, {
+        flipX: (Math.round(wx) & 1) === 1,
+        embedM: 0.2,
+      })
+    ) {
+      return;
+    }
     const x = toScreenX(wx);
     const groundY = toScreenY(this._getHorizonGroundY(this.level, wx));
     const h = heightM * scale;
@@ -3002,9 +3308,61 @@ export class CaveRenderer {
     const boatX = this.level.spawn?.x ?? 0;
     if (boatX + 14 < visX0 || boatX - 14 > visX1) return;
     const bobY = Math.sin(timeSec * 1.7) * 0.14;
-    const pitch = Math.sin(timeSec * 1.35 + 0.6) * 0.025;
+    const pitch = Math.sin(timeSec * 1.35 + 0.6) * 0.022;
     const bx = toScreenX(boatX);
     const by = toScreenY(bobY);
+    const surfY = toScreenY(0);
+
+    const boatImg = this._getSurfaceProp('boat');
+    if (boatImg) {
+      const iw = boatImg.naturalWidth || boatImg.width;
+      const ih = boatImg.naturalHeight || boatImg.height;
+      const bw = 12.2 * scale;
+      const bh = bw * (ih / iw);
+      const hullDraftY = bh * 0.23; // Submerge bottom ~23% (keel + ladder rungs) below waterline
+
+      ctx.save();
+      // 1. Live vertically-flipped rippled water reflection beneath the charter hull
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(bx - bw * 0.65, surfY, bw * 1.3, bh * 0.85);
+      ctx.clip();
+      ctx.translate(bx, surfY);
+      ctx.scale(1, -0.52);
+      ctx.globalAlpha = 0.24;
+      const rippleShift = Math.sin(timeSec * 2.8) * 0.12 * scale;
+      ctx.drawImage(boatImg, -bw * 0.5 + rippleShift, -bh + hullDraftY, bw, bh);
+      ctx.restore();
+
+      // Soft dark ambient hull shadow under the keel
+      ctx.fillStyle = 'rgba(2, 12, 26, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(bx, surfY + 0.45 * scale, bw * 0.44, 0.46 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Photorealistic Technical Dive Charter Boat rocking on ocean swell
+      ctx.translate(bx, by);
+      ctx.rotate(pitch);
+      ctx.drawImage(boatImg, -bw * 0.5, -bh + hullDraftY, bw, bh);
+      ctx.restore();
+
+      // 3. Animated white sea-foam & waterline lapping ripples across hull beam
+      ctx.save();
+      ctx.strokeStyle = 'rgba(241, 248, 255, 0.62)';
+      ctx.lineWidth = Math.max(1.2, 0.065 * scale);
+      ctx.lineCap = 'round';
+      for (let w = -3; w <= 3; w++) {
+        const ox = bx + w * 1.35 * scale + Math.sin(timeSec * 2.4 + w * 1.3) * 0.18 * scale;
+        const oy = surfY + Math.sin(timeSec * 3.1 + w) * 0.05 * scale;
+        const len = (0.45 + Math.abs(Math.cos(w * 0.9 + timeSec * 1.5)) * 0.48) * scale;
+        ctx.beginPath();
+        ctx.moveTo(ox - len * 0.5, oy);
+        ctx.lineTo(ox + len * 0.5, oy);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
 
     ctx.save();
     ctx.translate(bx, by);
@@ -4736,7 +5094,37 @@ export class CaveRenderer {
   }
 
   _drawThemedSurfaceBuilding(ctx, hutX, toScreenX, toScreenY, scale, timeSec, cx, flags) {
-    const { isNordic, isUral, isKalahari, isAbaco, isBudapest, isSinai, isAurora } = flags;
+    const { isNordic, isUral, isKalahari, isAbaco, isBudapest, isSinai, isAurora, isOxBelHa, isAtlantida } = flags;
+
+    // Use photorealistic transparent architectural cutouts matched to each expedition biome
+    const spriteKey = isAurora
+      ? 'research'
+      : isBudapest
+        ? 'bathhouse'
+        : isSinai || isAbaco || isOxBelHa || isAtlantida
+          ? 'palapa'
+          : 'cabin';
+    const spriteW = isBudapest || isAurora ? 4.6 : spriteKey === 'palapa' ? 4.35 : 4.15;
+    const drewPhoto = this._drawPhotoBuilding(ctx, spriteKey, hutX, toScreenX, toScreenY, scale, spriteW, {
+      stoneTop: isAurora ? '#475569' : isBudapest ? '#d6ccb4' : isSinai ? '#c49664' : isUral ? '#9aa6b4' : isKalahari ? '#9e5c3e' : '#8d8576',
+      stoneMid: isAurora ? '#334155' : isBudapest ? '#b5a98f' : isSinai ? '#9d7247' : isUral ? '#707d8c' : isKalahari ? '#7a442c' : '#6b6458',
+      stoneBot: isAurora ? '#1e293b' : isBudapest ? '#7d725c' : isSinai ? '#735130' : '#464139',
+      embedM: 0.14,
+    });
+    if (drewPhoto) {
+      if (isAurora || isBudapest) {
+        for (let st = 0; st < 3; st++) {
+          const sx = toScreenX(cx - 1.15 + st * 1.15 + Math.sin(timeSec * 0.85 + st) * 0.38);
+          const sy = toScreenY(-0.55 - ((timeSec * 0.58 + st * 0.34) % 1.5));
+          ctx.fillStyle = isAurora ? 'rgba(165, 243, 252, 0.2)' : 'rgba(255, 251, 240, 0.24)';
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, (0.58 + st * 0.15) * scale, 0.28 * scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return;
+    }
+
     const halfW = isBudapest || isAurora ? 1.65 : isSinai ? 1.55 : 1.38;
     const foot = this._sampleSurfaceFooting(this.level, hutX, halfW);
     const floorWy = Math.min(foot.gyC, foot.gyHigh + 0.04);
@@ -4975,6 +5363,8 @@ export class CaveRenderer {
         isBudapest,
         isSinai,
         isAurora,
+        isOxBelHa,
+        isAtlantida,
       });
 
       if ((isKalahari || isOxBelHa || isAurora) && isEntry) {
@@ -5022,9 +5412,11 @@ export class CaveRenderer {
         } else if (isSinai || isOxBelHa || isAtlantida) {
           this._drawBotanicalPalm(ctx, ts.wx, toScreenX, toScreenY, scale, e === 0 ? 1 : -1, sway * 0.75, ts.h * 0.78);
         } else if (isBudapest) {
-          this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.85 * scale, gx, gy - 1.55 * scale, 0.17 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
-          this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, ts.wx, gx, gy, 0.17 * scale, scale, ['#46382c', '#635141', '#7d6856']);
-          this._fillFoliageCluster(ctx, gx, gy - 1.8 * scale, 1.6 * scale, 1.05 * scale, 0, scale, 'jungle', 1);
+          if (!this._drawPhotoTree(ctx, 'med', ts.wx, toScreenX, toScreenY, scale, sway * 0.5, ts.h * 0.94, { flipX: (e & 1) === 1, widthScale: 1.12 })) {
+            this._drawTaperedCurvedTrunk(ctx, gx, gy + 0.06 * scale, gx + 0.08 * scale, gy - 0.85 * scale, gx, gy - 1.55 * scale, 0.17 * scale, 0.07 * scale, 6, ['#46382c', '#635141', '#7d6856'], false);
+            this._drawFlaredTreeCollar(ctx, toScreenX, toScreenY, ts.wx, gx, gy, 0.17 * scale, scale, ['#46382c', '#635141', '#7d6856']);
+            this._fillFoliageCluster(ctx, gx, gy - 1.8 * scale, 1.6 * scale, 1.05 * scale, 0, scale, 'jungle', 1);
+          }
         } else {
           this._drawMediterraneanCypress(ctx, ts.wx, toScreenX, toScreenY, scale, sway, ts.h);
         }

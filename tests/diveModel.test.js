@@ -2463,3 +2463,29 @@ test('v100 Cave Interactive Parity: all 20 caves enriched with open-water stage 
   assert.equal(cutRes.kind, 'cut-net');
   assert.equal(sTrap.cutSnagIds.has(trap.id), true);
 });
+
+test('v101 Photorealistic surface cutout assets exist on disk as valid compact WebP sprites', async () => {
+  const fs = await import('node:fs');
+  const expected = [
+    'surf-dive-boat.webp',
+    'surf-palapa.webp',
+    'surf-cabin.webp',
+    'surf-bathhouse.webp',
+    'surf-research-dome.webp',
+    'surf-tree-palm.webp',
+    'surf-tree-cypress.webp',
+    'surf-tree-spruce.webp',
+    'surf-tree-med.webp',
+    'surf-tree-acacia.webp',
+  ];
+  let totalBytes = 0;
+  for (const name of expected) {
+    const fp = new URL(`../public/assets/${name}`, import.meta.url);
+    assert.ok(fs.existsSync(fp), `Missing surface sprite ${name}`);
+    const buf = fs.readFileSync(fp);
+    assert.equal(buf.subarray(0, 4).toString('ascii'), 'RIFF', `${name} must be RIFF WebP`);
+    assert.equal(buf.subarray(8, 12).toString('ascii'), 'WEBP', `${name} must be WebP`);
+    totalBytes += buf.length;
+  }
+  assert.ok(totalBytes > 100_000 && totalBytes < 900_000, `Unexpected total surface sprite budget: ${totalBytes} bytes`);
+});
