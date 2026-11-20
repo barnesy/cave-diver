@@ -1423,6 +1423,7 @@ export class CaveRenderer {
     ghostPose = null,
     sonarPulse = null,
     difficulty = 'standard',
+    mutatorId = '',
     timeSec,
     dt,
   }) {
@@ -1684,7 +1685,14 @@ export class CaveRenderer {
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
     this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
-    const showCompass = difficulty === 'guided' ? true : difficulty === 'hardcore' ? false : !this.level.hideWaypointCompass;
+    const showCompass =
+      mutatorId === 'purist'
+        ? false
+        : difficulty === 'guided'
+          ? true
+          : difficulty === 'hardcore'
+            ? false
+            : !this.level.hideWaypointCompass;
     if (showCompass) {
       this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
     }
@@ -7852,7 +7860,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawVolumetricTorchBeam(ctx, diver, torchData, rangeM, { siltHaze = 0, isPeer = false, toScreenX, toScreenY, scale, timeSec = 0 } = {}) {
+  _drawVolumetricTorchBeam(ctx, diver, torchData, rangeM, { siltHaze = 0, isPeer = false, intensityMult = 1.0, toScreenX, toScreenY, scale, timeSec = 0 } = {}) {
     if (!torchData) return;
     ctx.save();
     const tx = toScreenX(torchData.ox);
@@ -7869,7 +7877,7 @@ export class CaveRenderer {
     ctx.clip();
 
     ctx.globalCompositeOperation = 'screen';
-    const intensity = isPeer ? 0.58 : 1.0;
+    const intensity = (isPeer ? 0.58 : 1.0) * intensityMult;
     const warmBoost = Math.min(0.18, siltHaze * 0.14);
     const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
     const scatterStamp = this.glowStamps?.torchBeamScatter;
@@ -8262,7 +8270,8 @@ export class CaveRenderer {
       lctx.restore();
     };
 
-    carveDiverLight(diver, localTorch, 16.5);
+    const localStrobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
+    carveDiverLight(diver, localTorch, 16.5 * (0.28 + 0.72 * localStrobe));
     const torchPeerIds = new Set();
     for (let i = 0; i < peerTorches.length; i++) {
       const pt = peerTorches[i];
@@ -8349,9 +8358,10 @@ export class CaveRenderer {
 
     // Volumetric scattering cone + limestone wall bounce highlights for local diver & peer buddies
     if (localTorch) {
-      this._drawVolumetricTorchBeam(ctx, diver, localTorch, 15.5, {
+      this._drawVolumetricTorchBeam(ctx, diver, localTorch, 15.5 * (0.3 + 0.7 * localStrobe), {
         siltHaze: localSiltDensity,
         isPeer: false,
+        intensityMult: 0.22 + 0.78 * localStrobe,
         toScreenX,
         toScreenY,
         scale,

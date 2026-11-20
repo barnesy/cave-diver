@@ -19,6 +19,10 @@ import {
   TECH_GEAR_CATALOG,
   computeUnlockedGear,
   sanitizeGearLoadout,
+  getDailyChallenge,
+  getDailyMutatorById,
+  recordDailyClear,
+  getDailyStatus,
 } from './game/logbookModel.js';
 import {
   createDiveSession,
@@ -481,7 +485,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=107" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=108" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1117,6 +1121,15 @@ const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
 const debriefGearBadgeEl = document.getElementById('debrief-gear-badge');
+const dailyChallengeCardEl = document.getElementById('daily-challenge-card');
+const dailyDateLabelEl = document.getElementById('daily-date-label');
+const dailyStreakPillEl = document.getElementById('daily-streak-pill');
+const dailySiteTitleEl = document.getElementById('daily-site-title');
+const dailyMutatorBadgeEl = document.getElementById('daily-mutator-badge');
+const dailyMutatorDescEl = document.getElementById('daily-mutator-desc');
+const btnPlayDaily = document.getElementById('btn-play-daily');
+const debriefDailyBadgeEl = document.getElementById('debrief-daily-badge');
+let activeDailyChallenge = null;
 let savedGearLoadout = { sonar: false, dpv: false, ccr: false };
 let lastGearHudKey = '';
 try {
@@ -1143,6 +1156,38 @@ function getEffectiveGearLoadout() {
   const book = loadCareerLogbook();
   const { unlockedIds } = computeUnlockedGear(book, LEVELS);
   return sanitizeGearLoadout(savedGearLoadout, unlockedIds);
+}
+
+function renderDailyChallengeCard() {
+  if (!dailyChallengeCardEl) return;
+  const daily = getDailyChallenge(LEVELS);
+  const book = loadCareerLogbook();
+  const status = getDailyStatus(book, daily.dateKey);
+  dailyChallengeCardEl.classList.toggle('cleared', status.clearedToday);
+  if (dailyDateLabelEl) {
+    dailyDateLabelEl.textContent = daily.dateKey;
+  }
+  if (dailyStreakPillEl) {
+    const streakLabel = `🔥 ${status.activeStreak}d Streak`;
+    dailyStreakPillEl.textContent = status.clearedToday ? `✓ Cleared · ${streakLabel}` : streakLabel;
+    dailyStreakPillEl.title =
+      status.bestStreak > 0
+        ? `Best Streak: ${status.bestStreak}d · Total Daily Clears: ${status.totalClears}`
+        : 'Clear today’s featured dive to start your Daily Expedition streak!';
+  }
+  if (dailySiteTitleEl && daily.level) {
+    const prefix = daily.level.isWreck ? '🚢 ' : '';
+    dailySiteTitleEl.textContent = `${prefix}L${daily.levelIndex + 1} · ${daily.level.name} (${getLevelMaxDepthM(daily.level)}m)`;
+  }
+  if (dailyMutatorBadgeEl && daily.mutator) {
+    dailyMutatorBadgeEl.textContent = `${daily.mutator.icon} ${daily.mutator.name}`;
+  }
+  if (dailyMutatorDescEl && daily.mutator) {
+    dailyMutatorDescEl.textContent = daily.mutator.shortDesc;
+  }
+  if (btnPlayDaily) {
+    btnPlayDaily.textContent = status.clearedToday ? '↻ REPLAY DAILY' : '▶ PLAY DAILY';
+  }
 }
 
 function renderTechGearDock() {
@@ -1462,12 +1507,14 @@ function openLogbookModal() {
       : `Current Rank: ${rankStr} · All Technical Certifications Earned!`;
   }
   if (logbookKpisEl) {
+    const dailyStatus = getDailyStatus(book);
     logbookKpisEl.innerHTML = `
       <div class="logbook-kpi"><span>Cleared</span><strong>${sum.clearedCount}/${sum.totalSites}</strong></div>
       <div class="logbook-kpi"><span>Dives</span><strong>${sum.totalDives}</strong></div>
       <div class="logbook-kpi"><span>Bottom Time</span><strong>${formatBottomTime(sum.totalTimeSec)}</strong></div>
       <div class="logbook-kpi"><span>Deepest</span><strong>${sum.deepestM.toFixed(0)}m</strong></div>
       <div class="logbook-kpi"><span>S-Ranks</span><strong>${certInfo.sGrades}</strong></div>
+      <div class="logbook-kpi"><span>Daily Streak</span><strong>🔥 ${dailyStatus.activeStreak}d${dailyStatus.bestStreak > 0 ? ` · Best ${dailyStatus.bestStreak}d` : ''}</strong></div>
     `;
   }
   if (logbookCertsEl) {
@@ -1773,7 +1820,20 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   const slotOffsets = [0, -1.35, 1.35, -2.5];
   const spawnOffsetX = multiplayer ? (slotOffsets[lan.getPlayerSlotIndex()] ?? 0) : 0;
   const activeGear = getEffectiveGearLoadout();
-  session = createDiveSession(activeLevel, { diverName, spawnOffsetX, difficulty: activeDifficulty, gear: activeGear });
+  const dailyRun =
+    !multiplayer && activeDailyChallenge && activeDailyChallenge.levelId === activeLevel.id
+      ? activeDailyChallenge
+      : null;
+  session = createDiveSession(activeLevel, {
+    diverName,
+    spawnOffsetX,
+    difficulty: activeDifficulty,
+    gear: activeGear,
+    mutatorId: dailyRun?.mutatorId || '',
+    dailyDateKey: dailyRun?.dateKey || '',
+  });
+  const dailyMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
+  session._dailyBadgeLabel = dailyMutMeta ? `📅 ${dailyMutMeta.icon} ${dailyMutMeta.shortName}` : '';
   lastGearHudKey = '';
   syncTechGearHud(session);
   refreshActiveGhostTrack(activeLevel);
@@ -1840,13 +1900,15 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const bottomMixName = getActiveGasName('TMX1455');
-  const openMsg = activeLevel.isWreck
-    ? activeLevel.reelMetersPerDiver > 0
-      ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
-      : `🚢 Descend the boat shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m before entering the hull.`
-    : activeLevel.reelMetersPerDiver > 0
-      ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
-      : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
+  const openMsg = dailyMutMeta
+    ? `📅 DAILY · ${dailyMutMeta.icon} ${dailyMutMeta.name}: ${dailyMutMeta.shortDesc}`
+    : activeLevel.isWreck
+      ? activeLevel.reelMetersPerDiver > 0
+        ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
+        : `🚢 Descend the boat shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m before entering the hull.`
+      : activeLevel.reelMetersPerDiver > 0
+        ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
+        : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
   showToast(openMsg, 4.8);
 }
 
@@ -1895,6 +1957,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
+      mutatorId: session.mutatorId || '',
     });
 
   if (isMultiplayer) {
@@ -2026,7 +2089,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   }
   renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success);
 
-  const updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
+  let updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
     levelId: level.id,
     success,
     score: teamSummary.teamScore,
@@ -2035,10 +2098,34 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     diveTimeSec: diveState.diveTimeSec,
     difficulty: runDiff,
   });
+  if (success && session.dailyDateKey) {
+    updatedLogbook = recordDailyClear(updatedLogbook, {
+      dateKey: session.dailyDateKey,
+      levelId: level.id,
+      mutatorId: session.mutatorId || '',
+      score: teamSummary.teamScore,
+      grade: teamSummary.teamRank.grade,
+      timeSec: diveState.diveTimeSec,
+    });
+  }
   saveCareerLogbook(updatedLogbook);
   renderTechGearDock();
+  renderDailyChallengeCard();
   renderCareerSummary();
   renderDebriefCertifications(updatedLogbook);
+  if (debriefDailyBadgeEl) {
+    if (session.dailyDateKey) {
+      const dStatus = getDailyStatus(updatedLogbook, session.dailyDateKey);
+      const dMut = getDailyMutatorById(session.mutatorId);
+      debriefDailyBadgeEl.hidden = false;
+      debriefDailyBadgeEl.className = `debrief-daily-badge${success ? ' cleared' : ''}`;
+      debriefDailyBadgeEl.textContent = success
+        ? `📅 DAILY CLEARED · 🔥 ${dStatus.activeStreak}d STREAK`
+        : `📅 DAILY · ${dMut ? `${dMut.icon} ${dMut.shortName}` : 'EXPEDITION'}`;
+    } else {
+      debriefDailyBadgeEl.hidden = true;
+    }
+  }
   bestEl.textContent =
     success && teamSummary.teamScore > prevBest
       ? 'NEW PERSONAL BEST!'
@@ -2982,6 +3069,7 @@ if (siteViewTabsEl && siteBrowserEl) {
 async function launchOpenCoopDive() {
   const diverName = requireCallsign();
   if (!diverName) return false;
+  activeDailyChallenge = null;
   if (lan.room) {
     lan.leaveRoom();
     resetLobbyUiState();
@@ -3036,6 +3124,42 @@ btnPlaySolo.addEventListener('click', () => {
     return;
   }
   launchOpenCoopDive();
+});
+
+async function launchDailyChallenge(dailyOverride = null) {
+  const diverName = requireCallsign();
+  if (!diverName) return false;
+  const daily = dailyOverride || getDailyChallenge(LEVELS);
+  if (!daily?.levelId) return false;
+  if (lan.room) {
+    lan.leaveRoom();
+    resetLobbyUiState();
+  }
+  activeDailyChallenge = daily;
+  if (activeLevel.id !== daily.levelId) {
+    activeLevel = getLevelById(daily.levelId);
+    if (selectLevel) selectLevel.value = activeLevel.id;
+    syncMenuLevelLabels(activeLevel);
+    renderLevelCards();
+  }
+  if (btnPlayDaily) btnPlayDaily.disabled = true;
+  if (btnPlaySolo) btnPlaySolo.disabled = true;
+  if (!screenMenu.hidden) {
+    screenMenu.classList.add('menu-submerging');
+  }
+  try {
+    await ensureLevelLoaded(daily.levelId, { showOverlay: true });
+    startDiveRun(false);
+    return true;
+  } finally {
+    if (btnPlayDaily) btnPlayDaily.disabled = false;
+    if (btnPlaySolo) btnPlaySolo.disabled = false;
+    screenMenu.classList.remove('menu-submerging');
+  }
+}
+
+btnPlayDaily?.addEventListener('click', () => {
+  launchDailyChallenge();
 });
 
 let activeMenuTab = 'solo';
@@ -3626,6 +3750,7 @@ function reconcileSiteFilterOnMenuReturn() {
 
 function abortActiveDiveToMenu() {
   const prevCode = lan.room?.code || '';
+  activeDailyChallenge = null;
   cancelDebriefAnimations();
   input?.resetAll?.();
   audio.resetEnvironmentFilter();
@@ -3657,6 +3782,7 @@ function abortActiveDiveToMenu() {
   reconcileSiteFilterOnMenuReturn();
   renderRoomsList();
   renderLevelCards();
+  renderDailyChallengeCard();
 }
 
 btnPauseResume?.addEventListener('click', () => setDivePaused(false));
@@ -3705,6 +3831,7 @@ btnNextLevel?.addEventListener('click', async () => {
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
+  const retryDaily = Boolean(session?.dailyDateKey && activeDailyChallenge);
   cancelDebriefAnimations();
   audio.resetEnvironmentFilter();
   if (isMultiplayer && lan.room && lan.getPeers().length > 0) {
@@ -3725,11 +3852,16 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     return;
   }
   screenDebrief.hidden = true;
-  launchOpenCoopDive();
+  if (retryDaily) {
+    launchDailyChallenge(activeDailyChallenge);
+  } else {
+    launchOpenCoopDive();
+  }
 });
 
 document.getElementById('btn-menu').addEventListener('click', () => {
   const prevCode = lan.room?.code || '';
+  activeDailyChallenge = null;
   cancelDebriefAnimations();
   audio.resetEnvironmentFilter();
   mode = 'menu';
@@ -3747,6 +3879,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   reconcileSiteFilterOnMenuReturn();
   renderRoomsList();
   renderLevelCards();
+  renderDailyChallengeCard();
 });
 
 lan.on('host_promoted', ({ code }) => {
@@ -4580,6 +4713,8 @@ function stepSimulation(dt) {
     reelRemainingM: getEffectiveReelRemainingM(session),
     reelingActive: Boolean(session.reelingActive),
     difficulty: session.difficulty || activeDifficulty,
+    mutatorId: session.mutatorId || '',
+    dailyMutatorLabel: session._dailyBadgeLabel || '',
     dt,
   });
 
@@ -4793,6 +4928,7 @@ function frame(nowMs) {
       })(),
       sonarPulse: session.sonar?.activePulse || null,
       difficulty: session.difficulty || activeDifficulty,
+      mutatorId: session.mutatorId || '',
       timeSec: session.simTimeSec,
       dt,
     });
@@ -5099,6 +5235,7 @@ function setupPwaSupport() {
 async function bootGame() {
   populateLevelSelect();
   renderLevelCards();
+  renderDailyChallengeCard();
   renderTechGearDock();
   setupPwaSupport();
   if (INITIAL_ROOM_CODE) {

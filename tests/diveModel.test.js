@@ -24,6 +24,11 @@ import {
   computeCertifications,
   computeUnlockedGear,
   sanitizeGearLoadout,
+  DAILY_MUTATORS,
+  getDailyChallenge,
+  getDailyMutatorById,
+  recordDailyClear,
+  getDailyStatus,
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
@@ -3191,4 +3196,133 @@ test('v107 Unlockable Tech Gear Loadout (Cave Sonar, DPV Scooter & CCR Rebreathe
   assert.ok(html.includes('id="btn-hud-dpv"'), 'Missing HUD DPV button');
   assert.ok(html.includes('id="hud-ccr-pill"'), 'Missing HUD CCR pill');
   assert.ok(html.includes('id="debrief-gear-badge"'), 'Missing Debrief gear badge');
+});
+
+test('v108 Daily Expedition Challenge: deterministic UTC rotation, streak logbook & all 6 mutators', async () => {
+  // 1. Deterministic UTC daily challenge + no back-to-back site repeats across 30 days
+  assert.equal(DAILY_MUTATORS.length, 6);
+  const dA = getDailyChallenge(LEVELS, '2026-11-20');
+  const dB = getDailyChallenge(LEVELS, '2026-11-20');
+  assert.deepEqual(
+    { dateKey: dA.dateKey, levelId: dA.levelId, mutatorId: dA.mutatorId },
+    { dateKey: dB.dateKey, levelId: dB.levelId, mutatorId: dB.mutatorId },
+    'Same UTC date must produce identical worldwide Daily Expedition'
+  );
+  assert.ok(getDailyMutatorById(dA.mutatorId), 'Mutator must resolve cleanly');
+
+  let prevLevelId = '';
+  const seenSites = new Set();
+  const seenMutators = new Set();
+  for (let day = 1; day <= 30; day++) {
+    const dk = `2026-11-${String(day).padStart(2, '0')}`;
+    const dc = getDailyChallenge(LEVELS, dk);
+    assert.notEqual(dc.levelId, prevLevelId, `Back-to-back duplicate site on ${dk}`);
+    prevLevelId = dc.levelId;
+    seenSites.add(dc.levelId);
+    seenMutators.add(dc.mutatorId);
+  }
+  assert.equal(seenSites.size, LEVELS.length, '30-day cycle should cover all 30 dive sites');
+  assert.ok(seenMutators.size >= 4, '30-day cycle should rotate across multiple mutators');
+
+  // 2. Logbook daily streak progression, same-day idempotency, high-score upgrade & reset on gap
+  let book = createEmptyLogbook();
+  assert.equal(getDailyStatus(book, '2026-11-18').activeStreak, 0);
+  book = recordDailyClear(book, { dateKey: '2026-11-18', levelId: LEVEL_1.id, mutatorId: 'strobe', score: 2400, grade: 'A', timeSec: 120 });
+  assert.equal(getDailyStatus(book, '2026-11-18').activeStreak, 1);
+  assert.equal(getDailyStatus(book, '2026-11-18').clearedToday, true);
+  // Same-day replay improves score without double-counting streak
+  book = recordDailyClear(book, { dateKey: '2026-11-18', levelId: LEVEL_1.id, mutatorId: 'strobe', score: 3100, grade: 'S', timeSec: 105 });
+  assert.equal(book.daily.currentStreak, 1);
+  assert.equal(book.daily.totalClears, 1);
+  assert.equal(book.daily.records['2026-11-18'].score, 3100);
+  // Consecutive next UTC day increments streak to 2
+  book = recordDailyClear(book, { dateKey: '2026-11-19', levelId: LEVEL_1.id, mutatorId: 'surge', score: 2900, grade: 'S', timeSec: 110 });
+  assert.equal(getDailyStatus(book, '2026-11-19').activeStreak, 2);
+  assert.equal(getDailyStatus(book, '2026-11-20').activeStreak, 2, 'Active streak remains alive on next day until missed');
+  assert.equal(getDailyStatus(book, '2026-11-21').activeStreak, 0, 'Missing a full UTC day resets activeStreak to 0');
+  // Clearing after gap restarts streak at 1 while preserving bestStreak = 2
+  book = recordDailyClear(book, { dateKey: '2026-11-21', levelId: LEVEL_1.id, mutatorId: 'purist', score: 2800, grade: 'A', timeSec: 118 });
+  assert.equal(book.daily.currentStreak, 1);
+  assert.equal(book.daily.bestStreak, 2);
+  assert.equal(book.daily.totalClears, 3);
+
+  // 3. Mutator physics & rules verification across all 6 mutators
+  // 3a. Purist strips all tech gear & forces compass hidden
+  const sPurist = createDiveSession(LEVEL_1, {
+    difficulty: 'guided',
+    gear: { sonar: true, dpv: true, ccr: true },
+    mutatorId: 'purist',
+    dailyDateKey: '2026-11-20',
+  });
+  assert.equal(sPurist.gear.sonar, false);
+  assert.equal(sPurist.gear.dpv, false);
+  assert.equal(sPurist.gear.ccr, false);
+  assert.equal(sPurist.forceHideCompass, true);
+
+  // 3b. Lights-Out Strobe modulates diver.strobeMod between bright flash (1.0) & dim rest (0.22)
+  const sStrobe = createDiveSession(LEVEL_1, { mutatorId: 'strobe', dailyDateKey: '2026-11-20' });
+  stepDiveSession(sStrobe, { x: 0, y: 0 }, 0.1);
+  assert.equal(sStrobe.diver.strobeMod, 1.0, 'Strobe should be at full brightness during flash window');
+  for (let i = 0; i < 16; i++) stepDiveSession(sStrobe, { x: 0, y: 0 }, 0.05); // simTime = 0.9s -> dark rest
+  assert.ok(sStrobe.diver.strobeMod < 0.3, `Strobe should dim during rest phase, got ${sStrobe.diver.strobeMod}`);
+
+  // 3c. Turbo Par boosts swim velocity & tightens parTimeSec to 0.75x
+  const sNorm = createDiveSession(LEVEL_1);
+  const sTurbo = createDiveSession(LEVEL_1, { mutatorId: 'turbo-par', dailyDateKey: '2026-11-20' });
+  for (let i = 0; i < 12; i++) {
+    stepDiveSession(sNorm, { x: 1, y: 0 }, 0.05);
+    stepDiveSession(sTurbo, { x: 1, y: 0 }, 0.05);
+  }
+  assert.ok(sTurbo.diver.vx > sNorm.diver.vx * 1.15, `Turbo Par vx (${sTurbo.diver.vx.toFixed(2)}) should exceed normal (${sNorm.diver.vx.toFixed(2)})`);
+  const baseSum = computeDiverScoreSummary({
+    name: 'Base', level: LEVEL_1, diveState: sNorm.diveState, checkpointsHit: new Set(),
+    collectedIds: new Set(), exploredCount: 10, totalExploreCells: 20, diveTimeSec: 120,
+  });
+  const turboSum = computeDiverScoreSummary({
+    name: 'Turbo', level: LEVEL_1, diveState: sTurbo.diveState, checkpointsHit: new Set(),
+    collectedIds: new Set(), exploredCount: 10, totalExploreCells: 20, diveTimeSec: 120, mutatorId: 'turbo-par',
+  });
+  assert.equal(turboSum.parTimeSec, Math.round(baseSum.parTimeSec * 0.75), 'Turbo Par must tighten par time by 25%');
+
+  // 3d. Heavy Surge imparts rhythmic lateral swell even without swim input
+  const sCalm = createDiveSession(LEVEL_1);
+  const sSurge = createDiveSession(LEVEL_1, { mutatorId: 'surge', dailyDateKey: '2026-11-20' });
+  sCalm.diver.x = 40; sCalm.diver.y = 18;
+  sSurge.diver.x = 40; sSurge.diver.y = 18;
+  for (let i = 0; i < 20; i++) {
+    stepDiveSession(sCalm, { x: 0, y: 0 }, 0.05);
+    stepDiveSession(sSurge, { x: 0, y: 0 }, 0.05);
+  }
+  assert.ok(Math.abs(sSurge.diver.vx - sCalm.diver.vx) > 0.05, 'Heavy Surge should impart noticeable lateral swell velocity');
+
+  // 3e. Silt-Storm amplifies floor silt generation vs baseline
+  const siltBase = [];
+  const siltStorm = [];
+  const tsBase = { accum: 0 };
+  const tsStorm = { accum: 0 };
+  const dSilt = { x: 114, y: 52.7, vx: 1.4, vy: 0, angle: 0 };
+  for (let i = 0; i < 20; i++) {
+    stirFloorSilt(LEVEL_1, dSilt, siltBase, { dt: 0.1, thrustMag: 0.8, timerState: tsBase, mutatorMult: 1.0 });
+    stirFloorSilt(LEVEL_1, dSilt, siltStorm, { dt: 0.1, thrustMag: 0.8, timerState: tsStorm, mutatorMult: 1.75 });
+  }
+  assert.ok(siltStorm.length > siltBase.length, `Silt-Storm (${siltStorm.length}) should stir more clouds than baseline (${siltBase.length})`);
+
+  // 3f. Iron Lungs burns ~1.35x gas vs standard
+  const stStd = createDiveState();
+  const stIron = createDiveState();
+  for (let i = 0; i < 40; i++) {
+    stepDivePhysiology(stStd, { depthM: 25, prevDepthM: 25, dt: 1.0, exertion: 0.4, gasBurnMultiplier: 1.0 });
+    stepDivePhysiology(stIron, { depthM: 25, prevDepthM: 25, dt: 1.0, exertion: 0.4, gasBurnMultiplier: 1.35 });
+  }
+  const burnStd = 200 - stStd.tanks.EAN32.bar;
+  const burnIron = 200 - stIron.tanks.EAN32.bar;
+  assert.ok(burnIron > burnStd * 1.28 && burnIron < burnStd * 1.42, `Iron Lungs gas burn (${burnIron.toFixed(1)}b) should be ~1.35x baseline (${burnStd.toFixed(1)}b)`);
+
+  // 4. HTML hooks present for Home Daily Banner, HUD Daily Badge & Debrief Daily Badge
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="daily-challenge-card"'), 'Missing Home Daily Expedition card');
+  assert.ok(html.includes('id="btn-play-daily"'), 'Missing Daily play button');
+  assert.ok(html.includes('id="dc-daily-badge"'), 'Missing HUD Daily mutator badge');
+  assert.ok(html.includes('id="debrief-daily-badge"'), 'Missing Debrief Daily streak badge');
 });

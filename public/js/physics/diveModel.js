@@ -275,6 +275,7 @@ export function stepDivePhysiology(
     headBumpImpulse = 0,
     isStuck = false,
     thrustMag = exertion,
+    gasBurnMultiplier = 1.0,
   }
 ) {
   if (!state.alive || dt <= 0) return state;
@@ -345,7 +346,8 @@ export function stepDivePhysiology(
     state.ccrScrubberPct = Math.max(0, (state.ccrScrubberPct ?? 100) - scrubBurnRate * dt);
   }
   const ccrGasMult = ccrLoopActive ? 0.38 : 1.0;
-  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * effAmb * ccrGasMult * dt;
+  const burnMult = Math.max(0.25, Math.min(2.5, Number(gasBurnMultiplier) || 1.0));
+  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * effAmb * ccrGasMult * burnMult * dt;
 
   if (clampedDepth > 0.3) {
     tank.litersRemaining = Math.max(0, tank.litersRemaining - litersBurned);

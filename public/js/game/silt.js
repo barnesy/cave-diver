@@ -68,10 +68,10 @@ const _siltNormalTmp = { nx: 0, ny: 0 };
  * stirring up billowing limestone silt plumes that obscure visibility.
  * Returns true if substantial floor silt was disturbed this tick.
  */
-export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState, onSpawn = null, difficulty = 'standard', dpvBoost = false }) {
+export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState, onSpawn = null, difficulty = 'standard', dpvBoost = false, mutatorMult = 1.0 }) {
   if (!diver || diver.y < 5.0) return false;
 
-  const diffMult = difficulty === 'hardcore' ? 1.35 : difficulty === 'guided' ? 0.56 : 1.0;
+  const diffMult = (difficulty === 'hardcore' ? 1.35 : difficulty === 'guided' ? 0.56 : 1.0) * (Number(mutatorMult) || 1.0);
   const kickBoost = dpvBoost ? 1.75 : (diver.body ? 0.55 + diver.body.kickSurge * 1.45 : 1.0);
   const vx = diver.vx || 0;
   const vy = diver.vy || 0;

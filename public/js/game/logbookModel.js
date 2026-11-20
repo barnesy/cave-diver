@@ -18,6 +18,14 @@ export function createEmptyLogbook() {
     deepestM: 0,
     bestScore: 0,
     cleared: {}, // levelId -> { score, grade, bestTimeSec, clears, bestDifficulty, lastDifficulty }
+    daily: {
+      currentStreak: 0,
+      bestStreak: 0,
+      totalClears: 0,
+      lastClearedDate: '',
+      clearedDates: [],
+      records: {},
+    },
   };
 }
 
@@ -41,6 +49,30 @@ function normalizeBook(raw) {
         ...(bestDiff ? { bestDifficulty: bestDiff } : {}),
         ...(lastDiff ? { lastDifficulty: lastDiff } : {}),
       };
+    }
+  }
+  if (raw.daily && typeof raw.daily === 'object') {
+    const d = raw.daily;
+    base.daily.currentStreak = Math.max(0, Math.round(Number(d.currentStreak) || 0));
+    base.daily.bestStreak = Math.max(base.daily.currentStreak, Math.round(Number(d.bestStreak) || 0));
+    base.daily.totalClears = Math.max(0, Math.round(Number(d.totalClears) || 0));
+    base.daily.lastClearedDate = typeof d.lastClearedDate === 'string' ? d.lastClearedDate.slice(0, 10) : '';
+    base.daily.clearedDates = Array.isArray(d.clearedDates)
+      ? Array.from(new Set(d.clearedDates.filter((k) => typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k)))).slice(-90)
+      : [];
+    if (d.records && typeof d.records === 'object') {
+      const keys = Object.keys(d.records).slice(-30);
+      for (const dk of keys) {
+        const r = d.records[dk];
+        if (!r || typeof r !== 'object') continue;
+        base.daily.records[dk] = {
+          levelId: typeof r.levelId === 'string' ? r.levelId : '',
+          mutatorId: typeof r.mutatorId === 'string' ? r.mutatorId : '',
+          score: Math.max(0, Math.round(Number(r.score) || 0)),
+          grade: typeof r.grade === 'string' ? r.grade : 'B',
+          timeSec: Math.max(0, Number(r.timeSec) || 0),
+        };
+      }
     }
   }
   return base;
@@ -292,5 +324,158 @@ export function sanitizeGearLoadout(rawLoadout, unlockedIds) {
     sonar: Boolean(src.sonar) && canUse('sonar'),
     dpv: Boolean(src.dpv) && canUse('dpv'),
     ccr: Boolean(src.ccr) && canUse('ccr'),
+  };
+}
+
+/**
+ * Deterministic Worldwide Daily Expedition Challenge & Mutator Engine.
+ * Uses UTC YYYY-MM-DD date keys so every diver globally plays the exact same daily dive & modifier.
+ */
+export const DAILY_MUTATORS = [
+  {
+    id: 'strobe',
+    icon: '⚡',
+    name: 'Lights-Out Strobe',
+    badge: '⚡ STROBE',
+    summary: 'Primary torch pulses in rhythmic emergency strobe flashes — time your moves & sonar sweeps!',
+  },
+  {
+    id: 'surge',
+    icon: '🌊',
+    name: 'Heavy Surge',
+    badge: '🌊 SURGE',
+    summary: '1.75× currents & siphon surges plus rhythmic open-tunnel swells — ride the lulls!',
+  },
+  {
+    id: 'silt-storm',
+    icon: '🌫️',
+    name: 'Silt-Storm',
+    badge: '🌫️ SILT-STORM',
+    summary: '1.75× denser floor & impact silt plumes with drifting dust — trim high off the bed!',
+  },
+  {
+    id: 'purist',
+    icon: '🧭',
+    name: 'Zero-Gear Purist',
+    badge: '🧭 PURIST',
+    summary: 'No Tech Gear (Sonar/DPV/CCR disabled) and compass hidden — pure classic technical diving!',
+  },
+  {
+    id: 'turbo-par',
+    icon: '⏱️',
+    name: 'Speedrun Par',
+    badge: '⏱️ SPEEDRUN',
+    summary: '1.22× swim boost with a tight 0.75× par-time target — sprint smart without blowing ascent limits!',
+  },
+  {
+    id: 'iron-lungs',
+    icon: '🫧',
+    name: 'High-Pressure Burn',
+    badge: '🫧 HIGH-BURN',
+    summary: '1.35× gas burn under exertion — breathe calm, respect Rule of Thirds & hit stage bottles!',
+  },
+];
+
+export function getDailyMutatorById(mutatorId) {
+  return DAILY_MUTATORS.find((m) => m.id === mutatorId) || null;
+}
+
+export function getUtcDateKey(date = new Date()) {
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function prevUtcDateKey(dateKey) {
+  const clean = getUtcDateKey(dateKey);
+  const [y, m, d] = clean.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return getUtcDateKey(dt);
+}
+
+function hashDateKey(dateKey) {
+  let h = 2166136261;
+  for (let i = 0; i < dateKey.length; i++) {
+    h ^= dateKey.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+export function getDailyChallenge(levels = [], dateOrKey = new Date()) {
+  const dateKey = getUtcDateKey(dateOrKey);
+  if (!Array.isArray(levels) || levels.length === 0) return null;
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dayNum = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  // Coprime stride guarantees every site rotates without consecutive-day repeats
+  const n = levels.length;
+  const stride = n % 7 === 0 ? 11 : 7;
+  const levelIndex = (((dayNum * stride) % n) + n) % n;
+  const level = levels[levelIndex];
+  const mutHash = hashDateKey(`${dateKey}:mutator`);
+  const mutator = DAILY_MUTATORS[mutHash % DAILY_MUTATORS.length];
+  return {
+    dateKey,
+    level,
+    levelId: level.id,
+    levelIndex,
+    mutator,
+    mutatorId: mutator.id,
+  };
+}
+
+export function recordDailyClear(rawBook, { dateKey, levelId, mutatorId, score = 0, grade = 'B', timeSec = 0 }) {
+  const book = normalizeBook(rawBook);
+  const cleanDate = getUtcDateKey(dateKey || new Date());
+  const cleanScore = Math.max(0, Math.round(Number(score) || 0));
+  const cleanTime = Math.max(0, Math.round((Number(timeSec) || 0) * 10) / 10);
+  const alreadyCleared = book.daily.clearedDates.includes(cleanDate);
+
+  if (!alreadyCleared) {
+    const yesterday = prevUtcDateKey(cleanDate);
+    if (book.daily.lastClearedDate === yesterday) {
+      book.daily.currentStreak += 1;
+    } else if (book.daily.lastClearedDate !== cleanDate) {
+      book.daily.currentStreak = 1;
+    }
+    book.daily.bestStreak = Math.max(book.daily.bestStreak, book.daily.currentStreak);
+    book.daily.totalClears += 1;
+    book.daily.lastClearedDate = cleanDate;
+    book.daily.clearedDates.push(cleanDate);
+    if (book.daily.clearedDates.length > 90) {
+      book.daily.clearedDates = book.daily.clearedDates.slice(-90);
+    }
+  }
+
+  const prevRec = book.daily.records[cleanDate];
+  if (!prevRec || cleanScore > prevRec.score) {
+    book.daily.records[cleanDate] = {
+      levelId: String(levelId || ''),
+      mutatorId: String(mutatorId || ''),
+      score: cleanScore,
+      grade: grade || 'B',
+      timeSec: cleanTime,
+    };
+  }
+  return book;
+}
+
+export function getDailyStatus(rawBook, dateOrKey = new Date()) {
+  const book = normalizeBook(rawBook);
+  const dateKey = getUtcDateKey(dateOrKey);
+  const yesterday = prevUtcDateKey(dateKey);
+  const clearedToday = book.daily.clearedDates.includes(dateKey);
+  const streakAlive = book.daily.lastClearedDate === dateKey || book.daily.lastClearedDate === yesterday;
+  return {
+    dateKey,
+    clearedToday,
+    activeStreak: streakAlive ? book.daily.currentStreak : 0,
+    bestStreak: book.daily.bestStreak,
+    totalClears: book.daily.totalClears,
+    todayRecord: book.daily.records[dateKey] || null,
   };
 }

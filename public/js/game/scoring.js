@@ -109,6 +109,7 @@ export function computeDiverScoreSummary({
   totalExploreCells = 1,
   diveTimeSec = diveState?.diveTimeSec || 0,
   hatchBonusScore = 0,
+  mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
   const cpCount = checkpointsHit instanceof Set ? checkpointsHit.size : Number(checkpointsHit) || 0;
@@ -118,7 +119,8 @@ export function computeDiverScoreSummary({
   const healthPct = computeHealthPct(diveState);
   const healthScore = alive ? Math.round(healthPct * 10) : Math.round(routeRatio * 120);
 
-  const parTimeSec = level?.parTimeSec || 160;
+  const basePar = level?.parTimeSec || 160;
+  const parTimeSec = mutatorId === 'turbo-par' ? Math.round(basePar * 0.75) : basePar;
   const speedPct = alive
     ? Math.round(clamp(15, 100, (parTimeSec / Math.max(parTimeSec * 0.72, diveTimeSec || parTimeSec)) * 100))
     : 0;

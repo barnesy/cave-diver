@@ -63,7 +63,7 @@ export function computeBreathProfile(diveState, exertion = 0) {
  */
 export function createDiveSession(
   level,
-  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard', gear = null } = {}
+  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard', gear = null, mutatorId = '', dailyDateKey = '' } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
@@ -72,15 +72,23 @@ export function createDiveSession(
   markExploredAround(exploreCells, exploredCells, spawnX, spawnY, 5.2);
   const exploredPct = Math.round((exploredCells.size / Math.max(1, exploreCells.length)) * 100);
   const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
-  const cleanGear = {
-    sonar: Boolean(gear?.sonar),
-    dpv: Boolean(gear?.dpv),
-    ccr: Boolean(gear?.ccr),
-  };
+  const cleanMutator = typeof mutatorId === 'string' ? mutatorId.trim() : '';
+  const cleanDailyKey = typeof dailyDateKey === 'string' ? dailyDateKey.trim() : '';
+  const isPurist = cleanMutator === 'purist';
+  const cleanGear = isPurist
+    ? { sonar: false, dpv: false, ccr: false }
+    : {
+        sonar: Boolean(gear?.sonar),
+        dpv: Boolean(gear?.dpv),
+        ccr: Boolean(gear?.ccr),
+      };
 
   return {
     level,
     difficulty: cleanDiff,
+    mutatorId: cleanMutator,
+    dailyDateKey: cleanDailyKey,
+    forceHideCompass: isPurist,
     gear: cleanGear,
     dpv: {
       equipped: cleanGear.dpv,
@@ -106,6 +114,7 @@ export function createDiveSession(
       torchAngle: 0.15,
       torchManualAim: false,
       torchOn: true,
+      strobeMod: 1.0,
       hasCcr: cleanGear.ccr,
       hasDpv: cleanGear.dpv,
       dpvActive: false,
@@ -1084,6 +1093,13 @@ export function stepPeerBubbles(bubbles, peers, dt) {
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const { level, ascentConfig, diver, diveState, checkpointsHit, siltClouds, siltStirTimer } = session;
   session.simTimeSec += dt;
+  const mutatorId = session.mutatorId || '';
+  if (mutatorId === 'strobe') {
+    const phase = session.simTimeSec % 1.7;
+    diver.strobeMod = phase < 0.36 ? 1.0 : phase < 0.55 ? 1.0 - ((phase - 0.36) / 0.19) * 0.78 : 0.22;
+  } else {
+    diver.strobeMod = 1.0;
+  }
   const imp = diveState.impairment || { swimMultiplier: 1, sacMultiplier: 1, tremor: 0 };
   const exertion = Math.min(1.4, Math.hypot(thrust.x, thrust.y) * 0.65 * imp.sacMultiplier);
 
@@ -1160,8 +1176,10 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const swimMult = (imp.swimMultiplier ?? 1) * towDrag;
   const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
-  const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult;
-  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult;
+  const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
+  const mutVertMult = mutatorId === 'turbo-par' ? 1.16 : 1.0;
+  const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult * mutHorizMult;
+  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult * mutVertMult;
   diver.vx += ctrlX * horizAccel * dt;
   diver.vy += ctrlY * vertAccel * dt;
 
@@ -1205,7 +1223,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   // Layered open-ocean drift currents on shipwreck dives (sheltered inside steel hull or when clipped to shot line)
-  const diffCurrentMult = session.difficulty === 'hardcore' ? 1.28 : session.difficulty === 'guided' ? 0.7 : 1.0;
+  const mutCurrentMult = mutatorId === 'surge' ? 1.75 : 1.0;
+  const diffCurrentMult = (session.difficulty === 'hardcore' ? 1.28 : session.difficulty === 'guided' ? 0.7 : 1.0) * mutCurrentMult;
   if (Array.isArray(level.driftCurrents) && clearanceM > 1.75 && !session.clippedToShotLine) {
     const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
     for (let c = 0; c < level.driftCurrents.length; c++) {
@@ -1258,6 +1277,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         }
       }
     }
+  }
+  if (mutatorId === 'surge' && diver.y > 4.0 && clearanceM > 1.4 && !session.clippedToShotLine) {
+    diver.vx += Math.sin(session.simTimeSec * 0.95) * 0.72 * dt;
   }
 
   // Shipwreck fishing-net & dangling cable entanglement hazards (cuttable with shears [E] — self or co-op buddy!)
@@ -1599,6 +1621,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   if (siltStirTimer.warnCooldown > 0) siltStirTimer.warnCooldown -= dt;
+  const isSiltStorm = mutatorId === 'silt-storm';
   const heavyWash = stirFloorSilt(level, diver, siltClouds, {
     dt,
     thrustMag,
@@ -1606,7 +1629,21 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     onSpawn: callbacks.onSiltSpawn,
     difficulty: session.difficulty || 'standard',
     dpvBoost: dpvThrusting,
+    mutatorMult: isSiltStorm ? 1.75 : 1.0,
   });
+  if (isSiltStorm && diver.y > 5.0 && thrustMag > 0.18 && siltClouds.length < 135 && Math.random() < dt * 0.85) {
+    const wisp = spawnSiltPlume(siltClouds, {
+      x: diver.x - Math.cos(diver.angle) * 0.65 + (Math.random() - 0.5) * 0.7,
+      y: diver.y - Math.sin(diver.angle) * 0.45 + 0.35,
+      vx: -diver.vx * 0.3 + (Math.random() - 0.5) * 0.35,
+      vy: -0.22 - Math.random() * 0.25,
+      radius: 0.72,
+      maxRadius: 2.9,
+      life: 18,
+      peakAlpha: 0.58,
+    });
+    if (wisp) callbacks.onSiltSpawn?.(wisp);
+  }
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
     callbacks.onToast?.(
@@ -1619,7 +1656,15 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   if (hit.collided && hit.impactSpeed > 1.1) {
     callbacks.onImpactSound?.(hit.impactSpeed);
-    const spawned = emitImpactSilt(siltClouds, diver.x, diver.y, hit.nx, hit.ny, hit.impactSpeed, session.difficulty || 'standard');
+    const spawned = emitImpactSilt(
+      siltClouds,
+      diver.x,
+      diver.y,
+      hit.nx,
+      hit.ny,
+      hit.impactSpeed,
+      isSiltStorm ? 'hardcore' : (session.difficulty || 'standard')
+    );
     if (spawned.length > 0) {
       callbacks.onSiltSpawn?.(spawned[0]);
     }
@@ -1638,6 +1683,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     headBumpImpulse,
     isStuck,
     thrustMag,
+    gasBurnMultiplier: mutatorId === 'iron-lungs' ? 1.35 : 1.0,
   });
 
   if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;
@@ -1813,6 +1859,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
+      mutatorId: session.mutatorId || '',
     });
 
   if (!diveState.alive) {

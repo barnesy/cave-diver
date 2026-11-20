@@ -229,6 +229,7 @@ export class DiveComputerHUD {
     this.elSelfHealth = document.getElementById('hud-self-health');
     this.elSelfName = document.getElementById('dc-self-name');
     this.elModeBadge = document.getElementById('dc-mode-badge');
+    this.elDailyBadge = document.getElementById('dc-daily-badge');
     this.elGasCallout = document.getElementById('hud-gas-callout');
     this.elGasCalloutTitle = document.getElementById('hud-gas-callout-title');
     this.elGasCalloutDetail = document.getElementById('hud-gas-callout-detail');
@@ -388,6 +389,8 @@ export class DiveComputerHUD {
     reelRemainingM = 0,
     reelingActive = false,
     difficulty = 'standard',
+    mutatorId = '',
+    dailyMutatorLabel = '',
     dt = 0.016,
   }) {
     const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
@@ -396,6 +399,13 @@ export class DiveComputerHUD {
         cleanDiff === 'hardcore' ? '🔥 HARDCORE' : cleanDiff === 'guided' ? '🧭 GUIDED' : '🤿 TECH';
       setText(this.elModeBadge, modeLbl);
       setClass(this.elModeBadge, `mode-badge hud-mode-badge mode-${cleanDiff}`);
+    }
+    if (this.elDailyBadge) {
+      const hasDaily = Boolean(mutatorId && dailyMutatorLabel);
+      setHidden(this.elDailyBadge, !hasDaily);
+      if (hasDaily) {
+        setText(this.elDailyBadge, dailyMutatorLabel);
+      }
     }
     setText(this.elDepth, diveState.depthM.toFixed(1));
     setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
@@ -643,17 +653,25 @@ export class DiveComputerHUD {
       `;
     } else if (nextCheckpoint) {
       const hideCompass =
-        cleanDiff === 'guided' ? false : cleanDiff === 'hardcore' ? true : Boolean(level?.hideWaypointCompass);
+        mutatorId === 'purist'
+          ? true
+          : cleanDiff === 'guided'
+            ? false
+            : cleanDiff === 'hardcore'
+              ? true
+              : Boolean(level?.hideWaypointCompass);
       if (hideCompass) {
         const navHint =
-          reelMaxMeters > 0
-            ? `Unlined · [G] deploy reel (${Math.round(reelRemainingM)}m)`
-            : cleanDiff === 'hardcore'
-              ? 'Hardcore · Navigate by guideline & landmarks'
-              : 'Follow landmarks & cave corridors';
+          mutatorId === 'purist'
+            ? 'Purist Daily · Navigate by guideline & landmarks'
+            : reelMaxMeters > 0
+              ? `Unlined · [G] deploy reel (${Math.round(reelRemainingM)}m)`
+              : cleanDiff === 'hardcore'
+                ? 'Hardcore · Navigate by guideline & landmarks'
+                : 'Follow landmarks & cave corridors';
         objectiveHtml = `
           <div class="obj-top-row">
-            <span class="obj-count">${cleanDiff === 'hardcore' ? 'HARDCORE' : 'MAZE'} · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+            <span class="obj-count">${mutatorId === 'purist' ? 'PURIST' : cleanDiff === 'hardcore' ? 'HARDCORE' : 'MAZE'} · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
             ${gasBadge}
           </div>
           <span class="obj-name">${level.recoveryTarget && !bodyRecovered ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `Tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`}</span>
@@ -674,7 +692,13 @@ export class DiveComputerHUD {
       }
     } else {
       const hideCompass =
-        cleanDiff === 'guided' ? false : cleanDiff === 'hardcore' ? true : Boolean(level?.hideWaypointCompass);
+        mutatorId === 'purist'
+          ? true
+          : cleanDiff === 'guided'
+            ? false
+            : cleanDiff === 'hardcore'
+              ? true
+              : Boolean(level?.hideWaypointCompass);
       if (hideCompass) {
         const needsRecovery = Boolean(level?.recoveryTarget && !bodyRecovered);
         objectiveHtml = `

@@ -4780,3 +4780,156 @@ button.mode-badge:hover {
     font-size: 0.62rem;
   }
 }
+
+/* Daily Expedition Challenge & Mutators (v108) */
+.daily-challenge-card {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.22), rgba(14, 116, 144, 0.24) 55%, rgba(6, 20, 38, 0.88));
+  border: 1px solid rgba(251, 191, 36, 0.44);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(254, 243, 199, 0.14);
+}
+.daily-challenge-card.cleared {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(14, 116, 144, 0.22) 55%, rgba(6, 20, 38, 0.88));
+  border-color: rgba(52, 211, 153, 0.56);
+}
+.daily-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.daily-card-eyebrow {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fde68a;
+  text-transform: uppercase;
+}
+.daily-challenge-card.cleared .daily-card-eyebrow {
+  color: #6ee7b7;
+}
+.daily-streak-pill {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #fef08a;
+  white-space: nowrap;
+}
+.daily-challenge-card.cleared .daily-streak-pill {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(52, 211, 153, 0.58);
+  color: #a7f3d0;
+}
+.daily-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.daily-card-info {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.daily-site-title {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.daily-mutator-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.daily-mutator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.52);
+  color: #fde68a;
+  white-space: nowrap;
+}
+.daily-mutator-desc {
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  line-height: 1.25;
+}
+.daily-play-btn {
+  flex: 0 0 auto;
+  padding: 7px 11px !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+}
+.daily-hud-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(217, 119, 6, 0.34);
+  border: 1px solid rgba(251, 191, 36, 0.68);
+  color: #fef08a;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+  white-space: nowrap;
+}
+.debrief-daily-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(245, 158, 11, 0.24);
+  border: 1px solid rgba(251, 191, 36, 0.62);
+  color: #fde68a;
+}
+.debrief-daily-badge.cleared {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(52, 211, 153, 0.66);
+  color: #a7f3d0;
+}
+@media (max-width: 540px) {
+  .daily-challenge-card {
+    padding: 8px 9px;
+  }
+  .daily-card-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+  }
+  .daily-play-btn {
+    width: 100%;
+    text-align: center;
+  }
+  .daily-hud-badge {
+    font-size: 0.58rem;
+    padding: 1px 6px;
+  }
+}
