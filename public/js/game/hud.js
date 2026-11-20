@@ -757,6 +757,7 @@ export class DiveComputerHUD {
           cond === 'NO GAS' ||
           cond === 'HYPOXIA' ||
           cond === 'O2 TOX' ||
+          cond === 'SNAGGED!' ||
           stress >= 65 ||
           mateBpm >= 150
             ? 'danger'

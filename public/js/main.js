@@ -470,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=101" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=102" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -484,11 +484,15 @@ function ensureSiteWorldMapBase() {
   siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
 }
 
-let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck'
+let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck' | 'todo'
 
 function getFilteredLevels() {
   if (siteCategoryFilter === 'wreck') return LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck'));
   if (siteCategoryFilter === 'cave') return LEVELS.filter((l) => !l.isWreck && l.category !== 'wreck');
+  if (siteCategoryFilter === 'todo') {
+    const book = loadCareerLogbook();
+    return LEVELS.filter((l) => !book.cleared?.[l.id]);
+  }
   return LEVELS;
 }
 
@@ -553,13 +557,16 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
 
   const routePts = pins.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
   const routeLine = `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`;
+  const book = loadCareerLogbook();
 
   const pinMarkup = pins
     .map(({ lvl, idx, slot, x, y }) => {
       const isSelected = lvl.id === activeLevel.id;
       const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
       const isUnlined = lvl.reelMetersPerDiver > 0;
-      const best = getSavedBestScore(lvl.id);
+      const clearRec = book.cleared?.[lvl.id] || null;
+      const best = Math.max(getSavedBestScore(lvl.id), clearRec?.score || 0);
+      const gradeTag = clearRec?.grade || '';
       const pinColor = isWreck ? '#fb923c' : isUnlined ? '#fbbf24' : '#38bdf8';
       const r = (isSelected ? 5.2 : 3.4) * k;
 
@@ -590,7 +597,12 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
         const anchor = placeLeft ? 'end' : 'start';
         const lx = x + (placeLeft ? -7.2 * k : 7.2 * k);
         const ly = y + 3.4 * k;
-        const labelText = isSelected && isZoomed ? `L${idx + 1} · ${lvl.name}` : `L${idx + 1}`;
+        const labelText =
+          isSelected && isZoomed
+            ? `L${idx + 1} · ${lvl.name}${gradeTag ? ` [${gradeTag}]` : ''}`
+            : gradeTag
+              ? `L${idx + 1}·${gradeTag}`
+              : `L${idx + 1}`;
         labelMarkup = `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" fill="${
           isSelected ? '#f0f9ff' : '#bae6fd'
         }" stroke="#020b14" stroke-width="${(3.4 * k).toFixed(2)}" paint-order="stroke" font-size="${(
@@ -631,28 +643,48 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
 function renderLevelCards() {
   if (!levelCardsEl) return;
   const locked = Boolean(lan.room && !lan.isHost());
+  const book = loadCareerLogbook();
+  const clearedCount = Object.keys(book.cleared || {}).length;
+  const nextRecommendedId = LEVELS.find((l) => !book.cleared?.[l.id])?.id || null;
   const visibleLevels = getFilteredLevels();
   const pill = document.getElementById('campaign-progress-pill');
   if (pill) {
     pill.textContent =
       siteCategoryFilter === 'wreck'
-        ? `${visibleLevels.length} Wrecks`
+        ? `${visibleLevels.length} Wrecks · ${clearedCount}/${LEVELS.length}`
         : siteCategoryFilter === 'cave'
-          ? `${visibleLevels.length} Caves`
-          : `${LEVELS.length} / ${CAMPAIGN_PLAN.length} Sites`;
+          ? `${visibleLevels.length} Caves · ${clearedCount}/${LEVELS.length}`
+          : siteCategoryFilter === 'todo'
+            ? `${visibleLevels.length} Uncleared`
+            : `${clearedCount} / ${LEVELS.length} Cleared`;
+  }
+  if (visibleLevels.length === 0) {
+    levelCardsEl.innerHTML = `<div class="lvl-empty-msg" style="padding:18px;text-align:center;color:#a7f3d0;font-size:0.8rem;">🏆 All ${LEVELS.length} expeditions cleared! Switch to All to chase S+ records.</div>`;
+    renderSiteWorldMap();
+    return;
   }
   levelCardsEl.innerHTML = visibleLevels.map((lvl) => {
     const idx = Math.max(0, LEVELS.findIndex((l) => l.id === lvl.id));
     const isSelected = lvl.id === activeLevel.id;
     const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
     const isCached = renderer.isLevelCached(lvl.id) || (renderer.ready && renderer.level?.id === lvl.id);
-    const best = getSavedBestScore(lvl.id);
+    const clearRec = book.cleared?.[lvl.id] || null;
+    const best = Math.max(getSavedBestScore(lvl.id), clearRec?.score || 0);
     const meta = getLevelMeta(lvl, idx);
     const slot = SITE_COORDS_BY_ID.get(lvl.id);
     const depth = `${meta.maxDepthM}m`;
+    const isNext = !clearRec && lvl.id === nextRecommendedId;
+    const grade = clearRec?.grade || '';
+    const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
+    const badgesHtml = grade
+      ? `<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>`
+      : isNext
+        ? `<span class="lvl-next-badge">NEXT</span>`
+        : '';
+    const timeStr = clearRec?.bestTimeSec > 0 ? ` · ${formatRunClock(clearRec.bestTimeSec)}` : '';
     const metaText =
       best > 0
-        ? `✓ ${best.toLocaleString()}`
+        ? `✓ ${best.toLocaleString()}${timeStr}`
         : isCached
           ? lvl.reelMetersPerDiver > 0
             ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
@@ -675,7 +707,7 @@ function renderLevelCards() {
       >
         <div class="lvl-card-top">
           <span>${tierTag} · ${slot?.region || ''}</span>
-          <span class="lvl-card-depth">${depth}</span>
+          <span class="lvl-card-badges">${badgesHtml}<span class="lvl-card-depth">${depth}</span></span>
         </div>
         <span class="lvl-card-name">${lvl.name}</span>
         <span class="lvl-card-meta ${best > 0 || isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
@@ -1128,6 +1160,99 @@ btnDiveGuideClose?.addEventListener('click', () => closeDiveGuideModal(false));
 btnDiveGuideStart?.addEventListener('click', () => closeDiveGuideModal(true));
 modalDiveGuide?.addEventListener('click', (e) => {
   if (e.target === modalDiveGuide) closeDiveGuideModal(false);
+});
+
+const btnOpenLogbook = document.getElementById('btn-open-logbook');
+const btnProgressPill = document.getElementById('campaign-progress-pill');
+const modalLogbook = document.getElementById('modal-logbook');
+const btnLogbookClose = document.getElementById('btn-logbook-close');
+const logbookKpisEl = document.getElementById('logbook-kpis');
+const logbookCertsEl = document.getElementById('logbook-certs-grid');
+const logbookSitesEl = document.getElementById('logbook-sites-list');
+const logbookSubEl = document.getElementById('logbook-modal-sub');
+
+function formatBottomTime(sec) {
+  const s = Math.max(0, Math.round(sec || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+}
+
+function openLogbookModal() {
+  if (!modalLogbook) return;
+  setHomeMenuOpen(false);
+  const book = loadCareerLogbook();
+  const sum = formatLogbookSummary(book, LEVELS.length);
+  const certInfo = computeCertifications(book, LEVELS);
+  const locked = Boolean(lan.room && !lan.isHost());
+
+  if (logbookSubEl) {
+    const rankStr = certInfo.highest ? `${certInfo.highest.icon} ${certInfo.highest.title}` : sum.campaignMedal;
+    logbookSubEl.textContent = certInfo.next
+      ? `Current Rank: ${rankStr} · Next: ${certInfo.next.title} (${certInfo.next.requirement})`
+      : `Current Rank: ${rankStr} · All Technical Certifications Earned!`;
+  }
+  if (logbookKpisEl) {
+    logbookKpisEl.innerHTML = `
+      <div class="logbook-kpi"><span>Cleared</span><strong>${sum.clearedCount}/${sum.totalSites}</strong></div>
+      <div class="logbook-kpi"><span>Dives</span><strong>${sum.totalDives}</strong></div>
+      <div class="logbook-kpi"><span>Bottom Time</span><strong>${formatBottomTime(sum.totalTimeSec)}</strong></div>
+      <div class="logbook-kpi"><span>Deepest</span><strong>${sum.deepestM.toFixed(0)}m</strong></div>
+      <div class="logbook-kpi"><span>S-Ranks</span><strong>${certInfo.sGrades}</strong></div>
+    `;
+  }
+  if (logbookCertsEl) {
+    logbookCertsEl.innerHTML = certInfo.certs
+      .map(
+        (c) => `
+        <div class="logbook-cert-card ${c.earned ? '' : 'locked'}">
+          <span class="logbook-cert-icon" aria-hidden="true">${c.earned ? c.icon : '🔒'}</span>
+          <div class="logbook-cert-copy">
+            <strong>${escapeHtml(c.title)}</strong>
+            <span>${escapeHtml(c.requirement)}</span>
+          </div>
+        </div>`
+      )
+      .join('');
+  }
+  if (logbookSitesEl) {
+    logbookSitesEl.innerHTML = LEVELS.map((lvl, idx) => {
+      const rec = book.cleared?.[lvl.id] || null;
+      const grade = rec?.grade || '—';
+      const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
+      const scoreTxt = rec ? `${rec.score.toLocaleString()} pts` : `${getLevelMaxDepthM(lvl)}m`;
+      const timeTxt = rec?.bestTimeSec > 0 ? formatRunClock(rec.bestTimeSec) : (lvl.isWreck ? 'Wreck' : 'Cave');
+      return `
+        <div class="logbook-site-row ${rec ? 'cleared' : ''}">
+          <span class="logbook-site-num">L${idx + 1}</span>
+          <span class="logbook-site-name">${lvl.isWreck ? '🚢 ' : ''}${escapeHtml(lvl.name)}</span>
+          <span class="logbook-site-stat">${escapeHtml(scoreTxt)} · ${escapeHtml(timeTxt)}</span>
+          ${rec ? `<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>` : '<span class="logbook-site-stat">—</span>'}
+          <button type="button" class="btn tiny ghost" data-logbook-jump="${lvl.id}" ${locked ? 'disabled' : ''}>Select</button>
+        </div>`;
+    }).join('');
+  }
+  modalLogbook.hidden = false;
+}
+
+function closeLogbookModal() {
+  if (modalLogbook) modalLogbook.hidden = true;
+}
+
+btnOpenLogbook?.addEventListener('click', openLogbookModal);
+btnProgressPill?.addEventListener('click', openLogbookModal);
+btnLogbookClose?.addEventListener('click', closeLogbookModal);
+modalLogbook?.addEventListener('click', (e) => {
+  if (e.target === modalLogbook) {
+    closeLogbookModal();
+    return;
+  }
+  const jumpBtn = e.target.closest('button[data-logbook-jump]');
+  if (jumpBtn && !(lan.room && !lan.isHost())) {
+    const lid = jumpBtn.dataset.logbookJump;
+    closeLogbookModal();
+    if (lid) selectAndLoadLevel(lid, { focusMap: mapZoomMode === 'site' });
+  }
 });
 
 function loadGhostTrack(levelId) {
@@ -2451,10 +2576,13 @@ if (siteCatTabsEl) {
   siteCatTabsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-site-cat]');
     if (!btn) return;
-    const nextCat = btn.dataset.siteCat === 'wreck' || btn.dataset.siteCat === 'cave' ? btn.dataset.siteCat : 'all';
+    const nextCat =
+      btn.dataset.siteCat === 'wreck' || btn.dataset.siteCat === 'cave' || btn.dataset.siteCat === 'todo'
+        ? btn.dataset.siteCat
+        : 'all';
     if (nextCat === siteCategoryFilter) return;
     siteCategoryFilter = nextCat;
-    const catIdx = nextCat === 'cave' ? 1 : nextCat === 'wreck' ? 2 : 0;
+    const catIdx = nextCat === 'cave' ? 1 : nextCat === 'wreck' ? 2 : nextCat === 'todo' ? 3 : 0;
     siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
     for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
       b.classList.toggle('active', b === btn);
@@ -2578,8 +2706,9 @@ document.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && homeMenuPopover && !homeMenuPopover.hidden) {
-    setHomeMenuOpen(false);
+  if (e.key === 'Escape') {
+    if (homeMenuPopover && !homeMenuPopover.hidden) setHomeMenuOpen(false);
+    if (modalLogbook && !modalLogbook.hidden) closeLogbookModal();
   }
 });
 
@@ -3548,6 +3677,9 @@ lan.on('dive_started', async (msg) => {
       ? {
           checkpoints: msg.checkpoints,
           collectibles: msg.collectibles,
+          openedHatches: msg.openedHatches,
+          cutSnags: msg.cutSnags,
+          placedMarkers: msg.placedMarkers,
           playerLines: msg.playerLines,
           bodyRecoveredBy: msg.bodyRecoveredBy,
         }
@@ -3786,8 +3918,15 @@ function stepSimulation(dt) {
     }
     sessionStepCallbacks.peers = isMultiplayer ? lan.getPeers() : null;
     sessionStepCallbacks.torchAim = input.getTorchAim();
+    const wasSubmerged = session._wasSubmerged ?? diver.y > 0.75;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
+    const nowSubmerged = diver.y > 0.75;
+    if (nowSubmerged !== wasSubmerged && session.simTimeSec > 0.35) {
+      audio.playSplash(nowSubmerged);
+    }
+    session._wasSubmerged = nowSubmerged;
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
+    audio.stepAmbience(dt, level, diver.y);
     syncWreckActionHud(session.wreckActionPrompt);
   } else {
     session.simTimeSec += dt;
@@ -3836,7 +3975,14 @@ function stepSimulation(dt) {
         heartRateBpm: diveState.heartRateBpm,
         cardiacStress: diveState.cardiacStress,
         ceilingM: diveState.ceilingM,
-        condition: diveState.impairment?.primaryCondition || 'NOMINAL',
+        condition:
+          (diveState.impairment?.primaryCondition && diveState.impairment.primaryCondition !== 'NOMINAL')
+            ? diveState.impairment.primaryCondition
+            : session.activeSnagIndex >= 0
+              ? 'SNAGGED!'
+              : diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 3.5
+                ? `DECO ${diveState.stopDepthM}m`
+                : 'NOMINAL',
         surfaced: Boolean(session.surfaced),
         healthPct,
         gasRemainingPct,

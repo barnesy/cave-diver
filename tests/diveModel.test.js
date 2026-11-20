@@ -2489,3 +2489,127 @@ test('v101 Photorealistic surface cutout assets exist on disk as valid compact W
   }
   assert.ok(totalBytes > 100_000 && totalBytes < 900_000, `Unexpected total surface sprite budget: ${totalBytes} bytes`);
 });
+
+test('v102 Career logbook hooks, underwater depth acoustics/ambience, and post-lighting co-op signals', async () => {
+  const fs = await import('node:fs');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Verify Bundle 1 & Bundle 3 HTML hooks exist cleanly
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="modal-logbook"'), 'Missing Career Logbook modal');
+  assert.ok(html.includes('id="btn-open-logbook"'), 'Missing Logbook menu button');
+  assert.ok(html.includes('data-site-cat="todo"'), 'Missing Todo uncleared site filter tab');
+  assert.ok(html.includes('data-signal="HOLD DECO 🛑"'), 'Missing HOLD DECO co-op quick signal');
+
+  // 2. Verify Bundle 2 DiveAudio depth low-pass sweep, splash transient, and biome ambience
+  const makeParam = (val = 0) => ({
+    value: val,
+    lastTarget: val,
+    setValueAtTime(v) { this.value = v; this.lastTarget = v; },
+    setTargetAtTime(v) { this.lastTarget = v; },
+    linearRampToValueAtTime(v) { this.lastTarget = v; },
+    exponentialRampToValueAtTime(v) { this.lastTarget = v; },
+  });
+  let createdNodes = 0;
+  const mockCtx = {
+    state: 'running',
+    currentTime: 10,
+    sampleRate: 44100,
+    destination: { kind: 'dest' },
+    createBiquadFilter() {
+      createdNodes += 1;
+      return { type: 'lowpass', frequency: makeParam(18000), Q: makeParam(0.7), connect() {} };
+    },
+    createGain() {
+      createdNodes += 1;
+      return { gain: makeParam(1), connect() {} };
+    },
+    createOscillator() {
+      createdNodes += 1;
+      return { type: 'sine', frequency: makeParam(440), connect() {}, start() {}, stop() {} };
+    },
+    createBuffer(_ch, len) {
+      const data = new Float32Array(len);
+      return { getChannelData: () => data };
+    },
+    createBufferSource() {
+      createdNodes += 1;
+      return { buffer: null, connect() {}, start() {}, stop() {} };
+    },
+  };
+
+  const audio = new DiveAudio();
+  audio.ctx = mockCtx;
+  audio.setEnvironmentFilter(0, 0); // surface
+  assert.ok(audio.masterFilter, 'masterFilter should be initialized');
+  const surfaceCutoff = audio.masterFilter.frequency.lastTarget;
+  audio.setEnvironmentFilter(10, 0); // shallow submerged
+  const shallowCutoff = audio.masterFilter.frequency.lastTarget;
+  audio.setEnvironmentFilter(140, 0.9); // deep + narcotic
+  const deepCutoff = audio.masterFilter.frequency.lastTarget;
+  assert.ok(surfaceCutoff >= 15000, `Surface cutoff should be wide open, got ${surfaceCutoff}`);
+  assert.ok(shallowCutoff < 4600 && shallowCutoff > deepCutoff, `Shallow cutoff should filter highs, got ${shallowCutoff}`);
+  assert.ok(deepCutoff <= 1400 && deepCutoff >= 1000, `Deep cutoff should muffle audio cleanly, got ${deepCutoff}`);
+
+  const beforeSplash = createdNodes;
+  audio.playSplash(true);
+  assert.ok(createdNodes > beforeSplash, 'playSplash(true) should emit noise + tone nodes');
+
+  const wreckLvl = LEVELS.find((l) => l.isWreck);
+  const caveLvl = LEVEL_1;
+  const beforeAmb = createdNodes;
+  audio._ambienceTimer = 0;
+  audio.stepAmbience(0.2, wreckLvl, 28);
+  audio._ambienceTimer = 0;
+  audio.stepAmbience(0.2, caveLvl, 28);
+  assert.ok(createdNodes > beforeAmb, 'stepAmbience should emit underwater biome audio nodes');
+
+  // 3. Verify Bundle 3 post-lighting _drawDiverSignals & _drawPeerEdgeIndicators run cleanly
+  const drawnTexts = [];
+  const noopCtx = new Proxy({
+    fillText(t) { drawnTexts.push(String(t)); },
+    measureText(t) { return { width: String(t).length * 7 }; },
+  }, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return () => {};
+    },
+    set() { return true; },
+  });
+  const now = performance.now();
+  const toSX = (wx) => 400 + wx * 28;
+  const toSY = (wy) => 300 + wy * 28;
+  CaveRenderer.prototype._drawDiverSignals(
+    noopCtx,
+    { x: 0, y: 0, signalText: 'HOLD DECO 🛑', signalExpiresAt: now + 3500 },
+    [{ x: 4, y: 1, alive: true, signalText: 'OK 👌', signalExpiresAt: now + 3200 }],
+    toSX,
+    toSY,
+    28,
+    12.5
+  );
+  assert.ok(drawnTexts.includes('HOLD DECO 🛑'), 'Local diver signal pill should draw post-lighting');
+  assert.ok(drawnTexts.includes('OK 👌'), 'Peer diver signal pill should draw post-lighting');
+
+  const edgeTexts = [];
+  const edgeCtx = new Proxy({
+    fillText(t) { edgeTexts.push(String(t)); },
+    measureText(t) { return { width: String(t).length * 7 }; },
+  }, {
+    get(target, prop) { return prop in target ? target[prop] : () => {}; },
+    set() { return true; },
+  });
+  CaveRenderer.prototype._drawPeerEdgeIndicators.call(
+    { _cachedDpr: 1 },
+    edgeCtx,
+    800,
+    600,
+    { x: 0, y: 10 },
+    [{ x: 40, y: 24, name: 'Maya', alive: true, condition: 'SNAGGED!', signalText: 'LOW GAS ⚠️', signalExpiresAt: now + 3000 }],
+    toSX,
+    toSY,
+    12.5
+  );
+  assert.ok(edgeTexts.some((t) => t.includes('SNAGGED!') && t.includes('LOW GAS')), 'Offscreen peer indicator should surface SNAGGED! and active signal');
+});

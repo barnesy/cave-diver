@@ -14,6 +14,9 @@ export class DiveAudio {
     this.lastExhaleAt = 0;
     this.lastHeartAt = 0;
     this._noiseBuffer = null;
+    this.masterFilter = null;
+    this._ambienceTimer = 4.0;
+    this._lastSplashAt = 0;
     this.hapticsEnabled = true;
     this.radio = new AquaticRadio(() => this.ctx, { isMutedFn: () => this.muted });
   }
@@ -38,6 +41,32 @@ export class DiveAudio {
 
   setEnvironmentFilter(depthM = 0, narcosisLevel = 0) {
     this.radio.setDepthMuffle?.(depthM, narcosisLevel);
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const mf = this._ensureMasterFilter();
+    if (!mf) return;
+    // Surface air = crisp 18kHz; shallow submerged = 4.2kHz; deep/narcotic = warm muffled 1.15kHz
+    let targetHz = 18000;
+    if (depthM > 0.65) {
+      const depthFrac = Math.min(1, (depthM - 0.65) / 140);
+      const narcFrac = Math.min(1, Math.max(0, narcosisLevel || 0));
+      targetHz = Math.max(1050, 4400 - depthFrac * 2400 - narcFrac * 950);
+    }
+    try {
+      mf.frequency.setTargetAtTime(targetHz, this.ctx.currentTime, 0.16);
+    } catch {}
+  }
+
+  _ensureMasterFilter() {
+    if (!this.ctx) return null;
+    if (!this.masterFilter) {
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 18000;
+      filt.Q.value = 0.65;
+      filt.connect(this.ctx.destination);
+      this.masterFilter = filt;
+    }
+    return this.masterFilter;
   }
 
   vibrate(pattern) {
@@ -57,6 +86,7 @@ export class DiveAudio {
         this.ctx = new AudioCtx();
       }
     }
+    this._ensureMasterFilter();
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
@@ -100,7 +130,7 @@ export class DiveAudio {
     gain.gain.exponentialRampToValueAtTime(gainVal, t + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterFilter || this.ctx.destination);
     osc.start(t);
     osc.stop(t + duration + 0.02);
   }
@@ -162,7 +192,7 @@ export class DiveAudio {
 
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterFilter || this.ctx.destination);
     src.start(t, Math.random() * 0.6);
     src.stop(t + dur + 0.04);
   }
@@ -229,11 +259,11 @@ export class DiveAudio {
     filter.connect(envGain);
     lfo.connect(lfoGain);
     lfoGain.connect(envGain.gain);
-    envGain.connect(this.ctx.destination);
+    envGain.connect(this.masterFilter || this.ctx.destination);
 
     src.connect(fizzFilter);
     fizzFilter.connect(fizzGain);
-    fizzGain.connect(this.ctx.destination);
+    fizzGain.connect(this.masterFilter || this.ctx.destination);
 
     src.start(t, Math.random() * 0.8);
     lfo.start(t);
@@ -321,7 +351,7 @@ export class DiveAudio {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
       src.connect(filt);
       filt.connect(g);
-      g.connect(this.ctx.destination);
+      g.connect(this.masterFilter || this.ctx.destination);
       src.start(t);
       src.stop(t + 0.16);
     }
@@ -452,5 +482,113 @@ export class DiveAudio {
       this.playTone(720, 0.06, 'sine', 0.05, 0.03);
     }
     this.vibrate(16);
+  }
+
+  /**
+   * Water-entry plunge splash (descending) or surface-break wash (emerging).
+   */
+  playSplash(submerging = true) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const now = performance.now();
+    if (now - this._lastSplashAt < 900) return;
+    this._lastSplashAt = now;
+
+    const noise = this._getNoiseBuffer();
+    if (!noise) return;
+    const t = this.ctx.currentTime;
+    const dur = submerging ? 0.58 : 0.42;
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = noise;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(submerging ? 1450 : 620, t);
+    filt.frequency.exponentialRampToValueAtTime(submerging ? 260 : 1280, t + dur);
+    filt.Q.value = 1.2;
+
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(submerging ? 0.085 : 0.055, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t, Math.random() * 0.4);
+    src.stop(t + dur + 0.04);
+
+    if (submerging) {
+      this.playTone(145, 0.24, 'sine', 0.045, 0.02);
+      this.vibrate(18);
+    }
+  }
+
+  /**
+   * Subtle procedural biome-specific underwater acoustics while submerged:
+   * - Caves: resonant karst cavern water-drip echoes & deep aquifer hush
+   * - Shipwrecks: deep oceanic swell sub-thrum
+   * - Geothermal / Glacial Iceland: mineral vent crackle or crystalline ice-creak chime
+   */
+  stepAmbience(dt, level, depthM = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level || depthM < 2.2) return;
+    this._ambienceTimer -= dt;
+    if (this._ambienceTimer > 0) return;
+
+    const style = level.theme?.surfaceStyle || '';
+    const isGlacier = style === 'kverkfjoll-glacier' || style === 'aurora-basalt';
+    const hasVents = Array.isArray(level.geothermalVents) && level.geothermalVents.length > 0;
+
+    if (level.isWreck) {
+      // Gentle low ocean swell sub-thrum
+      this._ambienceTimer = 6.5 + Math.random() * 6.0;
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      const f = 44 + Math.random() * 14;
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.82, t + 2.2);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.022, t + 0.85);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      osc.connect(g);
+      g.connect(this.masterFilter || this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 2.25);
+    } else if (isGlacier && Math.random() < 0.55) {
+      // Crystalline subglacial ice groan & harmonic shimmer
+      this._ambienceTimer = 5.5 + Math.random() * 5.5;
+      const f = 540 + Math.random() * 420;
+      this.playTone(f, 0.55, 'sine', 0.018, 0);
+      this.playTone(f * 1.498, 0.72, 'triangle', 0.012, 0.08);
+    } else if (hasVents && Math.random() < 0.55) {
+      // Delicate hydrothermal mineral hiss burst
+      this._ambienceTimer = 4.2 + Math.random() * 4.0;
+      const noise = this._getNoiseBuffer();
+      if (noise) {
+        const t = this.ctx.currentTime;
+        const src = this.ctx.createBufferSource();
+        src.buffer = noise;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.value = 640 + Math.random() * 380;
+        filt.Q.value = 3.5;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.018, t + 0.35);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
+        src.connect(filt);
+        filt.connect(g);
+        g.connect(this.masterFilter || this.ctx.destination);
+        src.start(t, Math.random() * 0.5);
+        src.stop(t + 1.3);
+      }
+    } else {
+      // Resonant karst cave water-drip echo (two soft descending droplets)
+      this._ambienceTimer = 5.2 + Math.random() * 6.5;
+      const base = 680 + Math.random() * 480;
+      this.playTone(base, 0.14, 'sine', 0.016, 0);
+      this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14);
+    }
   }
 }

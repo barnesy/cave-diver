@@ -1492,31 +1492,64 @@ export class CaveRenderer {
       this._drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec);
     }
 
-    // 4. Halocline / Thermocline Interface Shimmer + Refractive Shear Wave
+    // 4. Multi-Layer Refractive Halocline / Thermocline Interface Shimmer + Optical Shear Waves
     if (Number.isFinite(this.level.haloclineY)) {
       const haloY = toScreenY(this.level.haloclineY);
-      if (haloY > -60 && haloY < ch + 60) {
+      if (haloY > -90 && haloY < ch + 90) {
         ctx.save();
+        const bandH = 2.6 * scale;
         if (this.glowStamps.bandGlow) {
-          ctx.globalAlpha = 0.55;
-          ctx.drawImage(this.glowStamps.bandGlow, 0, haloY - 1.65 * scale, cw, 3.3 * scale);
+          ctx.globalAlpha = 0.62;
+          ctx.drawImage(this.glowStamps.bandGlow, 0, haloY - bandH * 0.72, cw, bandH * 1.44);
           ctx.globalAlpha = 1;
         } else {
-          ctx.fillStyle = theme?.haloclineColor || 'rgba(165, 243, 252, 0.22)';
-          ctx.fillRect(0, haloY - 1.1 * scale, cw, 2.2 * scale);
+          const hg = ctx.createLinearGradient(0, haloY - bandH, 0, haloY + bandH);
+          hg.addColorStop(0, 'rgba(165, 243, 252, 0)');
+          hg.addColorStop(0.42, theme?.haloclineColor || 'rgba(165, 243, 252, 0.24)');
+          hg.addColorStop(0.58, 'rgba(94, 234, 212, 0.16)');
+          hg.addColorStop(1, 'rgba(14, 116, 144, 0)');
+          ctx.fillStyle = hg;
+          ctx.fillRect(0, haloY - bandH, cw, bandH * 2);
         }
 
-        ctx.strokeStyle = 'rgba(224, 242, 254, 0.36)';
-        ctx.lineWidth = Math.max(1, 0.045 * scale);
-        ctx.beginPath();
-        const stepPx = Math.max(14, Math.round(cw / 32));
-        for (let sx = 0; sx <= cw + stepPx; sx += stepPx) {
-          const wx = (this.camX + narcX) + (sx - viewCenterX) / scale;
-          const waveY = haloY + (Math.sin(wx * 0.6 + timeSec * 1.9) * 0.11 + Math.cos(wx * 1.4 - timeSec * 1.4) * 0.06) * scale;
-          if (sx === 0) ctx.moveTo(sx, waveY);
-          else ctx.lineTo(sx, waveY);
+        // Three phase-offset refractive density ribbons simulating freshwater-over-saltwater optical shear
+        const stepPx = Math.max(14, Math.round(cw / 34));
+        const ribbons = [
+          { off: -0.34, amp: 0.12, freq: 0.55, speed: 1.8, col: 'rgba(224, 242, 254, 0.44)', w: 0.055 },
+          { off: 0.04, amp: 0.16, freq: 0.78, speed: -1.35, col: 'rgba(94, 234, 212, 0.34)', w: 0.075 },
+          { off: 0.42, amp: 0.1, freq: 1.05, speed: 2.15, col: 'rgba(186, 230, 253, 0.26)', w: 0.042 },
+        ];
+        for (let r = 0; r < ribbons.length; r++) {
+          const rb = ribbons[r];
+          ctx.strokeStyle = rb.col;
+          ctx.lineWidth = Math.max(1, rb.w * scale);
+          ctx.beginPath();
+          for (let sx = 0; sx <= cw + stepPx; sx += stepPx) {
+            const wx = this.camX + narcX + (sx - viewCenterX) / scale;
+            const waveY =
+              haloY +
+              (rb.off +
+                Math.sin(wx * rb.freq + timeSec * rb.speed) * rb.amp +
+                Math.cos(wx * (rb.freq * 1.8) - timeSec * 1.2 + r) * (rb.amp * 0.45)) *
+                scale;
+            if (sx === 0) ctx.moveTo(sx, waveY);
+            else ctx.lineTo(sx, waveY);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
+
+        // Floating iridescent halocline density-interface motes
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.46)';
+        const moteStart = Math.floor(visX0 / 2.6) * 2.6;
+        for (let mx = moteStart; mx <= visX1; mx += 2.6) {
+          const phase = mx * 1.73 + timeSec * 1.4;
+          const sx = toScreenX(mx + Math.sin(phase) * 0.35);
+          const sy = haloY + (Math.cos(phase * 1.3) * 0.65) * scale;
+          const mr = Math.max(1.2, (0.04 + 0.03 * Math.sin(phase * 2)) * scale);
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, mr * 2.2, mr * 0.65, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
       }
     }
@@ -1605,6 +1638,7 @@ export class CaveRenderer {
     if (!this.level.isWreck) {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
+    this._drawDiverSignals(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec);
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
@@ -3642,6 +3676,105 @@ export class CaveRenderer {
       ctx.stroke();
     }
 
+    // Signature underwater shipwreck focal landmarks (Bower Anchor + Chain, Bronze Propeller, Brass Telegraph)
+    if (profile !== 'victoria-vertical-battleship') {
+      // 1. Heavy Stockless Bower Anchor & Draped Iron Chain off the Bow
+      const anchorWx = hMax + 2.4;
+      if (anchorWx + 6 >= visX0 && anchorWx - 6 <= visX1) {
+        const ax = toScreenX(anchorWx);
+        const hawseY = toScreenY(deckY + 3.2);
+        const anchorY = toScreenY(Math.min(seabedY - 2.2, deckY + 13.5));
+        ctx.strokeStyle = 'rgba(100, 116, 139, 0.58)';
+        ctx.lineWidth = Math.max(2, 0.14 * scale);
+        ctx.setLineDash([0.35 * scale, 0.22 * scale]);
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(hMax - 0.5), hawseY);
+        ctx.quadraticCurveTo(ax + 0.8 * scale, (hawseY + anchorY) * 0.5, ax, anchorY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Forged iron anchor crown & twin flukes
+        ctx.save();
+        ctx.translate(ax, anchorY);
+        ctx.strokeStyle = '#64748b';
+        ctx.fillStyle = '#334155';
+        ctx.lineWidth = Math.max(2.2, 0.18 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -1.5 * scale);
+        ctx.lineTo(0, 0.65 * scale);
+        ctx.moveTo(-1.15 * scale, 0.1 * scale);
+        ctx.quadraticCurveTo(0, 1.15 * scale, 1.15 * scale, 0.1 * scale);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-1.35 * scale, -0.18 * scale);
+        ctx.lineTo(-0.82 * scale, 0.28 * scale);
+        ctx.lineTo(-1.12 * scale, 0.48 * scale);
+        ctx.closePath();
+        ctx.moveTo(1.35 * scale, -0.18 * scale);
+        ctx.lineTo(0.82 * scale, 0.28 * scale);
+        ctx.lineTo(1.12 * scale, 0.48 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 2. Massive 4-Blade Patinated Bronze Ship's Propeller at the Stern
+      const propWx = hMin - 1.4;
+      const propWy = Math.min(seabedY - 3.6, deckY + (seabedY - deckY) * 0.72);
+      if (propWx + 6 >= visX0 && propWx - 6 <= visX1 && propWy + 6 >= visY0 && propWy - 6 <= visY1) {
+        const px = toScreenX(propWx);
+        const py = toScreenY(propWy);
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.fillStyle = '#7c5d2f';
+        ctx.strokeStyle = '#b48a46';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        for (let b = 0; b < 4; b++) {
+          ctx.save();
+          ctx.rotate(b * (Math.PI * 0.5) + 0.35);
+          ctx.beginPath();
+          ctx.ellipse(0, -1.55 * scale, 0.52 * scale, 1.45 * scale, 0.16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.fillStyle = '#926c34';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.48 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 3. Brass Bridge Engine Order Telegraph on Upper Deck
+      const teleWx = (hMin + hMax) * 0.5 + 3.2;
+      if (teleWx + 4 >= visX0 && teleWx - 4 <= visX1 && deckY + 4 >= visY0 && deckY - 6 <= visY1) {
+        const tx = toScreenX(teleWx);
+        const ty = toScreenY(deckY);
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.fillStyle = '#85622c';
+        ctx.fillRect(-0.18 * scale, -1.45 * scale, 0.36 * scale, 1.45 * scale);
+        ctx.fillStyle = '#d4a64a';
+        ctx.strokeStyle = '#5c4119';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(0, -1.68 * scale, 0.44 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.arc(0, -1.68 * scale, 0.3 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -1.68 * scale);
+        ctx.lineTo(0.28 * scale, -2.18 * scale);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     ctx.restore();
   }
 
@@ -4284,6 +4417,43 @@ export class CaveRenderer {
   _drawCaveInteractives(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null) {
     const level = this.level;
     ctx.save();
+
+    // 0. Overhead Calcite Stalactite Draperies hanging from wide cave ceilings (zero collision)
+    if (Array.isArray(level.segments)) {
+      const stalCol = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(125, 211, 252, 0.48)' : 'rgba(148, 138, 118, 0.42)';
+      const stalHi = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(224, 242, 254, 0.46)' : 'rgba(214, 204, 184, 0.34)';
+      for (let i = 0; i < level.segments.length; i += 2) {
+        const seg = level.segments[i];
+        const mx = (seg.ax + seg.bx) * 0.5;
+        const my = (seg.ay + seg.by) * 0.5;
+        const mr = ((seg.ra || 2.5) + (seg.rb || 2.5)) * 0.5;
+        if (mr < 2.6 || my < 9) continue;
+        if (mx + 5 < visX0 || mx - 5 > visX1 || my - mr + 3 < visY0 || my - mr - 3 > visY1) continue;
+        const ceilY = my - mr * 0.9;
+        if (evaluateCaveSDF(level, mx, ceilY + 0.5) > -0.35) continue;
+        const sx = toScreenX(mx);
+        const sy = toScreenY(ceilY);
+        for (let t = -2; t <= 2; t++) {
+          const ox = t * 0.38 * scale;
+          const len = (0.48 + (Math.abs(t * 7 + i * 3) % 4) * 0.22) * scale;
+          const bw = (0.14 + (t === 0 ? 0.06 : 0)) * scale;
+          ctx.fillStyle = stalCol;
+          ctx.beginPath();
+          ctx.moveTo(sx + ox - bw, sy - 0.1 * scale);
+          ctx.lineTo(sx + ox + bw, sy - 0.1 * scale);
+          ctx.lineTo(sx + ox, sy + len);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = stalHi;
+          ctx.beginPath();
+          ctx.moveTo(sx + ox, sy - 0.08 * scale);
+          ctx.lineTo(sx + ox + bw * 0.55, sy - 0.08 * scale);
+          ctx.lineTo(sx + ox, sy + len * 0.85);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
 
     // 1. Steady Karst Spring / Underground River Currents
     if (Array.isArray(level.caveCurrents)) {
@@ -7124,7 +7294,7 @@ export class CaveRenderer {
       );
       const cond = diver.alive === false ? 'DOWN' : (diver.condition || 'NOMINAL');
       const alertColor =
-        diver.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || stress >= 65 || bpm >= 150
+        diver.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'SNAGGED!' || stress >= 65 || bpm >= 150
           ? '#ef4444'
           : cond !== 'NOMINAL' || bar < 50 || stress >= 25 || bpm >= 118
             ? '#fbbf24'
@@ -7151,29 +7321,78 @@ export class CaveRenderer {
       ctx.fillRect(sx + barW * 0.02, pillY, stressW, 4);
       ctx.restore();
     }
+  }
 
-    // Overhead diver hand-signal / comms speech pill
-    if (diver.signalText && diver.signalExpiresAt > performance.now()) {
-      const msgY = sy - scale * (isPeer ? 1.85 : 1.45);
+  /**
+   * Post-lighting luminous overhead hand/torch signals & 3-flash dive-light pulse
+   * so co-op team signals remain razor-sharp even in pitch-black cave sumps.
+   */
+  _drawDiverSignals(ctx, diver, peers, toScreenX, toScreenY, scale, timeSec) {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const list = [];
+    if (diver?.signalText && diver.signalExpiresAt > now) list.push({ d: diver, isPeer: false });
+    if (Array.isArray(peers)) {
+      for (let i = 0; i < peers.length; i++) {
+        const p = peers[i];
+        if (p?.signalText && p.signalExpiresAt > now) list.push({ d: p, isPeer: true });
+      }
+    }
+    if (list.length === 0) return;
+
+    ctx.save();
+    for (let i = 0; i < list.length; i++) {
+      const { d, isPeer } = list[i];
+      const remMs = d.signalExpiresAt - now;
+      const totalMs = isPeer ? 4500 : 4000;
+      const elapsedSec = Math.max(0, (totalMs - remMs) / 1000);
+      const fade = Math.min(1, remMs / 550);
+      const sx = toScreenX(d.x);
+      const sy = toScreenY(d.y);
+
+      // 3-flash dive-light beacon ring during first 1.6s of signal so teammates spot it across dark passages
+      if (elapsedSec < 1.65) {
+        const flashPhase = (elapsedSec * 3.0) % 1.0;
+        const flashAlpha = Math.sin(flashPhase * Math.PI) * (1 - elapsedSec / 1.8);
+        if (flashAlpha > 0.04) {
+          const ringR = (0.75 + flashPhase * 2.15) * scale;
+          const isUrgent = /GAS|DECO|HOLD/i.test(d.signalText);
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = isUrgent
+            ? `rgba(251, 191, 36, ${(flashAlpha * 0.85).toFixed(3)})`
+            : `rgba(56, 189, 248, ${(flashAlpha * 0.85).toFixed(3)})`;
+          ctx.lineWidth = Math.max(2, 0.1 * scale);
+          ctx.beginPath();
+          ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      const risePx = Math.min(14, elapsedSec * 5) + Math.sin(timeSec * 4 + i) * 1.5;
+      const msgY = sy - scale * (isPeer ? 1.92 : 1.55) - risePx;
+      const isWarn = /GAS|DECO/i.test(d.signalText);
       ctx.save();
-      ctx.font = `800 ${Math.max(10, Math.round(0.35 * scale))}px ui-monospace, monospace`;
-      const padX = 8;
-      const tw = ctx.measureText(diver.signalText).width;
+      ctx.globalAlpha = fade;
+      ctx.font = `800 ${Math.max(10, Math.round(0.36 * scale))}px ui-monospace, monospace`;
+      const padX = 9;
+      const tw = ctx.measureText(d.signalText).width;
       const bw = tw + padX * 2;
-      const bh = Math.max(19, 0.56 * scale);
-      ctx.fillStyle = 'rgba(8, 47, 73, 0.92)';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.5;
+      const bh = Math.max(20, 0.58 * scale);
+      ctx.fillStyle = isWarn ? 'rgba(69, 26, 3, 0.94)' : 'rgba(8, 47, 73, 0.94)';
+      ctx.strokeStyle = isWarn ? '#fbbf24' : '#38bdf8';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.roundRect(sx - bw * 0.5, msgY - bh * 0.5, bw, bh, 999);
       ctx.fill();
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#e0f2fe';
-      ctx.fillText(diver.signalText, sx, msgY + 0.5);
+      ctx.fillStyle = isWarn ? '#fef3c7' : '#e0f2fe';
+      ctx.fillText(d.signalText, sx, msgY + 0.5);
       ctx.restore();
     }
+    ctx.restore();
   }
 
   _drawPeerEdgeIndicators(ctx, cw, ch, diver, peers, toScreenX, toScreenY, timeSec) {
@@ -7202,9 +7421,9 @@ export class CaveRenderer {
       const ry = Math.max(topSafe, Math.min(ch - botSafe, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - Math.max(topSafe, botSafe) * 0.5)));
 
       const cond = p.alive === false ? 'DOWN' : (p.condition || 'NOMINAL');
-      const distressed = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'DCS';
+      const distressed = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'DCS' || cond === 'SNAGGED!';
       const pulse = distressed ? 0.65 + 0.35 * Math.sin(timeSec * 8) : 0.94;
-      const col = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX'
+      const col = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'SNAGGED!'
         ? '#f87171'
         : cond !== 'NOMINAL'
           ? '#fbbf24'
@@ -7224,9 +7443,11 @@ export class CaveRenderer {
       ctx.fill();
       ctx.restore();
 
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const activeSig = p.signalText && p.signalExpiresAt > nowMs ? ` · ${p.signalText}` : '';
       const label = cond === 'NOMINAL'
-        ? `${p.name || 'Buddy'} ${distM}m${depthTag}`
-        : `${p.name || 'Buddy'} ${cond} ${distM}m`;
+        ? `${p.name || 'Buddy'} ${distM}m${depthTag}${activeSig}`
+        : `${p.name || 'Buddy'} ${cond} ${distM}m${activeSig}`;
       const textW = ctx.measureText(label).width;
       const pillPadX = Math.round(7 * dpr);
       const pillW = textW + pillPadX * 2;

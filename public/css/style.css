@@ -545,7 +545,7 @@ html, body {
 .site-cat-tabs {
   position: relative;
   display: inline-grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 8px;
@@ -559,7 +559,7 @@ html, body {
   top: 2px;
   bottom: 2px;
   left: 2px;
-  width: calc((100% - 8px) / 3);
+  width: calc((100% - 10px) / 4);
   border-radius: 6px;
   background: linear-gradient(135deg, rgba(249, 115, 22, 0.34), rgba(14, 165, 233, 0.28));
   border: 1px solid rgba(251, 146, 60, 0.45);
@@ -4168,6 +4168,184 @@ select:focus-visible {
   background: rgba(45, 34, 6, 0.92);
   color: #fef9c3;
   box-shadow: 0 8px 26px rgba(133, 77, 14, 0.5), 0 0 20px rgba(250, 204, 21, 0.34);
+}
+/* v102 Career Logbook, Mastery Grade Pills & Map Cleared Legend */
+button.campaign-progress-pill {
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.14s ease;
+}
+button.campaign-progress-pill:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(14, 165, 233, 0.24);
+  transform: translateY(-1px);
+}
+.legend-dot.cleared {
+  background: transparent;
+  border: 2px solid #34d399;
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.6);
+}
+.lvl-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lvl-grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 0.63rem;
+  font-weight: 800;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  background: rgba(6, 78, 59, 0.72);
+  color: #a7f3d0;
+}
+.lvl-grade-badge.grade-s {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: rgba(113, 63, 18, 0.78);
+  color: #fef08a;
+}
+.lvl-grade-badge.grade-a {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(12, 74, 110, 0.78);
+  color: #bae6fd;
+}
+.lvl-next-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  background: rgba(14, 165, 233, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  color: #7dd3fc;
+}
+.logbook-card {
+  max-width: 680px;
+  width: min(94vw, 680px);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.logbook-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+@media (max-width: 540px) {
+  .logbook-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.logbook-kpi {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 7px 6px;
+  text-align: center;
+}
+.logbook-kpi span {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.logbook-kpi strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.92rem;
+  color: #e0f2fe;
+  font-family: ui-monospace, monospace;
+}
+.logbook-section-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+  margin-top: 2px;
+}
+.logbook-certs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 6px;
+}
+.logbook-cert-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(6, 78, 59, 0.32);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+}
+.logbook-cert-card.locked {
+  background: rgba(15, 23, 42, 0.62);
+  border-color: rgba(148, 163, 184, 0.2);
+  opacity: 0.72;
+}
+.logbook-cert-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.logbook-cert-copy strong {
+  display: block;
+  font-size: 0.76rem;
+  color: #f0f9ff;
+}
+.logbook-cert-copy span {
+  display: block;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+.logbook-sites-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+  max-height: 36vh;
+  padding-right: 4px;
+}
+.logbook-site-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 0.74rem;
+}
+.logbook-site-row.cleared {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(6, 42, 34, 0.35);
+}
+.logbook-site-num {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  color: #7dd3fc;
+  font-size: 0.7rem;
+}
+.logbook-site-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.logbook-site-stat {
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: #cbd5e1;
 }
 @keyframes wreckPulseDanger {
   0%, 100% { transform: translateX(-50%) scale(1); }
