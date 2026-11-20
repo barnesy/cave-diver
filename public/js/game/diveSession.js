@@ -150,6 +150,7 @@ export function createDiveSession(
       inhaleCount: 0,
     },
     simTimeSec: 0,
+    _wasSubmerged: (level.spawn?.y ?? 2) > 0.75,
   };
 }
 
@@ -240,8 +241,14 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
     if (!session.placedMarkerIds) session.placedMarkerIds = new Set();
     session.placedMarkerIds.add(msg.targetId);
     const anchor = session.level?.lineAnchors?.find((a) => a.id === msg.targetId);
+    const bonusM = anchor?.reelBonusM || 0;
+    if (bonusM > 0 && session.reelMaxMeters > 0) {
+      session.reelMaxMeters += bonusM;
+      session.reelRemainingM += bonusM;
+    }
     callbacks.onMarkerPlaced?.(anchor);
-    callbacks.onToast?.(`🪢 ${by} tagged ${anchor?.label || 'cave junction marker'}!`, 2.6);
+    const bonusTxt = bonusM > 0 && session.reelMaxMeters > 0 ? ` (+${bonusM}m team spool!)` : '';
+    callbacks.onToast?.(`🪢 ${by} tagged ${anchor?.label || 'cave junction marker'}${bonusTxt}`, 2.6);
     return true;
   }
   return false;
@@ -842,7 +849,8 @@ export function stepPeerBubbles(bubbles, peers, dt) {
     if (!p || p.alive === false || p.surfaced || (p.y ?? 0) <= 0.6) continue;
     const hrBpm = p.heartRateBpm ?? 78;
     const hrNorm = Math.max(0, Math.min(1, (hrBpm - 65) / 115));
-    const panic = p.condition && p.condition !== 'NOMINAL' ? 0.55 : hrNorm * 0.6;
+    const isCalmCond = !p.condition || p.condition === 'NOMINAL' || p.condition.startsWith('DECO ');
+    const panic = !isCalmCond ? 0.55 : hrNorm * 0.6;
     const drive = Math.max(0, Math.min(1.2, hrNorm * 0.72 + panic * 0.45));
     const cycleSec = 60 / (10.5 + drive * 20);
     if (!Number.isFinite(p._breathPhase)) p._breathPhase = (i * 0.37) % 1;

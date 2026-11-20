@@ -15,6 +15,8 @@ export class DiveAudio {
     this.lastHeartAt = 0;
     this._noiseBuffer = null;
     this.masterFilter = null;
+    this.masterGain = null;
+    this._lastFilterHz = 18000;
     this._ambienceTimer = 4.0;
     this._lastSplashAt = 0;
     this.hapticsEnabled = true;
@@ -51,19 +53,32 @@ export class DiveAudio {
       const narcFrac = Math.min(1, Math.max(0, narcosisLevel || 0));
       targetHz = Math.max(1050, 4400 - depthFrac * 2400 - narcFrac * 950);
     }
+    if (Math.abs(targetHz - this._lastFilterHz) < 15 && targetHz !== 18000) return;
+    this._lastFilterHz = targetHz;
     try {
       mf.frequency.setTargetAtTime(targetHz, this.ctx.currentTime, 0.16);
     } catch {}
   }
 
+  resetEnvironmentFilter() {
+    this._lastFilterHz = -1;
+    this.setEnvironmentFilter(0, 0);
+  }
+
   _ensureMasterFilter() {
     if (!this.ctx) return null;
+    if (!this.masterGain) {
+      const mg = this.ctx.createGain();
+      mg.gain.value = this.muted ? 0.0001 : 1.0;
+      mg.connect(this.ctx.destination);
+      this.masterGain = mg;
+    }
     if (!this.masterFilter) {
       const filt = this.ctx.createBiquadFilter();
       filt.type = 'lowpass';
       filt.frequency.value = 18000;
       filt.Q.value = 0.65;
-      filt.connect(this.ctx.destination);
+      filt.connect(this.masterGain);
       this.masterFilter = filt;
     }
     return this.masterFilter;
@@ -78,7 +93,7 @@ export class DiveAudio {
     } catch {}
   }
 
-  unlock() {
+  unlock({ autoStartRadio = true } = {}) {
     if (this.muted) return;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -87,28 +102,34 @@ export class DiveAudio {
       }
     }
     this._ensureMasterFilter();
-    if (this.ctx && this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state !== 'running') {
       this.ctx.resume().catch(() => {});
     }
-    if (this.ctx && this.radio.trackIndex > 0 && !this.radio._timer) {
+    if (autoStartRadio && this.ctx && this.radio.trackIndex > 0 && !this.radio._timer) {
       this.radio.start();
     }
   }
 
   setMuted(muted) {
-    this.muted = muted;
-    this.radio.syncMuted(muted);
+    this.muted = Boolean(muted);
+    this.radio.syncMuted(this.muted);
+    if (this.masterGain && this.ctx) {
+      try {
+        this.masterGain.gain.setTargetAtTime(this.muted ? 0.0001 : 1.0, this.ctx.currentTime, 0.03);
+      } catch {}
+    }
   }
 
   cycleRadioTrack() {
     if (this.muted) this.setMuted(false);
-    this.unlock();
-    if (this.ctx && this.ctx.state === 'suspended') {
+    this.unlock({ autoStartRadio: false });
+    const nextTrack = this.radio.cycleTrack();
+    if (this.ctx && this.ctx.state !== 'running') {
       this.ctx.resume().then(() => {
-        if (this.radio.trackIndex > 0) this.radio.start();
+        if (this.radio.trackIndex > 0 && !this.radio._timer) this.radio.start();
       }).catch(() => {});
     }
-    return this.radio.cycleTrack();
+    return nextTrack;
   }
 
   setRadioTrackIndex(idx) {
@@ -131,6 +152,10 @@ export class DiveAudio {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
     osc.connect(gain);
     gain.connect(this.masterFilter || this.ctx.destination);
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
     osc.start(t);
     osc.stop(t + duration + 0.02);
   }
@@ -187,12 +212,17 @@ export class DiveAudio {
     const peak = Math.min(0.052, 0.016 + intensity * 0.018 + panic * 0.014);
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.11, dur * 0.22));
-    gain.gain.setValueAtTime(peak * 0.92, t + dur * 0.72);
+    gain.gain.linearRampToValueAtTime(peak * 0.92, t + dur * 0.72);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     src.connect(filter);
     filter.connect(gain);
     gain.connect(this.masterFilter || this.ctx.destination);
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filter.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
     src.start(t, Math.random() * 0.6);
     src.stop(t + dur + 0.04);
   }
@@ -225,7 +255,7 @@ export class DiveAudio {
     filter.frequency.exponentialRampToValueAtTime(centerFreq * 0.62, t + dur);
     filter.Q.value = 1.6;
 
-    // LFO creates distinct underwater bubble-pocket cadence (faster & rougher under panic)
+    // LFO creates distinct underwater bubble-pocket cadence (enveloped cleanly to prevent onset/tail clicks)
     const lfo = this.ctx.createOscillator();
     lfo.type = 'sine';
     const lfoRate = 12.5 + intensity * 5.5 + panic * 6.0;
@@ -234,12 +264,16 @@ export class DiveAudio {
 
     const lfoGain = this.ctx.createGain();
     const peak = Math.min(0.088, 0.036 + intensity * 0.026 + panic * 0.02);
-    lfoGain.gain.setValueAtTime(peak * 0.34, t);
+    const attackEnd = t + Math.min(0.09, dur * 0.14);
+    lfoGain.gain.setValueAtTime(0.0001, t);
+    lfoGain.gain.exponentialRampToValueAtTime(peak * 0.34, attackEnd);
+    lfoGain.gain.linearRampToValueAtTime(peak * 0.28, t + dur * 0.55);
+    lfoGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     const envGain = this.ctx.createGain();
     envGain.gain.setValueAtTime(0.0001, t);
-    envGain.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.09, dur * 0.14));
-    envGain.gain.setValueAtTime(peak * 0.86, t + dur * 0.55);
+    envGain.gain.exponentialRampToValueAtTime(peak, attackEnd);
+    envGain.gain.linearRampToValueAtTime(peak * 0.86, t + dur * 0.55);
     envGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     // Layer 2: Higher effervescent bubble-pop fizz band
@@ -264,6 +298,16 @@ export class DiveAudio {
     src.connect(fizzFilter);
     fizzFilter.connect(fizzGain);
     fizzGain.connect(this.masterFilter || this.ctx.destination);
+
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filter.disconnect(); } catch {}
+      try { lfo.disconnect(); } catch {}
+      try { lfoGain.disconnect(); } catch {}
+      try { envGain.disconnect(); } catch {}
+      try { fizzFilter.disconnect(); } catch {}
+      try { fizzGain.disconnect(); } catch {}
+    };
 
     src.start(t, Math.random() * 0.8);
     lfo.start(t);
@@ -513,7 +557,12 @@ export class DiveAudio {
 
     src.connect(filt);
     filt.connect(g);
-    g.connect(this.ctx.destination);
+    g.connect(this.masterGain || this.ctx.destination);
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
     src.start(t, Math.random() * 0.4);
     src.stop(t + dur + 0.04);
 
@@ -553,6 +602,10 @@ export class DiveAudio {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
       osc.connect(g);
       g.connect(this.masterFilter || this.ctx.destination);
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+      };
       osc.start(t);
       osc.stop(t + 2.25);
     } else if (isGlacier && Math.random() < 0.55) {
@@ -580,6 +633,11 @@ export class DiveAudio {
         src.connect(filt);
         filt.connect(g);
         g.connect(this.masterFilter || this.ctx.destination);
+        src.onended = () => {
+          try { src.disconnect(); } catch {}
+          try { filt.disconnect(); } catch {}
+          try { g.disconnect(); } catch {}
+        };
         src.start(t, Math.random() * 0.5);
         src.stop(t + 1.3);
       }

@@ -11,7 +11,7 @@
   --purple: #c084fc;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2934,9 +2934,21 @@ select:focus-visible {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(224px, calc(env(safe-area-inset-bottom) + 218px));
     flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    max-width: calc(100vw - 156px);
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .coop-comms::-webkit-scrollbar {
+    display: none;
+  }
+  .coop-comms .comm-btn {
+    padding: 4px 7px;
+    font-size: 0.62rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .coop-wait-banner {
     top: max(112px, calc(env(safe-area-inset-top) + 104px));
@@ -2952,6 +2964,15 @@ select:focus-visible {
     flex-direction: row;
     flex-wrap: nowrap;
     max-width: 56vw;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .coop-comms::-webkit-scrollbar {
+    display: none;
+  }
+  .coop-comms .comm-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .game-toast {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
@@ -4231,9 +4252,14 @@ button.campaign-progress-pill:hover {
   max-width: 680px;
   width: min(94vw, 680px);
   max-height: 86vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.logbook-card > * {
+  flex-shrink: 0;
 }
 .logbook-kpis {
   display: grid;
@@ -4310,9 +4336,7 @@ button.campaign-progress-pill:hover {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  overflow-y: auto;
-  max-height: 36vh;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 .logbook-site-row {
   display: grid;
@@ -4324,6 +4348,22 @@ button.campaign-progress-pill:hover {
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.16);
   font-size: 0.74rem;
+}
+@media (max-width: 480px) {
+  .logbook-site-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    gap: 5px 6px;
+    padding: 6px 7px;
+  }
+  .logbook-site-stat {
+    grid-column: 2 / 4;
+    font-size: 0.64rem;
+    color: var(--text-muted);
+  }
+  .logbook-site-row .btn {
+    grid-row: 1 / 3;
+    grid-column: 4;
+  }
 }
 .logbook-site-row.cleared {
   border-color: rgba(52, 211, 153, 0.34);

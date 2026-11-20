@@ -350,6 +350,11 @@ function setLevelSelectionLocked(locked) {
       pin.classList.toggle('locked', locked);
     }
   }
+  if (logbookSitesEl) {
+    for (const btn of logbookSitesEl.querySelectorAll('button[data-logbook-jump]')) {
+      btn.disabled = locked;
+    }
+  }
 }
 
 // Removed legacy inline MAP_LANDMASS_POLYGONS (moved to ./game/worldMapData.js)
@@ -470,7 +475,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=102" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=103" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -486,25 +491,41 @@ function ensureSiteWorldMapBase() {
 
 let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck' | 'todo'
 
-function getFilteredLevels() {
+function setSiteCategoryFilter(nextCat) {
+  const valid = nextCat === 'wreck' || nextCat === 'cave' || nextCat === 'todo' ? nextCat : 'all';
+  siteCategoryFilter = valid;
+  if (siteCatTabsEl) {
+    const catIdx = valid === 'cave' ? 1 : valid === 'wreck' ? 2 : valid === 'todo' ? 3 : 0;
+    siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
+    for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
+      const isAct = b.dataset.siteCat === valid;
+      b.classList.toggle('active', isAct);
+      b.setAttribute('aria-selected', String(isAct));
+    }
+  }
+}
+
+function getFilteredLevels(bookOverride = null) {
   if (siteCategoryFilter === 'wreck') return LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck'));
   if (siteCategoryFilter === 'cave') return LEVELS.filter((l) => !l.isWreck && l.category !== 'wreck');
   if (siteCategoryFilter === 'todo') {
-    const book = loadCareerLogbook();
+    const book = bookOverride || loadCareerLogbook();
     return LEVELS.filter((l) => !book.cleared?.[l.id]);
   }
   return LEVELS;
 }
 
-function renderSiteWorldMap({ instantZoom = false } = {}) {
+function renderSiteWorldMap({ instantZoom = false, book: bookOverride = null } = {}) {
   if (!siteWorldMapEl) return;
   ensureSiteWorldMapBase();
 
   const locked = Boolean(lan.room && !lan.isHost());
-  const visibleLevels = getFilteredLevels();
+  const book = bookOverride || loadCareerLogbook();
+  const visibleLevels = getFilteredLevels(book);
   const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
+  const activeVisible = visibleLevels.some((l) => l.id === activeLevel.id);
   const targetVb =
-    mapZoomMode === 'site'
+    mapZoomMode === 'site' && activeVisible
       ? computeSiteFocusViewBox(activeLevel.id, activeSlot)
       : { ...GLOBAL_MAP_VIEWBOX };
 
@@ -555,9 +576,10 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
     return { lvl, idx, slot, x: pt.x, y: pt.y };
   });
 
-  const routePts = pins.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
-  const routeLine = `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`;
-  const book = loadCareerLogbook();
+  const routePts = pins.length >= 2 ? pins.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ') : '';
+  const routeLine = routePts
+    ? `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`
+    : '';
 
   const pinMarkup = pins
     .map(({ lvl, idx, slot, x, y }) => {
@@ -626,7 +648,11 @@ function renderSiteWorldMap({ instantZoom = false } = {}) {
 
   const overlayLayer = siteWorldMapEl.querySelector('#map-overlay-layer');
   if (overlayLayer) {
-    overlayLayer.innerHTML = `${routeLine}${pinMarkup}`;
+    const emptyBanner =
+      pins.length === 0
+        ? `<g><rect x="74" y="82" width="210" height="32" rx="10" fill="rgba(2, 11, 20, 0.88)" stroke="rgba(52, 211, 153, 0.55)" stroke-width="1" /><text x="179" y="101.5" text-anchor="middle" fill="#a7f3d0" font-size="9.5" font-weight="700" font-family="ui-monospace, monospace">ALL ${LEVELS.length} EXPEDITIONS CLEARED!</text></g>`
+        : '';
+    overlayLayer.innerHTML = `${routeLine}${pinMarkup}${emptyBanner}`;
   }
 
   animateMapViewBox(targetVb, instantZoom);
@@ -646,7 +672,7 @@ function renderLevelCards() {
   const book = loadCareerLogbook();
   const clearedCount = Object.keys(book.cleared || {}).length;
   const nextRecommendedId = LEVELS.find((l) => !book.cleared?.[l.id])?.id || null;
-  const visibleLevels = getFilteredLevels();
+  const visibleLevels = getFilteredLevels(book);
   const pill = document.getElementById('campaign-progress-pill');
   if (pill) {
     pill.textContent =
@@ -660,7 +686,7 @@ function renderLevelCards() {
   }
   if (visibleLevels.length === 0) {
     levelCardsEl.innerHTML = `<div class="lvl-empty-msg" style="padding:18px;text-align:center;color:#a7f3d0;font-size:0.8rem;">🏆 All ${LEVELS.length} expeditions cleared! Switch to All to chase S+ records.</div>`;
-    renderSiteWorldMap();
+    renderSiteWorldMap({ book });
     return;
   }
   levelCardsEl.innerHTML = visibleLevels.map((lvl) => {
@@ -717,7 +743,7 @@ function renderLevelCards() {
 
   const activeBtn = levelCardsEl.querySelector('.level-card-btn.active');
   activeBtn?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-  renderSiteWorldMap();
+  renderSiteWorldMap({ book });
 }
 
 function retriggerAnim(el, className) {
@@ -954,6 +980,10 @@ function handleReelRewind() {
 function setDivePaused(paused) {
   const next = Boolean(paused) && mode === 'diving' && !isMultiplayer && Boolean(session && !session.endedState);
   divePaused = next;
+  if (next) {
+    input?.resetAll?.();
+    audio.resetEnvironmentFilter();
+  }
   if (hudPauseOverlay) hudPauseOverlay.hidden = !next;
 }
 
@@ -1008,7 +1038,9 @@ const hud = new DiveComputerHUD({
   onReelRewind: handleReelRewind,
   onReelRewindHold: (held) => input?.setTouchRewindHeld(held),
   onHeartbeatPulse: (bpm) => {
-    if (mode === 'diving' && !divePaused) audio.playHeartbeat(bpm);
+    if (mode === 'diving' && !divePaused && !session?.endedState && session?.diveState?.alive !== false) {
+      audio.playHeartbeat(bpm);
+    }
   },
 });
 
@@ -1033,6 +1065,18 @@ const input = new InputController({
     return true;
   },
   onPauseToggle: () => {
+    if (hudMenuPopover && !hudMenuPopover.hidden) {
+      setHudMenuOpen(false);
+      return true;
+    }
+    if (modalLogbook && !modalLogbook.hidden) {
+      closeLogbookModal();
+      return true;
+    }
+    if (modalDiveGuide && !modalDiveGuide.hidden) {
+      closeDiveGuideModal(false);
+      return true;
+    }
     if (mode !== 'diving' || !session || session.endedState) return false;
     if (isMultiplayer) {
       showToast('Co-op dives run live — pause is solo-only.', 1.8);
@@ -1216,6 +1260,8 @@ function openLogbookModal() {
       .join('');
   }
   if (logbookSitesEl) {
+    const sitesHeading = document.getElementById('logbook-sites-heading');
+    if (sitesHeading) sitesHeading.textContent = `EXPEDITION MASTERY (${LEVELS.length} SITES)`;
     logbookSitesEl.innerHTML = LEVELS.map((lvl, idx) => {
       const rec = book.cleared?.[lvl.id] || null;
       const grade = rec?.grade || '—';
@@ -1248,9 +1294,18 @@ modalLogbook?.addEventListener('click', (e) => {
     return;
   }
   const jumpBtn = e.target.closest('button[data-logbook-jump]');
-  if (jumpBtn && !(lan.room && !lan.isHost())) {
+  if (jumpBtn) {
+    if (mode !== 'menu') {
+      closeLogbookModal();
+      return;
+    }
+    if (lan.room && !lan.isHost()) {
+      showToast('Host selects the expedition site in co-op.', 2.0);
+      return;
+    }
     const lid = jumpBtn.dataset.logbookJump;
     closeLogbookModal();
+    setActiveMenuTab('solo');
     if (lid) selectAndLoadLevel(lid, { focusMap: mapZoomMode === 'site' });
   }
 });
@@ -1445,6 +1500,12 @@ function formatRunClock(sec) {
 
 function startDiveRun(multiplayer = false, restoredState = null) {
   audio.unlock();
+  audio._ambienceTimer = 4.0;
+  audio.resetEnvironmentFilter();
+  input?.resetAll?.();
+  closeLogbookModal();
+  closeDiveGuideModal(false);
+  closeLeaderboardStatsModal();
   directJoinToDive = false;
   isMultiplayer = multiplayer;
   mode = 'diving';
@@ -1457,6 +1518,9 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   rewindHoldTimer = 0;
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   if (btnDropTow) btnDropTow.hidden = true;
+  if (btnTowBuddy) btnTowBuddy.hidden = true;
+  if (btnShareGas) btnShareGas.hidden = true;
+  syncWreckActionHud(null);
   celebrationParticles = [];
   if (debriefAnimFrame) {
     cancelAnimationFrame(debriefAnimFrame);
@@ -1544,6 +1608,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
 function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (!session) return;
   cancelDebriefAnimations();
+  input?.resetAll?.();
+  audio.resetEnvironmentFilter();
   mode = 'debrief';
   divePaused = false;
   spectatingPeer = false;
@@ -1587,34 +1653,43 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     });
 
   if (isMultiplayer) {
-    lan.sendPlayerState({
-      x: diver.x,
-      y: diver.y,
-      vx: 0,
-      vy: 0,
-      angle: diver.angle,
-      gasId: diveState.activeGasId,
-      activeBar: diveState.tanks[diveState.activeGasId]?.bar ?? 0,
-      cnsPercent: diveState.cnsPercent,
-      dcsStress: diveState.dcsStress,
-      hypoxiaStress: diveState.hypoxiaStress,
-      narcosisLevel: diveState.narcosisLevel,
-      heartRateBpm: diveState.heartRateBpm,
-      cardiacStress: diveState.cardiacStress,
-      ceilingM: diveState.ceilingM,
-      condition: diveState.impairment?.primaryCondition || 'NOMINAL',
-      surfaced: Boolean(success),
-      healthPct: localSummary.healthPct,
-      gasRemainingPct: localSummary.gasRemainingPct,
-      diveTimeSec: diveState.diveTimeSec,
-      collectiblesFound: localSummary.collectiblesFound,
-      exploredPct: localSummary.exploredPct,
-      totalScore: localSummary.totalScore,
-      depthM: diveState.depthM,
-      torchOn: diver.torchOn,
-      alive: diveState.alive,
-      name: diver.name,
-    });
+    lan.sendPlayerState(
+      {
+        x: diver.x,
+        y: diver.y,
+        vx: 0,
+        vy: 0,
+        angle: diver.angle,
+        gasId: diveState.activeGasId,
+        activeBar: diveState.tanks[diveState.activeGasId]?.bar ?? 0,
+        cnsPercent: diveState.cnsPercent,
+        dcsStress: diveState.dcsStress,
+        hypoxiaStress: diveState.hypoxiaStress,
+        narcosisLevel: diveState.narcosisLevel,
+        heartRateBpm: diveState.heartRateBpm,
+        cardiacStress: diveState.cardiacStress,
+        ceilingM: diveState.ceilingM,
+        condition: diveState.impairment?.primaryCondition || 'NOMINAL',
+        surfaced: Boolean(success),
+        healthPct: localSummary.healthPct,
+        gasRemainingPct: localSummary.gasRemainingPct,
+        diveTimeSec: diveState.diveTimeSec,
+        collectiblesFound: localSummary.collectiblesFound,
+        exploredPct: localSummary.exploredPct,
+        totalScore: localSummary.totalScore,
+        depthM: diveState.depthM,
+        torchOn: diver.torchOn,
+        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
+        torchManualAim: Boolean(diver.torchManualAim),
+        alive: diveState.alive,
+        carryingBody: Boolean(session.carryingBody),
+        rescueTargetId: session.rescueTargetId || '',
+        rescuedBy: session.rescuedBy || '',
+        rescued: Boolean(session.rescued),
+        name: diver.name,
+      },
+      { force: true }
+    );
   }
 
   const teamSummary = computeTeamScoreSummary(localSummary, isMultiplayer ? lan.getPeers() : [], {
@@ -1887,7 +1962,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
 
     lbPromise
       .then((res) => {
-        if (!debriefLeaderboardEl) return;
+        if (!debriefLeaderboardEl || mode !== 'debrief') return;
         if (!res?.ok) {
           console.warn('Leaderboard submit failed:', res?.error);
           return;
@@ -2512,8 +2587,13 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
     showToast('Host selects the expedition site in co-op.', 2.0);
     return;
   }
+  loadSeq += 1;
+  inFlightLoad = null;
   const nextLevel = getLevelById(chosenId);
   activeLevel = nextLevel;
+  if (siteCategoryFilter !== 'all' && !getFilteredLevels().some((l) => l.id === nextLevel.id)) {
+    setSiteCategoryFilter('all');
+  }
   if (focusMap) {
     mapZoomMode = 'site';
   }
@@ -2581,12 +2661,7 @@ if (siteCatTabsEl) {
         ? btn.dataset.siteCat
         : 'all';
     if (nextCat === siteCategoryFilter) return;
-    siteCategoryFilter = nextCat;
-    const catIdx = nextCat === 'cave' ? 1 : nextCat === 'wreck' ? 2 : nextCat === 'todo' ? 3 : 0;
-    siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
-    for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
-      b.classList.toggle('active', b === btn);
-    }
+    setSiteCategoryFilter(nextCat);
     const visible = getFilteredLevels();
     if (visible.length > 0 && !visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
       selectAndLoadLevel(visible[0].id, { focusMap: mapZoomMode === 'site' });
@@ -3059,6 +3134,17 @@ coopCommsEl?.addEventListener('click', (e) => {
     const targetGas = btn.dataset.targetGas || session.diveState.activeGasId;
     const targetName = btn.dataset.targetName || 'Buddy';
     if (!targetId) return;
+    const targetPeer = lan.getPeers().find((p) => p && p.id === targetId);
+    if (
+      !targetPeer ||
+      targetPeer.alive === false ||
+      targetPeer.surfaced ||
+      Math.hypot(targetPeer.x - session.diver.x, targetPeer.y - session.diver.y) > 4.2
+    ) {
+      btn.hidden = true;
+      showToast(`${targetName} moved out of gas-sharing reach.`, 2.0);
+      return;
+    }
     const candidate = getShareableGasCandidate(session.diveState, targetGas, 25, session.diveState.depthM);
     if (!candidate) {
       showToast('No safe gas cylinder with enough reserve to share here.', 2.2);
@@ -3177,10 +3263,20 @@ document.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && hudMenuPopover && !hudMenuPopover.hidden) {
-    setHudMenuOpen(false);
+  if (e.key === 'Escape') {
+    if (hudMenuPopover && !hudMenuPopover.hidden) setHudMenuOpen(false);
+    if (modalDiveGuide && !modalDiveGuide.hidden) closeDiveGuideModal(false);
   }
 });
+
+// Auto-resume AudioContext on any gesture after iOS Safari interruption or background tab suspend
+function resumeAudioOnGesture() {
+  if (!audio.muted && audio.ctx && audio.ctx.state !== 'running') {
+    audio.unlock();
+  }
+}
+window.addEventListener('pointerdown', resumeAudioOnGesture, { passive: true });
+window.addEventListener('keydown', resumeAudioOnGesture, { passive: true });
 
 const btnMute = document.getElementById('btn-mute');
 function syncMuteUi() {
@@ -3230,9 +3326,23 @@ syncRadioUi();
 btnMenuRadio?.addEventListener('click', handleRadioCycle);
 btnHudRadio?.addEventListener('click', handleRadioCycle);
 
+function reconcileSiteFilterOnMenuReturn() {
+  if (siteCategoryFilter !== 'todo') return;
+  const visible = getFilteredLevels();
+  if (visible.length === 0) {
+    setSiteCategoryFilter('all');
+  } else if (!visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
+    activeLevel = visible[0];
+    if (selectLevel) selectLevel.value = activeLevel.id;
+    syncMenuLevelLabels(activeLevel);
+  }
+}
+
 function abortActiveDiveToMenu() {
   const prevCode = lan.room?.code || '';
   cancelDebriefAnimations();
+  input?.resetAll?.();
+  audio.resetEnvironmentFilter();
   divePaused = false;
   pendingAbortAt = 0;
   mode = 'menu';
@@ -3243,6 +3353,9 @@ function abortActiveDiveToMenu() {
   setHudMenuOpen(false);
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   if (btnDropTow) btnDropTow.hidden = true;
+  if (btnTowBuddy) btnTowBuddy.hidden = true;
+  if (btnShareGas) btnShareGas.hidden = true;
+  syncWreckActionHud(null);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -3255,6 +3368,7 @@ function abortActiveDiveToMenu() {
     if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
   syncWakeLockFn?.();
+  reconcileSiteFilterOnMenuReturn();
   renderRoomsList();
   renderLevelCards();
 }
@@ -3277,28 +3391,36 @@ document.getElementById('btn-abort').addEventListener('click', () => {
 });
 
 btnNextLevel?.addEventListener('click', async () => {
+  if (btnNextLevel.disabled) return;
   const curIdx = LEVELS.findIndex((l) => l.id === activeLevel.id);
   if (curIdx < 0 || curIdx + 1 >= LEVELS.length) return;
   const nextLvl = LEVELS[curIdx + 1];
-  cancelDebriefAnimations();
-  await selectAndLoadLevel(nextLvl.id);
-  if (isMultiplayer && lan.room && lan.getPeers().length > 0 && lan.isHost()) {
-    mode = 'menu';
-    session = null;
+  btnNextLevel.disabled = true;
+  try {
+    cancelDebriefAnimations();
+    audio.resetEnvironmentFilter();
+    await selectAndLoadLevel(nextLvl.id);
+    if (isMultiplayer && lan.room && lan.getPeers().length > 0 && lan.isHost()) {
+      mode = 'menu';
+      session = null;
+      screenDebrief.hidden = true;
+      screenMenu.hidden = false;
+      setActiveMenuTab('solo');
+      syncWakeLockFn?.();
+      lan.returnToLobby();
+      showToast(`Selected L${curIdx + 2}: ${nextLvl.name} — ready for crew launch!`, 2.8);
+      return;
+    }
     screenDebrief.hidden = true;
-    screenMenu.hidden = false;
-    setActiveMenuTab('solo');
-    syncWakeLockFn?.();
-    lan.returnToLobby();
-    showToast(`Selected L${curIdx + 2}: ${nextLvl.name} — ready for crew launch!`, 2.8);
-    return;
+    launchOpenCoopDive();
+  } finally {
+    btnNextLevel.disabled = false;
   }
-  screenDebrief.hidden = true;
-  launchOpenCoopDive();
 });
 
 document.getElementById('btn-retry').addEventListener('click', () => {
   cancelDebriefAnimations();
+  audio.resetEnvironmentFilter();
   if (isMultiplayer && lan.room && lan.getPeers().length > 0) {
     mode = 'menu';
     session = null;
@@ -3306,6 +3428,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
     syncWakeLockFn?.();
+    reconcileSiteFilterOnMenuReturn();
     renderLevelCards();
     if (lan.isHost()) {
       lan.returnToLobby();
@@ -3322,6 +3445,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 document.getElementById('btn-menu').addEventListener('click', () => {
   const prevCode = lan.room?.code || '';
   cancelDebriefAnimations();
+  audio.resetEnvironmentFilter();
   mode = 'menu';
   session = null;
   activeDiveSeq = 0;
@@ -3334,6 +3458,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
     if (prevCode && roomCodeInput) roomCodeInput.value = prevCode;
   }
   syncWakeLockFn?.();
+  reconcileSiteFilterOnMenuReturn();
   renderRoomsList();
   renderLevelCards();
 });
@@ -3397,13 +3522,14 @@ lan.on('join_stage', ({ code, pct, message }) => {
 });
 
 lan.on('error', (msg) => {
+  const errText = typeof msg === 'string' ? msg : String(msg?.message || msg || 'Connection error');
   if (suppressNextExpiredError) {
     suppressNextExpiredError = false;
-    if (typeof msg === 'string' && (msg.includes('no longer active') || msg.includes('expired'))) {
+    if (errText.includes('no longer active') || errText.includes('expired')) {
       return;
     }
   }
-  if (attemptJoinAfterExpire && (msg.includes('no longer active') || msg.includes('expired'))) {
+  if (attemptJoinAfterExpire && (errText.includes('no longer active') || errText.includes('expired'))) {
     return;
   }
   if (directJoinToDive || pendingAutoJoinCode || joiningRoomCode) {
@@ -3416,15 +3542,16 @@ lan.on('error', (msg) => {
   if (lanStatus) {
     lanStatus.hidden = false;
     lanStatus.className = 'lan-status warn';
-    lanStatus.textContent = msg;
+    lanStatus.textContent = errText;
   }
-  showToast(msg, 3.0);
+  showToast(errText, 3.0);
 });
 
 lan.on('returned_to_lobby', () => {
   loadSeq += 1;
   inFlightLoad = null;
   cancelDebriefAnimations();
+  audio.resetEnvironmentFilter();
   screenLoader.classList.add('done');
   if (loaderCoopSyncEl) loaderCoopSyncEl.hidden = true;
   if (mode === 'debrief') {
@@ -3434,6 +3561,7 @@ lan.on('returned_to_lobby', () => {
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
     syncWakeLockFn?.();
+    reconcileSiteFilterOnMenuReturn();
     showToast('Host returned crew to room lobby for next dive.', 2.8);
   }
   renderLevelCards();
@@ -3660,6 +3788,33 @@ lan.on('dive_started', async (msg) => {
     activeDiveSeq = msg?.diveSeq || activeDiveSeq || 1;
     if (msg.checkpoints) for (const cpId of msg.checkpoints) session.checkpointsHit.add(cpId);
     if (msg.collectibles) for (const cId of msg.collectibles) session.collectedIds.add(cId);
+    if (Array.isArray(msg.openedHatches)) {
+      for (const hId of msg.openedHatches) {
+        if (!session.openedHatchIds.has(hId)) {
+          session.openedHatchIds.add(hId);
+          const hObj = session.level?.watertightHatches?.find((h) => h.id === hId);
+          session.hatchBonusScore = (session.hatchBonusScore || 0) + (hObj?.bonusPoints || 150);
+        }
+      }
+    }
+    if (Array.isArray(msg.cutSnags)) {
+      for (const sId of msg.cutSnags) {
+        session.cutSnagIds.add(sId);
+        const snIdx = session.level?.snagZones?.findIndex((s, i) => (s.id || `snag_${i}`) === sId);
+        if (snIdx >= 0 && snIdx === session.activeSnagIndex) session.activeSnagIndex = -1;
+      }
+    }
+    if (Array.isArray(msg.placedMarkers)) {
+      for (const mId of msg.placedMarkers) session.placedMarkerIds.add(mId);
+    }
+    if (Array.isArray(msg.playerLines)) {
+      if (!session.restoredPeerLines) session.restoredPeerLines = new Map();
+      for (const entry of msg.playerLines) {
+        if (entry.playerId && entry.playerId !== lan.clientId) {
+          session.restoredPeerLines.set(entry.playerId, entry.chains || []);
+        }
+      }
+    }
     if (msg.bodyRecoveredBy && !session.bodyRecovered) session.bodyRecovered = true;
     if (wasWaiting && !lan.isHost()) {
       showToast('Lead diver dropped into the cave!', 2.8);
@@ -3702,7 +3857,7 @@ lan.on('peer_guideline', (msg) => {
 });
 
 lan.on('peer_checkpoint', (msg) => {
-  if (!session) return;
+  if (!session || !msg?.checkpointId || session.checkpointsHit.has(msg.checkpointId)) return;
   session.checkpointsHit.add(msg.checkpointId);
   audio.playCheckpoint();
   showToast('Buddy tagged checkpoint!', 2.0);
@@ -3737,7 +3892,7 @@ lan.on('peer_silt', (msg) => {
 });
 
 lan.on('peer_body_recovered', (msg) => {
-  if (!session) return;
+  if (!session || session.bodyRecovered) return;
   session.bodyRecovered = true;
   const who = msg?.name || 'Buddy';
   const targetName = session.level.recoveryTarget?.name || 'fallen diver';
@@ -3786,6 +3941,8 @@ lan.on('peer_buddy_rescue', (msg) => {
     session.diver.rescuedBy = session.rescuedBy;
     audio.playRecovery();
     showToast(`🛟 ${msg.rescuerName || 'Buddy'} clipped a rescue tow onto you!`, 3.6);
+  } else if (msg.status === 'extracted') {
+    showToast(`🏆 ${msg.rescuerName || 'Buddy'} rescued ${msg.rescuedName || 'teammate'} safely to the surface!`, 3.4);
   } else {
     showToast(`🛟 ${msg.rescuerName || 'Buddy'} is towing ${msg.rescuedName || 'teammate'} toward the surface!`, 3.2);
   }
@@ -3920,13 +4077,16 @@ function stepSimulation(dt) {
     sessionStepCallbacks.torchAim = input.getTorchAim();
     const wasSubmerged = session._wasSubmerged ?? diver.y > 0.75;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
-    const nowSubmerged = diver.y > 0.75;
+    // Hysteresis band (0.55m / 0.95m) prevents breathing buoyancy bob from re-triggering splash
+    const nowSubmerged = wasSubmerged ? diver.y > 0.55 : diver.y > 0.95;
     if (nowSubmerged !== wasSubmerged && session.simTimeSec > 0.35) {
       audio.playSplash(nowSubmerged);
     }
     session._wasSubmerged = nowSubmerged;
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
-    audio.stepAmbience(dt, level, diver.y);
+    if (diveState.alive) {
+      audio.stepAmbience(dt, level, diver.y);
+    }
     syncWreckActionHud(session.wreckActionPrompt);
   } else {
     session.simTimeSec += dt;
@@ -3975,14 +4135,16 @@ function stepSimulation(dt) {
         heartRateBpm: diveState.heartRateBpm,
         cardiacStress: diveState.cardiacStress,
         ceilingM: diveState.ceilingM,
-        condition:
-          (diveState.impairment?.primaryCondition && diveState.impairment.primaryCondition !== 'NOMINAL')
-            ? diveState.impairment.primaryCondition
-            : session.activeSnagIndex >= 0
-              ? 'SNAGGED!'
-              : diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 3.5
-                ? `DECO ${diveState.stopDepthM}m`
-                : 'NOMINAL',
+        condition: (() => {
+          const pc = diveState.impairment?.primaryCondition;
+          if (pc === 'NO GAS' || pc === 'HYPOXIA' || pc === 'O2 TOX') return pc;
+          if (session.activeSnagIndex >= 0) return 'SNAGGED!';
+          if (pc && pc !== 'NOMINAL') return pc;
+          if (diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 3.5) {
+            return `DECO ${diveState.stopDepthM}m`;
+          }
+          return 'NOMINAL';
+        })(),
         surfaced: Boolean(session.surfaced),
         healthPct,
         gasRemainingPct,
@@ -4132,6 +4294,9 @@ function stepSimulation(dt) {
   }
 
   if (result.outcome && !session.endedState) {
+    if (result.outcome.success) {
+      audio.playSplash(false);
+    }
     if (result.outcome.success && isMultiplayer && session.rescueTargetId) {
       const towed = peers.find((p) => p && p.id === session.rescueTargetId);
       if (towed) {
@@ -4159,6 +4324,43 @@ function stepSimulation(dt) {
     // Wait cleanly on surface / spectate while teammates finish or fall
     session.endedState = result.outcome.success ? 'surfaced' : 'down';
     session.surfaced = Boolean(result.outcome.success);
+    audio.resetEnvironmentFilter();
+    lan.sendPlayerState(
+      {
+        x: diver.x,
+        y: diver.y,
+        vx: 0,
+        vy: 0,
+        angle: diver.angle,
+        gasId: diveState.activeGasId,
+        activeBar: diveState.tanks[diveState.activeGasId]?.bar ?? 0,
+        cnsPercent: diveState.cnsPercent,
+        dcsStress: diveState.dcsStress,
+        hypoxiaStress: diveState.hypoxiaStress,
+        narcosisLevel: diveState.narcosisLevel,
+        heartRateBpm: diveState.heartRateBpm,
+        cardiacStress: diveState.cardiacStress,
+        ceilingM: diveState.ceilingM,
+        condition: diveState.alive ? 'NOMINAL' : 'DOWN',
+        surfaced: Boolean(result.outcome.success),
+        healthPct: computeHealthPct(diveState),
+        gasRemainingPct: computeGasRemainingPct(diveState),
+        diveTimeSec: diveState.diveTimeSec,
+        collectiblesFound: session.collectedIds?.size || 0,
+        exploredPct: session.exploredPct || 0,
+        depthM: diveState.depthM,
+        torchOn: diver.torchOn,
+        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
+        torchManualAim: Boolean(diver.torchManualAim),
+        alive: diveState.alive,
+        carryingBody: Boolean(session.carryingBody),
+        rescueTargetId: session.rescueTargetId || '',
+        rescuedBy: session.rescuedBy || '',
+        rescued: Boolean(session.rescued),
+        name: diver.name,
+      },
+      { force: true }
+    );
     if (!result.outcome.success) {
       spectatingPeer = true;
     }

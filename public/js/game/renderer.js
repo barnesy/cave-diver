@@ -221,6 +221,9 @@ export class CaveRenderer {
     this._basinEdgeCache = new Map();
     this._waterMeniscusCache = new Map();
     this._ventCeilingCache = new Map();
+    this._stalactiteCache = null;
+    this._haloclineStamp = null;
+    this._haloclineStampKey = '';
     this._biolumMotes = null;
     this._skyGradCache = null;
     this._vignetteCache = null;
@@ -359,6 +362,9 @@ export class CaveRenderer {
     this._basinEdgeCache.clear();
     this._waterMeniscusCache.clear();
     this._ventCeilingCache.clear();
+    this._stalactiteCache = null;
+    this._haloclineStamp = null;
+    this._haloclineStampKey = '';
     this._biolumMotes = null;
     this._skyGradCache = null;
     this.camX = entry.level.spawn.x;
@@ -1488,8 +1494,8 @@ export class CaveRenderer {
     this._drawCaustics(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
 
     // 3. Water Surface Wave Line (clipped to open basin mouths so waves never cut through solid cliff rock)
-    if (surfY > -20 && surfY < ch + 20) {
-      this._drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec);
+    if (surfY > -2.2 * scale && surfY < ch + 2.2 * scale) {
+      this._drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec, surfY, narcX);
     }
 
     // 4. Multi-Layer Refractive Halocline / Thermocline Interface Shimmer + Optical Shear Waves
@@ -1498,39 +1504,53 @@ export class CaveRenderer {
       if (haloY > -90 && haloY < ch + 90) {
         ctx.save();
         const bandH = 2.6 * scale;
-        if (this.glowStamps.bandGlow) {
+        const haloKey = theme?.haloclineColor || 'default';
+        if (this._haloclineStampKey !== haloKey && typeof document !== 'undefined') {
+          this._haloclineStampKey = haloKey;
+          const c = document.createElement('canvas');
+          c.width = 1;
+          c.height = 64;
+          const gctx = c.getContext('2d');
+          const hg = gctx.createLinearGradient(0, 0, 0, 64);
+          hg.addColorStop(0, 'rgba(165, 243, 252, 0)');
+          hg.addColorStop(0.42, theme?.haloclineColor || 'rgba(165, 243, 252, 0.26)');
+          hg.addColorStop(0.58, theme?.haloclineColor || 'rgba(94, 234, 212, 0.18)');
+          hg.addColorStop(1, 'rgba(14, 116, 144, 0)');
+          gctx.fillStyle = hg;
+          gctx.fillRect(0, 0, 1, 64);
+          this._haloclineStamp = c;
+        }
+        if (this._haloclineStamp) {
+          ctx.drawImage(this._haloclineStamp, 0, haloY - bandH, cw, bandH * 2);
+        } else if (this.glowStamps.bandGlow) {
           ctx.globalAlpha = 0.62;
           ctx.drawImage(this.glowStamps.bandGlow, 0, haloY - bandH * 0.72, cw, bandH * 1.44);
           ctx.globalAlpha = 1;
-        } else {
-          const hg = ctx.createLinearGradient(0, haloY - bandH, 0, haloY + bandH);
-          hg.addColorStop(0, 'rgba(165, 243, 252, 0)');
-          hg.addColorStop(0.42, theme?.haloclineColor || 'rgba(165, 243, 252, 0.24)');
-          hg.addColorStop(0.58, 'rgba(94, 234, 212, 0.16)');
-          hg.addColorStop(1, 'rgba(14, 116, 144, 0)');
-          ctx.fillStyle = hg;
-          ctx.fillRect(0, haloY - bandH, cw, bandH * 2);
         }
 
         // Three phase-offset refractive density ribbons simulating freshwater-over-saltwater optical shear
         const stepPx = Math.max(14, Math.round(cw / 34));
-        const ribbons = [
-          { off: -0.34, amp: 0.12, freq: 0.55, speed: 1.8, col: 'rgba(224, 242, 254, 0.44)', w: 0.055 },
-          { off: 0.04, amp: 0.16, freq: 0.78, speed: -1.35, col: 'rgba(94, 234, 212, 0.34)', w: 0.075 },
-          { off: 0.42, amp: 0.1, freq: 1.05, speed: 2.15, col: 'rgba(186, 230, 253, 0.26)', w: 0.042 },
-        ];
-        for (let r = 0; r < ribbons.length; r++) {
-          const rb = ribbons[r];
-          ctx.strokeStyle = rb.col;
-          ctx.lineWidth = Math.max(1, rb.w * scale);
+        const rCols = this._haloclineRibbonCols || (this._haloclineRibbonCols = [
+          'rgba(224, 242, 254, 0.44)',
+          'rgba(94, 234, 212, 0.34)',
+          'rgba(186, 230, 253, 0.26)',
+        ]);
+        const rOffs = [-0.34, 0.04, 0.42];
+        const rAmps = [0.12, 0.16, 0.1];
+        const rFreqs = [0.55, 0.78, 1.05];
+        const rSpeeds = [1.8, -1.35, 2.15];
+        const rWidths = [0.055, 0.075, 0.042];
+        for (let r = 0; r < 3; r++) {
+          ctx.strokeStyle = r === 1 && theme?.haloclineColor ? theme.haloclineColor : rCols[r];
+          ctx.lineWidth = Math.max(1, rWidths[r] * scale);
           ctx.beginPath();
           for (let sx = 0; sx <= cw + stepPx; sx += stepPx) {
             const wx = this.camX + narcX + (sx - viewCenterX) / scale;
             const waveY =
               haloY +
-              (rb.off +
-                Math.sin(wx * rb.freq + timeSec * rb.speed) * rb.amp +
-                Math.cos(wx * (rb.freq * 1.8) - timeSec * 1.2 + r) * (rb.amp * 0.45)) *
+              (rOffs[r] +
+                Math.sin(wx * rFreqs[r] + timeSec * rSpeeds[r]) * rAmps[r] +
+                Math.cos(wx * (rFreqs[r] * 1.8) - timeSec * 1.2 + r) * (rAmps[r] * 0.45)) *
                 scale;
             if (sx === 0) ctx.moveTo(sx, waveY);
             else ctx.lineTo(sx, waveY);
@@ -1638,7 +1658,7 @@ export class CaveRenderer {
     if (!this.level.isWreck) {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
-    this._drawDiverSignals(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec);
+    this._drawDiverSignals(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, cw, ch);
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
@@ -1827,18 +1847,18 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec) {
+  _drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec, surfY = toScreenY(0), narcX = 0) {
     ctx.save();
     if (this.level.isWreck) {
       // Continuous open-ocean / Great Lakes surface swells across the entire viewport
       const stepPx = Math.max(12, Math.round(cw / 42));
       const pts = [];
       for (let sx = -stepPx; sx <= cw + stepPx; sx += stepPx) {
-        const wx = this.camX + (sx - cw * 0.5) / scale;
+        const wx = this.camX + narcX + (sx - cw * 0.5) / scale;
         const wy = Math.sin(wx * 0.65 + timeSec * 2.1) * 0.14 + Math.cos(wx * 1.45 - timeSec * 1.55) * 0.065;
         pts.push([sx, toScreenY(wy), wx]);
       }
-      this._strokeWaterMeniscus(ctx, pts, scale, false, timeSec);
+      this._strokeWaterMeniscus(ctx, pts, scale, false, timeSec, surfY);
       ctx.restore();
       return;
     }
@@ -1876,7 +1896,7 @@ export class CaveRenderer {
           const wy = Math.sin(wx * 1.15 + timeSec * 2.2) * 0.065 + Math.cos(wx * 2.4 - timeSec * 1.6) * 0.032;
           pts[i] = [toScreenX(wx), toScreenY(wy), wx];
         }
-        this._strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec);
+        this._strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec, surfY);
       }
 
       // Subtle skimming dragonflies above sunlit water
@@ -1903,17 +1923,18 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec) {
+  _strokeWaterMeniscus(ctx, pts, scale, isFlorida, timeSec, surfY = pts[0][1]) {
     // Soft underwater Fresnel sky-mirror reflection immediately under the wavy water surface
     const minX = pts[0][0];
     const maxX = pts[pts.length - 1][0];
-    const reflDepth = 1.45 * scale;
+    const reflTop = surfY - 0.25 * scale;
+    const reflDepth = 1.7 * scale;
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1] + reflDepth);
-    ctx.lineTo(pts[0][0], pts[0][1] + reflDepth);
+    ctx.lineTo(pts[pts.length - 1][0], surfY + reflDepth);
+    ctx.lineTo(pts[0][0], surfY + reflDepth);
     ctx.closePath();
     ctx.clip();
 
@@ -1921,10 +1942,11 @@ export class CaveRenderer {
     if (skyImg && (skyImg.naturalWidth || skyImg.width) > 0 && maxX > minX + 4) {
       const iw = skyImg.naturalWidth || skyImg.width;
       const ih = skyImg.naturalHeight || skyImg.height;
-      const waveShift = Math.sin(timeSec * 2.1 + minX * 0.03) * 0.14 * scale;
+      const worldPhase = pts[0][2] ?? 0;
+      const waveShift = Math.sin(timeSec * 2.1 + worldPhase * 0.55) * 0.12 * scale;
       ctx.save();
       ctx.globalAlpha = isFlorida ? 0.17 : 0.24;
-      ctx.translate(0, pts[0][1] * 2 + reflDepth);
+      ctx.translate(0, reflTop * 2 + reflDepth);
       ctx.scale(1, -1);
       ctx.drawImage(
         skyImg,
@@ -1932,20 +1954,20 @@ export class CaveRenderer {
         ih * 0.56,
         iw,
         ih * 0.44,
-        minX - 6 + waveShift,
-        pts[0][1],
-        maxX - minX + 12,
+        minX - 8 + waveShift,
+        reflTop,
+        maxX - minX + 16,
         reflDepth
       );
       ctx.restore();
     }
 
-    const fresnelGrad = ctx.createLinearGradient(0, pts[0][1], 0, pts[0][1] + reflDepth);
+    const fresnelGrad = ctx.createLinearGradient(0, reflTop, 0, reflTop + reflDepth);
     fresnelGrad.addColorStop(0, isFlorida ? 'rgba(245, 224, 180, 0.22)' : 'rgba(218, 242, 252, 0.24)');
     fresnelGrad.addColorStop(0.5, isFlorida ? 'rgba(220, 198, 152, 0.08)' : 'rgba(125, 211, 252, 0.09)');
     fresnelGrad.addColorStop(1, 'rgba(14, 116, 144, 0)');
     ctx.fillStyle = fresnelGrad;
-    ctx.fillRect(minX - 4, pts[0][1] - 4, maxX - minX + 8, reflDepth + 8);
+    ctx.fillRect(minX - 4, reflTop - 2, maxX - minX + 8, reflDepth + 6);
     ctx.restore();
 
     // Fine broken specular sky/sun glints instead of a thick uniform solid stripe
@@ -2098,7 +2120,9 @@ export class CaveRenderer {
     ctx.restore();
 
     // Foreground tufts & anchored base pebbles hiding the exact hill-to-wall contact line
-    this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW * 1.06, opts);
+    if (opts.berm !== false) {
+      this._drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW * 1.06, opts);
+    }
   }
 
   _drawContouredBermSkirt(ctx, toScreenX, toScreenY, scale, wx, halfW, opts = {}) {
@@ -2457,6 +2481,7 @@ export class CaveRenderer {
         stoneBot: opts.stoneBot || '#464139',
         capColor: opts.capColor || 'rgba(255, 248, 232, 0.16)',
         tufts: 5,
+        berm: false,
       });
     }
 
@@ -3356,13 +3381,15 @@ export class CaveRenderer {
       const hullDraftY = bh * 0.23; // Submerge bottom ~23% (keel + ladder rungs) below waterline
 
       ctx.save();
-      // 1. Live vertically-flipped rippled water reflection beneath the charter hull
+      // 1. Live vertically-flipped rippled water reflection synchronized with hull bob & pitch
       ctx.save();
       ctx.beginPath();
       ctx.rect(bx - bw * 0.65, surfY, bw * 1.3, bh * 0.85);
       ctx.clip();
-      ctx.translate(bx, surfY);
+      const bobDelta = by - surfY;
+      ctx.translate(bx, surfY - bobDelta * 0.52);
       ctx.scale(1, -0.52);
+      ctx.rotate(pitch);
       ctx.globalAlpha = 0.24;
       const rippleShift = Math.sin(timeSec * 2.8) * 0.12 * scale;
       ctx.drawImage(boatImg, -bw * 0.5 + rippleShift, -bh + hullDraftY, bw, bh);
@@ -3676,80 +3703,13 @@ export class CaveRenderer {
       ctx.stroke();
     }
 
-    // Signature underwater shipwreck focal landmarks (Bower Anchor + Chain, Bronze Propeller, Brass Telegraph)
+    // Signature underwater shipwreck bridge landmark (Brass Engine Order Telegraph anchored on intact deck)
     if (profile !== 'victoria-vertical-battleship') {
-      // 1. Heavy Stockless Bower Anchor & Draped Iron Chain off the Bow
-      const anchorWx = hMax + 2.4;
-      if (anchorWx + 6 >= visX0 && anchorWx - 6 <= visX1) {
-        const ax = toScreenX(anchorWx);
-        const hawseY = toScreenY(deckY + 3.2);
-        const anchorY = toScreenY(Math.min(seabedY - 2.2, deckY + 13.5));
-        ctx.strokeStyle = 'rgba(100, 116, 139, 0.58)';
-        ctx.lineWidth = Math.max(2, 0.14 * scale);
-        ctx.setLineDash([0.35 * scale, 0.22 * scale]);
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(hMax - 0.5), hawseY);
-        ctx.quadraticCurveTo(ax + 0.8 * scale, (hawseY + anchorY) * 0.5, ax, anchorY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Forged iron anchor crown & twin flukes
-        ctx.save();
-        ctx.translate(ax, anchorY);
-        ctx.strokeStyle = '#64748b';
-        ctx.fillStyle = '#334155';
-        ctx.lineWidth = Math.max(2.2, 0.18 * scale);
-        ctx.beginPath();
-        ctx.moveTo(0, -1.5 * scale);
-        ctx.lineTo(0, 0.65 * scale);
-        ctx.moveTo(-1.15 * scale, 0.1 * scale);
-        ctx.quadraticCurveTo(0, 1.15 * scale, 1.15 * scale, 0.1 * scale);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-1.35 * scale, -0.18 * scale);
-        ctx.lineTo(-0.82 * scale, 0.28 * scale);
-        ctx.lineTo(-1.12 * scale, 0.48 * scale);
-        ctx.closePath();
-        ctx.moveTo(1.35 * scale, -0.18 * scale);
-        ctx.lineTo(0.82 * scale, 0.28 * scale);
-        ctx.lineTo(1.12 * scale, 0.48 * scale);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // 2. Massive 4-Blade Patinated Bronze Ship's Propeller at the Stern
-      const propWx = hMin - 1.4;
-      const propWy = Math.min(seabedY - 3.6, deckY + (seabedY - deckY) * 0.72);
-      if (propWx + 6 >= visX0 && propWx - 6 <= visX1 && propWy + 6 >= visY0 && propWy - 6 <= visY1) {
-        const px = toScreenX(propWx);
-        const py = toScreenY(propWy);
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.fillStyle = '#7c5d2f';
-        ctx.strokeStyle = '#b48a46';
-        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
-        for (let b = 0; b < 4; b++) {
-          ctx.save();
-          ctx.rotate(b * (Math.PI * 0.5) + 0.35);
-          ctx.beginPath();
-          ctx.ellipse(0, -1.55 * scale, 0.52 * scale, 1.45 * scale, 0.16, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        }
-        ctx.fillStyle = '#926c34';
-        ctx.beginPath();
-        ctx.arc(0, 0, 0.48 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 3. Brass Bridge Engine Order Telegraph on Upper Deck
-      const teleWx = (hMin + hMax) * 0.5 + 3.2;
-      if (teleWx + 4 >= visX0 && teleWx - 4 <= visX1 && deckY + 4 >= visY0 && deckY - 6 <= visY1) {
+      const teleWx = profile === 'fitzgerald-split-freighter' ? 14 : (hMin + hMax) * 0.5 + 3.2;
+      const teleWy = this._getHorizonGroundY(level, teleWx);
+      if (teleWx + 4 >= visX0 && teleWx - 4 <= visX1 && teleWy + 4 >= visY0 && teleWy - 6 <= visY1) {
         const tx = toScreenX(teleWx);
-        const ty = toScreenY(deckY);
+        const ty = toScreenY(teleWy);
         ctx.save();
         ctx.translate(tx, ty);
         ctx.fillStyle = '#85622c';
@@ -4418,37 +4378,65 @@ export class CaveRenderer {
     const level = this.level;
     ctx.save();
 
-    // 0. Overhead Calcite Stalactite Draperies hanging from wide cave ceilings (zero collision)
+    // 0. Overhead Calcite / Glacial Stalactite Draperies (pre-cached & SDF-anchored to true ceiling rock)
     if (Array.isArray(level.segments)) {
-      const stalCol = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(125, 211, 252, 0.48)' : 'rgba(148, 138, 118, 0.42)';
-      const stalHi = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(224, 242, 254, 0.46)' : 'rgba(214, 204, 184, 0.34)';
-      for (let i = 0; i < level.segments.length; i += 2) {
-        const seg = level.segments[i];
-        const mx = (seg.ax + seg.bx) * 0.5;
-        const my = (seg.ay + seg.by) * 0.5;
-        const mr = ((seg.ra || 2.5) + (seg.rb || 2.5)) * 0.5;
-        if (mr < 2.6 || my < 9) continue;
-        if (mx + 5 < visX0 || mx - 5 > visX1 || my - mr + 3 < visY0 || my - mr - 3 > visY1) continue;
-        const ceilY = my - mr * 0.9;
-        if (evaluateCaveSDF(level, mx, ceilY + 0.5) > -0.35) continue;
-        const sx = toScreenX(mx);
-        const sy = toScreenY(ceilY);
-        for (let t = -2; t <= 2; t++) {
-          const ox = t * 0.38 * scale;
-          const len = (0.48 + (Math.abs(t * 7 + i * 3) % 4) * 0.22) * scale;
-          const bw = (0.14 + (t === 0 ? 0.06 : 0)) * scale;
+      if (!this._stalactiteCache) {
+        const list = [];
+        for (let i = 0; i < level.segments.length; i += 2) {
+          const seg = level.segments[i];
+          const dx = Math.abs(seg.bx - seg.ax);
+          const dy = Math.abs(seg.by - seg.ay);
+          // Skip steep/vertical shafts where stalactites have no overhead ceiling
+          if (dy > dx * 0.75) continue;
+          const mx = (seg.ax + seg.bx) * 0.5;
+          const my = (seg.ay + seg.by) * 0.5;
+          const mr = ((seg.ra || 2.5) + (seg.rb || 2.5)) * 0.5;
+          if (mr < 2.5 || my < 8) continue;
+          for (let t = -2; t <= 2; t++) {
+            const tx = mx + t * 0.42;
+            const lenM = 0.46 + (Math.abs(t * 7 + i * 3) % 4) * 0.22;
+            const bwM = 0.14 + (t === 0 ? 0.06 : 0);
+            // March upward from open passage center to locate the exact ceiling rock surface
+            let hitY = null;
+            const startY = my - mr * 0.35;
+            const maxY = Math.max(4.0, my - mr - 2.4);
+            for (let y = startY; y >= maxY; y -= 0.16) {
+              if (evaluateCaveSDF(level, tx, y) >= 0.05) {
+                hitY = y;
+                break;
+              }
+            }
+            if (hitY === null || hitY < 4.2) continue;
+            // Verify clear open water below the icicle tip so it hangs cleanly into the cavern
+            if (evaluateCaveSDF(level, tx, hitY + lenM + 0.35) > -0.3) continue;
+            list.push({ x: tx, y: hitY, len: lenM, bw: bwM });
+          }
+        }
+        this._stalactiteCache = list;
+      }
+      const stals = this._stalactiteCache;
+      if (stals.length > 0) {
+        const stalCol = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(125, 211, 252, 0.48)' : 'rgba(148, 138, 118, 0.42)';
+        const stalHi = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(224, 242, 254, 0.46)' : 'rgba(214, 204, 184, 0.34)';
+        for (let i = 0; i < stals.length; i++) {
+          const st = stals[i];
+          if (st.x + 1 < visX0 || st.x - 1 > visX1 || st.y + st.len + 1 < visY0 || st.y - 1 > visY1) continue;
+          const sx = toScreenX(st.x);
+          const sy = toScreenY(st.y);
+          const len = st.len * scale;
+          const bw = st.bw * scale;
           ctx.fillStyle = stalCol;
           ctx.beginPath();
-          ctx.moveTo(sx + ox - bw, sy - 0.1 * scale);
-          ctx.lineTo(sx + ox + bw, sy - 0.1 * scale);
-          ctx.lineTo(sx + ox, sy + len);
+          ctx.moveTo(sx - bw, sy - 0.14 * scale);
+          ctx.lineTo(sx + bw, sy - 0.14 * scale);
+          ctx.lineTo(sx, sy + len);
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = stalHi;
           ctx.beginPath();
-          ctx.moveTo(sx + ox, sy - 0.08 * scale);
-          ctx.lineTo(sx + ox + bw * 0.55, sy - 0.08 * scale);
-          ctx.lineTo(sx + ox, sy + len * 0.85);
+          ctx.moveTo(sx, sy - 0.12 * scale);
+          ctx.lineTo(sx + bw * 0.55, sy - 0.12 * scale);
+          ctx.lineTo(sx, sy + len * 0.85);
           ctx.closePath();
           ctx.fill();
         }
@@ -7293,12 +7281,22 @@ export class CaveRenderer {
         )
       );
       const cond = diver.alive === false ? 'DOWN' : (diver.condition || 'NOMINAL');
+      const isDecoHold = cond.startsWith('DECO ');
       const alertColor =
-        diver.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'SNAGGED!' || stress >= 65 || bpm >= 150
+        diver.alive === false ||
+        cond === 'NO GAS' ||
+        cond === 'HYPOXIA' ||
+        cond === 'O2 TOX' ||
+        cond === 'DCS' ||
+        cond === 'SNAGGED!' ||
+        stress >= 65 ||
+        bpm >= 150
           ? '#ef4444'
-          : cond !== 'NOMINAL' || bar < 50 || stress >= 25 || bpm >= 118
+          : (cond !== 'NOMINAL' && !isDecoHold) || bar < 50 || stress >= 25 || bpm >= 118
             ? '#fbbf24'
-            : '#fdba74';
+            : isDecoHold
+              ? '#38bdf8'
+              : '#fdba74';
 
       const pillY = sy - scale * 1.12;
       const barW = Math.max(42, 1.8 * scale);
@@ -7311,9 +7309,10 @@ export class CaveRenderer {
       ctx.fillText(tag, sx, pillY - 5);
 
       // Compact mini-bars below nameplate (left: gas, right: stress)
+      const mixStartBar = this.level?.gasOverrides?.[diver.gasId]?.startBar || 200;
       ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
       ctx.fillRect(sx - barW * 0.5, pillY, barW, 4);
-      const gasW = Math.max(0, Math.min(1, bar / 200)) * (barW * 0.48);
+      const gasW = Math.max(0, Math.min(1, bar / mixStartBar)) * (barW * 0.48);
       ctx.fillStyle = bar < 45 ? '#ef4444' : '#38bdf8';
       ctx.fillRect(sx - barW * 0.5, pillY, gasW, 4);
       const stressW = Math.max(0, Math.min(1, stress / 100)) * (barW * 0.48);
@@ -7327,7 +7326,7 @@ export class CaveRenderer {
    * Post-lighting luminous overhead hand/torch signals & 3-flash dive-light pulse
    * so co-op team signals remain razor-sharp even in pitch-black cave sumps.
    */
-  _drawDiverSignals(ctx, diver, peers, toScreenX, toScreenY, scale, timeSec) {
+  _drawDiverSignals(ctx, diver, peers, toScreenX, toScreenY, scale, timeSec, cw = 0, ch = 0) {
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const list = [];
     if (diver?.signalText && diver.signalExpiresAt > now) list.push({ d: diver, isPeer: false });
@@ -7348,17 +7347,19 @@ export class CaveRenderer {
       const fade = Math.min(1, remMs / 550);
       const sx = toScreenX(d.x);
       const sy = toScreenY(d.y);
+      // Skip completely offscreen peers (their signal is surfaced on _drawPeerEdgeIndicators)
+      if (isPeer && cw > 0 && ch > 0 && (sx < -24 || sx > cw + 24 || sy < -24 || sy > ch + 24)) continue;
 
+      const isWarn = /GAS|DECO|HOLD/i.test(d.signalText);
       // 3-flash dive-light beacon ring during first 1.6s of signal so teammates spot it across dark passages
       if (elapsedSec < 1.65) {
         const flashPhase = (elapsedSec * 3.0) % 1.0;
         const flashAlpha = Math.sin(flashPhase * Math.PI) * (1 - elapsedSec / 1.8);
         if (flashAlpha > 0.04) {
           const ringR = (0.75 + flashPhase * 2.15) * scale;
-          const isUrgent = /GAS|DECO|HOLD/i.test(d.signalText);
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = isUrgent
+          ctx.strokeStyle = isWarn
             ? `rgba(251, 191, 36, ${(flashAlpha * 0.85).toFixed(3)})`
             : `rgba(56, 189, 248, ${(flashAlpha * 0.85).toFixed(3)})`;
           ctx.lineWidth = Math.max(2, 0.1 * scale);
@@ -7370,8 +7371,9 @@ export class CaveRenderer {
       }
 
       const risePx = Math.min(14, elapsedSec * 5) + Math.sin(timeSec * 4 + i) * 1.5;
-      const msgY = sy - scale * (isPeer ? 1.92 : 1.55) - risePx;
-      const isWarn = /GAS|DECO/i.test(d.signalText);
+      const baseMsgY = isPeer
+        ? Math.min(sy - scale * 1.92, sy - scale * 1.12 - 28) - risePx
+        : sy - scale * 1.55 - risePx;
       ctx.save();
       ctx.globalAlpha = fade;
       ctx.font = `800 ${Math.max(10, Math.round(0.36 * scale))}px ui-monospace, monospace`;
@@ -7379,17 +7381,19 @@ export class CaveRenderer {
       const tw = ctx.measureText(d.signalText).width;
       const bw = tw + padX * 2;
       const bh = Math.max(20, 0.58 * scale);
+      const pillCx = cw > 0 ? Math.max(bw * 0.5 + 8, Math.min(cw - bw * 0.5 - 8, sx)) : sx;
+      const msgY = ch > 0 ? Math.max(bh * 0.5 + 12, Math.min(ch - bh * 0.5 - 12, baseMsgY)) : baseMsgY;
       ctx.fillStyle = isWarn ? 'rgba(69, 26, 3, 0.94)' : 'rgba(8, 47, 73, 0.94)';
       ctx.strokeStyle = isWarn ? '#fbbf24' : '#38bdf8';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.roundRect(sx - bw * 0.5, msgY - bh * 0.5, bw, bh, 999);
+      ctx.roundRect(pillCx - bw * 0.5, msgY - bh * 0.5, bw, bh, 999);
       ctx.fill();
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = isWarn ? '#fef3c7' : '#e0f2fe';
-      ctx.fillText(d.signalText, sx, msgY + 0.5);
+      ctx.fillText(d.signalText, pillCx, msgY + 0.5);
       ctx.restore();
     }
     ctx.restore();
@@ -7403,6 +7407,8 @@ export class CaveRenderer {
     const botSafe = Math.round((cw < ch ? 225 : 138) * dpr);
     const fontPx = Math.round(11 * dpr);
     const arrowSz = Math.round(8 * dpr);
+    const pillH = Math.round(20 * dpr);
+    const placedPills = [];
     ctx.save();
     ctx.font = `800 ${fontPx}px ui-monospace, monospace`;
     ctx.textBaseline = 'middle';
@@ -7418,16 +7424,49 @@ export class CaveRenderer {
       const depthTag = Math.abs(dDepth) >= 3 ? (dDepth > 0 ? ` ▼${dDepth}m` : ` ▲${Math.abs(dDepth)}m`) : '';
       const ang = Math.atan2(py - ch * 0.5, px - cw * 0.5);
       const rx = Math.max(marginX, Math.min(cw - marginX, cw * 0.5 + Math.cos(ang) * (cw * 0.5 - marginX)));
-      const ry = Math.max(topSafe, Math.min(ch - botSafe, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - Math.max(topSafe, botSafe) * 0.5)));
+      let ry = Math.max(topSafe, Math.min(ch - botSafe, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - Math.max(topSafe, botSafe) * 0.5)));
 
+      const stress = Math.round(
+        Math.max(p.cnsPercent || 0, p.dcsStress || 0, p.hypoxiaStress || 0, p.cardiacStress || 0, (p.narcosisLevel || 0) * 80)
+      );
+      const bpm = p.alive === false ? 0 : Math.round(p.heartRateBpm ?? 68);
+      const bar = Math.round(p.activeBar ?? 200);
       const cond = p.alive === false ? 'DOWN' : (p.condition || 'NOMINAL');
-      const distressed = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'DCS' || cond === 'SNAGGED!';
+      const isDecoHold = cond.startsWith('DECO ');
+      const distressed =
+        p.alive === false ||
+        cond === 'NO GAS' ||
+        cond === 'HYPOXIA' ||
+        cond === 'O2 TOX' ||
+        cond === 'DCS' ||
+        cond === 'SNAGGED!' ||
+        stress >= 65 ||
+        bpm >= 150;
+      const isWarn = !distressed && ((cond !== 'NOMINAL' && !isDecoHold) || bar < 50 || stress >= 25 || bpm >= 118);
       const pulse = distressed ? 0.65 + 0.35 * Math.sin(timeSec * 8) : 0.94;
-      const col = p.alive === false || cond === 'NO GAS' || cond === 'HYPOXIA' || cond === 'O2 TOX' || cond === 'SNAGGED!'
-        ? '#f87171'
-        : cond !== 'NOMINAL'
-          ? '#fbbf24'
-          : '#fdba74';
+      const col = distressed ? '#f87171' : isWarn ? '#fbbf24' : isDecoHold ? '#38bdf8' : '#fdba74';
+
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const activeSig = p.signalText && p.signalExpiresAt > nowMs ? ` · ${p.signalText}` : '';
+      const label = cond === 'NOMINAL'
+        ? `${p.name || 'Buddy'} ${distM}m${depthTag}${activeSig}`
+        : `${p.name || 'Buddy'} ${cond} ${distM}m${depthTag}${activeSig}`;
+      const textW = ctx.measureText(label).width;
+      const pillPadX = Math.round(7 * dpr);
+      const pillW = Math.min(cw - marginX * 2, textW + pillPadX * 2);
+      const onRight = rx > cw * 0.5;
+      const rawPillX = onRight ? rx - arrowSz - Math.round(5 * dpr) - pillW : rx + arrowSz + Math.round(5 * dpr);
+      const pillX = Math.max(marginX, Math.min(cw - marginX - pillW, rawPillX));
+
+      // Avoid vertical stacking collisions when multiple peers lie in the same direction
+      const stepY = pillH + Math.round(4 * dpr);
+      for (let k = 0; k < placedPills.length; k++) {
+        const prev = placedPills[k];
+        if (Math.abs(prev.x - pillX) < (prev.w + pillW) * 0.5 && Math.abs(prev.y - ry) < stepY) {
+          ry = Math.min(ch - botSafe, Math.max(topSafe, prev.y + (ry >= prev.y ? stepY : -stepY)));
+        }
+      }
+      placedPills.push({ x: pillX, y: ry, w: pillW });
 
       ctx.globalAlpha = pulse;
       ctx.save();
@@ -7443,18 +7482,6 @@ export class CaveRenderer {
       ctx.fill();
       ctx.restore();
 
-      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const activeSig = p.signalText && p.signalExpiresAt > nowMs ? ` · ${p.signalText}` : '';
-      const label = cond === 'NOMINAL'
-        ? `${p.name || 'Buddy'} ${distM}m${depthTag}${activeSig}`
-        : `${p.name || 'Buddy'} ${cond} ${distM}m${activeSig}`;
-      const textW = ctx.measureText(label).width;
-      const pillPadX = Math.round(7 * dpr);
-      const pillW = textW + pillPadX * 2;
-      const pillH = Math.round(20 * dpr);
-      const onRight = rx > cw * 0.5;
-      const pillX = onRight ? rx - arrowSz - Math.round(5 * dpr) - pillW : rx + arrowSz + Math.round(5 * dpr);
-
       ctx.fillStyle = distressed ? 'rgba(69, 10, 10, 0.9)' : 'rgba(6, 15, 29, 0.88)';
       ctx.strokeStyle = col;
       ctx.lineWidth = Math.max(1.2, 1.3 * dpr);
@@ -7465,7 +7492,7 @@ export class CaveRenderer {
 
       ctx.textAlign = 'center';
       ctx.fillStyle = col;
-      ctx.fillText(label, pillX + pillW * 0.5, ry + 0.5);
+      ctx.fillText(label, pillX + pillW * 0.5, ry + 0.5, pillW - pillPadX * 1.4);
     }
     ctx.restore();
   }

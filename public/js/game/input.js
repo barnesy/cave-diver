@@ -257,6 +257,14 @@ export class InputController {
     this._touchRewindHeld = Boolean(held);
   }
 
+  resetAll() {
+    this.keys.clear();
+    this._touchRewindHeld = false;
+    this._gpRewindHeld = false;
+    this.resetStick();
+    this.resetTorchStick();
+  }
+
   isRewindHeld() {
     return this.keys.has('KeyR') || this._gpRewindHeld || this._touchRewindHeld;
   }

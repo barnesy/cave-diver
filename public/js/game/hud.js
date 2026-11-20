@@ -752,16 +752,18 @@ export class DiveComputerHUD {
         );
         const mateBpm = p.alive === false ? 0 : Math.round(p.heartRateBpm ?? 68);
         const cond = p.alive === false ? 'DOWN' : (p.condition || 'NOMINAL');
+        const isDecoHold = cond.startsWith('DECO ');
         const sevCls =
           p.alive === false ||
           cond === 'NO GAS' ||
           cond === 'HYPOXIA' ||
           cond === 'O2 TOX' ||
+          cond === 'DCS' ||
           cond === 'SNAGGED!' ||
           stress >= 65 ||
           mateBpm >= 150
             ? 'danger'
-            : cond !== 'NOMINAL' || bar < 50 || stress >= 25 || mateBpm >= 118
+            : (cond !== 'NOMINAL' && !isDecoHold) || bar < 50 || stress >= 25 || mateBpm >= 118
               ? 'warn'
               : '';
         const gasColor = bar < 45 ? '#ef4444' : (mateMix?.color || '#38bdf8');

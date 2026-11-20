@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=102');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=103');
   }
   return trysteroModulePromise;
 }
@@ -381,7 +381,7 @@ export class LanClient {
     const type = payload?.type || '';
     if (type === 'player_state') {
       const now = Date.now();
-      if (now - this._p2pLastRelayStateAt < 90) return true; // ~11Hz relay fallback telemetry
+      if (!payload.force && now - this._p2pLastRelayStateAt < 90) return true; // ~11Hz relay fallback telemetry
       this._p2pLastRelayStateAt = now;
     } else if (type === 'peer_state') {
       const now = Date.now();
@@ -937,6 +937,9 @@ export class LanClient {
           rejoined: true,
           checkpoints: snap.checkpoints || [],
           collectibles: snap.collectibles || [],
+          openedHatches: snap.openedHatches || [],
+          cutSnags: snap.cutSnags || [],
+          placedMarkers: snap.placedMarkers || [],
           playerLines: snap.playerLines || [],
           bodyRecoveredBy: snap.bodyRecoveredBy || null,
           room: this.room,
@@ -973,6 +976,9 @@ export class LanClient {
       bodyRecoveredBy: null,
       checkpoints: [],
       collectibles: [],
+      openedHatches: [],
+      cutSnags: [],
+      placedMarkers: [],
       playerLines: [],
       players: (r.players || [])
         .filter((p) => p.id !== departingHostId)
@@ -1184,6 +1190,9 @@ export class LanClient {
           lateJoin: true,
           checkpoints: Array.from(coordinator.room.sharedCheckpoints),
           collectibles: Array.from(coordinator.room.sharedCollectibles),
+          openedHatches: Array.from(coordinator.room.openedHatches || []),
+          cutSnags: Array.from(coordinator.room.cutSnags || []),
+          placedMarkers: Array.from(coordinator.room.placedMarkers || []),
           playerLines: Array.from(coordinator.room.playerLines.entries()).map(([pid, d]) => ({
             playerId: pid,
             ...d,
@@ -1495,6 +1504,12 @@ export class LanClient {
               _lastRxMs: rxNow,
               _smoothSpeed: Math.hypot(msg.state.vx || 0, msg.state.vy || 0),
             };
+            const pendingSig = this._pendingSignals?.get(pid);
+            if (pendingSig && pendingSig.expiresAt > nowMs()) {
+              p.signalText = pendingSig.signal;
+              p.signalExpiresAt = pendingSig.expiresAt;
+              this._pendingSignals.delete(pid);
+            }
             this.peers.set(pid, p);
           } else {
             // Discard delayed out-of-order snapshots, while allowing clean mid-dive reconnect seq resets
@@ -1534,8 +1549,10 @@ export class LanClient {
             p.alive = msg.state.alive;
             p.carryingBody = Boolean(msg.state.carryingBody);
             p.rescueTargetId = msg.state.rescueTargetId || '';
-            p.rescuedBy = msg.state.rescuedBy || '';
-            p.rescued = Boolean(msg.state.rescued);
+            if (msg.state.rescuedBy || !(p._rescueLockUntil && rxNow < p._rescueLockUntil)) {
+              p.rescuedBy = msg.state.rescuedBy || '';
+            }
+            p.rescued = Boolean(msg.state.rescued || p.rescued);
             p.name = msg.state.name;
           }
           this._syncPeerAlias();
@@ -1558,6 +1575,22 @@ export class LanClient {
           this.emit('peer_collectible', msg);
           break;
         case 'peer_wreck_action':
+          if (this._lastRoomSnapshot && msg.targetId) {
+            const key =
+              msg.actionKind === 'hatch'
+                ? 'openedHatches'
+                : msg.actionKind === 'snag'
+                  ? 'cutSnags'
+                  : msg.actionKind === 'marker'
+                    ? 'placedMarkers'
+                    : null;
+            if (key) {
+              const arr = Array.isArray(this._lastRoomSnapshot[key])
+                ? this._lastRoomSnapshot[key]
+                : (this._lastRoomSnapshot[key] = []);
+              if (!arr.includes(msg.targetId)) arr.push(msg.targetId);
+            }
+          }
           this.emit('peer_wreck_action', msg);
           break;
         case 'peer_body_recovered':
@@ -1572,17 +1605,27 @@ export class LanClient {
         case 'peer_buddy_rescue':
           if (msg.rescuedId && this.peers.has(msg.rescuedId)) {
             const rp = this.peers.get(msg.rescuedId);
-            rp.rescuedBy = msg.rescuerId;
-            if (msg.status === 'extracted') rp.rescued = true;
+            if (msg.status === 'dropped') {
+              rp.rescuedBy = '';
+              rp._rescueLockUntil = 0;
+            } else {
+              rp.rescuedBy = msg.rescuerId || '';
+              rp._rescueLockUntil = nowMs() + 650;
+              if (msg.status === 'extracted') rp.rescued = true;
+            }
           }
           this.emit('peer_buddy_rescue', msg);
           break;
         case 'peer_signal': {
           const pid = msg.playerId || 'peer';
+          const expiresAt = nowMs() + 4500;
           const p = this.peers.get(pid);
           if (p) {
             p.signalText = msg.signal;
-            p.signalExpiresAt = performance.now() + 4500;
+            p.signalExpiresAt = expiresAt;
+          } else {
+            if (!this._pendingSignals) this._pendingSignals = new Map();
+            this._pendingSignals.set(pid, { signal: msg.signal, expiresAt });
           }
           this.emit('peer_signal', msg);
           break;
@@ -1869,6 +1912,9 @@ export class LanClient {
 
   sendSignal(signal) {
     if (!this.room || !this.connected || !signal) return;
+    const now = nowMs();
+    if (now - (this._lastSignalSentAt || 0) < 600) return;
+    this._lastSignalSentAt = now;
     this.send({ type: 'diver_signal', signal });
   }
 
@@ -1959,10 +2005,10 @@ export class LanClient {
     return nowMs() - this.lastSendAt >= 33;
   }
 
-  sendPlayerState(state) {
+  sendPlayerState(state, { force = false } = {}) {
     if (!this.room || !this.connected || !state) return;
     const now = nowMs();
-    if (now - this.lastSendAt < 33) return; // 30 Hz quantized sync (direct WebRTC/WS; relay self-throttles to ~11 Hz)
+    if (!force && now - this.lastSendAt < 33) return; // 30 Hz quantized sync (direct WebRTC/WS; relay self-throttles to ~11 Hz)
     this.lastSendAt = now;
     const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
     const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0);
@@ -1986,26 +2032,55 @@ export class LanClient {
       ceilingM: r1(state.ceilingM ?? 0),
       diveTimeSec: r1(state.diveTimeSec ?? 0),
     };
-    this.send({ type: 'player_state', state: compact });
+    this.send({ type: 'player_state', state: compact, force: Boolean(force) });
   }
 
   sendCheckpoint(checkpointId) {
-    if (!this.room || !this.connected) return;
+    if (!this.room || !this.connected || !checkpointId) return;
+    if (this._lastRoomSnapshot && Array.isArray(this._lastRoomSnapshot.checkpoints)) {
+      if (!this._lastRoomSnapshot.checkpoints.includes(checkpointId)) {
+        this._lastRoomSnapshot.checkpoints.push(checkpointId);
+      }
+    }
     this.send({ type: 'checkpoint_hit', checkpointId });
   }
 
   sendCollectible(collectibleId) {
-    if (!this.room || !this.connected) return;
+    if (!this.room || !this.connected || !collectibleId) return;
+    if (this._lastRoomSnapshot && Array.isArray(this._lastRoomSnapshot.collectibles)) {
+      if (!this._lastRoomSnapshot.collectibles.includes(collectibleId)) {
+        this._lastRoomSnapshot.collectibles.push(collectibleId);
+      }
+    }
     this.send({ type: 'collectible_hit', collectibleId });
   }
 
   sendWreckAction(actionKind, targetId) {
     if (!this.room || !this.connected || !actionKind || !targetId) return;
+    if (this._lastRoomSnapshot) {
+      const key =
+        actionKind === 'hatch'
+          ? 'openedHatches'
+          : actionKind === 'snag'
+            ? 'cutSnags'
+            : actionKind === 'marker'
+              ? 'placedMarkers'
+              : null;
+      if (key) {
+        const arr = Array.isArray(this._lastRoomSnapshot[key])
+          ? this._lastRoomSnapshot[key]
+          : (this._lastRoomSnapshot[key] = []);
+        if (!arr.includes(targetId)) arr.push(targetId);
+      }
+    }
     this.send({ type: 'wreck_action', actionKind, targetId });
   }
 
   sendBodyRecovered() {
     if (!this.room || !this.connected) return;
+    if (this._lastRoomSnapshot && !this._lastRoomSnapshot.bodyRecoveredBy) {
+      this._lastRoomSnapshot.bodyRecoveredBy = this.clientId || 'Recovered';
+    }
     this.send({ type: 'body_recovered' });
   }
 
@@ -2016,7 +2091,7 @@ export class LanClient {
 
   sendSiltEvent(plume) {
     if (!this.room || !this.connected || !plume) return;
-    const now = performance.now();
+    const now = nowMs();
     if (now - this.lastSiltAt < 140) return; // Smooth throttle for shared floor/impact silt propagation
     this.lastSiltAt = now;
     this.send({

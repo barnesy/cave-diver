@@ -1,63 +1,63 @@
-const CACHE_VERSION = 'cave-diver-v102';
+const CACHE_VERSION = 'cave-diver-v103';
 const CORE_SHELL = [
   './',
   './manifest.json',
-  './css/style.css?v=102',
-  './icons/icon.svg?v=102',
-  './icons/icon-192.png?v=102',
-  './icons/icon-512.png?v=102',
-  './assets/map-expedition.jpg?v=102',
-  './js/vendor/trystero-nostr.min.js?v=102',
-  './js/main.js?v=102',
-  './js/physics/diveModel.js?v=102',
-  './js/game/aquaticRadio.js?v=102',
-  './js/game/audio.js?v=102',
-  './js/game/collision.js?v=102',
-  './js/game/input.js?v=102',
-  './js/game/hud.js?v=102',
-  './js/game/diverBody.js?v=102',
-  './js/game/diveSession.js?v=102',
-  './js/game/scoring.js?v=102',
-  './js/game/leaderboardModel.js?v=102',
-  './js/game/logbookModel.js?v=102',
-  './js/game/worldMapData.js?v=102',
-  './js/game/renderer.js?v=102',
-  './js/game/artSprites.js?v=102',
-  './js/game/silt.js?v=102',
-  './js/game/lighting.js?v=102',
-  './js/game/marineLife.js?v=102',
-  './js/levels/themes.js?v=102',
-  './js/levels/campaign.js?v=102',
-  './js/levels/caveInteractives.js?v=102',
-  './js/levels/index.js?v=102',
-  './js/levels/level1.js?v=102',
-  './js/levels/level2.js?v=102',
-  './js/levels/level3.js?v=102',
-  './js/levels/level4.js?v=102',
-  './js/levels/level5.js?v=102',
-  './js/levels/level6.js?v=102',
-  './js/levels/level7.js?v=102',
-  './js/levels/level8.js?v=102',
-  './js/levels/level9.js?v=102',
-  './js/levels/level10.js?v=102',
-  './js/levels/level11.js?v=102',
-  './js/levels/level12.js?v=102',
-  './js/levels/level13.js?v=102',
-  './js/levels/level14.js?v=102',
-  './js/levels/level15.js?v=102',
-  './js/levels/level16.js?v=102',
-  './js/levels/level17.js?v=102',
-  './js/levels/level18.js?v=102',
-  './js/levels/level19.js?v=102',
-  './js/levels/level20.js?v=102',
-  './js/levels/wreck1_oriskany.js?v=102',
-  './js/levels/wreck2_andrea_doria.js?v=102',
-  './js/levels/wreck3_britannic.js?v=102',
-  './js/levels/wreck4_hms_victoria.js?v=102',
-  './js/levels/wreck5_edmund_fitzgerald.js?v=102',
-  './js/net/leaderboardClient.js?v=102',
-  './js/net/p2pRoomHost.js?v=102',
-  './js/net/lanClient.js?v=102',
+  './css/style.css?v=103',
+  './icons/icon.svg?v=103',
+  './icons/icon-192.png?v=103',
+  './icons/icon-512.png?v=103',
+  './assets/map-expedition.jpg?v=103',
+  './js/vendor/trystero-nostr.min.js?v=103',
+  './js/main.js?v=103',
+  './js/physics/diveModel.js?v=103',
+  './js/game/aquaticRadio.js?v=103',
+  './js/game/audio.js?v=103',
+  './js/game/collision.js?v=103',
+  './js/game/input.js?v=103',
+  './js/game/hud.js?v=103',
+  './js/game/diverBody.js?v=103',
+  './js/game/diveSession.js?v=103',
+  './js/game/scoring.js?v=103',
+  './js/game/leaderboardModel.js?v=103',
+  './js/game/logbookModel.js?v=103',
+  './js/game/worldMapData.js?v=103',
+  './js/game/renderer.js?v=103',
+  './js/game/artSprites.js?v=103',
+  './js/game/silt.js?v=103',
+  './js/game/lighting.js?v=103',
+  './js/game/marineLife.js?v=103',
+  './js/levels/themes.js?v=103',
+  './js/levels/campaign.js?v=103',
+  './js/levels/caveInteractives.js?v=103',
+  './js/levels/index.js?v=103',
+  './js/levels/level1.js?v=103',
+  './js/levels/level2.js?v=103',
+  './js/levels/level3.js?v=103',
+  './js/levels/level4.js?v=103',
+  './js/levels/level5.js?v=103',
+  './js/levels/level6.js?v=103',
+  './js/levels/level7.js?v=103',
+  './js/levels/level8.js?v=103',
+  './js/levels/level9.js?v=103',
+  './js/levels/level10.js?v=103',
+  './js/levels/level11.js?v=103',
+  './js/levels/level12.js?v=103',
+  './js/levels/level13.js?v=103',
+  './js/levels/level14.js?v=103',
+  './js/levels/level15.js?v=103',
+  './js/levels/level16.js?v=103',
+  './js/levels/level17.js?v=103',
+  './js/levels/level18.js?v=103',
+  './js/levels/level19.js?v=103',
+  './js/levels/level20.js?v=103',
+  './js/levels/wreck1_oriskany.js?v=103',
+  './js/levels/wreck2_andrea_doria.js?v=103',
+  './js/levels/wreck3_britannic.js?v=103',
+  './js/levels/wreck4_hms_victoria.js?v=103',
+  './js/levels/wreck5_edmund_fitzgerald.js?v=103',
+  './js/net/leaderboardClient.js?v=103',
+  './js/net/p2pRoomHost.js?v=103',
+  './js/net/lanClient.js?v=103',
   './assets/tex-limestone-wall.jpg',
   './assets/tex-cave-backwall.jpg',
   './assets/tex-florida-limestone.jpg',
@@ -65,9 +65,19 @@ const CORE_SHELL = [
   './assets/tex-foliage-canopy.jpg',
   './assets/tex-wreck-steel.jpg',
   './assets/tex-wreck-interior.jpg',
+  './assets/surf-dive-boat.webp',
+  './assets/surf-palapa.webp',
+  './assets/surf-cabin.webp',
+  './assets/surf-bathhouse.webp',
+  './assets/surf-research-dome.webp',
+  './assets/surf-tree-palm.webp',
+  './assets/surf-tree-cypress.webp',
+  './assets/surf-tree-spruce.webp',
+  './assets/surf-tree-med.webp',
+  './assets/surf-tree-acacia.webp',
 ];
 
-const MEDIA_CACHE = 'cave-diver-media-v1';
+const MEDIA_CACHE = 'cave-diver-media-v103';
 const MAX_MEDIA_ENTRIES = 56;
 
 async function trimMediaCache(cache) {
@@ -154,7 +164,7 @@ self.addEventListener('fetch', (event) => {
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
-            caches.open(CACHE_VERSION).then((c) => c.put(new URL('./', scopeUrl).href, copy));
+            event.waitUntil(caches.open(CACHE_VERSION).then((c) => c.put(new URL('./', scopeUrl).href, copy)));
           }
           return res;
         })
@@ -163,7 +173,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Versioned modules, styles, icons & artwork: cache-first with persistent LRU MEDIA_CACHE for large artwork
+  // Versioned modules, styles, icons & artwork: cache-first with versioned MEDIA_CACHE for large artwork
   const isMedia = relPath.startsWith('assets/');
   event.respondWith(
     caches.match(req).then((cached) => {
@@ -179,10 +189,12 @@ self.addEventListener('fetch', (event) => {
           ) {
             const copy = res.clone();
             const targetCache = isMedia ? MEDIA_CACHE : CACHE_VERSION;
-            caches.open(targetCache).then(async (c) => {
-              await c.put(req, copy);
-              if (isMedia) await trimMediaCache(c);
-            });
+            event.waitUntil(
+              caches.open(targetCache).then(async (c) => {
+                await c.put(req, copy);
+                if (isMedia) await trimMediaCache(c);
+              })
+            );
           }
           return res;
         })

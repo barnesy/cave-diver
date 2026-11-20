@@ -73,18 +73,25 @@ export function seedLogbookFromEntries(rawBook, entries) {
     if (!e || !e.levelId || e.levelId === 'overall' || e.grade === 'DNF') continue;
     const prev = book.cleared[e.levelId];
     const s = Math.max(0, Math.round(Number(e.score) || 0));
+    const tSec = Math.max(0, Math.round((Number(e.timeSec) || 0) * 10) / 10);
+    const maxD = Math.max(0, Math.round((Number(e.stats?.maxDepthM) || Number(e.maxDepthM) || 0) * 10) / 10);
     if (s > book.bestScore) book.bestScore = s;
+    if (maxD > book.deepestM) book.deepestM = maxD;
     if (!prev) {
       book.cleared[e.levelId] = {
         score: s,
         grade: e.grade || 'B',
-        bestTimeSec: Math.round((Number(e.timeSec) || 0) * 10) / 10,
+        bestTimeSec: tSec,
         clears: 1,
       };
+      if (tSec > 0) book.totalTimeSec = Math.round((book.totalTimeSec + tSec) * 10) / 10;
       book.totalDives = Math.max(book.totalDives, Object.keys(book.cleared).length);
     } else {
       if (s > prev.score) prev.score = s;
       if ((GRADE_RANK[e.grade] || 0) > (GRADE_RANK[prev.grade] || 0)) prev.grade = e.grade;
+      if (tSec > 0 && (prev.bestTimeSec <= 0 || tSec < prev.bestTimeSec)) {
+        prev.bestTimeSec = tSec;
+      }
     }
   }
   return book;

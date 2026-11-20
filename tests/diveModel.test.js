@@ -2613,3 +2613,128 @@ test('v102 Career logbook hooks, underwater depth acoustics/ambience, and post-l
   );
   assert.ok(edgeTexts.some((t) => t.includes('SNAGGED!') && t.includes('LOW GAS')), 'Offscreen peer indicator should surface SNAGGED! and active signal');
 });
+
+test('v103 Deep audit fixes: radio muffle, audio reset/mute, safe gas share, stalactite rock anchoring, co-op sync & SW precache', async () => {
+  const fs = await import('node:fs');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. AquaticRadio.setDepthMuffle actually updates _lowpass & DiveAudio.resetEnvironmentFilter restores 18kHz + masterGain mutes
+  const makeParam = (val = 0) => ({
+    value: val,
+    lastTarget: val,
+    setValueAtTime(v) { this.value = v; this.lastTarget = v; },
+    setTargetAtTime(v) { this.lastTarget = v; },
+    linearRampToValueAtTime(v) { this.lastTarget = v; },
+    exponentialRampToValueAtTime(v) { this.lastTarget = v; },
+    cancelScheduledValues() {},
+  });
+  const mockCtx = {
+    state: 'running',
+    currentTime: 5,
+    sampleRate: 44100,
+    destination: { kind: 'dest' },
+    createBiquadFilter() { return { type: 'lowpass', frequency: makeParam(18000), Q: makeParam(0.7), connect() {}, disconnect() {} }; },
+    createGain() { return { gain: makeParam(1), connect() {}, disconnect() {} }; },
+    createOscillator() { return { type: 'sine', frequency: makeParam(440), connect() {}, disconnect() {}, start() {}, stop() {} }; },
+    createBuffer(_ch, len) { return { getChannelData: () => new Float32Array(len) }; },
+    createBufferSource() { return { buffer: null, connect() {}, disconnect() {}, start() {}, stop() {} }; },
+  };
+  const audio = new DiveAudio();
+  audio.ctx = mockCtx;
+  audio.radio._ensureBus(mockCtx);
+  audio.setEnvironmentFilter(110, 0.8);
+  assert.ok(audio.radio._lowpass.frequency.lastTarget < 700, `Radio _lowpass should muffle deeply, got ${audio.radio._lowpass.frequency.lastTarget}`);
+  assert.ok(audio.masterFilter.frequency.lastTarget < 2000);
+  audio.resetEnvironmentFilter();
+  assert.equal(audio.masterFilter.frequency.lastTarget, 18000, 'resetEnvironmentFilter must restore crisp 18kHz');
+  audio.setMuted(true);
+  assert.ok(audio.masterGain.gain.lastTarget <= 0.001, 'setMuted(true) must immediately silence masterGain');
+
+  // 2. seedLogbookFromEntries preserves deepestM, totalTimeSec, and faster bestTimeSec
+  let seeded = seedLogbookFromEntries(createEmptyLogbook(), [
+    { levelId: 'cenote-el-abismo', score: 2500, grade: 'A', timeSec: 180, stats: { maxDepthM: 52.4 } },
+    { levelId: 'cenote-el-abismo', score: 2700, grade: 'S', timeSec: 132, stats: { maxDepthM: 55.1 } },
+  ]);
+  assert.equal(seeded.deepestM, 55.1);
+  assert.equal(seeded.totalTimeSec, 180);
+  assert.equal(seeded.cleared['cenote-el-abismo'].bestTimeSec, 132);
+
+  // 3. getShareableGasCandidate blocks toxic EAN32 at 60m and hypoxic TMX at 0.5m
+  const stDeep = createDiveState();
+  stDeep.tanks.TMX1455.bar = 20; // too low to share
+  stDeep.tanks.EAN32.bar = 190; // hyperoxic at 60m (PPO2=2.24)
+  stDeep.tanks.O2.bar = 190;
+  assert.equal(getShareableGasCandidate(stDeep, 'TMX1455', 25, 60), null, 'Must refuse donating toxic EAN32/O2 at 60m');
+
+  // 4. Peer cave marker sync grants jump-spool bonus to teammates
+  const unlinedCave = LEVELS.find((l) => !l.isWreck && l.reelMetersPerDiver > 0 && l.lineAnchors?.length > 0);
+  const sPeer = createDiveSession(unlinedCave);
+  const prevReel = sPeer.reelRemainingM;
+  const anchor = unlinedCave.lineAnchors[0];
+  applyPeerWreckAction(sPeer, { actionKind: 'marker', targetId: anchor.id, by: 'Lead' });
+  assert.ok(sPeer.reelRemainingM >= prevReel + anchor.reelBonusM, 'Teammates must receive jump-spool bonus on peer marker sync');
+
+  // 5. LanClient force-send bypasses 33ms throttle & peer_buddy_rescue dropped clears rescuedBy
+  const lc = new LanClient();
+  lc.room = { code: 'TEST' };
+  lc.connected = true;
+  const sentPayloads = [];
+  lc.send = (p) => sentPayloads.push(p);
+  lc.sendPlayerState({ x: 1, y: 2, angle: 0 });
+  lc.sendPlayerState({ x: 1, y: 2, angle: 0 }); // throttled
+  lc.sendPlayerState({ x: 1, y: 0.5, angle: 0, surfaced: true }, { force: true }); // forced!
+  assert.equal(sentPayloads.length, 2, 'Force-send must bypass 33ms throttle');
+  assert.equal(sentPayloads[1].state.surfaced, true);
+  lc.peers.set('p2', { id: 'p2', rescuedBy: 'p1', rescued: false });
+  lc._handleMessage({ type: 'peer_buddy_rescue', rescuedId: 'p2', rescuerId: 'p1', status: 'dropped' });
+  assert.equal(lc.peers.get('p2').rescuedBy, '', 'dropped rescue must clear rescuedBy');
+
+  // 6. P2pRoomCoordinator migrates playerLines/bodyRecoveredBy on token reconnect, attaches syncState on peer_wreck_action, blocks self gas_share
+  const p2pMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'V103', hostId: 'h1', hostName: 'Host', levelId: 'uss-oriskany-carrier' });
+  coord.bindPlayerSender('h1', (m) => p2pMsgs.push(m));
+  const guestMsgs = [];
+  coord.handleRemoteJoin({ name: 'Guest' }, (m) => guestMsgs.push(m), 'g-old');
+  const issuedToken = guestMsgs.find((m) => m.type === 'room_joined')?.reconnectToken;
+  assert.ok(issuedToken, 'Host must issue reconnectToken on room_joined');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('g-old', { type: 'guideline_sync', chains: [[{ x: 0, y: 10 }, { x: 4, y: 12 }]], reelingActive: true });
+  coord.handleMessage('g-old', { type: 'body_recovered' });
+  coord.handleMessage('h1', { type: 'wreck_action', actionKind: 'hatch', targetId: 'h_bridge' });
+  const wreckEvt = guestMsgs.find((m) => m.type === 'peer_wreck_action');
+  assert.ok(wreckEvt?.syncState?.openedHatches?.includes('h_bridge'), 'peer_wreck_action must attach updated syncState');
+  coord.handleMessage('h1', { type: 'gas_share', targetPlayerId: 'h1', gasId: 'EAN32', amountBar: 20 });
+  assert.equal(p2pMsgs.some((m) => m.type === 'peer_gas_share'), false, 'Self gas_share must be blocked');
+  coord.handleRemoteJoin({ name: 'Guest', reconnectToken: issuedToken }, () => {}, 'g-new');
+  assert.equal(coord.room.bodyRecoveredBy, 'g-new', 'bodyRecoveredBy must migrate to new peerId');
+  assert.ok(coord.room.playerLines.has('g-new'), 'playerLines must migrate to new peerId');
+  coord.destroy();
+
+  // 7. Every cached stalactite across all 20 cave levels is strictly anchored in solid rock (0 floating stalactites)
+  const noopCtx = new Proxy({}, { get: () => () => {}, set: () => true });
+  for (const lvl of LEVELS) {
+    if (lvl.isWreck) continue;
+    const fakeRenderer = { level: lvl, _stalactiteCache: null };
+    CaveRenderer.prototype._drawCaveInteractives.call(
+      fakeRenderer, noopCtx, -999, 999, -999, 999, (x) => x, (y) => y, 20, 0, null, null
+    );
+    for (const st of fakeRenderer._stalactiteCache || []) {
+      assert.ok(
+        evaluateCaveSDF(lvl, st.x, st.y) >= 0.04,
+        `Floating stalactite on ${lvl.id} at (${st.x.toFixed(1)}, ${st.y.toFixed(1)})`
+      );
+    }
+  }
+
+  // 8. CSS border-box on pseudo-elements, server.js .webp MIME, and sw.js surf-*.webp precache + versioned MEDIA_CACHE
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('*, *::before, *::after'), 'CSS must apply border-box to pseudo-elements');
+  const srv = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.ok(srv.includes("'.webp': 'image/webp'"), 'server.js must map .webp MIME type');
+  const sw = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.ok(sw.includes('./assets/surf-dive-boat.webp'), 'sw.js must precache surf-*.webp cutouts');
+  const cv = sw.match(/CACHE_VERSION\s*=\s*'cave-diver-v(\d+)'/)?.[1];
+  const mv = sw.match(/MEDIA_CACHE\s*=\s*'cave-diver-media-v(\d+)'/)?.[1];
+  assert.equal(cv, mv, 'CACHE_VERSION and MEDIA_CACHE versions must stay in lockstep');
+});

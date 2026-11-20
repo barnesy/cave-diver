@@ -51,7 +51,10 @@ function sanitizePlayerState(raw) {
     heartRateBpm: Math.max(0, Math.min(220, Math.round(num(raw.heartRateBpm, 68)))),
     cardiacStress: pct(raw.cardiacStress),
     ceilingM: Math.max(0, Math.round(num(raw.ceilingM, 0) * 10) / 10),
-    condition: typeof raw.condition === 'string' ? raw.condition.slice(0, 16) : 'NOMINAL',
+    condition:
+      typeof raw.condition === 'string'
+        ? raw.condition.replace(/[\r\n\t<>]/g, ' ').trim().slice(0, 16) || 'NOMINAL'
+        : 'NOMINAL',
     surfaced: Boolean(raw.surfaced),
     healthPct: pct(raw.healthPct ?? 100),
     gasRemainingPct: pct(raw.gasRemainingPct ?? 100),
@@ -384,6 +387,7 @@ export class P2pRoomCoordinator {
       msg?.type === 'returned_to_lobby' ||
       msg?.type === 'peer_checkpoint' ||
       msg?.type === 'peer_collectible' ||
+      msg?.type === 'peer_wreck_action' ||
       msg?.type === 'peer_body_recovered' ||
       msg?.type === 'peer_guideline';
     const payload = attachSnapshot ? { ...msg, syncState: this.exportSnapshot() } : msg;
@@ -460,6 +464,13 @@ export class P2pRoomCoordinator {
           oldMember.id = explicitPlayerId;
           oldMember.connected = true;
           this.room.players.set(explicitPlayerId, oldMember);
+          if (this.room.playerLines?.has(oldId)) {
+            this.room.playerLines.set(explicitPlayerId, this.room.playerLines.get(oldId));
+            this.room.playerLines.delete(oldId);
+          }
+          if (this.room.bodyRecoveredBy === oldId) {
+            this.room.bodyRecoveredBy = explicitPlayerId;
+          }
           break;
         }
       }
@@ -782,7 +793,11 @@ export class P2pRoomCoordinator {
       }
 
       case 'diver_signal': {
-        const sig = typeof msg.signal === 'string' ? msg.signal.trim().slice(0, 24) : '';
+        const now = Date.now();
+        if (now - (p._lastSignalAt || 0) < 600) return;
+        p._lastSignalAt = now;
+        const rawSig = typeof msg.signal === 'string' ? msg.signal.replace(/[\r\n\t<>]/g, ' ').trim() : '';
+        const sig = Array.from(rawSig).slice(0, 24).join('');
         if (!sig) return;
         this._broadcast({ type: 'peer_signal', playerId: p.id, name: p.name, signal: sig }, p.id);
         break;
@@ -827,24 +842,18 @@ export class P2pRoomCoordinator {
       }
 
       case 'checkpoint_hit': {
-        if (typeof msg.checkpointId === 'string') {
-          this.room.sharedCheckpoints.add(msg.checkpointId.slice(0, 24));
-        }
-        this._broadcast(
-          { type: 'peer_checkpoint', playerId: p.id, checkpointId: msg.checkpointId },
-          p.id
-        );
+        const cid = typeof msg.checkpointId === 'string' ? msg.checkpointId.trim().slice(0, 24) : '';
+        if (!cid) return;
+        this.room.sharedCheckpoints.add(cid);
+        this._broadcast({ type: 'peer_checkpoint', playerId: p.id, checkpointId: cid }, p.id);
         break;
       }
 
       case 'collectible_hit': {
-        if (typeof msg.collectibleId === 'string') {
-          this.room.sharedCollectibles.add(msg.collectibleId.slice(0, 32));
-        }
-        this._broadcast(
-          { type: 'peer_collectible', playerId: p.id, collectibleId: msg.collectibleId },
-          p.id
-        );
+        const colId = typeof msg.collectibleId === 'string' ? msg.collectibleId.trim().slice(0, 32) : '';
+        if (!colId) return;
+        this.room.sharedCollectibles.add(colId);
+        this._broadcast({ type: 'peer_collectible', playerId: p.id, collectibleId: colId }, p.id);
         break;
       }
 
@@ -879,7 +888,7 @@ export class P2pRoomCoordinator {
         const targetPlayerId = typeof msg.targetPlayerId === 'string' ? msg.targetPlayerId.slice(0, 48) : '';
         const gasId = ['EAN32', 'TMX1455', 'O2'].includes(msg.gasId) ? msg.gasId : 'EAN32';
         const amountBar = Math.max(1, Math.min(40, Math.round(Number(msg.amountBar) || 0)));
-        if (!targetPlayerId || amountBar <= 0) return;
+        if (!targetPlayerId || targetPlayerId === p.id || !this.room.players.has(targetPlayerId) || amountBar <= 0) return;
         this._sendTo(targetPlayerId, {
           type: 'peer_gas_share',
           fromPlayerId: p.id,

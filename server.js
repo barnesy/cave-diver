@@ -67,6 +67,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.ico': 'image/x-icon',
 };
 
@@ -300,7 +301,10 @@ function sanitizePlayerState(raw) {
     heartRateBpm: Math.max(0, Math.min(220, Math.round(num(raw.heartRateBpm, 68)))),
     cardiacStress: pct(raw.cardiacStress),
     ceilingM: Math.max(0, Math.round(num(raw.ceilingM, 0) * 10) / 10),
-    condition: typeof raw.condition === 'string' ? raw.condition.slice(0, 16) : 'NOMINAL',
+    condition:
+      typeof raw.condition === 'string'
+        ? raw.condition.replace(/[\r\n\t<>]/g, ' ').trim().slice(0, 16) || 'NOMINAL'
+        : 'NOMINAL',
     surfaced: Boolean(raw.surfaced),
     healthPct: pct(raw.healthPct ?? 100),
     gasRemainingPct: pct(raw.gasRemainingPct ?? 100),
@@ -316,7 +320,7 @@ function sanitizePlayerState(raw) {
     rescueTargetId: typeof raw.rescueTargetId === 'string' ? raw.rescueTargetId.slice(0, 48) : '',
     rescuedBy: typeof raw.rescuedBy === 'string' ? raw.rescuedBy.slice(0, 48) : '',
     rescued: Boolean(raw.rescued),
-    name: typeof raw.name === 'string' ? raw.name.slice(0, 18) : 'Diver',
+    name: sanitizeName(raw.name),
   };
 }
 
@@ -907,6 +911,13 @@ wss.on('connection', (ws) => {
         if (p.isHost) {
           room.started = false;
           room.phase = 'lobby';
+          room.sharedCheckpoints?.clear?.();
+          room.sharedCollectibles?.clear?.();
+          room.openedHatches?.clear?.();
+          room.cutSnags?.clear?.();
+          room.placedMarkers?.clear?.();
+          room.playerLines?.clear?.();
+          room.bodyRecoveredBy = null;
           broadcastRoom(room, {
             type: 'returned_to_lobby',
             room: serializeRoom(room),
@@ -937,7 +948,11 @@ wss.on('connection', (ws) => {
         const room = rooms.get(client.roomCode);
         if (!room) return;
         const p = room.players.get(client.id);
-        const signal = typeof msg.signal === 'string' ? msg.signal.trim().slice(0, 28) : '';
+        const now = Date.now();
+        if (p && now - (p._lastSignalAt || 0) < 600) return;
+        if (p) p._lastSignalAt = now;
+        const rawSig = typeof msg.signal === 'string' ? msg.signal.replace(/[\r\n\t<>]/g, ' ').trim() : '';
+        const signal = Array.from(rawSig).slice(0, 24).join('');
         if (!signal) return;
         broadcastRoom(
           room,
@@ -1089,10 +1104,11 @@ wss.on('connection', (ws) => {
         if (!room) return;
         const sender = room.players.get(client.id);
         const targetPlayerId = typeof msg.targetPlayerId === 'string' ? msg.targetPlayerId.slice(0, 48) : '';
+        if (!targetPlayerId || targetPlayerId === client.id) return;
         const target = room.players.get(targetPlayerId);
         const gasId = ['EAN32', 'TMX1455', 'O2'].includes(msg.gasId) ? msg.gasId : 'EAN32';
         const amountBar = Math.max(1, Math.min(40, Math.round(Number(msg.amountBar) || 0)));
-        if (!target || amountBar <= 0) return;
+        if (!target || !target.ws || amountBar <= 0) return;
         sendJson(target.ws, {
           type: 'peer_gas_share',
           fromPlayerId: client.id,
@@ -1117,7 +1133,7 @@ wss.on('connection', (ws) => {
             rescuerId: client.id,
             rescuerName: rescuer?.name || 'Buddy',
             rescuedId,
-            rescuedName: typeof msg.rescuedName === 'string' ? msg.rescuedName.slice(0, 18) : 'Buddy',
+            rescuedName: sanitizeName(msg.rescuedName || 'Buddy'),
             status: msg.status === 'extracted' || msg.status === 'dropped' ? msg.status : 'towing',
           },
           client.id

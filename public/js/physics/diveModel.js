@@ -756,11 +756,15 @@ export function getShareableGasCandidate(state, preferredGasId = null, maxDonate
     tried.add(gasId);
     const tank = state.tanks[gasId];
     if (!tank || tank.bar <= 38) continue;
-    // Never donate O2 100% below 6.5m (hyperoxic seizure risk at depth)
+    const mix = mixes[gasId] || GAS_MIXES[gasId];
+    // Never donate O2 below 6.5m, or hyperoxic/hypoxic mixes unsafe at current depth
     if (gasId === 'O2' && depthM > 6.5) continue;
+    if (mix) {
+      const ppo2 = computePPO2(depthM, mix);
+      if (ppo2 > 1.62 || (depthM >= 0.5 && ppo2 < 0.165)) continue;
+    }
     const donatedBar = Math.min(maxDonateBar, Math.floor(tank.bar - 25));
     if (donatedBar < 8) continue;
-    const mix = mixes[gasId] || GAS_MIXES[gasId];
     return { gasId, donatedBar, gasName: mix?.name || gasId };
   }
   return null;

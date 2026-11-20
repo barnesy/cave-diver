@@ -174,11 +174,15 @@ export class AquaticRadio {
 
   setDepthMuffle(depthM = 0, narcosisLevel = 0) {
     const ctx = this.getAudioCtx?.();
-    if (!this._filter || !ctx) return;
+    if (!this._lowpass || !ctx || ctx.state !== 'running') return;
     const depthRatio = Math.max(0, Math.min(1, depthM / 120));
     const narcRatio = Math.max(0, Math.min(1, narcosisLevel || 0));
     const targetHz = Math.max(460, 1450 - depthRatio * 550 - narcRatio * 480);
-    this._filter.frequency.setTargetAtTime(targetHz, ctx.currentTime, 0.25);
+    if (this._lastMuffleHz !== undefined && Math.abs(targetHz - this._lastMuffleHz) < 15) return;
+    this._lastMuffleHz = targetHz;
+    try {
+      this._lowpass.frequency.setTargetAtTime(targetHz, ctx.currentTime, 0.25);
+    } catch {}
   }
 
   _playVoice(ctx, bus, freq, when, duration, type, peakGain) {
@@ -191,6 +195,10 @@ export class AquaticRadio {
     g.gain.exponentialRampToValueAtTime(0.0001, when + duration);
     osc.connect(g);
     g.connect(bus);
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
     osc.start(when);
     osc.stop(when + duration + 0.03);
   }

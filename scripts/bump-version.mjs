@@ -41,6 +41,7 @@ const files = [
     transform: (src) =>
       src
         .replace(/(const\s+CACHE_VERSION\s*=\s*['"]cave-diver-v)\d+(['"])/, `$1${nextVer}$2`)
+        .replace(/(const\s+MEDIA_CACHE\s*=\s*['"]cave-diver-media-v)\d+(['"])/, `$1${nextVer}$2`)
         .replace(/(\?v=)\d+/g, `$1${nextVer}`),
   },
   {
