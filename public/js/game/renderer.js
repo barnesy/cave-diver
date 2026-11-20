@@ -37,6 +37,8 @@ const NO_HANGING_ROOTS_THEMES = new Set([
   'kalahari-dolomite',
   'nordic-marble',
   'ural-gypsum-karst',
+  'nordic-mine',
+  'greenland-iceberg',
 ]);
 
 const STAIN_MAP = {
@@ -59,6 +61,9 @@ const STAIN_MAP = {
   'atlantida-basalt': [-10, 14, 24, 0.58, 6, 0.66, 10, 0.8, 18],
   'lagoa-cerrado': [-22, 30, -4, 0.84, 0, 0.94, 4, 0.82, 4],
   'boybulok-steppe': [14, 10, -10, 0.86, 10, 0.84, 4, 0.74, 0],
+  'nordic-iron-mine': [14, 4, -8, 0.68, 8, 0.62, 4, 0.60, 4],
+  'greenland-glacial': [-12, 26, 46, 0.62, 12, 0.92, 24, 1.08, 40],
+  'bermuda-coral': [18, 12, 6, 0.94, 10, 0.92, 6, 0.88, 6],
 };
 
 const SKY_PALETTES = {
@@ -81,6 +86,9 @@ const SKY_PALETTES = {
   'atlantida-lava': ['#0c4a6e', '#38bdf8', '#fed7aa', 'rgba(254, 215, 170, 0.28)', 'rgba(224, 242, 254, 0.14)', 'rgba(15, 23, 42, 0.48)'],
   'lagoa-cerrado': ['#1d6fa3', '#67b7dc', '#fef08a', 'rgba(254, 240, 138, 0.22)', 'rgba(220, 252, 231, 0.16)', 'rgba(30, 48, 42, 0.44)'],
   'boybulok-steppe': ['#14233c', '#3c5a80', '#cbd5e1', 'rgba(226, 232, 240, 0.24)', 'rgba(203, 213, 225, 0.20)', 'rgba(30, 41, 59, 0.48)'],
+  'nordic-mine': ['#1e354d', '#526f8a', '#cbd5e1', 'rgba(226, 232, 240, 0.20)', 'rgba(203, 213, 225, 0.20)', 'rgba(30, 41, 59, 0.48)'],
+  'greenland-iceberg': ['#0f2c4d', '#3b82b8', '#e0f2fe', 'rgba(224, 242, 254, 0.30)', 'rgba(186, 230, 253, 0.24)', 'rgba(15, 32, 54, 0.44)'],
+  'bermuda-sargasso': ['#0369a1', '#38bdf8', '#fef08a', 'rgba(254, 240, 138, 0.24)', 'rgba(204, 251, 241, 0.18)', 'rgba(15, 38, 48, 0.44)'],
   yucatan: ['#7cb0cc', '#c6dfea', '#e6eed8', 'rgba(254, 243, 199, 0.18)', 'rgba(236, 248, 250, 0.15)', 'rgba(30, 48, 52, 0.44)'],
 };
 
@@ -104,6 +112,9 @@ const SURFACE_SOIL_PALETTES = {
   'atlantida-lava': { turf: '#3b2b24', soil: '#1e1b18', tuft: '#fdba74', stone: '#44403c' },
   'lagoa-cerrado': { turf: '#2f6532', soil: '#524432', tuft: '#4ade80', stone: '#8c8370' },
   'boybulok-steppe': { turf: '#5c5340', soil: '#463f33', tuft: '#cbd5e1', stone: '#78716c' },
+  'nordic-mine': { turf: '#2c4138', soil: '#3a3430', tuft: '#4b6b58', stone: '#57534e' },
+  'greenland-iceberg': { turf: '#7dd3fc', soil: '#1e3a5f', tuft: '#e0f2fe', stone: '#bae6fd' },
+  'bermuda-sargasso': { turf: '#2e6a4a', soil: '#a89888', tuft: '#4ade80', stone: '#d6c7bc' },
   yucatan: { turf: '#2b5528', soil: '#4a3d2d', tuft: '#447634', stone: '#6d6658' },
 };
 
@@ -127,6 +138,9 @@ const MARGIN_MAP = {
   'atlantida-basalt': ['#262328', '#ea580c'],
   'lagoa-cerrado': ['#5c5444', '#2f6d34'],
   'boybulok-steppe': ['#6b5d4d', '#64748b'],
+  'nordic-iron-mine': ['#44403c', '#57534e'],
+  'greenland-glacial': ['#2563eb', '#7dd3fc'],
+  'bermuda-coral': ['#8c7d72', '#2f7a64'],
 };
 
 const SURFACE_PROP_ASSETS = {
@@ -3149,13 +3163,13 @@ export class CaveRenderer {
           ctx.lineTo(gGx + 0.06 * scale + sway * 0.5, gGy - (0.55 + (Math.abs(g) % 2) * 0.25) * scale);
           ctx.stroke();
         }
-      } else if (style === 'bahamas-abaco') {
+      } else if (style === 'bahamas-abaco' || style === 'bermuda-sargasso') {
         if (hash > 0.22) {
           this._drawLongleafPine(ctx, wx, toScreenX, toScreenY, scale, sway * 0.85, h + 0.65);
         } else {
           this._drawBotanicalPalm(ctx, wx, toScreenX, toScreenY, scale, leanDir, sway, h * 0.8);
         }
-        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.24, toScreenX, toScreenY, scale, '#d6d3c9');
+        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.24, toScreenX, toScreenY, scale, style === 'bermuda-sargasso' ? '#d8c5b8' : '#d6d3c9');
         if ((s % 2) === 0) {
           const sbWx = wx + 0.85;
           const sbGy = toScreenY(this._getHorizonGroundY(this.level, sbWx));
@@ -3182,10 +3196,10 @@ export class CaveRenderer {
           this._fillFoliageCluster(ctx, gx, gy - 1.3 * scale, 1.4 * scale, 0.8 * scale, 0, scale, 'cypress', 1);
         }
         this._drawAnchoredBoulder(ctx, wx - 0.45, 0.68, 0.23, toScreenX, toScreenY, scale, style === 'quercy-ressel' ? '#c2bdb0' : style === 'boybulok-steppe' ? '#8c7e6d' : '#bda886');
-      } else if (style === 'moravia-rift') {
+      } else if (style === 'moravia-rift' || style === 'nordic-mine') {
         this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.65, h + 1.1);
-        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, '#475569');
-      } else if (style === 'aurora-basalt' || style === 'strytan-fjord' || style === 'kverkfjoll-glacier' || style === 'grjotagja-rift') {
+        this._drawAnchoredBoulder(ctx, wx - 0.85, 0.62, 0.25, toScreenX, toScreenY, scale, style === 'nordic-mine' ? '#57534e' : '#475569');
+      } else if (style === 'aurora-basalt' || style === 'strytan-fjord' || style === 'kverkfjoll-glacier' || style === 'grjotagja-rift' || style === 'greenland-iceberg') {
         if (style === 'strytan-fjord' || style === 'aurora-basalt') {
           if ((s & 1) === 0) {
             this._drawNorwaySpruce(ctx, wx, toScreenX, toScreenY, scale, sway * 0.55, h * 0.88);
@@ -3193,8 +3207,8 @@ export class CaveRenderer {
             this._drawSilverBirch(ctx, wx, toScreenX, toScreenY, scale, sway * 0.5, h * 0.72);
           }
         }
-        const bCol1 = style === 'kverkfjoll-glacier' ? '#7dd3fc' : style === 'grjotagja-rift' ? '#292524' : '#334155';
-        const bCol2 = style === 'kverkfjoll-glacier' ? '#38bdf8' : style === 'grjotagja-rift' ? '#44403c' : '#1e293b';
+        const bCol1 = (style === 'kverkfjoll-glacier' || style === 'greenland-iceberg') ? '#7dd3fc' : style === 'grjotagja-rift' ? '#292524' : '#334155';
+        const bCol2 = (style === 'kverkfjoll-glacier' || style === 'greenland-iceberg') ? '#bae6fd' : style === 'grjotagja-rift' ? '#44403c' : '#1e293b';
         this._drawAnchoredBoulder(ctx, wx - 0.78, 0.68, 0.28, toScreenX, toScreenY, scale, bCol1);
         this._drawAnchoredBoulder(ctx, wx + 0.72, 0.44, 0.2, toScreenX, toScreenY, scale, bCol2);
       } else if (style === 'oxbelha-twilight' || style === 'lagoa-cerrado') {
@@ -3688,6 +3702,49 @@ export class CaveRenderer {
         ctx.lineTo(breakX2 + 1.0 * scale, toScreenY(154));
         ctx.stroke();
       }
+    } else if (profile === 'thistlegorm-cargo-wreck') {
+      // Dramatic midships WWII ammunition blast crater jagged plates & scattered munitions silhouette
+      const bx1 = toScreenX(45);
+      const bx2 = toScreenX(65);
+      if (67 >= visX0 && 43 <= visX1) {
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.62)';
+        ctx.lineWidth = Math.max(2, 0.14 * scale);
+        ctx.beginPath();
+        ctx.moveTo(bx1, toScreenY(26));
+        ctx.lineTo(bx1 + 2.4 * scale, toScreenY(31));
+        ctx.lineTo(bx1 - 0.6 * scale, toScreenY(36));
+        ctx.lineTo(bx1 + 2.8 * scale, toScreenY(41));
+        ctx.moveTo(bx2, toScreenY(26));
+        ctx.lineTo(bx2 - 2.6 * scale, toScreenY(32));
+        ctx.lineTo(bx2 + 0.8 * scale, toScreenY(37));
+        ctx.lineTo(bx2 - 2.2 * scale, toScreenY(42));
+        ctx.stroke();
+      }
+    } else if (profile === 'u1206-submarine') {
+      // Type VIIC U-Boat saddle-tank flood vents, bow hydroplanes & hull stencil
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.68)';
+      const slitStart = Math.max(hMin + 4, Math.floor(visX0 / 4) * 4);
+      const slitEnd = Math.min(hMax - 4, visX1 + 4);
+      for (let wx = slitStart; wx <= slitEnd; wx += 4) {
+        const sx = toScreenX(wx);
+        ctx.fillRect(sx - 0.7 * scale, yDeck + 3.2 * scale, 1.4 * scale, 0.55 * scale);
+      }
+      // Forward & aft submarine diving hydroplanes
+      if (hMin + 12 >= visX0 && hMin - 10 <= visX1) {
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = Math.max(1.2, 0.08 * scale);
+        ctx.beginPath();
+        ctx.ellipse(xBow + 2.5 * scale, yDeck + 5.2 * scale, 3.2 * scale, 0.65 * scale, -0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      if (hMax + 10 >= visX0 && hMax - 12 <= visX1) {
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.ellipse(xStern - 2.2 * scale, yDeck + 6.4 * scale, 2.8 * scale, 0.58 * scale, 0.14, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // Subtle riveted vertical hull frame seams along the exterior backdrop
@@ -4078,6 +4135,88 @@ export class CaveRenderer {
           ctx.closePath();
           ctx.fill();
           ctx.restore();
+        } else if (prop.kind === 'crane') {
+          // Angled WWII cargo derrick crane boom + suspended hook cable
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(2, 0.18 * ps);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0, -7.8 * ps);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(0, -6.5 * ps);
+          ctx.rotate(prop.angle || 0.25);
+          ctx.lineWidth = Math.max(2, 0.16 * ps);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(8.5 * ps, -2.2 * ps);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
+          ctx.lineWidth = Math.max(1, 0.05 * ps);
+          ctx.beginPath();
+          ctx.moveTo(8.5 * ps, -2.2 * ps);
+          ctx.lineTo(8.5 * ps + Math.sin(timeSec * 1.2 + i) * 0.35 * ps, 3.8 * ps);
+          ctx.stroke();
+          ctx.restore();
+          ctx.restore();
+        } else if (prop.kind === 'locomotive') {
+          // Iconic WWII Stanier 8F Steam Locomotive resting upright on the Red Sea floor
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = '#47362b';
+          ctx.strokeStyle = '#785a46';
+          ctx.lineWidth = Math.max(1.2, 0.08 * ps);
+          ctx.beginPath();
+          ctx.roundRect(-5.2 * ps, -2.9 * ps, 8.2 * ps, 2.2 * ps, 0.6 * ps);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#3b2d24';
+          ctx.fillRect(2.6 * ps, -3.5 * ps, 2.6 * ps, 2.9 * ps);
+          ctx.fillRect(-4.2 * ps, -4.3 * ps, 0.85 * ps, 1.5 * ps);
+          ctx.beginPath();
+          ctx.arc(-1.2 * ps, -2.9 * ps, 0.65 * ps, Math.PI, 0);
+          ctx.fill();
+          ctx.strokeStyle = '#9a7b5c';
+          ctx.lineWidth = Math.max(1.5, 0.1 * ps);
+          for (let w = -3.4; w <= 3.6; w += 1.75) {
+            ctx.beginPath();
+            ctx.arc(w * ps, -0.55 * ps, 0.68 * ps, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else if (prop.kind === 'conning-tower') {
+          // WWII Type VIIC U-Boat armored conning tower with twin periscopes & hull stencil
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = '#334155';
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(1.5, 0.09 * ps);
+          ctx.beginPath();
+          ctx.moveTo(-4.8 * ps, 0.5 * ps);
+          ctx.lineTo(-3.6 * ps, -5.8 * ps);
+          ctx.lineTo(3.2 * ps, -5.8 * ps);
+          ctx.lineTo(4.6 * ps, 0.5 * ps);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(2.8 * ps, -4.6 * ps, 2.6 * ps, 2.2 * ps);
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(2, 0.14 * ps);
+          ctx.beginPath();
+          ctx.moveTo(-1.2 * ps, -5.8 * ps);
+          ctx.lineTo(-1.2 * ps, -10.8 * ps);
+          ctx.lineTo(-1.9 * ps, -10.8 * ps);
+          ctx.moveTo(0.8 * ps, -5.8 * ps);
+          ctx.lineTo(0.8 * ps, -9.2 * ps);
+          ctx.stroke();
+          ctx.font = `800 ${Math.max(9, Math.round(1.1 * ps))}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.fillStyle = 'rgba(226, 232, 240, 0.48)';
+          ctx.textAlign = 'center';
+          ctx.fillText('U-1206', -0.4 * ps, -2.2 * ps);
+          ctx.restore();
         }
       }
     }
@@ -4222,84 +4361,7 @@ export class CaveRenderer {
     }
 
     // 4. Interactive Watertight Bulkhead Hatches (heavy steel door + spinning brass handwheel!)
-    if (Array.isArray(level.watertightHatches)) {
-      const openedSet = wreckState?.openedHatchIds;
-      const crankId = wreckState?.crankingHatchId;
-      const crankProg = wreckState?.crankingHatchProgress || 0;
-
-      for (let h = 0; h < level.watertightHatches.length; h++) {
-        const hatch = level.watertightHatches[h];
-        const hr = hatch.radius || 1.9;
-        if (hatch.x + hr + 3 < visX0 || hatch.x - hr - 3 > visX1 || hatch.y + hr + 3 < visY0 || hatch.y - hr - 3 > visY1) continue;
-        const sx = toScreenX(hatch.x);
-        const sy = toScreenY(hatch.y);
-        const sr = hr * scale;
-        const isOpen = openedSet?.has(hatch.id);
-        const isCranking = !isOpen && crankId === hatch.id;
-
-        ctx.save();
-        ctx.translate(sx, sy);
-        if (isOpen) {
-          // Swung-open steel hatch frame (emerald glow showing passage is clear!)
-          ctx.strokeStyle = 'rgba(52, 211, 153, 0.65)';
-          ctx.lineWidth = Math.max(2.5, 0.14 * scale);
-          ctx.beginPath();
-          ctx.arc(0, 0, sr * 0.86, 0, Math.PI * 2);
-          ctx.stroke();
-          // Open door leaf hinged to side
-          ctx.fillStyle = 'rgba(51, 65, 85, 0.62)';
-          ctx.fillRect(sr * 0.75, -sr * 0.7, sr * 0.28, sr * 1.4);
-        } else {
-          // Sealed circular riveted steel bulkhead door
-          ctx.fillStyle = '#293548';
-          ctx.beginPath();
-          ctx.arc(0, 0, sr * 0.92, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = isCranking ? '#38bdf8' : '#f59e0b';
-          ctx.lineWidth = Math.max(2.4, 0.14 * scale);
-          ctx.stroke();
-
-          // Outer bolts around steel rim
-          ctx.fillStyle = '#94a3b8';
-          for (let b = 0; b < 8; b++) {
-            const ba = (b / 8) * Math.PI * 2;
-            ctx.beginPath();
-            ctx.arc(Math.cos(ba) * sr * 0.76, Math.sin(ba) * sr * 0.76, Math.max(1.4, 0.06 * scale), 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // Spinning brass 6-spoke handwheel
-          ctx.save();
-          const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.06;
-          ctx.rotate(wheelRot);
-          ctx.strokeStyle = '#fbbf24';
-          ctx.lineWidth = Math.max(2, 0.11 * scale);
-          ctx.beginPath();
-          ctx.arc(0, 0, sr * 0.44, 0, Math.PI * 2);
-          for (let sp = 0; sp < 6; sp++) {
-            const sa = (sp / 6) * Math.PI * 2;
-            ctx.moveTo(0, 0);
-            ctx.lineTo(Math.cos(sa) * sr * 0.44, Math.sin(sa) * sr * 0.44);
-          }
-          ctx.stroke();
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(0, 0, 0.14 * scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-
-          // Live cranking progress ring!
-          if (isCranking && crankProg > 0) {
-            ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = Math.max(3, 0.16 * scale);
-            ctx.beginPath();
-            ctx.arc(0, 0, sr * 1.08, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
-            ctx.stroke();
-          }
-        }
-        ctx.restore();
-      }
-    }
+    this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState);
 
     // 5. Cuttable Fishing-Net & Cable Entanglement Zones (with taut snare strands when hooked!)
     if (Array.isArray(level.snagZones)) {
@@ -4370,6 +4432,85 @@ export class CaveRenderer {
   }
 
   /**
+   * Shared Interactive Watertight Bulkhead / Mine Blast-Door Hatch renderer
+   * used on both Technical Shipwrecks and Flooded Underground Mines.
+   */
+  _drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null) {
+    const level = this.level;
+    if (!Array.isArray(level.watertightHatches) || level.watertightHatches.length === 0) return;
+    const openedSet = wreckState?.openedHatchIds;
+    const crankId = wreckState?.crankingHatchId;
+    const crankProg = wreckState?.crankingHatchProgress || 0;
+
+    for (let h = 0; h < level.watertightHatches.length; h++) {
+      const hatch = level.watertightHatches[h];
+      const hr = hatch.radius || 1.9;
+      if (hatch.x + hr + 3 < visX0 || hatch.x - hr - 3 > visX1 || hatch.y + hr + 3 < visY0 || hatch.y - hr - 3 > visY1) continue;
+      const sx = toScreenX(hatch.x);
+      const sy = toScreenY(hatch.y);
+      const sr = hr * scale;
+      const isOpen = openedSet?.has(hatch.id);
+      const isCranking = !isOpen && crankId === hatch.id;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      if (isOpen) {
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.65)';
+        ctx.lineWidth = Math.max(2.5, 0.14 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.86, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(51, 65, 85, 0.62)';
+        ctx.fillRect(sr * 0.75, -sr * 0.7, sr * 0.28, sr * 1.4);
+      } else {
+        ctx.fillStyle = '#293548';
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = isCranking ? '#38bdf8' : '#f59e0b';
+        ctx.lineWidth = Math.max(2.4, 0.14 * scale);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        for (let b = 0; b < 8; b++) {
+          const ba = (b / 8) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(Math.cos(ba) * sr * 0.76, Math.sin(ba) * sr * 0.76, Math.max(1.4, 0.06 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.save();
+        const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.06;
+        ctx.rotate(wheelRot);
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = Math.max(2, 0.11 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.44, 0, Math.PI * 2);
+        for (let sp = 0; sp < 6; sp++) {
+          const sa = (sp / 6) * Math.PI * 2;
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(sa) * sr * 0.44, Math.sin(sa) * sr * 0.44);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.14 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        if (isCranking && crankProg > 0) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = Math.max(3, 0.16 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 1.08, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  /**
    * Cave Interactive Parity elements: steady karst spring currents, pulsing tidal blue-hole siphons,
    * clipped staged bailout/deco cylinders, unlined cave junction line-markers & jump spools, and
    * abandoned tangled cave line traps cuttable with shears.
@@ -4416,8 +4557,21 @@ export class CaveRenderer {
       }
       const stals = this._stalactiteCache;
       if (stals.length > 0) {
-        const stalCol = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(125, 211, 252, 0.48)' : 'rgba(148, 138, 118, 0.42)';
-        const stalHi = level.theme?.id === 'kverkfjoll-glacier' ? 'rgba(224, 242, 254, 0.46)' : 'rgba(214, 204, 184, 0.34)';
+        const isGlacial = level.theme?.id === 'kverkfjoll-glacier' || level.theme?.id === 'greenland-iceberg';
+        const isMine = level.theme?.id === 'nordic-mine';
+        const isBermuda = level.theme?.id === 'bermuda-sargasso';
+        const stalCol = isGlacial
+          ? 'rgba(125, 211, 252, 0.48)'
+          : isMine
+            ? 'rgba(92, 84, 78, 0.44)'
+            : isBermuda
+              ? 'rgba(218, 204, 188, 0.48)'
+              : 'rgba(148, 138, 118, 0.42)';
+        const stalHi = isGlacial
+          ? 'rgba(224, 242, 254, 0.46)'
+          : isBermuda
+            ? 'rgba(248, 240, 232, 0.38)'
+            : 'rgba(214, 204, 184, 0.34)';
         for (let i = 0; i < stals.length; i++) {
           const st = stals[i];
           if (st.x + 1 < visX0 || st.x - 1 > visX1 || st.y + st.len + 1 < visY0 || st.y - 1 > visY1) continue;
@@ -4731,6 +4885,11 @@ export class CaveRenderer {
       }
     }
 
+    // 6. Crankable Mine / Subterranean Blast-Door Bulkhead Hatches (e.g., Ojamo Flooded Iron Mine)
+    if (typeof this._drawWatertightHatches === 'function') {
+      this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState);
+    }
+
     ctx.restore();
   }
 
@@ -4826,7 +4985,10 @@ export class CaveRenderer {
       surfaceStyle === 'grjotagja-rift' ||
       surfaceStyle === 'atlantida-lava' ||
       surfaceStyle === 'lagoa-cerrado' ||
-      surfaceStyle === 'boybulok-steppe'
+      surfaceStyle === 'boybulok-steppe' ||
+      surfaceStyle === 'nordic-mine' ||
+      surfaceStyle === 'greenland-iceberg' ||
+      surfaceStyle === 'bermuda-sargasso'
     ) {
       this._drawThemedExpeditionSurface(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, surfaceStyle);
       return;
@@ -5441,23 +5603,26 @@ export class CaveRenderer {
       style === 'nordic-fjord' ||
       style === 'ural-birch' ||
       style === 'moravia-rift' ||
+      style === 'nordic-mine' ||
       style === 'aurora-basalt' ||
       style === 'strytan-fjord' ||
       style === 'kverkfjoll-glacier' ||
+      style === 'greenland-iceberg' ||
       style === 'grjotagja-rift' ||
       style === 'boybulok-steppe';
     const isUral = style === 'ural-birch';
     const isKalahari = style === 'kalahari-crater';
-    const isAbaco = style === 'bahamas-abaco';
+    const isAbaco = style === 'bahamas-abaco' || style === 'bermuda-sargasso';
     const isBudapest = style === 'budapest-bathhouse';
     const isSinai = style === 'sinai-coast';
     const isAtlantida = style === 'atlantida-lava';
-    const isBarrenVolcanicOrGlacier = style === 'kverkfjoll-glacier' || style === 'grjotagja-rift';
+    const isBarrenVolcanicOrGlacier = style === 'kverkfjoll-glacier' || style === 'greenland-iceberg' || style === 'grjotagja-rift';
     const isOxBelHa = style === 'oxbelha-twilight' || style === 'lagoa-cerrado';
     const isAurora =
       style === 'aurora-basalt' ||
       style === 'strytan-fjord' ||
       style === 'kverkfjoll-glacier' ||
+      style === 'greenland-iceberg' ||
       style === 'grjotagja-rift';
     ctx.save();
     this._drawHorizonForestSpan(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec, style);

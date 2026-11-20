@@ -1673,7 +1673,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         title: level.recoveryTarget ? `${level.recoveryTarget.name} Recovered!` : `${level.name} Traversed!`,
         detail: level.recoveryTarget
           ? level.recoveryTarget.kind === 'probe'
-            ? `You reached ${Math.round(level.recoveryTarget.y)}m beneath the aurora, recovered ${level.recoveryTarget.name}, rode geothermal updrafts through Trimix & O2 deco, and surfaced safely.`
+            ? level.theme?.id === 'aurora-glacial' || (Array.isArray(level.geothermalVents) && level.geothermalVents.length > 0)
+              ? `You reached ${Math.round(level.recoveryTarget.y)}m beneath the aurora, recovered ${level.recoveryTarget.name}, rode geothermal updrafts through Trimix & O2 deco, and surfaced safely.`
+              : `You reached ${Math.round(level.recoveryTarget.y)}m, recovered ${level.recoveryTarget.name}, cleared Trimix & O2 decompression, and surfaced safely.`
             : `You reached ${Math.round(level.recoveryTarget.y)}m, secured ${level.recoveryTarget.name} on tow, completed deep trimix & oxygen decompression, and brought them home to the surface.`
           : 'You managed trimix bottom gas, avoided silt-outs, completed your oxygen decompression stop, and surfaced safely.',
         scoreSummary: buildSummary(),

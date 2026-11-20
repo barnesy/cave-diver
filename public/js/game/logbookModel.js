@@ -123,7 +123,7 @@ export function seedLogbookFromEntries(rawBook, entries) {
   return book;
 }
 
-export function formatLogbookSummary(rawBook, totalSites = 25) {
+export function formatLogbookSummary(rawBook, totalSites = 30) {
   const book = normalizeBook(rawBook);
   const clearedCount = Object.keys(book.cleared).length;
   let campaignMedal = 'TRAINEE';
@@ -162,7 +162,16 @@ export function computeCertifications(rawBook, levels = []) {
     const rec = book.cleared[lid];
     if (rec?.grade === 'S' || rec?.grade === 'S+') sGrades++;
     const lvl = levelMap.get(lid);
-    if (lvl?.isWreck || lid.includes('oriskany') || lid.includes('andrea-doria') || lid.includes('britannic') || lid.includes('victoria') || lid.includes('fitzgerald')) {
+    if (
+      lvl?.isWreck ||
+      lid.includes('thistlegorm') ||
+      lid.includes('oriskany') ||
+      lid.includes('u1206') ||
+      lid.includes('andrea-doria') ||
+      lid.includes('britannic') ||
+      lid.includes('victoria') ||
+      lid.includes('fitzgerald')
+    ) {
       wrecksCleared++;
     }
     if (lvl && (lvl.reelMetersPerDiver || 0) > 0) unlinedCleared++;

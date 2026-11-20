@@ -13,6 +13,7 @@ import { evaluateCaveSDF } from '../game/collision.js';
 const SPRING_CAVE_IDS = new Set([
   'eagles-nest-sink',
   'plura-marble-sump',
+  'ojamo-iron-mine',
   'fontaine-de-vaucluse',
   'orda-crystal-maze',
   'emergence-du-ressel',
@@ -22,8 +23,10 @@ const SPRING_CAVE_IDS = new Set([
 ]);
 
 const TIDAL_SIPHON_IDS = new Set([
+  'scoresby-sund-iceberg',
   'dans-cave-abaco',
   'blue-hole-dahab-arch',
+  'bermuda-devils-wall',
   'tunel-de-la-atlantida',
   'ox-bel-ha-grand-traverse',
   'silfra-katla-aurora-abyss',
@@ -77,7 +80,9 @@ export function enrichCaveInteractives(level) {
   }
   if (candidates.length === 0) return level;
 
-  const placedCoords = [];
+  const placedCoords = Array.isArray(level.watertightHatches)
+    ? level.watertightHatches.map((h) => ({ x: h.x, y: h.y }))
+    : [];
 
   // 1. Staged Bailout / Reserve Cylinder Caches (1 on intro, 2 on deeper/longer caves)
   if (!Array.isArray(level.stageCaches)) {

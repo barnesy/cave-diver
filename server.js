@@ -160,9 +160,9 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (Array.isArray(raw?.entries)) {
-        if (raw.entries.length === 0 || raw.entries.length > 25) {
+        if (raw.entries.length === 0 || raw.entries.length > 50) {
           res.writeHead(400, corsHeaders);
-          res.end(JSON.stringify({ error: 'Batch entries must contain 1..25 submissions.' }));
+          res.end(JSON.stringify({ error: 'Batch entries must contain 1..50 submissions.' }));
           return;
         }
         const valid = [];

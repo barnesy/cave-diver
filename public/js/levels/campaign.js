@@ -1,7 +1,8 @@
 /**
- * Master 25-Site Global Campaign Roadmap (20 Caves + 5 Iconic Technical Shipwrecks)
- * paced in ascending technical difficulty from 50m lined cenotes to 185m hypoxic karst sumps
- * and 162m ultra-deep shipwreck surveys.
+ * Master 30-Site Global Campaign Roadmap (23 Caves & Special Environments + 7 Technical Shipwrecks)
+ * paced in ascending technical difficulty from 44m sunlit Red Sea WWII wrecks & 50m cenotes
+ * through flooded iron mines, Greenland icebergs, North Sea U-boats, and Bermuda sea-arches
+ * to 185m hypoxic karst sumps and 162m ultra-deep shipwreck surveys.
  */
 
 export const CAMPAIGN_TIERS = [
@@ -45,6 +46,21 @@ export const CAMPAIGN_PLAN = [
   },
   {
     rank: 3,
+    id: 'ss-thistlegorm-wreck',
+    name: 'SS Thistlegorm WWII Cargo Wreck',
+    region: "Sha'ab Ali, Red Sea, Egypt",
+    category: 'wreck',
+    lat: 27.8,
+    lng: 33.9,
+    tier: 1,
+    badge: 'Wreck 44m',
+    targetDepthM: 44,
+    lined: true,
+    reelMetersPerDiver: 0,
+    implemented: true,
+  },
+  {
+    rank: 4,
     id: 'uss-oriskany-carrier',
     name: 'USS Oriskany Carrier Reef',
     region: 'Pensacola, Gulf of Mexico',
@@ -59,7 +75,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 4,
+    rank: 5,
     id: 'plura-marble-sump',
     name: 'Plura Marble Sump',
     region: 'Rana, Nordland, Norway',
@@ -74,7 +90,22 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 5,
+    rank: 6,
+    id: 'ojamo-iron-mine',
+    name: 'Ojamo Flooded Iron Mine',
+    region: 'Lohja, Southern Finland',
+    category: 'cave',
+    lat: 60.2,
+    lng: 24.0,
+    tier: 2,
+    badge: 'Mine 68m',
+    targetDepthM: 68,
+    lined: true,
+    reelMetersPerDiver: 0,
+    implemented: true,
+  },
+  {
+    rank: 7,
     id: 'fontaine-de-vaucluse',
     name: 'Fontaine de Vaucluse',
     region: 'Vaucluse, Provence, France',
@@ -89,7 +120,37 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 6,
+    rank: 8,
+    id: 'scoresby-sund-iceberg',
+    name: 'Scoresby Sund Iceberg Cathedral',
+    region: 'East Greenland',
+    category: 'cave',
+    lat: 65.6,
+    lng: -37.6,
+    tier: 3,
+    badge: 'Iceberg 82m',
+    targetDepthM: 82,
+    lined: true,
+    reelMetersPerDiver: 0,
+    implemented: true,
+  },
+  {
+    rank: 9,
+    id: 'u1206-north-sea-sub',
+    name: 'U-1206 North Sea U-Boat',
+    region: 'Off Cruden Bay, Scotland',
+    category: 'wreck',
+    lat: 57.4,
+    lng: -1.6,
+    tier: 3,
+    badge: 'U-Boat 88m',
+    targetDepthM: 88,
+    lined: true,
+    reelMetersPerDiver: 0,
+    implemented: true,
+  },
+  {
+    rank: 10,
     id: 'boesmansgat-abyss',
     name: 'Boesmansgat Abyss',
     region: 'Northern Cape, South Africa',
@@ -104,7 +165,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 7,
+    rank: 11,
     id: 'orda-crystal-maze',
     name: 'Orda Crystal Maze',
     region: 'Perm Krai, Ural Mountains',
@@ -119,7 +180,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 8,
+    rank: 12,
     id: 'dans-cave-abaco',
     name: "Dan's Cave",
     region: 'Great Abaco, Bahamas',
@@ -134,7 +195,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 9,
+    rank: 13,
     id: 'ss-andrea-doria',
     name: 'SS Andrea Doria',
     region: 'Off Nantucket, North Atlantic',
@@ -149,7 +210,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 10,
+    rank: 14,
     id: 'molnar-janos-vaults',
     name: 'Molnar Janos Thermal Vaults',
     region: 'Budapest, Hungary',
@@ -164,7 +225,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 11,
+    rank: 15,
     id: 'blue-hole-dahab-arch',
     name: 'Blue Hole & The Arch',
     region: 'Dahab, Red Sea, Egypt',
@@ -179,7 +240,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 12,
+    rank: 16,
     id: 'emergence-du-ressel',
     name: 'Émergence du Ressel',
     region: 'Lot River, France',
@@ -194,7 +255,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 13,
+    rank: 17,
     id: 'pozzo-del-merro',
     name: 'Pozzo del Merro Shaft',
     region: 'Lazio, Italy',
@@ -209,7 +270,22 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 14,
+    rank: 18,
+    id: 'bermuda-devils-wall',
+    name: 'Bermuda Crystal Arch & Abyss',
+    region: 'Bermuda, Sargasso Sea',
+    category: 'cave',
+    lat: 32.3,
+    lng: -64.8,
+    tier: 4,
+    badge: 'Bermuda 102m',
+    targetDepthM: 102,
+    lined: false,
+    reelMetersPerDiver: 225,
+    implemented: true,
+  },
+  {
+    rank: 19,
     id: 'hranicka-propast-rift',
     name: 'Hranická Propast Abyss',
     region: 'Moravia, Czechia',
@@ -224,7 +300,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 15,
+    rank: 20,
     id: 'ox-bel-ha-grand-traverse',
     name: 'Sistema Ox Bel Ha Traverse',
     region: 'Quintana Roo, Mexico',
@@ -239,7 +315,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 16,
+    rank: 21,
     id: 'hmhs-britannic',
     name: 'HMHS Britannic',
     region: 'Kea Channel, Aegean Sea, Greece',
@@ -254,7 +330,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 17,
+    rank: 22,
     id: 'silfra-katla-aurora-abyss',
     name: 'Silfra & Katla Aurora Abyss',
     region: 'Silfra & Katla, Iceland',
@@ -269,7 +345,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 18,
+    rank: 23,
     id: 'strytan-hydrothermal-chimneys',
     name: 'Strýtan Hydrothermal Spires',
     region: 'Eyjafjörður, Iceland',
@@ -284,7 +360,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 19,
+    rank: 24,
     id: 'kverkfjoll-subglacial-caves',
     name: 'Kverkfjöll Ice-Magma Caverns',
     region: 'Vatnajökull, Iceland',
@@ -299,7 +375,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 20,
+    rank: 25,
     id: 'hms-victoria-battleship',
     name: 'HMS Victoria Vertical Wreck',
     region: 'Off Tripoli, Lebanon',
@@ -314,7 +390,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 21,
+    rank: 26,
     id: 'grjotagja-kleifarvatn-rift',
     name: 'Grjótagjá Magma Fissure',
     region: 'Lake Mývatn, Iceland',
@@ -329,7 +405,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 22,
+    rank: 27,
     id: 'tunel-de-la-atlantida',
     name: 'Túnel de la Atlántida',
     region: 'Lanzarote, Canary Islands',
@@ -344,7 +420,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 23,
+    rank: 28,
     id: 'ss-edmund-fitzgerald',
     name: 'SS Edmund Fitzgerald Memorial',
     region: 'Lake Superior, Whitefish Bay',
@@ -359,7 +435,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 24,
+    rank: 29,
     id: 'lagoa-misteriosa-abyss',
     name: 'Lagoa Misteriosa Abyss',
     region: 'Mato Grosso do Sul, Brazil',
@@ -374,7 +450,7 @@ export const CAMPAIGN_PLAN = [
     implemented: true,
   },
   {
-    rank: 25,
+    rank: 30,
     id: 'boy-bulok-asian-sump',
     name: 'Boy-Bulok Asian Karst Sump',
     region: 'Baisuntau Ridge, Uzbekistan',

@@ -226,6 +226,11 @@ export function computeSiteFocusViewBox(levelId, slot) {
     'hmhs-britannic': { lng: 24.3, lat: 37.7, w: 66, h: 43.3 },
     'hms-victoria-battleship': { lng: 34.5, lat: 34.2, w: 66, h: 43.3 },
     'ss-edmund-fitzgerald': { lng: -85.1, lat: 46.8, w: 68, h: 44.6 },
+    'ss-thistlegorm-wreck': { lng: 34.0, lat: 28.0, w: 64, h: 42.0 },
+    'ojamo-iron-mine': { lng: 23.0, lat: 60.5, w: 72, h: 47.2 },
+    'scoresby-sund-iceberg': { lng: -35.5, lat: 65.2, w: 74, h: 48.5 },
+    'u1206-north-sea-sub': { lng: -2.0, lat: 57.0, w: 66, h: 43.3 },
+    'bermuda-devils-wall': { lng: -64.8, lat: 32.3, w: 68, h: 44.6 },
   };
 
   const frame = CUSTOM_FRAMING[levelId];

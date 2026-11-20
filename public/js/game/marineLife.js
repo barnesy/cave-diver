@@ -41,7 +41,10 @@ export function createMarineEcosystem(level) {
   // Dedicated Artificial-Reef & Pelagic Shipwreck Ecosystem (no cenote vines, turtles, or blind cavefish!)
   if (level.isWreck) {
     const isFreshwater = themeId === 'superior-memorial-wreck';
-    const isWarmReef = themeId === 'gulf-carrier-wreck' || themeId === 'aegean-britannic-wreck';
+    const isWarmReef =
+      themeId === 'gulf-carrier-wreck' ||
+      themeId === 'aegean-britannic-wreck' ||
+      themeId === 'red-sea-coral-wreck';
     const shotX = level.shotLine?.x ?? level.spawn?.x ?? 10;
     const deckY = level.wreckDeckY ?? 42;
     const hMin = level.wreckHullXMin ?? -24;
@@ -229,7 +232,9 @@ export function createMarineEcosystem(level) {
     themeId === 'kverkfjoll-glacier' ||
     themeId === 'grjotagja-lava' ||
     themeId === 'atlantida-volcanic' ||
-    themeId === 'boybulok-alpine';
+    themeId === 'boybulok-alpine' ||
+    themeId === 'nordic-mine' ||
+    themeId === 'greenland-iceberg';
 
   // 1. Sunlit Surface Basins
   for (let bIdx = 0; bIdx < level.openBasins.length; bIdx++) {

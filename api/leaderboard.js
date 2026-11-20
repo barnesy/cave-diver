@@ -79,8 +79,8 @@ export async function POST(request) {
 
   const isBatch = Array.isArray(raw?.entries);
   if (isBatch) {
-    if (raw.entries.length === 0 || raw.entries.length > 25) {
-      return jsonResponse({ error: 'Batch entries must contain 1..25 submissions.' }, 400);
+    if (raw.entries.length === 0 || raw.entries.length > 50) {
+      return jsonResponse({ error: 'Batch entries must contain 1..50 submissions.' }, 400);
     }
     const validEntries = [];
     for (const item of raw.entries) {

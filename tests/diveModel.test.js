@@ -960,9 +960,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 25 campaign levels (20 caves + 5 shipwrecks) validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 25, 'Campaign roadmap should chart all 25 levels');
-  assert.equal(LEVELS.length, 25, 'All 25 campaign levels should be registered');
+test('All 30 campaign levels (23 caves/environments + 7 shipwrecks) validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 30, 'Campaign roadmap should chart all 30 levels');
+  assert.equal(LEVELS.length, 30, 'All 30 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -2350,17 +2350,17 @@ test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dr
   const certs = computeCertifications(book, LEVELS);
   assert.equal(certs.earned.some((c) => c.id === 'full-cave'), false, 'Clearing 6 lined sites must NOT award Full Cave without an unlined reel clear');
 
-  // 5. CAMPAIGN_PLAN rank & Tier 5 authority (no rank collision between L20 Victoria and L25 Boy-Bulok)
+  // 5. CAMPAIGN_PLAN rank & Tier 5 authority (no rank collision between Victoria and Boy-Bulok)
   const boyMeta = getLevelMeta('boy-bulok-asian-sump');
   const vicMeta = getLevelMeta('hms-victoria-battleship');
-  assert.equal(boyMeta.rank, 25);
+  assert.equal(boyMeta.rank, 30);
   assert.equal(boyMeta.tier, 5);
-  assert.equal(vicMeta.rank, 20);
+  assert.equal(vicMeta.rank, 25);
 });
 
-test('v100 Cave Interactive Parity: all 20 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
+test('v100 Cave Interactive Parity: all 23 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
   const caves = LEVELS.filter((l) => !l.isWreck);
-  assert.equal(caves.length, 20);
+  assert.equal(caves.length, 23);
 
   for (const cave of caves) {
     assert.ok(Array.isArray(cave.stageCaches) && cave.stageCaches.length >= 1, `${cave.id} missing stageCaches`);
@@ -2937,4 +2937,115 @@ test('v105 Modes verification (Guided / Standard Tech / Hardcore): silt, impact,
   assert.ok(html.includes('id="menu-mode-badge"'), 'Missing Home screen mode badge');
   assert.ok(html.includes('id="dc-mode-badge"'), 'Missing HUD mode badge');
   assert.ok(html.includes('id="debrief-mode-badge"'), 'Missing Debrief mode badge');
+});
+
+test('v106 5 new varied expeditions (SS Thistlegorm, Ojamo Iron Mine, Scoresby Sund Iceberg, U-1206 Submarine, Bermuda Crystal Arch) validate & exercise signature mechanics', () => {
+  const newIds = [
+    'ss-thistlegorm-wreck',
+    'ojamo-iron-mine',
+    'scoresby-sund-iceberg',
+    'u1206-north-sea-sub',
+    'bermuda-devils-wall',
+  ];
+
+  for (const id of newIds) {
+    const lvl = getLevelById(id);
+    assert.equal(lvl.id, id, `Missing registered level ${id}`);
+    const check = validateLevel(lvl, { checkGeometry: true });
+    assert.equal(check.valid, true, `${id} validation failed: ${check.errors.join('; ')}`);
+    assert.ok(evaluateCaveSDF(lvl, lvl.spawn.x, lvl.spawn.y) < -0.6, `${id} spawn blocked`);
+    assert.ok(evaluateCaveSDF(lvl, lvl.exitZone.x, lvl.exitZone.y) < -0.6, `${id} exit blocked`);
+
+    for (const cp of lvl.checkpoints) {
+      assert.ok(evaluateCaveSDF(lvl, cp.x, cp.y) < -0.55, `${id} checkpoint ${cp.id} obstructed`);
+    }
+    for (const item of lvl.collectibles) {
+      assert.ok(evaluateCaveSDF(lvl, item.x, item.y) < -0.5, `${id} collectible ${item.id} obstructed`);
+    }
+    if (Array.isArray(lvl.guideline) && lvl.guideline.length >= 2) {
+      for (let i = 0; i < lvl.guideline.length - 1; i++) {
+        const a = lvl.guideline[i];
+        const b = lvl.guideline[i + 1];
+        for (let s = 0; s <= 5; s++) {
+          const t = s / 5;
+          const px = a.x + (b.x - a.x) * t;
+          const py = a.y + (b.y - a.y) * t;
+          assert.ok(evaluateCaveSDF(lvl, px, py) < -0.55, `${id} guideline blocked near (${px.toFixed(1)}, ${py.toFixed(1)})`);
+        }
+      }
+    }
+    // Check bottom gas safety at max depth
+    const st = createDiveSession(lvl).diveState;
+    switchGas(st, 'TMX1455');
+    const maxD = getLevelMeta(lvl).maxDepthM;
+    const ppo2 = computePPO2(maxD, st.mixes.TMX1455);
+    assert.ok(ppo2 >= 0.25 && ppo2 <= 1.38, `${id} TMX PPO2 at ${maxD}m out of range: ${ppo2}`);
+
+    // Verify marine ecosystem spawns cleanly in open water
+    const eco = createMarineEcosystem(lvl);
+    assert.ok(eco.fish.length > 0 && eco.anchored.length > 0, `${id} ecosystem should populate`);
+  }
+
+  // 1. SS Thistlegorm: Tier I intro wreck with blast crater hull dip & coral reef ecosystem
+  const thi = getLevelById('ss-thistlegorm-wreck');
+  assert.equal(thi.isWreck, true);
+  assert.equal(getLevelMeta(thi).tier, 1);
+  assert.ok(thi.hullTopY(55) > thi.wreckDeckY + 8, 'Thistlegorm blast crater must dip below cargo deck');
+  const thiEco = createMarineEcosystem(thi);
+  assert.ok(thiEco.anchored.some((a) => a.kind === 'seafan'), 'Red Sea Thistlegorm should grow warm coral sea fans');
+
+  // 2. Ojamo Flooded Iron Mine: non-wreck flooded mine with crankable watertight blast doors!
+  const ojamo = getLevelById('ojamo-iron-mine');
+  assert.equal(Boolean(ojamo.isWreck), false);
+  assert.ok(ojamo.watertightHatches.length >= 2, 'Ojamo mine should have >=2 sealed blast-door hatches');
+  const sOja = createDiveSession(ojamo);
+  const mineHatch = ojamo.watertightHatches[0];
+  sOja.diver.x = mineHatch.x - mineHatch.radius - 1.0;
+  sOja.diver.y = mineHatch.y;
+  stepDiveSession(sOja, { x: 0, y: 0 }, 0.05);
+  assert.equal(sOja.wreckActionPrompt?.kind, 'open-hatch', 'Mine blast door must offer open-hatch interaction');
+  triggerWreckAction(sOja);
+  for (let i = 0; i < 20; i++) stepDiveSession(sOja, { x: 0, y: 0 }, 0.1);
+  assert.equal(sOja.openedHatchIds.has(mineHatch.id), true, 'Mine blast door must unseal after cranking');
+  assert.ok(sOja.hatchBonusScore >= 175);
+
+  // 3. Scoresby Sund Iceberg Cathedral: Tier III Greenland iceberg with 3 sapphire archWindows & bioluminescence
+  const sco = getLevelById('scoresby-sund-iceberg');
+  assert.equal(getLevelMeta(sco).tier, 3);
+  assert.equal(sco.archWindows.length, 3);
+  assert.equal(sco.theme.bioluminescent, true);
+
+  // 4. U-1206 North Sea Submarine: Tier III submarine wreck with 3 watertight bulkheads & conning tower
+  const u12 = getLevelById('u1206-north-sea-sub');
+  assert.equal(u12.isWreck, true);
+  assert.equal(u12.shipProfile, 'u1206-submarine');
+  assert.equal(u12.watertightHatches.length, 3);
+  assert.ok(u12.wreckProps.some((p) => p.kind === 'conning-tower'));
+
+  // 5. Bermuda Crystal Arch & Abyss: unlined Tier IV sea-wall recovery mission with TMX 11/65
+  const ber = getLevelById('bermuda-devils-wall');
+  assert.equal(ber.lined, false);
+  assert.equal(ber.reelMetersPerDiver, 225);
+  assert.equal(ber.archWindows.length, 2);
+  const sBer = createDiveSession(ber);
+  assert.equal(sBer.diveState.mixes.TMX1455.name, 'TMX 11/65');
+  for (const cp of ber.checkpoints) sBer.checkpointsHit.add(cp.id);
+  sBer.diveState.ceilingM = 0;
+  sBer.diver.x = ber.exitZone.x;
+  sBer.diver.y = 1.0;
+  const blockedBer = stepDiveSession(sBer, { x: 0, y: 0 }, 0.05);
+  assert.equal(blockedBer.outcome, null, 'Bermuda must require Telemetry Buoy recovery before surfacing');
+  sBer.diveState.activeGasId = 'TMX1455';
+  sBer.diver.x = ber.recoveryTarget.x;
+  sBer.diver.y = ber.recoveryTarget.y;
+  stepDiveSession(sBer, { x: 0, y: 0 }, 0.05);
+  assert.equal(sBer.bodyRecovered, true);
+  sBer.diveState.activeGasId = 'EAN32';
+  sBer.diveState.ceilingM = 0;
+  sBer.diver.x = ber.exitZone.x;
+  sBer.diver.y = 1.0;
+  const doneBer = stepDiveSession(sBer, { x: 0, y: 0 }, 0.05);
+  assert.equal(doneBer.outcome?.success, true);
+  assert.ok(doneBer.outcome.title.includes('Bermuda Telemetry Buoy'));
+  assert.ok(!doneBer.outcome.detail.includes('aurora'), 'Bermuda probe debrief should not reference Iceland aurora');
 });
