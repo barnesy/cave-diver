@@ -476,7 +476,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=104" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=105" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -703,8 +703,9 @@ function renderLevelCards() {
     const isNext = !clearRec && lvl.id === nextRecommendedId;
     const grade = clearRec?.grade || '';
     const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
+    const modePillHtml = renderModeBadgeHtml(clearRec?.bestDifficulty || clearRec?.lastDifficulty, { compact: true });
     const badgesHtml = grade
-      ? `<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>`
+      ? `${modePillHtml}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>`
       : isNext
         ? `<span class="lvl-next-badge">NEXT</span>`
         : '';
@@ -1106,10 +1107,19 @@ const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
 const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
-  { id: 'guided', label: 'Guided', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
-  { id: 'standard', label: 'Standard Tech', btnText: '🎚️ Mode: Standard Tech', tag: '' },
-  { id: 'hardcore', label: 'Hardcore', btnText: '🎚️ Mode: Hardcore 🔥', tag: ' · HARDCORE' },
+  { id: 'guided', label: 'Guided', fullBadge: '🧭 GUIDED', shortBadge: '🧭 GD', pillBadge: '🧭 GUIDED', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
+  { id: 'standard', label: 'Standard Tech', fullBadge: '🤿 STANDARD TECH', shortBadge: '🤿 ST', pillBadge: '🤿 TECH', btnText: '🎚️ Mode: Standard Tech', tag: '' },
+  { id: 'hardcore', label: 'Hardcore', fullBadge: '🔥 HARDCORE', shortBadge: '🔥 HC', pillBadge: '🔥 HARDCORE', btnText: '🎚️ Mode: Hardcore 🔥', tag: ' · HARDCORE' },
 ];
+function getDifficultyMeta(diff) {
+  return DIFFICULTY_MODES.find((d) => d.id === diff) || null;
+}
+function renderModeBadgeHtml(diff, { compact = true } = {}) {
+  const m = getDifficultyMeta(diff);
+  if (!m) return '';
+  const txt = compact ? m.shortBadge : m.fullBadge;
+  return `<span class="mode-badge mode-${m.id}${compact ? ' compact' : ''}" title="${escapeHtml(m.label)} Mode">${txt}</span>`;
+}
 let activeDifficulty = 'standard';
 let ghostEnabled = true;
 let torchStickEnabled = true;
@@ -1129,6 +1139,8 @@ try {
 } catch {}
 
 const btnDifficultyCycle = document.getElementById('btn-difficulty-cycle');
+const menuModeBadgeEl = document.getElementById('menu-mode-badge');
+const debriefModeBadgeEl = document.getElementById('debrief-mode-badge');
 const btnGhostToggle = document.getElementById('btn-ghost-toggle');
 const btnHudGhostToggle = document.getElementById('btn-hud-ghost-toggle');
 const btnTorchStickToggle = document.getElementById('btn-torch-stick-toggle');
@@ -1142,6 +1154,11 @@ const btnDiveGuideStart = document.getElementById('btn-dive-guide-start');
 function syncPreferenceMenuButtons() {
   const diffMeta = DIFFICULTY_MODES.find((d) => d.id === activeDifficulty) || DIFFICULTY_MODES[1];
   if (btnDifficultyCycle) btnDifficultyCycle.textContent = diffMeta.btnText;
+  if (menuModeBadgeEl) {
+    menuModeBadgeEl.textContent = diffMeta.pillBadge;
+    menuModeBadgeEl.className = `mode-badge mode-${diffMeta.id}`;
+    menuModeBadgeEl.title = `Active Mode: ${diffMeta.label} (tap to switch)`;
+  }
   const ghostLabel = ghostEnabled ? '👻 PB Ghost: On' : '👻 PB Ghost: Off';
   if (btnGhostToggle) btnGhostToggle.textContent = ghostLabel;
   if (btnHudGhostToggle) btnHudGhostToggle.textContent = ghostLabel;
@@ -1167,7 +1184,7 @@ function toggleTorchStickOption() {
 btnTorchStickToggle?.addEventListener('click', toggleTorchStickOption);
 btnHudTorchStick?.addEventListener('click', toggleTorchStickOption);
 
-btnDifficultyCycle?.addEventListener('click', () => {
+function cycleDifficultyMode() {
   const idx = DIFFICULTY_MODES.findIndex((d) => d.id === activeDifficulty);
   const next = DIFFICULTY_MODES[(idx + 1) % DIFFICULTY_MODES.length];
   activeDifficulty = next.id;
@@ -1181,7 +1198,9 @@ btnDifficultyCycle?.addEventListener('click', () => {
         : '🤿 Standard Tech Mode active.',
     2.6
   );
-});
+}
+btnDifficultyCycle?.addEventListener('click', cycleDifficultyMode);
+menuModeBadgeEl?.addEventListener('click', cycleDifficultyMode);
 
 function toggleGhostOption() {
   ghostEnabled = !ghostEnabled;
@@ -1283,12 +1302,13 @@ function openLogbookModal() {
       const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
       const scoreTxt = rec ? `${rec.score.toLocaleString()} pts` : `${getLevelMaxDepthM(lvl)}m`;
       const timeTxt = rec?.bestTimeSec > 0 ? formatRunClock(rec.bestTimeSec) : (lvl.isWreck ? 'Wreck' : 'Cave');
+      const modeBadge = renderModeBadgeHtml(rec?.bestDifficulty || rec?.lastDifficulty, { compact: true });
       return `
         <div class="logbook-site-row ${rec ? 'cleared' : ''}">
           <span class="logbook-site-num">L${idx + 1}</span>
           <span class="logbook-site-name">${lvl.isWreck ? '🚢 ' : ''}${escapeHtml(lvl.name)}</span>
           <span class="logbook-site-stat">${escapeHtml(scoreTxt)} · ${escapeHtml(timeTxt)}</span>
-          ${rec ? `<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>` : '<span class="logbook-site-stat">—</span>'}
+          ${rec ? `<span class="lvl-card-badges">${modeBadge}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span></span>` : '<span class="logbook-site-stat">—</span>'}
           <button type="button" class="btn tiny ghost" data-logbook-jump="${lvl.id}" ${locked ? 'disabled' : ''}>Select</button>
         </div>`;
     }).join('');
@@ -1745,6 +1765,12 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       : 'DIVE COMPLETE'
     : 'DIVE FATALITY';
   badge.className = `debrief-badge ${success ? 'ok' : 'danger'}`;
+  const runDiff = session.difficulty || activeDifficulty;
+  const runDiffMeta = getDifficultyMeta(runDiff) || DIFFICULTY_MODES[1];
+  if (debriefModeBadgeEl) {
+    debriefModeBadgeEl.textContent = runDiffMeta.fullBadge;
+    debriefModeBadgeEl.className = `mode-badge mode-${runDiffMeta.id}`;
+  }
 
   document.getElementById('debrief-title').textContent = title;
   document.getElementById('debrief-detail').textContent = detail;
@@ -1800,6 +1826,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     grade: teamSummary.teamRank.grade,
     maxDepthM: diveState.maxDepthM,
     diveTimeSec: diveState.diveTimeSec,
+    difficulty: runDiff,
   });
   saveCareerLogbook(updatedLogbook);
   renderCareerSummary();
@@ -1979,7 +2006,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
           timeSec: teamSummary.avgTimeSec,
           exploredPct: teamSummary.exploredPct,
           collectiblesFound: teamSummary.collectiblesFound,
+          difficulty: runDiff,
           stats: {
+            difficulty: runDiff,
             maxDepthM: diveState.maxDepthM,
             avgHealthPct: teamSummary.avgHealthPct,
             avgSpeedPct: teamSummary.avgSpeedPct,
@@ -2095,6 +2124,8 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
   }
 
   const st = entry.stats || null;
+  const entryDiff = entry.difficulty || st?.difficulty || '';
+  const entryDiffMeta = getDifficultyMeta(entryDiff);
   const collectMax = entry.collectiblesTotal ?? (lvl?.collectibles?.length || 0);
   const cells = [
     ['Dive Time', formatRunClock(entry.timeSec || 0)],
@@ -2107,6 +2138,7 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
         : `${(st?.maxDepthM ?? meta?.maxDepthM ?? getLevelMaxDepthM(lvl)).toFixed?.(1) ?? (st?.maxDepthM ?? meta?.maxDepthM)} m`,
     ],
   ];
+  if (entryDiffMeta) cells.unshift(['Dive Mode', entryDiffMeta.fullBadge]);
   if (st?.avgHealthPct !== undefined) cells.push(['Avg Health', `${st.avgHealthPct}%`]);
   if (st?.avgSpeedPct !== undefined) cells.push(['Speed Rating', `${st.avgSpeedPct}%`]);
   if (st?.avgGasRemainingPct !== undefined) cells.push(['Gas Reserve', `${st.avgGasRemainingPct}%`]);
@@ -2185,10 +2217,11 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
             .map((sr) => {
               const idx = LEVELS.findIndex((l) => l.id === sr.levelId) + 1;
               const name = getLevelById(sr.levelId)?.name || sr.levelId;
+              const srModeBadge = renderModeBadgeHtml(sr.difficulty || sr.stats?.difficulty, { compact: true });
               return `
                 <div class="lb-stats-siterow">
                   <span class="lb-name">L${Math.max(1, idx)}: ${escapeHtml(name)}</span>
-                  <span class="lb-meta">${formatRunClock(sr.timeSec)} · ${sr.exploredPct}%</span>
+                  <span class="lb-meta">${srModeBadge} ${formatRunClock(sr.timeSec)} · ${sr.exploredPct}%</span>
                   <span class="lb-grade">${escapeHtml(sr.grade)}</span>
                   <span class="lb-score">${Number(sr.score || 0).toLocaleString()}</span>
                 </div>
@@ -2237,10 +2270,11 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
         (highlightKey && e.entryKey === highlightKey) ||
         (e.playerId && e.playerId === leaderboard.playerId);
       const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
+      const rowModeBadge = renderModeBadgeHtml(e.difficulty || e.stats?.difficulty, { compact: true });
       return `
         <button type="button" class="lb-row ${isMe ? 'me' : ''}" style="--row-i:${i}" data-lb-idx="${i}" title="View full dive stats">
           <span class="lb-rank">#${i + 1}</span>
-          <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small></span>
+          <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small> ${rowModeBadge}</span>
           <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
           <span class="lb-grade">${escapeHtml(e.grade)}</span>
           <span class="lb-score">${Number(e.score || 0).toLocaleString()}</span>
@@ -4330,6 +4364,7 @@ function stepSimulation(dt) {
     reelMaxMeters: session.reelMaxMeters || 0,
     reelRemainingM: getEffectiveReelRemainingM(session),
     reelingActive: Boolean(session.reelingActive),
+    difficulty: session.difficulty || activeDifficulty,
     dt,
   });
 

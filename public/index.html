@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="104" />
+  <meta name="app-version" content="105" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=104" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=104" />
-  <link rel="stylesheet" href="./css/style.css?v=104" />
+  <link rel="icon" href="./icons/icon-192.png?v=105" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=105" />
+  <link rel="stylesheet" href="./css/style.css?v=105" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=104" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=105" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=104" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=105" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -107,7 +107,7 @@
             <div class="home-menu-divider" role="separator"></div>
             <div class="home-menu-ver-row">
               <span class="home-menu-ver-lbl">Version</span>
-              <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v104</button>
+              <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v105</button>
             </div>
           </div>
         </div>
@@ -133,6 +133,7 @@
           <div class="level-picker-title-wrap">
             <label for="select-level">Expedition Site</label>
             <button id="campaign-progress-pill" class="campaign-progress-pill" type="button" title="Open Career Logbook &amp; Certifications">0 / 25 Cleared</button>
+            <button id="menu-mode-badge" class="mode-badge mode-standard" type="button" title="Cycle Dive Realism Mode (Guided / Standard Tech / Hardcore)">🤿 TECH</button>
             <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
           </div>
           <div class="site-picker-controls">
@@ -279,7 +280,10 @@
           <button id="btn-abort" class="util-btn danger" type="button" title="Abort Dive">✕</button>
         </div>
       </header>
-      <span id="dc-self-name" class="self-tag" title="Your Callsign">YOU</span>
+      <div class="hud-self-row">
+        <span id="dc-self-name" class="self-tag" title="Your Callsign">YOU</span>
+        <span id="dc-mode-badge" class="mode-badge hud-mode-badge mode-standard" title="Active Dive Realism Mode">🤿 TECH</span>
+      </div>
       <button id="hud-gas-callout" class="hud-gas-callout" type="button" hidden aria-live="assertive">
         <div class="gas-callout-copy">
           <strong id="hud-gas-callout-title">STOP · SWITCH TO TMX 14/55</strong>
@@ -433,7 +437,10 @@
     <div class="menu-card debrief-card">
       <div class="debrief-header">
         <div>
-          <div id="debrief-badge" class="debrief-badge">DIVE COMPLETE</div>
+          <div class="debrief-badge-row">
+            <div id="debrief-badge" class="debrief-badge">DIVE COMPLETE</div>
+            <span id="debrief-mode-badge" class="mode-badge mode-standard">🤿 STANDARD TECH</span>
+          </div>
           <h2 id="debrief-title" class="debrief-title">Summary</h2>
         </div>
         <div id="debrief-grade" class="debrief-grade-seal">S</div>
@@ -551,59 +558,59 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=104",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=104",
-        "./js/game/audio.js": "./js/game/audio.js?v=104",
-        "./js/game/collision.js": "./js/game/collision.js?v=104",
-        "./js/game/input.js": "./js/game/input.js?v=104",
-        "./js/game/hud.js": "./js/game/hud.js?v=104",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=104",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=104",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=104",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=104",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=104",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=104",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=104",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=104",
-        "./js/game/silt.js": "./js/game/silt.js?v=104",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=104",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=104",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=104",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=104",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=104",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=104",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=104",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=104",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=104",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=104",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=104",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=104",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=104",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=104",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=104",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=104",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=104",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=104",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=104",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=104",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=104",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=104",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=104",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=104",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=104",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=104",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=104",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=104",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=104",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=104",
-        "./js/levels/index.js": "./js/levels/index.js?v=104",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=104",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=104",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=104",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=104"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=105",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=105",
+        "./js/game/audio.js": "./js/game/audio.js?v=105",
+        "./js/game/collision.js": "./js/game/collision.js?v=105",
+        "./js/game/input.js": "./js/game/input.js?v=105",
+        "./js/game/hud.js": "./js/game/hud.js?v=105",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=105",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=105",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=105",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=105",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=105",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=105",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=105",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=105",
+        "./js/game/silt.js": "./js/game/silt.js?v=105",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=105",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=105",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=105",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=105",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=105",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=105",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=105",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=105",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=105",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=105",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=105",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=105",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=105",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=105",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=105",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=105",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=105",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=105",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=105",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=105",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=105",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=105",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=105",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=105",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=105",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=105",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=105",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=105",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=105",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=105",
+        "./js/levels/index.js": "./js/levels/index.js?v=105",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=105",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=105",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=105",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=105"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=104"></script>
+  <script type="module" src="./js/main.js?v=105"></script>
 </body>
 </html>

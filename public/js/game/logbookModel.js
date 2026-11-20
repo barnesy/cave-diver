@@ -4,6 +4,12 @@
  */
 
 const GRADE_RANK = { 'S+': 6, S: 5, A: 4, B: 3, C: 2, DNF: 1 };
+const DIFFICULTY_RANK = { guided: 1, standard: 2, hardcore: 3 };
+
+function normalizeDifficulty(raw) {
+  if (raw === 'guided' || raw === 'standard' || raw === 'hardcore') return raw;
+  return '';
+}
 
 export function createEmptyLogbook() {
   return {
@@ -11,7 +17,7 @@ export function createEmptyLogbook() {
     totalTimeSec: 0,
     deepestM: 0,
     bestScore: 0,
-    cleared: {}, // levelId -> { score, grade, bestTimeSec, clears }
+    cleared: {}, // levelId -> { score, grade, bestTimeSec, clears, bestDifficulty, lastDifficulty }
   };
 }
 
@@ -25,18 +31,25 @@ function normalizeBook(raw) {
   if (raw.cleared && typeof raw.cleared === 'object') {
     for (const [lid, rec] of Object.entries(raw.cleared)) {
       if (!rec || typeof rec !== 'object') continue;
+      const bestDiff = normalizeDifficulty(rec.bestDifficulty || rec.difficulty);
+      const lastDiff = normalizeDifficulty(rec.lastDifficulty || rec.difficulty || bestDiff);
       base.cleared[lid] = {
         score: Math.max(0, Math.round(Number(rec.score) || 0)),
         grade: typeof rec.grade === 'string' ? rec.grade : 'B',
         bestTimeSec: Math.max(0, Number(rec.bestTimeSec) || 0),
         clears: Math.max(1, Math.round(Number(rec.clears) || 1)),
+        ...(bestDiff ? { bestDifficulty: bestDiff } : {}),
+        ...(lastDiff ? { lastDifficulty: lastDiff } : {}),
       };
     }
   }
   return base;
 }
 
-export function recordDiveInLogbook(rawBook, { levelId, success, score = 0, grade = 'C', maxDepthM = 0, diveTimeSec = 0 }) {
+export function recordDiveInLogbook(
+  rawBook,
+  { levelId, success, score = 0, grade = 'C', maxDepthM = 0, diveTimeSec = 0, difficulty = 'standard' }
+) {
   const book = normalizeBook(rawBook);
   book.totalDives += 1;
   book.totalTimeSec = Math.round((book.totalTimeSec + Math.max(0, Number(diveTimeSec) || 0)) * 10) / 10;
@@ -45,6 +58,7 @@ export function recordDiveInLogbook(rawBook, { levelId, success, score = 0, grad
     book.deepestM = Math.max(book.deepestM, Math.round((Number(maxDepthM) || 0) * 10) / 10);
     const cleanScore = Math.max(0, Math.round(Number(score) || 0));
     const cleanTime = Math.max(0, Math.round((Number(diveTimeSec) || 0) * 10) / 10);
+    const cleanDiff = normalizeDifficulty(difficulty) || 'standard';
     if (cleanScore > book.bestScore) book.bestScore = cleanScore;
     const prev = book.cleared[levelId];
     if (!prev) {
@@ -53,9 +67,15 @@ export function recordDiveInLogbook(rawBook, { levelId, success, score = 0, grad
         grade: grade || 'B',
         bestTimeSec: cleanTime,
         clears: 1,
+        bestDifficulty: cleanDiff,
+        lastDifficulty: cleanDiff,
       };
     } else {
       prev.clears += 1;
+      prev.lastDifficulty = cleanDiff;
+      if ((DIFFICULTY_RANK[cleanDiff] || 0) >= (DIFFICULTY_RANK[prev.bestDifficulty] || 0)) {
+        prev.bestDifficulty = cleanDiff;
+      }
       if (cleanScore > prev.score) prev.score = cleanScore;
       if ((GRADE_RANK[grade] || 0) > (GRADE_RANK[prev.grade] || 0)) prev.grade = grade;
       if (cleanTime > 0 && (prev.bestTimeSec <= 0 || cleanTime < prev.bestTimeSec)) {
@@ -75,6 +95,7 @@ export function seedLogbookFromEntries(rawBook, entries) {
     const s = Math.max(0, Math.round(Number(e.score) || 0));
     const tSec = Math.max(0, Math.round((Number(e.timeSec) || 0) * 10) / 10);
     const maxD = Math.max(0, Math.round((Number(e.stats?.maxDepthM) || Number(e.maxDepthM) || 0) * 10) / 10);
+    const diff = normalizeDifficulty(e.difficulty || e.stats?.difficulty);
     if (s > book.bestScore) book.bestScore = s;
     if (maxD > book.deepestM) book.deepestM = maxD;
     if (!prev) {
@@ -83,6 +104,7 @@ export function seedLogbookFromEntries(rawBook, entries) {
         grade: e.grade || 'B',
         bestTimeSec: tSec,
         clears: 1,
+        ...(diff ? { bestDifficulty: diff, lastDifficulty: diff } : {}),
       };
       if (tSec > 0) book.totalTimeSec = Math.round((book.totalTimeSec + tSec) * 10) / 10;
       book.totalDives = Math.max(book.totalDives, Object.keys(book.cleared).length);
@@ -92,6 +114,10 @@ export function seedLogbookFromEntries(rawBook, entries) {
       if (tSec > 0 && (prev.bestTimeSec <= 0 || tSec < prev.bestTimeSec)) {
         prev.bestTimeSec = tSec;
       }
+      if (diff && (DIFFICULTY_RANK[diff] || 0) > (DIFFICULTY_RANK[prev.bestDifficulty] || 0)) {
+        prev.bestDifficulty = diff;
+      }
+      if (diff && !prev.lastDifficulty) prev.lastDifficulty = diff;
     }
   }
   return book;

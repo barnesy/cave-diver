@@ -2779,3 +2779,162 @@ test('v104 Ghost PB & Par Pacer track synthesis works across all 25 levels and r
   );
   assert.ok(drawn.some((t) => t.includes('👻 PAR') && t.includes('m')), 'Offscreen ghost should draw directional edge pacer');
 });
+
+test('v105 Modes verification (Guided / Standard Tech / Hardcore): silt, impact, currents, snag panic, compass/HUD & mode badges', async () => {
+  const fs = await import('node:fs');
+  const { emitImpactSilt } = await import('../public/js/game/diveSession.js');
+  const { DiveComputerHUD } = await import('../public/js/game/hud.js');
+
+  // 1. Floor silt stir scales monotonically: guided < standard < hardcore (count, radius, alpha)
+  const runFloorSilt = (difficulty) => {
+    const clouds = [];
+    const timer = { accum: 0 };
+    const diver = { x: 114, y: 52.8, vx: 1.4, vy: 0, angle: 0 };
+    for (let step = 0; step < 30; step++) {
+      stirFloorSilt(LEVEL_1, diver, clouds, { dt: 0.1, thrustMag: 0.85, timerState: timer, difficulty });
+    }
+    const avgAlpha = clouds.reduce((s, c) => s + (c.peakAlpha || 0), 0) / Math.max(1, clouds.length);
+    const avgMaxR = clouds.reduce((s, c) => s + (c.maxRadius || 0), 0) / Math.max(1, clouds.length);
+    return { count: clouds.length, avgAlpha, avgMaxR };
+  };
+  const sG = runFloorSilt('guided');
+  const sS = runFloorSilt('standard');
+  const sH = runFloorSilt('hardcore');
+  assert.ok(sG.count < sS.count && sS.count < sH.count, `Floor silt count must scale G(${sG.count}) < S(${sS.count}) < H(${sH.count})`);
+  assert.ok(sG.avgAlpha < sS.avgAlpha && sS.avgAlpha < sH.avgAlpha, 'Floor silt opacity must scale G < S < H');
+  assert.ok(sG.avgMaxR < sS.avgMaxR && sS.avgMaxR < sH.avgMaxR, 'Floor silt maxRadius must scale G < S < H');
+
+  // 2. Wall-impact silt scales monotonically: guided < standard < hardcore
+  const impG = emitImpactSilt([], 20, 20, 0, -1, 2.8, 'guided');
+  const impS = emitImpactSilt([], 20, 20, 0, -1, 2.8, 'standard');
+  const impH = emitImpactSilt([], 20, 20, 0, -1, 2.8, 'hardcore');
+  assert.ok(impG.length < impS.length && impS.length < impH.length, `Impact silt count G(${impG.length}) < S(${impS.length}) < H(${impH.length})`);
+  assert.ok(impG[0].peakAlpha < impS[0].peakAlpha && impS[0].peakAlpha < impH[0].peakAlpha);
+
+  // 3. Karst currents scale monotonically: guided < standard < hardcore
+  const ressel = getLevelById('emergence-du-ressel');
+  const cur = ressel.caveCurrents[0];
+  const measureCurrentPush = (difficulty) => {
+    const sess = createDiveSession(ressel, { difficulty });
+    sess.diver.x = cur.x;
+    sess.diver.y = cur.y;
+    sess.diver.vx = 0;
+    sess.diver.vy = 0;
+    stepDiveSession(sess, { x: 0, y: 0 }, 0.12);
+    return sess.diver.vx * cur.vx + sess.diver.vy * cur.vy;
+  };
+  const curG = measureCurrentPush('guided');
+  const curS = measureCurrentPush('standard');
+  const curH = measureCurrentPush('hardcore');
+  assert.ok(curG > 0 && curG < curS && curS < curH, `Current push must scale G(${curG.toFixed(4)}) < S(${curS.toFixed(4)}) < H(${curH.toFixed(4)})`);
+
+  // 4. Snag entanglement panic & HR spike scale monotonically: guided < standard < hardcore
+  const trap = ressel.snagZones[0];
+  const measureSnagStress = (difficulty) => {
+    const sess = createDiveSession(ressel, { difficulty });
+    sess.diver.x = trap.x;
+    sess.diver.y = trap.y;
+    sess.diveState.panicLevel = 0;
+    sess.diveState.heartRateBpm = 70;
+    for (let i = 0; i < 10; i++) {
+      stepDiveSession(sess, { x: 0, y: 0 }, 0.1);
+    }
+    return { panic: sess.diveState.panicLevel, hr: sess.diveState.heartRateBpm };
+  };
+  const snG = measureSnagStress('guided');
+  const snS = measureSnagStress('standard');
+  const snH = measureSnagStress('hardcore');
+  assert.ok(snG.panic < snS.panic && snS.panic < snH.panic, `Snag panic must scale G(${snG.panic.toFixed(2)}) < S(${snS.panic.toFixed(2)}) < H(${snH.panic.toFixed(2)})`);
+  assert.ok(snG.hr < snS.hr && snS.hr < snH.hr, `Snag HR must scale G(${snG.hr.toFixed(1)}) < S(${snS.hr.toFixed(1)}) < H(${snH.hr.toFixed(1)})`);
+
+  // 5. HUD mode badge + compass visibility override works for Guided on unlined maze & Hardcore on lined cave
+  const makeEl = () => ({
+    textContent: '',
+    className: '',
+    innerHTML: '',
+    hidden: false,
+    style: {},
+    dataset: {},
+    classList: { toggle() {}, add() {}, remove() {} },
+    querySelector: () => makeEl(),
+    addEventListener() {},
+    appendChild() {},
+    setAttribute() {},
+  });
+  const domMap = new Map();
+  const prevDoc = globalThis.document;
+  globalThis.document = {
+    getElementById(id) {
+      if (!domMap.has(id)) domMap.set(id, makeEl());
+      return domMap.get(id);
+    },
+    createElement() { return makeEl(); },
+  };
+  try {
+    const hud = new DiveComputerHUD({ onGasSelect() {}, onReelToggle() {}, onReelRewind() {}, onHeartbeatPulse() {} });
+    const maze = getLevelById('orda-crystal-maze'); // hideWaypointCompass: true
+    const dsMaze = createDiveState();
+    hud.update({
+      diveState: dsMaze,
+      diver: { x: maze.spawn.x, y: maze.spawn.y, name: 'Diver' },
+      nextCheckpoint: maze.checkpoints[0],
+      exitZone: maze.exitZone,
+      checkpointsHit: new Set(),
+      totalCheckpoints: maze.checkpoints.length,
+      level: maze,
+      difficulty: 'guided',
+      dt: 0.016,
+    });
+    assert.equal(domMap.get('dc-mode-badge').textContent, '🧭 GUIDED');
+    assert.ok(domMap.get('dc-objective').innerHTML.includes(maze.checkpoints[0].name), 'Guided mode must show waypoint name & distance even in unlined mazes');
+
+    const dsL1 = createDiveState();
+    hud.update({
+      diveState: dsL1,
+      diver: { x: LEVEL_1.spawn.x, y: LEVEL_1.spawn.y, name: 'Diver' },
+      nextCheckpoint: LEVEL_1.checkpoints[0],
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: new Set(),
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      difficulty: 'hardcore',
+      dt: 0.016,
+    });
+    assert.equal(domMap.get('dc-mode-badge').textContent, '🔥 HARDCORE');
+    assert.ok(!domMap.get('dc-objective').innerHTML.includes(LEVEL_1.checkpoints[0].name), 'Hardcore mode must hide waypoint name/arrows even on Level 1');
+    assert.ok(domMap.get('dc-objective').innerHTML.includes('HARDCORE'));
+  } finally {
+    globalThis.document = prevDoc;
+  }
+
+  // 6. Logbook & Leaderboard persist mode badges cleanly (never downgrading highest cleared tier)
+  let book = createEmptyLogbook();
+  book = recordDiveInLogbook(book, { levelId: 'cenote-el-abismo', success: true, score: 2500, grade: 'A', maxDepthM: 50, diveTimeSec: 130, difficulty: 'hardcore' });
+  assert.equal(book.cleared['cenote-el-abismo'].bestDifficulty, 'hardcore');
+  book = recordDiveInLogbook(book, { levelId: 'cenote-el-abismo', success: true, score: 2400, grade: 'B', maxDepthM: 50, diveTimeSec: 145, difficulty: 'guided' });
+  assert.equal(book.cleared['cenote-el-abismo'].bestDifficulty, 'hardcore', 'Replaying in Guided must not downgrade Hardcore badge');
+  assert.equal(book.cleared['cenote-el-abismo'].lastDifficulty, 'guided');
+
+  const sub = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'cenote-el-abismo',
+    playerId: 'hc1',
+    diverName: 'HardcoreDiver',
+    score: 2600,
+    timeSec: 120,
+    exploredPct: 90,
+    grade: 'S',
+    difficulty: 'hardcore',
+    stats: { maxDepthM: 50.2, difficulty: 'hardcore' },
+  });
+  assert.equal(sub.ok, true);
+  assert.equal(sub.entry.difficulty, 'hardcore');
+  assert.equal(sub.entry.stats.difficulty, 'hardcore');
+  const overall = queryLeaderboardEntries([sub.entry], { mode: 'solo', levelId: 'overall' });
+  assert.equal(overall[0].siteRuns[0].difficulty, 'hardcore');
+
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="menu-mode-badge"'), 'Missing Home screen mode badge');
+  assert.ok(html.includes('id="dc-mode-badge"'), 'Missing HUD mode badge');
+  assert.ok(html.includes('id="debrief-mode-badge"'), 'Missing Debrief mode badge');
+});

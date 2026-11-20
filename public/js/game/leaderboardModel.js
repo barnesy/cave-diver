@@ -100,6 +100,9 @@ export function normalizeLeaderboardSubmission(raw) {
   });
 
   const stats = sanitizeLeaderboardStats(raw.stats, level);
+  const rawDiff = raw.difficulty ?? raw.stats?.difficulty;
+  const difficulty =
+    rawDiff === 'guided' || rawDiff === 'standard' || rawDiff === 'hardcore' ? rawDiff : undefined;
 
   const diverName = sanitizeCallsign(raw.diverName || crew[0]?.name, 'Diver 1');
   if (crew.length === 0) {
@@ -134,6 +137,7 @@ export function normalizeLeaderboardSubmission(raw) {
       exploredPct,
       collectiblesFound,
       collectiblesTotal: maxCollect,
+      ...(difficulty ? { difficulty } : {}),
       ...(stats ? { stats } : {}),
       createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
     },
@@ -171,6 +175,9 @@ function sanitizeLeaderboardStats(raw, level) {
   assign('eanBar', clamp(raw.eanBar, 0, 260));
   assign('tmxBar', clamp(raw.tmxBar, 0, 260));
   assign('o2Bar', clamp(raw.o2Bar, 0, 260));
+  if (raw.difficulty === 'guided' || raw.difficulty === 'standard' || raw.difficulty === 'hardcore') {
+    out.difficulty = raw.difficulty;
+  }
   return Object.keys(out).length > 0 ? out : null;
 }
 
@@ -231,6 +238,9 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
         collectiblesFound: best.collectiblesFound || 0,
         collectiblesTotal: best.collectiblesTotal || 0,
         createdAt: best.createdAt,
+        ...(best.difficulty || best.stats?.difficulty
+          ? { difficulty: best.difficulty || best.stats?.difficulty }
+          : {}),
         ...(best.stats ? { stats: best.stats } : {}),
       }))
       .sort((a, b) => (rankOrder.get(a.levelId) ?? 999) - (rankOrder.get(b.levelId) ?? 999));

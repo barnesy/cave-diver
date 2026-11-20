@@ -116,16 +116,18 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
     timerState.accum -= 1.0;
     disturbed = true;
     const spread = (Math.random() - 0.5) * 1.4;
+    const radScale = difficulty === 'hardcore' ? 1.16 : difficulty === 'guided' ? 0.82 : 1.0;
+    const alphaScale = difficulty === 'hardcore' ? 1.09 : difficulty === 'guided' ? 0.78 : 1.0;
     // Prop-wash jets backward & billows upward from the limestone silt bed
     const cloud = spawnSiltPlume(siltClouds, {
       x: stirX + spread * 0.6,
       y: stirY - Math.random() * 0.22,
       vx: -fx * (0.65 + Math.random() * 0.85) + spread * 0.6,
       vy: -fy * 0.25 - (0.42 + Math.random() * 0.65),
-      radius: 0.75 + proximity * 0.55 + Math.random() * 0.35,
-      maxRadius: 3.4 + proximity * 2.1,
-      life: 28.0 + Math.random() * 12.0,
-      peakAlpha: 0.68 + proximity * 0.25,
+      radius: (0.75 + proximity * 0.55 + Math.random() * 0.35) * radScale,
+      maxRadius: (3.4 + proximity * 2.1) * radScale,
+      life: (28.0 + Math.random() * 12.0) * (difficulty === 'guided' ? 0.8 : difficulty === 'hardcore' ? 1.15 : 1.0),
+      peakAlpha: Math.min(0.95, (0.68 + proximity * 0.25) * alphaScale),
       canBud: true,
     });
     if (cloud && onSpawn) onSpawn(cloud);

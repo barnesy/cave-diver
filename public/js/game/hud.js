@@ -228,6 +228,7 @@ export class DiveComputerHUD {
     this.elBuddy = document.getElementById('dc-buddy');
     this.elSelfHealth = document.getElementById('hud-self-health');
     this.elSelfName = document.getElementById('dc-self-name');
+    this.elModeBadge = document.getElementById('dc-mode-badge');
     this.elGasCallout = document.getElementById('hud-gas-callout');
     this.elGasCalloutTitle = document.getElementById('hud-gas-callout-title');
     this.elGasCalloutDetail = document.getElementById('hud-gas-callout-detail');
@@ -386,8 +387,16 @@ export class DiveComputerHUD {
     reelMaxMeters = 0,
     reelRemainingM = 0,
     reelingActive = false,
+    difficulty = 'standard',
     dt = 0.016,
   }) {
+    const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
+    if (this.elModeBadge) {
+      const modeLbl =
+        cleanDiff === 'hardcore' ? '🔥 HARDCORE' : cleanDiff === 'guided' ? '🧭 GUIDED' : '🤿 TECH';
+      setText(this.elModeBadge, modeLbl);
+      setClass(this.elModeBadge, `mode-badge hud-mode-badge mode-${cleanDiff}`);
+    }
     setText(this.elDepth, diveState.depthM.toFixed(1));
     setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
     setText(this.elTime, formatClock(diveState.diveTimeSec));
@@ -633,14 +642,22 @@ export class DiveComputerHUD {
         <span class="obj-hint">${ascentStep.detail}</span>
       `;
     } else if (nextCheckpoint) {
-      if (level?.hideWaypointCompass) {
+      const hideCompass =
+        cleanDiff === 'guided' ? false : cleanDiff === 'hardcore' ? true : Boolean(level?.hideWaypointCompass);
+      if (hideCompass) {
+        const navHint =
+          reelMaxMeters > 0
+            ? `Unlined · [G] deploy reel (${Math.round(reelRemainingM)}m)`
+            : cleanDiff === 'hardcore'
+              ? 'Hardcore · Navigate by guideline & landmarks'
+              : 'Follow landmarks & cave corridors';
         objectiveHtml = `
           <div class="obj-top-row">
-            <span class="obj-count">MAZE · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+            <span class="obj-count">${cleanDiff === 'hardcore' ? 'HARDCORE' : 'MAZE'} · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
             ${gasBadge}
           </div>
           <span class="obj-name">${level.recoveryTarget && !bodyRecovered ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `Tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`}</span>
-          <span class="obj-hint">Unlined · [G] deploy reel (${Math.round(reelRemainingM)}m)</span>
+          <span class="obj-hint">${navHint}</span>
         `;
       } else {
         const dist = Math.hypot(nextCheckpoint.x - diver.x, nextCheckpoint.y - diver.y);
@@ -656,7 +673,9 @@ export class DiveComputerHUD {
         `;
       }
     } else {
-      if (level?.hideWaypointCompass) {
+      const hideCompass =
+        cleanDiff === 'guided' ? false : cleanDiff === 'hardcore' ? true : Boolean(level?.hideWaypointCompass);
+      if (hideCompass) {
         const needsRecovery = Boolean(level?.recoveryTarget && !bodyRecovered);
         objectiveHtml = `
           <div class="obj-top-row">

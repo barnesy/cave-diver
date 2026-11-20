@@ -600,8 +600,16 @@ export function rewindGuidelineSegment(session) {
 /**
  * Emit wall-impact silt plumes along the rebound normal and return newly created clouds.
  */
-export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed) {
-  const count = impactSpeed > 2.4 ? 6 : 3;
+export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed, difficulty = 'standard') {
+  const isHard = difficulty === 'hardcore';
+  const isGuided = difficulty === 'guided';
+  const count = isHard
+    ? (impactSpeed > 2.4 ? 8 : 5)
+    : isGuided
+      ? (impactSpeed > 2.4 ? 3 : 2)
+      : (impactSpeed > 2.4 ? 6 : 3);
+  const radScale = isHard ? 1.18 : isGuided ? 0.78 : 1.0;
+  const peakAlpha = isHard ? 0.94 : isGuided ? 0.6 : 0.85;
   const spawned = [];
   for (let i = 0; i < count; i++) {
     const opts = {
@@ -609,10 +617,10 @@ export function emitImpactSilt(siltClouds, x, y, nx, ny, impactSpeed) {
       y: y + ny * 0.45 + (Math.random() - 0.5) * 0.9,
       vx: -nx * (0.4 + Math.random() * 0.65) + (Math.random() - 0.5) * 0.5,
       vy: -ny * (0.4 + Math.random() * 0.6) - 0.25,
-      radius: 0.95 + Math.random() * 0.75,
-      maxRadius: 3.4 + Math.random() * 1.2,
-      life: 24.0 + Math.random() * 6.0,
-      peakAlpha: 0.85,
+      radius: (0.95 + Math.random() * 0.75) * radScale,
+      maxRadius: (3.4 + Math.random() * 1.2) * radScale,
+      life: (24.0 + Math.random() * 6.0) * (isGuided ? 0.78 : isHard ? 1.15 : 1.0),
+      peakAlpha,
     };
     const cloud = spawnSiltPlume(siltClouds, opts);
     if (cloud) spawned.push(cloud);
@@ -1423,7 +1431,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   if (hit.collided && hit.impactSpeed > 1.1) {
     callbacks.onImpactSound?.(hit.impactSpeed);
-    const spawned = emitImpactSilt(siltClouds, diver.x, diver.y, hit.nx, hit.ny, hit.impactSpeed);
+    const spawned = emitImpactSilt(siltClouds, diver.x, diver.y, hit.nx, hit.ny, hit.impactSpeed, session.difficulty || 'standard');
     if (spawned.length > 0) {
       callbacks.onSiltSpawn?.(spawned[0]);
     }
