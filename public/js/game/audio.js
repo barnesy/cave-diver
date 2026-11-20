@@ -649,4 +649,50 @@ export class DiveAudio {
       this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14);
     }
   }
+
+  /**
+   * Hydrophone Cave Sonar ping + soft delayed cavern echo.
+   */
+  playSonarPing() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(1480, 0.24, 'sine', 0.068, 0);
+    this.playTone(1468, 0.34, 'sine', 0.026, 0.26);
+    this.playTone(1455, 0.38, 'sine', 0.012, 0.56);
+    this.vibrate?.(18);
+  }
+
+  /**
+   * Subtle electric DPV underwater scooter propeller thrumming pulse.
+   */
+  playDpvHum(intensity = 0.7) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'triangle';
+    const baseHz = 96 + Math.min(1, Math.max(0, intensity)) * 42;
+    osc.frequency.setValueAtTime(baseHz, t);
+    osc.frequency.exponentialRampToValueAtTime(baseHz * 1.08, t + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(baseHz * 0.96, t + 0.26);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.024, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    osc.connect(g);
+    g.connect(this.masterFilter || this.ctx.destination);
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
+    osc.start(t);
+    osc.stop(t + 0.28);
+  }
+
+  /**
+   * Whisper-quiet CCR Rebreather O2 solenoid micro-tick (replaces loud open-circuit exhaust bubbles).
+   */
+  playCcrSolenoid() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(920, 0.035, 'sine', 0.018, 0);
+    this.playTone(1340, 0.025, 'triangle', 0.012, 0.03);
+  }
 }

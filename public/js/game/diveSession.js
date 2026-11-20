@@ -4,6 +4,7 @@ import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './co
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary } from './scoring.js';
+import { castLightRay } from './lighting.js';
 
 const MAX_BUBBLES = 240;
 const _bubbleNormalScratch = { nx: 0, ny: -1 };
@@ -62,7 +63,7 @@ export function computeBreathProfile(diveState, exertion = 0) {
  */
 export function createDiveSession(
   level,
-  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard' } = {}
+  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard', gear = null } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
@@ -71,10 +72,29 @@ export function createDiveSession(
   markExploredAround(exploreCells, exploredCells, spawnX, spawnY, 5.2);
   const exploredPct = Math.round((exploredCells.size / Math.max(1, exploreCells.length)) * 100);
   const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
+  const cleanGear = {
+    sonar: Boolean(gear?.sonar),
+    dpv: Boolean(gear?.dpv),
+    ccr: Boolean(gear?.ccr),
+  };
 
   return {
     level,
     difficulty: cleanDiff,
+    gear: cleanGear,
+    dpv: {
+      equipped: cleanGear.dpv,
+      active: false,
+      batteryPct: 100,
+      thrusting: false,
+      humAccum: 0,
+    },
+    sonar: {
+      equipped: cleanGear.sonar,
+      cooldownSec: 0,
+      maxCooldownSec: 9.0,
+      activePulse: null,
+    },
     ascentConfig: getAscentConfig(level),
     diver: {
       x: spawnX,
@@ -86,10 +106,14 @@ export function createDiveSession(
       torchAngle: 0.15,
       torchManualAim: false,
       torchOn: true,
+      hasCcr: cleanGear.ccr,
+      hasDpv: cleanGear.dpv,
+      dpvActive: false,
+      dpvThrusting: false,
       name: diverName,
       body: createDiverBody(spawnX, spawnY),
     },
-    diveState: createDiveState({ mixOverrides: level.gasOverrides }),
+    diveState: createDiveState({ mixOverrides: level.gasOverrides, ccrEnabled: cleanGear.ccr }),
     diveProfile: [{ t: 0, d: Math.max(0, Number(spawnY.toFixed(1))), gas: 'EAN32', deco: 0 }],
     _lastProfileSampleAt: 0,
     _lastProfileGas: 'EAN32',
@@ -165,6 +189,93 @@ export function computeSurgeWave(zone, timeSec = 0) {
   if (Math.abs(raw) <= 0.35) return 0;
   const sign = raw >= 0 ? 1 : -1;
   return sign * ((Math.abs(raw) - 0.35) / 0.65);
+}
+
+/**
+ * Toggle equipped DPV underwater scooter cruise propulsion on/off.
+ */
+export function toggleDpvScooter(session) {
+  if (!session?.dpv?.equipped || !session.diveState?.alive || session.surfaced) {
+    return { ok: false, active: false, reason: 'unavailable' };
+  }
+  if (!session.dpv.active && (session.dpv.batteryPct || 0) <= 0.5) {
+    return { ok: false, active: false, reason: 'empty' };
+  }
+  session.dpv.active = !session.dpv.active;
+  if (!session.dpv.active) session.dpv.thrusting = false;
+  if (session.diver) {
+    session.diver.dpvActive = session.dpv.active;
+    session.diver.dpvThrusting = session.dpv.thrusting;
+  }
+  return { ok: true, active: session.dpv.active, batteryPct: session.dpv.batteryPct };
+}
+
+/**
+ * Emit a 360-degree Cave Sonar hydrophone pulse (28m range, 9s cooldown).
+ * Maps rock-wall echo contours & highlights nearby relics, hatches, stage caches, markers & targets through darkness/silt.
+ */
+export function triggerSonarPing(session, callbacks = {}) {
+  if (!session?.sonar?.equipped || !session.diveState?.alive || session.surfaced) {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if ((session.sonar.cooldownSec || 0) > 0.05) {
+    return { ok: false, reason: 'cooldown', remainingSec: session.sonar.cooldownSec };
+  }
+
+  const { level, diver } = session;
+  const maxRadiusM = 28.0;
+  const rayCount = 48;
+  const wallHits = [];
+  for (let i = 0; i < rayCount; i++) {
+    const ang = (i / rayCount) * Math.PI * 2;
+    const hit = castLightRay(level, diver.x, diver.y, ang, maxRadiusM, []);
+    if (hit && hit.hitWall && hit.dist > 0.6 && hit.dist <= maxRadiusM) {
+      wallHits.push({ x: hit.x, y: hit.y, dist: hit.dist });
+    }
+  }
+
+  const contacts = [];
+  const addContact = (x, y, kind, icon, label) => {
+    const dist = Math.hypot(x - diver.x, y - diver.y);
+    if (dist <= maxRadiusM && dist >= 0.4) {
+      contacts.push({ x, y, dist, kind, icon, label });
+    }
+  };
+  for (const c of level.collectibles || []) {
+    if (!session.collectedIds?.has(c.id)) addContact(c.x, c.y, 'collectible', '💎', c.name);
+  }
+  for (const h of level.watertightHatches || []) {
+    if (!session.openedHatchIds?.has(h.id)) addContact(h.x, h.y, 'hatch', '⚙️', h.label);
+  }
+  for (const st of level.stageCaches || []) {
+    if (!session.claimedStageIds?.has(st.id)) addContact(st.x, st.y, 'stage', '⛽', st.label);
+  }
+  for (const a of level.lineAnchors || []) {
+    if (!session.placedMarkerIds?.has(a.id)) addContact(a.x, a.y, 'marker', '📍', a.label);
+  }
+  if (level.recoveryTarget && !session.bodyRecovered) {
+    addContact(level.recoveryTarget.x, level.recoveryTarget.y, 'recovery', '🎯', level.recoveryTarget.name);
+  }
+
+  // Wide sonar sweep also charts nearby unexplored cells cleanly
+  const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0);
+  if (newlyMapped > 0 && session.exploreCells?.length > 0) {
+    session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
+  }
+
+  const pulse = {
+    x: diver.x,
+    y: diver.y,
+    ageSec: 0,
+    durationSec: 2.6,
+    maxRadiusM,
+    wallHits,
+    contacts,
+  };
+  session.sonar.activePulse = pulse;
+  session.sonar.cooldownSec = session.sonar.maxCooldownSec || 9.0;
+  callbacks.onSonarPing?.(pulse);
+  return { ok: true, pulse };
 }
 
 /**
@@ -735,34 +846,49 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
     }
 
     // Detect transition into exhale -> trigger regulator exhaust sound & initial twin-port burst
+    // CCR Closed-Circuit Rebreather scrubs CO2 silently (~92% fewer bubbles & no rust percolation!)
+    const ccrSilent = Boolean(diveState?.ccrEnabled) && (diveState?.ccrScrubberPct ?? 0) > 0.1;
     if (nextState === 'exhale' && prevState !== 'exhale') {
       breath.exhaleCount += 1;
       breath.emitAccum = 0;
-      callbacks.onExhale?.({ ...audioPayload, durationSec: profile.exhaleSec });
+      callbacks.onExhale?.({ ...audioPayload, durationSec: profile.exhaleSec, isCcr: ccrSilent });
 
       const { mouthX, mouthY, perpX, perpY } = getDiverMouthPos(diver);
-      const initCount = Math.round(2 + profile.drive * 2.6);
-      for (let i = 0; i < initCount; i++) {
-        const portSign = i % 2 === 0 ? 1 : -1;
-        spawnExhaustBubble(
-          bubbles,
-          mouthX + perpX * portSign * 0.06,
-          mouthY + perpY * portSign * 0.06,
-          (diver.vx || 0) * 0.34,
-          (diver.vy || 0) * 0.18,
-          {
-            primary: i < Math.ceil(initCount * 0.65),
-            panic: profile.panic,
-            intensity: profile.intensity,
+      if (ccrSilent) {
+        // Only emit an occasional whisper-quiet loop-purge micro-bubble on ascent or every 3rd breath
+        if ((diver.vy || 0) < -0.5 || breath.exhaleCount % 3 === 0) {
+          spawnExhaustBubble(bubbles, mouthX, mouthY, (diver.vx || 0) * 0.25, (diver.vy || 0) * 0.15, {
+            primary: false,
+            panic: 0,
+            intensity: 0.2,
             depthM: diver.y,
-            portSign,
-          }
-        );
+            portSign: 1,
+          });
+        }
+      } else {
+        const initCount = Math.round(2 + profile.drive * 2.6);
+        for (let i = 0; i < initCount; i++) {
+          const portSign = i % 2 === 0 ? 1 : -1;
+          spawnExhaustBubble(
+            bubbles,
+            mouthX + perpX * portSign * 0.06,
+            mouthY + perpY * portSign * 0.06,
+            (diver.vx || 0) * 0.34,
+            (diver.vy || 0) * 0.18,
+            {
+              primary: i < Math.ceil(initCount * 0.65),
+              panic: profile.panic,
+              intensity: profile.intensity,
+              depthM: diver.y,
+              portSign,
+            }
+          );
+        }
       }
     }
 
-    // Continuous shaped bubble plume during exhale phase (bell-curve flow envelope)
-    if (nextState === 'exhale') {
+    // Continuous shaped bubble plume during exhale phase (bell-curve flow envelope; suppressed on CCR)
+    if (nextState === 'exhale' && !ccrSilent) {
       const exhaleProgress = Math.max(
         0,
         Math.min(1, (breath.phase - profile.holdEnd) / Math.max(0.05, profile.exhaleEnd - profile.holdEnd))
@@ -916,7 +1042,7 @@ export function stepPeerBubbles(bubbles, peers, dt) {
   if (!Array.isArray(bubbles) || !Array.isArray(peers) || peers.length === 0 || dt <= 0) return;
   for (let i = 0; i < peers.length; i++) {
     const p = peers[i];
-    if (!p || p.alive === false || p.surfaced || (p.y ?? 0) <= 0.6) continue;
+    if (!p || p.alive === false || p.surfaced || (p.y ?? 0) <= 0.6 || p.hasCcr) continue;
     const hrBpm = p.heartRateBpm ?? 78;
     const hrNorm = Math.max(0, Math.min(1, (hrBpm - 65) / 115));
     const isCalmCond = !p.condition || p.condition === 'NOMINAL' || p.condition.startsWith('DECO ');
@@ -975,11 +1101,67 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   const thrustMag = Math.min(1, Math.hypot(ctrlX, ctrlY));
-  const kickPulse = thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0;
+
+  // DPV Underwater Scooter motorized propulsion (1.82x thrust, lower physical exertion, battery drain & propwash!)
+  const dpv = session.dpv;
+  let dpvThrusting = false;
+  if (dpv?.equipped && dpv.active && !session.clippedToShotLine && diveState.alive) {
+    if (dpv.batteryPct <= 0.05) {
+      dpv.active = false;
+      dpv.batteryPct = 0;
+      callbacks.onToast?.('🔋 DPV scooter battery depleted — switching to fins!', 2.6);
+    } else if (thrustMag > 0.08) {
+      dpvThrusting = true;
+      dpv.batteryPct = Math.max(0, dpv.batteryPct - dt * (1.45 * thrustMag));
+      dpv.humAccum = (dpv.humAccum || 0) + dt;
+      if (dpv.humAccum >= 0.28) {
+        dpv.humAccum = 0;
+        callbacks.onDpvHum?.(thrustMag);
+      }
+      if (diver.y > 0.6 && Math.random() < dt * 14) {
+        const bx = diver.x + Math.cos(diver.angle) * 0.42;
+        const by = diver.y + Math.sin(diver.angle) * 0.42;
+        spawnExhaustBubble(session.bubbles, bx, by, -Math.cos(diver.angle) * 2.4, -Math.sin(diver.angle) * 1.4, {
+          primary: false,
+          panic: 0,
+          intensity: 0.35,
+          depthM: diver.y,
+          portSign: Math.random() < 0.5 ? 1 : -1,
+        });
+      }
+      if (dpv.batteryPct <= 0.05) {
+        dpv.active = false;
+        dpvThrusting = false;
+        dpv.batteryPct = 0;
+        callbacks.onToast?.('🔋 DPV scooter battery depleted — switching to fins!', 2.6);
+      }
+    }
+  }
+  if (dpv) dpv.thrusting = dpvThrusting;
+  diver.dpvActive = Boolean(dpv?.active);
+  diver.dpvThrusting = dpvThrusting;
+
+  // Advance Cave Sonar Ping sweep & cooldown
+  if (session.sonar) {
+    if (session.sonar.cooldownSec > 0) {
+      session.sonar.cooldownSec = Math.max(0, session.sonar.cooldownSec - dt);
+    }
+    if (session.sonar.activePulse) {
+      session.sonar.activePulse.ageSec += dt;
+      if (session.sonar.activePulse.ageSec >= session.sonar.activePulse.durationSec) {
+        session.sonar.activePulse = null;
+      }
+    }
+  }
+
+  const effectiveExertion = dpvThrusting ? exertion * 0.52 : exertion;
+  const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
   const swimMult = (imp.swimMultiplier ?? 1) * towDrag;
-  const horizAccel = 6.2 * kickPulse * swimMult;
-  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult;
+  const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
+  const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
+  const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult;
+  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult;
   diver.vx += ctrlX * horizAccel * dt;
   diver.vy += ctrlY * vertAccel * dt;
 
@@ -1423,10 +1605,16 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     timerState: siltStirTimer,
     onSpawn: callbacks.onSiltSpawn,
     difficulty: session.difficulty || 'standard',
+    dpvBoost: dpvThrusting,
   });
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
-    callbacks.onToast?.('Fin wash stirring floor silt! Lift off the bottom for visibility.', 2.2);
+    callbacks.onToast?.(
+      dpvThrusting
+        ? 'DPV propwash stirring heavy silt! Lift off bottom or toggle DPV off [V].'
+        : 'Fin wash stirring floor silt! Lift off the bottom for visibility.',
+      2.2
+    );
   }
 
   if (hit.collided && hit.impactSpeed > 1.1) {
@@ -1441,12 +1629,12 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Step physiology & dive computer (including HR & gas-burn coupling)
+  // Step physiology & dive computer (including HR & gas-burn coupling; DPV lowers physical fin exertion)
   stepDivePhysiology(diveState, {
     depthM: Math.max(0, diver.y),
     prevDepthM,
     dt,
-    exertion,
+    exertion: effectiveExertion,
     headBumpImpulse,
     isStuck,
     thrustMag,

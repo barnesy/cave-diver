@@ -556,12 +556,17 @@ function _getRigGradients(ctx, u) {
 
 /**
  * Draws the Life Aquatic / technical cave diver rig details (drysuit seam, Zissou accent,
- * brushed twinset, glass mask glint, glowing cyan wrist dive computer).
+ * brushed twinset or CCR rebreather shell, glass mask glint, optional torpedo DPV scooter).
  */
-export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
+export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = null) {
   const accent = isPeer ? '#fb923c' : '#ef4444'; // Classic Zissou red cap/accent vs buddy orange
   const trim = isPeer ? '#fdba74' : '#38bdf8';
   const { suitGrad, tankGrad, stageGrad, glassGrad } = _getRigGradients(ctx, u);
+  const hasCcr = Boolean(gearOpts?.hasCcr);
+  const hasDpv = Boolean(gearOpts?.hasDpv);
+  const dpvActive = Boolean(gearOpts?.dpvActive);
+  const dpvThrusting = Boolean(gearOpts?.dpvThrusting);
+  const timeSec = gearOpts?.timeSec || 0;
 
   // Sculpted drysuit torso shell with shading
   ctx.fillStyle = suitGrad;
@@ -577,21 +582,52 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.lineTo(u * 0.18, u * 0.18);
   ctx.stroke();
 
-  // Twin Backgas Cylinders (brushed aluminum metallic gradient)
-  ctx.fillStyle = tankGrad;
-  ctx.beginPath();
-  ctx.roundRect(-u * 0.9, -u * 0.58, u * 1.15, u * 0.35, u * 0.15);
-  ctx.fill();
-  ctx.strokeStyle = '#475569';
-  ctx.lineWidth = Math.max(1, u * 0.035);
-  ctx.stroke();
+  if (hasCcr) {
+    // Closed-Circuit Rebreather (CCR) back-mount yellow/graphite canister & corrugated breathing loop
+    ctx.fillStyle = '#eab308';
+    ctx.beginPath();
+    ctx.roundRect(-u * 0.92, -u * 0.62, u * 1.18, u * 0.40, u * 0.14);
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = Math.max(1.2, u * 0.045);
+    ctx.stroke();
+    // Graphite scrubber head cap & twin corrugated loop hoses arching over shoulder to mouthpiece
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-u * 0.88, -u * 0.62, u * 0.32, u * 0.40);
+    ctx.fillRect(u * 0.06, -u * 0.62, u * 0.20, u * 0.40);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = Math.max(2.2, u * 0.11);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.18, -u * 0.42);
+    ctx.quadraticCurveTo(u * 0.65, -u * 0.50, u * 0.70, u * 0.12);
+    ctx.stroke();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = Math.max(1, u * 0.04);
+    ctx.setLineDash([u * 0.08, u * 0.06]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Glowing green CCR PPO2 setpoint HUD LED on mouthpiece
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.arc(u * 0.66, -u * 0.24, Math.max(1.5, u * 0.055), 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Twin Backgas Cylinders (brushed aluminum metallic gradient)
+    ctx.fillStyle = tankGrad;
+    ctx.beginPath();
+    ctx.roundRect(-u * 0.9, -u * 0.58, u * 1.15, u * 0.35, u * 0.15);
+    ctx.fill();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = Math.max(1, u * 0.035);
+    ctx.stroke();
 
-  // Specular streak & manifold valve
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fillRect(-u * 0.8, -u * 0.53, u * 0.9, u * 0.05);
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(u * 0.16, -u * 0.55, u * 0.15, u * 0.28);
-  ctx.fillRect(-u * 0.66, -u * 0.58, u * 0.1, u * 0.35);
+    // Specular streak & manifold valve
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(-u * 0.8, -u * 0.53, u * 0.9, u * 0.05);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(u * 0.16, -u * 0.55, u * 0.15, u * 0.28);
+    ctx.fillRect(-u * 0.66, -u * 0.58, u * 0.1, u * 0.35);
+  }
 
   // Slung Stage Cylinder (Deco / Travel bottle) with color band
   ctx.fillStyle = stageGrad;
@@ -646,6 +682,57 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale) {
   ctx.moveTo(u * 0.2, -u * 0.38);
   ctx.quadraticCurveTo(u * 0.62, u * 0.42, u * 0.68, u * 0.14);
   ctx.stroke();
+
+  // Torpedo DPV Underwater Scooter gripped ahead of diver when equipped
+  if (hasDpv) {
+    ctx.save();
+    ctx.translate(u * 1.18, u * 0.26);
+    // Tow cord linking scooter shroud to chest harness D-ring
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.72)';
+    ctx.lineWidth = Math.max(1, u * 0.035);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.42, 0);
+    ctx.lineTo(-u * 1.0, -u * 0.1);
+    ctx.stroke();
+    // Rear prop shroud
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = dpvActive ? '#22d3ee' : '#64748b';
+    ctx.lineWidth = Math.max(1.1, u * 0.045);
+    ctx.beginPath();
+    ctx.roundRect(-u * 0.46, -u * 0.24, u * 0.34, u * 0.48, u * 0.08);
+    ctx.fill();
+    ctx.stroke();
+    // Spinning cyan propeller blur when throttling
+    if (dpvThrusting) {
+      const spin = Math.sin(timeSec * 42) * u * 0.16;
+      ctx.strokeStyle = 'rgba(103, 232, 249, 0.9)';
+      ctx.lineWidth = Math.max(1.4, u * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(-u * 0.38, -Math.abs(spin) - u * 0.04);
+      ctx.lineTo(-u * 0.38, Math.abs(spin) + u * 0.04);
+      ctx.stroke();
+    }
+    // Streamlined yellow torpedo battery body & nosecone
+    ctx.fillStyle = dpvActive ? '#facc15' : '#ca8a04';
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.14, -u * 0.19);
+    ctx.lineTo(u * 0.36, -u * 0.19);
+    ctx.quadraticCurveTo(u * 0.64, 0, u * 0.36, u * 0.19);
+    ctx.lineTo(-u * 0.14, u * 0.19);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = Math.max(1, u * 0.04);
+    ctx.stroke();
+    // Nosecone active status LED
+    if (dpvActive) {
+      ctx.fillStyle = dpvThrusting ? '#67e8f9' : '#4ade80';
+      ctx.beginPath();
+      ctx.arc(u * 0.34, 0, Math.max(1.4, u * 0.055), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 /**

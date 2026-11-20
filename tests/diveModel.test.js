@@ -22,6 +22,8 @@ import {
   seedLogbookFromEntries,
   formatLogbookSummary,
   computeCertifications,
+  computeUnlockedGear,
+  sanitizeGearLoadout,
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
@@ -56,6 +58,8 @@ import {
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
   triggerWreckAction,
+  toggleDpvScooter,
+  triggerSonarPing,
   computeSurgeWave,
   sampleGhostPose,
   applyPeerWreckAction,
@@ -3048,4 +3052,143 @@ test('v106 5 new varied expeditions (SS Thistlegorm, Ojamo Iron Mine, Scoresby S
   assert.equal(doneBer.outcome?.success, true);
   assert.ok(doneBer.outcome.title.includes('Bermuda Telemetry Buoy'));
   assert.ok(!doneBer.outcome.detail.includes('aurora'), 'Bermuda probe debrief should not reference Iceland aurora');
+});
+
+test('v107 Unlockable Tech Gear Loadout (Cave Sonar, DPV Scooter & CCR Rebreather): cert unlocks, physics, bubbles, silt wake, co-op sync & HUD', async () => {
+  const fs = await import('node:fs');
+
+  // 1. Cert-gated unlocks via computeUnlockedGear & sanitizeGearLoadout
+  let book = createEmptyLogbook();
+  assert.equal(computeUnlockedGear(book, LEVELS).unlockedIds.size, 0, 'Fresh diver should start with 0 unlocked tech gear');
+  assert.deepEqual(
+    sanitizeGearLoadout({ sonar: true, dpv: true, ccr: true }, computeUnlockedGear(book, LEVELS).unlockedIds),
+    { sonar: false, dpv: false, ccr: false },
+    'Locked gear must be stripped from loadout'
+  );
+
+  book = recordDiveInLogbook(book, { levelId: 'cenote-el-abismo', success: true, score: 2600, grade: 'A', maxDepthM: 50, diveTimeSec: 160 });
+  assert.equal(computeUnlockedGear(book, LEVELS).unlockedIds.has('sonar'), true, '1 clear unlocks Cave Sonar');
+  assert.equal(computeUnlockedGear(book, LEVELS).unlockedIds.has('dpv'), false);
+
+  book = recordDiveInLogbook(book, { levelId: 'eagles-nest-sink', success: true, score: 2700, grade: 'A', maxDepthM: 58, diveTimeSec: 180 });
+  book = recordDiveInLogbook(book, { levelId: 'uss-oriskany-carrier', success: true, score: 2900, grade: 'S', maxDepthM: 65, diveTimeSec: 240 });
+  const allUnlocks = computeUnlockedGear(book, LEVELS).unlockedIds;
+  assert.ok(allUnlocks.has('sonar') && allUnlocks.has('dpv') && allUnlocks.has('ccr'), '3 clears + 65m unlocks all 3 tech gear items');
+
+  // 2. Cave Sonar Ping: casts wall echo contour rays, pings nearby contacts, boosts explored cells & enforces cooldown
+  const ori = getLevelById('uss-oriskany-carrier');
+  const sSonar = createDiveSession(ori, { gear: { sonar: true } });
+  sSonar.diver.x = 36;
+  sSonar.diver.y = 52;
+  const exploredBefore = sSonar.exploredCells.size;
+  let sonarSoundFired = 0;
+  const ping = triggerSonarPing(sSonar, { onSonarPing: () => { sonarSoundFired++; } });
+  assert.equal(ping.ok, true);
+  assert.equal(sonarSoundFired, 1);
+  assert.ok(ping.pulse.wallHits.length >= 12, `Expected >=12 sonar wall hits, got ${ping.pulse.wallHits.length}`);
+  assert.ok(ping.pulse.contacts.length >= 2, `Expected sonar contacts near Hangar Bay, got ${ping.pulse.contacts.length}`);
+  assert.ok(sSonar.exploredCells.size > exploredBefore, 'Sonar sweep should chart nearby unexplored cells');
+  assert.equal(triggerSonarPing(sSonar).reason, 'cooldown', 'Second immediate ping must be blocked by cooldown');
+  for (let i = 0; i < 30; i++) stepDiveSession(sSonar, { x: 0, y: 0 }, 0.1);
+  assert.equal(sSonar.sonar.activePulse, null, 'Sonar pulse should clear cleanly after durationSec');
+
+  // 3. DPV Underwater Scooter: boosts swim speed, drains battery, amplifies floor silt wake & auto-disables when empty
+  const sFins = createDiveSession(LEVEL_1);
+  const sDpv = createDiveSession(LEVEL_1, { gear: { dpv: true } });
+  sFins.diver.x = 40; sFins.diver.y = 22;
+  sDpv.diver.x = 40; sDpv.diver.y = 22;
+  assert.equal(toggleDpvScooter(sDpv).active, true);
+  let dpvHums = 0;
+  for (let i = 0; i < 20; i++) {
+    stepDiveSession(sFins, { x: 1, y: 0 }, 0.05);
+    stepDiveSession(sDpv, { x: 1, y: 0 }, 0.05, { onDpvHum: () => { dpvHums++; } });
+  }
+  assert.ok(sDpv.diver.vx > sFins.diver.vx * 1.45, `Expected DPV speed (${sDpv.diver.vx.toFixed(2)}) >> fins (${sFins.diver.vx.toFixed(2)})`);
+  assert.ok(sDpv.dpv.batteryPct < 99.5, 'DPV throttling must consume battery');
+  assert.ok(dpvHums >= 1, 'DPV throttling should trigger electric motor hum callback');
+
+  // Floor silt wake: DPV boost kicks up more silt clouds than standard fins near floor
+  const floorFinClouds = [];
+  const floorDpvClouds = [];
+  const tFin = { accum: 0 };
+  const tDpv = { accum: 0 };
+  const dFloor = { x: 114, y: 52.7, vx: 1.5, vy: 0, angle: 0 };
+  for (let i = 0; i < 18; i++) {
+    stirFloorSilt(LEVEL_1, dFloor, floorFinClouds, { dt: 0.1, thrustMag: 0.85, timerState: tFin, dpvBoost: false });
+    stirFloorSilt(LEVEL_1, dFloor, floorDpvClouds, { dt: 0.1, thrustMag: 0.85, timerState: tDpv, dpvBoost: true });
+  }
+  assert.ok(floorDpvClouds.length > floorFinClouds.length, `DPV propwash (${floorDpvClouds.length}) should stir more floor silt than fins (${floorFinClouds.length})`);
+
+  // Battery exhaustion auto-disables DPV cleanly
+  sDpv.dpv.batteryPct = 0.08;
+  stepDiveSession(sDpv, { x: 1, y: 0 }, 0.2);
+  assert.equal(sDpv.dpv.active, false, 'Empty battery must auto-disable DPV');
+  assert.equal(toggleDpvScooter(sDpv).reason, 'empty');
+
+  // 4. CCR Closed-Circuit Rebreather: 2.6x gas economy, near-zero bubbles, faster O2 deco & scrubber drain
+  const ocState = createDiveState();
+  const ccrState = createDiveState({ ccrEnabled: true });
+  switchGas(ocState, 'TMX1455');
+  switchGas(ccrState, 'TMX1455');
+  for (let i = 0; i < 60; i++) {
+    stepDivePhysiology(ocState, { depthM: 50, prevDepthM: 50, dt: 1.0, exertion: 0.4 });
+    stepDivePhysiology(ccrState, { depthM: 50, prevDepthM: 50, dt: 1.0, exertion: 0.4 });
+  }
+  const ocBurn = 200 - ocState.tanks.TMX1455.bar;
+  const ccrBurn = 200 - ccrState.tanks.TMX1455.bar;
+  assert.ok(ccrBurn < ocBurn * 0.45, `CCR gas burn (${ccrBurn.toFixed(1)} bar) should be ~0.38x open circuit (${ocBurn.toFixed(1)} bar)`);
+  assert.ok(ccrState.ccrScrubberPct < 96 && ccrState.ccrScrubberPct > 80, `Expected realistic scrubber drain, got ${ccrState.ccrScrubberPct}`);
+
+  // CCR suppresses open-circuit bubble exhaust & tags onExhale with isCcr=true
+  const sOc = createDiveSession(LEVEL_1);
+  const sCcr = createDiveSession(LEVEL_1, { gear: { ccr: true } });
+  sOc.diver.x = 40; sOc.diver.y = 20;
+  sCcr.diver.x = 40; sCcr.diver.y = 20;
+  let sawCcrExhale = false;
+  for (let i = 0; i < 160; i++) {
+    stepDiveSession(sOc, { x: 0, y: 0 }, 0.05);
+    stepDiveSession(sCcr, { x: 0, y: 0 }, 0.05, { onExhale: (ev) => { if (ev?.isCcr) sawCcrExhale = true; } });
+  }
+  assert.equal(sawCcrExhale, true, 'CCR exhale callback should pass isCcr: true for solenoid audio');
+  assert.ok(sCcr.bubbles.length < sOc.bubbles.length * 0.25, `CCR bubbles (${sCcr.bubbles.length}) should be vastly lower than OC (${sOc.bubbles.length})`);
+
+  // 5. Co-op P2P relay preserves hasCcr, hasDpv, dpvActive, dpvThrusting
+  const peerMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'GEAR', hostId: 'h1', hostName: 'Lead', levelId: LEVEL_1.id });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'Buddy' }, (m) => peerMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('h1', {
+    type: 'player_state',
+    state: { seq: 1, x: 18, y: 14, vx: 2.2, vy: 0, angle: 0, hasCcr: true, hasDpv: true, dpvActive: true, dpvThrusting: true, alive: true },
+  });
+  const relayed = peerMsgs.find((m) => m.type === 'peer_state');
+  assert.equal(relayed?.state?.hasCcr, true);
+  assert.equal(relayed?.state?.hasDpv, true);
+  assert.equal(relayed?.state?.dpvActive, true);
+  assert.equal(relayed?.state?.dpvThrusting, true);
+  coord.destroy();
+
+  // 6. Renderer draws CCR + DPV rig & Sonar Ping sweep cleanly + HTML hooks exist
+  const noopCtx = new Proxy({
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+    measureText: (t) => ({ width: String(t).length * 7 }),
+  }, { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true });
+  CaveRenderer.prototype._drawSonarPulse.call(
+    {},
+    noopCtx,
+    { ...ping.pulse, ageSec: 0.7 },
+    (x) => 400 + x * 20,
+    (y) => 300 + y * 20,
+    20,
+    5.0
+  );
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="menu-gear-dock"'), 'Missing Home Tech Gear Loadout dock');
+  assert.ok(html.includes('id="hud-gear-dock"'), 'Missing HUD Tech Gear dock');
+  assert.ok(html.includes('id="btn-hud-sonar"'), 'Missing HUD Sonar button');
+  assert.ok(html.includes('id="btn-hud-dpv"'), 'Missing HUD DPV button');
+  assert.ok(html.includes('id="hud-ccr-pill"'), 'Missing HUD CCR pill');
+  assert.ok(html.includes('id="debrief-gear-badge"'), 'Missing Debrief gear badge');
 });

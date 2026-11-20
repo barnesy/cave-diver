@@ -234,3 +234,63 @@ export function computeCertifications(rawBook, levels = []) {
   const highest = earned.length > 0 ? earned[earned.length - 1] : null;
   return { certs, earned, highest, next, wrecksCleared, sGrades };
 }
+
+/**
+ * Unlockable Technical Gear Catalog tied directly to the Career Certification Ladder.
+ */
+export const TECH_GEAR_CATALOG = [
+  {
+    id: 'sonar',
+    icon: '📡',
+    name: 'Cave Sonar',
+    shortName: 'SONAR',
+    hotkey: 'Q',
+    certId: 'open-water',
+    certName: 'Open Water',
+    requirement: 'Clear 1 site',
+    summary: 'Pulse [Q] for a 28m wireframe wall & relic echo sweep through darkness and silt.',
+  },
+  {
+    id: 'dpv',
+    icon: '🛴',
+    name: 'DPV Scooter',
+    shortName: 'DPV',
+    hotkey: 'V',
+    certId: 'cavern',
+    certName: 'Cavern Diver',
+    requirement: 'Clear 3 sites',
+    summary: 'Toggle [V] for 1.8× motorized propulsion & calmer BPM — watch battery & floor silt wake.',
+  },
+  {
+    id: 'ccr',
+    icon: '🫁',
+    name: 'CCR Rebreather',
+    shortName: 'CCR',
+    hotkey: '',
+    certId: 'trimix-normoxic',
+    certName: 'Normoxic Trimix',
+    requirement: 'Reach 60m+',
+    summary: 'Closed-circuit loop: 92% fewer bubbles, 2.6× gas endurance, zero rust rain & 20% faster deco.',
+  },
+];
+
+export function computeUnlockedGear(rawBook, levels = []) {
+  const certInfo = computeCertifications(rawBook, levels);
+  const earnedIds = new Set(certInfo.earned.map((c) => c.id));
+  const items = TECH_GEAR_CATALOG.map((g) => ({
+    ...g,
+    unlocked: earnedIds.has(g.certId),
+  }));
+  const unlockedIds = new Set(items.filter((g) => g.unlocked).map((g) => g.id));
+  return { items, unlockedIds, certInfo };
+}
+
+export function sanitizeGearLoadout(rawLoadout, unlockedIds) {
+  const src = rawLoadout && typeof rawLoadout === 'object' ? rawLoadout : {};
+  const canUse = (id) => (unlockedIds instanceof Set ? unlockedIds.has(id) : Boolean(unlockedIds));
+  return {
+    sonar: Boolean(src.sonar) && canUse('sonar'),
+    dpv: Boolean(src.dpv) && canUse('dpv'),
+    ccr: Boolean(src.ccr) && canUse('ccr'),
+  };
+}

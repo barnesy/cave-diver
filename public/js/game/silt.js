@@ -68,22 +68,24 @@ const _siltNormalTmp = { nx: 0, ny: 0 };
  * stirring up billowing limestone silt plumes that obscure visibility.
  * Returns true if substantial floor silt was disturbed this tick.
  */
-export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState, onSpawn = null, difficulty = 'standard' }) {
+export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerState, onSpawn = null, difficulty = 'standard', dpvBoost = false }) {
   if (!diver || diver.y < 5.0) return false;
 
   const diffMult = difficulty === 'hardcore' ? 1.35 : difficulty === 'guided' ? 0.56 : 1.0;
-  const kickBoost = diver.body ? 0.55 + diver.body.kickSurge * 1.45 : 1.0;
+  const kickBoost = dpvBoost ? 1.75 : (diver.body ? 0.55 + diver.body.kickSurge * 1.45 : 1.0);
   const vx = diver.vx || 0;
   const vy = diver.vy || 0;
   const speed = Math.sqrt(vx * vx + vy * vy);
-  const activity = Math.min(1.5, thrustMag * 0.95 * kickBoost + speed * 0.35);
+  const activity = Math.min(dpvBoost ? 2.2 : 1.5, thrustMag * 0.95 * kickBoost + speed * 0.35);
   if (activity < 0.12) return false;
 
   // Sample clearance beneath pelvis and both articulated fin tips (zero allocations)
+  const maxProbe = dpvBoost ? 2.35 : 1.65;
+  const maxClear = dpvBoost ? 2.25 : 1.55;
   let minClearance = Infinity;
   let stirX = diver.x;
   let stirY = diver.y;
-  const c0 = sampleFloorClearance(level, diver.x, diver.y + 0.15, 1.65);
+  const c0 = sampleFloorClearance(level, diver.x, diver.y + 0.15, maxProbe);
   if (c0 !== null && c0 < minClearance) {
     minClearance = c0;
     stirX = diver.x;
@@ -93,7 +95,7 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
   if (legs) {
     for (let i = 0; i < legs.length; i++) {
       const tip = legs[i].finTip;
-      const c = sampleFloorClearance(level, tip.x, tip.y, 1.65);
+      const c = sampleFloorClearance(level, tip.x, tip.y, maxProbe);
       if (c !== null && c < minClearance) {
         minClearance = c;
         stirX = tip.x;
@@ -102,10 +104,10 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
     }
   }
 
-  if (minClearance > 1.55) return false;
+  if (minClearance > maxClear) return false;
 
-  const proximity = 1 - minClearance / 1.55; // 0..1 as fins skim the floor
-  const spawnRate = (2.8 + proximity * 8.5) * activity * diffMult;
+  const proximity = 1 - minClearance / maxClear; // 0..1 as fins or DPV propwash skim the floor
+  const spawnRate = (2.8 + proximity * 8.5) * activity * diffMult * (dpvBoost ? 1.35 : 1.0);
   timerState.accum = (timerState.accum || 0) + spawnRate * dt;
 
   let disturbed = false;
@@ -116,8 +118,8 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
     timerState.accum -= 1.0;
     disturbed = true;
     const spread = (Math.random() - 0.5) * 1.4;
-    const radScale = difficulty === 'hardcore' ? 1.16 : difficulty === 'guided' ? 0.82 : 1.0;
-    const alphaScale = difficulty === 'hardcore' ? 1.09 : difficulty === 'guided' ? 0.78 : 1.0;
+    const radScale = (difficulty === 'hardcore' ? 1.16 : difficulty === 'guided' ? 0.82 : 1.0) * (dpvBoost ? 1.18 : 1.0);
+    const alphaScale = (difficulty === 'hardcore' ? 1.09 : difficulty === 'guided' ? 0.78 : 1.0) * (dpvBoost ? 1.06 : 1.0);
     // Prop-wash jets backward & billows upward from the limestone silt bed
     const cloud = spawnSiltPlume(siltClouds, {
       x: stirX + spread * 0.6,

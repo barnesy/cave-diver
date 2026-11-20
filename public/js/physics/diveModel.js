@@ -131,7 +131,7 @@ export function computeDiverImpairment(state) {
   };
 }
 
-export function createDiveState({ mixOverrides } = {}) {
+export function createDiveState({ mixOverrides, ccrEnabled = false } = {}) {
   const mixes = {};
   const tanks = {};
   for (const id of GAS_ORDER) {
@@ -150,6 +150,9 @@ export function createDiveState({ mixOverrides } = {}) {
     mixes,
     activeGasId: 'EAN32',
     tanks,
+    ccrEnabled: Boolean(ccrEnabled),
+    ccrScrubberPct: 100,
+    ccrSetpointBar: 1.3,
     depthM: 0,
     maxDepthM: 0,
     diveTimeSec: 0,
@@ -331,11 +334,18 @@ export function stepDivePhysiology(
 
   // Gas consumption coupled directly to Heart Rate / breathing exertion (rest 16 L/min -> panic ~47 L/min)
   // Above 90m (10 ATA), taper pressure multiplier slightly (semi-closed expedition gas efficiency) so 150–185m traverses stay viable
+  // Closed-Circuit Rebreather (CCR) scrubs CO2 & recycles ~62% of diluent/O2 while scrubber media remains active
   const hrNorm = Math.max(0, (state.heartRateBpm - 68) / 100);
   const baseSacLPerMin = (16 + exertion * 11.5) * (1 + hrNorm * 0.85);
   const gasCompressionScale = 5.0;
   const effAmb = pAmb <= 10.0 ? pAmb : 10.0 + (pAmb - 10.0) * 0.48;
-  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * effAmb * dt;
+  const ccrLoopActive = Boolean(state.ccrEnabled) && (state.ccrScrubberPct ?? 0) > 0.1;
+  if (state.ccrEnabled && clampedDepth > 0.3) {
+    const scrubBurnRate = 0.115 + exertion * 0.065 + (state.panicLevel || 0) * 0.08;
+    state.ccrScrubberPct = Math.max(0, (state.ccrScrubberPct ?? 100) - scrubBurnRate * dt);
+  }
+  const ccrGasMult = ccrLoopActive ? 0.38 : 1.0;
+  const litersBurned = (baseSacLPerMin / 60) * gasCompressionScale * effAmb * ccrGasMult * dt;
 
   if (clampedDepth > 0.3) {
     tank.litersRemaining = Math.max(0, tank.litersRemaining - litersBurned);
@@ -387,12 +397,15 @@ export function stepDivePhysiology(
   const pAlvHe = Math.max(0, pAmb - WATER_VAPOR_BAR) * gas.fHe;
 
   // Gameplay-paced deep helium off-gassing above 9m keeps 120-185m deco stops engaging (1-2 min) rather than 8-11 min idle waiting
+  // CCR optimal deco setpoint also accelerates shallow decompression off-gassing by ~22%
   const deepHeOffgasMult = clampedDepth > 9.0 ? 2.2 : 1.0;
+  const ccrDecoOffgasMult = ccrLoopActive && clampedDepth <= 9.5 ? 1.22 : 1.0;
   for (let i = 0; i < state.compartments.length; i++) {
     const c = state.compartments[i];
     const spec = COMPARTMENTS[i];
-    c.pN2 = schrienerUpdate(c.pN2, pAlvN2, dt, spec.halfN2);
-    const heDt = pAlvHe < c.pHe ? dt * deepHeOffgasMult : dt;
+    const n2Dt = pAlvN2 < c.pN2 ? dt * ccrDecoOffgasMult : dt;
+    c.pN2 = schrienerUpdate(c.pN2, pAlvN2, n2Dt, spec.halfN2);
+    const heDt = pAlvHe < c.pHe ? dt * deepHeOffgasMult * ccrDecoOffgasMult : dt;
     c.pHe = schrienerUpdate(c.pHe, pAlvHe, heDt, spec.halfHe);
   }
 

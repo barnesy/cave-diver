@@ -16,6 +16,9 @@ import {
   seedLogbookFromEntries,
   formatLogbookSummary,
   computeCertifications,
+  TECH_GEAR_CATALOG,
+  computeUnlockedGear,
+  sanitizeGearLoadout,
 } from './game/logbookModel.js';
 import {
   createDiveSession,
@@ -25,6 +28,8 @@ import {
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
   triggerWreckAction,
+  toggleDpvScooter,
+  triggerSonarPing,
   sampleGhostPose,
   buildParGhostTrack,
   applyPeerWreckAction,
@@ -476,7 +481,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=106" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=107" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1093,6 +1098,8 @@ const input = new InputController({
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
   onWreckAction: () => handleWreckAction(),
+  onSonarPing: () => handleSonarPing(),
+  onDpvToggle: () => handleDpvToggle(),
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -1100,6 +1107,190 @@ const wreckActionLabelEl = document.getElementById('wreck-action-label');
 const wreckActionDetailEl = document.getElementById('wreck-action-detail');
 const wreckActionProgressEl = document.getElementById('wreck-action-progress');
 let lastWreckActionKey = '';
+
+// Unlockable Tech Gear Loadout (Cave Sonar, DPV Scooter & CCR Rebreather tied to Cert Ladder)
+const GEAR_LOADOUT_KEY = 'caveDiverGearLoadout_v1';
+const gearDockGridEl = document.getElementById('gear-dock-grid');
+const gearDockSubEl = document.getElementById('gear-dock-sub');
+const hudGearDockEl = document.getElementById('hud-gear-dock');
+const btnHudSonar = document.getElementById('btn-hud-sonar');
+const btnHudDpv = document.getElementById('btn-hud-dpv');
+const hudCcrPill = document.getElementById('hud-ccr-pill');
+const debriefGearBadgeEl = document.getElementById('debrief-gear-badge');
+let savedGearLoadout = { sonar: false, dpv: false, ccr: false };
+let lastGearHudKey = '';
+try {
+  const rawGear = localStorage.getItem(GEAR_LOADOUT_KEY);
+  if (rawGear) {
+    const parsedGear = JSON.parse(rawGear);
+    if (parsedGear && typeof parsedGear === 'object') {
+      savedGearLoadout = {
+        sonar: Boolean(parsedGear.sonar),
+        dpv: Boolean(parsedGear.dpv),
+        ccr: Boolean(parsedGear.ccr),
+      };
+    }
+  }
+} catch {}
+
+function saveGearLoadout() {
+  try {
+    localStorage.setItem(GEAR_LOADOUT_KEY, JSON.stringify(savedGearLoadout));
+  } catch {}
+}
+
+function getEffectiveGearLoadout() {
+  const book = loadCareerLogbook();
+  const { unlockedIds } = computeUnlockedGear(book, LEVELS);
+  return sanitizeGearLoadout(savedGearLoadout, unlockedIds);
+}
+
+function renderTechGearDock() {
+  if (!gearDockGridEl) return;
+  const book = loadCareerLogbook();
+  const { items, unlockedIds } = computeUnlockedGear(book, LEVELS);
+  const eff = sanitizeGearLoadout(savedGearLoadout, unlockedIds);
+  const unlockedCount = unlockedIds.size;
+  if (gearDockSubEl) {
+    gearDockSubEl.textContent =
+      unlockedCount === items.length
+        ? 'All Tech Gear Unlocked · Tap to equip'
+        : `${unlockedCount}/${items.length} Unlocked via Career Certs`;
+  }
+  gearDockGridEl.innerHTML = items
+    .map((g) => {
+      const equipped = eff[g.id];
+      const cls = g.unlocked ? (equipped ? 'equipped' : 'unlocked') : 'locked';
+      const stateTxt = g.unlocked ? (equipped ? 'ON' : 'OFF') : '🔒';
+      const metaTxt = g.unlocked
+        ? g.id === 'sonar'
+          ? '[Q] 28m Scan'
+          : g.id === 'dpv'
+            ? '[V] 1.8× Speed'
+            : 'Silent · 2.6× Gas'
+        : g.requirement;
+      return `
+        <button type="button" class="gear-slot-btn ${cls}" data-gear-id="${g.id}" title="${escapeHtml(g.summary)}" aria-pressed="${equipped ? 'true' : 'false'}">
+          <span class="gear-slot-top"><span>${g.icon} ${g.shortName}</span><span class="gear-slot-state">${stateTxt}</span></span>
+          <span class="gear-slot-meta">${escapeHtml(metaTxt)}</span>
+        </button>
+      `;
+    })
+    .join('');
+}
+
+gearDockGridEl?.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-gear-id]');
+  if (!btn) return;
+  const gid = btn.dataset.gearId;
+  const book = loadCareerLogbook();
+  const { items, unlockedIds } = computeUnlockedGear(book, LEVELS);
+  const item = items.find((g) => g.id === gid);
+  if (!item) return;
+  if (!unlockedIds.has(gid)) {
+    showToast(`🔒 Unlock ${item.name}: earn ${item.certName} (${item.requirement})`, 3.2);
+    return;
+  }
+  savedGearLoadout[gid] = !savedGearLoadout[gid];
+  saveGearLoadout();
+  renderTechGearDock();
+  showToast(
+    savedGearLoadout[gid] ? `${item.icon} ${item.name} equipped — ${item.summary}` : `${item.icon} ${item.name} unequipped`,
+    2.6
+  );
+});
+
+function handleSonarPing() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  if (!session.sonar?.equipped) return false;
+  const res = triggerSonarPing(session, {
+    onSonarPing: () => audio.playSonarPing(),
+  });
+  if (res.ok) {
+    const count = res.pulse?.contacts?.length || 0;
+    showToast(count > 0 ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!` : '📡 Sonar contour sweep!', 1.8);
+    return true;
+  }
+  if (res.reason === 'cooldown') {
+    showToast(`📡 Sonar recharging (${Math.ceil(res.remainingSec)}s)...`, 1.4);
+    return true;
+  }
+  return false;
+}
+
+function handleDpvToggle() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  if (!session.dpv?.equipped) return false;
+  const res = toggleDpvScooter(session);
+  if (res.ok) {
+    audio.playClipLine(res.active);
+    showToast(
+      res.active
+        ? `🛴 DPV Scooter ENGAGED (${Math.round(res.batteryPct)}% batt) — watch floor silt wake!`
+        : '🛴 DPV Scooter OFF — fin propulsion',
+      2.0
+    );
+    return true;
+  }
+  if (res.reason === 'empty') {
+    showToast('🔋 DPV battery empty — swim on fins.', 1.8);
+    return true;
+  }
+  return false;
+}
+
+btnHudSonar?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleSonarPing();
+});
+btnHudDpv?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleDpvToggle();
+});
+
+function syncTechGearHud(sess) {
+  if (!hudGearDockEl) return;
+  const hasSonar = Boolean(sess?.sonar?.equipped);
+  const hasDpv = Boolean(sess?.dpv?.equipped);
+  const hasCcr = Boolean(sess?.gear?.ccr);
+  if (!sess || (!hasSonar && !hasDpv && !hasCcr)) {
+    if (lastGearHudKey !== 'none') {
+      lastGearHudKey = 'none';
+      hudGearDockEl.hidden = true;
+    }
+    return;
+  }
+  const cdSec = Math.ceil(sess.sonar?.cooldownSec || 0);
+  const dpvPct = Math.round(sess.dpv?.batteryPct ?? 100);
+  const dpvOn = Boolean(sess.dpv?.active);
+  const ccrPct = Math.round(sess.diveState?.ccrScrubberPct ?? 100);
+  const key = `${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
+  if (key === lastGearHudKey) return;
+  lastGearHudKey = key;
+  hudGearDockEl.hidden = false;
+
+  if (btnHudSonar) {
+    btnHudSonar.hidden = !hasSonar;
+    if (hasSonar) {
+      btnHudSonar.textContent = cdSec > 0 ? `📡 ${cdSec}s` : '📡 SONAR [Q]';
+      btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
+    }
+  }
+  if (btnHudDpv) {
+    btnHudDpv.hidden = !hasDpv;
+    if (hasDpv) {
+      btnHudDpv.textContent = dpvPct <= 0 ? '🔋 DPV 0%' : dpvOn ? `🛴 DPV ON · ${dpvPct}%` : `🛴 DPV · ${dpvPct}%`;
+      btnHudDpv.className = `gear-hud-btn dpv ${dpvPct <= 0 ? 'empty' : dpvOn ? 'active' : ''}`;
+    }
+  }
+  if (hudCcrPill) {
+    hudCcrPill.hidden = !hasCcr;
+    if (hasCcr) {
+      hudCcrPill.textContent = ccrPct <= 0 ? '🫁 CCR BAILOUT' : `🫁 CCR ${ccrPct}%`;
+      hudCcrPill.className = `gear-hud-pill ccr ${ccrPct < 20 ? 'low' : ''}`;
+    }
+  }
+}
 
 // Difficulty Realism Mode (Guided / Standard Tech / Hardcore), PB Ghost Replay & First-Dive Guide
 const DIFFICULTY_PREF_KEY = 'caveDiverDifficulty_v1';
@@ -1581,7 +1772,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   const diverName = playerNameInput?.value.trim() || 'Diver 1';
   const slotOffsets = [0, -1.35, 1.35, -2.5];
   const spawnOffsetX = multiplayer ? (slotOffsets[lan.getPlayerSlotIndex()] ?? 0) : 0;
-  session = createDiveSession(activeLevel, { diverName, spawnOffsetX, difficulty: activeDifficulty });
+  const activeGear = getEffectiveGearLoadout();
+  session = createDiveSession(activeLevel, { diverName, spawnOffsetX, difficulty: activeDifficulty, gear: activeGear });
+  lastGearHudKey = '';
+  syncTechGearHud(session);
   refreshActiveGhostTrack(activeLevel);
   session.endedState = null;
   session.localOutcome = null;
@@ -1732,6 +1926,10 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         torchOn: diver.torchOn,
         torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
         torchManualAim: Boolean(diver.torchManualAim),
+        hasCcr: Boolean(diver.hasCcr),
+        hasDpv: Boolean(diver.hasDpv),
+        dpvActive: Boolean(diver.dpvActive),
+        dpvThrusting: Boolean(diver.dpvThrusting),
         alive: diveState.alive,
         carryingBody: Boolean(session.carryingBody),
         rescueTargetId: session.rescueTargetId || '',
@@ -1770,6 +1968,15 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (debriefModeBadgeEl) {
     debriefModeBadgeEl.textContent = runDiffMeta.fullBadge;
     debriefModeBadgeEl.className = `mode-badge mode-${runDiffMeta.id}`;
+  }
+  if (debriefGearBadgeEl) {
+    const equippedIcons = TECH_GEAR_CATALOG.filter((g) => session.gear?.[g.id]).map((g) => `${g.icon} ${g.shortName}`);
+    if (equippedIcons.length > 0) {
+      debriefGearBadgeEl.textContent = equippedIcons.join(' · ');
+      debriefGearBadgeEl.hidden = false;
+    } else {
+      debriefGearBadgeEl.hidden = true;
+    }
   }
 
   document.getElementById('debrief-title').textContent = title;
@@ -1829,6 +2036,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     difficulty: runDiff,
   });
   saveCareerLogbook(updatedLogbook);
+  renderTechGearDock();
   renderCareerSummary();
   renderDebriefCertifications(updatedLogbook);
   bestEl.textContent =
@@ -4067,7 +4275,8 @@ const sessionStepCallbacks = {
   onImpactSound: (spd) => audio.playImpact(spd),
   onAlarm: (lvl) => audio.playAlarm(lvl),
   onInhale: (ev) => audio.playRegulatorInhale(ev),
-  onExhale: (ev) => audio.playRegulatorExhale(ev),
+  onExhale: (ev) => (ev?.isCcr ? audio.playCcrSolenoid() : audio.playRegulatorExhale(ev)),
+  onDpvHum: (mag) => audio.playDpvHum(mag),
   onHullGroan: (depthRatio) => audio.playHullGroan(depthRatio),
   onHatchCrank: (progress) => audio.playHatchCrank(progress),
   onHatchOpen: () => audio.playHatchOpen(),
@@ -4166,11 +4375,13 @@ function stepSimulation(dt) {
       audio.stepAmbience(dt, level, diver.y);
     }
     syncWreckActionHud(session.wreckActionPrompt);
+    syncTechGearHud(session);
   } else {
     session.simTimeSec += dt;
     diver.vx = 0;
     diver.vy = 0;
     syncWreckActionHud(null);
+    syncTechGearHud(session);
   }
 
   const peers = isMultiplayer ? lan.getPeers() : [];
@@ -4233,6 +4444,10 @@ function stepSimulation(dt) {
         torchOn: diver.torchOn,
         torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
         torchManualAim: Boolean(diver.torchManualAim),
+        hasCcr: Boolean(diver.hasCcr),
+        hasDpv: Boolean(diver.hasDpv),
+        dpvActive: Boolean(diver.dpvActive),
+        dpvThrusting: Boolean(diver.dpvThrusting),
         alive: diveState.alive,
         carryingBody: Boolean(session.carryingBody),
         rescueTargetId: session.rescueTargetId || '',
@@ -4431,6 +4646,10 @@ function stepSimulation(dt) {
         torchOn: diver.torchOn,
         torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
         torchManualAim: Boolean(diver.torchManualAim),
+        hasCcr: Boolean(diver.hasCcr),
+        hasDpv: Boolean(diver.hasDpv),
+        dpvActive: Boolean(diver.dpvActive),
+        dpvThrusting: Boolean(diver.dpvThrusting),
         alive: diveState.alive,
         carryingBody: Boolean(session.carryingBody),
         rescueTargetId: session.rescueTargetId || '',
@@ -4572,6 +4791,7 @@ function frame(nowMs) {
         const pose = sampleGhostPose(activeGhostTrack, session.simTimeSec);
         return pose ? { ...pose, isPar: activeGhostIsPar } : null;
       })(),
+      sonarPulse: session.sonar?.activePulse || null,
       difficulty: session.difficulty || activeDifficulty,
       timeSec: session.simTimeSec,
       dt,
@@ -4879,6 +5099,7 @@ function setupPwaSupport() {
 async function bootGame() {
   populateLevelSelect();
   renderLevelCards();
+  renderTechGearDock();
   setupPwaSupport();
   if (INITIAL_ROOM_CODE) {
     beginRoomJoinLoading(INITIAL_ROOM_CODE, {

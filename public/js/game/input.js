@@ -14,6 +14,8 @@ export class InputController {
     onReelToggle,
     onReelRewind,
     onWreckAction,
+    onSonarPing,
+    onDpvToggle,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -38,6 +40,8 @@ export class InputController {
     this.onReelToggle = onReelToggle;
     this.onReelRewind = onReelRewind;
     this.onWreckAction = onWreckAction;
+    this.onSonarPing = onSonarPing;
+    this.onDpvToggle = onDpvToggle;
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
@@ -65,6 +69,12 @@ export class InputController {
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
       if ((code === 'KeyE' || code === 'KeyF') && !e.repeat) {
         if (this.onWreckAction?.()) e.preventDefault();
+      }
+      if (code === 'KeyQ' && !e.repeat) {
+        if (this.onSonarPing?.()) e.preventDefault();
+      }
+      if (code === 'KeyV' && !e.repeat) {
+        if (this.onDpvToggle?.()) e.preventDefault();
       }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();
@@ -308,6 +318,8 @@ export class InputController {
     if (justPressed(2)) this.onRecommendedGasSwitch?.(); // X / Square
     if (justPressed(3)) this.onTorchToggle?.(); // Y / Triangle
     if (justPressed(5)) this.onWreckAction?.(); // RB / R1
+    if (justPressed(7)) this.onDpvToggle?.(); // RT / R2 -> DPV Scooter Toggle
+    if (justPressed(8) || justPressed(11)) this.onSonarPing?.(); // Select/View or R3 -> Sonar Ping
     if (justPressed(9)) this.onPauseToggle?.(); // Start / Options
     if (justPressed(4)) this.onReelRewind?.(); // LB / L1
     this._gpRewindHeld = pressed(4);

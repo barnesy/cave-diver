@@ -1421,6 +1421,7 @@ export class CaveRenderer {
     ecosystem,
     wreckState = null,
     ghostPose = null,
+    sonarPulse = null,
     difficulty = 'standard',
     timeSec,
     dt,
@@ -1665,6 +1666,9 @@ export class CaveRenderer {
     }
     if (ghostPose) {
       this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec, cw, ch, diver);
+    }
+    if (sonarPulse) {
+      this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -7429,6 +7433,91 @@ export class CaveRenderer {
     }
   }
 
+  _drawSonarPulse(ctx, pulse, toScreenX, toScreenY, scale, timeSec) {
+    if (!pulse || pulse.ageSec >= pulse.durationSec) return;
+    const sweepDur = 1.45;
+    const sweepProgress = Math.min(1, pulse.ageSec / sweepDur);
+    const waveRadiusM = sweepProgress * (pulse.maxRadiusM || 28);
+    const overallFade = Math.max(0, 1 - pulse.ageSec / pulse.durationSec);
+    const cx = toScreenX(pulse.x);
+    const cy = toScreenY(pulse.y);
+
+    ctx.save();
+    // Expanding translucent hydrophone wavefront + trailing echo ring
+    if (sweepProgress < 1) {
+      const waveAlpha = (1 - sweepProgress) * 0.72;
+      ctx.strokeStyle = `rgba(56, 189, 248, ${waveAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(2, 0.14 * scale);
+      ctx.beginPath();
+      ctx.arc(cx, cy, waveRadiusM * scale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (waveRadiusM > 2.2) {
+        ctx.strokeStyle = `rgba(103, 232, 249, ${(waveAlpha * 0.42).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(cx, cy, (waveRadiusM - 1.8) * scale, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Rock-wall contour echo dots illuminated as the sonar ring sweeps past
+    const hits = pulse.wallHits || [];
+    for (let i = 0; i < hits.length; i++) {
+      const h = hits[i];
+      if (h.dist > waveRadiusM) continue;
+      const hitAge = pulse.ageSec - (h.dist / (pulse.maxRadiusM || 28)) * sweepDur;
+      const a = Math.max(0, Math.min(1, 1 - hitAge / 1.45)) * overallFade;
+      if (a <= 0.03) continue;
+      const hx = toScreenX(h.x);
+      const hy = toScreenY(h.y);
+      ctx.fillStyle = `rgba(103, 232, 249, ${(a * 0.85).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(hx, hy, Math.max(2.2, 0.14 * scale), 0, Math.PI * 2);
+      ctx.fill();
+      if (i > 0) {
+        const prev = hits[i - 1];
+        if (prev.dist <= waveRadiusM && Math.hypot(h.x - prev.x, h.y - prev.y) < 5.5) {
+          ctx.strokeStyle = `rgba(45, 212, 191, ${(a * 0.48).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.2, 0.065 * scale);
+          ctx.beginPath();
+          ctx.moveTo(toScreenX(prev.x), toScreenY(prev.y));
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // High-contrast sonar contact diamonds for relics, hatches, stage caches, markers & recovery targets
+    const contacts = pulse.contacts || [];
+    for (let i = 0; i < contacts.length; i++) {
+      const c = contacts[i];
+      if (c.dist > waveRadiusM) continue;
+      const pingAge = pulse.ageSec - (c.dist / (pulse.maxRadiusM || 28)) * sweepDur;
+      const a = Math.max(0, Math.min(1, 1 - pingAge / 1.85)) * overallFade;
+      if (a <= 0.04) continue;
+      const px = toScreenX(c.x);
+      const py = toScreenY(c.y);
+      const col = c.kind === 'recovery' ? '251, 191, 36' : c.kind === 'hatch' ? '249, 115, 22' : c.kind === 'stage' ? '74, 222, 128' : '56, 189, 248';
+      const r = (0.65 + Math.sin(timeSec * 9 + i) * 0.12) * scale;
+      ctx.strokeStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+      ctx.beginPath();
+      ctx.moveTo(px, py - r);
+      ctx.lineTo(px + r, py);
+      ctx.lineTo(px, py + r);
+      ctx.lineTo(px - r, py);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.font = `700 ${Math.max(10, Math.round(scale * 0.46))}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(248, 250, 252, ${a.toFixed(3)})`;
+      ctx.fillText(c.icon || '◆', px, py);
+    }
+    ctx.restore();
+  }
+
   _drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, isPeer) {
     const body = diver.body || createDiverBody(diver.x, diver.y, diver.angle);
     const sx = toScreenX(diver.x);
@@ -7467,7 +7556,13 @@ export class CaveRenderer {
     if (facingLeft) ctx.scale(1, -1);
 
     const u = scale * 0.55;
-    drawStyledDiverRig(ctx, u, scale, isPeer, rollScale);
+    drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, {
+      hasCcr: diver.hasCcr,
+      hasDpv: diver.hasDpv,
+      dpvActive: diver.dpvActive,
+      dpvThrusting: diver.dpvThrusting,
+      timeSec,
+    });
     ctx.restore();
 
     // 4. Near leg (in front of pelvis)
