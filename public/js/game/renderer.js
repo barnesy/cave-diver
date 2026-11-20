@@ -1468,9 +1468,11 @@ export class CaveRenderer {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
 
-    // 8a-ii. Shipwreck Foreground Steel Bulkhead Ribs, Watertight Hatches, Surge Breaches & Cuttable Nets
+    // 8a-ii. Shipwreck Foreground Hazards OR Cave Interactive Features (Stages, Line Markers, Flows, Siphons & Line Traps)
     if (this.level.isWreck) {
       this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
+    } else {
+      this._drawCaveInteractives(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
     }
 
     // 8b. Authentic Cenote & Cave Flora, Calcite Formations, Fishes, Slider Turtles & Remipedes
@@ -1519,6 +1521,9 @@ export class CaveRenderer {
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
+    }
+    if (!this.level.isWreck) {
+      this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
@@ -3907,6 +3912,370 @@ export class CaveRenderer {
         ctx.arc(sx + sway * 0.35, sy, sr * 0.92, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Cave Interactive Parity elements: steady karst spring currents, pulsing tidal blue-hole siphons,
+   * clipped staged bailout/deco cylinders, unlined cave junction line-markers & jump spools, and
+   * abandoned tangled cave line traps cuttable with shears.
+   */
+  _drawCaveInteractives(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null) {
+    const level = this.level;
+    ctx.save();
+
+    // 1. Steady Karst Spring / Underground River Currents
+    if (Array.isArray(level.caveCurrents)) {
+      for (let c = 0; c < level.caveCurrents.length; c++) {
+        const cur = level.caveCurrents[c];
+        const cr = cur.radius || 4.0;
+        if (cur.x + cr + 2 < visX0 || cur.x - cr - 2 > visX1 || cur.y + cr + 2 < visY0 || cur.y - cr - 2 > visY1) continue;
+        const sx = toScreenX(cur.x);
+        const sy = toScreenY(cur.y);
+        const sr = cr * scale;
+        const ang = Math.atan2(cur.vy || 0, cur.vx || 1);
+        const spd = Math.hypot(cur.vx || 0, cur.vy || 0);
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(ang);
+        ctx.strokeStyle = 'rgba(94, 234, 212, 0.38)';
+        ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+        ctx.lineCap = 'round';
+        for (let k = -2; k <= 2; k++) {
+          const oy = k * sr * 0.3;
+          const travel = ((timeSec * (1.25 + spd * 0.65) + k * 0.63 + c * 0.4) % 1.0) * 2 - 1;
+          const ox = travel * sr * 0.56;
+          const segLen = sr * 0.42;
+          ctx.beginPath();
+          ctx.moveTo(ox - segLen * 0.5, oy);
+          ctx.lineTo(ox + segLen * 0.5, oy);
+          ctx.lineTo(ox + segLen * 0.5 - 0.24 * scale, oy - 0.17 * scale);
+          ctx.moveTo(ox + segLen * 0.5, oy);
+          ctx.lineTo(ox + segLen * 0.5 - 0.24 * scale, oy + 0.17 * scale);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // 2. Pulsing Tidal Blue-Hole & Karst Siphon Surges (in exact phase with computeSurgeWave!)
+    if (Array.isArray(level.surgeZones)) {
+      for (let z = 0; z < level.surgeZones.length; z++) {
+        const zone = level.surgeZones[z];
+        const zr = zone.radius || 4.0;
+        if (zone.x + zr + 2 < visX0 || zone.x - zr - 2 > visX1 || zone.y + zr + 2 < visY0 || zone.y - zr - 2 > visY1) continue;
+        const wave = computeSurgeWave(zone, timeSec);
+        const sx = toScreenX(zone.x);
+        const sy = toScreenY(zone.y);
+        const sr = zr * scale;
+        const mag = Math.hypot(zone.vx || 0, zone.vy || 0) || 1;
+        const dirX = (zone.vx || 0) / mag;
+        const dirY = (zone.vy || 0) / mag;
+        const flowSign = wave >= 0 ? 1 : -1;
+        const strength = Math.abs(wave);
+
+        if (strength > 0.05) {
+          const ang = Math.atan2(dirY * flowSign, dirX * flowSign);
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(ang);
+          ctx.strokeStyle = `rgba(125, 211, 252, ${0.22 + strength * 0.58})`;
+          ctx.lineWidth = Math.max(1.5, (0.06 + strength * 0.06) * scale);
+          ctx.lineCap = 'round';
+          for (let k = -2; k <= 2; k++) {
+            const oy = k * sr * 0.32;
+            const travel = ((timeSec * 5.0 + k * 0.7) % 1.0) * 2 - 1;
+            const ox = travel * sr * 0.55;
+            const segLen = sr * (0.35 + strength * 0.25);
+            ctx.beginPath();
+            ctx.moveTo(ox - segLen * 0.5, oy);
+            ctx.lineTo(ox + segLen * 0.5, oy);
+            ctx.lineTo(ox + segLen * 0.5 - 0.28 * scale, oy - 0.2 * scale);
+            ctx.moveTo(ox + segLen * 0.5, oy);
+            ctx.lineTo(ox + segLen * 0.5 - 0.28 * scale, oy + 0.2 * scale);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.34)';
+          ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+          ctx.setLineDash([5, 6]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr * 0.72, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    // 3. Staged Bailout / Reserve Scuba Cylinders clipped on rock tie-offs
+    if (Array.isArray(level.stageCaches)) {
+      const claimedSet = wreckState?.claimedStageIds;
+      for (let i = 0; i < level.stageCaches.length; i++) {
+        const cache = level.stageCaches[i];
+        if (cache.x + 3 < visX0 || cache.x - 3 > visX1 || cache.y + 3 < visY0 || cache.y - 3 > visY1) continue;
+        const sx = toScreenX(cache.x);
+        const sy = toScreenY(cache.y);
+        const claimed = claimedSet?.has(cache.id);
+        const bob = Math.sin(timeSec * 1.9 + i * 2.1) * 0.09 * scale;
+        const isTmx = cache.gasId === 'TMX1455';
+        const isO2 = cache.gasId === 'O2';
+        const bodyCol = claimed ? '#475569' : isTmx ? '#f59e0b' : isO2 ? '#10b981' : '#0ea5e9';
+        const trimCol = claimed ? '#94a3b8' : isTmx ? '#fef08a' : isO2 ? '#a7f3d0' : '#bae6fd';
+
+        ctx.save();
+        ctx.translate(sx, sy + bob);
+
+        // Pulsing beacon ring for unclaimed reserve stage bottle
+        if (!claimed) {
+          const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.2 + i);
+          ctx.strokeStyle = isTmx
+            ? `rgba(251, 191, 36, ${0.28 + pulse * 0.34})`
+            : isO2
+              ? `rgba(52, 211, 153, ${0.28 + pulse * 0.34})`
+              : `rgba(56, 189, 248, ${0.28 + pulse * 0.34})`;
+          ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, (0.95 + pulse * 0.25) * scale, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Nylon clip tether cord & bolt-snap ring
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.72)';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -0.58 * scale);
+        ctx.lineTo(0, -1.05 * scale);
+        ctx.stroke();
+
+        // Scuba AL80 cylinder tilted cleanly at 24°
+        ctx.save();
+        ctx.rotate(-0.42);
+        const cw = 0.96 * scale;
+        const ch = 0.38 * scale;
+        // Cylinder body
+        ctx.fillStyle = bodyCol;
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.beginPath();
+        ctx.roundRect(-cw * 0.5, -ch * 0.5, cw, ch, ch * 0.45);
+        ctx.fill();
+        ctx.stroke();
+
+        // Reflective depth-band collar stripe
+        ctx.fillStyle = trimCol;
+        ctx.fillRect(-cw * 0.14, -ch * 0.46, cw * 0.28, ch * 0.92);
+
+        // Brass DIN valve + regulator first stage
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(cw * 0.46, -ch * 0.22, 0.2 * scale, ch * 0.44);
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(cw * 0.66, 0, 0.09 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Crisp stenciled tag below cylinder
+        if (scale >= 12) {
+          ctx.font = `700 ${Math.max(9, Math.round(scale * 0.31))}px "JetBrains Mono", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = claimed ? 'rgba(148, 163, 184, 0.85)' : trimCol;
+          const shortTag = claimed ? '✓ STAGE' : `${isTmx ? 'TMX' : isO2 ? 'O2' : 'EAN'} +${cache.barBonus || 65}b`;
+          ctx.fillText(shortTag, 0, 0.58 * scale);
+        }
+        ctx.restore();
+      }
+    }
+
+    // 4. Unlined Cave Line-Marker & Jump-Spool Stations
+    if (Array.isArray(level.lineAnchors)) {
+      const placedSet = wreckState?.placedMarkerIds;
+      for (let i = 0; i < level.lineAnchors.length; i++) {
+        const anchor = level.lineAnchors[i];
+        if (anchor.x + 3 < visX0 || anchor.x - 3 > visX1 || anchor.y + 3 < visY0 || anchor.y - 3 > visY1) continue;
+        const sx = toScreenX(anchor.x);
+        const sy = toScreenY(anchor.y);
+        const placed = placedSet?.has(anchor.id);
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        if (placed) {
+          // Clipped directional yellow cave arrow ("REM cookie") pointing toward exit!
+          ctx.rotate(anchor.dirAngle || -Math.PI * 0.5);
+          ctx.fillStyle = '#facc15';
+          ctx.strokeStyle = '#713f12';
+          ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+          ctx.beginPath();
+          ctx.moveTo(0.68 * scale, 0);
+          ctx.lineTo(-0.42 * scale, -0.36 * scale);
+          ctx.lineTo(-0.24 * scale, 0);
+          ctx.lineTo(-0.42 * scale, 0.36 * scale);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          // Waiting jump-spool station with dashed junction ring
+          const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.0 + i * 1.4);
+          ctx.strokeStyle = `rgba(250, 204, 21, ${0.32 + pulse * 0.35})`;
+          ctx.lineWidth = Math.max(1.3, 0.05 * scale);
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.85 * scale, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Finger spool wheel + wrapped white nylon line
+          ctx.fillStyle = '#1e293b';
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = Math.max(1.5, 0.07 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.38 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.16 * scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (scale >= 12) {
+            ctx.font = `700 ${Math.max(9, Math.round(scale * 0.3))}px "JetBrains Mono", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#fef08a';
+            ctx.fillText(`+${anchor.reelBonusM || 40}m SPOOL`, 0, 0.58 * scale);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // 5. Abandoned Tangled Cave Line Traps (cuttable with [E] shears / buddy rescue)
+    if (Array.isArray(level.snagZones)) {
+      const cutSet = wreckState?.cutSnagIds;
+      const activeIdx = wreckState?.activeSnagIndex ?? -1;
+      for (let s = 0; s < level.snagZones.length; s++) {
+        const snag = level.snagZones[s];
+        const snagKey = snag.id || `snag_${s}`;
+        const r = snag.radius || 2.1;
+        if (snag.x + r + 3 < visX0 || snag.x - r - 3 > visX1 || snag.y + r + 3 < visY0 || snag.y - r - 3 > visY1) continue;
+        const sx = toScreenX(snag.x);
+        const sy = toScreenY(snag.y);
+        const sr = r * scale;
+        const sway = Math.sin(timeSec * 1.55 + s * 2.3) * 0.2 * scale;
+        const isCut = cutSet?.has(snagKey);
+
+        if (isCut) {
+          ctx.strokeStyle = 'rgba(226, 232, 240, 0.34)';
+          ctx.lineWidth = Math.max(1, 0.035 * scale);
+          ctx.beginPath();
+          for (const side of [-1, 1]) {
+            ctx.moveTo(sx + side * sr * 0.78, sy - sr * 0.65);
+            ctx.quadraticCurveTo(sx + side * sr * 0.55 + sway, sy, sx + side * sr * 0.68 + sway, sy + sr * 0.62);
+          }
+          ctx.stroke();
+          continue;
+        }
+
+        const isHooked = activeIdx === s;
+        // Loose snarled pale-yellow nylon cave guideline loops
+        ctx.strokeStyle = isHooked ? 'rgba(248, 113, 113, 0.85)' : 'rgba(254, 240, 138, 0.58)';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+        ctx.beginPath();
+        for (let k = -2; k <= 2; k++) {
+          const ang = k * 0.62 + sway * 0.02;
+          ctx.ellipse(
+            sx + Math.cos(ang) * sr * 0.22 + sway * 0.35,
+            sy + Math.sin(ang) * sr * 0.22,
+            sr * (0.48 + Math.abs(k) * 0.14),
+            sr * (0.28 + (2 - Math.abs(k)) * 0.12),
+            ang,
+            0,
+            Math.PI * 2
+          );
+        }
+        ctx.stroke();
+
+        if (isHooked && diver) {
+          const dx = toScreenX(diver.x);
+          const dy = toScreenY(diver.y);
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.92)';
+          ctx.lineWidth = Math.max(1.6, 0.055 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx - sr * 0.28, sy - sr * 0.22);
+          ctx.lineTo(dx, dy);
+          ctx.moveTo(sx + sr * 0.28, sy + sr * 0.22);
+          ctx.lineTo(dx, dy);
+          ctx.stroke();
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Post-lighting subtle phosphorescent glints for placed yellow cave arrows and clipped stage bottles
+   * so divers can navigate by placed markers and spot reserve gas even in deep sumps.
+   */
+  _drawCaveInteractiveBeacons(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null) {
+    const level = this.level;
+    const placedSet = wreckState?.placedMarkerIds;
+    const claimedSet = wreckState?.claimedStageIds;
+    const hasAnchors = Array.isArray(level.lineAnchors) && level.lineAnchors.length > 0;
+    const hasStages = Array.isArray(level.stageCaches) && level.stageCaches.length > 0;
+    if (!hasAnchors && !hasStages) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    if (hasAnchors && placedSet && placedSet.size > 0) {
+      for (let i = 0; i < level.lineAnchors.length; i++) {
+        const anchor = level.lineAnchors[i];
+        if (!placedSet.has(anchor.id)) continue;
+        if (anchor.x + 3 < visX0 || anchor.x - 3 > visX1 || anchor.y + 3 < visY0 || anchor.y - 3 > visY1) continue;
+        const sx = toScreenX(anchor.x);
+        const sy = toScreenY(anchor.y);
+        const pulse = 0.72 + 0.28 * Math.sin(timeSec * 2.6 + i);
+        if (this.glowStamps?.warm) {
+          const r = 1.65 * scale;
+          ctx.globalAlpha = 0.42 * pulse;
+          ctx.drawImage(this.glowStamps.warm, sx - r, sy - r, r * 2, r * 2);
+        }
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(anchor.dirAngle || -Math.PI * 0.5);
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.moveTo(0.64 * scale, 0);
+        ctx.lineTo(-0.38 * scale, -0.32 * scale);
+        ctx.lineTo(-0.22 * scale, 0);
+        ctx.lineTo(-0.38 * scale, 0.32 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    if (hasStages) {
+      for (let i = 0; i < level.stageCaches.length; i++) {
+        const cache = level.stageCaches[i];
+        if (claimedSet?.has(cache.id)) continue;
+        if (cache.x + 3 < visX0 || cache.x - 3 > visX1 || cache.y + 3 < visY0 || cache.y - 3 > visY1) continue;
+        const sx = toScreenX(cache.x);
+        const sy = toScreenY(cache.y);
+        const glint = 0.22 + 0.16 * Math.sin(timeSec * 3.1 + i * 1.9);
+        const stamp = cache.gasId === 'TMX1455' ? this.glowStamps?.warm : this.glowStamps?.cyan;
+        if (stamp) {
+          const r = 1.35 * scale;
+          ctx.globalAlpha = glint;
+          ctx.drawImage(stamp, sx - r, sy - r, r * 2, r * 2);
+        }
       }
     }
 

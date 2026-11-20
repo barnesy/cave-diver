@@ -2357,3 +2357,109 @@ test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dr
   assert.equal(boyMeta.tier, 5);
   assert.equal(vicMeta.rank, 20);
 });
+
+test('v100 Cave Interactive Parity: all 20 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
+  const caves = LEVELS.filter((l) => !l.isWreck);
+  assert.equal(caves.length, 20);
+
+  for (const cave of caves) {
+    assert.ok(Array.isArray(cave.stageCaches) && cave.stageCaches.length >= 1, `${cave.id} missing stageCaches`);
+    const hasFlow = (cave.caveCurrents?.length || 0) + (cave.surgeZones?.length || 0) >= 1;
+    assert.ok(hasFlow, `${cave.id} must have at least one karst current or tidal siphon surge`);
+    if ((cave.reelMetersPerDiver || 0) > 0) {
+      assert.ok(Array.isArray(cave.lineAnchors) && cave.lineAnchors.length >= 1, `Unlined cave ${cave.id} missing lineAnchors`);
+    }
+    const allInteractives = [
+      ...(cave.stageCaches || []),
+      ...(cave.lineAnchors || []),
+      ...(cave.caveCurrents || []),
+      ...(cave.surgeZones || []),
+      ...(cave.snagZones || []),
+    ];
+    for (const item of allInteractives) {
+      const sdf = evaluateCaveSDF(cave, item.x, item.y);
+      assert.ok(sdf < -0.8, `${cave.id} interactive ${item.id} has tight/blocked SDF=${sdf.toFixed(2)}`);
+    }
+  }
+
+  // 1. Staged bailout cylinder refill (leaves bottle clipped if full; tops up +bar & litersRemaining when below full)
+  const ressel = getLevelById('emergence-du-ressel');
+  const sC = createDiveSession(ressel);
+  const stage = ressel.stageCaches[0];
+  sC.diver.x = stage.x;
+  sC.diver.y = stage.y;
+  const fullRes = triggerWreckAction(sC);
+  assert.equal(fullRes.kind, 'stage-full', 'Full tank should not waste staged bailout cylinder');
+  assert.equal(sC.claimedStageIds.has(stage.id), false);
+
+  sC.diveState.tanks[stage.gasId].bar = 100;
+  sC.diveState.tanks[stage.gasId].litersRemaining = sC.diveState.tanks[stage.gasId].maxLiters * 0.5;
+  stepDiveSession(sC, { x: 0, y: 0 }, 0.05);
+  assert.equal(sC.wreckActionPrompt?.kind, 'refill-stage', 'HUD prompt should offer stage gas refill');
+  let refillEvent = null;
+  const fillRes = triggerWreckAction(sC, { onStageRefill: (c, added) => { refillEvent = { c, added }; } });
+  assert.equal(fillRes.kind, 'refill-stage');
+  assert.ok(fillRes.addedBar >= 50, `Expected stage refill >= 50 bar, got ${fillRes.addedBar}`);
+  assert.ok(sC.diveState.tanks[stage.gasId].bar >= 150);
+  assert.equal(sC.claimedStageIds.has(stage.id), true);
+  assert.ok(refillEvent && refillEvent.added >= 50);
+
+  // 2. Unlined cave line-marker placement (+reelBonusM & co-op marker sync / late-join hydration)
+  const anchor = ressel.lineAnchors[0];
+  const prevReel = sC.reelRemainingM;
+  sC.diver.x = anchor.x;
+  sC.diver.y = anchor.y;
+  stepDiveSession(sC, { x: 0, y: 0 }, 0.05);
+  assert.equal(sC.wreckActionPrompt?.kind, 'place-marker');
+  let syncedMarker = null;
+  const markRes = triggerWreckAction(sC, {
+    onWreckSync: (k, id) => { syncedMarker = { k, id }; },
+  });
+  assert.equal(markRes.kind, 'place-marker');
+  assert.equal(sC.placedMarkerIds.has(anchor.id), true);
+  assert.ok(sC.reelRemainingM >= prevReel + anchor.reelBonusM);
+  assert.deepEqual(syncedMarker, { k: 'marker', id: anchor.id });
+
+  // Co-op relay + late-join placedMarkers state
+  const peerMsgs = [];
+  const lateMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'CAVE', hostId: 'h1', hostName: 'Host', levelId: ressel.id });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'B1' }, (m) => peerMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('h1', { type: 'wreck_action', actionKind: 'marker', targetId: anchor.id });
+  const peerMarkerMsg = peerMsgs.find((m) => m.type === 'peer_wreck_action' && m.actionKind === 'marker');
+  assert.equal(peerMarkerMsg?.targetId, anchor.id, 'Co-op peer must receive live marker placement');
+
+  const peerSession = createDiveSession(ressel);
+  assert.equal(applyPeerWreckAction(peerSession, peerMarkerMsg), true);
+  assert.equal(peerSession.placedMarkerIds.has(anchor.id), true);
+
+  coord.handleRemoteJoin({ name: 'LateCave' }, (m) => lateMsgs.push(m), 'b2');
+  const lateStart = lateMsgs.find((m) => m.type === 'dive_started');
+  assert.ok(lateStart?.placedMarkers?.includes(anchor.id), 'Late joiner must receive placed cave markers');
+
+  // 3. Steady karst spring current pushes diver along flow vector
+  const cur = ressel.caveCurrents[0];
+  const sFlow = createDiveSession(ressel);
+  sFlow.diver.x = cur.x;
+  sFlow.diver.y = cur.y;
+  sFlow.diver.vx = 0;
+  sFlow.diver.vy = 0;
+  stepDiveSession(sFlow, { x: 0, y: 0 }, 0.1);
+  const dot = sFlow.diver.vx * cur.vx + sFlow.diver.vy * cur.vy;
+  assert.ok(dot > 0.01, `Expected karst current to push diver along flow vector, got dot=${dot}`);
+
+  // 4. Abandoned cave line trap entangles diver, prompts CUT LINE [E], and cuts free cleanly
+  const trap = ressel.snagZones[0];
+  const sTrap = createDiveSession(ressel);
+  sTrap.diver.x = trap.x;
+  sTrap.diver.y = trap.y;
+  stepDiveSession(sTrap, { x: 0, y: 0 }, 0.05);
+  assert.equal(sTrap.activeSnagIndex, 0);
+  assert.equal(sTrap.wreckActionPrompt?.kind, 'cut-net');
+  assert.match(sTrap.wreckActionPrompt?.label || '', /CUT LINE/);
+  const cutRes = triggerWreckAction(sTrap);
+  assert.equal(cutRes.kind, 'cut-net');
+  assert.equal(sTrap.cutSnagIds.has(trap.id), true);
+});

@@ -382,6 +382,7 @@ function launchRoomDive(room) {
   room.sharedCollectibles = new Set();
   room.openedHatches = new Set();
   room.cutSnags = new Set();
+  room.placedMarkers = new Set();
   room.playerLines = new Map();
   room.bodyRecoveredBy = null;
   broadcastRoom(room, {
@@ -561,6 +562,11 @@ wss.on('connection', (ws) => {
               ? initDive.cutSnags.filter((id) => typeof id === 'string').slice(0, 32)
               : []
           ),
+          placedMarkers: new Set(
+            initStarted && Array.isArray(initDive.placedMarkers)
+              ? initDive.placedMarkers.filter((id) => typeof id === 'string').slice(0, 32)
+              : []
+          ),
           playerLines: new Map(),
           bodyRecoveredBy: initStarted && initDive.bodyRecovered ? client.id : null,
           players: new Map(),
@@ -674,6 +680,7 @@ wss.on('connection', (ws) => {
             collectibles: Array.from(room.sharedCollectibles || []),
             openedHatches: Array.from(room.openedHatches || []),
             cutSnags: Array.from(room.cutSnags || []),
+            placedMarkers: Array.from(room.placedMarkers || []),
             playerLines: Array.from((room.playerLines || new Map()).entries()).map(([pid, data]) => ({
               playerId: pid,
               ...data,
@@ -745,6 +752,7 @@ wss.on('connection', (ws) => {
             collectibles: Array.from(room.sharedCollectibles || []),
             openedHatches: Array.from(room.openedHatches || []),
             cutSnags: Array.from(room.cutSnags || []),
+            placedMarkers: Array.from(room.placedMarkers || []),
             playerLines: Array.from((room.playerLines || new Map()).entries()).map(([pid, data]) => ({
               playerId: pid,
               ...data,
@@ -1036,11 +1044,15 @@ wss.on('connection', (ws) => {
       case 'wreck_action': {
         const room = rooms.get(client.roomCode);
         if (!room) return;
-        const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
+        const actionKind =
+          msg.actionKind === 'hatch' || msg.actionKind === 'snag' || msg.actionKind === 'marker'
+            ? msg.actionKind
+            : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
         if (!actionKind || !targetId) break;
         if (actionKind === 'hatch') room.openedHatches?.add(targetId);
         else if (actionKind === 'snag') room.cutSnags?.add(targetId);
+        else if (actionKind === 'marker') room.placedMarkers?.add(targetId);
         broadcastRoom(
           room,
           {

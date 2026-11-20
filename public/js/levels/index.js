@@ -25,6 +25,7 @@ import { WRECK_HMS_VICTORIA } from './wreck4_hms_victoria.js';
 import { WRECK_EDMUND_FITZGERALD } from './wreck5_edmund_fitzgerald.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
+import { enrichCaveInteractives } from './caveInteractives.js';
 
 export { CAMPAIGN_PLAN, CAMPAIGN_TIERS };
 
@@ -59,6 +60,10 @@ export const LEVELS = [
   LEVEL_19,
   LEVEL_20,
 ];
+
+for (const lvl of LEVELS) {
+  if (!lvl.isWreck) enrichCaveInteractives(lvl);
+}
 
 export const DEFAULT_LEVEL_ID = LEVEL_1.id;
 

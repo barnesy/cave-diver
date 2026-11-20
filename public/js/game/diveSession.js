@@ -1,5 +1,5 @@
 import { getAscentConfig } from '../levels/index.js';
-import { createDiveState, stepDivePhysiology } from '../physics/diveModel.js';
+import { createDiveState, stepDivePhysiology, receiveGasIntoState } from '../physics/diveModel.js';
 import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
@@ -114,10 +114,13 @@ export function createDiveSession(
     restrictWarnCooldown: 0,
     snagWarnCooldown: 0,
     surgeWarnCooldown: 0,
+    caveFlowWarnCooldown: 0,
     rustPercolateCooldown: 0,
     hullGroanTimer: 8.5 + Math.random() * 9.0,
     clippedToShotLine: false,
     cutSnagIds: new Set(),
+    claimedStageIds: new Set(),
+    placedMarkerIds: new Set(),
     activeSnagIndex: -1,
     buddySnagIndex: -1,
     buddySnagName: '',
@@ -229,25 +232,36 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
     }
     const snag = snIdx >= 0 ? session.level.snagZones[snIdx] : null;
     callbacks.onLineCut?.(snag);
-    callbacks.onToast?.(`✂️ ${by} cut ${snag?.label || 'fishing net'} clear!`, 2.6);
+    callbacks.onToast?.(`✂️ ${by} cut ${snag?.label || 'line snag'} clear!`, 2.6);
+    return true;
+  }
+  if (msg.actionKind === 'marker') {
+    if (session.placedMarkerIds?.has(msg.targetId)) return false;
+    if (!session.placedMarkerIds) session.placedMarkerIds = new Set();
+    session.placedMarkerIds.add(msg.targetId);
+    const anchor = session.level?.lineAnchors?.find((a) => a.id === msg.targetId);
+    callbacks.onMarkerPlaced?.(anchor);
+    callbacks.onToast?.(`🪢 ${by} tagged ${anchor?.label || 'cave junction marker'}!`, 2.6);
     return true;
   }
   return false;
 }
 
 /**
- * Triggers the active contextual shipwreck action:
- * 1) Slice free from a tangled fishing net / cable (or rescue a tangled co-op buddy!)
- * 2) Crank open a sealed watertight bulkhead hatch (unlocks shortcut/vault + bonus)
- * 3) Clip onto or unclip from the open-water shot line for fast controlled zip-descent/ascent
+ * Triggers the active contextual cave or shipwreck action:
+ * 1) Slice free from a tangled fishing net / abandoned cave line trap (self or co-op buddy!)
+ * 2) Crank open a sealed watertight bulkhead hatch (shipwrecks)
+ * 3) Top up gas from a clipped staged bailout / deco cylinder cache (caves)
+ * 4) Clip a glowing directional cave arrow & recover jump-spool line at an unlined junction (caves)
+ * 5) Clip onto or unclip from the open-water shot line (shipwrecks)
  */
 export function triggerWreckAction(session, callbacks = {}) {
-  if (!session || !session.level?.isWreck || session.diveState?.alive === false) {
+  if (!session || !session.level || session.diveState?.alive === false) {
     return { handled: false, kind: null };
   }
   const { level, diver, diveState, siltClouds, bubbles } = session;
 
-  // 1. Priority 1: Slice free from active fishing-net / cable snag (self or tangled co-op buddy!)
+  // 1. Priority 1: Slice free from active fishing-net / abandoned cave-line snag (self or tangled co-op buddy!)
   const snagIdx = session.activeSnagIndex >= 0 ? session.activeSnagIndex : session.buddySnagIndex;
   if (snagIdx >= 0 && Array.isArray(level.snagZones)) {
     const isBuddyRescue = session.activeSnagIndex < 0 && session.buddySnagIndex >= 0;
@@ -261,17 +275,18 @@ export function triggerWreckAction(session, callbacks = {}) {
       diveState.heartRateBpm = Math.max(72, (diveState.heartRateBpm || 80) - 14);
       callbacks.onLineCut?.(snag);
       callbacks.onWreckSync?.('snag', snagKey);
+      const snagTitle = snag.label || (snag.kind === 'linetrap' ? 'tangled cave line' : 'net snag');
       callbacks.onToast?.(
         isBuddyRescue
-          ? `✂️ Cut ${session.buddySnagName || 'your buddy'} free from ${snag.label || 'net snag'}!`
-          : `✂️ Cut free from ${snag.label || 'net snag'}! Path cleared.`,
+          ? `✂️ Cut ${session.buddySnagName || 'your buddy'} free from ${snagTitle}!`
+          : `✂️ Cut free from ${snagTitle}! Path cleared.`,
         2.6
       );
       return { handled: true, kind: 'cut-net', targetId: snagKey, buddyRescue: isBuddyRescue };
     }
   }
 
-  // 2. Priority 2: Crank open a nearby sealed watertight bulkhead hatch
+  // 2. Priority 2: Crank open a nearby sealed watertight bulkhead hatch (shipwrecks)
   if (Array.isArray(level.watertightHatches)) {
     for (let i = 0; i < level.watertightHatches.length; i++) {
       const hatch = level.watertightHatches[i];
@@ -298,7 +313,61 @@ export function triggerWreckAction(session, callbacks = {}) {
     }
   }
 
-  // 3. Priority 3: Clip onto / unclip from the open-water shot line
+  // 3. Priority 3: Top up reserve gas from a nearby staged bailout / deco cave cylinder
+  if (Array.isArray(level.stageCaches)) {
+    if (!session.claimedStageIds) session.claimedStageIds = new Set();
+    for (let i = 0; i < level.stageCaches.length; i++) {
+      const cache = level.stageCaches[i];
+      if (!cache || session.claimedStageIds.has(cache.id)) continue;
+      const dist = Math.hypot(diver.x - cache.x, diver.y - cache.y);
+      if (dist <= 3.6) {
+        const added = receiveGasIntoState(diveState, cache.gasId, cache.barBonus || 65);
+        const gasName = diveState.mixes?.[cache.gasId]?.shortName || cache.gasId || 'Gas';
+        if (added < 0.5) {
+          callbacks.onToast?.(`⛽ ${gasName} tank already full — bottle left clipped for exit!`, 2.4);
+          return { handled: true, kind: 'stage-full', targetId: cache.id, addedBar: 0 };
+        }
+        session.claimedStageIds.add(cache.id);
+        if (Array.isArray(bubbles)) {
+          for (let k = 0; k < 10; k++) {
+            spawnExhaustBubble(
+              bubbles,
+              cache.x + (Math.random() - 0.5) * 0.6,
+              cache.y + (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.9,
+              -0.7 - Math.random() * 0.8,
+              { primary: k < 5, intensity: 0.85, depthM: cache.y }
+            );
+          }
+        }
+        callbacks.onStageRefill?.(cache, added);
+        callbacks.onToast?.(`⛽ Topped up ${gasName} (+${Math.round(added)} bar) from ${cache.label}!`, 3.0);
+        return { handled: true, kind: 'refill-stage', targetId: cache.id, gasId: cache.gasId, addedBar: added };
+      }
+    }
+  }
+
+  // 4. Priority 4: Clip a glowing directional cave arrow & collect jump-spool line at an unlined junction
+  if (Array.isArray(level.lineAnchors)) {
+    if (!session.placedMarkerIds) session.placedMarkerIds = new Set();
+    for (let i = 0; i < level.lineAnchors.length; i++) {
+      const anchor = level.lineAnchors[i];
+      if (!anchor || session.placedMarkerIds.has(anchor.id)) continue;
+      const dist = Math.hypot(diver.x - anchor.x, diver.y - anchor.y);
+      if (dist <= 3.6) {
+        session.placedMarkerIds.add(anchor.id);
+        const bonusM = anchor.reelBonusM || 40;
+        session.reelRemainingM = (session.reelRemainingM || 0) + bonusM;
+        session.reelMaxMeters = (session.reelMaxMeters || 0) + bonusM;
+        callbacks.onMarkerPlaced?.(anchor, bonusM);
+        callbacks.onWreckSync?.('marker', anchor.id);
+        callbacks.onToast?.(`🪢 Tagged ${anchor.label} & clipped +${bonusM}m jump spool!`, 3.0);
+        return { handled: true, kind: 'place-marker', targetId: anchor.id, reelBonusM: bonusM };
+      }
+    }
+  }
+
+  // 5. Priority 5: Clip onto / unclip from the open-water shot line (shipwrecks)
   if (level.shotLine) {
     if (session.clippedToShotLine) {
       session.clippedToShotLine = false;
@@ -889,6 +958,26 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
+  // Steady underground karst spring / resurgence currents inside cave conduits
+  if (session.caveFlowWarnCooldown > 0) session.caveFlowWarnCooldown -= dt;
+  if (Array.isArray(level.caveCurrents)) {
+    for (let c = 0; c < level.caveCurrents.length; c++) {
+      const cur = level.caveCurrents[c];
+      const cr = cur.radius || 4.0;
+      const dist = Math.hypot(diver.x - cur.x, diver.y - cur.y);
+      if (dist <= cr) {
+        const falloff = 0.48 + 0.52 * (1 - dist / cr);
+        const pulse = 0.88 + 0.12 * Math.sin(session.simTimeSec * 1.15 + c * 2.3);
+        diver.vx += (cur.vx || 0) * falloff * pulse * diffCurrentMult * dt;
+        diver.vy += (cur.vy || 0) * falloff * pulse * diffCurrentMult * dt;
+        if (session.caveFlowWarnCooldown <= 0) {
+          session.caveFlowWarnCooldown = 9.0;
+          callbacks.onToast?.(`💧 ${cur.label || 'Karst spring current'} — hug the wall or ride the flow!`, 2.4);
+        }
+      }
+    }
+  }
+
   // Timed hull-breach surge currents (rhythmic ocean swell pulsing through torn hatches — time the calm lull!)
   if (session.surgeWarnCooldown > 0) session.surgeWarnCooldown -= dt;
   if (Array.isArray(level.surgeZones)) {
@@ -935,7 +1024,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         diveState.heartRateBpm = Math.min(192, (diveState.heartRateBpm || 68) + dt * (11 + grip * 12) * panicScale);
         if (session.snagWarnCooldown <= 0) {
           session.snagWarnCooldown = 5.5;
-          callbacks.onToast?.(`🕸️ Tangled in ${snag.label || 'fishing net'} — press [E] / Cut Net!`, 2.8);
+          const isLineTrap = snag.kind === 'linetrap';
+          callbacks.onToast?.(
+            isLineTrap
+              ? `🪢 Snagged in ${snag.label || 'abandoned cave line'} — press [E] / Cut Free!`
+              : `🕸️ Tangled in ${snag.label || 'fishing net'} — press [E] / Cut Net!`,
+            2.8
+          );
         }
         break;
       }
@@ -1053,49 +1148,89 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
-  // Publish contextual wreck action prompt for HUD button (zero-allocation when unchanged)
-  if (level.isWreck) {
-    if (session.activeSnagIndex >= 0) {
-      const sn = level.snagZones?.[session.activeSnagIndex];
-      session.wreckActionPrompt = {
-        kind: 'cut-net',
-        label: `✂️ CUT FREE [E]`,
-        detail: sn?.label || 'Tangled Net',
-        progress: 0,
-      };
-    } else if (session.buddySnagIndex >= 0) {
-      const sn = level.snagZones?.[session.buddySnagIndex];
-      session.wreckActionPrompt = {
-        kind: 'cut-net',
-        label: `✂️ CUT ${session.buddySnagName || 'BUDDY'} FREE [E]`,
-        detail: sn?.label || 'Buddy Tangled in Net',
-        progress: 0,
-      };
-    } else if (nearbyHatch) {
-      const isCranking = session.crankingHatchId === nearbyHatch.id;
-      session.wreckActionPrompt = {
-        kind: 'open-hatch',
-        label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
-        detail: nearbyHatch.label || 'Watertight Hatch',
-        progress: isCranking ? session.crankingHatchProgress : 0,
-      };
-    } else if (session.clippedToShotLine) {
-      session.wreckActionPrompt = {
-        kind: 'unclip-line',
-        label: '🔓 UNCLIP LINE [E]',
-        detail: 'Shot Line Zip Active',
-        progress: 0,
-      };
-    } else if (nearShotLine) {
-      session.wreckActionPrompt = {
-        kind: 'clip-line',
-        label: '⚓ CLIP SHOT LINE [E]',
-        detail: 'Fast Zip Descent / Deco Hold',
-        progress: 0,
-      };
-    } else {
-      session.wreckActionPrompt = null;
+  // Check nearby cave stage bailout cylinder & unlined junction line-marker stations
+  let nearbyStage = null;
+  if (Array.isArray(level.stageCaches)) {
+    for (let i = 0; i < level.stageCaches.length; i++) {
+      const cache = level.stageCaches[i];
+      if (!cache || session.claimedStageIds?.has(cache.id)) continue;
+      if (Math.hypot(diver.x - cache.x, diver.y - cache.y) <= 3.6) {
+        const tank = diveState.tanks?.[cache.gasId];
+        const mix = diveState.mixes?.[cache.gasId];
+        const maxBar = mix?.startBar || 200;
+        if (!tank || tank.bar < maxBar - 1) {
+          nearbyStage = cache;
+          break;
+        }
+      }
     }
+  }
+  let nearbyAnchor = null;
+  if (Array.isArray(level.lineAnchors)) {
+    for (let i = 0; i < level.lineAnchors.length; i++) {
+      const anchor = level.lineAnchors[i];
+      if (!anchor || session.placedMarkerIds?.has(anchor.id)) continue;
+      if (Math.hypot(diver.x - anchor.x, diver.y - anchor.y) <= 3.6) {
+        nearbyAnchor = anchor;
+        break;
+      }
+    }
+  }
+
+  // Publish contextual cave / shipwreck action prompt for HUD button
+  if (session.activeSnagIndex >= 0) {
+    const sn = level.snagZones?.[session.activeSnagIndex];
+    session.wreckActionPrompt = {
+      kind: 'cut-net',
+      label: sn?.kind === 'linetrap' ? `✂️ CUT LINE [E]` : `✂️ CUT FREE [E]`,
+      detail: sn?.label || (sn?.kind === 'linetrap' ? 'Abandoned Cave Line' : 'Tangled Net'),
+      progress: 0,
+    };
+  } else if (session.buddySnagIndex >= 0) {
+    const sn = level.snagZones?.[session.buddySnagIndex];
+    session.wreckActionPrompt = {
+      kind: 'cut-net',
+      label: `✂️ CUT ${session.buddySnagName || 'BUDDY'} FREE [E]`,
+      detail: sn?.label || 'Buddy Entangled',
+      progress: 0,
+    };
+  } else if (nearbyHatch) {
+    const isCranking = session.crankingHatchId === nearbyHatch.id;
+    session.wreckActionPrompt = {
+      kind: 'open-hatch',
+      label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
+      detail: nearbyHatch.label || 'Watertight Hatch',
+      progress: isCranking ? session.crankingHatchProgress : 0,
+    };
+  } else if (nearbyStage) {
+    const gasShort = diveState.mixes?.[nearbyStage.gasId]?.shortName || nearbyStage.gasId || 'GAS';
+    session.wreckActionPrompt = {
+      kind: 'refill-stage',
+      label: `⛽ REFILL ${gasShort} [E]`,
+      detail: `+${nearbyStage.barBonus || 65} bar · ${nearbyStage.label}`,
+      progress: 0,
+    };
+  } else if (nearbyAnchor) {
+    session.wreckActionPrompt = {
+      kind: 'place-marker',
+      label: `🪢 TAG MARKER [E]`,
+      detail: `+${nearbyAnchor.reelBonusM || 40}m Spool · ${nearbyAnchor.label}`,
+      progress: 0,
+    };
+  } else if (session.clippedToShotLine) {
+    session.wreckActionPrompt = {
+      kind: 'unclip-line',
+      label: '🔓 UNCLIP LINE [E]',
+      detail: 'Shot Line Zip Active',
+      progress: 0,
+    };
+  } else if (nearShotLine) {
+    session.wreckActionPrompt = {
+      kind: 'clip-line',
+      label: '⚓ CLIP SHOT LINE [E]',
+      detail: 'Fast Zip Descent / Deco Hold',
+      progress: 0,
+    };
   } else {
     session.wreckActionPrompt = null;
   }

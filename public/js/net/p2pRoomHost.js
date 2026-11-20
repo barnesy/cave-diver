@@ -171,6 +171,11 @@ export class P2pRoomCoordinator {
           ? initialDiveState.cutSnags.filter((id) => typeof id === 'string').slice(0, 32)
           : []
       ),
+      placedMarkers: new Set(
+        initStarted && Array.isArray(initialDiveState.placedMarkers)
+          ? initialDiveState.placedMarkers.filter((id) => typeof id === 'string').slice(0, 32)
+          : []
+      ),
       playerLines: new Map(),
       bodyRecoveredBy: initStarted && initialDiveState.bodyRecovered ? hostId : null,
       players: new Map(),
@@ -268,6 +273,7 @@ export class P2pRoomCoordinator {
       collectibles: Array.from(this.room.sharedCollectibles),
       openedHatches: Array.from(this.room.openedHatches || []),
       cutSnags: Array.from(this.room.cutSnags || []),
+      placedMarkers: Array.from(this.room.placedMarkers || []),
       playerLines: Array.from(this.room.playerLines.entries()).map(([pid, d]) => ({
         playerId: pid,
         ...d,
@@ -308,6 +314,7 @@ export class P2pRoomCoordinator {
     coord.room.sharedCollectibles = new Set(snapshot.collectibles || []);
     coord.room.openedHatches = new Set(snapshot.openedHatches || []);
     coord.room.cutSnags = new Set(snapshot.cutSnags || []);
+    coord.room.placedMarkers = new Set(snapshot.placedMarkers || []);
     coord.room.playerLines = new Map();
     for (const pl of snapshot.playerLines || []) {
       if (pl?.playerId && pl.playerId !== departingHostId) {
@@ -404,6 +411,7 @@ export class P2pRoomCoordinator {
     this.room.sharedCollectibles = new Set();
     this.room.openedHatches = new Set();
     this.room.cutSnags = new Set();
+    this.room.placedMarkers = new Set();
     this.room.playerLines = new Map();
     this.room.bodyRecoveredBy = null;
     this._broadcast({
@@ -487,6 +495,7 @@ export class P2pRoomCoordinator {
           collectibles: Array.from(this.room.sharedCollectibles),
           openedHatches: Array.from(this.room.openedHatches || []),
           cutSnags: Array.from(this.room.cutSnags || []),
+          placedMarkers: Array.from(this.room.placedMarkers || []),
           playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
             playerId: pid,
             ...data,
@@ -564,6 +573,7 @@ export class P2pRoomCoordinator {
         collectibles: Array.from(this.room.sharedCollectibles),
         openedHatches: Array.from(this.room.openedHatches || []),
         cutSnags: Array.from(this.room.cutSnags || []),
+        placedMarkers: Array.from(this.room.placedMarkers || []),
         playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
           playerId: pid,
           ...data,
@@ -624,6 +634,7 @@ export class P2pRoomCoordinator {
         collectibles: Array.from(this.room.sharedCollectibles),
         openedHatches: Array.from(this.room.openedHatches || []),
         cutSnags: Array.from(this.room.cutSnags || []),
+        placedMarkers: Array.from(this.room.placedMarkers || []),
         playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
           playerId: pid,
           ...data,
@@ -756,6 +767,7 @@ export class P2pRoomCoordinator {
         this.room.sharedCollectibles.clear();
         this.room.openedHatches?.clear();
         this.room.cutSnags?.clear();
+        this.room.placedMarkers?.clear();
         this.room.playerLines.clear();
         this.room.bodyRecoveredBy = null;
         this._broadcast({ type: 'returned_to_lobby', room: this.serializeRoom() });
@@ -837,11 +849,15 @@ export class P2pRoomCoordinator {
       }
 
       case 'wreck_action': {
-        const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
+        const actionKind =
+          msg.actionKind === 'hatch' || msg.actionKind === 'snag' || msg.actionKind === 'marker'
+            ? msg.actionKind
+            : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
         if (actionKind && targetId) {
           if (actionKind === 'hatch') this.room.openedHatches?.add(targetId);
           else if (actionKind === 'snag') this.room.cutSnags?.add(targetId);
+          else if (actionKind === 'marker') this.room.placedMarkers?.add(targetId);
           this._broadcast(
             { type: 'peer_wreck_action', playerId: p.id, by: p.name, actionKind, targetId },
             p.id

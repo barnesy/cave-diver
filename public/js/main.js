@@ -470,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=99" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=100" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1270,6 +1270,8 @@ function syncWreckActionHud(prompt) {
   btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch');
   btnWreckAction.classList.toggle('is-clip', prompt.kind === 'clip-line');
   btnWreckAction.classList.toggle('is-unclip', prompt.kind === 'unclip-line');
+  btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage');
+  btnWreckAction.classList.toggle('is-marker', prompt.kind === 'place-marker');
   if (wreckActionLabelEl) wreckActionLabelEl.textContent = prompt.label;
   if (wreckActionDetailEl) wreckActionDetailEl.textContent = prompt.detail || '';
   if (wreckActionProgressEl) wreckActionProgressEl.style.width = `${pct}%`;
@@ -1361,6 +1363,9 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   }
   if (Array.isArray(restoredState?.cutSnags)) {
     for (const sId of restoredState.cutSnags) session.cutSnagIds.add(sId);
+  }
+  if (Array.isArray(restoredState?.placedMarkers)) {
+    for (const mId of restoredState.placedMarkers) session.placedMarkerIds.add(mId);
   }
   if (restoredState?.bodyRecoveredBy) {
     session.bodyRecovered = true;
@@ -2810,6 +2815,7 @@ async function upgradeDiveToCoopRoom({ share = false } = {}) {
       collectibles: Array.from(session.collectedIds || []),
       openedHatches: Array.from(session.openedHatchIds || []),
       cutSnags: Array.from(session.cutSnagIds || []),
+      placedMarkers: Array.from(session.placedMarkerIds || []),
       bodyRecovered: Boolean(session.bodyRecovered),
       playerLines: session.guidelineChains || [],
     });
@@ -3700,6 +3706,8 @@ const sessionStepCallbacks = {
   onHatchOpen: () => audio.playHatchOpen(),
   onLineCut: () => audio.playLineCut(),
   onClipLine: (clipped) => audio.playClipLine(clipped),
+  onStageRefill: () => audio.playGasShare(),
+  onMarkerPlaced: () => audio.playClipLine(true),
   onWreckSync: (actionKind, targetId) => {
     if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
   },
@@ -4122,16 +4130,16 @@ function frame(nowMs) {
       localSiltDensity: session.localSiltDensity,
       bubbles: session.bubbles,
       ecosystem,
-      wreckState: session.level?.isWreck
-        ? {
-            clippedToShotLine: session.clippedToShotLine,
-            cutSnagIds: session.cutSnagIds,
-            activeSnagIndex: session.activeSnagIndex,
-            openedHatchIds: session.openedHatchIds,
-            crankingHatchId: session.crankingHatchId,
-            crankingHatchProgress: session.crankingHatchProgress,
-          }
-        : null,
+      wreckState: {
+        clippedToShotLine: session.clippedToShotLine,
+        cutSnagIds: session.cutSnagIds,
+        activeSnagIndex: session.activeSnagIndex,
+        openedHatchIds: session.openedHatchIds,
+        crankingHatchId: session.crankingHatchId,
+        crankingHatchProgress: session.crankingHatchProgress,
+        claimedStageIds: session.claimedStageIds,
+        placedMarkerIds: session.placedMarkerIds,
+      },
       ghostPose: ghostEnabled && activeGhostTrack ? sampleGhostPose(activeGhostTrack, session.simTimeSec) : null,
       difficulty: session.difficulty || activeDifficulty,
       timeSec: session.simTimeSec,
