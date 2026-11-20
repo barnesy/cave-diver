@@ -221,10 +221,19 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill
     leg.finOpen += (targetOpen - leg.finOpen) * Math.min(1, dt * 12);
   }
 
-  // 3. Torch hand floats naturally ahead/below chest with subtle breathing sway
+  // 3. Torch hand floats naturally ahead/below chest, or reaches along manual flashlight joystick aim
   const breath = Math.sin(body.breathPhase) * 0.025;
-  const targetHandX = diver.x + fx * 0.48 - ux * (0.19 + breath);
-  const targetHandY = diver.y + fy * 0.48 - uy * (0.19 + breath);
+  let targetHandX;
+  let targetHandY;
+  if (diver.torchManualAim && Number.isFinite(diver.torchAngle)) {
+    const tfx = Math.cos(diver.torchAngle);
+    const tfy = Math.sin(diver.torchAngle);
+    targetHandX = diver.x + tfx * 0.48;
+    targetHandY = diver.y + tfy * 0.48 - breath;
+  } else {
+    targetHandX = diver.x + fx * 0.48 - ux * (0.19 + breath);
+    targetHandY = diver.y + fy * 0.48 - uy * (0.19 + breath);
+  }
   constrainJoint(torsoAnchor, body.hand, targetHandX, targetHandY, 0.52, 52, dt, level, 0.14);
 }
 

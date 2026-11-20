@@ -83,6 +83,8 @@ export function createDiveSession(
       vy: 0,
       angle: 0.15,
       angVel: 0,
+      torchAngle: 0.15,
+      torchManualAim: false,
       torchOn: true,
       name: diverName,
       body: createDiverBody(spawnX, spawnY),
@@ -1163,6 +1165,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const turnStiffness = thrustMag > 0.1 ? 18 : 5;
   diver.angVel = (diver.angVel + diff * turnStiffness * dt) * Math.exp(-6.5 * dt);
   diver.angle += diver.angVel * dt;
+
+  // Flashlight direction: follows diver heading by default, smoothly overridden while left torch stick is aimed
+  const torchAim = callbacks.torchAim;
+  const curTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
+  if (torchAim?.active && Number.isFinite(torchAim.angle)) {
+    let tDiff = torchAim.angle - curTorchAng;
+    while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+    while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-18 * dt));
+    diver.torchManualAim = true;
+  } else {
+    let tDiff = diver.angle - curTorchAng;
+    while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+    while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-10 * dt));
+    diver.torchManualAim = false;
+  }
 
   // Cave Wall Collision & Floor/Impact Silt-Out + Stuck / Head-Bump Stress Detection
   const hit = resolveDiverCollision(level, diver, 0.52);

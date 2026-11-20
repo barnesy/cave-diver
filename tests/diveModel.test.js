@@ -2195,3 +2195,32 @@ test('v96 bundles: co-op wreck sync & buddy net rescue, dive profile & PB ghost 
   stepDiveSession(sHard, { x: 0, y: 0 }, 0.25);
   assert.ok(sHard.diver.vx > sGuided.diver.vx * 1.5, `Hardcore drift (${sHard.diver.vx}) should exceed guided (${sGuided.diver.vx})`);
 });
+
+test('Left flashlight joystick temporarily overrides diver torchAngle & hand aim while held and returns to diver heading on release', () => {
+  const lvl = getLevelById('cenote-el-abismo');
+  const sess = createDiveSession(lvl);
+  sess.diver.x = 12;
+  sess.diver.y = 12;
+
+  // 1. Default behavior: swimming right keeps torchAngle aligned with diver.angle (~0 rad)
+  for (let i = 0; i < 12; i++) {
+    stepDiveSession(sess, { x: 1, y: 0 }, 0.08, { torchAim: { active: false, angle: null } });
+  }
+  assert.equal(sess.diver.torchManualAim, false);
+  assert.ok(Math.abs(sess.diver.torchAngle - sess.diver.angle) < 0.12, 'Torch should follow diver heading by default');
+
+  // 2. While left flashlight joystick is aimed straight down (+PI/2) while swimming right, torch overrides heading
+  for (let i = 0; i < 10; i++) {
+    stepDiveSession(sess, { x: 0.8, y: 0 }, 0.08, { torchAim: { active: true, angle: Math.PI * 0.5 } });
+  }
+  assert.equal(sess.diver.torchManualAim, true);
+  assert.ok(Math.abs(sess.diver.torchAngle - Math.PI * 0.5) < 0.15, `Expected torchAngle near +PI/2, got ${sess.diver.torchAngle}`);
+  assert.ok(sess.diver.body.hand.y > sess.diver.y + 0.15, 'Articulated torch hand should aim downward with flashlight stick');
+
+  // 3. Releasing flashlight joystick smoothly returns beam to follow diver heading again
+  for (let i = 0; i < 18; i++) {
+    stepDiveSession(sess, { x: 0.8, y: 0 }, 0.08, { torchAim: { active: false, angle: null } });
+  }
+  assert.equal(sess.diver.torchManualAim, false);
+  assert.ok(Math.abs(sess.diver.torchAngle - sess.diver.angle) < 0.15, 'Torch should return to diver heading after release');
+});

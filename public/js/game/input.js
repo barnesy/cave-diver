@@ -6,6 +6,8 @@ export class InputController {
   constructor({
     stickBaseEl,
     stickKnobEl,
+    torchStickBaseEl = null,
+    torchStickKnobEl = null,
     onGasSelect,
     onRecommendedGasSwitch,
     onTorchToggle,
@@ -20,8 +22,16 @@ export class InputController {
     this.stickCenter = { x: 0, y: 0 };
     this.maxRadius = 40;
 
+    this.torchVec = { x: 0, y: 0, active: false };
+    this.torchPointerId = null;
+    this.torchCenter = { x: 0, y: 0 };
+    this.torchMaxRadius = 36;
+    this._gpTorchVec = { x: 0, y: 0, active: false };
+
     this.stickBaseEl = stickBaseEl;
     this.stickKnobEl = stickKnobEl;
+    this.torchStickBaseEl = torchStickBaseEl;
+    this.torchStickKnobEl = torchStickKnobEl;
     this.onGasSelect = onGasSelect;
     this.onRecommendedGasSwitch = onRecommendedGasSwitch;
     this.onTorchToggle = onTorchToggle;
@@ -34,6 +44,7 @@ export class InputController {
 
     this._bindKeyboard();
     this._bindTouchStick();
+    this._bindTorchStick();
   }
 
   _bindKeyboard() {
@@ -66,6 +77,7 @@ export class InputController {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.resetStick();
+      this.resetTorchStick();
     });
   }
 
@@ -143,6 +155,94 @@ export class InputController {
     }
   }
 
+  _bindTorchStick() {
+    if (!this.torchStickBaseEl || !this.torchStickKnobEl) return;
+
+    const DEADZONE = 0.14;
+    const updateTorch = (clientX, clientY) => {
+      const dx = clientX - this.torchCenter.x;
+      const dy = clientY - this.torchCenter.y;
+      const dist = Math.hypot(dx, dy);
+      const clamped = Math.min(dist, this.torchMaxRadius);
+      const angle = Math.atan2(dy, dx);
+      const kx = Math.cos(angle) * clamped;
+      const ky = Math.sin(angle) * clamped;
+
+      this.torchStickKnobEl.style.transform = `translate(${kx}px, ${ky}px)`;
+      const rawNorm = this.torchMaxRadius > 0 ? clamped / this.torchMaxRadius : 0;
+      if (rawNorm <= DEADZONE) {
+        this.torchVec.x = 0;
+        this.torchVec.y = 0;
+        this.torchVec.active = false;
+        this.torchStickBaseEl.classList.remove('aiming');
+        return;
+      }
+      this.torchVec.x = Math.cos(angle);
+      this.torchVec.y = Math.sin(angle);
+      this.torchVec.active = true;
+      this.torchStickBaseEl.classList.add('aiming');
+    };
+
+    this.torchStickBaseEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (this.torchPointerId !== null) return;
+      this.torchPointerId = e.pointerId;
+      this.torchStickBaseEl.setPointerCapture(e.pointerId);
+      const rect = this.torchStickBaseEl.getBoundingClientRect();
+      this.torchMaxRadius = Math.max(20, rect.width * 0.34);
+      this.torchCenter = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      };
+      updateTorch(e.clientX, e.clientY);
+    });
+
+    this.torchStickBaseEl.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== this.torchPointerId) return;
+      e.preventDefault();
+      updateTorch(e.clientX, e.clientY);
+    });
+
+    const release = (e) => {
+      if (e.pointerId !== this.torchPointerId) return;
+      this.resetTorchStick();
+    };
+
+    this.torchStickBaseEl.addEventListener('pointerup', release);
+    this.torchStickBaseEl.addEventListener('pointercancel', release);
+  }
+
+  resetTorchStick() {
+    this.torchPointerId = null;
+    this.torchVec.x = 0;
+    this.torchVec.y = 0;
+    this.torchVec.active = false;
+    if (this.torchStickKnobEl) {
+      this.torchStickKnobEl.style.transform = 'translate(0px, 0px)';
+    }
+    this.torchStickBaseEl?.classList.remove('aiming');
+  }
+
+  getTorchAim() {
+    if (this.torchVec.active) {
+      return {
+        active: true,
+        x: this.torchVec.x,
+        y: this.torchVec.y,
+        angle: Math.atan2(this.torchVec.y, this.torchVec.x),
+      };
+    }
+    if (this._gpTorchVec.active) {
+      return {
+        active: true,
+        x: this._gpTorchVec.x,
+        y: this._gpTorchVec.y,
+        angle: Math.atan2(this._gpTorchVec.y, this._gpTorchVec.x),
+      };
+    }
+    return { active: false, x: 0, y: 0, angle: null };
+  }
+
   isRewindHeld() {
     return this.keys.has('KeyR') || this._gpRewindHeld;
   }
@@ -169,6 +269,7 @@ export class InputController {
     }
     if (!gp) {
       this._gpRewindHeld = false;
+      this._gpTorchVec.active = false;
       this._prevGpButtons.length = 0;
       return { x: 0, y: 0 };
     }
@@ -214,6 +315,19 @@ export class InputController {
 
     const ltVal = gp.buttons?.[6]?.value ?? (pressed(6) ? 1 : 0);
     const precision = ltVal > 0.35 ? 0.45 : 1.0;
+
+    // Right stick (axes 2, 3) temporarily overrides flashlight aim direction
+    const rx = gp.axes?.[2] || 0;
+    const ry = gp.axes?.[3] || 0;
+    const rMag = Math.hypot(rx, ry);
+    if (rMag > 0.22) {
+      this._gpTorchVec.x = rx / rMag;
+      this._gpTorchVec.y = ry / rMag;
+      this._gpTorchVec.active = true;
+    } else {
+      this._gpTorchVec.active = false;
+    }
+
     return { x: gx * precision, y: gy * precision };
   }
 

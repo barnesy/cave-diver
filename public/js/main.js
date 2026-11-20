@@ -470,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=96" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=97" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -982,6 +982,8 @@ const hud = new DiveComputerHUD({
 const input = new InputController({
   stickBaseEl: document.getElementById('touch-stick'),
   stickKnobEl: document.getElementById('touch-knob'),
+  torchStickBaseEl: document.getElementById('torch-stick'),
+  torchStickKnobEl: document.getElementById('torch-knob'),
   onGasSelect: (gasId) => trySwitchGas(gasId),
   onRecommendedGasSwitch: () => {
     if (mode !== 'diving' || !session || divePaused) return false;
@@ -1023,6 +1025,7 @@ let lastWreckActionKey = '';
 // Difficulty Realism Mode (Guided / Standard Tech / Hardcore), PB Ghost Replay & First-Dive Guide
 const DIFFICULTY_PREF_KEY = 'caveDiverDifficulty_v1';
 const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
+const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
   { id: 'guided', label: 'Guided', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
@@ -1031,6 +1034,7 @@ const DIFFICULTY_MODES = [
 ];
 let activeDifficulty = 'standard';
 let ghostEnabled = true;
+let torchStickEnabled = true;
 let activeGhostTrack = null;
 let pendingGuideLaunch = false;
 
@@ -1041,10 +1045,15 @@ try {
   }
   const savedGhost = localStorage.getItem(GHOST_PREF_KEY);
   if (savedGhost === '0') ghostEnabled = false;
+  const savedTorchStick = localStorage.getItem(TORCH_STICK_PREF_KEY);
+  if (savedTorchStick === '0') torchStickEnabled = false;
 } catch {}
 
 const btnDifficultyCycle = document.getElementById('btn-difficulty-cycle');
 const btnGhostToggle = document.getElementById('btn-ghost-toggle');
+const btnTorchStickToggle = document.getElementById('btn-torch-stick-toggle');
+const btnHudTorchStick = document.getElementById('btn-hud-torch-stick');
+const torchStickEl = document.getElementById('torch-stick');
 const btnOpenGuide = document.getElementById('btn-open-guide');
 const modalDiveGuide = document.getElementById('modal-dive-guide');
 const btnDiveGuideClose = document.getElementById('btn-dive-guide-close');
@@ -1054,8 +1063,27 @@ function syncPreferenceMenuButtons() {
   const diffMeta = DIFFICULTY_MODES.find((d) => d.id === activeDifficulty) || DIFFICULTY_MODES[1];
   if (btnDifficultyCycle) btnDifficultyCycle.textContent = diffMeta.btnText;
   if (btnGhostToggle) btnGhostToggle.textContent = ghostEnabled ? '👻 PB Ghost: On' : '👻 PB Ghost: Off';
+  const torchLabel = torchStickEnabled ? '🔦 Light Stick: On' : '🔦 Light Stick: Off';
+  if (btnTorchStickToggle) btnTorchStickToggle.textContent = torchLabel;
+  if (btnHudTorchStick) btnHudTorchStick.textContent = torchLabel;
+  if (torchStickEl) torchStickEl.hidden = !torchStickEnabled;
 }
 syncPreferenceMenuButtons();
+
+function toggleTorchStickOption() {
+  torchStickEnabled = !torchStickEnabled;
+  if (!torchStickEnabled) input.resetTorchStick();
+  try { localStorage.setItem(TORCH_STICK_PREF_KEY, torchStickEnabled ? '1' : '0'); } catch {}
+  syncPreferenceMenuButtons();
+  showToast(
+    torchStickEnabled
+      ? '🔦 Left flashlight aim joystick enabled.'
+      : '🔦 Left flashlight joystick hidden (beam follows diver).',
+    2.2
+  );
+}
+btnTorchStickToggle?.addEventListener('click', toggleTorchStickOption);
+btnHudTorchStick?.addEventListener('click', toggleTorchStickOption);
 
 btnDifficultyCycle?.addEventListener('click', () => {
   const idx = DIFFICULTY_MODES.findIndex((d) => d.id === activeDifficulty);
@@ -3735,6 +3763,7 @@ function stepSimulation(dt) {
       rewindHoldTimer = 0;
     }
     sessionStepCallbacks.peers = isMultiplayer ? lan.getPeers() : null;
+    sessionStepCallbacks.torchAim = input.getTorchAim();
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
     syncWreckActionHud(session.wreckActionPrompt);

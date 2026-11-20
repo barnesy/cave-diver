@@ -6281,10 +6281,11 @@ export class CaveRenderer {
     }
     ctx.restore();
 
-    // Torch body at hand
+    // Torch body at hand (aims along manual flashlight joystick override when active, else diver heading)
+    const torchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
     ctx.save();
     ctx.translate(hx, hy);
-    ctx.rotate(diver.angle);
+    ctx.rotate(torchAng);
     ctx.fillStyle = '#e2e8f0';
     ctx.beginPath();
     ctx.roundRect(-0.1 * scale, -0.055 * scale, 0.28 * scale, 0.11 * scale, 0.03 * scale);
@@ -6503,8 +6504,9 @@ export class CaveRenderer {
       const moteStamp = this.glowStamps.cyan;
       const sparks = this._torchSparksScratch;
       sparks.length = 0;
-      const beamFx = Math.cos(diver.angle || 0);
-      const beamFy = Math.sin(diver.angle || 0);
+      const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+      const beamFx = Math.cos(beamAng);
+      const beamFy = Math.sin(beamAng);
       const cell = 6;
       const gx0 = Math.floor((torchData.ox - rangeM) / cell);
       const gx1 = Math.ceil((torchData.ox + rangeM) / cell);
@@ -6667,6 +6669,7 @@ export class CaveRenderer {
       }
     }
 
+    const localTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
     const localTorch = diver.torchOn !== false
       ? {
           ox: diver.body?.hand ? diver.body.hand.x : diver.x,
@@ -6675,7 +6678,7 @@ export class CaveRenderer {
             this.level,
             diver.body?.hand ? diver.body.hand.x : diver.x,
             diver.body?.hand ? diver.body.hand.y : diver.y,
-            diver.angle,
+            localTorchAng,
             0.44,
             16.5,
             52,
@@ -6980,12 +6983,13 @@ export class CaveRenderer {
     const rustStamp = this.glowStamps.rustSilt || baseStamp;
     const warmStamp = this.glowStamps.warm;
 
+    const localBeamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
     const lights = [
       {
         x: diver.x,
         y: diver.y,
-        fx: Math.cos(diver.angle),
-        fy: Math.sin(diver.angle),
+        fx: Math.cos(localBeamAng),
+        fy: Math.sin(localBeamAng),
         torchOn: diver.torchOn !== false,
       },
     ];
