@@ -470,7 +470,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=98" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=99" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -974,6 +974,7 @@ const hud = new DiveComputerHUD({
   onGasSelect: (gasId) => trySwitchGas(gasId),
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
+  onReelRewindHold: (held) => input?.setTouchRewindHeld(held),
   onHeartbeatPulse: (bpm) => {
     if (mode === 'diving' && !divePaused) audio.playHeartbeat(bpm);
   },
@@ -1351,6 +1352,16 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (restoredState?.collectibles) {
     for (const cId of restoredState.collectibles) session.collectedIds.add(cId);
   }
+  if (Array.isArray(restoredState?.openedHatches)) {
+    for (const hId of restoredState.openedHatches) {
+      session.openedHatchIds.add(hId);
+      const hObj = activeLevel.watertightHatches?.find((h) => h.id === hId);
+      session.hatchBonusScore = (session.hatchBonusScore || 0) + (hObj?.bonusPoints || 150);
+    }
+  }
+  if (Array.isArray(restoredState?.cutSnags)) {
+    for (const sId of restoredState.cutSnags) session.cutSnagIds.add(sId);
+  }
   if (restoredState?.bodyRecoveredBy) {
     session.bodyRecovered = true;
     session.carryingBody = restoredState.bodyRecoveredBy === lan.clientId;
@@ -1442,6 +1453,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
+      hatchBonusScore: session.hatchBonusScore || 0,
     });
 
   if (isMultiplayer) {
@@ -2796,6 +2808,8 @@ async function upgradeDiveToCoopRoom({ share = false } = {}) {
     const room = await lan.createRoom(diverName, activeLevel.id, 4, {
       checkpoints: Array.from(session.checkpointsHit || []),
       collectibles: Array.from(session.collectedIds || []),
+      openedHatches: Array.from(session.openedHatchIds || []),
+      cutSnags: Array.from(session.cutSnagIds || []),
       bodyRecovered: Boolean(session.bodyRecovered),
       playerLines: session.guidelineChains || [],
     });
@@ -3848,9 +3862,10 @@ function stepSimulation(dt) {
         const ty = rescuer.y - Math.sin(ang) * 1.55;
         const nextX = diver.x + (tx - diver.x) * Math.min(1, dt * 8);
         const nextY = diver.y + (ty - diver.y) * Math.min(1, dt * 8);
-        const col = resolveDiverCollision(level, nextX, nextY, 0.55);
-        diver.x = col.x;
-        diver.y = col.y;
+        const towProbe = { x: nextX, y: nextY, vx: 0, vy: 0 };
+        resolveDiverCollision(level, towProbe, 0.55);
+        diver.x = towProbe.x;
+        diver.y = towProbe.y;
         diver.angle = ang;
         if (rescuer.surfaced && !session.rescued) {
           session.rescued = true;

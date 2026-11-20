@@ -214,6 +214,7 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
       session.crankingHatchProgress = 0;
     }
     const hatch = session.level?.watertightHatches?.find((h) => h.id === msg.targetId);
+    session.hatchBonusScore = (session.hatchBonusScore || 0) + (hatch?.bonusPoints || 150);
     callbacks.onHatchOpen?.(hatch);
     callbacks.onToast?.(`🔓 ${by} unsealed ${hatch?.label || 'Watertight Hatch'}!`, 2.6);
     return true;
@@ -1208,6 +1209,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     thrustMag,
     timerState: siltStirTimer,
     onSpawn: callbacks.onSiltSpawn,
+    difficulty: session.difficulty || 'standard',
   });
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
@@ -1277,8 +1279,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     callbacks.onAlarm?.('warn');
   }
 
-  // Checkpoints
-  for (const cp of level.checkpoints) {
+  // Checkpoints (on shipwrecks, gate post-turnaround ascent checkpoints so shot-line cp5/cp6 don't auto-fire during descent!)
+  const turnaroundIdx = level.isWreck
+    ? level.checkpoints.findIndex((c) => c.id === ascentConfig.turnaroundId)
+    : -1;
+  for (let i = 0; i < level.checkpoints.length; i++) {
+    const cp = level.checkpoints[i];
+    if (turnaroundIdx >= 0 && i > turnaroundIdx && !ascendingPhase) continue;
     if (!checkpointsHit.has(cp.id) && Math.hypot(diver.x - cp.x, diver.y - cp.y) <= cp.radius) {
       checkpointsHit.add(cp.id);
       callbacks.onCheckpoint?.(cp);
@@ -1404,6 +1411,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
+      hatchBonusScore: session.hatchBonusScore || 0,
     });
 
   if (!diveState.alive) {

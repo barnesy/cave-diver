@@ -40,9 +40,9 @@ export function recordDiveInLogbook(rawBook, { levelId, success, score = 0, grad
   const book = normalizeBook(rawBook);
   book.totalDives += 1;
   book.totalTimeSec = Math.round((book.totalTimeSec + Math.max(0, Number(diveTimeSec) || 0)) * 10) / 10;
-  book.deepestM = Math.max(book.deepestM, Math.round((Number(maxDepthM) || 0) * 10) / 10);
 
   if (success && levelId) {
+    book.deepestM = Math.max(book.deepestM, Math.round((Number(maxDepthM) || 0) * 10) / 10);
     const cleanScore = Math.max(0, Math.round(Number(score) || 0));
     const cleanTime = Math.max(0, Math.round((Number(diveTimeSec) || 0) * 10) / 10);
     if (cleanScore > book.bestScore) book.bestScore = cleanScore;
@@ -132,7 +132,7 @@ export function computeCertifications(rawBook, levels = []) {
     if (lvl?.isWreck || lid.includes('oriskany') || lid.includes('andrea-doria') || lid.includes('britannic') || lid.includes('victoria') || lid.includes('fitzgerald')) {
       wrecksCleared++;
     }
-    if (lvl && !lvl.lined) unlinedCleared++;
+    if (lvl && (lvl.reelMetersPerDiver || 0) > 0) unlinedCleared++;
   }
 
   const certs = [

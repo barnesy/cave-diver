@@ -38,10 +38,10 @@ html, body {
   display: block;
 }
 
-/* Toast Banner (sits cleanly above bottom dive console) */
+/* Toast Banner (sits cleanly above bottom dive console & wreck action pill) */
 .game-toast {
   position: fixed;
-  bottom: max(136px, calc(env(safe-area-inset-bottom) + 130px));
+  bottom: max(206px, calc(env(safe-area-inset-bottom) + 200px));
   top: auto;
   left: 50%;
   transform: translate(-50%, 16px);
@@ -66,9 +66,9 @@ html, body {
 }
 @media (max-width: 760px) {
   .game-toast {
-    bottom: max(248px, calc(env(safe-area-inset-bottom) + 242px));
-    top: auto;
-    transform: translate(-50%, 14px);
+    top: max(106px, calc(env(safe-area-inset-top) + 98px));
+    bottom: auto;
+    transform: translate(-50%, -10px);
     font-size: 0.78rem;
   }
   .game-toast.visible {
@@ -2402,10 +2402,6 @@ html, body {
     grid-template-columns: repeat(3, minmax(66px, 80px));
     padding: 4px;
   }
-  .coop-comms {
-    top: max(56px, calc(env(safe-area-inset-top) + 48px));
-    bottom: auto;
-  }
 }
 
 /* Solo Dive Pause Overlay */
@@ -2860,7 +2856,7 @@ select:focus-visible {
   align-items: flex-end;
   gap: 4px;
   pointer-events: auto;
-  z-index: 25;
+  z-index: 32;
 }
 .comm-btn {
   background: rgba(8, 15, 26, 0.92);
@@ -2936,14 +2932,47 @@ select:focus-visible {
   .coop-comms {
     top: auto;
     right: max(8px, env(safe-area-inset-right));
-    bottom: max(188px, calc(env(safe-area-inset-bottom) + 182px));
+    bottom: max(224px, calc(env(safe-area-inset-bottom) + 218px));
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: flex-end;
-    max-width: calc(100vw - 16px);
+    max-width: calc(100vw - 156px);
   }
   .coop-wait-banner {
     top: max(112px, calc(env(safe-area-inset-top) + 104px));
+  }
+}
+
+/* Landscape Mobile Overlay Lanes (placed after base & <=680px rules so cascade wins cleanly!) */
+@media (max-height: 460px) and (orientation: landscape) {
+  .coop-comms {
+    top: max(52px, calc(env(safe-area-inset-top) + 46px));
+    bottom: auto;
+    right: max(8px, env(safe-area-inset-right));
+    flex-direction: row;
+    flex-wrap: nowrap;
+    max-width: 56vw;
+  }
+  .game-toast {
+    top: max(54px, calc(env(safe-area-inset-top) + 48px));
+    bottom: auto;
+  }
+  .wreck-action-btn {
+    bottom: max(100px, calc(env(safe-area-inset-bottom) + 94px));
+    min-width: 162px;
+    padding: 6px 14px;
+  }
+}
+
+@media (max-width: 600px) and (min-height: 461px) {
+  .wreck-action-btn {
+    bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px));
+    min-width: 146px;
+    max-width: 184px;
+    padding: 7px 12px;
+  }
+  .wreck-action-btn strong {
+    font-size: 0.74rem;
   }
 }
 
@@ -4131,6 +4160,24 @@ select:focus-visible {
 @keyframes wreckPulseDanger {
   0%, 100% { transform: translateX(-50%) scale(1); }
   50% { transform: translateX(-50%) scale(1.045); }
+}
+@media (max-width: 600px) and (min-height: 461px) {
+  .wreck-action-btn {
+    bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px));
+    min-width: 146px;
+    max-width: 184px;
+    padding: 7px 12px;
+  }
+  .wreck-action-btn strong {
+    font-size: 0.74rem;
+  }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  .wreck-action-btn {
+    bottom: max(100px, calc(env(safe-area-inset-bottom) + 94px));
+    min-width: 162px;
+    padding: 6px 14px;
+  }
 }
 
 /* Post-Dive Real Dive Computer Depth Profile Graph */

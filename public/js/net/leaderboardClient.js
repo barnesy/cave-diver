@@ -275,6 +275,7 @@ export class LeaderboardClient {
       );
       if (res.ok || res.status === 400) {
         this._syncedLocalKeys.add(sig);
+        this._saveSyncedKeys();
         return res.ok ? 1 : 0;
       }
     } catch {

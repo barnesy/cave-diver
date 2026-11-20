@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=98');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=99');
   }
   return trysteroModulePromise;
 }
@@ -905,9 +905,8 @@ export class LanClient {
       const snapHost = snap.players.find((p) => p.isHost);
       const someoneElseIsHost =
         snapHost &&
-        snapHost.reconnectToken &&
-        session.reconnectToken &&
-        snapHost.reconnectToken !== session.reconnectToken;
+        ((snapHost.reconnectToken && session.reconnectToken && snapHost.reconnectToken !== session.reconnectToken) ||
+          (snapHost.id && this.clientId && snapHost.id !== this.clientId && snapHost.name && session.name && snapHost.name !== session.name));
       if (someoneElseIsHost) {
         await this._p2pJoinRoom(
           {
@@ -1220,7 +1219,10 @@ export class LanClient {
     }, 900);
 
     this._p2pJoinTimer = setTimeout(() => {
-      clearTimeout(cloudFallbackTimer);
+      if (this._p2pCloudFallbackTimer) {
+        clearTimeout(this._p2pCloudFallbackTimer);
+        this._p2pCloudFallbackTimer = null;
+      }
       if (this._p2pGen === gen && !this._p2pJoinAcked) {
         this._cleanupP2p();
         if (isRejoin) {
@@ -2028,6 +2030,7 @@ export class LanClient {
         maxRadius: Math.round((plume.maxRadius || 3.6) * 100) / 100,
         life: Math.round((plume.life || 26) * 10) / 10,
         peakAlpha: Math.round((plume.peakAlpha ?? plume.alpha ?? 0.78) * 100) / 100,
+        isRust: Boolean(plume.isRust),
       },
     });
   }

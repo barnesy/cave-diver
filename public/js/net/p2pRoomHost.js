@@ -161,6 +161,16 @@ export class P2pRoomCoordinator {
           ? initialDiveState.collectibles.filter((id) => typeof id === 'string').slice(0, 64)
           : []
       ),
+      openedHatches: new Set(
+        initStarted && Array.isArray(initialDiveState.openedHatches)
+          ? initialDiveState.openedHatches.filter((id) => typeof id === 'string').slice(0, 32)
+          : []
+      ),
+      cutSnags: new Set(
+        initStarted && Array.isArray(initialDiveState.cutSnags)
+          ? initialDiveState.cutSnags.filter((id) => typeof id === 'string').slice(0, 32)
+          : []
+      ),
       playerLines: new Map(),
       bodyRecoveredBy: initStarted && initialDiveState.bodyRecovered ? hostId : null,
       players: new Map(),
@@ -256,6 +266,8 @@ export class P2pRoomCoordinator {
       bodyRecoveredBy: this.room.bodyRecoveredBy || null,
       checkpoints: Array.from(this.room.sharedCheckpoints),
       collectibles: Array.from(this.room.sharedCollectibles),
+      openedHatches: Array.from(this.room.openedHatches || []),
+      cutSnags: Array.from(this.room.cutSnags || []),
       playerLines: Array.from(this.room.playerLines.entries()).map(([pid, d]) => ({
         playerId: pid,
         ...d,
@@ -294,6 +306,8 @@ export class P2pRoomCoordinator {
     coord.room.bodyRecoveredBy = snapshot.bodyRecoveredBy || null;
     coord.room.sharedCheckpoints = new Set(snapshot.checkpoints || []);
     coord.room.sharedCollectibles = new Set(snapshot.collectibles || []);
+    coord.room.openedHatches = new Set(snapshot.openedHatches || []);
+    coord.room.cutSnags = new Set(snapshot.cutSnags || []);
     coord.room.playerLines = new Map();
     for (const pl of snapshot.playerLines || []) {
       if (pl?.playerId && pl.playerId !== departingHostId) {
@@ -388,6 +402,8 @@ export class P2pRoomCoordinator {
     this.room.diveSeq = (this.room.diveSeq || 0) + 1;
     this.room.sharedCheckpoints = new Set();
     this.room.sharedCollectibles = new Set();
+    this.room.openedHatches = new Set();
+    this.room.cutSnags = new Set();
     this.room.playerLines = new Map();
     this.room.bodyRecoveredBy = null;
     this._broadcast({
@@ -469,6 +485,8 @@ export class P2pRoomCoordinator {
           preserveDive: Boolean(msg.preserveDive),
           checkpoints: Array.from(this.room.sharedCheckpoints),
           collectibles: Array.from(this.room.sharedCollectibles),
+          openedHatches: Array.from(this.room.openedHatches || []),
+          cutSnags: Array.from(this.room.cutSnags || []),
           playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
             playerId: pid,
             ...data,
@@ -544,6 +562,8 @@ export class P2pRoomCoordinator {
         lateJoin: true,
         checkpoints: Array.from(this.room.sharedCheckpoints),
         collectibles: Array.from(this.room.sharedCollectibles),
+        openedHatches: Array.from(this.room.openedHatches || []),
+        cutSnags: Array.from(this.room.cutSnags || []),
         playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
           playerId: pid,
           ...data,
@@ -602,6 +622,8 @@ export class P2pRoomCoordinator {
         rejoined: true,
         checkpoints: Array.from(this.room.sharedCheckpoints),
         collectibles: Array.from(this.room.sharedCollectibles),
+        openedHatches: Array.from(this.room.openedHatches || []),
+        cutSnags: Array.from(this.room.cutSnags || []),
         playerLines: Array.from(this.room.playerLines.entries()).map(([pid, data]) => ({
           playerId: pid,
           ...data,
@@ -732,6 +754,8 @@ export class P2pRoomCoordinator {
         this.room.phase = 'lobby';
         this.room.sharedCheckpoints.clear();
         this.room.sharedCollectibles.clear();
+        this.room.openedHatches?.clear();
+        this.room.cutSnags?.clear();
         this.room.playerLines.clear();
         this.room.bodyRecoveredBy = null;
         this._broadcast({ type: 'returned_to_lobby', room: this.serializeRoom() });
@@ -771,6 +795,7 @@ export class P2pRoomCoordinator {
                 ? Math.min(0.92, Math.max(0.2, pl.peakAlpha ?? pl.opacity))
                 : 0.78,
               canBud: false,
+              isRust: Boolean(pl.isRust),
             },
           },
           p.id
@@ -815,6 +840,8 @@ export class P2pRoomCoordinator {
         const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
         if (actionKind && targetId) {
+          if (actionKind === 'hatch') this.room.openedHatches?.add(targetId);
+          else if (actionKind === 'snag') this.room.cutSnags?.add(targetId);
           this._broadcast(
             { type: 'peer_wreck_action', playerId: p.id, by: p.name, actionKind, targetId },
             p.id
@@ -858,7 +885,7 @@ export class P2pRoomCoordinator {
             rescuerName: p.name,
             rescuedId,
             rescuedName: sanitizeName(msg.rescuedName, 'Buddy'),
-            status: msg.status === 'extracted' ? 'extracted' : 'towing',
+            status: msg.status === 'extracted' || msg.status === 'dropped' ? msg.status : 'towing',
           },
           p.id
         );

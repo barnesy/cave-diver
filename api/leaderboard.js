@@ -68,7 +68,11 @@ export async function GET(request) {
 export async function POST(request) {
   let raw;
   try {
-    raw = await request.json();
+    const text = await request.text();
+    if (text.length > 131072) {
+      return jsonResponse({ error: 'Payload too large.' }, 413);
+    }
+    raw = JSON.parse(text);
   } catch {
     return jsonResponse({ error: 'Invalid JSON body.' }, 400);
   }
@@ -152,13 +156,14 @@ export async function POST(request) {
     const boardAll = queryLeaderboardEntries(allEntries, {
       mode: entry.mode,
       levelId: entry.levelId,
-      limit: 50,
+      limit: 500,
     });
-    const rank = boardAll.findIndex((e) => e.entryKey === entry.entryKey) + 1;
+    const idx = boardAll.findIndex((e) => e.entryKey === entry.entryKey);
+    const rank = idx >= 0 ? idx + 1 : boardAll.length + 1;
     return jsonResponse({
       ok: true,
       entry,
-      rank: rank > 0 ? rank : 1,
+      rank,
       total: boardAll.length,
       entries: boardAll.slice(0, 20),
     });

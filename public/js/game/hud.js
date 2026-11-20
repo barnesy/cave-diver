@@ -208,8 +208,9 @@ function setStyleProp(el, prop, val) {
 }
 
 export class DiveComputerHUD {
-  constructor({ onGasSelect, onReelToggle, onReelRewind, onHeartbeatPulse }) {
+  constructor({ onGasSelect, onReelToggle, onReelRewind, onReelRewindHold = null, onHeartbeatPulse }) {
     this.onHeartbeatPulse = onHeartbeatPulse;
+    this._onReelRewindHold = onReelRewindHold;
     this._isTouchDevice =
       typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
     this.elDepth = document.getElementById('dc-depth');
@@ -260,8 +261,14 @@ export class DiveComputerHUD {
     this.btnReelRewind?.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      try { this.btnReelRewind.setPointerCapture(e.pointerId); } catch {}
+      this._onReelRewindHold?.(true);
       onReelRewind?.();
     });
+    const endRewindHold = () => this._onReelRewindHold?.(false);
+    this.btnReelRewind?.addEventListener('pointerup', endRewindHold);
+    this.btnReelRewind?.addEventListener('pointercancel', endRewindHold);
+    this.btnReelRewind?.addEventListener('lostpointercapture', endRewindHold);
     this.btnReelRewind?.addEventListener('click', (e) => {
       if (e.detail === 0) onReelRewind?.();
     });

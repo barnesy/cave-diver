@@ -244,13 +244,14 @@ function estimateDecoStopTimeSec(compartments, gas, stopDepthM) {
   const targetCeilingM = Math.max(0, stopDepthM - 3.0);
 
   let sec = 0;
+  const deepHeOffgasMult = stopDepthM > 9.0 ? 2.2 : 1.0;
   while (sec < 300) {
     const ceilM = barToDepth(calcCeilingBar(sim, GF_HIGH));
     if (ceilM <= targetCeilingM + 0.1) break;
     sec += 2;
     for (let i = 0; i < sim.length; i++) {
       sim[i].pN2 = schrienerUpdate(sim[i].pN2, pAlvN2, 2, COMPARTMENTS[i].halfN2);
-      sim[i].pHe = schrienerUpdate(sim[i].pHe, pAlvHe, 2, COMPARTMENTS[i].halfHe);
+      sim[i].pHe = schrienerUpdate(sim[i].pHe, pAlvHe, 2 * deepHeOffgasMult, COMPARTMENTS[i].halfHe);
     }
   }
   return sec;
@@ -637,7 +638,10 @@ export function getAscentInstruction(state, depthM, checkpointsHit, ascentConfig
     };
   }
 
-  if (depthM > 16.0 && state.activeGasId !== 'EAN32' && state.tanks.EAN32.bar > 1) {
+  if (
+    ((depthM > 16.0 && state.activeGasId !== 'EAN32') || (depthM > 6.5 && state.activeGasId === 'TMX1455')) &&
+    state.tanks.EAN32.bar > 1
+  ) {
     return {
       action: 'STOP',
       title: 'STOP HERE · SWITCH TO EAN32',

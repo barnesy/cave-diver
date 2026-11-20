@@ -2279,3 +2279,81 @@ test('Co-diver torchAngle & torchManualAim relay over P2P and interpolate smooth
   assert.ok(peer && peer.torchManualAim === true);
   assert.ok(peer.torchAngle > 1.2 && peer.torchAngle <= 1.55, `Expected interpolated peer torchAngle near 1.5, got ${peer?.torchAngle}`);
 });
+
+test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dropped tow, late-join wreck state, cert integrity & campaign ranks', () => {
+  // 1. Shipwreck ascent checkpoints (cp5/cp6) do NOT auto-fire during initial shot-line descent
+  const ori = getLevelById('uss-oriskany-carrier');
+  const sW = createDiveSession(ori);
+  sW.diver.x = 10; sW.diver.y = 6.0;
+  stepDiveSession(sW, { x: 0, y: 0 }, 0.05);
+  assert.equal(sW.checkpointsHit.has('cp6'), false, '6m O2 Trapeze cp6 must not fire during descent');
+  sW.diver.x = 10; sW.diver.y = 22.0;
+  stepDiveSession(sW, { x: 0, y: 0 }, 0.05);
+  assert.equal(sW.checkpointsHit.has('cp1'), true, '22m descent buoy cp1 should fire');
+  assert.equal(sW.checkpointsHit.has('cp5'), false, '22m ascent switch cp5 must not fire before turnaround');
+  // Once turnaround cp4 is tagged, cp5 & cp6 fire cleanly on ascent
+  sW.checkpointsHit.add('cp4');
+  stepDiveSession(sW, { x: 0, y: 0 }, 0.05);
+  assert.equal(sW.checkpointsHit.has('cp5'), true, 'cp5 should fire after turnaround');
+
+  // 2. hatchBonusScore counts toward final score and stays within leaderboard ceiling
+  const baseSummary = computeDiverScoreSummary({
+    level: ori,
+    diveState: sW.diveState,
+    checkpointsHit: sW.checkpointsHit,
+    collectedIds: new Set(),
+    exploredCount: 10,
+    totalExploreCells: 20,
+    hatchBonusScore: 0,
+  });
+  const hatchSummary = computeDiverScoreSummary({
+    level: ori,
+    diveState: sW.diveState,
+    checkpointsHit: sW.checkpointsHit,
+    collectedIds: new Set(),
+    exploredCount: 10,
+    totalExploreCells: 20,
+    hatchBonusScore: 150,
+  });
+  assert.equal(hatchSummary.totalScore - baseSummary.totalScore, 150);
+  assert.ok(hatchSummary.totalScore <= computeLevelMaxScore(ori.id, false));
+
+  // 3. P2pRoomCoordinator preserves 'dropped' buddy_rescue status, isRust silt, and late-join wreck hatches/snags
+  const buddyMsgs = [];
+  const lateMsgs = [];
+  const coord = new P2pRoomCoordinator({ code: 'V99R', hostId: 'h1', hostName: 'Host', levelId: ori.id });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'B1' }, (m) => buddyMsgs.push(m), 'b1');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('h1', { type: 'buddy_rescue', rescuedId: 'b1', rescuedName: 'B1', status: 'dropped' });
+  coord.handleMessage('h1', { type: 'silt_event', plume: { x: 10, y: 50, isRust: true } });
+  coord.handleMessage('h1', { type: 'wreck_action', actionKind: 'hatch', targetId: 'ori_hatch_bow' });
+  coord.handleMessage('h1', { type: 'wreck_action', actionKind: 'snag', targetId: 'ori_snag1' });
+
+  const dropMsg = buddyMsgs.find((m) => m.type === 'peer_buddy_rescue');
+  assert.equal(dropMsg?.status, 'dropped', 'buddy_rescue must preserve dropped status');
+  const rustMsg = buddyMsgs.find((m) => m.type === 'peer_silt');
+  assert.equal(rustMsg?.plume?.isRust, true, 'peer_silt must preserve isRust flag');
+
+  coord.handleRemoteJoin({ name: 'LateDiver' }, (m) => lateMsgs.push(m), 'b2');
+  const lateStart = lateMsgs.find((m) => m.type === 'dive_started');
+  assert.ok(lateStart?.openedHatches?.includes('ori_hatch_bow'), 'Late joiner must receive already-opened hatches');
+  assert.ok(lateStart?.cutSnags?.includes('ori_snag1'), 'Late joiner must receive already-cut snags');
+
+  // 4. Certification integrity: fatal dive does not grant depth cert; lined caves do not grant Full Cave
+  let book = createEmptyLogbook();
+  book = recordDiveInLogbook(book, { levelId: 'hmhs-britannic', success: false, score: 0, grade: 'DNF', maxDepthM: 125, diveTimeSec: 90 });
+  assert.equal(book.deepestM, 0, 'Fatal dive must not count toward deepest certified depth');
+  for (const id of ['cenote-el-abismo', 'eagles-nest-sink', 'uss-oriskany-carrier', 'peacock-springs-labyrinth', 'fontaine-de-vaucluse', 'cenote-angelita-abyss']) {
+    book = recordDiveInLogbook(book, { levelId: id, success: true, score: 2400, grade: 'A', maxDepthM: 50, diveTimeSec: 180 });
+  }
+  const certs = computeCertifications(book, LEVELS);
+  assert.equal(certs.earned.some((c) => c.id === 'full-cave'), false, 'Clearing 6 lined sites must NOT award Full Cave without an unlined reel clear');
+
+  // 5. CAMPAIGN_PLAN rank & Tier 5 authority (no rank collision between L20 Victoria and L25 Boy-Bulok)
+  const boyMeta = getLevelMeta('boy-bulok-asian-sump');
+  const vicMeta = getLevelMeta('hms-victoria-battleship');
+  assert.equal(boyMeta.rank, 25);
+  assert.equal(boyMeta.tier, 5);
+  assert.equal(vicMeta.rank, 20);
+});

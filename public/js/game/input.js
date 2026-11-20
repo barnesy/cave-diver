@@ -41,6 +41,7 @@ export class InputController {
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
+    this._touchRewindHeld = false;
 
     this._bindKeyboard();
     this._bindTouchStick();
@@ -112,7 +113,7 @@ export class InputController {
       e.preventDefault();
       if (this.activePointerId !== null) return;
       this.activePointerId = e.pointerId;
-      this.stickBaseEl.setPointerCapture(e.pointerId);
+      try { this.stickBaseEl.setPointerCapture(e.pointerId); } catch {}
       const rect = this.stickBaseEl.getBoundingClientRect();
       // Clamp maxRadius cleanly inside ring so the knob never overflows neighboring HUD cards
       this.maxRadius = Math.max(22, rect.width * 0.34);
@@ -144,6 +145,7 @@ export class InputController {
 
     this.stickBaseEl.addEventListener('pointerup', release);
     this.stickBaseEl.addEventListener('pointercancel', release);
+    this.stickBaseEl.addEventListener('lostpointercapture', release);
   }
 
   resetStick() {
@@ -187,12 +189,19 @@ export class InputController {
       e.preventDefault();
       if (this.torchPointerId !== null) return;
       this.torchPointerId = e.pointerId;
-      this.torchStickBaseEl.setPointerCapture(e.pointerId);
+      try { this.torchStickBaseEl.setPointerCapture(e.pointerId); } catch {}
       const rect = this.torchStickBaseEl.getBoundingClientRect();
       this.torchMaxRadius = Math.max(20, rect.width * 0.34);
+      const boxCx = rect.left + rect.width / 2;
+      const boxCy = rect.top + rect.height / 2;
+      const offX = e.clientX - boxCx;
+      const offY = e.clientY - boxCy;
+      const offD = Math.hypot(offX, offY);
+      const maxShift = this.torchMaxRadius * 0.32;
+      const shiftRatio = offD > maxShift && offD > 0 ? maxShift / offD : 1;
       this.torchCenter = {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
+        x: boxCx + offX * shiftRatio,
+        y: boxCy + offY * shiftRatio,
       };
       updateTorch(e.clientX, e.clientY);
     });
@@ -210,6 +219,7 @@ export class InputController {
 
     this.torchStickBaseEl.addEventListener('pointerup', release);
     this.torchStickBaseEl.addEventListener('pointercancel', release);
+    this.torchStickBaseEl.addEventListener('lostpointercapture', release);
   }
 
   resetTorchStick() {
@@ -243,8 +253,12 @@ export class InputController {
     return { active: false, x: 0, y: 0, angle: null };
   }
 
+  setTouchRewindHeld(held) {
+    this._touchRewindHeld = Boolean(held);
+  }
+
   isRewindHeld() {
-    return this.keys.has('KeyR') || this._gpRewindHeld;
+    return this.keys.has('KeyR') || this._gpRewindHeld || this._touchRewindHeld;
   }
 
   _pollGamepad() {

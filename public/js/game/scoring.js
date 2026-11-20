@@ -108,6 +108,7 @@ export function computeDiverScoreSummary({
   exploredCount = 0,
   totalExploreCells = 1,
   diveTimeSec = diveState?.diveTimeSec || 0,
+  hatchBonusScore = 0,
 }) {
   const alive = diveState?.alive !== false;
   const cpCount = checkpointsHit instanceof Set ? checkpointsHit.size : Number(checkpointsHit) || 0;
@@ -143,8 +144,10 @@ export function computeDiverScoreSummary({
   const cartographerBonus = alive && exploredPct >= 92 ? 250 : 0;
 
   const gasRemainingPct = computeGasRemainingPct(diveState);
-  const totalScore = healthScore + speedScore + collectiblesScore + explorationScore + cartographerBonus;
-  const maxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250;
+  const maxHatchBonus = (level?.watertightHatches || []).reduce((s, h) => s + (Number(h.bonusPoints) || 150), 0);
+  const cleanHatchBonus = alive ? Math.min(maxHatchBonus, Math.max(0, Math.round(Number(hatchBonusScore) || 0))) : 0;
+  const totalScore = healthScore + speedScore + collectiblesScore + explorationScore + cartographerBonus + cleanHatchBonus;
+  const maxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
   const rank = assignScoreRank(totalScore, alive, maxPossible);
 
   return {
@@ -166,6 +169,7 @@ export function computeDiverScoreSummary({
     exploredPct,
     explorationScore,
     cartographerBonus,
+    hatchBonusScore: cleanHatchBonus,
     healthScore,
     speedScore,
     totalScore,

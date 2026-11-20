@@ -104,8 +104,8 @@ export function getLevelMeta(levelOrId, fallbackIndex = 0) {
   const lvl = typeof levelOrId === 'object' ? levelOrId : LEVEL_MAP.get(id);
   const idx = plan ? plan.rank - 1 : LEVELS.findIndex((l) => l.id === id);
   const resolvedIdx = idx >= 0 ? idx : fallbackIndex;
-  const rank = lvl?.difficultyRank || plan?.rank || resolvedIdx + 1;
-  const tier = lvl?.tier || plan?.tier || (rank <= 2 ? 1 : rank <= 4 ? 2 : rank === 5 ? 3 : 4);
+  const rank = plan?.rank || lvl?.difficultyRank || resolvedIdx + 1;
+  const tier = plan?.tier || lvl?.tier || (rank <= 2 ? 1 : rank <= 4 ? 2 : rank === 5 ? 3 : 4);
   const reelM = Number.isFinite(lvl?.reelMetersPerDiver) ? lvl.reelMetersPerDiver : plan?.reelMetersPerDiver || 0;
   const maxDepthM = getLevelMaxDepthM(lvl) || plan?.targetDepthM || 50;
   const badge = plan?.badge || (reelM > 0 ? `Unlined ${maxDepthM}m` : `${maxDepthM}m`);

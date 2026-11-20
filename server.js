@@ -189,15 +189,16 @@ const server = http.createServer(async (req, res) => {
       const boardAll = queryLeaderboardEntries(leaderboardStore, {
         mode: parsed.entry.mode,
         levelId: parsed.entry.levelId,
-        limit: 50,
+        limit: 500,
       });
-      const rank = boardAll.findIndex((e) => e.entryKey === parsed.entry.entryKey) + 1;
+      const idx = boardAll.findIndex((e) => e.entryKey === parsed.entry.entryKey);
+      const rank = idx >= 0 ? idx + 1 : boardAll.length + 1;
       res.writeHead(200, corsHeaders);
       res.end(
         JSON.stringify({
           ok: true,
           entry: parsed.entry,
-          rank: rank > 0 ? rank : 1,
+          rank,
           total: boardAll.length,
           entries: boardAll.slice(0, 20),
         })
@@ -379,6 +380,8 @@ function launchRoomDive(room) {
   room.diveSeq = (room.diveSeq || 0) + 1;
   room.sharedCheckpoints = new Set();
   room.sharedCollectibles = new Set();
+  room.openedHatches = new Set();
+  room.cutSnags = new Set();
   room.playerLines = new Map();
   room.bodyRecoveredBy = null;
   broadcastRoom(room, {
@@ -548,6 +551,16 @@ wss.on('connection', (ws) => {
               ? initDive.collectibles.filter((id) => typeof id === 'string').slice(0, 64)
               : []
           ),
+          openedHatches: new Set(
+            initStarted && Array.isArray(initDive.openedHatches)
+              ? initDive.openedHatches.filter((id) => typeof id === 'string').slice(0, 32)
+              : []
+          ),
+          cutSnags: new Set(
+            initStarted && Array.isArray(initDive.cutSnags)
+              ? initDive.cutSnags.filter((id) => typeof id === 'string').slice(0, 32)
+              : []
+          ),
           playerLines: new Map(),
           bodyRecoveredBy: initStarted && initDive.bodyRecovered ? client.id : null,
           players: new Map(),
@@ -659,6 +672,8 @@ wss.on('connection', (ws) => {
             lateJoin: true,
             checkpoints: Array.from(room.sharedCheckpoints || []),
             collectibles: Array.from(room.sharedCollectibles || []),
+            openedHatches: Array.from(room.openedHatches || []),
+            cutSnags: Array.from(room.cutSnags || []),
             playerLines: Array.from((room.playerLines || new Map()).entries()).map(([pid, data]) => ({
               playerId: pid,
               ...data,
@@ -728,6 +743,8 @@ wss.on('connection', (ws) => {
             rejoined: true,
             checkpoints: Array.from(room.sharedCheckpoints || []),
             collectibles: Array.from(room.sharedCollectibles || []),
+            openedHatches: Array.from(room.openedHatches || []),
+            cutSnags: Array.from(room.cutSnags || []),
             playerLines: Array.from((room.playerLines || new Map()).entries()).map(([pid, data]) => ({
               playerId: pid,
               ...data,
@@ -972,6 +989,7 @@ wss.on('connection', (ws) => {
               maxRadius: Number.isFinite(p.maxRadius) ? Math.min(5.0, Math.max(1.2, p.maxRadius)) : 3.4,
               life: Number.isFinite(p.life) ? Math.min(32, Math.max(4, p.life)) : 22,
               peakAlpha: Number.isFinite(p.peakAlpha) ? Math.min(0.9, Math.max(0.2, p.peakAlpha)) : 0.78,
+              isRust: Boolean(p.isRust),
             },
           },
           client.id
@@ -1021,6 +1039,8 @@ wss.on('connection', (ws) => {
         const actionKind = msg.actionKind === 'hatch' || msg.actionKind === 'snag' ? msg.actionKind : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';
         if (!actionKind || !targetId) break;
+        if (actionKind === 'hatch') room.openedHatches?.add(targetId);
+        else if (actionKind === 'snag') room.cutSnags?.add(targetId);
         broadcastRoom(
           room,
           {
@@ -1086,7 +1106,7 @@ wss.on('connection', (ws) => {
             rescuerName: rescuer?.name || 'Buddy',
             rescuedId,
             rescuedName: typeof msg.rescuedName === 'string' ? msg.rescuedName.slice(0, 18) : 'Buddy',
-            status: msg.status === 'extracted' ? 'extracted' : 'towing',
+            status: msg.status === 'extracted' || msg.status === 'dropped' ? msg.status : 'towing',
           },
           client.id
         );

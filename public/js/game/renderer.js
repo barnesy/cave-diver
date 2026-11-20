@@ -1279,14 +1279,15 @@ export class CaveRenderer {
     // Ambient buoyant bokeh bubbles rising softly through the deep backdrop (zero-alloc)
     if (!this._reducedMotion) {
       const bubbleCount = 26;
-      ctx.lineWidth = Math.max(1, (this._dpr || 1) * 0.8);
+      const mdpr = this._cachedDpr || 1;
+      ctx.lineWidth = Math.max(1, mdpr * 0.8);
       for (let i = 0; i < bubbleCount; i++) {
         const seed = (i + 1) * 1.6180339;
         const speed = 0.022 + (i % 7) * 0.0075;
         const phase = (timeSec * speed + (seed % 1)) % 1;
         const by = ch * (1.06 - phase * 1.12);
         const bx = cw * (((seed * 7.31) % 1) + Math.sin(timeSec * (0.6 + (i % 4) * 0.25) + i * 2.3) * 0.018);
-        const r = (2.0 + (i % 5) * 1.35) * (0.65 + (1 - phase) * 0.45) * (this._dpr || 1);
+        const r = (2.0 + (i % 5) * 1.35) * (0.65 + (1 - phase) * 0.45) * mdpr;
         const fade = Math.sin(phase * Math.PI);
         const alpha = fade * (0.14 + (i % 3) * 0.06);
         ctx.fillStyle = `rgba(186, 230, 253, ${(alpha * 0.55).toFixed(3)})`;
@@ -1332,11 +1333,14 @@ export class CaveRenderer {
     const dpr = this._cachedDpr || 1;
     const scale = this.pxPerM * dpr;
 
-    // Smooth camera follow (defaults to local diver, or spectated buddy target)
+    // Smooth camera follow + Torch-Coupled Peek Look-Ahead when aiming the left flashlight joystick
     const camAnchor = cameraTarget || diver;
-    const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * 2.2;
-    const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * 1.4;
-    const camAlpha = Math.min(1, dt * 6);
+    const isManualPeek = Boolean(camAnchor.torchManualAim && Number.isFinite(camAnchor.torchAngle));
+    const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * 3.4 : 0;
+    const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
+    const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
+    const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY;
+    const camAlpha = Math.min(1, dt * (isManualPeek ? 5.2 : 6.0));
     this.camX += (lookX - this.camX) * camAlpha;
     this.camY += (lookY - this.camY) * camAlpha;
 
@@ -1512,6 +1516,9 @@ export class CaveRenderer {
     }
     if (ghostPose) {
       this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
+      this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
     }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
@@ -4984,6 +4991,38 @@ export class CaveRenderer {
     ctx.restore();
   }
 
+  /**
+   * Subtle post-lighting specular glints on exhaled bubbles passing inside the diver's torch cone.
+   */
+  _drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale) {
+    const ox = diver.body?.hand ? diver.body.hand.x : diver.x;
+    const oy = diver.body?.hand ? diver.body.hand.y : diver.y;
+    const ang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+    const fx = Math.cos(ang);
+    const fy = Math.sin(ang);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
+    ctx.beginPath();
+    for (let i = 0; i < bubbles.length; i++) {
+      const b = bubbles[i];
+      const dx = b.x - ox;
+      const dy = b.y - oy;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < 0.08 || dSq > 144) continue;
+      const dist = Math.sqrt(dSq);
+      if ((dx * fx + dy * fy) / dist < 0.8) continue;
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      if (sx < -6 || sx > cw + 6 || sy < -6 || sy > ch + 6) continue;
+      const gr = Math.max(1.1, Math.min(3.2, (b.r || 0.05) * scale * 0.42));
+      ctx.moveTo(sx + gr, sy);
+      ctx.arc(sx, sy, gr, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.restore();
+  }
+
   _drawGhostDiver(ctx, ghost, toScreenX, toScreenY, scale, timeSec) {
     if (!ghost) return;
     const sx = toScreenX(ghost.x);
@@ -7141,8 +7180,8 @@ export class CaveRenderer {
       ctx.globalAlpha = Math.min(0.88, s.alpha * (0.48 + lit * 0.44));
       ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 1.15, -r * 1.05, r * 2.3, r * 2.1);
 
-      // Counter-rotating secondary billowing tendril as cloud expands & diffuses
-      if (lifeRatio < 0.96) {
+      // Counter-rotating secondary billowing tendril (skipped on mobile under dense silt to save fill-rate)
+      if (lifeRatio < 0.96 && (!this._isCoarseMobile || siltClouds.length <= 24)) {
         ctx.rotate(-rot * 1.7 + 1.1);
         ctx.globalAlpha = Math.min(0.54, s.alpha * 0.42);
         ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 0.85, -r * 0.95, r * 1.9, r * 1.75);
@@ -7150,27 +7189,28 @@ export class CaveRenderer {
       ctx.restore();
 
       if (glare > 0.01) {
-        glareList.push(sx, sy, r, glare, s.seed || 0);
+        glareList.push(sx, sy, r, glare, s.seed || 0, s.isRust ? 1 : 0);
       }
     }
 
-    // Pass 2: single batched 'screen' milky torch backscatter across all lit silt clouds
+    // Pass 2: single batched 'screen' torch backscatter (warm limestone vs burnt-orange shipwreck rust!)
     if (glareList.length > 0) {
       ctx.globalCompositeOperation = 'screen';
-      for (let i = 0; i < glareList.length; i += 5) {
+      for (let i = 0; i < glareList.length; i += 6) {
         const sx = glareList[i];
         const sy = glareList[i + 1];
         const r = glareList[i + 2];
         const glare = glareList[i + 3];
-        ctx.globalAlpha = Math.min(0.65, glare * 0.72);
-        ctx.drawImage(warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
+        const isRust = glareList[i + 5] === 1;
+        ctx.globalAlpha = Math.min(0.65, glare * (isRust ? 0.82 : 0.72));
+        ctx.drawImage(isRust ? rustStamp : warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
       }
 
-      // Pass 3: single batched 'source-over' suspended limestone sediment glints
+      // Pass 3: single batched 'source-over' suspended sediment glints
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
-      for (let i = 0; i < glareList.length; i += 5) {
+      for (let i = 0; i < glareList.length; i += 6) {
         const sx = glareList[i];
         const sy = glareList[i + 1];
         const r = glareList[i + 2];

@@ -177,13 +177,17 @@ export async function POST(request) {
             updatedAt: now,
           };
           if (next.room) next.room = { ...next.room, players: remaining };
-          if (next.snapshot?.room) {
+          if (next.snapshot && typeof next.snapshot === 'object') {
+            const snapPlayers = Array.isArray(next.snapshot.players)
+              ? next.snapshot.players.filter((p) => p.id !== pid)
+              : remaining;
+            if (snapPlayers.length > 0 && !snapPlayers.some((p) => p.isHost)) {
+              snapPlayers[0] = { ...snapPlayers[0], isHost: true };
+            }
             next.snapshot = {
               ...next.snapshot,
-              room: { ...next.snapshot.room, players: remaining },
-              players: Array.isArray(next.snapshot.players)
-                ? next.snapshot.players.filter((p) => p.id !== pid)
-                : remaining,
+              ...(next.snapshot.room ? { room: { ...next.snapshot.room, players: remaining } } : {}),
+              players: snapPlayers,
             };
           }
           return next;
