@@ -26,6 +26,7 @@ import {
   getEffectiveReelRemainingM,
   triggerWreckAction,
   sampleGhostPose,
+  buildParGhostTrack,
   applyPeerWreckAction,
 } from './game/diveSession.js';
 import {
@@ -475,7 +476,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=103" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=104" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1113,6 +1114,7 @@ let activeDifficulty = 'standard';
 let ghostEnabled = true;
 let torchStickEnabled = true;
 let activeGhostTrack = null;
+let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
 
 try {
@@ -1128,6 +1130,7 @@ try {
 
 const btnDifficultyCycle = document.getElementById('btn-difficulty-cycle');
 const btnGhostToggle = document.getElementById('btn-ghost-toggle');
+const btnHudGhostToggle = document.getElementById('btn-hud-ghost-toggle');
 const btnTorchStickToggle = document.getElementById('btn-torch-stick-toggle');
 const btnHudTorchStick = document.getElementById('btn-hud-torch-stick');
 const torchStickEl = document.getElementById('torch-stick');
@@ -1139,7 +1142,9 @@ const btnDiveGuideStart = document.getElementById('btn-dive-guide-start');
 function syncPreferenceMenuButtons() {
   const diffMeta = DIFFICULTY_MODES.find((d) => d.id === activeDifficulty) || DIFFICULTY_MODES[1];
   if (btnDifficultyCycle) btnDifficultyCycle.textContent = diffMeta.btnText;
-  if (btnGhostToggle) btnGhostToggle.textContent = ghostEnabled ? '👻 PB Ghost: On' : '👻 PB Ghost: Off';
+  const ghostLabel = ghostEnabled ? '👻 PB Ghost: On' : '👻 PB Ghost: Off';
+  if (btnGhostToggle) btnGhostToggle.textContent = ghostLabel;
+  if (btnHudGhostToggle) btnHudGhostToggle.textContent = ghostLabel;
   const torchLabel = torchStickEnabled ? '🔦 Light Stick: On' : '🔦 Light Stick: Off';
   if (btnTorchStickToggle) btnTorchStickToggle.textContent = torchLabel;
   if (btnHudTorchStick) btnHudTorchStick.textContent = torchLabel;
@@ -1178,12 +1183,22 @@ btnDifficultyCycle?.addEventListener('click', () => {
   );
 });
 
-btnGhostToggle?.addEventListener('click', () => {
+function toggleGhostOption() {
   ghostEnabled = !ghostEnabled;
   try { localStorage.setItem(GHOST_PREF_KEY, ghostEnabled ? '1' : '0'); } catch {}
   syncPreferenceMenuButtons();
-  showToast(ghostEnabled ? '👻 Personal Best Ghost Diver enabled.' : '👻 Personal Best Ghost Diver hidden.', 2.0);
-});
+  const targetLvl = session?.level || activeLevel;
+  refreshActiveGhostTrack(targetLvl);
+  if (!ghostEnabled) {
+    showToast('👻 PB Ghost Diver hidden.', 2.0);
+  } else if (activeGhostTrack && !activeGhostIsPar) {
+    showToast('👻 PB Ghost Diver active — racing your Personal Best!', 2.4);
+  } else {
+    showToast('👻 Par Pacer active — clear this site to save your own PB Ghost!', 2.8);
+  }
+}
+btnGhostToggle?.addEventListener('click', toggleGhostOption);
+btnHudGhostToggle?.addEventListener('click', toggleGhostOption);
 
 function openDiveGuideModal(launchAfter = false) {
   pendingGuideLaunch = Boolean(launchAfter);
@@ -1325,8 +1340,24 @@ function loadGhostTrack(levelId) {
 function saveGhostTrack(levelId, track) {
   if (!levelId || !Array.isArray(track) || track.length < 2) return;
   try {
-    localStorage.setItem(`caveDiverGhost_${levelId}`, JSON.stringify(track.slice(0, 280)));
+    localStorage.setItem(`caveDiverGhost_${levelId}`, JSON.stringify(track.slice(0, 1200)));
   } catch {}
+}
+
+function refreshActiveGhostTrack(level) {
+  if (!ghostEnabled || !level) {
+    activeGhostTrack = null;
+    activeGhostIsPar = false;
+    return;
+  }
+  const saved = loadGhostTrack(level.id);
+  if (saved) {
+    activeGhostTrack = saved;
+    activeGhostIsPar = false;
+  } else {
+    activeGhostTrack = buildParGhostTrack(level);
+    activeGhostIsPar = Boolean(activeGhostTrack);
+  }
 }
 
 function renderDebriefDepthProfile(profile, maxDepthM, success) {
@@ -1531,7 +1562,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   const slotOffsets = [0, -1.35, 1.35, -2.5];
   const spawnOffsetX = multiplayer ? (slotOffsets[lan.getPlayerSlotIndex()] ?? 0) : 0;
   session = createDiveSession(activeLevel, { diverName, spawnOffsetX, difficulty: activeDifficulty });
-  activeGhostTrack = ghostEnabled ? loadGhostTrack(activeLevel.id) : null;
+  refreshActiveGhostTrack(activeLevel);
   session.endedState = null;
   session.localOutcome = null;
   session._awaitingHostStart = Boolean(restoredState?.awaitingHostStart);
@@ -1724,16 +1755,29 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   const gradeEl = document.getElementById('debrief-grade');
   scoreLblEl.textContent = teamSummary.isTeam ? 'TEAM EXPEDITION SCORE' : 'EXPEDITION SCORE';
 
-  // Track best score cleanly per level in localStorage
+  // Track best score & PB ghost cleanly per level in localStorage
   const bestKey = `caveDiverBest_${level.id}`;
   let prevBest = 0;
   try {
     prevBest = Number(localStorage.getItem(bestKey) || 0);
+    const prevLogRec = loadCareerLogbook().cleared?.[level.id] || null;
+    const hadGhost = Boolean(loadGhostTrack(level.id));
+    const isFasterClear =
+      success &&
+      diveState.diveTimeSec > 0 &&
+      (!prevLogRec?.bestTimeSec || diveState.diveTimeSec < prevLogRec.bestTimeSec);
     if (success && teamSummary.teamScore > prevBest) {
       localStorage.setItem(bestKey, String(teamSummary.teamScore));
-      if (session?.ghostTrack?.length >= 2) {
-        saveGhostTrack(level.id, session.ghostTrack);
-      }
+    }
+    if (success && session?.ghostTrack?.length >= 2 && (teamSummary.teamScore >= prevBest || isFasterClear || !hadGhost)) {
+      const finTrack = session.ghostTrack.slice(0, 1199);
+      finTrack.push([
+        Math.round((session.simTimeSec || diveState.diveTimeSec || 0) * 10),
+        Math.round(diver.x * 10),
+        Math.round(diver.y * 10),
+        Math.round((diver.angle || 0) * 10),
+      ]);
+      saveGhostTrack(level.id, finTrack);
     }
   } catch {
     // ignore storage restriction
@@ -4488,7 +4532,11 @@ function frame(nowMs) {
         claimedStageIds: session.claimedStageIds,
         placedMarkerIds: session.placedMarkerIds,
       },
-      ghostPose: ghostEnabled && activeGhostTrack ? sampleGhostPose(activeGhostTrack, session.simTimeSec) : null,
+      ghostPose: (() => {
+        if (!ghostEnabled || !activeGhostTrack) return null;
+        const pose = sampleGhostPose(activeGhostTrack, session.simTimeSec);
+        return pose ? { ...pose, isPar: activeGhostIsPar } : null;
+      })(),
       difficulty: session.difficulty || activeDifficulty,
       timeSec: session.simTimeSec,
       dt,

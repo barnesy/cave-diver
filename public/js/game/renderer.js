@@ -1650,7 +1650,7 @@ export class CaveRenderer {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
     }
     if (ghostPose) {
-      this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec);
+      this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec, cw, ch, diver);
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -5942,61 +5942,156 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawGhostDiver(ctx, ghost, toScreenX, toScreenY, scale, timeSec) {
+  _drawGhostDiver(ctx, ghost, toScreenX, toScreenY, scale, timeSec, cw = 0, ch = 0, diver = null) {
     if (!ghost) return;
     const sx = toScreenX(ghost.x);
     const sy = toScreenY(ghost.y);
     const u = scale;
-    const pulse = 0.72 + 0.28 * Math.sin(timeSec * 3.4);
+    const isPar = Boolean(ghost.isPar);
+    const strokeCol = isPar ? '#c084fc' : '#22d3ee';
+    const fillCol = isPar ? 'rgba(192, 132, 252, 0.34)' : 'rgba(34, 211, 238, 0.36)';
+    const labelText = isPar ? '👻 PAR PACER' : '👻 PB GHOST';
+    const dpr = this._cachedDpr || 1;
+
+    // If ghost has swum off-camera, show a sleek edge indicator so the diver can always race their pace
+    if (cw > 0 && ch > 0 && diver) {
+      const marginX = Math.round(28 * dpr);
+      const topSafe = Math.round((cw < ch ? 116 : 92) * dpr);
+      const botSafe = Math.round((cw < ch ? 225 : 138) * dpr);
+      const onScreen = sx >= -18 && sx <= cw + 18 && sy >= -18 && sy <= ch + 18;
+      if (!onScreen) {
+        const distM = Math.round(Math.hypot(ghost.x - diver.x, ghost.y - diver.y));
+        const dDepth = Math.round((ghost.y || 0) - (diver.y || 0));
+        const depthTag = Math.abs(dDepth) >= 3 ? (dDepth > 0 ? ` ▼${dDepth}m` : ` ▲${Math.abs(dDepth)}m`) : '';
+        const ang = Math.atan2(sy - ch * 0.5, sx - cw * 0.5);
+        const rx = Math.max(marginX, Math.min(cw - marginX, cw * 0.5 + Math.cos(ang) * (cw * 0.5 - marginX)));
+        const ry = Math.max(topSafe, Math.min(ch - botSafe, ch * 0.5 + Math.sin(ang) * (ch * 0.5 - Math.max(topSafe, botSafe) * 0.5)));
+        const arrowSz = Math.round(7 * dpr);
+        const fontPx = Math.round(10 * dpr);
+        const tag = `${isPar ? '👻 PAR' : '👻 PB'} ${distM}m${depthTag}`;
+        ctx.save();
+        ctx.globalAlpha = 0.82;
+        ctx.save();
+        ctx.translate(rx, ry);
+        ctx.rotate(ang);
+        ctx.fillStyle = strokeCol;
+        ctx.beginPath();
+        ctx.moveTo(arrowSz, 0);
+        ctx.lineTo(-arrowSz * 0.7, -arrowSz * 0.55);
+        ctx.lineTo(-arrowSz * 0.35, 0);
+        ctx.lineTo(-arrowSz * 0.7, arrowSz * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.font = `800 ${fontPx}px ui-monospace, monospace`;
+        ctx.textBaseline = 'middle';
+        const pillPad = Math.round(6 * dpr);
+        const pillW = ctx.measureText(tag).width + pillPad * 2;
+        const pillH = Math.round(18 * dpr);
+        const onRight = rx > cw * 0.5;
+        const rawX = onRight ? rx - arrowSz - Math.round(5 * dpr) - pillW : rx + arrowSz + Math.round(5 * dpr);
+        const pillX = Math.max(marginX, Math.min(cw - marginX - pillW, rawX));
+        ctx.fillStyle = 'rgba(2, 12, 26, 0.84)';
+        ctx.strokeStyle = strokeCol;
+        ctx.lineWidth = Math.max(1, 1.2 * dpr);
+        ctx.beginPath();
+        ctx.roundRect(pillX, ry - pillH * 0.5, pillW, pillH, 999);
+        ctx.fill();
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isPar ? '#e9d5ff' : '#a5f3fc';
+        ctx.fillText(tag, pillX + pillW * 0.5, ry + 0.5);
+        ctx.restore();
+        return;
+      }
+    }
+
+    const pulse = 0.82 + 0.18 * Math.sin(timeSec * 3.4);
 
     ctx.save();
     ctx.translate(sx, sy);
 
-    // Subtle holographic cyan aura
+    // Luminous holographic aura so the ghost reads clearly in both sunlit cenotes and pitch-black sumps
     const stamp = this.glowStamps?.cyan;
     if (stamp) {
-      ctx.globalAlpha = 0.24 * pulse;
-      const gr = u * 1.15;
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = (ghost.finished ? 0.22 : 0.42) * pulse;
+      const gr = u * 1.35;
       ctx.drawImage(stamp, -gr, -gr, gr * 2, gr * 2);
+      ctx.restore();
     }
 
     // Translucent diver silhouette oriented along PB travel angle
     ctx.save();
     ctx.rotate(ghost.angle || 0);
     if (Math.cos(ghost.angle || 0) < 0) ctx.scale(1, -1);
-    ctx.globalAlpha = (ghost.finished ? 0.25 : 0.48) * pulse;
-    ctx.strokeStyle = '#67e8f9';
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
-    ctx.lineWidth = Math.max(1.2, u * 0.045);
+    ctx.globalAlpha = (ghost.finished ? 0.38 : 0.78) * pulse;
+    ctx.strokeStyle = strokeCol;
+    ctx.fillStyle = fillCol;
+    ctx.lineWidth = Math.max(1.6, u * 0.06);
 
-    // Torso & twinset cylinder outline
+    // Twinset cylinder pack on back
+    ctx.beginPath();
+    ctx.roundRect(-u * 0.34, -u * 0.28, u * 0.58, u * 0.14, u * 0.06);
+    ctx.fill();
+    ctx.stroke();
+
+    // Torso
     ctx.beginPath();
     ctx.ellipse(0, 0, u * 0.44, u * 0.16, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // Head
+
+    // Head & glowing mask visor
     ctx.beginPath();
     ctx.arc(u * 0.52, -u * 0.04, u * 0.14, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    // Soft forward holographic torch cone
+    if (!ghost.finished) {
+      ctx.fillStyle = isPar ? 'rgba(192, 132, 252, 0.13)' : 'rgba(34, 211, 238, 0.14)';
+      ctx.beginPath();
+      ctx.moveTo(u * 0.62, -u * 0.02);
+      ctx.lineTo(u * 2.2, -u * 0.48);
+      ctx.lineTo(u * 2.2, u * 0.44);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // Sweeping animated fin stroke
-    const kick = Math.sin(timeSec * 6.5) * u * 0.12;
+    const kick = Math.sin(timeSec * 6.5) * u * 0.14;
     ctx.beginPath();
     ctx.moveTo(-u * 0.42, 0);
-    ctx.lineTo(-u * 0.85, -u * 0.08 + kick);
-    ctx.lineTo(-u * 1.08, -u * 0.14 + kick);
+    ctx.lineTo(-u * 0.86, -u * 0.09 + kick);
+    ctx.lineTo(-u * 1.14, -u * 0.15 + kick);
     ctx.moveTo(-u * 0.42, 0);
-    ctx.lineTo(-u * 0.85, u * 0.08 - kick);
-    ctx.lineTo(-u * 1.08, u * 0.14 - kick);
+    ctx.lineTo(-u * 0.86, u * 0.09 - kick);
+    ctx.lineTo(-u * 1.14, u * 0.15 - kick);
     ctx.stroke();
     ctx.restore();
 
-    // Crisp floating PB GHOST label
-    ctx.globalAlpha = 0.78;
-    ctx.font = `700 ${Math.max(9, Math.round(u * 0.28))}px ui-monospace, monospace`;
+    // High-contrast floating pill badge (readable against bright water & dark rock)
+    ctx.globalAlpha = ghost.finished ? 0.6 : 0.92;
+    const fontPx = Math.max(9, Math.round(u * 0.3));
+    ctx.font = `800 ${fontPx}px ui-monospace, monospace`;
+    const tw = ctx.measureText(labelText).width;
+    const bw = tw + 12;
+    const bh = Math.max(16, fontPx + 6);
+    const labelY = -u * 0.72;
+    ctx.fillStyle = 'rgba(2, 12, 26, 0.82)';
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(-bw * 0.5, labelY - bh * 0.5, bw, bh, 999);
+    ctx.fill();
+    ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#a5f3fc';
-    ctx.fillText('👻 PB GHOST', 0, -u * 0.55);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isPar ? '#e9d5ff' : '#cffafe';
+    ctx.fillText(labelText, 0, labelY + 0.5);
     ctx.restore();
   }
 

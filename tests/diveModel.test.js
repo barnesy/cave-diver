@@ -2738,3 +2738,44 @@ test('v103 Deep audit fixes: radio muffle, audio reset/mute, safe gas share, sta
   const mv = sw.match(/MEDIA_CACHE\s*=\s*'cave-diver-media-v(\d+)'/)?.[1];
   assert.equal(cv, mv, 'CACHE_VERSION and MEDIA_CACHE versions must stay in lockstep');
 });
+
+test('v104 Ghost PB & Par Pacer track synthesis works across all 25 levels and renders onscreen & offscreen indicators', async () => {
+  const { buildParGhostTrack } = await import('../public/js/game/diveSession.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  for (const lvl of LEVELS) {
+    const track = buildParGhostTrack(lvl);
+    assert.ok(Array.isArray(track) && track.length >= 2, `Missing par ghost track for ${lvl.id}`);
+    const pStart = sampleGhostPose(track, 0);
+    const pMid = sampleGhostPose(track, (lvl.parTimeSec || 180) * 0.5);
+    assert.ok(pStart && Number.isFinite(pStart.x) && Number.isFinite(pStart.y));
+    assert.ok(pMid && Number.isFinite(pMid.x) && Number.isFinite(pMid.y));
+  }
+
+  // Onscreen PB ghost + offscreen Par Pacer arrow render cleanly
+  const drawn = [];
+  const mockCtx = new Proxy({
+    fillText(t) { drawn.push(String(t)); },
+    measureText(t) { return { width: String(t).length * 7 }; },
+  }, {
+    get(target, prop) { return prop in target ? target[prop] : () => {}; },
+    set() { return true; },
+  });
+  const toSX = (x) => 400 + x * 24;
+  const toSY = (y) => 300 + y * 24;
+  CaveRenderer.prototype._drawGhostDiver.call(
+    { _cachedDpr: 1, glowStamps: {} },
+    mockCtx,
+    { x: 2, y: 1, angle: 0.2, finished: false, isPar: false },
+    toSX, toSY, 24, 5.0, 800, 600, { x: 0, y: 1 }
+  );
+  assert.ok(drawn.includes('👻 PB GHOST'), 'Onscreen PB ghost should draw PB GHOST badge');
+
+  CaveRenderer.prototype._drawGhostDiver.call(
+    { _cachedDpr: 1, glowStamps: {} },
+    mockCtx,
+    { x: 50, y: 12, angle: 0.1, finished: false, isPar: true },
+    toSX, toSY, 24, 5.0, 800, 600, { x: 0, y: 2 }
+  );
+  assert.ok(drawn.some((t) => t.includes('👻 PAR') && t.includes('m')), 'Offscreen ghost should draw directional edge pacer');
+});

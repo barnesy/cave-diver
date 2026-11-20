@@ -205,6 +205,68 @@ export function sampleGhostPose(track, timeSec) {
 }
 
 /**
+ * Synthesizes a smooth par-time reference pacer ghost track along a level's guideline or
+ * checkpoint route so players with Ghost Mode enabled always have a live pacer to race
+ * until they record their own Personal Best run on that site.
+ */
+export function buildParGhostTrack(level) {
+  if (!level || !level.spawn) return null;
+  const rawPts = [];
+  const pushPt = (x, y) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (rawPts.length > 0) {
+      const prev = rawPts[rawPts.length - 1];
+      if (Math.hypot(x - prev.x, y - prev.y) < 0.6) return;
+    }
+    rawPts.push({ x, y });
+  };
+
+  pushPt(level.spawn.x, level.spawn.y);
+  if (Array.isArray(level.guideline) && level.guideline.length >= 2) {
+    for (const pt of level.guideline) {
+      if (Array.isArray(pt)) pushPt(pt[0], pt[1]);
+      else if (pt) pushPt(pt.x, pt.y);
+    }
+  } else if (Array.isArray(level.checkpoints) && level.checkpoints.length > 0) {
+    for (const cp of level.checkpoints) {
+      pushPt(cp.x, cp.y);
+    }
+    if (level.recoveryTarget) {
+      pushPt(level.recoveryTarget.x, level.recoveryTarget.y);
+    }
+  }
+  if (level.exitZone) {
+    pushPt(level.exitZone.x, level.exitZone.y);
+  }
+  if (rawPts.length < 2) return null;
+
+  let totalDist = 0;
+  const cumDist = [0];
+  for (let i = 1; i < rawPts.length; i++) {
+    totalDist += Math.hypot(rawPts[i].x - rawPts[i - 1].x, rawPts[i].y - rawPts[i - 1].y);
+    cumDist.push(totalDist);
+  }
+  if (totalDist < 1) return null;
+
+  const parSec = Math.max(45, Number(level.parTimeSec) || Math.round(totalDist / 1.35));
+  const track = [];
+  for (let i = 0; i < rawPts.length; i++) {
+    const p = rawPts[i];
+    const next = rawPts[Math.min(rawPts.length - 1, i + 1)];
+    const prev = rawPts[Math.max(0, i - 1)];
+    const ang = Math.atan2(next.y - prev.y, next.x - prev.x);
+    const tSec = (cumDist[i] / totalDist) * parSec;
+    track.push([
+      Math.round(tSec * 10),
+      Math.round(p.x * 10),
+      Math.round(p.y * 10),
+      Math.round(ang * 10),
+    ]);
+  }
+  return track;
+}
+
+/**
  * Applies a remote co-op buddy's wreck action (opening a hatch or slicing a net) to local state.
  */
 export function applyPeerWreckAction(session, msg, callbacks = {}) {
@@ -1533,7 +1595,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       });
     }
   }
-  if (session.ghostTrack && session.ghostTrack.length < 280 && session.simTimeSec - (session._lastGhostSampleAt || 0) >= 0.6) {
+  if (session.ghostTrack && session.ghostTrack.length < 1200 && session.simTimeSec - (session._lastGhostSampleAt || 0) >= 0.6) {
     session._lastGhostSampleAt = session.simTimeSec;
     session.ghostTrack.push([
       Math.round(session.simTimeSec * 10),
