@@ -1,4 +1,4 @@
-import { GAS_MIXES, GAS_ORDER, computePPO2, getRecommendedGas, getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
+import { GAS_MIXES, GAS_ORDER, computePPO2, computeTissueCompartmentStatus, getRecommendedGas, getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
 import { EXPLORE_GRID_CELL_M } from './scoring.js';
 
@@ -1498,4 +1498,192 @@ export class DiveComputerHUD {
       }
     }
   }
+}
+
+/**
+ * Sample / interpolate a dive profile array at any target timeSec for interactive Debrief scrubbing (v126).
+ */
+export function sampleDiveProfileAtTime(profile, timeSec) {
+  if (!Array.isArray(profile) || profile.length === 0) return null;
+  if (profile.length === 1) return { ...profile[0] };
+  const t = Math.max(profile[0].t || 0, Math.min(profile[profile.length - 1].t || 0, Number(timeSec) || 0));
+  let lo = 0;
+  let hi = profile.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((profile[mid].t || 0) <= t) lo = mid;
+    else hi = mid;
+  }
+  const a = profile[lo];
+  const b = profile[hi];
+  const span = Math.max(0.001, (b.t || 0) - (a.t || 0));
+  const f = Math.max(0, Math.min(1, (t - (a.t || 0)) / span));
+  const lerp = (va, vb, fallback = 0) => {
+    const na = Number.isFinite(va) ? va : fallback;
+    const nb = Number.isFinite(vb) ? vb : na;
+    return na + (nb - na) * f;
+  };
+  return {
+    t: Math.round(t * 10) / 10,
+    d: Math.round(lerp(a.d, b.d, 0) * 10) / 10,
+    gas: f < 0.5 ? a.gas : b.gas,
+    deco: Math.round(lerp(a.deco, b.deco, 0)),
+    ppo2: Math.round(lerp(a.ppo2, b.ppo2, 0.32) * 100) / 100,
+    cns: Math.round(lerp(a.cns, b.cns, 0)),
+    hr: Math.round(lerp(a.hr, b.hr, 68)),
+    bar: Math.round(lerp(a.bar, b.bar, 150)),
+    gf99: Math.round(lerp(a.gf99, b.gf99, 0)),
+  };
+}
+
+/**
+ * Render Shearwater-Perdix-style Technical Dive Computer OLED overlay with live
+ * Bühlmann ZH-L16C tissue loading bars (N2 + He), GF99%, CNS%, NDL/TTS, PPO2 & END (v126).
+ */
+export function drawShearwaterComputer(ctx, width, height, diveState) {
+  if (!ctx || width <= 0 || height <= 0 || !diveState) return;
+  const status = computeTissueCompartmentStatus(diveState);
+  const gas = diveState.mixes?.[diveState.activeGasId] || GAS_MIXES[diveState.activeGasId] || GAS_MIXES.EAN32;
+  const tankBar = Math.round(diveState.tanks?.[diveState.activeGasId]?.bar || 0);
+
+  ctx.save();
+  // Dark OLED bezel backdrop
+  ctx.fillStyle = '#040914';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.38)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
+
+  // Header strip
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fillRect(2, 2, width - 4, 18);
+  ctx.font = '700 9px ui-monospace, SFMono-Regular, monospace';
+  ctx.fillStyle = '#38bdf8';
+  ctx.textAlign = 'left';
+  ctx.fillText('SHEARWATER · ZH-L16C', 8, 14);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = diveState.ccrEnabled ? '#4ade80' : '#94a3b8';
+  ctx.fillText(diveState.ccrEnabled ? 'CCR 1.3' : 'OC TEC', width - 8, 14);
+
+  // Top primary readout row: DEPTH | TIME | NDL / TTS
+  const topY = 24;
+  ctx.textAlign = 'left';
+  ctx.font = '600 8px ui-monospace, monospace';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('DEPTH', 8, topY + 7);
+  ctx.fillText('TIME', 88, topY + 7);
+  ctx.fillText(status.stopDepthM > 0 ? 'TTS / STOP' : 'NDL', 152, topY + 7);
+
+  ctx.font = '800 18px ui-monospace, monospace';
+  ctx.fillStyle = '#e0f2fe';
+  ctx.fillText(`${(diveState.depthM || 0).toFixed(1)}m`, 8, topY + 25);
+
+  ctx.font = '700 14px ui-monospace, monospace';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText(formatClock(diveState.diveTimeSec || 0), 88, topY + 24);
+
+  if (status.stopDepthM > 0) {
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '800 13px ui-monospace, monospace';
+    ctx.fillText(`${Math.ceil(status.ttsSec / 60)}m · ${status.stopDepthM}m`, 152, topY + 24);
+  } else {
+    ctx.fillStyle = status.ndlMin <= 5 ? '#f59e0b' : '#4ade80';
+    ctx.font = '800 15px ui-monospace, monospace';
+    ctx.fillText(`${status.ndlMin} min`, 152, topY + 24);
+  }
+
+  // Tissue Saturation Bar Graph (T1..T4 N2 cyan + He violet vs 100% M-value ceiling)
+  const chartX = 8;
+  const chartY = 58;
+  const chartW = width - 16;
+  const chartH = 60;
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+  ctx.fillRect(chartX, chartY, chartW, chartH);
+
+  // 100% M-Value threshold line (at 76% of chart height so supersaturation >1.0 can rise visibly above it)
+  const mLineY = chartY + chartH - chartH * 0.72;
+  ctx.save();
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(chartX, mLineY);
+  ctx.lineTo(chartX + chartW, mLineY);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.font = '600 8px ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+  ctx.textAlign = 'right';
+  ctx.fillText('M-VAL 100%', chartX + chartW - 3, mLineY - 2);
+  ctx.textAlign = 'left';
+  ctx.fillText(`TISSUES (LEAD ${status.leadingLabel})`, chartX + 4, chartY + 9);
+
+  const barCount = status.bars.length;
+  const gap = 8;
+  const barW = Math.max(18, Math.floor((chartW - gap * (barCount + 1)) / Math.max(1, barCount)));
+  const maxBarH = chartH - 22;
+  const barBaseY = chartY + chartH - 11;
+
+  for (let i = 0; i < barCount; i++) {
+    const b = status.bars[i];
+    const bx = chartX + gap + i * (barW + gap);
+    const norm = Math.max(0.06, Math.min(1.25, b.loadFrac));
+    const totalH = Math.min(maxBarH, Math.round((norm / 1.25) * maxBarH));
+    const heH = Math.round(totalH * b.heShare);
+    const n2H = Math.max(1, totalH - heH);
+
+    // Track background
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+    ctx.fillRect(bx, barBaseY - maxBarH, barW, maxBarH);
+
+    // N2 lower segment (cyan / amber if deco)
+    ctx.fillStyle = b.inDeco ? '#f59e0b' : '#38bdf8';
+    ctx.fillRect(bx, barBaseY - n2H, barW, n2H);
+
+    // He upper segment (violet)
+    if (heH > 0) {
+      ctx.fillStyle = '#c084fc';
+      ctx.fillRect(bx, barBaseY - n2H - heH, barW, heH);
+    }
+
+    // Highlight leading tissue outline
+    if (i === status.leadingIndex) {
+      ctx.strokeStyle = b.inDeco ? '#fde047' : '#e0f2fe';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx - 0.5, barBaseY - maxBarH - 0.5, barW + 1, maxBarH + 1);
+    }
+
+    // Compartment label
+    ctx.font = '700 8px ui-monospace, monospace';
+    ctx.fillStyle = i === status.leadingIndex ? '#f8fafc' : '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.id, bx + barW * 0.5, chartY + chartH - 2);
+  }
+
+  // Bottom telemetry strip: GAS | PPO2 | CNS% | GF99% | END
+  const botY = height - 30;
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.86)';
+  ctx.fillRect(4, botY, width - 8, 26);
+
+  const cells = [
+    { lbl: gas.shortLabel || gas.id, val: `${tankBar}b`, col: gas.color || '#38bdf8' },
+    { lbl: 'PPO2', val: status.ppo2.toFixed(2), col: status.ppo2 > 1.55 || status.ppo2 < 0.18 ? '#f87171' : status.ppo2 > 1.38 ? '#fbbf24' : '#4ade80' },
+    { lbl: 'CNS', val: `${status.cnsPct}%`, col: status.cnsPct >= 80 ? '#f87171' : status.cnsPct >= 50 ? '#fbbf24' : '#cbd5e1' },
+    { lbl: 'GF99', val: `${status.gf99Pct}%`, col: status.gf99Pct >= 95 ? '#f87171' : status.gf99Pct >= 75 ? '#fbbf24' : '#67e8f9' },
+    { lbl: 'END', val: `${status.endM}m`, col: status.endM >= 35 ? '#fbbf24' : '#cbd5e1' },
+  ];
+  const cellW = (width - 12) / cells.length;
+  for (let i = 0; i < cells.length; i++) {
+    const cx = 6 + cellW * (i + 0.5);
+    ctx.textAlign = 'center';
+    ctx.font = '600 7.5px ui-monospace, monospace';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(cells[i].lbl, cx, botY + 9);
+    ctx.font = '800 10px ui-monospace, monospace';
+    ctx.fillStyle = cells[i].col;
+    ctx.fillText(cells[i].val, cx, botY + 21);
+  }
+
+  ctx.restore();
 }

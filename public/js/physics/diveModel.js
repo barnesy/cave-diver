@@ -208,6 +208,80 @@ export function computeDiverImpairment(state) {
   };
 }
 
+const COMPARTMENT_LABELS = ['T1 Fast', 'T2 Mid-F', 'T3 Mid-S', 'T4 Slow'];
+
+/**
+ * Compute Shearwater-style Bühlmann ZH-L16C tissue loading bars & GF99% supersaturation telemetry (v126).
+ * Pure read-only telemetry helper derived directly from live state.compartments.
+ */
+export function computeTissueCompartmentStatus(state) {
+  const depthM = Math.max(0, Number(state?.depthM) || 0);
+  const pAmb = depthToBar(depthM);
+  const rawComps = Array.isArray(state?.compartments) && state.compartments.length > 0
+    ? state.compartments
+    : COMPARTMENTS.map(() => ({ pN2: SURFACE_N2_BAR, pHe: 0 }));
+
+  const bars = [];
+  let leadingIndex = 0;
+  let maxMFrac = 0;
+  let maxGf99 = 0;
+
+  for (let i = 0; i < COMPARTMENTS.length; i++) {
+    const c = rawComps[i] || { pN2: SURFACE_N2_BAR, pHe: 0 };
+    const spec = COMPARTMENTS[i];
+    const pN2 = Math.max(0, Number(c.pN2) || 0);
+    const pHe = Math.max(0, Number(c.pHe) || 0);
+    const pTotal = pN2 + pHe;
+    const a = pTotal > 0.001 ? (spec.aN2 * pN2 + spec.aHe * pHe) / pTotal : spec.aN2;
+    const b = pTotal > 0.001 ? (spec.bN2 * pN2 + spec.bHe * pHe) / pTotal : spec.bN2;
+    // M-value at surface (1.0 bar ambient) & at current ambient depth
+    const mSurf = 1.0 / b + a;
+    const mAmb = pAmb / b + a;
+    const surfaceLoadFrac = Math.max(0, Math.min(1.4, pTotal / Math.max(0.5, mSurf)));
+    const ambientLoadFrac = Math.max(0, Math.min(1.4, pTotal / Math.max(0.5, mAmb)));
+    const gf99 = mAmb > pAmb ? Math.max(0, ((pTotal - pAmb) / (mAmb - pAmb)) * 100) : 0;
+
+    if (surfaceLoadFrac > maxMFrac) {
+      maxMFrac = surfaceLoadFrac;
+      leadingIndex = i;
+    }
+    if (gf99 > maxGf99) maxGf99 = gf99;
+
+    const n2Share = pTotal > 0.001 ? pN2 / pTotal : 1;
+    const heShare = pTotal > 0.001 ? pHe / pTotal : 0;
+    bars.push({
+      id: `T${i + 1}`,
+      label: COMPARTMENT_LABELS[i] || `T${i + 1}`,
+      halfN2: spec.halfN2,
+      halfHe: spec.halfHe,
+      pN2: Math.round(pN2 * 100) / 100,
+      pHe: Math.round(pHe * 100) / 100,
+      pTotal: Math.round(pTotal * 100) / 100,
+      mSurf: Math.round(mSurf * 100) / 100,
+      loadFrac: Math.round(surfaceLoadFrac * 1000) / 1000,
+      ambientLoadFrac: Math.round(ambientLoadFrac * 1000) / 1000,
+      n2Share: Math.round(n2Share * 1000) / 1000,
+      heShare: Math.round(heShare * 1000) / 1000,
+      inDeco: pTotal > mSurf * GF_HIGH,
+    });
+  }
+
+  return {
+    bars,
+    leadingIndex,
+    leadingLabel: bars[leadingIndex]?.id || 'T1',
+    gf99Pct: Math.round(Math.min(199, maxGf99)),
+    cnsPct: Math.round(Math.max(0, Number(state?.cnsPercent) || 0)),
+    ndlMin: Math.round(Math.max(0, Number(state?.ndlMin) || 0)),
+    ttsSec: Math.round(Math.max(0, Number(state?.ttsSec) || 0)),
+    ceilingM: Math.round(Math.max(0, Number(state?.ceilingM) || 0) * 10) / 10,
+    stopDepthM: Math.round(Math.max(0, Number(state?.stopDepthM) || 0)),
+    stopRemainingSec: Math.round(Math.max(0, Number(state?.stopRemainingSec) || 0)),
+    ppo2: Math.round(Math.max(0, Number(state?.ppo2) || 0) * 100) / 100,
+    endM: Math.round(Math.max(0, Number(state?.endM) || 0)),
+  };
+}
+
 export function createDiveState({ mixOverrides, ccrEnabled = false } = {}) {
   const mixes = {};
   const tanks = {};

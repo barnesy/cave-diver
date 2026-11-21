@@ -20,6 +20,7 @@ export class InputController {
     onCameraSnap,
     onBuddyPing,
     onStageDrop,
+    onComputerToggle,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -50,6 +51,7 @@ export class InputController {
     this.onCameraSnap = onCameraSnap;
     this.onBuddyPing = onBuddyPing;
     this.onStageDrop = onStageDrop;
+    this.onComputerToggle = onComputerToggle;
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
@@ -95,6 +97,9 @@ export class InputController {
       }
       if (code === 'KeyT' && !e.repeat) {
         if (this.onStageDrop?.()) e.preventDefault();
+      }
+      if (code === 'KeyX' && !e.repeat) {
+        if (this.onComputerToggle?.()) e.preventDefault();
       }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();

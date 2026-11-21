@@ -1,5 +1,5 @@
 import { getAscentConfig } from '../levels/index.js';
-import { createDiveState, stepDivePhysiology, receiveGasIntoState } from '../physics/diveModel.js';
+import { createDiveState, stepDivePhysiology, receiveGasIntoState, computeTissueCompartmentStatus } from '../physics/diveModel.js';
 import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
@@ -3006,11 +3006,17 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     if (gasChanged || tDive - (session._lastProfileSampleAt || 0) >= 1.5) {
       session._lastProfileSampleAt = tDive;
       session._lastProfileGas = diveState.activeGasId;
+      const tissueSnap = computeTissueCompartmentStatus(diveState);
       session.diveProfile.push({
         t: Number(tDive.toFixed(1)),
         d: Number(Math.max(0, diver.y).toFixed(1)),
         gas: diveState.activeGasId,
         deco: diveState.stopDepthM || 0,
+        ppo2: Number((diveState.ppo2 || 0).toFixed(2)),
+        cns: Math.round(diveState.cnsPercent || 0),
+        hr: Math.round(diveState.heartRateBpm || 68),
+        bar: Math.round(diveState.tanks?.[diveState.activeGasId]?.bar || 0),
+        gf99: tissueSnap.gf99Pct,
       });
     }
   }

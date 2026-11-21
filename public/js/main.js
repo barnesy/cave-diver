@@ -97,7 +97,7 @@ import {
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
-import { DiveComputerHUD, isMinimapAllowed } from './game/hud.js';
+import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
 import { InputController } from './game/input.js';
 import { DiveAudio } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -529,7 +529,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=125" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=126" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1189,7 +1189,28 @@ const input = new InputController({
   onCameraSnap: () => handleCameraSnap(),
   onBuddyPing: () => handleBuddyLocatePing(''),
   onStageDrop: () => handleStageDrop(),
+  onComputerToggle: () => toggleShearwaterComputer(),
 });
+
+// Shearwater ZH-L16C OLED Dive Computer Overlay (v126)
+const shearwaterPanelEl = document.getElementById('shearwater-panel');
+const shearwaterCanvasEl = document.getElementById('shearwater-canvas');
+const btnHudComputerEl = document.getElementById('btn-hud-computer');
+let shearwaterOpen = false;
+let lastShearwaterDrawMs = 0;
+
+function toggleShearwaterComputer(forceState) {
+  if (mode !== 'diving' && forceState !== false) return false;
+  shearwaterOpen = typeof forceState === 'boolean' ? forceState : !shearwaterOpen;
+  if (shearwaterPanelEl) shearwaterPanelEl.hidden = !shearwaterOpen;
+  if (btnHudComputerEl) btnHudComputerEl.classList.toggle('active', shearwaterOpen);
+  if (shearwaterOpen && session?.diveState && shearwaterCanvasEl) {
+    const sctx = shearwaterCanvasEl.getContext('2d');
+    if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, session.diveState);
+  }
+  return true;
+}
+btnHudComputerEl?.addEventListener('click', () => toggleShearwaterComputer());
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
 const wreckActionLabelEl = document.getElementById('wreck-action-label');
@@ -3497,7 +3518,51 @@ function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = n
     markup += `<text x="${W - padR}" y="10" text-anchor="end" font-size="8.5" font-weight="700" font-family="ui-monospace,monospace"><tspan fill="#38bdf8">━ You</tspan>  ${names}</text>`;
   }
 
+  // Interactive telemetry scrubber crosshair overlay (v126)
+  markup += `<g id="debrief-scrub-cursor" visibility="hidden">`;
+  markup += `<line id="debrief-scrub-line" x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3 2"/>`;
+  markup += `<circle id="debrief-scrub-dot" cx="${padL}" cy="${padT}" r="4.2" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.8"/>`;
+  markup += `</g>`;
+
   svg.innerHTML = markup;
+
+  const scrubEl = document.getElementById('debrief-profile-scrub');
+  const cursorGroup = svg.querySelector('#debrief-scrub-cursor');
+  const cursorLine = svg.querySelector('#debrief-scrub-line');
+  const cursorDot = svg.querySelector('#debrief-scrub-dot');
+  const defaultScrubHint = 'Hover or drag across the depth curve to inspect PPO₂, CNS%, GF99%, Heart Rate & Tank Bar';
+  if (scrubEl) scrubEl.textContent = defaultScrubHint;
+
+  const updateScrubFromClientX = (clientX) => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    const svgX = ((clientX - rect.left) / rect.width) * W;
+    const clampedFrac = Math.max(0, Math.min(1, (svgX - padL) / plotW));
+    const sample = sampleDiveProfileAtTime(profile, clampedFrac * maxT);
+    if (!sample) return;
+    const cx = sx(sample.t).toFixed(1);
+    const cy = sy(sample.d).toFixed(1);
+    if (cursorGroup) cursorGroup.setAttribute('visibility', 'visible');
+    if (cursorLine) {
+      cursorLine.setAttribute('x1', cx);
+      cursorLine.setAttribute('x2', cx);
+    }
+    if (cursorDot) {
+      cursorDot.setAttribute('cx', cx);
+      cursorDot.setAttribute('cy', cy);
+    }
+    if (scrubEl) {
+      const decoTxt = sample.deco > 0 ? ` · STOP ${sample.deco}m` : '';
+      scrubEl.textContent =
+        `⏱ ${formatRunClock(sample.t)} · ${sample.d.toFixed(1)}m · ${sample.gas} (${sample.bar}b) · PPO₂ ${sample.ppo2.toFixed(2)} · CNS ${sample.cns}% · GF99 ${sample.gf99}% · ♥ ${sample.hr}bpm${decoTxt}`;
+    }
+  };
+  svg.onpointermove = (e) => updateScrubFromClientX(e.clientX);
+  svg.onpointerdown = (e) => updateScrubFromClientX(e.clientX);
+  svg.onpointerleave = () => {
+    if (cursorGroup) cursorGroup.setAttribute('visibility', 'hidden');
+    if (scrubEl) scrubEl.textContent = defaultScrubHint;
+  };
 }
 
 function renderDebriefCertifications(logbook) {
@@ -3908,6 +3973,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   } catch {
     // ignore storage restriction
   }
+  toggleShearwaterComputer(false);
   // Append final profile point and render the Dive Computer Depth Profile Graph + Earned Certifications
   if (session?.diveProfile) {
     session.diveProfile.push({
@@ -3915,6 +3981,11 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       d: Number(Math.max(0, diver.y).toFixed(1)),
       gas: diveState.activeGasId,
       deco: diveState.stopDepthM || 0,
+      ppo2: Number((diveState.ppo2 || 0).toFixed(2)),
+      cns: Math.round(diveState.cnsPercent || 0),
+      hr: Math.round(diveState.heartRateBpm || 68),
+      bar: Math.round(diveState.tanks?.[diveState.activeGasId]?.bar || 0),
+      gf99: 0,
     });
   }
   renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success, session?.peerProfiles);
@@ -6792,6 +6863,12 @@ function stepSimulation(dt) {
         });
       }
     }
+  }
+
+  if (shearwaterOpen && shearwaterCanvasEl && nowMs - lastShearwaterDrawMs >= 140) {
+    lastShearwaterDrawMs = nowMs;
+    const sctx = shearwaterCanvasEl.getContext('2d');
+    if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, diveState);
   }
 
   hud.update({

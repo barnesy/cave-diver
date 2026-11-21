@@ -16,6 +16,7 @@ import {
   getShareableGasCandidate,
   donateGasFromState,
   receiveGasIntoState,
+  computeTissueCompartmentStatus,
 } from '../public/js/physics/diveModel.js';
 import {
   createEmptyLogbook,
@@ -122,6 +123,8 @@ import {
   isMinimapAllowed,
   computeMinimapViewport,
   drawSonarMinimap,
+  drawShearwaterComputer,
+  sampleDiveProfileAtTime,
 } from '../public/js/game/hud.js';
 import { CaveRenderer } from '../public/js/game/renderer.js';
 import { stirFloorSilt, stepSiltPhysics, spawnSiltPlume, sampleSiltDensity } from '../public/js/game/silt.js';
@@ -4697,4 +4700,66 @@ test('v125 Procedural Endless Expeditions ("Uncharted Sump"): determinism, SDF g
   const session = createDiveSession(resolved, { mode: 'solo', difficulty: 'standard' });
   stepDiveSession(session, { x: 0.4, y: 0.6, boost: false }, 0.05, {});
   assert.ok(Number.isFinite(session.diver.x) && Number.isFinite(session.diver.y));
+});
+
+test('v126 Shearwater-Style Technical Dive Computer: ZH-L16C tissue bars, GF99%, OLED renderer & Debrief telemetry scrubber', () => {
+  // 1. Surface state has 4 low-loaded compartments & GF99 === 0
+  const st = createDiveState();
+  const surfStatus = computeTissueCompartmentStatus(st);
+  assert.equal(surfStatus.bars.length, 4);
+  assert.equal(surfStatus.gf99Pct, 0);
+  assert.ok(surfStatus.bars.every((b) => b.loadFrac < 0.6 && b.heShare === 0));
+
+  // 2. Deep Trimix bottom exposure loads both N2 and He compartments & builds deco ceiling
+  switchGas(st, 'TMX1455');
+  for (let i = 0; i < 180; i++) {
+    stepDivePhysiology(st, { depthM: 50, prevDepthM: 50, dt: 1.0, exertion: 0.35 });
+  }
+  const deepStatus = computeTissueCompartmentStatus(st);
+  assert.ok(deepStatus.bars[0].heShare > 0.35, 'Trimix bottom exposure should load Helium in fast compartment');
+  assert.ok(deepStatus.bars[0].loadFrac > surfStatus.bars[0].loadFrac);
+  assert.ok(deepStatus.ceilingM > 0 || deepStatus.stopDepthM > 0, '50m 3-min exposure should build deco obligation');
+  assert.ok(deepStatus.ppo2 > 0.7 && deepStatus.ppo2 < 1.1);
+
+  // 3. Shearwater OLED computer renders cleanly to mock 2D canvas
+  const calls = [];
+  const mockCtx = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left',
+    save() { calls.push('save'); },
+    restore() { calls.push('restore'); },
+    fillRect() { calls.push('fillRect'); },
+    strokeRect() { calls.push('strokeRect'); },
+    fillText(txt) { calls.push(`text:${txt}`); },
+    setLineDash() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+  };
+  drawShearwaterComputer(mockCtx, 248, 162, st);
+  assert.ok(calls.includes('text:SHEARWATER · ZH-L16C'));
+  assert.ok(calls.includes('text:T1') && calls.includes('text:T4'));
+  assert.ok(calls.some((c) => c.startsWith('text:GF99')));
+
+  // 4. Interactive Debrief telemetry scrubber interpolates smoothly across profile points
+  const profile = [
+    { t: 0, d: 1.0, gas: 'EAN32', deco: 0, ppo2: 0.35, cns: 0, hr: 72, bar: 200, gf99: 0 },
+    { t: 60, d: 45.0, gas: 'TMX1455', deco: 6, ppo2: 0.77, cns: 12, hr: 108, bar: 160, gf99: 54 },
+    { t: 120, d: 6.0, gas: 'O2', deco: 6, ppo2: 1.6, cns: 28, hr: 84, bar: 140, gf99: 82 },
+  ];
+  const mid = sampleDiveProfileAtTime(profile, 30);
+  assert.equal(mid.t, 30);
+  assert.equal(mid.d, 23);
+  assert.equal(mid.hr, 90);
+  assert.equal(mid.bar, 180);
+  assert.equal(mid.gf99, 27);
+
+  const clampedEnd = sampleDiveProfileAtTime(profile, 999);
+  assert.equal(clampedEnd.t, 120);
+  assert.equal(clampedEnd.gas, 'O2');
+  assert.equal(clampedEnd.cns, 28);
 });
