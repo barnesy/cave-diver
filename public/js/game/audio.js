@@ -184,47 +184,75 @@ export class DiveAudio {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const intensity = typeof ev === 'number' ? Math.max(0.3, Math.min(1.4, ev)) : (ev.intensity ?? 0.5);
     const panic = typeof ev === 'object' && ev ? (ev.panic ?? 0) : 0;
-    const dur = Math.max(0.32, Math.min(1.35, (ev?.durationSec ?? 0.85) * 0.92));
+    const dur = Math.max(0.45, Math.min(1.45, (ev?.durationSec ?? 0.95) * 0.96));
     const depthM = ev?.depthM ?? 10;
     const now = performance.now();
-    if (now - this.lastInhaleAt < Math.max(240, dur * 600)) return;
+    if (now - this.lastInhaleAt < Math.max(260, dur * 580)) return;
     this.lastInhaleAt = now;
 
     const noise = this._getNoiseBuffer();
     if (!noise) return;
     const t = this.ctx.currentTime;
+    const dest = this.masterFilter || this.ctx.destination;
 
-    // Crisp demand-valve diaphragm hiss (higher & sharper during rapid panicked gasps)
+    // Warm, meditative two-layer regulator inhale:
+    // Layer 1: Soft low-passed chamber resonance (warm lung/mouthpiece body, no harsh 2kHz sibilance)
+    // Layer 2: Feather-soft velvet airflow whisper that only brightens slightly under real panic
     const src = this.ctx.createBufferSource();
     src.buffer = noise;
     src.loop = true;
 
     const depthMuffle = Math.max(0.72, 1 - Math.min(120, depthM) / 380);
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    const baseFreq = (1480 + intensity * 460 + panic * 420) * depthMuffle;
-    filter.frequency.setValueAtTime(baseFreq * 0.88, t);
-    filter.frequency.exponentialRampToValueAtTime(baseFreq * 1.12, t + dur * 0.35);
-    filter.frequency.exponentialRampToValueAtTime(baseFreq * 0.78, t + dur);
-    filter.Q.value = 2.4 + panic * 0.8;
+    const bodyFilter = this.ctx.createBiquadFilter();
+    bodyFilter.type = 'lowpass';
+    const bodyPeakHz = (560 + intensity * 140 + panic * 150) * depthMuffle;
+    bodyFilter.frequency.setValueAtTime(Math.max(220, bodyPeakHz * 0.64), t);
+    bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(260, bodyPeakHz), t + dur * 0.42);
+    bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(200, bodyPeakHz * 0.56), t + dur);
+    bodyFilter.Q.value = 0.85;
 
-    const gain = this.ctx.createGain();
-    const peak = Math.min(0.052, 0.016 + intensity * 0.018 + panic * 0.014);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.11, dur * 0.22));
-    gain.gain.linearRampToValueAtTime(peak * 0.92, t + dur * 0.72);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const bodyGain = this.ctx.createGain();
+    const peak = Math.min(0.044, 0.017 + intensity * 0.014 + panic * 0.01);
+    const riseEnd = t + Math.max(0.14, dur * 0.32);
+    const holdEnd = t + dur * 0.62;
+    bodyGain.gain.setValueAtTime(0.0001, t);
+    bodyGain.gain.exponentialRampToValueAtTime(peak, riseEnd);
+    bodyGain.gain.linearRampToValueAtTime(peak * 0.88, holdEnd);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterFilter || this.ctx.destination);
+    // Layer 2: Wide, gentle airflow texture well below piercing frequencies
+    const airFilter = this.ctx.createBiquadFilter();
+    airFilter.type = 'bandpass';
+    const airFreq = (820 + intensity * 190 + panic * 260) * depthMuffle;
+    airFilter.frequency.setValueAtTime(airFreq * 0.9, t);
+    airFilter.frequency.exponentialRampToValueAtTime(airFreq * 1.06, t + dur * 0.42);
+    airFilter.frequency.exponentialRampToValueAtTime(airFreq * 0.84, t + dur);
+    airFilter.Q.value = 0.9 + panic * 0.35;
+
+    const airGain = this.ctx.createGain();
+    const airPeak = peak * (0.28 + panic * 0.22);
+    airGain.gain.setValueAtTime(0.0001, t);
+    airGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, airPeak), riseEnd);
+    airGain.gain.linearRampToValueAtTime(Math.max(0.0002, airPeak * 0.82), holdEnd);
+    airGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(bodyFilter);
+    bodyFilter.connect(bodyGain);
+    bodyGain.connect(dest);
+
+    src.connect(airFilter);
+    airFilter.connect(airGain);
+    airGain.connect(dest);
+
     src.onended = () => {
       try { src.disconnect(); } catch {}
-      try { filter.disconnect(); } catch {}
-      try { gain.disconnect(); } catch {}
+      try { bodyFilter.disconnect(); } catch {}
+      try { bodyGain.disconnect(); } catch {}
+      try { airFilter.disconnect(); } catch {}
+      try { airGain.disconnect(); } catch {}
     };
     src.start(t, Math.random() * 0.6);
-    src.stop(t + dur + 0.04);
+    src.stop(t + dur + 0.05);
   }
 
   playRegulatorExhale(ev = 0) {
