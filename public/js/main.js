@@ -103,6 +103,7 @@ import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js
 import { spawnSiltPlume } from './game/silt.js';
 import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
+import { createAiBuddyState, stepAiBuddy, handlePlayerSignalForAiBuddy } from './game/aiBuddy.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -534,7 +535,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=133" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=134" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1099,9 +1100,17 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
   return false;
 }
 
+function getActivePeers() {
+  if (isMultiplayer) {
+    const humanPeers = lan.getPeers();
+    if (humanPeers && humanPeers.length > 0) return humanPeers;
+  }
+  return session?.aiBuddy ? [session.aiBuddy] : [];
+}
+
 function handleBuddyLocatePing(targetPeerId = '') {
-  if (mode !== 'diving' || !session || !isMultiplayer) return false;
-  const peers = lan.getPeers();
+  if (mode !== 'diving' || !session) return false;
+  const peers = getActivePeers();
   if (!peers || peers.length === 0) return false;
   const peer =
     (targetPeerId ? peers.find((p) => p && (p.id === targetPeerId || p.name === targetPeerId)) : null) ||
@@ -1233,6 +1242,16 @@ function dispatchScubaSignal(idOrText) {
   if (!spec) return false;
   if (lan?.roomCode) lan.sendSignal(spec.text);
   audio.playSignal?.();
+  if (session.aiBuddy && (!isMultiplayer || lan.getPeers().length === 0)) {
+    const aiRes = handlePlayerSignalForAiBuddy(session.aiBuddy, idOrText, session, performance.now());
+    if (aiRes?.responded) {
+      const mix = computeSpatialMix(session.diver.x, session.diver.y, session.aiBuddy.x, session.aiBuddy.y);
+      audio.playSignal?.(mix.pan);
+      showToast(aiRes.toast || `${session.aiBuddy.name}: 👌 Copy`, 2.4);
+      toggleSignalWheel(false);
+      return true;
+    }
+  }
   showToast(lan?.roomCode ? `Signaled crew: ${spec.text}` : `Dive Signal: ${spec.text}`, 2.1);
   toggleSignalWheel(false);
   return true;
@@ -1878,6 +1897,7 @@ const DIFFICULTY_PREF_KEY = 'caveDiverDifficulty_v1';
 const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
 const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
 const DRILLS_PREF_KEY = 'caveDiverDrills_v1';
+const AI_BUDDY_PREF_KEY = 'caveDiverAiBuddy_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
   { id: 'guided', label: 'Guided', fullBadge: '🧭 GUIDED', shortBadge: '🧭 GD', pillBadge: '🧭 GUIDED', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
@@ -1932,6 +1952,35 @@ btnDrillsToggle?.addEventListener('click', () => {
 });
 menuDrillsPillEl?.addEventListener('click', toggleDrillsPreference);
 syncDrillsUi();
+
+// AI Autonomous Dive Buddy ("Solo Co-op" Wingman) preference (v134)
+let aiBuddyEnabled = false;
+try {
+  aiBuddyEnabled = localStorage.getItem(AI_BUDDY_PREF_KEY) === '1';
+} catch {}
+const menuAiBuddyPillEl = document.getElementById('menu-ai-buddy-pill');
+function syncAiBuddyUi() {
+  if (menuAiBuddyPillEl) {
+    menuAiBuddyPillEl.textContent = aiBuddyEnabled ? '🤖 AI Buddy: ON' : '🤖 AI Buddy: Off';
+    menuAiBuddyPillEl.classList.toggle('active', aiBuddyEnabled);
+  }
+  syncSetupDrawerSummary();
+}
+function toggleAiBuddyPreference() {
+  aiBuddyEnabled = !aiBuddyEnabled;
+  try {
+    localStorage.setItem(AI_BUDDY_PREF_KEY, aiBuddyEnabled ? '1' : '0');
+  } catch {}
+  syncAiBuddyUi();
+  showToast(
+    aiBuddyEnabled
+      ? '🤖 AI Dive Buddy APEX-2 ON — 2nd torch beam, hand-signals, snag-cut & emergency gas share!'
+      : '🤖 AI Dive Buddy turned off (solo dive).',
+    2.8
+  );
+}
+menuAiBuddyPillEl?.addEventListener('click', toggleAiBuddyPreference);
+syncAiBuddyUi();
 let activeGhostTrack = null;
 let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
@@ -4074,6 +4123,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   session.localOutcome = null;
   session._awaitingHostStart = Boolean(restoredState?.awaitingHostStart);
   session.restoredPeerLines = new Map();
+  session.aiBuddy =
+    aiBuddyEnabled && (!multiplayer || lan.getPeers().length === 0)
+      ? createAiBuddyState(activeLevel, session.diver, { initialGasId: session.diveState.activeGasId })
+      : null;
 
   if (restoredState?.checkpoints) {
     for (const cpId of restoredState.checkpoints) session.checkpointsHit.add(cpId);
@@ -4127,7 +4180,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = false;
   syncWakeLockFn?.();
-  if (coopCommsEl) coopCommsEl.hidden = !(multiplayer && lan.getPeers().length > 0);
+  if (coopCommsEl) coopCommsEl.hidden = !(getActivePeers().length > 0);
   if (multiplayer && lan.room) {
     syncRoomInviteUi(lan.room);
   } else {
@@ -5549,6 +5602,9 @@ function syncSetupDrawerSummary() {
   } catch {}
   try {
     if (drillsEnabled) activeCount++;
+  } catch {}
+  try {
+    if (aiBuddyEnabled) activeCount++;
   } catch {}
   try {
     if (activeSandboxMutatorId) activeCount++;
@@ -7120,12 +7176,35 @@ function stepSimulation(dt) {
     syncTechGearHud(session);
   }
 
-  const peers = isMultiplayer ? lan.getPeers() : [];
-  if (coopCommsEl && mode === 'diving') {
-    coopCommsEl.hidden = !(isMultiplayer && peers.length > 0);
+  const humanPeers = isMultiplayer ? lan.getPeers() : [];
+  if (humanPeers.length > 0 && session.aiBuddy) {
+    session.aiBuddy = null;
+    showToast('🤖 APEX-2 handed off wing to human crew!', 2.4);
   }
-  if (isMultiplayer) {
-    // Share cave exploration coverage across buddies only when they move >= 1.2m (avoids 60Hz O(cells) scans)
+  if (session.aiBuddy && diveState.alive && !session.endedState) {
+    stepAiBuddy(session.aiBuddy, session, dt, {
+      timestampMs: performance.now(),
+      onBuddySignal: (buddy) => {
+        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
+        audio.playSignal?.(mix.pan);
+      },
+      onBuddyGasShare: ({ buddy, gasId, amountBar }) => {
+        audio.playGasShare?.();
+        showToast(`🤖 ${buddy.name} shared +${amountBar} bar ${getActiveGasName(gasId)} via long hose!`, 2.8);
+      },
+      onBuddyCutSnag: (buddy) => {
+        audio.playLineCut?.();
+        showToast(`🤖 ${buddy.name} cut your entanglement free!`, 2.6);
+      },
+    });
+  }
+
+  const peers = getActivePeers();
+  if (coopCommsEl && mode === 'diving') {
+    coopCommsEl.hidden = !(peers.length > 0);
+  }
+  if (peers.length > 0) {
+    // Share cave exploration coverage across buddies (human or AI wingman) only when they move >= 1.2m
     if (session.exploreCells && session.exploredCells) {
       for (const p of peers) {
         if (!p || p.surfaced || p.alive === false) continue;
@@ -7141,16 +7220,18 @@ function stepSimulation(dt) {
         }
       }
     }
+    stepPeerBubbles(session.bubbles, peers, dt);
+    recordPeerDepthProfiles(session, peers, session.simTimeSec);
+  }
+  if (isMultiplayer) {
     if (lan.shouldSendPlayerState()) {
       lan.sendPlayerState(buildPlayerStatePayload(session));
     }
     lan.stepPeerInterpolation(dt, level);
-    stepPeerBubbles(session.bubbles, peers, dt);
-    recordPeerDepthProfiles(session, peers, session.simTimeSec);
 
     // If downed and a rescuer is towing us, glide smoothly behind the rescuer (respecting cave rock SDF)
     if (!diveState.alive && session.rescuedBy) {
-      const rescuer = peers.find((p) => p && (p.id === session.rescuedBy || p.rescueTargetId === lan.clientId));
+      const rescuer = humanPeers.find((p) => p && (p.id === session.rescuedBy || p.rescueTargetId === lan.clientId));
       if (!rescuer || rescuer.alive === false) {
         session.rescuedBy = '';
         session.diver.rescuedBy = '';
@@ -7178,12 +7259,12 @@ function stepSimulation(dt) {
       }
     }
     // Clear stale rescuedBy flags on peers whose rescuer died or dropped tow
-    for (const p of peers) {
+    for (const p of humanPeers) {
       if (!p || !p.rescuedBy || p.rescued) continue;
       if (p.rescuedBy === lan.clientId) {
         if (!diveState.alive || session.rescueTargetId !== p.id) p.rescuedBy = '';
       } else {
-        const otherRescuer = peers.find((r) => r && r.id === p.rescuedBy);
+        const otherRescuer = humanPeers.find((r) => r && r.id === p.rescuedBy);
         if (!otherRescuer || otherRescuer.alive === false) p.rescuedBy = '';
       }
     }
@@ -7197,7 +7278,7 @@ function stepSimulation(dt) {
     let downedPeer = null;
     if (isMultiplayer && diveState.alive && !session.endedState && !session.rescueTargetId) {
       let bestDist = 3.6;
-      for (const p of peers) {
+      for (const p of humanPeers) {
         if (!p || p.alive !== false || p.rescued || p.rescuedBy) continue;
         const d = Math.hypot(p.x - diver.x, p.y - diver.y);
         if (d <= 1.45) {
@@ -7224,7 +7305,7 @@ function stepSimulation(dt) {
     let shareCand = null;
     if (isMultiplayer && diveState.alive && !session.endedState) {
       let bestDist = 3.6;
-      for (const p of peers) {
+      for (const p of humanPeers) {
         if (!p || p.alive === false || p.surfaced) continue;
         const d = Math.hypot(p.x - diver.x, p.y - diver.y);
         const lowGas = (p.activeBar ?? 200) < 95 || p.condition === 'NO GAS' || p.condition === 'LOW GAS';
@@ -7345,7 +7426,7 @@ function stepSimulation(dt) {
     }
     session.localOutcome = result.outcome;
     const pendingPeers = isMultiplayer
-      ? peers.filter((p) => p.alive !== false && !p.surfaced)
+      ? humanPeers.filter((p) => p.alive !== false && !p.surfaced)
       : [];
 
     if (!isMultiplayer || pendingPeers.length === 0) {
@@ -7399,9 +7480,9 @@ function stepSimulation(dt) {
       );
     }
   } else if (session.endedState && isMultiplayer) {
-    const activePeers = peers.filter((p) => p.alive !== false && !p.surfaced);
+    const activePeers = humanPeers.filter((p) => p.alive !== false && !p.surfaced);
     if (activePeers.length === 0 && session.localOutcome) {
-      const peersAllSurfaced = peers.length > 0 && peers.every((p) => p.alive !== false && p.surfaced);
+      const peersAllSurfaced = humanPeers.length > 0 && humanPeers.every((p) => p.alive !== false && p.surfaced);
       const outcomeTitle = peersAllSurfaced
         ? `Team Surfaced: ${level.name}!`
         : session.localOutcome.title;
@@ -7438,15 +7519,16 @@ function frame(nowMs) {
     }
     const nextCheckpoint =
       session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
-    const peers = isMultiplayer ? lan.getPeers() : [];
+    const peers = getActivePeers();
+    const humanFramePeers = isMultiplayer ? lan.getPeers() : [];
     const activeSpectatePeers = spectatingPeer
-      ? peers.filter((p) => p && p.alive !== false && !p.surfaced)
+      ? humanFramePeers.filter((p) => p && p.alive !== false && !p.surfaced)
       : [];
     const spectateTarget =
-      spectatingPeer && peers.length > 0
+      spectatingPeer && humanFramePeers.length > 0
         ? activeSpectatePeers.length > 0
           ? activeSpectatePeers[spectatePeerIdx % activeSpectatePeers.length]
-          : peers[0]
+          : humanFramePeers[0]
         : null;
     const playerLines = _framePlayerLines;
     playerLines.length = 0;

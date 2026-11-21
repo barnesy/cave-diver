@@ -5025,3 +5025,105 @@ test('v133 Spatial 3D Underwater Audio, Mobile Haptics & Independent Audio Mixer
   audio.triggerHaptic('sonar');
   audio.playSpatialTestSweep();
 });
+
+test('v134 AI Autonomous Dive Buddy ("Solo Co-op" Wingman): formation, SDF clearance, torch spotlighting, signals, gas share & snag rescue', async () => {
+  const {
+    createAiBuddyState,
+    stepAiBuddy,
+    handlePlayerSignalForAiBuddy,
+    AI_BUDDY_ID,
+  } = await import('../public/js/game/aiBuddy.js');
+
+  const session = createDiveSession(LEVEL_1, { diverName: 'SoloLead' });
+  const buddy = createAiBuddyState(LEVEL_1, session.diver);
+  assert.equal(buddy.id, AI_BUDDY_ID);
+  assert.equal(buddy.isAiBuddy, true);
+  assert.equal(buddy.alive, true);
+  assert.ok(buddy.body && buddy.body.pelvis, 'AI Buddy should have articulated diver body');
+  assert.ok(evaluateCaveSDF(LEVEL_1, buddy.x, buddy.y) <= -0.45, 'AI Buddy must spawn in open navigable water');
+
+  // 1. Formation follow & SDF-safe navigation
+  for (let i = 0; i < 40; i++) {
+    stepDiveSession(session, { x: 0.7, y: 0.4, boost: false }, 0.05);
+    stepAiBuddy(buddy, session, 0.05, { timestampMs: 1000 + i * 50 });
+  }
+  assert.ok(evaluateCaveSDF(LEVEL_1, buddy.x, buddy.y) <= -0.4, 'AI Buddy must maintain open-water SDF clearance while following');
+  assert.ok(Math.hypot(buddy.x - session.diver.x, buddy.y - session.diver.y) < 12, 'AI Buddy stays within formation reach');
+
+  // 2. Scuba hand-signal commands (HOLD -> ATTENTION -> ASCEND -> OK)
+  const holdRes = handlePlayerSignalForAiBuddy(buddy, 'hold', session, 5000);
+  assert.equal(holdRes.responded, true);
+  assert.equal(buddy.mode, 'hold');
+  assert.equal(buddy.condition, 'HOLDING');
+  const heldX = buddy.holdX;
+  const heldY = buddy.holdY;
+  stepAiBuddy(buddy, session, 0.05, { nowMs: 5050 });
+  assert.ok(Math.hypot(buddy.x - heldX, buddy.y - heldY) < 1.5, 'AI Buddy holds position after HOLD signal');
+
+  const scoutRes = handlePlayerSignalForAiBuddy(buddy, 'attention', session, 6000);
+  assert.equal(scoutRes.responded, true);
+  assert.equal(buddy.mode, 'scout');
+
+  const ascRes = handlePlayerSignalForAiBuddy(buddy, 'ascend', session, 7000);
+  assert.equal(ascRes.responded, true);
+  assert.equal(buddy.mode, 'ascend');
+
+  const okRes = handlePlayerSignalForAiBuddy(buddy, 'ok', session, 8000);
+  assert.equal(okRes.responded, true);
+  assert.equal(buddy.mode, 'follow');
+  assert.equal(buddy.condition, 'NOMINAL');
+
+  // 3. Secondary torch spotlighting onto nearby collectible
+  const col = LEVEL_1.collectibles[0];
+  session.diver.x = col.x - 4;
+  session.diver.y = col.y;
+  buddy.x = col.x - 5;
+  buddy.y = col.y;
+  for (let i = 0; i < 30; i++) {
+    stepAiBuddy(buddy, session, 0.05, { nowMs: 9000 + i * 50 });
+  }
+  const expectedAng = Math.atan2(col.y - buddy.y, col.x - buddy.x);
+  let angErr = Math.abs(buddy.torchAngle - expectedAng);
+  while (angErr > Math.PI) angErr = Math.abs(angErr - Math.PI * 2);
+  assert.ok(angErr < 0.65, `Expected buddy torch to track nearby collectible (err=${angErr.toFixed(2)})`);
+
+  // 4. Emergency automatic gas share + airShareBeams VFX
+  const activeTank = session.diveState.tanks[session.diveState.activeGasId];
+  activeTank.bar = 22;
+  buddy.x = session.diver.x + 1.2;
+  buddy.y = session.diver.y;
+  let gasShareEvent = null;
+  for (let i = 0; i < 20 && !gasShareEvent; i++) {
+    stepAiBuddy(buddy, session, 0.05, {
+      nowMs: 12000 + i * 50,
+      onBuddyGasShare: (ev) => {
+        gasShareEvent = ev;
+      },
+    });
+  }
+  assert.ok(gasShareEvent && gasShareEvent.amountBar >= 15, 'AI Buddy should auto-donate emergency gas when player < 34 bar');
+  assert.ok(activeTank.bar > 35, `Player tank should be replenished (got ${activeTank.bar})`);
+  assert.ok(session.airShareBeams.length > 0, 'Gas share should trigger animated airShareBeams hose VFX');
+  assert.ok(buddy.gasDonationsCount >= 1 && buddy.gasDonatedTotalBar >= 15);
+
+  // 5. Autonomous snag-cut rescue on shipwreck snag
+  const wreck = LEVELS.find((l) => l.isWreck && Array.isArray(l.snagZones) && l.snagZones.length > 0);
+  assert.ok(wreck, 'Expected at least one shipwreck with snagZones');
+  const wSession = createDiveSession(wreck, { diverName: 'WreckLead' });
+  const wBuddy = createAiBuddyState(wreck, wSession.diver);
+  wSession.activeSnagIndex = 0;
+  wBuddy.x = wSession.diver.x + 1.1;
+  wBuddy.y = wSession.diver.y;
+  let snagCutFired = false;
+  for (let i = 0; i < 45 && !snagCutFired; i++) {
+    stepAiBuddy(wBuddy, wSession, 0.05, {
+      nowMs: 20000 + i * 50,
+      onBuddyCutSnag: () => {
+        snagCutFired = true;
+      },
+    });
+  }
+  assert.equal(snagCutFired, true, 'AI Buddy should rush in and cut entangled player free');
+  assert.equal(wSession.activeSnagIndex, -1, 'Snag index should clear once AI Buddy cuts line');
+  assert.equal(wBuddy.snagsAssisted, 1);
+});
