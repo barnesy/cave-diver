@@ -70,7 +70,8 @@ export function createDiveSession(
   const spawnY = level.spawn.y + spawnOffsetY;
   const exploreCells = buildExploreCells(level);
   const exploredCells = new Set();
-  markExploredAround(exploreCells, exploredCells, spawnX, spawnY, 5.2);
+  const exploredGrid = new Set();
+  markExploredAround(exploreCells, exploredCells, spawnX, spawnY, 5.2, exploredGrid);
   const exploredPct = Math.round((exploredCells.size / Math.max(1, exploreCells.length)) * 100);
   const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
   const cleanMutator = typeof mutatorId === 'string' ? mutatorId.trim() : '';
@@ -149,6 +150,7 @@ export function createDiveSession(
     recoveryWarnCooldown: 0,
     exploreCells,
     exploredCells,
+    exploredGrid,
     exploredPct,
     surfaced: false,
     siltClouds: [],
@@ -277,7 +279,7 @@ export function triggerSonarPing(session, callbacks = {}) {
   }
 
   // Wide sonar sweep also charts nearby unexplored cells cleanly
-  const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0);
+  const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0, session.exploredGrid);
   if (newlyMapped > 0 && session.exploreCells?.length > 0) {
     session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
   }
@@ -1927,7 +1929,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     if (dxExp * dxExp + dyExp * dyExp >= 1.0) {
       session._lastExploreX = diver.x;
       session._lastExploreY = diver.y;
-      if (markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 4.4) > 0) {
+      if (markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 4.4, session.exploredGrid) > 0) {
         session.exploredPct = Math.round(
           (session.exploredCells.size / Math.max(1, session.exploreCells.length)) * 100
         );

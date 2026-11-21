@@ -244,6 +244,11 @@ export class CaveRenderer {
     this._siltGlareScratch = [];
     this._torchSparksScratch = [];
     this._peerTorchCache = new Map();
+    this._activePeerKeysScratch = new Set();
+    this._torchPeerIdsScratch = new Set();
+    this._visibleTorchPeersScratch = [];
+    this._airGradCache = null;
+    this._skyCutGradCache = null;
     this._auroraStamps = this._buildAuroraStamps();
     this._needsResize = true;
     this._cachedDpr = 1;
@@ -1758,12 +1763,16 @@ export class CaveRenderer {
     ctx.rect(0, 0, cw, skyBotY);
     ctx.clip();
 
-    // Base atmospheric gradient beneath panorama
-    const airGrad = ctx.createLinearGradient(0, 0, 0, skyBotY);
-    airGrad.addColorStop(0, skyA);
-    airGrad.addColorStop(0.55, skyB);
-    airGrad.addColorStop(1, skyC);
-    ctx.fillStyle = airGrad;
+    // Base atmospheric gradient beneath panorama (cached per quantized skyBotY + style)
+    const airKey = `${style}|${Math.round(skyBotY / 4)}`;
+    if (!this._airGradCache || this._airGradCache.key !== airKey) {
+      const airGrad = ctx.createLinearGradient(0, 0, 0, Math.max(1, skyBotY));
+      airGrad.addColorStop(0, skyA);
+      airGrad.addColorStop(0.55, skyB);
+      airGrad.addColorStop(1, skyC);
+      this._airGradCache = { key: airKey, grad: airGrad };
+    }
+    ctx.fillStyle = this._airGradCache.grad;
     ctx.fillRect(0, 0, cw, skyBotY);
 
     // 1. Photorealistic mirror-tiled sky & distant rainforest / cypress canopy panorama
@@ -8130,11 +8139,16 @@ export class CaveRenderer {
     if (surfMaskY > -20) {
       const fadeBot = surfMaskY + 1.4 * scale * ry;
       if (fadeBot > 0) {
-        const skyCut = lctx.createLinearGradient(0, Math.max(0, surfMaskY - 4), 0, fadeBot);
-        skyCut.addColorStop(0, 'rgba(0,0,0,1)');
-        skyCut.addColorStop(0.65, 'rgba(0,0,0,0.92)');
-        skyCut.addColorStop(1, 'rgba(0,0,0,0)');
-        lctx.fillStyle = skyCut;
+        const cutTop = Math.max(0, surfMaskY - 4);
+        const skyCutKey = `${Math.round(cutTop / 2)}|${Math.round(fadeBot / 2)}`;
+        if (!this._skyCutGradCache || this._skyCutGradCache.key !== skyCutKey) {
+          const skyCut = lctx.createLinearGradient(0, cutTop, 0, fadeBot);
+          skyCut.addColorStop(0, 'rgba(0,0,0,1)');
+          skyCut.addColorStop(0.65, 'rgba(0,0,0,0.92)');
+          skyCut.addColorStop(1, 'rgba(0,0,0,0)');
+          this._skyCutGradCache = { key: skyCutKey, grad: skyCut };
+        }
+        lctx.fillStyle = this._skyCutGradCache.grad;
         lctx.fillRect(0, 0, lw, Math.min(lh, fadeBot));
       }
     }
@@ -8194,10 +8208,12 @@ export class CaveRenderer {
     const nowPerf = _nowMs();
     const peerRange = 14.0;
     const peerHalfSpread = 0.4;
-    const activePeerKeys = new Set();
+    const activePeerKeys = this._activePeerKeysScratch || (this._activePeerKeysScratch = new Set());
+    activePeerKeys.clear();
 
     // First pass: directional beam-cone frustum culling so offscreen beams pointing away cost 0 CPU/GPU
-    const visibleTorchPeers = [];
+    const visibleTorchPeers = this._visibleTorchPeersScratch || (this._visibleTorchPeersScratch = []);
+    visibleTorchPeers.length = 0;
     for (let i = 0; i < peerList.length; i++) {
       const p = peerList[i];
       if (!p || p.alive === false || p.torchOn === false) continue;
@@ -8345,7 +8361,8 @@ export class CaveRenderer {
 
     const localStrobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
     carveDiverLight(diver, localTorch, 16.5 * (0.28 + 0.72 * localStrobe));
-    const torchPeerIds = new Set();
+    const torchPeerIds = this._torchPeerIdsScratch || (this._torchPeerIdsScratch = new Set());
+    torchPeerIds.clear();
     for (let i = 0; i < peerTorches.length; i++) {
       const pt = peerTorches[i];
       if (pt.peer?.id) torchPeerIds.add(pt.peer.id);

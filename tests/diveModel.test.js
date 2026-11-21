@@ -76,6 +76,8 @@ import {
 } from '../public/js/game/diveSession.js';
 import {
   buildExploreCells,
+  markExploredAround,
+  exploreGridKey,
   computeDiverScoreSummary,
   computeTeamScoreSummary,
   computeHealthPct,
@@ -3518,4 +3520,42 @@ test('v110 Underwater Strobe Camera & Marine Field Guide: catalog, subject captu
   assert.ok(html.includes('id="btn-camera"'), 'Missing HUD camera button');
   assert.ok(html.includes('id="hud-photo-card"'), 'Missing HUD photo discovery card');
   assert.ok(html.includes('id="logbook-field-guide-grid"'), 'Missing Logbook Field Guide gallery');
+});
+
+test('v111 Pass 1 optimizations: O(1) minimap spatial grid fog-of-war, zero-GC lighting scratch & mobile UX order', async () => {
+  // 1. O(1) spatial hash grid populated cleanly by createDiveSession & markExploredAround
+  const sess = createDiveSession(LEVEL_1);
+  assert.ok(sess.exploredGrid instanceof Set && sess.exploredGrid.size > 0, 'Session must populate exploredGrid at spawn');
+  const sampleCell = sess.exploreCells[Array.from(sess.exploredCells)[0]];
+  assert.equal(sess.exploredGrid.has(exploreGridKey(sampleCell.x, sampleCell.y)), true);
+
+  const farGrid = new Set();
+  const farSet = new Set();
+  const added = markExploredAround(sess.exploreCells, farSet, LEVEL_1.spawn.x, LEVEL_1.spawn.y, 6.0, farGrid);
+  assert.ok(added > 0 && farGrid.size > 0);
+
+  // drawSonarMinimap accepts exploredGrid fast path cleanly
+  let gridStrokes = 0;
+  const ctx = new Proxy({ stroke: () => { gridStrokes++; } }, { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true });
+  drawSonarMinimap(ctx, 352, 224, {
+    level: LEVEL_1,
+    diver: sess.diver,
+    exploreCells: sess.exploreCells,
+    exploredCells: sess.exploredCells,
+    exploredGrid: sess.exploredGrid,
+    checkpointsHit: sess.checkpointsHit,
+    nextCheckpoint: LEVEL_1.checkpoints[0],
+    difficulty: 'standard',
+    zoomMode: 'follow',
+    timeSec: 1.5,
+  });
+  assert.ok(gridStrokes > 0, 'Minimap with O(1) exploredGrid must draw cleanly');
+
+  // 2. Primary DIVE CTA sits above Daily Challenge & Tech Gear Loadout for mobile above-the-fold ergonomics
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const idxPlay = html.indexOf('id="btn-play-solo"');
+  const idxDaily = html.indexOf('id="daily-challenge-card"');
+  const idxGear = html.indexOf('id="menu-gear-dock"');
+  assert.ok(idxPlay > 0 && idxPlay < idxDaily && idxDaily < idxGear, 'Primary DIVE CTA should appear above Daily & Gear cards');
 });

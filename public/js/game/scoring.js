@@ -42,20 +42,34 @@ export function buildExploreCells(level, stepM = 2.6) {
   return cells;
 }
 
+export const EXPLORE_GRID_CELL_M = 4;
+
+/**
+ * Pack coarse 4m spatial grid coordinates into a zero-allocation integer key for O(1) fog-of-war queries.
+ */
+export function exploreGridKey(wx, wy) {
+  const gx = Math.round(wx / EXPLORE_GRID_CELL_M) + 8192;
+  const gy = Math.round(wy / EXPLORE_GRID_CELL_M) + 8192;
+  return gx * 16384 + gy;
+}
+
 /**
  * Mark cave exploration cells within sonar/light range around a diver position.
+ * Optionally populates an O(1) spatial hash Set (`exploredGrid`) for fast minimap fog-of-war checks.
  * Returns the number of newly uncovered cells.
  */
-export function markExploredAround(exploreCells, exploredSet, wx, wy, radiusM = 4.2) {
+export function markExploredAround(exploreCells, exploredSet, wx, wy, radiusM = 4.2, exploredGrid = null) {
   if (!exploreCells || !exploredSet) return 0;
   const r2 = radiusM * radiusM;
   let added = 0;
   for (let i = 0; i < exploreCells.length; i++) {
     if (exploredSet.has(i)) continue;
-    const dx = exploreCells[i].x - wx;
-    const dy = exploreCells[i].y - wy;
+    const c = exploreCells[i];
+    const dx = c.x - wx;
+    const dy = c.y - wy;
     if (dx * dx + dy * dy <= r2) {
       exploredSet.add(i);
+      if (exploredGrid) exploredGrid.add(exploreGridKey(c.x, c.y));
       added++;
     }
   }

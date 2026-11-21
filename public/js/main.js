@@ -488,7 +488,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=110" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=111" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2140,44 +2140,17 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
 
   if (isMultiplayer) {
     lan.sendPlayerState(
-      {
-        x: diver.x,
-        y: diver.y,
+      buildPlayerStatePayload(session, {
         vx: 0,
         vy: 0,
-        angle: diver.angle,
-        gasId: diveState.activeGasId,
-        activeBar: diveState.tanks[diveState.activeGasId]?.bar ?? 0,
-        cnsPercent: diveState.cnsPercent,
-        dcsStress: diveState.dcsStress,
-        hypoxiaStress: diveState.hypoxiaStress,
-        narcosisLevel: diveState.narcosisLevel,
-        heartRateBpm: diveState.heartRateBpm,
-        cardiacStress: diveState.cardiacStress,
-        ceilingM: diveState.ceilingM,
         condition: diveState.impairment?.primaryCondition || 'NOMINAL',
         surfaced: Boolean(success),
         healthPct: localSummary.healthPct,
         gasRemainingPct: localSummary.gasRemainingPct,
-        diveTimeSec: diveState.diveTimeSec,
         collectiblesFound: localSummary.collectiblesFound,
         exploredPct: localSummary.exploredPct,
         totalScore: localSummary.totalScore,
-        depthM: diveState.depthM,
-        torchOn: diver.torchOn,
-        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
-        torchManualAim: Boolean(diver.torchManualAim),
-        hasCcr: Boolean(diver.hasCcr),
-        hasDpv: Boolean(diver.hasDpv),
-        dpvActive: Boolean(diver.dpvActive),
-        dpvThrusting: Boolean(diver.dpvThrusting),
-        alive: diveState.alive,
-        carryingBody: Boolean(session.carryingBody),
-        rescueTargetId: session.rescueTargetId || '',
-        rescuedBy: session.rescuedBy || '',
-        rescued: Boolean(session.rescued),
-        name: diver.name,
-      },
+      }),
       { force: true }
     );
   }
@@ -2768,8 +2741,17 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
 }
 
 const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
+let _cachedLogbook = null;
+
+function invalidateCareerLogbookCache() {
+  _cachedLogbook = null;
+}
+window.addEventListener('storage', (e) => {
+  if (!e?.key || e.key === CAREER_LOGBOOK_KEY) invalidateCareerLogbookCache();
+});
 
 function loadCareerLogbook() {
+  if (_cachedLogbook) return _cachedLogbook;
   try {
     let book = createEmptyLogbook();
     const raw = localStorage.getItem(CAREER_LOGBOOK_KEY);
@@ -2777,16 +2759,75 @@ function loadCareerLogbook() {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') book = parsed;
     }
-    return seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+    _cachedLogbook = seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+    return _cachedLogbook;
   } catch {
     return createEmptyLogbook();
   }
 }
 
 function saveCareerLogbook(book) {
+  _cachedLogbook = book || null;
   try {
     localStorage.setItem(CAREER_LOGBOOK_KEY, JSON.stringify(book));
   } catch {}
+}
+
+/**
+ * Single source of truth for outgoing co-op diver telemetry snapshots.
+ */
+function buildPlayerStatePayload(sess, overrides = {}) {
+  const { diver, diveState } = sess;
+  const activeTank = diveState.tanks?.[diveState.activeGasId];
+  const defaultCondition = (() => {
+    const pc = diveState.impairment?.primaryCondition;
+    if (pc === 'NO GAS' || pc === 'HYPOXIA' || pc === 'O2 TOX') return pc;
+    if (sess.activeSnagIndex >= 0) return 'SNAGGED!';
+    if (pc && pc !== 'NOMINAL') return pc;
+    if (diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 3.5) {
+      return `DECO ${diveState.stopDepthM}m`;
+    }
+    return 'NOMINAL';
+  })();
+
+  return {
+    x: diver.x,
+    y: diver.y,
+    vx: diver.vx,
+    vy: diver.vy,
+    angle: diver.angle,
+    gasId: diveState.activeGasId,
+    activeBar: activeTank ? activeTank.bar : 0,
+    cnsPercent: diveState.cnsPercent,
+    dcsStress: diveState.dcsStress,
+    hypoxiaStress: diveState.hypoxiaStress,
+    narcosisLevel: diveState.narcosisLevel,
+    heartRateBpm: diveState.heartRateBpm,
+    cardiacStress: diveState.cardiacStress,
+    ceilingM: diveState.ceilingM,
+    condition: defaultCondition,
+    surfaced: Boolean(sess.surfaced),
+    healthPct: computeHealthPct(diveState),
+    gasRemainingPct: computeGasRemainingPct(diveState),
+    diveTimeSec: diveState.diveTimeSec,
+    collectiblesFound: sess.collectedIds?.size || 0,
+    exploredPct: sess.exploredPct || 0,
+    depthM: diveState.depthM,
+    torchOn: diver.torchOn,
+    torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
+    torchManualAim: Boolean(diver.torchManualAim),
+    hasCcr: Boolean(diver.hasCcr),
+    hasDpv: Boolean(diver.hasDpv),
+    dpvActive: Boolean(diver.dpvActive),
+    dpvThrusting: Boolean(diver.dpvThrusting),
+    alive: diveState.alive,
+    carryingBody: Boolean(sess.carryingBody),
+    rescueTargetId: sess.rescueTargetId || '',
+    rescuedBy: sess.rescuedBy || '',
+    rescued: Boolean(sess.rescued),
+    name: diver.name,
+    ...overrides,
+  };
 }
 
 function renderCareerSummary() {
@@ -4719,7 +4760,7 @@ function stepSimulation(dt) {
         }
         p._lastExploreX = p.x;
         p._lastExploreY = p.y;
-        if (markExploredAround(session.exploreCells, session.exploredCells, p.x, p.y, 4.4) > 0) {
+        if (markExploredAround(session.exploreCells, session.exploredCells, p.x, p.y, 4.4, session.exploredGrid) > 0) {
           session.exploredPct = Math.round(
             (session.exploredCells.size / Math.max(1, session.exploreCells.length)) * 100
           );
@@ -4727,55 +4768,7 @@ function stepSimulation(dt) {
       }
     }
     if (lan.shouldSendPlayerState()) {
-      const activeTank = diveState.tanks[diveState.activeGasId];
-      const healthPct = computeHealthPct(diveState);
-      const gasRemainingPct = computeGasRemainingPct(diveState);
-      lan.sendPlayerState({
-        x: diver.x,
-        y: diver.y,
-        vx: diver.vx,
-        vy: diver.vy,
-        angle: diver.angle,
-        gasId: diveState.activeGasId,
-        activeBar: activeTank ? activeTank.bar : 0,
-        cnsPercent: diveState.cnsPercent,
-        dcsStress: diveState.dcsStress,
-        hypoxiaStress: diveState.hypoxiaStress,
-        narcosisLevel: diveState.narcosisLevel,
-        heartRateBpm: diveState.heartRateBpm,
-        cardiacStress: diveState.cardiacStress,
-        ceilingM: diveState.ceilingM,
-        condition: (() => {
-          const pc = diveState.impairment?.primaryCondition;
-          if (pc === 'NO GAS' || pc === 'HYPOXIA' || pc === 'O2 TOX') return pc;
-          if (session.activeSnagIndex >= 0) return 'SNAGGED!';
-          if (pc && pc !== 'NOMINAL') return pc;
-          if (diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 3.5) {
-            return `DECO ${diveState.stopDepthM}m`;
-          }
-          return 'NOMINAL';
-        })(),
-        surfaced: Boolean(session.surfaced),
-        healthPct,
-        gasRemainingPct,
-        diveTimeSec: diveState.diveTimeSec,
-        collectiblesFound: session.collectedIds?.size || 0,
-        exploredPct: session.exploredPct || 0,
-        depthM: diveState.depthM,
-        torchOn: diver.torchOn,
-        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
-        torchManualAim: Boolean(diver.torchManualAim),
-        hasCcr: Boolean(diver.hasCcr),
-        hasDpv: Boolean(diver.hasDpv),
-        dpvActive: Boolean(diver.dpvActive),
-        dpvThrusting: Boolean(diver.dpvThrusting),
-        alive: diveState.alive,
-        carryingBody: Boolean(session.carryingBody),
-        rescueTargetId: session.rescueTargetId || '',
-        rescuedBy: session.rescuedBy || '',
-        rescued: Boolean(session.rescued),
-        name: diver.name,
-      });
+      lan.sendPlayerState(buildPlayerStatePayload(session));
     }
     lan.stepPeerInterpolation(dt, level);
     stepPeerBubbles(session.bubbles, peers, dt);
@@ -4933,6 +4926,7 @@ function stepSimulation(dt) {
     minimapZoomMode,
     exploreCells: session.exploreCells,
     exploredCells: session.exploredCells,
+    exploredGrid: session.exploredGrid,
     collectedIds: session.collectedIds,
     openedHatchIds: session.openedHatchIds,
     claimedStageIds: session.claimedStageIds,
@@ -4980,43 +4974,12 @@ function stepSimulation(dt) {
     session.surfaced = Boolean(result.outcome.success);
     audio.resetEnvironmentFilter();
     lan.sendPlayerState(
-      {
-        x: diver.x,
-        y: diver.y,
+      buildPlayerStatePayload(session, {
         vx: 0,
         vy: 0,
-        angle: diver.angle,
-        gasId: diveState.activeGasId,
-        activeBar: diveState.tanks[diveState.activeGasId]?.bar ?? 0,
-        cnsPercent: diveState.cnsPercent,
-        dcsStress: diveState.dcsStress,
-        hypoxiaStress: diveState.hypoxiaStress,
-        narcosisLevel: diveState.narcosisLevel,
-        heartRateBpm: diveState.heartRateBpm,
-        cardiacStress: diveState.cardiacStress,
-        ceilingM: diveState.ceilingM,
         condition: diveState.alive ? 'NOMINAL' : 'DOWN',
         surfaced: Boolean(result.outcome.success),
-        healthPct: computeHealthPct(diveState),
-        gasRemainingPct: computeGasRemainingPct(diveState),
-        diveTimeSec: diveState.diveTimeSec,
-        collectiblesFound: session.collectedIds?.size || 0,
-        exploredPct: session.exploredPct || 0,
-        depthM: diveState.depthM,
-        torchOn: diver.torchOn,
-        torchAngle: Number((Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle).toFixed(3)),
-        torchManualAim: Boolean(diver.torchManualAim),
-        hasCcr: Boolean(diver.hasCcr),
-        hasDpv: Boolean(diver.hasDpv),
-        dpvActive: Boolean(diver.dpvActive),
-        dpvThrusting: Boolean(diver.dpvThrusting),
-        alive: diveState.alive,
-        carryingBody: Boolean(session.carryingBody),
-        rescueTargetId: session.rescueTargetId || '',
-        rescuedBy: session.rescuedBy || '',
-        rescued: Boolean(session.rescued),
-        name: diver.name,
-      },
+      }),
       { force: true }
     );
     if (!result.outcome.success) {

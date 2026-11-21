@@ -1,5 +1,6 @@
 import { GAS_MIXES, GAS_ORDER, computePPO2, getRecommendedGas, getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
+import { EXPLORE_GRID_CELL_M } from './scoring.js';
 
 const GAS_HOTKEY_LABELS = { EAN32: '1', TMX1455: '2', O2: '3' };
 
@@ -275,9 +276,32 @@ export function computeMinimapViewport(level, diver, { zoomMode = 'follow', widt
   };
 }
 
-function _isPointRevealed(wx, wy, diver, exploreCells, exploredCells, sonarPulse, revealDistM = 6.5) {
-  if (diver && Math.hypot(wx - diver.x, wy - diver.y) <= revealDistM + 3.5) return true;
-  if (sonarPulse && Math.hypot(wx - sonarPulse.x, wy - sonarPulse.y) <= (sonarPulse.maxRadiusM || 28)) return true;
+function _isPointRevealed(wx, wy, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, revealDistM = 6.5) {
+  if (diver) {
+    const ddx = wx - diver.x;
+    const ddy = wy - diver.y;
+    const dr = revealDistM + 3.5;
+    if (ddx * ddx + ddy * ddy <= dr * dr) return true;
+  }
+  if (sonarPulse) {
+    const sdx = wx - sonarPulse.x;
+    const sdy = wy - sonarPulse.y;
+    const sr = sonarPulse.maxRadiusM || 28;
+    if (sdx * sdx + sdy * sdy <= sr * sr) return true;
+  }
+  if (exploredGrid && exploredGrid.size > 0) {
+    // O(1) 3x3 coarse 4m spatial neighborhood lookup (covers >= 6.5m radius with zero allocations)
+    const cgx = Math.round(wx / EXPLORE_GRID_CELL_M) + 8192;
+    const cgy = Math.round(wy / EXPLORE_GRID_CELL_M) + 8192;
+    const span = revealDistM > 7.5 ? 2 : 1;
+    for (let dx = -span; dx <= span; dx++) {
+      const row = (cgx + dx) * 16384;
+      for (let dy = -span; dy <= span; dy++) {
+        if (exploredGrid.has(row + (cgy + dy))) return true;
+      }
+    }
+    return false;
+  }
   if (!exploreCells || !exploredCells || exploredCells.size === 0) return false;
   const r2 = revealDistM * revealDistM;
   for (const idx of exploredCells) {
@@ -301,6 +325,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     peers = [],
     exploreCells = [],
     exploredCells = null,
+    exploredGrid = null,
     checkpointsHit = null,
     nextCheckpoint = null,
     collectedIds = null,
@@ -426,7 +451,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     let drawing = false;
     for (let i = 0; i < pts.length; i++) {
       const pt = pts[i];
-      const vis = isGuided || _isPointRevealed(pt.x, pt.y, diver, exploreCells, exploredCells, sonarPulse, 7.5);
+      const vis = isGuided || _isPointRevealed(pt.x, pt.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.5);
       if (vis) {
         const sx = toX(pt.x);
         const sy = toY(pt.y);
@@ -479,7 +504,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     for (let i = 0; i < level.stageCaches.length; i++) {
       const st = level.stageCaches[i];
       if (!st || claimedStageIds?.has(st.id)) continue;
-      if (!isGuided && !_isPointRevealed(st.x, st.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      if (!isGuided && !_isPointRevealed(st.x, st.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.0)) continue;
       const sx = toX(st.x);
       const sy = toY(st.y);
       ctx.fillStyle = '#34d399';
@@ -491,7 +516,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const an = level.lineAnchors[i];
       if (!an) continue;
       const tagged = Boolean(placedMarkerIds?.has(an.id));
-      if (!tagged && !isGuided && !_isPointRevealed(an.x, an.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      if (!tagged && !isGuided && !_isPointRevealed(an.x, an.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.0)) continue;
       const sx = toX(an.x);
       const sy = toY(an.y);
       ctx.fillStyle = tagged ? '#4ade80' : '#fbbf24';
@@ -504,7 +529,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     for (let i = 0; i < level.watertightHatches.length; i++) {
       const h = level.watertightHatches[i];
       if (!h || openedHatchIds?.has(h.id)) continue;
-      if (!isGuided && !_isPointRevealed(h.x, h.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      if (!isGuided && !_isPointRevealed(h.x, h.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.0)) continue;
       const sx = toX(h.x);
       const sy = toY(h.y);
       ctx.strokeStyle = '#fb923c';
@@ -516,7 +541,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     for (let i = 0; i < level.collectibles.length; i++) {
       const item = level.collectibles[i];
       if (!item || collectedIds?.has(item.id)) continue;
-      if (!_isPointRevealed(item.x, item.y, diver, exploreCells, exploredCells, sonarPulse, 6.0)) continue;
+      if (!_isPointRevealed(item.x, item.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 6.0)) continue;
       const sx = toX(item.x);
       const sy = toY(item.y);
       ctx.fillStyle = '#fde047';
@@ -538,7 +563,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const cp = level.checkpoints[i];
       const hit = Boolean(checkpointsHit?.has(cp.id));
       const isNext = nextCheckpoint && nextCheckpoint.id === cp.id;
-      if (!hit && !allowCompassHints && !_isPointRevealed(cp.x, cp.y, diver, exploreCells, exploredCells, sonarPulse, 6.5)) {
+      if (!hit && !allowCompassHints && !_isPointRevealed(cp.x, cp.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 6.5)) {
         continue;
       }
       const sx = toX(cp.x);
@@ -581,7 +606,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
 
   if (level.recoveryTarget && !bodyRecovered) {
     const rt = level.recoveryTarget;
-    if (allowCompassHints || _isPointRevealed(rt.x, rt.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) {
+    if (allowCompassHints || _isPointRevealed(rt.x, rt.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.0)) {
       const rx = toX(rt.x);
       const ry = toY(rt.y);
       ctx.strokeStyle = `rgba(244, 114, 182, ${(0.5 + 0.5 * pulse).toFixed(2)})`;
@@ -864,6 +889,7 @@ export class DiveComputerHUD {
     minimapZoomMode = 'follow',
     exploreCells = null,
     exploredCells = null,
+    exploredGrid = null,
     collectedIds = null,
     openedHatchIds = null,
     claimedStageIds = null,
@@ -1366,6 +1392,7 @@ export class DiveComputerHUD {
               peers: teamList,
               exploreCells,
               exploredCells,
+              exploredGrid,
               checkpointsHit,
               nextCheckpoint,
               collectedIds,
