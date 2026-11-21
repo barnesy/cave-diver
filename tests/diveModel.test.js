@@ -4980,3 +4980,48 @@ test('v131 Daily Generated Sump Expeditions & Monthly Daily Dive Calendar: deter
   assert.equal(cal.days[21].isFuture, true);
   assert.equal(cal.days[21].cleared, false);
 });
+
+test('v133 Spatial 3D Underwater Audio, Mobile Haptics & Independent Audio Mixer: spatial pan/attenuation, buses & presets', async () => {
+  const { DiveAudio, computeSpatialMix, HAPTIC_PRESETS } = await import('../public/js/game/audio.js');
+
+  // 1. Spatial 3D pan & distance attenuation math
+  const center = computeSpatialMix(10, 20, 10, 20);
+  assert.equal(center.pan, 0);
+  assert.equal(center.gain, 1);
+  assert.equal(center.distanceM, 0);
+
+  const rightNear = computeSpatialMix(10, 20, 22, 20);
+  assert.ok(rightNear.pan > 0.5 && rightNear.pan <= 0.92, `Expected right stereo pan, got ${rightNear.pan}`);
+  assert.ok(rightNear.gain > 0.3 && rightNear.gain < 0.8);
+
+  const leftFar = computeSpatialMix(10, 20, -40, 20, { maxDistM: 36 });
+  assert.ok(leftFar.pan < -0.8);
+  assert.equal(leftFar.gain, 0, 'Beyond maxDistM should attenuate cleanly to 0');
+
+  // 2. Independent mixer settings & AquaticRadio volume sync
+  const audio = new DiveAudio();
+  const updated = audio.setMixerSettings({
+    sfxVolume: 0.42,
+    ambienceVolume: 0.95,
+    radioVolume: 0.3,
+    spatialEnabled: false,
+    hapticsEnabled: false,
+  });
+  assert.equal(updated.sfxVolume, 0.42);
+  assert.equal(updated.ambienceVolume, 0.95);
+  assert.equal(updated.radioVolume, 0.3);
+  assert.equal(audio.radio.volume, 0.3);
+  assert.equal(updated.spatialEnabled, false);
+  assert.equal(updated.hapticsEnabled, false);
+
+  // Clamping out-of-range mixer values safely
+  const clamped = audio.setMixerSettings({ sfxVolume: 5.5, ambienceVolume: -2, radioVolume: 1.8 });
+  assert.equal(clamped.sfxVolume, 1);
+  assert.equal(clamped.ambienceVolume, 0);
+  assert.equal(clamped.radioVolume, 1);
+
+  // 3. Haptic presets catalog & safe headless invocation
+  assert.ok(Array.isArray(HAPTIC_PRESETS.impact) && Array.isArray(HAPTIC_PRESETS.sonar) && Array.isArray(HAPTIC_PRESETS.critical));
+  audio.triggerHaptic('sonar');
+  audio.playSpatialTestSweep();
+});

@@ -5,6 +5,46 @@
 
 import { AquaticRadio } from './aquaticRadio.js';
 
+/**
+ * Named mobile haptic feedback vibration patterns (ms) — v133.
+ */
+export const HAPTIC_PRESETS = Object.freeze({
+  impact: [36, 20, 18],
+  sonar: [18, 35, 12],
+  alarm: [45, 50, 45],
+  critical: [75, 40, 75, 40, 90],
+  signal: [14, 24, 14],
+  drill: [55, 35, 55],
+  stage: [22],
+  photo: [12],
+  checkpoint: [16, 20, 24],
+  test: [16, 40, 22],
+});
+
+/**
+ * Pure 2D-to-stereo spatial underwater audio calculator (v133).
+ * Maps world-space source coordinates relative to the diver into stereo pan [-0.92..+0.92]
+ * and smooth distance-attenuated gain [0..1].
+ */
+export function computeSpatialMix(listenerX, listenerY, sourceX, sourceY, { maxDistM = 36 } = {}) {
+  const dx = (Number(sourceX) || 0) - (Number(listenerX) || 0);
+  const dy = (Number(sourceY) || 0) - (Number(listenerY) || 0);
+  const dist = Math.hypot(dx, dy);
+  const maxD = Math.max(4, Number(maxDistM) || 36);
+  if (dist >= maxD) {
+    return { pan: Math.max(-0.92, Math.min(0.92, dx / 18)), gain: 0, distanceM: Math.round(dist * 10) / 10 };
+  }
+  const pan = Math.max(-0.92, Math.min(0.92, dx / 18));
+  const rawAtten = 1 / (1 + Math.pow(dist / 12, 1.55));
+  const edgeFade = dist > maxD * 0.78 ? Math.max(0, (maxD - dist) / (maxD * 0.22)) : 1;
+  const gain = Math.max(0, Math.min(1, rawAtten * edgeFade));
+  return {
+    pan: Math.round(pan * 1000) / 1000,
+    gain: Math.round(gain * 1000) / 1000,
+    distanceM: Math.round(dist * 10) / 10,
+  };
+}
+
 export class DiveAudio {
   constructor() {
     this.ctx = null;
@@ -16,6 +56,11 @@ export class DiveAudio {
     this._noiseBuffer = null;
     this.masterFilter = null;
     this.masterGain = null;
+    this.sfxBus = null;
+    this.ambienceBus = null;
+    this.sfxVolume = 0.85;
+    this.ambienceVolume = 0.80;
+    this.spatialEnabled = true;
     this._lastFilterHz = 18000;
     this._ambienceTimer = 4.0;
     this._lastWhaleAt = 0;
@@ -82,7 +127,95 @@ export class DiveAudio {
       filt.connect(this.masterGain);
       this.masterFilter = filt;
     }
+    if (!this.sfxBus) {
+      const sb = this.ctx.createGain();
+      sb.gain.value = Math.max(0.0001, this.sfxVolume);
+      sb.connect(this.masterFilter);
+      this.sfxBus = sb;
+    }
+    if (!this.ambienceBus) {
+      const ab = this.ctx.createGain();
+      ab.gain.value = Math.max(0.0001, this.ambienceVolume);
+      ab.connect(this.masterFilter);
+      this.ambienceBus = ab;
+    }
     return this.masterFilter;
+  }
+
+  _getBusNode(bus = 'sfx') {
+    this._ensureMasterFilter();
+    if (bus === 'ambience' && this.ambienceBus) return this.ambienceBus;
+    if (this.sfxBus) return this.sfxBus;
+    return this.masterFilter || this.ctx?.destination || null;
+  }
+
+  _connectSpatial(node, { pan = 0, bus = 'sfx' } = {}) {
+    const dest = this._getBusNode(bus);
+    if (!dest) return null;
+    const clampedPan = this.spatialEnabled ? Math.max(-0.95, Math.min(0.95, Number(pan) || 0)) : 0;
+    if (Math.abs(clampedPan) > 0.02 && typeof this.ctx?.createStereoPanner === 'function') {
+      const panner = this.ctx.createStereoPanner();
+      panner.pan.setValueAtTime(clampedPan, this.ctx.currentTime);
+      node.connect(panner);
+      panner.connect(dest);
+      return panner;
+    }
+    node.connect(dest);
+    return null;
+  }
+
+  getMixerSettings() {
+    return {
+      sfxVolume: Math.round(this.sfxVolume * 100) / 100,
+      ambienceVolume: Math.round(this.ambienceVolume * 100) / 100,
+      radioVolume: Math.round((this.radio?.volume ?? 0.65) * 100) / 100,
+      spatialEnabled: Boolean(this.spatialEnabled),
+      hapticsEnabled: Boolean(this.hapticsEnabled),
+      muted: Boolean(this.muted),
+    };
+  }
+
+  setMixerSettings(opts = {}) {
+    if (opts.sfxVolume !== undefined && Number.isFinite(Number(opts.sfxVolume))) {
+      this.sfxVolume = Math.max(0, Math.min(1, Number(opts.sfxVolume)));
+      if (this.sfxBus && this.ctx) {
+        try {
+          this.sfxBus.gain.setTargetAtTime(Math.max(0.0001, this.sfxVolume), this.ctx.currentTime, 0.04);
+        } catch {}
+      }
+    }
+    if (opts.ambienceVolume !== undefined && Number.isFinite(Number(opts.ambienceVolume))) {
+      this.ambienceVolume = Math.max(0, Math.min(1, Number(opts.ambienceVolume)));
+      if (this.ambienceBus && this.ctx) {
+        try {
+          this.ambienceBus.gain.setTargetAtTime(Math.max(0.0001, this.ambienceVolume), this.ctx.currentTime, 0.04);
+        } catch {}
+      }
+    }
+    if (opts.radioVolume !== undefined && Number.isFinite(Number(opts.radioVolume))) {
+      this.radio?.setVolume?.(Number(opts.radioVolume));
+    }
+    if (typeof opts.spatialEnabled === 'boolean') {
+      this.spatialEnabled = opts.spatialEnabled;
+    }
+    if (typeof opts.hapticsEnabled === 'boolean') {
+      this.hapticsEnabled = opts.hapticsEnabled;
+    }
+    return this.getMixerSettings();
+  }
+
+  triggerHaptic(presetName = 'signal') {
+    const pat = HAPTIC_PRESETS[presetName] || HAPTIC_PRESETS.signal;
+    this.vibrate(pat);
+  }
+
+  playSpatialTestSweep() {
+    if (this.muted) this.setMuted(false);
+    this.unlock({ autoStartRadio: false });
+    this.playTone(980, 0.16, 'sine', 0.08, 0.0, { pan: -0.82, bus: 'sfx' });
+    this.playTone(1240, 0.16, 'sine', 0.085, 0.17, { pan: 0.0, bus: 'sfx' });
+    this.playTone(1520, 0.22, 'triangle', 0.08, 0.34, { pan: 0.82, bus: 'sfx' });
+    this.triggerHaptic('test');
   }
 
   vibrate(pattern) {
@@ -97,7 +230,7 @@ export class DiveAudio {
   unlock({ autoStartRadio = true } = {}) {
     if (this.muted) return;
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }
@@ -141,7 +274,7 @@ export class DiveAudio {
     return this.radio.getButtonLabel();
   }
 
-  playTone(freq, duration, type = 'sine', gainVal = 0.08, delay = 0) {
+  playTone(freq, duration, type = 'sine', gainVal = 0.08, delay = 0, { pan = 0, bus = 'sfx' } = {}) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
@@ -152,10 +285,11 @@ export class DiveAudio {
     gain.gain.exponentialRampToValueAtTime(gainVal, t + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
     osc.connect(gain);
-    gain.connect(this.masterFilter || this.ctx.destination);
+    const panner = this._connectSpatial(gain, { pan, bus });
     osc.onended = () => {
       try { osc.disconnect(); } catch {}
       try { gain.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
     };
     osc.start(t);
     osc.stop(t + duration + 0.02);
@@ -194,7 +328,8 @@ export class DiveAudio {
     const noise = this._getNoiseBuffer();
     if (!noise) return;
     const t = this.ctx.currentTime;
-    const dest = this.masterFilter || this.ctx.destination;
+    const dest = this._getBusNode('sfx');
+    if (!dest) return;
 
     // Warm, meditative two-layer regulator inhale:
     // Layer 1: Soft low-passed chamber resonance (warm lung/mouthpiece body, no harsh 2kHz sibilance)
@@ -318,15 +453,17 @@ export class DiveAudio {
     fizzGain.gain.exponentialRampToValueAtTime(fizzPeak, t + Math.min(0.12, dur * 0.2));
     fizzGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
+    const dest = this._getBusNode('sfx');
+    if (!dest) return;
     src.connect(filter);
     filter.connect(envGain);
     lfo.connect(lfoGain);
     lfoGain.connect(envGain.gain);
-    envGain.connect(this.masterFilter || this.ctx.destination);
+    envGain.connect(dest);
 
     src.connect(fizzFilter);
     fizzFilter.connect(fizzGain);
-    fizzGain.connect(this.masterFilter || this.ctx.destination);
+    fizzGain.connect(dest);
 
     src.onended = () => {
       try { src.disconnect(); } catch {}
@@ -356,11 +493,11 @@ export class DiveAudio {
     this.playTone(46, 0.11, 'sine', vol * 0.82, 0.12);
   }
 
-  playSignal() {
+  playSignal(pan = 0) {
     this.unlock();
-    this.playTone(987.77, 0.08, 'sine', 0.075, 0);
-    this.playTone(1318.5, 0.12, 'sine', 0.065, 0.08);
-    this.vibrate(15);
+    this.playTone(987.77, 0.08, 'sine', 0.075, 0, { pan, bus: 'sfx' });
+    this.playTone(1318.5, 0.12, 'sine', 0.065, 0.08, { pan, bus: 'sfx' });
+    this.triggerHaptic('signal');
   }
 
   playRecovery() {
@@ -424,11 +561,11 @@ export class DiveAudio {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
       src.connect(filt);
       filt.connect(g);
-      g.connect(this.masterFilter || this.ctx.destination);
+      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
       src.start(t);
       src.stop(t + 0.16);
     }
-    this.vibrate(Math.round(24 + intensity * 18));
+    this.triggerHaptic('impact');
   }
 
   playAlarm(level) {
@@ -451,7 +588,7 @@ export class DiveAudio {
   /**
    * Deep resonant metallic ship-hull groan caused by ocean currents flexing sunken steel.
    */
-  playHullGroan(depthRatio = 0.5) {
+  playHullGroan(depthRatio = 0.5, pan = 0) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
     const dur = 1.9 + Math.random() * 1.1;
@@ -481,7 +618,14 @@ export class DiveAudio {
     osc1.connect(filt);
     osc2.connect(filt);
     filt.connect(g);
-    g.connect(this.masterFilter || this.ctx.destination);
+    const panner = this._connectSpatial(g, { pan, bus: 'ambience' });
+    osc1.onended = () => {
+      try { osc1.disconnect(); } catch {}
+      try { osc2.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
+    };
 
     osc1.start(t);
     osc2.start(t);
@@ -524,7 +668,7 @@ export class DiveAudio {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
       src.connect(filt);
       filt.connect(g);
-      g.connect(this.masterFilter || this.ctx.destination);
+      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
       src.start(t);
       src.stop(t + 0.45);
     }
@@ -586,7 +730,7 @@ export class DiveAudio {
 
     src.connect(filt);
     filt.connect(g);
-    g.connect(this.masterGain || this.ctx.destination);
+    this._connectSpatial(g, { pan: 0, bus: 'sfx' });
     src.onended = () => {
       try { src.disconnect(); } catch {}
       try { filt.disconnect(); } catch {}
@@ -604,10 +748,9 @@ export class DiveAudio {
   /**
    * Distant, ethereal open-ocean humpback whale song (dual-harmonic pitch glide through warm lowpass).
    */
-  playWhaleSong() {
+  playWhaleSong(pan = 0) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
-    const dest = this.masterFilter || this.ctx.destination;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(460, t);
@@ -641,13 +784,14 @@ export class DiveAudio {
     osc2.connect(g2);
     g1.connect(filter);
     g2.connect(filter);
-    filter.connect(dest);
+    const panner = this._connectSpatial(filter, { pan, bus: 'ambience' });
     osc1.onended = () => {
       try { osc1.disconnect(); } catch {}
       try { osc2.disconnect(); } catch {}
       try { g1.disconnect(); } catch {}
       try { g2.disconnect(); } catch {}
       try { filter.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
     };
     osc1.start(t);
     osc2.start(t);
@@ -682,7 +826,7 @@ export class DiveAudio {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(filt);
     filt.connect(g);
-    g.connect(this.masterFilter || this.ctx.destination);
+    this._connectSpatial(g, { pan: 0, bus: 'sfx' });
     src.onended = () => {
       try { src.disconnect(); } catch {}
       try { filt.disconnect(); } catch {}
@@ -718,7 +862,7 @@ export class DiveAudio {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(filt);
     filt.connect(g);
-    g.connect(this.masterFilter || this.ctx.destination);
+    this._connectSpatial(g, { pan: 0, bus: 'sfx' });
     src.onended = () => {
       try { src.disconnect(); } catch {}
       try { filt.disconnect(); } catch {}
@@ -744,10 +888,33 @@ export class DiveAudio {
    * - Shipwrecks: distant humpback whale song, deep steel hull settling creak & oceanic swell sub-thrum
    * - Geothermal / Glacial Iceland & Arctic: mineral vent crackle or crystalline ice-creak chime
    */
-  stepAmbience(dt, level, depthM = 0) {
+  stepAmbience(dt, level, depthM = 0, diver = null) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level || depthM < 2.2) return;
     this._ambienceTimer -= dt;
     if (this._ambienceTimer > 0) return;
+
+    // Derive spatial stereo pan from nearest landmark (vent / surge / wreck hull center) relative to diver (v133)
+    let ambPan = (Math.random() - 0.5) * 0.7;
+    if (diver && Number.isFinite(diver.x)) {
+      const landmarks = [
+        ...(Array.isArray(level.geothermalVents) ? level.geothermalVents : []),
+        ...(Array.isArray(level.surgeZones) ? level.surgeZones : []),
+      ];
+      let bestDist = Infinity;
+      for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        if (!lm || !Number.isFinite(lm.x)) continue;
+        const mix = computeSpatialMix(diver.x, diver.y, lm.x, lm.y, { maxDistM: 42 });
+        if (mix.gain > 0.08 && mix.distanceM < bestDist) {
+          bestDist = mix.distanceM;
+          ambPan = mix.pan;
+        }
+      }
+      if (bestDist === Infinity && level.isWreck && Number.isFinite(level.wreckHullXMin) && Number.isFinite(level.wreckHullXMax)) {
+        const hullMidX = (level.wreckHullXMin + level.wreckHullXMax) * 0.5;
+        ambPan = computeSpatialMix(diver.x, diver.y, hullMidX, level.wreckDeckY || 30, { maxDistM: 90 }).pan;
+      }
+    }
 
     const style = level.theme?.surfaceStyle || '';
     const isGlacier =
@@ -763,9 +930,9 @@ export class DiveAudio {
       if (depthM > 8 && nowMs - this._lastWhaleAt > 28000 && roll < 0.28) {
         this._lastWhaleAt = nowMs;
         this._ambienceTimer = 9.0 + Math.random() * 7.0;
-        this.playWhaleSong();
+        this.playWhaleSong(ambPan);
       } else if (depthM > 20 && roll < 0.56) {
-        // Distant deep-water steel hull settling creak
+        // Distant deep-water steel hull settling creak (spatialized onto ambienceBus)
         this._ambienceTimer = 7.2 + Math.random() * 6.5;
         const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
@@ -782,16 +949,17 @@ export class DiveAudio {
         g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
         osc.connect(filt);
         filt.connect(g);
-        g.connect(this.masterFilter || this.ctx.destination);
+        const panner = this._connectSpatial(g, { pan: ambPan, bus: 'ambience' });
         osc.onended = () => {
           try { osc.disconnect(); } catch {}
           try { filt.disconnect(); } catch {}
           try { g.disconnect(); } catch {}
+          try { panner?.disconnect(); } catch {}
         };
         osc.start(t);
         osc.stop(t + 1.75);
       } else {
-        // Gentle low ocean swell sub-thrum
+        // Gentle low ocean swell sub-thrum (spatialized onto ambienceBus)
         this._ambienceTimer = 6.5 + Math.random() * 6.0;
         const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
@@ -804,23 +972,24 @@ export class DiveAudio {
         g.gain.linearRampToValueAtTime(0.022, t + 0.85);
         g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
         osc.connect(g);
-        g.connect(this.masterFilter || this.ctx.destination);
+        const panner = this._connectSpatial(g, { pan: ambPan, bus: 'ambience' });
         osc.onended = () => {
           try { osc.disconnect(); } catch {}
           try { g.disconnect(); } catch {}
+          try { panner?.disconnect(); } catch {}
         };
         osc.start(t);
         osc.stop(t + 2.25);
       }
     } else if (isGlacier && Math.random() < 0.6) {
-      // Crystalline subglacial ice groan & harmonic shimmer
+      // Crystalline subglacial ice groan & harmonic shimmer (spatialized onto ambienceBus)
       this._ambienceTimer = 5.5 + Math.random() * 5.5;
       const f = 540 + Math.random() * 420;
-      this.playTone(f, 0.55, 'sine', 0.018, 0);
-      this.playTone(f * 1.498, 0.72, 'triangle', 0.012, 0.08);
-      this.playTone(f * 2.0, 0.42, 'sine', 0.006, 0.22);
+      this.playTone(f, 0.55, 'sine', 0.018, 0, { pan: ambPan, bus: 'ambience' });
+      this.playTone(f * 1.498, 0.72, 'triangle', 0.012, 0.08, { pan: ambPan * 0.85, bus: 'ambience' });
+      this.playTone(f * 2.0, 0.42, 'sine', 0.006, 0.22, { pan: ambPan * 0.65, bus: 'ambience' });
     } else if (hasVents && Math.random() < 0.55) {
-      // Delicate hydrothermal mineral hiss burst
+      // Delicate hydrothermal mineral hiss burst (spatialized onto ambienceBus)
       this._ambienceTimer = 4.2 + Math.random() * 4.0;
       const noise = this._getNoiseBuffer();
       if (noise) {
@@ -837,22 +1006,23 @@ export class DiveAudio {
         g.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
         src.connect(filt);
         filt.connect(g);
-        g.connect(this.masterFilter || this.ctx.destination);
+        const panner = this._connectSpatial(g, { pan: ambPan, bus: 'ambience' });
         src.onended = () => {
           try { src.disconnect(); } catch {}
           try { filt.disconnect(); } catch {}
           try { g.disconnect(); } catch {}
+          try { panner?.disconnect(); } catch {}
         };
         src.start(t, Math.random() * 0.5);
         src.stop(t + 1.3);
       }
     } else {
-      // Resonant 3-tap karst cave water-drip echo
+      // Resonant 3-tap karst cave water-drip echo (spatialized onto ambienceBus)
       this._ambienceTimer = 5.2 + Math.random() * 6.5;
       const base = 680 + Math.random() * 480;
-      this.playTone(base, 0.14, 'sine', 0.016, 0);
-      this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14);
-      this.playTone(base * 1.16, 0.22, 'sine', 0.0055, 0.32);
+      this.playTone(base, 0.14, 'sine', 0.016, 0, { pan: ambPan, bus: 'ambience' });
+      this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14, { pan: ambPan * 0.7, bus: 'ambience' });
+      this.playTone(base * 1.16, 0.22, 'sine', 0.0055, 0.32, { pan: ambPan * 0.4, bus: 'ambience' });
     }
   }
 
@@ -884,7 +1054,7 @@ export class DiveAudio {
     g.gain.linearRampToValueAtTime(0.024, t + 0.05);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
     osc.connect(g);
-    g.connect(this.masterFilter || this.ctx.destination);
+    this._connectSpatial(g, { pan: 0, bus: 'sfx' });
     osc.onended = () => {
       try { osc.disconnect(); } catch {}
       try { g.disconnect(); } catch {}
@@ -928,17 +1098,17 @@ export class DiveAudio {
   /**
    * Atmospheric chime for dynamic encounters: deep pelagic whale-like swell or crisp Survey Beacon salvage ping.
    */
-  playEncounterChime(kind = 'beacon') {
+  playEncounterChime(kind = 'beacon', pan = 0) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     if (kind === 'beacon') {
-      this.playTone(1180, 0.09, 'sine', 0.055, 0);
-      this.playTone(1568, 0.14, 'triangle', 0.06, 0.085);
+      this.playTone(1180, 0.09, 'sine', 0.055, 0, { pan, bus: 'sfx' });
+      this.playTone(1568, 0.14, 'triangle', 0.06, 0.085, { pan, bus: 'sfx' });
       this.vibrate?.(24);
       return;
     }
     if (kind === 'buddy-ping') {
-      this.playTone(784, 0.11, 'sine', 0.048, 0);
-      this.playTone(1174.6, 0.15, 'sine', 0.052, 0.11);
+      this.playTone(784, 0.11, 'sine', 0.048, 0, { pan, bus: 'sfx' });
+      this.playTone(1174.6, 0.15, 'sine', 0.052, 0.11, { pan, bus: 'sfx' });
       this.vibrate?.(16);
       return;
     }
@@ -955,10 +1125,11 @@ export class DiveAudio {
     g.gain.linearRampToValueAtTime(0.042, t + 0.25);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
     osc.connect(g);
-    g.connect(this.masterFilter || this.ctx.destination);
+    const panner = this._connectSpatial(g, { pan, bus: 'ambience' });
     osc.onended = () => {
       try { osc.disconnect(); } catch {}
       try { g.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
     };
     osc.start(t);
     osc.stop(t + 1.24);

@@ -81,6 +81,7 @@ export class AquaticRadio {
     this.getAudioCtx = getAudioCtx;
     this.isMutedFn = isMutedFn;
     this.trackIndex = 0; // 0 = Off
+    this.volume = 0.65; // 0..1 mixer fader (v133)
     this._timer = null;
     this._step = 0;
     this._nextStepTime = 0;
@@ -125,7 +126,8 @@ export class AquaticRadio {
     filter.Q.setValueAtTime(0.7, ctx.currentTime);
 
     const bus = ctx.createGain();
-    bus.gain.setValueAtTime(this.isMutedFn() ? 0.0001 : 0.16, ctx.currentTime);
+    const targetGain = this.isMutedFn() ? 0.0001 : Math.max(0.0001, 0.24 * this.volume);
+    bus.gain.setValueAtTime(targetGain, ctx.currentTime);
     bus.connect(filter);
     filter.connect(ctx.destination);
     this._lowpass = filter;
@@ -133,10 +135,17 @@ export class AquaticRadio {
     return bus;
   }
 
+  setVolume(vol) {
+    this.volume = Math.max(0, Math.min(1, Number.isFinite(Number(vol)) ? Number(vol) : 0.65));
+    this.syncMuted(this.isMutedFn());
+    return this.volume;
+  }
+
   syncMuted(muted) {
     const ctx = this.getAudioCtx?.();
     if (!ctx || !this._busGain) return;
-    this._busGain.gain.setTargetAtTime(muted ? 0.0001 : 0.16, ctx.currentTime, 0.06);
+    const targetGain = muted ? 0.0001 : Math.max(0.0001, 0.24 * this.volume);
+    this._busGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.06);
   }
 
   start() {

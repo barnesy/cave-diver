@@ -104,7 +104,7 @@ import { spawnSiltPlume } from './game/silt.js';
 import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import { InputController } from './game/input.js';
-import { DiveAudio } from './game/audio.js';
+import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
 import { LeaderboardClient } from './net/leaderboardClient.js';
 import { GitHubClient, buildPrefilledIssueUrl } from './net/githubClient.js';
@@ -534,7 +534,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=132" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=133" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1169,6 +1169,10 @@ const input = new InputController({
     }
     if (proceduralModal && !proceduralModal.hidden) {
       closeProceduralModal();
+      return true;
+    }
+    if (audioMixerModalEl && !audioMixerModalEl.hidden) {
+      closeAudioMixerModal();
       return true;
     }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
@@ -3117,6 +3121,104 @@ btnProcLaunch?.addEventListener('click', async () => {
   renderProceduralModal();
   closeProceduralModal();
   await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: true });
+});
+
+// ─── Spatial 3D Underwater Audio Mixer & Mobile Haptics (v133) ───
+const AUDIO_MIXER_PREF_KEY = 'caveDiverAudioMix_v1';
+const audioMixerModalEl = document.getElementById('audio-mixer-modal');
+const btnOpenAudioMixer = document.getElementById('btn-open-audio-mixer');
+const btnHudAudioMixer = document.getElementById('btn-hud-audio-mixer');
+const btnAudioMixerClose = document.getElementById('btn-audio-mixer-close');
+const btnMixerDone = document.getElementById('btn-mixer-done');
+const btnMixerTest = document.getElementById('btn-mixer-test');
+const mixerSfxRange = document.getElementById('mixer-sfx-range');
+const mixerAmbRange = document.getElementById('mixer-amb-range');
+const mixerRadioRange = document.getElementById('mixer-radio-range');
+const mixerSfxVal = document.getElementById('mixer-sfx-val');
+const mixerAmbVal = document.getElementById('mixer-amb-val');
+const mixerRadioVal = document.getElementById('mixer-radio-val');
+const mixerSpatialCheck = document.getElementById('mixer-spatial-check');
+const mixerHapticsCheck = document.getElementById('mixer-haptics-check');
+
+try {
+  const rawMix = localStorage.getItem(AUDIO_MIXER_PREF_KEY);
+  if (rawMix) {
+    const parsedMix = JSON.parse(rawMix);
+    if (parsedMix && typeof parsedMix === 'object') {
+      audio.setMixerSettings(parsedMix);
+    }
+  }
+} catch {}
+
+function saveAudioMixerPrefs() {
+  try {
+    localStorage.setItem(AUDIO_MIXER_PREF_KEY, JSON.stringify(audio.getMixerSettings()));
+  } catch {}
+}
+
+function syncAudioMixerModalUi() {
+  const s = audio.getMixerSettings();
+  const sfxPct = Math.round(s.sfxVolume * 100);
+  const ambPct = Math.round(s.ambienceVolume * 100);
+  const radPct = Math.round(s.radioVolume * 100);
+  if (mixerSfxRange) mixerSfxRange.value = String(sfxPct);
+  if (mixerAmbRange) mixerAmbRange.value = String(ambPct);
+  if (mixerRadioRange) mixerRadioRange.value = String(radPct);
+  if (mixerSfxVal) mixerSfxVal.textContent = `${sfxPct}%`;
+  if (mixerAmbVal) mixerAmbVal.textContent = `${ambPct}%`;
+  if (mixerRadioVal) mixerRadioVal.textContent = `${radPct}%`;
+  if (mixerSpatialCheck) mixerSpatialCheck.checked = Boolean(s.spatialEnabled);
+  if (mixerHapticsCheck) mixerHapticsCheck.checked = Boolean(s.hapticsEnabled);
+}
+
+function openAudioMixerModal() {
+  if (!audioMixerModalEl) return;
+  setHomeMenuOpen(false);
+  setHudMenuOpen(false);
+  syncAudioMixerModalUi();
+  audioMixerModalEl.hidden = false;
+}
+
+function closeAudioMixerModal() {
+  if (audioMixerModalEl) audioMixerModalEl.hidden = true;
+}
+
+btnOpenAudioMixer?.addEventListener('click', openAudioMixerModal);
+btnHudAudioMixer?.addEventListener('click', openAudioMixerModal);
+btnAudioMixerClose?.addEventListener('click', closeAudioMixerModal);
+btnMixerDone?.addEventListener('click', closeAudioMixerModal);
+audioMixerModalEl?.addEventListener('click', (e) => {
+  if (e.target === audioMixerModalEl) closeAudioMixerModal();
+});
+mixerSfxRange?.addEventListener('input', () => {
+  const v = Math.max(0, Math.min(100, Number(mixerSfxRange.value) || 0));
+  audio.setMixerSettings({ sfxVolume: v / 100 });
+  if (mixerSfxVal) mixerSfxVal.textContent = `${v}%`;
+  saveAudioMixerPrefs();
+});
+mixerAmbRange?.addEventListener('input', () => {
+  const v = Math.max(0, Math.min(100, Number(mixerAmbRange.value) || 0));
+  audio.setMixerSettings({ ambienceVolume: v / 100 });
+  if (mixerAmbVal) mixerAmbVal.textContent = `${v}%`;
+  saveAudioMixerPrefs();
+});
+mixerRadioRange?.addEventListener('input', () => {
+  const v = Math.max(0, Math.min(100, Number(mixerRadioRange.value) || 0));
+  audio.setMixerSettings({ radioVolume: v / 100 });
+  if (mixerRadioVal) mixerRadioVal.textContent = `${v}%`;
+  saveAudioMixerPrefs();
+});
+mixerSpatialCheck?.addEventListener('change', () => {
+  audio.setMixerSettings({ spatialEnabled: Boolean(mixerSpatialCheck.checked) });
+  saveAudioMixerPrefs();
+});
+mixerHapticsCheck?.addEventListener('change', () => {
+  audio.setMixerSettings({ hapticsEnabled: Boolean(mixerHapticsCheck.checked) });
+  saveAudioMixerPrefs();
+});
+btnMixerTest?.addEventListener('click', () => {
+  audio.playSpatialTestSweep();
+  showToast('🎧 Left → Center → Right spatial sonar sweep!', 2.0);
 });
 btnChallengeAccept?.addEventListener('click', () => {
   btnPlaySolo?.click();
@@ -6743,7 +6845,14 @@ lan.on('dive_started', async (msg) => {
 });
 
 lan.on('peer_signal', (msg) => {
-  audio.playSignal();
+  let pan = 0;
+  if (session?.diver) {
+    const p = lan.getPeers().find((peer) => peer && peer.id === msg.playerId);
+    if (p && Number.isFinite(p.x)) {
+      pan = computeSpatialMix(session.diver.x, session.diver.y, p.x, p.y, { maxDistM: 60 }).pan;
+    }
+  }
+  audio.playSignal(pan);
   showToast(`${msg.name || 'Buddy'}: ${msg.signal}`, 3.0);
 });
 
@@ -6999,7 +7108,7 @@ function stepSimulation(dt) {
     session._wasSubmerged = nowSubmerged;
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
     if (diveState.alive) {
-      audio.stepAmbience(dt, level, diver.y);
+      audio.stepAmbience(dt, level, diver.y, diver);
     }
     syncWreckActionHud(session.wreckActionPrompt);
     syncTechGearHud(session);
