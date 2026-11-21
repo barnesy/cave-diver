@@ -530,7 +530,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=127" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=128" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1232,8 +1232,14 @@ if (signalWheelGridEl) {
     dispatchScubaSignal(btn.dataset.sigId);
   });
 }
-btnHudSignalsEl?.addEventListener('click', () => toggleSignalWheel());
-btnSignalWheelClose?.addEventListener('click', () => toggleSignalWheel(false));
+btnHudSignalsEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSignalWheel();
+});
+btnSignalWheelClose?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSignalWheel(false);
+});
 
 // Shearwater ZH-L16C OLED Dive Computer Overlay (v126)
 const shearwaterPanelEl = document.getElementById('shearwater-panel');
@@ -1253,7 +1259,10 @@ function toggleShearwaterComputer(forceState) {
   }
   return true;
 }
-btnHudComputerEl?.addEventListener('click', () => toggleShearwaterComputer());
+btnHudComputerEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleShearwaterComputer();
+});
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
 const wreckActionLabelEl = document.getElementById('wreck-action-label');
@@ -1583,7 +1592,7 @@ btnHudStage?.addEventListener('click', (e) => {
 
 function handleStageDrop() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
-  audio.resume();
+  audio.unlock();
   const res = dropStageTank(session, {
     onWreckSync: (actionKind, targetId) => {
       if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
@@ -6905,10 +6914,13 @@ function stepSimulation(dt) {
     }
   }
 
-  if (shearwaterOpen && shearwaterCanvasEl && nowMs - lastShearwaterDrawMs >= 140) {
-    lastShearwaterDrawMs = nowMs;
-    const sctx = shearwaterCanvasEl.getContext('2d');
-    if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, diveState);
+  if (shearwaterOpen && shearwaterCanvasEl) {
+    const shearNowMs = performance.now();
+    if (shearNowMs - lastShearwaterDrawMs >= 140) {
+      lastShearwaterDrawMs = shearNowMs;
+      const sctx = shearwaterCanvasEl.getContext('2d');
+      if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, diveState);
+    }
   }
 
   hud.update({

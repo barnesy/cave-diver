@@ -21,6 +21,8 @@ import { LEVEL_20 } from './level20.js';
 import { LEVEL_21 } from './level21_ojamo.js';
 import { LEVEL_22 } from './level22_scoresby.js';
 import { LEVEL_23 } from './level23_bermuda.js';
+import { LEVEL_24 } from './level24_bimini.js';
+import { LEVEL_25 } from './level25_krubera.js';
 import { WRECK_ORISKANY } from './wreck1_oriskany.js';
 import { WRECK_ANDREA_DORIA } from './wreck2_andrea_doria.js';
 import { WRECK_BRITANNIC } from './wreck3_britannic.js';
@@ -28,6 +30,7 @@ import { WRECK_HMS_VICTORIA } from './wreck4_hms_victoria.js';
 import { WRECK_EDMUND_FITZGERALD } from './wreck5_edmund_fitzgerald.js';
 import { WRECK_THISTLEGORM } from './wreck6_thistlegorm.js';
 import { WRECK_U1206 } from './wreck7_u1206.js';
+import { WRECK_ZENOBIA } from './wreck8_zenobia.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
 import { enrichCaveInteractives } from './caveInteractives.js';
@@ -92,6 +95,9 @@ export const LEVELS = [
   WRECK_EDMUND_FITZGERALD,
   LEVEL_19,
   LEVEL_20,
+  LEVEL_24,
+  WRECK_ZENOBIA,
+  LEVEL_25,
 ];
 
 for (const lvl of LEVELS) {

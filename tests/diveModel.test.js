@@ -1025,9 +1025,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 30 campaign levels (23 caves/environments + 7 shipwrecks) validate cleanly and scale monotonically to 185m Boy-Bulok Asian Karst Sump', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 30, 'Campaign roadmap should chart all 30 levels');
-  assert.equal(LEVELS.length, 30, 'All 30 campaign levels should be registered');
+test('All 33 campaign levels (25 caves/environments + 8 shipwrecks) validate cleanly and scale monotonically to 198m Krubera-Voronya Abyssal Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 33, 'Campaign roadmap should chart all 33 levels');
+  assert.equal(LEVELS.length, 33, 'All 33 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -2423,9 +2423,9 @@ test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dr
   assert.equal(vicMeta.rank, 25);
 });
 
-test('v100 Cave Interactive Parity: all 23 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
+test('v100 Cave Interactive Parity: all 25 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
   const caves = LEVELS.filter((l) => !l.isWreck);
-  assert.equal(caves.length, 23);
+  assert.equal(caves.length, 25);
 
   for (const cave of caves) {
     assert.ok(Array.isArray(cave.stageCaches) && cave.stageCaches.length >= 1, `${cave.id} missing stageCaches`);
@@ -3269,16 +3269,18 @@ test('v108 Daily Expedition Challenge: deterministic UTC rotation, streak logboo
   let prevLevelId = '';
   const seenSites = new Set();
   const seenMutators = new Set();
-  for (let day = 1; day <= 30; day++) {
-    const dk = `2026-11-${String(day).padStart(2, '0')}`;
+  const baseUtcMs = Date.UTC(2026, 10, 1);
+  for (let offset = 0; offset < LEVELS.length; offset++) {
+    const dt = new Date(baseUtcMs + offset * 86400000);
+    const dk = dt.toISOString().slice(0, 10);
     const dc = getDailyChallenge(LEVELS, dk);
     assert.notEqual(dc.levelId, prevLevelId, `Back-to-back duplicate site on ${dk}`);
     prevLevelId = dc.levelId;
     seenSites.add(dc.levelId);
     seenMutators.add(dc.mutatorId);
   }
-  assert.equal(seenSites.size, LEVELS.length, '30-day cycle should cover all 30 dive sites');
-  assert.ok(seenMutators.size >= 4, '30-day cycle should rotate across multiple mutators');
+  assert.equal(seenSites.size, LEVELS.length, `${LEVELS.length}-day cycle should cover all ${LEVELS.length} dive sites`);
+  assert.ok(seenMutators.size >= 4, 'Daily cycle should rotate across multiple mutators');
 
   // 2. Logbook daily streak progression, same-day idempotency, high-score upgrade & reset on gap
   let book = createEmptyLogbook();
@@ -4843,4 +4845,56 @@ test('v127 Co-op Scuba Hand-Signals & Torch Light-Signaling: catalog, animated t
   assert.ok(drawn.includes('text:👍 ASCEND / TURN'));
   assert.ok(drawn.includes('text:🔦 LOOK / ATTENTION'));
   assert.ok(drawn.filter((d) => d === 'arc').length >= 4);
+});
+
+test('v128 Extreme Frontier Expedition Pack (+3 Iconic Dives -> 33 Total) & HUD COMP/STAGE crash regression guard', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Validate all 3 new iconic expeditions with full SDF geometry checks
+  const bimini = getLevelById('bimini-road-megalith');
+  const zenobia = getLevelById('ms-zenobia-ferry');
+  const krubera = getLevelById('krubera-voronya-sump');
+
+  for (const lvl of [bimini, zenobia, krubera]) {
+    const res = validateLevel(lvl, { checkGeometry: true });
+    assert.equal(res.valid, true, `${lvl.id} geometry failed: ${res.errors.join('; ')}`);
+  }
+
+  assert.equal(bimini.archWindows.length, 2);
+  assert.equal(zenobia.isWreck, true);
+  assert.equal(zenobia.watertightHatches.length, 2);
+  assert.equal(zenobia.snagZones.length, 2);
+
+  // Krubera-Voronya 198m world-record sump: TMX 8/76 safe PPO2 at 198m + probe recovery
+  assert.equal(krubera.lined, false);
+  assert.equal(krubera.reelMetersPerDiver, 405);
+  assert.equal(krubera.recoveryTarget?.id, 'krubera-abyssal-probe');
+  const kSession = createDiveSession(krubera, { mode: 'solo', difficulty: 'standard' });
+  assert.equal(kSession.diveState.mixes.TMX1455.name, 'TMX 8/76');
+  kSession.diveState.activeGasId = 'TMX1455';
+  stepDivePhysiology(kSession.diveState, { depthM: 198.0, prevDepthM: 198.0, dt: 0.5, exertion: 0.25 });
+  assert.ok(kSession.diveState.ppo2 > 1.4 && kSession.diveState.ppo2 < 1.75);
+  assert.equal(kSession.diveState.alive, true);
+
+  // 2. Regression guard: every audio.<method>( call in main.js must exist on DiveAudio.prototype,
+  //    and stepSimulation must never reference undefined `nowMs` (preventing STAGE/COMP crashes).
+  const mainSrc = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  const audioCalls = new Set(
+    Array.from(mainSrc.matchAll(/\baudio\.([a-zA-Z0-9_]+)\s*\(/g), (m) => m[1])
+  );
+  for (const fnName of audioCalls) {
+    assert.equal(
+      typeof DiveAudio.prototype[fnName],
+      'function',
+      `main.js invokes audio.${fnName}(), which does not exist on DiveAudio.prototype`
+    );
+  }
+  const stepSimMatch = mainSrc.match(/function stepSimulation\(dt\)\s*\{([\s\S]*?)^function frame\(/m);
+  assert.ok(stepSimMatch, 'stepSimulation(dt) should be present in main.js');
+  assert.equal(
+    /\bnowMs\b/.test(stepSimMatch[1]),
+    false,
+    'stepSimulation(dt) must not reference out-of-scope nowMs'
+  );
 });
