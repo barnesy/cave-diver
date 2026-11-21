@@ -2,6 +2,7 @@ import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
+import { getWeatherById, computeStormLightningFlash } from './weather.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -240,6 +241,8 @@ export class CaveRenderer {
     this._haloclineStamp = null;
     this._haloclineStampKey = '';
     this._biolumMotes = null;
+    this._shallowBiolumMotes = null;
+    this._activeWeather = null;
     this._skyGradCache = null;
     this._vignetteCache = null;
     this._siltGlareScratch = [];
@@ -387,6 +390,8 @@ export class CaveRenderer {
     this._haloclineStamp = null;
     this._haloclineStampKey = '';
     this._biolumMotes = null;
+    this._shallowBiolumMotes = null;
+    this._activeWeather = null;
     this._skyGradCache = null;
     this.camX = entry.level.spawn.x;
     this.camY = entry.level.spawn.y;
@@ -1313,7 +1318,8 @@ export class CaveRenderer {
   /**
    * Lightweight <0.5ms water-and-light menu backdrop rendered when no cave chunks have been baked yet.
    */
-  renderMenuBackdrop(level, timeSec = 0) {
+  renderMenuBackdrop(level, timeSec = 0, weather = null) {
+    this._activeWeather = weather ? (typeof weather === 'string' ? getWeatherById(weather) : weather) : null;
     this.resize();
     const ctx = this.ctx;
     const cw = this.canvas.width;
@@ -1406,6 +1412,10 @@ export class CaveRenderer {
       }
     }
     ctx.restore();
+    if (this._activeWeather && this._activeWeather.id !== 'clear-day') {
+      this._drawWeatherSkyAtmosphere(ctx, cw, ch * 0.44, timeSec);
+      this._drawWeatherPrecipitation(ctx, cw, ch, ch * 0.44, timeSec);
+    }
   }
 
   render({
@@ -1437,12 +1447,14 @@ export class CaveRenderer {
     airShareBeams = null,
     droppedStages = null,
     drills = null,
+    weather = null,
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
     timeSec,
     dt,
   }) {
+    this._activeWeather = weather ? (typeof weather === 'string' ? getWeatherById(weather) : weather) : null;
     const peerList = Array.isArray(peers) ? peers : (peerDiver ? [peerDiver] : []);
     this.resize();
     const ctx = this.ctx;
@@ -1505,9 +1517,12 @@ export class CaveRenderer {
     ctx.fillStyle = this._skyGradCache.grad;
     ctx.fillRect(0, 0, cw, ch);
 
-    // Above-water sky strip (sky, sun halo & clouds behind cliffs)
+    // Above-water sky strip (sky, sun halo & clouds behind cliffs + dynamic weather sky atmosphere)
     if (surfY > 0) {
       this._drawSurfaceSky(ctx, cw, surfY, toScreenX, toScreenY, scale, timeSec);
+      if (this._activeWeather && this._activeWeather.id !== 'clear-day') {
+        this._drawWeatherSkyAtmosphere(ctx, cw, surfY, timeSec);
+      }
     }
 
     // 1b. 1:1 World-Locked Carved Cave Backwall + subtle atmospheric depth-fog veil separating backwall from foreground rock
@@ -1520,10 +1535,30 @@ export class CaveRenderer {
       ctx.restore();
     }
 
-    // 2. Physical 2D Ray-Cast Cenote Daylight Sunbeams & Shimmering Caustics
+    // 2. Physical 2D Ray-Cast Cenote Daylight Sunbeams & Shimmering Caustics (modulated by weather/time-of-day)
     const sunCurtains = this._computeVisibleSunCurtains(visX0, visX1, visY0, siltClouds);
-    this._drawSunbeams(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
-    this._drawCaustics(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+    const weatherSun = this._activeWeather ? this._activeWeather.sunIntensity : 1.0;
+    const weatherCaustics = this._activeWeather ? this._activeWeather.causticIntensity : 1.0;
+    if (weatherSun > 0.08) {
+      if (weatherSun < 0.99) {
+        ctx.save();
+        ctx.globalAlpha = weatherSun;
+        this._drawSunbeams(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+        ctx.restore();
+      } else {
+        this._drawSunbeams(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+      }
+    }
+    if (weatherCaustics > 0.08) {
+      if (weatherCaustics < 0.99) {
+        ctx.save();
+        ctx.globalAlpha = weatherCaustics;
+        this._drawCaustics(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+        ctx.restore();
+      } else {
+        this._drawCaustics(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+      }
+    }
 
     // 3. Water Surface Wave Line (clipped to open basin mouths so waves never cut through solid cliff rock)
     if (surfY > -2.2 * scale && surfY < ch + 2.2 * scale) {
@@ -1635,8 +1670,18 @@ export class CaveRenderer {
     if (visY0 < 3.8 && surfY >= -24 && surfY <= ch + 24) {
       this._drawSurfaceRipples(ctx, surfaceRipples, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
-    if (visY0 < 24 && sunCurtains && sunCurtains.length > 0) {
-      this._drawCausticWebs(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+    if (visY0 < 24 && sunCurtains && sunCurtains.length > 0 && weatherCaustics > 0.08) {
+      if (weatherCaustics < 0.99) {
+        ctx.save();
+        ctx.globalAlpha = weatherCaustics;
+        this._drawCausticWebs(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+        ctx.restore();
+      } else {
+        this._drawCausticWebs(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+      }
+    }
+    if (this._activeWeather && (this._activeWeather.precip !== 'none' || this._activeWeather.lightning) && surfY > -40) {
+      this._drawWeatherPrecipitation(ctx, cw, ch, surfY, timeSec);
     }
 
     // 8a-ii. Shipwreck Foreground Hazards OR Cave Interactive Features (Stages, Line Markers, Flows, Siphons & Line Traps)
@@ -1688,7 +1733,7 @@ export class CaveRenderer {
     if (Array.isArray(this.level.geothermalVents) && this.level.geothermalVents.length > 0) {
       this._drawGeothermalVents(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
     }
-    if (this.level.theme?.bioluminescent) {
+    if (this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum) {
       this._drawBioluminescence(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
     }
     if (bioWake && bioWake.length > 0 && typeof this._drawBioWake === 'function') {
@@ -7573,35 +7618,71 @@ export class CaveRenderer {
     return motes;
   }
 
-  _drawBioluminescence(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
-    if (visY1 < 34) return;
-    const motes = this._ensureBiolumMotes();
-    if (!motes.length) return;
-    const cyanStamp = this.glowStamps.cyan;
-    const magStamp = this.glowStamps.magenta;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < motes.length; i++) {
-      const m = motes[i];
-      if (m.bx < visX0 - 1.5 || m.bx > visX1 + 1.5 || m.by < visY0 - 1.5 || m.by > visY1 + 1.5) continue;
-      const wx = m.bx + Math.sin(timeSec * 0.55 + m.r2 * 6.28) * 0.72;
-      const wy = m.by + Math.cos(timeSec * 0.45 + m.r1 * 6.28) * 0.52;
-      const s = 0.5 + 0.5 * Math.sin(timeSec * 1.9 + m.r1 * 12 + m.k);
-      const twinkle = 0.25 + 0.75 * s * s;
-      const sx = toScreenX(wx);
-      const sy = toScreenY(wy);
-      const haloR = Math.max(5.5, (0.24 + m.r2 * 0.18) * scale);
-      const stamp = m.isTeal ? cyanStamp : magStamp;
-      ctx.globalAlpha = 0.65 * twinkle;
-      if (stamp) {
-        ctx.drawImage(stamp, sx - haloR, sy - haloR, haloR * 2, haloR * 2);
-      } else {
-        ctx.fillStyle = m.isTeal ? '#5eead4' : '#c4b5fd';
-        ctx.beginPath();
-        ctx.arc(sx, sy, haloR * 0.35, 0, Math.PI * 2);
-        ctx.fill();
+  _ensureShallowBiolumMotes() {
+    if (this._shallowBiolumMotes) return this._shallowBiolumMotes;
+    const motes = [];
+    const { xMin, xMax, yMax } = this.level.bounds;
+    const maxShallowY = Math.min(34, yMax);
+    const cellSize = 8;
+    const cx0 = Math.floor(xMin / cellSize);
+    const cx1 = Math.ceil(xMax / cellSize);
+    const cy0 = 0;
+    const cy1 = Math.ceil(maxShallowY / cellSize);
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let k = 0; k < 5; k++) {
+          const h1 = Math.sin(cx * 151.3 + cy * 277.9 + k * 63.1) * 43758.5453;
+          const r1 = h1 - Math.floor(h1);
+          const h2 = Math.sin(cx * 211.7 + cy * 197.3 + k * 53.7) * 43758.5453;
+          const r2 = h2 - Math.floor(h2);
+          const bx = (cx + r1) * cellSize;
+          const by = (cy + r2) * cellSize;
+          if (by < 1.8 || by >= 34 || evaluateCaveSDF(this.level, bx, by) >= -0.45) continue;
+          motes.push({ bx, by, r1, r2, k, isTeal: (k & 1) === 0 });
+        }
       }
     }
+    this._shallowBiolumMotes = motes;
+    return motes;
+  }
+
+  _drawBioluminescence(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const nightBiolum = Boolean(this._activeWeather?.forceBiolum);
+    if (!nightBiolum && visY1 < 34) return;
+    if (nightBiolum && visY1 < 1.5) return;
+    const deepMotes = visY1 >= 34 ? this._ensureBiolumMotes() : [];
+    const shallowMotes = nightBiolum && visY0 < 34 ? this._ensureShallowBiolumMotes() : [];
+    if (!deepMotes.length && !shallowMotes.length) return;
+    const cyanStamp = this.glowStamps.cyan;
+    const magStamp = this.glowStamps.magenta;
+    const alphaScale = nightBiolum ? 0.85 : 0.65;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const drawList = (motes) => {
+      for (let i = 0; i < motes.length; i++) {
+        const m = motes[i];
+        if (m.bx < visX0 - 1.5 || m.bx > visX1 + 1.5 || m.by < visY0 - 1.5 || m.by > visY1 + 1.5) continue;
+        const wx = m.bx + Math.sin(timeSec * 0.55 + m.r2 * 6.28) * 0.72;
+        const wy = m.by + Math.cos(timeSec * 0.45 + m.r1 * 6.28) * 0.52;
+        const s = 0.5 + 0.5 * Math.sin(timeSec * 1.9 + m.r1 * 12 + m.k);
+        const twinkle = 0.25 + 0.75 * s * s;
+        const sx = toScreenX(wx);
+        const sy = toScreenY(wy);
+        const haloR = Math.max(5.5, (0.24 + m.r2 * 0.18) * scale);
+        const stamp = m.isTeal ? cyanStamp : magStamp;
+        ctx.globalAlpha = alphaScale * twinkle;
+        if (stamp) {
+          ctx.drawImage(stamp, sx - haloR, sy - haloR, haloR * 2, haloR * 2);
+        } else {
+          ctx.fillStyle = m.isTeal ? '#5eead4' : '#c4b5fd';
+          ctx.beginPath();
+          ctx.arc(sx, sy, haloR * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    };
+    if (shallowMotes.length) drawList(shallowMotes);
+    if (deepMotes.length) drawList(deepMotes);
     ctx.restore();
   }
 
@@ -8685,7 +8766,15 @@ export class CaveRenderer {
       const near = Math.max(0, 1 - Math.hypot(diver.x - cx, diver.y - 3) / 14);
       if (near > daylight) daylight = near;
     }
-    const darknessAlpha = Math.max(0.16, Math.min(0.96, 0.28 + depthFactor * 0.7 - daylight * 0.55));
+    const wObj = this._activeWeather;
+    const weatherDarkBoost = wObj?.darknessBoost || 0;
+    const lightningFlash = wObj?.lightning ? computeStormLightningFlash(wObj, timeSec) : 0;
+    const weatherSunScale = Math.min(1, (wObj ? wObj.sunIntensity : 1.0) + lightningFlash * 0.65);
+    const effectiveDaylight = daylight * weatherSunScale;
+    const darknessAlpha = Math.max(
+      0.16,
+      Math.min(0.96, 0.28 + depthFactor * 0.7 + weatherDarkBoost * (1 - depthFactor * 0.65) - effectiveDaylight * 0.55 - lightningFlash * 0.22)
+    );
 
     lctx.globalCompositeOperation = 'source-over';
     lctx.clearRect(0, 0, lw, lh);
@@ -8719,7 +8808,7 @@ export class CaveRenderer {
     }
 
     // 2. Ray-cast underwater sun shafts entering Cenote Alpha (entrance) & Cenote Beta (exit)
-    if (sunCurtains && sunCurtains.length > 0) {
+    if (sunCurtains && sunCurtains.length > 0 && weatherSunScale > 0.08) {
       for (const { rays } of sunCurtains) {
         lctx.save();
         lctx.beginPath();
@@ -8734,9 +8823,9 @@ export class CaveRenderer {
         const topPx = toScreenY(0) * ry;
         const botPx = toScreenY(18.5) * ry;
         const sunCut = lctx.createLinearGradient(0, topPx, 0, botPx);
-        sunCut.addColorStop(0, 'rgba(0,0,0,0.98)');
-        sunCut.addColorStop(0.35, 'rgba(0,0,0,0.85)');
-        sunCut.addColorStop(0.75, 'rgba(0,0,0,0.42)');
+        sunCut.addColorStop(0, `rgba(0,0,0,${(0.98 * weatherSunScale).toFixed(3)})`);
+        sunCut.addColorStop(0.35, `rgba(0,0,0,${(0.85 * weatherSunScale).toFixed(3)})`);
+        sunCut.addColorStop(0.75, `rgba(0,0,0,${(0.42 * weatherSunScale).toFixed(3)})`);
         sunCut.addColorStop(1, 'rgba(0,0,0,0)');
         lctx.fillStyle = sunCut;
         lctx.fill();
@@ -9536,6 +9625,143 @@ export class CaveRenderer {
         const halfCone = diver.backupTorchActive ? 0.27 : 0.34;
         ctx.arc(ox, oy, reachPx, ang - halfCone, ang + halfCone);
         ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Dynamic weather & time-of-day sky atmosphere (v137):
+   * Golden Hour molten sunset wash, Night Dive starry vault + glowing crescent moon,
+   * Tropical Storm brooding cloud veil + lightning sky flash, and Arctic Snow overcast.
+   */
+  _drawWeatherSkyAtmosphere(ctx, cw, surfY, timeSec) {
+    const w = this._activeWeather;
+    if (!w || w.id === 'clear-day' || surfY <= 0) return;
+    const skyH = Math.max(10, Math.min(ctx.canvas.height, surfY + 8));
+    ctx.save();
+
+    if (w.skyDarken > 0) {
+      ctx.fillStyle = `rgba(2, 6, 23, ${Math.min(0.88, w.skyDarken).toFixed(3)})`;
+      ctx.fillRect(0, 0, cw, skyH);
+    }
+    if (w.skyTintRgba) {
+      const grad = ctx.createLinearGradient(0, 0, 0, skyH);
+      grad.addColorStop(0, w.skyTintRgba);
+      grad.addColorStop(1, w.id === 'golden-hour' ? 'rgba(251, 191, 36, 0.42)' : 'rgba(2, 6, 23, 0.08)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, cw, skyH);
+    }
+
+    // Starfield + crescent moon for Bioluminescent Night Dive
+    if (w.stars) {
+      const starCount = Math.min(68, Math.max(28, Math.round(cw / 20)));
+      for (let i = 0; i < starCount; i++) {
+        const sx = ((Math.sin(i * 127.1 + 3.1) * 43758.5453) % 1 + 1) % 1 * cw;
+        const sy = ((Math.sin(i * 269.5 + 1.7) * 43758.5453) % 1 + 1) % 1 * (skyH * 0.86);
+        const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(timeSec * (1.4 + (i % 5) * 0.4) + i * 2.1));
+        const r = i % 7 === 0 ? 1.8 : 1.05;
+        ctx.fillStyle = i % 9 === 0 ? `rgba(186, 230, 253, ${(tw * 0.92).toFixed(3)})` : `rgba(241, 245, 249, ${(tw * 0.82).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Glowing crescent moon
+      const mx = cw * 0.78;
+      const my = Math.min(skyH * 0.34, 72);
+      const mr = Math.max(11, Math.min(18, skyH * 0.12));
+      const halo = ctx.createRadialGradient(mx, my, mr * 0.4, mx, my, mr * 3.8);
+      halo.addColorStop(0, 'rgba(224, 242, 254, 0.36)');
+      halo.addColorStop(0.5, 'rgba(125, 211, 252, 0.12)');
+      halo.addColorStop(1, 'rgba(125, 211, 252, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(mx, my, mr * 3.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.arc(mx, my, mr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#07112b';
+      ctx.beginPath();
+      ctx.arc(mx + mr * 0.42, my - mr * 0.16, mr * 0.88, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Golden Hour low horizon sun glow
+    if (w.id === 'golden-hour') {
+      const sunX = cw * 0.72;
+      const sunY = Math.max(18, skyH - 18);
+      const g = ctx.createRadialGradient(sunX, sunY, 8, sunX, sunY, Math.max(120, cw * 0.32));
+      g.addColorStop(0, 'rgba(254, 240, 138, 0.62)');
+      g.addColorStop(0.35, 'rgba(251, 146, 60, 0.3)');
+      g.addColorStop(1, 'rgba(251, 146, 60, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, cw, skyH);
+    }
+
+    // Storm distant lightning sky illumination
+    if (w.lightning) {
+      const flash = computeStormLightningFlash(w, timeSec);
+      if (flash > 0.02) {
+        ctx.fillStyle = `rgba(224, 242, 254, ${(flash * 0.42).toFixed(3)})`;
+        ctx.fillRect(0, 0, cw, skyH);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Falling rain streaks (Tropical Storm) or blowing snow flurries (Arctic Snow) above water (v137).
+   */
+  _drawWeatherPrecipitation(ctx, cw, ch, surfY, timeSec) {
+    const w = this._activeWeather;
+    if (!w) return;
+    const clipH = Math.max(0, Math.min(ch, surfY + 6));
+    if (clipH < 8) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, cw, clipH);
+    ctx.clip();
+
+    if (w.precip === 'rain') {
+      const count = Math.min(84, Math.max(36, Math.round(cw / 16)));
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.42)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      for (let i = 0; i < count; i++) {
+        const seedX = ((Math.sin(i * 91.7 + 1.3) * 43758.5453) % 1 + 1) % 1;
+        const seedY = ((Math.sin(i * 183.1 + 4.9) * 43758.5453) % 1 + 1) % 1;
+        const speed = 420 + (i % 5) * 65;
+        const y = ((seedY * clipH + timeSec * speed) % (clipH + 40)) - 20;
+        const x = ((seedX * cw - timeSec * 125 + y * 0.24) % (cw + 60) + (cw + 60)) % (cw + 60) - 30;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 6.5, y + 18);
+      }
+      ctx.stroke();
+
+      const flash = computeStormLightningFlash(w, timeSec);
+      if (flash > 0.05) {
+        ctx.fillStyle = `rgba(224, 242, 254, ${(flash * 0.16).toFixed(3)})`;
+        ctx.fillRect(0, 0, cw, clipH);
+      }
+    } else if (w.precip === 'snow') {
+      const count = Math.min(72, Math.max(32, Math.round(cw / 18)));
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.78)';
+      for (let i = 0; i < count; i++) {
+        const seedX = ((Math.sin(i * 63.3 + 2.7) * 43758.5453) % 1 + 1) % 1;
+        const seedY = ((Math.sin(i * 149.9 + 5.1) * 43758.5453) % 1 + 1) % 1;
+        const speed = 34 + (i % 6) * 11;
+        const y = ((seedY * clipH + timeSec * speed) % (clipH + 16)) - 8;
+        const drift = Math.sin(timeSec * 1.4 + i * 1.7) * 18 - timeSec * 22;
+        const x = ((seedX * cw + drift) % (cw + 20) + (cw + 20)) % (cw + 20) - 10;
+        const r = 1.2 + (i % 3) * 0.75;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
       }
     }

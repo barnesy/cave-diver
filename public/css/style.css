@@ -5966,12 +5966,38 @@ button.mode-badge:hover {
 }
 .dive-setup-item .mode-badge,
 .dive-setup-item .ai-buddy-pill,
+.dive-setup-item .weather-plan-pill,
 .dive-setup-item .gas-plan-pill,
 .dive-setup-item .drills-plan-pill,
 .dive-setup-item .mutator-plan-pill {
   padding: 5px 11px;
   font-size: 0.74rem;
   flex-shrink: 0;
+}
+.weather-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.weather-plan-pill:hover {
+  border-color: rgba(125, 211, 252, 0.75);
+  color: #e0f2fe;
+}
+.weather-plan-pill.active {
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.56), rgba(88, 28, 135, 0.46));
+  border-color: rgba(129, 140, 248, 0.85);
+  color: #e0e7ff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
 }
 @media (max-width: 640px) {
   .dive-setup-grid {

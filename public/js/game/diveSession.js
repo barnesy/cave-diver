@@ -7,6 +7,7 @@ import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PH
 import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
+import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 
 const MAX_BUBBLES = 240;
 const _bubbleNormalScratch = { nx: 0, ny: -1 };
@@ -75,6 +76,7 @@ export function createDiveSession(
     dailyDateKey = '',
     customMixOverrides = null,
     drillsEnabled = false,
+    weatherId = 'clear-day',
   } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
@@ -99,12 +101,15 @@ export function createDiveSession(
     customMixOverrides && typeof customMixOverrides === 'object'
       ? { ...(level.gasOverrides || {}), ...customMixOverrides }
       : level.gasOverrides;
+  const resolvedWeather = resolveEffectiveWeather(weatherId, { level });
 
   return {
     level,
     difficulty: cleanDiff,
     mutatorId: cleanMutator,
     dailyDateKey: cleanDailyKey,
+    weather: resolvedWeather,
+    weatherBonusScore: resolvedWeather?.scoreBonus || 0,
     forceHideCompass: isPurist,
     gear: cleanGear,
     dpv: {
@@ -794,9 +799,10 @@ function stepBioWake(session, dt, peers = null) {
   }
 
   const level = session.level;
-  const isBiolumSite = Boolean(level?.theme?.bioluminescent);
-  const minDepth = isBiolumSite ? 4.5 : level?.isWreck ? 15.0 : 11.5;
-  const hueBase = isBiolumSite ? 172 : level?.isWreck ? 192 : 184;
+  const weather = session.weather;
+  const isBiolumSite = Boolean(level?.theme?.bioluminescent || weather?.forceBiolum);
+  const minDepth = weather?.forceBiolum ? 1.4 : isBiolumSite ? 4.5 : level?.isWreck ? 15.0 : 11.5;
+  const hueBase = weather?.forceBiolum ? 186 : isBiolumSite ? 172 : level?.isWreck ? 192 : 184;
 
   const emitFromDiver = (d, rateMult = 1.0) => {
     if (!d || d.y < minDepth) return;
@@ -825,7 +831,7 @@ function stepBioWake(session, dt, peers = null) {
   };
 
   session._bioWakeAccum = (session._bioWakeAccum || 0) + dt;
-  const interval = isBiolumSite ? 0.055 : 0.095;
+  const interval = weather?.forceBiolum ? 0.042 : isBiolumSite ? 0.055 : 0.095;
   if (session._bioWakeAccum >= interval) {
     session._bioWakeAccum = 0;
     emitFromDiver(session.diver, 1.0);
@@ -885,6 +891,23 @@ export function stepSurfaceRipples(session, dt, peers = null) {
       for (let i = 0; i < peers.length; i++) {
         const p = peers[i];
         if (p && p.alive !== false && !p.surfaced) spawnNearSurface(p, 0.85);
+      }
+    }
+    // Storm raindrop impact ripples on open water surface (v137)
+    if (session.weather?.precip === 'rain' && ripples.length < 24 && session.diver && session.diver.y < 14) {
+      const basins = session.level?.openBasins || [];
+      if (basins.length > 0) {
+        const b = basins[Math.floor(Math.random() * basins.length)];
+        const rx = b.xMin + Math.random() * Math.max(2, b.xMax - b.xMin);
+        ripples.push({
+          x: rx,
+          startR: 0.14,
+          radius: 0.14,
+          maxR: 0.95 + Math.random() * 0.9,
+          age: 0,
+          life: 0.85 + Math.random() * 0.45,
+          intensity: 0.55,
+        });
       }
     }
   }
@@ -2988,6 +3011,24 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   stepBubbles(session, dt, callbacks, exertion);
   stepDynamicEncounters(session, dt, callbacks);
+  // Shallow-water surface weather swell near open basins / shipwrecks (v137)
+  if (session.weather?.swellStrength > 0 && diver.y < 9.5 && diveState.alive) {
+    let nearOpenBasin = Boolean(level.isWreck);
+    if (!nearOpenBasin && Array.isArray(level.openBasins)) {
+      for (let i = 0; i < level.openBasins.length; i++) {
+        const b = level.openBasins[i];
+        if (diver.x >= b.xMin - 4 && diver.x <= b.xMax + 4) {
+          nearOpenBasin = true;
+          break;
+        }
+      }
+    }
+    if (nearOpenBasin) {
+      const swell = computeWeatherSwellForce(session.weather, diver.y, session.simTimeSec, { nearOpenBasin });
+      diver.vx += swell.ax * dt;
+      diver.vy += swell.ay * dt;
+    }
+  }
   stepBioWake(session, dt, callbacks.peers);
   stepSurfaceRipples(session, dt, callbacks.peers);
   if (session.buddyPing) {

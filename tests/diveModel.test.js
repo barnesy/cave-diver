@@ -5245,7 +5245,7 @@ test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singlet
     globalThis.document = { hidden:false, visibilityState:'visible', body:new El('body'), documentElement:new El('html'), getElementById:id=>byId.get(id)||null, createElement:t=>new El(t), createElementNS:(_n,t)=>new El(t), querySelector:()=>null, querySelectorAll:()=>[], addEventListener(){}, removeEventListener(){} };
     await import(pathToFileURL(${JSON.stringify(path.join(pubDir, 'js/main.js'))}).href);
     await new Promise(r => setTimeout(r, 40));
-    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
+    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-weather-pill','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
       byId.get(id)?.click();
     }
     await new Promise(r => setTimeout(r, 30));
@@ -5255,4 +5255,92 @@ test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singlet
     stdio: 'pipe',
     timeout: 10000,
   });
+});
+
+test('v137 Dynamic Surface Weather, Day/Night & Bioluminescent Night-Dive Mode: presets, auto clock, swell, scoring & renderer', async () => {
+  const {
+    WEATHER_PRESETS,
+    WEATHER_CYCLE_ORDER,
+    getWeatherById,
+    resolveEffectiveWeather,
+    computeWeatherSwellForce,
+    computeStormLightningFlash,
+    MAX_WEATHER_BONUS,
+  } = await import('../public/js/game/weather.js');
+
+  assert.equal(WEATHER_PRESETS.length, 5);
+  assert.ok(WEATHER_CYCLE_ORDER.includes('auto'));
+  assert.equal(MAX_WEATHER_BONUS, 250);
+
+  // 1. Auto clock + site-climate resolution
+  assert.equal(resolveEffectiveWeather('auto', { hourLocal: 22 }).id, 'night-biolum');
+  assert.equal(resolveEffectiveWeather('auto', { hourLocal: 18 }).id, 'golden-hour');
+  assert.equal(resolveEffectiveWeather('auto', { hourLocal: 12 }).id, 'clear-day');
+  assert.equal(
+    resolveEffectiveWeather('auto', { hourLocal: 14, level: { theme: { surfaceStyle: 'kverkfjoll-glacier' } } }).id,
+    'arctic-blizzard'
+  );
+
+  // 2. Shallow storm swell physics & deep-water shelter attenuation
+  const storm = getWeatherById('tropical-storm');
+  const shallowSwell = computeWeatherSwellForce(storm, 2.0, 1.2, { nearOpenBasin: true });
+  assert.ok(Math.abs(shallowSwell.ax) > 0.25, `Expected noticeable shallow storm swell, got ${shallowSwell.ax}`);
+  const deepSwell = computeWeatherSwellForce(storm, 14.0, 1.2, { nearOpenBasin: true });
+  assert.equal(deepSwell.ax, 0);
+  assert.equal(deepSwell.ay, 0);
+  const caveSwell = computeWeatherSwellForce(storm, 2.0, 1.2, { nearOpenBasin: false });
+  assert.equal(caveSwell.ax, 0);
+
+  // 3. Deterministic storm lightning pulse
+  assert.ok(computeStormLightningFlash(storm, 0.06) > 0.5, 'Storm should pulse lightning near t=0.06');
+  assert.equal(computeStormLightningFlash(storm, 5.0), 0, 'Lightning should be quiet between flashes');
+  assert.equal(computeStormLightningFlash(getWeatherById('clear-day'), 0.06), 0);
+
+  // 4. Night Dive session: shallow bioluminescent fin-wake & +250 score bonus within ceiling
+  const nightSession = createDiveSession(LEVEL_1, { diverName: 'NightDiver', weatherId: 'night-biolum' });
+  assert.equal(nightSession.weather.id, 'night-biolum');
+  assert.equal(nightSession.weatherBonusScore, 250);
+  nightSession.diver.y = 3.2;
+  for (let i = 0; i < 15; i++) {
+    stepDiveSession(nightSession, { x: 0.9, y: 0.2, boost: false }, 0.05);
+  }
+  assert.ok(nightSession.bioWake.length > 0, 'Night Dive should trigger shallow bioluminescent fin-wake sparks');
+
+  const nightScore = computeDiverScoreSummary({
+    name: 'NightDiver',
+    level: LEVEL_1,
+    diveState: nightSession.diveState,
+    checkpointsHit: nightSession.checkpointsHit,
+    collectedIds: nightSession.collectedIds,
+    exploredCount: nightSession.exploredCells.size,
+    totalExploreCells: nightSession.exploreCells.length,
+    diveTimeSec: 120,
+    weatherBonusScore: nightSession.weatherBonusScore,
+  });
+  assert.equal(nightScore.weatherBonusScore, 250);
+  assert.ok(nightScore.totalScore <= computeLevelMaxScore(LEVEL_1.id, false));
+
+  // 5. Renderer weather passes execute cleanly across all presets (incl. Night Bioluminescence & Storm Rain)
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 24 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r.glowStamps = { cyan: null, magenta: null };
+  r._biolumMotes = null;
+  r._shallowBiolumMotes = null;
+  for (const preset of WEATHER_PRESETS) {
+    r._activeWeather = preset;
+    r._drawWeatherSkyAtmosphere(noopCtx, 800, 240, 0.06);
+    r._drawWeatherPrecipitation(noopCtx, 800, 600, 240, 0.06);
+    if (preset.forceBiolum) {
+      r._drawBioluminescence(noopCtx, -10, 40, 0, 25, (x) => x * 20 + 200, (y) => y * 20 + 100, 20, 1.5);
+    }
+  }
 });

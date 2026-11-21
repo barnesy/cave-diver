@@ -104,6 +104,7 @@ import { spawnSiltPlume } from './game/silt.js';
 import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import { createAiBuddyState, stepAiBuddy, handlePlayerSignalForAiBuddy } from './game/aiBuddy.js';
+import { WEATHER_CYCLE_ORDER, resolveEffectiveWeather } from './game/weather.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -535,7 +536,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=136" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=137" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1902,6 +1903,7 @@ const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
 const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
 const DRILLS_PREF_KEY = 'caveDiverDrills_v1';
 const AI_BUDDY_PREF_KEY = 'caveDiverAiBuddy_v1';
+const WEATHER_PREF_KEY = 'caveDiverWeather_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
   { id: 'guided', label: 'Guided', fullBadge: '🧭 GUIDED', shortBadge: '🧭 GD', pillBadge: '🧭 GUIDED', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
@@ -1985,6 +1987,41 @@ function toggleAiBuddyPreference() {
 }
 menuAiBuddyPillEl?.addEventListener('click', toggleAiBuddyPreference);
 syncAiBuddyUi();
+
+// Dynamic Surface Weather & Time-of-Day preference (v137)
+let weatherPrefId = 'clear-day';
+try {
+  const savedW = localStorage.getItem(WEATHER_PREF_KEY);
+  if (savedW && WEATHER_CYCLE_ORDER.includes(savedW)) weatherPrefId = savedW;
+} catch {}
+const menuWeatherPillEl = document.getElementById('menu-weather-pill');
+function syncWeatherUi() {
+  const resolved = resolveEffectiveWeather(weatherPrefId, { level: activeLevel });
+  if (menuWeatherPillEl) {
+    menuWeatherPillEl.textContent =
+      weatherPrefId === 'auto' ? `🌍 Auto (${resolved.shortLabel})` : resolved.pillText;
+    menuWeatherPillEl.classList.toggle('active', weatherPrefId !== 'clear-day');
+  }
+  syncSetupDrawerSummary();
+}
+function cycleWeatherPreference() {
+  const idx = WEATHER_CYCLE_ORDER.indexOf(weatherPrefId);
+  weatherPrefId = WEATHER_CYCLE_ORDER[(idx + 1) % WEATHER_CYCLE_ORDER.length];
+  try {
+    localStorage.setItem(WEATHER_PREF_KEY, weatherPrefId);
+  } catch {}
+  syncWeatherUi();
+  const resolved = resolveEffectiveWeather(weatherPrefId, { level: activeLevel });
+  const bonusTxt = resolved.scoreBonus > 0 ? ` (+${resolved.scoreBonus} pts)` : '';
+  showToast(
+    weatherPrefId === 'auto'
+      ? `🌍 Weather: Live Auto → ${resolved.icon} ${resolved.label}${bonusTxt}`
+      : `${resolved.icon} Weather: ${resolved.label}${bonusTxt}`,
+    2.5
+  );
+}
+menuWeatherPillEl?.addEventListener('click', cycleWeatherPreference);
+syncWeatherUi();
 let activeGhostTrack = null;
 let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
@@ -4120,6 +4157,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     dailyDateKey: dailyRun?.dateKey || '',
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
     drillsEnabled,
+    weatherId: weatherPrefId,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
@@ -4264,6 +4302,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
+      weatherBonusScore: session.weatherBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 
@@ -5637,17 +5676,24 @@ function syncSetupDrawerSummary() {
   const resetBtn = document.getElementById('btn-setup-reset');
   let activeCount = 0;
   let modeMod = false;
+  let weatherMod = false;
   let gasMod = false;
   let drillsMod = false;
   let aiMod = false;
   let mutMod = false;
   let procMod = false;
   let currentDiff = 'standard';
+  let currentWeatherPref = 'clear-day';
   let currentMutId = '';
   try {
     currentDiff = activeDifficulty || 'standard';
     modeMod = currentDiff !== 'standard';
     if (modeMod) activeCount++;
+  } catch {}
+  try {
+    currentWeatherPref = weatherPrefId || 'clear-day';
+    weatherMod = currentWeatherPref !== 'clear-day';
+    if (weatherMod) activeCount++;
   } catch {}
   try {
     gasMod = Boolean(customGasPlan?.enabled);
@@ -5681,6 +5727,7 @@ function syncSetupDrawerSummary() {
 
   // Update active card highlights & readable live descriptions inside the Dive Setup Panel
   document.getElementById('setup-card-mode')?.classList.toggle('active-card', modeMod);
+  document.getElementById('setup-card-weather')?.classList.toggle('active-card', weatherMod);
   document.getElementById('setup-card-ai')?.classList.toggle('active-card', aiMod);
   document.getElementById('setup-card-gas')?.classList.toggle('active-card', gasMod);
   document.getElementById('setup-card-drills')?.classList.toggle('active-card', drillsMod);
@@ -5690,6 +5737,14 @@ function syncSetupDrawerSummary() {
   const modeDescEl = document.getElementById('setup-mode-desc');
   if (modeDescEl) {
     modeDescEl.textContent = getSetupModeDescription(currentDiff);
+  }
+  const weatherDescEl = document.getElementById('setup-weather-desc');
+  if (weatherDescEl) {
+    const rw = resolveEffectiveWeather(currentWeatherPref, { level: activeLevel });
+    weatherDescEl.textContent =
+      currentWeatherPref === 'auto'
+        ? `Live Auto (${rw.icon} ${rw.label}): ${rw.desc}`
+        : rw.desc;
   }
   const gasDescEl = document.getElementById('setup-gas-desc');
   if (gasDescEl) {
@@ -5742,6 +5797,11 @@ btnSetupResetEl?.addEventListener('click', () => {
     activeDifficulty = 'standard';
     try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
     syncPreferenceMenuButtons();
+  }
+  if (weatherPrefId !== 'clear-day') {
+    weatherPrefId = 'clear-day';
+    try { localStorage.setItem(WEATHER_PREF_KEY, weatherPrefId); } catch {}
+    syncWeatherUi();
   }
   if (aiBuddyEnabled) {
     aiBuddyEnabled = false;
@@ -7754,6 +7814,7 @@ function frame(nowMs) {
       airShareBeams: session.airShareBeams || null,
       droppedStages: session.droppedStages || null,
       drills: session.drills || null,
+      weather: session.weather || null,
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
@@ -7772,11 +7833,12 @@ function frame(nowMs) {
       siltClouds: EMPTY_ARR,
       bubbles: EMPTY_ARR,
       ecosystem,
+      weather: resolveEffectiveWeather(weatherPrefId, { level: activeLevel }),
       timeSec: menuTimeSec,
       dt,
     });
   } else {
-    renderer.renderMenuBackdrop(activeLevel, menuTimeSec);
+    renderer.renderMenuBackdrop(activeLevel, menuTimeSec, resolveEffectiveWeather(weatherPrefId, { level: activeLevel }));
   }
 
   requestAnimationFrame(frame);

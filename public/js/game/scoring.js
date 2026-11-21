@@ -112,10 +112,11 @@ export function assignScoreRank(totalScore, alive = true, maxPossible = 3200) {
 export const MAX_PHOTO_BONUS = 300;
 export const MAX_ENCOUNTER_BONUS = 180;
 export const MAX_DRILL_BONUS = 600;
+export const MAX_WEATHER_BONUS = 250;
 
 /**
  * Score a single diver's completed (or aborted) cave traverse across:
- * health vitals, run speed, collectibles recovered, cave explored completeness, hatches, wildlife photos, beacons & emergency drills.
+ * health vitals, run speed, collectibles recovered, cave explored completeness, hatches, wildlife photos, beacons, emergency drills & weather conditions.
  */
 export function computeDiverScoreSummary({
   name = 'Diver 1',
@@ -130,6 +131,7 @@ export function computeDiverScoreSummary({
   photoBonusScore = 0,
   encounterBonusScore = 0,
   drillBonusScore = 0,
+  weatherBonusScore = 0,
   mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
@@ -172,6 +174,7 @@ export function computeDiverScoreSummary({
   const cleanPhotoBonus = alive ? Math.min(MAX_PHOTO_BONUS, Math.max(0, Math.round(Number(photoBonusScore) || 0))) : 0;
   const cleanEncounterBonus = alive ? Math.min(MAX_ENCOUNTER_BONUS, Math.max(0, Math.round(Number(encounterBonusScore) || 0))) : 0;
   const cleanDrillBonus = alive ? Math.min(MAX_DRILL_BONUS, Math.max(0, Math.round(Number(drillBonusScore) || 0))) : 0;
+  const cleanWeatherBonus = alive ? Math.min(MAX_WEATHER_BONUS, Math.max(0, Math.round(Number(weatherBonusScore) || 0))) : 0;
   const totalScore =
     healthScore +
     speedScore +
@@ -181,9 +184,10 @@ export function computeDiverScoreSummary({
     cleanHatchBonus +
     cleanPhotoBonus +
     cleanEncounterBonus +
-    cleanDrillBonus;
+    cleanDrillBonus +
+    cleanWeatherBonus;
   const baseMaxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
-  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS;
+  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS + MAX_WEATHER_BONUS;
   const rank = assignScoreRank(totalScore, alive, baseMaxPossible);
 
   return {
@@ -209,6 +213,7 @@ export function computeDiverScoreSummary({
     photoBonusScore: cleanPhotoBonus,
     encounterBonusScore: cleanEncounterBonus,
     drillBonusScore: cleanDrillBonus,
+    weatherBonusScore: cleanWeatherBonus,
     healthScore,
     speedScore,
     totalScore,
