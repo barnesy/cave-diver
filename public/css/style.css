@@ -1624,6 +1624,15 @@ html, body {
   font-family: ui-monospace, monospace;
   font-size: 0.66rem;
   contain: layout style;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.12s ease;
+}
+.mate-card:hover {
+  border-color: rgba(251, 191, 36, 0.72);
+}
+.mate-card:active {
+  transform: scale(0.97);
 }
 .mate-card.warn {
   border-color: rgba(251, 191, 36, 0.65);

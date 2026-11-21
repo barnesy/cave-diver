@@ -39,6 +39,9 @@ import {
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
+  triggerBuddyLocatePing,
+  pushAirShareBeam,
+  recordPeerDepthProfiles,
   sampleGhostPose,
   buildParGhostTrack,
   applyPeerWreckAction,
@@ -492,7 +495,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=116" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=117" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1050,11 +1053,26 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
   return false;
 }
 
+function handleBuddyLocatePing(targetPeerId = '') {
+  if (mode !== 'diving' || !session || !isMultiplayer) return false;
+  const peers = lan.getPeers();
+  if (!peers || peers.length === 0) return false;
+  const peer =
+    (targetPeerId ? peers.find((p) => p && (p.id === targetPeerId || p.name === targetPeerId)) : null) ||
+    peers.find((p) => p && p.alive === false && !p.rescued) ||
+    peers.find((p) => p && !p.surfaced) ||
+    peers[0];
+  if (!peer) return false;
+  const res = triggerBuddyLocatePing(session, peer, sessionStepCallbacks);
+  return Boolean(res?.ok);
+}
+
 const hud = new DiveComputerHUD({
   onGasSelect: (gasId) => trySwitchGas(gasId),
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
   onReelRewindHold: (held) => input?.setTouchRewindHeld(held),
+  onBuddySelect: (pid) => handleBuddyLocatePing(pid),
   onHeartbeatPulse: (bpm) => {
     if (mode === 'diving' && !divePaused && !session?.endedState && session?.diveState?.alive !== false) {
       audio.playHeartbeat(bpm);
@@ -1113,6 +1131,7 @@ const input = new InputController({
   onDpvToggle: () => handleDpvToggle(),
   onMinimapToggle: () => handleMinimapToggle(),
   onCameraSnap: () => handleCameraSnap(),
+  onBuddyPing: () => handleBuddyLocatePing(''),
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -2267,7 +2286,7 @@ function refreshActiveGhostTrack(level) {
   }
 }
 
-function renderDebriefDepthProfile(profile, maxDepthM, success) {
+function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = null) {
   const wrap = document.getElementById('debrief-profile-wrap');
   const svg = document.getElementById('debrief-profile-svg');
   if (!wrap || !svg) return;
@@ -2276,21 +2295,38 @@ function renderDebriefDepthProfile(profile, maxDepthM, success) {
     return;
   }
   wrap.hidden = false;
+  const buddyTraces = [];
+  if (peerProfiles instanceof Map) {
+    for (const rec of peerProfiles.values()) {
+      if (rec && Array.isArray(rec.points) && rec.points.length >= 2) {
+        buddyTraces.push(rec);
+      }
+    }
+  }
   const W = 420;
   const H = 124;
   const padL = 34;
   const padR = 12;
-  const padT = 12;
+  const padT = 14;
   const padB = 20;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-  const maxT = Math.max(10, profile[profile.length - 1].t || 10);
-  const maxD = Math.max(12, Math.ceil((maxDepthM || Math.max(...profile.map((p) => p.d))) / 10) * 10);
+  let maxT = Math.max(10, profile[profile.length - 1].t || 10);
+  let peakAllD = Math.max(maxDepthM || 0, ...profile.map((p) => p.d));
+  for (const bt of buddyTraces) {
+    const lastPt = bt.points[bt.points.length - 1];
+    if (lastPt?.t > maxT) maxT = lastPt.t;
+    for (const pt of bt.points) {
+      if (pt.d > peakAllD) peakAllD = pt.d;
+    }
+  }
+  const maxD = Math.max(12, Math.ceil(peakAllD / 10) * 10);
 
   const sx = (t) => padL + (t / maxT) * plotW;
   const sy = (d) => padT + (d / maxD) * plotH;
 
   const gasColor = (g) => (g === 'O2' ? '#34d399' : g === 'TMX1455' ? '#fbbf24' : '#38bdf8');
+  const buddyPalette = ['#f472b6', '#c084fc', '#fb923c'];
 
   let markup = '';
   // Subtle depth horizontal grid lines (0m, 50%, 100%)
@@ -2301,13 +2337,20 @@ function renderDebriefDepthProfile(profile, maxDepthM, success) {
     markup += `<text x="${padL - 5}" y="${Number(y) + 3}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${dVal}m</text>`;
   }
 
-  // Soft translucent area fill under profile curve
+  // Soft translucent area fill under local diver profile curve
   let areaPts = `${sx(profile[0].t).toFixed(1)},${padT} `;
   for (const p of profile) {
     areaPts += `${sx(p.t).toFixed(1)},${sy(p.d).toFixed(1)} `;
   }
   areaPts += `${sx(profile[profile.length - 1].t).toFixed(1)},${padT}`;
   markup += `<polygon points="${areaPts}" fill="rgba(14,165,233,0.12)"/>`;
+
+  // Co-op buddy comparison depth traces (dashed warm accent overlays, v117)
+  buddyTraces.forEach((bt, bIdx) => {
+    const col = buddyPalette[bIdx % buddyPalette.length];
+    const polyPts = bt.points.map((pt) => `${sx(pt.t).toFixed(1)},${sy(pt.d).toFixed(1)}`).join(' ');
+    markup += `<polyline points="${polyPts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round" opacity="0.88"/>`;
+  });
 
   // Highlight deco-stop segments with soft emerald shading
   for (let i = 1; i < profile.length; i++) {
@@ -2337,6 +2380,16 @@ function renderDebriefDepthProfile(profile, maxDepthM, success) {
   const endP = profile[profile.length - 1];
   markup += `<circle cx="${sx(endP.t).toFixed(1)}" cy="${sy(endP.d).toFixed(1)}" r="3.4" fill="${success ? '#34d399' : '#ef4444'}" stroke="#0f172a" stroke-width="1.2"/>`;
   markup += `<text x="${W - padR}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${formatRunClock(maxT)}</text>`;
+
+  // Compact co-op legend in top-right when buddy trace(s) are overlaid
+  if (buddyTraces.length > 0) {
+    const names = buddyTraces
+      .slice(0, 2)
+      .map((bt, idx) => `<tspan fill="${buddyPalette[idx % buddyPalette.length]}">╌ ${escapeHtml((bt.name || 'Buddy').slice(0, 10))}</tspan>`)
+      .join('  ');
+    markup += `<text x="${W - padR}" y="10" text-anchor="end" font-size="8.5" font-weight="700" font-family="ui-monospace,monospace"><tspan fill="#38bdf8">━ You</tspan>  ${names}</text>`;
+  }
+
   svg.innerHTML = markup;
 }
 
@@ -2716,7 +2769,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       deco: diveState.stopDepthM || 0,
     });
   }
-  renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success);
+  renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success, session?.peerProfiles);
 
   let updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
     levelId: level.id,
@@ -4283,6 +4336,13 @@ coopCommsEl?.addEventListener('click', (e) => {
       return;
     }
     lan.sendGasShare(targetId, donation.gasId, donation.donatedBar);
+    pushAirShareBeam(session, {
+      peerId: targetId,
+      peerName: targetName,
+      fromSelf: true,
+      gasId: donation.gasId,
+      amountBar: donation.donatedBar,
+    });
     audio.playGasShare();
     showToast(`🎁 Shared +${donation.donatedBar} bar ${getActiveGasName(donation.gasId)} with ${targetName}!`, 2.6);
     btn.hidden = true;
@@ -5108,6 +5168,13 @@ lan.on('peer_gas_share', (msg) => {
   if (!session || mode !== 'diving' || !msg?.amountBar) return;
   const added = receiveGasIntoState(session.diveState, msg.gasId, msg.amountBar);
   if (added > 0) {
+    pushAirShareBeam(session, {
+      peerId: msg.fromId || '',
+      peerName: msg.fromName || 'Buddy',
+      fromSelf: false,
+      gasId: msg.gasId,
+      amountBar: added,
+    });
     audio.playGasShare();
     const gName = getActiveGasName(msg.gasId);
     showToast(`🎁 ${msg.fromName || 'Buddy'} shared +${Math.round(added)} bar ${gName}!`, 3.0);
@@ -5156,6 +5223,7 @@ const sessionStepCallbacks = {
   onMarkerPlaced: () => audio.playClipLine(true),
   onEncounterSpawn: (visitor) => audio.playEncounterChime(visitor?.kind || 'whaleshark'),
   onBeaconClaimed: () => audio.playEncounterChime('beacon'),
+  onBuddyPing: () => audio.playEncounterChime('buddy-ping'),
   onWreckSync: (actionKind, targetId) => {
     if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
   },
@@ -5282,6 +5350,7 @@ function stepSimulation(dt) {
     }
     lan.stepPeerInterpolation(dt, level);
     stepPeerBubbles(session.bubbles, peers, dt);
+    recordPeerDepthProfiles(session, peers, session.simTimeSec);
 
     // If downed and a rescuer is towing us, glide smoothly behind the rescuer (respecting cave rock SDF)
     if (!diveState.alive && session.rescuedBy) {
@@ -5444,6 +5513,7 @@ function stepSimulation(dt) {
     playerLines: _minimapPlayerLines,
     sonarPulse: session.sonar?.activePulse || null,
     encounters: session.encounters || null,
+    buddyPing: session.buddyPing || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,
@@ -5642,6 +5712,8 @@ function frame(nowMs) {
       sonarPulse: session.sonar?.activePulse || null,
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,
+      buddyPing: session.buddyPing || null,
+      airShareBeams: session.airShareBeams || null,
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',

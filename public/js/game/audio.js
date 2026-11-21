@@ -758,6 +758,12 @@ export class DiveAudio {
       this.vibrate?.(24);
       return;
     }
+    if (kind === 'buddy-ping') {
+      this.playTone(784, 0.11, 'sine', 0.048, 0);
+      this.playTone(1174.6, 0.15, 'sine', 0.052, 0.11);
+      this.vibrate?.(16);
+      return;
+    }
     // Deep majestic sub-harmonic ocean glide swell (Whale Shark / Manta Ray / Bioluminescent Swarm)
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();

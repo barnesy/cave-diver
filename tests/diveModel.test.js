@@ -3766,3 +3766,125 @@ test('v113 Co-op Team Hold visibility, stale exit prompt clearing & mobile pinch
     globalThis.document = prevDoc;
   }
 });
+
+test('v117 Co-op Buddy Overhaul: Buddy Locate Ping, shared Beacon/Photo crew bonuses, Air-Share hose VFX & buddy depth profiles', async () => {
+  const {
+    triggerBuddyLocatePing,
+    pushAirShareBeam,
+    recordPeerDepthProfiles,
+    applyPeerWreckAction,
+  } = await import('../public/js/game/diveSession.js');
+
+  const s = createDiveSession(LEVEL_1);
+  const sarah = { id: 'p2', name: 'Sarah', x: 32, y: 18, depthM: 18, gasId: 'TMX1455', alive: true, surfaced: false };
+
+  // 1. Buddy Locate Ping activates beam, syncs to crew, tracks live peer coords & expires cleanly
+  const synced = [];
+  let pingChimeCount = 0;
+  const pingRes = triggerBuddyLocatePing(s, sarah, {
+    onBuddyPing: () => { pingChimeCount++; },
+    onWreckSync: (k, t) => synced.push([k, t]),
+  });
+  assert.equal(pingRes.ok, true);
+  assert.equal(pingChimeCount, 1);
+  assert.deepEqual(synced[0], ['buddy-ping', 'p2']);
+  assert.equal(s.buddyPing.targetName, 'Sarah');
+
+  sarah.x = 36;
+  sarah.y = 21;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.2, { peers: [sarah] });
+  assert.equal(s.buddyPing.x, 36, 'Buddy ping must track live peer X coordinate');
+  assert.equal(s.buddyPing.y, 21, 'Buddy ping must track live peer Y coordinate');
+
+  // Incoming peer buddy-ping chimes & toasts cleanly
+  let incomingPingToast = '';
+  assert.equal(
+    applyPeerWreckAction(
+      s,
+      { actionKind: 'buddy-ping', targetId: 'p1', playerId: 'p2', by: 'Sarah' },
+      { onBuddyPing: () => { pingChimeCount++; }, onToast: (m) => { incomingPingToast = m; } }
+    ),
+    true
+  );
+  assert.equal(pingChimeCount, 2);
+  assert.ok(incomingPingToast.includes('Sarah'));
+
+  // 2. Shared Survey Beacon credit awards +180 crew bonus, +18b reserve & prevents double-claim
+  s.diveState.tanks.EAN32.bar = 140;
+  const bcApplied = applyPeerWreckAction(s, { actionKind: 'beacon', targetId: s.encounters.beacon.id, by: 'Sarah' });
+  assert.equal(bcApplied, true);
+  assert.equal(s.encounters.beacon.claimed, true);
+  assert.equal(s.encounters.encounterBonusScore, 180);
+  assert.ok(s.diveState.tanks.EAN32.bar >= 157);
+  assert.equal(applyPeerWreckAction(s, { actionKind: 'beacon', targetId: s.encounters.beacon.id, by: 'Sarah' }), false);
+
+  // 3. Shared Wildlife Photo discovery awards 50% crew assist bonus & credits species
+  const photoApplied = applyPeerWreckAction(s, { actionKind: 'photo', targetId: 'whaleshark:3', by: 'Sarah' });
+  assert.equal(photoApplied, true);
+  assert.equal(s.camera.photographedIds.has('whaleshark'), true);
+  assert.equal(s.camera.photoBonusScore, 90, '3-star Whale Shark (180 pts) must grant 50% = 90 crew assist pts');
+  assert.equal(applyPeerWreckAction(s, { actionKind: 'photo', targetId: 'whaleshark:3', by: 'Sarah' }), false);
+
+  // 4. Air-Share octo-hose beam VFX + passive buddy depth profile recording
+  const beam = pushAirShareBeam(s, { peerId: 'p2', peerName: 'Sarah', fromSelf: true, gasId: 'TMX1455', amountBar: 35 });
+  assert.equal(beam.amountBar, 35);
+  assert.equal(s.airShareBeams.length, 1);
+
+  recordPeerDepthProfiles(s, [sarah], 1.0);
+  sarah.depthM = 28.4;
+  recordPeerDepthProfiles(s, [sarah], 4.0);
+  const sarahProfile = s.peerProfiles.get('p2');
+  assert.ok(sarahProfile && sarahProfile.points.length === 2);
+  assert.equal(sarahProfile.points[1].d, 28.4);
+
+  // 5. Renderer draws braided tow, air-share hose beams, buddy locate ping & minimap reticle cleanly
+  const noopCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 80 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+  s.diver.rescueTargetId = 'p2';
+  CaveRenderer.prototype._drawBuddyRescueTethers.call(
+    {},
+    noopCtx,
+    s.diver,
+    [sarah],
+    (x) => 400 + x * 12,
+    (y) => 200 + y * 12,
+    12,
+    3.5,
+    s.airShareBeams
+  );
+  CaveRenderer.prototype._drawBuddyLocatePing.call(
+    {},
+    noopCtx,
+    s.diver,
+    s.buddyPing,
+    (x) => 400 + x * 12,
+    (y) => 200 + y * 12,
+    12,
+    3.5,
+    1280,
+    720
+  );
+  drawSonarMinimap(noopCtx, 352, 224, {
+    level: LEVEL_1,
+    diver: s.diver,
+    peers: [sarah],
+    exploreCells: s.exploreCells,
+    exploredCells: s.exploredCells,
+    exploredGrid: s.exploredGrid,
+    buddyPing: s.buddyPing,
+    difficulty: 'standard',
+    zoomMode: 'follow',
+    timeSec: 3.5,
+  });
+
+  // Beams & ping expire after sufficient dt
+  for (let i = 0; i < 60; i++) stepDiveSession(s, { x: 0, y: 0 }, 0.1, { peers: [sarah] });
+  assert.equal(s.buddyPing, null);
+  assert.equal(s.airShareBeams.length, 0);
+});

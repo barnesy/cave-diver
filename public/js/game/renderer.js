@@ -1430,6 +1430,8 @@ export class CaveRenderer {
     sonarPulse = null,
     cameraFlash = null,
     encounters = null,
+    buddyPing = null,
+    airShareBeams = null,
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
@@ -1642,8 +1644,8 @@ export class CaveRenderer {
       this._drawDynamicEncounters(ctx, encounters, visX0 - 10, visX1 + 10, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, 'world');
     }
 
-    // 9. Divers & Active Co-op Rescue Tow Lifelines
-    this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec);
+    // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
+    this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
     }
@@ -1696,6 +1698,9 @@ export class CaveRenderer {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
     this._drawDiverSignals(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, cw, ch);
+    if (buddyPing && typeof this._drawBuddyLocatePing === 'function') {
+      this._drawBuddyLocatePing(ctx, diver, buddyPing, toScreenX, toScreenY, scale, timeSec, cw, ch);
+    }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
@@ -6930,11 +6935,11 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec) {
+  _drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams = null) {
     if (!Array.isArray(peerList) || peerList.length === 0) return;
     ctx.save();
     const allDivers = [
-      { id: diver.id || '__self__', x: diver.x, y: diver.y, alive: true, rescueTargetId: diver.rescueTargetId || '' },
+      { id: diver.id || '__self__', x: diver.x, y: diver.y, name: diver.name || 'You', alive: true, rescueTargetId: diver.rescueTargetId || '' },
       ...peerList,
     ];
 
@@ -6946,7 +6951,7 @@ export class CaveRenderer {
       const sy = toScreenY(p.y);
       const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.2);
       const r = (0.95 + pulse * 0.45) * scale;
-      ctx.strokeStyle = p.rescuedBy ? 'rgba(74, 222, 128, 0.75)' : 'rgba(245, 158, 11, 0.82)';
+      ctx.strokeStyle = p.rescuedBy ? 'rgba(74, 222, 128, 0.78)' : 'rgba(245, 158, 11, 0.85)';
       ctx.lineWidth = Math.max(1.8, 0.065 * scale);
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
@@ -6956,25 +6961,162 @@ export class CaveRenderer {
       ctx.font = `800 ${Math.max(9, Math.round(0.32 * scale))}px ui-monospace, monospace`;
       ctx.textAlign = 'center';
       ctx.fillStyle = p.rescuedBy ? '#86efac' : '#fde68a';
-      ctx.fillText(p.rescuedBy ? 'TOWING' : 'SOS · RESCUE', sx, sy - r - 0.25 * scale);
+      ctx.fillText(p.rescuedBy ? '🛟 TOWING' : 'SOS · RESCUE', sx, sy - r - 0.25 * scale);
     }
 
-    // 2. Umbilical tow line between rescuer and towed teammate
+    // 2. Braided catenary umbilical tow line between rescuer and towed teammate
     for (let i = 0; i < allDivers.length; i++) {
       const rescuer = allDivers[i];
       if (!rescuer?.rescueTargetId) continue;
       const target = peerList.find((p) => p && p.id === rescuer.rescueTargetId);
       const tPos = target || (rescuer !== allDivers[0] && diver.rescuedBy === rescuer.id ? diver : null);
       if (!tPos) continue;
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = Math.max(2, 0.07 * scale);
-      ctx.setLineDash([7, 5]);
+      const x1 = toScreenX(rescuer.x);
+      const y1 = toScreenY(rescuer.y);
+      const x2 = toScreenX(tPos.x);
+      const y2 = toScreenY(tPos.y);
+      const mx = (x1 + x2) * 0.5;
+      const my = (y1 + y2) * 0.5 + (0.28 + 0.09 * Math.sin(timeSec * 4.2)) * scale;
+
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.28)';
+      ctx.lineWidth = Math.max(4.5, 0.16 * scale);
       ctx.beginPath();
-      ctx.moveTo(toScreenX(rescuer.x), toScreenY(rescuer.y));
-      ctx.lineTo(toScreenX(tPos.x), toScreenY(tPos.y));
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(mx, my, x2, y2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = Math.max(2, 0.075 * scale);
+      ctx.setLineDash([7, 4]);
+      ctx.lineDashOffset = -timeSec * 18;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(mx, my, x2, y2);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+
+      // Carabiner clip rings at both diver harness attachment points
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(x1, y1, Math.max(2.6, 0.08 * scale), 0, Math.PI * 2);
+      ctx.arc(x2, y2, Math.max(2.6, 0.08 * scale), 0, Math.PI * 2);
+      ctx.fill();
     }
+
+    // 3. Active Air-Share Octo-Hose Transfer Beams (v117)
+    if (Array.isArray(airShareBeams) && airShareBeams.length > 0) {
+      for (let i = 0; i < airShareBeams.length; i++) {
+        const b = airShareBeams[i];
+        if (!b || b.timer <= 0) continue;
+        const peer = peerList.find((p) => p && (p.id === b.peerId || p.name === b.peerName));
+        if (!peer) continue;
+        const donor = b.fromSelf ? diver : peer;
+        const recv = b.fromSelf ? peer : diver;
+        const x1 = toScreenX(donor.x);
+        const y1 = toScreenY(donor.y);
+        const x2 = toScreenX(recv.x);
+        const y2 = toScreenY(recv.y);
+        const alpha = Math.min(1, b.timer / 0.55) * Math.min(1, ((b.duration || 2.6) - b.timer) / 0.18 + 0.25);
+        const hoseCol = b.gasId === 'O2' ? '52, 211, 153' : b.gasId === 'TMX1455' ? '251, 191, 36' : '56, 189, 248';
+        const mx = (x1 + x2) * 0.5;
+        const my = (y1 + y2) * 0.5 + 0.35 * scale;
+
+        ctx.strokeStyle = `rgba(${hoseCol}, ${(0.28 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(5, 0.18 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${hoseCol}, ${(0.9 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2, 0.07 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.stroke();
+
+        // Flowing pressurized gas pulses along the quadratic hose curve
+        for (let k = 0; k < 4; k++) {
+          const u = ((timeSec * 1.45 + k * 0.25) % 1);
+          const inv = 1 - u;
+          const px = inv * inv * x1 + 2 * inv * u * mx + u * u * x2;
+          const py = inv * inv * y1 + 2 * inv * u * my + u * u * y2;
+          ctx.fillStyle = `rgba(240, 249, 255, ${(0.92 * alpha).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(px, py, Math.max(2.4, 0.085 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.font = `800 ${Math.max(10, Math.round(0.34 * scale))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = `rgba(224, 242, 254, ${alpha.toFixed(3)})`;
+        ctx.fillText(`🎁 +${b.amountBar}b`, mx, my - 0.32 * scale);
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawBuddyLocatePing(ctx, diver, buddyPing, toScreenX, toScreenY, scale, timeSec, cw, ch) {
+    if (!buddyPing || buddyPing.timer <= 0) return;
+    const dur = Math.max(0.5, buddyPing.duration || 4.6);
+    const fade = Math.min(1, buddyPing.timer / 0.85);
+    const dx = toScreenX(diver.x);
+    const dy = toScreenY(diver.y);
+    const bx = toScreenX(buddyPing.x);
+    const by = toScreenY(buddyPing.y);
+    const distM = Math.round(Math.hypot(buddyPing.x - diver.x, buddyPing.y - diver.y));
+
+    ctx.save();
+    // 1. Acoustic bearing line from self diver toward pinged buddy (visible through walls & silt)
+    const grad = ctx.createLinearGradient(dx, dy, bx, by);
+    grad.addColorStop(0, `rgba(56, 189, 248, ${(0.12 * fade).toFixed(3)})`);
+    grad.addColorStop(0.55, `rgba(56, 189, 248, ${(0.52 * fade).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(251, 191, 36, ${(0.88 * fade).toFixed(3)})`);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -timeSec * 34;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+
+    // 2. Expanding concentric sonar target rings centered on buddy
+    for (let rIdx = 0; rIdx < 2; rIdx++) {
+      const phase = ((dur - buddyPing.timer) * 1.15 + rIdx * 0.5) % 1;
+      const rad = (0.7 + phase * 2.8) * scale;
+      const ringAlpha = (1 - phase) * 0.82 * fade;
+      ctx.strokeStyle = `rgba(251, 191, 36, ${ringAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+      ctx.beginPath();
+      ctx.arc(bx, by, rad, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 3. Floating clamped locator badge (stays onscreen at edge when buddy is far away)
+    const padX = Math.max(66, cw * 0.08);
+    const padY = Math.max(92, ch * 0.14);
+    const lx = Math.max(padX, Math.min(cw - padX, bx));
+    const ly = Math.max(padY, Math.min(ch - padY, by - 1.35 * scale));
+    const label = `📡 ${buddyPing.targetName || 'Buddy'} · ${distM}m`;
+    ctx.font = `800 ${Math.max(11, Math.round(0.36 * scale))}px ui-monospace, monospace`;
+    const tw = ctx.measureText(label).width;
+    const pw = tw + 18;
+    const ph = Math.max(22, Math.round(0.68 * scale));
+    ctx.fillStyle = `rgba(8, 20, 36, ${(0.92 * fade).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(251, 191, 36, ${(0.88 * fade).toFixed(3)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(lx - pw / 2, ly - ph / 2, pw, ph, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = `rgba(254, 243, 199, ${fade.toFixed(3)})`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, lx, ly + 0.5);
     ctx.restore();
   }
 

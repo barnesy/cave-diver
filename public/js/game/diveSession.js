@@ -115,6 +115,10 @@ export function createDiveSession(
       photos: [],
     },
     encounters: createDynamicEncounters(level),
+    buddyPing: null,
+    airShareBeams: [],
+    peerProfiles: new Map(),
+    _lastPeerProfileSampleAt: -99,
     ascentConfig: getAscentConfig(level),
     diver: {
       x: spawnX,
@@ -432,6 +436,7 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
       const room = Math.max(0, MAX_PHOTO_BONUS - (session.camera.photoBonusScore || 0));
       points = Math.min(room, Math.round((subject.points || 60) * starMult));
       session.camera.photoBonusScore = (session.camera.photoBonusScore || 0) + points;
+      callbacks.onWreckSync?.('photo', `${subject.id}:${stars}`);
     }
     session.camera.photoCount += 1;
     session.camera.photos.push({
@@ -614,6 +619,7 @@ export function claimSurveyBeacon(session, callbacks = {}) {
     });
   }
   callbacks.onBeaconClaimed?.(bc, addedBar);
+  callbacks.onWreckSync?.('beacon', bc.id || 'beacon');
   const gasTxt = addedBar >= 1 ? ` · +${Math.round(addedBar)}b reserve` : '';
   callbacks.onToast?.(`📡 ${bc.label} salvaged! (+${pts} pts · 15m sonar map${gasTxt})`, 3.4);
   return { ok: true, beacon: bc, points: pts, addedBar };
@@ -834,7 +840,87 @@ export function buildParGhostTrack(level) {
 }
 
 /**
- * Applies a remote co-op buddy's wreck action (opening a hatch or slicing a net) to local state.
+ * Pulse an emissive acoustic locator beam & minimap reticle toward a co-op teammate.
+ */
+export function triggerBuddyLocatePing(session, peer, callbacks = {}) {
+  if (!session || !peer) return { ok: false };
+  const ping = {
+    targetId: peer.id || '',
+    targetName: peer.name || 'Buddy',
+    x: Number(peer.x) || 0,
+    y: Number(peer.y) || 0,
+    timer: 4.6,
+    duration: 4.6,
+  };
+  session.buddyPing = ping;
+  callbacks.onBuddyPing?.(ping);
+  callbacks.onWreckSync?.('buddy-ping', ping.targetId || ping.targetName);
+  const distM = Math.round(Math.hypot(ping.x - (session.diver?.x || 0), ping.y - (session.diver?.y || 0)));
+  callbacks.onToast?.(`📡 Pinging ${ping.targetName} (${distM}m · ${Math.max(0, Math.round(ping.y))}m depth)`, 2.4);
+  return { ok: true, ping };
+}
+
+/**
+ * Push a temporary glowing octo-hose transfer stream between donor & recipient divers.
+ */
+export function pushAirShareBeam(
+  session,
+  { peerId = '', peerName = 'Buddy', fromSelf = true, gasId = 'EAN32', amountBar = 25 } = {}
+) {
+  if (!session) return null;
+  if (!Array.isArray(session.airShareBeams)) session.airShareBeams = [];
+  const beam = {
+    peerId,
+    peerName,
+    fromSelf: Boolean(fromSelf),
+    gasId,
+    amountBar: Math.round(Number(amountBar) || 25),
+    timer: 2.6,
+    duration: 2.6,
+  };
+  session.airShareBeams.push(beam);
+  if (session.airShareBeams.length > 6) session.airShareBeams.shift();
+  return beam;
+}
+
+/**
+ * Passively sample co-op buddy depth profiles every ~2.5s for side-by-side debrief comparison.
+ */
+export function recordPeerDepthProfiles(session, peers, simTimeSec = 0) {
+  if (!session || !Array.isArray(peers) || peers.length === 0) return;
+  if (!(session.peerProfiles instanceof Map)) session.peerProfiles = new Map();
+  const t = Math.max(0, Number(simTimeSec) || 0);
+  const lastAt = Number.isFinite(session._lastPeerProfileSampleAt) ? session._lastPeerProfileSampleAt : -99;
+  const due = t - lastAt >= 2.5;
+  let sampledAny = false;
+  for (let i = 0; i < peers.length; i++) {
+    const p = peers[i];
+    if (!p) continue;
+    const pid = p.id || p.name || `peer_${i}`;
+    let rec = session.peerProfiles.get(pid);
+    if (!rec) {
+      rec = { id: pid, name: p.name || 'Buddy', points: [] };
+      session.peerProfiles.set(pid, rec);
+    } else if (p.name) {
+      rec.name = p.name;
+    }
+    if (!due && rec.points.length > 0) continue;
+    if (rec.points.length >= 300) continue;
+    const d = Math.max(0, Number((p.depthM ?? p.y ?? 0).toFixed(1)));
+    rec.points.push({
+      t: Number(t.toFixed(1)),
+      d,
+      gas: p.gasId || 'EAN32',
+    });
+    sampledAny = true;
+  }
+  if (sampledAny && due) {
+    session._lastPeerProfileSampleAt = t;
+  }
+}
+
+/**
+ * Applies a remote co-op buddy's action (hatch, snag, marker, shared beacon, shared wildlife photo, buddy ping) to local state.
  */
 export function applyPeerWreckAction(session, msg, callbacks = {}) {
   if (!session || !msg || !msg.actionKind || !msg.targetId) return false;
@@ -878,6 +964,59 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
     callbacks.onMarkerPlaced?.(anchor);
     const bonusTxt = bonusM > 0 && session.reelMaxMeters > 0 ? ` (+${bonusM}m team spool!)` : '';
     callbacks.onToast?.(`🪢 ${by} tagged ${anchor?.label || 'cave junction marker'}${bonusTxt}`, 2.6);
+    return true;
+  }
+  if (msg.actionKind === 'beacon') {
+    const bc = session.encounters?.beacon;
+    if (!bc || bc.claimed) return false;
+    bc.claimed = true;
+    const pts = Math.min(MAX_ENCOUNTER_BONUS, bc.points || MAX_ENCOUNTER_BONUS);
+    session.encounters.encounterBonusScore = Math.min(
+      MAX_ENCOUNTER_BONUS,
+      (session.encounters.encounterBonusScore || 0) + pts
+    );
+    let addedBar = 0;
+    const activeGas = session.diveState?.activeGasId;
+    if (activeGas && session.diveState?.tanks?.[activeGas]?.bar < 185) {
+      addedBar = receiveGasIntoState(session.diveState, activeGas, 18);
+    }
+    const newlyMapped = markExploredAround(
+      session.exploreCells,
+      session.exploredCells,
+      bc.x,
+      bc.y,
+      15.0,
+      session.exploredGrid
+    );
+    if (newlyMapped > 0 && session.exploreCells?.length > 0) {
+      session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
+    }
+    callbacks.onBeaconClaimed?.(bc, addedBar);
+    const gasTxt = addedBar >= 1 ? ` · +${Math.round(addedBar)}b reserve` : '';
+    callbacks.onToast?.(`📡 ${by} salvaged the Survey Beacon! (+${pts} crew pts${gasTxt})`, 3.4);
+    return true;
+  }
+  if (msg.actionKind === 'photo') {
+    const [entryId, starsRaw] = String(msg.targetId).split(':');
+    const entry = getFieldGuideEntry(entryId);
+    if (!entry || !session.camera) return false;
+    if (session.camera.photographedIds.has(entry.id)) return false;
+    session.camera.photographedIds.add(entry.id);
+    const stars = Math.max(1, Math.min(3, Number(starsRaw) || 2));
+    const starMult = stars === 3 ? 1.0 : stars === 2 ? 0.8 : 0.6;
+    const room = Math.max(0, MAX_PHOTO_BONUS - (session.camera.photoBonusScore || 0));
+    const crewPts = Math.min(room, Math.round((entry.points || 60) * starMult * 0.5));
+    session.camera.photoBonusScore = (session.camera.photoBonusScore || 0) + crewPts;
+    const starStr = '★'.repeat(stars);
+    callbacks.onToast?.(
+      `📷 ${by} photographed ${entry.icon} ${entry.name} ${starStr}${crewPts > 0 ? ` (+${crewPts} crew bonus!)` : ''}`,
+      3.0
+    );
+    return true;
+  }
+  if (msg.actionKind === 'buddy-ping') {
+    callbacks.onBuddyPing?.({ targetId: msg.playerId || '', targetName: by, incoming: true });
+    callbacks.onToast?.(`📡 ${by} pinged your locator!`, 2.2);
     return true;
   }
   return false;
@@ -2300,6 +2439,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   stepBubbles(session, dt, callbacks, exertion);
   stepDynamicEncounters(session, dt, callbacks);
+  if (session.buddyPing) {
+    session.buddyPing.timer = Math.max(0, session.buddyPing.timer - dt);
+    if (Array.isArray(callbacks.peers) && session.buddyPing.targetId) {
+      const livePeer = callbacks.peers.find((p) => p && p.id === session.buddyPing.targetId);
+      if (livePeer) {
+        session.buddyPing.x = livePeer.x;
+        session.buddyPing.y = livePeer.y;
+      }
+    }
+    if (session.buddyPing.timer <= 0) session.buddyPing = null;
+  }
+  if (Array.isArray(session.airShareBeams) && session.airShareBeams.length > 0) {
+    for (let i = session.airShareBeams.length - 1; i >= 0; i--) {
+      session.airShareBeams[i].timer -= dt;
+      if (session.airShareBeams[i].timer <= 0) session.airShareBeams.splice(i, 1);
+    }
+  }
   const rawSilt = stepSiltPhysics(level, siltClouds, diver, dt);
   session.localSiltDensity = Math.min(1, rawSilt + (session.encounters?.fogDensity || 0) * 0.65);
 

@@ -336,6 +336,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     playerLines = [],
     sonarPulse = null,
     encounters = null,
+    buddyPing = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
@@ -658,14 +659,23 @@ export function drawSonarMinimap(ctx, width, height, state) {
     ctx.stroke();
   }
 
-  // 9. Co-op Buddy Dots
+  // 9. Co-op Buddy Dots (+ active Buddy Locate Ping reticle)
   if (Array.isArray(peers)) {
     for (let i = 0; i < peers.length; i++) {
       const p = peers[i];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
       const px = toX(p.x);
       const py = toY(p.y);
-      ctx.fillStyle = p.alive === false ? '#ef4444' : '#38bdf8';
+      const isPinged = Boolean(buddyPing && buddyPing.timer > 0 && (!buddyPing.targetId || buddyPing.targetId === p.id));
+      if (isPinged) {
+        const pRing = 7 + ((timeSec * 14) % 10);
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, py, pRing, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = p.alive === false ? '#ef4444' : isPinged ? '#fbbf24' : '#38bdf8';
       ctx.strokeStyle = '#020617';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -718,8 +728,9 @@ export function drawSonarMinimap(ctx, width, height, state) {
 }
 
 export class DiveComputerHUD {
-  constructor({ onGasSelect, onReelToggle, onReelRewind, onReelRewindHold = null, onHeartbeatPulse }) {
+  constructor({ onGasSelect, onReelToggle, onReelRewind, onReelRewindHold = null, onHeartbeatPulse, onBuddySelect = null }) {
     this.onHeartbeatPulse = onHeartbeatPulse;
+    this.onBuddySelect = onBuddySelect;
     this._onReelRewindHold = onReelRewindHold;
     this._isTouchDevice =
       typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
@@ -921,6 +932,7 @@ export class DiveComputerHUD {
     playerLines = null,
     sonarPulse = null,
     encounters = null,
+    buddyPing = null,
     endedState = '',
     spectatingPeer = false,
     timeSec = 0,
@@ -1296,6 +1308,11 @@ export class DiveComputerHUD {
         if (!ui) {
           const card = document.createElement('div');
           card.className = 'mate-card';
+          card.title = 'Tap to ping buddy locator [B]';
+          card.setAttribute?.('role', 'button');
+          card.addEventListener?.('click', () => {
+            this.onBuddySelect?.(pid);
+          });
           card.innerHTML = `
             <div class="mate-top">
               <span class="mate-name"></span>
@@ -1426,7 +1443,8 @@ export class DiveComputerHUD {
           this._minimapRedrawAccum >= 0.055 ||
           expSize !== this._minimapLastExplored ||
           minimapZoomMode !== this._minimapLastZoom ||
-          Boolean(sonarPulse);
+          Boolean(sonarPulse) ||
+          Boolean(buddyPing);
         if (needsRedraw) {
           this._minimapRedrawAccum = 0;
           this._minimapLastExplored = expSize;
@@ -1454,6 +1472,7 @@ export class DiveComputerHUD {
               playerLines,
               sonarPulse,
               encounters,
+              buddyPing,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,
