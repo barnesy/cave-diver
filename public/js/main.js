@@ -495,7 +495,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=117" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=118" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2979,12 +2979,33 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         ? `${lan.room.code}-d${activeDiveSeq || 1}-${level.id}`
         : undefined;
     const shouldSubmitToServer = !teamSummary.isTeam || !lan.room || lan.isHost();
+    const verifiedGh = github.authenticated && github.user ? github.user : null;
+    const baseStatsPayload = {
+      difficulty: runDiff,
+      maxDepthM: diveState.maxDepthM,
+      avgHealthPct: teamSummary.avgHealthPct,
+      avgSpeedPct: teamSummary.avgSpeedPct,
+      avgGasRemainingPct: teamSummary.avgGasRemainingPct,
+      peakHeartRateBpm: Math.round(diveState.maxHeartRateBpm || diveState.heartRateBpm || 68),
+      checkpointsHit: checkpointsHit.size,
+      totalCheckpoints: (level.checkpoints || []).length,
+      healthScore: teamSummary.avgHealthScore,
+      speedScore: teamSummary.avgSpeedScore,
+      collectiblesScore: teamSummary.collectiblesScore,
+      explorationScore: teamSummary.explorationScore + teamSummary.cartographerBonus,
+      rescueBonus: teamSummary.rescueBonus || 0,
+      teamSurvivalBonus: teamSummary.teamSurvivalBonus || 0,
+      eanBar: Math.round(diveState.tanks.EAN32.bar),
+      tmxBar: Math.round(diveState.tanks.TMX1455.bar),
+      o2Bar: Math.round(diveState.tanks.O2.bar),
+    };
     const lbPromise = shouldSubmitToServer
       ? leaderboard.submitRun({
           mode: subMode,
           levelId: level.id,
           runId: subRunId,
           diverName: playerNameInput?.value.trim() || 'Diver 1',
+          verifiedGitHubUser: verifiedGh,
           crew: teamSummary.roster.map((r) => ({
             name: r.name,
             score: r.totalScore,
@@ -3001,31 +3022,35 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
           exploredPct: teamSummary.exploredPct,
           collectiblesFound: teamSummary.collectiblesFound,
           difficulty: runDiff,
-          stats: {
-            difficulty: runDiff,
-            maxDepthM: diveState.maxDepthM,
-            avgHealthPct: teamSummary.avgHealthPct,
-            avgSpeedPct: teamSummary.avgSpeedPct,
-            avgGasRemainingPct: teamSummary.avgGasRemainingPct,
-            peakHeartRateBpm: Math.round(diveState.maxHeartRateBpm || diveState.heartRateBpm || 68),
-            checkpointsHit: checkpointsHit.size,
-            totalCheckpoints: (level.checkpoints || []).length,
-            healthScore: teamSummary.avgHealthScore,
-            speedScore: teamSummary.avgSpeedScore,
-            collectiblesScore: teamSummary.collectiblesScore,
-            explorationScore: teamSummary.explorationScore + teamSummary.cartographerBonus,
-            rescueBonus: teamSummary.rescueBonus || 0,
-            teamSurvivalBonus: teamSummary.teamSurvivalBonus || 0,
-            eanBar: Math.round(diveState.tanks.EAN32.bar),
-            tmxBar: Math.round(diveState.tanks.TMX1455.bar),
-            o2Bar: Math.round(diveState.tanks.O2.bar),
-          },
+          stats: baseStatsPayload,
         })
       : leaderboard.fetchBoard({ mode: subMode, levelId: level.id, limit: 10 }).then((b) => ({
           ok: true,
           source: b.source,
           entries: b.entries || [],
         }));
+
+    // Also submit Daily Expedition Challenge clears to the dedicated Daily Leaderboard!
+    if (session.dailyDateKey) {
+      leaderboard
+        .submitRun({
+          mode: 'daily',
+          levelId: level.id,
+          dailyDateKey: session.dailyDateKey,
+          mutatorId: session.mutatorId || '',
+          diverName: playerNameInput?.value.trim() || 'Diver 1',
+          verifiedGitHubUser: verifiedGh,
+          teamSize: 1,
+          score: localSummary.totalScore,
+          grade: localSummary.rank?.grade || teamSummary.teamRank.grade,
+          timeSec: diveState.diveTimeSec,
+          exploredPct: localSummary.exploredPct,
+          collectiblesFound: localSummary.collectiblesFound,
+          difficulty: runDiff,
+          stats: baseStatsPayload,
+        })
+        .catch(() => {});
+    }
 
     lbPromise
       .then((res) => {
@@ -3098,13 +3123,19 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
   lbStatsCloseTimer = 0;
   lbStatsModalEl.classList.remove('is-closing');
   const isOverall = entry.levelId === 'overall';
+  const isDaily = entry.mode === 'daily';
   const lvl = !isOverall ? getLevelById(entry.levelId) : null;
   const lvlIdx = lvl ? LEVELS.findIndex((l) => l.id === lvl.id) + 1 : 0;
   const meta = lvl ? getLevelMeta(lvl, Math.max(0, lvlIdx - 1)) : null;
-  const modeLabel = entry.mode === 'team' ? 'CO-OP TEAM' : 'SOLO DIVER';
+  const modeLabel = entry.mode === 'team' ? 'CO-OP TEAM' : isDaily ? 'DAILY EXPEDITION' : 'SOLO DIVER';
+  const dailyMut = entry.mutatorId ? getDailyMutatorById(entry.mutatorId) : null;
   const siteTitle = isOverall
-    ? `Overall Campaign (${entry.sitesCompleted || 0}/${entry.totalSites || LEVELS.length} Sites)`
-    : `L${lvlIdx}: ${lvl?.name || entry.levelId}`;
+    ? isDaily
+      ? `All-Time Daily Champions (${entry.sitesCompleted || 0} Daily Clears)`
+      : `Overall Campaign (${entry.sitesCompleted || 0}/${entry.totalSites || LEVELS.length} Sites)`
+    : isDaily && entry.dailyDateKey
+      ? `Daily ${entry.dailyDateKey} · L${lvlIdx}: ${lvl?.name || entry.levelId}`
+      : `L${lvlIdx}: ${lvl?.name || entry.levelId}`;
 
   if (lbStatsKickerEl) {
     lbStatsKickerEl.textContent = `${modeLabel} · RANK #${rankNum}`;
@@ -3114,7 +3145,8 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
   }
   if (lbStatsSubEl) {
     const regionPart = meta?.region ? ` · ${meta.region}` : '';
-    lbStatsSubEl.textContent = `${siteTitle}${regionPart} · ${formatLbDate(entry.createdAt)}`;
+    const mutPart = dailyMut ? ` · ${dailyMut.icon} ${dailyMut.shortName}` : '';
+    lbStatsSubEl.textContent = `${siteTitle}${regionPart}${mutPart} · ${formatLbDate(entry.createdAt)}`;
   }
 
   const st = entry.stats || null;
@@ -3229,7 +3261,24 @@ function openLeaderboardStatsModal(entry, rankNum = 1) {
 
   const legacyNote = !st && !isOverall ? '<div class="lb-stats-note">Detailed physiology & score breakdown is recorded on new dives completed in v81+.</div>' : '';
 
+  const ghProfileBanner =
+    entry.githubVerified && entry.githubLogin
+      ? `
+        <div class="lb-profile-banner">
+          <div class="lb-profile-left">
+            ${entry.githubAvatar ? `<img class="lb-profile-avatar" src="${escapeHtml(entry.githubAvatar)}" alt="" />` : ''}
+            <div class="lb-profile-copy">
+              <strong>✓ @${escapeHtml(entry.githubLogin)} · GitHub Verified Diver</strong>
+              <span>Authenticated expedition record synced via GitHub</span>
+            </div>
+          </div>
+          <a class="btn tiny secondary" href="https://github.com/${encodeURIComponent(entry.githubLogin)}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        </div>
+      `
+      : '';
+
   lbStatsBodyEl.innerHTML = `
+    ${ghProfileBanner}
     <div class="lb-stats-hero">
       <div>
         <div class="lb-stats-score-lbl">Total Score</div>
@@ -3258,17 +3307,31 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
   if (!Array.isArray(entries) || entries.length === 0) {
     return '<div class="lb-empty">No completed expeditions recorded here yet. Finish a dive to claim #1!</div>';
   }
+  const myGhLogin = github.authenticated && github.user?.login ? github.user.login.toLowerCase() : '';
   return entries
     .map((e, i) => {
       const isMe =
         (highlightKey && e.entryKey === highlightKey) ||
-        (e.playerId && e.playerId === leaderboard.playerId);
+        (e.playerId && e.playerId === leaderboard.playerId) ||
+        (myGhLogin && e.githubVerified && String(e.githubLogin || '').toLowerCase() === myGhLogin);
       const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
       const rowModeBadge = renderModeBadgeHtml(e.difficulty || e.stats?.difficulty, { compact: true });
+      const ghAvatarHtml =
+        e.githubVerified && e.githubAvatar
+          ? `<img class="lb-gh-avatar" src="${escapeHtml(e.githubAvatar)}" alt="" />`
+          : '';
+      const ghBadgeHtml =
+        e.githubVerified && e.githubLogin
+          ? `<span class="lb-gh-badge" title="GitHub Verified Diver">✓ @${escapeHtml(e.githubLogin)}</span>`
+          : '';
+      const mutMeta = e.mode === 'daily' && e.mutatorId ? getDailyMutatorById(e.mutatorId) : null;
+      const mutPillHtml = mutMeta
+        ? `<span class="lb-mutator-pill">${mutMeta.icon} ${escapeHtml(mutMeta.shortName)}</span>`
+        : '';
       return `
-        <button type="button" class="lb-row ${isMe ? 'me' : ''}" style="--row-i:${i}" data-lb-idx="${i}" title="View full dive stats">
+        <button type="button" class="lb-row ${isMe ? 'me' : ''}" style="--row-i:${i}" data-lb-idx="${i}" title="View diver profile &amp; full dive stats">
           <span class="lb-rank">#${i + 1}</span>
-          <span class="lb-name">${escapeHtml(e.displayName)}<small class="lb-meta">${teamTag}</small> ${rowModeBadge}</span>
+          <span class="lb-name"><span class="lb-name-wrap">${ghAvatarHtml}<span>${escapeHtml(e.displayName)}</span><small class="lb-meta">${teamTag}</small>${ghBadgeHtml}${mutPillHtml}${rowModeBadge}</span></span>
           <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
           <span class="lb-grade">${escapeHtml(e.grade)}</span>
           <span class="lb-score">${Number(e.score || 0).toLocaleString()}</span>
@@ -3387,32 +3450,70 @@ function renderCareerSummary() {
   `;
 }
 
+function getRecentUtcDateKeys(count = 7) {
+  const keys = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+    keys.push(d.toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
 function populateLbSiteSelect() {
   if (!selectLbSite) return;
+  if (lbMode === 'daily') {
+    const recentDates = getRecentUtcDateKeys(7);
+    const dateOpts = recentDates.map((dk, idx) => {
+      const ch = getDailyChallenge(LEVELS, dk);
+      const dayTag = idx === 0 ? 'Today' : idx === 1 ? 'Yesterday' : dk;
+      return `<option value="${dk}">📅 ${dayTag} (${dk}) · ${ch.level.name} · ${ch.mutator.icon} ${ch.mutator.shortName}</option>`;
+    });
+    selectLbSite.innerHTML = [
+      ...dateOpts,
+      `<option value="overall">🏆 All-Time Daily Champions</option>`,
+    ].join('');
+    if (!lbFilterLevelId || (lbFilterLevelId !== 'overall' && !/^\d{4}-\d{2}-\d{2}$/.test(lbFilterLevelId))) {
+      lbFilterLevelId = recentDates[0];
+    }
+    selectLbSite.value = lbFilterLevelId;
+    return;
+  }
   const opts = [
     `<option value="overall">🌐 All ${LEVELS.length} Sites (Overall)</option>`,
     ...LEVELS.map((lvl, idx) => `<option value="${lvl.id}">L${idx + 1}: ${lvl.name} (${getLevelMaxDepthM(lvl)}m)</option>`),
   ];
   selectLbSite.innerHTML = opts.join('');
+  if (!lbFilterLevelId || /^\d{4}-\d{2}-\d{2}$/.test(lbFilterLevelId)) {
+    lbFilterLevelId = activeLevel.id;
+  }
   selectLbSite.value = lbFilterLevelId || activeLevel.id;
 }
 
 async function refreshMenuLeaderboard() {
   renderCareerSummary();
   if (!leaderboardRowsEl || !leaderboardSubEl) return;
-  if (selectLbSite && selectLbSite.options.length === 0) {
-    populateLbSiteSelect();
-  }
-  const targetLevel = lbFilterLevelId || activeLevel.id;
+  populateLbSiteSelect();
+  const targetLevel = lbFilterLevelId || (lbMode === 'daily' ? getRecentUtcDateKeys(1)[0] : activeLevel.id);
   if (selectLbSite) selectLbSite.value = targetLevel;
   leaderboardSubEl.textContent = 'Syncing rankings...';
   const board = await leaderboard.fetchBoard({ mode: lbMode, levelId: targetLevel, limit: 20 });
-  const modeLabel = lbMode === 'team' ? 'Co-op Teams' : 'Individual Divers';
-  const lvlIdx = LEVELS.findIndex((l) => l.id === targetLevel);
-  const scopeLabel =
-    targetLevel === 'overall'
-      ? `Overall Campaign (All ${LEVELS.length} Sites)`
-      : `L${Math.max(1, lvlIdx + 1)}: ${getLevelById(targetLevel).name}`;
+  const modeLabel = lbMode === 'team' ? 'Co-op Teams' : lbMode === 'daily' ? 'Daily Expedition' : 'Individual Divers';
+  let scopeLabel = '';
+  if (lbMode === 'daily') {
+    if (targetLevel === 'overall') {
+      scopeLabel = 'All-Time Daily Champions';
+    } else {
+      const ch = getDailyChallenge(LEVELS, targetLevel);
+      scopeLabel = `${targetLevel} · ${ch.level.name} (${ch.mutator.icon} ${ch.mutator.shortName})`;
+    }
+  } else {
+    const lvlIdx = LEVELS.findIndex((l) => l.id === targetLevel);
+    scopeLabel =
+      targetLevel === 'overall'
+        ? `Overall Campaign (All ${LEVELS.length} Sites)`
+        : `L${Math.max(1, lvlIdx + 1)}: ${getLevelById(targetLevel).name}`;
+  }
   const originNote =
     board.source === 'global'
       ? (board.pendingSync > 0 ? `Global Rankings (${board.pendingSync} pending sync)` : 'Global Rankings')
@@ -4015,9 +4116,10 @@ btnLbBack?.addEventListener('click', () => setActiveMenuTab('solo'));
 leaderboardPanel?.addEventListener('click', (e) => {
   const modeBtn = e.target.closest('button[data-lb-mode]');
   if (modeBtn) {
-    lbMode = modeBtn.dataset.lbMode === 'team' ? 'team' : 'solo';
+    const rawMode = modeBtn.dataset.lbMode;
+    lbMode = rawMode === 'team' ? 'team' : rawMode === 'daily' ? 'daily' : 'solo';
     const tabsWrap = modeBtn.closest('.lb-tabs');
-    tabsWrap?.style.setProperty('--lb-index', lbMode === 'team' ? '1' : '0');
+    tabsWrap?.style.setProperty('--lb-index', lbMode === 'daily' ? '2' : lbMode === 'team' ? '1' : '0');
     for (const b of leaderboardPanel.querySelectorAll('button[data-lb-mode]')) {
       b.classList.toggle('active', b === modeBtn);
     }

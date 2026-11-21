@@ -3820,11 +3820,11 @@ select:focus-visible {
   color: #f0f9ff;
 }
 
-/* Sliding pill on Leaderboard mode switcher (Individual / Team) */
+/* Sliding pill on Leaderboard mode switcher (Individual / Team / Daily) */
 .lb-tabs {
   position: relative;
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   --lb-index: 0;
 }
 .lb-tabs::before {
@@ -3833,7 +3833,7 @@ select:focus-visible {
   top: 2px;
   bottom: 2px;
   left: 2px;
-  width: calc(50% - 4px);
+  width: calc((100% - 12px) / 3);
   border-radius: 7px;
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.32), rgba(2, 132, 199, 0.24));
   border: 1px solid rgba(56, 189, 248, 0.45);
@@ -5453,4 +5453,87 @@ button.mode-badge:hover {
     max-width: 118px;
     font-size: 0.72rem;
   }
+}
+
+/* GitHub Verified Leaderboard Badges & Diver Profile Cards (v118) */
+.lb-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.lb-gh-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(74, 222, 128, 0.65);
+  flex-shrink: 0;
+}
+.lb-gh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.18);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  color: #86efac;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.lb-mutator-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  color: #bae6fd;
+  font-size: 0.6rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lb-profile-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(6, 44, 48, 0.52), rgba(10, 22, 38, 0.92));
+  border: 1px solid rgba(74, 222, 128, 0.44);
+}
+.lb-profile-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.lb-profile-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(74, 222, 128, 0.72);
+  flex-shrink: 0;
+}
+.lb-profile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lb-profile-copy strong {
+  font-size: 0.82rem;
+  color: #dcfce7;
+}
+.lb-profile-copy span {
+  font-size: 0.7rem;
+  color: #94a3b8;
 }

@@ -1298,3 +1298,137 @@ test('v116 Upstash Redis KV store + GitHub Private Gist PB Ghost & Loadout sync'
   assert.equal(syncJson.prefs.gear.dpv, true);
   assert.equal(savedGistBody.ghosts['cenote-el-abismo'][1][0], 1420);
 });
+
+test('v118 GitHub Verified Leaderboards (anti-spoof), Daily Challenge Board & cross-device overall unification', async () => {
+  const fs = await import('node:fs');
+  const {
+    normalizeLeaderboardSubmission,
+    mergeLeaderboardEntries,
+    queryLeaderboardEntries,
+    sanitizeGitHubAvatarUrl,
+  } = await import('../public/js/game/leaderboardModel.js');
+
+  // 1. Client-supplied githubVerified/githubLogin MUST be stripped when no trusted verifiedGitHubUser is passed
+  const spoofAttempt = normalizeLeaderboardSubmission({
+    mode: 'solo',
+    levelId: 'cenote-el-abismo',
+    diverName: 'FakeUser',
+    score: 2400,
+    grade: 'A',
+    timeSec: 150,
+    exploredPct: 88,
+    githubVerified: true,
+    githubLogin: 'barnesy',
+    githubAvatar: 'https://avatars.githubusercontent.com/u/4242',
+  });
+  assert.equal(spoofAttempt.ok, true);
+  assert.equal(spoofAttempt.entry.githubVerified, undefined, 'Unverified client payload must never spoof githubVerified');
+  assert.equal(spoofAttempt.entry.githubLogin, undefined);
+
+  // Avatar URL sanitizer rejects non-GitHub hosts
+  assert.equal(sanitizeGitHubAvatarUrl('https://evil.example/avatar.png'), '');
+  assert.equal(
+    sanitizeGitHubAvatarUrl('https://avatars.githubusercontent.com/u/4242?v=4'),
+    'https://avatars.githubusercontent.com/u/4242?v=4'
+  );
+
+  // 2. Trusted verifiedGitHubUser stamps verified badge and unifies playerId across devices
+  const ghUser = { login: 'barnesy', avatarUrl: 'https://avatars.githubusercontent.com/u/4242?v=4' };
+  const phoneRun = normalizeLeaderboardSubmission(
+    {
+      mode: 'solo',
+      levelId: 'cenote-el-abismo',
+      playerId: 'd_phone_1',
+      diverName: 'Chris',
+      score: 2700,
+      grade: 'S',
+      timeSec: 138,
+      exploredPct: 95,
+    },
+    { verifiedGitHubUser: ghUser }
+  );
+  const pcRun = normalizeLeaderboardSubmission(
+    {
+      mode: 'solo',
+      levelId: 'eagles-nest-sink',
+      playerId: 'd_pc_2',
+      diverName: 'Chris',
+      score: 2900,
+      grade: 'S+',
+      timeSec: 162,
+      exploredPct: 98,
+    },
+    { verifiedGitHubUser: ghUser }
+  );
+  assert.equal(phoneRun.entry.githubVerified, true);
+  assert.equal(phoneRun.entry.githubLogin, 'barnesy');
+  assert.equal(phoneRun.entry.playerId, 'gh_barnesy');
+  assert.equal(pcRun.entry.playerId, 'gh_barnesy');
+
+  const overallSolo = queryLeaderboardEntries([phoneRun.entry, pcRun.entry], { mode: 'solo', levelId: 'overall', limit: 10 });
+  assert.equal(overallSolo.length, 1, 'Verified runs across phone & PC must unify into 1 overall diver row');
+  assert.equal(overallSolo[0].sitesCompleted, 2);
+  assert.equal(overallSolo[0].score, 5600);
+  assert.equal(overallSolo[0].githubVerified, true);
+  assert.equal(overallSolo[0].githubLogin, 'barnesy');
+
+  // 3. Daily Expedition Leaderboard: per-date queries & All-Time Daily Champions aggregation
+  const daily1 = normalizeLeaderboardSubmission(
+    {
+      mode: 'daily',
+      levelId: 'cenote-el-abismo',
+      dailyDateKey: '2026-11-21',
+      mutatorId: 'turbo-par',
+      diverName: 'Chris',
+      score: 2850,
+      grade: 'S',
+      timeSec: 121,
+      exploredPct: 94,
+    },
+    { verifiedGitHubUser: ghUser }
+  );
+  const daily2 = normalizeLeaderboardSubmission({
+    mode: 'daily',
+    levelId: 'cenote-el-abismo',
+    dailyDateKey: '2026-11-21',
+    mutatorId: 'turbo-par',
+    playerId: 'd_sarah',
+    diverName: 'Sarah',
+    score: 2920,
+    grade: 'S+',
+    timeSec: 118,
+    exploredPct: 96,
+  });
+  const dailyPrev = normalizeLeaderboardSubmission(
+    {
+      mode: 'daily',
+      levelId: 'uss-oriskany-carrier',
+      dailyDateKey: '2026-11-20',
+      mutatorId: 'deep-silt',
+      diverName: 'Chris',
+      score: 3050,
+      grade: 'S',
+      timeSec: 210,
+      exploredPct: 92,
+    },
+    { verifiedGitHubUser: ghUser }
+  );
+  const { entries: allDaily } = mergeLeaderboardEntries([], [daily1.entry, daily2.entry, dailyPrev.entry]);
+
+  const todayBoard = queryLeaderboardEntries(allDaily, { mode: 'daily', levelId: '2026-11-21', limit: 10 });
+  assert.equal(todayBoard.length, 2);
+  assert.equal(todayBoard[0].displayName, 'Sarah');
+  assert.equal(todayBoard[1].githubLogin, 'barnesy');
+  assert.equal(todayBoard[1].mutatorId, 'turbo-par');
+
+  const allTimeDaily = queryLeaderboardEntries(allDaily, { mode: 'daily', levelId: 'overall', limit: 10 });
+  assert.equal(allTimeDaily.length, 2);
+  assert.equal(allTimeDaily[0].displayName, 'Chris');
+  assert.equal(allTimeDaily[0].sitesCompleted, 2);
+  assert.equal(allTimeDaily[0].grade, '2 DAILY');
+  assert.equal(allTimeDaily[0].githubVerified, true);
+
+  // 4. UI exposes Daily tab cleanly
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-lb-daily"') && html.includes('data-lb-mode="daily"'));
+});

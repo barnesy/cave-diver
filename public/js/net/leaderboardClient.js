@@ -31,6 +31,9 @@ function getOverallOwnerKey(row, mode) {
       : '';
     return crewKey || String(row?.displayName || '').toLowerCase();
   }
+  if (row?.githubVerified && row?.githubLogin) {
+    return `gh:${String(row.githubLogin).toLowerCase()}`;
+  }
   return row?.playerId || String(row?.displayName || '').toLowerCase();
 }
 
@@ -78,9 +81,13 @@ function mergeRemoteAndLocalBoard(remoteEntries, localEntries, { mode, levelId, 
 
   const byKey = new Map();
   for (const e of [...remoteEntries, ...localEntries]) {
-    if (!e || e.mode !== mode || e.levelId !== levelId) continue;
+    if (!e || e.mode !== mode) continue;
+    const matchesBoard = mode === 'daily' ? e.dailyDateKey === levelId : e.levelId === levelId;
+    if (!matchesBoard) continue;
     const prev = byKey.get(e.entryKey);
-    if (!prev || e.score > prev.score || (e.score === prev.score && e.timeSec < prev.timeSec)) {
+    const better = !prev || e.score > prev.score || (e.score === prev.score && e.timeSec < prev.timeSec);
+    const upgradedVerify = Boolean(prev && !prev.githubVerified && e.githubVerified && e.score >= prev.score);
+    if (better || upgradedVerify) {
       byKey.set(e.entryKey, e);
     }
   }
@@ -124,13 +131,14 @@ export class LeaderboardClient {
   }
 
   async _fetchWithTimeout(url, opts = {}, timeoutMs = 8000) {
+    const reqOpts = { credentials: 'same-origin', ...opts };
     if (typeof AbortController === 'undefined') {
-      return fetch(url, opts);
+      return fetch(url, reqOpts);
     }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      return await fetch(url, { ...opts, signal: ctrl.signal });
+      return await fetch(url, { ...reqOpts, signal: ctrl.signal });
     } finally {
       clearTimeout(timer);
     }
@@ -144,6 +152,8 @@ export class LeaderboardClient {
     return {
       mode: entry.mode,
       levelId: entry.levelId,
+      ...(entry.dailyDateKey ? { dailyDateKey: entry.dailyDateKey } : {}),
+      ...(entry.mutatorId ? { mutatorId: entry.mutatorId } : {}),
       runId: entry.mode === 'team' ? entry.entryKey : undefined,
       playerId: entry.playerId || this.playerId,
       diverName: entry.displayName,
@@ -403,13 +413,14 @@ export class LeaderboardClient {
 
   async submitRun(submission) {
     this._localEntries = this._loadLocalCache();
+    const { verifiedGitHubUser = null, ...restSub } = submission || {};
     const payload = {
-      ...submission,
-      playerId: submission.playerId || this.playerId,
-      createdAt: Number.isFinite(Number(submission.createdAt)) ? Number(submission.createdAt) : Date.now(),
+      ...restSub,
+      playerId: restSub.playerId || this.playerId,
+      createdAt: Number.isFinite(Number(restSub.createdAt)) ? Number(restSub.createdAt) : Date.now(),
     };
 
-    const parsedLocal = normalizeLeaderboardSubmission(payload);
+    const parsedLocal = normalizeLeaderboardSubmission(payload, { verifiedGitHubUser });
     if (!parsedLocal.ok) {
       return { ok: false, error: parsedLocal.error };
     }
@@ -418,7 +429,10 @@ export class LeaderboardClient {
     const buildLocalResult = (source = 'local') => {
       const board = queryLeaderboardEntries(this._localEntries, {
         mode: parsedLocal.entry.mode,
-        levelId: parsedLocal.entry.levelId,
+        levelId:
+          parsedLocal.entry.mode === 'daily'
+            ? parsedLocal.entry.dailyDateKey
+            : parsedLocal.entry.levelId,
         limit: 50,
       });
       const rank = board.findIndex((e) => e.entryKey === parsedLocal.entry.entryKey) + 1;

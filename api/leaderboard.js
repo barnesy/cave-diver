@@ -12,9 +12,34 @@ import {
   readBlobJson,
   writeBlobJson,
 } from './_blobJson.js';
+import {
+  SESSION_COOKIE_NAME,
+  decryptSessionPayload,
+  getGitHubConfig,
+  parseCookies,
+} from './_githubAuth.js';
 
 const LEADERBOARD_BLOB_PATH = 'leaderboard/entries-v1.json';
 const LEADERBOARD_BACKUP_PATH = 'leaderboard/backup-v1.json';
+
+function readVerifiedGitHubUser(request) {
+  try {
+    const cfg = getGitHubConfig(process.env);
+    if (!cfg.configured) return null;
+    const cookies = parseCookies(request.headers.get('cookie') || '');
+    const raw = cookies[SESSION_COOKIE_NAME];
+    if (!raw) return null;
+    const sess = decryptSessionPayload(raw, cfg);
+    if (!sess?.user?.login) return null;
+    return {
+      login: sess.user.login,
+      avatarUrl: sess.user.avatarUrl || '',
+      name: sess.user.name || sess.user.login,
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function readAllWithBackupFallback() {
   let primaryErr = null;
@@ -53,7 +78,8 @@ export function OPTIONS() {
 export async function GET(request) {
   try {
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') === 'team' ? 'team' : 'solo';
+    const rawMode = url.searchParams.get('mode');
+    const mode = rawMode === 'team' ? 'team' : rawMode === 'daily' ? 'daily' : 'solo';
     const level = url.searchParams.get('level') || 'overall';
     const limit = Math.max(1, Math.min(50, Number(url.searchParams.get('limit')) || 20));
 
@@ -77,6 +103,8 @@ export async function POST(request) {
     return jsonResponse({ error: 'Invalid JSON body.' }, 400);
   }
 
+  const verifiedGitHubUser = readVerifiedGitHubUser(request);
+
   const isBatch = Array.isArray(raw?.entries);
   if (isBatch) {
     if (raw.entries.length === 0 || raw.entries.length > 50) {
@@ -84,7 +112,7 @@ export async function POST(request) {
     }
     const validEntries = [];
     for (const item of raw.entries) {
-      const parsed = normalizeLeaderboardSubmission(item);
+      const parsed = normalizeLeaderboardSubmission(item, { verifiedGitHubUser });
       if (!parsed.ok) {
         return jsonResponse({ error: parsed.error }, 400);
       }
@@ -121,7 +149,7 @@ export async function POST(request) {
     }
   }
 
-  const parsed = normalizeLeaderboardSubmission(raw);
+  const parsed = normalizeLeaderboardSubmission(raw, { verifiedGitHubUser });
   if (!parsed.ok) {
     return jsonResponse({ error: parsed.error }, 400);
   }
@@ -155,7 +183,7 @@ export async function POST(request) {
 
     const boardAll = queryLeaderboardEntries(allEntries, {
       mode: entry.mode,
-      levelId: entry.levelId,
+      levelId: entry.mode === 'daily' ? entry.dailyDateKey : entry.levelId,
       limit: 500,
     });
     const idx = boardAll.findIndex((e) => e.entryKey === entry.entryKey);

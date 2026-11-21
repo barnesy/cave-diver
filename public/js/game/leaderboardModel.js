@@ -1,7 +1,27 @@
 import { LEVELS, isValidLevelId, getLevelById } from '../levels/index.js';
 
-export const LEADERBOARD_MODES = new Set(['solo', 'team']);
+export const LEADERBOARD_MODES = new Set(['solo', 'team', 'daily']);
 export const CALLSIGN_MAX_LEN = 16;
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const GH_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+
+export function sanitizeGitHubAvatarUrl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    if (u.protocol === 'https:' && u.hostname === 'avatars.githubusercontent.com') {
+      return u.toString().slice(0, 260);
+    }
+  } catch {}
+  return '';
+}
+
+export function sanitizeGitHubLogin(raw) {
+  const s = String(raw || '').trim();
+  return GH_LOGIN_RE.test(s) ? s : '';
+}
 
 export function sanitizeCallsign(raw, fallback = 'Diver', maxLen = CALLSIGN_MAX_LEN) {
   const cleaned = String(raw || '')
@@ -37,16 +57,18 @@ export function computeLevelMaxScore(levelId, isTeam = false) {
 }
 
 /**
- * Validate and normalize a solo or co-op team dive submission.
+ * Validate and normalize a solo, co-op team, or daily expedition dive submission.
  * Returns { ok: true, entry } or { ok: false, error }.
+ * Cryptographically verified GitHub identity is stamped ONLY when `verifiedGitHubUser` is provided.
  */
-export function normalizeLeaderboardSubmission(raw) {
+export function normalizeLeaderboardSubmission(raw, { verifiedGitHubUser = null } = {}) {
   if (!raw || typeof raw !== 'object') {
     return { ok: false, error: 'Invalid submission payload.' };
   }
-  const mode = raw.mode === 'team' ? 'team' : raw.mode === 'solo' ? 'solo' : null;
+  const mode =
+    raw.mode === 'team' ? 'team' : raw.mode === 'daily' ? 'daily' : raw.mode === 'solo' ? 'solo' : null;
   if (!mode) {
-    return { ok: false, error: 'Leaderboard mode must be "solo" or "team".' };
+    return { ok: false, error: 'Leaderboard mode must be "solo", "team", or "daily".' };
   }
   const levelId = typeof raw.levelId === 'string' ? raw.levelId.trim() : '';
   if (!isValidLevelId(levelId)) {
@@ -54,6 +76,15 @@ export function normalizeLeaderboardSubmission(raw) {
   }
 
   const isTeam = mode === 'team';
+  const isDaily = mode === 'daily';
+  const rawDateKey = typeof raw.dailyDateKey === 'string' ? raw.dailyDateKey.trim().slice(0, 10) : '';
+  const dailyDateKey = isDaily
+    ? DATE_KEY_RE.test(rawDateKey)
+      ? rawDateKey
+      : new Date().toISOString().slice(0, 10)
+    : '';
+  const mutatorId = isDaily ? sanitizeIdToken(raw.mutatorId, 32) : '';
+
   const teamSize = isTeam
     ? Math.max(2, Math.min(4, Math.round(Number(raw.teamSize) || 2)))
     : 1;
@@ -78,7 +109,14 @@ export function normalizeLeaderboardSubmission(raw) {
     return { ok: false, error: 'Only completed dives qualify for the global leaderboard.' };
   }
 
-  const playerId = sanitizeIdToken(raw.playerId, 36) || `anon_${Date.now().toString(36)}`;
+  // Verified GitHub identity is ONLY accepted from a trusted server/session source
+  const ghLogin = verifiedGitHubUser ? sanitizeGitHubLogin(verifiedGitHubUser.login) : '';
+  const ghAvatar = ghLogin ? sanitizeGitHubAvatarUrl(verifiedGitHubUser.avatarUrl) : '';
+  const githubVerified = Boolean(ghLogin);
+
+  const playerId = ghLogin
+    ? `gh_${ghLogin.toLowerCase().slice(0, 32)}`
+    : sanitizeIdToken(raw.playerId, 36) || `anon_${Date.now().toString(36)}`;
   const rawCrew = Array.isArray(raw.crew) ? raw.crew.slice(0, 4) : [];
   const crew = rawCrew.map((m, idx) => {
     const member = {
@@ -117,18 +155,26 @@ export function normalizeLeaderboardSubmission(raw) {
     sanitizeIdToken(raw.runId, 48) ||
     `${playerId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
-  // Solo deduplicates per (playerId, levelId) keeping PB; Team deduplicates shared co-op runId
-  const entryKey = isTeam ? runId : `${playerId}:${levelId}`;
+  // Solo deduplicates per (playerId, levelId); Daily per (playerId, dailyDateKey); Team per shared runId
+  const entryKey = isTeam
+    ? runId
+    : isDaily
+      ? `${playerId}:${dailyDateKey}`
+      : `${playerId}:${levelId}`;
 
   return {
     ok: true,
     entry: {
       mode,
       levelId,
+      ...(isDaily ? { dailyDateKey } : {}),
+      ...(mutatorId ? { mutatorId } : {}),
       entryKey,
       playerId,
       runId,
       displayName,
+      ...(githubVerified ? { githubLogin: ghLogin, githubVerified: true } : {}),
+      ...(ghAvatar ? { githubAvatar: ghAvatar } : {}),
       crew,
       teamSize,
       score,
@@ -188,31 +234,43 @@ export function sortLeaderboardEntries(a, b) {
 }
 
 /**
- * Aggregate best-per-level scores across all 14 sites into a campaign-wide ranking.
+ * Aggregate best-per-level (or per-date for daily) scores into a campaign-wide ranking.
  */
 export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
+  const safeMode = mode === 'team' ? 'team' : mode === 'daily' ? 'daily' : 'solo';
   const buckets = new Map();
   for (const e of entries || []) {
-    if (!e || e.mode !== mode) continue;
+    if (!e || e.mode !== safeMode) continue;
     const ownerKey =
-      mode === 'team'
+      safeMode === 'team'
         ? (e.crew || []).map((c) => c.name.toLowerCase()).sort().join('|') || e.displayName.toLowerCase()
-        : e.playerId || e.displayName.toLowerCase();
+        : e.githubVerified && e.githubLogin
+          ? `gh:${e.githubLogin.toLowerCase()}`
+          : e.playerId || e.displayName.toLowerCase();
     let agg = buckets.get(ownerKey);
     if (!agg) {
       agg = {
         playerId: e.playerId,
         displayName: e.displayName,
+        githubLogin: e.githubVerified && e.githubLogin ? e.githubLogin : '',
+        githubAvatar: e.githubVerified && e.githubAvatar ? e.githubAvatar : '',
+        githubVerified: Boolean(e.githubVerified && e.githubLogin),
         teamSize: e.teamSize,
         crew: e.crew,
-        bestByLevel: new Map(),
+        bestBySlot: new Map(),
         latestAt: e.createdAt,
       };
       buckets.set(ownerKey, agg);
     }
-    const prev = agg.bestByLevel.get(e.levelId);
+    const slotKey = safeMode === 'daily' ? e.dailyDateKey || e.levelId : e.levelId;
+    const prev = agg.bestBySlot.get(slotKey);
     if (!prev || sortLeaderboardEntries(e, prev) < 0) {
-      agg.bestByLevel.set(e.levelId, e);
+      agg.bestBySlot.set(slotKey, e);
+    }
+    if (e.githubVerified && e.githubLogin) {
+      agg.githubVerified = true;
+      agg.githubLogin = e.githubLogin;
+      if (e.githubAvatar) agg.githubAvatar = e.githubAvatar;
     }
     if (e.createdAt >= agg.latestAt) {
       agg.latestAt = e.createdAt;
@@ -228,9 +286,11 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
     let totalCollectFound = 0;
     let totalCollectAvail = 0;
     const rankOrder = new Map(LEVELS.map((l, i) => [l.id, i]));
-    const siteRuns = Array.from(agg.bestByLevel.values())
+    const siteRuns = Array.from(agg.bestBySlot.values())
       .map((best) => ({
         levelId: best.levelId,
+        ...(best.dailyDateKey ? { dailyDateKey: best.dailyDateKey } : {}),
+        ...(best.mutatorId ? { mutatorId: best.mutatorId } : {}),
         score: best.score,
         grade: best.grade,
         timeSec: best.timeSec,
@@ -243,30 +303,41 @@ export function buildOverallStandings(entries, mode = 'solo', limit = 20) {
           : {}),
         ...(best.stats ? { stats: best.stats } : {}),
       }))
-      .sort((a, b) => (rankOrder.get(a.levelId) ?? 999) - (rankOrder.get(b.levelId) ?? 999));
+      .sort((a, b) =>
+        safeMode === 'daily'
+          ? String(b.dailyDateKey || '').localeCompare(String(a.dailyDateKey || ''))
+          : (rankOrder.get(a.levelId) ?? 999) - (rankOrder.get(b.levelId) ?? 999)
+      );
 
-    for (const best of agg.bestByLevel.values()) {
+    for (const best of agg.bestBySlot.values()) {
       totalScore += best.score;
       totalTime += best.timeSec;
       exploredSum += best.exploredPct;
       totalCollectFound += best.collectiblesFound || 0;
       totalCollectAvail += best.collectiblesTotal || 0;
     }
-    const sitesCompleted = agg.bestByLevel.size;
+    const sitesCompleted = agg.bestBySlot.size;
     rows.push({
-      mode,
+      mode: safeMode,
       levelId: 'overall',
       playerId: agg.playerId,
       displayName: agg.displayName,
+      ...(agg.githubVerified ? { githubLogin: agg.githubLogin, githubVerified: true } : {}),
+      ...(agg.githubAvatar ? { githubAvatar: agg.githubAvatar } : {}),
       crew: agg.crew,
       teamSize: agg.teamSize,
       sitesCompleted,
-      totalSites: LEVELS.length,
+      totalSites: safeMode === 'daily' ? sitesCompleted : LEVELS.length,
       collectiblesFound: totalCollectFound,
       collectiblesTotal: totalCollectAvail,
       siteRuns,
       score: totalScore,
-      grade: sitesCompleted >= LEVELS.length ? 'CAMPAIGN' : `${sitesCompleted}/${LEVELS.length} SITES`,
+      grade:
+        safeMode === 'daily'
+          ? `${sitesCompleted} DAILY`
+          : sitesCompleted >= LEVELS.length
+            ? 'CAMPAIGN'
+            : `${sitesCompleted}/${LEVELS.length} SITES`,
       timeSec: Math.round(totalTime * 10) / 10,
       exploredPct: Math.round(exploredSum / Math.max(1, sitesCompleted)),
       createdAt: agg.latestAt,
@@ -296,7 +367,10 @@ export function mergeLeaderboardEntries(existingList, incomingEntries) {
     const mapKey = `${entry.mode}|${entry.entryKey}`;
     const idx = indexByKey.get(mapKey);
     if (idx !== undefined) {
-      if (sortLeaderboardEntries(entry, items[idx]) < 0) {
+      const prev = items[idx];
+      const better = sortLeaderboardEntries(entry, prev) < 0;
+      const upgradedVerify = !prev.githubVerified && Boolean(entry.githubVerified) && entry.score >= prev.score;
+      if (better || upgradedVerify) {
         items[idx] = entry;
         changed = true;
       }
@@ -313,11 +387,11 @@ export function pruneLeaderboardEntries(entries, maxTotal = 2500, minPerBoard = 
   const list = Array.isArray(entries) ? entries.slice() : [];
   if (list.length <= maxTotal) return list;
 
-  // Preserve at least top minPerBoard entries per (mode, levelId) so one popular cave cannot evict another
+  // Preserve at least top minPerBoard entries per board so one popular cave or day cannot evict another
   const byBoard = new Map();
   for (const e of list) {
     if (!e) continue;
-    const bKey = `${e.mode}|${e.levelId}`;
+    const bKey = e.mode === 'daily' ? `daily|${e.dailyDateKey || e.levelId}` : `${e.mode}|${e.levelId}`;
     let bucket = byBoard.get(bKey);
     if (!bucket) {
       bucket = [];
@@ -346,10 +420,20 @@ export function pruneLeaderboardEntries(entries, maxTotal = 2500, minPerBoard = 
 }
 
 export function queryLeaderboardEntries(allEntries, { mode = 'solo', levelId = 'overall', limit = 20 } = {}) {
-  const safeMode = mode === 'team' ? 'team' : 'solo';
+  const safeMode = mode === 'team' ? 'team' : mode === 'daily' ? 'daily' : 'solo';
   const safeLimit = Math.max(1, Math.min(50, Math.round(Number(limit) || 20)));
   if (levelId === 'overall') {
     return buildOverallStandings(allEntries, safeMode, safeLimit);
+  }
+  if (safeMode === 'daily') {
+    const targetDate = DATE_KEY_RE.test(String(levelId || ''))
+      ? String(levelId)
+      : new Date().toISOString().slice(0, 10);
+    return (allEntries || [])
+      .filter((e) => e && e.mode === 'daily' && e.dailyDateKey === targetDate)
+      .slice()
+      .sort(sortLeaderboardEntries)
+      .slice(0, safeLimit);
   }
   if (!isValidLevelId(levelId)) {
     return [];
