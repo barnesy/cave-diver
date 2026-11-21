@@ -534,7 +534,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=131" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=132" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -848,7 +848,9 @@ window.addEventListener('resize', () => {
 function syncMenuLevelLabels(level, { animate = false } = {}) {
   const idx = LEVELS.findIndex((l) => l.id === level.id);
   const lvlNum = idx >= 0 ? idx + 1 : 1;
-  btnPlaySolo.textContent = `DIVE · LEVEL ${lvlNum}`;
+  btnPlaySolo.textContent = level.isProcedural
+    ? `DIVE · ∞ #${level.proceduralMeta?.seed || 'SUMP'}`
+    : `DIVE · LEVEL ${lvlNum}`;
   const menuTitle = screenMenu.querySelector('.menu-title');
   const menuDesc = menuDescEl || screenMenu.querySelector('.menu-desc');
   const loaderTitle = screenLoader.querySelector('.loader-title');
@@ -1163,6 +1165,10 @@ const input = new InputController({
     }
     if (dailyCalModalEl && !dailyCalModalEl.hidden) {
       closeDailyCalendarModal();
+      return true;
+    }
+    if (proceduralModal && !proceduralModal.hidden) {
+      closeProceduralModal();
       return true;
     }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
@@ -3045,7 +3051,7 @@ function renderProceduralModal() {
 
 function openProceduralModal() {
   if (!proceduralModal) return;
-  closeHomeMenu?.();
+  setHomeMenuOpen(false);
   if (procSeedInput) procSeedInput.value = draftProcedural.seed;
   if (procTierSelect) procTierSelect.value = draftProcedural.tier;
   if (procBiomeSelect) procBiomeSelect.value = draftProcedural.biome;

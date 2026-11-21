@@ -4901,6 +4901,11 @@ test('v128 Extreme Frontier Expedition Pack (+3 Iconic Dives -> 33 Total) & HUD 
     false,
     'stepSimulation(dt) must not reference out-of-scope nowMs'
   );
+  assert.equal(
+    /\bcloseHomeMenu\b/.test(mainSrc),
+    false,
+    'main.js must use setHomeMenuOpen(false), never undeclared closeHomeMenu'
+  );
 });
 
 test('v131 Daily Generated Sump Expeditions & Monthly Daily Dive Calendar: determinism, SDF validation & archive backfill', () => {
