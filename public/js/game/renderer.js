@@ -1433,6 +1433,7 @@ export class CaveRenderer {
     bioWake = null,
     buddyPing = null,
     airShareBeams = null,
+    droppedStages = null,
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
@@ -1634,6 +1635,9 @@ export class CaveRenderer {
       this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
     } else {
       this._drawCaveInteractives(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
+    }
+    if (Array.isArray(droppedStages) && droppedStages.length > 0) {
+      this._drawDroppedStages(ctx, droppedStages, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
     }
 
     // 8b. Authentic Cenote & Cave Flora, Calcite Formations, Fishes, Slider Turtles & Remipedes
@@ -4942,6 +4946,86 @@ export class CaveRenderer {
    * Post-lighting subtle phosphorescent glints for placed yellow cave arrows and clipped stage bottles
    * so divers can navigate by placed markers and spot reserve gas even in deep sumps.
    */
+  _drawDroppedStages(ctx, droppedStages, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(droppedStages) || droppedStages.length === 0) return;
+    for (let i = 0; i < droppedStages.length; i++) {
+      const st = droppedStages[i];
+      if (!st) continue;
+      if (st.x + 3 < visX0 || st.x - 3 > visX1 || st.y + 3 < visY0 || st.y - 3 > visY1) continue;
+      const sx = toScreenX(st.x);
+      const sy = toScreenY(st.y);
+      const bob = Math.sin(timeSec * 2.1 + i * 1.7) * 0.08 * scale;
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.4 + i);
+      const isTmx = st.gasId === 'TMX1455';
+      const isO2 = st.gasId === 'O2';
+      const bodyCol = st.color || (isTmx ? '#c084fc' : isO2 ? '#4ade80' : '#38bdf8');
+      const trimCol = isTmx ? '#f5d0fe' : isO2 ? '#bbf7d0' : '#bae6fd';
+
+      ctx.save();
+      ctx.translate(sx, sy + bob);
+
+      // Soft pulsing retrieval locator ring
+      ctx.strokeStyle = isTmx
+        ? `rgba(192, 132, 252, ${0.32 + pulse * 0.36})`
+        : isO2
+          ? `rgba(74, 222, 128, ${0.32 + pulse * 0.36})`
+          : `rgba(56, 189, 248, ${0.32 + pulse * 0.36})`;
+      ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, (0.92 + pulse * 0.24) * scale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Bolt-snap line clip & rigging cord
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.85)';
+      ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+      ctx.beginPath();
+      ctx.moveTo(0, -0.52 * scale);
+      ctx.lineTo(0, -1.02 * scale);
+      ctx.stroke();
+
+      // Clipped AL80 aluminum stage bottle
+      ctx.save();
+      ctx.rotate(-0.36);
+      const cw = 0.94 * scale;
+      const ch = 0.36 * scale;
+      ctx.fillStyle = '#cbd5e1';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-cw * 0.5, -ch * 0.5, cw, ch, ch * 0.45);
+      } else {
+        ctx.rect(-cw * 0.5, -ch * 0.5, cw, ch);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Color-coded gas mix band
+      ctx.fillStyle = bodyCol;
+      ctx.fillRect(-cw * 0.18, -ch * 0.46, cw * 0.36, ch * 0.92);
+
+      // DIN valve & rigged reg hose loop
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cw * 0.45, -ch * 0.2, 0.19 * scale, ch * 0.4);
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(cw * 0.64, 0, 0.08 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Crisp stenciled bar + mix tag
+      if (scale >= 11) {
+        ctx.font = `700 ${Math.max(9, Math.round(scale * 0.3))}px "JetBrains Mono", monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = trimCol;
+        const shortTag = `${st.bar || 45}b ${st.shortLabel || st.gasId}`;
+        ctx.fillText(shortTag, 0, 0.56 * scale);
+      }
+      ctx.restore();
+    }
+  }
+
   _drawCaveInteractiveBeacons(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null) {
     const level = this.level;
     const placedSet = wreckState?.placedMarkerIds;

@@ -964,3 +964,155 @@ export function getFieldGuideStats(rawBook) {
     entries,
   };
 }
+
+function csvEscape(val) {
+  const s = val == null ? '' : String(val);
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/**
+ * Export the player's career dive logbook across all expeditions as an RFC-4180 CSV string.
+ */
+export function exportLogbookToCsv(rawBook, levels = []) {
+  const book = normalizeBook(rawBook);
+  const summary = formatLogbookSummary(book, Math.max(1, (levels || []).length || 30));
+  const fg = getFieldGuideStats(book);
+  const headers = [
+    'Site ID',
+    'Expedition',
+    'Location',
+    'Category',
+    'Max Depth (m)',
+    'Status',
+    'Best Grade',
+    'Best Score',
+    'Best Time (s)',
+    'Clears',
+    'Best Difficulty',
+  ];
+  const rows = [headers.map(csvEscape).join(',')];
+  const listedIds = new Set();
+
+  for (const lvl of levels || []) {
+    if (!lvl?.id) continue;
+    listedIds.add(lvl.id);
+    const rec = book.cleared[lvl.id] || null;
+    rows.push(
+      [
+        lvl.id,
+        lvl.name || lvl.id,
+        lvl.location || '',
+        lvl.isWreck ? 'Shipwreck' : 'Cave',
+        lvl.maxDepthM ?? '',
+        rec ? 'CLEARED' : 'UNEXPLORED',
+        rec?.grade || '',
+        rec ? rec.score : '',
+        rec && rec.bestTimeSec > 0 ? rec.bestTimeSec.toFixed(1) : '',
+        rec ? rec.clears : 0,
+        rec?.bestDifficulty || '',
+      ]
+        .map(csvEscape)
+        .join(',')
+    );
+  }
+
+  for (const [lid, rec] of Object.entries(book.cleared)) {
+    if (listedIds.has(lid) || !rec) continue;
+    rows.push(
+      [
+        lid,
+        lid,
+        '',
+        'Expedition',
+        '',
+        'CLEARED',
+        rec.grade || '',
+        rec.score ?? '',
+        rec.bestTimeSec > 0 ? rec.bestTimeSec.toFixed(1) : '',
+        rec.clears ?? 1,
+        rec.bestDifficulty || '',
+      ]
+        .map(csvEscape)
+        .join(',')
+    );
+  }
+
+  rows.push('');
+  rows.push(
+    [
+      'CAREER SUMMARY',
+      summary.campaignMedal,
+      `Sites ${summary.clearedCount}/${summary.totalSites}`,
+      `Total Dives: ${summary.totalDives}`,
+      `Deepest: ${summary.deepestM}m`,
+      `Total Bottom Time: ${Math.round(summary.totalTimeSec)}s`,
+      `Best Score: ${summary.bestScore}`,
+      `Daily Streak: ${book.dailyStreak || 0} (Best ${book.bestDailyStreak || 0})`,
+      `Field Guide: ${fg.discoveredCount}/${fg.totalCount} (${fg.naturalistRank})`,
+      '',
+      '',
+    ]
+      .map(csvEscape)
+      .join(',')
+  );
+
+  return rows.join('\r\n');
+}
+
+/**
+ * Export a rich, structured JSON snapshot of the player's career dive logbook, certifications, and field guide.
+ */
+export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
+  const book = normalizeBook(rawBook);
+  const summary = formatLogbookSummary(book, Math.max(1, (levels || []).length || 30));
+  const certs = computeCertifications(book, levels);
+  const fieldGuide = getFieldGuideStats(book);
+  const sites = (levels || []).map((lvl) => {
+    const rec = book.cleared[lvl.id] || null;
+    return {
+      id: lvl.id,
+      name: lvl.name || lvl.id,
+      location: lvl.location || '',
+      category: lvl.isWreck ? 'shipwreck' : 'cave',
+      maxDepthM: lvl.maxDepthM ?? null,
+      cleared: Boolean(rec),
+      record: rec ? { ...rec } : null,
+    };
+  });
+
+  return JSON.stringify(
+    {
+      schema: 'techno-dive-logbook-v1',
+      exportedAt: new Date().toISOString(),
+      diverName: meta.diverName || 'Diver',
+      githubLogin: meta.githubLogin || '',
+      version: meta.version || '',
+      summary,
+      daily: {
+        currentStreak: book.dailyStreak || 0,
+        bestStreak: book.bestDailyStreak || 0,
+        lastDailyDate: book.lastDailyDate || '',
+        completedCount: Object.keys(book.dailyCompleted || {}).length,
+        completed: book.dailyCompleted || {},
+      },
+      certifications: {
+        earnedCount: certs.earnedCount,
+        total: certs.total,
+        highestTitle: certs.highestTitle,
+        earned: certs.certs.filter((c) => c.earned).map((c) => c.id),
+      },
+      fieldGuide: {
+        discoveredCount: fieldGuide.discoveredCount,
+        totalCount: fieldGuide.totalCount,
+        goldCount: fieldGuide.goldCount,
+        totalPhotos: fieldGuide.totalPhotos,
+        naturalistRank: fieldGuide.naturalistRank,
+        entries: book.fieldGuide,
+      },
+      sites,
+    },
+    null,
+    2
+  );
+}

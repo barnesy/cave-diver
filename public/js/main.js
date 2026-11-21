@@ -4,6 +4,7 @@ import {
   switchGas,
   GAS_MIXES,
   computePPO2,
+  buildCustomGasBlend,
   getRecommendedGas,
   getShareableGasCandidate,
   donateGasFromState,
@@ -27,6 +28,8 @@ import {
   getDailyStatus,
   recordFieldGuidePhoto,
   getFieldGuideStats,
+  exportLogbookToCsv,
+  exportLogbookToJson,
 } from './game/logbookModel.js';
 import {
   createDiveSession,
@@ -36,6 +39,7 @@ import {
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
   triggerWreckAction,
+  dropStageTank,
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
@@ -495,7 +499,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=119" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=120" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -878,6 +882,7 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
   activeLevel = nextLevel;
   if (selectLevel) selectLevel.value = nextLevel.id;
   syncMenuLevelLabels(nextLevel, { animate: true });
+  if (typeof syncGasPlanBadges === 'function') syncGasPlanBadges();
 
   const isCached = renderer.isLevelCached(nextLevel.id);
   const mapPct = (rawPct) => {
@@ -1109,6 +1114,10 @@ const input = new InputController({
       closeLogbookModal();
       return true;
     }
+    if (gasPlannerModal && !gasPlannerModal.hidden) {
+      closeGasPlannerModal();
+      return true;
+    }
     if (modalDiveGuide && !modalDiveGuide.hidden) {
       closeDiveGuideModal(false);
       return true;
@@ -1132,6 +1141,7 @@ const input = new InputController({
   onMinimapToggle: () => handleMinimapToggle(),
   onCameraSnap: () => handleCameraSnap(),
   onBuddyPing: () => handleBuddyLocatePing(''),
+  onStageDrop: () => handleStageDrop(),
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -1277,6 +1287,7 @@ const GEAR_LOADOUT_KEY = 'caveDiverGearLoadout_v1';
 const gearDockGridEl = document.getElementById('gear-dock-grid');
 const gearDockSubEl = document.getElementById('gear-dock-sub');
 const hudGearDockEl = document.getElementById('hud-gear-dock');
+const btnHudStage = document.getElementById('btn-hud-stage');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
@@ -1453,28 +1464,59 @@ btnHudDpv?.addEventListener('click', (e) => {
   e.stopPropagation();
   handleDpvToggle();
 });
+btnHudStage?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleStageDrop();
+});
+
+function handleStageDrop() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  audio.resume();
+  const res = dropStageTank(session, {
+    onWreckSync: (actionKind, targetId) => {
+      if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
+    },
+    onStageDrop: () => {
+      audio.playClipLine?.(true);
+    },
+    onToast: (txt, sec) => showToast(txt, sec),
+  });
+  if (res.ok) {
+    lastGearHudKey = '';
+    syncTechGearHud(session);
+  }
+  return Boolean(res.ok);
+}
 
 function syncTechGearHud(sess) {
   if (!hudGearDockEl) return;
-  const hasSonar = Boolean(sess?.sonar?.equipped);
-  const hasDpv = Boolean(sess?.dpv?.equipped);
-  const hasCcr = Boolean(sess?.gear?.ccr);
-  if (!sess || (!hasSonar && !hasDpv && !hasCcr)) {
+  if (!sess) {
     if (lastGearHudKey !== 'none') {
       lastGearHudKey = 'none';
       hudGearDockEl.hidden = true;
     }
     return;
   }
+  const hasSonar = Boolean(sess.sonar?.equipped);
+  const hasDpv = Boolean(sess.dpv?.equipped);
+  const hasCcr = Boolean(sess.gear?.ccr);
+  const staged = Boolean(sess.spareStageDropped);
+  const activeGasBar = Math.round(sess.diveState?.tanks?.[sess.diveState?.activeGasId]?.bar ?? 0);
+  const canStage = !staged && activeGasBar >= 75 && (sess.diver?.y || 0) >= 1.2;
   const cdSec = Math.ceil(sess.sonar?.cooldownSec || 0);
   const dpvPct = Math.round(sess.dpv?.batteryPct ?? 100);
   const dpvOn = Boolean(sess.dpv?.active);
   const ccrPct = Math.round(sess.diveState?.ccrScrubberPct ?? 100);
-  const key = `${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
+  const key = `stg:${staged}:${canStage}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
   if (key === lastGearHudKey) return;
   lastGearHudKey = key;
   hudGearDockEl.hidden = false;
 
+  if (btnHudStage) {
+    btnHudStage.hidden = false;
+    btnHudStage.textContent = staged ? '🛢 STAGED (+6%)' : '🛢 STAGE [T]';
+    btnHudStage.className = `gear-hud-btn stage ${staged ? 'staged' : canStage ? '' : 'low'}`;
+  }
   if (btnHudSonar) {
     btnHudSonar.hidden = !hasSonar;
     if (hasSonar) {
@@ -1779,6 +1821,288 @@ function closeLogbookModal() {
 btnOpenLogbook?.addEventListener('click', openLogbookModal);
 btnProgressPill?.addEventListener('click', openLogbookModal);
 btnLogbookClose?.addEventListener('click', closeLogbookModal);
+
+function downloadTextFile(filename, content, mimeType) {
+  try {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const btnLogbookExportCsv = document.getElementById('btn-logbook-export-csv');
+const btnLogbookExportJson = document.getElementById('btn-logbook-export-json');
+btnLogbookExportCsv?.addEventListener('click', () => {
+  const book = loadCareerLogbook();
+  const csv = exportLogbookToCsv(book, LEVELS);
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (downloadTextFile(`techno-dive-logbook-${stamp}.csv`, csv, 'text/csv;charset=utf-8')) {
+    showToast(`📥 Exported Dive Logbook CSV (${Object.keys(book.cleared).length}/${LEVELS.length} sites)`, 2.6);
+  }
+});
+btnLogbookExportJson?.addEventListener('click', () => {
+  const book = loadCareerLogbook();
+  const appVer = document.querySelector('meta[name="app-version"]')?.content || '';
+  const json = exportLogbookToJson(book, LEVELS, {
+    diverName: playerNameInput?.value.trim() || 'Diver',
+    githubLogin: github.getStatus().user?.login || '',
+    version: appVer ? `v${appVer}` : '',
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (downloadTextFile(`techno-dive-logbook-${stamp}.json`, json, 'application/json;charset=utf-8')) {
+    showToast('📄 Exported full Dive Logbook & Field Guide JSON!', 2.6);
+  }
+});
+
+// Pre-Dive Technical Trimix / Nitrox Gas Blender (v120)
+const CUSTOM_GAS_PREF_KEY = 'caveDiverCustomGas_v1';
+const gasPlannerModal = document.getElementById('gas-planner-modal');
+const btnOpenGasPlanner = document.getElementById('btn-open-gas-planner');
+const menuGasPillEl = document.getElementById('menu-gas-pill');
+const homeMenuGasLabelEl = document.getElementById('home-menu-gas-label');
+const btnGasPlannerClose = document.getElementById('btn-gas-planner-close');
+const gasPlannerSubEl = document.getElementById('gas-planner-sub');
+const gasPresetRowEl = document.getElementById('gas-preset-row');
+const gasO2Slider = document.getElementById('gas-o2-slider');
+const gasHeSlider = document.getElementById('gas-he-slider');
+const gasO2ValEl = document.getElementById('gas-o2-val');
+const gasHeValEl = document.getElementById('gas-he-val');
+const gasBarO2El = document.getElementById('gas-bar-o2');
+const gasBarHeEl = document.getElementById('gas-bar-he');
+const gasBarN2El = document.getElementById('gas-bar-n2');
+const gasLegO2El = document.getElementById('gas-leg-o2');
+const gasLegHeEl = document.getElementById('gas-leg-he');
+const gasLegN2El = document.getElementById('gas-leg-n2');
+const gasOutNameEl = document.getElementById('gas-out-name');
+const gasOutMod14El = document.getElementById('gas-out-mod14');
+const gasOutMod16El = document.getElementById('gas-out-mod16');
+const gasOutMinEl = document.getElementById('gas-out-min');
+const gasOutDepthLblEl = document.getElementById('gas-out-depth-lbl');
+const gasOutPpo2El = document.getElementById('gas-out-ppo2');
+const gasOutEndEl = document.getElementById('gas-out-end');
+const gasSafetyPillEl = document.getElementById('gas-safety-pill');
+const btnGasApply = document.getElementById('btn-gas-apply');
+const btnGasReset = document.getElementById('btn-gas-reset');
+
+let customGasPlan = { enabled: false, o2Pct: 18, hePct: 45 };
+let draftGasPlan = { o2Pct: 18, hePct: 45, useDefault: true };
+try {
+  const rawGas = localStorage.getItem(CUSTOM_GAS_PREF_KEY);
+  if (rawGas) {
+    const parsed = JSON.parse(rawGas);
+    if (parsed && typeof parsed === 'object') {
+      customGasPlan = {
+        enabled: Boolean(parsed.enabled),
+        o2Pct: Math.max(8, Math.min(40, Math.round(Number(parsed.o2Pct) || 18))),
+        hePct: Math.max(0, Math.min(75, Math.round(Number(parsed.hePct) || 45))),
+      };
+    }
+  }
+} catch {}
+
+function saveCustomGasPlan() {
+  try {
+    localStorage.setItem(CUSTOM_GAS_PREF_KEY, JSON.stringify(customGasPlan));
+  } catch {}
+}
+
+function getSiteDefaultBottomMix(lvl) {
+  const ov = lvl?.gasOverrides?.TMX1455;
+  return ov ? { ...GAS_MIXES.TMX1455, ...ov } : GAS_MIXES.TMX1455;
+}
+
+function getActiveCustomMixOverrides(lvl = activeLevel) {
+  if (!customGasPlan.enabled) return null;
+  const targetDepthM = getLevelMaxDepthM(lvl) || 50;
+  const baseGas = getSiteDefaultBottomMix(lvl);
+  const blend = buildCustomGasBlend({
+    o2Pct: customGasPlan.o2Pct,
+    hePct: customGasPlan.hePct,
+    targetDepthM,
+    baseGas,
+  });
+  return { TMX1455: blend.override };
+}
+
+function syncGasPlanBadges() {
+  const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
+  if (customGasPlan.enabled) {
+    const blend = buildCustomGasBlend({
+      o2Pct: customGasPlan.o2Pct,
+      hePct: customGasPlan.hePct,
+      targetDepthM,
+      baseGas: getSiteDefaultBottomMix(activeLevel),
+    });
+    if (menuGasPillEl) {
+      menuGasPillEl.textContent = `🧪 ${blend.name}`;
+      menuGasPillEl.classList.add('custom');
+    }
+    if (homeMenuGasLabelEl) {
+      homeMenuGasLabelEl.textContent = `🧪 Gas Blender (${blend.shortLabel})`;
+    }
+  } else {
+    if (menuGasPillEl) {
+      menuGasPillEl.textContent = '🧪 Default Mix';
+      menuGasPillEl.classList.remove('custom');
+    }
+    if (homeMenuGasLabelEl) {
+      homeMenuGasLabelEl.textContent = '🧪 Gas Blender';
+    }
+  }
+}
+
+function renderGasPlannerModal() {
+  if (!gasPlannerModal) return;
+  const lvl = activeLevel || LEVELS[0];
+  const targetDepthM = Math.round(getLevelMaxDepthM(lvl) || 50);
+  const siteBase = getSiteDefaultBottomMix(lvl);
+  const maxAllowedHe = Math.min(75, Math.max(0, 95 - draftGasPlan.o2Pct));
+  if (draftGasPlan.hePct > maxAllowedHe) draftGasPlan.hePct = maxAllowedHe;
+
+  const blend = buildCustomGasBlend({
+    o2Pct: draftGasPlan.o2Pct,
+    hePct: draftGasPlan.hePct,
+    targetDepthM,
+    baseGas: siteBase,
+  });
+
+  if (gasPlannerSubEl) {
+    gasPlannerSubEl.textContent = `${lvl.name} · Target Max Depth ${targetDepthM}m (Site Default: ${siteBase.name})`;
+  }
+  if (gasO2Slider) gasO2Slider.value = String(blend.o2Pct);
+  if (gasHeSlider) {
+    gasHeSlider.max = String(Math.min(75, Math.max(0, 95 - blend.o2Pct)));
+    gasHeSlider.value = String(blend.hePct);
+  }
+  if (gasO2ValEl) gasO2ValEl.textContent = `${blend.o2Pct}%`;
+  if (gasHeValEl) gasHeValEl.textContent = `${blend.hePct}%`;
+  if (gasBarO2El) gasBarO2El.style.width = `${blend.o2Pct}%`;
+  if (gasBarHeEl) gasBarHeEl.style.width = `${blend.hePct}%`;
+  if (gasBarN2El) gasBarN2El.style.width = `${blend.n2Pct}%`;
+  if (gasLegO2El) gasLegO2El.textContent = `${blend.o2Pct}%`;
+  if (gasLegHeEl) gasLegHeEl.textContent = `${blend.hePct}%`;
+  if (gasLegN2El) gasLegN2El.textContent = `${blend.n2Pct}%`;
+
+  if (gasOutNameEl) gasOutNameEl.textContent = draftGasPlan.useDefault ? `${siteBase.name} (Default)` : blend.name;
+  if (gasOutMod14El) gasOutMod14El.textContent = `${blend.mod14M.toFixed(1)}m`;
+  if (gasOutMod16El) gasOutMod16El.textContent = `${blend.mod16M.toFixed(1)}m`;
+  if (gasOutMinEl) gasOutMinEl.textContent = blend.minM > 0 ? `${blend.minM}m (Hypoxic)` : '0m (Normoxic)';
+  if (gasOutDepthLblEl) gasOutDepthLblEl.textContent = `PPO₂ @ ${targetDepthM}m`;
+  if (gasOutPpo2El) gasOutPpo2El.textContent = `${blend.ppo2AtTarget.toFixed(2)} bar`;
+  if (gasOutEndEl) gasOutEndEl.textContent = `${blend.endAtTargetM.toFixed(1)}m`;
+  if (gasSafetyPillEl) {
+    gasSafetyPillEl.textContent = blend.statusText;
+    gasSafetyPillEl.className = `gas-safety-pill ${blend.status}`;
+  }
+
+  if (gasPresetRowEl) {
+    gasPresetRowEl.querySelectorAll('.gas-preset-btn').forEach((btn) => {
+      const isDefBtn = btn.dataset.preset === 'default';
+      const match = isDefBtn
+        ? draftGasPlan.useDefault
+        : !draftGasPlan.useDefault && Number(btn.dataset.o2) === blend.o2Pct && Number(btn.dataset.he) === blend.hePct;
+      btn.classList.toggle('active', match);
+    });
+  }
+}
+
+function openGasPlannerModal() {
+  if (!gasPlannerModal) return;
+  setHomeMenuOpen(false);
+  const siteBase = getSiteDefaultBottomMix(activeLevel);
+  if (customGasPlan.enabled) {
+    draftGasPlan = { o2Pct: customGasPlan.o2Pct, hePct: customGasPlan.hePct, useDefault: false };
+  } else {
+    draftGasPlan = {
+      o2Pct: Math.round((siteBase.fO2 || 0.14) * 100),
+      hePct: Math.round((siteBase.fHe || 0.55) * 100),
+      useDefault: true,
+    };
+  }
+  renderGasPlannerModal();
+  gasPlannerModal.hidden = false;
+}
+
+function closeGasPlannerModal() {
+  if (gasPlannerModal) gasPlannerModal.hidden = true;
+}
+
+btnOpenGasPlanner?.addEventListener('click', openGasPlannerModal);
+menuGasPillEl?.addEventListener('click', openGasPlannerModal);
+btnGasPlannerClose?.addEventListener('click', closeGasPlannerModal);
+gasPlannerModal?.addEventListener('click', (e) => {
+  if (e.target === gasPlannerModal) closeGasPlannerModal();
+});
+gasO2Slider?.addEventListener('input', () => {
+  draftGasPlan.o2Pct = Number(gasO2Slider.value) || 18;
+  draftGasPlan.useDefault = false;
+  renderGasPlannerModal();
+});
+gasHeSlider?.addEventListener('input', () => {
+  draftGasPlan.hePct = Number(gasHeSlider.value) || 0;
+  draftGasPlan.useDefault = false;
+  renderGasPlannerModal();
+});
+gasPresetRowEl?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.gas-preset-btn');
+  if (!btn) return;
+  if (btn.dataset.preset === 'default') {
+    const siteBase = getSiteDefaultBottomMix(activeLevel);
+    draftGasPlan = {
+      o2Pct: Math.round((siteBase.fO2 || 0.14) * 100),
+      hePct: Math.round((siteBase.fHe || 0.55) * 100),
+      useDefault: true,
+    };
+  } else {
+    draftGasPlan = {
+      o2Pct: Number(btn.dataset.o2) || 18,
+      hePct: Number(btn.dataset.he) || 45,
+      useDefault: false,
+    };
+  }
+  renderGasPlannerModal();
+});
+btnGasApply?.addEventListener('click', () => {
+  if (draftGasPlan.useDefault) {
+    customGasPlan.enabled = false;
+    saveCustomGasPlan();
+    syncGasPlanBadges();
+    closeGasPlannerModal();
+    showToast('🧪 Using expedition site default bottom gas.', 2.2);
+    return;
+  }
+  customGasPlan = {
+    enabled: true,
+    o2Pct: draftGasPlan.o2Pct,
+    hePct: draftGasPlan.hePct,
+  };
+  saveCustomGasPlan();
+  syncGasPlanBadges();
+  closeGasPlannerModal();
+  const blend = buildCustomGasBlend({
+    o2Pct: customGasPlan.o2Pct,
+    hePct: customGasPlan.hePct,
+    targetDepthM: getLevelMaxDepthM(activeLevel) || 50,
+  });
+  showToast(`🧪 Custom bottom gas locked: ${blend.name} (MOD ${blend.mod14M.toFixed(0)}m)`, 2.8);
+});
+btnGasReset?.addEventListener('click', () => {
+  customGasPlan.enabled = false;
+  saveCustomGasPlan();
+  syncGasPlanBadges();
+  closeGasPlannerModal();
+  showToast('🧪 Reset to expedition site default gas mix.', 2.2);
+});
+syncGasPlanBadges();
 modalLogbook?.addEventListener('click', (e) => {
   if (e.target === modalLogbook) {
     closeLogbookModal();
@@ -2548,6 +2872,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     gear: activeGear,
     mutatorId: dailyRun?.mutatorId || '',
     dailyDateKey: dailyRun?.dateKey || '',
+    customMixOverrides: getActiveCustomMixOverrides(activeLevel),
   });
   const dailyMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = dailyMutMeta ? `📅 ${dailyMutMeta.icon} ${dailyMutMeta.shortName}` : '';
@@ -5630,6 +5955,7 @@ function stepSimulation(dt) {
     sonarPulse: session.sonar?.activePulse || null,
     encounters: session.encounters || null,
     buddyPing: session.buddyPing || null,
+    droppedStages: session.droppedStages || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,
@@ -5831,6 +6157,7 @@ function frame(nowMs) {
       bioWake: session.bioWake || null,
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
+      droppedStages: session.droppedStages || null,
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',

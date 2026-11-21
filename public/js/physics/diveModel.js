@@ -80,6 +80,83 @@ export function computeEND(depthM, gas) {
   return Math.max(0, (pAmb * (1 - gas.fHe) - 1.0) * 10.0);
 }
 
+/**
+ * Technical Trimix / Nitrox custom blend calculator (Dalton's Law MOD, Hypoxic ceiling & END).
+ * Returns a ready-to-use bottom mix override plus live safety diagnostics for targetDepthM.
+ */
+export function buildCustomGasBlend({ o2Pct = 18, hePct = 45, targetDepthM = 50, baseGas = GAS_MIXES.TMX1455 } = {}) {
+  const cleanO2 = Math.max(8, Math.min(40, Math.round(Number(o2Pct) || 18)));
+  const maxHe = Math.max(0, 95 - cleanO2);
+  const cleanHe = Math.max(0, Math.min(maxHe, Math.round(Number(hePct) || 0)));
+  const cleanN2 = Math.max(0, 100 - cleanO2 - cleanHe);
+  const fO2 = cleanO2 / 100;
+  const fHe = cleanHe / 100;
+  const fN2 = cleanN2 / 100;
+
+  const mod14M = Math.max(0, Math.round(((1.4 / fO2) - 1.0) * 100) / 10);
+  const mod16M = Math.max(0, Math.round(((1.6 / fO2) - 1.0) * 100) / 10);
+  const minM = fO2 < 0.16 ? Math.max(1, Math.ceil(((0.16 / fO2) - 1.0) * 10)) : 0;
+  const depth = Math.max(0, Number(targetDepthM) || 0);
+  const mixObj = { fO2, fHe, fN2 };
+  const ppo2AtTarget = Math.round(computePPO2(depth, mixObj) * 100) / 100;
+  const endAtTargetM = Math.round(computeEND(depth, mixObj) * 10) / 10;
+
+  let status = 'safe';
+  let statusText = '✓ Optimal Technical Mix';
+  if (ppo2AtTarget > 1.6) {
+    status = 'danger';
+    statusText = `⛔ O₂ Toxicity risk at ${Math.round(depth)}m (PPO₂ ${ppo2AtTarget.toFixed(2)} > 1.60)`;
+  } else if (depth > 0 && ppo2AtTarget < 0.16) {
+    status = 'danger';
+    statusText = `⛔ Hypoxic at ${Math.round(depth)}m (PPO₂ ${ppo2AtTarget.toFixed(2)} < 0.16)`;
+  } else if (endAtTargetM > 38) {
+    status = 'danger';
+    statusText = `⛔ Severe Narcosis at ${Math.round(depth)}m (END ${Math.round(endAtTargetM)}m)`;
+  } else if (ppo2AtTarget > 1.4) {
+    status = 'caution';
+    statusText = `⚠ High PPO₂ at ${Math.round(depth)}m (${ppo2AtTarget.toFixed(2)} bar — lower O₂%)`;
+  } else if (endAtTargetM > 30) {
+    status = 'caution';
+    statusText = `⚠ Moderate Narcosis at ${Math.round(depth)}m (END ${Math.round(endAtTargetM)}m — add He%)`;
+  } else if (minM > 0) {
+    statusText = `✓ Hypoxic Trimix · Switch below ${minM}m (MOD ${Math.round(mod14M)}m)`;
+  }
+
+  const label = cleanHe > 0 ? `TMX ${cleanO2}/${cleanHe}` : `EAN${cleanO2}`;
+  const shortLabel = `${cleanO2}/${String(cleanHe).padStart(2, '0')}`;
+  const override = {
+    ...(baseGas || GAS_MIXES.TMX1455),
+    name: label,
+    shortLabel,
+    role: `Custom (${minM}–${Math.round(mod14M)}m)`,
+    fO2,
+    fHe,
+    fN2,
+    modM: mod16M,
+    minM,
+  };
+
+  return {
+    o2Pct: cleanO2,
+    hePct: cleanHe,
+    n2Pct: cleanN2,
+    fO2,
+    fHe,
+    fN2,
+    mod14M,
+    mod16M,
+    minM,
+    ppo2AtTarget,
+    endAtTargetM,
+    status,
+    statusText,
+    label,
+    name: label,
+    shortLabel,
+    override,
+  };
+}
+
 export function computeDiverImpairment(state) {
   const cns = state.cnsPercent || 0;
   const dcs = state.dcsStress || 0;

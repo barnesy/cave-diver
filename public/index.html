@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="119" />
+  <meta name="app-version" content="120" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=119" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=119" />
-  <link rel="stylesheet" href="./css/style.css?v=119" />
+  <link rel="icon" href="./icons/icon-192.png?v=120" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=120" />
+  <link rel="stylesheet" href="./css/style.css?v=120" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=119" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=120" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=119" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=120" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -100,6 +100,10 @@
                 <span>🎖️ Diver Logbook</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
               </button>
+              <button id="btn-open-gas-planner" class="home-menu-item" type="button" role="menuitem" title="Blend Custom Trimix / Nitrox Bottom Gas (Dalton's Law MOD &amp; END)">
+                <span id="home-menu-gas-label">🧪 Gas Blender</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
               <button id="btn-open-issue" class="home-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">
                 <span>🐛 Report Issue / Idea</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
@@ -125,7 +129,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v119</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v120</button>
               </div>
             </div>
           </div>
@@ -153,6 +157,7 @@
             <label for="select-level">Expedition Site</label>
             <button id="campaign-progress-pill" class="campaign-progress-pill" type="button" title="Open Career Logbook &amp; Certifications">0 / 30 Cleared</button>
             <button id="menu-mode-badge" class="mode-badge mode-standard" type="button" title="Cycle Dive Realism Mode (Guided / Standard Tech / Hardcore)">🤿 TECH</button>
+            <button id="menu-gas-pill" class="gas-plan-pill" type="button" title="Open Technical Gas Blender (Custom Trimix / Nitrox)">🧪 Default Mix</button>
             <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
           </div>
           <div class="site-picker-controls">
@@ -392,8 +397,8 @@
           <span><strong>Space / Tab</strong> Recommended Gas</span>
           <span><strong>G / Hold R</strong> Reel Deploy / Rewind</span>
           <span><strong>E / F</strong> Stage Gas / Line Marker / Cut / Hatch</span>
-          <span><strong>Q / V / C</strong> Sonar Ping / DPV / Strobe Camera</span>
-          <span><strong>M / L / Esc</strong> Sonar Map / Torch / Resume</span>
+          <span><strong>Q / V / C / T</strong> Sonar / DPV / Camera / Stage Bottle</span>
+          <span><strong>M / L / B / Esc</strong> Sonar Map / Torch / Ping / Resume</span>
         </div>
         <div class="menu-actions">
           <button id="btn-pause-resume" class="btn primary" type="button">RESUME DIVE</button>
@@ -491,6 +496,7 @@
       <!-- Right Wing: Tech Gear Controls + Guideline Controls + Gas Tank Controls -->
       <div class="hud-right-wing">
         <div id="hud-gear-dock" class="hud-gear-dock" hidden aria-label="Tech Gear Controls">
+          <button id="btn-hud-stage" class="gear-hud-btn stage" type="button" title="Clip AL80 Stage Bottle for Exit Bailout (T)">🛢 STAGE [T]</button>
           <button id="btn-hud-sonar" class="gear-hud-btn sonar" type="button" hidden title="Pulse Cave Sonar (Q)">📡 SONAR [Q]</button>
           <button id="btn-hud-dpv" class="gear-hud-btn dpv" type="button" hidden title="Toggle DPV Scooter (V)">🛴 DPV 100%</button>
           <span id="hud-ccr-pill" class="gear-hud-pill ccr" hidden title="Closed-Circuit Rebreather CO₂ Scrubber">🫁 CCR 100%</span>
@@ -607,6 +613,13 @@
         <button id="btn-logbook-close" class="btn tiny ghost" type="button" aria-label="Close diver logbook">✕</button>
       </div>
       <div id="logbook-github-bar" class="logbook-github-bar"></div>
+      <div class="logbook-export-bar" aria-label="Export Dive Logbook">
+        <span class="logbook-export-lbl">EXPORT LOGBOOK</span>
+        <div class="logbook-export-btns">
+          <button id="btn-logbook-export-csv" class="btn tiny secondary" type="button" title="Download all 30 expeditions &amp; career stats as spreadsheet CSV">📥 Export CSV</button>
+          <button id="btn-logbook-export-json" class="btn tiny secondary" type="button" title="Download full structured career logbook &amp; Field Guide JSON">📄 Export JSON</button>
+        </div>
+      </div>
       <div id="logbook-kpis" class="logbook-kpis"></div>
       <div class="logbook-section-title">TECHNICAL CERTIFICATION LADDER</div>
       <div id="logbook-certs-grid" class="logbook-certs-grid"></div>
@@ -630,6 +643,73 @@
         <button id="btn-lb-stats-close" class="btn tiny ghost" type="button" aria-label="Close dive stats">✕</button>
       </div>
       <div id="lb-stats-body" class="lb-stats-body"></div>
+    </div>
+  </div>
+
+  <!-- Technical Pre-Dive Trimix / Nitrox Gas Blender Modal -->
+  <div id="gas-planner-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="gas-planner-title">
+    <div class="lb-stats-card gas-planner-card">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">TECHNO DIVE · DALTON'S LAW GAS BLENDER</div>
+          <h2 id="gas-planner-title" class="lb-stats-title">Custom Bottom Mix Planner</h2>
+          <div id="gas-planner-sub" class="lb-stats-sub">Tune O₂ &amp; Helium for your target expedition depth</div>
+        </div>
+        <button id="btn-gas-planner-close" class="btn tiny ghost" type="button" aria-label="Close gas planner">✕</button>
+      </div>
+
+      <div id="gas-preset-row" class="gas-preset-row" role="group" aria-label="Technical Gas Presets">
+        <button type="button" class="gas-preset-btn" data-preset="default">Site Default</button>
+        <button type="button" class="gas-preset-btn" data-o2="21" data-he="35">TMX 21/35</button>
+        <button type="button" class="gas-preset-btn" data-o2="18" data-he="45">TMX 18/45</button>
+        <button type="button" class="gas-preset-btn" data-o2="12" data-he="60">TMX 12/60</button>
+        <button type="button" class="gas-preset-btn" data-o2="10" data-he="70">TMX 10/70</button>
+      </div>
+
+      <div class="gas-sliders-box">
+        <div class="gas-slider-row">
+          <div class="gas-slider-head">
+            <label for="gas-o2-slider">Oxygen (O₂)</label>
+            <strong id="gas-o2-val" class="gas-val-o2">18%</strong>
+          </div>
+          <input id="gas-o2-slider" type="range" min="8" max="40" step="1" value="18" />
+        </div>
+        <div class="gas-slider-row">
+          <div class="gas-slider-head">
+            <label for="gas-he-slider">Helium (He)</label>
+            <strong id="gas-he-val" class="gas-val-he">45%</strong>
+          </div>
+          <input id="gas-he-slider" type="range" min="0" max="75" step="1" value="45" />
+        </div>
+        <div class="gas-mix-bar-wrap">
+          <div class="gas-mix-bar" aria-hidden="true">
+            <span id="gas-bar-o2" class="gas-seg o2" style="width:18%"></span>
+            <span id="gas-bar-he" class="gas-seg he" style="width:45%"></span>
+            <span id="gas-bar-n2" class="gas-seg n2" style="width:37%"></span>
+          </div>
+          <div class="gas-mix-legend">
+            <span><i class="gdot o2"></i>O₂ <b id="gas-leg-o2">18%</b></span>
+            <span><i class="gdot he"></i>He <b id="gas-leg-he">45%</b></span>
+            <span><i class="gdot n2"></i>N₂ <b id="gas-leg-n2">37%</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gas-readout-grid">
+        <div class="gas-metric"><span>MIX LABEL</span><strong id="gas-out-name">TMX 18/45</strong></div>
+        <div class="gas-metric"><span>MOD (1.4 bar)</span><strong id="gas-out-mod14">67.8m</strong></div>
+        <div class="gas-metric"><span>MOD (1.6 max)</span><strong id="gas-out-mod16">78.9m</strong></div>
+        <div class="gas-metric"><span>HYPOXIC MIN</span><strong id="gas-out-min">0m (Normoxic)</strong></div>
+        <div class="gas-metric"><span id="gas-out-depth-lbl">PPO₂ @ 50m</span><strong id="gas-out-ppo2">1.08 bar</strong></div>
+        <div class="gas-metric"><span>END @ MAX</span><strong id="gas-out-end">23.0m</strong></div>
+      </div>
+
+      <div id="gas-safety-pill" class="gas-safety-pill safe" role="status" aria-live="polite">✓ Optimal Technical Mix</div>
+
+      <div class="gas-planner-actions">
+        <button id="btn-gas-apply" class="btn primary" type="button">Apply Custom Mix</button>
+        <button id="btn-gas-reset" class="btn secondary" type="button">Reset Default</button>
+      </div>
     </div>
   </div>
 
@@ -672,65 +752,65 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=119",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=119",
-        "./js/game/audio.js": "./js/game/audio.js?v=119",
-        "./js/game/collision.js": "./js/game/collision.js?v=119",
-        "./js/game/input.js": "./js/game/input.js?v=119",
-        "./js/game/hud.js": "./js/game/hud.js?v=119",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=119",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=119",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=119",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=119",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=119",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=119",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=119",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=119",
-        "./js/game/silt.js": "./js/game/silt.js?v=119",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=119",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=119",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=119",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=119",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=119",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=119",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=119",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=119",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=119",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=119",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=119",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=119",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=119",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=119",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=119",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=119",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=119",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=119",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=119",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=119",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=119",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=119",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=119",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=119",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=119",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=119",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=119",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=119",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=119",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=119",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=119",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=119",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=119",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=119",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=119",
-        "./js/levels/index.js": "./js/levels/index.js?v=119",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=119",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=119",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=119",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=119",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=119"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=120",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=120",
+        "./js/game/audio.js": "./js/game/audio.js?v=120",
+        "./js/game/collision.js": "./js/game/collision.js?v=120",
+        "./js/game/input.js": "./js/game/input.js?v=120",
+        "./js/game/hud.js": "./js/game/hud.js?v=120",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=120",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=120",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=120",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=120",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=120",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=120",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=120",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=120",
+        "./js/game/silt.js": "./js/game/silt.js?v=120",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=120",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=120",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=120",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=120",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=120",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=120",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=120",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=120",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=120",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=120",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=120",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=120",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=120",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=120",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=120",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=120",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=120",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=120",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=120",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=120",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=120",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=120",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=120",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=120",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=120",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=120",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=120",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=120",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=120",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=120",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=120",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=120",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=120",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=120",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=120",
+        "./js/levels/index.js": "./js/levels/index.js?v=120",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=120",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=120",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=120",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=120",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=120"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=119"></script>
+  <script type="module" src="./js/main.js?v=120"></script>
 </body>
 </html>

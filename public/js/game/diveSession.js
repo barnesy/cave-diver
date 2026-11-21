@@ -64,7 +64,16 @@ export function computeBreathProfile(diveState, exertion = 0) {
  */
 export function createDiveSession(
   level,
-  { diverName = 'Diver 1', spawnOffsetX = 0, spawnOffsetY = 0, difficulty = 'standard', gear = null, mutatorId = '', dailyDateKey = '' } = {}
+  {
+    diverName = 'Diver 1',
+    spawnOffsetX = 0,
+    spawnOffsetY = 0,
+    difficulty = 'standard',
+    gear = null,
+    mutatorId = '',
+    dailyDateKey = '',
+    customMixOverrides = null,
+  } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
@@ -84,6 +93,10 @@ export function createDiveSession(
         dpv: Boolean(gear?.dpv),
         ccr: Boolean(gear?.ccr),
       };
+  const mergedMixOverrides =
+    customMixOverrides && typeof customMixOverrides === 'object'
+      ? { ...(level.gasOverrides || {}), ...customMixOverrides }
+      : level.gasOverrides;
 
   return {
     level,
@@ -140,7 +153,9 @@ export function createDiveSession(
       name: diverName,
       body: createDiverBody(spawnX, spawnY),
     },
-    diveState: createDiveState({ mixOverrides: level.gasOverrides, ccrEnabled: cleanGear.ccr }),
+    diveState: createDiveState({ mixOverrides: mergedMixOverrides, ccrEnabled: cleanGear.ccr }),
+    droppedStages: [],
+    spareStageDropped: false,
     diveProfile: [{ t: 0, d: Math.max(0, Number(spawnY.toFixed(1))), gas: 'EAN32', deco: 0 }],
     _lastProfileSampleAt: 0,
     _lastProfileGas: 'EAN32',
@@ -1091,7 +1106,173 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
     callbacks.onToast?.(`📡 ${by} pinged your locator!`, 2.2);
     return true;
   }
+  if (msg.actionKind === 'stage-drop') {
+    const parts = String(msg.targetId || '').split('|');
+    const [stageId, gasId, xStr, yStr, barStr] = parts;
+    if (!stageId || !gasId) return false;
+    if (!Array.isArray(session.droppedStages)) session.droppedStages = [];
+    if (session.droppedStages.some((s) => s.id === stageId)) return false;
+    const sx = Number(xStr);
+    const sy = Number(yStr);
+    const bar = Math.max(10, Math.min(120, Math.round(Number(barStr) || 45)));
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return false;
+    const mix = session.diveState?.mixes?.[gasId];
+    session.droppedStages.push({
+      id: stageId,
+      x: sx,
+      y: sy,
+      gasId,
+      gasName: mix?.name || gasId,
+      shortLabel: mix?.shortLabel || gasId,
+      color: mix?.color || '#38bdf8',
+      bar,
+      ownerName: by,
+      isLocal: false,
+    });
+    callbacks.onToast?.(`🛢 ${by} clipped a ${bar}b ${mix?.name || gasId} stage bottle at ${Math.max(0, Math.round(sy))}m!`, 2.8);
+    return true;
+  }
+  if (msg.actionKind === 'stage-pick') {
+    if (!Array.isArray(session.droppedStages)) return false;
+    const idx = session.droppedStages.findIndex((s) => s.id === msg.targetId);
+    if (idx < 0) return false;
+    const [removed] = session.droppedStages.splice(idx, 1);
+    if (removed?.isLocal) session.spareStageDropped = false;
+    callbacks.onToast?.(`🛢 ${by} picked up ${removed?.gasName || 'stage'} bottle.`, 2.2);
+    return true;
+  }
   return false;
+}
+
+const STAGE_DROP_BAR = 45;
+const STAGE_MIN_RESERVE_BAR = 75;
+const STAGE_EFFICIENCY_BONUS_BAR = 5;
+
+/**
+ * Physically clip an AL80 stage bottle at the diver's current coordinates for exit bailout.
+ * Transfers 45 bar from the active cylinder (requires >= 75 bar) and reduces swim drag (+6% speed).
+ */
+export function dropStageTank(session, callbacks = {}) {
+  if (!session || !session.diveState?.alive || session.surfaced) {
+    return { ok: false, reason: 'inactive' };
+  }
+  if (session.spareStageDropped) {
+    callbacks.onToast?.('🛢 Stage bottle already clipped on the line — swim back & press [E] to retrieve it!', 2.4);
+    return { ok: false, reason: 'already-dropped' };
+  }
+  const { diveState, diver } = session;
+  const gasId = diveState.activeGasId || 'EAN32';
+  const tank = diveState.tanks?.[gasId];
+  const mix = diveState.mixes?.[gasId];
+  if (!tank || tank.bar < STAGE_MIN_RESERVE_BAR) {
+    const have = Math.round(tank?.bar || 0);
+    callbacks.onToast?.(
+      `⚠️ Need at least ${STAGE_MIN_RESERVE_BAR} bar in ${mix?.name || gasId} to stage a bottle (currently ${have}b).`,
+      2.6
+    );
+    return { ok: false, reason: 'low-gas', bar: have };
+  }
+  if ((diver.y || 0) < 1.2) {
+    callbacks.onToast?.('🛢 Submerge below 1.5m before clipping a stage cylinder.', 2.0);
+    return { ok: false, reason: 'surface' };
+  }
+
+  const startBar = mix?.startBar || 200;
+  tank.bar = Math.max(0, Math.round((tank.bar - STAGE_DROP_BAR) * 10) / 10);
+  if (Number.isFinite(tank.maxLiters) && tank.maxLiters > 0) {
+    tank.litersRemaining = Math.max(0, (tank.bar / startBar) * tank.maxLiters);
+  }
+  const stageId = `stg_${Math.round((session.simTimeSec || 0) * 10)}_${Math.floor(Math.random() * 9000 + 1000)}`;
+  const stage = {
+    id: stageId,
+    x: Math.round(diver.x * 100) / 100,
+    y: Math.round(diver.y * 100) / 100,
+    gasId,
+    gasName: mix?.name || gasId,
+    shortLabel: mix?.shortLabel || gasId,
+    color: mix?.color || '#38bdf8',
+    bar: STAGE_DROP_BAR,
+    ownerName: diver.name || 'Diver',
+    isLocal: true,
+  };
+  if (!Array.isArray(session.droppedStages)) session.droppedStages = [];
+  session.droppedStages.push(stage);
+  session.spareStageDropped = true;
+
+  if (Array.isArray(session.bubbles)) {
+    for (let k = 0; k < 7; k++) {
+      spawnExhaustBubble(
+        session.bubbles,
+        stage.x + (Math.random() - 0.5) * 0.45,
+        stage.y + (Math.random() - 0.5) * 0.35,
+        (Math.random() - 0.5) * 0.7,
+        -0.55 - Math.random() * 0.6,
+        { primary: k < 3, intensity: 0.65, depthM: stage.y }
+      );
+    }
+  }
+
+  const encoded = `${stage.id}|${stage.gasId}|${stage.x.toFixed(1)}|${stage.y.toFixed(1)}|${stage.bar}`;
+  callbacks.onWreckSync?.('stage-drop', encoded);
+  callbacks.onStageDrop?.(stage);
+  callbacks.onToast?.(
+    `🛢 Staged ${stage.bar}b ${stage.gasName} bottle at ${Math.max(0, Math.round(stage.y))}m (+6% streamlined speed)!`,
+    3.0
+  );
+  return { ok: true, stage };
+}
+
+/**
+ * Retrieve a previously clipped physical stage bottle (own or buddy's) within 2.8m.
+ */
+export function retrieveStageTank(session, stageId = null, callbacks = {}) {
+  if (!session || !session.diveState?.alive || !Array.isArray(session.droppedStages) || session.droppedStages.length === 0) {
+    return { ok: false, reason: 'none' };
+  }
+  const { diver, diveState } = session;
+  let idx = -1;
+  if (stageId) {
+    idx = session.droppedStages.findIndex((s) => s.id === stageId);
+  } else {
+    let bestD = 2.85;
+    for (let i = 0; i < session.droppedStages.length; i++) {
+      const s = session.droppedStages[i];
+      const d = Math.hypot(diver.x - s.x, diver.y - s.y);
+      if (d <= bestD) {
+        bestD = d;
+        idx = i;
+      }
+    }
+  }
+  if (idx < 0) return { ok: false, reason: 'out-of-range' };
+  const stage = session.droppedStages[idx];
+  if (Math.hypot(diver.x - stage.x, diver.y - stage.y) > 3.1) {
+    return { ok: false, reason: 'out-of-range' };
+  }
+  const totalFill = (stage.bar || STAGE_DROP_BAR) + STAGE_EFFICIENCY_BONUS_BAR;
+  const added = receiveGasIntoState(diveState, stage.gasId, totalFill);
+  session.droppedStages.splice(idx, 1);
+  if (stage.isLocal) session.spareStageDropped = false;
+
+  if (Array.isArray(session.bubbles)) {
+    for (let k = 0; k < 8; k++) {
+      spawnExhaustBubble(
+        session.bubbles,
+        stage.x + (Math.random() - 0.5) * 0.5,
+        stage.y + (Math.random() - 0.5) * 0.4,
+        (Math.random() - 0.5) * 0.8,
+        -0.65 - Math.random() * 0.7,
+        { primary: k < 4, intensity: 0.75, depthM: stage.y }
+      );
+    }
+  }
+  callbacks.onWreckSync?.('stage-pick', stage.id);
+  callbacks.onStageRefill?.(stage, added);
+  callbacks.onToast?.(
+    `🛢 Retrieved ${stage.gasName} stage bottle (+${Math.round(added)} bar recovered)!`,
+    2.8
+  );
+  return { ok: true, stage, addedBar: added };
 }
 
 /**
@@ -1191,6 +1372,20 @@ export function triggerWreckAction(session, callbacks = {}) {
         callbacks.onToast?.(`⛽ Topped up ${gasName} (+${Math.round(added)} bar) from ${cache.label}!`, 3.0);
         return { handled: true, kind: 'refill-stage', targetId: cache.id, gasId: cache.gasId, addedBar: added };
       }
+    }
+  }
+
+  // 3b. Priority 3b: Retrieve a player-clipped physical stage bottle (own or co-op buddy's)
+  if (Array.isArray(session.droppedStages) && session.droppedStages.length > 0) {
+    const res = retrieveStageTank(session, null, callbacks);
+    if (res.ok) {
+      return {
+        handled: true,
+        kind: 'retrieve-stage',
+        targetId: res.stage.id,
+        gasId: res.stage.gasId,
+        addedBar: res.addedBar,
+      };
     }
   }
 
@@ -1853,7 +2048,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const effectiveExertion = dpvThrusting ? exertion * 0.52 : exertion;
   const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
-  const swimMult = (imp.swimMultiplier ?? 1) * towDrag;
+  const stageTrimMult = session.spareStageDropped ? 1.06 : 1.0;
+  const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult;
   const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
@@ -2127,6 +2323,19 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       }
     }
   }
+  let nearbyDroppedStage = null;
+  if (Array.isArray(session.droppedStages) && session.droppedStages.length > 0) {
+    let bestD = 2.85;
+    for (let i = 0; i < session.droppedStages.length; i++) {
+      const st = session.droppedStages[i];
+      const d = Math.hypot(diver.x - st.x, diver.y - st.y);
+      if (d <= bestD) {
+        bestD = d;
+        nearbyDroppedStage = st;
+      }
+    }
+  }
+
   let nearbyAnchor = null;
   if (Array.isArray(level.lineAnchors)) {
     for (let i = 0; i < level.lineAnchors.length; i++) {
@@ -2173,6 +2382,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       kind: 'refill-stage',
       label: `⛽ REFILL ${gasShort} [E]`,
       detail: `+${nearbyStage.barBonus || 65} bar · ${nearbyStage.label}`,
+      progress: 0,
+    };
+  } else if (nearbyDroppedStage) {
+    session.wreckActionPrompt = {
+      kind: 'retrieve-stage',
+      label: `🛢 RETRIEVE ${nearbyDroppedStage.shortLabel || nearbyDroppedStage.gasId} [E]`,
+      detail: `+${(nearbyDroppedStage.bar || 45) + 5} bar · ${nearbyDroppedStage.isLocal ? 'Your Staged Bottle' : `${nearbyDroppedStage.ownerName}'s Stage`}`,
       progress: 0,
     };
   } else if (nearbyAnchor) {

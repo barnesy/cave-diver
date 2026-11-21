@@ -8,6 +8,7 @@ import {
   stepDivePhysiology,
   computePPO2,
   computeEND,
+  buildCustomGasBlend,
   getRecommendedGas,
   getAscentInstruction,
   getGasSwitchCoach,
@@ -33,6 +34,8 @@ import {
   getFieldGuideEntry,
   recordFieldGuidePhoto,
   getFieldGuideStats,
+  exportLogbookToCsv,
+  exportLogbookToJson,
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
@@ -67,6 +70,8 @@ import {
   rewindGuidelineSegment,
   getEffectiveReelRemainingM,
   triggerWreckAction,
+  dropStageTank,
+  retrieveStageTank,
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
@@ -3977,4 +3982,157 @@ test('v119 Underwater Atmosphere & Immersion: crepuscular god-rays, bioluminesce
   assert.equal(fg.totalPhotos, 5);
   assert.equal(fg.rareDiscovered, 5);
   assert.ok(fg.naturalistRank.includes('Pelagic Naturalist'));
+});
+
+test('v120 Technical Dive Planner (Custom Trimix/Nitrox), Physical Stage Tank Drop/Retrieval & Dive Log Export', () => {
+  // 1. Dalton's Law custom Trimix / Nitrox blend calculations & safety diagnostics
+  const normoxic = buildCustomGasBlend({ o2Pct: 18, hePct: 45, targetDepthM: 55 });
+  assert.equal(normoxic.o2Pct, 18);
+  assert.equal(normoxic.hePct, 45);
+  assert.equal(normoxic.n2Pct, 37);
+  assert.equal(normoxic.name, 'TMX 18/45');
+  assert.equal(normoxic.minM, 0);
+  assert.equal(normoxic.status, 'safe');
+  assert.ok(normoxic.mod14M > 65 && normoxic.mod14M < 70);
+  assert.ok(normoxic.endAtTargetM < 30);
+
+  const hypoxic = buildCustomGasBlend({ o2Pct: 10, hePct: 70, targetDepthM: 100 });
+  assert.equal(hypoxic.name, 'TMX 10/70');
+  assert.ok(hypoxic.minM >= 6, `Hypoxic 10% O2 should require >=6m min depth, got ${hypoxic.minM}`);
+  assert.equal(hypoxic.status, 'safe');
+
+  const hyperoxic = buildCustomGasBlend({ o2Pct: 36, hePct: 0, targetDepthM: 45 });
+  assert.equal(hyperoxic.status, 'danger');
+  assert.ok(hyperoxic.ppo2AtTarget > 1.6);
+
+  const narcotic = buildCustomGasBlend({ o2Pct: 21, hePct: 0, targetDepthM: 50 });
+  assert.equal(narcotic.status, 'danger');
+  assert.ok(narcotic.endAtTargetM > 38);
+
+  // Custom blend flows cleanly into createDiveSession
+  const sCustom = createDiveSession(LEVEL_1, {
+    diverName: 'Blender',
+    customMixOverrides: { TMX1455: normoxic.override },
+  });
+  assert.equal(sCustom.diveState.mixes.TMX1455.name, 'TMX 18/45');
+  assert.equal(sCustom.diveState.mixes.TMX1455.fO2, 0.18);
+  assert.equal(sCustom.diveState.mixes.TMX1455.fHe, 0.45);
+
+  // 2. Physical Stage Tank Drop, +6% speed trim boost, Co-op Sync, Retrieval & Minimap/Renderer draw
+  sCustom.diver.x = 18;
+  sCustom.diver.y = 0.5;
+  assert.equal(dropStageTank(sCustom).reason, 'surface', 'Cannot drop stage bottle at surface');
+
+  sCustom.diver.y = 14;
+  sCustom.diveState.tanks.EAN32.bar = 60;
+  assert.equal(dropStageTank(sCustom).reason, 'low-gas', 'Cannot drop stage bottle below 75 bar');
+
+  sCustom.diveState.tanks.EAN32.bar = 180;
+  sCustom.diveState.tanks.EAN32.litersRemaining = (180 / 200) * sCustom.diveState.tanks.EAN32.maxLiters;
+  const syncEvents = [];
+  const dropRes = dropStageTank(sCustom, {
+    onWreckSync: (k, id) => syncEvents.push({ k, id }),
+  });
+  assert.equal(dropRes.ok, true);
+  assert.equal(sCustom.spareStageDropped, true);
+  assert.equal(sCustom.droppedStages.length, 1);
+  assert.equal(sCustom.diveState.tanks.EAN32.bar, 135);
+  assert.equal(syncEvents[0]?.k, 'stage-drop');
+
+  // Cannot drop a second stage while first is still clipped
+  assert.equal(dropStageTank(sCustom).reason, 'already-dropped');
+
+  // Verify +6% streamlined swim speed bonus while staged
+  const sNormal = createDiveSession(LEVEL_1);
+  sNormal.diver.x = 18;
+  sNormal.diver.y = 14;
+  sNormal.diver.vx = 0;
+  sNormal.diver.vy = 0;
+  sCustom.diver.vx = 0;
+  sCustom.diver.vy = 0;
+  stepDiveSession(sNormal, { x: 1, y: 0 }, 0.08);
+  stepDiveSession(sCustom, { x: 1, y: 0 }, 0.08);
+  assert.ok(sCustom.diver.vx > sNormal.diver.vx * 1.03, 'Staged diver should swim faster with reduced drag');
+
+  // Co-op peer receives dropped stage bottle & contextual prompt offers retrieval
+  const peerSession = createDiveSession(LEVEL_1, { diverName: 'Buddy' });
+  assert.equal(
+    applyPeerWreckAction(peerSession, { actionKind: 'stage-drop', targetId: syncEvents[0].id, by: 'Blender' }),
+    true
+  );
+  assert.equal(peerSession.droppedStages.length, 1);
+
+  // Move back onto stage bottle and retrieve via triggerWreckAction (+50 bar incl. +5b efficiency bonus)
+  sCustom.diver.x = dropRes.stage.x + 0.5;
+  sCustom.diver.y = dropRes.stage.y;
+  stepDiveSession(sCustom, { x: 0, y: 0 }, 0.05);
+  assert.equal(sCustom.wreckActionPrompt?.kind, 'retrieve-stage');
+  const barBefore = sCustom.diveState.tanks.EAN32.bar;
+  const pickRes = triggerWreckAction(sCustom, {
+    onWreckSync: (k, id) => syncEvents.push({ k, id }),
+  });
+  assert.equal(pickRes.handled, true);
+  assert.equal(pickRes.kind, 'retrieve-stage');
+  assert.equal(sCustom.spareStageDropped, false);
+  assert.equal(sCustom.droppedStages.length, 0);
+  assert.ok(sCustom.diveState.tanks.EAN32.bar >= barBefore + 45);
+  assert.equal(syncEvents[1]?.k, 'stage-pick');
+
+  // Peer removes bottle when stage-pick arrives
+  assert.equal(
+    applyPeerWreckAction(peerSession, { actionKind: 'stage-pick', targetId: syncEvents[1].id, by: 'Blender' }),
+    true
+  );
+  assert.equal(peerSession.droppedStages.length, 0);
+
+  // Renderer & Sonar Minimap draw dropped stages cleanly
+  const noopCtx = new Proxy(
+    { createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }) },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+  CaveRenderer.prototype._drawDroppedStages.call(
+    {},
+    noopCtx,
+    [dropRes.stage],
+    0, 100, 0, 60,
+    (x) => 100 + x * 14,
+    (y) => 50 + y * 14,
+    14,
+    3.5
+  );
+  drawSonarMinimap(noopCtx, 320, 200, {
+    level: LEVEL_1,
+    diver: sCustom.diver,
+    droppedStages: [dropRes.stage],
+  });
+
+  // 3. Dive Logbook CSV & JSON Export
+  let book = createEmptyLogbook();
+  book = recordDiveInLogbook(book, {
+    levelId: 'cenote-el-abismo',
+    success: true,
+    score: 3150,
+    grade: 'S',
+    maxDepthM: 54.2,
+    diveTimeSec: 185,
+    difficulty: 'hardcore',
+  });
+  book = recordFieldGuidePhoto(book, { entryId: 'whaleshark', stars: 3, siteId: 'uss-oriskany-carrier', siteName: 'USS Oriskany', depthM: 28 }).book;
+
+  const csv = exportLogbookToCsv(book, LEVELS);
+  const csvLines = csv.split('\r\n');
+  assert.ok(csvLines[0].includes('Site ID,Expedition,Location'));
+  assert.ok(csv.includes('cenote-el-abismo'));
+  assert.ok(csv.includes('CLEARED,S,3150,185.0,1,hardcore'));
+  assert.ok(csv.includes('CAREER SUMMARY'));
+
+  const jsonStr = exportLogbookToJson(book, LEVELS, { diverName: 'Barnesy', githubLogin: 'barnesy', version: 'v120' });
+  const parsed = JSON.parse(jsonStr);
+  assert.equal(parsed.schema, 'techno-dive-logbook-v1');
+  assert.equal(parsed.diverName, 'Barnesy');
+  assert.equal(parsed.githubLogin, 'barnesy');
+  assert.equal(parsed.summary.clearedCount, 1);
+  assert.equal(parsed.sites.length, LEVELS.length);
+  assert.equal(parsed.fieldGuide.discoveredCount, 1);
+  assert.equal(parsed.sites.find((s) => s.id === 'cenote-el-abismo')?.record?.grade, 'S');
 });

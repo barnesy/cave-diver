@@ -19,6 +19,7 @@ export class InputController {
     onMinimapToggle,
     onCameraSnap,
     onBuddyPing,
+    onStageDrop,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -48,6 +49,7 @@ export class InputController {
     this.onMinimapToggle = onMinimapToggle;
     this.onCameraSnap = onCameraSnap;
     this.onBuddyPing = onBuddyPing;
+    this.onStageDrop = onStageDrop;
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
@@ -90,6 +92,9 @@ export class InputController {
       }
       if (code === 'KeyB' && !e.repeat) {
         if (this.onBuddyPing?.()) e.preventDefault();
+      }
+      if (code === 'KeyT' && !e.repeat) {
+        if (this.onStageDrop?.()) e.preventDefault();
       }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();

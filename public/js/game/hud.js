@@ -337,6 +337,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     sonarPulse = null,
     encounters = null,
     buddyPing = null,
+    droppedStages = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
@@ -511,6 +512,19 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const sy = toY(st.y);
       ctx.fillStyle = '#34d399';
       ctx.fillRect(sx - 3.5, sy - 3.5, 7, 7);
+    }
+  }
+  if (Array.isArray(droppedStages) && droppedStages.length > 0) {
+    for (let i = 0; i < droppedStages.length; i++) {
+      const st = droppedStages[i];
+      if (!st) continue;
+      const sx = toX(st.x);
+      const sy = toY(st.y);
+      ctx.fillStyle = st.color || '#38bdf8';
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.4;
+      ctx.fillRect(sx - 3.5, sy - 5, 7, 10);
+      ctx.strokeRect(sx - 3.5, sy - 5, 7, 10);
     }
   }
   if (Array.isArray(level.lineAnchors)) {
@@ -933,6 +947,7 @@ export class DiveComputerHUD {
     sonarPulse = null,
     encounters = null,
     buddyPing = null,
+    droppedStages = null,
     endedState = '',
     spectatingPeer = false,
     timeSec = 0,
@@ -1473,6 +1488,7 @@ export class DiveComputerHUD {
               sonarPulse,
               encounters,
               buddyPing,
+              droppedStages,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,
