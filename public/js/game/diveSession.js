@@ -1,6 +1,7 @@
 import { getAscentConfig } from '../levels/index.js';
 import { createDiveState, stepDivePhysiology, receiveGasIntoState, computeTissueCompartmentStatus } from '../physics/diveModel.js';
 import { resolveDiverCollision, resolveDiverPeerCollisions, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
+import { createDynamicHazards, stepDynamicHazards } from './dynamicHazards.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS, MAX_DRILL_BONUS } from './scoring.js';
@@ -136,6 +137,7 @@ export function createDiveSession(
       photos: [],
     },
     encounters: createDynamicEncounters(level),
+    hazards: createDynamicHazards(level),
     bioWake: [],
     _bioWakeAccum: 0,
     surfaceRipples: [],
@@ -2897,6 +2899,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
+  // Reactive Cave & Wreck Hazards: Cold Thermoclines, Overhead Bubble Percolation & Shifting Surge Hatches (v141)
+  const hazRes = stepDynamicHazards(session, dt, callbacks);
+
   // Step physiology & dive computer (including HR & gas-burn coupling; DPV lowers physical fin exertion)
   stepDivePhysiology(diveState, {
     depthM: Math.max(0, diver.y),
@@ -2908,7 +2913,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     thrustMag,
     gasBurnMultiplier:
       (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
-      (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0),
+      (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
+      (hazRes.gasRateMult || 1.0),
   });
 
   if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;

@@ -5663,3 +5663,136 @@ test('v140 Hardcore Mode Diver-to-Diver Physical Collision: separation, rebound,
   assert.ok(aiBuddy.x > openPt.x + 0.4, 'AI buddy should separate right from player');
   assert.ok(Math.hypot(player2.x - aiBuddy.x, player2.y - aiBuddy.y) >= DIVER_PEER_COLLISION_RADIUS * 2 - 0.02);
 });
+
+test('v141 Solo 4-Diver AI Squad (1–3 Wingmen) & Dynamic Reactive Hazards (Thermoclines, Bubble Percolation & Shifting Hatches)', async () => {
+  const {
+    AI_SQUAD_ROSTER,
+    createAiSquad,
+    stepAiSquad,
+    handlePlayerSignalForAiSquad,
+  } = await import('../public/js/game/aiBuddy.js');
+  const {
+    createDynamicHazards,
+    stepDynamicHazards,
+    computeShiftingHatchOpenness,
+  } = await import('../public/js/game/dynamicHazards.js');
+
+  // 1. Solo 4-Diver AI Squad: 3 distinct wingmen with unique liveries, staggered formation & Hardcore safety
+  assert.equal(AI_SQUAD_ROSTER.length, 3);
+  const hcSess = createDiveSession(LEVEL_1, { diverName: 'SoloLead', difficulty: 'hardcore' });
+  const squad = createAiSquad(LEVEL_1, hcSess.diver, 3, { initialGasId: 'EAN32' });
+  assert.equal(squad.length, 3);
+  assert.equal(new Set(squad.map((b) => b.id)).size, 3);
+  assert.equal(new Set(squad.map((b) => b.livery?.suitId)).size, 3);
+  assert.equal(new Set(squad.map((b) => b.livery?.torchId)).size, 3);
+
+  // Swim forward with full 4-diver Hardcore squad and verify 0 rock clips
+  hcSess.simTimeSec = 4;
+  for (let i = 0; i < 40; i++) {
+    stepDiveSession(hcSess, { x: 0.7, y: 0.35 }, 0.05, { peers: squad });
+    stepAiSquad(squad, hcSess, 0.05, { timestampMs: 1000 + i * 50 });
+  }
+  assert.ok(evaluateCaveSDF(LEVEL_1, hcSess.diver.x, hcSess.diver.y) < 0, 'Player must remain in open water with 3 AI wingmen');
+  for (const b of squad) {
+    assert.ok(evaluateCaveSDF(LEVEL_1, b.x, b.y) < 0, `AI wingman ${b.name} must remain in open water`);
+  }
+
+  // Squad signal handling: HOLD halts all 3; SHARE-AIR dispatches only the single best-positioned wingman
+  const holdRes = handlePlayerSignalForAiSquad(squad, 'hold', hcSess, 5000);
+  assert.equal(holdRes.responded, true);
+  assert.ok(squad.every((b) => b.mode === 'hold'), 'HOLD signal must halt entire AI squad');
+  const airRes = handlePlayerSignalForAiSquad(squad, 'share-air', hcSess, 5500);
+  assert.equal(airRes.responded, true);
+  assert.equal(squad.filter((b) => b.mode === 'assist-gas').length, 1, 'Only 1 wingman should rush in for SHARE-AIR');
+
+  // 2. Dynamic Reactive Hazards across all 33 campaign sites
+  let totalThermos = 0;
+  let totalPercs = 0;
+  let totalHatches = 0;
+  for (const lvl of LEVELS) {
+    const hz = createDynamicHazards(lvl);
+    totalThermos += hz.thermoclines.length;
+    totalPercs += hz.percolationZones.length;
+    totalHatches += hz.shiftingHatches.length;
+    for (const th of hz.thermoclines) assert.ok(evaluateCaveSDF(lvl, th.x, th.y) < 0, `${lvl.id} thermocline in rock`);
+    for (const h of hz.shiftingHatches) assert.ok(evaluateCaveSDF(lvl, h.x, h.y) < 0, `${lvl.id} hatch in rock`);
+  }
+  assert.ok(totalThermos >= 40, `Expected thermoclines across campaign, got ${totalThermos}`);
+  assert.ok(totalPercs >= 25, `Expected percolation ceilings across campaign, got ${totalPercs}`);
+  assert.ok(totalHatches >= 30, `Expected shifting hatches across campaign, got ${totalHatches}`);
+
+  // 3. Thermocline cold-shock increases gas burn & heart rate
+  const thSess = createDiveSession(LEVEL_1, { diverName: 'Thermal', difficulty: 'standard' });
+  assert.ok(thSess.hazards.thermoclines.length >= 1);
+  const th0 = thSess.hazards.thermoclines[0];
+  thSess.diver.x = th0.x;
+  thSess.diver.y = th0.y;
+  let thermoToast = '';
+  let lastHaz = null;
+  for (let i = 0; i < 10; i++) {
+    lastHaz = stepDynamicHazards(thSess, 0.1, { onToast: (m) => { thermoToast = m; } });
+  }
+  assert.equal(thSess.hazards.inThermocline, true);
+  assert.ok(lastHaz.gasRateMult > 1.05, `Expected elevated cold-shock gas burn, got ${lastHaz.gasRateMult}`);
+  assert.match(thermoToast, /Thermocline/);
+
+  // 4. Overhead Bubble Percolation: Open-circuit exhaust triggers ceiling silt; CCR glides cleanly bubble-free!
+  const percSite = LEVELS.find((l) => createDynamicHazards(l).percolationZones.length > 0);
+  const ocSess = createDiveSession(percSite, { diverName: 'OpenCircuit', gear: { ccr: false } });
+  const ccrSess = createDiveSession(percSite, { diverName: 'Rebreather', gear: { ccr: true } });
+  const pzOc = ocSess.hazards.percolationZones[0];
+  const pzCcr = ccrSess.hazards.percolationZones[0];
+  ocSess.diver.x = pzOc.x;
+  ocSess.diver.y = pzOc.ceilY + 1.8;
+  ocSess.breath.phase = 'exhale';
+  ccrSess.diver.x = pzCcr.x;
+  ccrSess.diver.y = pzCcr.ceilY + 1.8;
+  ccrSess.breath.phase = 'exhale';
+  let ocTriggered = false;
+  let ccrTriggered = false;
+  for (let i = 0; i < 20; i++) {
+    if (stepDynamicHazards(ocSess, 0.1).percolationTriggered) ocTriggered = true;
+    if (stepDynamicHazards(ccrSess, 0.1).percolationTriggered) ccrTriggered = true;
+  }
+  assert.equal(ocTriggered, true, 'Open-circuit exhale bubbles should trigger ceiling percolation silt');
+  assert.equal(ocSess.siltClouds.length > 0, true, 'Percolation should spawn downward-falling ceiling silt plumes');
+  assert.equal(ccrTriggered, false, 'Bubble-free CCR rebreather should glide under percolation ceiling cleanly');
+
+  // 5. Surge-Driven Shifting Hatch oscillates & pushes diver smoothly when slamming shut
+  const wreck = getLevelById('ss-thistlegorm-wreck');
+  const wSess = createDiveSession(wreck, { diverName: 'WreckTech' });
+  const h0 = wSess.hazards.shiftingHatches[0];
+  assert.ok(h0 && h0.isWreckHatch === true);
+  // Find a timestamp where openness < 0.15 (slam phase)
+  let slamT = 0;
+  for (let t = 0; t < h0.periodSec; t += 0.1) {
+    if (computeShiftingHatchOpenness(h0, t) < 0.15) {
+      slamT = t;
+      break;
+    }
+  }
+  wSess.simTimeSec = slamT;
+  wSess.diver.x = h0.x + 0.5;
+  wSess.diver.y = h0.y;
+  wSess.diver.vx = 0;
+  let groaned = false;
+  const hRes = stepDynamicHazards(wSess, 0.1, { onHullGroan: () => { groaned = true; } });
+  assert.equal(hRes.hatchPushApplied, true);
+  assert.ok(wSess.diver.vx > 0.05, 'Slamming hatch should eject diver out of aperture');
+  assert.equal(groaned, true, 'Slamming hatch should trigger metallic hull groan audio');
+
+  // 6. Renderer dynamic hazard & frost-rim passes execute cleanly
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 24 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = wreck;
+  r._drawDynamicHazards(noopCtx, wSess.hazards, -100, 300, -10, 200, (x) => x * 20, (y) => y * 20, 20, 2.5, wSess.diver);
+  r._drawThermoclineFrostRim(noopCtx, 800, 600, thSess.hazards, 2.5);
+});

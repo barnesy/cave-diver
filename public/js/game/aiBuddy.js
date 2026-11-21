@@ -8,7 +8,7 @@
  * air-share hose VFX.
  */
 
-import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision } from './collision.js';
+import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision, resolveDiverPeerCollisions } from './collision.js';
 import { createDiverBody, stepDiverBody } from './diverBody.js';
 import { getScubaSignalById, triggerDiverSignal } from './diveSignals.js';
 import { GAS_MIXES, getRecommendedGas, receiveGasIntoState } from '../physics/diveModel.js';
@@ -16,6 +16,27 @@ import { pushAirShareBeam } from './diveSession.js';
 
 export const AI_BUDDY_ID = 'ai-wingman-01';
 export const AI_BUDDY_DEFAULT_NAME = '🤖 APEX-2';
+
+export const AI_SQUAD_ROSTER = Object.freeze([
+  {
+    id: 'ai-wingman-01',
+    name: '🤖 APEX-2',
+    role: 'Lead Wingman',
+    livery: { suitId: 'arctic-cobalt', torchId: 'amber-silt', patchId: 'cenote-explorer' },
+  },
+  {
+    id: 'ai-wingman-02',
+    name: '🤖 COBRA-3',
+    role: 'Flank Scout',
+    livery: { suitId: 'expedition-amber', torchId: 'warm-halogen', patchId: 'wreck-penetrator' },
+  },
+  {
+    id: 'ai-wingman-03',
+    name: '🤖 ORCA-4',
+    role: 'Tail Guard',
+    livery: { suitId: 'wreck-titanium', torchId: 'emerald-spot', patchId: 'abyss-veteran' },
+  },
+]);
 
 const _normScratch = { nx: 0, ny: 0 };
 
@@ -37,17 +58,34 @@ function openWaterClearance(level, x, y) {
   return -evaluateCaveSDF(level, x, y);
 }
 
-function findSafeSpawnOffset(level, diver) {
+function findSafeSpawnOffset(level, diver, slotIndex = 0) {
   const baseX = Number(diver?.x) || 0;
   const baseY = Number(diver?.y) || 1.2;
-  const candidates = [
-    { dx: -1.7, dy: 0.3 },
-    { dx: 1.7, dy: 0.3 },
-    { dx: -1.2, dy: 1.1 },
-    { dx: 1.2, dy: 1.1 },
-    { dx: 0, dy: 1.3 },
-    { dx: 0, dy: 0.2 },
+  const candidatesBySlot = [
+    [
+      { dx: -1.7, dy: 0.3 },
+      { dx: 1.7, dy: 0.3 },
+      { dx: -1.2, dy: 1.1 },
+      { dx: 1.2, dy: 1.1 },
+      { dx: 0, dy: 1.3 },
+      { dx: 0, dy: 0.2 },
+    ],
+    [
+      { dx: 1.85, dy: 0.4 },
+      { dx: -2.85, dy: 0.5 },
+      { dx: 1.3, dy: 1.45 },
+      { dx: -1.3, dy: 1.45 },
+      { dx: 0.6, dy: 1.8 },
+    ],
+    [
+      { dx: -2.95, dy: 0.55 },
+      { dx: 2.95, dy: 0.55 },
+      { dx: 0, dy: 2.25 },
+      { dx: -1.5, dy: 2.1 },
+      { dx: 1.5, dy: 2.1 },
+    ],
   ];
+  const candidates = candidatesBySlot[slotIndex % candidatesBySlot.length];
   for (let i = 0; i < candidates.length; i++) {
     const cx = baseX + candidates[i].dx;
     const cy = Math.max(0.85, baseY + candidates[i].dy);
@@ -55,19 +93,24 @@ function findSafeSpawnOffset(level, diver) {
       return { x: cx, y: cy };
     }
   }
-  return { x: baseX, y: Math.max(0.85, baseY + 0.35) };
+  return { x: baseX + (slotIndex - 1) * 0.4, y: Math.max(0.85, baseY + 0.35 + slotIndex * 0.45) };
 }
 
 /**
  * Create a new AI Autonomous Dive Buddy state anchored cleanly near the diver spawn.
  */
 export function createAiBuddyState(level, diver, opts = {}) {
-  const spawn = findSafeSpawnOffset(level, diver);
+  const slotIndex = Math.max(0, Math.min(2, Math.floor(Number(opts.slotIndex) || 0)));
+  const roster = AI_SQUAD_ROSTER[slotIndex] || AI_SQUAD_ROSTER[0];
+  const spawn = findSafeSpawnOffset(level, diver, slotIndex);
   const angle = Number(diver?.angle) || 0;
   const buddy = {
-    id: AI_BUDDY_ID,
-    name: opts.name || AI_BUDDY_DEFAULT_NAME,
+    id: opts.id || roster.id,
+    name: opts.name || roster.name,
+    role: roster.role,
+    slotIndex,
     isAiBuddy: true,
+    livery: opts.livery ? { ...opts.livery } : { ...roster.livery },
     x: spawn.x,
     y: spawn.y,
     vx: 0,
@@ -104,7 +147,7 @@ export function createAiBuddyState(level, diver, opts = {}) {
     modeTimer: 0,
     holdX: spawn.x,
     holdY: spawn.y,
-    sweepPhase: 0,
+    sweepPhase: slotIndex * 2.1,
     gasShareCooldown: 0,
     snagAssistTimer: 0,
     strandedTimer: 0,
@@ -131,6 +174,18 @@ export function createAiBuddyState(level, diver, opts = {}) {
     buddy.depthM = Math.max(0, buddy.y);
   }
   return buddy;
+}
+
+/**
+ * Create a full solo AI Dive Squad of 1 to 3 distinct wingmen (2-diver up to 4-diver squad).
+ */
+export function createAiSquad(level, diver, count = 1, opts = {}) {
+  const cleanCount = Math.max(0, Math.min(AI_SQUAD_ROSTER.length, Math.floor(Number(count) || 0)));
+  const squad = [];
+  for (let i = 0; i < cleanCount; i++) {
+    squad.push(createAiBuddyState(level, diver, { ...opts, slotIndex: i }));
+  }
+  return squad;
 }
 
 /**
@@ -274,14 +329,33 @@ function chooseFormationTarget(level, diver, buddy, hardcore = false) {
     }
   }
 
-  // Standard wingman formation: evaluate flanking & single-file slots and pick cleanest open water
+  // Standard wingman formation: evaluate flanking & staggered single-file slots for 1..3 AI wingmen
   // In Hardcore mode, trail slightly wider to avoid bumping tanks during diver-to-diver collisions
+  const slot = Math.max(0, Number(buddy?.slotIndex) || 0);
   const hcPad = hardcore ? 0.55 : 0;
+  const trailStep = slot * (hardcore ? 1.85 : 1.5);
+  const sideSign = slot % 2 === 0 ? 1 : -1;
   const slots = [
-    { x: diver.x + backX * (2.25 + hcPad) + perpX * (0.95 + hcPad * 0.4), y: Math.max(0.8, diver.y + backY * (2.25 + hcPad) + perpY * (0.95 + hcPad * 0.4) - 0.35), bonus: 0.35 },
-    { x: diver.x + backX * (2.25 + hcPad) - perpX * (0.95 + hcPad * 0.4), y: Math.max(0.8, diver.y + backY * (2.25 + hcPad) - perpY * (0.95 + hcPad * 0.4) - 0.35), bonus: 0.25 },
-    { x: diver.x + backX * (2.15 + hcPad), y: Math.max(0.8, diver.y + backY * (2.15 + hcPad)), bonus: 0.2 },
-    { x: diver.x + backX * (1.35 + hcPad * 0.85), y: Math.max(0.8, diver.y + backY * (1.35 + hcPad * 0.85)), bonus: 0.1 },
+    {
+      x: diver.x + backX * (2.25 + hcPad + trailStep) + perpX * sideSign * (0.95 + hcPad * 0.35),
+      y: Math.max(0.8, diver.y + backY * (2.25 + hcPad + trailStep) + perpY * sideSign * (0.95 + hcPad * 0.35) - 0.3),
+      bonus: 0.35,
+    },
+    {
+      x: diver.x + backX * (2.25 + hcPad + trailStep) - perpX * sideSign * (0.95 + hcPad * 0.35),
+      y: Math.max(0.8, diver.y + backY * (2.25 + hcPad + trailStep) - perpY * sideSign * (0.95 + hcPad * 0.35) - 0.3),
+      bonus: 0.25,
+    },
+    {
+      x: diver.x + backX * (2.15 + hcPad + trailStep),
+      y: Math.max(0.8, diver.y + backY * (2.15 + hcPad + trailStep)),
+      bonus: 0.22,
+    },
+    {
+      x: diver.x + backX * (1.35 + hcPad * 0.85 + trailStep * 0.85),
+      y: Math.max(0.8, diver.y + backY * (1.35 + hcPad * 0.85 + trailStep * 0.85)),
+      bonus: 0.1,
+    },
   ];
   let bestSlot = slots[2];
   let bestScore = -Infinity;
@@ -535,6 +609,24 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     desVy -= _normScratch.ny * push;
   }
 
+  // Friendly inter-squadmate spacing repulsion so 2–3 AI wingmen hold staggered single-file trim
+  const squadPeers = Array.isArray(callbacks.squadPeers) ? callbacks.squadPeers : null;
+  if (squadPeers && squadPeers.length > 0) {
+    const minSep = session.difficulty === 'hardcore' ? 1.65 : 1.25;
+    for (let i = 0; i < squadPeers.length; i++) {
+      const other = squadPeers[i];
+      if (!other || other === buddy || other.alive === false) continue;
+      const sx = buddy.x - other.x;
+      const sy = buddy.y - other.y;
+      const sd = Math.hypot(sx, sy);
+      if (sd > 0.01 && sd < minSep) {
+        const rep = ((minSep - sd) / minSep) * 2.6;
+        desVx += (sx / sd) * rep;
+        desVy += (sy / sd) * rep;
+      }
+    }
+  }
+
   const accel = Math.min(1, clampedDt * (urgent ? 5.6 : 4.2));
   buddy.vx += (desVx - buddy.vx) * accel;
   buddy.vy += (desVy - buddy.vy) * accel;
@@ -548,7 +640,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     buddy.strandedTimer = (buddy.strandedTimer || 0) + clampedDt;
     if (buddy.strandedTimer >= 2.6) {
       buddy.strandedTimer = 0;
-      const regroup = findSafeSpawnOffset(level, diver);
+      const regroup = findSafeSpawnOffset(level, diver, buddy.slotIndex || 0);
       buddy.x = regroup.x;
       buddy.y = regroup.y;
       buddy.vx = 0;
@@ -587,4 +679,67 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     distToPlayer,
     torchAngle: buddy.torchAngle,
   };
+}
+
+/**
+ * Step an entire 1..3 wingman AI Dive Squad cleanly, including Hardcore mutual collision among squadmates.
+ */
+export function stepAiSquad(squad, session, dt, callbacks = {}) {
+  if (!Array.isArray(squad) || squad.length === 0 || !session) return [];
+  const results = [];
+  for (let i = 0; i < squad.length; i++) {
+    const buddy = squad[i];
+    if (!buddy) continue;
+    results.push(stepAiBuddy(buddy, session, dt, { ...callbacks, squadPeers: squad }));
+  }
+  if (session.difficulty === 'hardcore' && squad.length > 1 && (session.simTimeSec >= 2.0 || (session.diver?.y || 0) > 2.2)) {
+    for (let i = 0; i < squad.length; i++) {
+      const a = squad[i];
+      if (!a || a.alive === false) continue;
+      const others = squad.slice(i + 1);
+      resolveDiverPeerCollisions(session.level, a, others);
+    }
+  }
+  return results;
+}
+
+/**
+ * Dispatch a player hand-signal across an AI Dive Squad (closest wingman handles emergency gas/snag assists;
+ * full squad responds to OK / HOLD / ATTENTION / ASCEND).
+ */
+export function handlePlayerSignalForAiSquad(squad, idOrText, session, nowMs = Date.now()) {
+  if (!Array.isArray(squad) || squad.length === 0) return { responded: false };
+  const spec = getScubaSignalById(idOrText);
+  const sigId = spec?.id || 'ok';
+  const diver = session?.diver;
+
+  if (sigId === 'low-gas' || sigId === 'share-air') {
+    let best = squad[0];
+    let bestScore = -Infinity;
+    for (let i = 0; i < squad.length; i++) {
+      const b = squad[i];
+      const d = diver ? Math.hypot(b.x - diver.x, b.y - diver.y) : 0;
+      const score = (b.activeBar || 0) - d * 6;
+      if (score > bestScore) {
+        bestScore = score;
+        best = b;
+      }
+    }
+    return handlePlayerSignalForAiBuddy(best, idOrText, session, nowMs);
+  }
+
+  let primaryRes = null;
+  for (let i = 0; i < squad.length; i++) {
+    const res = handlePlayerSignalForAiBuddy(squad[i], idOrText, session, nowMs);
+    if (!primaryRes && res.responded) primaryRes = res;
+  }
+  if (!primaryRes) return { responded: false };
+  if (squad.length > 1) {
+    const names = squad.map((b) => b.name.replace(/^🤖\s*/, '')).join(', ');
+    primaryRes = {
+      ...primaryRes,
+      toast: `🤖 Squad (${names}): ${primaryRes.toast.replace(/^[^:]+:\s*/, '')}`,
+    };
+  }
+  return primaryRes;
 }

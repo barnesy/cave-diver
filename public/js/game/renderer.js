@@ -1443,6 +1443,7 @@ export class CaveRenderer {
     sonarPulse = null,
     cameraFlash = null,
     encounters = null,
+    hazards = null,
     bioWake = null,
     surfaceRipples = null,
     buddyPing = null,
@@ -1712,6 +1713,9 @@ export class CaveRenderer {
     if (encounters && typeof this._drawDynamicEncounters === 'function') {
       this._drawDynamicEncounters(ctx, encounters, visX0 - 10, visX1 + 10, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, 'world');
     }
+    if (hazards && typeof this._drawDynamicHazards === 'function') {
+      this._drawDynamicHazards(ctx, hazards, visX0 - 8, visX1 + 8, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, diver);
+    }
 
     // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
@@ -1805,6 +1809,9 @@ export class CaveRenderer {
     // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating or in Photo Mode)
     if (!isSpectating && !isPhotoMode) {
       this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
+      if (hazards?.thermoclineColdFactor > 0.06) {
+        this._drawThermoclineFrostRim(ctx, cw, ch, hazards, timeSec);
+      }
       if (drills?.active || drills?.backupTorchActive) {
         this._drawEmergencyDrillOverlay(ctx, cw, ch, drills, timeSec);
       }
@@ -9805,6 +9812,153 @@ export class CaveRenderer {
       }
     }
 
+    ctx.restore();
+  }
+
+  /**
+   * Draw reactive underwater environmental hazards (v141):
+   *   - Cold Thermocline Pockets (shimmering icy-cobalt refraction lenses)
+   *   - Overhead Bubble Percolation Ceilings (fragile silt ribbons + cascading sediment streaks)
+   *   - Surge-Driven Shifting Wreck Hatches / Tidal Siphon Gates (animated doors + status beacon)
+   */
+  _drawDynamicHazards(ctx, hazards, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver) {
+    if (!hazards) return;
+    ctx.save();
+
+    // 1. Cold Thermocline Pockets
+    const thermos = hazards.thermoclines || [];
+    for (let i = 0; i < thermos.length; i++) {
+      const th = thermos[i];
+      if (th.x + th.rx < visX0 || th.x - th.rx > visX1 || th.y + th.ry < visY0 || th.y - th.ry > visY1) continue;
+      const sx = toScreenX(th.x);
+      const sy = toScreenY(th.y);
+      const rxPx = th.rx * scale;
+      const ryPx = th.ry * scale;
+      const grad = ctx.createRadialGradient(sx, sy, rxPx * 0.12, sx, sy, Math.max(rxPx, ryPx));
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.24)');
+      grad.addColorStop(0.55, 'rgba(14, 165, 233, 0.14)');
+      grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, rxPx, ryPx, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shimmering cold thermal shear ribbons
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.36)';
+      ctx.lineWidth = Math.max(1, 0.055 * scale);
+      for (let r = -1; r <= 1; r++) {
+        ctx.beginPath();
+        const yOff = r * ryPx * 0.38;
+        const steps = 10;
+        for (let k = 0; k <= steps; k++) {
+          const frac = k / steps;
+          const px = sx - rxPx * 0.85 + frac * rxPx * 1.7;
+          const py = sy + yOff + Math.sin(frac * 6.2 + timeSec * 2.4 + th.phase + r) * (0.14 * scale);
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      if (diver && Math.hypot(diver.x - th.x, diver.y - th.y) < th.rx + 4.5) {
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.85)';
+        ctx.fillText(`❄️ -${th.tempDropC}°C THERMOCLINE`, sx, sy - ryPx * 0.72);
+      }
+    }
+
+    // 2. Overhead Bubble Percolation Ceilings
+    const percs = hazards.percolationZones || [];
+    for (let i = 0; i < percs.length; i++) {
+      const pz = percs[i];
+      if (pz.x + pz.halfWidth < visX0 || pz.x - pz.halfWidth > visX1 || pz.ceilY + 6 < visY0 || pz.ceilY - 1 > visY1) continue;
+      const sx0 = toScreenX(pz.x - pz.halfWidth);
+      const sx1 = toScreenX(pz.x + pz.halfWidth);
+      const sy = toScreenY(pz.ceilY);
+      const isRust = Boolean(this.level?.isWreck);
+      const activeGlow = Math.min(1, pz.intensity || 0);
+
+      // Delicate clinging ceiling silt crust
+      ctx.strokeStyle = isRust
+        ? `rgba(217, 119, 6, ${(0.34 + activeGlow * 0.45).toFixed(2)})`
+        : `rgba(226, 232, 240, ${(0.28 + activeGlow * 0.48).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.5, (0.09 + activeGlow * 0.08) * scale);
+      ctx.setLineDash([Math.max(4, scale * 0.25), Math.max(3, scale * 0.16)]);
+      ctx.beginPath();
+      ctx.moveTo(sx0, sy);
+      ctx.lineTo(sx1, sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Cascading falling sediment streaks
+      if (pz.streaks && pz.streaks.length > 0) {
+        ctx.strokeStyle = isRust ? 'rgba(245, 158, 11, 0.58)' : 'rgba(203, 213, 225, 0.56)';
+        ctx.lineWidth = Math.max(1, 0.05 * scale);
+        ctx.beginPath();
+        for (let k = 0; k < pz.streaks.length; k++) {
+          const st = pz.streaks[k];
+          const px = toScreenX(st.x);
+          const py = toScreenY(st.y);
+          ctx.moveTo(px, py);
+          ctx.lineTo(px, py + Math.max(4, scale * 0.35));
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 3. Surge-Driven Shifting Wreck Hatches / Tidal Siphon Gates
+    const hatches = hazards.shiftingHatches || [];
+    for (let i = 0; i < hatches.length; i++) {
+      const h = hatches[i];
+      if (h.x + h.radius < visX0 || h.x - h.radius > visX1 || h.y + h.radius < visY0 || h.y - h.radius > visY1) continue;
+      const sx = toScreenX(h.x);
+      const sy = toScreenY(h.y);
+      const rPx = h.radius * scale;
+      const open = Math.max(0, Math.min(1, h.openness ?? 1));
+      const leafSpan = rPx * 0.82 * (1 - open * 0.86);
+      const frameW = Math.max(4, 0.24 * scale);
+
+      // Steel bulkhead / karst gate leaves closing from top & bottom
+      ctx.fillStyle = h.isWreckHatch ? '#334155' : '#475569';
+      ctx.strokeStyle = h.isWreckHatch ? '#94a3b8' : '#7dd3fc';
+      ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+      ctx.fillRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
+      ctx.strokeRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
+      ctx.fillRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
+      ctx.strokeRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
+
+      // Status timing beacon (Green = wide open window, Amber = closing, Red = slamming/surging)
+      const beaconCol = open >= 0.55 ? '#4ade80' : open >= 0.3 ? '#fbbf24' : '#f87171';
+      ctx.fillStyle = beaconCol;
+      ctx.beginPath();
+      ctx.arc(sx, sy - rPx - Math.max(4, scale * 0.22), Math.max(3, scale * 0.14), 0, Math.PI * 2);
+      ctx.fill();
+
+      if (open < 0.35) {
+        ctx.strokeStyle = 'rgba(248, 113, 113, 0.45)';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(sx, sy, rPx * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawThermoclineFrostRim(ctx, cw, ch, hazards, timeSec) {
+    const cold = Math.max(0, Math.min(1, hazards?.thermoclineColdFactor || 0));
+    if (cold <= 0.05) return;
+    ctx.save();
+    const pulse = 0.85 + 0.15 * Math.sin(timeSec * 4.5);
+    const alpha = Math.min(0.42, cold * 0.36 * pulse);
+    const rOuter = Math.hypot(cw * 0.5, ch * 0.5);
+    const g = ctx.createRadialGradient(cw * 0.5, ch * 0.5, rOuter * 0.46, cw * 0.5, ch * 0.5, rOuter);
+    g.addColorStop(0, 'rgba(56, 189, 248, 0)');
+    g.addColorStop(1, `rgba(125, 211, 252, ${alpha.toFixed(3)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, cw, ch);
     ctx.restore();
   }
 }
