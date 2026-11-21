@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=137');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=138');
   }
   return trysteroModulePromise;
 }
@@ -1500,6 +1500,7 @@ export class LanClient {
               hasDpv: Boolean(msg.state.hasDpv),
               dpvActive: Boolean(msg.state.dpvActive),
               dpvThrusting: Boolean(msg.state.dpvThrusting),
+              livery: msg.state.livery || null,
               targetX: msg.state.x,
               targetY: msg.state.y,
               targetAngle: msg.state.angle,
@@ -1533,6 +1534,7 @@ export class LanClient {
             p.hasDpv = Boolean(msg.state.hasDpv);
             p.dpvActive = Boolean(msg.state.dpvActive);
             p.dpvThrusting = Boolean(msg.state.dpvThrusting);
+            if (msg.state.livery !== undefined) p.livery = msg.state.livery || null;
             p.vx = msg.state.vx;
             p.vy = msg.state.vy;
             p.gasId = msg.state.gasId;

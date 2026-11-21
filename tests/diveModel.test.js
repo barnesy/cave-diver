@@ -5226,6 +5226,7 @@ test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singlet
       ['caveDiverAiBuddy_v1','1'],
       ['caveDiverDifficulty_v1','hardcore'],
       ['caveDiverCustomGas_v1', JSON.stringify({ enabled: true, o2Pct: 18, hePct: 45 })],
+      ['caveDiverLivery_v1', JSON.stringify({ suitId: 'arctic-cobalt', torchId: 'warm-halogen', patchId: 'cave-arrow' })],
     ]);
     const origSI = globalThis.setInterval;
     globalThis.setInterval = (...a) => { const h = origSI(...a); h.unref?.(); return h; };
@@ -5245,7 +5246,7 @@ test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singlet
     globalThis.document = { hidden:false, visibilityState:'visible', body:new El('body'), documentElement:new El('html'), getElementById:id=>byId.get(id)||null, createElement:t=>new El(t), createElementNS:(_n,t)=>new El(t), querySelector:()=>null, querySelectorAll:()=>[], addEventListener(){}, removeEventListener(){} };
     await import(pathToFileURL(${JSON.stringify(path.join(pubDir, 'js/main.js'))}).href);
     await new Promise(r => setTimeout(r, 40));
-    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-weather-pill','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
+    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-weather-pill','menu-livery-pill','btn-livery-reset','btn-livery-done','btn-setup-drawer','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
       byId.get(id)?.click();
     }
     await new Promise(r => setTimeout(r, 30));
@@ -5343,4 +5344,124 @@ test('v137 Dynamic Surface Weather, Day/Night & Bioluminescent Night-Dive Mode: 
       r._drawBioluminescence(noopCtx, -10, 40, 0, 25, (x) => x * 20 + 200, (y) => y * 20 + 100, 20, 1.5);
     }
   }
+});
+
+test('v138 Diver Gear Workshop, Custom Rig Liveries, Technical Torch Optics & Co-op Sync', async () => {
+  const {
+    SUIT_LIVERIES,
+    TORCH_OPTICS,
+    MILESTONE_PATCHES,
+    DEFAULT_RIG_LIVERY,
+    getSuitLivery,
+    getTorchOptic,
+    getMilestonePatch,
+    computeUnlockedLiveries,
+    sanitizeRigLivery,
+    isDefaultRigLivery,
+    drawLiveryPreview,
+  } = await import('../public/js/game/rigLivery.js');
+
+  assert.equal(SUIT_LIVERIES.length, 6);
+  assert.equal(TORCH_OPTICS.length, 4);
+  assert.equal(MILESTONE_PATCHES.length, 6);
+  assert.equal(isDefaultRigLivery(DEFAULT_RIG_LIVERY), true);
+  assert.equal(isDefaultRigLivery({ ...DEFAULT_RIG_LIVERY, suitId: 'arctic-cobalt' }), false);
+
+  // 1. Fresh diver unlocks standard issue items only; career clears & field guide unlock milestones
+  const wreckIds = LEVELS.filter((l) => l.isWreck).map((l) => l.id);
+  const freshBook = createEmptyLogbook();
+  const freshUnlocks = computeUnlockedLiveries(freshBook, wreckIds);
+  assert.equal(freshUnlocks.suits.has('zissou-classic'), true);
+  assert.equal(freshUnlocks.suits.has('arctic-cobalt'), true);
+  assert.equal(freshUnlocks.suits.has('expedition-amber'), true);
+  assert.equal(freshUnlocks.suits.has('abyss-emerald'), false);
+  assert.equal(freshUnlocks.torches.has('amber-silt'), false);
+
+  // Sanitizer enforces unlock gates & rejects invalid IDs
+  const clamped = sanitizeRigLivery(
+    { suitId: 'krubera-obsidian', torchId: 'amber-silt', patchId: 'nonexistent' },
+    freshUnlocks
+  );
+  assert.deepEqual(clamped, DEFAULT_RIG_LIVERY);
+
+  // Career progression unlocks Cenote Emerald, Wreck Titanium, Amber Silt-Piercer & Marine Bio patch
+  let vetBook = createEmptyLogbook();
+  for (const id of ['cenote-el-abismo', 'eagles-nest-sink', 'uss-oriskany-carrier']) {
+    vetBook = recordDiveInLogbook(vetBook, { levelId: id, success: true, score: 2500, grade: 'A', maxDepthM: 55, diveTimeSec: 180 });
+  }
+  for (let i = 0; i < 5; i++) {
+    vetBook.fieldGuide[`species-${i}`] = { count: 1, bestStars: 3, firstSiteId: 'cenote-el-abismo', bestSiteName: 'Cenote', bestDepthM: 20 };
+  }
+  const vetUnlocks = computeUnlockedLiveries(vetBook, wreckIds);
+  assert.equal(vetUnlocks.stats.sitesCleared, 3);
+  assert.equal(vetUnlocks.stats.wreckClears, 1);
+  assert.equal(vetUnlocks.stats.speciesLogged, 5);
+  assert.equal(vetUnlocks.suits.has('abyss-emerald'), true);
+  assert.equal(vetUnlocks.suits.has('wreck-titanium'), true);
+  assert.equal(vetUnlocks.torches.has('amber-silt'), true);
+  assert.equal(vetUnlocks.torches.has('emerald-spot'), true);
+  assert.equal(vetUnlocks.patches.has('wreck-penetrator'), true);
+  assert.equal(vetUnlocks.patches.has('wildlife-biologist'), true);
+
+  const customRig = { suitId: 'wreck-titanium', torchId: 'amber-silt', patchId: 'wreck-penetrator' };
+  assert.deepEqual(sanitizeRigLivery(customRig, vetUnlocks), customRig);
+  assert.ok(getTorchOptic('amber-silt').siltPierce > 0.2);
+  assert.ok(getTorchOptic('emerald-spot').rangeMult > 1.05);
+  assert.equal(getSuitLivery('unknown-id').id, 'zissou-classic');
+  assert.equal(getMilestonePatch('wreck-penetrator').icon, '⚓');
+
+  // 2. Workshop animated preview & renderer passes execute cleanly with custom livery & optics
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 560, height: 148 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 24 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  drawLiveryPreview(noopCtx, 560, 148, customRig, { hasCcr: true, hasDpv: true, timeSec: 1.4 });
+
+  const s = createDiveSession(LEVEL_1, { diverName: 'CustomTech', livery: customRig });
+  assert.deepEqual(s.diver.livery, customRig);
+
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r.ctx = noopCtx;
+  r.glowStamps = { warm: null, cyan: null, magenta: null };
+  r._torchSparksScratch = [];
+  r.siltCanvas = { width: 800, height: 600 };
+  const toSX = (x) => x * 20 + 200;
+  const toSY = (y) => y * 20 + 100;
+  r._drawDiver(noopCtx, s.diver, toSX, toSY, 20, false, 1.2, null, 0);
+  r._drawVolumetricTorchBeam(
+    noopCtx,
+    s.diver,
+    { ox: s.diver.x, oy: s.diver.y, rays: [{ x: s.diver.x + 8, y: s.diver.y - 2 }, { x: s.diver.x + 8, y: s.diver.y + 2 }] },
+    16.5 * getTorchOptic(customRig.torchId).rangeMult,
+    { siltHaze: 0.4, toScreenX: toSX, toScreenY: toSY, scale: 20, timeSec: 1.2 }
+  );
+  r._drawSpectralAbsorption(noopCtx, 800, 600, s.diver, toSX, toSY, 20);
+
+  // 3. Co-op P2pRoomCoordinator & LanClient relay and preserve remote peer livery
+  const peerPkts = [];
+  const coord = new P2pRoomCoordinator({ code: 'LIV1', hostId: 'h1', hostName: 'Host', levelId: LEVEL_1.id });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'Guest' }, (m) => peerPkts.push(m), 'p2');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('h1', {
+    type: 'player_state',
+    state: { seq: 1, x: 10, y: 12, vx: 0, vy: 0, angle: 0, torchOn: true, alive: true, livery: customRig },
+  });
+  const relayed = peerPkts.find((m) => m.type === 'peer_state');
+  assert.deepEqual(relayed?.state?.livery, customRig);
+
+  const client = new LanClient();
+  client._handleMessage({
+    type: 'peer_state',
+    playerId: 'h1',
+    state: relayed.state,
+  });
+  const peer = client.getPeers().find((p) => p.id === 'h1');
+  assert.deepEqual(peer?.livery, customRig);
 });

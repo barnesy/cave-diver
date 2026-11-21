@@ -77,6 +77,7 @@ export function createDiveSession(
     customMixOverrides = null,
     drillsEnabled = false,
     weatherId = 'clear-day',
+    livery = null,
   } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
@@ -159,6 +160,7 @@ export function createDiveSession(
       hasDpv: cleanGear.dpv,
       dpvActive: false,
       dpvThrusting: false,
+      livery: livery ? { ...livery } : null,
       name: diverName,
       body: createDiverBody(spawnX, spawnY),
     },

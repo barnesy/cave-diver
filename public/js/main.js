@@ -105,6 +105,19 @@ import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDivePr
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import { createAiBuddyState, stepAiBuddy, handlePlayerSignalForAiBuddy } from './game/aiBuddy.js';
 import { WEATHER_CYCLE_ORDER, resolveEffectiveWeather } from './game/weather.js';
+import {
+  SUIT_LIVERIES,
+  TORCH_OPTICS,
+  MILESTONE_PATCHES,
+  DEFAULT_RIG_LIVERY,
+  getSuitLivery,
+  getTorchOptic,
+  getMilestonePatch,
+  computeUnlockedLiveries,
+  sanitizeRigLivery,
+  isDefaultRigLivery,
+  drawLiveryPreview,
+} from './game/rigLivery.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -536,7 +549,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=137" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=138" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1187,6 +1200,10 @@ const input = new InputController({
     }
     if (diveSetupModalEl && !diveSetupModalEl.hidden) {
       closeDiveSetupModal();
+      return true;
+    }
+    if (liveryModalEl && !liveryModalEl.hidden) {
+      closeLiveryModal();
       return true;
     }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
@@ -1904,6 +1921,7 @@ const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
 const DRILLS_PREF_KEY = 'caveDiverDrills_v1';
 const AI_BUDDY_PREF_KEY = 'caveDiverAiBuddy_v1';
 const WEATHER_PREF_KEY = 'caveDiverWeather_v1';
+const LIVERY_PREF_KEY = 'caveDiverLivery_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
   { id: 'guided', label: 'Guided', fullBadge: '🧭 GUIDED', shortBadge: '🧭 GD', pillBadge: '🧭 GUIDED', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
@@ -2022,6 +2040,182 @@ function cycleWeatherPreference() {
 }
 menuWeatherPillEl?.addEventListener('click', cycleWeatherPreference);
 syncWeatherUi();
+
+// Diver Gear Workshop, Custom Rig Liveries & Technical Torch Optics (v138)
+const WRECK_LEVEL_ID_SET = new Set(LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck')).map((l) => l.id));
+function getCurrentLiveryUnlocks() {
+  let book = null;
+  try { book = loadCareerLogbook(); } catch {}
+  return computeUnlockedLiveries(book, WRECK_LEVEL_ID_SET);
+}
+let activeRigLivery = { ...DEFAULT_RIG_LIVERY };
+try {
+  const rawLiv = localStorage.getItem(LIVERY_PREF_KEY);
+  if (rawLiv) {
+    activeRigLivery = sanitizeRigLivery(JSON.parse(rawLiv), getCurrentLiveryUnlocks());
+  }
+} catch {}
+const menuLiveryPillEl = document.getElementById('menu-livery-pill');
+const liveryModalEl = document.getElementById('livery-modal');
+const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
+const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
+const liverySuitGridEl = document.getElementById('livery-suit-grid');
+const liveryTorchGridEl = document.getElementById('livery-torch-grid');
+const liveryPatchGridEl = document.getElementById('livery-patch-grid');
+const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
+const btnLiveryCloseEl = document.getElementById('btn-livery-close');
+const btnLiveryResetEl = document.getElementById('btn-livery-reset');
+const btnLiveryDoneEl = document.getElementById('btn-livery-done');
+
+function saveRigLivery() {
+  try { localStorage.setItem(LIVERY_PREF_KEY, JSON.stringify(activeRigLivery)); } catch {}
+}
+
+function syncLiveryUi() {
+  const suit = getSuitLivery(activeRigLivery.suitId);
+  const custom = !isDefaultRigLivery(activeRigLivery);
+  if (menuLiveryPillEl) {
+    menuLiveryPillEl.textContent = `🎨 ${suit.name}`;
+    menuLiveryPillEl.classList.toggle('active', custom);
+  }
+  if (session?.diver) {
+    session.diver.livery = { ...activeRigLivery };
+  }
+  syncSetupDrawerSummary();
+}
+
+function renderLiveryPreviewFrame(timeSec = 0) {
+  if (!liveryPreviewCtx || !liveryPreviewCanvasEl) return;
+  let hasCcr = false;
+  let hasDpv = false;
+  try {
+    const eq = getEffectiveGearLoadout();
+    hasCcr = Boolean(eq?.ccr);
+    hasDpv = Boolean(eq?.dpv);
+  } catch {}
+  drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, activeRigLivery, {
+    hasCcr,
+    hasDpv,
+    timeSec,
+  });
+}
+
+function renderLiveryWorkshopModal() {
+  const unlocks = getCurrentLiveryUnlocks();
+  activeRigLivery = sanitizeRigLivery(activeRigLivery, unlocks);
+  const totalItems = SUIT_LIVERIES.length + TORCH_OPTICS.length + MILESTONE_PATCHES.length;
+  const totalUnlocked = unlocks.suits.size + unlocks.torches.size + unlocks.patches.size;
+  if (liveryUnlockSummaryEl) {
+    liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} Workshop items unlocked (${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${unlocks.stats.speciesLogged} species). Syncs live in co-op.`;
+  }
+
+  if (liverySuitGridEl) {
+    liverySuitGridEl.innerHTML = SUIT_LIVERIES.map((s) => {
+      const unlocked = unlocks.suits.has(s.id);
+      const selected = activeRigLivery.suitId === s.id;
+      const chipStyle = `background: linear-gradient(135deg, ${s.suitTop} 0%, ${s.suitMid} 52%, ${s.accent} 53%, ${s.trim} 100%);`;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-suit-id="${s.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(s.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : s.unlockHint) : `Locked · ${s.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liverySuitGridEl.querySelectorAll('button[data-suit-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sid = btn.getAttribute('data-suit-id');
+        if (!sid || !unlocks.suits.has(sid)) return;
+        activeRigLivery = { ...activeRigLivery, suitId: sid };
+        saveRigLivery();
+        syncLiveryUi();
+        renderLiveryWorkshopModal();
+      });
+    });
+  }
+
+  if (liveryTorchGridEl) {
+    liveryTorchGridEl.innerHTML = TORCH_OPTICS.map((t) => {
+      const unlocked = unlocks.torches.has(t.id);
+      const selected = activeRigLivery.torchId === t.id;
+      const chipStyle = `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${t.swatch} 55%, #0f172a 100%);`;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-torch-id="${t.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(t.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? t.specText : `Locked · ${t.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryTorchGridEl.querySelectorAll('button[data-torch-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tid = btn.getAttribute('data-torch-id');
+        if (!tid || !unlocks.torches.has(tid)) return;
+        activeRigLivery = { ...activeRigLivery, torchId: tid };
+        saveRigLivery();
+        syncLiveryUi();
+        renderLiveryWorkshopModal();
+      });
+    });
+  }
+
+  if (liveryPatchGridEl) {
+    liveryPatchGridEl.innerHTML = MILESTONE_PATCHES.map((p) => {
+      const unlocked = unlocks.patches.has(p.id);
+      const selected = activeRigLivery.patchId === p.id;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-patch-id="${p.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="background: rgba(15, 23, 42, 0.9);" aria-hidden="true">${unlocked ? escapeHtml(p.icon) : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(p.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : p.unlockHint) : p.unlockHint)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryPatchGridEl.querySelectorAll('button[data-patch-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pid = btn.getAttribute('data-patch-id');
+        if (!pid || !unlocks.patches.has(pid)) return;
+        activeRigLivery = { ...activeRigLivery, patchId: pid };
+        saveRigLivery();
+        syncLiveryUi();
+        renderLiveryWorkshopModal();
+      });
+    });
+  }
+
+  if (btnLiveryResetEl) {
+    btnLiveryResetEl.disabled = isDefaultRigLivery(activeRigLivery);
+  }
+  renderLiveryPreviewFrame(performance.now() * 0.001);
+}
+
+function openLiveryModal() {
+  if (!liveryModalEl) return;
+  closeDiveSetupModal();
+  setHomeMenuOpen(false);
+  renderLiveryWorkshopModal();
+  liveryModalEl.hidden = false;
+}
+
+function closeLiveryModal() {
+  if (!liveryModalEl) return;
+  liveryModalEl.hidden = true;
+}
+
+menuLiveryPillEl?.addEventListener('click', openLiveryModal);
+btnLiveryCloseEl?.addEventListener('click', closeLiveryModal);
+btnLiveryDoneEl?.addEventListener('click', closeLiveryModal);
+liveryModalEl?.addEventListener('click', (e) => {
+  if (e.target === liveryModalEl) closeLiveryModal();
+});
+btnLiveryResetEl?.addEventListener('click', () => {
+  activeRigLivery = { ...DEFAULT_RIG_LIVERY };
+  saveRigLivery();
+  syncLiveryUi();
+  renderLiveryWorkshopModal();
+  showToast('🎨 Gear Workshop reset to Standard Issue (Zissou Tech · 6500K LED).', 2.2);
+});
+syncLiveryUi();
 let activeGhostTrack = null;
 let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
@@ -4158,6 +4352,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
     drillsEnabled,
     weatherId: weatherPrefId,
+    livery: activeRigLivery,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
@@ -5147,6 +5342,7 @@ function buildPlayerStatePayload(sess, overrides = {}) {
     hasDpv: Boolean(diver.hasDpv),
     dpvActive: Boolean(diver.dpvActive),
     dpvThrusting: Boolean(diver.dpvThrusting),
+    livery: diver.livery ? { ...diver.livery } : null,
     alive: diveState.alive,
     carryingBody: Boolean(sess.carryingBody),
     rescueTargetId: sess.rescueTargetId || '',
@@ -5677,6 +5873,7 @@ function syncSetupDrawerSummary() {
   let activeCount = 0;
   let modeMod = false;
   let weatherMod = false;
+  let liveryMod = false;
   let gasMod = false;
   let drillsMod = false;
   let aiMod = false;
@@ -5684,6 +5881,7 @@ function syncSetupDrawerSummary() {
   let procMod = false;
   let currentDiff = 'standard';
   let currentWeatherPref = 'clear-day';
+  let currentLivery = DEFAULT_RIG_LIVERY;
   let currentMutId = '';
   try {
     currentDiff = activeDifficulty || 'standard';
@@ -5694,6 +5892,11 @@ function syncSetupDrawerSummary() {
     currentWeatherPref = weatherPrefId || 'clear-day';
     weatherMod = currentWeatherPref !== 'clear-day';
     if (weatherMod) activeCount++;
+  } catch {}
+  try {
+    currentLivery = activeRigLivery || DEFAULT_RIG_LIVERY;
+    liveryMod = !isDefaultRigLivery(currentLivery);
+    if (liveryMod) activeCount++;
   } catch {}
   try {
     gasMod = Boolean(customGasPlan?.enabled);
@@ -5728,6 +5931,7 @@ function syncSetupDrawerSummary() {
   // Update active card highlights & readable live descriptions inside the Dive Setup Panel
   document.getElementById('setup-card-mode')?.classList.toggle('active-card', modeMod);
   document.getElementById('setup-card-weather')?.classList.toggle('active-card', weatherMod);
+  document.getElementById('setup-card-livery')?.classList.toggle('active-card', liveryMod);
   document.getElementById('setup-card-ai')?.classList.toggle('active-card', aiMod);
   document.getElementById('setup-card-gas')?.classList.toggle('active-card', gasMod);
   document.getElementById('setup-card-drills')?.classList.toggle('active-card', drillsMod);
@@ -5745,6 +5949,15 @@ function syncSetupDrawerSummary() {
       currentWeatherPref === 'auto'
         ? `Live Auto (${rw.icon} ${rw.label}): ${rw.desc}`
         : rw.desc;
+  }
+  const liveryDescEl = document.getElementById('setup-livery-desc');
+  if (liveryDescEl) {
+    const suit = getSuitLivery(currentLivery.suitId);
+    const torch = getTorchOptic(currentLivery.torchId);
+    const patch = getMilestonePatch(currentLivery.patchId);
+    liveryDescEl.textContent = liveryMod
+      ? `Equipped: ${suit.name} · ${torch.name} (${torch.specText}) · Patch: ${patch.name}.`
+      : 'Customize drysuit livery, primary torch optics (Halogen, Amber Silt-Piercer, Emerald Spot) & career harness patches.';
   }
   const gasDescEl = document.getElementById('setup-gas-desc');
   if (gasDescEl) {
@@ -5802,6 +6015,11 @@ btnSetupResetEl?.addEventListener('click', () => {
     weatherPrefId = 'clear-day';
     try { localStorage.setItem(WEATHER_PREF_KEY, weatherPrefId); } catch {}
     syncWeatherUi();
+  }
+  if (!isDefaultRigLivery(activeRigLivery)) {
+    activeRigLivery = { ...DEFAULT_RIG_LIVERY };
+    saveRigLivery();
+    syncLiveryUi();
   }
   if (aiBuddyEnabled) {
     aiBuddyEnabled = false;
@@ -7824,6 +8042,7 @@ function frame(nowMs) {
   } else if (renderer.ready && renderer.level?.id === activeLevel.id) {
     menuPreviewDiver.x = activeLevel.spawn.x + 7 + Math.sin(nowMs * 0.0003) * 4;
     menuPreviewDiver.y = Math.min(activeLevel.spawn.y + 6.5, 9);
+    menuPreviewDiver.livery = activeRigLivery;
     renderer.render({
       diver: menuPreviewDiver,
       diveState: MENU_PREVIEW_DIVE_STATE,
@@ -7839,6 +8058,10 @@ function frame(nowMs) {
     });
   } else {
     renderer.renderMenuBackdrop(activeLevel, menuTimeSec, resolveEffectiveWeather(weatherPrefId, { level: activeLevel }));
+  }
+
+  if (liveryModalEl && !liveryModalEl.hidden) {
+    renderLiveryPreviewFrame(menuTimeSec);
   }
 
   requestAnimationFrame(frame);

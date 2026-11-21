@@ -69,6 +69,14 @@ function sanitizePlayerState(raw) {
     hasDpv: Boolean(raw.hasDpv),
     dpvActive: Boolean(raw.dpvActive),
     dpvThrusting: Boolean(raw.dpvThrusting),
+    livery:
+      raw.livery && typeof raw.livery === 'object'
+        ? {
+            suitId: typeof raw.livery.suitId === 'string' ? raw.livery.suitId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
+            torchId: typeof raw.livery.torchId === 'string' ? raw.livery.torchId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
+            patchId: typeof raw.livery.patchId === 'string' ? raw.livery.patchId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
+          }
+        : null,
     alive: raw.alive !== false,
     carryingBody: Boolean(raw.carryingBody),
     rescueTargetId: typeof raw.rescueTargetId === 'string' ? raw.rescueTargetId.slice(0, 48) : '',

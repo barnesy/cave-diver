@@ -3,6 +3,7 @@ import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
 import { getWeatherById, computeStormLightningFlash } from './weather.js';
+import { getSuitLivery, getTorchOptic, getMilestonePatch } from './rigLivery.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -7743,7 +7744,7 @@ export class CaveRenderer {
     ctx.stroke();
   }
 
-  _drawArticulatedLeg(ctx, pelvis, leg, toScreenX, toScreenY, scale, isPeer, isBackLeg) {
+  _drawArticulatedLeg(ctx, pelvis, leg, toScreenX, toScreenY, scale, isPeer, isBackLeg, liverySuit = null) {
     const px = toScreenX(pelvis.x);
     const py = toScreenY(pelvis.y);
     const kx = toScreenX(leg.knee.x);
@@ -7753,10 +7754,14 @@ export class CaveRenderer {
     const fx = toScreenX(leg.finTip.x);
     const fy = toScreenY(leg.finTip.y);
 
-    const suitColor = isBackLeg ? '#09111e' : '#111c2d';
-    const trimColor = isPeer
-      ? (isBackLeg ? '#9a3412' : '#fb923c')
-      : (isBackLeg ? '#0369a1' : '#38bdf8');
+    const suitColor = liverySuit
+      ? (isBackLeg ? liverySuit.suitBot : liverySuit.suitMid)
+      : (isBackLeg ? '#09111e' : '#111c2d');
+    const trimColor = liverySuit
+      ? (isBackLeg ? liverySuit.finColor : liverySuit.finTip)
+      : isPeer
+        ? (isBackLeg ? '#9a3412' : '#fb923c')
+        : (isBackLeg ? '#0369a1' : '#38bdf8');
 
     // Thigh & calf
     this._drawLimbSegment(ctx, px, py, kx, ky, 0.21 * scale, suitColor);
@@ -8215,17 +8220,31 @@ export class CaveRenderer {
 
     ctx.save();
 
+    const liverySuit = diver.livery ? getSuitLivery(diver.livery.suitId) : null;
+    const liveryPatch = diver.livery ? getMilestonePatch(diver.livery.patchId) : null;
+    const liveryPalette = liverySuit
+      ? {
+          suitTop: liverySuit.suitTop,
+          suitMid: liverySuit.suitMid,
+          suitBot: liverySuit.suitBot,
+          accent: liverySuit.accent,
+          trim: liverySuit.trim,
+          stageBand: liverySuit.stageBand,
+          patchIcon: liveryPatch && liveryPatch.id !== 'none' ? liveryPatch.icon : '',
+        }
+      : null;
+
     // 1. Far leg (behind torso)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liverySuit);
 
     // 2. Articulated Torso connecting shoulders (sx, sy) to pelvis (px, py)
-    const accent = isPeer ? '#fb923c' : '#22d3ee';
+    const accent = liverySuit ? liverySuit.trim : (isPeer ? '#fb923c' : '#22d3ee');
     const torsoAngle = Math.atan2(sy - py, sx - px);
     const rollScale = Math.abs(body.rollVisual) < 0.15 ? 0.15 : body.rollVisual;
     const facingLeft = body.facingSign < 0;
 
     // Flexible drysuit spine core
-    this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, '#0f172a');
+    this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, liverySuit ? liverySuit.suitMid : '#0f172a');
     // Subtle shoulder / hip trim stripe
     ctx.strokeStyle = accent;
     ctx.lineWidth = Math.max(1.5, 0.04 * scale);
@@ -8248,11 +8267,12 @@ export class CaveRenderer {
       dpvActive: diver.dpvActive,
       dpvThrusting: diver.dpvThrusting,
       timeSec,
+      liveryPalette,
     });
     ctx.restore();
 
     // 4. Near leg (in front of pelvis)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liverySuit);
 
     // 5. Articulated Arm, Wrist Dive Computer & Goodman-handle Primary Torch
     const shoulderX = sx + Math.cos(torsoAngle) * (0.08 * scale);
@@ -8605,20 +8625,22 @@ export class CaveRenderer {
     ctx.clip();
 
     ctx.globalCompositeOperation = 'screen';
+    const optic = getTorchOptic(diver?.livery?.torchId);
     const intensity = (isPeer ? 0.58 : 1.0) * intensityMult;
-    const warmBoost = Math.min(0.18, siltHaze * 0.14);
+    const effectiveHaze = siltHaze * (1 - (optic.siltPierce || 0));
+    const warmBoost = Math.min(0.18, effectiveHaze * 0.14);
     const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
     const scatterStamp = this.glowStamps?.torchBeamScatter;
-    if (scatterStamp) {
+    if (scatterStamp && optic.id === 'tech-led') {
       ctx.globalAlpha = Math.min(1, intensity * 0.85 + warmBoost * 1.4);
       ctx.drawImage(scatterStamp, tx - rPx, ty - rPx, rPx * 2, rPx * 2);
       ctx.globalAlpha = 1;
     } else {
       const scatter = ctx.createRadialGradient(tx, ty, 0.15 * scale, tx, ty, rPx);
-      scatter.addColorStop(0, `rgba(254, 249, 195, ${(0.24 * intensity + warmBoost).toFixed(3)})`);
-      scatter.addColorStop(0.28, `rgba(186, 230, 253, ${(0.14 * intensity + warmBoost * 0.45).toFixed(3)})`);
-      scatter.addColorStop(0.7, `rgba(14, 165, 233, ${(0.05 * intensity).toFixed(3)})`);
-      scatter.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      scatter.addColorStop(0, `rgba(${optic.coreRgb}, ${(0.28 * intensity + warmBoost).toFixed(3)})`);
+      scatter.addColorStop(0.32, `rgba(${optic.shaftRgb}, ${(0.16 * intensity + warmBoost * 0.45).toFixed(3)})`);
+      scatter.addColorStop(0.72, `rgba(${optic.shaftRgb}, ${(0.06 * intensity).toFixed(3)})`);
+      scatter.addColorStop(1, `rgba(${optic.shaftRgb}, 0)`);
       ctx.fillStyle = scatter;
       ctx.fillRect(tx - rPx, ty - rPx, rPx * 2, rPx * 2);
     }
@@ -8628,7 +8650,7 @@ export class CaveRenderer {
     ctx.moveTo(tx, ty);
     ctx.arc(tx, ty, rPx * 0.9, beamAng - 0.13, beamAng + 0.13);
     ctx.closePath();
-    ctx.fillStyle = `rgba(224, 242, 254, ${(0.1 * intensity).toFixed(3)})`;
+    ctx.fillStyle = `rgba(${optic.coreRgb}, ${(0.12 * intensity).toFixed(3)})`;
     ctx.fill();
 
     // Smooth feathered 2D Ray-Cast Tyndall / Particulate Light Shafts (coarser stride for remote peers = 2x faster GPU)
@@ -8640,7 +8662,7 @@ export class CaveRenderer {
       const rB = torchData.rays[Math.min(rayLen - 1, i + shaftStep)];
       const centerDist = Math.abs((i + shaftStep * 0.5) / Math.max(1, rayLen - 1) - 0.5) * 2;
       const rayAlpha = (1 - centerDist * 0.75) * (isPeer ? 0.032 : 0.024) * intensity;
-      ctx.fillStyle = `rgba(186, 230, 253, ${rayAlpha.toFixed(4)})`;
+      ctx.fillStyle = `rgba(${optic.shaftRgb}, ${rayAlpha.toFixed(4)})`;
       ctx.beginPath();
       ctx.moveTo(tx, ty);
       ctx.lineTo(toScreenX(rA.x), toScreenY(rA.y));
@@ -8844,7 +8866,7 @@ export class CaveRenderer {
             diver.body?.hand ? diver.body.hand.y : diver.y,
             localTorchAng,
             0.44,
-            16.5,
+            16.5 * (getTorchOptic(diver?.livery?.torchId).rangeMult || 1.0),
             52,
             siltClouds
           ),
@@ -9614,7 +9636,8 @@ export class CaveRenderer {
         const tx = ox + Math.cos(ang) * reachPx * 0.48;
         const ty = oy + Math.sin(ang) * reachPx * 0.48;
         const g = ctx.createRadialGradient(ox, oy, 4, tx, ty, reachPx * 0.62);
-        const warmRgb = diver.backupTorchActive ? '255, 198, 120' : '255, 224, 182';
+        const optic = getTorchOptic(diver?.livery?.torchId);
+        const warmRgb = diver.backupTorchActive ? '255, 198, 120' : (optic.warmRgb || '255, 224, 182');
         g.addColorStop(0, `rgba(${warmRgb}, ${(beamAlpha * 1.15).toFixed(3)})`);
         g.addColorStop(0.55, `rgba(${warmRgb}, ${(beamAlpha * 0.48).toFixed(3)})`);
         g.addColorStop(1, `rgba(${warmRgb}, 0)`);

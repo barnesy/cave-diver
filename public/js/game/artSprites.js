@@ -559,8 +559,10 @@ function _getRigGradients(ctx, u) {
  * brushed twinset or CCR rebreather shell, glass mask glint, optional torpedo DPV scooter).
  */
 export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = null) {
-  const accent = isPeer ? '#fb923c' : '#ef4444'; // Classic Zissou red cap/accent vs buddy orange
-  const trim = isPeer ? '#fdba74' : '#38bdf8';
+  const pal = gearOpts?.liveryPalette || null;
+  const accent = pal?.accent || (isPeer ? '#fb923c' : '#ef4444'); // Classic Zissou red cap/accent vs custom livery
+  const trim = pal?.trim || (isPeer ? '#fdba74' : '#38bdf8');
+  const stageBandColor = pal?.stageBand || (isPeer ? '#fb923c' : '#22c55e');
   const { suitGrad, tankGrad, stageGrad, glassGrad } = _getRigGradients(ctx, u);
   const hasCcr = Boolean(gearOpts?.hasCcr);
   const hasDpv = Boolean(gearOpts?.hasDpv);
@@ -568,8 +570,16 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   const dpvThrusting = Boolean(gearOpts?.dpvThrusting);
   const timeSec = gearOpts?.timeSec || 0;
 
-  // Sculpted drysuit torso shell with shading
-  ctx.fillStyle = suitGrad;
+  // Sculpted drysuit torso shell with shading (supports custom livery drysuit colorway)
+  if (pal?.suitTop && pal?.suitMid && pal?.suitBot) {
+    const customSuitGrad = ctx.createLinearGradient(0, -u * 0.4, 0, u * 0.45);
+    customSuitGrad.addColorStop(0, pal.suitTop);
+    customSuitGrad.addColorStop(0.55, pal.suitMid);
+    customSuitGrad.addColorStop(1, pal.suitBot);
+    ctx.fillStyle = customSuitGrad;
+  } else {
+    ctx.fillStyle = suitGrad;
+  }
   ctx.beginPath();
   ctx.ellipse(-u * 0.22, u * 0.02, u * 0.72, u * 0.31, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -581,6 +591,24 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.moveTo(-u * 0.65, -u * 0.18);
   ctx.lineTo(u * 0.18, u * 0.18);
   ctx.stroke();
+
+  // Optional Milestone Shoulder Patch emblem (v138)
+  if (pal?.patchIcon) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+    ctx.strokeStyle = trim;
+    ctx.lineWidth = Math.max(1, u * 0.032);
+    ctx.beginPath();
+    ctx.arc(-u * 0.18, -u * 0.02, Math.max(3.5, u * 0.135), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `700 ${Math.max(7, Math.round(u * 0.16))}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillStyle = '#f8fafc';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pal.patchIcon, -u * 0.18, -u * 0.01);
+    ctx.restore();
+  }
 
   if (hasCcr) {
     // Closed-Circuit Rebreather (CCR) back-mount yellow/graphite canister & corrugated breathing loop
@@ -634,7 +662,7 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.beginPath();
   ctx.roundRect(-u * 0.58, u * 0.26, u * 0.9, u * 0.24, u * 0.11);
   ctx.fill();
-  ctx.fillStyle = isPeer ? '#fb923c' : '#22c55e';
+  ctx.fillStyle = stageBandColor;
   ctx.fillRect(-u * 0.2, u * 0.26, u * 0.14, u * 0.24);
 
   // Hood / Helmet with subtle Zissou-inspired stripe accent & top rim catchlight
