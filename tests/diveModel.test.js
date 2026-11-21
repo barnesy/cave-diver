@@ -5127,3 +5127,132 @@ test('v134 AI Autonomous Dive Buddy ("Solo Co-op" Wingman): formation, SDF clear
   assert.equal(wSession.activeSnagIndex, -1, 'Snag index should clear once AI Buddy cuts line');
   assert.equal(wBuddy.snagsAssisted, 1);
 });
+
+test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singleton methods & headless main.js boot', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(testDir, '..');
+  const pubDir = path.join(repoRoot, 'public');
+  const html = fs.readFileSync(path.join(pubDir, 'index.html'), 'utf8');
+  const mainSrc = fs.readFileSync(path.join(pubDir, 'js/main.js'), 'utf8');
+  const swSrc = fs.readFileSync(path.join(pubDir, 'sw.js'), 'utf8');
+
+  // 1. Every getElementById(...) in main.js must exist in index.html (or be dynamically created in JS)
+  const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+  const missingIds = [];
+  for (const m of mainSrc.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)) {
+    const id = m[1];
+    if (!htmlIds.has(id) && !mainSrc.includes(`id="${id}"`) && !mainSrc.includes(`id='${id}'`)) {
+      missingIds.push(id);
+    }
+  }
+  assert.deepEqual(missingIds, [], `main.js references missing HTML IDs: ${missingIds.join(', ')}`);
+
+  // 2. Previously caught undeclared-symbol regressions must never reappear
+  assert.equal(/\bdailyMutMeta\b/.test(mainSrc), false, 'main.js must not reference undeclared dailyMutMeta');
+  assert.equal(/\bpopulateLevelSelector\b/.test(mainSrc), false, 'main.js must not reference undeclared populateLevelSelector');
+
+  // 3. All singleton method calls in main.js must exist on their respective class prototypes
+  const singletons = [
+    { varName: 'audio', mod: '../public/js/game/audio.js', cls: 'DiveAudio' },
+    { varName: 'renderer', mod: '../public/js/game/renderer.js', cls: 'CaveRenderer' },
+    { varName: 'hud', mod: '../public/js/game/hud.js', cls: 'DiveComputerHUD' },
+    { varName: 'input', mod: '../public/js/game/input.js', cls: 'InputController' },
+    { varName: 'lan', mod: '../public/js/net/lanClient.js', cls: 'LanClient' },
+    { varName: 'leaderboard', mod: '../public/js/net/leaderboardClient.js', cls: 'LeaderboardClient' },
+    { varName: 'github', mod: '../public/js/net/githubClient.js', cls: 'GitHubClient' },
+  ];
+  for (const s of singletons) {
+    const mod = await import(s.mod);
+    const valid = new Set(Object.getOwnPropertyNames(mod[s.cls]?.prototype || {}));
+    const re = new RegExp(`\\b${s.varName}(?:\\?\\.|\\.)([A-Za-z_$][\\w$]*)\\s*\\(`, 'g');
+    const missing = [...new Set([...mainSrc.matchAll(re)].map((x) => x[1]))].filter((fn) => !valid.has(fn));
+    assert.deepEqual(missing, [], `${s.varName} calls missing methods: ${missing.join(', ')}`);
+  }
+
+  // 4. Every CORE_SHELL entry in sw.js must exist on disk
+  const swEntries = [...swSrc.matchAll(/'(\.\/[^']+)'/g)].map((m) => m[1].split('?')[0]);
+  for (const rel of swEntries) {
+    if (rel === './') continue;
+    assert.equal(fs.existsSync(path.join(pubDir, rel.slice(2))), true, `SW CORE_SHELL missing on disk: ${rel}`);
+  }
+
+  // 5. Real V8 subprocess boot + modal click-through smoke test with populated localStorage prefs (catches TDZ & init crashes)
+  const bootScript = `
+    import fs from 'node:fs';
+    import { pathToFileURL } from 'node:url';
+    const html = fs.readFileSync(${JSON.stringify(path.join(pubDir, 'index.html'))}, 'utf8');
+    const errs = [];
+    process.on('uncaughtException', (e) => errs.push(e.stack || String(e)));
+    process.on('unhandledRejection', (e) => errs.push(e?.stack || String(e)));
+    const mkCtx = () => new Proxy({
+      canvas: { width: 800, height: 600 },
+      measureText: () => ({ width: 24 }),
+      createImageData: (w, h) => ({ data: new Uint8ClampedArray((w || 16) * (h || 16) * 4), width: w || 16, height: h || 16 }),
+      getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray((w || 16) * (h || 16) * 4), width: w || 16, height: h || 16 }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createPattern: () => ({}),
+    }, { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) });
+    class CL { constructor(){ this.s = new Set(); } add(...a){ a.forEach(x=>this.s.add(x)); } remove(...a){ a.forEach(x=>this.s.delete(x)); } toggle(x,f){ if(f===undefined){ if(this.s.has(x)){this.s.delete(x);return false;} this.s.add(x);return true;} if(f)this.s.add(x); else this.s.delete(x); return !!f; } contains(x){ return this.s.has(x); } }
+    class El {
+      constructor(tag='div', id=''){ this.tagName=tag.toUpperCase(); this.id=id; this.hidden=false; this.disabled=false; this.value=''; this.checked=false; this.textContent=''; this.innerHTML=''; this.className=''; this.dataset={}; this.style=new Proxy({},{get:(t,p)=>p==='setProperty'?()=>{}:t[p]??'',set:(t,p,v)=>((t[p]=v),true)}); this.classList=new CL(); this.children=[]; this.listeners=new Map(); this.width=800; this.height=600; this.clientWidth=800; this.clientHeight=600; this.attributes=new Map(); }
+      addEventListener(e,f){ if(!this.listeners.has(e)) this.listeners.set(e,[]); this.listeners.get(e).push(f); }
+      removeEventListener(){}
+      click(){ for(const f of this.listeners.get('click')||[]) f({type:'click',target:this,preventDefault(){},stopPropagation(){}}); }
+      setAttribute(k,v){ this.attributes.set(k,String(v)); if(k==='hidden') this.hidden=true; }
+      getAttribute(k){ return this.attributes.get(k)??null; }
+      removeAttribute(k){ this.attributes.delete(k); if(k==='hidden') this.hidden=false; }
+      appendChild(c){ this.children.push(c); return c; } removeChild(){} replaceChildren(){} remove(){} focus(){} blur(){} select(){}
+      closest(){ return null; } querySelector(){ return new El(); } querySelectorAll(){ return []; }
+      getBoundingClientRect(){ return {left:0,top:0,width:800,height:600,right:800,bottom:600}; }
+      getContext(){ return mkCtx(); } toDataURL(){ return 'data:image/png;base64,'; }
+    }
+    const byId = new Map();
+    for (const m of html.matchAll(/<([a-zA-Z0-9-]+)\\b([^>]*)\\bid="([^"]+)"([^>]*)>/g)) {
+      const el = new El(m[1], m[3]);
+      if (/\\bhidden\\b/.test(m[2]+m[4])) el.hidden = true;
+      if (/\\bchecked\\b/.test(m[2]+m[4])) el.checked = true;
+      byId.set(m[3], el);
+    }
+    const store = new Map([
+      ['caveDiverBriefed_v1','1'],
+      ['caveDiverName_v1','BootGuard'],
+      ['caveDiverDrills_v1','1'],
+      ['caveDiverAiBuddy_v1','1'],
+      ['caveDiverDifficulty_v1','hardcore'],
+      ['caveDiverCustomGas_v1', JSON.stringify({ enabled: true, o2Pct: 18, hePct: 45 })],
+    ]);
+    const origSI = globalThis.setInterval;
+    globalThis.setInterval = (...a) => { const h = origSI(...a); h.unref?.(); return h; };
+    globalThis.window = globalThis; globalThis.self = globalThis;
+    globalThis.localStorage = { getItem: k => store.has(k)?store.get(k):null, setItem:(k,v)=>store.set(k,String(v)), removeItem:k=>store.delete(k), clear:()=>store.clear() };
+    globalThis.sessionStorage = globalThis.localStorage;
+    globalThis.location = { origin:'https://example.test', pathname:'/', search:'', hash:'', href:'https://example.test/', protocol:'https:', host:'example.test', hostname:'example.test', reload(){} };
+    globalThis.history = { replaceState(){}, pushState(){} };
+    globalThis.innerWidth = 1280; globalThis.innerHeight = 800; globalThis.devicePixelRatio = 1;
+    globalThis.matchMedia = () => ({ matches:false, addEventListener(){}, removeEventListener(){} });
+    globalThis.ResizeObserver = class { observe(){} unobserve(){} disconnect(){} };
+    globalThis.Image = class { set src(v){ queueMicrotask(()=>this.onerror?.()); } };
+    globalThis.requestAnimationFrame = () => 1; globalThis.cancelAnimationFrame = () => {};
+    globalThis.fetch = async () => ({ ok:false, status:404, json:async()=>({}), text:async()=>'' });
+    globalThis.addEventListener = () => {}; globalThis.removeEventListener = () => {};
+    try { Object.defineProperty(globalThis, 'navigator', { configurable:true, value:{ userAgent:'Test', onLine:false, vibrate:()=>true } }); } catch {}
+    globalThis.document = { hidden:false, visibilityState:'visible', body:new El('body'), documentElement:new El('html'), getElementById:id=>byId.get(id)||null, createElement:t=>new El(t), createElementNS:(_n,t)=>new El(t), querySelector:()=>null, querySelectorAll:()=>[], addEventListener(){}, removeEventListener(){} };
+    await import(pathToFileURL(${JSON.stringify(path.join(pubDir, 'js/main.js'))}).href);
+    await new Promise(r => setTimeout(r, 40));
+    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
+      byId.get(id)?.click();
+    }
+    await new Promise(r => setTimeout(r, 30));
+    if (errs.length) { console.error(errs.join('\\n')); process.exit(1); }
+  `;
+  execFileSync(process.execPath, ['--input-type=module', '-e', bootScript], {
+    stdio: 'pipe',
+    timeout: 10000,
+  });
+});

@@ -535,7 +535,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=135" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=136" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2314,7 +2314,8 @@ inputLogbookImport?.addEventListener('change', async () => {
     renderCareerSummary();
     renderTechGearDock();
     renderDailyChallengeCard();
-    populateLevelSelector();
+    populateLevelSelect();
+    renderLevelCards();
     openLogbookModal();
     showToast(
       `📤 Imported & merged ${parsed.siteCount} site clears & ${parsed.fieldGuideCount} Field Guide species!`,
@@ -4201,8 +4202,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const bottomMixName = getActiveGasName('TMX1455');
-  const openMsg = dailyMutMeta
-    ? `📅 DAILY · ${dailyMutMeta.icon} ${dailyMutMeta.name}: ${dailyMutMeta.shortDesc}`
+  const openMsg = runMutMeta
+    ? `${session.dailyDateKey ? '📅 DAILY' : '🎛️ SANDBOX'} · ${runMutMeta.icon} ${runMutMeta.name}: ${runMutMeta.shortDesc}`
     : activeLevel.isWreck
       ? activeLevel.reelMetersPerDiver > 0
         ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
@@ -5605,28 +5606,35 @@ const btnSetupCloseEl = document.getElementById('btn-setup-close');
 const btnSetupDoneEl = document.getElementById('btn-setup-done');
 const btnSetupResetEl = document.getElementById('btn-setup-reset');
 
-const SETUP_MODE_DESCRIPTIONS = {
-  guided: 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.',
-  standard: 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.',
-  hardcore: 'Hardcore Mode: No compass coaching, aggressive silt clouds, heavy surge currents, and strict emergency physiology (+score bonus).',
-};
+function getSetupModeDescription(diffId) {
+  if (diffId === 'guided') {
+    return 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.';
+  }
+  if (diffId === 'hardcore') {
+    return 'Hardcore Mode: No compass coaching, aggressive silt clouds, heavy surge currents, and strict emergency physiology (+score bonus).';
+  }
+  return 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.';
+}
 
 function openDiveSetupModal() {
-  if (!diveSetupModalEl) return;
+  const modal = document.getElementById('dive-setup-modal');
+  if (!modal) return;
   setHomeMenuOpen(false);
-  diveSetupModalEl.hidden = false;
+  modal.hidden = false;
   syncSetupDrawerSummary();
 }
 
 function closeDiveSetupModal() {
-  if (!diveSetupModalEl) return;
-  diveSetupModalEl.hidden = true;
+  const modal = document.getElementById('dive-setup-modal');
+  if (!modal) return;
+  modal.hidden = true;
   syncSetupDrawerSummary();
 }
 
 function syncSetupDrawerSummary() {
   const btn = document.getElementById('btn-setup-drawer');
   const modal = document.getElementById('dive-setup-modal');
+  const resetBtn = document.getElementById('btn-setup-reset');
   let activeCount = 0;
   let modeMod = false;
   let gasMod = false;
@@ -5634,8 +5642,11 @@ function syncSetupDrawerSummary() {
   let aiMod = false;
   let mutMod = false;
   let procMod = false;
+  let currentDiff = 'standard';
+  let currentMutId = '';
   try {
-    modeMod = activeDifficulty !== 'standard';
+    currentDiff = activeDifficulty || 'standard';
+    modeMod = currentDiff !== 'standard';
     if (modeMod) activeCount++;
   } catch {}
   try {
@@ -5651,7 +5662,8 @@ function syncSetupDrawerSummary() {
     if (aiMod) activeCount++;
   } catch {}
   try {
-    mutMod = Boolean(activeSandboxMutatorId);
+    currentMutId = activeSandboxMutatorId || '';
+    mutMod = Boolean(currentMutId);
     if (mutMod) activeCount++;
   } catch {}
   try {
@@ -5677,26 +5689,30 @@ function syncSetupDrawerSummary() {
 
   const modeDescEl = document.getElementById('setup-mode-desc');
   if (modeDescEl) {
-    modeDescEl.textContent = SETUP_MODE_DESCRIPTIONS[activeDifficulty] || SETUP_MODE_DESCRIPTIONS.standard;
+    modeDescEl.textContent = getSetupModeDescription(currentDiff);
   }
   const gasDescEl = document.getElementById('setup-gas-desc');
   if (gasDescEl) {
     if (gasMod) {
-      const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
-      const b = buildCustomGasBlend({
-        o2Pct: customGasPlan.o2Pct,
-        hePct: customGasPlan.hePct,
-        targetDepthM,
-        baseGas: getSiteDefaultBottomMix(activeLevel),
-      });
-      gasDescEl.textContent = `Active custom bottom mix: ${b.name} (MOD ${Math.round(b.mod14M)}m · END ${Math.round(b.endAtTargetM)}m at ${Math.round(targetDepthM)}m). Tap to adjust or revert.`;
+      try {
+        const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
+        const b = buildCustomGasBlend({
+          o2Pct: customGasPlan.o2Pct,
+          hePct: customGasPlan.hePct,
+          targetDepthM,
+          baseGas: getSiteDefaultBottomMix(activeLevel),
+        });
+        gasDescEl.textContent = `Active custom bottom mix: ${b.name} (MOD ${Math.round(b.mod14M)}m · END ${Math.round(b.endAtTargetM)}m at ${Math.round(targetDepthM)}m). Tap to adjust or revert.`;
+      } catch {
+        gasDescEl.textContent = 'Custom bottom gas blend active. Tap to adjust or revert to site defaults.';
+      }
     } else {
       gasDescEl.textContent = 'Customize your bottom Trimix or Nitrox O₂ & Helium ratios to fine-tune MOD, oxygen toxicity, and narcosis depth.';
     }
   }
   const mutDescEl = document.getElementById('setup-mutator-desc');
   if (mutDescEl) {
-    const mut = activeSandboxMutatorId ? getDailyMutatorById(activeSandboxMutatorId) : null;
+    const mut = currentMutId ? getDailyMutatorById(currentMutId) : null;
     mutDescEl.textContent = mut
       ? `Active mutator: ${mut.icon} ${mut.name} — ${mut.shortDesc}`
       : 'Activate extreme visibility, current, or gear mutators and generate shareable head-to-head challenge links.';
@@ -5707,8 +5723,8 @@ function syncSetupDrawerSummary() {
       ? `Active procedural sump: ${activeLevel.name} (Max ${activeLevel.maxDepthM || '?'}m). Tap to roll a new seed, tier, or biome.`
       : 'Generate infinite deterministic seeded cave expeditions across 4 technical depth tiers and 5 distinct geological biomes.';
   }
-  if (btnSetupResetEl) {
-    btnSetupResetEl.disabled = activeCount === 0;
+  if (resetBtn) {
+    resetBtn.disabled = activeCount === 0;
   }
 }
 
@@ -7907,7 +7923,7 @@ function setupPwaSupport() {
     }
     setTimeout(reloadApp, 4500);
 
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && navigator.serviceWorker) {
       try {
         const reg = swReg || (await navigator.serviceWorker.getRegistration('./'));
         if (reg) {
@@ -7943,7 +7959,7 @@ function setupPwaSupport() {
   btnPwaUpdate?.addEventListener('click', () => checkForPwaUpdate({ manual: true }));
   btnApplyPwaUpdate?.addEventListener('click', applyPwaUpdate);
 
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && navigator.serviceWorker) {
     const hadController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController) return;
@@ -7982,7 +7998,7 @@ function setupPwaSupport() {
   let screenWakeLock = null;
   const syncWakeLock = async () => {
     const shouldHold = !document.hidden && (mode === 'diving' || Boolean(lan.room));
-    if (shouldHold && 'wakeLock' in navigator && !screenWakeLock) {
+    if (shouldHold && navigator.wakeLock && !screenWakeLock) {
       try {
         screenWakeLock = await navigator.wakeLock.request('screen');
         screenWakeLock.addEventListener('release', () => {
