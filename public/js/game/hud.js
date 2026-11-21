@@ -336,6 +336,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     playerLines = [],
     sonarPulse = null,
     encounters = null,
+    hazards = null,
     buddyPing = null,
     droppedStages = null,
     difficulty = 'standard',
@@ -660,7 +661,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
-  // 8. Active Cave Sonar Hydrophone Pulse Ring
+  // 8. Active Cave Sonar Hydrophone Pulse Ring + Hazard Contact Echoes (v142)
   if (sonarPulse && sonarPulse.durationSec > 0) {
     const frac = Math.max(0, Math.min(1, sonarPulse.ageSec / sonarPulse.durationSec));
     const rPx = frac * (sonarPulse.maxRadiusM || 28) * scale;
@@ -671,6 +672,26 @@ export function drawSonarMinimap(ctx, width, height, state) {
     ctx.beginPath();
     ctx.arc(px, py, rPx, 0, Math.PI * 2);
     ctx.stroke();
+
+    const fade = Math.max(0, 1 - frac);
+    const contacts = sonarPulse.contacts || [];
+    for (let i = 0; i < contacts.length; i++) {
+      const c = contacts[i];
+      if (c.kind !== 'shifting-hatch' && c.kind !== 'percolation' && c.kind !== 'thermocline') continue;
+      const cx = toX(c.x);
+      const cy = toY(c.y);
+      ctx.fillStyle =
+        c.kind === 'shifting-hatch'
+          ? (c.hatchRef?.openness ?? 1) < 0.35
+            ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
+            : `rgba(74, 222, 128, ${(fade * 0.95).toFixed(2)})`
+          : c.kind === 'percolation'
+            ? `rgba(251, 191, 36, ${(fade * 0.9).toFixed(2)})`
+            : `rgba(125, 211, 252, ${(fade * 0.9).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, c.kind === 'thermocline' ? 4.2 : 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // 9. Co-op Buddy Dots (+ active Buddy Locate Ping reticle)
@@ -751,6 +772,7 @@ export class DiveComputerHUD {
     this.elDepth = document.getElementById('dc-depth');
     this.elMaxDepth = document.getElementById('dc-max-depth');
     this.elTime = document.getElementById('dc-time');
+    this.elTemp = document.getElementById('dc-temp');
     this.elDecoLabel = document.getElementById('dc-deco-label');
     this.elDecoVal = document.getElementById('dc-deco-val');
     this.elPPO2 = document.getElementById('dc-ppo2');
@@ -946,6 +968,7 @@ export class DiveComputerHUD {
     playerLines = null,
     sonarPulse = null,
     encounters = null,
+    hazards = null,
     buddyPing = null,
     droppedStages = null,
     endedState = '',
@@ -970,6 +993,11 @@ export class DiveComputerHUD {
     setText(this.elDepth, diveState.depthM.toFixed(1));
     setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
     setText(this.elTime, formatClock(diveState.diveTimeSec));
+    if (this.elTemp && hazards && Number.isFinite(hazards.waterTempC)) {
+      const inCold = Boolean(hazards.inThermocline || (hazards.thermoclineColdFactor || 0) > 0.2);
+      setText(this.elTemp, `${inCold ? '❄️' : ''}${Math.round(hazards.waterTempC)}°C`);
+      setClass(this.elTemp, inCold ? 'dc-subval dc-temp cold' : 'dc-subval dc-temp');
+    }
 
     // NDL vs Mandatory Deco Stop
     if (diveState.stopDepthM > 0) {
@@ -1540,7 +1568,7 @@ export function sampleDiveProfileAtTime(profile, timeSec) {
  * Render Shearwater-Perdix-style Technical Dive Computer OLED overlay with live
  * Bühlmann ZH-L16C tissue loading bars (N2 + He), GF99%, CNS%, NDL/TTS, PPO2 & END (v126).
  */
-export function drawShearwaterComputer(ctx, width, height, diveState) {
+export function drawShearwaterComputer(ctx, width, height, diveState, thermal = null) {
   if (!ctx || width <= 0 || height <= 0 || !diveState) return;
   const status = computeTissueCompartmentStatus(diveState);
   const gas = diveState.mixes?.[diveState.activeGasId] || GAS_MIXES[diveState.activeGasId] || GAS_MIXES.EAN32;
@@ -1554,7 +1582,7 @@ export function drawShearwaterComputer(ctx, width, height, diveState) {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(1, 1, width - 2, height - 2);
 
-  // Header strip
+  // Header strip (with live ambient water temp °C & thermocline cold-shock badge)
   ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
   ctx.fillRect(2, 2, width - 4, 18);
   ctx.font = '700 9px ui-monospace, SFMono-Regular, monospace';
@@ -1562,8 +1590,11 @@ export function drawShearwaterComputer(ctx, width, height, diveState) {
   ctx.textAlign = 'left';
   ctx.fillText('SHEARWATER · ZH-L16C', 8, 14);
   ctx.textAlign = 'right';
-  ctx.fillStyle = diveState.ccrEnabled ? '#4ade80' : '#94a3b8';
-  ctx.fillText(diveState.ccrEnabled ? 'CCR 1.3' : 'OC TEC', width - 8, 14);
+  const hasTemp = thermal && Number.isFinite(thermal.waterTempC);
+  const coldShock = Boolean(thermal?.inThermocline);
+  const tempTag = hasTemp ? `${coldShock ? '❄️' : ''}${thermal.waterTempC.toFixed(1)}°C · ` : '';
+  ctx.fillStyle = coldShock ? '#7dd3fc' : diveState.ccrEnabled ? '#4ade80' : '#94a3b8';
+  ctx.fillText(`${tempTag}${diveState.ccrEnabled ? 'CCR 1.3' : 'OC TEC'}`, width - 8, 14);
 
   // Top primary readout row: DEPTH | TIME | NDL / TTS
   const topY = 24;

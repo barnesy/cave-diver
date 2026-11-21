@@ -3154,7 +3154,8 @@ test('v107 Unlockable Tech Gear Loadout (Cave Sonar, DPV Scooter & CCR Rebreathe
   assert.ok(ping.pulse.contacts.length >= 2, `Expected sonar contacts near Hangar Bay, got ${ping.pulse.contacts.length}`);
   assert.ok(sSonar.exploredCells.size > exploredBefore, 'Sonar sweep should chart nearby unexplored cells');
   assert.equal(triggerSonarPing(sSonar).reason, 'cooldown', 'Second immediate ping must be blocked by cooldown');
-  for (let i = 0; i < 30; i++) stepDiveSession(sSonar, { x: 0, y: 0 }, 0.1);
+  const clearSteps = Math.ceil((ping.pulse.durationSec || 3.8) / 0.1) + 2;
+  for (let i = 0; i < clearSteps; i++) stepDiveSession(sSonar, { x: 0, y: 0 }, 0.1);
   assert.equal(sSonar.sonar.activePulse, null, 'Sonar pulse should clear cleanly after durationSec');
 
   // 3. DPV Underwater Scooter: boosts swim speed, drains battery, amplifies floor silt wake & auto-disables when empty
@@ -5795,4 +5796,145 @@ test('v141 Solo 4-Diver AI Squad (1–3 Wingmen) & Dynamic Reactive Hazards (The
   r.level = wreck;
   r._drawDynamicHazards(noopCtx, wSess.hazards, -100, 300, -10, 200, (x) => x * 20, (y) => y * 20, 20, 2.5, wSess.diver);
   r._drawThermoclineFrostRim(noopCtx, 800, 600, thSess.hazards, 2.5);
+});
+
+test('v142 Underwater Acoustic Sonar Hazard Overlay & Live Thermal HUD: biome temperatures, thermocline drop, silt-piercing sonar & OLED/bezel readouts', async () => {
+  const fs = await import('node:fs');
+  const { computeAmbientWaterTempC, stepDynamicHazards } = await import('../public/js/game/dynamicHazards.js');
+  const { triggerSonarPing } = await import('../public/js/game/diveSession.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { DiveComputerHUD, drawShearwaterComputer, drawSonarMinimap } = await import('../public/js/game/hud.js');
+
+  // 1. Biome-calibrated ambient water temperature, depth cooling, weather offset & thermocline shock
+  const arctic = getLevelById('scoresby-sund-iceberg');
+  const tropic = getLevelById('cenote-el-abismo');
+  const med = getLevelById('fontaine-de-vaucluse');
+  const tArctic = computeAmbientWaterTempC(arctic, 10);
+  const tMed = computeAmbientWaterTempC(med, 10);
+  const tTropic = computeAmbientWaterTempC(tropic, 10);
+  assert.ok(tArctic < tMed && tMed < tTropic, `Expected Arctic (${tArctic}) < Med (${tMed}) < Tropic (${tTropic})`);
+  assert.ok(
+    computeAmbientWaterTempC(tropic, 60) < computeAmbientWaterTempC(tropic, 5),
+    'Deeper water should cool monotonically'
+  );
+  assert.ok(
+    computeAmbientWaterTempC(tropic, 5, null, { id: 'arctic-blizzard' }) < computeAmbientWaterTempC(tropic, 5),
+    'Arctic blizzard weather should lower surface water temperature'
+  );
+  const tShock = computeAmbientWaterTempC(tropic, 20, { thermoclineColdFactor: 1, thermoclineTempDropC: 8 });
+  const tBase = computeAmbientWaterTempC(tropic, 20, { thermoclineColdFactor: 0, thermoclineTempDropC: 0 });
+  assert.ok(tBase - tShock >= 7.5, `Thermocline should drop temp by ~8°C (base=${tBase}, shock=${tShock})`);
+
+  // 2. stepDynamicHazards updates live waterTempC and drops it inside a thermocline pocket
+  const s = createDiveSession(LEVEL_1, { diverName: 'ThermalSonar', gear: { sonar: true } });
+  const th0 = s.hazards.thermoclines[0];
+  assert.ok(th0, 'LEVEL_1 should have at least one thermocline');
+  s.diver.x = LEVEL_1.spawn.x;
+  s.diver.y = 8;
+  stepDynamicHazards(s, 0.1);
+  const warmTemp = s.hazards.waterTempC;
+  s.diver.x = th0.x;
+  s.diver.y = th0.y;
+  for (let i = 0; i < 12; i++) stepDynamicHazards(s, 0.1);
+  assert.equal(s.hazards.inThermocline, true);
+  assert.ok(s.hazards.waterTempC < warmTemp - 3, `Expected visible temperature drop inside thermocline (${warmTemp} -> ${s.hazards.waterTempC})`);
+
+  // 3. Upgraded Active Sonar Ping tags reactive hazards (shifting-hatch, percolation, thermocline) & populates summary
+  s.sonarCooldownSec = 0;
+  // Ensure one of each reactive hazard is within 18m of diver so sonar sweep captures all 3 kinds
+  s.hazards.shiftingHatches = [{ id: 'sh_test', x: s.diver.x + 6, y: s.diver.y, radius: 2.5, openness: 0.2 }];
+  s.hazards.percolationZones = [{ id: 'pz_test', x: s.diver.x - 5, y: s.diver.y, ceilY: s.diver.y - 2, halfWidth: 3.5 }];
+  const ping = triggerSonarPing(s);
+  assert.equal(ping.ok, true);
+  assert.equal(ping.pulse.durationSec, 3.8, 'Upgraded sonar pulse should persist for 3.8s');
+  assert.ok(ping.pulse.contacts.some((c) => c.kind === 'shifting-hatch'), 'Sonar should tag shifting-hatch');
+  assert.ok(ping.pulse.contacts.some((c) => c.kind === 'percolation'), 'Sonar should tag percolation ceiling');
+  assert.ok(ping.pulse.contacts.some((c) => c.kind === 'thermocline'), 'Sonar should tag thermocline lens');
+  assert.ok(ping.pulse.summary.hatches >= 1 && ping.pulse.summary.percolation >= 1 && ping.pulse.summary.thermoclines >= 1);
+
+  // 4. Verify post-silt ordering in renderer.js + silt-piercing sonar canvas draw + minimap + Shearwater OLED + bezel HUD
+  const rendererSrc = fs.readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  const siltIdx = rendererSrc.indexOf('this._drawSiltClouds(');
+  const sonarIdx = rendererSrc.indexOf('this._drawSonarPulse(');
+  assert.ok(siltIdx > 0 && sonarIdx > siltIdx, '_drawSonarPulse must execute after _drawSiltClouds to pierce zero-vis silt-outs');
+
+  const drawnTexts = [];
+  const mockCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      fillText(t) { drawnTexts.push(String(t)); },
+      measureText(t) { return { width: String(t).length * 7 }; },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+
+  ping.pulse.ageSec = 1.4; // wavefront has swept past all contacts
+  const r = Object.create(CaveRenderer.prototype);
+  r._drawSonarPulse(mockCtx, ping.pulse, (x) => 400 + (x - s.diver.x) * 20, (y) => 300 + (y - s.diver.y) * 20, 20, 12.0);
+  assert.ok(drawnTexts.some((t) => t.includes('SLAM!')), 'Sonar world overlay should label closing/slamming hatch');
+  assert.ok(drawnTexts.some((t) => t.includes('CEIL SILT')), 'Sonar world overlay should label percolation ceiling');
+  assert.ok(drawnTexts.some((t) => t.includes('°C')), 'Sonar world overlay should label thermocline °C drop');
+
+  // Sonar Cartography Minimap renders hazard echoes cleanly
+  drawSonarMinimap(mockCtx, 220, 150, {
+    level: LEVEL_1,
+    diver: s.diver,
+    sonarPulse: ping.pulse,
+    timeSec: 12.0,
+  });
+
+  // Shearwater OLED draws live water temperature & icy thermocline badge
+  drawnTexts.length = 0;
+  drawShearwaterComputer(mockCtx, 260, 156, s.diveState, {
+    waterTempC: s.hazards.waterTempC,
+    inThermocline: true,
+  });
+  assert.ok(
+    drawnTexts.some((t) => t.includes('❄️') && t.includes('°C')),
+    `Shearwater OLED header should display live icy °C reading, saw: ${drawnTexts.join(' | ')}`
+  );
+
+  // Main Dive Computer bezel updates #dc-temp with .cold class during thermocline
+  const makeEl = () => ({
+    textContent: '',
+    className: '',
+    innerHTML: '',
+    hidden: false,
+    style: {},
+    dataset: {},
+    classList: { toggle() {}, add() {}, remove() {} },
+    querySelector: () => makeEl(),
+    addEventListener() {},
+    appendChild() {},
+    setAttribute() {},
+  });
+  const domMap = new Map();
+  const prevDoc = globalThis.document;
+  globalThis.document = {
+    getElementById(id) {
+      if (!domMap.has(id)) domMap.set(id, makeEl());
+      return domMap.get(id);
+    },
+    createElement() { return makeEl(); },
+  };
+  try {
+    const hud = new DiveComputerHUD({ onGasSelect() {}, onReelToggle() {}, onReelRewind() {}, onHeartbeatPulse() {} });
+    hud.update({
+      diveState: s.diveState,
+      diver: s.diver,
+      nextCheckpoint: LEVEL_1.checkpoints[0],
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: new Set(),
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      hazards: s.hazards,
+      dt: 0.016,
+    });
+    assert.ok(domMap.get('dc-temp').textContent.includes('❄️') && domMap.get('dc-temp').textContent.includes('°C'));
+    assert.ok(domMap.get('dc-temp').className.includes('cold'));
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });

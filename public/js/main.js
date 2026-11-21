@@ -564,7 +564,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=141" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=142" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1354,7 +1354,12 @@ function toggleShearwaterComputer(forceState) {
   if (btnHudComputerEl) btnHudComputerEl.classList.toggle('active', shearwaterOpen);
   if (shearwaterOpen && session?.diveState && shearwaterCanvasEl) {
     const sctx = shearwaterCanvasEl.getContext('2d');
-    if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, session.diveState);
+    if (sctx) {
+      drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, session.diveState, {
+        waterTempC: session.hazards?.waterTempC,
+        inThermocline: Boolean(session.hazards?.inThermocline),
+      });
+    }
   }
   return true;
 }
@@ -2028,8 +2033,21 @@ function handleSonarPing() {
     onSonarPing: () => audio.playSonarPing(),
   });
   if (res.ok) {
+    const sum = res.pulse?.summary;
     const count = res.pulse?.contacts?.length || 0;
-    showToast(count > 0 ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!` : '📡 Sonar contour sweep!', 1.8);
+    const parts = [];
+    if (sum?.collectibles) parts.push(`💎 ${sum.collectibles} relic${sum.collectibles === 1 ? '' : 's'}`);
+    if (sum?.hatches) parts.push(`🚪 ${sum.hatches} hatch${sum.hatches === 1 ? '' : 'es'}`);
+    if (sum?.percolation) parts.push(`🌫️ ${sum.percolation} ceil silt`);
+    if (sum?.thermoclines) parts.push(`❄️ ${sum.thermoclines} thermo`);
+    showToast(
+      parts.length > 0
+        ? `📡 Sonar lock: ${parts.join(' · ')}`
+        : count > 0
+          ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!`
+          : '📡 Sonar contour sweep!',
+      2.3
+    );
     return true;
   }
   if (res.reason === 'cooldown') {
@@ -8220,7 +8238,12 @@ function stepSimulation(dt) {
     if (shearNowMs - lastShearwaterDrawMs >= 140) {
       lastShearwaterDrawMs = shearNowMs;
       const sctx = shearwaterCanvasEl.getContext('2d');
-      if (sctx) drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, diveState);
+      if (sctx) {
+        drawShearwaterComputer(sctx, shearwaterCanvasEl.width, shearwaterCanvasEl.height, diveState, {
+          waterTempC: session.hazards?.waterTempC,
+          inThermocline: Boolean(session.hazards?.inThermocline),
+        });
+      }
     }
   }
 
@@ -8258,6 +8281,7 @@ function stepSimulation(dt) {
     playerLines: _minimapPlayerLines,
     sonarPulse: session.sonar?.activePulse || null,
     encounters: session.encounters || null,
+    hazards: session.hazards || null,
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
     endedState: session.endedState || '',

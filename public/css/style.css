@@ -6968,3 +6968,13 @@ button.mode-badge:hover {
     display: none;
   }
 }
+
+/* Live Water Temperature Readout & Thermocline Cold-Shock Indicator (v142) */
+.dc-temp {
+  color: #7dd3fc;
+}
+.dc-temp.cold {
+  color: #e0f2fe;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
+  font-weight: 800;
+}

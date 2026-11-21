@@ -44,6 +44,40 @@ export function computeShiftingHatchOpenness(hatch, timeSec) {
 }
 
 /**
+ * Compute realistic biome-calibrated ambient water temperature (°C) at current depth,
+ * factoring in weather surface cooling, geothermal vents, and cold thermocline pockets (v142).
+ */
+export function computeAmbientWaterTempC(level, depthM = 0, hazards = null, weather = null) {
+  const idStr = `${level?.id || ''} ${level?.theme?.surfaceStyle || ''} ${level?.name || ''}`;
+  let baseSurfaceC = 24.5;
+  let floorMinC = 14.0;
+  if (/arctic|ice|scoresby|kverkfjoll|silfra|strytan/i.test(idStr)) {
+    baseSurfaceC = 3.5;
+    floorMinC = 1.2;
+  } else if (/ojamo|fitzgerald|orda|krubera|plura|boy-bulok|hranicka/i.test(idStr)) {
+    baseSurfaceC = 9.5;
+    floorMinC = 4.2;
+  } else if (/vaucluse|ressel|zenobia|britannic|andrea-doria|victoria|u1206|merro|molnar/i.test(idStr)) {
+    baseSurfaceC = 18.0;
+    floorMinC = 11.5;
+  } else if (/yucatan|cenote|bahamas|abaco|bimini|bermuda|red-sea|thistlegorm|dahab|oriskany|lagoa|lanzarote/i.test(idStr)) {
+    baseSurfaceC = 26.0;
+    floorMinC = 18.5;
+  }
+
+  const d = Math.max(0, Number(depthM) || 0);
+  const weatherOffset =
+    weather?.id === 'arctic-blizzard' ? -2.2 : weather?.id === 'night-biolum' ? -1.0 : weather?.id === 'tropical-storm' ? -0.6 : 0;
+  const depthCooled = Math.max(floorMinC, baseSurfaceC + weatherOffset - d * 0.065);
+  const thermoDrop =
+    hazards && hazards.thermoclineColdFactor > 0.01
+      ? (hazards.thermoclineTempDropC || 7) * Math.max(0, Math.min(1, hazards.thermoclineColdFactor))
+      : 0;
+  const raw = Math.max(0.5, Math.min(34.0, depthCooled - thermoDrop));
+  return Math.round(raw * 10) / 10;
+}
+
+/**
  * Synthesize deterministic, SDF-validated reactive hazards tailored to any cave or shipwreck level.
  */
 export function createDynamicHazards(level) {
@@ -55,6 +89,8 @@ export function createDynamicHazards(level) {
       inThermocline: false,
       thermoclineColdFactor: 0,
       thermoclineTempDropC: 0,
+      baselineTempC: 24.0,
+      waterTempC: 24.0,
       activePercolation: 0,
       activeHatchAlert: false,
       _thermoToastCd: 0,
@@ -162,6 +198,7 @@ export function createDynamicHazards(level) {
     label: isWreck ? 'Surge Bulkhead Hatch' : 'Tidal Siphon Gate',
   }));
 
+  const startTempC = computeAmbientWaterTempC(level, level.spawn?.y || 1, null, null);
   return {
     thermoclines,
     percolationZones,
@@ -169,6 +206,8 @@ export function createDynamicHazards(level) {
     inThermocline: false,
     thermoclineColdFactor: 0,
     thermoclineTempDropC: 0,
+    baselineTempC: startTempC,
+    waterTempC: startTempC,
     activePercolation: 0,
     activeHatchAlert: false,
     _thermoToastCd: 0,
@@ -217,6 +256,8 @@ export function stepDynamicHazards(session, dt, callbacks = {}) {
   const targetCold = inThermo ? coldDepth : 0;
   haz.thermoclineColdFactor += (targetCold - haz.thermoclineColdFactor) * Math.min(1, dt * (inThermo ? 3.2 : 1.8));
   haz.thermoclineTempDropC = inThermo ? tempDropC : 0;
+  haz.baselineTempC = computeAmbientWaterTempC(session.level, Math.max(0, diver.y), null, session.weather);
+  haz.waterTempC = computeAmbientWaterTempC(session.level, Math.max(0, diver.y), haz, session.weather);
 
   let gasRateMult = 1.0;
   let coldHeartRateBonus = 0;

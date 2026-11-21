@@ -300,10 +300,10 @@ export function triggerSonarPing(session, callbacks = {}) {
   }
 
   const contacts = [];
-  const addContact = (x, y, kind, icon, label) => {
+  const addContact = (x, y, kind, icon, label, extra = null) => {
     const dist = Math.hypot(x - diver.x, y - diver.y);
     if (dist <= maxRadiusM && dist >= 0.4) {
-      contacts.push({ x, y, dist, kind, icon, label });
+      contacts.push(extra ? { x, y, dist, kind, icon, label, ...extra } : { x, y, dist, kind, icon, label });
     }
   };
   for (const c of level.collectibles || []) {
@@ -325,6 +325,25 @@ export function triggerSonarPing(session, callbacks = {}) {
     const bc = session.encounters.beacon;
     addContact(bc.x, bc.y, 'beacon', '📡', bc.label);
   }
+  // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
+  if (session.hazards) {
+    for (const sh of session.hazards.shiftingHatches || []) {
+      addContact(sh.x, sh.y, 'shifting-hatch', '🚪', sh.label, { hatchRef: sh, radius: sh.radius });
+    }
+    for (const pz of session.hazards.percolationZones || []) {
+      addContact(pz.x, pz.ceilY + 0.4, 'percolation', '🌫️', 'Fragile Ceiling', {
+        ceilY: pz.ceilY,
+        halfWidth: pz.halfWidth,
+      });
+    }
+    for (const th of session.hazards.thermoclines || []) {
+      addContact(th.x, th.y, 'thermocline', '❄️', `-${th.tempDropC}°C Thermocline`, {
+        tempDropC: th.tempDropC,
+        rx: th.rx,
+        ry: th.ry,
+      });
+    }
+  }
 
   // Wide sonar sweep also charts nearby unexplored cells cleanly
   const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0, session.exploredGrid);
@@ -336,10 +355,16 @@ export function triggerSonarPing(session, callbacks = {}) {
     x: diver.x,
     y: diver.y,
     ageSec: 0,
-    durationSec: 2.6,
+    durationSec: 3.8,
     maxRadiusM,
     wallHits,
     contacts,
+    summary: {
+      collectibles: contacts.filter((c) => c.kind === 'collectible').length,
+      hatches: contacts.filter((c) => c.kind === 'shifting-hatch' || c.kind === 'hatch').length,
+      percolation: contacts.filter((c) => c.kind === 'percolation').length,
+      thermoclines: contacts.filter((c) => c.kind === 'thermocline').length,
+    },
   };
   session.sonar.activePulse = pulse;
   session.sonar.cooldownSec = session.sonar.maxCooldownSec || 9.0;

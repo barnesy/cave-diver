@@ -1759,9 +1759,6 @@ export class CaveRenderer {
     if (ghostPose) {
       this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec, cw, ch, diver);
     }
-    if (sonarPulse) {
-      this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
-    }
     if (cameraFlash && typeof this._drawCameraFlash === 'function') {
       this._drawCameraFlash(ctx, cameraFlash, toScreenX, toScreenY, scale);
     }
@@ -1782,6 +1779,11 @@ export class CaveRenderer {
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
+
+    // 11a. Active Acoustic Cave Sonar Overlay (drawn POST-silt so echoes pierce zero-vis silt-outs! v142)
+    if (sonarPulse) {
+      this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
+    }
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
     if (!isPhotoMode) {
@@ -8202,16 +8204,72 @@ export class CaveRenderer {
       }
     }
 
-    // High-contrast sonar contact diamonds for relics, hatches, stage caches, markers & recovery targets
+    // High-contrast silt-piercing sonar contacts: relics, stage caches, markers, recovery, AND reactive hazards (v142)
     const contacts = pulse.contacts || [];
     for (let i = 0; i < contacts.length; i++) {
       const c = contacts[i];
       if (c.dist > waveRadiusM) continue;
       const pingAge = pulse.ageSec - (c.dist / (pulse.maxRadiusM || 28)) * sweepDur;
-      const a = Math.max(0, Math.min(1, 1 - pingAge / 1.85)) * overallFade;
+      const a = Math.max(0, Math.min(1, 1 - pingAge / 2.65)) * overallFade;
       if (a <= 0.04) continue;
       const px = toScreenX(c.x);
       const py = toScreenY(c.y);
+
+      if (c.kind === 'shifting-hatch') {
+        const open = Math.max(0, Math.min(1, c.hatchRef?.openness ?? 1));
+        const col = open >= 0.55 ? '74, 222, 128' : open >= 0.3 ? '251, 191, 36' : '248, 113, 113';
+        const statusTxt = open >= 0.55 ? 'OPEN' : open >= 0.3 ? 'CLOSING' : 'SLAM!';
+        const hr = Math.max(0.85, (c.radius || 2.4) * 0.55) * scale;
+        ctx.strokeStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2, 0.1 * scale);
+        ctx.beginPath();
+        ctx.arc(px, py, hr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(${col}, ${a.toFixed(3)})`;
+        ctx.fillText(`🚪 ${statusTxt}`, px, py - hr - Math.max(7, scale * 0.28));
+        continue;
+      }
+
+      if (c.kind === 'percolation') {
+        const halfPx = (c.halfWidth || 3.4) * scale;
+        const ceilPy = toScreenY(c.ceilY ?? c.y);
+        ctx.strokeStyle = `rgba(251, 191, 36, ${(a * 0.9).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2, 0.1 * scale);
+        ctx.setLineDash([Math.max(5, scale * 0.3), Math.max(3, scale * 0.18)]);
+        ctx.beginPath();
+        ctx.moveTo(px - halfPx, ceilPy);
+        ctx.lineTo(px + halfPx, ceilPy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.32))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = `rgba(253, 224, 71, ${a.toFixed(3)})`;
+        ctx.fillText('🌫️ CEIL SILT', px, ceilPy - Math.max(4, scale * 0.14));
+        continue;
+      }
+
+      if (c.kind === 'thermocline') {
+        const rxPx = (c.rx || 4.5) * scale * 0.72;
+        const ryPx = (c.ry || 2.2) * scale * 0.72;
+        ctx.strokeStyle = `rgba(125, 211, 252, ${(a * 0.85).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+        ctx.setLineDash([Math.max(4, scale * 0.24), Math.max(3, scale * 0.18)]);
+        ctx.beginPath();
+        ctx.ellipse(px, py, rxPx, ryPx, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.32))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(186, 230, 253, ${a.toFixed(3)})`;
+        ctx.fillText(`❄️ -${c.tempDropC || 7}°C`, px, py);
+        continue;
+      }
+
       const col = c.kind === 'recovery' ? '251, 191, 36' : c.kind === 'hatch' ? '249, 115, 22' : c.kind === 'stage' ? '74, 222, 128' : '56, 189, 248';
       const r = (0.65 + Math.sin(timeSec * 9 + i) * 0.12) * scale;
       ctx.strokeStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
@@ -8228,6 +8286,11 @@ export class CaveRenderer {
       ctx.textBaseline = 'middle';
       ctx.fillStyle = `rgba(248, 250, 252, ${a.toFixed(3)})`;
       ctx.fillText(c.icon || '◆', px, py);
+      if (c.kind === 'collectible' || c.kind === 'recovery') {
+        ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+        ctx.fillStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
+        ctx.fillText(`${Math.round(c.dist)}m`, px, py + r + Math.max(6, scale * 0.22));
+      }
     }
     ctx.restore();
   }
