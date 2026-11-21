@@ -118,6 +118,16 @@ import {
   isDefaultRigLivery,
   drawLiveryPreview,
 } from './game/rigLivery.js';
+import {
+  PHOTO_FILTERS,
+  PHOTO_FRAMES,
+  createPhotoModeState,
+  clampPhotoModeState,
+  getPhotoFrame,
+  renderPhotoSnapshot,
+  renderFieldGuideCollectorCard,
+  filterAndSortFieldGuide,
+} from './game/photoStudio.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -549,7 +559,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=138" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=139" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1056,6 +1066,7 @@ function handleReelRewind() {
 }
 
 function setDivePaused(paused) {
+  if (photoModeState.active) setPhotoModeActive(false);
   const next = Boolean(paused) && mode === 'diving' && !isMultiplayer && Boolean(session && !session.endedState);
   divePaused = next;
   if (next) {
@@ -1206,6 +1217,14 @@ const input = new InputController({
       closeLiveryModal();
       return true;
     }
+    if (fgCardModalEl && !fgCardModalEl.hidden) {
+      closeFieldGuideCardModal();
+      return true;
+    }
+    if (photoModeState.active) {
+      setPhotoModeActive(false);
+      return true;
+    }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
       closeGasPlannerModal();
       return true;
@@ -1244,11 +1263,16 @@ const input = new InputController({
   onSonarPing: () => handleSonarPing(),
   onDpvToggle: () => handleDpvToggle(),
   onMinimapToggle: () => handleMinimapToggle(),
-  onCameraSnap: () => handleCameraSnap(),
+  onCameraSnap: () => (photoModeState.active ? savePhotoStudioSnapshot() : handleCameraSnap()),
   onBuddyPing: () => handleBuddyLocatePing(''),
   onStageDrop: () => handleStageDrop(),
   onComputerToggle: () => toggleShearwaterComputer(),
   onSignalWheelToggle: () => toggleSignalWheel(),
+  onPhotoModeToggle: () => {
+    if (mode !== 'diving' || !session || session.endedState) return false;
+    setPhotoModeActive(!photoModeState.active);
+    return true;
+  },
 });
 
 // Scuba Hand-Signals & Torch Light-Signaling Wheel (v127)
@@ -1467,6 +1491,225 @@ btnCamera?.addEventListener('click', (e) => {
   e.stopPropagation();
   handleCameraSnap();
 });
+
+// Freeze-Frame Underwater Photo Mode Studio (v139)
+const photoModeState = createPhotoModeState();
+const photoStudioOverlayEl = document.getElementById('photo-studio-overlay');
+const btnPausePhotoMode = document.getElementById('btn-pause-photo-mode');
+const btnPhotoExit = document.getElementById('btn-photo-exit');
+const photoZoomRangeEl = document.getElementById('photo-zoom-range');
+const photoZoomValEl = document.getElementById('photo-zoom-val');
+const btnPhotoCenter = document.getElementById('btn-photo-center');
+const btnPhotoGrid = document.getElementById('btn-photo-grid');
+const btnPhotoFrame = document.getElementById('btn-photo-frame');
+const btnPhotoSave = document.getElementById('btn-photo-save');
+const photoFilterPillsEl = document.getElementById('photo-filter-pills');
+
+function syncPhotoStudioUi() {
+  clampPhotoModeState(photoModeState);
+  if (photoZoomRangeEl) photoZoomRangeEl.value = String(Math.round(photoModeState.zoom * 100));
+  if (photoZoomValEl) photoZoomValEl.textContent = `${photoModeState.zoom.toFixed(2)}×`;
+  if (btnPhotoGrid) btnPhotoGrid.classList.toggle('active', photoModeState.showGrid);
+  if (btnPhotoFrame) {
+    const fr = getPhotoFrame(photoModeState.frameId);
+    btnPhotoFrame.textContent = `🖼 ${fr.shortName}`;
+  }
+  if (photoFilterPillsEl) {
+    photoFilterPillsEl.querySelectorAll('button[data-photo-filter]').forEach((btn) => {
+      const active = btn.getAttribute('data-photo-filter') === photoModeState.filterId;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+  }
+}
+
+if (photoFilterPillsEl) {
+  photoFilterPillsEl.innerHTML = PHOTO_FILTERS.map(
+    (f) => `<button type="button" class="photo-filter-pill${f.id === photoModeState.filterId ? ' active' : ''}" data-photo-filter="${f.id}" role="radio" aria-checked="${f.id === photoModeState.filterId}">${escapeHtml(f.shortName)}</button>`
+  ).join('');
+  photoFilterPillsEl.querySelectorAll('button[data-photo-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const fid = btn.getAttribute('data-photo-filter');
+      if (!fid) return;
+      photoModeState.filterId = fid;
+      syncPhotoStudioUi();
+    });
+  });
+}
+
+function setPhotoModeActive(nextActive) {
+  const want = Boolean(nextActive);
+  if (want) {
+    if (mode !== 'diving' || !session || session.endedState) return false;
+    if (isMultiplayer) {
+      showToast('📸 Photo Mode freezes time — available on solo dives!', 2.2);
+      return false;
+    }
+    photoModeState.active = true;
+    photoModeState.panX = 0;
+    photoModeState.panY = 0;
+    photoModeState.zoom = 1.0;
+    photoModeState.hideOverlayForCapture = false;
+    divePaused = true;
+    input?.resetAll?.();
+    audio.resetEnvironmentFilter();
+    if (hudPauseOverlay) hudPauseOverlay.hidden = true;
+    if (screenHud) screenHud.hidden = true;
+    if (photoStudioOverlayEl) photoStudioOverlayEl.hidden = false;
+    syncPhotoStudioUi();
+    return true;
+  }
+  if (!photoModeState.active) return false;
+  photoModeState.active = false;
+  photoModeState.hideOverlayForCapture = false;
+  divePaused = false;
+  if (photoStudioOverlayEl) photoStudioOverlayEl.hidden = true;
+  if (screenHud && mode === 'diving') screenHud.hidden = false;
+  return true;
+}
+
+function savePhotoStudioSnapshot() {
+  if (!photoModeState.active || !session || !canvas) return false;
+  const wasGrid = photoModeState.showGrid;
+  const prevHide = photoModeState.hideOverlayForCapture;
+  // Render a clean borderless/gridless frame onto the game canvas before compositing the styled PNG
+  photoModeState.showGrid = false;
+  photoModeState.hideOverlayForCapture = true;
+  try {
+    const nextCheckpoint = session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
+    renderer.render({
+      diver: session.diver,
+      diveState: session.diveState,
+      peers: getActivePeers(),
+      checkpointsHit: session.checkpointsHit,
+      nextCheckpoint,
+      playerLines: _framePlayerLines,
+      collectedIds: session.collectedIds,
+      bodyRecovered: Boolean(session.bodyRecovered),
+      carryingBody: Boolean(session.carryingBody),
+      collectBursts: session.collectBursts,
+      celebrationParticles,
+      siltClouds: session.siltClouds,
+      localSiltDensity: session.localSiltDensity,
+      bubbles: session.bubbles,
+      ecosystem,
+      wreckState: {
+        clippedToShotLine: session.clippedToShotLine,
+        cutSnagIds: session.cutSnagIds,
+        activeSnagIndex: session.activeSnagIndex,
+        openedHatchIds: session.openedHatchIds,
+        crankingHatchId: session.crankingHatchId,
+        crankingHatchProgress: session.crankingHatchProgress,
+        claimedStageIds: session.claimedStageIds,
+        placedMarkerIds: session.placedMarkerIds,
+      },
+      encounters: session.encounters || null,
+      bioWake: session.bioWake || null,
+      surfaceRipples: session.surfaceRipples || null,
+      droppedStages: session.droppedStages || null,
+      weather: session.weather || null,
+      photoMode: photoModeState,
+      endedState: session.endedState || '',
+      difficulty: session.difficulty || activeDifficulty,
+      mutatorId: session.mutatorId || '',
+      timeSec: session.simTimeSec,
+      dt: 0,
+    });
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = 1200;
+    outCanvas.height = 675;
+    const outCtx = outCanvas.getContext('2d');
+    const verMeta = document.querySelector('meta[name="app-version"]')?.content || '139';
+    renderPhotoSnapshot(outCtx, canvas, {
+      width: 1200,
+      height: 675,
+      filterId: photoModeState.filterId,
+      frameId: photoModeState.frameId,
+      siteName: session.level?.name || 'Expedition Site',
+      depthM: session.diveState?.depthM || session.diver?.y || 0,
+      gasLabel: getActiveGasName(session.diveState?.activeGasId || 'EAN32'),
+      diverName: session.diverName || getEnteredCallsign() || 'Diver',
+      weatherLabel: session.weather?.label || '',
+      version: `v${verMeta}`,
+    });
+    const dataUrl = outCanvas.toDataURL('image/png');
+    const slug = String(session.level?.id || 'dive').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `techno-dive-photo-${slug}-${Math.round(session.diveState?.depthM || 0)}m.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    audio.playCameraShutter(true, false);
+    showToast('📸 High-res Underwater Photo saved as PNG!', 2.4);
+  } catch {
+    showToast('Could not export photograph on this browser.', 2.0);
+  } finally {
+    photoModeState.showGrid = wasGrid;
+    photoModeState.hideOverlayForCapture = prevHide;
+  }
+  return true;
+}
+
+btnPausePhotoMode?.addEventListener('click', () => setPhotoModeActive(true));
+btnPhotoExit?.addEventListener('click', () => setPhotoModeActive(false));
+photoZoomRangeEl?.addEventListener('input', () => {
+  photoModeState.zoom = (Number(photoZoomRangeEl.value) || 100) / 100;
+  syncPhotoStudioUi();
+});
+btnPhotoCenter?.addEventListener('click', () => {
+  photoModeState.panX = 0;
+  photoModeState.panY = 0;
+  photoModeState.zoom = 1.0;
+  syncPhotoStudioUi();
+});
+btnPhotoGrid?.addEventListener('click', () => {
+  photoModeState.showGrid = !photoModeState.showGrid;
+  syncPhotoStudioUi();
+});
+btnPhotoFrame?.addEventListener('click', () => {
+  const idx = PHOTO_FRAMES.findIndex((f) => f.id === photoModeState.frameId);
+  photoModeState.frameId = PHOTO_FRAMES[(idx + 1) % PHOTO_FRAMES.length].id;
+  syncPhotoStudioUi();
+});
+btnPhotoSave?.addEventListener('click', () => savePhotoStudioSnapshot());
+
+// Canvas pointer drag-pan & scroll-wheel zoom while Photo Mode Studio is active
+let photoDragPointerId = null;
+let photoDragLastX = 0;
+let photoDragLastY = 0;
+canvas?.addEventListener('pointerdown', (e) => {
+  if (!photoModeState.active) return;
+  photoDragPointerId = e.pointerId;
+  photoDragLastX = e.clientX;
+  photoDragLastY = e.clientY;
+  try { canvas.setPointerCapture?.(e.pointerId); } catch {}
+});
+canvas?.addEventListener('pointermove', (e) => {
+  if (!photoModeState.active || photoDragPointerId !== e.pointerId) return;
+  const dx = e.clientX - photoDragLastX;
+  const dy = e.clientY - photoDragLastY;
+  photoDragLastX = e.clientX;
+  photoDragLastY = e.clientY;
+  const pxPerM = Math.max(12, (renderer.pxPerM || 28) * photoModeState.zoom);
+  photoModeState.panX -= dx / pxPerM;
+  photoModeState.panY -= dy / pxPerM;
+  clampPhotoModeState(photoModeState);
+});
+const endPhotoDrag = (e) => {
+  if (photoDragPointerId === e.pointerId) {
+    photoDragPointerId = null;
+    try { canvas?.releasePointerCapture?.(e.pointerId); } catch {}
+  }
+};
+canvas?.addEventListener('pointerup', endPhotoDrag);
+canvas?.addEventListener('pointercancel', endPhotoDrag);
+canvas?.addEventListener('wheel', (e) => {
+  if (!photoModeState.active) return;
+  e.preventDefault();
+  photoModeState.zoom += e.deltaY < 0 ? 0.1 : -0.1;
+  syncPhotoStudioUi();
+}, { passive: false });
 hudMinimapWrapEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleMinimapZoom();
@@ -2398,50 +2641,7 @@ function openLogbookModal() {
   const fgTrophyEl = document.getElementById('logbook-fg-trophy');
   const fgGrid = document.getElementById('logbook-field-guide-grid');
   if (fgGrid) {
-    const fgStats = getFieldGuideStats(book);
-    if (fgHeading) {
-      fgHeading.textContent = `EXPEDITION FIELD GUIDE (${fgStats.discoveredCount}/${fgStats.totalCount} PHOTOGRAPHED)`;
-    }
-    if (fgTrophyEl) {
-      fgTrophyEl.innerHTML = `
-        <div class="fg-trophy-top">
-          <span class="fg-trophy-rank">${escapeHtml(fgStats.naturalistRank)}</span>
-          <div class="fg-trophy-pills">
-            <span class="fg-trophy-pill gold">★★★ ${fgStats.goldCount}/${fgStats.totalCount}</span>
-            <span class="fg-trophy-pill">🐋 Rare/Epic ${fgStats.rareDiscovered}/${fgStats.rareTotal}</span>
-            <span class="fg-trophy-pill">📷 ${fgStats.totalPhotos} shots</span>
-          </div>
-        </div>
-        <div class="fg-trophy-bar"><div class="fg-trophy-fill" style="width:${fgStats.pct}%"></div></div>
-      `;
-    }
-    fgGrid.innerHTML = fgStats.entries
-      .map((e) => {
-        if (!e.discovered) {
-          return `
-            <div class="fg-card locked">
-              <span class="fg-icon" aria-hidden="true">${e.icon}</span>
-              <div class="fg-copy">
-                <div class="fg-head"><strong>??? (${e.rarity.toUpperCase()})</strong></div>
-                <span class="fg-meta">Habitat: ${escapeHtml(e.habitat)}</span>
-              </div>
-            </div>`;
-        }
-        const stars = '★'.repeat(e.bestStars) + '☆'.repeat(3 - e.bestStars);
-        const sightTxt = e.bestSiteName
-          ? `${e.bestSiteName} · ${Math.round(e.bestDepthM)}m · ×${e.count}`
-          : `${Math.round(e.bestDepthM)}m · ×${e.count}`;
-        return `
-          <div class="fg-card rarity-${e.rarity}">
-            <span class="fg-icon" aria-hidden="true">${e.icon}</span>
-            <div class="fg-copy">
-              <div class="fg-head"><strong>${escapeHtml(e.name)}</strong><span class="fg-stars">${stars}</span></div>
-              <span class="fg-latin">${escapeHtml(e.latin)}</span>
-              <span class="fg-meta">${escapeHtml(sightTxt)}</span>
-            </div>
-          </div>`;
-      })
-      .join('');
+    renderFieldGuideGallery(book, fgHeading, fgTrophyEl, fgGrid);
   }
   if (logbookSitesEl) {
     const sitesHeading = document.getElementById('logbook-sites-heading');
@@ -2480,6 +2680,191 @@ function closeLogbookModal() {
 btnOpenLogbook?.addEventListener('click', openLogbookModal);
 btnProgressPill?.addEventListener('click', openLogbookModal);
 btnLogbookClose?.addEventListener('click', closeLogbookModal);
+
+// Marine Field Guide Gallery Filter/Sort & Shareable Specimen Collector Cards (v139)
+let fgFilterMode = 'all';
+let fgSortMode = 'catalog';
+let activeFgCardEntry = null;
+const fgFilterTabsEl = document.getElementById('fg-filter-tabs');
+const fgSortSelectEl = document.getElementById('fg-sort-select');
+const fgCardModalEl = document.getElementById('fg-card-modal');
+const fgCardTitleEl = document.getElementById('fg-card-title');
+const fgCardSubEl = document.getElementById('fg-card-sub');
+const fgCardCanvasEl = document.getElementById('fg-card-canvas');
+const fgCardCtx = fgCardCanvasEl?.getContext?.('2d') || null;
+const btnFgCardClose = document.getElementById('btn-fg-card-close');
+const btnFgCardDownload = document.getElementById('btn-fg-card-download');
+const btnFgCardShare = document.getElementById('btn-fg-card-share');
+
+function renderFieldGuideGallery(
+  bookOverride = null,
+  fgHeading = document.getElementById('logbook-field-guide-heading'),
+  fgTrophyEl = document.getElementById('logbook-fg-trophy'),
+  fgGrid = document.getElementById('logbook-field-guide-grid')
+) {
+  if (!fgGrid) return;
+  const book = bookOverride || loadCareerLogbook();
+  const fgStats = getFieldGuideStats(book);
+  if (fgHeading) {
+    fgHeading.textContent = `EXPEDITION FIELD GUIDE (${fgStats.discoveredCount}/${fgStats.totalCount} PHOTOGRAPHED)`;
+  }
+  if (fgTrophyEl) {
+    fgTrophyEl.innerHTML = `
+      <div class="fg-trophy-top">
+        <span class="fg-trophy-rank">${escapeHtml(fgStats.naturalistRank)}</span>
+        <div class="fg-trophy-pills">
+          <span class="fg-trophy-pill gold">★★★ ${fgStats.goldCount}/${fgStats.totalCount}</span>
+          <span class="fg-trophy-pill">🐋 Rare/Epic ${fgStats.rareDiscovered}/${fgStats.rareTotal}</span>
+          <span class="fg-trophy-pill">📷 ${fgStats.totalPhotos} shots</span>
+        </div>
+      </div>
+      <div class="fg-trophy-bar"><div class="fg-trophy-fill" style="width:${fgStats.pct}%"></div></div>
+    `;
+  }
+  const filtered = filterAndSortFieldGuide(fgStats.entries, { filter: fgFilterMode, sort: fgSortMode });
+  if (filtered.length === 0) {
+    fgGrid.innerHTML = `<div class="fg-empty-note">No specimens match this filter yet — snap underwater wildlife with <strong>[C]</strong> or freeze-frame Photo Studio <strong>[O]</strong>!</div>`;
+    return;
+  }
+  fgGrid.innerHTML = filtered
+    .map((e) => {
+      if (!e.discovered) {
+        return `
+          <div class="fg-card locked">
+            <span class="fg-icon" aria-hidden="true">${e.icon}</span>
+            <div class="fg-copy">
+              <div class="fg-head"><strong>??? (${e.rarity.toUpperCase()})</strong></div>
+              <span class="fg-meta">Habitat: ${escapeHtml(e.habitat)}</span>
+            </div>
+          </div>`;
+      }
+      const stars = '★'.repeat(e.bestStars) + '☆'.repeat(3 - e.bestStars);
+      const sightTxt = e.bestSiteName
+        ? `${e.bestSiteName} · ×${e.count}`
+        : `×${e.count} Logged`;
+      const depthTxt = e.bestDepthM > 0 ? `${Math.round(e.bestDepthM)}m` : 'Shallow';
+      return `
+        <div class="fg-card clickable rarity-${e.rarity}${e.bestStars >= 3 ? ' gold-star' : ''}" data-fg-entry="${e.id}" role="button" tabindex="0" title="Inspect &amp; share ${escapeHtml(e.name)} collector card">
+          <span class="fg-icon" aria-hidden="true">${e.icon}</span>
+          <div class="fg-copy">
+            <div class="fg-head"><strong>${escapeHtml(e.name)}</strong><span class="fg-stars">${stars}</span></div>
+            <span class="fg-latin">${escapeHtml(e.latin)}</span>
+            <span class="fg-meta">${escapeHtml(sightTxt)}</span>
+            <div class="fg-badge-strip">
+              <span class="fg-depth-badge">⬇ ${escapeHtml(depthTxt)}</span>
+              <span class="fg-rarity-badge ${e.rarity}">${escapeHtml(e.rarity)}</span>
+              <span class="fg-card-cta">🪪 Card</span>
+            </div>
+          </div>
+        </div>`;
+    })
+    .join('');
+}
+
+function openFieldGuideCardModal(entryId) {
+  if (!fgCardModalEl || !entryId) return;
+  const book = loadCareerLogbook();
+  const fgStats = getFieldGuideStats(book);
+  const entry = fgStats.entries.find((e) => e.id === entryId && e.discovered);
+  if (!entry) return;
+  activeFgCardEntry = entry;
+  if (fgCardTitleEl) fgCardTitleEl.textContent = `${entry.icon} ${entry.name}`;
+  if (fgCardSubEl) {
+    const stars = '★'.repeat(entry.bestStars) + '☆'.repeat(3 - entry.bestStars);
+    fgCardSubEl.textContent = `${entry.latin} · ${stars} · ${entry.bestDepthM > 0 ? `${Math.round(entry.bestDepthM)}m` : 'Shallow'} · ${entry.bestSiteName || 'Expedition Archive'}`;
+  }
+  const verMeta = document.querySelector('meta[name="app-version"]')?.content || '139';
+  if (fgCardCtx && fgCardCanvasEl) {
+    renderFieldGuideCollectorCard(fgCardCtx, {
+      width: fgCardCanvasEl.width,
+      height: fgCardCanvasEl.height,
+      entry,
+      diverName: getEnteredCallsign() || 'Expedition Diver',
+      fgStats,
+      version: `v${verMeta}`,
+    });
+  }
+  if (btnFgCardShare) {
+    btnFgCardShare.hidden = typeof navigator?.share !== 'function';
+  }
+  fgCardModalEl.hidden = false;
+}
+
+function closeFieldGuideCardModal() {
+  if (fgCardModalEl) fgCardModalEl.hidden = true;
+}
+
+fgFilterTabsEl?.querySelectorAll('button[data-fg-filter]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const next = btn.getAttribute('data-fg-filter') || 'all';
+    fgFilterMode = next;
+    fgFilterTabsEl.querySelectorAll('button[data-fg-filter]').forEach((b) => {
+      const sel = b === btn;
+      b.classList.toggle('active', sel);
+      b.setAttribute('aria-selected', sel ? 'true' : 'false');
+    });
+    renderFieldGuideGallery();
+  });
+});
+
+fgSortSelectEl?.addEventListener('change', () => {
+  fgSortMode = fgSortSelectEl.value || 'catalog';
+  renderFieldGuideGallery();
+});
+
+const fgGridClickRoot = document.getElementById('logbook-field-guide-grid');
+fgGridClickRoot?.addEventListener('click', (e) => {
+  const card = e.target?.closest?.('[data-fg-entry]');
+  if (!card) return;
+  openFieldGuideCardModal(card.getAttribute('data-fg-entry'));
+});
+fgGridClickRoot?.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target?.closest?.('[data-fg-entry]');
+  if (!card) return;
+  e.preventDefault();
+  openFieldGuideCardModal(card.getAttribute('data-fg-entry'));
+});
+
+btnFgCardClose?.addEventListener('click', closeFieldGuideCardModal);
+fgCardModalEl?.addEventListener('click', (e) => {
+  if (e.target === fgCardModalEl) closeFieldGuideCardModal();
+});
+btnFgCardDownload?.addEventListener('click', () => {
+  if (!fgCardCanvasEl || !activeFgCardEntry) return;
+  try {
+    const a = document.createElement('a');
+    a.href = fgCardCanvasEl.toDataURL('image/png');
+    a.download = `techno-dive-specimen-${activeFgCardEntry.id}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast(`🪪 Saved ${activeFgCardEntry.name} Collector Card PNG!`, 2.2);
+  } catch {
+    showToast('Could not export Collector Card PNG.', 2.0);
+  }
+});
+btnFgCardShare?.addEventListener('click', async () => {
+  if (!fgCardCanvasEl || !activeFgCardEntry || typeof navigator?.share !== 'function') return;
+  try {
+    const blob = await new Promise((resolve) => fgCardCanvasEl.toBlob?.(resolve, 'image/png'));
+    if (blob && typeof File === 'function') {
+      const file = new File([blob], `techno-dive-specimen-${activeFgCardEntry.id}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: `${activeFgCardEntry.name} — Techno Dive Marine Field Guide`,
+          text: `Logged ${activeFgCardEntry.name} (${activeFgCardEntry.latin}) at ${Math.round(activeFgCardEntry.bestDepthM || 0)}m!`,
+          files: [file],
+        });
+        return;
+      }
+    }
+    await navigator.share({
+      title: `${activeFgCardEntry.name} — Techno Dive Marine Field Guide`,
+      text: `Logged ${activeFgCardEntry.name} (${activeFgCardEntry.latin}) at ${Math.round(activeFgCardEntry.bestDepthM || 0)}m!`,
+    });
+  } catch {}
+});
 
 function downloadTextFile(filename, content, mimeType) {
   try {
@@ -4309,6 +4694,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   closeLogbookModal();
   toggleShearwaterComputer(false);
   toggleSignalWheel(false);
+  setPhotoModeActive(false);
   closeDiveGuideModal(false);
   closeLeaderboardStatsModal();
   directJoinToDive = false;
@@ -4452,6 +4838,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   cancelDebriefAnimations();
   input?.resetAll?.();
   audio.resetEnvironmentFilter();
+  setPhotoModeActive(false);
   mode = 'debrief';
   divePaused = false;
   spectatingPeer = false;
@@ -6806,6 +7193,7 @@ function abortActiveDiveToMenu() {
   cancelDebriefAnimations();
   input?.resetAll?.();
   audio.resetEnvironmentFilter();
+  setPhotoModeActive(false);
   divePaused = false;
   pendingAbortAt = 0;
   mode = 'menu';
@@ -7537,6 +7925,17 @@ function stepSimulation(dt) {
   }
 
   const activeTimeSec = mode === 'diving' && session ? session.simTimeSec : menuTimeSec;
+  if (photoModeState.active && mode === 'diving' && session) {
+    // Allow smooth WASD / Arrow camera panning while underwater time is frozen in Photo Mode Studio
+    const panVec = input.getThrust();
+    if (Math.abs(panVec.x) > 0.01 || Math.abs(panVec.y) > 0.01) {
+      const panSpeed = 9.0 / Math.max(0.65, photoModeState.zoom || 1);
+      photoModeState.panX += panVec.x * panSpeed * dt;
+      photoModeState.panY += panVec.y * panSpeed * dt;
+      clampPhotoModeState(photoModeState);
+    }
+    return;
+  }
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
     stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel);
   }
@@ -8033,6 +8432,7 @@ function frame(nowMs) {
       droppedStages: session.droppedStages || null,
       drills: session.drills || null,
       weather: session.weather || null,
+      photoMode: photoModeState.active ? photoModeState : null,
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',

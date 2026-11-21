@@ -4,6 +4,7 @@ import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './light
 import { getScubaSignalById } from './diveSignals.js';
 import { getWeatherById, computeStormLightningFlash } from './weather.js';
 import { getSuitLivery, getTorchOptic, getMilestonePatch } from './rigLivery.js';
+import { applyPhotoViewportOverlay } from './photoStudio.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -1449,6 +1450,7 @@ export class CaveRenderer {
     droppedStages = null,
     drills = null,
     weather = null,
+    photoMode = null,
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
@@ -1456,37 +1458,44 @@ export class CaveRenderer {
     dt,
   }) {
     this._activeWeather = weather ? (typeof weather === 'string' ? getWeatherById(weather) : weather) : null;
+    const isPhotoMode = Boolean(photoMode?.active);
     const peerList = Array.isArray(peers) ? peers : (peerDiver ? [peerDiver] : []);
     this.resize();
     const ctx = this.ctx;
     const cw = this.canvas.width;
     const ch = this.canvas.height;
     const dpr = this._cachedDpr || 1;
-    const scale = this.pxPerM * dpr;
+    const photoZoom = isPhotoMode ? Math.max(0.65, Math.min(2.2, Number(photoMode.zoom) || 1.0)) : 1.0;
+    const scale = this.pxPerM * dpr * photoZoom;
 
-    // Smooth camera follow + Torch-Coupled Peek Look-Ahead when aiming the left flashlight joystick
+    // Smooth camera follow + Torch-Coupled Peek Look-Ahead (or direct pan/zoom in Photo Mode Studio)
     const camAnchor = cameraTarget || diver;
-    const isManualPeek = Boolean(camAnchor.torchManualAim && Number.isFinite(camAnchor.torchAngle));
-    const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * 3.4 : 0;
-    const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
-    const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
-    const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY;
-    const camAlpha = Math.min(1, dt * (isManualPeek ? 5.2 : 6.0));
-    this.camX += (lookX - this.camX) * camAlpha;
-    this.camY += (lookY - this.camY) * camAlpha;
+    if (isPhotoMode) {
+      this.camX = camAnchor.x + (Number(photoMode.panX) || 0);
+      this.camY = camAnchor.y + (Number(photoMode.panY) || 0);
+    } else {
+      const isManualPeek = Boolean(camAnchor.torchManualAim && Number.isFinite(camAnchor.torchAngle));
+      const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * 3.4 : 0;
+      const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
+      const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
+      const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY;
+      const camAlpha = Math.min(1, dt * (isManualPeek ? 5.2 : 6.0));
+      this.camX += (lookX - this.camX) * camAlpha;
+      this.camY += (lookY - this.camY) * camAlpha;
+    }
 
-    // Narcosis gentle camera drift (suppressed under prefers-reduced-motion or when spectating a buddy)
+    // Narcosis gentle camera drift (suppressed under prefers-reduced-motion, spectating, or Photo Mode)
     let narcX = 0;
     let narcY = 0;
     const isSpectating = Boolean(cameraTarget && cameraTarget !== diver);
-    if (!isSpectating && !this._reducedMotion && diveState.narcosisLevel > 0.15) {
+    if (!isPhotoMode && !isSpectating && !this._reducedMotion && diveState.narcosisLevel > 0.15) {
       narcX = Math.sin(timeSec * 1.7) * diveState.narcosisLevel * 0.45;
       narcY = Math.cos(timeSec * 1.3) * diveState.narcosisLevel * 0.35;
     }
 
     const viewCenterX = cw * 0.5;
     // On narrow portrait phones, shift framing slightly higher so the diver sits centered above the bottom dock
-    const viewCenterY = cw < ch ? ch * 0.39 : ch * 0.46;
+    const viewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? ch * 0.39 : ch * 0.46);
 
     const toScreenX = (wx) => viewCenterX + (wx - (this.camX + narcX)) * scale;
     const toScreenY = (wy) => viewCenterY + (wy - (this.camY + narcY)) * scale;
@@ -1771,32 +1780,39 @@ export class CaveRenderer {
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
-    this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
-    const showCompass =
-      mutatorId === 'purist'
-        ? false
-        : difficulty === 'guided'
-          ? true
-          : difficulty === 'hardcore'
-            ? false
-            : !this.level.hideWaypointCompass;
-    if (showCompass && !endedState) {
-      this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
-    }
-    this._drawPeerEdgeIndicators(ctx, cw, ch, diver, peerList, toScreenX, toScreenY, timeSec);
-    if (celebrationParticles && celebrationParticles.length > 0) {
-      this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
-    }
-    if (!endedState) {
-      this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
+    if (!isPhotoMode) {
+      this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
+      const showCompass =
+        mutatorId === 'purist'
+          ? false
+          : difficulty === 'guided'
+            ? true
+            : difficulty === 'hardcore'
+              ? false
+              : !this.level.hideWaypointCompass;
+      if (showCompass && !endedState) {
+        this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
+      }
+      this._drawPeerEdgeIndicators(ctx, cw, ch, diver, peerList, toScreenX, toScreenY, timeSec);
+      if (celebrationParticles && celebrationParticles.length > 0) {
+        this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
+      }
+      if (!endedState) {
+        this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
+      }
     }
 
-    // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating a buddy)
-    if (!isSpectating) {
+    // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating or in Photo Mode)
+    if (!isSpectating && !isPhotoMode) {
       this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
       if (drills?.active || drills?.backupTorchActive) {
         this._drawEmergencyDrillOverlay(ctx, cw, ch, drills, timeSec);
       }
+    }
+
+    // 13. Live Freeze-Frame Photo Mode Color Grade, Vignette & Composition Grid (v139)
+    if (isPhotoMode) {
+      applyPhotoViewportOverlay(ctx, cw, ch, photoMode);
     }
   }
 

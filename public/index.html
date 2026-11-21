@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="138" />
+  <meta name="app-version" content="139" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=138" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=138" />
-  <link rel="stylesheet" href="./css/style.css?v=138" />
+  <link rel="icon" href="./icons/icon-192.png?v=139" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=139" />
+  <link rel="stylesheet" href="./css/style.css?v=139" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=138" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=139" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=138" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=139" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -149,7 +149,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v138</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v139</button>
               </div>
             </div>
           </div>
@@ -431,12 +431,13 @@
           <span><strong>Space / Tab</strong> Recommended Gas</span>
           <span><strong>G / Hold R</strong> Reel Deploy / Rewind</span>
           <span><strong>E / F</strong> Stage Gas / Line Marker / Cut / Hatch</span>
-          <span><strong>Q / V / C / T</strong> Sonar / DPV / Camera / Stage Bottle</span>
-          <span><strong>M / L / B / Esc</strong> Sonar Map / Torch / Ping / Resume</span>
+          <span><strong>Q / V / C / O</strong> Sonar / DPV / Camera / Photo Studio</span>
+          <span><strong>T / M / L / B / Esc</strong> Stage / Map / Torch / Ping / Resume</span>
         </div>
         <div class="menu-actions">
           <button id="btn-pause-resume" class="btn primary" type="button">RESUME DIVE</button>
-          <button id="btn-pause-abort" class="btn secondary" type="button">ABORT TO MENU</button>
+          <button id="btn-pause-photo-mode" class="btn secondary" type="button" title="Freeze the dive to pan, zoom, color-grade &amp; save a high-res underwater PNG (O)">📸 PHOTO MODE</button>
+          <button id="btn-pause-abort" class="btn ghost" type="button">ABORT TO MENU</button>
         </div>
       </div>
     </div>
@@ -558,6 +559,33 @@
         </div>
         <div id="signal-wheel-grid" class="signal-wheel-grid"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- Freeze-Frame Underwater Photo Mode Studio Overlay (v139) -->
+  <section id="photo-studio-overlay" class="photo-studio-overlay" hidden aria-label="Underwater Photo Mode Studio">
+    <div class="photo-studio-top">
+      <div class="photo-studio-badge">
+        <strong>📸 PHOTO STUDIO</strong>
+        <span id="photo-studio-hint">FROZEN · Drag or WASD to pan · Scroll to zoom</span>
+      </div>
+      <button id="btn-photo-exit" class="btn tiny secondary" type="button" title="Exit Photo Mode and resume dive (O / Esc)">✕ Exit [O]</button>
+    </div>
+    <div class="photo-studio-dock">
+      <div class="photo-studio-row">
+        <label class="photo-zoom-ctrl" for="photo-zoom-range">
+          <span>🔍 Zoom</span>
+          <input id="photo-zoom-range" type="range" min="65" max="220" step="5" value="100" />
+          <strong id="photo-zoom-val">1.00×</strong>
+        </label>
+        <div class="photo-studio-tools">
+          <button id="btn-photo-center" class="btn tiny ghost" type="button" title="Re-center camera on diver">⌖ Center</button>
+          <button id="btn-photo-grid" class="btn tiny secondary active" type="button" title="Toggle Rule-of-Thirds composition grid"># Grid</button>
+          <button id="btn-photo-frame" class="btn tiny secondary" type="button" title="Cycle photo framing (Stamp / Cinema / Clean)">🖼 Stamp</button>
+          <button id="btn-photo-save" class="btn tiny primary" type="button" title="Capture high-res PNG underwater photograph (C)">📸 Save PNG</button>
+        </div>
+      </div>
+      <div id="photo-filter-pills" class="photo-filter-pills" role="radiogroup" aria-label="Underwater Color Grade"></div>
     </div>
   </section>
 
@@ -695,6 +723,21 @@
       <div id="logbook-certs-grid" class="logbook-certs-grid"></div>
       <div id="logbook-field-guide-heading" class="logbook-section-title">EXPEDITION FIELD GUIDE (0/18 PHOTOGRAPHED)</div>
       <div id="logbook-fg-trophy" class="logbook-fg-trophy"></div>
+      <div id="fg-toolbar" class="fg-toolbar" aria-label="Filter and sort Marine Field Guide">
+        <div id="fg-filter-tabs" class="fg-filter-tabs" role="tablist" aria-label="Field Guide Filter">
+          <button type="button" class="fg-filter-btn active" data-fg-filter="all" aria-selected="true">All</button>
+          <button type="button" class="fg-filter-btn" data-fg-filter="discovered" aria-selected="false">Logged</button>
+          <button type="button" class="fg-filter-btn" data-fg-filter="gold" aria-selected="false">★★★</button>
+          <button type="button" class="fg-filter-btn" data-fg-filter="rare" aria-selected="false">Rare</button>
+          <button type="button" class="fg-filter-btn" data-fg-filter="undiscovered" aria-selected="false">Missing</button>
+        </div>
+        <select id="fg-sort-select" class="fg-sort-select" aria-label="Sort Field Guide">
+          <option value="catalog">Sort: Catalog</option>
+          <option value="stars">Sort: Best ★</option>
+          <option value="depth">Sort: Deepest</option>
+          <option value="rarity">Sort: Rarity</option>
+        </select>
+      </div>
       <div id="logbook-field-guide-grid" class="logbook-field-guide-grid"></div>
       <div id="logbook-sites-heading" class="logbook-section-title">EXPEDITION MASTERY (30 SITES)</div>
       <div id="logbook-sites-list" class="logbook-sites-list"></div>
@@ -1087,6 +1130,27 @@
     </div>
   </div>
 
+  <!-- Marine Field Guide Specimen Inspector & Shareable Collector Card Modal (v139) -->
+  <div id="fg-card-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="fg-card-title">
+    <div class="lb-stats-card fg-card-modal-box">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">MARINE FIELD GUIDE · COLLECTOR SPECIMEN CARD</div>
+          <h2 id="fg-card-title" class="lb-stats-title">Specimen Card</h2>
+          <div id="fg-card-sub" class="lb-stats-sub">Shareable 960×560 high-res collector PNG</div>
+        </div>
+        <button id="btn-fg-card-close" class="btn tiny ghost" type="button" aria-label="Close specimen card">✕</button>
+      </div>
+      <div class="fg-card-canvas-wrap">
+        <canvas id="fg-card-canvas" width="960" height="560" aria-label="Marine Field Guide Collector Card"></canvas>
+      </div>
+      <div class="gas-planner-actions" style="margin-top:12px;">
+        <button id="btn-fg-card-share" class="btn secondary" type="button" hidden>📤 Share Card</button>
+        <button id="btn-fg-card-download" class="btn primary" type="button">⬇ Download Card PNG</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Spatial 3D Underwater Audio Mixer & Mobile Haptics Modal (v133) -->
   <div id="audio-mixer-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="audio-mixer-title">
     <div class="lb-stats-card audio-mixer-card">
@@ -1176,75 +1240,76 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=138",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=138",
-        "./js/game/audio.js": "./js/game/audio.js?v=138",
-        "./js/game/collision.js": "./js/game/collision.js?v=138",
-        "./js/game/input.js": "./js/game/input.js?v=138",
-        "./js/game/hud.js": "./js/game/hud.js?v=138",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=138",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=138",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=138",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=138",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=138",
-        "./js/game/weather.js": "./js/game/weather.js?v=138",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=138",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=138",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=138",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=138",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=138",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=138",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=138",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=138",
-        "./js/game/silt.js": "./js/game/silt.js?v=138",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=138",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=138",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=138",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=138",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=138",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=138",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=138",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=138",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=138",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=138",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=138",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=138",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=138",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=138",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=138",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=138",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=138",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=138",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=138",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=138",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=138",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=138",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=138",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=138",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=138",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=138",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=138",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=138",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=138",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=138",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=138",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=138",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=138",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=138",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=138",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=138",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=138",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=138",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=138",
-        "./js/levels/index.js": "./js/levels/index.js?v=138",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=138",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=138",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=138",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=138",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=138"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=139",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=139",
+        "./js/game/audio.js": "./js/game/audio.js?v=139",
+        "./js/game/collision.js": "./js/game/collision.js?v=139",
+        "./js/game/input.js": "./js/game/input.js?v=139",
+        "./js/game/hud.js": "./js/game/hud.js?v=139",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=139",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=139",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=139",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=139",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=139",
+        "./js/game/weather.js": "./js/game/weather.js?v=139",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=139",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=139",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=139",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=139",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=139",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=139",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=139",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=139",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=139",
+        "./js/game/silt.js": "./js/game/silt.js?v=139",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=139",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=139",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=139",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=139",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=139",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=139",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=139",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=139",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=139",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=139",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=139",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=139",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=139",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=139",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=139",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=139",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=139",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=139",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=139",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=139",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=139",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=139",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=139",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=139",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=139",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=139",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=139",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=139",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=139",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=139",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=139",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=139",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=139",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=139",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=139",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=139",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=139",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=139",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=139",
+        "./js/levels/index.js": "./js/levels/index.js?v=139",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=139",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=139",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=139",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=139",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=139"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=138"></script>
+  <script type="module" src="./js/main.js?v=139"></script>
 </body>
 </html>

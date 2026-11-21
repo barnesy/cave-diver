@@ -6714,3 +6714,257 @@ button.mode-badge:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Underwater Photo Mode Studio Overlay & Marine Field Guide Gallery Polish (v139) */
+.photo-studio-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+}
+.photo-studio-overlay[hidden] {
+  display: none !important;
+}
+.photo-studio-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  pointer-events: auto;
+}
+.photo-studio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(4, 14, 28, 0.84);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  backdrop-filter: blur(8px);
+  color: #e0f2fe;
+  font-size: 0.72rem;
+}
+.photo-studio-badge strong {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  letter-spacing: 0.06em;
+  color: #38bdf8;
+}
+.photo-studio-badge span {
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+.photo-studio-dock {
+  pointer-events: auto;
+  align-self: center;
+  width: min(740px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 13px;
+  border-radius: 16px;
+  background: rgba(4, 14, 28, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+}
+.photo-studio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.photo-zoom-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+.photo-zoom-ctrl input[type='range'] {
+  width: 120px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+.photo-zoom-ctrl strong {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.72rem;
+  color: #7dd3fc;
+  min-width: 38px;
+}
+.photo-studio-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#btn-photo-grid.active {
+  border-color: rgba(56, 189, 248, 0.85);
+  background: rgba(14, 165, 233, 0.28);
+  color: #e0f2fe;
+}
+.photo-filter-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.photo-filter-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.75);
+  color: #cbd5e1;
+  font-size: 0.69rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.photo-filter-pill:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+  color: #f8fafc;
+}
+.photo-filter-pill.active {
+  border-color: rgba(56, 189, 248, 0.92);
+  background: rgba(14, 165, 233, 0.28);
+  color: #e0f2fe;
+}
+
+/* Field Guide Gallery Toolbar, Badges & Collector Card Modal */
+.fg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 8px;
+}
+.fg-filter-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.fg-filter-btn {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.72);
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.fg-filter-btn:hover {
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #e2e8f0;
+}
+.fg-filter-btn.active {
+  border-color: rgba(56, 189, 248, 0.88);
+  background: rgba(14, 165, 233, 0.24);
+  color: #e0f2fe;
+}
+.fg-sort-select {
+  background: rgba(15, 23, 42, 0.85);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fg-card.clickable {
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.fg-card.clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.78);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.fg-card.gold-star {
+  border-color: rgba(250, 204, 21, 0.65);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.14);
+}
+.fg-badge-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.fg-depth-badge,
+.fg-rarity-badge,
+.fg-card-cta {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+.fg-depth-badge {
+  background: rgba(14, 165, 233, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  color: #7dd3fc;
+}
+.fg-rarity-badge {
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  color: #cbd5e1;
+  text-transform: uppercase;
+}
+.fg-rarity-badge.rare {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: rgba(192, 132, 252, 0.55);
+  color: #e9d5ff;
+}
+.fg-rarity-badge.epic {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fef08a;
+}
+.fg-card-cta {
+  margin-left: auto;
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.42);
+  color: #6ee7b7;
+}
+.fg-empty-note {
+  grid-column: 1 / -1;
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+}
+.fg-card-modal-box {
+  width: min(680px, calc(100vw - 24px));
+}
+.fg-card-canvas-wrap {
+  margin-top: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  background: #020914;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+#fg-card-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 960 / 560;
+}
+@media (max-width: 640px) {
+  .photo-studio-badge span {
+    display: none;
+  }
+}

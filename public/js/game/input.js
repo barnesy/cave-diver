@@ -22,6 +22,7 @@ export class InputController {
     onStageDrop,
     onComputerToggle,
     onSignalWheelToggle,
+    onPhotoModeToggle,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -54,6 +55,7 @@ export class InputController {
     this.onStageDrop = onStageDrop;
     this.onComputerToggle = onComputerToggle;
     this.onSignalWheelToggle = onSignalWheelToggle;
+    this.onPhotoModeToggle = onPhotoModeToggle;
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
@@ -105,6 +107,9 @@ export class InputController {
       }
       if (code === 'KeyH' && !e.repeat) {
         if (this.onSignalWheelToggle?.()) e.preventDefault();
+      }
+      if (code === 'KeyO' && !e.repeat) {
+        if (this.onPhotoModeToggle?.()) e.preventDefault();
       }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();

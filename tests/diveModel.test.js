@@ -5246,7 +5246,7 @@ test('v136 Code Quality & V8 Boot Integrity Guard: DOM IDs, SW precache, singlet
     globalThis.document = { hidden:false, visibilityState:'visible', body:new El('body'), documentElement:new El('html'), getElementById:id=>byId.get(id)||null, createElement:t=>new El(t), createElementNS:(_n,t)=>new El(t), querySelector:()=>null, querySelectorAll:()=>[], addEventListener(){}, removeEventListener(){} };
     await import(pathToFileURL(${JSON.stringify(path.join(pubDir, 'js/main.js'))}).href);
     await new Promise(r => setTimeout(r, 40));
-    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-weather-pill','menu-livery-pill','btn-livery-reset','btn-livery-done','btn-setup-drawer','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
+    for (const id of ['btn-setup-drawer','menu-mode-badge','menu-weather-pill','menu-livery-pill','btn-livery-reset','btn-livery-done','btn-setup-drawer','menu-ai-buddy-pill','menu-drills-pill','btn-setup-reset','btn-setup-done','btn-open-logbook','btn-logbook-close','btn-photo-grid','btn-photo-frame','btn-photo-center','btn-open-audio-mixer','btn-mixer-test','btn-mixer-done','btn-open-daily-calendar','btn-daily-cal-close','btn-open-procedural','btn-proc-modal-close']) {
       byId.get(id)?.click();
     }
     await new Promise(r => setTimeout(r, 30));
@@ -5464,4 +5464,123 @@ test('v138 Diver Gear Workshop, Custom Rig Liveries, Technical Torch Optics & Co
   });
   const peer = client.getPeers().find((p) => p.id === 'h1');
   assert.deepEqual(peer?.livery, customRig);
+});
+
+test('v139 Underwater Photo Mode Studio & Marine Field Guide Collector Cards', async () => {
+  const {
+    PHOTO_FILTERS,
+    PHOTO_FRAMES,
+    PHOTO_MIN_ZOOM,
+    PHOTO_MAX_ZOOM,
+    PHOTO_MAX_PAN_M,
+    createPhotoModeState,
+    clampPhotoModeState,
+    applyPhotoViewportOverlay,
+    renderPhotoSnapshot,
+    renderFieldGuideCollectorCard,
+    filterAndSortFieldGuide,
+  } = await import('../public/js/game/photoStudio.js');
+
+  assert.equal(PHOTO_FILTERS.length, 5);
+  assert.equal(PHOTO_FRAMES.length, 3);
+
+  // 1. State creation & bounds clamping
+  const pm = createPhotoModeState();
+  assert.equal(pm.active, false);
+  assert.equal(pm.zoom, 1.0);
+  pm.zoom = 9.9;
+  pm.panX = -999;
+  pm.panY = 500;
+  pm.filterId = 'invalid-grade';
+  pm.frameId = 'invalid-frame';
+  clampPhotoModeState(pm);
+  assert.equal(pm.zoom, PHOTO_MAX_ZOOM);
+  assert.equal(pm.panX, -PHOTO_MAX_PAN_M);
+  assert.equal(pm.panY, PHOTO_MAX_PAN_M);
+  assert.equal(pm.filterId, 'natural');
+  assert.equal(pm.frameId, 'telemetry');
+  pm.zoom = 0.05;
+  clampPhotoModeState(pm);
+  assert.equal(pm.zoom, PHOTO_MIN_ZOOM);
+
+  // 2. Live viewport overlay & high-res snapshot composition execute across all filters & frames
+  const drawnTexts = [];
+  const makeCtx = (w, h) =>
+    new Proxy(
+      {
+        canvas: { width: w, height: h },
+        createLinearGradient: () => ({ addColorStop() {} }),
+        createRadialGradient: () => ({ addColorStop() {} }),
+        measureText: (t) => ({ width: String(t || '').length * 8 }),
+        fillText: (t) => drawnTexts.push(String(t || '')),
+      },
+      { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+    );
+
+  const viewCtx = makeCtx(1280, 720);
+  for (const f of PHOTO_FILTERS) {
+    for (const fr of PHOTO_FRAMES) {
+      applyPhotoViewportOverlay(viewCtx, 1280, 720, {
+        active: true,
+        filterId: f.id,
+        frameId: fr.id,
+        showGrid: true,
+        hideOverlayForCapture: false,
+      });
+    }
+  }
+
+  const snapCtx = makeCtx(1200, 675);
+  for (const fr of PHOTO_FRAMES) {
+    const ok = renderPhotoSnapshot(snapCtx, { width: 1280, height: 720 }, {
+      width: 1200,
+      height: 675,
+      filterId: 'warm-strobe',
+      frameId: fr.id,
+      siteName: 'Cenote El Abismo',
+      depthM: 42.5,
+      gasLabel: 'TMX 14/55',
+      diverName: 'Cousteau',
+      weatherLabel: 'Night Biolum',
+      version: 'v139',
+    });
+    assert.equal(ok, true);
+  }
+  assert.ok(drawnTexts.some((t) => t.includes('Cenote El Abismo')), 'Telemetry photo stamp should include site name');
+
+  // 3. Marine Field Guide filtering, sorting & museum-grade Collector Card PNG renderer
+  let book = createEmptyLogbook();
+  book = recordFieldGuidePhoto(book, { entryId: 'whaleshark', stars: 3, siteId: 'blue-hole-dahab', siteName: 'Blue Hole', depthM: 64 }).book;
+  book = recordFieldGuidePhoto(book, { entryId: 'remipede', stars: 2, siteId: 'cenote-el-abismo', siteName: 'Cenote El Abismo', depthM: 31 }).book;
+  book = recordFieldGuidePhoto(book, { entryId: 'cavefish', stars: 1, siteId: 'cenote-el-abismo', siteName: 'Cenote El Abismo', depthM: 12 }).book;
+  const fgStats = getFieldGuideStats(book);
+
+  const discovered = filterAndSortFieldGuide(fgStats.entries, { filter: 'discovered', sort: 'depth' });
+  assert.equal(discovered.length, 3);
+  assert.equal(discovered[0].id, 'whaleshark', 'Deepest sort should rank 64m whale shark first');
+
+  const gold = filterAndSortFieldGuide(fgStats.entries, { filter: 'gold', sort: 'stars' });
+  assert.equal(gold.length, 1);
+  assert.equal(gold[0].id, 'whaleshark');
+
+  const rare = filterAndSortFieldGuide(fgStats.entries, { filter: 'rare', sort: 'rarity' });
+  assert.ok(rare.every((e) => e.rarity === 'rare' || e.rarity === 'epic'));
+  assert.equal(rare[0].rarity, 'epic');
+
+  const missing = filterAndSortFieldGuide(fgStats.entries, { filter: 'undiscovered', sort: 'catalog' });
+  assert.equal(missing.length, fgStats.totalCount - 3);
+
+  drawnTexts.length = 0;
+  const cardCtx = makeCtx(960, 560);
+  const cardOk = renderFieldGuideCollectorCard(cardCtx, {
+    width: 960,
+    height: 560,
+    entry: discovered[0],
+    diverName: 'Cousteau',
+    fgStats,
+    version: 'v139',
+  });
+  assert.equal(cardOk, true);
+  assert.ok(drawnTexts.some((t) => t.includes('GOLD MASTER PHOTOGRAPH')), '3-star specimen card should display gold master banner');
+  assert.ok(drawnTexts.some((t) => t.includes('64m')), 'Specimen card should display best depth badge');
 });
