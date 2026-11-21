@@ -530,7 +530,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=128" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=129" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1141,6 +1141,14 @@ const input = new InputController({
     return true;
   },
   onPauseToggle: () => {
+    if (shearwaterOpen) {
+      toggleShearwaterComputer(false);
+      return true;
+    }
+    if (signalWheelOpen) {
+      toggleSignalWheel(false);
+      return true;
+    }
     if (hudMenuPopover && !hudMenuPopover.hidden) {
       setHudMenuOpen(false);
       return true;
@@ -1241,9 +1249,10 @@ btnSignalWheelClose?.addEventListener('click', (e) => {
   toggleSignalWheel(false);
 });
 
-// Shearwater ZH-L16C OLED Dive Computer Overlay (v126)
+// Shearwater ZH-L16C OLED Dive Computer Overlay (v126/v129)
 const shearwaterPanelEl = document.getElementById('shearwater-panel');
 const shearwaterCanvasEl = document.getElementById('shearwater-canvas');
+const btnShearwaterCloseEl = document.getElementById('btn-shearwater-close');
 const btnHudComputerEl = document.getElementById('btn-hud-computer');
 let shearwaterOpen = false;
 let lastShearwaterDrawMs = 0;
@@ -1262,6 +1271,14 @@ function toggleShearwaterComputer(forceState) {
 btnHudComputerEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleShearwaterComputer();
+});
+btnShearwaterCloseEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleShearwaterComputer(false);
+});
+shearwaterCanvasEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleShearwaterComputer(false);
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -3719,6 +3736,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   audio.resetEnvironmentFilter();
   input?.resetAll?.();
   closeLogbookModal();
+  toggleShearwaterComputer(false);
+  toggleSignalWheel(false);
   closeDiveGuideModal(false);
   closeLeaderboardStatsModal();
   directJoinToDive = false;
@@ -5987,6 +6006,8 @@ function abortActiveDiveToMenu() {
   syncWreckActionHud(null);
   hideHudPhotoCard();
   screenHud.classList.remove('hud-team-hold');
+  toggleShearwaterComputer(false);
+  toggleSignalWheel(false);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;

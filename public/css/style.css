@@ -6062,24 +6062,61 @@ button.mode-badge:hover {
   gap: 6px;
 }
 
-/* Shearwater ZH-L16C OLED Dive Computer & Interactive Debrief Scrubber (v126) */
+/* Shearwater ZH-L16C OLED Dive Computer & Interactive Debrief Scrubber (v126/v129) */
 .shearwater-panel {
   position: fixed;
-  right: 14px;
-  bottom: 138px;
-  z-index: 32;
-  padding: 5px;
+  right: 12px;
+  top: 74px;
+  bottom: auto;
+  z-index: 38;
+  padding: 5px 6px 6px;
   border-radius: 12px;
-  background: rgba(2, 6, 23, 0.92);
-  border: 1px solid rgba(56, 189, 248, 0.42);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(15, 23, 42, 0.9) inset;
+  background: rgba(2, 6, 23, 0.94);
+  border: 1px solid rgba(56, 189, 248, 0.48);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(15, 23, 42, 0.9) inset;
   pointer-events: auto;
+}
+.shearwater-panel[hidden] {
+  display: none !important;
+}
+.shearwater-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 2px 5px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #7dd3fc;
+}
+.shearwater-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+.shearwater-close-btn:hover,
+.shearwater-close-btn:active {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(248, 113, 113, 0.75);
 }
 .shearwater-panel canvas {
   display: block;
   width: 248px;
   height: 162px;
   border-radius: 8px;
+  cursor: pointer;
 }
 .gear-hud-btn.computer.active {
   border-color: rgba(56, 189, 248, 0.85);
@@ -6105,7 +6142,7 @@ button.mode-badge:hover {
 @media (max-width: 640px) {
   .shearwater-panel {
     right: 8px;
-    bottom: 118px;
+    top: 66px;
   }
   .shearwater-panel canvas {
     width: 204px;
