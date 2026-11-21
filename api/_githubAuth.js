@@ -8,8 +8,8 @@ export const DEFAULT_ISSUES_REPO = 'barnesy/cave-diver';
 export const GITHUB_OAUTH_SCOPES = 'read:user gist public_repo';
 
 export function getGitHubConfig(env = process.env) {
-  const clientId = String(env.GITHUB_CLIENT_ID || '').trim();
-  const clientSecret = String(env.GITHUB_CLIENT_SECRET || '').trim();
+  const clientId = String(env.GITHUB_CLIENT_ID || env.GITHUB_ID || env.GH_CLIENT_ID || '').trim();
+  const clientSecret = String(env.GITHUB_CLIENT_SECRET || env.GITHUB_SECRET || env.GH_CLIENT_SECRET || '').trim();
   const sessionSecret = String(env.SESSION_SECRET || '').trim();
   const rawRepo = String(env.GITHUB_ISSUES_REPO || DEFAULT_ISSUES_REPO).trim();
   const repo = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(rawRepo) ? rawRepo : DEFAULT_ISSUES_REPO;

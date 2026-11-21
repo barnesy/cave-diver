@@ -102,13 +102,38 @@ export async function readBlobEtag(pathname) {
   }
 }
 
-async function readBlobWithAccess(pathname, fallbackValue, access) {
+async function fetchPublicBlobUrl(url, fallbackValue, etag = null) {
+  const bust = new URL(url);
+  bust.searchParams.set('_ts', String(Date.now()));
+  const res = await fetch(bust.toString(), {
+    method: 'GET',
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  });
+  if (res.status === 404) {
+    return { data: fallbackValue, etag: null, notFound: true };
+  }
+  if (!res.ok) {
+    throw Object.assign(new Error(`Public blob fetch failed with status ${res.status}`), {
+      status: res.status,
+    });
+  }
+  const text = await res.text();
+  const parsed = text ? JSON.parse(text) : fallbackValue;
+  return {
+    data: parsed ?? fallbackValue,
+    etag: etag || res.headers.get('etag') || null,
+    notFound: false,
+  };
+}
+
+async function readBlobWithAccess(urlOrPathname, fallbackValue, access, extraOpts = {}) {
   const opts =
     access === 'public'
-      ? { access: 'public', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }
-      : { access: 'private', useCache: false };
+      ? { access: 'public', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, ...extraOpts }
+      : { access: 'private', useCache: false, ...extraOpts };
 
-  const res = await get(pathname, opts);
+  const res = await get(urlOrPathname, opts);
   if (!res || res.statusCode === 404) {
     return { data: fallbackValue, etag: null, notFound: true };
   }
@@ -127,6 +152,39 @@ async function readBlobWithAccess(pathname, fallbackValue, access) {
 }
 
 export async function readBlobJson(pathname, fallbackValue = null) {
+  // Authoritative lookup via head() avoids 403s on missing blobs & reveals exact public vs private URL
+  let meta = null;
+  try {
+    meta = await head(pathname);
+  } catch (err) {
+    if (isNotFoundBlobError(err)) {
+      return { data: fallbackValue, etag: null, notFound: true };
+    }
+    // Fall through to direct get() if head() failed for a non-404 reason
+  }
+
+  if (meta?.url) {
+    if (meta.url.includes('.public.blob.')) {
+      cachedBlobAccess = 'public';
+      return fetchPublicBlobUrl(meta.url, fallbackValue, meta.etag || null);
+    }
+    if (meta.url.includes('.private.blob.')) {
+      cachedBlobAccess = 'private';
+      try {
+        return await readBlobWithAccess(meta.url, fallbackValue, 'private');
+      } catch (err) {
+        if (isNotFoundBlobError(err)) {
+          return { data: fallbackValue, etag: null, notFound: true };
+        }
+        const rwToken = process.env.BLOB_READ_WRITE_TOKEN;
+        if (rwToken && isAccessMismatchError(err)) {
+          return readBlobWithAccess(meta.url, fallbackValue, 'private', { token: rwToken });
+        }
+        throw err;
+      }
+    }
+  }
+
   const primaryAccess = await detectStoreAccess();
   try {
     const out = await readBlobWithAccess(pathname, fallbackValue, primaryAccess);
