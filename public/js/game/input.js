@@ -17,6 +17,7 @@ export class InputController {
     onSonarPing,
     onDpvToggle,
     onMinimapToggle,
+    onCameraSnap,
     onPauseToggle,
   }) {
     this.keys = new Set();
@@ -44,6 +45,7 @@ export class InputController {
     this.onSonarPing = onSonarPing;
     this.onDpvToggle = onDpvToggle;
     this.onMinimapToggle = onMinimapToggle;
+    this.onCameraSnap = onCameraSnap;
     this.onPauseToggle = onPauseToggle;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
@@ -80,6 +82,9 @@ export class InputController {
       }
       if (code === 'KeyM' && !e.repeat) {
         if (this.onMinimapToggle?.()) e.preventDefault();
+      }
+      if (code === 'KeyC' && !e.repeat) {
+        if (this.onCameraSnap?.()) e.preventDefault();
       }
       if ((code === 'Escape' || code === 'KeyP') && !e.repeat) {
         if (this.onPauseToggle?.()) e.preventDefault();

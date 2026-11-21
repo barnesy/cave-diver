@@ -3,7 +3,8 @@ import { createDiveState, stepDivePhysiology, receiveGasIntoState } from '../phy
 import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
-import { buildExploreCells, markExploredAround, computeDiverScoreSummary } from './scoring.js';
+import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS } from './scoring.js';
+import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 
 const MAX_BUBBLES = 240;
@@ -102,6 +103,15 @@ export function createDiveSession(
       cooldownSec: 0,
       maxCooldownSec: 9.0,
       activePulse: null,
+    },
+    camera: {
+      cooldownSec: 0,
+      maxCooldownSec: 1.25,
+      activeFlash: null,
+      photoCount: 0,
+      photoBonusScore: 0,
+      photographedIds: new Set(),
+      photos: [],
     },
     ascentConfig: getAscentConfig(level),
     diver: {
@@ -285,6 +295,150 @@ export function triggerSonarPing(session, callbacks = {}) {
   session.sonar.cooldownSec = session.sonar.maxCooldownSec || 9.0;
   callbacks.onSonarPing?.(pulse);
   return { ok: true, pulse };
+}
+
+const RARITY_WEIGHT = { epic: 4, rare: 3, uncommon: 2, common: 1 };
+
+/**
+ * Trigger the underwater twin-strobe camera along the diver's torch/heading vector,
+ * capturing visible wildlife, cave formations, or geothermal landmarks for the Field Guide.
+ */
+export function captureCameraPhoto(session, ecosystem = null, { knownIds = null } = {}, callbacks = {}) {
+  if (!session?.camera || !session.diveState?.alive || session.surfaced) {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if ((session.camera.cooldownSec || 0) > 0.05) {
+    return { ok: false, reason: 'cooldown', remainingSec: session.camera.cooldownSec };
+  }
+
+  const { level, diver } = session;
+  const aimAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+  const maxRangeM = 12.5;
+  const halfConeRad = 0.86;
+  const silt = session.localSiltDensity || 0;
+  const candidates = [];
+
+  const consider = (entryId, tx, ty) => {
+    const entry = getFieldGuideEntry(entryId);
+    if (!entry) return;
+    const dx = tx - diver.x;
+    const dy = ty - diver.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.35 || dist > maxRangeM) return;
+    const angTo = Math.atan2(dy, dx);
+    let angDiff = Math.abs(angTo - aimAng);
+    while (angDiff > Math.PI) angDiff = Math.abs(angDiff - Math.PI * 2);
+    if (angDiff > halfConeRad) return;
+    const ray = castLightRay(level, diver.x, diver.y, angTo, dist, []);
+    if (ray && ray.hitWall && ray.dist < dist - 0.85) return;
+
+    let q = 0;
+    q += angDiff <= 0.34 ? 1.0 : angDiff <= 0.62 ? 0.6 : 0.2;
+    q += dist >= 1.2 && dist <= 8.5 ? 1.0 : dist <= 11.0 ? 0.6 : 0.3;
+    q += silt < 0.22 ? 1.0 : silt < 0.48 ? 0.5 : 0.15;
+    const stars = Math.max(1, Math.min(3, Math.round(q)));
+
+    const isNewInGuide = knownIds instanceof Set ? !knownIds.has(entry.id) : false;
+    const isNewThisDive = !session.camera.photographedIds.has(entry.id);
+    const rarityW = RARITY_WEIGHT[entry.rarity] || 1;
+    const priority =
+      (isNewInGuide ? 1000 : 0) +
+      (isNewThisDive ? 400 : 0) +
+      rarityW * 80 +
+      stars * 25 -
+      dist * 3 -
+      angDiff * 15;
+
+    candidates.push({ entry, tx, ty, dist, stars, isNewInGuide, isNewThisDive, priority });
+  };
+
+  if (ecosystem) {
+    for (const m of ecosystem.megafauna || []) consider(m.kind, m.x, m.y);
+    for (const t of ecosystem.turtles || []) consider('slider', t.x, t.y);
+    for (const j of ecosystem.jellies || []) consider('jellyfish', j.x, j.y);
+    for (const f of ecosystem.fish || []) {
+      const id = f.kind === 'molly' ? 'cichlid' : f.kind;
+      consider(id, f.x, f.y);
+    }
+    for (const r of ecosystem.remipedes || []) consider(r.kind, r.x, r.y);
+    for (const a of ecosystem.anchored || []) {
+      if (a.kind === 'seafan' || a.kind === 'rusticle' || a.kind === 'sodastraw' || a.kind === 'crystal') {
+        consider(a.kind, a.x, a.y);
+      }
+    }
+  }
+  for (const v of level.geothermalVents || []) {
+    consider('hydrovent', v.x, v.y - Math.min(3.5, (v.height || 10) * 0.3));
+  }
+  for (const c of level.collectibles || []) {
+    if (c.kind === 'crystal' && !session.collectedIds?.has(c.id)) {
+      consider('crystal', c.x, c.y);
+    }
+  }
+
+  candidates.sort((a, b) => b.priority - a.priority);
+  const best = candidates[0] || null;
+
+  let points = 0;
+  let subject = null;
+  let stars = 0;
+  let isNewInGuide = false;
+  let isNewThisDive = false;
+  let depthM = Math.max(0, diver.y);
+
+  if (best) {
+    subject = best.entry;
+    stars = best.stars;
+    isNewInGuide = best.isNewInGuide;
+    isNewThisDive = best.isNewThisDive;
+    depthM = Math.max(0, best.ty);
+    if (isNewThisDive) {
+      session.camera.photographedIds.add(subject.id);
+      const starMult = stars === 3 ? 1.0 : stars === 2 ? 0.8 : 0.6;
+      const room = Math.max(0, MAX_PHOTO_BONUS - (session.camera.photoBonusScore || 0));
+      points = Math.min(room, Math.round((subject.points || 60) * starMult));
+      session.camera.photoBonusScore = (session.camera.photoBonusScore || 0) + points;
+    }
+    session.camera.photoCount += 1;
+    session.camera.photos.push({
+      entryId: subject.id,
+      name: subject.name,
+      icon: subject.icon,
+      stars,
+      points,
+      isNewInGuide,
+      depthM: Math.round(depthM * 10) / 10,
+    });
+    if (points > 0 && Array.isArray(session.collectBursts)) {
+      session.collectBursts.push({
+        x: best.tx,
+        y: best.ty,
+        points,
+        kind: 'photo',
+        age: 0,
+        duration: 1.4,
+      });
+    }
+  }
+
+  const flash = {
+    x: diver.x,
+    y: diver.y,
+    angle: aimAng,
+    targetX: best ? best.tx : null,
+    targetY: best ? best.ty : null,
+    subject,
+    stars,
+    isNewInGuide,
+    points,
+    ageSec: 0,
+    durationSec: 0.72,
+  };
+  session.camera.activeFlash = flash;
+  session.camera.cooldownSec = session.camera.maxCooldownSec || 1.25;
+  const result = { ok: true, flash, subject, stars, isNewInGuide, isNewThisDive, points, depthM };
+  callbacks.onCameraSnap?.(result);
+  return result;
 }
 
 /**
@@ -1157,7 +1311,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   diver.dpvActive = Boolean(dpv?.active);
   diver.dpvThrusting = dpvThrusting;
 
-  // Advance Cave Sonar Ping sweep & cooldown
+  // Advance Cave Sonar Ping & Strobe Camera cooldown/flash timers
   if (session.sonar) {
     if (session.sonar.cooldownSec > 0) {
       session.sonar.cooldownSec = Math.max(0, session.sonar.cooldownSec - dt);
@@ -1166,6 +1320,17 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       session.sonar.activePulse.ageSec += dt;
       if (session.sonar.activePulse.ageSec >= session.sonar.activePulse.durationSec) {
         session.sonar.activePulse = null;
+      }
+    }
+  }
+  if (session.camera) {
+    if (session.camera.cooldownSec > 0) {
+      session.camera.cooldownSec = Math.max(0, session.camera.cooldownSec - dt);
+    }
+    if (session.camera.activeFlash) {
+      session.camera.activeFlash.ageSec += dt;
+      if (session.camera.activeFlash.ageSec >= session.camera.activeFlash.durationSec) {
+        session.camera.activeFlash = null;
       }
     }
   }
@@ -1859,6 +2024,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
+      photoBonusScore: session.camera?.photoBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 

@@ -23,6 +23,8 @@ import {
   getDailyMutatorById,
   recordDailyClear,
   getDailyStatus,
+  recordFieldGuidePhoto,
+  getFieldGuideStats,
 } from './game/logbookModel.js';
 import {
   createDiveSession,
@@ -34,6 +36,7 @@ import {
   triggerWreckAction,
   toggleDpvScooter,
   triggerSonarPing,
+  captureCameraPhoto,
   sampleGhostPose,
   buildParGhostTrack,
   applyPeerWreckAction,
@@ -485,7 +488,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=109" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=110" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1105,6 +1108,7 @@ const input = new InputController({
   onSonarPing: () => handleSonarPing(),
   onDpvToggle: () => handleDpvToggle(),
   onMinimapToggle: () => handleMinimapToggle(),
+  onCameraSnap: () => handleCameraSnap(),
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -1162,6 +1166,77 @@ function toggleMinimapZoom() {
 btnMinimap?.addEventListener('click', (e) => {
   e.stopPropagation();
   handleMinimapToggle();
+});
+
+// Underwater Strobe Camera & Marine Field Guide controls (v110)
+const btnCamera = document.getElementById('btn-camera');
+const hudPhotoCardEl = document.getElementById('hud-photo-card');
+const hudPhotoIconEl = document.getElementById('hud-photo-icon');
+const hudPhotoNameEl = document.getElementById('hud-photo-name');
+const hudPhotoBadgeEl = document.getElementById('hud-photo-badge');
+const hudPhotoSubEl = document.getElementById('hud-photo-sub');
+let hudPhotoCardTimer = 0;
+
+function hideHudPhotoCard() {
+  clearTimeout(hudPhotoCardTimer);
+  hudPhotoCardTimer = 0;
+  if (hudPhotoCardEl) hudPhotoCardEl.hidden = true;
+}
+
+function showHudPhotoCard(res, fgStats) {
+  if (!hudPhotoCardEl || !res?.subject) return;
+  clearTimeout(hudPhotoCardTimer);
+  const starStr = '★'.repeat(Math.max(1, Math.min(3, res.stars || 1)));
+  if (hudPhotoIconEl) hudPhotoIconEl.textContent = res.subject.icon || '📷';
+  if (hudPhotoNameEl) hudPhotoNameEl.textContent = res.subject.name;
+  if (hudPhotoBadgeEl) {
+    hudPhotoBadgeEl.hidden = !res.isNewInGuide && !res.upgradedStars;
+    hudPhotoBadgeEl.textContent = res.isNewInGuide ? 'NEW GUIDE!' : 'UPGRADED!';
+  }
+  const ptsTxt = res.points > 0 ? ` · +${res.points} pts` : '';
+  const guideTxt = fgStats ? ` · Guide ${fgStats.discoveredCount}/${fgStats.totalCount}` : '';
+  if (hudPhotoSubEl) hudPhotoSubEl.textContent = `${starStr}${ptsTxt}${guideTxt}`;
+  hudPhotoCardEl.classList.toggle('is-new', Boolean(res.isNewInGuide));
+  hudPhotoCardEl.hidden = false;
+  hudPhotoCardTimer = setTimeout(() => {
+    hudPhotoCardTimer = 0;
+    if (hudPhotoCardEl) hudPhotoCardEl.hidden = true;
+  }, 3200);
+}
+
+function handleCameraSnap() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  const book = loadCareerLogbook();
+  const knownIds = new Set(Object.keys(book.fieldGuide || {}));
+  const res = captureCameraPhoto(session, ecosystem, { knownIds });
+  if (!res.ok) {
+    if (res.reason === 'cooldown') {
+      showToast('📷 Strobe recharging...', 0.9);
+      return true;
+    }
+    return false;
+  }
+  audio.playCameraShutter(Boolean(res.subject), Boolean(res.isNewInGuide));
+  if (res.subject) {
+    const saved = recordFieldGuidePhoto(book, {
+      entryId: res.subject.id,
+      stars: res.stars,
+      siteId: session.level?.id || '',
+      siteName: session.level?.name || '',
+      depthM: res.depthM,
+    });
+    saveCareerLogbook(saved.book);
+    const fgStats = getFieldGuideStats(saved.book);
+    showHudPhotoCard({ ...res, upgradedStars: saved.upgradedStars }, fgStats);
+  } else {
+    showToast('📷 Snap! Aim torch at wildlife, corals, crystals or vents.', 1.8);
+  }
+  return true;
+}
+
+btnCamera?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleCameraSnap();
 });
 hudMinimapWrapEl?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1570,6 +1645,7 @@ function openLogbookModal() {
   }
   if (logbookKpisEl) {
     const dailyStatus = getDailyStatus(book);
+    const fgStats = getFieldGuideStats(book);
     logbookKpisEl.innerHTML = `
       <div class="logbook-kpi"><span>Cleared</span><strong>${sum.clearedCount}/${sum.totalSites}</strong></div>
       <div class="logbook-kpi"><span>Dives</span><strong>${sum.totalDives}</strong></div>
@@ -1577,6 +1653,7 @@ function openLogbookModal() {
       <div class="logbook-kpi"><span>Deepest</span><strong>${sum.deepestM.toFixed(0)}m</strong></div>
       <div class="logbook-kpi"><span>S-Ranks</span><strong>${certInfo.sGrades}</strong></div>
       <div class="logbook-kpi"><span>Daily Streak</span><strong>🔥 ${dailyStatus.activeStreak}d${dailyStatus.bestStreak > 0 ? ` · Best ${dailyStatus.bestStreak}d` : ''}</strong></div>
+      <div class="logbook-kpi"><span>Field Guide</span><strong>📷 ${fgStats.discoveredCount}/${fgStats.totalCount}</strong></div>
     `;
   }
   if (logbookCertsEl) {
@@ -1591,6 +1668,41 @@ function openLogbookModal() {
           </div>
         </div>`
       )
+      .join('');
+  }
+  const fgHeading = document.getElementById('logbook-field-guide-heading');
+  const fgGrid = document.getElementById('logbook-field-guide-grid');
+  if (fgGrid) {
+    const fgStats = getFieldGuideStats(book);
+    if (fgHeading) {
+      fgHeading.textContent = `EXPEDITION FIELD GUIDE (${fgStats.discoveredCount}/${fgStats.totalCount} PHOTOGRAPHED)`;
+    }
+    fgGrid.innerHTML = fgStats.entries
+      .map((e) => {
+        if (!e.discovered) {
+          return `
+            <div class="fg-card locked">
+              <span class="fg-icon" aria-hidden="true">${e.icon}</span>
+              <div class="fg-copy">
+                <div class="fg-head"><strong>??? (${e.rarity.toUpperCase()})</strong></div>
+                <span class="fg-meta">Habitat: ${escapeHtml(e.habitat)}</span>
+              </div>
+            </div>`;
+        }
+        const stars = '★'.repeat(e.bestStars) + '☆'.repeat(3 - e.bestStars);
+        const sightTxt = e.bestSiteName
+          ? `${e.bestSiteName} · ${Math.round(e.bestDepthM)}m · ×${e.count}`
+          : `${Math.round(e.bestDepthM)}m · ×${e.count}`;
+        return `
+          <div class="fg-card rarity-${e.rarity}">
+            <span class="fg-icon" aria-hidden="true">${e.icon}</span>
+            <div class="fg-copy">
+              <div class="fg-head"><strong>${escapeHtml(e.name)}</strong><span class="fg-stars">${stars}</span></div>
+              <span class="fg-latin">${escapeHtml(e.latin)}</span>
+              <span class="fg-meta">${escapeHtml(sightTxt)}</span>
+            </div>
+          </div>`;
+      })
       .join('');
   }
   if (logbookSitesEl) {
@@ -1872,6 +1984,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (btnTowBuddy) btnTowBuddy.hidden = true;
   if (btnShareGas) btnShareGas.hidden = true;
   syncWreckActionHud(null);
+  hideHudPhotoCard();
   celebrationParticles = [];
   if (debriefAnimFrame) {
     cancelAnimationFrame(debriefAnimFrame);
@@ -1985,6 +2098,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   spectatingPeer = false;
   setHudMenuOpen(false);
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
+  hideHudPhotoCard();
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -2020,6 +2134,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
+      photoBonusScore: session.camera?.photoBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 
@@ -2228,6 +2343,15 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       cls: 'purple',
     },
   ];
+  if ((teamSummary.photoBonusScore || 0) > 0) {
+    const snapCount = session.camera?.photographedIds?.size || 1;
+    rows.push({
+      label: `Field Photos (${snapCount} species)`,
+      pts: teamSummary.photoBonusScore,
+      pct: Math.round((teamSummary.photoBonusScore / 300) * 100),
+      cls: 'gold',
+    });
+  }
   if (teamSummary.isTeam) {
     if (teamSummary.rescueBonus > 0) {
       rows.push({
@@ -3830,6 +3954,7 @@ function abortActiveDiveToMenu() {
   if (btnTowBuddy) btnTowBuddy.hidden = true;
   if (btnShareGas) btnShareGas.hidden = true;
   syncWreckActionHud(null);
+  hideHudPhotoCard();
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -5027,6 +5152,7 @@ function frame(nowMs) {
         return pose ? { ...pose, isPar: activeGhostIsPar } : null;
       })(),
       sonarPulse: session.sonar?.activePulse || null,
+      cameraFlash: session.camera?.activeFlash || null,
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
       timeSec: session.simTimeSec,

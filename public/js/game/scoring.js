@@ -95,9 +95,11 @@ export function assignScoreRank(totalScore, alive = true, maxPossible = 3200) {
   return { grade: 'C', label: 'SAFE SURVIVOR' };
 }
 
+export const MAX_PHOTO_BONUS = 300;
+
 /**
  * Score a single diver's completed (or aborted) cave traverse across:
- * health vitals, run speed, collectibles recovered, and cave explored completeness.
+ * health vitals, run speed, collectibles recovered, cave explored completeness, hatches, and wildlife photography.
  */
 export function computeDiverScoreSummary({
   name = 'Diver 1',
@@ -109,6 +111,7 @@ export function computeDiverScoreSummary({
   totalExploreCells = 1,
   diveTimeSec = diveState?.diveTimeSec || 0,
   hatchBonusScore = 0,
+  photoBonusScore = 0,
   mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
@@ -148,8 +151,9 @@ export function computeDiverScoreSummary({
   const gasRemainingPct = computeGasRemainingPct(diveState);
   const maxHatchBonus = (level?.watertightHatches || []).reduce((s, h) => s + (Number(h.bonusPoints) || 150), 0);
   const cleanHatchBonus = alive ? Math.min(maxHatchBonus, Math.max(0, Math.round(Number(hatchBonusScore) || 0))) : 0;
-  const totalScore = healthScore + speedScore + collectiblesScore + explorationScore + cartographerBonus + cleanHatchBonus;
-  const maxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
+  const cleanPhotoBonus = alive ? Math.min(MAX_PHOTO_BONUS, Math.max(0, Math.round(Number(photoBonusScore) || 0))) : 0;
+  const totalScore = healthScore + speedScore + collectiblesScore + explorationScore + cartographerBonus + cleanHatchBonus + cleanPhotoBonus;
+  const maxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus + MAX_PHOTO_BONUS;
   const rank = assignScoreRank(totalScore, alive, maxPossible);
 
   return {
@@ -172,6 +176,7 @@ export function computeDiverScoreSummary({
     explorationScore,
     cartographerBonus,
     hatchBonusScore: cleanHatchBonus,
+    photoBonusScore: cleanPhotoBonus,
     healthScore,
     speedScore,
     totalScore,
@@ -254,6 +259,8 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     localSummary.collectiblesScore +
     localSummary.explorationScore +
     localSummary.cartographerBonus +
+    (localSummary.hatchBonusScore || 0) +
+    (localSummary.photoBonusScore || 0) +
     rescueBonus +
     teamSurvivalBonus;
   const teamScore = Math.min(teamMaxPossible, rawTeamScore);
@@ -280,6 +287,8 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     exploredPct: localSummary.exploredPct,
     explorationScore: localSummary.explorationScore,
     cartographerBonus: localSummary.cartographerBonus,
+    hatchBonusScore: localSummary.hatchBonusScore || 0,
+    photoBonusScore: localSummary.photoBonusScore || 0,
     rescueBonus,
     teamSurvivalBonus,
     teamScore,

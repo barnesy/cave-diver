@@ -1422,6 +1422,7 @@ export class CaveRenderer {
     wreckState = null,
     ghostPose = null,
     sonarPulse = null,
+    cameraFlash = null,
     difficulty = 'standard',
     mutatorId = '',
     timeSec,
@@ -1670,6 +1671,9 @@ export class CaveRenderer {
     }
     if (sonarPulse) {
       this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (cameraFlash && typeof this._drawCameraFlash === 'function') {
+      this._drawCameraFlash(ctx, cameraFlash, toScreenX, toScreenY, scale);
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -7439,6 +7443,75 @@ export class CaveRenderer {
       ctx.lineTo(ax + dirX * (finLen * 0.62), ay + dirY * (finLen * 0.62));
       ctx.stroke();
     }
+  }
+
+  _drawCameraFlash(ctx, flash, toScreenX, toScreenY, scale) {
+    if (!flash || flash.ageSec >= flash.durationSec) return;
+    const t = Math.max(0, Math.min(1, flash.ageSec / flash.durationSec));
+    const sx = toScreenX(flash.x);
+    const sy = toScreenY(flash.y);
+    const ang = Number.isFinite(flash.angle) ? flash.angle : 0;
+
+    ctx.save();
+    // 1. Intense twin-strobe flash burst cone (fades sharply in first 0.36s)
+    if (t < 0.52) {
+      const flashAlpha = Math.pow(1 - t / 0.52, 1.8);
+      const rPx = (10.5 + t * 5.0) * scale;
+      ctx.globalCompositeOperation = 'screen';
+      const grad = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, rPx);
+      grad.addColorStop(0, `rgba(255, 255, 255, ${(0.92 * flashAlpha).toFixed(3)})`);
+      grad.addColorStop(0.32, `rgba(224, 242, 254, ${(0.52 * flashAlpha).toFixed(3)})`);
+      grad.addColorStop(0.75, `rgba(56, 189, 248, ${(0.18 * flashAlpha).toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.arc(sx, sy, rPx, ang - 0.86, ang + 0.86);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 2. Crisp viewfinder focus brackets around the captured subject
+    if (flash.subject && Number.isFinite(flash.targetX) && Number.isFinite(flash.targetY)) {
+      const tx = toScreenX(flash.targetX);
+      const ty = toScreenY(flash.targetY);
+      const boxAlpha = t < 0.2 ? t / 0.2 : Math.max(0, 1 - (t - 0.2) / 0.8);
+      const half = Math.max(18, 1.15 * scale) * (1.15 - 0.15 * Math.min(1, t * 3));
+      const corner = Math.max(6, half * 0.36);
+      const col = flash.isNewInGuide ? '#fde047' : '#38bdf8';
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = boxAlpha;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      // Top-left
+      ctx.moveTo(tx - half, ty - half + corner);
+      ctx.lineTo(tx - half, ty - half);
+      ctx.lineTo(tx - half + corner, ty - half);
+      // Top-right
+      ctx.moveTo(tx + half - corner, ty - half);
+      ctx.lineTo(tx + half, ty - half);
+      ctx.lineTo(tx + half, ty - half + corner);
+      // Bottom-right
+      ctx.moveTo(tx + half, ty + half - corner);
+      ctx.lineTo(tx + half, ty + half);
+      ctx.lineTo(tx + half - corner, ty + half);
+      // Bottom-left
+      ctx.moveTo(tx - half + corner, ty + half);
+      ctx.lineTo(tx - half, ty + half);
+      ctx.lineTo(tx - half, ty + half - corner);
+      ctx.stroke();
+
+      const starStr = '★'.repeat(Math.max(1, Math.min(3, flash.stars || 1)));
+      const tag = flash.isNewInGuide ? `NEW · ${starStr}` : starStr;
+      ctx.font = 'bold 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = col;
+      ctx.fillText(tag, tx, ty - half - 4);
+    }
+    ctx.restore();
   }
 
   _drawSonarPulse(ctx, pulse, toScreenX, toScreenY, scale, timeSec) {

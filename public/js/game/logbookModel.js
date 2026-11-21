@@ -26,6 +26,7 @@ export function createEmptyLogbook() {
       clearedDates: [],
       records: {},
     },
+    fieldGuide: {}, // entryId -> { count, bestStars, firstSiteId, bestSiteName, bestDepthM }
   };
 }
 
@@ -73,6 +74,18 @@ function normalizeBook(raw) {
           timeSec: Math.max(0, Number(r.timeSec) || 0),
         };
       }
+    }
+  }
+  if (raw.fieldGuide && typeof raw.fieldGuide === 'object') {
+    for (const [eid, rec] of Object.entries(raw.fieldGuide)) {
+      if (!rec || typeof rec !== 'object') continue;
+      base.fieldGuide[eid] = {
+        count: Math.max(1, Math.round(Number(rec.count) || 1)),
+        bestStars: Math.max(1, Math.min(3, Math.round(Number(rec.bestStars) || 1))),
+        firstSiteId: typeof rec.firstSiteId === 'string' ? rec.firstSiteId : '',
+        bestSiteName: typeof rec.bestSiteName === 'string' ? rec.bestSiteName : '',
+        bestDepthM: Math.max(0, Math.round((Number(rec.bestDepthM) || 0) * 10) / 10),
+      };
     }
   }
   return base;
@@ -478,4 +491,243 @@ export function getDailyStatus(rawBook, dateOrKey = new Date()) {
     totalClears: book.daily.totalClears,
     todayRecord: book.daily.records[dateKey] || null,
   };
+}
+
+/**
+ * Expedition Marine Life & Underwater Landmark Field Guide (v110).
+ * Every entry maps to real live fauna, formations, or geothermal landmarks across the 30 dive sites.
+ */
+export const FIELD_GUIDE_CATALOG = [
+  {
+    id: 'shark',
+    icon: '🦈',
+    name: 'Pelagic Reef Shark',
+    latin: 'Carcharhinus perezi',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Open ocean blue water above deep shipwrecks',
+    bio: 'Patrols artificial reef superstructures along warm Gulf, Aegean, and Red Sea wrecks.',
+  },
+  {
+    id: 'grouper',
+    icon: '🐟',
+    name: 'Giant Goliath Grouper',
+    latin: 'Epinephelus itajara',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Dark cavernous interior holds of sunken ships',
+    bio: 'Territorial 300 kg ambush predator that hovers silently inside flooded engine rooms and cargo bays.',
+  },
+  {
+    id: 'laketrout',
+    icon: '🐟',
+    name: 'Abyssal Lake Trout',
+    latin: 'Salvelinus namaycush',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Frigid freshwater hulls (SS Edmund Fitzgerald)',
+    bio: 'Cold-water Great Lakes apex fish thriving in 4°C lightless freshwater depths.',
+  },
+  {
+    id: 'jellyfish',
+    icon: '🪼',
+    name: 'Pelagic Moon Jelly',
+    latin: 'Aurelia aurita',
+    category: 'wildlife',
+    rarity: 'uncommon',
+    points: 90,
+    habitat: 'Mid-water shot lines on ocean shipwrecks',
+    bio: 'Translucent bioluminescent medusae drifting gracefully past decompression stops.',
+  },
+  {
+    id: 'barracuda',
+    icon: '🐠',
+    name: 'Great Barracuda',
+    latin: 'Sphyraena barracuda',
+    category: 'wildlife',
+    rarity: 'uncommon',
+    points: 90,
+    habitat: 'Upper wreck decks & reef baitball edges',
+    bio: 'Silver torpedo hunter hovering motionless near dive-boat shot lines.',
+  },
+  {
+    id: 'slider',
+    icon: '🐢',
+    name: 'Cenote Slider Turtle',
+    latin: 'Trachemys venusta',
+    category: 'wildlife',
+    rarity: 'uncommon',
+    points: 90,
+    habitat: 'Sunlit karst entrance pools & springs',
+    bio: 'Freshwater turtle gliding through shafts of surface daylight above limestone sinkholes.',
+  },
+  {
+    id: 'cavefish',
+    icon: '👻',
+    name: 'Dama Blanca Cavefish',
+    latin: 'Typhliasina pearsei',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Deep lightless cave galleries (≥32m)',
+    bio: 'Eyeless translucent troglobite endemic to flooded karst caverns, navigating via lateral-line vibrations.',
+  },
+  {
+    id: 'remipede',
+    icon: '🦐',
+    name: 'Blind Cave Remipede',
+    latin: 'Xibalbanus tulumensis',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Saline halocline cave conduits (22–60m)',
+    bio: 'Venomous living-fossil crustacean that swims upside-down through oxygen-poor halocline tunnels.',
+  },
+  {
+    id: 'prawn',
+    icon: '🦐',
+    name: 'Ghost Cave Prawn',
+    latin: 'Creaseria morleyi',
+    category: 'wildlife',
+    rarity: 'uncommon',
+    points: 90,
+    habitat: 'Phreatic limestone passages & shelves',
+    bio: 'Albino cave shrimp with elongated antennae sweeping silty ledges for organic detritus.',
+  },
+  {
+    id: 'catfish',
+    icon: '🐟',
+    name: 'Pale Twilight Catfish',
+    latin: 'Rhamdia guatemalensis',
+    category: 'wildlife',
+    rarity: 'common',
+    points: 60,
+    habitat: 'Cavern twilight zones (10–24m) & freshwater wrecks',
+    bio: 'Whiskered cavern-dweller sheltering beneath overhanging rock ledges at the edge of darkness.',
+  },
+  {
+    id: 'cichlid',
+    icon: '🐠',
+    name: 'Cenote Cichlid & Molly',
+    latin: 'Mayaheros urophthalmus',
+    category: 'wildlife',
+    rarity: 'common',
+    points: 60,
+    habitat: 'Sunlit surface basins & cenote mouths',
+    bio: 'Vibrant shoaling fish darting among submerged roots and emerald sunbeams.',
+  },
+  {
+    id: 'seafan',
+    icon: '🪸',
+    name: 'Gorgonian Sea Fan',
+    latin: 'Gorgonia ventalina',
+    category: 'landmark',
+    rarity: 'common',
+    points: 60,
+    habitat: 'Current-swept upper steel decks on ocean wrecks',
+    bio: 'Delicate branching soft-coral colonies turning sunken steel into living artificial reefs.',
+  },
+  {
+    id: 'rusticle',
+    icon: '🔩',
+    name: 'Deep Hull Rusticles',
+    latin: 'Halomonas titanicae',
+    category: 'landmark',
+    rarity: 'common',
+    points: 60,
+    habitat: 'Flooded steel overheads on historic shipwrecks',
+    bio: 'Fragile iron-oxide stalactites spun by iron-eating bacteria — diver exhaust bubbles rain rust snow.',
+  },
+  {
+    id: 'sodastraw',
+    icon: '🪨',
+    name: 'Calcite Soda Straws',
+    latin: 'Submerged Speleothems',
+    category: 'landmark',
+    rarity: 'common',
+    points: 60,
+    habitat: 'Flooded limestone cavern ceilings (≥11m)',
+    bio: 'Hollow dripstone needles formed in air during Ice Age low-sea-level epochs before caves flooded.',
+  },
+  {
+    id: 'crystal',
+    icon: '💎',
+    name: 'Phreatic Calcite Crystal',
+    latin: 'Dogtooth Spar Cluster',
+    category: 'landmark',
+    rarity: 'uncommon',
+    points: 90,
+    habitat: 'Deep mineral-saturated karst & glacial walls (≥26m)',
+    bio: 'Razor-faceted calcite and quartz prisms glittering brilliantly under high-lumen primary torches.',
+  },
+  {
+    id: 'hydrovent',
+    icon: '🌋',
+    name: 'Hydrothermal Vent Chimney',
+    latin: 'Geothermal Mineral Plume',
+    category: 'landmark',
+    rarity: 'epic',
+    points: 180,
+    habitat: 'Icelandic tectonic rifts & subglacial fissures',
+    bio: 'Towering superheated mineral chimneys venting buoyant geothermal updrafts into freezing abyssal waters.',
+  },
+];
+
+const FIELD_GUIDE_BY_ID = new Map(FIELD_GUIDE_CATALOG.map((e) => [e.id, e]));
+
+export function getFieldGuideEntry(entryId) {
+  return FIELD_GUIDE_BY_ID.get(entryId) || null;
+}
+
+export function recordFieldGuidePhoto(rawBook, { entryId, stars = 1, siteId = '', siteName = '', depthM = 0 } = {}) {
+  const book = normalizeBook(rawBook);
+  const entry = getFieldGuideEntry(entryId);
+  if (!entry) return { book, isNew: false, upgradedStars: false };
+  const cleanStars = Math.max(1, Math.min(3, Math.round(Number(stars) || 1)));
+  const cleanDepth = Math.max(0, Math.round((Number(depthM) || 0) * 10) / 10);
+  const prev = book.fieldGuide[entry.id];
+  if (!prev) {
+    book.fieldGuide[entry.id] = {
+      count: 1,
+      bestStars: cleanStars,
+      firstSiteId: String(siteId || ''),
+      bestSiteName: String(siteName || ''),
+      bestDepthM: cleanDepth,
+    };
+    return { book, isNew: true, upgradedStars: false };
+  }
+  prev.count += 1;
+  let upgradedStars = false;
+  if (cleanStars > prev.bestStars) {
+    prev.bestStars = cleanStars;
+    upgradedStars = true;
+    if (siteName) prev.bestSiteName = String(siteName);
+  }
+  if (cleanDepth > prev.bestDepthM) {
+    prev.bestDepthM = cleanDepth;
+  }
+  return { book, isNew: false, upgradedStars };
+}
+
+export function getFieldGuideStats(rawBook) {
+  const book = normalizeBook(rawBook);
+  const entries = FIELD_GUIDE_CATALOG.map((entry) => {
+    const rec = book.fieldGuide[entry.id] || null;
+    return {
+      ...entry,
+      discovered: Boolean(rec),
+      count: rec?.count || 0,
+      bestStars: rec?.bestStars || 0,
+      firstSiteId: rec?.firstSiteId || '',
+      bestSiteName: rec?.bestSiteName || '',
+      bestDepthM: rec?.bestDepthM || 0,
+    };
+  });
+  const discoveredCount = entries.filter((e) => e.discovered).length;
+  const totalCount = entries.length;
+  const pct = totalCount > 0 ? Math.round((discoveredCount / totalCount) * 100) : 0;
+  return { discoveredCount, totalCount, pct, entries };
 }

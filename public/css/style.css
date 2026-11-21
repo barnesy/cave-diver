@@ -5030,3 +5030,150 @@ button.mode-badge:hover {
     height: 76px;
   }
 }
+
+/* Underwater Strobe Camera & Marine Field Guide (v110) */
+.hud-photo-card {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(6, 24, 48, 0.94), rgba(2, 12, 26, 0.96));
+  border: 1.5px solid rgba(56, 189, 248, 0.65);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.58), 0 0 18px rgba(56, 189, 248, 0.25);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  max-width: min(92vw, 340px);
+  pointer-events: none;
+  animation: photoCardPop 0.24s ease-out;
+}
+.hud-photo-card.is-new {
+  border-color: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.62), 0 0 22px rgba(250, 204, 21, 0.32);
+}
+.hud-photo-card[hidden] {
+  display: none !important;
+}
+@keyframes photoCardPop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.hud-photo-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.hud-photo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hud-photo-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-photo-top strong {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-photo-badge {
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.22);
+  border: 1px solid rgba(250, 204, 21, 0.65);
+  color: #fef08a;
+  flex-shrink: 0;
+}
+.hud-photo-sub {
+  font-size: 0.62rem;
+  color: #bae6fd;
+}
+
+.logbook-field-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.fg-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(10, 26, 48, 0.92), rgba(4, 13, 28, 0.96));
+  border: 1px solid rgba(56, 189, 248, 0.34);
+}
+.fg-card.rarity-rare {
+  border-color: rgba(192, 132, 252, 0.48);
+}
+.fg-card.rarity-epic {
+  border-color: rgba(250, 204, 21, 0.6);
+  background: linear-gradient(145deg, rgba(56, 32, 8, 0.46), rgba(6, 15, 30, 0.96));
+}
+.fg-card.locked {
+  opacity: 0.62;
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(6, 14, 28, 0.72);
+}
+.fg-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.fg-card.locked .fg-icon {
+  filter: grayscale(1) brightness(0.65);
+}
+.fg-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.fg-head strong {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fg-stars {
+  font-size: 0.62rem;
+  color: #fde047;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.fg-latin {
+  font-size: 0.6rem;
+  font-style: italic;
+  color: #7dd3fc;
+}
+.fg-meta {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+@media (max-width: 540px) {
+  .logbook-field-guide-grid {
+    grid-template-columns: 1fr;
+  }
+}

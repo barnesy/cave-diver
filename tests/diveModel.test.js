@@ -29,6 +29,10 @@ import {
   getDailyMutatorById,
   recordDailyClear,
   getDailyStatus,
+  FIELD_GUIDE_CATALOG,
+  getFieldGuideEntry,
+  recordFieldGuidePhoto,
+  getFieldGuideStats,
 } from '../public/js/game/logbookModel.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
@@ -65,6 +69,7 @@ import {
   triggerWreckAction,
   toggleDpvScooter,
   triggerSonarPing,
+  captureCameraPhoto,
   computeSurgeWave,
   sampleGhostPose,
   applyPeerWreckAction,
@@ -3418,4 +3423,99 @@ test('v109 Live Sonar Cave & Wreck Cartography Minimap: gating, viewports, fog-o
   assert.ok(html.includes('id="hud-minimap-canvas"'), 'Missing HUD minimap canvas');
   assert.ok(html.includes('id="hud-minimap-pct"'), 'Missing HUD minimap exploration readout');
   assert.ok(html.includes('id="hud-minimap-zoom"'), 'Missing HUD minimap zoom badge');
+});
+
+test('v110 Underwater Strobe Camera & Marine Field Guide: catalog, subject capture, stars, scoring, flash & Logbook UI', async () => {
+  // 1. 16-entry Field Guide catalog & Logbook discovery/upgrade persistence
+  assert.equal(FIELD_GUIDE_CATALOG.length, 16);
+  assert.ok(getFieldGuideEntry('shark') && getFieldGuideEntry('hydrovent') && getFieldGuideEntry('remipede'));
+
+  let book = createEmptyLogbook();
+  assert.equal(getFieldGuideStats(book).discoveredCount, 0);
+  const rec1 = recordFieldGuidePhoto(book, {
+    entryId: 'shark',
+    stars: 2,
+    siteId: 'ss-thistlegorm-wwii-wreck',
+    siteName: 'SS Thistlegorm',
+    depthM: 24.5,
+  });
+  assert.equal(rec1.isNew, true);
+  assert.equal(rec1.upgradedStars, false);
+  book = rec1.book;
+  const rec2 = recordFieldGuidePhoto(book, {
+    entryId: 'shark',
+    stars: 3,
+    siteId: 'rms-britannic-wreck',
+    siteName: 'HMHS Britannic',
+    depthM: 48.2,
+  });
+  assert.equal(rec2.isNew, false);
+  assert.equal(rec2.upgradedStars, true);
+  book = rec2.book;
+  const fg = getFieldGuideStats(book);
+  assert.equal(fg.discoveredCount, 1);
+  assert.equal(book.fieldGuide.shark.count, 2);
+  assert.equal(book.fieldGuide.shark.bestStars, 3);
+  assert.equal(book.fieldGuide.shark.bestDepthM, 48.2);
+
+  // 2. Strobe camera captures live marine creature in cone, enforces cooldown & caps photoBonusScore at 300
+  const sess = createDiveSession(LEVEL_1);
+  const eco = createMarineEcosystem(LEVEL_1);
+  const turtle = eco.turtles[0] || eco.fish[0];
+  assert.ok(turtle, 'Level 1 ecosystem should contain sunlit fauna');
+  // Position diver cleanly 3.5m left of creature facing directly at it
+  sess.diver.x = turtle.x - 3.2;
+  sess.diver.y = turtle.y;
+  sess.diver.angle = 0;
+  sess.diver.torchAngle = 0;
+  sess.localSiltDensity = 0.05;
+
+  const snap = captureCameraPhoto(sess, eco, { knownIds: new Set() });
+  assert.equal(snap.ok, true);
+  assert.ok(snap.subject, 'Camera must detect visible wildlife in frame');
+  assert.equal(snap.isNewInGuide, true);
+  assert.ok(snap.stars >= 2 && snap.stars <= 3, `Expected 2-3 star framing, got ${snap.stars}`);
+  assert.ok(snap.points > 0 && sess.camera.photoBonusScore === snap.points);
+  assert.ok(sess.camera.activeFlash && sess.camera.activeFlash.subject.id === snap.subject.id);
+
+  // Cooldown blocks immediate rapid re-fire; stepping 1.4s recharges strobe & clears flash
+  const blocked = captureCameraPhoto(sess, eco);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, 'cooldown');
+  for (let i = 0; i < 28; i++) stepDiveSession(sess, { x: 0, y: 0 }, 0.05);
+  assert.equal(sess.camera.cooldownSec, 0);
+  assert.equal(sess.camera.activeFlash, null);
+
+  // Scoring integrates photoBonusScore cleanly & stays within computeLevelMaxScore ceiling
+  const scoreWithPhoto = computeDiverScoreSummary({
+    name: 'Photographer',
+    level: LEVEL_1,
+    diveState: sess.diveState,
+    checkpointsHit: new Set(LEVEL_1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(LEVEL_1.collectibles.map((c) => c.id)),
+    exploredCount: 100,
+    totalExploreCells: 100,
+    diveTimeSec: 100,
+    photoBonusScore: 999, // clamped to MAX_PHOTO_BONUS (300)
+  });
+  assert.equal(scoreWithPhoto.photoBonusScore, 300);
+  assert.ok(scoreWithPhoto.totalScore <= computeLevelMaxScore(LEVEL_1.id, false));
+
+  // 3. Renderer draws strobe flash & viewfinder focus brackets cleanly + HTML hooks exist
+  const noopCtx = new Proxy({
+    createRadialGradient: () => ({ addColorStop() {} }),
+  }, { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true });
+  CaveRenderer.prototype._drawCameraFlash.call(
+    {},
+    noopCtx,
+    { ...snap.flash, ageSec: 0.12 },
+    (x) => 400 + x * 20,
+    (y) => 300 + y * 20,
+    20
+  );
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-camera"'), 'Missing HUD camera button');
+  assert.ok(html.includes('id="hud-photo-card"'), 'Missing HUD photo discovery card');
+  assert.ok(html.includes('id="logbook-field-guide-grid"'), 'Missing Logbook Field Guide gallery');
 });

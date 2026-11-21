@@ -695,4 +695,27 @@ export class DiveAudio {
     this.playTone(920, 0.035, 'sine', 0.018, 0);
     this.playTone(1340, 0.025, 'triangle', 0.012, 0.03);
   }
+
+  /**
+   * Underwater twin-strobe camera mechanical shutter click + optional subject/discovery chime.
+   */
+  playCameraShutter(captured = false, isNew = false) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    // Crisp dual-blade shutter snap
+    this.playTone(2100, 0.022, 'square', 0.045, 0);
+    this.playTone(980, 0.03, 'triangle', 0.055, 0.024);
+    if (captured) {
+      if (isNew) {
+        // Bright 3-note Field Guide discovery fanfare
+        this.playTone(784, 0.09, 'sine', 0.055, 0.07);
+        this.playTone(1046.5, 0.1, 'sine', 0.06, 0.14);
+        this.playTone(1318.5, 0.16, 'triangle', 0.065, 0.22);
+      } else {
+        this.playTone(880, 0.075, 'sine', 0.042, 0.07);
+        this.playTone(1174.6, 0.11, 'sine', 0.045, 0.13);
+      }
+    }
+    this.vibrate?.(captured ? 22 : 12);
+  }
 }
