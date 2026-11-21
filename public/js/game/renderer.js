@@ -281,6 +281,7 @@ export class CaveRenderer {
       };
       window.addEventListener('resize', this._onWindowResize, { passive: true });
       window.addEventListener('orientationchange', this._onWindowResize, { passive: true });
+      window.visualViewport?.addEventListener?.('resize', this._onWindowResize, { passive: true });
     }
 
     if (!deferBuild) {
@@ -1429,6 +1430,7 @@ export class CaveRenderer {
     sonarPulse = null,
     cameraFlash = null,
     encounters = null,
+    endedState = '',
     difficulty = 'standard',
     mutatorId = '',
     timeSec,
@@ -1709,14 +1711,16 @@ export class CaveRenderer {
           : difficulty === 'hardcore'
             ? false
             : !this.level.hideWaypointCompass;
-    if (showCompass) {
+    if (showCompass && !endedState) {
       this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
     }
     this._drawPeerEdgeIndicators(ctx, cw, ch, diver, peerList, toScreenX, toScreenY, timeSec);
     if (celebrationParticles && celebrationParticles.length > 0) {
       this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
     }
-    this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
+    if (!endedState) {
+      this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
+    }
 
     // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS — skipped while spectating a buddy)
     if (!isSpectating) {

@@ -22,10 +22,12 @@ html, body {
   width: 100%;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg-deep);
   color: var(--text-main);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   touch-action: none;
+  -webkit-text-size-adjust: 100%;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -36,6 +38,7 @@ html, body {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
 }
 
 /* Toast Banner (sits cleanly above bottom dive console & wreck action pill) */
@@ -1085,6 +1088,16 @@ html, body {
   inset: 0;
   z-index: 20;
   pointer-events: none;
+  touch-action: none;
+}
+.hud-layer * {
+  touch-action: none;
+}
+.hud-layer.hud-team-hold #touch-stick,
+.hud-layer.hud-team-hold #torch-stick {
+  opacity: 0.22;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
 }
 
 /* Unified Single-Strip Top Bar + Sub-bar Callsign Pill */
@@ -1969,6 +1982,7 @@ html, body {
   width: 96px;
   height: 96px;
   pointer-events: auto;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2874,15 +2888,14 @@ select:focus-visible {
   background: rgba(14, 165, 233, 0.35);
 }
 
-/* Co-op Surfacing & Spectate Sync Banner */
+/* Co-op Surfacing & Spectate Sync Banner (stacked directly below .hud-top-bar inside .hud-top-stack) */
 .coop-wait-banner {
-  position: fixed;
-  top: max(68px, calc(env(safe-area-inset-top) + 60px));
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(94vw, 470px);
-  background: rgba(8, 17, 30, 0.95);
-  border: 1px solid rgba(74, 222, 128, 0.45);
+  position: relative;
+  align-self: center;
+  width: min(100%, 490px);
+  margin-top: 2px;
+  background: rgba(6, 17, 30, 0.96);
+  border: 1.5px solid rgba(74, 222, 128, 0.72);
   border-radius: 14px;
   padding: 9px 12px;
   display: flex;
@@ -2890,11 +2903,13 @@ select:focus-visible {
   justify-content: space-between;
   gap: 10px;
   pointer-events: auto;
-  z-index: 30;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  z-index: 50;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.58), 0 0 18px rgba(74, 222, 128, 0.22);
 }
 .coop-wait-banner.down {
-  border-color: rgba(248, 113, 113, 0.55);
+  border-color: rgba(248, 113, 113, 0.75);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.58), 0 0 18px rgba(248, 113, 113, 0.22);
 }
 .coop-wait-info {
   display: flex;
@@ -2938,6 +2953,7 @@ select:focus-visible {
     justify-content: flex-start;
     max-width: calc(100vw - 16px);
     overflow-x: auto;
+    touch-action: pan-x;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -2951,7 +2967,8 @@ select:focus-visible {
     flex-shrink: 0;
   }
   .coop-wait-banner {
-    top: max(112px, calc(env(safe-area-inset-top) + 104px));
+    padding: 8px 10px;
+    gap: 8px;
   }
 }
 
@@ -2965,6 +2982,7 @@ select:focus-visible {
     flex-wrap: nowrap;
     max-width: 56vw;
     overflow-x: auto;
+    touch-action: pan-x;
     scrollbar-width: none;
   }
   .coop-comms::-webkit-scrollbar {
@@ -2973,6 +2991,9 @@ select:focus-visible {
   .coop-comms .comm-btn {
     white-space: nowrap;
     flex-shrink: 0;
+  }
+  .coop-wait-banner {
+    padding: 6px 10px;
   }
   .game-toast {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));

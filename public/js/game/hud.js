@@ -921,6 +921,8 @@ export class DiveComputerHUD {
     playerLines = null,
     sonarPulse = null,
     encounters = null,
+    endedState = '',
+    spectatingPeer = false,
     timeSec = 0,
     dt = 0.016,
   }) {
@@ -1117,7 +1119,13 @@ export class DiveComputerHUD {
     }
 
     // Alerts Strip (uses active level mixMap so gasOverrides on L12–L20 display accurately)
-    if (gasCoach && gasCoach.severity === 'danger') {
+    if (endedState === 'surfaced') {
+      setText(this.elAlerts, '✓ SURFACED SAFE · TEAM HOLD');
+      setClass(this.elAlerts, 'dc-alerts ok');
+    } else if (endedState === 'down') {
+      setText(this.elAlerts, '✕ DIVER DOWN · AWAITING RESCUE');
+      setClass(this.elAlerts, 'dc-alerts danger');
+    } else if (gasCoach && gasCoach.severity === 'danger') {
       setText(this.elAlerts, gasCoach.title);
       setClass(this.elAlerts, 'dc-alerts danger');
     } else if (diveState.warnings.length > 0) {
@@ -1160,7 +1168,25 @@ export class DiveComputerHUD {
           : isProbe ? ' · 🛰 PROBE' : ' · 🛟 BODY'
       : '';
     let objectiveHtml = '';
-    if (gasCoach && (gasCoach.severity === 'danger' || !ascentStep)) {
+    if (endedState === 'surfaced') {
+      objectiveHtml = `
+        <div class="obj-top-row">
+          <span class="obj-count">TEAM HOLD · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+          <span class="obj-gas ok">✓ SAFE</span>
+        </div>
+        <div class="obj-action move">✓ SURFACED SAFE · WAITING FOR CREW</div>
+        <span class="obj-hint">${spectatingPeer ? 'Spectating crew below · Tap Finish Now to debrief' : 'Tap Watch Buddy below to spectate or Finish Now to debrief'}</span>
+      `;
+    } else if (endedState === 'down') {
+      objectiveHtml = `
+        <div class="obj-top-row">
+          <span class="obj-count">DIVER DOWN · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
+          <span class="obj-gas switch">RESCUE</span>
+        </div>
+        <div class="obj-action danger">✕ DIVER DOWN · SPECTATING CREW</div>
+        <span class="obj-hint">A buddy can tow you to surface, or tap Finish Now below</span>
+      `;
+    } else if (gasCoach && (gasCoach.severity === 'danger' || !ascentStep)) {
       const cls = gasCoach.severity === 'danger' ? 'danger' : 'stop';
       const icon = gasCoach.severity === 'danger' ? '⛔' : '■';
       objectiveHtml = `

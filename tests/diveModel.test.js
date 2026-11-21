@@ -3675,3 +3675,94 @@ test('v112 Dynamic Underwater Encounters: pelagic whale-shark/manta flybys, shif
     timeSec: 5.0,
   });
 });
+
+test('v113 Co-op Team Hold visibility, stale exit prompt clearing & mobile pinch-zoom lock', async () => {
+  const fs = await import('node:fs');
+  const { DiveComputerHUD } = await import('../public/js/game/hud.js');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const mainJs = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Mobile pinch/double-tap zoom lock in viewport meta, CSS & JS gesture guards
+  assert.match(html, /<meta\s+name="viewport"[^>]*maximum-scale=1\.0[^>]*user-scalable=no/i, 'Viewport meta must disable accidental pinch-zoom');
+  assert.match(css, /\.hud-layer\s*\{[\s\S]*?touch-action:\s*none;/, 'HUD layer must lock touch-action: none');
+  assert.match(css, /\.touch-stick\s*\{[\s\S]*?touch-action:\s*none;/, 'Swim stick must explicitly lock touch-action: none');
+  assert.ok(mainJs.includes("document.addEventListener('gesturestart'"), 'main.js must block Safari pinch gesturestart');
+  assert.ok(mainJs.includes('e.touches && e.touches.length > 1'), 'main.js must block multi-touch pinch touchmove');
+
+  // 2. #coop-wait-banner must live inside .hud-top-stack as a relative flex item above z-index 40 (never buried under .hud-top-bar)
+  const topStackStart = html.indexOf('<div class="hud-top-stack">');
+  const coopBannerIdx = html.indexOf('id="coop-wait-banner"');
+  const coopCommsIdx = html.indexOf('id="coop-comms"');
+  assert.ok(topStackStart > 0 && coopBannerIdx > topStackStart && coopBannerIdx < coopCommsIdx, '#coop-wait-banner must be nested inside .hud-top-stack');
+  assert.match(css, /\.coop-wait-banner\s*\{[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*50;/, '.coop-wait-banner must stack cleanly with position: relative and z-index: 50');
+
+  // 3. DiveComputerHUD replaces stale NOW MOVE TO SURFACE EXIT prompts during Co-op Team Hold ('surfaced' / 'down')
+  const domMap = new Map();
+  const makeEl = () => ({
+    textContent: '',
+    innerHTML: '',
+    className: '',
+    hidden: false,
+    style: { setProperty() {} },
+    dataset: {},
+    classList: { toggle() {}, add() {}, remove() {} },
+    addEventListener() {},
+    appendChild() {},
+    querySelector: () => makeEl(),
+    querySelectorAll: () => [],
+  });
+  const prevDoc = globalThis.document;
+  globalThis.document = {
+    getElementById: (id) => {
+      if (!domMap.has(id)) domMap.set(id, makeEl());
+      return domMap.get(id);
+    },
+    createElement: () => makeEl(),
+  };
+  try {
+    const hud = new DiveComputerHUD({ onGasSelect: () => {} });
+    const s = createDiveSession(LEVEL_1);
+    for (const cp of LEVEL_1.checkpoints) s.checkpointsHit.add(cp.id);
+    s.diver.x = LEVEL_1.exitZone.x;
+    s.diver.y = 1.2;
+    s.diveState.depthM = 1.2;
+    s.diveState.ceilingM = 0;
+
+    hud.update({
+      diveState: s.diveState,
+      diver: s.diver,
+      nextCheckpoint: null,
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: s.checkpointsHit,
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      ascentConfig: s.ascentConfig,
+      endedState: 'surfaced',
+      spectatingPeer: false,
+      minimapVisible: false,
+    });
+    assert.ok(domMap.get('dc-alerts').textContent.includes('SURFACED SAFE'), 'Alerts strip must show SURFACED SAFE in team hold');
+    assert.ok(!domMap.get('dc-alerts').textContent.includes('NOW MOVE TO SURFACE EXIT'), 'Alerts strip must not show stale exit prompt');
+    assert.ok(domMap.get('dc-objective').innerHTML.includes('SURFACED SAFE'), 'Objective bar must show SURFACED SAFE in team hold');
+    assert.ok(!domMap.get('dc-objective').innerHTML.includes('NOW MOVE TO SURFACE EXIT'), 'Objective bar must not show stale exit prompt');
+
+    hud.update({
+      diveState: s.diveState,
+      diver: s.diver,
+      nextCheckpoint: null,
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: s.checkpointsHit,
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      ascentConfig: s.ascentConfig,
+      endedState: 'down',
+      spectatingPeer: true,
+      minimapVisible: false,
+    });
+    assert.ok(domMap.get('dc-alerts').textContent.includes('DIVER DOWN'), 'Alerts strip must show DIVER DOWN when downed in co-op');
+    assert.ok(domMap.get('dc-objective').innerHTML.includes('DIVER DOWN'), 'Objective bar must show DIVER DOWN when downed in co-op');
+  } finally {
+    globalThis.document = prevDoc;
+  }
+});

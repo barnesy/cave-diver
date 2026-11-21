@@ -488,7 +488,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=112" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=113" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2066,6 +2066,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenMenu.classList.remove('menu-submerging');
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
+  screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = false;
   syncWakeLockFn?.();
   if (coopCommsEl) coopCommsEl.hidden = !(multiplayer && lan.getPeers().length > 0);
@@ -2099,6 +2100,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   setHudMenuOpen(false);
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   hideHudPhotoCard();
+  screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -3925,6 +3927,23 @@ function resumeAudioOnGesture() {
 window.addEventListener('pointerdown', resumeAudioOnGesture, { passive: true });
 window.addEventListener('keydown', resumeAudioOnGesture, { passive: true });
 
+// Block accidental iOS/Android pinch-zoom during dual-thumb diving (keeps single-tap clicks & dual-stick pointer events intact)
+const preventPinchGesture = (e) => {
+  e.preventDefault();
+};
+document.addEventListener('gesturestart', preventPinchGesture, { passive: false });
+document.addEventListener('gesturechange', preventPinchGesture, { passive: false });
+document.addEventListener('gestureend', preventPinchGesture, { passive: false });
+document.addEventListener(
+  'touchmove',
+  (e) => {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  },
+  { passive: false }
+);
+
 const btnMute = document.getElementById('btn-mute');
 function syncMuteUi() {
   if (!btnMute) return;
@@ -4005,6 +4024,7 @@ function abortActiveDiveToMenu() {
   if (btnShareGas) btnShareGas.hidden = true;
   syncWreckActionHud(null);
   hideHudPhotoCard();
+  screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -4945,6 +4965,8 @@ function stepSimulation(dt) {
     playerLines: _minimapPlayerLines,
     sonarPulse: session.sonar?.activePulse || null,
     encounters: session.encounters || null,
+    endedState: session.endedState || '',
+    spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,
     dt,
   });
@@ -4984,6 +5006,8 @@ function stepSimulation(dt) {
     // Wait cleanly on surface / spectate while teammates finish or fall
     session.endedState = result.outcome.success ? 'surfaced' : 'down';
     session.surfaced = Boolean(result.outcome.success);
+    input?.resetAll?.();
+    screenHud.classList.add('hud-team-hold');
     audio.resetEnvironmentFilter();
     lan.sendPlayerState(
       buildPlayerStatePayload(session, {
@@ -4997,6 +5021,7 @@ function stepSimulation(dt) {
     if (!result.outcome.success) {
       spectatingPeer = true;
     }
+    const leadPeer = pendingPeers[0];
     if (coopWaitBannerEl) {
       coopWaitBannerEl.hidden = false;
       coopWaitBannerEl.className = `coop-wait-banner ${result.outcome.success ? '' : 'down'}`;
@@ -5005,9 +5030,18 @@ function stepSimulation(dt) {
           ? '✓ SURFACED SAFE · TEAM HOLD'
           : '✕ DIVER DOWN · SPECTATING CREW';
       }
+      if (coopWaitDetailEl && leadPeer) {
+        coopWaitDetailEl.textContent = `Waiting for ${leadPeer.name || 'Buddy'} (${(leadPeer.depthM ?? 0).toFixed(1)}m · ${Math.round(leadPeer.activeBar ?? 200)} bar)`;
+      }
       if (btnCoopSpectate) {
         btnCoopSpectate.textContent = spectatingPeer ? 'My Diver' : 'Watch Buddy';
       }
+    }
+    if (result.outcome.success) {
+      showToast(
+        `✓ Surfaced safe! Waiting for ${leadPeer?.name || 'your buddy'} — tap Watch Buddy or Finish Now`,
+        4.2
+      );
     }
   } else if (session.endedState && isMultiplayer) {
     const activePeers = peers.filter((p) => p.alive !== false && !p.surfaced);
@@ -5129,6 +5163,7 @@ function frame(nowMs) {
       sonarPulse: session.sonar?.activePulse || null,
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,
+      endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
       timeSec: session.simTimeSec,
