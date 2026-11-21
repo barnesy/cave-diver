@@ -131,6 +131,8 @@ export function createDiveSession(
     encounters: createDynamicEncounters(level),
     bioWake: [],
     _bioWakeAccum: 0,
+    surfaceRipples: [],
+    _rippleAccum: 0,
     buddyPing: null,
     airShareBeams: [],
     peerProfiles: new Map(),
@@ -832,6 +834,56 @@ function stepBioWake(session, dt, peers = null) {
         if (peer && peer.alive !== false && !peer.surfaced) {
           emitFromDiver(peer, 0.85);
         }
+      }
+    }
+  }
+}
+
+/**
+ * Advance & spawn expanding surface meniscus fin-kick & splash ripple rings (v124).
+ */
+export function stepSurfaceRipples(session, dt, peers = null) {
+  if (!session || !Array.isArray(session.surfaceRipples)) return;
+  const ripples = session.surfaceRipples;
+
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.age += dt;
+    const t = r.age / Math.max(0.2, r.life);
+    if (t >= 1) {
+      ripples.splice(i, 1);
+      continue;
+    }
+    r.radius = r.startR + (r.maxR - r.startR) * (1 - Math.pow(1 - t, 2.1));
+  }
+
+  const spawnNearSurface = (d, scale = 1.0) => {
+    if (!d || ripples.length >= 24) return;
+    if (d.y < -0.4 || d.y > 3.6) return;
+    const spd = Math.hypot(d.vx || 0, d.vy || 0);
+    const nearTop = d.y < 1.15;
+    if (spd < 0.35 && !nearTop) return;
+    const depthAtten = Math.max(0.25, 1 - Math.max(0, d.y) / 3.8);
+    const tailOffset = d.y > 0.7 ? -Math.cos(d.angle || 0) * 0.75 : 0;
+    ripples.push({
+      x: d.x + tailOffset + (Math.random() - 0.5) * 0.35,
+      startR: 0.25,
+      radius: 0.25,
+      maxR: (1.8 + Math.min(2.4, spd * 0.65)) * depthAtten * scale,
+      age: 0,
+      life: 1.35 + depthAtten * 0.85,
+      intensity: Math.min(1, (0.45 + spd * 0.22) * depthAtten * scale),
+    });
+  };
+
+  session._rippleAccum = (session._rippleAccum || 0) + dt;
+  if (session._rippleAccum >= 0.26) {
+    session._rippleAccum = 0;
+    spawnNearSurface(session.diver, 1.0);
+    if (Array.isArray(peers)) {
+      for (let i = 0; i < peers.length; i++) {
+        const p = peers[i];
+        if (p && p.alive !== false && !p.surfaced) spawnNearSurface(p, 0.85);
       }
     }
   }
@@ -2926,6 +2978,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   stepBubbles(session, dt, callbacks, exertion);
   stepDynamicEncounters(session, dt, callbacks);
   stepBioWake(session, dt, callbacks.peers);
+  stepSurfaceRipples(session, dt, callbacks.peers);
   if (session.buddyPing) {
     session.buddyPing.timer = Math.max(0, session.buddyPing.timer - dt);
     if (Array.isArray(callbacks.peers) && session.buddyPing.targetId) {

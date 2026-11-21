@@ -1,6 +1,6 @@
 import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './collision.js';
 import { createDiverBody } from './diverBody.js';
-import { castTorchFan, castSunCurtain } from './lighting.js';
+import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -1431,6 +1431,7 @@ export class CaveRenderer {
     cameraFlash = null,
     encounters = null,
     bioWake = null,
+    surfaceRipples = null,
     buddyPing = null,
     airShareBeams = null,
     droppedStages = null,
@@ -1630,6 +1631,12 @@ export class CaveRenderer {
     if (visY0 < 4.5) {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
+    if (visY0 < 3.8 && surfY >= -24 && surfY <= ch + 24) {
+      this._drawSurfaceRipples(ctx, surfaceRipples, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (visY0 < 24 && sunCurtains && sunCurtains.length > 0) {
+      this._drawCausticWebs(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec);
+    }
 
     // 8a-ii. Shipwreck Foreground Hazards OR Cave Interactive Features (Stages, Line Markers, Flows, Siphons & Line Traps)
     if (this.level.isWreck) {
@@ -1675,7 +1682,8 @@ export class CaveRenderer {
       localSiltDensity
     );
 
-    // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint & Collect Bursts
+    // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint, Spectral Optics & Collect Bursts
+    this._drawSpectralAbsorption(ctx, cw, ch, diver, toScreenX, toScreenY, scale);
     if (Array.isArray(this.level.geothermalVents) && this.level.geothermalVents.length > 0) {
       this._drawGeothermalVents(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
     }
@@ -9317,6 +9325,168 @@ export class CaveRenderer {
       // Subtle warm halogen amber lens tint when operating on backup light
       ctx.fillStyle = 'rgba(251, 191, 36, 0.045)';
       ctx.fillRect(0, 0, cw, ch);
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Shimmering animated underwater caustic light webs projected along sunlit shallow floors & wreck decks (v124).
+   * Uses ray-traced sunCurtains hit points so dark overhead cave passages stay authentically shadow-free.
+   */
+  _drawCausticWebs(ctx, sunCurtains, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(sunCurtains) || sunCurtains.length === 0) return;
+    const t = this._reducedMotion ? timeSec * 0.25 : timeSec;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    for (let c = 0; c < sunCurtains.length; c++) {
+      const curtain = sunCurtains[c];
+      const rays = Array.isArray(curtain) ? curtain : curtain?.rays;
+      if (!Array.isArray(rays) || rays.length < 2) continue;
+
+      // Project caustic dance cells along the sunlit floor/deck contour (0.4m .. 22m depth)
+      for (let i = 0; i < rays.length - 1; i++) {
+        const a = rays[i];
+        const b = rays[i + 1];
+        if (!a || !b) continue;
+        if (a.hitWall === false && b.hitWall === false) continue;
+        const midY = (a.yBot + b.yBot) * 0.5;
+        if (midY < 0.35 || midY > 22.5) continue;
+        const depthFade = Math.pow(Math.max(0, 1 - midY / 23.0), 1.35);
+        if (depthFade <= 0.03) continue;
+
+        const ax = toScreenX(a.xBot);
+        const ay = toScreenY(a.yBot);
+        const bx = toScreenX(b.xBot);
+        const by = toScreenY(b.yBot);
+        const segLen = Math.hypot(bx - ax, by - ay);
+        if (segLen < 2 || segLen > scale * 9) continue;
+
+        const wave1 = 0.5 + 0.5 * Math.sin(a.xBot * 1.45 + t * 2.35 + c * 1.3);
+        const wave2 = 0.5 + 0.5 * Math.cos(a.xBot * 2.4 - t * 1.85 + midY * 0.45);
+        const shimmer = (0.35 + 0.65 * wave1 * wave2) * depthFade;
+
+        // Luminous caustic ribbon hugging the rock/deck contour
+        ctx.strokeStyle = `rgba(186, 245, 255, ${(0.22 + shimmer * 0.38).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, (0.09 + shimmer * 0.14) * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+
+        // Interference caustic cell arcs dancing just above the sunlit surface
+        const cx = (ax + bx) * 0.5 + Math.sin(t * 2.1 + i * 1.7) * 0.16 * scale;
+        const cy = (ay + by) * 0.5 - (0.28 + wave1 * 0.35) * scale;
+        const rx = Math.max(4, (0.42 + wave2 * 0.36) * scale);
+        const ry = Math.max(2, rx * 0.34);
+        ctx.strokeStyle = `rgba(224, 252, 255, ${(shimmer * 0.32).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, Math.sin(t * 1.2 + i) * 0.18, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Foreshortened concentric water-surface fin-kick & splash meniscus ripple rings at y = 0 (v124).
+   */
+  _drawSurfaceRipples(ctx, surfaceRipples, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
+    const surfY = toScreenY(0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    // Subtle ambient horizon shimmer along open water surface
+    if (Array.isArray(surfaceRipples) && surfaceRipples.length > 0) {
+      for (let i = 0; i < surfaceRipples.length; i++) {
+        const rp = surfaceRipples[i];
+        if (!rp || rp.x + rp.radius < visX0 - 2 || rp.x - rp.radius > visX1 + 2) continue;
+        const lifeT = Math.max(0, Math.min(1, rp.age / Math.max(0.2, rp.life)));
+        const fade = (1 - lifeT) * (1 - lifeT) * (rp.intensity ?? 0.7);
+        if (fade <= 0.02) continue;
+
+        const sx = toScreenX(rp.x);
+        const rx = Math.max(3, rp.radius * scale);
+        const ry = Math.max(1.2, rx * 0.14);
+
+        // Outer bright meniscus ring
+        ctx.strokeStyle = `rgba(224, 248, 255, ${(fade * 0.68).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.1, (0.045 * (1 - lifeT * 0.5)) * scale);
+        ctx.beginPath();
+        ctx.ellipse(sx, surfY, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner harmonic secondary ripple crest
+        if (rx > 10) {
+          ctx.strokeStyle = `rgba(103, 232, 249, ${(fade * 0.42).toFixed(3)})`;
+          ctx.lineWidth = Math.max(0.9, 0.03 * scale);
+          ctx.beginPath();
+          ctx.ellipse(sx, surfY + 1, rx * 0.64, ry * 0.68, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    } else {
+      // Gentle resting meniscus glints when camera sits near calm surface
+      const t = this._reducedMotion ? timeSec * 0.25 : timeSec;
+      const startX = Math.floor(visX0 / 6) * 6;
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.24)';
+      ctx.lineWidth = 1.2;
+      for (let wx = startX; wx <= visX1; wx += 6) {
+        const sx = toScreenX(wx + Math.sin(t * 0.8 + wx) * 0.6);
+        const w = (0.7 + 0.4 * Math.sin(t * 1.9 + wx * 0.7)) * scale;
+        ctx.beginPath();
+        ctx.moveTo(sx - w, surfY);
+        ctx.lineTo(sx + w, surfY);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Beer-Lambert depth spectral color absorption + warm high-CRI torch color restoration cone (v124).
+   * Below ~6m reds fade into deep cobalt-indigo, while sweeping your torch vividly brings warm hues back.
+   */
+  _drawSpectralAbsorption(ctx, cw, ch, diver, toScreenX, toScreenY, scale) {
+    if (!diver) return;
+    const spec = computeSpectralAbsorption(diver.y);
+    if (spec.tintAlpha <= 0.005) return;
+
+    ctx.save();
+    // 1. Subtle deep-water cobalt spectral wash (reduces red/warm ambient saturation cleanly at depth)
+    ctx.fillStyle = `rgba(4, 32, 74, ${spec.tintAlpha.toFixed(3)})`;
+    ctx.fillRect(0, 0, cw, ch);
+
+    // 2. High-CRI Torch Spectral Restoration Cone: restores warm natural reds/oranges inside the beam!
+    if (diver.torchOn !== false && spec.warmRestoreStrength > 0.08) {
+      const strobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
+      const beamAlpha = spec.warmRestoreStrength * (0.11 + (diver.backupTorchActive ? 0.05 : 0)) * (0.25 + 0.75 * strobe);
+      if (beamAlpha > 0.01) {
+        const ang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle || 0;
+        const ox = toScreenX(diver.x + Math.cos(ang) * 0.45);
+        const oy = toScreenY(diver.y + Math.sin(ang) * 0.45);
+        const reachPx = Math.max(40, (diver.backupTorchActive ? 9.5 : 13.0) * scale * (0.35 + 0.65 * strobe));
+        const tx = ox + Math.cos(ang) * reachPx * 0.48;
+        const ty = oy + Math.sin(ang) * reachPx * 0.48;
+        const g = ctx.createRadialGradient(ox, oy, 4, tx, ty, reachPx * 0.62);
+        const warmRgb = diver.backupTorchActive ? '255, 198, 120' : '255, 224, 182';
+        g.addColorStop(0, `rgba(${warmRgb}, ${(beamAlpha * 1.15).toFixed(3)})`);
+        g.addColorStop(0.55, `rgba(${warmRgb}, ${(beamAlpha * 0.48).toFixed(3)})`);
+        g.addColorStop(1, `rgba(${warmRgb}, 0)`);
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        const halfCone = diver.backupTorchActive ? 0.27 : 0.34;
+        ctx.arc(ox, oy, reachPx, ang - halfCone, ang + halfCone);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     ctx.restore();

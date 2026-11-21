@@ -197,3 +197,29 @@ export function castSunCurtain(level, xMin, xMax, sunAngle = Math.PI * 0.5 - 0.1
   }
   return curtains;
 }
+
+/**
+ * Physically inspired Beer-Lambert underwater spectral wavelength absorption (v124).
+ * Reds vanish rapidly (~10m), oranges/yellows by ~22m, while blue-cyan penetrates deep —
+ * until a high-CRI dive torch restores warm colors locally inside the beam cone.
+ */
+export function computeSpectralAbsorption(depthM = 0) {
+  const d = Math.max(0, Number(depthM) || 0);
+  const redRetention = Math.exp(-0.16 * d);
+  const greenRetention = Math.exp(-0.045 * d);
+  const blueRetention = Math.exp(-0.016 * d);
+  // How strongly red/warm light has been stripped relative to blue
+  const redLoss = Math.max(0, Math.min(1, 1 - redRetention));
+  const absorptionStrength = d <= 4 ? 0 : Math.min(1, ((d - 4) / 34) * (0.45 + 0.55 * redLoss));
+  const tintAlpha = Math.round(absorptionStrength * 0.22 * 1000) / 1000;
+  const warmRestoreStrength = Math.round(Math.min(1, redLoss * 0.85) * 1000) / 1000;
+  return {
+    depthM: d,
+    redRetention: Math.round(redRetention * 1000) / 1000,
+    greenRetention: Math.round(greenRetention * 1000) / 1000,
+    blueRetention: Math.round(blueRetention * 1000) / 1000,
+    absorptionStrength: Math.round(absorptionStrength * 1000) / 1000,
+    tintAlpha,
+    warmRestoreStrength,
+  };
+}

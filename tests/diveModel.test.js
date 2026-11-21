@@ -98,6 +98,7 @@ import {
   computeSurgeWave,
   sampleGhostPose,
   applyPeerWreckAction,
+  stepSurfaceRipples,
 } from '../public/js/game/diveSession.js';
 import {
   buildExploreCells,
@@ -117,7 +118,7 @@ import { CaveRenderer } from '../public/js/game/renderer.js';
 import { stirFloorSilt, stepSiltPhysics, spawnSiltPlume, sampleSiltDensity } from '../public/js/game/silt.js';
 import { RADIO_TRACKS, midiToFreq, AquaticRadio } from '../public/js/game/aquaticRadio.js';
 import { createDiverBody, stepDiverBody } from '../public/js/game/diverBody.js';
-import { castLightRay, castTorchFan, castSunCurtain } from '../public/js/game/lighting.js';
+import { castLightRay, castTorchFan, castSunCurtain, computeSpectralAbsorption } from '../public/js/game/lighting.js';
 import { createMarineEcosystem, stepMarineEcosystem } from '../public/js/game/marineLife.js';
 
 test('PPO2 and END match diving physics for all three mixes', () => {
@@ -4479,4 +4480,145 @@ test('v123 Custom Challenge Links & Mutator Sandbox URL Codec, Sanitization & He
   const dnfRes = evaluateChallengeResult(parsed, { success: false, score: 400 });
   assert.equal(dnfRes.won, false);
   assert.ok(dnfRes.headline.includes('CHALLENGE FAILED'));
+});
+
+test('v124 Dynamic Underwater Optics & Caustics Pass: Beer-Lambert spectral absorption, caustic light webs & surface fin-kick ripples', () => {
+  // 1. Beer-Lambert spectral color attenuation by depth
+  const surf = computeSpectralAbsorption(0);
+  assert.equal(surf.redRetention, 1);
+  assert.equal(surf.greenRetention, 1);
+  assert.equal(surf.blueRetention, 1);
+  assert.equal(surf.tintAlpha, 0);
+  assert.equal(surf.warmRestoreStrength, 0);
+
+  const shallow = computeSpectralAbsorption(3);
+  assert.equal(shallow.tintAlpha, 0);
+  assert.ok(shallow.redRetention > 0.5 && shallow.redRetention < 0.7);
+  assert.ok(shallow.blueRetention > shallow.greenRetention && shallow.greenRetention > shallow.redRetention);
+
+  const mid = computeSpectralAbsorption(15);
+  assert.ok(mid.redRetention < 0.12, `expected red to fade by 15m, got ${mid.redRetention}`);
+  assert.ok(mid.blueRetention > 0.75, `expected blue to persist at 15m, got ${mid.blueRetention}`);
+  assert.ok(mid.tintAlpha > 0 && mid.tintAlpha < 0.15);
+  assert.ok(mid.warmRestoreStrength > 0.7);
+
+  const deep = computeSpectralAbsorption(45);
+  assert.ok(deep.redRetention < 0.01);
+  assert.ok(deep.tintAlpha > mid.tintAlpha && deep.tintAlpha <= 0.22);
+  assert.ok(deep.warmRestoreStrength >= 0.84 && deep.warmRestoreStrength <= 0.85);
+
+  // 2. Surface meniscus fin-kick & splash ripple physics
+  const session = createDiveSession(LEVEL_1, { mode: 'solo', difficulty: 'standard' });
+  assert.ok(Array.isArray(session.surfaceRipples));
+
+  // Deep diver should not spawn surface ripples
+  session.diver.x = 12;
+  session.diver.y = 20;
+  session.diver.vx = 2.0;
+  session.diver.vy = 0;
+  stepSurfaceRipples(session, 0.25);
+  assert.equal(session.surfaceRipples.length, 0);
+
+  // Shallow diver kicking near y = 0 spawns expanding ripples
+  session.diver.y = 1.1;
+  session.diver.vx = 1.6;
+  stepSurfaceRipples(session, 0.25);
+  assert.ok(session.surfaceRipples.length >= 1, 'should spawn surface ripple when kicking near surface');
+  const firstRadius = session.surfaceRipples[0].radius;
+  stepSurfaceRipples(session, 0.4);
+  assert.ok(session.surfaceRipples[0].radius > firstRadius, 'surface ripple should expand over time');
+
+  // Stop kicking and advance until ripples expire cleanly
+  session.diver.y = 18;
+  session.diver.vx = 0;
+  for (let i = 0; i < 15; i++) {
+    stepSurfaceRipples(session, 0.35);
+  }
+  assert.equal(session.surfaceRipples.length, 0, 'expired surface ripples should be pruned');
+
+  // 3. Renderer optical passes execute cleanly on a mock 2D canvas context
+  const ops = [];
+  const makeGrad = () => ({ addColorStop() {} });
+  const mockCtx = {
+    globalCompositeOperation: 'source-over',
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineCap: 'butt',
+    save() { ops.push('save'); },
+    restore() { ops.push('restore'); },
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    ellipse() { ops.push('ellipse'); },
+    fill() { ops.push('fill'); },
+    stroke() { ops.push('stroke'); },
+    fillRect() { ops.push('fillRect'); },
+    createRadialGradient: makeGrad,
+  };
+  const toScreenX = (wx) => 400 + wx * 24;
+  const toScreenY = (wy) => 100 + wy * 24;
+  const fakeRenderer = { _reducedMotion: false };
+
+  // 3a. Caustic light webs along sunlit shallow rock/wreck contour (ignoring non-wall deep rays)
+  const curtains = [
+    {
+      rays: [
+        { xTop: 0, xBot: 0.4, yBot: 4.5, hitWall: true },
+        { xTop: 1.5, xBot: 1.9, yBot: 5.2, hitWall: true },
+        { xTop: 3.0, xBot: 3.4, yBot: 22.0, hitWall: false },
+        { xTop: 4.5, xBot: 4.9, yBot: 22.0, hitWall: false },
+      ],
+    },
+  ];
+  CaveRenderer.prototype._drawCausticWebs.call(fakeRenderer, mockCtx, curtains, toScreenX, toScreenY, 24, 2.5);
+  assert.ok(ops.includes('stroke') && ops.includes('ellipse'));
+
+  // 3b. Surface ripples (both active ripples and calm meniscus fallback)
+  ops.length = 0;
+  CaveRenderer.prototype._drawSurfaceRipples.call(
+    fakeRenderer,
+    mockCtx,
+    [{ x: 2, radius: 1.4, age: 0.3, life: 2.2, intensity: 0.85 }],
+    -10,
+    20,
+    toScreenX,
+    toScreenY,
+    24,
+    2.5
+  );
+  assert.ok(ops.includes('ellipse') && ops.includes('stroke'));
+
+  ops.length = 0;
+  CaveRenderer.prototype._drawSurfaceRipples.call(fakeRenderer, mockCtx, [], -10, 20, toScreenX, toScreenY, 24, 2.5);
+  assert.ok(ops.includes('stroke'));
+
+  // 3c. Beer-Lambert spectral absorption + primary & backup torch warm restoration cones
+  ops.length = 0;
+  CaveRenderer.prototype._drawSpectralAbsorption.call(
+    fakeRenderer,
+    mockCtx,
+    800,
+    600,
+    { x: 5, y: 24, angle: 0.2, torchAngle: 0.2, torchOn: true, backupTorchActive: false, strobeMod: 1 },
+    toScreenX,
+    toScreenY,
+    24
+  );
+  assert.ok(ops.includes('fillRect') && ops.includes('fill'));
+
+  ops.length = 0;
+  CaveRenderer.prototype._drawSpectralAbsorption.call(
+    fakeRenderer,
+    mockCtx,
+    800,
+    600,
+    { x: 5, y: 24, angle: 0.2, torchAngle: 0.2, torchOn: true, backupTorchActive: true, strobeMod: 0.8 },
+    toScreenX,
+    toScreenY,
+    24
+  );
+  assert.ok(ops.includes('fillRect') && ops.includes('fill'));
 });
