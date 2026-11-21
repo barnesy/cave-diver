@@ -5814,3 +5814,50 @@ button.mode-badge:hover {
 .gas-planner-actions .btn {
   flex: 1;
 }
+
+/* Dive Replay Theater & Shareable Expedition Postcard (v121) */
+.debrief-replay-wrap {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(3, 13, 25, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+.replay-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 640 / 210;
+  border-radius: 9px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: #020814;
+  margin-top: 6px;
+}
+.replay-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #7dd3fc;
+  font-variant-numeric: tabular-nums;
+}
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.replay-scrubber {
+  flex: 1;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+.replay-modal-card {
+  max-width: 560px;
+  width: 100%;
+}
+.logbook-site-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}

@@ -30,7 +30,14 @@ import {
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
+  parseImportedLogbookJson,
 } from './game/logbookModel.js';
+import {
+  decodeReplayTrack,
+  drawReplayFrame,
+  renderExpeditionPostcard,
+  formatReplayTime,
+} from './game/diveCard.js';
 import {
   createDiveSession,
   stepDiveSession,
@@ -499,7 +506,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=120" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=121" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1116,6 +1123,10 @@ const input = new InputController({
     }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
       closeGasPlannerModal();
+      return true;
+    }
+    if (replayModal && !replayModal.hidden) {
+      closeReplayModal();
       return true;
     }
     if (modalDiveGuide && !modalDiveGuide.hidden) {
@@ -1798,13 +1809,17 @@ function openLogbookModal() {
       const scoreTxt = rec ? `${rec.score.toLocaleString()} pts` : `${getLevelMaxDepthM(lvl)}m`;
       const timeTxt = rec?.bestTimeSec > 0 ? formatRunClock(rec.bestTimeSec) : (lvl.isWreck ? 'Wreck' : 'Cave');
       const modeBadge = renderModeBadgeHtml(rec?.bestDifficulty || rec?.lastDifficulty, { compact: true });
+      const hasPbTrack = Boolean(loadGhostTrack(lvl.id));
       return `
         <div class="logbook-site-row ${rec ? 'cleared' : ''}">
           <span class="logbook-site-num">L${idx + 1}</span>
           <span class="logbook-site-name">${lvl.isWreck ? '🚢 ' : ''}${escapeHtml(lvl.name)}</span>
           <span class="logbook-site-stat">${escapeHtml(scoreTxt)} · ${escapeHtml(timeTxt)}</span>
           ${rec ? `<span class="lvl-card-badges">${modeBadge}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span></span>` : '<span class="logbook-site-stat">—</span>'}
-          <button type="button" class="btn tiny ghost" data-logbook-jump="${lvl.id}" ${locked ? 'disabled' : ''}>Select</button>
+          <span class="logbook-site-actions">
+            ${hasPbTrack ? `<button type="button" class="btn tiny secondary" data-logbook-replay="${lvl.id}" title="Watch PB Track Replay &amp; Share Card">🎬</button>` : ''}
+            <button type="button" class="btn tiny ghost" data-logbook-jump="${lvl.id}" ${locked ? 'disabled' : ''}>Select</button>
+          </span>
         </div>`;
     }).join('');
   }
@@ -1861,6 +1876,274 @@ btnLogbookExportJson?.addEventListener('click', () => {
   if (downloadTextFile(`techno-dive-logbook-${stamp}.json`, json, 'application/json;charset=utf-8')) {
     showToast('📄 Exported full Dive Logbook & Field Guide JSON!', 2.6);
   }
+});
+
+const btnLogbookImportJson = document.getElementById('btn-logbook-import-json');
+const inputLogbookImport = document.getElementById('input-logbook-import');
+btnLogbookImportJson?.addEventListener('click', () => {
+  if (inputLogbookImport) {
+    inputLogbookImport.value = '';
+    inputLogbookImport.click();
+  }
+});
+inputLogbookImport?.addEventListener('change', async () => {
+  const file = inputLogbookImport.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = parseImportedLogbookJson(text);
+    if (!parsed.ok) {
+      showToast(`⚠️ Import failed: ${parsed.error}`, 3.0);
+      return;
+    }
+    const merged = mergeCareerLogbooks(loadCareerLogbook(), parsed.book);
+    saveCareerLogbook(merged);
+    renderCareerSummary();
+    renderTechGearDock();
+    renderDailyChallengeCard();
+    populateLevelSelector();
+    openLogbookModal();
+    showToast(
+      `📤 Imported & merged ${parsed.siteCount} site clears & ${parsed.fieldGuideCount} Field Guide species!`,
+      3.2
+    );
+  } catch {
+    showToast('⚠️ Could not read backup JSON file.', 2.8);
+  }
+});
+
+// ── Dive Replay Theater & Shareable PNG Expedition Postcard (v121) ──
+const REPLAY_SPEEDS = [1, 2, 4];
+
+function createReplayController({ canvas, metaEl, playBtn, scrubber, speedBtn }) {
+  let state = {
+    level: null,
+    samples: [],
+    profile: null,
+    progress: 0,
+    playing: false,
+    speedIdx: 1, // default 2x
+    rafId: 0,
+    lastTs: 0,
+  };
+
+  function draw() {
+    if (!canvas || !state.level || state.samples.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const pose = drawReplayFrame(ctx, canvas.width, canvas.height, {
+      level: state.level,
+      track: state.samples,
+      profile: state.profile,
+      progress: state.progress,
+    });
+    if (scrubber) scrubber.value = String(Math.round(state.progress * 1000));
+    if (metaEl && pose) {
+      const tCur = formatReplayTime(pose.t);
+      const tTot = formatReplayTime(pose.totalSec);
+      metaEl.textContent = `${tCur} / ${tTot} · ${Math.max(0, pose.y).toFixed(1)}m`;
+    }
+  }
+
+  function syncBtns() {
+    if (playBtn) playBtn.textContent = state.playing ? '⏸ Pause' : state.progress >= 0.999 ? '↺ Replay' : '▶ Play';
+    if (speedBtn) speedBtn.textContent = `${REPLAY_SPEEDS[state.speedIdx]}×`;
+  }
+
+  function stop() {
+    state.playing = false;
+    if (state.rafId) {
+      cancelAnimationFrame(state.rafId);
+      state.rafId = 0;
+    }
+    syncBtns();
+  }
+
+  function tick(ts) {
+    if (!state.playing) return;
+    if (!state.lastTs) state.lastTs = ts;
+    const dtSec = Math.min(0.1, Math.max(0, (ts - state.lastTs) / 1000));
+    state.lastTs = ts;
+    const totalSec = Math.max(4, state.samples[state.samples.length - 1]?.t || 20);
+    // Compressed theatrical playback: 1x finishes a 60s dive in ~10s, 2x in ~5s, 4x in ~2.5s
+    const speed = REPLAY_SPEEDS[state.speedIdx] * 6;
+    state.progress = Math.min(1, state.progress + (dtSec * speed) / totalSec);
+    draw();
+    if (state.progress >= 1) {
+      stop();
+      return;
+    }
+    state.rafId = requestAnimationFrame(tick);
+  }
+
+  function play() {
+    if (!state.level || state.samples.length < 2) return;
+    if (state.progress >= 0.995) state.progress = 0;
+    state.playing = true;
+    state.lastTs = 0;
+    syncBtns();
+    if (!state.rafId) state.rafId = requestAnimationFrame(tick);
+  }
+
+  function load({ level, track, profile = null, autoPlay = true }) {
+    stop();
+    const samples = decodeReplayTrack(track);
+    state.level = level || null;
+    state.samples = samples;
+    state.profile = Array.isArray(profile) ? profile : null;
+    state.progress = autoPlay ? 0 : 1;
+    syncBtns();
+    draw();
+    if (autoPlay && samples.length >= 2) play();
+    return samples.length >= 2;
+  }
+
+  playBtn?.addEventListener('click', () => {
+    if (state.playing) stop();
+    else play();
+  });
+  speedBtn?.addEventListener('click', () => {
+    state.speedIdx = (state.speedIdx + 1) % REPLAY_SPEEDS.length;
+    syncBtns();
+  });
+  scrubber?.addEventListener('input', () => {
+    stop();
+    state.progress = Math.max(0, Math.min(1, Number(scrubber.value) / 1000));
+    draw();
+  });
+
+  return { load, play, stop, draw };
+}
+
+async function shareOrDownloadPostcard(cardData) {
+  if (!cardData?.level) return false;
+  const off = document.createElement('canvas');
+  off.width = 1200;
+  off.height = 630;
+  const ctx = off.getContext('2d');
+  if (!ctx) return false;
+
+  const appVer = document.querySelector('meta[name="app-version"]')?.content || '121';
+  renderExpeditionPostcard(ctx, 1200, 630, {
+    ...cardData,
+    githubLogin: github.getStatus().user?.login || '',
+    version: `v${appVer}`,
+  });
+
+  const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
+  if (!blob) return false;
+  const slug = String(cardData.level.id || 'expedition').replace(/[^a-z0-9-]+/gi, '-');
+  const gradeSlug = String(cardData.grade || 'S').replace(/[^a-z0-9]+/gi, '');
+  const filename = `techno-dive-${slug}-${gradeSlug}.png`;
+
+  try {
+    if (typeof File !== 'undefined' && navigator.share && navigator.canShare) {
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Techno Dive · ${cardData.level.name} (${cardData.grade})`,
+          text: `Cleared ${cardData.level.name} (${Number(cardData.maxDepthM || 0).toFixed(1)}m · ${Number(cardData.score || 0).toLocaleString()} pts) in Techno Dive!`,
+        });
+        showToast('📸 Expedition Postcard shared!', 2.4);
+        return true;
+      }
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') return false;
+  }
+
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(`📸 Saved Expedition Postcard (${filename})!`, 2.8);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const debriefReplayWrapEl = document.getElementById('debrief-replay-wrap');
+const debriefReplay = createReplayController({
+  canvas: document.getElementById('debrief-replay-canvas'),
+  metaEl: document.getElementById('debrief-replay-meta'),
+  playBtn: document.getElementById('btn-replay-play'),
+  scrubber: document.getElementById('replay-scrubber'),
+  speedBtn: document.getElementById('btn-replay-speed'),
+});
+let lastDebriefCardData = null;
+const btnDebriefShareCard = document.getElementById('btn-debrief-share-card');
+btnDebriefShareCard?.addEventListener('click', () => {
+  if (lastDebriefCardData) shareOrDownloadPostcard(lastDebriefCardData);
+});
+
+const replayModal = document.getElementById('replay-modal');
+const replayModalTitleEl = document.getElementById('replay-modal-title');
+const replayModalSubEl = document.getElementById('replay-modal-sub');
+const btnReplayModalClose = document.getElementById('btn-replay-modal-close');
+const btnModalReplayShare = document.getElementById('btn-modal-replay-share');
+const modalReplay = createReplayController({
+  canvas: document.getElementById('modal-replay-canvas'),
+  metaEl: document.getElementById('modal-replay-meta'),
+  playBtn: document.getElementById('btn-modal-replay-play'),
+  scrubber: document.getElementById('modal-replay-scrubber'),
+  speedBtn: document.getElementById('btn-modal-replay-speed'),
+});
+let activeModalReplayCardData = null;
+
+function openLogbookReplayModal(levelId) {
+  const lvl = getLevelById(levelId);
+  const track = loadGhostTrack(levelId);
+  if (!lvl || !track || track.length < 2 || !replayModal) {
+    showToast('No recorded PB track found for this site yet.', 2.2);
+    return;
+  }
+  const book = loadCareerLogbook();
+  const rec = book.cleared?.[lvl.id] || null;
+  const decoded = decodeReplayTrack(track);
+  const maxD = decoded.reduce((m, p) => Math.max(m, p.y), 0);
+  const totalSec = rec?.bestTimeSec || decoded[decoded.length - 1]?.t || 0;
+
+  if (replayModalTitleEl) replayModalTitleEl.textContent = lvl.name;
+  if (replayModalSubEl) {
+    replayModalSubEl.textContent = rec
+      ? `Grade ${rec.grade} · ${rec.score.toLocaleString()} pts · ${formatReplayTime(totalSec)} · Max ${maxD.toFixed(1)}m`
+      : `Recorded Run · ${formatReplayTime(totalSec)} · Max ${maxD.toFixed(1)}m`;
+  }
+  activeModalReplayCardData = {
+    level: lvl,
+    diverName: playerNameInput?.value.trim() || 'Diver',
+    success: Boolean(rec),
+    grade: rec?.grade || 'PB',
+    score: rec?.score || 0,
+    maxDepthM: maxD || getLevelMaxDepthM(lvl),
+    diveTimeSec: totalSec,
+    exploredPct: rec ? 100 : 0,
+    difficulty: rec?.bestDifficulty || activeDifficulty,
+    track,
+    profile: null,
+  };
+  replayModal.hidden = false;
+  modalReplay.load({ level: lvl, track, autoPlay: true });
+}
+
+function closeReplayModal() {
+  modalReplay.stop();
+  if (replayModal) replayModal.hidden = true;
+}
+
+btnReplayModalClose?.addEventListener('click', closeReplayModal);
+replayModal?.addEventListener('click', (e) => {
+  if (e.target === replayModal) closeReplayModal();
+});
+btnModalReplayShare?.addEventListener('click', () => {
+  if (activeModalReplayCardData) shareOrDownloadPostcard(activeModalReplayCardData);
 });
 
 // Pre-Dive Technical Trimix / Nitrox Gas Blender (v120)
@@ -2106,6 +2389,12 @@ syncGasPlanBadges();
 modalLogbook?.addEventListener('click', (e) => {
   if (e.target === modalLogbook) {
     closeLogbookModal();
+    return;
+  }
+  const replayBtn = e.target.closest('button[data-logbook-replay]');
+  if (replayBtn) {
+    const lid = replayBtn.dataset.logbookReplay;
+    if (lid) openLogbookReplayModal(lid);
     return;
   }
   const jumpBtn = e.target.closest('button[data-logbook-jump]');
@@ -2933,6 +3222,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenMenu.classList.remove('menu-submerging');
   screenMenu.hidden = true;
   screenDebrief.hidden = true;
+  debriefReplay.stop();
   screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = false;
   syncWakeLockFn?.();
@@ -3109,6 +3399,45 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     });
   }
   renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success, session?.peerProfiles);
+
+  const replayTrack = Array.isArray(session?.ghostTrack) ? session.ghostTrack.slice(0, 1199) : [];
+  if (replayTrack.length > 0) {
+    replayTrack.push([
+      Math.round((session.simTimeSec || diveState.diveTimeSec || 0) * 10),
+      Math.round(diver.x * 10),
+      Math.round(diver.y * 10),
+      Math.round((diver.angle || 0) * 10),
+    ]);
+  }
+  if (debriefReplayWrapEl) {
+    const hasReplay = replayTrack.length >= 2;
+    debriefReplayWrapEl.hidden = !hasReplay;
+    if (hasReplay) {
+      debriefReplay.load({
+        level,
+        track: replayTrack,
+        profile: session?.diveProfile || null,
+        autoPlay: true,
+      });
+    } else {
+      debriefReplay.stop();
+    }
+  }
+  lastDebriefCardData = {
+    level,
+    diverName: diver.name || playerNameInput?.value.trim() || 'Diver',
+    success,
+    grade: teamSummary.teamRank.grade,
+    score: teamSummary.teamScore,
+    maxDepthM: diveState.maxDepthM,
+    diveTimeSec: diveState.diveTimeSec,
+    exploredPct: teamSummary.exploredPct,
+    difficulty: runDiff,
+    customMixLabel: customGasPlan.enabled ? diveState.mixes?.TMX1455?.name || '' : '',
+    dailyBadge: session._dailyBadgeLabel || '',
+    track: replayTrack,
+    profile: session?.diveProfile ? session.diveProfile.slice() : [],
+  };
 
   let updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
     levelId: level.id,
@@ -5054,6 +5383,7 @@ btnNextLevel?.addEventListener('click', async () => {
       mode = 'menu';
       session = null;
       screenDebrief.hidden = true;
+  debriefReplay.stop();
       screenMenu.hidden = false;
       setActiveMenuTab('solo');
       syncWakeLockFn?.();
@@ -5062,6 +5392,7 @@ btnNextLevel?.addEventListener('click', async () => {
       return;
     }
     screenDebrief.hidden = true;
+  debriefReplay.stop();
     launchOpenCoopDive();
   } finally {
     btnNextLevel.disabled = false;
@@ -5076,6 +5407,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     mode = 'menu';
     session = null;
     screenDebrief.hidden = true;
+  debriefReplay.stop();
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
     syncWakeLockFn?.();
@@ -5090,6 +5422,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
     return;
   }
   screenDebrief.hidden = true;
+  debriefReplay.stop();
   if (retryDaily) {
     launchDailyChallenge(activeDailyChallenge);
   } else {
@@ -5106,6 +5439,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   session = null;
   activeDiveSeq = 0;
   screenDebrief.hidden = true;
+  debriefReplay.stop();
   screenMenu.hidden = false;
   if (isMultiplayer) {
     lan.leaveRoom();
@@ -5215,6 +5549,7 @@ lan.on('returned_to_lobby', () => {
     mode = 'menu';
     session = null;
     screenDebrief.hidden = true;
+  debriefReplay.stop();
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
     syncWakeLockFn?.();

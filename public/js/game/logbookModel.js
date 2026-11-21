@@ -1048,7 +1048,7 @@ export function exportLogbookToCsv(rawBook, levels = []) {
       `Deepest: ${summary.deepestM}m`,
       `Total Bottom Time: ${Math.round(summary.totalTimeSec)}s`,
       `Best Score: ${summary.bestScore}`,
-      `Daily Streak: ${book.dailyStreak || 0} (Best ${book.bestDailyStreak || 0})`,
+      `Daily Streak: ${book.daily?.currentStreak || 0} (Best ${book.daily?.bestStreak || 0})`,
       `Field Guide: ${fg.discoveredCount}/${fg.totalCount} (${fg.naturalistRank})`,
       '',
       '',
@@ -1090,11 +1090,12 @@ export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
       version: meta.version || '',
       summary,
       daily: {
-        currentStreak: book.dailyStreak || 0,
-        bestStreak: book.bestDailyStreak || 0,
-        lastDailyDate: book.lastDailyDate || '',
-        completedCount: Object.keys(book.dailyCompleted || {}).length,
-        completed: book.dailyCompleted || {},
+        currentStreak: book.daily?.currentStreak || 0,
+        bestStreak: book.daily?.bestStreak || 0,
+        totalClears: book.daily?.totalClears || 0,
+        lastClearedDate: book.daily?.lastClearedDate || '',
+        clearedDates: Array.isArray(book.daily?.clearedDates) ? [...book.daily.clearedDates] : [],
+        records: book.daily?.records ? { ...book.daily.records } : {},
       },
       certifications: {
         earnedCount: certs.earnedCount,
@@ -1115,4 +1116,80 @@ export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
     null,
     2
   );
+}
+
+/**
+ * Parse and validate an exported JSON logbook backup (`techno-dive-logbook-v1`)
+ * or raw career logbook object into a canonical normalized CareerLogbook ready for smart-merge.
+ */
+export function parseImportedLogbookJson(rawInput) {
+  let data = rawInput;
+  if (typeof rawInput === 'string') {
+    const trimmed = rawInput.trim();
+    if (!trimmed) return { ok: false, error: 'Empty JSON file.' };
+    if (trimmed.length > 2_000_000) return { ok: false, error: 'Backup file exceeds 2 MB limit.' };
+    try {
+      data = JSON.parse(trimmed);
+    } catch {
+      return { ok: false, error: 'Invalid JSON syntax.' };
+    }
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { ok: false, error: 'JSON backup must be an object.' };
+  }
+
+  let candidate = null;
+  if (data.schema === 'techno-dive-logbook-v1' || Array.isArray(data.sites)) {
+    const cleared = {};
+    if (Array.isArray(data.sites)) {
+      for (const s of data.sites) {
+        if (!s || typeof s.id !== 'string' || !s.cleared || !s.record || typeof s.record !== 'object') continue;
+        cleared[s.id] = { ...s.record };
+      }
+    }
+    const sum = data.summary && typeof data.summary === 'object' ? data.summary : {};
+    const daily = data.daily && typeof data.daily === 'object' ? data.daily : {};
+    const fgEntries =
+      data.fieldGuide && typeof data.fieldGuide.entries === 'object' ? data.fieldGuide.entries : {};
+    candidate = {
+      cleared,
+      totalDives: sum.totalDives ?? Object.keys(cleared).length,
+      totalTimeSec: sum.totalTimeSec ?? 0,
+      deepestM: sum.deepestM ?? 0,
+      bestScore: sum.bestScore ?? 0,
+      daily: {
+        currentStreak: daily.currentStreak ?? 0,
+        bestStreak: daily.bestStreak ?? 0,
+        totalClears: daily.totalClears ?? (Array.isArray(daily.clearedDates) ? daily.clearedDates.length : 0),
+        lastClearedDate: daily.lastClearedDate || daily.lastDailyDate || '',
+        clearedDates: Array.isArray(daily.clearedDates) ? daily.clearedDates : [],
+        records: daily.records && typeof daily.records === 'object' ? daily.records : {},
+      },
+      fieldGuide: fgEntries,
+    };
+  } else if (data.cleared && typeof data.cleared === 'object' && !Array.isArray(data.cleared)) {
+    candidate = data;
+  } else if (data.logbook && typeof data.logbook === 'object') {
+    candidate = data.logbook;
+  } else {
+    return { ok: false, error: 'Unrecognized Techno Dive logbook backup format.' };
+  }
+
+  const book = normalizeBook(candidate);
+  const siteCount = Object.keys(book.cleared).length;
+  const fieldGuideCount = Object.keys(book.fieldGuide).length;
+  const dailyCount = Math.max(book.daily.totalClears || 0, book.daily.clearedDates.length);
+  if (siteCount === 0 && fieldGuideCount === 0 && dailyCount === 0 && book.totalDives === 0) {
+    return { ok: false, error: 'Backup contains no dive records to import.' };
+  }
+
+  return {
+    ok: true,
+    book,
+    siteCount,
+    fieldGuideCount,
+    dailyCount,
+    exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '',
+    diverName: typeof data.diverName === 'string' ? data.diverName : '',
+  };
 }

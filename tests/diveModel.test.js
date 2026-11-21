@@ -36,7 +36,16 @@ import {
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
+  parseImportedLogbookJson,
+  mergeCareerLogbooks,
 } from '../public/js/game/logbookModel.js';
+import {
+  formatReplayTime,
+  decodeReplayTrack,
+  sampleReplayPoint,
+  drawReplayFrame,
+  renderExpeditionPostcard,
+} from '../public/js/game/diveCard.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import { LanClient } from '../public/js/net/lanClient.js';
@@ -4135,4 +4144,137 @@ test('v120 Technical Dive Planner (Custom Trimix/Nitrox), Physical Stage Tank Dr
   assert.equal(parsed.sites.length, LEVELS.length);
   assert.equal(parsed.fieldGuide.discoveredCount, 1);
   assert.equal(parsed.sites.find((s) => s.id === 'cenote-el-abismo')?.record?.grade, 'S');
+});
+
+test('v121 Dive Replay Theater, Shareable 1200x630 PNG Expedition Postcard & JSON Logbook Import Round-Trip', () => {
+  // 1. Replay track decoding & smooth interpolation
+  const rawTrack = [
+    [0, 100, 20, 0],
+    [100, 300, 240, 5],
+    [200, 500, 460, 2],
+    [300, 120, 30, -15],
+  ];
+  const samples = decodeReplayTrack(rawTrack);
+  assert.equal(samples.length, 4);
+  assert.equal(samples[1].t, 10);
+  assert.equal(samples[1].x, 30);
+  assert.equal(samples[1].y, 24);
+  assert.equal(formatReplayTime(125), '02:05');
+
+  const mid = sampleReplayPoint(samples, 0.5);
+  assert.ok(Math.abs(mid.t - 15) < 0.01);
+  assert.ok(Math.abs(mid.x - 40) < 0.05);
+  assert.ok(Math.abs(mid.y - 35) < 0.05);
+  assert.equal(sampleReplayPoint([], 0.5), null);
+
+  // 2. drawReplayFrame & renderExpeditionPostcard execute cleanly with recorded canvas commands
+  const drawnTexts = [];
+  const noopCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (txt) => ({ width: String(txt).length * 9 }),
+      fillText: (txt) => { drawnTexts.push(String(txt)); },
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+
+  const pose = drawReplayFrame(noopCtx, 640, 210, {
+    level: LEVEL_1,
+    track: rawTrack,
+    profile: [
+      { t: 0, d: 2, gas: 'EAN32' },
+      { t: 15, d: 35, gas: 'TMX1455' },
+      { t: 30, d: 3, gas: 'O2' },
+    ],
+    progress: 0.5,
+  });
+  assert.ok(pose && Math.abs(pose.x - 40) < 0.1);
+
+  drawnTexts.length = 0;
+  const okCard = renderExpeditionPostcard(noopCtx, 1200, 630, {
+    level: getLevelById('uss-oriskany-carrier'),
+    diverName: 'Barnesy',
+    githubLogin: 'barnesy',
+    success: true,
+    grade: 'S',
+    score: 3420,
+    maxDepthM: 64.5,
+    diveTimeSec: 218,
+    exploredPct: 96,
+    difficulty: 'hardcore',
+    customMixLabel: 'TMX 18/45',
+    dailyBadge: '📅 DAILY',
+    track: rawTrack,
+    profile: [
+      { t: 0, d: 2, gas: 'EAN32' },
+      { t: 100, d: 64.5, gas: 'TMX1455' },
+      { t: 218, d: 0.5, gas: 'O2' },
+    ],
+    version: 'v121',
+  });
+  assert.equal(okCard, true);
+  assert.ok(drawnTexts.some((t) => t.includes('@barnesy')));
+  assert.ok(drawnTexts.some((t) => t.includes('TMX 18/45')));
+  assert.ok(drawnTexts.some((t) => t.includes('64.5m')));
+  assert.ok(drawnTexts.some((t) => t.includes('03:38')));
+
+  // 3. JSON Logbook Export -> Import -> Smart-Merge round-trip
+  let backupBook = createEmptyLogbook();
+  backupBook = recordDiveInLogbook(backupBook, {
+    levelId: 'cenote-el-abismo',
+    success: true,
+    score: 3250,
+    grade: 'S',
+    maxDepthM: 54.0,
+    diveTimeSec: 175,
+    difficulty: 'hardcore',
+  });
+  backupBook = recordDailyClear(backupBook, {
+    dateKey: '2026-11-21',
+    levelId: 'cenote-el-abismo',
+    mutatorId: 'strobe',
+    score: 3250,
+    grade: 'S',
+    timeSec: 175,
+  });
+  backupBook = recordFieldGuidePhoto(backupBook, {
+    entryId: 'whaleshark',
+    stars: 3,
+    siteId: 'uss-oriskany-carrier',
+    siteName: 'USS Oriskany',
+    depthM: 28,
+  }).book;
+
+  const exportedJson = exportLogbookToJson(backupBook, LEVELS, { diverName: 'Barnesy', version: 'v121' });
+  const imported = parseImportedLogbookJson(exportedJson);
+  assert.equal(imported.ok, true);
+  assert.equal(imported.siteCount, 1);
+  assert.equal(imported.fieldGuideCount, 1);
+  assert.equal(imported.dailyCount, 1);
+  assert.equal(imported.book.cleared['cenote-el-abismo'].grade, 'S');
+  assert.equal(imported.book.fieldGuide.whaleshark.bestStars, 3);
+
+  // Smart-merge preserves local clears while absorbing imported backup
+  let localBook = createEmptyLogbook();
+  localBook = recordDiveInLogbook(localBook, {
+    levelId: 'eagles-nest-sink',
+    success: true,
+    score: 2900,
+    grade: 'A',
+    maxDepthM: 88.0,
+    diveTimeSec: 240,
+    difficulty: 'standard',
+  });
+  const merged = mergeCareerLogbooks(localBook, imported.book);
+  assert.equal(Object.keys(merged.cleared).length, 2);
+  assert.equal(merged.cleared['cenote-el-abismo'].grade, 'S');
+  assert.equal(merged.cleared['eagles-nest-sink'].grade, 'A');
+  assert.equal(merged.fieldGuide.whaleshark.bestStars, 3);
+
+  // Validation guards on bad JSON
+  assert.equal(parseImportedLogbookJson('').ok, false);
+  assert.equal(parseImportedLogbookJson('{not-json').ok, false);
+  assert.equal(parseImportedLogbookJson('{"foo":"bar"}').ok, false);
+  assert.equal(parseImportedLogbookJson(exportLogbookToJson(createEmptyLogbook(), LEVELS)).ok, false);
 });
