@@ -75,7 +75,12 @@ import {
   computeTeamScoreSummary,
   computeHealthPct,
 } from '../public/js/game/scoring.js';
-import { sampleEkgWave } from '../public/js/game/hud.js';
+import {
+  sampleEkgWave,
+  isMinimapAllowed,
+  computeMinimapViewport,
+  drawSonarMinimap,
+} from '../public/js/game/hud.js';
 import { CaveRenderer } from '../public/js/game/renderer.js';
 import { stirFloorSilt, stepSiltPhysics, spawnSiltPlume, sampleSiltDensity } from '../public/js/game/silt.js';
 import { RADIO_TRACKS, midiToFreq, AquaticRadio } from '../public/js/game/aquaticRadio.js';
@@ -3325,4 +3330,92 @@ test('v108 Daily Expedition Challenge: deterministic UTC rotation, streak logboo
   assert.ok(html.includes('id="btn-play-daily"'), 'Missing Daily play button');
   assert.ok(html.includes('id="dc-daily-badge"'), 'Missing HUD Daily mutator badge');
   assert.ok(html.includes('id="debrief-daily-badge"'), 'Missing Debrief Daily streak badge');
+});
+
+test('v109 Live Sonar Cave & Wreck Cartography Minimap: gating, viewports, fog-of-war rendering & HUD hooks', async () => {
+  // 1. Mode & Mutator gating: enabled in Guided/Standard & standard mutators, disabled in Hardcore/Purist
+  assert.equal(isMinimapAllowed('guided', ''), true);
+  assert.equal(isMinimapAllowed('standard', ''), true);
+  assert.equal(isMinimapAllowed('standard', 'strobe'), true);
+  assert.equal(isMinimapAllowed('standard', 'surge'), true);
+  assert.equal(isMinimapAllowed('hardcore', ''), false);
+  assert.equal(isMinimapAllowed('guided', 'purist'), false);
+  assert.equal(isMinimapAllowed('standard', 'purist'), false);
+
+  // 2. Viewport projection in Follow & Full modes across cave and shipwreck sites
+  const wreckLvl = getLevelById('ss-thistlegorm-wwii-wreck');
+  const vpFollow = computeMinimapViewport(LEVEL_1, LEVEL_1.spawn, { zoomMode: 'follow', width: 352, height: 224 });
+  const vpFull = computeMinimapViewport(LEVEL_1, LEVEL_1.spawn, { zoomMode: 'full', width: 352, height: 224 });
+  assert.ok(vpFollow.scale > vpFull.scale, `Follow zoom scale (${vpFollow.scale.toFixed(2)}) should be closer than Full (${vpFull.scale.toFixed(2)})`);
+  assert.ok(vpFull.toX(LEVEL_1.bounds.xMin) >= 0 && vpFull.toX(LEVEL_1.bounds.xMax) <= 352);
+  assert.ok(vpFull.toY(LEVEL_1.bounds.yMin) >= 0 && vpFull.toY(LEVEL_1.bounds.yMax) <= 224);
+
+  const vpWreck = computeMinimapViewport(wreckLvl, wreckLvl.spawn, { zoomMode: 'full', width: 352, height: 224 });
+  assert.ok(vpWreck.scale > 0 && vpWreck.toX(wreckLvl.spawn.x) >= 0 && vpWreck.toX(wreckLvl.spawn.x) <= 352);
+
+  // 3. Fog-of-war vs Guided blueprint rendering + Sonar pulse + player lines + co-op buddies
+  const countArcs = (difficulty, opts = {}) => {
+    let arcs = 0;
+    let strokes = 0;
+    const ctx = new Proxy({
+      arc: () => { arcs++; },
+      stroke: () => { strokes++; },
+    }, { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true });
+    drawSonarMinimap(ctx, 352, 224, {
+      level: opts.level || LEVEL_1,
+      diver: opts.diver || { x: LEVEL_1.spawn.x, y: LEVEL_1.spawn.y, angle: 0.2, torchAngle: 0.2, torchOn: true },
+      peers: [{ id: 'p1', x: 30, y: 15, alive: true }],
+      exploreCells: opts.exploreCells,
+      exploredCells: opts.exploredCells,
+      checkpointsHit: new Set(['cp1']),
+      nextCheckpoint: (opts.level || LEVEL_1).checkpoints[1] || null,
+      collectedIds: new Set(),
+      openedHatchIds: new Set(),
+      claimedStageIds: new Set(),
+      placedMarkerIds: new Set(),
+      bodyRecovered: false,
+      playerLines: [{ isSelf: true, chains: [[{ x: 10, y: 5 }, { x: 22, y: 12 }]], reelingActive: true, ownerX: 25, ownerY: 14 }],
+      sonarPulse: opts.sonarPulse || null,
+      difficulty,
+      zoomMode: 'full',
+      timeSec: 4.2,
+    });
+    return { arcs, strokes };
+  };
+
+  const sess = createDiveSession(LEVEL_1, { gear: { sonar: true } });
+  const stdDraw = countArcs('standard', { exploreCells: sess.exploreCells, exploredCells: sess.exploredCells });
+  const guiDraw = countArcs('guided', { exploreCells: sess.exploreCells, exploredCells: sess.exploredCells });
+  assert.ok(guiDraw.arcs > stdDraw.arcs, `Guided blueprint (${guiDraw.arcs} arcs) should draw unexplored passages beyond Standard fog-of-war (${stdDraw.arcs} arcs)`);
+
+  // Firing Cave Sonar expands explored cells & draws live ping ring cleanly
+  const beforeExp = sess.exploredCells.size;
+  const ping = triggerSonarPing(sess);
+  assert.equal(ping.ok, true);
+  assert.ok(sess.exploredCells.size >= beforeExp);
+  const sonarDraw = countArcs('standard', {
+    exploreCells: sess.exploreCells,
+    exploredCells: sess.exploredCells,
+    sonarPulse: { ...ping.pulse, ageSec: 0.5 },
+  });
+  assert.ok(sonarDraw.strokes > stdDraw.strokes, 'Active Cave Sonar ping should draw expanding sonar wave stroke');
+
+  // Shipwreck full-survey draw with shot line & watertight hatches
+  const wreckSess = createDiveSession(wreckLvl);
+  const wreckDraw = countArcs('standard', {
+    level: wreckLvl,
+    diver: wreckSess.diver,
+    exploreCells: wreckSess.exploreCells,
+    exploredCells: wreckSess.exploredCells,
+  });
+  assert.ok(wreckDraw.arcs > 0 && wreckDraw.strokes > 0);
+
+  // 4. HTML hooks present
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-minimap"'), 'Missing HUD minimap toggle button');
+  assert.ok(html.includes('id="hud-minimap-wrap"'), 'Missing HUD minimap wrapper');
+  assert.ok(html.includes('id="hud-minimap-canvas"'), 'Missing HUD minimap canvas');
+  assert.ok(html.includes('id="hud-minimap-pct"'), 'Missing HUD minimap exploration readout');
+  assert.ok(html.includes('id="hud-minimap-zoom"'), 'Missing HUD minimap zoom badge');
 });

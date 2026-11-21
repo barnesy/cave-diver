@@ -207,6 +207,467 @@ function setStyleProp(el, prop, val) {
   }
 }
 
+export function isMinimapAllowed(difficulty = 'standard', mutatorId = '') {
+  return difficulty !== 'hardcore' && mutatorId !== 'purist';
+}
+
+export function computeMinimapViewport(level, diver, { zoomMode = 'follow', width = 352, height = 224 } = {}) {
+  const b = level?.bounds || { xMin: -20, xMax: 160, yMin: -4, yMax: 70 };
+  const padPx = 10;
+  const innerW = Math.max(20, width - padPx * 2);
+  const innerH = Math.max(20, height - padPx * 2);
+  const worldW = Math.max(20, (b.xMax - b.xMin) || 120);
+  const worldH = Math.max(20, (b.yMax - b.yMin) || 60);
+
+  if (zoomMode === 'full') {
+    const scale = Math.min(innerW / worldW, innerH / worldH);
+    const drawW = worldW * scale;
+    const drawH = worldH * scale;
+    const offX = (width - drawW) * 0.5 - b.xMin * scale;
+    const offY = (height - drawH) * 0.5 - b.yMin * scale;
+    return {
+      zoomMode: 'full',
+      scale,
+      offX,
+      offY,
+      viewMinX: -offX / scale,
+      viewMaxX: (width - offX) / scale,
+      viewMinY: -offY / scale,
+      viewMaxY: (height - offY) / scale,
+      toX: (wx) => offX + wx * scale,
+      toY: (wy) => offY + wy * scale,
+    };
+  }
+
+  // Follow zoom: tactical local sonar window centered on diver (~58m wide)
+  const targetSpanX = Math.min(worldW, 60);
+  const targetSpanY = Math.min(worldH, 38);
+  const scale = Math.min(innerW / Math.max(24, targetSpanX), innerH / Math.max(18, targetSpanY));
+  const halfSpanX = (width * 0.5) / scale;
+  const halfSpanY = (height * 0.5) / scale;
+  let cx = Number.isFinite(diver?.x) ? diver.x : (b.xMin + b.xMax) * 0.5;
+  let cy = Number.isFinite(diver?.y) ? diver.y : (b.yMin + b.yMax) * 0.5;
+
+  if (worldW > halfSpanX * 2) {
+    cx = Math.max(b.xMin + halfSpanX - 4, Math.min(b.xMax - halfSpanX + 4, cx));
+  } else {
+    cx = (b.xMin + b.xMax) * 0.5;
+  }
+  if (worldH > halfSpanY * 2) {
+    cy = Math.max(b.yMin + halfSpanY - 3, Math.min(b.yMax - halfSpanY + 3, cy));
+  } else {
+    cy = (b.yMin + b.yMax) * 0.5;
+  }
+
+  const offX = width * 0.5 - cx * scale;
+  const offY = height * 0.5 - cy * scale;
+  return {
+    zoomMode: 'follow',
+    scale,
+    offX,
+    offY,
+    viewMinX: cx - halfSpanX,
+    viewMaxX: cx + halfSpanX,
+    viewMinY: cy - halfSpanY,
+    viewMaxY: cy + halfSpanY,
+    toX: (wx) => offX + wx * scale,
+    toY: (wy) => offY + wy * scale,
+  };
+}
+
+function _isPointRevealed(wx, wy, diver, exploreCells, exploredCells, sonarPulse, revealDistM = 6.5) {
+  if (diver && Math.hypot(wx - diver.x, wy - diver.y) <= revealDistM + 3.5) return true;
+  if (sonarPulse && Math.hypot(wx - sonarPulse.x, wy - sonarPulse.y) <= (sonarPulse.maxRadiusM || 28)) return true;
+  if (!exploreCells || !exploredCells || exploredCells.size === 0) return false;
+  const r2 = revealDistM * revealDistM;
+  for (const idx of exploredCells) {
+    const c = exploreCells[idx];
+    if (!c) continue;
+    const dx = c.x - wx;
+    const dy = c.y - wy;
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
+}
+
+/**
+ * Draw the live tactical Sonar Cave & Wreck Cartography Minimap onto a 2D canvas context.
+ */
+export function drawSonarMinimap(ctx, width, height, state) {
+  if (!ctx || !state?.level || width <= 0 || height <= 0) return;
+  const {
+    level,
+    diver,
+    peers = [],
+    exploreCells = [],
+    exploredCells = null,
+    checkpointsHit = null,
+    nextCheckpoint = null,
+    collectedIds = null,
+    openedHatchIds = null,
+    claimedStageIds = null,
+    placedMarkerIds = null,
+    bodyRecovered = false,
+    playerLines = [],
+    sonarPulse = null,
+    difficulty = 'standard',
+    zoomMode = 'follow',
+    timeSec = 0,
+  } = state;
+
+  const vp = computeMinimapViewport(level, diver, { zoomMode, width, height });
+  const { scale, toX, toY, viewMinX, viewMaxX, viewMinY, viewMaxY } = vp;
+  const isGuided = difficulty === 'guided';
+  const isWreck = Boolean(level.isWreck);
+
+  ctx.save();
+  // 1. Deep Sonar Scope Backdrop & Subtle Bathymetric Depth Grid
+  ctx.fillStyle = '#030d19';
+  ctx.fillRect(0, 0, width, height);
+
+  const depthStep = zoomMode === 'full' ? (viewMaxY - viewMinY > 110 ? 40 : 20) : 10;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.10)';
+  ctx.fillStyle = 'rgba(125, 211, 252, 0.42)';
+  ctx.font = 'bold 14px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textBaseline = 'bottom';
+  const firstDepth = Math.max(depthStep, Math.ceil(Math.max(0, viewMinY) / depthStep) * depthStep);
+  for (let d = firstDepth; d <= viewMaxY; d += depthStep) {
+    const sy = toY(d);
+    if (sy < 12 || sy > height - 6) continue;
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(width, sy);
+    ctx.stroke();
+    ctx.fillText(`${d}m`, 6, sy - 2);
+  }
+
+  // Water surface horizon line (y = 0)
+  const surfY = toY(0);
+  if (surfY >= -4 && surfY <= height + 4) {
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.55)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, surfY);
+    ctx.lineTo(width, surfY);
+    ctx.stroke();
+  }
+
+  // 2. Passage Cartography: Guided Blueprint Ghost + Live Fog-of-War Explored Passages
+  const cellR = Math.max(2.6, 2.35 * scale);
+  const padWorld = 4;
+
+  if (isGuided && Array.isArray(exploreCells) && exploreCells.length > 0) {
+    ctx.fillStyle = isWreck ? 'rgba(251, 146, 60, 0.11)' : 'rgba(56, 189, 248, 0.11)';
+    ctx.beginPath();
+    for (let i = 0; i < exploreCells.length; i++) {
+      const c = exploreCells[i];
+      if (c.x < viewMinX - padWorld || c.x > viewMaxX + padWorld || c.y < viewMinY - padWorld || c.y > viewMaxY + padWorld) continue;
+      const sx = toX(c.x);
+      const sy = toY(c.y);
+      ctx.moveTo(sx + cellR, sy);
+      ctx.arc(sx, sy, cellR, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
+  if (exploredCells && exploredCells.size > 0 && Array.isArray(exploreCells)) {
+    // Soft sonar halo + crisp carved passage core
+    ctx.fillStyle = isWreck ? 'rgba(251, 146, 60, 0.24)' : 'rgba(14, 165, 233, 0.24)';
+    const outerR = cellR * 1.24;
+    ctx.beginPath();
+    for (const idx of exploredCells) {
+      const c = exploreCells[idx];
+      if (!c) continue;
+      if (c.x < viewMinX - padWorld || c.x > viewMaxX + padWorld || c.y < viewMinY - padWorld || c.y > viewMaxY + padWorld) continue;
+      const sx = toX(c.x);
+      const sy = toY(c.y);
+      ctx.moveTo(sx + outerR, sy);
+      ctx.arc(sx, sy, outerR, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    ctx.fillStyle = isWreck ? 'rgba(253, 186, 116, 0.34)' : 'rgba(125, 211, 252, 0.36)';
+    ctx.beginPath();
+    for (const idx of exploredCells) {
+      const c = exploreCells[idx];
+      if (!c) continue;
+      if (c.x < viewMinX - padWorld || c.x > viewMaxX + padWorld || c.y < viewMinY - padWorld || c.y > viewMaxY + padWorld) continue;
+      const sx = toX(c.x);
+      const sy = toY(c.y);
+      ctx.moveTo(sx + cellR * 0.82, sy);
+      ctx.arc(sx, sy, cellR * 0.82, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
+  // 3. Shipwreck Shot Line
+  if (isWreck && level.shotLine) {
+    const sx = toX(level.shotLine.x ?? level.spawn?.x ?? 0);
+    const sy0 = toY(0);
+    const sy1 = toY(level.shotLine.bottomY ?? level.wreckDeckY ?? 40);
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.65)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy0);
+    ctx.lineTo(sx, sy1);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4. Fixed Cave Guidelines (shown fully in Guided, or where revealed in Standard)
+  const drawGuidelineChain = (pts, stroke, lw) => {
+    if (!Array.isArray(pts) || pts.length < 2) return;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    let drawing = false;
+    for (let i = 0; i < pts.length; i++) {
+      const pt = pts[i];
+      const vis = isGuided || _isPointRevealed(pt.x, pt.y, diver, exploreCells, exploredCells, sonarPulse, 7.5);
+      if (vis) {
+        const sx = toX(pt.x);
+        const sy = toY(pt.y);
+        if (!drawing) {
+          ctx.moveTo(sx, sy);
+          drawing = true;
+        } else {
+          ctx.lineTo(sx, sy);
+        }
+      } else {
+        drawing = false;
+      }
+    }
+    ctx.stroke();
+  };
+  if (Array.isArray(level.guideline) && level.guideline.length >= 2) {
+    drawGuidelineChain(level.guideline, 'rgba(253, 224, 71, 0.72)', 1.8);
+  }
+  if (Array.isArray(level.guidelineBranches)) {
+    for (let b = 0; b < level.guidelineBranches.length; b++) {
+      drawGuidelineChain(level.guidelineBranches[b], 'rgba(253, 224, 71, 0.48)', 1.3);
+    }
+  }
+
+  // 5. Player-Deployed Guideline Reel Chains (always visible as your own breadcrumb trail!)
+  if (Array.isArray(playerLines)) {
+    for (let i = 0; i < playerLines.length; i++) {
+      const pl = playerLines[i];
+      if (!pl?.chains?.length) continue;
+      ctx.strokeStyle = pl.isSelf ? '#4ade80' : '#38bdf8';
+      ctx.lineWidth = pl.isSelf ? 2.2 : 1.7;
+      for (let c = 0; c < pl.chains.length; c++) {
+        const ch = pl.chains[c];
+        if (!ch || ch.length === 0) continue;
+        ctx.beginPath();
+        ctx.moveTo(toX(ch[0].x), toY(ch[0].y));
+        for (let k = 1; k < ch.length; k++) {
+          ctx.lineTo(toX(ch[k].x), toY(ch[k].y));
+        }
+        if (pl.reelingActive && c === pl.chains.length - 1 && Number.isFinite(pl.ownerX) && Number.isFinite(pl.ownerY)) {
+          ctx.lineTo(toX(pl.ownerX), toY(pl.ownerY));
+        }
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 6. Discovered Interactive Stations & Relics
+  if (Array.isArray(level.stageCaches)) {
+    for (let i = 0; i < level.stageCaches.length; i++) {
+      const st = level.stageCaches[i];
+      if (!st || claimedStageIds?.has(st.id)) continue;
+      if (!isGuided && !_isPointRevealed(st.x, st.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      const sx = toX(st.x);
+      const sy = toY(st.y);
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(sx - 3.5, sy - 3.5, 7, 7);
+    }
+  }
+  if (Array.isArray(level.lineAnchors)) {
+    for (let i = 0; i < level.lineAnchors.length; i++) {
+      const an = level.lineAnchors[i];
+      if (!an) continue;
+      const tagged = Boolean(placedMarkerIds?.has(an.id));
+      if (!tagged && !isGuided && !_isPointRevealed(an.x, an.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      const sx = toX(an.x);
+      const sy = toY(an.y);
+      ctx.fillStyle = tagged ? '#4ade80' : '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (Array.isArray(level.watertightHatches)) {
+    for (let i = 0; i < level.watertightHatches.length; i++) {
+      const h = level.watertightHatches[i];
+      if (!h || openedHatchIds?.has(h.id)) continue;
+      if (!isGuided && !_isPointRevealed(h.x, h.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) continue;
+      const sx = toX(h.x);
+      const sy = toY(h.y);
+      ctx.strokeStyle = '#fb923c';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx - 4, sy - 4, 8, 8);
+    }
+  }
+  if (Array.isArray(level.collectibles)) {
+    for (let i = 0; i < level.collectibles.length; i++) {
+      const item = level.collectibles[i];
+      if (!item || collectedIds?.has(item.id)) continue;
+      if (!_isPointRevealed(item.x, item.y, diver, exploreCells, exploredCells, sonarPulse, 6.0)) continue;
+      const sx = toX(item.x);
+      const sy = toY(item.y);
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 4.2);
+      ctx.lineTo(sx + 3.6, sy);
+      ctx.lineTo(sx, sy + 4.2);
+      ctx.lineTo(sx - 3.6, sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // 7. Checkpoints, Surface Exit & Recovery Target
+  const allowCompassHints = isGuided || !level.hideWaypointCompass;
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
+  if (Array.isArray(level.checkpoints)) {
+    for (let i = 0; i < level.checkpoints.length; i++) {
+      const cp = level.checkpoints[i];
+      const hit = Boolean(checkpointsHit?.has(cp.id));
+      const isNext = nextCheckpoint && nextCheckpoint.id === cp.id;
+      if (!hit && !allowCompassHints && !_isPointRevealed(cp.x, cp.y, diver, exploreCells, exploredCells, sonarPulse, 6.5)) {
+        continue;
+      }
+      const sx = toX(cp.x);
+      const sy = toY(cp.y);
+      if (isNext) {
+        ctx.strokeStyle = `rgba(56, 189, 248, ${(0.45 + 0.45 * pulse).toFixed(2)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 5.5 + pulse * 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#e0f2fe';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hit) {
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.78)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  if (level.exitZone) {
+    const ex = toX(level.exitZone.x);
+    const ey = toY(Math.max(1.0, level.exitZone.y));
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.moveTo(ex, ey - 5.5);
+    ctx.lineTo(ex + 5, ey + 3.5);
+    ctx.lineTo(ex - 5, ey + 3.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (level.recoveryTarget && !bodyRecovered) {
+    const rt = level.recoveryTarget;
+    if (allowCompassHints || _isPointRevealed(rt.x, rt.y, diver, exploreCells, exploredCells, sonarPulse, 7.0)) {
+      const rx = toX(rt.x);
+      const ry = toY(rt.y);
+      ctx.strokeStyle = `rgba(244, 114, 182, ${(0.5 + 0.5 * pulse).toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 5 + pulse * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#f472b6';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 8. Active Cave Sonar Hydrophone Pulse Ring
+  if (sonarPulse && sonarPulse.durationSec > 0) {
+    const frac = Math.max(0, Math.min(1, sonarPulse.ageSec / sonarPulse.durationSec));
+    const rPx = frac * (sonarPulse.maxRadiusM || 28) * scale;
+    const px = toX(sonarPulse.x);
+    const py = toY(sonarPulse.y);
+    ctx.strokeStyle = `rgba(34, 211, 238, ${((1 - frac) * 0.9).toFixed(2)})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(px, py, rPx, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 9. Co-op Buddy Dots
+  if (Array.isArray(peers)) {
+    for (let i = 0; i < peers.length; i++) {
+      const p = peers[i];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const px = toX(p.x);
+      const py = toY(p.y);
+      ctx.fillStyle = p.alive === false ? '#ef4444' : '#38bdf8';
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  // 10. Local Diver Torch Wedge & Heading Chevron
+  if (diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+    const dx = toX(diver.x);
+    const dy = toY(diver.y);
+    const ang = Number.isFinite(diver.angle) ? diver.angle : 0;
+    const tAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : ang;
+
+    if (diver.torchOn !== false) {
+      const coneR = Math.max(18, 12 * scale);
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.22)';
+      ctx.beginPath();
+      ctx.moveTo(dx, dy);
+      ctx.arc(dx, dy, coneR, tAng - 0.36, tAng + 0.36);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.rotate(ang);
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(7.5, 0);
+    ctx.lineTo(-5.2, -4.6);
+    ctx.lineTo(-2.6, 0);
+    ctx.lineTo(-5.2, 4.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Subtle radar scanline sheen
+  const sweepY = ((timeSec * 28) % (height + 40)) - 20;
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
+  ctx.fillRect(0, sweepY, width, 10);
+
+  ctx.restore();
+}
+
 export class DiveComputerHUD {
   constructor({ onGasSelect, onReelToggle, onReelRewind, onReelRewindHold = null, onHeartbeatPulse }) {
     this.onHeartbeatPulse = onHeartbeatPulse;
@@ -230,6 +691,14 @@ export class DiveComputerHUD {
     this.elSelfName = document.getElementById('dc-self-name');
     this.elModeBadge = document.getElementById('dc-mode-badge');
     this.elDailyBadge = document.getElementById('dc-daily-badge');
+    this.elMinimapWrap = document.getElementById('hud-minimap-wrap');
+    this.elMinimapCanvas = document.getElementById('hud-minimap-canvas');
+    this.elMinimapPct = document.getElementById('hud-minimap-pct');
+    this.elMinimapZoom = document.getElementById('hud-minimap-zoom');
+    this._minimapCtx = null;
+    this._minimapRedrawAccum = 1;
+    this._minimapLastExplored = -1;
+    this._minimapLastZoom = '';
     this.elGasCallout = document.getElementById('hud-gas-callout');
     this.elGasCalloutTitle = document.getElementById('hud-gas-callout-title');
     this.elGasCalloutDetail = document.getElementById('hud-gas-callout-detail');
@@ -391,6 +860,17 @@ export class DiveComputerHUD {
     difficulty = 'standard',
     mutatorId = '',
     dailyMutatorLabel = '',
+    minimapVisible = true,
+    minimapZoomMode = 'follow',
+    exploreCells = null,
+    exploredCells = null,
+    collectedIds = null,
+    openedHatchIds = null,
+    claimedStageIds = null,
+    placedMarkerIds = null,
+    playerLines = null,
+    sonarPulse = null,
+    timeSec = 0,
     dt = 0.016,
   }) {
     const cleanDiff = difficulty === 'guided' || difficulty === 'hardcore' ? difficulty : 'standard';
@@ -852,6 +1332,55 @@ export class DiveComputerHUD {
           ui.card.remove();
         }
         this.mateCards.clear();
+      }
+    }
+
+    // Live Sonar Cave & Wreck Cartography Minimap (throttled ~18 Hz for ultra-light GPU cost)
+    if (this.elMinimapWrap) {
+      const allowed = isMinimapAllowed(cleanDiff, mutatorId);
+      const showMap = Boolean(allowed && minimapVisible && level);
+      setHidden(this.elMinimapWrap, !showMap);
+      if (showMap && this.elMinimapCanvas) {
+        setText(this.elMinimapPct, `${Math.round(exploredPct || 0)}%`);
+        setText(this.elMinimapZoom, minimapZoomMode === 'full' ? 'FULL' : 'ZOOM');
+        this._minimapRedrawAccum += dt;
+        const expSize = exploredCells ? exploredCells.size : 0;
+        const needsRedraw =
+          this._minimapRedrawAccum >= 0.055 ||
+          expSize !== this._minimapLastExplored ||
+          minimapZoomMode !== this._minimapLastZoom ||
+          Boolean(sonarPulse);
+        if (needsRedraw) {
+          this._minimapRedrawAccum = 0;
+          this._minimapLastExplored = expSize;
+          this._minimapLastZoom = minimapZoomMode;
+          const mctx =
+            this._minimapCtx ||
+            (typeof this.elMinimapCanvas.getContext === 'function'
+              ? (this._minimapCtx = this.elMinimapCanvas.getContext('2d'))
+              : null);
+          if (mctx) {
+            drawSonarMinimap(mctx, this.elMinimapCanvas.width, this.elMinimapCanvas.height, {
+              level,
+              diver,
+              peers: teamList,
+              exploreCells,
+              exploredCells,
+              checkpointsHit,
+              nextCheckpoint,
+              collectedIds,
+              openedHatchIds,
+              claimedStageIds,
+              placedMarkerIds,
+              bodyRecovered,
+              playerLines,
+              sonarPulse,
+              difficulty: cleanDiff,
+              zoomMode: minimapZoomMode,
+              timeSec,
+            });
+          }
+        }
       }
     }
   }

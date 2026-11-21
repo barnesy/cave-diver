@@ -55,7 +55,7 @@ import {
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
-import { DiveComputerHUD } from './game/hud.js';
+import { DiveComputerHUD, isMinimapAllowed } from './game/hud.js';
 import { InputController } from './game/input.js';
 import { DiveAudio } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -485,7 +485,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=108" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=109" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1104,6 +1104,7 @@ const input = new InputController({
   onWreckAction: () => handleWreckAction(),
   onSonarPing: () => handleSonarPing(),
   onDpvToggle: () => handleDpvToggle(),
+  onMinimapToggle: () => handleMinimapToggle(),
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -1111,6 +1112,67 @@ const wreckActionLabelEl = document.getElementById('wreck-action-label');
 const wreckActionDetailEl = document.getElementById('wreck-action-detail');
 const wreckActionProgressEl = document.getElementById('wreck-action-progress');
 let lastWreckActionKey = '';
+
+// Live Sonar Cave & Wreck Cartography Minimap state & controls (v109)
+const MINIMAP_PREF_KEY = 'caveDiverMinimap_v1';
+const btnMinimap = document.getElementById('btn-minimap');
+const hudMinimapWrapEl = document.getElementById('hud-minimap-wrap');
+let minimapVisible = true;
+let minimapZoomMode = 'follow'; // 'follow' | 'full'
+const _minimapPlayerLines = [];
+try {
+  if (localStorage.getItem(MINIMAP_PREF_KEY) === '0') minimapVisible = false;
+} catch {}
+
+function syncMinimapButtonUi() {
+  if (!btnMinimap) return;
+  const diff = session?.difficulty || activeDifficulty;
+  const mut = session?.mutatorId || '';
+  const allowed = isMinimapAllowed(diff, mut);
+  btnMinimap.classList.toggle('active', allowed && minimapVisible);
+  btnMinimap.classList.toggle('disabled-mode', !allowed);
+  btnMinimap.title = !allowed
+    ? 'Sonar Minimap disabled in Hardcore / Zero-Gear Purist mode'
+    : minimapVisible
+      ? 'Hide Sonar Minimap (M)'
+      : 'Show Sonar Minimap (M)';
+}
+
+function handleMinimapToggle() {
+  if (mode !== 'diving' || !session || divePaused) return false;
+  const allowed = isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '');
+  if (!allowed) {
+    showToast('🧭 Sonar Minimap disabled in Hardcore / Zero-Gear Purist mode.', 2.2);
+    return true;
+  }
+  minimapVisible = !minimapVisible;
+  try { localStorage.setItem(MINIMAP_PREF_KEY, minimapVisible ? '1' : '0'); } catch {}
+  syncMinimapButtonUi();
+  showToast(minimapVisible ? '📡 Sonar Minimap: On (tap map for Full Survey)' : '📡 Sonar Minimap: Hidden [M]', 1.8);
+  return true;
+}
+
+function toggleMinimapZoom() {
+  if (mode !== 'diving' || !session || !minimapVisible) return;
+  if (!isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '')) return;
+  minimapZoomMode = minimapZoomMode === 'follow' ? 'full' : 'follow';
+  showToast(minimapZoomMode === 'full' ? '🗺️ Sonar Map: Full Site Survey' : '🗺️ Sonar Map: Tactical Follow Zoom', 1.6);
+}
+
+btnMinimap?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleMinimapToggle();
+});
+hudMinimapWrapEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleMinimapZoom();
+});
+hudMinimapWrapEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    toggleMinimapZoom();
+  }
+});
 
 // Unlockable Tech Gear Loadout (Cave Sonar, DPV Scooter & CCR Rebreather tied to Cert Ladder)
 const GEAR_LOADOUT_KEY = 'caveDiverGearLoadout_v1';
@@ -1836,6 +1898,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   session._dailyBadgeLabel = dailyMutMeta ? `📅 ${dailyMutMeta.icon} ${dailyMutMeta.shortName}` : '';
   lastGearHudKey = '';
   syncTechGearHud(session);
+  syncMinimapButtonUi();
   refreshActiveGhostTrack(activeLevel);
   session.endedState = null;
   session.localOutcome = null;
@@ -4693,6 +4756,32 @@ function stepSimulation(dt) {
     }
   }
 
+  _minimapPlayerLines.length = 0;
+  if (session.guidelineChains?.length > 0) {
+    _minimapPlayerLines.push({
+      isSelf: true,
+      chains: session.guidelineChains,
+      reelingActive: session.reelingActive,
+      ownerX: diver.x,
+      ownerY: diver.y,
+    });
+  }
+  if (isMultiplayer) {
+    for (let i = 0; i < peers.length; i++) {
+      const p = peers[i];
+      const chains = p.guidelineChains || session.restoredPeerLines?.get(p.id);
+      if (chains && chains.length > 0) {
+        _minimapPlayerLines.push({
+          isSelf: false,
+          chains,
+          reelingActive: Boolean(p.reelingActive),
+          ownerX: p.x,
+          ownerY: p.y,
+        });
+      }
+    }
+  }
+
   hud.update({
     diveState,
     diver,
@@ -4715,6 +4804,17 @@ function stepSimulation(dt) {
     difficulty: session.difficulty || activeDifficulty,
     mutatorId: session.mutatorId || '',
     dailyMutatorLabel: session._dailyBadgeLabel || '',
+    minimapVisible,
+    minimapZoomMode,
+    exploreCells: session.exploreCells,
+    exploredCells: session.exploredCells,
+    collectedIds: session.collectedIds,
+    openedHatchIds: session.openedHatchIds,
+    claimedStageIds: session.claimedStageIds,
+    placedMarkerIds: session.placedMarkerIds,
+    playerLines: _minimapPlayerLines,
+    sonarPulse: session.sonar?.activePulse || null,
+    timeSec: session.simTimeSec,
     dt,
   });
 
