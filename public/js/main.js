@@ -1,4 +1,19 @@
-import { LEVELS, DEFAULT_LEVEL_ID, CAMPAIGN_PLAN, getLevelById, getLevelMeta, getLevelMaxDepthM } from './levels/index.js';
+import {
+  LEVELS,
+  DEFAULT_LEVEL_ID,
+  CAMPAIGN_PLAN,
+  getLevelById,
+  getLevelMeta,
+  getLevelMaxDepthM,
+  PROCEDURAL_TIERS,
+  PROCEDURAL_BIOMES,
+  normalizeProceduralSeed,
+  randomProceduralSeed,
+  buildProceduralLevelId,
+  buildProceduralShareUrl,
+  parseProceduralFromSearch,
+  generateProceduralLevel,
+} from './levels/index.js';
 import {
   createDiveState,
   switchGas,
@@ -514,7 +529,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=124" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=125" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2722,6 +2737,121 @@ btnSandboxLaunch?.addEventListener('click', () => {
   applyDraftSandboxToMenu();
   closeChallengeModal();
   btnPlaySolo?.click();
+});
+
+// ─── Procedural Endless Expeditions ("Uncharted Sump Generator", v125) ───
+const proceduralModal = document.getElementById('procedural-modal');
+const btnOpenProcedural = document.getElementById('btn-open-procedural');
+const menuProcPillEl = document.getElementById('menu-proc-pill');
+const btnProcModalClose = document.getElementById('btn-proc-modal-close');
+const procSeedInput = document.getElementById('proc-seed-input');
+const btnProcRandom = document.getElementById('btn-proc-random');
+const procTierSelect = document.getElementById('proc-tier-select');
+const procBiomeSelect = document.getElementById('proc-biome-select');
+const procUnlinedCheck = document.getElementById('proc-unlined-check');
+const procPreviewBox = document.getElementById('proc-preview-box');
+const procUrlInput = document.getElementById('proc-url-input');
+const btnProcCopy = document.getElementById('btn-proc-copy');
+const btnProcLaunch = document.getElementById('btn-proc-launch');
+const btnProcSelect = document.getElementById('btn-proc-select');
+
+let draftProcedural = {
+  seed: randomProceduralSeed(),
+  tier: 'deep',
+  biome: 'cenote',
+  unlined: false,
+};
+
+function renderProceduralModal() {
+  if (!proceduralModal) return;
+  draftProcedural.seed = normalizeProceduralSeed(procSeedInput?.value || draftProcedural.seed);
+  draftProcedural.tier = PROCEDURAL_TIERS[procTierSelect?.value] ? procTierSelect.value : 'deep';
+  draftProcedural.biome = PROCEDURAL_BIOMES[procBiomeSelect?.value] ? procBiomeSelect.value : 'cenote';
+  draftProcedural.unlined = Boolean(procUnlinedCheck?.checked);
+
+  const previewLevel = generateProceduralLevel(draftProcedural);
+  const gasLabel = previewLevel.gasOverrides?.TMX1455?.name || 'TMX 14/55';
+  if (procPreviewBox) {
+    procPreviewBox.innerHTML =
+      `<strong>${previewLevel.name}</strong><br/>` +
+      `Max Depth: <strong>${previewLevel.proceduralMeta.targetDepthM}m</strong> · ` +
+      `Segments: <strong>${previewLevel.segments.length}</strong> · ` +
+      `Relics: <strong>${previewLevel.collectibles.length}</strong> · ` +
+      `Bottom Mix: <strong>${gasLabel}</strong>` +
+      (previewLevel.reelMetersPerDiver > 0 ? ` · <strong>🧵 ${previewLevel.reelMetersPerDiver}m Unlined Reel</strong>` : ' · <strong>Fixed Guideline</strong>');
+  }
+  if (procUrlInput) {
+    procUrlInput.value = buildProceduralShareUrl(`${location.origin}${location.pathname}`, draftProcedural);
+  }
+}
+
+function openProceduralModal() {
+  if (!proceduralModal) return;
+  closeHomeMenu?.();
+  if (procSeedInput) procSeedInput.value = draftProcedural.seed;
+  if (procTierSelect) procTierSelect.value = draftProcedural.tier;
+  if (procBiomeSelect) procBiomeSelect.value = draftProcedural.biome;
+  if (procUnlinedCheck) procUnlinedCheck.checked = draftProcedural.unlined;
+  renderProceduralModal();
+  proceduralModal.hidden = false;
+}
+
+function closeProceduralModal() {
+  if (proceduralModal) proceduralModal.hidden = true;
+}
+
+async function applyProceduralLevelToMenu(cfg, { launchImmediately = false } = {}) {
+  const procId = buildProceduralLevelId(cfg);
+  await selectAndLoadLevel(procId, { focusMap: false });
+  if (menuProcPillEl) {
+    const s = normalizeProceduralSeed(cfg.seed);
+    menuProcPillEl.textContent = `∞ #${s}`;
+    menuProcPillEl.classList.add('active');
+  }
+  if (launchImmediately) {
+    btnPlaySolo?.click();
+  } else {
+    showToast(`∞ Uncharted Sump #${normalizeProceduralSeed(cfg.seed)} carved & ready!`, 2.6);
+  }
+}
+
+btnOpenProcedural?.addEventListener('click', openProceduralModal);
+menuProcPillEl?.addEventListener('click', openProceduralModal);
+btnProcModalClose?.addEventListener('click', closeProceduralModal);
+proceduralModal?.addEventListener('click', (e) => {
+  if (e.target === proceduralModal) closeProceduralModal();
+});
+procSeedInput?.addEventListener('input', renderProceduralModal);
+procTierSelect?.addEventListener('change', renderProceduralModal);
+procBiomeSelect?.addEventListener('change', renderProceduralModal);
+procUnlinedCheck?.addEventListener('change', renderProceduralModal);
+btnProcRandom?.addEventListener('click', () => {
+  draftProcedural.seed = randomProceduralSeed();
+  if (procSeedInput) procSeedInput.value = draftProcedural.seed;
+  renderProceduralModal();
+});
+btnProcCopy?.addEventListener('click', async () => {
+  const url = procUrlInput?.value || '';
+  if (!url) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Uncharted Sump seed URL copied!', 2.4);
+      return;
+    }
+  } catch {}
+  procUrlInput?.select();
+  showToast('Seed URL selected — press Ctrl+C to copy.', 2.2);
+});
+btnProcSelect?.addEventListener('click', async () => {
+  renderProceduralModal();
+  closeProceduralModal();
+  await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: false });
+});
+btnProcLaunch?.addEventListener('click', async () => {
+  renderProceduralModal();
+  closeProceduralModal();
+  await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: true });
 });
 btnChallengeAccept?.addEventListener('click', () => {
   btnPlaySolo?.click();
@@ -7221,8 +7351,20 @@ async function bootGame() {
     validLevelIds: LEVELS.map((l) => l.id),
     validMutatorIds: DAILY_MUTATORS.map((m) => m.id),
   });
+  const incomingProc = parseProceduralFromSearch(location.search);
   if (incomingChallenge && !INITIAL_ROOM_CODE) {
     applyIncomingChallenge(incomingChallenge).catch(() => {});
+  } else if (incomingProc && !INITIAL_ROOM_CODE) {
+    draftProcedural = {
+      seed: incomingProc.seed,
+      tier: incomingProc.tier,
+      biome: incomingProc.biome,
+      unlined: incomingProc.unlined,
+    };
+    applyProceduralLevelToMenu(draftProcedural, { launchImmediately: false }).catch(() => {});
+    try {
+      history.replaceState(null, '', `${location.origin}${location.pathname}`);
+    } catch {}
   }
   if (INITIAL_ROOM_CODE) {
     beginRoomJoinLoading(INITIAL_ROOM_CODE, {

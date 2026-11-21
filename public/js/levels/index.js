@@ -31,8 +31,31 @@ import { WRECK_U1206 } from './wreck7_u1206.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
 import { enrichCaveInteractives } from './caveInteractives.js';
+import {
+  PROCEDURAL_TIERS,
+  PROCEDURAL_BIOMES,
+  normalizeProceduralSeed,
+  randomProceduralSeed,
+  buildProceduralLevelId,
+  parseProceduralLevelId,
+  buildProceduralShareUrl,
+  parseProceduralFromSearch,
+  generateProceduralLevel,
+} from './proceduralLevel.js';
 
-export { CAMPAIGN_PLAN, CAMPAIGN_TIERS };
+export {
+  CAMPAIGN_PLAN,
+  CAMPAIGN_TIERS,
+  PROCEDURAL_TIERS,
+  PROCEDURAL_BIOMES,
+  normalizeProceduralSeed,
+  randomProceduralSeed,
+  buildProceduralLevelId,
+  parseProceduralLevelId,
+  buildProceduralShareUrl,
+  parseProceduralFromSearch,
+  generateProceduralLevel,
+};
 
 /**
  * Registry of all playable cave, mine, iceberg & shipwreck dive levels, ordered by increasing campaign difficulty.
@@ -79,23 +102,43 @@ export const DEFAULT_LEVEL_ID = LEVEL_1.id;
 
 const LEVEL_MAP = new Map(LEVELS.map((lvl) => [lvl.id, lvl]));
 const PLAN_MAP = new Map(CAMPAIGN_PLAN.map((slot) => [slot.id, slot]));
+const PROCEDURAL_CACHE = new Map();
+
+function getOrBuildProceduralLevel(levelId) {
+  const parsed = parseProceduralLevelId(levelId);
+  if (!parsed) return null;
+  const canonicalId = buildProceduralLevelId(parsed);
+  if (PROCEDURAL_CACHE.has(canonicalId)) {
+    return PROCEDURAL_CACHE.get(canonicalId);
+  }
+  const built = generateProceduralLevel(parsed);
+  if (PROCEDURAL_CACHE.size >= 16) {
+    const oldestKey = PROCEDURAL_CACHE.keys().next().value;
+    if (oldestKey) PROCEDURAL_CACHE.delete(oldestKey);
+  }
+  PROCEDURAL_CACHE.set(canonicalId, built);
+  return built;
+}
 
 /**
- * Look up a registered level definition by id, falling back to the default level.
+ * Look up a registered level definition (or deterministic procedural sump) by id, falling back to the default level.
  * @param {string} levelId
  * @returns {object}
  */
 export function getLevelById(levelId) {
-  return LEVEL_MAP.get(levelId) || LEVEL_1;
+  if (LEVEL_MAP.has(levelId)) return LEVEL_MAP.get(levelId);
+  const proc = getOrBuildProceduralLevel(levelId);
+  if (proc) return proc;
+  return LEVEL_1;
 }
 
 /**
- * Check whether an arbitrary string matches a registered level id.
+ * Check whether an arbitrary string matches a registered level id or a valid procedural sump id.
  * @param {string} levelId
  * @returns {boolean}
  */
 export function isValidLevelId(levelId) {
-  return typeof levelId === 'string' && LEVEL_MAP.has(levelId);
+  return typeof levelId === 'string' && (LEVEL_MAP.has(levelId) || parseProceduralLevelId(levelId) !== null);
 }
 
 /**
@@ -116,20 +159,20 @@ export function getLevelMaxDepthM(level) {
 export function getLevelMeta(levelOrId, fallbackIndex = 0) {
   const id = typeof levelOrId === 'string' ? levelOrId : levelOrId?.id;
   const plan = PLAN_MAP.get(id);
-  const lvl = typeof levelOrId === 'object' ? levelOrId : LEVEL_MAP.get(id);
+  const lvl = typeof levelOrId === 'object' ? levelOrId : (LEVEL_MAP.get(id) || getOrBuildProceduralLevel(id));
   const idx = plan ? plan.rank - 1 : LEVELS.findIndex((l) => l.id === id);
   const resolvedIdx = idx >= 0 ? idx : fallbackIndex;
   const rank = plan?.rank || lvl?.difficultyRank || resolvedIdx + 1;
   const tier = plan?.tier || lvl?.tier || (rank <= 2 ? 1 : rank <= 4 ? 2 : rank === 5 ? 3 : 4);
   const reelM = Number.isFinite(lvl?.reelMetersPerDiver) ? lvl.reelMetersPerDiver : plan?.reelMetersPerDiver || 0;
   const maxDepthM = getLevelMaxDepthM(lvl) || plan?.targetDepthM || 50;
-  const badge = plan?.badge || (reelM > 0 ? `Unlined ${maxDepthM}m` : `${maxDepthM}m`);
+  const badge = plan?.badge || lvl?.badge || (reelM > 0 ? `Unlined ${maxDepthM}m` : `${maxDepthM}m`);
   return {
     rank,
     tier,
     badge,
     category: lvl?.category || plan?.category || (lvl?.isWreck ? 'wreck' : 'cave'),
-    region: plan?.region || '',
+    region: plan?.region || (lvl?.isProcedural ? 'Uncharted Sump' : ''),
     maxDepthM,
     lined: reelM <= 0 && (lvl?.guideline?.length ?? 0) > 0,
     reelMetersPerDiver: reelM,

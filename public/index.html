@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="124" />
+  <meta name="app-version" content="125" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=124" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=124" />
-  <link rel="stylesheet" href="./css/style.css?v=124" />
+  <link rel="icon" href="./icons/icon-192.png?v=125" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=125" />
+  <link rel="stylesheet" href="./css/style.css?v=125" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=124" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=125" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=124" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=125" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -108,6 +108,10 @@
                 <span id="home-menu-sandbox-label">🎛️ Challenge Sandbox</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
               </button>
+              <button id="btn-open-procedural" class="home-menu-item" type="button" role="menuitem" title="Generate an Infinite Seeded Cave Expedition (Uncharted Sump)">
+                <span>∞ Uncharted Sump</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
               <button id="btn-open-issue" class="home-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">
                 <span>🐛 Report Issue / Idea</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
@@ -136,7 +140,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v124</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v125</button>
               </div>
             </div>
           </div>
@@ -177,6 +181,7 @@
             <button id="menu-gas-pill" class="gas-plan-pill" type="button" title="Open Technical Gas Blender (Custom Trimix / Nitrox)">🧪 Default Mix</button>
             <button id="menu-drills-pill" class="drills-plan-pill" type="button" title="Toggle Emergency Failure Drills (Mask Flood / Light Fail / Free-Flow · +200 Mastery)">⚡ Drills: Off</button>
             <button id="menu-mutator-pill" class="mutator-plan-pill" type="button" title="Open Challenge Sandbox &amp; Mutator Mixer (Shareable URL)">🎛️ Sandbox</button>
+            <button id="menu-proc-pill" class="mutator-plan-pill" type="button" title="Generate Infinite Seeded Uncharted Sump Expeditions">∞ Endless</button>
             <span id="level-lock-note" class="level-lock-note" hidden>Host controls dive site</span>
           </div>
           <div class="site-picker-controls">
@@ -837,6 +842,70 @@
     </div>
   </div>
 
+  <!-- Procedural Endless Expeditions Modal ("Uncharted Sump Generator", v125) -->
+  <div id="procedural-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="procedural-modal-title">
+    <div class="lb-stats-card challenge-modal-card">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">TECHNO DIVE · ENDLESS GENERATOR</div>
+          <h2 id="procedural-modal-title" class="lb-stats-title">∞ Uncharted Sump Generator</h2>
+          <div class="lb-stats-sub">Generate infinite seeded karst caves, flooded mines &amp; glacial rifts — share the seed to dive the exact same cave!</div>
+        </div>
+        <button id="btn-proc-modal-close" class="btn tiny ghost" type="button" aria-label="Close uncharted sump generator">✕</button>
+      </div>
+
+      <div class="sandbox-section">
+        <label class="sandbox-lbl" for="proc-seed-input">EXPEDITION SEED</label>
+        <div class="challenge-url-row">
+          <input id="proc-seed-input" class="room-invite-input" type="text" maxlength="10" value="ABYSS7" autocomplete="off" aria-label="Procedural cave seed" />
+          <button id="btn-proc-random" class="btn tiny secondary" type="button" title="Roll a fresh random seed">🎲 Random</button>
+        </div>
+      </div>
+
+      <div class="sandbox-section">
+        <label class="sandbox-lbl" for="proc-tier-select">DEPTH TIER</label>
+        <select id="proc-tier-select" class="lb-site-select" style="width:100%;">
+          <option value="shallow">Shallow Karst (~38m · Nitrox / Light Trimix)</option>
+          <option value="deep" selected>Deep Sump (~78m · TMX 12/60 Technical)</option>
+          <option value="extreme">Abyssal Rift (~142m · Hypoxic TMX 9/70 + Vents)</option>
+        </select>
+      </div>
+
+      <div class="sandbox-section">
+        <label class="sandbox-lbl" for="proc-biome-select">GEOLOGICAL BIOME</label>
+        <select id="proc-biome-select" class="lb-site-select" style="width:100%;">
+          <option value="cenote" selected>Yucatán Cenote (Limestone &amp; Turquoise Halocline)</option>
+          <option value="mine">Flooded Nordic Mine (Timber &amp; Iron Ore Shafts)</option>
+          <option value="glacier">Subglacial Rift (Blue Ice Vaults)</option>
+          <option value="volcanic">Volcanic Lava Tube (Basalt &amp; Thermal Vents)</option>
+          <option value="crystal">Crystal Halocline Sink (Aragonite Spires)</option>
+        </select>
+      </div>
+
+      <div class="sandbox-section">
+        <label class="issue-diag-toggle">
+          <input id="proc-unlined-check" type="checkbox" />
+          <span>🧵 Unlined Reel Maze (No fixed guideline — lay &amp; rewind your own reel!)</span>
+        </label>
+      </div>
+
+      <div id="proc-preview-box" class="challenge-preview-box" style="padding:10px 12px;border-radius:10px;background:rgba(15,23,42,0.55);border:1px solid rgba(56,189,248,0.22);font-size:12px;color:#cbd5e1;margin-bottom:10px;"></div>
+
+      <div class="sandbox-section">
+        <label class="sandbox-lbl" for="proc-url-input">SHAREABLE SEED LINK</label>
+        <div class="challenge-url-row">
+          <input id="proc-url-input" class="room-invite-input" type="text" readonly aria-label="Shareable procedural seed link" />
+          <button id="btn-proc-copy" class="btn tiny accent" type="button">Copy</button>
+        </div>
+      </div>
+
+      <div class="gas-planner-actions" style="margin-top:12px;">
+        <button id="btn-proc-launch" class="btn primary" type="button">🚀 Dive Uncharted Sump</button>
+        <button id="btn-proc-select" class="btn secondary" type="button">Select as Site</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GitHub Issue / Feedback Reporter Modal -->
   <div id="issue-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="issue-modal-title">
     <div class="lb-stats-card issue-card">
@@ -876,67 +945,68 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=124",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=124",
-        "./js/game/audio.js": "./js/game/audio.js?v=124",
-        "./js/game/collision.js": "./js/game/collision.js?v=124",
-        "./js/game/input.js": "./js/game/input.js?v=124",
-        "./js/game/hud.js": "./js/game/hud.js?v=124",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=124",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=124",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=124",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=124",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=124",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=124",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=124",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=124",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=124",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=124",
-        "./js/game/silt.js": "./js/game/silt.js?v=124",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=124",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=124",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=124",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=124",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=124",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=124",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=124",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=124",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=124",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=124",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=124",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=124",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=124",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=124",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=124",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=124",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=124",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=124",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=124",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=124",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=124",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=124",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=124",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=124",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=124",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=124",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=124",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=124",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=124",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=124",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=124",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=124",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=124",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=124",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=124",
-        "./js/levels/index.js": "./js/levels/index.js?v=124",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=124",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=124",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=124",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=124",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=124"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=125",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=125",
+        "./js/game/audio.js": "./js/game/audio.js?v=125",
+        "./js/game/collision.js": "./js/game/collision.js?v=125",
+        "./js/game/input.js": "./js/game/input.js?v=125",
+        "./js/game/hud.js": "./js/game/hud.js?v=125",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=125",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=125",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=125",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=125",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=125",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=125",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=125",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=125",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=125",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=125",
+        "./js/game/silt.js": "./js/game/silt.js?v=125",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=125",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=125",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=125",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=125",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=125",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=125",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=125",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=125",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=125",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=125",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=125",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=125",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=125",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=125",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=125",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=125",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=125",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=125",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=125",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=125",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=125",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=125",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=125",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=125",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=125",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=125",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=125",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=125",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=125",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=125",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=125",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=125",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=125",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=125",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=125",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=125",
+        "./js/levels/index.js": "./js/levels/index.js?v=125",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=125",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=125",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=125",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=125",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=125"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=124"></script>
+  <script type="module" src="./js/main.js?v=125"></script>
 </body>
 </html>

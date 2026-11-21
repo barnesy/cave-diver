@@ -74,6 +74,15 @@ import {
   getLevelMeta,
   getAscentConfig,
   validateLevel,
+  isValidLevelId,
+  PROCEDURAL_TIERS,
+  PROCEDURAL_BIOMES,
+  normalizeProceduralSeed,
+  buildProceduralLevelId,
+  parseProceduralLevelId,
+  buildProceduralShareUrl,
+  parseProceduralFromSearch,
+  generateProceduralLevel,
 } from '../public/js/levels/index.js';
 import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision, createChunkSDFEvaluator, createBoxSDFEvaluator } from '../public/js/game/collision.js';
 import {
@@ -4621,4 +4630,71 @@ test('v124 Dynamic Underwater Optics & Caustics Pass: Beer-Lambert spectral abso
     24
   );
   assert.ok(ops.includes('fillRect') && ops.includes('fill'));
+});
+
+test('v125 Procedural Endless Expeditions ("Uncharted Sump"): determinism, SDF geometry validation across tiers/biomes & URL codec', () => {
+  // 1. Seed normalization & deterministic generation
+  assert.equal(normalizeProceduralSeed('  k7-m9!p2 '), 'K7M9P2');
+  assert.equal(normalizeProceduralSeed(''), 'ABYSS7');
+
+  const cfgA = { seed: 'K7M9P2', tier: 'deep', biome: 'volcanic', unlined: false };
+  const lvlA1 = generateProceduralLevel(cfgA);
+  const lvlA2 = generateProceduralLevel(cfgA);
+  assert.equal(lvlA1.id, lvlA2.id);
+  assert.deepEqual(lvlA1.segments, lvlA2.segments);
+  assert.deepEqual(lvlA1.checkpoints, lvlA2.checkpoints);
+  assert.deepEqual(lvlA1.collectibles, lvlA2.collectibles);
+  assert.ok(Array.isArray(lvlA1.geothermalVents) && lvlA1.geothermalVents.length >= 2);
+
+  // 2. Validate SDF geometry navigability across all 3 tiers x 5 biomes + unlined maze mode
+  const tierIds = Object.keys(PROCEDURAL_TIERS);
+  const biomeIds = Object.keys(PROCEDURAL_BIOMES);
+  for (let ti = 0; ti < tierIds.length; ti++) {
+    for (let bi = 0; bi < biomeIds.length; bi++) {
+      const unlined = (ti + bi) % 2 === 1;
+      const lvl = generateProceduralLevel({
+        seed: `S${ti}${bi}X9`,
+        tier: tierIds[ti],
+        biome: biomeIds[bi],
+        unlined,
+      });
+      const res = validateLevel(lvl, { checkGeometry: true });
+      assert.equal(res.valid, true, `Procedural ${lvl.id} failed geometry check: ${res.errors.join('; ')}`);
+      assert.equal(lvl.isProcedural, true);
+      if (unlined) {
+        assert.equal(lvl.guideline.length, 0);
+        assert.ok(lvl.reelMetersPerDiver > 150);
+      } else {
+        assert.ok(lvl.guideline.length >= 8);
+      }
+    }
+  }
+
+  // 3. Registry & shareable URL round-trip
+  const procId = buildProceduralLevelId({ seed: 'SUMP42', tier: 'extreme', biome: 'glacier', unlined: true });
+  assert.equal(isValidLevelId(procId), true);
+  assert.deepEqual(parseProceduralLevelId(procId), {
+    seed: 'SUMP42',
+    tier: 'extreme',
+    biome: 'glacier',
+    unlined: true,
+  });
+  const resolved = getLevelById(procId);
+  assert.equal(resolved.id, procId);
+  assert.equal(getLevelMeta(resolved).region, 'Uncharted Sump');
+
+  const shareUrl = buildProceduralShareUrl('https://cave-diver.vercel.app/', {
+    seed: 'SUMP42',
+    tier: 'extreme',
+    biome: 'glacier',
+    unlined: true,
+  });
+  const parsedUrl = parseProceduralFromSearch(new URL(shareUrl).search);
+  assert.equal(parsedUrl.levelId, procId);
+  assert.equal(parsedUrl.unlined, true);
+
+  // 4. Playable DiveSession executes cleanly on procedural level
+  const session = createDiveSession(resolved, { mode: 'solo', difficulty: 'standard' });
+  stepDiveSession(session, { x: 0.4, y: 0.6, boost: false }, 0.05, {});
+  assert.ok(Number.isFinite(session.diver.x) && Number.isFinite(session.diver.y));
 });
