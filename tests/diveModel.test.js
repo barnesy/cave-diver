@@ -46,6 +46,12 @@ import {
   drawReplayFrame,
   renderExpeditionPostcard,
 } from '../public/js/game/diveCard.js';
+import {
+  buildChallengeUrl,
+  parseChallengeFromSearch,
+  formatChallengeSummary,
+  evaluateChallengeResult,
+} from '../public/js/game/challengeLink.js';
 import { LEVEL_1 } from '../public/js/levels/level1.js';
 import { P2pRoomCoordinator, pickNextP2pHostId } from '../public/js/net/p2pRoomHost.js';
 import { LanClient } from '../public/js/net/lanClient.js';
@@ -4390,4 +4396,87 @@ test('v122 Technical Failure & Emergency Bailout Drills: Mask Flood, Primary Tor
   a.playMaskPurge();
   a.playFreeFlowHiss();
   a.playDrillClear();
+});
+
+test('v123 Custom Challenge Links & Mutator Sandbox URL Codec, Sanitization & Head-to-Head Evaluation', () => {
+  const validLevels = LEVELS.map((l) => l.id);
+  const validMutators = DAILY_MUTATORS.map((m) => m.id);
+
+  // 1. Build & parse full custom challenge URL round-trip
+  const url = buildChallengeUrl('https://cave-diver.vercel.app/', {
+    siteId: 'hmhs-britannic',
+    difficulty: 'hardcore',
+    mutatorId: 'strobe',
+    customGas: true,
+    o2Pct: 10,
+    hePct: 70,
+    drillsEnabled: true,
+    challengerName: 'Barnesy',
+    targetScore: 3420,
+  });
+  assert.ok(url.includes('challenge=1'));
+  assert.ok(url.includes('site=hmhs-britannic'));
+  assert.ok(url.includes('diff=hardcore'));
+  assert.ok(url.includes('mut=strobe'));
+  assert.ok(url.includes('o2=10'));
+  assert.ok(url.includes('he=70'));
+  assert.ok(url.includes('drills=1'));
+  assert.ok(url.includes('target=3420'));
+
+  const parsed = parseChallengeFromSearch(new URL(url).search, {
+    validLevelIds: validLevels,
+    validMutatorIds: validMutators,
+  });
+  assert.deepEqual(parsed, {
+    siteId: 'hmhs-britannic',
+    difficulty: 'hardcore',
+    mutatorId: 'strobe',
+    customGas: true,
+    o2Pct: 10,
+    hePct: 70,
+    drillsEnabled: true,
+    challengerName: 'Barnesy',
+    targetScore: 3420,
+  });
+
+  // 2. Sanitization & security guards
+  assert.equal(parseChallengeFromSearch('?room=ABCD', { validLevelIds: validLevels, validMutatorIds: validMutators }), null);
+  assert.equal(parseChallengeFromSearch('?challenge=1&site=invalid-cave', { validLevelIds: validLevels, validMutatorIds: validMutators }), null);
+  const clamped = parseChallengeFromSearch(
+    '?challenge=1&site=cenote-el-abismo&diff=bogus&mut=unknown&o2=99&he=99&by=<Evil>\nDiver1234567890&target=9999999',
+    { validLevelIds: validLevels, validMutatorIds: validMutators }
+  );
+  assert.equal(clamped.difficulty, 'standard');
+  assert.equal(clamped.mutatorId, '');
+  assert.equal(clamped.o2Pct, 40);
+  assert.equal(clamped.hePct, 55); // 95 - 40
+  assert.equal(clamped.targetScore, 99999);
+  assert.ok(!clamped.challengerName.includes('<') && clamped.challengerName.length <= 16);
+
+  // 3. Summary formatting & head-to-head result evaluation
+  const summary = formatChallengeSummary(parsed, {
+    levelName: 'HMHS Britannic',
+    mutator: getDailyMutatorById('strobe'),
+  });
+  assert.ok(summary.tags.includes('🔥 Hardcore'));
+  assert.ok(summary.tags.some((t) => t.includes('TMX 10/70')));
+  assert.ok(summary.tags.includes('⚡ Failure Drills'));
+  assert.ok(summary.shareText.includes('Barnesy challenged you on HMHS Britannic'));
+
+  const winRes = evaluateChallengeResult(parsed, { success: true, score: 3560 });
+  assert.equal(winRes.won, true);
+  assert.equal(winRes.margin, 140);
+  assert.ok(winRes.headline.includes('+140'));
+
+  const tieRes = evaluateChallengeResult(parsed, { success: true, score: 3420 });
+  assert.equal(tieRes.won, true);
+  assert.equal(tieRes.margin, 0);
+
+  const missRes = evaluateChallengeResult(parsed, { success: true, score: 3335 });
+  assert.equal(missRes.won, false);
+  assert.equal(missRes.margin, -85);
+
+  const dnfRes = evaluateChallengeResult(parsed, { success: false, score: 400 });
+  assert.equal(dnfRes.won, false);
+  assert.ok(dnfRes.headline.includes('CHALLENGE FAILED'));
 });

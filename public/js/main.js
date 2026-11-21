@@ -22,6 +22,7 @@ import {
   TECH_GEAR_CATALOG,
   computeUnlockedGear,
   sanitizeGearLoadout,
+  DAILY_MUTATORS,
   getDailyChallenge,
   getDailyMutatorById,
   recordDailyClear,
@@ -38,6 +39,12 @@ import {
   renderExpeditionPostcard,
   formatReplayTime,
 } from './game/diveCard.js';
+import {
+  buildChallengeUrl,
+  parseChallengeFromSearch,
+  formatChallengeSummary,
+  evaluateChallengeResult,
+} from './game/challengeLink.js';
 import {
   createDiveSession,
   stepDiveSession,
@@ -507,7 +514,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=122" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=123" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1132,6 +1139,10 @@ const input = new InputController({
     }
     if (replayModal && !replayModal.hidden) {
       closeReplayModal();
+      return true;
+    }
+    if (challengeModal && !challengeModal.hidden) {
+      closeChallengeModal();
       return true;
     }
     if (modalDiveGuide && !modalDiveGuide.hidden) {
@@ -2454,6 +2465,277 @@ btnGasReset?.addEventListener('click', () => {
   showToast('🧪 Reset to expedition site default gas mix.', 2.2);
 });
 syncGasPlanBadges();
+
+// ── Custom Challenge Links & Mutator Sandbox (v123) ──
+const challengeModal = document.getElementById('challenge-modal');
+const btnOpenChallenge = document.getElementById('btn-open-challenge');
+const menuMutatorPillEl = document.getElementById('menu-mutator-pill');
+const homeMenuSandboxLabelEl = document.getElementById('home-menu-sandbox-label');
+const btnChallengeModalClose = document.getElementById('btn-challenge-modal-close');
+const sandboxMutatorGridEl = document.getElementById('sandbox-mutator-grid');
+const sandboxDiffSelect = document.getElementById('sandbox-diff-select');
+const sandboxTargetInput = document.getElementById('sandbox-target-input');
+const sandboxDrillsCheck = document.getElementById('sandbox-drills-check');
+const sandboxGasCheck = document.getElementById('sandbox-gas-check');
+const sandboxGasLabelEl = document.getElementById('sandbox-gas-label');
+const sandboxUrlInput = document.getElementById('sandbox-url-input');
+const btnSandboxCopy = document.getElementById('btn-sandbox-copy');
+const btnSandboxShare = document.getElementById('btn-sandbox-share');
+const btnSandboxLaunch = document.getElementById('btn-sandbox-launch');
+const btnSandboxApply = document.getElementById('btn-sandbox-apply');
+const challengeBannerEl = document.getElementById('challenge-banner');
+const challengeBannerTitleEl = document.getElementById('challenge-banner-title');
+const challengeBannerTagsEl = document.getElementById('challenge-banner-tags');
+const btnChallengeAccept = document.getElementById('btn-challenge-accept');
+const btnChallengeDismiss = document.getElementById('btn-challenge-dismiss');
+const debriefChallengeBannerEl = document.getElementById('debrief-challenge-banner');
+const btnDebriefChallenge = document.getElementById('btn-debrief-challenge');
+
+let activeSandboxMutatorId = '';
+let activeIncomingChallenge = null;
+let draftSandbox = {
+  mutatorId: '',
+  difficulty: 'standard',
+  drillsEnabled: false,
+  customGas: false,
+  targetScore: 0,
+};
+let lastDebriefChallengeUrl = '';
+let lastDebriefChallengeText = '';
+
+function syncSandboxPillUi() {
+  const mut = activeSandboxMutatorId ? getDailyMutatorById(activeSandboxMutatorId) : null;
+  if (menuMutatorPillEl) {
+    menuMutatorPillEl.textContent = mut ? `${mut.icon} ${mut.shortName}` : '🎛️ Sandbox';
+    menuMutatorPillEl.classList.toggle('active', Boolean(mut));
+  }
+  if (homeMenuSandboxLabelEl) {
+    homeMenuSandboxLabelEl.textContent = mut ? `🎛️ Sandbox (${mut.shortName})` : '🎛️ Challenge Sandbox';
+  }
+}
+
+function getDraftChallengeConfig() {
+  return {
+    siteId: activeLevel?.id || DEFAULT_LEVEL_ID,
+    difficulty: draftSandbox.difficulty,
+    mutatorId: draftSandbox.mutatorId,
+    customGas: draftSandbox.customGas,
+    o2Pct: customGasPlan.o2Pct,
+    hePct: customGasPlan.hePct,
+    drillsEnabled: draftSandbox.drillsEnabled,
+    challengerName: playerNameInput?.value.trim() || '',
+    targetScore: Math.max(0, Math.round(Number(draftSandbox.targetScore) || 0)),
+  };
+}
+
+function renderSandboxModal() {
+  if (!challengeModal) return;
+  if (sandboxMutatorGridEl) {
+    const items = [
+      { id: '', icon: '✨', shortName: 'No Mutator', desc: 'Standard site rules & conditions' },
+      ...DAILY_MUTATORS,
+    ];
+    sandboxMutatorGridEl.innerHTML = items
+      .map(
+        (m) => `
+        <button type="button" class="sandbox-mut-btn${draftSandbox.mutatorId === m.id ? ' active' : ''}" data-sandbox-mut="${m.id}">
+          <strong>${m.icon} ${escapeHtml(m.shortName)}</strong>
+          <span>${escapeHtml(m.desc || '')}</span>
+        </button>`
+      )
+      .join('');
+  }
+  if (sandboxDiffSelect) sandboxDiffSelect.value = draftSandbox.difficulty;
+  if (sandboxTargetInput) sandboxTargetInput.value = draftSandbox.targetScore > 0 ? String(draftSandbox.targetScore) : '';
+  if (sandboxDrillsCheck) sandboxDrillsCheck.checked = draftSandbox.drillsEnabled;
+  if (sandboxGasCheck) sandboxGasCheck.checked = draftSandbox.customGas;
+  if (sandboxGasLabelEl) {
+    const mixTxt = customGasPlan.hePct > 0 ? `TMX ${customGasPlan.o2Pct}/${customGasPlan.hePct}` : `EAN${customGasPlan.o2Pct}`;
+    sandboxGasLabelEl.textContent = `🧪 Include Custom Trimix (${mixTxt})`;
+  }
+  const url = buildChallengeUrl(`${location.origin}${location.pathname}`, getDraftChallengeConfig());
+  if (sandboxUrlInput) sandboxUrlInput.value = url;
+  if (btnSandboxShare) btnSandboxShare.hidden = typeof navigator.share !== 'function';
+}
+
+function openChallengeModal() {
+  if (!challengeModal) return;
+  setHomeMenuOpen(false);
+  const pbRec = loadCareerLogbook().cleared?.[activeLevel?.id];
+  draftSandbox = {
+    mutatorId: activeSandboxMutatorId,
+    difficulty: activeDifficulty,
+    drillsEnabled,
+    customGas: customGasPlan.enabled,
+    targetScore: pbRec?.score || 0,
+  };
+  renderSandboxModal();
+  challengeModal.hidden = false;
+}
+
+function closeChallengeModal() {
+  if (challengeModal) challengeModal.hidden = true;
+}
+
+function applyDraftSandboxToMenu() {
+  activeSandboxMutatorId = draftSandbox.mutatorId || '';
+  activeDifficulty = draftSandbox.difficulty;
+  try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
+  syncPreferenceMenuButtons();
+
+  drillsEnabled = Boolean(draftSandbox.drillsEnabled);
+  try { localStorage.setItem(DRILLS_PREF_KEY, drillsEnabled ? '1' : '0'); } catch {}
+  syncDrillsUi();
+
+  customGasPlan.enabled = Boolean(draftSandbox.customGas);
+  saveCustomGasPlan();
+  syncGasPlanBadges();
+  syncSandboxPillUi();
+}
+
+async function copyOrShareChallengeUrl(url, shareText) {
+  if (!url) return false;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Techno Dive Expedition Challenge', text: shareText, url });
+      showToast('🔗 Challenge link shared!', 2.4);
+      return true;
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') return false;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Challenge link copied! Send it to a friend to race!', 2.8);
+      return true;
+    }
+  } catch {}
+  showToast('Select & copy the Challenge URL above!', 2.4);
+  return false;
+}
+
+function renderIncomingChallengeBanner() {
+  if (!challengeBannerEl) return;
+  if (!activeIncomingChallenge) {
+    challengeBannerEl.hidden = true;
+    return;
+  }
+  const lvl = getLevelById(activeIncomingChallenge.siteId);
+  const mut = activeIncomingChallenge.mutatorId ? getDailyMutatorById(activeIncomingChallenge.mutatorId) : null;
+  const { tags } = formatChallengeSummary(activeIncomingChallenge, { levelName: lvl?.name || 'Expedition', mutator: mut });
+  const who = activeIncomingChallenge.challengerName
+    ? `🏆 ${activeIncomingChallenge.challengerName.toUpperCase()} CHALLENGED YOU`
+    : '🏆 EXPEDITION CHALLENGE RECEIVED';
+  if (challengeBannerTitleEl) challengeBannerTitleEl.textContent = `${who} · ${lvl?.name || ''}`;
+  if (challengeBannerTagsEl) challengeBannerTagsEl.textContent = tags.join(' · ');
+  challengeBannerEl.hidden = false;
+}
+
+async function applyIncomingChallenge(ch) {
+  if (!ch) return;
+  activeIncomingChallenge = ch;
+  activeDifficulty = ch.difficulty;
+  try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
+  syncPreferenceMenuButtons();
+
+  activeSandboxMutatorId = ch.mutatorId || '';
+  syncSandboxPillUi();
+
+  drillsEnabled = Boolean(ch.drillsEnabled);
+  try { localStorage.setItem(DRILLS_PREF_KEY, drillsEnabled ? '1' : '0'); } catch {}
+  syncDrillsUi();
+
+  if (ch.customGas) {
+    customGasPlan = { enabled: true, o2Pct: ch.o2Pct, hePct: ch.hePct };
+    saveCustomGasPlan();
+  } else {
+    customGasPlan.enabled = false;
+    saveCustomGasPlan();
+  }
+  syncGasPlanBadges();
+
+  if (ch.siteId && ch.siteId !== activeLevel?.id) {
+    await selectAndLoadLevel(ch.siteId, { focusMap: false });
+  }
+  renderIncomingChallengeBanner();
+  // Clean URL query params cleanly without reloading so refresh doesn't re-apply stale challenge
+  try {
+    const cleanUrl = `${location.origin}${location.pathname}`;
+    history.replaceState(null, '', cleanUrl);
+  } catch {}
+}
+
+btnOpenChallenge?.addEventListener('click', openChallengeModal);
+menuMutatorPillEl?.addEventListener('click', openChallengeModal);
+btnChallengeModalClose?.addEventListener('click', closeChallengeModal);
+challengeModal?.addEventListener('click', (e) => {
+  if (e.target === challengeModal) closeChallengeModal();
+});
+sandboxMutatorGridEl?.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-sandbox-mut]');
+  if (!btn) return;
+  draftSandbox.mutatorId = btn.dataset.sandboxMut || '';
+  renderSandboxModal();
+});
+sandboxDiffSelect?.addEventListener('change', () => {
+  draftSandbox.difficulty = sandboxDiffSelect.value || 'standard';
+  renderSandboxModal();
+});
+sandboxTargetInput?.addEventListener('input', () => {
+  draftSandbox.targetScore = Math.max(0, Math.round(Number(sandboxTargetInput.value) || 0));
+  renderSandboxModal();
+});
+sandboxDrillsCheck?.addEventListener('change', () => {
+  draftSandbox.drillsEnabled = Boolean(sandboxDrillsCheck.checked);
+  renderSandboxModal();
+});
+sandboxGasCheck?.addEventListener('change', () => {
+  draftSandbox.customGas = Boolean(sandboxGasCheck.checked);
+  renderSandboxModal();
+});
+btnSandboxCopy?.addEventListener('click', async () => {
+  const url = sandboxUrlInput?.value || '';
+  if (!url) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Challenge URL copied to clipboard!', 2.4);
+      return;
+    }
+  } catch {}
+  sandboxUrlInput?.select();
+  showToast('Challenge URL selected — press Ctrl+C to copy.', 2.2);
+});
+btnSandboxShare?.addEventListener('click', () => {
+  const cfg = getDraftChallengeConfig();
+  const mut = cfg.mutatorId ? getDailyMutatorById(cfg.mutatorId) : null;
+  const { shareText } = formatChallengeSummary(cfg, { levelName: activeLevel?.name || 'Expedition', mutator: mut });
+  copyOrShareChallengeUrl(sandboxUrlInput?.value || '', shareText);
+});
+btnSandboxApply?.addEventListener('click', () => {
+  applyDraftSandboxToMenu();
+  closeChallengeModal();
+  showToast('🎛️ Sandbox settings applied! Hit DIVE SOLO whenever ready.', 2.4);
+});
+btnSandboxLaunch?.addEventListener('click', () => {
+  applyDraftSandboxToMenu();
+  closeChallengeModal();
+  btnPlaySolo?.click();
+});
+btnChallengeAccept?.addEventListener('click', () => {
+  btnPlaySolo?.click();
+});
+btnChallengeDismiss?.addEventListener('click', () => {
+  activeIncomingChallenge = null;
+  renderIncomingChallengeBanner();
+});
+btnDebriefChallenge?.addEventListener('click', () => {
+  if (lastDebriefChallengeUrl) {
+    copyOrShareChallengeUrl(lastDebriefChallengeUrl, lastDebriefChallengeText);
+  }
+});
+syncSandboxPillUi();
 modalLogbook?.addEventListener('click', (e) => {
   if (e.target === modalLogbook) {
     closeLogbookModal();
@@ -3222,18 +3504,25 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     !multiplayer && activeDailyChallenge && activeDailyChallenge.levelId === activeLevel.id
       ? activeDailyChallenge
       : null;
+  const effectiveMutatorId = dailyRun?.mutatorId || (!multiplayer ? activeSandboxMutatorId : '') || '';
   session = createDiveSession(activeLevel, {
     diverName,
     spawnOffsetX,
     difficulty: activeDifficulty,
     gear: activeGear,
-    mutatorId: dailyRun?.mutatorId || '',
+    mutatorId: effectiveMutatorId,
     dailyDateKey: dailyRun?.dateKey || '',
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
     drillsEnabled,
   });
-  const dailyMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
-  session._dailyBadgeLabel = dailyMutMeta ? `📅 ${dailyMutMeta.icon} ${dailyMutMeta.shortName}` : '';
+  const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
+  session._dailyBadgeLabel = runMutMeta
+    ? `${session.dailyDateKey ? '📅' : '🎛️'} ${runMutMeta.icon} ${runMutMeta.shortName}`
+    : '';
+  session._challenge =
+    !multiplayer && activeIncomingChallenge && activeIncomingChallenge.siteId === activeLevel.id
+      ? { ...activeIncomingChallenge }
+      : null;
   lastGearHudKey = '';
   syncTechGearHud(session);
   syncMinimapButtonUi();
@@ -3425,6 +3714,36 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
 
   document.getElementById('debrief-title').textContent = title;
   document.getElementById('debrief-detail').textContent = detail;
+
+  if (debriefChallengeBannerEl) {
+    if (session._challenge) {
+      const chRes = evaluateChallengeResult(session._challenge, {
+        success,
+        score: teamSummary.teamScore,
+      });
+      debriefChallengeBannerEl.hidden = false;
+      debriefChallengeBannerEl.className = `debrief-challenge-banner ${chRes.won ? 'won' : 'lost'}`;
+      debriefChallengeBannerEl.textContent = chRes.headline;
+    } else {
+      debriefChallengeBannerEl.hidden = true;
+    }
+  }
+  const runChallengeCfg = {
+    siteId: level.id,
+    difficulty: runDiff,
+    mutatorId: session.mutatorId || '',
+    customGas: customGasPlan.enabled,
+    o2Pct: customGasPlan.o2Pct,
+    hePct: customGasPlan.hePct,
+    drillsEnabled: Boolean(session.drills?.enabled),
+    challengerName: diver.name || playerNameInput?.value.trim() || '',
+    targetScore: success ? teamSummary.teamScore : 0,
+  };
+  lastDebriefChallengeUrl = buildChallengeUrl(`${location.origin}${location.pathname}`, runChallengeCfg);
+  lastDebriefChallengeText = formatChallengeSummary(runChallengeCfg, {
+    levelName: level.name,
+    mutator: session.mutatorId ? getDailyMutatorById(session.mutatorId) : null,
+  }).shareText;
 
   const scoreLblEl = document.getElementById('debrief-score-label');
   const totalScoreEl = document.getElementById('debrief-total-score');
@@ -6896,6 +7215,14 @@ async function bootGame() {
   renderDailyChallengeCard();
   renderTechGearDock();
   setupPwaSupport();
+
+  const incomingChallenge = parseChallengeFromSearch(location.search, {
+    validLevelIds: LEVELS.map((l) => l.id),
+    validMutatorIds: DAILY_MUTATORS.map((m) => m.id),
+  });
+  if (incomingChallenge && !INITIAL_ROOM_CODE) {
+    applyIncomingChallenge(incomingChallenge).catch(() => {});
+  }
   if (INITIAL_ROOM_CODE) {
     beginRoomJoinLoading(INITIAL_ROOM_CODE, {
       directDive: true,

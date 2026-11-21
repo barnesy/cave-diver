@@ -5899,3 +5899,165 @@ button.mode-badge:hover {
   color: #fee2e2;
   animation: gasPulse 0.9s ease-in-out infinite;
 }
+
+/* Custom Challenge Links & Mutator Sandbox (v123) */
+.mutator-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  background: rgba(15, 23, 42, 0.72);
+  color: #bae6fd;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.mutator-plan-pill:hover {
+  border-color: rgba(56, 189, 248, 0.75);
+  color: #f0f9ff;
+}
+.mutator-plan-pill.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.42), rgba(16, 185, 129, 0.34));
+  border-color: rgba(103, 232, 249, 0.85);
+  color: #ecfeff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.28);
+}
+
+.challenge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.34), rgba(14, 116, 144, 0.38));
+  border: 1px solid rgba(192, 132, 252, 0.65);
+  color: #f8fafc;
+}
+.challenge-banner[hidden] { display: none; }
+.challenge-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.challenge-banner-copy strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: #fde68a;
+}
+.challenge-banner-copy span {
+  font-size: 0.7rem;
+  color: #e0f2fe;
+}
+.challenge-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debrief-challenge-banner {
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+.debrief-challenge-banner.won {
+  background: linear-gradient(135deg, rgba(6, 95, 70, 0.62), rgba(14, 116, 144, 0.52));
+  border: 1px solid rgba(74, 222, 128, 0.72);
+  color: #d1fae5;
+}
+.debrief-challenge-banner.lost {
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.55), rgba(127, 29, 29, 0.5));
+  border: 1px solid rgba(251, 191, 36, 0.62);
+  color: #fef3c7;
+}
+
+.challenge-modal-card {
+  max-width: 520px;
+  width: 100%;
+}
+.sandbox-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.sandbox-lbl {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+.sandbox-mutator-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.sandbox-mut-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.76);
+  color: #cbd5e1;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.sandbox-mut-btn strong {
+  font-size: 0.74rem;
+  color: #f1f5f9;
+}
+.sandbox-mut-btn span {
+  font-size: 0.64rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+.sandbox-mut-btn:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+.sandbox-mut-btn.active {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.44), rgba(88, 28, 135, 0.34));
+  border-color: rgba(103, 232, 249, 0.85);
+}
+.sandbox-row-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sandbox-row-two input[type="number"] {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+.sandbox-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.challenge-url-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
