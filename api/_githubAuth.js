@@ -129,6 +129,12 @@ export function sanitizePrefs(raw) {
       ccr: Boolean(raw.gear.ccr),
     };
   }
+  if (typeof raw.ghostEnabled === 'boolean') {
+    out.ghostEnabled = raw.ghostEnabled;
+  }
+  if (typeof raw.torchStickEnabled === 'boolean') {
+    out.torchStickEnabled = raw.torchStickEnabled;
+  }
   return out;
 }
 

@@ -1170,3 +1170,131 @@ test('v115 GitHub OAuth, Private Gist Cloud Save smart-merge & direct Issue subm
   const preUrl = buildPrefilledIssueUrl({ kind: 'feature', title: 'Dive log CSV', description: 'Export dives' });
   assert.ok(preUrl.includes('github.com/barnesy/cave-diver/issues/new?') && preUrl.includes('Feature'));
 });
+
+test('v116 Upstash Redis KV store + GitHub Private Gist PB Ghost & Loadout sync', async () => {
+  const { getUpstashConfig, kvWriteJson, kvReadJson, kvListPaths, kvDeletePath } = await import('../api/_kvStore.js');
+  const { normalizeGhostTrack, mergeGhostTracks } = await import('../public/js/game/logbookModel.js');
+  const { createGitHubHandler } = await import('../api/github.js');
+
+  // 1. Upstash config supports both UPSTASH_REDIS_REST_* and KV_REST_API_*
+  assert.equal(getUpstashConfig({}), null);
+  assert.deepEqual(
+    getUpstashConfig({ UPSTASH_REDIS_REST_URL: 'https://redis.upstash.io/', UPSTASH_REDIS_REST_TOKEN: 'tok1' }),
+    { url: 'https://redis.upstash.io', token: 'tok1' }
+  );
+  assert.deepEqual(
+    getUpstashConfig({ KV_REST_API_URL: 'https://kv.upstash.io', KV_REST_API_TOKEN: 'tok2' }),
+    { url: 'https://kv.upstash.io', token: 'tok2' }
+  );
+
+  // 2. Mocked Upstash Redis REST endpoint handles SET+EX, SADD, GET, SMEMBERS, DEL+SREM
+  const kvData = new Map();
+  const kvSets = new Map();
+  const seenTtls = new Map();
+  const execCmd = (cmd) => {
+    const op = cmd[0];
+    if (op === 'GET') return kvData.has(cmd[1]) ? kvData.get(cmd[1]) : null;
+    if (op === 'SET') {
+      kvData.set(cmd[1], cmd[2]);
+      if (cmd[3] === 'EX') seenTtls.set(cmd[1], cmd[4]);
+      return 'OK';
+    }
+    if (op === 'DEL') {
+      kvData.delete(cmd[1]);
+      return 1;
+    }
+    if (op === 'SADD') {
+      if (!kvSets.has(cmd[1])) kvSets.set(cmd[1], new Set());
+      kvSets.get(cmd[1]).add(cmd[2]);
+      return 1;
+    }
+    if (op === 'SREM') {
+      kvSets.get(cmd[1])?.delete(cmd[2]);
+      return 1;
+    }
+    if (op === 'SMEMBERS') {
+      return Array.from(kvSets.get(cmd[1]) || []);
+    }
+    throw new Error(`Unexpected Redis op ${op}`);
+  };
+  const mockRedisFetch = async (url, init) => {
+    assert.equal(init.headers.Authorization, 'Bearer tok1');
+    const body = JSON.parse(init.body);
+    if (String(url).endsWith('/pipeline')) {
+      return new Response(JSON.stringify(body.map((c) => ({ result: execCmd(c) }))), { status: 200 });
+    }
+    return new Response(JSON.stringify({ result: execCmd(body) }), { status: 200 });
+  };
+  const redisOpts = {
+    env: { UPSTASH_REDIS_REST_URL: 'https://redis.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'tok1' },
+    fetchImpl: mockRedisFetch,
+  };
+
+  await kvWriteJson('rooms/ABCD.json', { code: 'ABCD', players: [{ id: 'p1', name: 'Chris' }] }, { ttlSec: 1500, ...redisOpts });
+  assert.equal(seenTtls.get('td:rooms/ABCD.json'), 1500, 'Room write must set 25-min Redis EX TTL');
+  const listed = await kvListPaths('rooms/', 20, redisOpts);
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].pathname, 'rooms/ABCD.json');
+  const readBack = await kvReadJson('rooms/ABCD.json', null, redisOpts);
+  assert.equal(readBack.notFound, false);
+  assert.equal(readBack.data.code, 'ABCD');
+  await kvDeletePath('rooms/ABCD.json', redisOpts);
+  assert.equal((await kvReadJson('rooms/ABCD.json', null, redisOpts)).notFound, true);
+  assert.equal((await kvListPaths('rooms/', 20, redisOpts)).length, 0);
+
+  // 3. PB Ghost Track normalization & faster-PB merge
+  const longTrack = Array.from({ length: 900 }, (_, i) => [i * 2, 100 + i, 50 + (i % 40), 0]);
+  const compact = normalizeGhostTrack(longTrack, 360);
+  assert.ok(compact.length <= 360 && compact.length >= 100);
+  assert.deepEqual(compact[0], longTrack[0], 'Compact ghost must preserve start point');
+  assert.deepEqual(compact[compact.length - 1], longTrack[longTrack.length - 1], 'Compact ghost must preserve exact finish timestamp');
+
+  const slowGhost = [[0, 10, 10, 0], [1800, 90, 20, 0]];
+  const fastGhost = [[0, 10, 10, 0], [1420, 90, 20, 0]];
+  const mergedGhosts = mergeGhostTracks(
+    { 'cenote-el-abismo': slowGhost, 'eagles-nest-sink': slowGhost },
+    { 'cenote-el-abismo': fastGhost, 'uss-oriskany-carrier': fastGhost }
+  );
+  assert.equal(Object.keys(mergedGhosts).length, 3);
+  assert.equal(mergedGhosts['cenote-el-abismo'][1][0], 1420, 'Merge must pick faster PB ghost per site');
+
+  // 4. GitHub Private Gist sync persists & merges PB ghosts + extended loadout prefs
+  const { encryptSessionPayload, getGitHubConfig } = await import('../api/_githubAuth.js');
+  const env = { GITHUB_CLIENT_ID: 'id1', GITHUB_CLIENT_SECRET: 'sec1' };
+  const cfg = getGitHubConfig(env);
+  const cookieVal = encryptSessionPayload(
+    { token: 'gho_tok', user: { id: 1, login: 'barnesy', name: 'Chris' }, gistId: null },
+    cfg
+  );
+  let savedGistBody = null;
+  const mockGhFetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u.startsWith('https://api.github.com/gists?')) return new Response('[]', { status: 200 });
+    if (u === 'https://api.github.com/gists' && init.method === 'POST') {
+      savedGistBody = JSON.parse(JSON.parse(init.body).files['techno-dive-logbook.json'].content);
+      return new Response(
+        JSON.stringify({ id: 'g_ghosts', html_url: 'https://gist.github.com/barnesy/g_ghosts', updated_at: '2026-11-21T09:00:00Z' }),
+        { status: 201 }
+      );
+    }
+    return new Response('err', { status: 500 });
+  };
+  const gh = createGitHubHandler({ fetchImpl: mockGhFetch, env });
+  const syncRes = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/sync', {
+      method: 'POST',
+      headers: { cookie: `td_gh_session=${cookieVal}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        logbook: { totalDives: 2, cleared: {} },
+        prefs: { gear: { sonar: true, dpv: true, ccr: false }, difficulty: 'hardcore', ghostEnabled: true, torchStickEnabled: false },
+        ghosts: { 'cenote-el-abismo': fastGhost },
+      }),
+    })
+  );
+  assert.equal(syncRes.status, 200);
+  const syncJson = await syncRes.json();
+  assert.equal(syncJson.ghosts['cenote-el-abismo'][1][0], 1420);
+  assert.equal(syncJson.prefs.torchStickEnabled, false);
+  assert.equal(syncJson.prefs.gear.dpv, true);
+  assert.equal(savedGistBody.ghosts['cenote-el-abismo'][1][0], 1420);
+});

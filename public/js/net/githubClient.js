@@ -64,6 +64,7 @@ export class GitHubClient {
     this.gistUrl = null;
     this.repo = DEFAULT_GITHUB_REPO;
     this.lastSyncedAt = null;
+    this.ghostCount = 0;
     this.syncing = false;
     this._syncInFlight = null;
   }
@@ -124,6 +125,7 @@ export class GitHubClient {
       gistUrl: this.gistUrl,
       repo: this.repo,
       lastSyncedAt: this.lastSyncedAt,
+      ghostCount: this.ghostCount,
       syncing: this.syncing,
     };
   }
@@ -144,13 +146,14 @@ export class GitHubClient {
     this.gistId = null;
     this.gistUrl = null;
     this.lastSyncedAt = null;
+    this.ghostCount = 0;
     return this.getStatus();
   }
 
   /**
-   * Smart-merge local career logbook & preferences with the user's private GitHub Gist.
+   * Smart-merge local career logbook, loadout preferences & PB ghost replays with the user's private GitHub Gist.
    */
-  async syncStats(logbook, prefs = {}) {
+  async syncStats(logbook, prefs = {}, ghosts = null) {
     if (!this.authenticated) {
       return { ok: false, error: 'Not signed in with GitHub' };
     }
@@ -164,7 +167,7 @@ export class GitHubClient {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ logbook, prefs }),
+          body: JSON.stringify({ logbook, prefs, ...(ghosts ? { ghosts } : {}) }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 401) {
@@ -178,6 +181,8 @@ export class GitHubClient {
         this.gistId = data.gistId || this.gistId;
         this.gistUrl = data.gistUrl || this.gistUrl;
         this.lastSyncedAt = data.syncedAt || new Date().toISOString();
+        const syncedGhosts = data.ghosts && typeof data.ghosts === 'object' ? data.ghosts : {};
+        this.ghostCount = Object.keys(syncedGhosts).length;
         return {
           ok: true,
           gistId: this.gistId,
@@ -185,6 +190,7 @@ export class GitHubClient {
           syncedAt: this.lastSyncedAt,
           logbook: data.logbook,
           prefs: data.prefs || {},
+          ghosts: syncedGhosts,
         };
       } catch (err) {
         return { ok: false, error: err?.message || 'Network error syncing GitHub Gist' };

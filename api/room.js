@@ -79,12 +79,17 @@ export async function GET(request) {
     const expiredPaths = [];
     const records = await Promise.all(
       roomBlobs.map(async (b) => {
-        const { data } = await readBlobJson(b.pathname, null);
-        if (!isLiveRoomRecord(data, now)) {
-          expiredPaths.push(b.pathname);
+        try {
+          const { data } = await readBlobJson(b.pathname, null);
+          if (!isLiveRoomRecord(data, now)) {
+            expiredPaths.push(b.pathname);
+            return null;
+          }
+          return data;
+        } catch {
+          // Skip unreadable or revoked legacy blobs cleanly instead of failing the entire room list
           return null;
         }
-        return data;
       })
     );
     // Opportunistically clean up expired room blobs so list cap never starves new rooms
@@ -191,7 +196,9 @@ export async function POST(request) {
             };
           }
           return next;
-        }
+        },
+        8,
+        { ttlSec: Math.ceil(ROOM_TTL_MS / 1000) }
       );
       if (deleted) {
         await deleteBlobPath(blobPath);
@@ -256,7 +263,9 @@ export async function POST(request) {
           return NO_BLOB_MUTATION;
         }
         return record;
-      }
+      },
+      8,
+      { ttlSec: Math.ceil(ROOM_TTL_MS / 1000) }
     );
     return jsonResponse({ ok: true, room: saved?.room || roomClean });
   } catch (err) {

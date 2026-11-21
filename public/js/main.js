@@ -13,6 +13,7 @@ import { resolveDiverCollision } from './game/collision.js';
 import {
   createEmptyLogbook,
   mergeCareerLogbooks,
+  normalizeGhostTrack,
   recordDiveInLogbook,
   seedLogbookFromEntries,
   formatLogbookSummary,
@@ -491,7 +492,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=115" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=116" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1286,10 +1287,11 @@ try {
   }
 } catch {}
 
-function saveGearLoadout() {
+function saveGearLoadout({ skipCloudSync = false } = {}) {
   try {
     localStorage.setItem(GEAR_LOADOUT_KEY, JSON.stringify(savedGearLoadout));
   } catch {}
+  if (!skipCloudSync) scheduleGitHubStatsSync();
 }
 
 function getEffectiveGearLoadout() {
@@ -1550,6 +1552,7 @@ function toggleTorchStickOption() {
   if (!torchStickEnabled) input.resetTorchStick();
   try { localStorage.setItem(TORCH_STICK_PREF_KEY, torchStickEnabled ? '1' : '0'); } catch {}
   syncPreferenceMenuButtons();
+  scheduleGitHubStatsSync();
   showToast(
     torchStickEnabled
       ? '🔦 Left flashlight aim joystick enabled.'
@@ -1566,6 +1569,7 @@ function cycleDifficultyMode() {
   activeDifficulty = next.id;
   try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
   syncPreferenceMenuButtons();
+  scheduleGitHubStatsSync();
   showToast(
     activeDifficulty === 'hardcore'
       ? '🔥 Hardcore Mode: No compass, stronger surges & heavy percolation!'
@@ -1582,6 +1586,7 @@ function toggleGhostOption() {
   ghostEnabled = !ghostEnabled;
   try { localStorage.setItem(GHOST_PREF_KEY, ghostEnabled ? '1' : '0'); } catch {}
   syncPreferenceMenuButtons();
+  scheduleGitHubStatsSync();
   const targetLvl = session?.level || activeLevel;
   refreshActiveGhostTrack(targetLvl);
   if (!ghostEnabled) {
@@ -1805,11 +1810,44 @@ function formatSyncTimeLabel(isoStr) {
 function buildCurrentPrefsForSync() {
   const prefs = {
     difficulty: activeDifficulty,
-    gear: { ...activeGearLoadout },
+    gear: { ...savedGearLoadout },
+    ghostEnabled: Boolean(ghostEnabled),
+    torchStickEnabled: Boolean(torchStickEnabled),
   };
   const callsign = getEnteredCallsign();
   if (callsign) prefs.playerName = callsign;
   return prefs;
+}
+
+function collectLocalGhostTracks() {
+  const out = {};
+  for (const lvl of LEVELS) {
+    const raw = loadGhostTrack(lvl.id);
+    if (!raw) continue;
+    const compact = normalizeGhostTrack(raw, 360);
+    if (compact) out[lvl.id] = compact;
+  }
+  return out;
+}
+
+function applyMergedGhostTracks(mergedGhosts) {
+  if (!mergedGhosts || typeof mergedGhosts !== 'object') return 0;
+  let updated = 0;
+  for (const [lid, track] of Object.entries(mergedGhosts)) {
+    const clean = normalizeGhostTrack(track, 360);
+    if (!clean) continue;
+    const local = loadGhostTrack(lid);
+    const localDur = local && local.length >= 2 ? local[local.length - 1][0] : Infinity;
+    const cloudDur = clean[clean.length - 1][0];
+    if (!local || (cloudDur > 0 && cloudDur < localDur)) {
+      saveGhostTrack(lid, clean);
+      updated += 1;
+    }
+  }
+  if (updated > 0) {
+    refreshActiveGhostTrack(session?.level || activeLevel);
+  }
+  return updated;
 }
 
 function renderGitHubAccountUi() {
@@ -1849,6 +1887,7 @@ function renderGitHubAccountUi() {
     logbookGithubBarEl.classList.toggle('connected', st.authenticated);
     if (st.authenticated && st.user) {
       const syncMeta = st.syncing ? 'Syncing private Gist...' : formatSyncTimeLabel(st.lastSyncedAt);
+      const ghostMeta = st.ghostCount > 0 ? ` · ${st.ghostCount} PB ghost${st.ghostCount === 1 ? '' : 's'}` : '';
       const gistLink = st.gistUrl
         ? `<a class="btn tiny ghost" href="${escapeHtml(st.gistUrl)}" target="_blank" rel="noopener noreferrer">Gist ↗</a>`
         : '';
@@ -1857,7 +1896,7 @@ function renderGitHubAccountUi() {
           ${st.user.avatarUrl ? `<img class="logbook-gh-avatar" src="${escapeHtml(st.user.avatarUrl)}" alt="" />` : ''}
           <div class="logbook-gh-copy">
             <strong>🐙 @${escapeHtml(st.user.login)} · Cloud Save Active</strong>
-            <span>${escapeHtml(syncMeta)} · Private Gist sync across devices</span>
+            <span>${escapeHtml(syncMeta)}${escapeHtml(ghostMeta)} · Private Gist sync across devices</span>
           </div>
         </div>
         <div class="logbook-gh-actions">
@@ -1918,13 +1957,17 @@ async function syncCareerStatsWithGitHub({ quiet = true } = {}) {
   if (!github.authenticated) return { ok: false };
   renderGitHubAccountUi();
   const localBook = loadCareerLogbook();
-  const res = await github.syncStats(localBook, buildCurrentPrefsForSync());
+  const localGhosts = collectLocalGhostTracks();
+  const res = await github.syncStats(localBook, buildCurrentPrefsForSync(), localGhosts);
   if (res.ok && res.logbook) {
     const merged = mergeCareerLogbooks(localBook, res.logbook);
     saveCareerLogbook(merged, { skipCloudSync: true });
-    // Restore cloud callsign if local player hasn't set one yet
-    if (!getEnteredCallsign() && (res.prefs?.playerName || github.user?.login)) {
-      const nextName = sanitizeCallsignInput(res.prefs?.playerName || github.user?.login || '');
+    applyMergedGhostTracks(res.ghosts);
+
+    // Restore cloud callsign & loadout/preferences on fresh devices (without clobbering explicit local overrides)
+    const prefs = res.prefs || {};
+    if (!getEnteredCallsign() && (prefs.playerName || github.user?.login)) {
+      const nextName = sanitizeCallsignInput(prefs.playerName || github.user?.login || '');
       if (nextName && playerNameInput) {
         playerNameInput.value = nextName;
         syncCallsignCount();
@@ -1933,6 +1976,30 @@ async function syncCareerStatsWithGitHub({ quiet = true } = {}) {
         } catch {}
       }
     }
+    try {
+      if (prefs.gear && !localStorage.getItem(GEAR_LOADOUT_KEY)) {
+        const { unlockedIds } = computeUnlockedGear(merged, LEVELS);
+        savedGearLoadout = sanitizeGearLoadout(prefs.gear, unlockedIds);
+        saveGearLoadout({ skipCloudSync: true });
+      }
+      if (
+        (prefs.difficulty === 'guided' || prefs.difficulty === 'standard' || prefs.difficulty === 'hardcore') &&
+        !localStorage.getItem(DIFFICULTY_PREF_KEY)
+      ) {
+        activeDifficulty = prefs.difficulty;
+        localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty);
+      }
+      if (typeof prefs.ghostEnabled === 'boolean' && localStorage.getItem(GHOST_PREF_KEY) === null) {
+        ghostEnabled = prefs.ghostEnabled;
+        localStorage.setItem(GHOST_PREF_KEY, ghostEnabled ? '1' : '0');
+      }
+      if (typeof prefs.torchStickEnabled === 'boolean' && localStorage.getItem(TORCH_STICK_PREF_KEY) === null) {
+        torchStickEnabled = prefs.torchStickEnabled;
+        localStorage.setItem(TORCH_STICK_PREF_KEY, torchStickEnabled ? '1' : '0');
+      }
+    } catch {}
+
+    syncPreferenceMenuButtons();
     renderCareerSummary();
     renderTechGearDock();
     renderDailyChallengeCard();
@@ -1941,7 +2008,9 @@ async function syncCareerStatsWithGitHub({ quiet = true } = {}) {
       openLogbookModal();
     }
     if (!quiet) {
-      showToast(`☁ Synced career stats to @${github.user?.login}'s Private Gist!`, 2.6);
+      const gCount = Object.keys(res.ghosts || {}).length;
+      const gTxt = gCount > 0 ? ` + ${gCount} PB ghost${gCount === 1 ? '' : 's'}` : '';
+      showToast(`☁ Synced career stats${gTxt} to @${github.user?.login}'s Private Gist!`, 2.8);
     }
   } else if (!quiet && res.error) {
     showToast(res.error, 3.0);

@@ -8,6 +8,13 @@ import {
   BlobNotFoundError,
   BlobPreconditionFailedError,
 } from '@vercel/blob';
+import {
+  isUpstashConfigured,
+  kvDeletePath,
+  kvListPaths,
+  kvReadJson,
+  kvWriteJson,
+} from './_kvStore.js';
 
 export const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -152,6 +159,9 @@ async function readBlobWithAccess(urlOrPathname, fallbackValue, access, extraOpt
 }
 
 export async function readBlobJson(pathname, fallbackValue = null) {
+  if (isUpstashConfigured()) {
+    return kvReadJson(pathname, fallbackValue);
+  }
   // Authoritative lookup via head() avoids 403s on missing blobs & reveals exact public vs private URL
   let meta = null;
   try {
@@ -213,7 +223,10 @@ export async function readBlobJson(pathname, fallbackValue = null) {
   }
 }
 
-export async function writeBlobJson(pathname, data, { ifMatch = null, allowOverwrite = true } = {}) {
+export async function writeBlobJson(pathname, data, { ifMatch = null, allowOverwrite = true, ttlSec = 0 } = {}) {
+  if (isUpstashConfigured()) {
+    return kvWriteJson(pathname, data, { ttlSec });
+  }
   const payload = JSON.stringify(data);
   const buildOpts = (access) => {
     const opts = {
@@ -248,6 +261,10 @@ export async function writeBlobJson(pathname, data, { ifMatch = null, allowOverw
 }
 
 export async function deleteBlobPath(pathname) {
+  if (isUpstashConfigured()) {
+    await kvDeletePath(pathname);
+    return;
+  }
   try {
     await del(pathname);
   } catch (err) {
@@ -258,15 +275,29 @@ export async function deleteBlobPath(pathname) {
 }
 
 export async function listBlobPaths(prefix, limit = 30) {
+  if (isUpstashConfigured()) {
+    return kvListPaths(prefix, limit);
+  }
   const res = await list({ prefix, limit });
   return Array.isArray(res?.blobs) ? res.blobs : [];
 }
 
 /**
- * Optimistically read-modify-write a JSON document in Private Vercel Blob,
- * refusing blind overwrites on transient read failures and retrying conflicts with jittered backoff.
+ * Optimistically read-modify-write a JSON document in Upstash Redis (when configured)
+ * or Private/Public Vercel Blob, refusing blind overwrites and retrying conflicts cleanly.
  */
-export async function mutateBlobJson(pathname, makeDefaultFn, mutatorFn, maxAttempts = 8) {
+export async function mutateBlobJson(pathname, makeDefaultFn, mutatorFn, maxAttempts = 8, { ttlSec = 0 } = {}) {
+  if (isUpstashConfigured()) {
+    const readRes = await kvReadJson(pathname, makeDefaultFn());
+    const draft = readRes.data ?? makeDefaultFn();
+    const nextResult = await mutatorFn(draft, { notFound: readRes.notFound });
+    if (nextResult === NO_BLOB_MUTATION) {
+      return draft;
+    }
+    const valueToWrite = nextResult === undefined ? draft : nextResult;
+    await kvWriteJson(pathname, valueToWrite, { ttlSec });
+    return valueToWrite;
+  }
   let lastErr = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const readRes = await readBlobJson(pathname, makeDefaultFn());
@@ -285,7 +316,7 @@ export async function mutateBlobJson(pathname, makeDefaultFn, mutatorFn, maxAtte
       await writeBlobJson(
         pathname,
         valueToWrite,
-        readRes.notFound ? { allowOverwrite: false } : { ifMatch: canonicalEtag, allowOverwrite: true }
+        readRes.notFound ? { allowOverwrite: false, ttlSec } : { ifMatch: canonicalEtag, allowOverwrite: true, ttlSec }
       );
       return valueToWrite;
     } catch (err) {

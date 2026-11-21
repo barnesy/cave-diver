@@ -210,6 +210,75 @@ export function mergeCareerLogbooks(rawA, rawB) {
   return out;
 }
 
+/**
+ * Validate and compact a PB ghost replay track ([t10, x10, y10, ang10] tuples)
+ * for lightweight Private Gist cloud storage while preserving exact start & finish timestamps.
+ */
+export function normalizeGhostTrack(rawTrack, maxPoints = 360) {
+  if (!Array.isArray(rawTrack) || rawTrack.length < 2) return null;
+  const cleaned = [];
+  let lastT = -Infinity;
+  for (let i = 0; i < rawTrack.length; i++) {
+    const pt = rawTrack[i];
+    if (!Array.isArray(pt) || pt.length < 3) continue;
+    const t = Math.round(Number(pt[0]));
+    const x = Math.round(Number(pt[1]));
+    const y = Math.round(Number(pt[2]));
+    const a = Number.isFinite(Number(pt[3])) ? Math.round(Number(pt[3])) : 0;
+    if (!Number.isFinite(t) || !Number.isFinite(x) || !Number.isFinite(y) || t < 0) continue;
+    if (t < lastT) continue;
+    lastT = t;
+    cleaned.push([t, x, y, a]);
+  }
+  if (cleaned.length < 2) return null;
+  const cap = Math.max(16, Math.min(600, Math.round(maxPoints) || 360));
+  if (cleaned.length <= cap) return cleaned;
+
+  // Uniformly downsample interior points while keeping exact start (0) and finish (length - 1)
+  const out = [cleaned[0]];
+  const span = cleaned.length - 1;
+  const interiorSlots = cap - 2;
+  for (let i = 1; i <= interiorSlots; i++) {
+    const idx = Math.min(span - 1, Math.max(1, Math.round((i / (interiorSlots + 1)) * span)));
+    if (out[out.length - 1][0] !== cleaned[idx][0]) {
+      out.push(cleaned[idx]);
+    }
+  }
+  out.push(cleaned[span]);
+  return out;
+}
+
+/**
+ * Merge two maps of { [levelId]: ghostTrack }, keeping the faster completed PB ghost per site.
+ */
+export function mergeGhostTracks(rawA, rawB, { maxSites = 30, maxPoints = 360 } = {}) {
+  const out = {};
+  const keys = new Set([
+    ...(rawA && typeof rawA === 'object' ? Object.keys(rawA) : []),
+    ...(rawB && typeof rawB === 'object' ? Object.keys(rawB) : []),
+  ]);
+  for (const lid of keys) {
+    if (!lid || typeof lid !== 'string' || lid.length > 64) continue;
+    const a = normalizeGhostTrack(rawA?.[lid], maxPoints);
+    const b = normalizeGhostTrack(rawB?.[lid], maxPoints);
+    if (a && !b) {
+      out[lid] = a;
+    } else if (b && !a) {
+      out[lid] = b;
+    } else if (a && b) {
+      const durA = a[a.length - 1][0];
+      const durB = b[b.length - 1][0];
+      if (durA > 0 && durB > 0) {
+        out[lid] = durB < durA ? b : a;
+      } else {
+        out[lid] = b.length > a.length ? b : a;
+      }
+    }
+    if (Object.keys(out).length >= maxSites) break;
+  }
+  return out;
+}
+
 export function recordDiveInLogbook(
   rawBook,
   { levelId, success, score = 0, grade = 'C', maxDepthM = 0, diveTimeSec = 0, difficulty = 'standard' }

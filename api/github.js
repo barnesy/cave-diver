@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { mergeCareerLogbooks, normalizeCareerLogbook } from '../public/js/game/logbookModel.js';
+import { mergeCareerLogbooks, mergeGhostTracks, normalizeCareerLogbook } from '../public/js/game/logbookModel.js';
 import {
   GITHUB_OAUTH_SCOPES,
   SESSION_COOKIE_NAME,
@@ -212,6 +212,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
             gistUrl: null,
             logbook: null,
             prefs: {},
+            ghosts: {},
           });
         }
         const updatedCookies = [];
@@ -233,6 +234,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
             updatedAt: existing.updatedAt || existing.data?.updatedAt || null,
             logbook: normalizeCareerLogbook(existing.data?.logbook || existing.data),
             prefs: sanitizePrefs(existing.data?.prefs),
+            ghosts: mergeGhostTracks(existing.data?.ghosts, null),
           },
           200,
           updatedCookies
@@ -292,6 +294,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
           ...sanitizePrefs(existing?.data?.prefs),
           ...sanitizePrefs(body?.prefs),
         };
+        const mergedGhosts = mergeGhostTracks(existing?.data?.ghosts, body?.ghosts);
         const syncedAt = new Date().toISOString();
 
         const gistPayload = {
@@ -300,6 +303,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
           githubUser: sess.user.login,
           logbook: mergedLogbook,
           prefs: mergedPrefs,
+          ghosts: mergedGhosts,
         };
 
         const saved = await writeLogbookGist(sess.token, gistId, gistPayload, fetchImpl);
@@ -322,6 +326,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
             syncedAt,
             logbook: mergedLogbook,
             prefs: mergedPrefs,
+            ghosts: mergedGhosts,
           },
           200,
           updatedCookies
