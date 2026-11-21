@@ -637,18 +637,23 @@ export function recordDailyClear(rawBook, { dateKey, levelId, mutatorId, score =
   const alreadyCleared = book.daily.clearedDates.includes(cleanDate);
 
   if (!alreadyCleared) {
-    const yesterday = prevUtcDateKey(cleanDate);
-    if (book.daily.lastClearedDate === yesterday) {
-      book.daily.currentStreak += 1;
-    } else if (book.daily.lastClearedDate !== cleanDate) {
-      book.daily.currentStreak = 1;
+    const prevLast = book.daily.lastClearedDate || '';
+    const isArchiveBackfill = Boolean(prevLast && cleanDate < prevLast);
+    if (!isArchiveBackfill) {
+      const yesterday = prevUtcDateKey(cleanDate);
+      if (prevLast === yesterday) {
+        book.daily.currentStreak += 1;
+      } else if (prevLast !== cleanDate) {
+        book.daily.currentStreak = 1;
+      }
+      book.daily.bestStreak = Math.max(book.daily.bestStreak, book.daily.currentStreak);
+      book.daily.lastClearedDate = cleanDate;
     }
-    book.daily.bestStreak = Math.max(book.daily.bestStreak, book.daily.currentStreak);
     book.daily.totalClears += 1;
-    book.daily.lastClearedDate = cleanDate;
     book.daily.clearedDates.push(cleanDate);
-    if (book.daily.clearedDates.length > 90) {
-      book.daily.clearedDates = book.daily.clearedDates.slice(-90);
+    book.daily.clearedDates.sort();
+    if (book.daily.clearedDates.length > 366) {
+      book.daily.clearedDates = book.daily.clearedDates.slice(-366);
     }
   }
 
@@ -678,6 +683,76 @@ export function getDailyStatus(rawBook, dateOrKey = new Date()) {
     bestStreak: book.daily.bestStreak,
     totalClears: book.daily.totalClears,
     todayRecord: book.daily.records[dateKey] || null,
+  };
+}
+
+const CALENDAR_MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Deterministic Daily Mutator lookup for any UTC date key (shared by Daily Card & Calendar, v131).
+ */
+export function getDailyMutatorForDate(dateOrKey = new Date()) {
+  const dateKey = getUtcDateKey(dateOrKey);
+  const mutHash = hashDateKey(`${dateKey}:mutator`);
+  return DAILY_MUTATORS[mutHash % DAILY_MUTATORS.length];
+}
+
+/**
+ * Build a complete UTC calendar month matrix with per-day completion records, grades & lock states (v131).
+ * @param {object} rawBook
+ * @param {number} year - full year e.g. 2026
+ * @param {number} month0 - 0-based month (0 = Jan .. 11 = Dec)
+ * @param {Date|string} [todayOrKey]
+ */
+export function buildDailyCalendarMonth(rawBook, year, month0, todayOrKey = new Date()) {
+  const book = normalizeBook(rawBook);
+  const todayKey = getUtcDateKey(todayOrKey);
+  const cleanYear = Math.max(2020, Math.min(2099, Math.trunc(Number(year) || Number(todayKey.slice(0, 4)))));
+  const cleanMonth0 = Math.max(0, Math.min(11, Math.trunc(Number(month0) ?? (Number(todayKey.slice(5, 7)) - 1))));
+  const firstDate = new Date(Date.UTC(cleanYear, cleanMonth0, 1));
+  const firstWeekday = firstDate.getUTCDay(); // 0=Sun..6=Sat
+  const daysInMonth = new Date(Date.UTC(cleanYear, cleanMonth0 + 1, 0)).getUTCDate();
+  const clearedSet = new Set(book.daily.clearedDates || []);
+
+  const days = [];
+  let clearedInMonth = 0;
+  let availableInMonth = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${cleanYear}-${String(cleanMonth0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const isToday = dateKey === todayKey;
+    const isFuture = dateKey > todayKey;
+    const isPast = dateKey < todayKey;
+    const rec = book.daily.records?.[dateKey] || null;
+    const cleared = clearedSet.has(dateKey) || Boolean(rec);
+    if (!isFuture) availableInMonth += 1;
+    if (cleared) clearedInMonth += 1;
+    days.push({
+      day: d,
+      dateKey,
+      isToday,
+      isFuture,
+      isPast,
+      cleared,
+      record: rec,
+      grade: rec?.grade || (cleared ? '✓' : ''),
+      score: rec?.score || 0,
+      mutator: getDailyMutatorForDate(dateKey),
+    });
+  }
+
+  return {
+    year: cleanYear,
+    month0: cleanMonth0,
+    monthLabel: `${CALENDAR_MONTH_NAMES[cleanMonth0]} ${cleanYear}`,
+    firstWeekday,
+    daysInMonth,
+    todayKey,
+    days,
+    clearedInMonth,
+    availableInMonth,
   };
 }
 

@@ -13,6 +13,7 @@ import {
   buildProceduralShareUrl,
   parseProceduralFromSearch,
   generateProceduralLevel,
+  getDailyGeneratedConfig,
 } from './levels/index.js';
 import {
   createDiveState,
@@ -40,6 +41,9 @@ import {
   DAILY_MUTATORS,
   getDailyChallenge,
   getDailyMutatorById,
+  getDailyMutatorForDate,
+  getUtcDateKey,
+  buildDailyCalendarMonth,
   recordDailyClear,
   getDailyStatus,
   recordFieldGuidePhoto,
@@ -530,7 +534,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=130" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=131" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1157,6 +1161,10 @@ const input = new InputController({
       closeLogbookModal();
       return true;
     }
+    if (dailyCalModalEl && !dailyCalModalEl.hidden) {
+      closeDailyCalendarModal();
+      return true;
+    }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
       closeGasPlannerModal();
       return true;
@@ -1468,9 +1476,28 @@ function getEffectiveGearLoadout() {
   return sanitizeGearLoadout(savedGearLoadout, unlockedIds);
 }
 
+function getDailyGeneratedExpedition(dateOrKey = new Date()) {
+  const cfg = getDailyGeneratedConfig(dateOrKey);
+  const level = getLevelById(cfg.levelId);
+  const mutator = getDailyMutatorForDate(cfg.dateKey);
+  return {
+    dateKey: cfg.dateKey,
+    seed: cfg.seed,
+    tier: cfg.tier,
+    biome: cfg.biome,
+    biomeSpec: cfg.biomeSpec,
+    tierSpec: cfg.tierSpec,
+    unlined: cfg.unlined,
+    level,
+    levelId: level.id,
+    mutator,
+    mutatorId: mutator.id,
+  };
+}
+
 function renderDailyChallengeCard() {
   if (!dailyChallengeCardEl) return;
-  const daily = getDailyChallenge(LEVELS);
+  const daily = getDailyGeneratedExpedition();
   const book = loadCareerLogbook();
   const status = getDailyStatus(book, daily.dateKey);
   dailyChallengeCardEl.classList.toggle('cleared', status.clearedToday);
@@ -1483,22 +1510,159 @@ function renderDailyChallengeCard() {
     dailyStreakPillEl.title =
       status.bestStreak > 0
         ? `Best Streak: ${status.bestStreak}d · Total Daily Clears: ${status.totalClears}`
-        : 'Clear today’s featured dive to start your Daily Expedition streak!';
+        : 'Clear today’s daily generated sump to start your streak!';
   }
   if (dailySiteTitleEl && daily.level) {
-    const prefix = daily.level.isWreck ? '🚢 ' : '';
-    dailySiteTitleEl.textContent = `${prefix}L${daily.levelIndex + 1} · ${daily.level.name} (${getLevelMaxDepthM(daily.level)}m)`;
+    const lineTag = daily.unlined ? ' · 🧵 Unlined' : '';
+    dailySiteTitleEl.textContent = `∞ ${daily.level.name} · ${daily.level.proceduralMeta?.targetDepthM || getLevelMaxDepthM(daily.level)}m${lineTag}`;
   }
   if (dailyMutatorBadgeEl && daily.mutator) {
     dailyMutatorBadgeEl.textContent = `${daily.mutator.icon} ${daily.mutator.name}`;
   }
   if (dailyMutatorDescEl && daily.mutator) {
-    dailyMutatorDescEl.textContent = daily.mutator.shortDesc;
+    dailyMutatorDescEl.textContent = daily.mutator.shortDesc || daily.mutator.summary || '';
   }
   if (btnPlayDaily) {
     btnPlayDaily.textContent = status.clearedToday ? '↻ REPLAY DAILY' : '▶ PLAY DAILY';
   }
 }
+
+// ─── Daily Generated Sump Calendar Modal (v131) ───
+const dailyCalModalEl = document.getElementById('daily-calendar-modal');
+const btnOpenDailyCalendar = document.getElementById('btn-open-daily-calendar');
+const btnDailyCalClose = document.getElementById('btn-daily-cal-close');
+const btnDailyCalPrev = document.getElementById('btn-daily-cal-prev');
+const btnDailyCalNext = document.getElementById('btn-daily-cal-next');
+const dailyCalMonthLabelEl = document.getElementById('daily-cal-month-label');
+const dailyCalStatsEl = document.getElementById('daily-cal-stats');
+const dailyCalGridEl = document.getElementById('daily-cal-grid');
+const dailyCalSelTitleEl = document.getElementById('daily-cal-sel-title');
+const dailyCalSelBadgeEl = document.getElementById('daily-cal-sel-badge');
+const dailyCalSelMetaEl = document.getElementById('daily-cal-sel-meta');
+const dailyCalSelRecordEl = document.getElementById('daily-cal-sel-record');
+const btnDailyCalLaunch = document.getElementById('btn-daily-cal-launch');
+
+let dailyCalYear = new Date().getUTCFullYear();
+let dailyCalMonth0 = new Date().getUTCMonth();
+let dailyCalSelectedKey = getUtcDateKey();
+
+function renderDailyCalendarModal() {
+  if (!dailyCalModalEl || !dailyCalGridEl) return;
+  const book = loadCareerLogbook();
+  const todayKey = getUtcDateKey();
+  const cal = buildDailyCalendarMonth(book, dailyCalYear, dailyCalMonth0, todayKey);
+  const status = getDailyStatus(book, todayKey);
+
+  if (dailyCalMonthLabelEl) dailyCalMonthLabelEl.textContent = cal.monthLabel;
+  if (dailyCalStatsEl) {
+    dailyCalStatsEl.textContent =
+      `🔥 ${status.activeStreak}d Streak · 🏆 Best ${status.bestStreak}d · ✅ ${cal.clearedInMonth}/${cal.availableInMonth} this month (${status.totalClears} total)`;
+  }
+  if (btnDailyCalNext) {
+    const todayY = Number(todayKey.slice(0, 4));
+    const todayM0 = Number(todayKey.slice(5, 7)) - 1;
+    btnDailyCalNext.disabled = cal.year > todayY || (cal.year === todayY && cal.month0 >= todayM0);
+  }
+
+  let html = '';
+  for (let s = 0; s < cal.firstWeekday; s++) {
+    html += '<div class="daily-cal-spacer" aria-hidden="true"></div>';
+  }
+  for (const cell of cal.days) {
+    const classes = ['daily-cal-cell'];
+    if (cell.cleared) classes.push('cleared');
+    if (cell.isToday) classes.push('today');
+    if (cell.isFuture) classes.push('future');
+    if (cell.dateKey === dailyCalSelectedKey) classes.push('selected');
+    const sub = cell.isFuture ? '🔒' : cell.cleared ? (cell.grade || '✓') : cell.isToday ? 'NOW' : '·';
+    html +=
+      `<button type="button" class="${classes.join(' ')}" data-cal-date="${cell.dateKey}"` +
+      (cell.isFuture ? ' disabled' : '') +
+      ` aria-label="${cell.dateKey}${cell.cleared ? ' cleared' : ''}">` +
+      `<span>${cell.day}</span><span class="daily-cal-cell-sub">${sub}</span></button>`;
+  }
+  dailyCalGridEl.innerHTML = html;
+
+  // Render preview for selected day
+  const selKey = dailyCalSelectedKey <= todayKey ? dailyCalSelectedKey : todayKey;
+  dailyCalSelectedKey = selKey;
+  const daily = getDailyGeneratedExpedition(selKey);
+  const rec = book.daily?.records?.[selKey] || null;
+  const depthM = daily.level?.proceduralMeta?.targetDepthM || getLevelMaxDepthM(daily.level);
+  const isTodaySel = selKey === todayKey;
+  if (dailyCalSelTitleEl) {
+    dailyCalSelTitleEl.textContent = `${isTodaySel ? 'Today · ' : ''}${selKey} · ${daily.level.name}`;
+  }
+  if (dailyCalSelBadgeEl && daily.mutator) {
+    dailyCalSelBadgeEl.textContent = `${daily.mutator.icon} ${daily.mutator.name}`;
+  }
+  if (dailyCalSelMetaEl) {
+    const gasName = daily.level.gasOverrides?.TMX1455?.name || 'TMX 14/55';
+    dailyCalSelMetaEl.textContent =
+      `Seed #${daily.seed} · ${daily.biomeSpec.label} · ${depthM}m (${gasName})${daily.unlined ? ' · 🧵 Unlined Reel' : ' · Fixed Line'} — ${daily.mutator.summary || ''}`;
+  }
+  if (dailyCalSelRecordEl) {
+    dailyCalSelRecordEl.textContent = rec
+      ? `✅ Cleared · Grade ${rec.grade} · Best Score ${rec.score.toLocaleString()} · Time ${formatRunClock(rec.timeSec || 0)}`
+      : isTodaySel
+        ? 'Not cleared yet — clear today to grow your streak!'
+        : 'Archive Expedition — dive anytime to earn its calendar checkmark!';
+  }
+  if (btnDailyCalLaunch) {
+    btnDailyCalLaunch.textContent = rec
+      ? `↻ Replay ${selKey}`
+      : isTodaySel
+        ? '▶ Dive Today’s Daily Sump'
+        : `▶ Dive Archive (${selKey})`;
+  }
+}
+
+function openDailyCalendarModal() {
+  if (!dailyCalModalEl) return;
+  const todayKey = getUtcDateKey();
+  dailyCalYear = Number(todayKey.slice(0, 4));
+  dailyCalMonth0 = Number(todayKey.slice(5, 7)) - 1;
+  dailyCalSelectedKey = todayKey;
+  renderDailyCalendarModal();
+  dailyCalModalEl.hidden = false;
+}
+
+function closeDailyCalendarModal() {
+  if (dailyCalModalEl) dailyCalModalEl.hidden = true;
+}
+
+btnOpenDailyCalendar?.addEventListener('click', openDailyCalendarModal);
+btnDailyCalClose?.addEventListener('click', closeDailyCalendarModal);
+dailyCalModalEl?.addEventListener('click', (e) => {
+  if (e.target === dailyCalModalEl) closeDailyCalendarModal();
+});
+btnDailyCalPrev?.addEventListener('click', () => {
+  dailyCalMonth0 -= 1;
+  if (dailyCalMonth0 < 0) {
+    dailyCalMonth0 = 11;
+    dailyCalYear -= 1;
+  }
+  renderDailyCalendarModal();
+});
+btnDailyCalNext?.addEventListener('click', () => {
+  dailyCalMonth0 += 1;
+  if (dailyCalMonth0 > 11) {
+    dailyCalMonth0 = 0;
+    dailyCalYear += 1;
+  }
+  renderDailyCalendarModal();
+});
+dailyCalGridEl?.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-cal-date]');
+  if (!btn || btn.disabled) return;
+  dailyCalSelectedKey = btn.dataset.calDate;
+  renderDailyCalendarModal();
+});
+btnDailyCalLaunch?.addEventListener('click', () => {
+  const daily = getDailyGeneratedExpedition(dailyCalSelectedKey);
+  closeDailyCalendarModal();
+  launchDailyChallenge(daily);
+});
 
 function renderTechGearDock() {
   if (!gearDockGridEl) return;
@@ -5400,7 +5564,7 @@ btnPlaySolo.addEventListener('click', () => {
 async function launchDailyChallenge(dailyOverride = null) {
   const diverName = requireCallsign();
   if (!diverName) return false;
-  const daily = dailyOverride || getDailyChallenge(LEVELS);
+  const daily = dailyOverride || getDailyGeneratedExpedition();
   if (!daily?.levelId) return false;
   if (lan.room) {
     lan.leaveRoom();

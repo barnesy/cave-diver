@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="130" />
+  <meta name="app-version" content="131" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=130" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=130" />
-  <link rel="stylesheet" href="./css/style.css?v=130" />
+  <link rel="icon" href="./icons/icon-192.png?v=131" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=131" />
+  <link rel="stylesheet" href="./css/style.css?v=131" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=130" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=131" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=130" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=131" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -145,7 +145,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v130</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v131</button>
               </div>
             </div>
           </div>
@@ -239,18 +239,21 @@
         </div>
         <div id="daily-challenge-card" class="daily-challenge-card" aria-label="Daily Expedition Challenge">
           <div class="daily-card-head">
-            <span class="daily-card-eyebrow">📅 DAILY EXPEDITION · <span id="daily-date-label">UTC</span></span>
+            <span class="daily-card-eyebrow">📅 DAILY GENERATED SUMP · <span id="daily-date-label">UTC</span></span>
             <span id="daily-streak-pill" class="daily-streak-pill">🔥 0d Streak</span>
           </div>
           <div class="daily-card-body">
             <div class="daily-card-info">
-              <div id="daily-site-title" class="daily-site-title">Loading Daily Site...</div>
+              <div id="daily-site-title" class="daily-site-title">Loading Daily Sump...</div>
               <div class="daily-mutator-row">
                 <span id="daily-mutator-badge" class="daily-mutator-badge">⚡ Mutator</span>
                 <span id="daily-mutator-desc" class="daily-mutator-desc"></span>
               </div>
             </div>
-            <button id="btn-play-daily" class="btn tiny primary daily-play-btn" type="button">▶ PLAY DAILY</button>
+            <div class="daily-card-actions">
+              <button id="btn-open-daily-calendar" class="btn tiny secondary daily-cal-btn" type="button" title="Browse Daily Dive Calendar &amp; Archive Expeditions">📅 Calendar</button>
+              <button id="btn-play-daily" class="btn tiny primary daily-play-btn" type="button">▶ PLAY DAILY</button>
+            </div>
           </div>
         </div>
         <div id="menu-gear-dock" class="gear-loadout-dock" aria-label="Tech Gear Loadout">
@@ -932,6 +935,43 @@
     </div>
   </div>
 
+  <!-- Daily Generated Sump Calendar Modal (v131) -->
+  <div id="daily-calendar-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="daily-cal-title">
+    <div class="lb-stats-card daily-cal-card">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">TECHNO DIVE · DAILY GENERATED ARCHIVE</div>
+          <h2 id="daily-cal-title" class="lb-stats-title">📅 Daily Dive Calendar</h2>
+          <div id="daily-cal-stats" class="lb-stats-sub">Every day carves a fresh procedural cave &amp; mutator worldwide.</div>
+        </div>
+        <button id="btn-daily-cal-close" class="btn tiny ghost" type="button" aria-label="Close daily calendar">✕</button>
+      </div>
+
+      <div class="daily-cal-nav">
+        <button id="btn-daily-cal-prev" class="btn tiny secondary" type="button" aria-label="Previous month">‹ Prev</button>
+        <strong id="daily-cal-month-label" class="daily-cal-month-label">November 2026</strong>
+        <button id="btn-daily-cal-next" class="btn tiny secondary" type="button" aria-label="Next month">Next ›</button>
+      </div>
+
+      <div class="daily-cal-weekdays" aria-hidden="true">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div id="daily-cal-grid" class="daily-cal-grid" role="grid" aria-label="Monthly daily dive calendar"></div>
+
+      <div id="daily-cal-preview" class="daily-cal-preview">
+        <div class="daily-cal-preview-top">
+          <strong id="daily-cal-sel-title">Select a day</strong>
+          <span id="daily-cal-sel-badge" class="daily-mutator-badge">⚡ Mutator</span>
+        </div>
+        <div id="daily-cal-sel-meta" class="daily-cal-sel-meta"></div>
+        <div id="daily-cal-sel-record" class="daily-cal-sel-record"></div>
+        <div class="daily-cal-preview-actions">
+          <button id="btn-daily-cal-launch" class="btn primary" type="button">▶ Dive Selected Day</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- GitHub Issue / Feedback Reporter Modal -->
   <div id="issue-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="issue-modal-title">
     <div class="lb-stats-card issue-card">
@@ -971,72 +1011,72 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=130",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=130",
-        "./js/game/audio.js": "./js/game/audio.js?v=130",
-        "./js/game/collision.js": "./js/game/collision.js?v=130",
-        "./js/game/input.js": "./js/game/input.js?v=130",
-        "./js/game/hud.js": "./js/game/hud.js?v=130",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=130",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=130",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=130",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=130",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=130",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=130",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=130",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=130",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=130",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=130",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=130",
-        "./js/game/silt.js": "./js/game/silt.js?v=130",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=130",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=130",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=130",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=130",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=130",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=130",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=130",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=130",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=130",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=130",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=130",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=130",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=130",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=130",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=130",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=130",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=130",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=130",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=130",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=130",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=130",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=130",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=130",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=130",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=130",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=130",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=130",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=130",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=130",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=130",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=130",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=130",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=130",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=130",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=130",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=130",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=130",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=130",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=130",
-        "./js/levels/index.js": "./js/levels/index.js?v=130",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=130",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=130",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=130",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=130",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=130"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=131",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=131",
+        "./js/game/audio.js": "./js/game/audio.js?v=131",
+        "./js/game/collision.js": "./js/game/collision.js?v=131",
+        "./js/game/input.js": "./js/game/input.js?v=131",
+        "./js/game/hud.js": "./js/game/hud.js?v=131",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=131",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=131",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=131",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=131",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=131",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=131",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=131",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=131",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=131",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=131",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=131",
+        "./js/game/silt.js": "./js/game/silt.js?v=131",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=131",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=131",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=131",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=131",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=131",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=131",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=131",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=131",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=131",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=131",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=131",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=131",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=131",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=131",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=131",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=131",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=131",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=131",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=131",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=131",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=131",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=131",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=131",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=131",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=131",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=131",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=131",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=131",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=131",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=131",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=131",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=131",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=131",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=131",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=131",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=131",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=131",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=131",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=131",
+        "./js/levels/index.js": "./js/levels/index.js?v=131",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=131",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=131",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=131",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=131",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=131"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=130"></script>
+  <script type="module" src="./js/main.js?v=131"></script>
 </body>
 </html>

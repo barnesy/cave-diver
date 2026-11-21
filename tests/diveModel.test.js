@@ -29,6 +29,8 @@ import {
   DAILY_MUTATORS,
   getDailyChallenge,
   getDailyMutatorById,
+  getDailyMutatorForDate,
+  buildDailyCalendarMonth,
   recordDailyClear,
   getDailyStatus,
   FIELD_GUIDE_CATALOG,
@@ -90,6 +92,8 @@ import {
   buildProceduralShareUrl,
   parseProceduralFromSearch,
   generateProceduralLevel,
+  getDailyGeneratedConfig,
+  getDailyGeneratedLevel,
 } from '../public/js/levels/index.js';
 import { evaluateCaveSDF, evaluateCaveNormal, resolveDiverCollision, createChunkSDFEvaluator, createBoxSDFEvaluator } from '../public/js/game/collision.js';
 import {
@@ -4897,4 +4901,77 @@ test('v128 Extreme Frontier Expedition Pack (+3 Iconic Dives -> 33 Total) & HUD 
     false,
     'stepSimulation(dt) must not reference out-of-scope nowMs'
   );
+});
+
+test('v131 Daily Generated Sump Expeditions & Monthly Daily Dive Calendar: determinism, SDF validation & archive backfill', () => {
+  // 1. Deterministic daily procedural generation across 14 consecutive UTC days with zero consecutive biome repeats
+  let prevBiome = '';
+  const seenBiomes = new Set();
+  const seenTiers = new Set();
+  for (let day = 1; day <= 14; day++) {
+    const dateKey = `2026-11-${String(day).padStart(2, '0')}`;
+    const cfgA = getDailyGeneratedConfig(dateKey);
+    const cfgB = getDailyGeneratedConfig(dateKey);
+    assert.deepEqual(cfgA, cfgB, 'Same date must yield identical daily generated config');
+    assert.equal(cfgA.seed, `D2611${String(day).padStart(2, '0')}`);
+    assert.notEqual(cfgA.biome, prevBiome, `Consecutive days should not repeat biome (${dateKey})`);
+    prevBiome = cfgA.biome;
+    seenBiomes.add(cfgA.biome);
+    seenTiers.add(cfgA.tier);
+
+    const lvl = getDailyGeneratedLevel(dateKey);
+    const check = validateLevel(lvl, { checkGeometry: true });
+    assert.equal(check.valid, true, `Daily generated sump ${dateKey} failed SDF check: ${check.errors.join('; ')}`);
+    assert.equal(getLevelById(cfgA.levelId).id, cfgA.levelId);
+    assert.ok(getDailyMutatorForDate(dateKey)?.id);
+  }
+  assert.ok(seenBiomes.size >= 4, '14-day window should cover at least 4 geological biomes');
+  assert.equal(seenTiers.size, 3, '14-day window should span shallow, deep, and extreme tiers');
+
+  // 2. Monthly Calendar Matrix & Archive Backfill streak integrity
+  let book = createEmptyLogbook();
+  // Clear Nov 20 and Nov 21 -> 2-day live streak
+  book = recordDailyClear(book, {
+    dateKey: '2026-11-20',
+    levelId: getDailyGeneratedConfig('2026-11-20').levelId,
+    mutatorId: getDailyMutatorForDate('2026-11-20').id,
+    score: 2650,
+    grade: 'A',
+    timeSec: 180,
+  });
+  book = recordDailyClear(book, {
+    dateKey: '2026-11-21',
+    levelId: getDailyGeneratedConfig('2026-11-21').levelId,
+    mutatorId: getDailyMutatorForDate('2026-11-21').id,
+    score: 3120,
+    grade: 'S',
+    timeSec: 162,
+  });
+  assert.equal(getDailyStatus(book, '2026-11-21').activeStreak, 2);
+
+  // Backfill older archive day Nov 10 -> records clear & grade without breaking live 2-day streak!
+  book = recordDailyClear(book, {
+    dateKey: '2026-11-10',
+    levelId: getDailyGeneratedConfig('2026-11-10').levelId,
+    mutatorId: getDailyMutatorForDate('2026-11-10').id,
+    score: 2400,
+    grade: 'B',
+    timeSec: 210,
+  });
+  const st = getDailyStatus(book, '2026-11-21');
+  assert.equal(st.activeStreak, 2, 'Archive backfill must preserve live streak');
+  assert.equal(st.totalClears, 3);
+
+  const cal = buildDailyCalendarMonth(book, 2026, 10, '2026-11-21'); // Nov 2026
+  assert.equal(cal.monthLabel, 'November 2026');
+  assert.equal(cal.daysInMonth, 30);
+  assert.equal(cal.clearedInMonth, 3);
+  assert.equal(cal.availableInMonth, 21);
+  assert.equal(cal.days[9].dateKey, '2026-11-10');
+  assert.equal(cal.days[9].cleared, true);
+  assert.equal(cal.days[9].grade, 'B');
+  assert.equal(cal.days[20].isToday, true);
+  assert.equal(cal.days[20].grade, 'S');
+  assert.equal(cal.days[21].isFuture, true);
+  assert.equal(cal.days[21].cleared, false);
 });

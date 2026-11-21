@@ -549,3 +549,55 @@ export function generateProceduralLevel(opts = {}) {
   enrichCaveInteractives(level);
   return level;
 }
+
+const DAILY_BIOME_KEYS = Object.keys(PROCEDURAL_BIOMES);
+const DAILY_TIER_CYCLE = ['shallow', 'deep', 'deep', 'extreme', 'shallow', 'deep', 'extreme'];
+
+/**
+ * Deterministically derive the Daily Generated Sump parameters for any UTC date key (YYYY-MM-DD) — v131.
+ * Every calendar day gets a unique seed (`DYYMMDD`), non-repeating biome, varied depth tier & reel challenge.
+ */
+export function getDailyGeneratedConfig(dateOrKey = new Date()) {
+  let dateKey;
+  if (typeof dateOrKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrKey)) {
+    dateKey = dateOrKey;
+  } else {
+    const d = dateOrKey instanceof Date ? dateOrKey : new Date(dateOrKey);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    dateKey = `${y}-${m}-${day}`;
+  }
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dayNum = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  const seed = `D${String(y).slice(-2)}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`;
+  // Coprime stride across 5 biomes ensures no two consecutive days share the same biome
+  const biomeIdx = (((dayNum * 2) % DAILY_BIOME_KEYS.length) + DAILY_BIOME_KEYS.length) % DAILY_BIOME_KEYS.length;
+  const biome = DAILY_BIOME_KEYS[biomeIdx];
+  // Hash for tier & unlined variety while keeping every week varied
+  const rng = createSeededRng(`daily-meta|${dateKey}`);
+  const tierIdx = (((dayNum % DAILY_TIER_CYCLE.length) + DAILY_TIER_CYCLE.length) % DAILY_TIER_CYCLE.length);
+  const tier = DAILY_TIER_CYCLE[tierIdx];
+  const unlined = rng() < 0.28;
+  const levelId = buildProceduralLevelId({ seed, tier, biome, unlined });
+  return {
+    dateKey,
+    seed,
+    tier,
+    tierSpec: PROCEDURAL_TIERS[tier],
+    biome,
+    biomeSpec: PROCEDURAL_BIOMES[biome],
+    unlined,
+    levelId,
+  };
+}
+
+/**
+ * Build the complete playable daily generated cave level for any UTC date key (YYYY-MM-DD).
+ */
+export function getDailyGeneratedLevel(dateOrKey = new Date()) {
+  const cfg = getDailyGeneratedConfig(dateOrKey);
+  const level = generateProceduralLevel(cfg);
+  level.dailyDateKey = cfg.dateKey;
+  return level;
+}

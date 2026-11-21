@@ -44,6 +44,8 @@ import {
   buildProceduralShareUrl,
   parseProceduralFromSearch,
   generateProceduralLevel,
+  getDailyGeneratedConfig,
+  getDailyGeneratedLevel,
 } from './proceduralLevel.js';
 
 export {
@@ -58,6 +60,8 @@ export {
   buildProceduralShareUrl,
   parseProceduralFromSearch,
   generateProceduralLevel,
+  getDailyGeneratedConfig,
+  getDailyGeneratedLevel,
 };
 
 /**
