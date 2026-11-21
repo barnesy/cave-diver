@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=126');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=127');
   }
   return trysteroModulePromise;
 }
@@ -1630,6 +1630,7 @@ export class LanClient {
           const p = this.peers.get(pid);
           if (p) {
             p.signalText = msg.signal;
+            p.signalStartedAt = nowMs();
             p.signalExpiresAt = expiresAt;
           } else {
             if (!this._pendingSignals) this._pendingSignals = new Map();

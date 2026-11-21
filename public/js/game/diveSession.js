@@ -6,6 +6,7 @@ import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS, MAX_DRILL_BONUS } from './scoring.js';
 import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
+import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
 
 const MAX_BUBBLES = 240;
 const _bubbleNormalScratch = { nx: 0, ny: -1 };
@@ -2748,10 +2749,20 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-18 * dt));
     diver.torchManualAim = true;
   } else {
-    let tDiff = diver.angle - curTorchAng;
+    let targetAng = diver.angle;
+    const nowSigMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (diver.signalText && diver.signalExpiresAt > nowSigMs && Number.isFinite(diver.signalStartedAt)) {
+      const sigSpec = getScubaSignalById(diver.signalId || diver.signalText);
+      const gest = computeTorchSignalGesture(sigSpec, (nowSigMs - diver.signalStartedAt) / 1000);
+      if (gest) {
+        targetAng = diver.angle + gest.angleOffsetRad;
+        diver.strobeMod = Math.min(diver.strobeMod ?? 1, gest.strobeMod);
+      }
+    }
+    let tDiff = targetAng - curTorchAng;
     while (tDiff > Math.PI) tDiff -= Math.PI * 2;
     while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-10 * dt));
+    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-14 * dt));
     diver.torchManualAim = false;
   }
 

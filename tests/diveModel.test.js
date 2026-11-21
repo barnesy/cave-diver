@@ -48,6 +48,12 @@ import {
   renderExpeditionPostcard,
 } from '../public/js/game/diveCard.js';
 import {
+  SCUBA_SIGNALS,
+  getScubaSignalById,
+  triggerDiverSignal,
+  computeTorchSignalGesture,
+} from '../public/js/game/diveSignals.js';
+import {
   buildChallengeUrl,
   parseChallengeFromSearch,
   formatChallengeSummary,
@@ -4762,4 +4768,79 @@ test('v126 Shearwater-Style Technical Dive Computer: ZH-L16C tissue bars, GF99%,
   assert.equal(clampedEnd.t, 120);
   assert.equal(clampedEnd.gas, 'O2');
   assert.equal(clampedEnd.cns, 28);
+});
+
+test('v127 Co-op Scuba Hand-Signals & Torch Light-Signaling: catalog, animated torch gestures, session & post-lighting renderer', () => {
+  assert.equal(SCUBA_SIGNALS.length, 6);
+  assert.equal(getScubaSignalById('ok')?.torchPattern, 'circle');
+  assert.equal(getScubaSignalById('🆘 SHARE AIR!')?.id, 'share-air');
+  assert.equal(getScubaSignalById('LOW GAS')?.id, 'low-gas');
+  assert.equal(getScubaSignalById('HOLD DECO')?.id, 'hold');
+
+  // 1. Torch light gesture modulation for OK (circle), LOOK (wave), and SHARE AIR (sos-wave)
+  const okG = computeTorchSignalGesture(getScubaSignalById('ok'), 0.45);
+  assert.ok(okG && Math.abs(okG.angleOffsetRad) > 0 && okG.pattern === 'circle');
+  const waveG = computeTorchSignalGesture(getScubaSignalById('attention'), 0.35);
+  assert.ok(waveG && Math.abs(waveG.angleOffsetRad) > 0.1 && waveG.pattern === 'wave');
+  const sosG = computeTorchSignalGesture(getScubaSignalById('share-air'), 0.5);
+  assert.ok(sosG && sosG.strobeMod <= 1 && sosG.pattern === 'sos-wave');
+  assert.equal(computeTorchSignalGesture(getScubaSignalById('ok'), 4.5), null, 'gesture should conclude cleanly after window');
+
+  // 2. triggerDiverSignal stamps diver metadata cleanly and animates torchAngle inside stepDiveSession
+  const session = createDiveSession(LEVEL_1, { mode: 'solo', difficulty: 'standard' });
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const stamped = triggerDiverSignal(session.diver, 'attention', now - 320);
+  assert.equal(stamped.id, 'attention');
+  assert.equal(session.diver.signalId, 'attention');
+  const beforeAng = session.diver.torchAngle;
+  stepDiveSession(session, { x: 0, y: 0, boost: false }, 0.08, {});
+  assert.notEqual(session.diver.torchAngle, beforeAng, 'active wave signal should sweep diver torchAngle');
+
+  // 3. Renderer _drawDiverSignals draws torch O-circle, wave arcs, ascent chevrons & color-coded slates
+  const drawn = [];
+  const mockCtx = {
+    globalCompositeOperation: 'source-over',
+    globalAlpha: 1,
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'center',
+    textBaseline: 'middle',
+    save() {},
+    restore() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() { drawn.push('arc'); },
+    roundRect() { drawn.push('roundRect'); },
+    fill() { drawn.push('fill'); },
+    stroke() { drawn.push('stroke'); },
+    measureText(t) { return { width: t.length * 7 }; },
+    fillText(t) { drawn.push(`text:${t}`); },
+  };
+  const toScreenX = (wx) => 400 + wx * 24;
+  const toScreenY = (wy) => 200 + wy * 24;
+
+  const peerOk = { x: 8, y: 5, angle: 0, torchAngle: 0, torchOn: true };
+  triggerDiverSignal(peerOk, 'ok', now - 400);
+  const peerAsc = { x: 12, y: 6, angle: 0, torchAngle: 0, torchOn: true };
+  triggerDiverSignal(peerAsc, 'ascend', now - 400);
+
+  CaveRenderer.prototype._drawDiverSignals.call(
+    {},
+    mockCtx,
+    session.diver,
+    [peerOk, peerAsc],
+    toScreenX,
+    toScreenY,
+    24,
+    2.5,
+    800,
+    600
+  );
+  assert.ok(drawn.includes('text:👌 OK'));
+  assert.ok(drawn.includes('text:👍 ASCEND / TURN'));
+  assert.ok(drawn.includes('text:🔦 LOOK / ATTENTION'));
+  assert.ok(drawn.filter((d) => d === 'arc').length >= 4);
 });

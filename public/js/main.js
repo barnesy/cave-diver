@@ -98,6 +98,7 @@ import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
 import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
+import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import { InputController } from './game/input.js';
 import { DiveAudio } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -529,7 +530,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=126" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=127" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1190,7 +1191,49 @@ const input = new InputController({
   onBuddyPing: () => handleBuddyLocatePing(''),
   onStageDrop: () => handleStageDrop(),
   onComputerToggle: () => toggleShearwaterComputer(),
+  onSignalWheelToggle: () => toggleSignalWheel(),
 });
+
+// Scuba Hand-Signals & Torch Light-Signaling Wheel (v127)
+const signalWheelEl = document.getElementById('signal-wheel');
+const signalWheelGridEl = document.getElementById('signal-wheel-grid');
+const btnSignalWheelClose = document.getElementById('btn-signal-wheel-close');
+const btnHudSignalsEl = document.getElementById('btn-hud-signals');
+let signalWheelOpen = false;
+
+function dispatchScubaSignal(idOrText) {
+  if (mode !== 'diving' || !session || !session.diver || divePaused) return false;
+  const spec = triggerDiverSignal(session.diver, idOrText, performance.now());
+  if (!spec) return false;
+  if (lan?.roomCode) lan.sendSignal(spec.text);
+  audio.playSignal?.();
+  showToast(lan?.roomCode ? `Signaled crew: ${spec.text}` : `Dive Signal: ${spec.text}`, 2.1);
+  toggleSignalWheel(false);
+  return true;
+}
+
+function toggleSignalWheel(forceState) {
+  if (mode !== 'diving' && forceState !== false) return false;
+  signalWheelOpen = typeof forceState === 'boolean' ? forceState : !signalWheelOpen;
+  if (signalWheelEl) signalWheelEl.hidden = !signalWheelOpen;
+  if (btnHudSignalsEl) btnHudSignalsEl.classList.toggle('active', signalWheelOpen);
+  return true;
+}
+
+if (signalWheelGridEl) {
+  signalWheelGridEl.innerHTML = SCUBA_SIGNALS.map(
+    (s) =>
+      `<button type="button" class="signal-wheel-btn" data-sig-id="${s.id}" style="--sig-col:${s.color}">` +
+      `<strong>${s.text}</strong><span>${s.desc}</span></button>`
+  ).join('');
+  signalWheelGridEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-sig-id]');
+    if (!btn) return;
+    dispatchScubaSignal(btn.dataset.sigId);
+  });
+}
+btnHudSignalsEl?.addEventListener('click', () => toggleSignalWheel());
+btnSignalWheelClose?.addEventListener('click', () => toggleSignalWheel(false));
 
 // Shearwater ZH-L16C OLED Dive Computer Overlay (v126)
 const shearwaterPanelEl = document.getElementById('shearwater-panel');
@@ -3974,6 +4017,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     // ignore storage restriction
   }
   toggleShearwaterComputer(false);
+  toggleSignalWheel(false);
   // Append final profile point and render the Dive Computer Depth Profile Graph + Earned Certifications
   if (session?.diveProfile) {
     session.diveProfile.push({
@@ -5740,11 +5784,7 @@ coopCommsEl?.addEventListener('click', (e) => {
   }
   const sig = btn.dataset.signal;
   if (!sig) return;
-  session.diver.signalText = sig;
-  session.diver.signalExpiresAt = performance.now() + 4000;
-  lan.sendSignal(sig);
-  audio.playSignal();
-  showToast(`Signaled crew: ${sig}`, 1.8);
+  dispatchScubaSignal(sig);
 });
 
 btnCoopSpectate?.addEventListener('click', () => {

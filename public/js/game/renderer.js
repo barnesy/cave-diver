@@ -1,6 +1,7 @@
 import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './collision.js';
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
+import { getScubaSignalById } from './diveSignals.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -8309,7 +8310,58 @@ export class CaveRenderer {
       // Skip completely offscreen peers (their signal is surfaced on _drawPeerEdgeIndicators)
       if (isPeer && cw > 0 && ch > 0 && (sx < -24 || sx > cw + 24 || sy < -24 || sy > ch + 24)) continue;
 
-      const isWarn = /GAS|DECO|HOLD/i.test(d.signalText);
+      const sigSpec = getScubaSignalById(d.signalId || d.signalText);
+      const isWarn = sigSpec ? (sigSpec.id === 'low-gas' || sigSpec.id === 'hold' || sigSpec.id === 'share-air') : /GAS|DECO|HOLD|SHARE/i.test(d.signalText);
+      const accentColor = sigSpec?.color || (isWarn ? '#fbbf24' : '#38bdf8');
+      const bgColor = sigSpec?.bgRgba || (isWarn ? 'rgba(69, 26, 3, 0.94)' : 'rgba(8, 47, 73, 0.94)');
+      const txtColor = sigSpec?.textColor || (isWarn ? '#fef3c7' : '#e0f2fe');
+      const sigElapsed = Number.isFinite(d.signalStartedAt) ? Math.max(0, (now - d.signalStartedAt) / 1000) : elapsedSec;
+
+      // Authentic in-world cave-diving torch light gesture graphic ahead of diver's beam (v127)
+      if (sigSpec && sigElapsed < 2.35 && d.torchOn !== false) {
+        const gFade = Math.min(1, sigElapsed / 0.2) * Math.min(1, (2.35 - sigElapsed) / 0.35);
+        const aimAng = Number.isFinite(d.torchAngle) ? d.torchAngle : (d.angle || 0);
+        const gx = sx + Math.cos(aimAng) * 2.15 * scale;
+        const gy = sy + Math.sin(aimAng) * 2.15 * scale;
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = gFade * 0.9;
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = Math.max(2, 0.08 * scale);
+        if (sigSpec.torchPattern === 'circle') {
+          // Luminous Torch "O" Circle signal (classic cave-diving OK gesture!)
+          const r = 0.68 * scale;
+          const headA = sigElapsed * Math.PI * 2.8;
+          ctx.beginPath();
+          ctx.arc(gx, gy, r, headA - Math.PI * 1.45, headA);
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(gx + Math.cos(headA) * r, gy + Math.sin(headA) * r, Math.max(2.6, 0.1 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        } else if (sigSpec.torchPattern === 'wave' || sigSpec.torchPattern === 'sos-wave') {
+          // Sweeping attention light arcs
+          for (let aIdx = 0; aIdx < 2; aIdx++) {
+            const ar = (1.1 + aIdx * 0.55) * scale;
+            ctx.beginPath();
+            ctx.arc(sx, sy, ar, aimAng - 0.52, aimAng + 0.52);
+            ctx.stroke();
+          }
+        } else if (sigSpec.torchPattern === 'nod-up') {
+          // Rising upward ascent chevrons above diver
+          for (let cIdx = 0; cIdx < 2; cIdx++) {
+            const cy = sy - (1.0 + ((sigElapsed * 1.3 + cIdx * 0.5) % 1.0) * 1.1) * scale;
+            const cwHalf = 0.36 * scale;
+            ctx.beginPath();
+            ctx.moveTo(sx - cwHalf, cy + 0.18 * scale);
+            ctx.lineTo(sx, cy - 0.12 * scale);
+            ctx.lineTo(sx + cwHalf, cy + 0.18 * scale);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
       // 3-flash dive-light beacon ring during first 1.6s of signal so teammates spot it across dark passages
       if (elapsedSec < 1.65) {
         const flashPhase = (elapsedSec * 3.0) % 1.0;
@@ -8318,9 +8370,8 @@ export class CaveRenderer {
           const ringR = (0.75 + flashPhase * 2.15) * scale;
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = isWarn
-            ? `rgba(251, 191, 36, ${(flashAlpha * 0.85).toFixed(3)})`
-            : `rgba(56, 189, 248, ${(flashAlpha * 0.85).toFixed(3)})`;
+          ctx.globalAlpha = flashAlpha * 0.85;
+          ctx.strokeStyle = accentColor;
           ctx.lineWidth = Math.max(2, 0.1 * scale);
           ctx.beginPath();
           ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
@@ -8342,8 +8393,8 @@ export class CaveRenderer {
       const bh = Math.max(20, 0.58 * scale);
       const pillCx = cw > 0 ? Math.max(bw * 0.5 + 8, Math.min(cw - bw * 0.5 - 8, sx)) : sx;
       const msgY = ch > 0 ? Math.max(bh * 0.5 + 12, Math.min(ch - bh * 0.5 - 12, baseMsgY)) : baseMsgY;
-      ctx.fillStyle = isWarn ? 'rgba(69, 26, 3, 0.94)' : 'rgba(8, 47, 73, 0.94)';
-      ctx.strokeStyle = isWarn ? '#fbbf24' : '#38bdf8';
+      ctx.fillStyle = bgColor;
+      ctx.strokeStyle = accentColor;
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.roundRect(pillCx - bw * 0.5, msgY - bh * 0.5, bw, bh, 999);
@@ -8351,7 +8402,7 @@ export class CaveRenderer {
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isWarn ? '#fef3c7' : '#e0f2fe';
+      ctx.fillStyle = txtColor;
       ctx.fillText(d.signalText, pillCx, msgY + 0.5);
       ctx.restore();
     }
