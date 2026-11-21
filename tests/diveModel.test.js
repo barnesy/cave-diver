@@ -70,6 +70,9 @@ import {
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
+  createDynamicEncounters,
+  spawnDynamicVisitor,
+  claimSurveyBeacon,
   computeSurgeWave,
   sampleGhostPose,
   applyPeerWreckAction,
@@ -3428,8 +3431,8 @@ test('v109 Live Sonar Cave & Wreck Cartography Minimap: gating, viewports, fog-o
 });
 
 test('v110 Underwater Strobe Camera & Marine Field Guide: catalog, subject capture, stars, scoring, flash & Logbook UI', async () => {
-  // 1. 16-entry Field Guide catalog & Logbook discovery/upgrade persistence
-  assert.equal(FIELD_GUIDE_CATALOG.length, 16);
+  // 1. 18-entry Field Guide catalog & Logbook discovery/upgrade persistence
+  assert.equal(FIELD_GUIDE_CATALOG.length, 18);
   assert.ok(getFieldGuideEntry('shark') && getFieldGuideEntry('hydrovent') && getFieldGuideEntry('remipede'));
 
   let book = createEmptyLogbook();
@@ -3558,4 +3561,117 @@ test('v111 Pass 1 optimizations: O(1) minimap spatial grid fog-of-war, zero-GC l
   const idxDaily = html.indexOf('id="daily-challenge-card"');
   const idxGear = html.indexOf('id="menu-gear-dock"');
   assert.ok(idxPlay > 0 && idxPlay < idxDaily && idxDaily < idxGear, 'Primary DIVE CTA should appear above Daily & Gear cards');
+});
+
+test('v112 Dynamic Underwater Encounters: pelagic whale-shark/manta flybys, shifting fog banks, survey beacon & camera/scoring integration', () => {
+  // 1. Every campaign level generates SDF-safe shifting visibility banks & open-water survey beacon
+  const wreckLvl = getLevelById('ss-thistlegorm-wwii-wreck');
+  const caveEnc = createDynamicEncounters(LEVEL_1);
+  const wreckEnc = createDynamicEncounters(wreckLvl);
+  assert.ok(caveEnc.fogBanks.length >= 1, 'Cave level should spawn shifting visibility fog banks');
+  assert.ok(wreckEnc.fogBanks.length >= 1, 'Wreck level should spawn shifting visibility fog banks');
+  assert.ok(caveEnc.beacon && !caveEnc.beacon.claimed, 'Cave level should spawn optional Survey Beacon');
+  assert.ok(wreckEnc.beacon && !wreckEnc.beacon.claimed, 'Wreck level should spawn optional Distress Transponder');
+  assert.ok(evaluateCaveSDF(LEVEL_1, caveEnc.beacon.x, caveEnc.beacon.y) < -1.0, 'Cave beacon must be in navigable open water');
+  assert.ok(evaluateCaveSDF(wreckLvl, wreckEnc.beacon.x, wreckEnc.beacon.y) < -1.0, 'Wreck beacon must be in navigable open water');
+
+  // 2. Whale Shark & Manta Ray pelagic flybys on ocean shipwrecks are photographable with the Strobe Camera!
+  const sWreck = createDiveSession(wreckLvl);
+  sWreck.diver.x = wreckLvl.spawn.x;
+  sWreck.diver.y = 14;
+  sWreck.diver.angle = 0;
+  sWreck.diver.torchAngle = 0;
+  const ws = spawnDynamicVisitor(sWreck, 'whaleshark');
+  assert.ok(ws && ws.kind === 'whaleshark');
+  // Position Whale Shark cleanly 9m ahead of diver in open blue water
+  ws.x = sWreck.diver.x + 9.0;
+  ws.y = sWreck.diver.y;
+  const wsSnap = captureCameraPhoto(sWreck, null, { knownIds: new Set() });
+  assert.equal(wsSnap.ok, true);
+  assert.equal(wsSnap.subject?.id, 'whaleshark', 'Strobe camera must capture passing Whale Shark for Field Guide!');
+  assert.equal(wsSnap.isNewInGuide, true);
+  assert.ok(wsSnap.points > 0);
+
+  // Bioluminescent swarm spawns in caves
+  const sCave = createDiveSession(LEVEL_1);
+  sCave.diver.x = 40;
+  sCave.diver.y = 20;
+  const swarm = spawnDynamicVisitor(sCave, 'biolum-swarm');
+  assert.ok(swarm && swarm.kind === 'biolum-swarm');
+
+  // 3. Shifting visibility bank drifts & raises local fogDensity when diver enters
+  const fb = sCave.encounters.fogBanks[0];
+  sCave.diver.x = fb.baseX;
+  sCave.diver.y = fb.baseY;
+  stepDiveSession(sCave, { x: 0, y: 0 }, 0.1);
+  assert.equal(sCave.encounters.inFogBank, true, 'Diver inside fog bank must set inFogBank=true');
+  assert.ok(sCave.encounters.fogDensity > 0.1);
+
+  // 4. Optional Survey Beacon salvage awards +180 pts, 15m sonar map reveal, +18 bar reserve & fits computeLevelMaxScore
+  const bc = sCave.encounters.beacon;
+  sCave.diveState.tanks.EAN32.bar = 140;
+  const expBefore = sCave.exploredCells.size;
+  sCave.diver.x = bc.x + 2.2;
+  sCave.diver.y = bc.y;
+  const act = triggerWreckAction(sCave);
+  assert.equal(act.handled, true);
+  assert.equal(act.kind, 'claim-beacon');
+  assert.equal(bc.claimed, true);
+  assert.equal(sCave.encounters.encounterBonusScore, 180);
+  assert.ok(sCave.diveState.tanks.EAN32.bar >= 157, 'Beacon salvage should top up spare reserve gas');
+  assert.ok(sCave.exploredCells.size >= expBefore, 'Beacon salvage should trigger 15m sonar sweep');
+  assert.equal(claimSurveyBeacon(sCave).ok, false, 'Beacon cannot be double-claimed');
+
+  const encSummary = computeDiverScoreSummary({
+    name: 'Explorer',
+    level: LEVEL_1,
+    diveState: sCave.diveState,
+    checkpointsHit: new Set(LEVEL_1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(LEVEL_1.collectibles.map((c) => c.id)),
+    exploredCount: 100,
+    totalExploreCells: 100,
+    diveTimeSec: 90,
+    photoBonusScore: 300,
+    encounterBonusScore: 180,
+  });
+  assert.equal(encSummary.encounterBonusScore, 180);
+  assert.equal(encSummary.totalScore <= computeLevelMaxScore(LEVEL_1.id, false), true);
+
+  // 5. Renderer draws both world & emissive encounter passes cleanly + Minimap plots unclaimed beacon
+  const noopCtx = new Proxy({
+    createRadialGradient: () => ({ addColorStop() {} }),
+  }, { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true });
+  CaveRenderer.prototype._drawDynamicEncounters.call(
+    {},
+    noopCtx,
+    sWreck.encounters,
+    -100, 300, -10, 100,
+    (x) => 400 + x * 12,
+    (y) => 200 + y * 12,
+    12,
+    5.0,
+    'world'
+  );
+  CaveRenderer.prototype._drawDynamicEncounters.call(
+    {},
+    noopCtx,
+    sWreck.encounters,
+    -100, 300, -10, 100,
+    (x) => 400 + x * 12,
+    (y) => 200 + y * 12,
+    12,
+    5.0,
+    'emissive'
+  );
+  drawSonarMinimap(noopCtx, 352, 224, {
+    level: wreckLvl,
+    diver: sWreck.diver,
+    exploreCells: sWreck.exploreCells,
+    exploredCells: sWreck.exploredCells,
+    exploredGrid: sWreck.exploredGrid,
+    encounters: sWreck.encounters,
+    difficulty: 'standard',
+    zoomMode: 'full',
+    timeSec: 5.0,
+  });
 });

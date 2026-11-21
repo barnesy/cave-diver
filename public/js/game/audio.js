@@ -718,4 +718,37 @@ export class DiveAudio {
     }
     this.vibrate?.(captured ? 22 : 12);
   }
+
+  /**
+   * Atmospheric chime for dynamic encounters: deep pelagic whale-like swell or crisp Survey Beacon salvage ping.
+   */
+  playEncounterChime(kind = 'beacon') {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (kind === 'beacon') {
+      this.playTone(1180, 0.09, 'sine', 0.055, 0);
+      this.playTone(1568, 0.14, 'triangle', 0.06, 0.085);
+      this.vibrate?.(24);
+      return;
+    }
+    // Deep majestic sub-harmonic ocean glide swell (Whale Shark / Manta Ray / Bioluminescent Swarm)
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    const f0 = kind === 'biolum-swarm' ? 390 : 122;
+    const f1 = kind === 'biolum-swarm' ? 520 : 88;
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(f1, t + 1.15);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.042, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    osc.connect(g);
+    g.connect(this.masterFilter || this.ctx.destination);
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
+    osc.start(t);
+    osc.stop(t + 1.24);
+  }
 }

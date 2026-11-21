@@ -31,8 +31,8 @@ export function computeLevelMaxScore(levelId, isTeam = false) {
   );
   const allCollectiblesBonus = list.length > 0 ? 400 : 0;
   const maxHatchBonus = (level.watertightHatches || []).reduce((sum, h) => sum + (Number(h.bonusPoints) || 150), 0);
-  // Match scoring.js maxPossible: Health (1000) + Speed (800) + Collectibles + All Bonus (400) + Explore (700) + Cartographer (250) + Hatches + Photos (300)
-  const soloCeiling = 1000 + 800 + collectiblePts + allCollectiblesBonus + 700 + 250 + maxHatchBonus + 300;
+  // Match scoring.js maxPossible: Health (1000) + Speed (800) + Collectibles + All Bonus (400) + Explore (700) + Cartographer (250) + Hatches + Photos (300) + Survey Beacon (180)
+  const soloCeiling = 1000 + 800 + collectiblePts + allCollectiblesBonus + 700 + 250 + maxHatchBonus + 300 + 180;
   return isTeam ? soloCeiling + 600 : soloCeiling;
 }
 

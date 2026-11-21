@@ -1428,6 +1428,7 @@ export class CaveRenderer {
     ghostPose = null,
     sonarPulse = null,
     cameraFlash = null,
+    encounters = null,
     difficulty = 'standard',
     mutatorId = '',
     timeSec,
@@ -1635,6 +1636,9 @@ export class CaveRenderer {
       this._drawAnchoredLife(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
       this._drawSwimmers(ctx, ecosystem, visX0 - 4, visX1 + 4, visY0 - 4, visY1 + 4, toScreenX, toScreenY, scale, timeSec);
     }
+    if (encounters && typeof this._drawDynamicEncounters === 'function') {
+      this._drawDynamicEncounters(ctx, encounters, visX0 - 10, visX1 + 10, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, 'world');
+    }
 
     // 9. Divers & Active Co-op Rescue Tow Lifelines
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec);
@@ -1679,6 +1683,9 @@ export class CaveRenderer {
     }
     if (cameraFlash && typeof this._drawCameraFlash === 'function') {
       this._drawCameraFlash(ctx, cameraFlash, toScreenX, toScreenY, scale);
+    }
+    if (encounters && typeof this._drawDynamicEncounters === 'function') {
+      this._drawDynamicEncounters(ctx, encounters, visX0 - 10, visX1 + 10, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, 'emissive');
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -7452,6 +7459,195 @@ export class CaveRenderer {
       ctx.lineTo(ax + dirX * (finLen * 0.62), ay + dirY * (finLen * 0.62));
       ctx.stroke();
     }
+  }
+
+  _drawDynamicEncounters(ctx, encounters, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
+    if (!encounters) return;
+    ctx.save();
+
+    if (pass === 'world') {
+      // 1. Drifting Thermocline / Halocline Visibility Mist Banks
+      const banks = encounters.fogBanks || [];
+      for (let i = 0; i < banks.length; i++) {
+        const fb = banks[i];
+        if (fb.x + fb.radiusX < xMin || fb.x - fb.radiusX > xMax || fb.y + fb.radiusY < yMin || fb.y - fb.radiusY > yMax) continue;
+        const sx = toScreenX(fb.x);
+        const sy = toScreenY(fb.y);
+        const rx = fb.radiusX * scale;
+        const ry = fb.radiusY * scale;
+        const waveShift = Math.sin(timeSec * 0.9 + fb.phase) * 0.35 * scale;
+        ctx.save();
+        ctx.translate(sx + waveShift, sy);
+        ctx.scale(1, Math.max(0.25, ry / Math.max(1, rx)));
+        const grad = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
+        const col = fb.tint === 'ocean' ? '125, 211, 252' : '165, 243, 252';
+        grad.addColorStop(0, `rgba(${col}, ${(fb.density * 0.42).toFixed(3)})`);
+        grad.addColorStop(0.6, `rgba(${col}, ${(fb.density * 0.2).toFixed(3)})`);
+        grad.addColorStop(1, `rgba(${col}, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, rx, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 2. Majestic Passing Pelagic Silhouettes (Whale Shark & Oceanic Manta Ray)
+      const visitors = encounters.visitors || [];
+      for (let i = 0; i < visitors.length; i++) {
+        const v = visitors[i];
+        if (v.kind === 'biolum-swarm') continue;
+        if (v.x + v.size * 2 < xMin || v.x - v.size * 2 > xMax || v.y + v.size < yMin || v.y - v.size > yMax) continue;
+        const sx = toScreenX(v.x);
+        const sy = toScreenY(v.y);
+        const fade = Math.min(1, v.ageSec / 2.2) * Math.min(1, (v.durationSec - v.ageSec) / 2.4);
+        const sz = v.size * scale;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        if (v.dir < 0) ctx.scale(-1, 1);
+        ctx.globalAlpha = 0.78 * fade;
+
+        if (v.kind === 'whaleshark') {
+          const tailWag = Math.sin(timeSec * 2.1 + v.phase) * sz * 0.08;
+          // Deep-blue pelagic body silhouette
+          ctx.fillStyle = '#0c2742';
+          ctx.beginPath();
+          ctx.moveTo(sz * 0.56, -sz * 0.02);
+          ctx.quadraticCurveTo(sz * 0.35, -sz * 0.2, -sz * 0.12, -sz * 0.14);
+          ctx.quadraticCurveTo(-sz * 0.44, -sz * 0.08, -sz * 0.62, tailWag - sz * 0.26);
+          ctx.lineTo(-sz * 0.52, tailWag);
+          ctx.lineTo(-sz * 0.6, tailWag + sz * 0.19);
+          ctx.quadraticCurveTo(-sz * 0.38, sz * 0.09, -sz * 0.06, sz * 0.13);
+          ctx.quadraticCurveTo(sz * 0.36, sz * 0.17, sz * 0.56, sz * 0.04);
+          ctx.closePath();
+          ctx.fill();
+
+          // Pale belly & dorsal/pectoral fins
+          ctx.fillStyle = '#1e3a5f';
+          ctx.beginPath();
+          ctx.moveTo(sz * 0.02, -sz * 0.14);
+          ctx.lineTo(-sz * 0.14, -sz * 0.3);
+          ctx.lineTo(-sz * 0.22, -sz * 0.12);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(sz * 0.22, sz * 0.09);
+          ctx.lineTo(sz * 0.02, sz * 0.31);
+          ctx.lineTo(-sz * 0.06, sz * 0.11);
+          ctx.closePath();
+          ctx.fill();
+
+          // Iconic Whale Shark constellation polka-dot spots
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 6; c++) {
+              const px = sz * (0.32 - c * 0.12);
+              const py = sz * (-0.09 + r * 0.065);
+              ctx.beginPath();
+              ctx.arc(px, py, Math.max(1.2, sz * 0.015), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        } else if (v.kind === 'mantaray') {
+          const flap = Math.sin(timeSec * 3.1 + v.phase) * sz * 0.18;
+          ctx.fillStyle = '#0e2a47';
+          ctx.beginPath();
+          ctx.moveTo(sz * 0.42, 0);
+          ctx.quadraticCurveTo(sz * 0.12, -sz * 0.46 + flap, -sz * 0.18, -sz * 0.32 + flap * 0.7);
+          ctx.quadraticCurveTo(-sz * 0.26, -sz * 0.08, -sz * 0.46, 0);
+          ctx.quadraticCurveTo(-sz * 0.26, sz * 0.08, -sz * 0.18, sz * 0.32 - flap * 0.7);
+          ctx.quadraticCurveTo(sz * 0.12, sz * 0.46 - flap, sz * 0.42, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          // Trailing whip tail & pale ventral underside highlight
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
+          ctx.lineWidth = Math.max(1.2, sz * 0.022);
+          ctx.beginPath();
+          ctx.moveTo(-sz * 0.42, 0);
+          ctx.quadraticCurveTo(-sz * 0.66, flap * 0.3, -sz * 0.85, -flap * 0.2);
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.36)';
+          ctx.beginPath();
+          ctx.ellipse(sz * 0.05, 0, sz * 0.22, sz * 0.09, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    } else {
+      // Emissive post-lighting pass: Bioluminescent Comb-Jelly Swarms & Survey/Distress Beacon
+      const visitors = encounters.visitors || [];
+      for (let i = 0; i < visitors.length; i++) {
+        const v = visitors[i];
+        if (v.kind !== 'biolum-swarm') continue;
+        if (v.x + 5 < xMin || v.x - 5 > xMax || v.y + 4 < yMin || v.y - 4 > yMax) continue;
+        const fade = Math.min(1, v.ageSec / 1.8) * Math.min(1, (v.durationSec - v.ageSec) / 2.2);
+        const sx = toScreenX(v.x);
+        const sy = toScreenY(v.y);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let k = 0; k < 12; k++) {
+          const ang = k * 0.55 + timeSec * 0.45 + v.phase;
+          const rad = (0.45 + (k % 4) * 0.42) * scale;
+          const jx = sx + Math.cos(ang) * rad * 1.4;
+          const jy = sy + Math.sin(ang * 1.3) * rad * 0.75;
+          const pulse = 0.45 + 0.55 * Math.sin(timeSec * 4.2 + k * 1.1);
+          const col = k % 3 === 0 ? '#c084fc' : '#22d3ee';
+          ctx.globalAlpha = 0.72 * pulse * fade;
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(jx, jy, Math.max(2.0, (0.09 + (k % 3) * 0.03) * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Optional Survey / Emergency Distress Beacon with rhythmic amber-cyan strobe pulse
+      const bc = encounters.beacon;
+      if (bc && !bc.claimed && bc.x >= xMin && bc.x <= xMax && bc.y >= yMin && bc.y <= yMax) {
+        const bob = Math.sin(timeSec * 2.2 + bc.pingPhase) * 0.16;
+        const bx = toScreenX(bc.x);
+        const by = toScreenY(bc.y + bob);
+        const ringT = (timeSec * 0.85) % 1;
+
+        // Expanding acoustic transponder strobe ring
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(251, 191, 36, ${((1 - ringT) * 0.78).toFixed(3)})`;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.arc(bx, by, (0.45 + ringT * 2.4) * scale, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Transponder buoy canister + antenna + blinking LED
+        ctx.globalCompositeOperation = 'source-over';
+        const r = Math.max(5.5, 0.28 * scale);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(bx, by - r);
+        ctx.lineTo(bx, by - r * 2.4);
+        ctx.stroke();
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bx - r * 0.85, by - r, r * 1.7, r * 2.0, 4) : ctx.rect(bx - r * 0.85, by - r, r * 1.7, r * 2.0);
+        ctx.fill();
+        ctx.stroke();
+
+        const blink = Math.sin(timeSec * 7.0) > 0.15;
+        ctx.fillStyle = blink ? '#38bdf8' : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(bx, by - r * 2.4, Math.max(2.8, r * 0.45), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
   }
 
   _drawCameraFlash(ctx, flash, toScreenX, toScreenY, scale) {

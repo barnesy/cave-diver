@@ -674,6 +674,28 @@ export const FIELD_GUIDE_CATALOG = [
     habitat: 'Icelandic tectonic rifts & subglacial fissures',
     bio: 'Towering superheated mineral chimneys venting buoyant geothermal updrafts into freezing abyssal waters.',
   },
+  {
+    id: 'whaleshark',
+    icon: '🐋',
+    name: 'Whale Shark',
+    latin: 'Rhincodon typus',
+    category: 'wildlife',
+    rarity: 'epic',
+    points: 180,
+    habitat: 'Rare pelagic blue-water visitor above ocean shipwrecks',
+    bio: 'Gentle 12-meter filter-feeding leviathan gliding silently across sunken decks in open ocean currents.',
+  },
+  {
+    id: 'mantaray',
+    icon: '🦅',
+    name: 'Oceanic Manta Ray',
+    latin: 'Mobula birostris',
+    category: 'wildlife',
+    rarity: 'rare',
+    points: 130,
+    habitat: 'Pelagic open-water flybys along shipwreck reefs',
+    bio: 'Graceful giant ray soaring effortlessly on 6-meter wingspans through mid-water thermoclines.',
+  },
 ];
 
 const FIELD_GUIDE_BY_ID = new Map(FIELD_GUIDE_CATALOG.map((e) => [e.id, e]));

@@ -3,7 +3,7 @@ import { createDiveState, stepDivePhysiology, receiveGasIntoState } from '../phy
 import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
-import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS } from './scoring.js';
+import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS } from './scoring.js';
 import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 
@@ -114,6 +114,7 @@ export function createDiveSession(
       photographedIds: new Set(),
       photos: [],
     },
+    encounters: createDynamicEncounters(level),
     ascentConfig: getAscentConfig(level),
     diver: {
       x: spawnX,
@@ -277,6 +278,10 @@ export function triggerSonarPing(session, callbacks = {}) {
   if (level.recoveryTarget && !session.bodyRecovered) {
     addContact(level.recoveryTarget.x, level.recoveryTarget.y, 'recovery', '🎯', level.recoveryTarget.name);
   }
+  if (session.encounters?.beacon && !session.encounters.beacon.claimed) {
+    const bc = session.encounters.beacon;
+    addContact(bc.x, bc.y, 'beacon', '📡', bc.label);
+  }
 
   // Wide sonar sweep also charts nearby unexplored cells cleanly
   const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0, session.exploredGrid);
@@ -377,6 +382,33 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
       consider('crystal', c.x, c.y);
     }
   }
+  // Dynamic Pelagic Visitors (Whale Sharks, Manta Rays, Bioluminescent Swarms) — extended 19m wide-angle lens reach!
+  if (Array.isArray(session.encounters?.visitors)) {
+    for (const v of session.encounters.visitors) {
+      const entryId = v.kind === 'whaleshark' || v.kind === 'mantaray' ? v.kind : 'jellyfish';
+      const entry = getFieldGuideEntry(entryId);
+      if (!entry) continue;
+      const dx = v.x - diver.x;
+      const dy = v.y - diver.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 0.5 || dist > 19.5) continue;
+      const angTo = Math.atan2(dy, dx);
+      let angDiff = Math.abs(angTo - aimAng);
+      while (angDiff > Math.PI) angDiff = Math.abs(angDiff - Math.PI * 2);
+      if (angDiff > halfConeRad + 0.14) continue;
+      const ray = castLightRay(level, diver.x, diver.y, angTo, dist, []);
+      if (ray && ray.hitWall && ray.dist < dist - 1.2) continue;
+      let q = 0;
+      q += angDiff <= 0.38 ? 1.0 : angDiff <= 0.68 ? 0.65 : 0.25;
+      q += dist <= 13.0 ? 1.0 : 0.6;
+      q += silt < 0.25 ? 1.0 : 0.5;
+      const stars = Math.max(1, Math.min(3, Math.round(q)));
+      const isNewInGuide = knownIds instanceof Set ? !knownIds.has(entry.id) : false;
+      const isNewThisDive = !session.camera.photographedIds.has(entry.id);
+      const priority = (isNewInGuide ? 1200 : 0) + (isNewThisDive ? 500 : 0) + (RARITY_WEIGHT[entry.rarity] || 3) * 100 + stars * 25;
+      candidates.push({ entry, tx: v.x, ty: v.y, dist, stars, isNewInGuide, isNewThisDive, priority });
+    }
+  }
 
   candidates.sort((a, b) => b.priority - a.priority);
   const best = candidates[0] || null;
@@ -441,6 +473,265 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
   const result = { ok: true, flash, subject, stars, isNewInGuide, isNewThisDive, points, depthM };
   callbacks.onCameraSnap?.(result);
   return result;
+}
+
+/**
+ * Create dynamic underwater encounters for a dive session:
+ * - Shifting thermocline / halocline visibility banks
+ * - An optional open-water Survey / Distress Beacon mini-objective (+180 pts, +18 bar pony reserve & 15m sonar sweep)
+ * - Periodic rare pelagic visitors (Whale Sharks & Manta Rays on ocean wrecks; Bioluminescent Swarms in deep caves)
+ */
+export function createDynamicEncounters(level) {
+  const segs = Array.isArray(level?.segments) ? level.segments : [];
+  const spawnX = level?.spawn?.x ?? 0;
+  const spawnY = level?.spawn?.y ?? 2;
+  const exitX = level?.exitZone?.x ?? spawnX;
+  const exitY = level?.exitZone?.y ?? 2;
+
+  // Deterministic pseudo-random helper keyed by level id
+  let seed = 2166136261;
+  const idStr = String(level?.id || 'dive');
+  for (let i = 0; i < idStr.length; i++) {
+    seed ^= idStr.charCodeAt(i);
+    seed = Math.imul(seed, 16777619);
+  }
+  const nextRand = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  // 1. Shifting Visibility / Thermocline Haze Banks (2-3 spaced wide chambers)
+  const candidates = [];
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    const mx = (s.ax + s.bx) * 0.5;
+    const my = (s.ay + s.by) * 0.5;
+    const minR = Math.min(s.ra || 2, s.rb || 2);
+    if (my >= 10 && minR >= 2.5 && evaluateCaveSDF(level, mx, my) < -1.5) {
+      candidates.push({ x: mx, y: my, r: minR });
+    }
+  }
+  const fogBanks = [];
+  const wantBanks = Math.min(3, Math.max(1, Math.floor(candidates.length / 4)));
+  for (let i = 0; i < candidates.length && fogBanks.length < wantBanks; i++) {
+    const pickIdx = Math.floor(((i + 0.5) / Math.max(1, wantBanks)) * candidates.length);
+    const c = candidates[Math.min(candidates.length - 1, pickIdx)];
+    if (!c) continue;
+    if (fogBanks.some((f) => Math.hypot(f.baseX - c.x, f.baseY - c.y) < 18)) continue;
+    fogBanks.push({
+      id: `fog_${fogBanks.length + 1}`,
+      baseX: c.x,
+      baseY: c.y,
+      x: c.x,
+      y: c.y,
+      radiusX: Math.min(9.5, Math.max(4.8, c.r * 1.9)),
+      radiusY: Math.min(4.8, Math.max(2.6, c.r * 0.95)),
+      driftAmpX: 2.2 + nextRand() * 2.4,
+      driftAmpY: 0.7 + nextRand() * 0.9,
+      driftSpeed: 0.16 + nextRand() * 0.14,
+      phase: nextRand() * Math.PI * 2,
+      density: 0.32 + nextRand() * 0.14,
+      tint: level?.isWreck ? 'ocean' : 'halocline',
+    });
+  }
+
+  // 2. Optional Mid-Dive Survey / Emergency Distress Beacon in open water away from spawn/exit
+  let beacon = null;
+  let bestBeaconScore = -Infinity;
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    const dSpawn = Math.hypot(c.x - spawnX, c.y - spawnY);
+    const dExit = Math.hypot(c.x - exitX, c.y - exitY);
+    if (dSpawn < 18 || dExit < 16 || c.y < 14) continue;
+    const score = Math.min(dSpawn, dExit) + c.r * 2.5 + nextRand() * 14;
+    if (score > bestBeaconScore) {
+      bestBeaconScore = score;
+      beacon = {
+        id: 'survey_beacon',
+        x: c.x,
+        y: c.y,
+        label: level?.isWreck ? 'Distress Transponder' : 'Lost Survey Beacon',
+        points: MAX_ENCOUNTER_BONUS,
+        claimed: false,
+        pingPhase: nextRand() * Math.PI * 2,
+      };
+    }
+  }
+
+  const isOceanWreck = Boolean(level?.isWreck && level?.theme?.id !== 'superior-memorial-wreck');
+  return {
+    fogBanks,
+    beacon,
+    visitors: [],
+    isOceanWreck,
+    nextVisitorInSec: isOceanWreck ? 12 + nextRand() * 8 : 16 + nextRand() * 10,
+    visitorCount: 0,
+    inFogBank: false,
+    fogDensity: 0,
+    fogWarnCooldown: 0,
+    encounterBonusScore: 0,
+  };
+}
+
+/**
+ * Claim the optional Survey / Distress Beacon (+180 bonus pts, +18 bar reserve pony & 15m sonar map burst).
+ */
+export function claimSurveyBeacon(session, callbacks = {}) {
+  const bc = session?.encounters?.beacon;
+  if (!bc || bc.claimed) return { ok: false };
+  bc.claimed = true;
+  const pts = Math.min(MAX_ENCOUNTER_BONUS, bc.points || MAX_ENCOUNTER_BONUS);
+  session.encounters.encounterBonusScore = Math.min(
+    MAX_ENCOUNTER_BONUS,
+    (session.encounters.encounterBonusScore || 0) + pts
+  );
+  // Clip spare pony reserve (+18 bar) onto active cylinder if not already full
+  let addedBar = 0;
+  const activeGas = session.diveState?.activeGasId;
+  if (activeGas && session.diveState?.tanks?.[activeGas]?.bar < 185) {
+    addedBar = receiveGasIntoState(session.diveState, activeGas, 18);
+  }
+  // Wide 15m acoustic telemetry sweep reveals surrounding passages on the Sonar Minimap
+  const newlyMapped = markExploredAround(
+    session.exploreCells,
+    session.exploredCells,
+    bc.x,
+    bc.y,
+    15.0,
+    session.exploredGrid
+  );
+  if (newlyMapped > 0 && session.exploreCells?.length > 0) {
+    session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
+  }
+  if (Array.isArray(session.collectBursts)) {
+    session.collectBursts.push({
+      x: bc.x,
+      y: bc.y,
+      points: pts,
+      kind: 'beacon',
+      age: 0,
+      duration: 1.6,
+    });
+  }
+  callbacks.onBeaconClaimed?.(bc, addedBar);
+  const gasTxt = addedBar >= 1 ? ` · +${Math.round(addedBar)}b reserve` : '';
+  callbacks.onToast?.(`📡 ${bc.label} salvaged! (+${pts} pts · 15m sonar map${gasTxt})`, 3.4);
+  return { ok: true, beacon: bc, points: pts, addedBar };
+}
+
+/**
+ * Spawn a passing Whale Shark, Manta Ray, or Bioluminescent Swarm near the diver cleanly in open water.
+ */
+export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}) {
+  const enc = session?.encounters;
+  const { level, diver } = session || {};
+  if (!enc || !level || !diver) return null;
+
+  const isOcean = enc.isOceanWreck;
+  const kind =
+    kindOverride ||
+    (isOcean ? (enc.visitorCount % 2 === 0 ? 'mantaray' : 'whaleshark') : 'biolum-swarm');
+  const dir = enc.visitorCount % 2 === 0 ? 1 : -1;
+
+  let startX = diver.x - dir * (kind === 'biolum-swarm' ? 11 : 22);
+  let startY = isOcean
+    ? Math.max(7.5, Math.min((level.wreckDeckY || 42) - 4, diver.y - 2.5))
+    : Math.max(12, diver.y - 0.8);
+
+  // For cave swarms, verify an open-water spot near the diver
+  if (!isOcean) {
+    if (evaluateCaveSDF(level, diver.x + dir * 6, diver.y) < -1.0) {
+      startX = diver.x + dir * 6;
+      startY = diver.y;
+    } else if (evaluateCaveSDF(level, diver.x, diver.y) < -1.0) {
+      startX = diver.x - dir * 3;
+      startY = diver.y;
+    } else {
+      return null;
+    }
+  }
+
+  const speed = kind === 'whaleshark' ? 1.55 : kind === 'mantaray' ? 2.45 : 0.65;
+  const visitor = {
+    id: `vis_${enc.visitorCount + 1}`,
+    kind,
+    x: startX,
+    y: startY,
+    vx: dir * speed,
+    vy: 0,
+    dir,
+    size: kind === 'whaleshark' ? 4.4 : kind === 'mantaray' ? 2.6 : 1.9,
+    phase: enc.visitorCount * 1.9,
+    ageSec: 0,
+    durationSec: kind === 'biolum-swarm' ? 22 : 24,
+  };
+  enc.visitors.push(visitor);
+  enc.visitorCount += 1;
+  callbacks.onEncounterSpawn?.(visitor);
+  if (kind === 'whaleshark') {
+    callbacks.onToast?.('🐋 Rare sighting! A Whale Shark is gliding nearby — snap it with [C]!', 3.6);
+  } else if (kind === 'mantaray') {
+    callbacks.onToast?.('🦅 Oceanic Manta Ray sweeping past the wreck — press [C] to photograph!', 3.4);
+  } else {
+    callbacks.onToast?.('✨ Bioluminescent comb-jelly swarm drifting through the cavern!', 3.0);
+  }
+  return visitor;
+}
+
+function stepDynamicEncounters(session, dt, callbacks = {}) {
+  const enc = session?.encounters;
+  if (!enc) return;
+  const { diver, simTimeSec } = session;
+
+  // 1. Drift shifting visibility / thermocline haze banks & sample local density
+  if (enc.fogWarnCooldown > 0) enc.fogWarnCooldown -= dt;
+  let fogDensity = 0;
+  for (let i = 0; i < enc.fogBanks.length; i++) {
+    const fb = enc.fogBanks[i];
+    fb.x = fb.baseX + Math.sin(simTimeSec * fb.driftSpeed + fb.phase) * fb.driftAmpX;
+    fb.y = fb.baseY + Math.cos(simTimeSec * fb.driftSpeed * 0.72 + fb.phase) * fb.driftAmpY;
+    const nx = (diver.x - fb.x) / fb.radiusX;
+    const ny = (diver.y - fb.y) / fb.radiusY;
+    const d2 = nx * nx + ny * ny;
+    if (d2 < 1) {
+      const local = (1 - Math.sqrt(d2)) * fb.density;
+      if (local > fogDensity) fogDensity = local;
+    }
+  }
+  const wasInFog = enc.inFogBank;
+  enc.fogDensity = fogDensity;
+  enc.inFogBank = fogDensity >= 0.08;
+  if (enc.inFogBank && !wasInFog && enc.fogWarnCooldown <= 0) {
+    enc.fogWarnCooldown = 28;
+    callbacks.onToast?.('🌫️ Drifting thermocline haze — watch trim & sonar map!', 2.6);
+  }
+
+  // 2. Advance & spawn rare passing visitors (Whale Sharks, Manta Rays, Bioluminescent Swarms)
+  for (let i = enc.visitors.length - 1; i >= 0; i--) {
+    const v = enc.visitors[i];
+    v.ageSec += dt;
+    v.x += v.vx * dt;
+    v.y += Math.sin(simTimeSec * (v.kind === 'mantaray' ? 1.8 : 0.9) + v.phase) * 0.22 * dt;
+    if (v.ageSec >= v.durationSec) {
+      enc.visitors.splice(i, 1);
+    }
+  }
+  if (diver.y >= 6.0 && enc.visitors.length === 0) {
+    enc.nextVisitorInSec -= dt;
+    if (enc.nextVisitorInSec <= 0) {
+      const spawned = spawnDynamicVisitor(session, null, callbacks);
+      enc.nextVisitorInSec = spawned ? (enc.isOceanWreck ? 36 : 40) : 10;
+    }
+  }
+
+  // 3. Survey / Distress Beacon pulse & close-range auto-salvage
+  const bc = enc.beacon;
+  if (bc && !bc.claimed) {
+    bc.pingPhase = (bc.pingPhase + dt * 2.2) % (Math.PI * 2);
+    if (Math.hypot(diver.x - bc.x, diver.y - bc.y) <= 1.65) {
+      claimSurveyBeacon(session, callbacks);
+    }
+  }
 }
 
 /**
@@ -708,6 +999,17 @@ export function triggerWreckAction(session, callbacks = {}) {
         callbacks.onWreckSync?.('marker', anchor.id);
         callbacks.onToast?.(`🪢 Tagged ${anchor.label} & clipped +${bonusM}m jump spool!`, 3.0);
         return { handled: true, kind: 'place-marker', targetId: anchor.id, reelBonusM: bonusM };
+      }
+    }
+  }
+
+  // 4b. Priority 4b: Salvage optional mid-dive Survey / Distress Beacon
+  if (session.encounters?.beacon && !session.encounters.beacon.claimed) {
+    const bc = session.encounters.beacon;
+    if (Math.hypot(diver.x - bc.x, diver.y - bc.y) <= 4.0) {
+      const res = claimSurveyBeacon(session, callbacks);
+      if (res.ok) {
+        return { handled: true, kind: 'claim-beacon', targetId: bc.id, points: res.points, addedBar: res.addedBar };
       }
     }
   }
@@ -1626,6 +1928,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
+  const bc = session.encounters?.beacon;
+  const nearBeacon = Boolean(bc && !bc.claimed && Math.hypot(diver.x - bc.x, diver.y - bc.y) <= 4.0);
+
   // Publish contextual cave / shipwreck action prompt for HUD button
   if (session.activeSnagIndex >= 0) {
     const sn = level.snagZones?.[session.activeSnagIndex];
@@ -1664,6 +1969,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       kind: 'place-marker',
       label: `🪢 TAG MARKER [E]`,
       detail: `+${nearbyAnchor.reelBonusM || 40}m Spool · ${nearbyAnchor.label}`,
+      progress: 0,
+    };
+  } else if (nearBeacon) {
+    session.wreckActionPrompt = {
+      kind: 'claim-beacon',
+      label: `📡 SALVAGE BEACON [E]`,
+      detail: `+${bc.points || MAX_ENCOUNTER_BONUS} pts · 15m Sonar & Reserve`,
       progress: 0,
     };
   } else if (session.clippedToShotLine) {
@@ -1987,7 +2299,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   stepBubbles(session, dt, callbacks, exertion);
-  session.localSiltDensity = stepSiltPhysics(level, siltClouds, diver, dt);
+  stepDynamicEncounters(session, dt, callbacks);
+  const rawSilt = stepSiltPhysics(level, siltClouds, diver, dt);
+  session.localSiltDensity = Math.min(1, rawSilt + (session.encounters?.fogDensity || 0) * 0.65);
 
   // Record Dive Computer Depth Profile (every 1.5s or immediately on gas switch) & PB Ghost track (every 0.6s)
   const tDive = diveState.diveTimeSec || session.simTimeSec;
@@ -2027,6 +2341,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
       photoBonusScore: session.camera?.photoBonusScore || 0,
+      encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 

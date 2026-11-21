@@ -335,6 +335,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     bodyRecovered = false,
     playerLines = [],
     sonarPulse = null,
+    encounters = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
@@ -621,6 +622,29 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
+  // Optional Survey / Distress Beacon (detectable via 24m acoustic ping range or once explored)
+  if (encounters?.beacon && !encounters.beacon.claimed) {
+    const bc = encounters.beacon;
+    const inPingRange = diver && Math.hypot(bc.x - diver.x, bc.y - diver.y) <= 24;
+    if (isGuided || inPingRange || _isPointRevealed(bc.x, bc.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 7.5)) {
+      const bx = toX(bc.x);
+      const by = toY(bc.y);
+      ctx.strokeStyle = `rgba(251, 191, 36, ${(0.45 + 0.5 * pulse).toFixed(2)})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(bx, by, 4.5 + pulse * 3.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(bx, by - 4);
+      ctx.lineTo(bx + 3.5, by);
+      ctx.lineTo(bx, by + 4);
+      ctx.lineTo(bx - 3.5, by);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
   // 8. Active Cave Sonar Hydrophone Pulse Ring
   if (sonarPulse && sonarPulse.durationSec > 0) {
     const frac = Math.max(0, Math.min(1, sonarPulse.ageSec / sonarPulse.durationSec));
@@ -896,6 +920,7 @@ export class DiveComputerHUD {
     placedMarkerIds = null,
     playerLines = null,
     sonarPulse = null,
+    encounters = null,
     timeSec = 0,
     dt = 0.016,
   }) {
@@ -1402,6 +1427,7 @@ export class DiveComputerHUD {
               bodyRecovered,
               playerLines,
               sonarPulse,
+              encounters,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,

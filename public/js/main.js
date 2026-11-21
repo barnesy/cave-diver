@@ -488,7 +488,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=111" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=112" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2135,6 +2135,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       diveTimeSec: diveState.diveTimeSec,
       hatchBonusScore: session.hatchBonusScore || 0,
       photoBonusScore: session.camera?.photoBonusScore || 0,
+      encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 
@@ -2323,6 +2324,14 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       pts: teamSummary.photoBonusScore,
       pct: Math.round((teamSummary.photoBonusScore / 300) * 100),
       cls: 'gold',
+    });
+  }
+  if ((teamSummary.encounterBonusScore || 0) > 0) {
+    rows.push({
+      label: '📡 Survey Beacon Salvaged',
+      pts: teamSummary.encounterBonusScore,
+      pct: 100,
+      cls: 'green',
     });
   }
   if (teamSummary.isTeam) {
@@ -4646,6 +4655,8 @@ const sessionStepCallbacks = {
   onClipLine: (clipped) => audio.playClipLine(clipped),
   onStageRefill: () => audio.playGasShare(),
   onMarkerPlaced: () => audio.playClipLine(true),
+  onEncounterSpawn: (visitor) => audio.playEncounterChime(visitor?.kind || 'whaleshark'),
+  onBeaconClaimed: () => audio.playEncounterChime('beacon'),
   onWreckSync: (actionKind, targetId) => {
     if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
   },
@@ -4933,6 +4944,7 @@ function stepSimulation(dt) {
     placedMarkerIds: session.placedMarkerIds,
     playerLines: _minimapPlayerLines,
     sonarPulse: session.sonar?.activePulse || null,
+    encounters: session.encounters || null,
     timeSec: session.simTimeSec,
     dt,
   });
@@ -5116,6 +5128,7 @@ function frame(nowMs) {
       })(),
       sonarPulse: session.sonar?.activePulse || null,
       cameraFlash: session.camera?.activeFlash || null,
+      encounters: session.encounters || null,
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
       timeSec: session.simTimeSec,
