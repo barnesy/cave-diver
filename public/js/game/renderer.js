@@ -1434,6 +1434,7 @@ export class CaveRenderer {
     buddyPing = null,
     airShareBeams = null,
     droppedStages = null,
+    drills = null,
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
@@ -1735,9 +1736,12 @@ export class CaveRenderer {
       this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
     }
 
-    // 12. Physiology Screen Vignettes (Hypoxia / O2 Tox / Narcosis / DCS — skipped while spectating a buddy)
+    // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating a buddy)
     if (!isSpectating) {
       this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
+      if (drills?.active || drills?.backupTorchActive) {
+        this._drawEmergencyDrillOverlay(ctx, cw, ch, drills, timeSec);
+      }
     }
   }
 
@@ -9240,6 +9244,81 @@ export class CaveRenderer {
       ctx.fillStyle = vig.narcosis;
       ctx.fillRect(0, 0, cw, ch);
     }
+    ctx.restore();
+  }
+
+  _drawEmergencyDrillOverlay(ctx, cw, ch, drills, timeSec) {
+    if (!drills) return;
+    const active = drills.active;
+    ctx.save();
+
+    if (active?.kind === 'mask-flood') {
+      const sev = Math.max(0.25, Math.min(1, active.severity ?? 0.65));
+      const waterTopY = ch * (0.72 - sev * 0.44);
+      const grad = ctx.createLinearGradient(0, waterTopY - 24, 0, ch);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+      grad.addColorStop(0.14, `rgba(125, 211, 252, ${0.22 + sev * 0.24})`);
+      grad.addColorStop(0.55, `rgba(14, 116, 144, ${0.32 + sev * 0.26})`);
+      grad.addColorStop(1, `rgba(7, 42, 71, ${0.44 + sev * 0.25})`);
+
+      // Rising sloshing water-line meniscus inside the dive mask
+      ctx.beginPath();
+      ctx.moveTo(0, ch);
+      const steps = 16;
+      for (let i = 0; i <= steps; i++) {
+        const px = (i / steps) * cw;
+        const slosh =
+          Math.sin(timeSec * 3.8 + i * 0.72) * (6 + sev * 7) +
+          Math.cos(timeSec * 2.3 - i * 0.45) * 4;
+        ctx.lineTo(px, waterTopY + slosh);
+      }
+      ctx.lineTo(cw, ch);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Refractive shimmering bright meniscus ridge
+      ctx.strokeStyle = `rgba(224, 242, 254, ${0.55 + sev * 0.3})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const px = (i / steps) * cw;
+        const slosh =
+          Math.sin(timeSec * 3.8 + i * 0.72) * (6 + sev * 7) +
+          Math.cos(timeSec * 2.3 - i * 0.45) * 4;
+        if (i === 0) ctx.moveTo(px, waterTopY + slosh);
+        else ctx.lineTo(px, waterTopY + slosh);
+      }
+      ctx.stroke();
+
+      // Scattered refraction droplets across upper visor glass
+      ctx.fillStyle = `rgba(186, 230, 253, ${0.18 + sev * 0.16})`;
+      for (let k = 0; k < 14; k++) {
+        const dx = ((k * 197 + 43) % 100) * 0.01 * cw;
+        const dy = ((k * 131 + 19) % 100) * 0.01 * waterTopY;
+        const r = 4 + (k % 4) * 3.5;
+        ctx.beginPath();
+        ctx.arc(dx, dy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (active?.kind === 'free-flow') {
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 9.0);
+      ctx.strokeStyle = `rgba(251, 191, 36, ${0.26 + pulse * 0.32})`;
+      ctx.lineWidth = Math.max(6, Math.min(cw, ch) * 0.014);
+      ctx.strokeRect(4, 4, cw - 8, ch - 8);
+    } else if (active?.kind === 'torch-fail') {
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 12.0);
+      ctx.strokeStyle = `rgba(248, 113, 113, ${0.22 + pulse * 0.28})`;
+      ctx.lineWidth = Math.max(5, Math.min(cw, ch) * 0.012);
+      ctx.strokeRect(4, 4, cw - 8, ch - 8);
+    }
+
+    if (drills.backupTorchActive && !active) {
+      // Subtle warm halogen amber lens tint when operating on backup light
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.045)';
+      ctx.fillRect(0, 0, cw, ch);
+    }
+
     ctx.restore();
   }
 }

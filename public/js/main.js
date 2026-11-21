@@ -47,6 +47,7 @@ import {
   getEffectiveReelRemainingM,
   triggerWreckAction,
   dropStageTank,
+  resolveEmergencyDrill,
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
@@ -506,7 +507,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=121" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=122" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1058,7 +1059,11 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
 
   if (switchGas(ds, gasId)) {
     audio.playGasSwitch();
-    showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
+    if (session.drills?.active?.kind === 'free-flow') {
+      resolveEmergencyDrill(session, 'free-flow', sessionStepCallbacks);
+    } else {
+      showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
+    }
     return true;
   }
   showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
@@ -1142,7 +1147,12 @@ const input = new InputController({
     return true;
   },
   onTorchToggle: () => {
-    if (session?.diver && !divePaused) session.diver.torchOn = !session.diver.torchOn;
+    if (!session?.diver || divePaused) return;
+    if (session.drills?.active?.kind === 'torch-fail') {
+      resolveEmergencyDrill(session, 'torch-fail', sessionStepCallbacks);
+      return;
+    }
+    session.diver.torchOn = !session.diver.torchOn;
   },
   onReelToggle: handleReelToggle,
   onReelRewind: handleReelRewind,
@@ -1298,6 +1308,7 @@ const GEAR_LOADOUT_KEY = 'caveDiverGearLoadout_v1';
 const gearDockGridEl = document.getElementById('gear-dock-grid');
 const gearDockSubEl = document.getElementById('gear-dock-sub');
 const hudGearDockEl = document.getElementById('hud-gear-dock');
+const hudDrillPill = document.getElementById('hud-drill-pill');
 const btnHudStage = document.getElementById('btn-hud-stage');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
@@ -1511,6 +1522,9 @@ function syncTechGearHud(sess) {
   const hasSonar = Boolean(sess.sonar?.equipped);
   const hasDpv = Boolean(sess.dpv?.equipped);
   const hasCcr = Boolean(sess.gear?.ccr);
+  const drillsOn = Boolean(sess.drills?.enabled || sess.drills?.active);
+  const activeDrillKind = sess.drills?.active?.kind || '';
+  const drillsDone = sess.drills?.completedCount || 0;
   const staged = Boolean(sess.spareStageDropped);
   const activeGasBar = Math.round(sess.diveState?.tanks?.[sess.diveState?.activeGasId]?.bar ?? 0);
   const canStage = !staged && activeGasBar >= 75 && (sess.diver?.y || 0) >= 1.2;
@@ -1518,11 +1532,29 @@ function syncTechGearHud(sess) {
   const dpvPct = Math.round(sess.dpv?.batteryPct ?? 100);
   const dpvOn = Boolean(sess.dpv?.active);
   const ccrPct = Math.round(sess.diveState?.ccrScrubberPct ?? 100);
-  const key = `stg:${staged}:${canStage}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
+  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
   if (key === lastGearHudKey) return;
   lastGearHudKey = key;
   hudGearDockEl.hidden = false;
 
+  if (hudDrillPill) {
+    hudDrillPill.hidden = !drillsOn;
+    if (drillsOn) {
+      if (activeDrillKind === 'mask-flood') {
+        hudDrillPill.textContent = '🫧 MASK FLOOD [E]';
+        hudDrillPill.className = 'gear-hud-pill drill alert';
+      } else if (activeDrillKind === 'torch-fail') {
+        hudDrillPill.textContent = '🔦 LIGHT FAIL [L]';
+        hudDrillPill.className = 'gear-hud-pill drill alert';
+      } else if (activeDrillKind === 'free-flow') {
+        hudDrillPill.textContent = '🔧 FREE-FLOW [E]';
+        hudDrillPill.className = 'gear-hud-pill drill alert';
+      } else {
+        hudDrillPill.textContent = drillsDone > 0 ? `⚡ DRILLS · ${drillsDone}✓` : '⚡ DRILLS';
+        hudDrillPill.className = 'gear-hud-pill drill';
+      }
+    }
+  }
   if (btnHudStage) {
     btnHudStage.hidden = false;
     btnHudStage.textContent = staged ? '🛢 STAGED (+6%)' : '🛢 STAGE [T]';
@@ -1555,6 +1587,7 @@ function syncTechGearHud(sess) {
 const DIFFICULTY_PREF_KEY = 'caveDiverDifficulty_v1';
 const GHOST_PREF_KEY = 'caveDiverGhostEnabled_v1';
 const TORCH_STICK_PREF_KEY = 'caveDiverTorchStick_v1';
+const DRILLS_PREF_KEY = 'caveDiverDrills_v1';
 const BRIEFED_PREF_KEY = 'caveDiverBriefed_v1';
 const DIFFICULTY_MODES = [
   { id: 'guided', label: 'Guided', fullBadge: '🧭 GUIDED', shortBadge: '🧭 GD', pillBadge: '🧭 GUIDED', btnText: '🎚️ Mode: Guided', tag: ' · GUIDED' },
@@ -1573,6 +1606,41 @@ function renderModeBadgeHtml(diff, { compact = true } = {}) {
 let activeDifficulty = 'standard';
 let ghostEnabled = true;
 let torchStickEnabled = true;
+let drillsEnabled = false;
+try {
+  drillsEnabled = localStorage.getItem(DRILLS_PREF_KEY) === '1';
+} catch {}
+const btnDrillsToggle = document.getElementById('btn-drills-toggle');
+const menuDrillsPillEl = document.getElementById('menu-drills-pill');
+function syncDrillsUi() {
+  if (btnDrillsToggle) {
+    btnDrillsToggle.textContent = drillsEnabled ? '⚡ Failure Drills: On' : '⚡ Failure Drills: Off';
+    btnDrillsToggle.classList.toggle('active', drillsEnabled);
+  }
+  if (menuDrillsPillEl) {
+    menuDrillsPillEl.textContent = drillsEnabled ? '⚡ Drills: ON' : '⚡ Drills: Off';
+    menuDrillsPillEl.classList.toggle('active', drillsEnabled);
+  }
+}
+function toggleDrillsPreference() {
+  drillsEnabled = !drillsEnabled;
+  try {
+    localStorage.setItem(DRILLS_PREF_KEY, drillsEnabled ? '1' : '0');
+  } catch {}
+  syncDrillsUi();
+  showToast(
+    drillsEnabled
+      ? '⚡ Technical Failure Drills ON — Mask Flood, Light Failure & Free-Flow (+200 each)!'
+      : '⚡ Technical Failure Drills turned off.',
+    2.8
+  );
+}
+btnDrillsToggle?.addEventListener('click', () => {
+  setHomeMenuOpen(false);
+  toggleDrillsPreference();
+});
+menuDrillsPillEl?.addEventListener('click', toggleDrillsPreference);
+syncDrillsUi();
 let activeGhostTrack = null;
 let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
@@ -3162,6 +3230,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     mutatorId: dailyRun?.mutatorId || '',
     dailyDateKey: dailyRun?.dateKey || '',
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
+    drillsEnabled,
   });
   const dailyMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = dailyMutMeta ? `📅 ${dailyMutMeta.icon} ${dailyMutMeta.shortName}` : '';
@@ -3295,6 +3364,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       hatchBonusScore: session.hatchBonusScore || 0,
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
+      drillBonusScore: session.drills?.bonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 
@@ -3530,6 +3600,15 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       pts: teamSummary.encounterBonusScore,
       pct: 100,
       cls: 'green',
+    });
+  }
+  if ((teamSummary.drillBonusScore || 0) > 0) {
+    const drillCnt = session.drills?.completedCount || Math.max(1, Math.round(teamSummary.drillBonusScore / 200));
+    rows.push({
+      label: `⚡ Emergency Drills (${drillCnt} mastered)`,
+      pts: teamSummary.drillBonusScore,
+      pct: Math.round((teamSummary.drillBonusScore / 600) * 100),
+      cls: 'gold',
     });
   }
   if (teamSummary.isTeam) {
@@ -5195,7 +5274,12 @@ document.getElementById('btn-leave-room').addEventListener('click', () => {
 
 document.getElementById('btn-torch').addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (session?.diver) session.diver.torchOn = !session.diver.torchOn;
+  if (!session?.diver) return;
+  if (session.drills?.active?.kind === 'torch-fail') {
+    resolveEmergencyDrill(session, 'torch-fail', sessionStepCallbacks);
+    return;
+  }
+  session.diver.torchOn = !session.diver.torchOn;
 });
 
 function setHudMenuOpen(open) {
@@ -6000,6 +6084,12 @@ const sessionStepCallbacks = {
   onEncounterSpawn: (visitor) => audio.playEncounterChime(visitor?.kind || 'whaleshark'),
   onBeaconClaimed: () => audio.playEncounterChime('beacon'),
   onBuddyPing: () => audio.playEncounterChime('buddy-ping'),
+  onMaskPurge: () => {
+    audio.playMaskPurge();
+    audio.playDrillClear();
+  },
+  onFreeFlowHiss: () => audio.playFreeFlowHiss(),
+  onDrillClear: () => audio.playDrillClear(),
   onWreckSync: (actionKind, targetId) => {
     if (isMultiplayer) lan.sendWreckAction(actionKind, targetId);
   },
@@ -6493,6 +6583,7 @@ function frame(nowMs) {
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
       droppedStages: session.droppedStages || null,
+      drills: session.drills || null,
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',

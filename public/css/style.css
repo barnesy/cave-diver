@@ -5861,3 +5861,41 @@ button.mode-badge:hover {
   gap: 5px;
   flex-shrink: 0;
 }
+
+/* Emergency Failure Drills Toggle & Alert Pill (v122) */
+.drills-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.drills-plan-pill:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  color: #fef3c7;
+}
+.drills-plan-pill.active {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.45), rgba(180, 83, 9, 0.4));
+  border-color: rgba(251, 191, 36, 0.85);
+  color: #fef08a;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.28);
+}
+.gear-hud-pill.drill {
+  border-color: rgba(251, 191, 36, 0.52);
+  background: rgba(120, 53, 15, 0.42);
+  color: #fde68a;
+}
+.gear-hud-pill.drill.alert {
+  border-color: rgba(248, 113, 113, 0.85);
+  background: rgba(153, 27, 27, 0.72);
+  color: #fee2e2;
+  animation: gasPulse 0.9s ease-in-out infinite;
+}

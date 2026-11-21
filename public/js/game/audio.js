@@ -656,6 +656,89 @@ export class DiveAudio {
   }
 
   /**
+   * Pressurized nose-exhale bubble purge when clearing a flooded dive mask (v122).
+   */
+  playMaskPurge() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const dur = 0.42;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const env = Math.sin((i / len) * Math.PI);
+      data[i] = (Math.random() * 2 - 1) * env * 0.7;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(620, t);
+    filt.frequency.exponentialRampToValueAtTime(1280, t + dur);
+    filt.Q.value = 1.6;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.09, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.masterFilter || this.ctx.destination);
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
+    src.start(t);
+    src.stop(t + dur + 0.02);
+    this.vibrate?.([18, 22, 16]);
+  }
+
+  /**
+   * Urgent regulator free-flow gas hiss burst (v122).
+   */
+  playFreeFlowHiss() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const dur = 0.28;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.55;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(1150, t);
+    filt.Q.value = 1.2;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.055, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.masterFilter || this.ctx.destination);
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  /**
+   * Crisp two-tone confirmation chime when mastering a technical failure drill (v122).
+   */
+  playDrillClear() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone?.(660, 0.11, 'triangle', 0.055, 0);
+    this.playTone?.(990, 0.18, 'sine', 0.06, 0.09);
+    this.vibrate?.([14, 18, 28]);
+  }
+
+  /**
    * Subtle procedural biome-specific underwater acoustics while submerged:
    * - Caves: 3-tap resonant karst cavern water-drip echoes & deep aquifer hush
    * - Shipwrecks: distant humpback whale song, deep steel hull settling creak & oceanic swell sub-thrum

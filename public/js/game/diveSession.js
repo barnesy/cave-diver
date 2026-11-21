@@ -3,7 +3,7 @@ import { createDiveState, stepDivePhysiology, receiveGasIntoState } from '../phy
 import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
-import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS } from './scoring.js';
+import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS, MAX_DRILL_BONUS } from './scoring.js';
 import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 
@@ -73,6 +73,7 @@ export function createDiveSession(
     mutatorId = '',
     dailyDateKey = '',
     customMixOverrides = null,
+    drillsEnabled = false,
   } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
@@ -156,6 +157,15 @@ export function createDiveSession(
     diveState: createDiveState({ mixOverrides: mergedMixOverrides, ccrEnabled: cleanGear.ccr }),
     droppedStages: [],
     spareStageDropped: false,
+    drills: {
+      enabled: Boolean(drillsEnabled),
+      active: null, // { kind: 'mask-flood' | 'torch-fail' | 'free-flow', elapsedSec, severity, hissAccum }
+      cooldownSec: 22,
+      completedCount: 0,
+      bonusScore: 0,
+      history: [],
+      backupTorchActive: false,
+    },
     diveProfile: [{ t: 0, d: Math.max(0, Number(spawnY.toFixed(1))), gas: 'EAN32', deco: 0 }],
     _lastProfileSampleAt: 0,
     _lastProfileGas: 'EAN32',
@@ -1275,6 +1285,152 @@ export function retrieveStageTank(session, stageId = null, callbacks = {}) {
   return { ok: true, stage, addedBar: added };
 }
 
+export const EMERGENCY_DRILL_KINDS = ['mask-flood', 'torch-fail', 'free-flow'];
+const DRILL_POINTS_EACH = 200;
+
+/**
+ * Trigger an authentic mid-dive technical emergency drill (`mask-flood`, `torch-fail`, or `free-flow`).
+ */
+export function triggerEmergencyDrill(session, requestedKind = null, callbacks = {}) {
+  if (!session?.drills || !session.diveState?.alive || session.surfaced) {
+    return { ok: false, reason: 'inactive' };
+  }
+  if (session.drills.active) {
+    return { ok: false, reason: 'already-active', active: session.drills.active };
+  }
+  let kind = EMERGENCY_DRILL_KINDS.includes(requestedKind) ? requestedKind : null;
+  if (!kind) {
+    const unseen = EMERGENCY_DRILL_KINDS.filter((k) => {
+      if (k === 'torch-fail' && session.drills.backupTorchActive) return false;
+      return !session.drills.history.includes(k);
+    });
+    const pool = unseen.length > 0
+      ? unseen
+      : EMERGENCY_DRILL_KINDS.filter((k) => !(k === 'torch-fail' && session.drills.backupTorchActive));
+    kind = pool[Math.floor(Math.random() * pool.length)] || 'mask-flood';
+  }
+  const drill = {
+    kind,
+    elapsedSec: 0,
+    severity: kind === 'mask-flood' ? 0.3 : 1.0,
+    hissAccum: 0,
+  };
+  session.drills.active = drill;
+  session.drills.history.push(kind);
+  callbacks.onDrillStart?.(drill);
+  callbacks.onAlarm?.('warn');
+  if (kind === 'mask-flood') {
+    callbacks.onToast?.('🫧 MASK FLOODING! Stay calm — press [E] / Clear Mask to purge water!', 3.6);
+  } else if (kind === 'torch-fail') {
+    callbacks.onToast?.('🔦 PRIMARY LIGHT FAILING! Press [L] or [E] to deploy your Backup Torch!', 3.6);
+  } else if (kind === 'free-flow') {
+    callbacks.onToast?.('🔧 REGULATOR FREE-FLOW (3× gas burn)! Press [E] to feather valve or switch gas [1/2/3]!', 3.8);
+  }
+  return { ok: true, drill };
+}
+
+/**
+ * Resolve an active emergency failure drill and award +200 Emergency Mastery points (up to MAX_DRILL_BONUS).
+ */
+export function resolveEmergencyDrill(session, expectedKind = null, callbacks = {}) {
+  const active = session?.drills?.active;
+  if (!active || !session.diveState?.alive) {
+    return { ok: false, reason: 'none' };
+  }
+  if (expectedKind && active.kind !== expectedKind) {
+    return { ok: false, reason: 'mismatch' };
+  }
+  const resolvedKind = active.kind;
+  session.drills.active = null;
+  session.drills.cooldownSec = 32 + Math.random() * 18;
+  session.drills.completedCount = (session.drills.completedCount || 0) + 1;
+  const room = Math.max(0, MAX_DRILL_BONUS - (session.drills.bonusScore || 0));
+  const points = Math.min(room, DRILL_POINTS_EACH);
+  session.drills.bonusScore = (session.drills.bonusScore || 0) + points;
+
+  const { diver, diveState, bubbles } = session;
+  diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.2);
+  diveState.heartRateBpm = Math.max(70, (diveState.heartRateBpm || 84) - 10);
+
+  if (resolvedKind === 'mask-flood') {
+    if (Array.isArray(bubbles)) {
+      for (let k = 0; k < 14; k++) {
+        spawnExhaustBubble(
+          bubbles,
+          diver.x + Math.cos(diver.angle) * 0.45 + (Math.random() - 0.5) * 0.3,
+          diver.y + Math.sin(diver.angle) * 0.35,
+          (Math.random() - 0.5) * 1.1,
+          -0.9 - Math.random() * 1.1,
+          { primary: k < 7, intensity: 1.0, depthM: diver.y }
+        );
+      }
+    }
+    callbacks.onMaskPurge?.();
+    callbacks.onToast?.(`🫧 Mask purged crystal clear! (+${points} Emergency Mastery)`, 3.0);
+  } else if (resolvedKind === 'torch-fail') {
+    session.drills.backupTorchActive = true;
+    diver.torchOn = true;
+    diver.backupTorchActive = true;
+    callbacks.onDrillClear?.(resolvedKind, points);
+    callbacks.onToast?.(`🔦 Backup halogen torch deployed! (+${points} Emergency Mastery)`, 3.0);
+  } else if (resolvedKind === 'free-flow') {
+    callbacks.onDrillClear?.(resolvedKind, points);
+    callbacks.onToast?.(`🔧 Regulator free-flow isolated! (+${points} Emergency Mastery)`, 3.0);
+  }
+  return { ok: true, kind: resolvedKind, points, totalBonus: session.drills.bonusScore };
+}
+
+/**
+ * Advance active emergency failure drills & trigger cooldowns during stepDiveSession.
+ */
+export function stepEmergencyDrills(session, dt, callbacks = {}) {
+  const drills = session?.drills;
+  if (!drills || !session.diveState?.alive || session.surfaced) return;
+  const { diver, diveState, bubbles } = session;
+  diver.backupTorchActive = Boolean(drills.backupTorchActive);
+
+  if (drills.active) {
+    const active = drills.active;
+    active.elapsedSec += dt;
+    if (active.kind === 'mask-flood') {
+      active.severity = Math.min(1, 0.3 + active.elapsedSec / 3.2);
+      diveState.heartRateBpm = Math.min(175, (diveState.heartRateBpm || 74) + dt * 4.2);
+      diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * 0.045);
+    } else if (active.kind === 'torch-fail') {
+      diveState.heartRateBpm = Math.min(175, (diveState.heartRateBpm || 74) + dt * 3.8);
+      diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * 0.04);
+    } else if (active.kind === 'free-flow') {
+      diveState.heartRateBpm = Math.min(180, (diveState.heartRateBpm || 76) + dt * 5.2);
+      diveState.panicLevel = Math.min(1, (diveState.panicLevel || 0) + dt * 0.055);
+      active.hissAccum = (active.hissAccum || 0) + dt;
+      if (active.hissAccum >= 0.42) {
+        active.hissAccum = 0;
+        callbacks.onFreeFlowHiss?.();
+      }
+      if (Array.isArray(bubbles) && Math.random() < dt * 24) {
+        spawnExhaustBubble(
+          bubbles,
+          diver.x + Math.cos(diver.angle) * 0.42,
+          diver.y + Math.sin(diver.angle) * 0.32,
+          (Math.random() - 0.5) * 1.2,
+          -1.1 - Math.random() * 1.2,
+          { primary: true, intensity: 1.15, depthM: diver.y }
+        );
+      }
+    }
+    return;
+  }
+
+  if (!drills.enabled) return;
+  if ((drills.completedCount || 0) >= 3) return;
+  if ((diver.y || 0) < 7.0 || session.activeSnagIndex >= 0 || (diveState.panicLevel || 0) > 0.65) return;
+
+  drills.cooldownSec = Math.max(0, (drills.cooldownSec ?? 22) - dt);
+  if (drills.cooldownSec <= 0) {
+    triggerEmergencyDrill(session, null, callbacks);
+  }
+}
+
 /**
  * Triggers the active contextual cave or shipwreck action:
  * 1) Slice free from a tangled fishing net / abandoned cave line trap (self or co-op buddy!)
@@ -1311,6 +1467,14 @@ export function triggerWreckAction(session, callbacks = {}) {
         2.6
       );
       return { handled: true, kind: 'cut-net', targetId: snagKey, buddyRescue: isBuddyRescue };
+    }
+  }
+
+  // 1b. Priority 1b: Resolve active technical emergency drill (Mask Flood / Primary Torch Fail / Regulator Free-Flow)
+  if (session.drills?.active) {
+    const res = resolveEmergencyDrill(session, null, callbacks);
+    if (res.ok) {
+      return { handled: true, kind: `drill-${res.kind}`, drillKind: res.kind, points: res.points };
     }
   }
 
@@ -1958,12 +2122,20 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const { level, ascentConfig, diver, diveState, checkpointsHit, siltClouds, siltStirTimer } = session;
   session.simTimeSec += dt;
   const mutatorId = session.mutatorId || '';
+  stepEmergencyDrills(session, dt, callbacks);
+  let torchMod = 1.0;
   if (mutatorId === 'strobe') {
     const phase = session.simTimeSec % 1.7;
-    diver.strobeMod = phase < 0.36 ? 1.0 : phase < 0.55 ? 1.0 - ((phase - 0.36) / 0.19) * 0.78 : 0.22;
-  } else {
-    diver.strobeMod = 1.0;
+    torchMod = phase < 0.36 ? 1.0 : phase < 0.55 ? 1.0 - ((phase - 0.36) / 0.19) * 0.78 : 0.22;
   }
+  if (session.drills?.active?.kind === 'torch-fail') {
+    const el = session.drills.active.elapsedSec || 0;
+    const sputter = el < 1.3 ? (Math.sin(el * 42) > 0.15 ? 0.75 : 0.08) : 0.06;
+    torchMod = Math.min(torchMod, sputter);
+  } else if (session.drills?.backupTorchActive) {
+    torchMod = Math.min(torchMod, 0.78);
+  }
+  diver.strobeMod = torchMod;
   const imp = diveState.impairment || { swimMultiplier: 1, sacMultiplier: 1, tremor: 0 };
   const exertion = Math.min(1.4, Math.hypot(thrust.x, thrust.y) * 0.65 * imp.sacMultiplier);
 
@@ -2368,6 +2540,30 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       detail: sn?.label || 'Buddy Entangled',
       progress: 0,
     };
+  } else if (session.drills?.active) {
+    const ak = session.drills.active.kind;
+    if (ak === 'mask-flood') {
+      session.wreckActionPrompt = {
+        kind: 'drill-mask',
+        label: '🫧 CLEAR MASK [E]',
+        detail: 'Exhale through nose to purge flood (+200)',
+        progress: 0,
+      };
+    } else if (ak === 'torch-fail') {
+      session.wreckActionPrompt = {
+        kind: 'drill-torch',
+        label: '🔦 BACKUP TORCH [L / E]',
+        detail: 'Primary light failed — deploy backup (+200)',
+        progress: 0,
+      };
+    } else {
+      session.wreckActionPrompt = {
+        kind: 'drill-freeflow',
+        label: '🔧 ISOLATE VALVE [E]',
+        detail: 'Free-flow 3× gas burn — feather or switch gas (+200)',
+        progress: 0,
+      };
+    }
   } else if (nearbyHatch) {
     const isCranking = session.crankingHatchId === nearbyHatch.id;
     session.wreckActionPrompt = {
@@ -2589,7 +2785,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     headBumpImpulse,
     isStuck,
     thrustMag,
-    gasBurnMultiplier: mutatorId === 'iron-lungs' ? 1.35 : 1.0,
+    gasBurnMultiplier:
+      (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
+      (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0),
   });
 
   if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;
@@ -2787,6 +2985,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       hatchBonusScore: session.hatchBonusScore || 0,
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
+      drillBonusScore: session.drills?.bonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 

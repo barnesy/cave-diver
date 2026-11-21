@@ -111,10 +111,11 @@ export function assignScoreRank(totalScore, alive = true, maxPossible = 3200) {
 
 export const MAX_PHOTO_BONUS = 300;
 export const MAX_ENCOUNTER_BONUS = 180;
+export const MAX_DRILL_BONUS = 600;
 
 /**
  * Score a single diver's completed (or aborted) cave traverse across:
- * health vitals, run speed, collectibles recovered, cave explored completeness, hatches, wildlife photos & survey beacons.
+ * health vitals, run speed, collectibles recovered, cave explored completeness, hatches, wildlife photos, beacons & emergency drills.
  */
 export function computeDiverScoreSummary({
   name = 'Diver 1',
@@ -128,6 +129,7 @@ export function computeDiverScoreSummary({
   hatchBonusScore = 0,
   photoBonusScore = 0,
   encounterBonusScore = 0,
+  drillBonusScore = 0,
   mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
@@ -169,6 +171,7 @@ export function computeDiverScoreSummary({
   const cleanHatchBonus = alive ? Math.min(maxHatchBonus, Math.max(0, Math.round(Number(hatchBonusScore) || 0))) : 0;
   const cleanPhotoBonus = alive ? Math.min(MAX_PHOTO_BONUS, Math.max(0, Math.round(Number(photoBonusScore) || 0))) : 0;
   const cleanEncounterBonus = alive ? Math.min(MAX_ENCOUNTER_BONUS, Math.max(0, Math.round(Number(encounterBonusScore) || 0))) : 0;
+  const cleanDrillBonus = alive ? Math.min(MAX_DRILL_BONUS, Math.max(0, Math.round(Number(drillBonusScore) || 0))) : 0;
   const totalScore =
     healthScore +
     speedScore +
@@ -177,9 +180,10 @@ export function computeDiverScoreSummary({
     cartographerBonus +
     cleanHatchBonus +
     cleanPhotoBonus +
-    cleanEncounterBonus;
+    cleanEncounterBonus +
+    cleanDrillBonus;
   const baseMaxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
-  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS;
+  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS;
   const rank = assignScoreRank(totalScore, alive, baseMaxPossible);
 
   return {
@@ -204,6 +208,7 @@ export function computeDiverScoreSummary({
     hatchBonusScore: cleanHatchBonus,
     photoBonusScore: cleanPhotoBonus,
     encounterBonusScore: cleanEncounterBonus,
+    drillBonusScore: cleanDrillBonus,
     healthScore,
     speedScore,
     totalScore,
@@ -289,13 +294,14 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     (localSummary.hatchBonusScore || 0) +
     (localSummary.photoBonusScore || 0) +
     (localSummary.encounterBonusScore || 0) +
+    (localSummary.drillBonusScore || 0) +
     rescueBonus +
     teamSurvivalBonus;
   const teamScore = Math.min(teamMaxPossible, rawTeamScore);
   const teamRank = assignScoreRank(
     teamScore,
     survivorsCount > 0 && localExtracted,
-    Math.max(1, teamMaxPossible - MAX_PHOTO_BONUS - MAX_ENCOUNTER_BONUS)
+    Math.max(1, teamMaxPossible - MAX_PHOTO_BONUS - MAX_ENCOUNTER_BONUS - MAX_DRILL_BONUS)
   );
 
   return {
@@ -322,6 +328,7 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     hatchBonusScore: localSummary.hatchBonusScore || 0,
     photoBonusScore: localSummary.photoBonusScore || 0,
     encounterBonusScore: localSummary.encounterBonusScore || 0,
+    drillBonusScore: localSummary.drillBonusScore || 0,
     rescueBonus,
     teamSurvivalBonus,
     teamScore,

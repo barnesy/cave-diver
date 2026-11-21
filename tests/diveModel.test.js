@@ -81,6 +81,8 @@ import {
   triggerWreckAction,
   dropStageTank,
   retrieveStageTank,
+  triggerEmergencyDrill,
+  resolveEmergencyDrill,
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
@@ -4277,4 +4279,115 @@ test('v121 Dive Replay Theater, Shareable 1200x630 PNG Expedition Postcard & JSO
   assert.equal(parseImportedLogbookJson('{not-json').ok, false);
   assert.equal(parseImportedLogbookJson('{"foo":"bar"}').ok, false);
   assert.equal(parseImportedLogbookJson(exportLogbookToJson(createEmptyLogbook(), LEVELS)).ok, false);
+});
+
+test('v122 Technical Failure & Emergency Bailout Drills: Mask Flood, Primary Torch Failure, Regulator Free-Flow, Scoring & FX', async () => {
+  // 1. Drills remain completely dormant unless explicitly opted in
+  const sOff = createDiveSession(LEVEL_1, { drillsEnabled: false });
+  sOff.diver.x = 20;
+  sOff.diver.y = 14;
+  sOff.drills.cooldownSec = 0;
+  stepDiveSession(sOff, { x: 0, y: 0 }, 0.2);
+  assert.equal(sOff.drills.active, null, 'Drills must never fire when disabled');
+
+  // 2. Opt-in Drills auto-trigger once submerged past cooldown
+  const sOn = createDiveSession(LEVEL_1, { drillsEnabled: true });
+  sOn.diver.x = 20;
+  sOn.diver.y = 14;
+  sOn.drills.cooldownSec = 0.05;
+  stepDiveSession(sOn, { x: 0, y: 0 }, 0.1);
+  assert.ok(sOn.drills.active, 'Drills should trigger automatically when enabled and submerged');
+
+  // 3. Mask Flood drill: ramps severity, prompts CLEAR MASK [E], resolves via triggerWreckAction (+200 & purge bubbles)
+  const sMask = createDiveSession(LEVEL_1, { drillsEnabled: true });
+  sMask.diver.x = 20;
+  sMask.diver.y = 14;
+  assert.equal(triggerEmergencyDrill(sMask, 'mask-flood').ok, true);
+  stepDiveSession(sMask, { x: 0, y: 0 }, 1.0);
+  assert.ok(sMask.drills.active.severity > 0.5);
+  assert.equal(sMask.wreckActionPrompt?.kind, 'drill-mask');
+  let purged = false;
+  const bubblesBefore = sMask.bubbles.length;
+  const maskRes = triggerWreckAction(sMask, { onMaskPurge: () => { purged = true; } });
+  assert.equal(maskRes.handled, true);
+  assert.equal(maskRes.drillKind, 'mask-flood');
+  assert.equal(maskRes.points, 200);
+  assert.equal(purged, true);
+  assert.equal(sMask.drills.active, null);
+  assert.ok(sMask.bubbles.length > bubblesBefore);
+
+  // 4. Primary Torch Failure -> Backup Halogen Torch deployment (+200)
+  assert.equal(triggerEmergencyDrill(sMask, 'torch-fail').ok, true);
+  sMask.drills.active.elapsedSec = 2.0;
+  stepDiveSession(sMask, { x: 0, y: 0 }, 0.1);
+  assert.ok(sMask.diver.strobeMod < 0.15, 'Failed primary torch should drop light output');
+  assert.equal(sMask.wreckActionPrompt?.kind, 'drill-torch');
+  const torchRes = resolveEmergencyDrill(sMask, 'torch-fail');
+  assert.equal(torchRes.ok, true);
+  assert.equal(torchRes.points, 200);
+  assert.equal(sMask.drills.backupTorchActive, true);
+  stepDiveSession(sMask, { x: 0, y: 0 }, 0.05);
+  assert.ok(sMask.diver.strobeMod >= 0.75 && sMask.diver.strobeMod <= 0.82, 'Backup torch should run at 0.78 intensity');
+
+  // 5. Regulator Free-Flow burns gas ~3x faster and awards +200 on valve isolation
+  const sBase = createDiveSession(LEVEL_1, { drillsEnabled: false });
+  const sFlow = createDiveSession(LEVEL_1, { drillsEnabled: true });
+  sBase.diver.x = 20;
+  sBase.diver.y = 18;
+  sFlow.diver.x = 20;
+  sFlow.diver.y = 18;
+  triggerEmergencyDrill(sFlow, 'free-flow');
+  let hissCount = 0;
+  for (let i = 0; i < 10; i++) {
+    stepDiveSession(sBase, { x: 0, y: 0 }, 0.1);
+    stepDiveSession(sFlow, { x: 0, y: 0 }, 0.1, { onFreeFlowHiss: () => { hissCount++; } });
+  }
+  const baseUsed = 200 - sBase.diveState.tanks.EAN32.bar;
+  const flowUsed = 200 - sFlow.diveState.tanks.EAN32.bar;
+  assert.ok(flowUsed > baseUsed * 2.3, `Free-flow should drain gas ~3x faster (flow=${flowUsed.toFixed(2)} vs base=${baseUsed.toFixed(2)})`);
+  assert.ok(hissCount >= 1);
+  assert.equal(sFlow.wreckActionPrompt?.kind, 'drill-freeflow');
+  const flowRes = triggerWreckAction(sFlow);
+  assert.equal(flowRes.drillKind, 'free-flow');
+  assert.equal(flowRes.points, 200);
+
+  // 6. Scoring & Leaderboard Ceiling Parity with drillBonusScore
+  const summary = computeDiverScoreSummary({
+    level: LEVEL_1,
+    diveState: sMask.diveState,
+    checkpointsHit: sMask.checkpointsHit,
+    collectedIds: new Set(),
+    exploredCount: 20,
+    totalExploreCells: 20,
+    drillBonusScore: 600,
+  });
+  assert.equal(summary.drillBonusScore, 600);
+  assert.ok(summary.totalScore <= computeLevelMaxScore(LEVEL_1.id, false));
+
+  // 7. Renderer visor overlay & Audio drill synth execute cleanly
+  const noopCtx = new Proxy(
+    { createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }) },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+  CaveRenderer.prototype._drawEmergencyDrillOverlay.call({}, noopCtx, 800, 600, { active: { kind: 'mask-flood', severity: 0.8 } }, 3.2);
+  CaveRenderer.prototype._drawEmergencyDrillOverlay.call({}, noopCtx, 800, 600, { active: { kind: 'free-flow', severity: 1 } }, 3.2);
+  CaveRenderer.prototype._drawEmergencyDrillOverlay.call({}, noopCtx, 800, 600, { active: null, backupTorchActive: true }, 3.2);
+
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  const a = new DiveAudio();
+  const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {} });
+  a.ctx = {
+    state: 'running',
+    currentTime: 1,
+    sampleRate: 44100,
+    destination: {},
+    createOscillator: () => ({ type: 'sine', frequency: param(), connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+    createBiquadFilter: () => ({ type: 'bandpass', frequency: param(), Q: param(), connect() {}, disconnect() {} }),
+    createGain: () => ({ gain: param(), connect() {}, disconnect() {} }),
+    createBuffer: (c, l) => ({ getChannelData: () => new Float32Array(l) }),
+    createBufferSource: () => ({ connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+  };
+  a.playMaskPurge();
+  a.playFreeFlowHiss();
+  a.playDrillClear();
 });
