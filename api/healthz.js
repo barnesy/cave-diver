@@ -7,6 +7,7 @@ export function OPTIONS() {
 
 export function GET() {
   const gh = getGitHubConfig(process.env);
+  const githubEnvKeys = Object.keys(process.env).filter((k) => /github|gh_/i.test(k)).sort();
   return jsonResponse({
     ok: true,
     platform: 'vercel',
@@ -16,5 +17,6 @@ export function GET() {
     githubConfigured: gh.configured,
     githubHasClientId: Boolean(gh.clientId),
     githubHasClientSecret: Boolean(gh.clientSecret),
+    githubEnvKeys,
   });
 }
