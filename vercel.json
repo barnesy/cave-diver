@@ -4,7 +4,8 @@
   "fluid": true,
   "rewrites": [
     { "source": "/join/:code", "destination": "/?room=:code" },
-    { "source": "/healthz", "destination": "/api/healthz" }
+    { "source": "/healthz", "destination": "/api/healthz" },
+    { "source": "/api/github/:action", "destination": "/api/github?action=:action" }
   ],
   "headers": [
     {

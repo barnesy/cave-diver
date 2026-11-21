@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="114" />
+  <meta name="app-version" content="115" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=114" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=114" />
-  <link rel="stylesheet" href="./css/style.css?v=114" />
+  <link rel="icon" href="./icons/icon-192.png?v=115" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=115" />
+  <link rel="stylesheet" href="./css/style.css?v=115" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=114" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=115" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,57 +57,76 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=114" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=115" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
           </div>
         </div>
-        <div class="home-menu-wrap">
+        <div class="menu-header-actions">
           <button
-            id="btn-home-menu"
-            class="home-menu-btn"
+            id="btn-github-account"
+            class="gh-account-pill"
             type="button"
-            title="Leaderboard, Music &amp; Version"
-            aria-label="Open Menu"
-            aria-haspopup="true"
-            aria-expanded="false"
-            aria-controls="home-menu-popover"
+            title="Sign in with GitHub to sync stats via Private Gist &amp; submit issues"
           >
-            <span class="home-menu-glyph" aria-hidden="true">☰</span>
-            <span id="home-menu-update-dot" class="home-menu-update-dot" hidden></span>
+            <svg class="gh-mark-svg" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            <img id="gh-account-avatar" class="gh-account-avatar" alt="" hidden />
+            <span id="gh-account-label" class="gh-account-label">GitHub</span>
+            <span id="gh-sync-dot" class="gh-sync-dot" hidden title="Cloud synced"></span>
           </button>
-          <div id="home-menu-popover" class="home-menu-popover" role="menu" aria-label="Expedition Menu" hidden>
-            <button id="btn-open-leaderboard" class="home-menu-item" type="button" role="menuitem">
-              <span id="home-menu-lb-label">🏆 Leaderboard</span>
-              <span class="home-menu-chevron" aria-hidden="true">›</span>
+          <div class="home-menu-wrap">
+            <button
+              id="btn-home-menu"
+              class="home-menu-btn"
+              type="button"
+              title="Leaderboard, Music &amp; Version"
+              aria-label="Open Menu"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="home-menu-popover"
+            >
+              <span class="home-menu-glyph" aria-hidden="true">☰</span>
+              <span id="home-menu-update-dot" class="home-menu-update-dot" hidden></span>
             </button>
-            <button id="btn-open-logbook" class="home-menu-item" type="button" role="menuitem" title="View Career Certifications &amp; Site Mastery">
-              <span>🎖️ Diver Logbook</span>
-              <span class="home-menu-chevron" aria-hidden="true">›</span>
-            </button>
-            <button id="btn-menu-radio" class="home-menu-item radio-btn" type="button" role="menuitem" title="Cycle Chill Aquatic Radio">
-              📻 Music: Off
-            </button>
-            <button id="btn-difficulty-cycle" class="home-menu-item" type="button" role="menuitem" title="Cycle Realism Mode (Guided / Tech / Hardcore)">
-              🎚️ Mode: Standard Tech
-            </button>
-            <button id="btn-ghost-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Personal Best Ghost Diver">
-              👻 PB Ghost: On
-            </button>
-            <button id="btn-torch-stick-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Left Flashlight Aim Joystick">
-              🔦 Light Stick: On
-            </button>
-            <button id="btn-open-guide" class="home-menu-item" type="button" role="menuitem" title="Open Technical Dive Quick Guide">
-              📖 Dive Guide
-            </button>
-            <button id="btn-install-pwa" class="home-menu-item" type="button" role="menuitem" hidden>
-              📲 Install App
-            </button>
-            <div class="home-menu-divider" role="separator"></div>
-            <div class="home-menu-ver-row">
-              <span class="home-menu-ver-lbl">Version</span>
-              <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v114</button>
+            <div id="home-menu-popover" class="home-menu-popover" role="menu" aria-label="Expedition Menu" hidden>
+              <button id="btn-open-leaderboard" class="home-menu-item" type="button" role="menuitem">
+                <span id="home-menu-lb-label">🏆 Leaderboard</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
+              <button id="btn-open-logbook" class="home-menu-item" type="button" role="menuitem" title="View Career Certifications &amp; Site Mastery">
+                <span>🎖️ Diver Logbook</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
+              <button id="btn-open-issue" class="home-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">
+                <span>🐛 Report Issue / Idea</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
+              <button id="btn-menu-radio" class="home-menu-item radio-btn" type="button" role="menuitem" title="Cycle Chill Aquatic Radio">
+                📻 Music: Off
+              </button>
+              <button id="btn-difficulty-cycle" class="home-menu-item" type="button" role="menuitem" title="Cycle Realism Mode (Guided / Tech / Hardcore)">
+                🎚️ Mode: Standard Tech
+              </button>
+              <button id="btn-ghost-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Personal Best Ghost Diver">
+                👻 PB Ghost: On
+              </button>
+              <button id="btn-torch-stick-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Left Flashlight Aim Joystick">
+                🔦 Light Stick: On
+              </button>
+              <button id="btn-open-guide" class="home-menu-item" type="button" role="menuitem" title="Open Technical Dive Quick Guide">
+                📖 Dive Guide
+              </button>
+              <button id="btn-install-pwa" class="home-menu-item" type="button" role="menuitem" hidden>
+                📲 Install App
+              </button>
+              <div class="home-menu-divider" role="separator"></div>
+              <div class="home-menu-ver-row">
+                <span class="home-menu-ver-lbl">Version</span>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v115</button>
+              </div>
             </div>
           </div>
         </div>
@@ -300,6 +319,7 @@
               <button id="btn-hud-torch-stick" class="hud-menu-item" type="button" role="menuitem" title="Toggle Left Flashlight Aim Joystick">🔦 Light Stick: On</button>
               <button id="btn-hud-ghost-toggle" class="hud-menu-item" type="button" role="menuitem" title="Toggle Personal Best Ghost Diver">👻 PB Ghost: On</button>
               <button id="btn-mute" class="hud-menu-item" type="button" role="menuitem" title="Toggle Sound">🔊 Sound: On</button>
+              <button id="btn-hud-issue" class="hud-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">🐛 Report Issue</button>
             </div>
           </div>
           <button id="btn-abort" class="util-btn danger" type="button" title="Abort Dive">✕</button>
@@ -585,6 +605,7 @@
         </div>
         <button id="btn-logbook-close" class="btn tiny ghost" type="button" aria-label="Close diver logbook">✕</button>
       </div>
+      <div id="logbook-github-bar" class="logbook-github-bar"></div>
       <div id="logbook-kpis" class="logbook-kpis"></div>
       <div class="logbook-section-title">TECHNICAL CERTIFICATION LADDER</div>
       <div id="logbook-certs-grid" class="logbook-certs-grid"></div>
@@ -610,67 +631,104 @@
     </div>
   </div>
 
+  <!-- GitHub Issue / Feedback Reporter Modal -->
+  <div id="issue-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="issue-modal-title">
+    <div class="lb-stats-card issue-card">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">GITHUB · BARNESY/CAVE-DIVER</div>
+          <h2 id="issue-modal-title" class="lb-stats-title">Report Issue or Idea</h2>
+          <div id="issue-modal-sub" class="lb-stats-sub">Post directly with your GitHub account or open a pre-filled form</div>
+        </div>
+        <button id="btn-issue-close" class="btn tiny ghost" type="button" aria-label="Close issue reporter">✕</button>
+      </div>
+      <div id="issue-kind-tabs" class="issue-kind-tabs" role="tablist" aria-label="Issue Category">
+        <button type="button" class="issue-kind-btn active" data-issue-kind="bug" aria-selected="true">🐛 Bug Report</button>
+        <button type="button" class="issue-kind-btn" data-issue-kind="feature" aria-selected="false">✨ Feature Idea</button>
+        <button type="button" class="issue-kind-btn" data-issue-kind="feedback" aria-selected="false">💬 Feedback</button>
+      </div>
+      <div class="issue-field">
+        <label for="issue-title-input">Title</label>
+        <input id="issue-title-input" type="text" maxlength="130" placeholder="Short summary (e.g. Co-op banner overlap on mobile)" autocomplete="off" />
+      </div>
+      <div class="issue-field">
+        <label for="issue-desc-input">Details</label>
+        <textarea id="issue-desc-input" rows="4" maxlength="4000" placeholder="What happened, or what would make Techno Dive even better?"></textarea>
+      </div>
+      <label class="issue-diag-toggle">
+        <input id="issue-attach-diag" type="checkbox" checked />
+        <span>Attach dive diagnostics (<span id="issue-diag-preview">v114 · Solo</span>)</span>
+      </label>
+      <div id="issue-result" class="issue-result" hidden role="status" aria-live="polite"></div>
+      <div class="issue-actions">
+        <button id="btn-issue-submit" class="btn primary" type="button">Submit Issue on GitHub</button>
+        <button id="btn-issue-open-gh" class="btn secondary" type="button">Open on GitHub ↗</button>
+      </div>
+    </div>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=114",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=114",
-        "./js/game/audio.js": "./js/game/audio.js?v=114",
-        "./js/game/collision.js": "./js/game/collision.js?v=114",
-        "./js/game/input.js": "./js/game/input.js?v=114",
-        "./js/game/hud.js": "./js/game/hud.js?v=114",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=114",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=114",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=114",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=114",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=114",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=114",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=114",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=114",
-        "./js/game/silt.js": "./js/game/silt.js?v=114",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=114",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=114",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=114",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=114",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=114",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=114",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=114",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=114",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=114",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=114",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=114",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=114",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=114",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=114",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=114",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=114",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=114",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=114",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=114",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=114",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=114",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=114",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=114",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=114",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=114",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=114",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=114",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=114",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=114",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=114",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=114",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=114",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=114",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=114",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=114",
-        "./js/levels/index.js": "./js/levels/index.js?v=114",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=114",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=114",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=114",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=114"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=115",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=115",
+        "./js/game/audio.js": "./js/game/audio.js?v=115",
+        "./js/game/collision.js": "./js/game/collision.js?v=115",
+        "./js/game/input.js": "./js/game/input.js?v=115",
+        "./js/game/hud.js": "./js/game/hud.js?v=115",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=115",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=115",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=115",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=115",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=115",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=115",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=115",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=115",
+        "./js/game/silt.js": "./js/game/silt.js?v=115",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=115",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=115",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=115",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=115",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=115",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=115",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=115",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=115",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=115",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=115",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=115",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=115",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=115",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=115",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=115",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=115",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=115",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=115",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=115",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=115",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=115",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=115",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=115",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=115",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=115",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=115",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=115",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=115",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=115",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=115",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=115",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=115",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=115",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=115",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=115",
+        "./js/levels/index.js": "./js/levels/index.js?v=115",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=115",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=115",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=115",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=115",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=115"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=114"></script>
+  <script type="module" src="./js/main.js?v=115"></script>
 </body>
 </html>

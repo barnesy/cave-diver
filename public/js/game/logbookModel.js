@@ -91,6 +91,125 @@ function normalizeBook(raw) {
   return base;
 }
 
+export function normalizeCareerLogbook(raw) {
+  return normalizeBook(raw);
+}
+
+/**
+ * Commutative, idempotent merge of two career logbooks (e.g. local device + GitHub Private Gist).
+ * Never overwrites higher scores, better grades, faster times, field guide captures, or daily streaks.
+ */
+export function mergeCareerLogbooks(rawA, rawB) {
+  const a = normalizeBook(rawA);
+  const b = normalizeBook(rawB);
+  const out = createEmptyLogbook();
+
+  out.totalDives = Math.max(a.totalDives, b.totalDives);
+  out.totalTimeSec = Math.round(Math.max(a.totalTimeSec, b.totalTimeSec) * 10) / 10;
+  out.deepestM = Math.round(Math.max(a.deepestM, b.deepestM) * 10) / 10;
+  out.bestScore = Math.max(a.bestScore, b.bestScore);
+
+  const siteIds = new Set([...Object.keys(a.cleared), ...Object.keys(b.cleared)]);
+  for (const lid of siteIds) {
+    const ra = a.cleared[lid];
+    const rb = b.cleared[lid];
+    if (ra && !rb) {
+      out.cleared[lid] = { ...ra };
+      continue;
+    }
+    if (rb && !ra) {
+      out.cleared[lid] = { ...rb };
+      continue;
+    }
+    const bestScore = Math.max(ra.score || 0, rb.score || 0);
+    const bestGrade = (GRADE_RANK[rb.grade] || 0) > (GRADE_RANK[ra.grade] || 0) ? rb.grade : ra.grade;
+    const bestTimeSec =
+      ra.bestTimeSec > 0 && rb.bestTimeSec > 0
+        ? Math.min(ra.bestTimeSec, rb.bestTimeSec)
+        : Math.max(ra.bestTimeSec || 0, rb.bestTimeSec || 0);
+    const bestDiff =
+      (DIFFICULTY_RANK[rb.bestDifficulty] || 0) > (DIFFICULTY_RANK[ra.bestDifficulty] || 0)
+        ? rb.bestDifficulty
+        : ra.bestDifficulty || rb.bestDifficulty || '';
+    const lastDiff = rb.lastDifficulty || ra.lastDifficulty || bestDiff;
+    out.cleared[lid] = {
+      score: bestScore,
+      grade: bestGrade,
+      bestTimeSec,
+      clears: Math.max(ra.clears || 1, rb.clears || 1),
+      ...(bestDiff ? { bestDifficulty: bestDiff } : {}),
+      ...(lastDiff ? { lastDifficulty: lastDiff } : {}),
+    };
+    if (bestScore > out.bestScore) out.bestScore = bestScore;
+  }
+  out.totalDives = Math.max(out.totalDives, Object.keys(out.cleared).length);
+
+  // Merge Daily Expedition cleared dates & recalculate exact streak continuity
+  const allDates = Array.from(new Set([...(a.daily.clearedDates || []), ...(b.daily.clearedDates || [])])).sort();
+  out.daily.clearedDates = allDates.slice(-90);
+  out.daily.totalClears = Math.max(a.daily.totalClears || 0, b.daily.totalClears || 0, allDates.length);
+  out.daily.lastClearedDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
+
+  let bestStreak = Math.max(a.daily.bestStreak || 0, b.daily.bestStreak || 0);
+  let curRun = 0;
+  let prevDay = '';
+  for (const d of allDates) {
+    if (prevDay && prevUtcDateKey(d) === prevDay) {
+      curRun += 1;
+    } else {
+      curRun = 1;
+    }
+    if (curRun > bestStreak) bestStreak = curRun;
+    prevDay = d;
+  }
+  out.daily.currentStreak = curRun;
+  out.daily.bestStreak = Math.max(bestStreak, curRun);
+
+  const recDates = Array.from(
+    new Set([...Object.keys(a.daily.records || {}), ...Object.keys(b.daily.records || {})])
+  )
+    .sort()
+    .slice(-30);
+  for (const dk of recDates) {
+    const ra = a.daily.records?.[dk];
+    const rb = b.daily.records?.[dk];
+    if (ra && !rb) {
+      out.daily.records[dk] = { ...ra };
+    } else if (rb && !ra) {
+      out.daily.records[dk] = { ...rb };
+    } else if (ra && rb) {
+      const winner = (rb.score || 0) > (ra.score || 0) ? rb : ra;
+      out.daily.records[dk] = {
+        ...winner,
+        timeSec:
+          ra.timeSec > 0 && rb.timeSec > 0 ? Math.min(ra.timeSec, rb.timeSec) : winner.timeSec || 0,
+      };
+    }
+  }
+
+  // Merge Expedition Field Guide species captures
+  const fgIds = new Set([...Object.keys(a.fieldGuide || {}), ...Object.keys(b.fieldGuide || {})]);
+  for (const eid of fgIds) {
+    const ra = a.fieldGuide?.[eid];
+    const rb = b.fieldGuide?.[eid];
+    if (ra && !rb) {
+      out.fieldGuide[eid] = { ...ra };
+    } else if (rb && !ra) {
+      out.fieldGuide[eid] = { ...rb };
+    } else if (ra && rb) {
+      out.fieldGuide[eid] = {
+        count: Math.max(ra.count || 1, rb.count || 1),
+        bestStars: Math.max(ra.bestStars || 1, rb.bestStars || 1),
+        firstSiteId: ra.firstSiteId || rb.firstSiteId || '',
+        bestSiteName: (rb.bestStars || 0) > (ra.bestStars || 0) ? rb.bestSiteName || ra.bestSiteName : ra.bestSiteName || rb.bestSiteName,
+        bestDepthM: Math.round(Math.max(ra.bestDepthM || 0, rb.bestDepthM || 0) * 10) / 10,
+      };
+    }
+  }
+
+  return out;
+}
+
 export function recordDiveInLogbook(
   rawBook,
   { levelId, success, score = 0, grade = 'C', maxDepthM = 0, diveTimeSec = 0, difficulty = 'standard' }

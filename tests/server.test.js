@@ -908,3 +908,265 @@ test('PWA Service Worker and index.html cache versions stay in lockstep and supp
   assert.ok(swSrc.includes('SKIP_WAITING'), 'sw.js must listen for SKIP_WAITING messages');
   assert.ok(htmlSrc.includes('pwa-update-banner') && htmlSrc.includes('btn-pwa-update'));
 });
+
+test('v115 GitHub OAuth, Private Gist Cloud Save smart-merge & direct Issue submission', async () => {
+  const { createGitHubHandler } = await import('../api/github.js');
+  const { mergeCareerLogbooks } = await import('../public/js/game/logbookModel.js');
+  const { buildPrefilledIssueUrl } = await import('../public/js/net/githubClient.js');
+
+  // 1. Smart logbook merge preserves highest scores, faster times, field guide captures & daily streaks
+  const devA = {
+    totalDives: 4,
+    totalTimeSec: 600,
+    deepestM: 65,
+    bestScore: 2800,
+    cleared: {
+      'cenote-el-abismo': { score: 2600, grade: 'A', bestTimeSec: 155, clears: 2, bestDifficulty: 'standard' },
+      'eagles-nest-sink': { score: 2800, grade: 'S', bestTimeSec: 180, clears: 1, bestDifficulty: 'hardcore' },
+    },
+    daily: {
+      currentStreak: 2,
+      bestStreak: 2,
+      totalClears: 2,
+      lastClearedDate: '2026-11-20',
+      clearedDates: ['2026-11-19', '2026-11-20'],
+      records: { '2026-11-20': { levelId: 'cenote-el-abismo', mutatorId: 'turbo-par', score: 2600, grade: 'A', timeSec: 150 } },
+    },
+    fieldGuide: {
+      shark: { count: 1, bestStars: 2, firstSiteId: 'uss-oriskany-carrier', bestSiteName: 'USS Oriskany', bestDepthM: 28 },
+    },
+  };
+  const devB = {
+    totalDives: 6,
+    totalTimeSec: 720,
+    deepestM: 112,
+    bestScore: 3100,
+    cleared: {
+      'cenote-el-abismo': { score: 2950, grade: 'S+', bestTimeSec: 132, clears: 3, bestDifficulty: 'hardcore' },
+      'uss-oriskany-carrier': { score: 3100, grade: 'S', bestTimeSec: 210, clears: 1, bestDifficulty: 'standard' },
+    },
+    daily: {
+      currentStreak: 1,
+      bestStreak: 1,
+      totalClears: 1,
+      lastClearedDate: '2026-11-21',
+      clearedDates: ['2026-11-21'],
+      records: { '2026-11-21': { levelId: 'uss-oriskany-carrier', mutatorId: 'deep-silt', score: 3100, grade: 'S', timeSec: 205 } },
+    },
+    fieldGuide: {
+      shark: { count: 2, bestStars: 3, firstSiteId: 'uss-oriskany-carrier', bestSiteName: 'USS Oriskany', bestDepthM: 34 },
+      whaleshark: { count: 1, bestStars: 3, firstSiteId: 'hms-victoria-wreck', bestSiteName: 'HMS Victoria', bestDepthM: 18 },
+    },
+  };
+  const merged = mergeCareerLogbooks(devA, devB);
+  assert.equal(merged.totalDives, 6);
+  assert.equal(merged.deepestM, 112);
+  assert.equal(merged.bestScore, 3100);
+  assert.equal(Object.keys(merged.cleared).length, 3);
+  assert.equal(merged.cleared['cenote-el-abismo'].grade, 'S+');
+  assert.equal(merged.cleared['cenote-el-abismo'].bestTimeSec, 132);
+  assert.equal(merged.cleared['cenote-el-abismo'].bestDifficulty, 'hardcore');
+  assert.equal(merged.daily.currentStreak, 3, 'Consecutive merged dates 11-19..11-21 must compute 3-day streak');
+  assert.equal(merged.daily.bestStreak, 3);
+  assert.equal(merged.fieldGuide.shark.bestStars, 3);
+  assert.equal(merged.fieldGuide.whaleshark.bestStars, 3);
+
+  // 2. Unconfigured env reports configured: false gracefully
+  const uncfg = createGitHubHandler({ env: {} });
+  const uncfgRes = await uncfg.GET(new Request('https://cave-diver.vercel.app/api/github/session'));
+  assert.equal(uncfgRes.status, 200);
+  const uncfgJson = await uncfgRes.json();
+  assert.equal(uncfgJson.configured, false);
+  assert.equal(uncfgJson.authenticated, false);
+
+  // 3. Full OAuth flow + Private Gist create/merge + Direct Issue creation with mocked GitHub API
+  const gistStore = new Map();
+  const createdIssues = [];
+  const mockFetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u === 'https://github.com/login/oauth/access_token') {
+      return new Response(JSON.stringify({ access_token: 'gho_test_secret_token_999' }), { status: 200 });
+    }
+    if (u === 'https://api.github.com/user') {
+      assert.equal(init.headers.Authorization, 'Bearer gho_test_secret_token_999');
+      return new Response(
+        JSON.stringify({
+          id: 4242,
+          login: 'barnesy',
+          name: 'Chris Barnes',
+          avatar_url: 'https://avatars.githubusercontent.com/u/4242',
+          html_url: 'https://github.com/barnesy',
+        }),
+        { status: 200 }
+      );
+    }
+    if (u.startsWith('https://api.github.com/gists?')) {
+      const list = Array.from(gistStore.values());
+      return new Response(JSON.stringify(list), { status: 200 });
+    }
+    if (u === 'https://api.github.com/gists' && init.method === 'POST') {
+      const body = JSON.parse(init.body);
+      assert.equal(body.public, false, 'Career stats Gist MUST be private (public: false)');
+      const id = 'gist_abc123';
+      const gistObj = {
+        id,
+        html_url: `https://gist.github.com/barnesy/${id}`,
+        updated_at: '2026-11-21T04:00:00Z',
+        files: {
+          'techno-dive-logbook.json': { content: body.files['techno-dive-logbook.json'].content },
+        },
+      };
+      gistStore.set(id, gistObj);
+      return new Response(JSON.stringify(gistObj), { status: 201 });
+    }
+    if (u.startsWith('https://api.github.com/gists/gist_abc123')) {
+      const existing = gistStore.get('gist_abc123');
+      if (!existing) return new Response('Not found', { status: 404 });
+      if (init.method === 'PATCH') {
+        const body = JSON.parse(init.body);
+        existing.files['techno-dive-logbook.json'].content = body.files['techno-dive-logbook.json'].content;
+        existing.updated_at = '2026-11-21T04:05:00Z';
+      }
+      return new Response(JSON.stringify(existing), { status: 200 });
+    }
+    if (u === 'https://api.github.com/repos/barnesy/cave-diver/issues' && init.method === 'POST') {
+      assert.equal(init.headers.Authorization, 'Bearer gho_test_secret_token_999');
+      const body = JSON.parse(init.body);
+      createdIssues.push(body);
+      return new Response(
+        JSON.stringify({
+          number: 77,
+          title: body.title,
+          html_url: 'https://github.com/barnesy/cave-diver/issues/77',
+        }),
+        { status: 201 }
+      );
+    }
+    return new Response(`Unexpected URL ${u}`, { status: 500 });
+  };
+
+  const gh = createGitHubHandler({
+    fetchImpl: mockFetch,
+    env: {
+      GITHUB_CLIENT_ID: 'Iv1_test_client_id',
+      GITHUB_CLIENT_SECRET: 'super_secret_oauth_key',
+      GITHUB_ISSUES_REPO: 'barnesy/cave-diver',
+    },
+  });
+
+  // Login redirects with CSRF state cookie
+  const loginRes = await gh.GET(new Request('https://cave-diver.vercel.app/api/github/login'));
+  assert.equal(loginRes.status, 302);
+  const authLoc = new URL(loginRes.headers.get('location'));
+  assert.equal(authLoc.hostname, 'github.com');
+  assert.equal(authLoc.searchParams.get('scope'), 'read:user gist public_repo');
+  const stateParam = authLoc.searchParams.get('state');
+  const stateCookieHeader = loginRes.headers.get('set-cookie');
+  assert.ok(stateCookieHeader.includes('HttpOnly') && stateCookieHeader.includes('Secure'));
+  const stateCookiePair = stateCookieHeader.split(';')[0];
+
+  // Callback rejects mismatched CSRF state
+  const badCb = await gh.GET(
+    new Request('https://cave-diver.vercel.app/api/github/callback?code=abc&state=wrong', {
+      headers: { cookie: stateCookiePair },
+    })
+  );
+  assert.equal(badCb.status, 302);
+  assert.ok(badCb.headers.get('location').includes('gh=invalid_state'));
+
+  // Callback succeeds with valid state and encrypts token inside HttpOnly cookie
+  const okCb = await gh.GET(
+    new Request(`https://cave-diver.vercel.app/api/github/callback?code=validcode&state=${encodeURIComponent(stateParam)}`, {
+      headers: { cookie: stateCookiePair },
+    })
+  );
+  assert.equal(okCb.status, 302);
+  assert.equal(okCb.headers.get('location'), 'https://cave-diver.vercel.app/?gh=connected');
+  const allSetCookies = okCb.headers.getSetCookie ? okCb.headers.getSetCookie() : [okCb.headers.get('set-cookie')];
+  const sessionSetCookie = allSetCookies.find((c) => c.startsWith('td_gh_session='));
+  assert.ok(sessionSetCookie && sessionSetCookie.includes('HttpOnly'));
+  assert.ok(!sessionSetCookie.includes('gho_test_secret_token_999'), 'OAuth token must be AES-GCM encrypted, never plaintext');
+  const sessionCookiePair = sessionSetCookie.split(';')[0];
+
+  // Session reports authenticated user
+  const sessRes = await gh.GET(
+    new Request('https://cave-diver.vercel.app/api/github/session', {
+      headers: { cookie: sessionCookiePair },
+    })
+  );
+  const sessJson = await sessRes.json();
+  assert.equal(sessJson.authenticated, true);
+  assert.equal(sessJson.user.login, 'barnesy');
+
+  // First sync creates Private Gist with devA
+  const sync1 = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/sync', {
+      method: 'POST',
+      headers: { cookie: sessionCookiePair, 'content-type': 'application/json' },
+      body: JSON.stringify({ logbook: devA, prefs: { playerName: 'barnesy', difficulty: 'hardcore' } }),
+    })
+  );
+  assert.equal(sync1.status, 200);
+  const sync1Json = await sync1.json();
+  assert.equal(sync1Json.ok, true);
+  assert.equal(sync1Json.gistId, 'gist_abc123');
+  const refreshedCookie = (sync1.headers.getSetCookie?.() || []).find((c) => c.startsWith('td_gh_session='))?.split(';')[0] || sessionCookiePair;
+
+  // Second sync from Device B merges devA + devB without losing either
+  const sync2 = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/sync', {
+      method: 'POST',
+      headers: { cookie: refreshedCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ logbook: devB, prefs: { gear: { sonar: true, dpv: false, ccr: true } } }),
+    })
+  );
+  assert.equal(sync2.status, 200);
+  const sync2Json = await sync2.json();
+  assert.equal(Object.keys(sync2Json.logbook.cleared).length, 3);
+  assert.equal(sync2Json.logbook.daily.currentStreak, 3);
+  assert.equal(sync2Json.logbook.fieldGuide.whaleshark.bestStars, 3);
+
+  // Unauthenticated issue submission returns 401 + pre-filled GitHub fallback URL
+  const unauthIssue = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/issue', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'bug', title: 'Test bug', description: 'Steps to reproduce' }),
+    })
+  );
+  assert.equal(unauthIssue.status, 401);
+  const unauthJson = await unauthIssue.json();
+  assert.ok(unauthJson.fallbackUrl.startsWith('https://github.com/barnesy/cave-diver/issues/new?'));
+
+  // Authenticated issue submission posts directly to barnesy/cave-diver with diagnostics
+  const authIssue = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/issue', {
+      method: 'POST',
+      headers: { cookie: refreshedCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'bug',
+        title: 'Torch flickers near hatch',
+        description: 'Happened on HMS Victoria at 42m depth.',
+        context: { appVersion: 'v115', levelName: 'HMS Victoria', difficulty: 'standard', multiplayer: true },
+      }),
+    })
+  );
+  assert.equal(authIssue.status, 200);
+  const authIssueJson = await authIssue.json();
+  assert.equal(authIssueJson.ok, true);
+  assert.equal(authIssueJson.issue.number, 77);
+  assert.equal(createdIssues.length, 1);
+  assert.equal(createdIssues[0].title, '[Bug] Torch flickers near hatch');
+  assert.ok(createdIssues[0].body.includes('Techno Dive Diagnostics') && createdIssues[0].body.includes('HMS Victoria'));
+
+  // Logout clears cookie
+  const logoutRes = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/logout', { method: 'POST' })
+  );
+  assert.equal(logoutRes.status, 200);
+  assert.ok((logoutRes.headers.get('set-cookie') || '').includes('Max-Age=0'));
+
+  // Client pre-filled URL helper works offline
+  const preUrl = buildPrefilledIssueUrl({ kind: 'feature', title: 'Dive log CSV', description: 'Export dives' });
+  assert.ok(preUrl.includes('github.com/barnesy/cave-diver/issues/new?') && preUrl.includes('Feature'));
+});

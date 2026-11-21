@@ -5212,3 +5212,236 @@ button.mode-badge:hover {
     height: 76px;
   }
 }
+
+/* GitHub OAuth Account Pill, Logbook Cloud Sync Bar & Issue Reporter Modal (v115) */
+.menu-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.gh-account-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  color: #e2e8f0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
+  max-width: 158px;
+}
+.gh-account-pill:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(30, 41, 59, 0.94);
+}
+.gh-account-pill:active {
+  transform: scale(0.96);
+}
+.gh-account-pill.connected {
+  border-color: rgba(74, 222, 128, 0.48);
+  background: rgba(6, 78, 59, 0.28);
+  padding: 0 9px 0 6px;
+}
+.gh-mark-svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #f8fafc;
+}
+.gh-account-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  flex-shrink: 0;
+}
+.gh-account-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gh-sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.75);
+  flex-shrink: 0;
+}
+.gh-sync-dot.syncing {
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.85);
+}
+
+.logbook-github-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 25, 44, 0.85));
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+.logbook-github-bar.connected {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: linear-gradient(135deg, rgba(6, 44, 48, 0.55), rgba(10, 22, 38, 0.9));
+}
+.logbook-gh-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.logbook-gh-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(74, 222, 128, 0.65);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.logbook-gh-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.logbook-gh-copy strong {
+  font-size: 0.82rem;
+  color: #f1f5f9;
+}
+.logbook-gh-copy span {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+.logbook-gh-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.issue-card {
+  width: min(520px, 95vw);
+}
+.issue-kind-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.issue-kind-btn {
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.issue-kind-btn.active {
+  background: rgba(14, 165, 233, 0.22);
+  border-color: rgba(56, 189, 248, 0.72);
+  color: #f0f9ff;
+}
+.issue-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.issue-field label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.issue-field input,
+.issue-field textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(2, 11, 20, 0.88);
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 0.86rem;
+  padding: 9px 11px;
+  resize: vertical;
+  touch-action: manipulation;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.issue-field input:focus,
+.issue-field textarea:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+}
+.issue-diag-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.issue-diag-toggle input {
+  accent-color: #38bdf8;
+  width: 15px;
+  height: 15px;
+}
+.issue-result {
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.issue-result.ok {
+  background: rgba(22, 163, 74, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  color: #dcfce7;
+}
+.issue-result.ok a {
+  color: #86efac;
+  font-weight: 700;
+}
+.issue-result.err {
+  background: rgba(220, 38, 38, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  color: #fecaca;
+}
+.issue-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.issue-actions .btn {
+  flex: 1 1 160px;
+}
+
+@media (max-width: 440px) {
+  .gh-account-pill {
+    padding: 0 8px;
+    max-width: 118px;
+    font-size: 0.72rem;
+  }
+}
