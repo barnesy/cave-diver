@@ -939,5 +939,28 @@ export function getFieldGuideStats(rawBook) {
   const discoveredCount = entries.filter((e) => e.discovered).length;
   const totalCount = entries.length;
   const pct = totalCount > 0 ? Math.round((discoveredCount / totalCount) * 100) : 0;
-  return { discoveredCount, totalCount, pct, entries };
+  const goldCount = entries.filter((e) => e.bestStars >= 3).length;
+  const totalPhotos = entries.reduce((sum, e) => sum + (e.count || 0), 0);
+  const rareEntries = entries.filter((e) => e.rarity === 'rare' || e.rarity === 'epic');
+  const rareTotal = rareEntries.length;
+  const rareDiscovered = rareEntries.filter((e) => e.discovered).length;
+  const naturalistRank =
+    discoveredCount >= totalCount && goldCount >= Math.ceil(totalCount * 0.5)
+      ? '🏆 Master Marine Photographer'
+      : discoveredCount >= 12 || rareDiscovered >= 5
+        ? '🐋 Pelagic Naturalist'
+        : discoveredCount >= 5
+          ? '📷 Reef Observer'
+          : '🔍 Field Spotter';
+  return {
+    discoveredCount,
+    totalCount,
+    pct,
+    goldCount,
+    totalPhotos,
+    rareDiscovered,
+    rareTotal,
+    naturalistRank,
+    entries,
+  };
 }

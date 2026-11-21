@@ -115,6 +115,8 @@ export function createDiveSession(
       photos: [],
     },
     encounters: createDynamicEncounters(level),
+    bioWake: [],
+    _bioWakeAccum: 0,
     buddyPing: null,
     airShareBeams: [],
     peerProfiles: new Map(),
@@ -736,6 +738,76 @@ function stepDynamicEncounters(session, dt, callbacks = {}) {
     bc.pingPhase = (bc.pingPhase + dt * 2.2) % (Math.PI * 2);
     if (Math.hypot(diver.x - bc.x, diver.y - bc.y) <= 1.65) {
       claimSurveyBeacon(session, callbacks);
+    }
+  }
+}
+
+const MAX_BIO_WAKE = 88;
+
+/**
+ * Stir shimmering bioluminescent plankton / dinoflagellate fin-wake particles behind moving divers
+ * in deep caves, shipwrecks, and glacial caverns (v119).
+ */
+function stepBioWake(session, dt, peers = null) {
+  if (!session || !Array.isArray(session.bioWake)) return;
+  const wake = session.bioWake;
+  const drag = Math.pow(0.28, dt);
+  for (let i = wake.length - 1; i >= 0; i--) {
+    const p = wake[i];
+    p.age += dt;
+    if (p.age >= p.life) {
+      wake.splice(i, 1);
+      continue;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= drag;
+    p.vy = p.vy * drag - 0.04 * dt;
+  }
+
+  const level = session.level;
+  const isBiolumSite = Boolean(level?.theme?.bioluminescent);
+  const minDepth = isBiolumSite ? 4.5 : level?.isWreck ? 15.0 : 11.5;
+  const hueBase = isBiolumSite ? 172 : level?.isWreck ? 192 : 184;
+
+  const emitFromDiver = (d, rateMult = 1.0) => {
+    if (!d || d.y < minDepth) return;
+    const spd = Math.hypot(d.vx || 0, d.vy || 0);
+    if (spd < 0.48) return;
+    const ang = Number.isFinite(d.angle) ? d.angle : 0;
+    const finX = d.x - Math.cos(ang) * 0.85;
+    const finY = d.y - Math.sin(ang) * 0.85;
+    const count = spd > 2.6 || d.dpvThrusting ? 2 : 1;
+    for (let k = 0; k < count; k++) {
+      if (wake.length >= MAX_BIO_WAKE) wake.shift();
+      const spread = (Math.random() - 0.5) * 0.45;
+      const jitter = (Math.random() - 0.5) * 0.6;
+      wake.push({
+        x: finX + (Math.random() - 0.5) * 0.36,
+        y: finY + (Math.random() - 0.5) * 0.36,
+        vx: -Math.cos(ang + spread) * (0.45 + spd * 0.18) * rateMult + jitter * 0.25,
+        vy: -Math.sin(ang + spread) * (0.45 + spd * 0.18) * rateMult + jitter * 0.25,
+        age: 0,
+        life: 1.15 + Math.random() * 1.05,
+        size: 0.045 + Math.random() * 0.055,
+        hue: hueBase + (Math.random() - 0.5) * 34,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  session._bioWakeAccum = (session._bioWakeAccum || 0) + dt;
+  const interval = isBiolumSite ? 0.055 : 0.095;
+  if (session._bioWakeAccum >= interval) {
+    session._bioWakeAccum = 0;
+    emitFromDiver(session.diver, 1.0);
+    if (Array.isArray(peers)) {
+      for (let i = 0; i < peers.length; i++) {
+        const peer = peers[i];
+        if (peer && peer.alive !== false && !peer.surfaced) {
+          emitFromDiver(peer, 0.85);
+        }
+      }
     }
   }
 }
@@ -2439,6 +2511,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   stepBubbles(session, dt, callbacks, exertion);
   stepDynamicEncounters(session, dt, callbacks);
+  stepBioWake(session, dt, callbacks.peers);
   if (session.buddyPing) {
     session.buddyPing.timer = Math.max(0, session.buddyPing.timer - dt);
     if (Array.isArray(callbacks.peers) && session.buddyPing.targetId) {

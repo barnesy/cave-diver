@@ -495,7 +495,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=118" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=119" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1698,11 +1698,25 @@ function openLogbookModal() {
       .join('');
   }
   const fgHeading = document.getElementById('logbook-field-guide-heading');
+  const fgTrophyEl = document.getElementById('logbook-fg-trophy');
   const fgGrid = document.getElementById('logbook-field-guide-grid');
   if (fgGrid) {
     const fgStats = getFieldGuideStats(book);
     if (fgHeading) {
       fgHeading.textContent = `EXPEDITION FIELD GUIDE (${fgStats.discoveredCount}/${fgStats.totalCount} PHOTOGRAPHED)`;
+    }
+    if (fgTrophyEl) {
+      fgTrophyEl.innerHTML = `
+        <div class="fg-trophy-top">
+          <span class="fg-trophy-rank">${escapeHtml(fgStats.naturalistRank)}</span>
+          <div class="fg-trophy-pills">
+            <span class="fg-trophy-pill gold">★★★ ${fgStats.goldCount}/${fgStats.totalCount}</span>
+            <span class="fg-trophy-pill">🐋 Rare/Epic ${fgStats.rareDiscovered}/${fgStats.rareTotal}</span>
+            <span class="fg-trophy-pill">📷 ${fgStats.totalPhotos} shots</span>
+          </div>
+        </div>
+        <div class="fg-trophy-bar"><div class="fg-trophy-fill" style="width:${fgStats.pct}%"></div></div>
+      `;
     }
     fgGrid.innerHTML = fgStats.entries
       .map((e) => {
@@ -5814,6 +5828,7 @@ function frame(nowMs) {
       sonarPulse: session.sonar?.activePulse || null,
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,
+      bioWake: session.bioWake || null,
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
       endedState: session.endedState || '',

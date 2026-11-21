@@ -3888,3 +3888,93 @@ test('v117 Co-op Buddy Overhaul: Buddy Locate Ping, shared Beacon/Photo crew bon
   assert.equal(s.buddyPing, null);
   assert.equal(s.airShareBeams.length, 0);
 });
+
+test('v119 Underwater Atmosphere & Immersion: crepuscular god-rays, bioluminescent fin-wake, whale song ambience & Field Guide trophy stats', async () => {
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Bioluminescent plankton fin-wake spawns when swimming deep, stays bounded & expires cleanly
+  const s = createDiveSession(LEVEL_1);
+  s.diver.x = 40;
+  s.diver.y = 22;
+  for (let i = 0; i < 20; i++) {
+    stepDiveSession(s, { x: 1, y: 0 }, 0.08);
+  }
+  assert.ok(s.bioWake.length > 0 && s.bioWake.length <= 88, `Expected 1..88 bioWake particles, got ${s.bioWake.length}`);
+  for (let i = 0; i < 40; i++) {
+    s.diver.vx = 0;
+    s.diver.vy = 0;
+    stepDiveSession(s, { x: 0, y: 0 }, 0.1);
+  }
+  assert.equal(s.bioWake.length, 0, 'BioWake sparkles must decay cleanly when stationary');
+
+  // 2. Renderer draws enhanced volumetric god-rays & bioluminescent fin-wake sparkles cleanly
+  const noopCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+  const sampleCurtain = [
+    {
+      rays: [
+        { xTop: 6, yTop: 0, xBot: 8, yBot: 20 },
+        { xTop: 12, yTop: 0, xBot: 15, yBot: 22 },
+        { xTop: 18, yTop: 0, xBot: 20, yBot: 19 },
+      ],
+    },
+  ];
+  CaveRenderer.prototype._drawSunbeams.call(
+    { level: LEVEL_1 },
+    noopCtx,
+    sampleCurtain,
+    (x) => 200 + x * 14,
+    (y) => 80 + y * 14,
+    14,
+    4.2
+  );
+  CaveRenderer.prototype._drawBioWake.call(
+    {},
+    noopCtx,
+    [{ x: 40, y: 22, age: 0.4, life: 1.5, size: 0.06, hue: 182, phase: 0.5 }],
+    0, 100, 0, 50,
+    (x) => 200 + x * 14,
+    (y) => 80 + y * 14,
+    14,
+    4.2
+  );
+
+  // 3. Audio whale song & biome ambience synth execute cleanly without errors
+  const a = new DiveAudio();
+  const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {} });
+  a.ctx = {
+    state: 'running',
+    currentTime: 2,
+    sampleRate: 44100,
+    destination: {},
+    createOscillator: () => ({ type: 'sine', frequency: param(), connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+    createBiquadFilter: () => ({ type: 'lowpass', frequency: param(), Q: param(), connect() {}, disconnect() {} }),
+    createGain: () => ({ gain: param(), connect() {}, disconnect() {} }),
+    createBuffer: (c, l) => ({ getChannelData: () => new Float32Array(l) }),
+    createBufferSource: () => ({ connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+  };
+  a.playWhaleSong();
+  a._ambienceTimer = 0;
+  a.stepAmbience(0.1, getLevelById('uss-oriskany-carrier'), 26);
+  a._ambienceTimer = 0;
+  a.stepAmbience(0.1, getLevelById('scoresby-sund-iceberg'), 18);
+  a._ambienceTimer = 0;
+  a.stepAmbience(0.1, LEVEL_1, 20);
+
+  // 4. Field Guide Naturalist Trophy stats compute gold, rare/epic, total photos & rank
+  let book = createEmptyLogbook();
+  for (const id of ['whaleshark', 'mantaray', 'shark', 'grouper', 'remipede']) {
+    book = recordFieldGuidePhoto(book, { entryId: id, stars: 3, siteId: 'uss-oriskany-carrier', siteName: 'USS Oriskany', depthM: 28 }).book;
+  }
+  const fg = getFieldGuideStats(book);
+  assert.equal(fg.discoveredCount, 5);
+  assert.equal(fg.goldCount, 5);
+  assert.equal(fg.totalPhotos, 5);
+  assert.equal(fg.rareDiscovered, 5);
+  assert.ok(fg.naturalistRank.includes('Pelagic Naturalist'));
+});

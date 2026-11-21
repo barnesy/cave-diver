@@ -1430,6 +1430,7 @@ export class CaveRenderer {
     sonarPulse = null,
     cameraFlash = null,
     encounters = null,
+    bioWake = null,
     buddyPing = null,
     airShareBeams = null,
     endedState = '',
@@ -1675,6 +1676,9 @@ export class CaveRenderer {
     }
     if (this.level.theme?.bioluminescent) {
       this._drawBioluminescence(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (bioWake && bioWake.length > 0 && typeof this._drawBioWake === 'function') {
+      this._drawBioWake(ctx, bioWake, visX0 - 2, visX1 + 2, visY0 - 2, visY1 + 2, toScreenX, toScreenY, scale, timeSec);
     }
     if (ecosystem) {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
@@ -5861,20 +5865,61 @@ export class CaveRenderer {
       ctx.clip();
 
       const sy0 = toScreenY(0);
-      const sy1 = toScreenY(18);
-      const midX = toScreenX((rays[0].xTop + rays[rays.length - 1].xTop) * 0.5);
+      const sy1 = toScreenY(24);
+      const leftX = rays[0].xTop;
+      const rightX = rays[rays.length - 1].xTop;
+      const spanW = Math.max(2, rightX - leftX);
+      const midX = toScreenX((leftX + rightX) * 0.5);
       const sway = Math.sin(timeSec * 0.7) * 0.8 * scale;
       const grad = ctx.createLinearGradient(midX, sy0, midX + sway, sy1);
-      grad.addColorStop(0, this.level.theme?.sunbeamTop || 'rgba(186, 230, 253, 0.36)');
-      grad.addColorStop(0.55, this.level.theme?.sunbeamMid || 'rgba(56, 189, 248, 0.14)');
+      grad.addColorStop(0, this.level.theme?.sunbeamTop || 'rgba(186, 230, 253, 0.34)');
+      grad.addColorStop(0.45, this.level.theme?.sunbeamMid || 'rgba(56, 189, 248, 0.13)');
       grad.addColorStop(1, 'rgba(14, 165, 233, 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(
-        toScreenX(rays[0].xTop) - 6 * scale,
+        toScreenX(leftX) - 6 * scale,
         sy0,
-        (rays[rays.length - 1].xTop - rays[0].xTop + 12) * scale,
+        (spanW + 12) * scale,
         sy1 - sy0
       );
+
+      // Distinct angled crepuscular god-ray shafts + sunlit motes inside open-water cavern/wreck shafts (v119)
+      const shaftCount = Math.max(3, Math.min(6, Math.round(spanW / 3.4)));
+      const tiltPx = (this.level.isWreck ? 4.8 : 3.2) * scale;
+      ctx.globalCompositeOperation = 'screen';
+      for (let sIdx = 0; sIdx < shaftCount; sIdx++) {
+        const frac = (sIdx + 0.5) / shaftCount;
+        const wave = Math.sin(timeSec * 0.85 + sIdx * 1.45) * 0.65;
+        const shimmer = 0.55 + 0.45 * Math.sin(timeSec * 1.35 + sIdx * 2.1);
+        const topWorldX = leftX + spanW * frac + wave * 0.45;
+        const halfTop = Math.max(0.42, (spanW / shaftCount) * 0.24) * scale;
+        const halfBot = halfTop * 2.25;
+        const tx = toScreenX(topWorldX);
+        const bx = tx + tiltPx + wave * 0.7 * scale;
+        const shaftGrad = ctx.createLinearGradient(tx, sy0, bx, sy1);
+        shaftGrad.addColorStop(0, `rgba(224, 242, 254, ${(0.11 + shimmer * 0.12).toFixed(3)})`);
+        shaftGrad.addColorStop(0.5, `rgba(103, 232, 249, ${(0.045 + shimmer * 0.055).toFixed(3)})`);
+        shaftGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = shaftGrad;
+        ctx.beginPath();
+        ctx.moveTo(tx - halfTop, sy0);
+        ctx.lineTo(tx + halfTop, sy0);
+        ctx.lineTo(bx + halfBot, sy1);
+        ctx.lineTo(bx - halfBot, sy1);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Drifting sunlit water motes suspended inside the bright upper beam
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.36)';
+      for (let m = 0; m < 8; m++) {
+        const mx = leftX + ((m * 0.37 + Math.sin(timeSec * 0.25 + m * 1.9) * 0.14 + 1) % 1) * spanW;
+        const my = 1.2 + ((m * 1.95 + timeSec * 0.28) % 13.5);
+        const mr = Math.max(1.0, (0.032 + (m % 3) * 0.014) * scale);
+        ctx.beginPath();
+        ctx.arc(toScreenX(mx), toScreenY(my), mr, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
     ctx.restore();
@@ -7605,6 +7650,37 @@ export class CaveRenderer {
       ctx.lineTo(ax + dirX * (finLen * 0.62), ay + dirY * (finLen * 0.62));
       ctx.stroke();
     }
+  }
+
+  /**
+   * Emissive bioluminescent plankton / dinoflagellate fin-wake sparkle trails (v119).
+   */
+  _drawBioWake(ctx, bioWake, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(bioWake) || bioWake.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < bioWake.length; i++) {
+      const p = bioWake[i];
+      if (!p || p.x < xMin || p.x > xMax || p.y < yMin || p.y > yMax) continue;
+      const frac = Math.max(0, Math.min(1, p.age / Math.max(0.2, p.life)));
+      const fadeIn = Math.min(1, p.age / 0.14);
+      const twinkle = 0.68 + 0.32 * Math.sin(timeSec * 8.5 + (p.phase || i));
+      const alpha = fadeIn * (1 - frac) * (1 - frac) * 0.72 * twinkle;
+      if (alpha < 0.02) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const r = Math.max(1.2, (p.size || 0.06) * scale * (1.15 - frac * 0.45));
+      const hue = Math.round(p.hue || 184);
+      ctx.fillStyle = `hsla(${hue}, 96%, 68%, ${(alpha * 0.38).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsla(${hue}, 100%, 86%, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   _drawDynamicEncounters(ctx, encounters, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
