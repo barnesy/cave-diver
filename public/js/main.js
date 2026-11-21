@@ -535,7 +535,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=134" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=135" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1182,6 +1182,10 @@ const input = new InputController({
     }
     if (audioMixerModalEl && !audioMixerModalEl.hidden) {
       closeAudioMixerModal();
+      return true;
+    }
+    if (diveSetupModalEl && !diveSetupModalEl.hidden) {
+      closeDiveSetupModal();
       return true;
     }
     if (gasPlannerModal && !gasPlannerModal.hidden) {
@@ -2730,7 +2734,10 @@ function closeGasPlannerModal() {
 }
 
 btnOpenGasPlanner?.addEventListener('click', openGasPlannerModal);
-menuGasPillEl?.addEventListener('click', openGasPlannerModal);
+menuGasPillEl?.addEventListener('click', () => {
+  closeDiveSetupModal();
+  openGasPlannerModal();
+});
 btnGasPlannerClose?.addEventListener('click', closeGasPlannerModal);
 gasPlannerModal?.addEventListener('click', (e) => {
   if (e.target === gasPlannerModal) closeGasPlannerModal();
@@ -2999,7 +3006,10 @@ async function applyIncomingChallenge(ch) {
 }
 
 btnOpenChallenge?.addEventListener('click', openChallengeModal);
-menuMutatorPillEl?.addEventListener('click', openChallengeModal);
+menuMutatorPillEl?.addEventListener('click', () => {
+  closeDiveSetupModal();
+  openChallengeModal();
+});
 btnChallengeModalClose?.addEventListener('click', closeChallengeModal);
 challengeModal?.addEventListener('click', (e) => {
   if (e.target === challengeModal) closeChallengeModal();
@@ -3134,7 +3144,10 @@ async function applyProceduralLevelToMenu(cfg, { launchImmediately = false } = {
 }
 
 btnOpenProcedural?.addEventListener('click', openProceduralModal);
-menuProcPillEl?.addEventListener('click', openProceduralModal);
+menuProcPillEl?.addEventListener('click', () => {
+  closeDiveSetupModal();
+  openProceduralModal();
+});
 btnProcModalClose?.addEventListener('click', closeProceduralModal);
 proceduralModal?.addEventListener('click', (e) => {
   if (e.target === proceduralModal) closeProceduralModal();
@@ -5587,42 +5600,161 @@ if (siteCatTabsEl) {
 
 const btnCycleSiteView = document.getElementById('btn-cycle-site-view');
 const btnSetupDrawerEl = document.getElementById('btn-setup-drawer');
-const diveSetupDrawerEl = document.getElementById('dive-setup-drawer');
+const diveSetupModalEl = document.getElementById('dive-setup-modal');
+const btnSetupCloseEl = document.getElementById('btn-setup-close');
+const btnSetupDoneEl = document.getElementById('btn-setup-done');
+const btnSetupResetEl = document.getElementById('btn-setup-reset');
+
+const SETUP_MODE_DESCRIPTIONS = {
+  guided: 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.',
+  standard: 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.',
+  hardcore: 'Hardcore Mode: No compass coaching, aggressive silt clouds, heavy surge currents, and strict emergency physiology (+score bonus).',
+};
+
+function openDiveSetupModal() {
+  if (!diveSetupModalEl) return;
+  setHomeMenuOpen(false);
+  diveSetupModalEl.hidden = false;
+  syncSetupDrawerSummary();
+}
+
+function closeDiveSetupModal() {
+  if (!diveSetupModalEl) return;
+  diveSetupModalEl.hidden = true;
+  syncSetupDrawerSummary();
+}
 
 function syncSetupDrawerSummary() {
   const btn = document.getElementById('btn-setup-drawer');
-  const drawer = document.getElementById('dive-setup-drawer');
-  if (!btn) return;
+  const modal = document.getElementById('dive-setup-modal');
   let activeCount = 0;
+  let modeMod = false;
+  let gasMod = false;
+  let drillsMod = false;
+  let aiMod = false;
+  let mutMod = false;
+  let procMod = false;
   try {
-    if (activeDifficulty !== 'standard') activeCount++;
+    modeMod = activeDifficulty !== 'standard';
+    if (modeMod) activeCount++;
   } catch {}
   try {
-    if (customGasPlan?.enabled) activeCount++;
+    gasMod = Boolean(customGasPlan?.enabled);
+    if (gasMod) activeCount++;
   } catch {}
   try {
-    if (drillsEnabled) activeCount++;
+    drillsMod = Boolean(drillsEnabled);
+    if (drillsMod) activeCount++;
   } catch {}
   try {
-    if (aiBuddyEnabled) activeCount++;
+    aiMod = Boolean(aiBuddyEnabled);
+    if (aiMod) activeCount++;
   } catch {}
   try {
-    if (activeSandboxMutatorId) activeCount++;
+    mutMod = Boolean(activeSandboxMutatorId);
+    if (mutMod) activeCount++;
   } catch {}
   try {
-    if (activeLevel?.isProcedural) activeCount++;
+    procMod = Boolean(activeLevel?.isProcedural);
+    if (procMod) activeCount++;
   } catch {}
-  const isOpen = Boolean(drawer && !drawer.hidden);
-  btn.textContent = activeCount > 0 ? `⚙️ Setup · ${activeCount}` : '⚙️ Setup';
-  btn.classList.toggle('has-mods', activeCount > 0);
-  btn.classList.toggle('open', isOpen);
-  btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+  const isOpen = Boolean(modal && !modal.hidden);
+  if (btn) {
+    btn.textContent = activeCount > 0 ? `⚙️ Setup · ${activeCount}` : '⚙️ Setup';
+    btn.classList.toggle('has-mods', activeCount > 0);
+    btn.classList.toggle('open', isOpen);
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+
+  // Update active card highlights & readable live descriptions inside the Dive Setup Panel
+  document.getElementById('setup-card-mode')?.classList.toggle('active-card', modeMod);
+  document.getElementById('setup-card-ai')?.classList.toggle('active-card', aiMod);
+  document.getElementById('setup-card-gas')?.classList.toggle('active-card', gasMod);
+  document.getElementById('setup-card-drills')?.classList.toggle('active-card', drillsMod);
+  document.getElementById('setup-card-mutator')?.classList.toggle('active-card', mutMod);
+  document.getElementById('setup-card-proc')?.classList.toggle('active-card', procMod);
+
+  const modeDescEl = document.getElementById('setup-mode-desc');
+  if (modeDescEl) {
+    modeDescEl.textContent = SETUP_MODE_DESCRIPTIONS[activeDifficulty] || SETUP_MODE_DESCRIPTIONS.standard;
+  }
+  const gasDescEl = document.getElementById('setup-gas-desc');
+  if (gasDescEl) {
+    if (gasMod) {
+      const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
+      const b = buildCustomGasBlend({
+        o2Pct: customGasPlan.o2Pct,
+        hePct: customGasPlan.hePct,
+        targetDepthM,
+        baseGas: getSiteDefaultBottomMix(activeLevel),
+      });
+      gasDescEl.textContent = `Active custom bottom mix: ${b.name} (MOD ${Math.round(b.mod14M)}m · END ${Math.round(b.endAtTargetM)}m at ${Math.round(targetDepthM)}m). Tap to adjust or revert.`;
+    } else {
+      gasDescEl.textContent = 'Customize your bottom Trimix or Nitrox O₂ & Helium ratios to fine-tune MOD, oxygen toxicity, and narcosis depth.';
+    }
+  }
+  const mutDescEl = document.getElementById('setup-mutator-desc');
+  if (mutDescEl) {
+    const mut = activeSandboxMutatorId ? getDailyMutatorById(activeSandboxMutatorId) : null;
+    mutDescEl.textContent = mut
+      ? `Active mutator: ${mut.icon} ${mut.name} — ${mut.shortDesc}`
+      : 'Activate extreme visibility, current, or gear mutators and generate shareable head-to-head challenge links.';
+  }
+  const procDescEl = document.getElementById('setup-proc-desc');
+  if (procDescEl) {
+    procDescEl.textContent = procMod
+      ? `Active procedural sump: ${activeLevel.name} (Max ${activeLevel.maxDepthM || '?'}m). Tap to roll a new seed, tier, or biome.`
+      : 'Generate infinite deterministic seeded cave expeditions across 4 technical depth tiers and 5 distinct geological biomes.';
+  }
+  if (btnSetupResetEl) {
+    btnSetupResetEl.disabled = activeCount === 0;
+  }
 }
 
 btnSetupDrawerEl?.addEventListener('click', () => {
-  if (!diveSetupDrawerEl) return;
-  diveSetupDrawerEl.hidden = !diveSetupDrawerEl.hidden;
+  if (diveSetupModalEl && !diveSetupModalEl.hidden) closeDiveSetupModal();
+  else openDiveSetupModal();
+});
+btnSetupCloseEl?.addEventListener('click', closeDiveSetupModal);
+btnSetupDoneEl?.addEventListener('click', closeDiveSetupModal);
+diveSetupModalEl?.addEventListener('click', (e) => {
+  if (e.target === diveSetupModalEl) closeDiveSetupModal();
+});
+btnSetupResetEl?.addEventListener('click', () => {
+  if (activeDifficulty !== 'standard') {
+    activeDifficulty = 'standard';
+    try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
+    syncPreferenceMenuButtons();
+  }
+  if (aiBuddyEnabled) {
+    aiBuddyEnabled = false;
+    try { localStorage.setItem(AI_BUDDY_PREF_KEY, '0'); } catch {}
+    syncAiBuddyUi();
+  }
+  if (drillsEnabled) {
+    drillsEnabled = false;
+    try { localStorage.setItem(DRILLS_PREF_KEY, '0'); } catch {}
+    syncDrillsUi();
+  }
+  if (customGasPlan?.enabled) {
+    customGasPlan.enabled = false;
+    saveCustomGasPlan();
+    syncGasPlanBadges();
+  }
+  if (activeSandboxMutatorId) {
+    activeSandboxMutatorId = '';
+    syncSandboxPillUi();
+  }
+  if (activeLevel?.isProcedural) {
+    if (menuProcPillEl) {
+      menuProcPillEl.textContent = '∞ Endless';
+      menuProcPillEl.classList.remove('active');
+    }
+    selectAndLoadLevel(DEFAULT_LEVEL_ID);
+  }
   syncSetupDrawerSummary();
+  showToast('↺ Dive Setup reset to Standard Tech defaults.', 2.2);
 });
 syncSetupDrawerSummary();
 

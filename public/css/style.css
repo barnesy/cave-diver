@@ -5913,6 +5913,71 @@ button.mode-badge:hover {
   color: #e0f2fe;
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
 }
+
+/* Dedicated Dive Setup & Modifiers Modal Panel (v135) */
+.dive-setup-card {
+  max-width: 680px;
+}
+.dive-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.dive-setup-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.62);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+.dive-setup-item:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(15, 23, 42, 0.78);
+}
+.dive-setup-item.active-card {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: linear-gradient(155deg, rgba(14, 116, 144, 0.2), rgba(15, 23, 42, 0.78));
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.14);
+}
+.dive-setup-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dive-setup-item-title {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: 0.01em;
+}
+.dive-setup-item-desc {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.44;
+  color: #94a3b8;
+}
+.dive-setup-item.active-card .dive-setup-item-desc {
+  color: #cbd5e1;
+}
+.dive-setup-item .mode-badge,
+.dive-setup-item .ai-buddy-pill,
+.dive-setup-item .gas-plan-pill,
+.dive-setup-item .drills-plan-pill,
+.dive-setup-item .mutator-plan-pill {
+  padding: 5px 11px;
+  font-size: 0.74rem;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .dive-setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .gear-hud-pill.drill {
   border-color: rgba(251, 191, 36, 0.52);
   background: rgba(120, 53, 15, 0.42);
