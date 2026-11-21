@@ -15,7 +15,7 @@
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { WebSocket } from 'ws';
-import { getLevelById } from '../public/js/levels/index.js';
+import { LEVELS, getLevelById } from '../public/js/levels/index.js';
 import { createDiveSession, stepDiveSession } from '../public/js/game/diveSession.js';
 import { evaluateCaveSDF } from '../public/js/game/collision.js';
 
@@ -35,6 +35,7 @@ function parseArgs(argv) {
     ticks: 300,
     difficulty: 'hardcore',
     aggressive: false,
+    allSites: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -45,6 +46,7 @@ function parseArgs(argv) {
     else if (a === '--ticks' && argv[i + 1]) args.ticks = Math.max(60, parseInt(argv[++i], 10) || 300);
     else if (a === '--difficulty' && argv[i + 1]) args.difficulty = argv[++i];
     else if (a === '--aggressive') args.aggressive = true;
+    else if (a === '--all-sites') args.allSites = true;
   }
   return args;
 }
@@ -286,11 +288,14 @@ async function runHeadlessBenchmark(args) {
     await new Promise((r) => setTimeout(r, 60));
     const wallElapsedSec = (performance.now() - benchStart) / 1000;
 
-    // Phase B: Multi-site 4-diver pinch gauntlet across tight caves & wrecks
-    const gauntletSites = ['cenote-el-abismo', 'orda-crystal-maze', 'ss-thistlegorm-wreck', 'krubera-voronya-abyssal'];
+    // Phase B: Multi-site 4-diver pinch gauntlet across tight caves & wrecks (or all 33 sites with --all-sites)
+    const gauntletSites = args.allSites
+      ? LEVELS.map((l) => l.id)
+      : ['cenote-el-abismo', 'orda-crystal-maze', 'ss-thistlegorm-wreck', 'krubera-voronya-sump'];
     let gauntletClips = 0;
     let gauntletNaNs = 0;
     let gauntletBumps = 0;
+    const clippedSites = [];
     for (const siteId of gauntletSites) {
       const gLvl = getLevelById(siteId);
       const anchor = gLvl.checkpoints[Math.min(1, gLvl.checkpoints.length - 1)] || gLvl.spawn;
@@ -304,6 +309,7 @@ async function runHeadlessBenchmark(args) {
         gs.diver.vy = -Math.sin(ang) * 1.2;
         return gs;
       });
+      let siteClips = 0;
       for (let t = 0; t < 120; t++) {
         for (let i = 0; i < 4; i++) {
           const gs = gSessions[i];
@@ -316,9 +322,13 @@ async function runHeadlessBenchmark(args) {
             onImpactSound: () => { gauntletBumps += 1; },
           });
           if (!Number.isFinite(gs.diver.x) || !Number.isFinite(gs.diver.y)) gauntletNaNs += 1;
-          if (evaluateCaveSDF(gLvl, gs.diver.x, gs.diver.y) >= 0.05) gauntletClips += 1;
+          if (evaluateCaveSDF(gLvl, gs.diver.x, gs.diver.y) >= 0.05) {
+            gauntletClips += 1;
+            siteClips += 1;
+          }
         }
       }
+      if (siteClips > 0) clippedSites.push(`${siteId}(${siteClips})`);
     }
 
     const sortedTicks = tickTimesMs.slice().sort((a, b) => a - b);
@@ -334,9 +344,9 @@ async function runHeadlessBenchmark(args) {
     console.log(`  Sim Budget       : avg ${avgTick.toFixed(2)}ms · p95 ${p95Tick.toFixed(2)}ms · max ${maxTick.toFixed(2)}ms (all 4 divers/tick)`);
     console.log(`  WS Relay Fan-Out : ${totalTxPackets} TX → ${totalRxPackets} RX packets (${(totalRxBytes / 1024 / Math.max(0.1, wallElapsedSec)).toFixed(1)} KB/s)`);
     console.log(`  Livery Integrity : ${totalLiveryChecks}/${totalRxPackets} relayed peer_state frames carried custom rig livery`);
-    console.log(`  Hardcore Bumps   : ${totalBumps} corridor impacts · ${gauntletBumps} multi-site pinch impacts`);
+    console.log(`  Hardcore Bumps   : ${totalBumps} corridor impacts · ${gauntletBumps} pinch impacts across ${gauntletSites.length} site(s)`);
     console.log(`  Min Pair Spacing : ${minPairDist.toFixed(2)}m across 6 diver pairs`);
-    console.log(`  Safety Invariants: ${totalWallClips + gauntletClips} rock clips · ${totalNaNs + gauntletNaNs} NaN states`);
+    console.log(`  Safety Invariants: ${totalWallClips + gauntletClips} rock clips · ${totalNaNs + gauntletNaNs} NaN states${clippedSites.length ? ` [${clippedSites.join(', ')}]` : ''}`);
     console.log('────────────────────────────────────────────────────────────');
 
     const failed = totalWallClips > 0 || gauntletClips > 0 || totalNaNs > 0 || gauntletNaNs > 0 || totalRxPackets === 0;
