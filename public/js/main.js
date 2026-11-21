@@ -530,7 +530,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=129" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=130" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1737,6 +1737,7 @@ function syncDrillsUi() {
     menuDrillsPillEl.textContent = drillsEnabled ? '⚡ Drills: ON' : '⚡ Drills: Off';
     menuDrillsPillEl.classList.toggle('active', drillsEnabled);
   }
+  syncSetupDrawerSummary();
 }
 function toggleDrillsPreference() {
   drillsEnabled = !drillsEnabled;
@@ -1800,6 +1801,7 @@ function syncPreferenceMenuButtons() {
   if (btnTorchStickToggle) btnTorchStickToggle.textContent = torchLabel;
   if (btnHudTorchStick) btnHudTorchStick.textContent = torchLabel;
   if (torchStickEl) torchStickEl.hidden = !torchStickEnabled;
+  syncSetupDrawerSummary();
 }
 syncPreferenceMenuButtons();
 
@@ -2425,6 +2427,7 @@ function syncGasPlanBadges() {
       homeMenuGasLabelEl.textContent = '🧪 Gas Blender';
     }
   }
+  syncSetupDrawerSummary();
 }
 
 function renderGasPlannerModal() {
@@ -2617,6 +2620,7 @@ function syncSandboxPillUi() {
   if (homeMenuSandboxLabelEl) {
     homeMenuSandboxLabelEl.textContent = mut ? `🎛️ Sandbox (${mut.shortName})` : '🎛️ Challenge Sandbox';
   }
+  syncSetupDrawerSummary();
 }
 
 function getDraftChallengeConfig() {
@@ -2898,6 +2902,7 @@ async function applyProceduralLevelToMenu(cfg, { launchImmediately = false } = {
     menuProcPillEl.textContent = `∞ #${s}`;
     menuProcPillEl.classList.add('active');
   }
+  syncSetupDrawerSummary();
   if (launchImmediately) {
     btnPlaySolo?.click();
   } else {
@@ -5255,26 +5260,82 @@ if (siteCatTabsEl) {
   });
 }
 
+const btnCycleSiteView = document.getElementById('btn-cycle-site-view');
+const btnSetupDrawerEl = document.getElementById('btn-setup-drawer');
+const diveSetupDrawerEl = document.getElementById('dive-setup-drawer');
+
+function syncSetupDrawerSummary() {
+  const btn = document.getElementById('btn-setup-drawer');
+  const drawer = document.getElementById('dive-setup-drawer');
+  if (!btn) return;
+  let activeCount = 0;
+  try {
+    if (activeDifficulty !== 'standard') activeCount++;
+  } catch {}
+  try {
+    if (customGasPlan?.enabled) activeCount++;
+  } catch {}
+  try {
+    if (drillsEnabled) activeCount++;
+  } catch {}
+  try {
+    if (activeSandboxMutatorId) activeCount++;
+  } catch {}
+  try {
+    if (activeLevel?.isProcedural) activeCount++;
+  } catch {}
+  const isOpen = Boolean(drawer && !drawer.hidden);
+  btn.textContent = activeCount > 0 ? `⚙️ Setup · ${activeCount}` : '⚙️ Setup';
+  btn.classList.toggle('has-mods', activeCount > 0);
+  btn.classList.toggle('open', isOpen);
+  btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+btnSetupDrawerEl?.addEventListener('click', () => {
+  if (!diveSetupDrawerEl) return;
+  diveSetupDrawerEl.hidden = !diveSetupDrawerEl.hidden;
+  syncSetupDrawerSummary();
+});
+syncSetupDrawerSummary();
+
+const SITE_VIEW_ORDER = ['split', 'map', 'list'];
+const SITE_VIEW_LABELS = { split: '◫ Split', map: '🗺 Map', list: '☰ List' };
+
+function applySiteViewMode(nextMode) {
+  const cleanMode = nextMode === 'map' || nextMode === 'list' ? nextMode : 'split';
+  if (cleanMode === siteViewMode && siteBrowserEl?.classList.contains(`view-${cleanMode}`)) return;
+  siteViewMode = cleanMode;
+  const viewIdx = cleanMode === 'map' ? 1 : cleanMode === 'list' ? 2 : 0;
+  if (siteViewTabsEl) {
+    siteViewTabsEl.style.setProperty('--view-index', String(viewIdx));
+    for (const b of siteViewTabsEl.querySelectorAll('button[data-site-view]')) {
+      b.classList.toggle('active', b.dataset.siteView === cleanMode);
+    }
+  }
+  if (btnCycleSiteView) {
+    btnCycleSiteView.textContent = SITE_VIEW_LABELS[cleanMode] || '◫ Split';
+  }
+  if (siteBrowserEl) {
+    siteBrowserEl.className = `site-browser view-${siteViewMode}`;
+    retriggerAnim(siteBrowserEl, 'anim-view-morph');
+  }
+  if (cleanMode !== 'list') {
+    renderSiteWorldMap({ instantZoom: false });
+  }
+}
+
 if (siteViewTabsEl && siteBrowserEl) {
   siteViewTabsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-site-view]');
     if (!btn) return;
-    const v = btn.dataset.siteView;
-    const nextMode = v === 'map' || v === 'list' ? v : 'split';
-    if (nextMode === siteViewMode) return;
-    siteViewMode = nextMode;
-    const viewIdx = nextMode === 'map' ? 1 : nextMode === 'list' ? 2 : 0;
-    siteViewTabsEl.style.setProperty('--view-index', String(viewIdx));
-    siteBrowserEl.className = `site-browser view-${siteViewMode}`;
-    retriggerAnim(siteBrowserEl, 'anim-view-morph');
-    for (const b of siteViewTabsEl.querySelectorAll('button[data-site-view]')) {
-      b.classList.toggle('active', b === btn);
-    }
-    if (nextMode !== 'list') {
-      renderSiteWorldMap({ instantZoom: false });
-    }
+    applySiteViewMode(btn.dataset.siteView);
   });
 }
+btnCycleSiteView?.addEventListener('click', () => {
+  const idx = SITE_VIEW_ORDER.indexOf(siteViewMode);
+  const next = SITE_VIEW_ORDER[(idx + 1) % SITE_VIEW_ORDER.length];
+  applySiteViewMode(next);
+});
 
 async function launchOpenCoopDive() {
   const diverName = requireCallsign();
