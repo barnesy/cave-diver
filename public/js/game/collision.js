@@ -261,3 +261,118 @@ export function resolveDiverCollision(level, diver, diverRadius = 0.55) {
 
   return { collided, impactSpeed, nx: hitNx, ny: hitNy };
 }
+
+export const DIVER_PEER_COLLISION_RADIUS = 0.56;
+
+/**
+ * Resolves physical diver-to-diver collisions (used in Hardcore Mode so squadmates must
+ * maintain authentic single-file cave trim and avoid bumping rigs in restrictions).
+ * Always re-enforces cave wall SDF collision afterwards so a peer can never push a diver into rock.
+ */
+export function resolveDiverPeerCollisions(
+  level,
+  diver,
+  peers,
+  {
+    diverRadius = DIVER_PEER_COLLISION_RADIUS,
+    peerRadius = DIVER_PEER_COLLISION_RADIUS,
+    restitution = 0.35,
+    excludePeerId = '',
+  } = {}
+) {
+  if (!diver || !Array.isArray(peers) || peers.length === 0) {
+    return { collided: false, impactSpeed: 0, hitPeer: null, nx: 0, ny: 0, pushCount: 0 };
+  }
+
+  const minDist = Math.max(0.4, diverRadius + peerRadius);
+  let collided = false;
+  let maxImpactSpeed = 0;
+  let hitPeer = null;
+  let lastNx = 0;
+  let lastNy = 0;
+  let pushCount = 0;
+
+  for (let i = 0; i < peers.length; i++) {
+    const p = peers[i];
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (p.alive === false || p.surfaced === true) continue;
+    if (p.rescued === true || Boolean(p.rescuedBy)) continue;
+    if (excludePeerId && p.id === excludePeerId) continue;
+    // Allow AI Buddy APEX-2 to close in during active emergency gas-share or snag-cut rescue
+    if (p.isAiBuddy && (p.mode === 'assist-gas' || p.mode === 'assist-snag')) continue;
+
+    let dx = diver.x - p.x;
+    let dy = diver.y - p.y;
+    let dist = Math.hypot(dx, dy);
+    if (dist >= minDist) continue;
+
+    let nx;
+    let ny;
+    if (dist < 1e-4) {
+      // Deterministic separation fallback if two divers overlap identically
+      const idStr = String(p.id || i);
+      const parity = (idStr.charCodeAt(0) || i) % 2 === 0 ? 1 : -1;
+      nx = parity;
+      ny = 0;
+      dist = 0;
+    } else {
+      nx = dx / dist;
+      ny = dy / dist;
+    }
+
+    const overlap = minDist - dist;
+    const isLocalMutablePeer = Boolean(p.isAiBuddy);
+    const diverShare = isLocalMutablePeer ? 0.5 : 0.65;
+
+    diver.x += nx * overlap * diverShare;
+    diver.y = Math.max(0.35, diver.y + ny * overlap * diverShare);
+    if (isLocalMutablePeer) {
+      p.x -= nx * overlap * (1 - diverShare);
+      p.y = Math.max(0.35, p.y - ny * overlap * (1 - diverShare));
+    }
+
+    const pvx = Number.isFinite(p.vx) ? p.vx : 0;
+    const pvy = Number.isFinite(p.vy) ? p.vy : 0;
+    const relVn = (diver.vx - pvx) * nx + (diver.vy - pvy) * ny;
+    if (relVn < 0) {
+      const closing = -relVn;
+      if (closing > maxImpactSpeed) {
+        maxImpactSpeed = closing;
+        hitPeer = p;
+      }
+      const impulse = Math.min(3.8, (1 + restitution) * closing * diverShare);
+      diver.vx += nx * impulse;
+      diver.vy += ny * impulse;
+      if (isLocalMutablePeer) {
+        const peerImpulse = Math.min(3.8, (1 + restitution) * closing * (1 - diverShare));
+        p.vx = pvx - nx * peerImpulse;
+        p.vy = pvy - ny * peerImpulse;
+      }
+    } else if (!hitPeer) {
+      hitPeer = p;
+    }
+
+    if (isLocalMutablePeer && level) {
+      resolveDiverCollision(level, p, 0.52);
+    }
+
+    collided = true;
+    lastNx = nx;
+    lastNy = ny;
+    pushCount += 1;
+  }
+
+  // Re-enforce cave rock SDF bounds so peer pushes can never wedge the diver inside a wall
+  if (collided && level) {
+    resolveDiverCollision(level, diver, 0.52);
+  }
+
+  return {
+    collided,
+    impactSpeed: maxImpactSpeed,
+    hitPeer,
+    nx: lastNx,
+    ny: lastNy,
+    pushCount,
+  };
+}

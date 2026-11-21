@@ -233,7 +233,7 @@ function findNearestUncollected(level, collectedIds, x, y, maxRangeM) {
   return best ? { item: best, dist: bestD } : null;
 }
 
-function chooseFormationTarget(level, diver, buddy) {
+function chooseFormationTarget(level, diver, buddy, hardcore = false) {
   const backX = -Math.cos(diver.angle || 0);
   const backY = -Math.sin(diver.angle || 0);
   const perpX = -backY;
@@ -275,11 +275,13 @@ function chooseFormationTarget(level, diver, buddy) {
   }
 
   // Standard wingman formation: evaluate flanking & single-file slots and pick cleanest open water
+  // In Hardcore mode, trail slightly wider to avoid bumping tanks during diver-to-diver collisions
+  const hcPad = hardcore ? 0.55 : 0;
   const slots = [
-    { x: diver.x + backX * 2.25 + perpX * 0.95, y: Math.max(0.8, diver.y + backY * 2.25 + perpY * 0.95 - 0.35), bonus: 0.35 },
-    { x: diver.x + backX * 2.25 - perpX * 0.95, y: Math.max(0.8, diver.y + backY * 2.25 - perpY * 0.95 - 0.35), bonus: 0.25 },
-    { x: diver.x + backX * 2.15, y: Math.max(0.8, diver.y + backY * 2.15), bonus: 0.2 },
-    { x: diver.x + backX * 1.35, y: Math.max(0.8, diver.y + backY * 1.35), bonus: 0.1 },
+    { x: diver.x + backX * (2.25 + hcPad) + perpX * (0.95 + hcPad * 0.4), y: Math.max(0.8, diver.y + backY * (2.25 + hcPad) + perpY * (0.95 + hcPad * 0.4) - 0.35), bonus: 0.35 },
+    { x: diver.x + backX * (2.25 + hcPad) - perpX * (0.95 + hcPad * 0.4), y: Math.max(0.8, diver.y + backY * (2.25 + hcPad) - perpY * (0.95 + hcPad * 0.4) - 0.35), bonus: 0.25 },
+    { x: diver.x + backX * (2.15 + hcPad), y: Math.max(0.8, diver.y + backY * (2.15 + hcPad)), bonus: 0.2 },
+    { x: diver.x + backX * (1.35 + hcPad * 0.85), y: Math.max(0.8, diver.y + backY * (1.35 + hcPad * 0.85)), bonus: 0.1 },
   ];
   let bestSlot = slots[2];
   let bestScore = -Infinity;
@@ -496,7 +498,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
 
   // --- Steering & SDF-Safe Wall Avoidance ---
-  let target = chooseFormationTarget(level, diver, buddy);
+  let target = chooseFormationTarget(level, diver, buddy, session.difficulty === 'hardcore');
   // If far away, follow the player's recent breadcrumb trail so buddy navigates around rock bends cleanly
   if (buddy.mode !== 'hold' && distToPlayer > 7.5 && buddy.playerTrail.length > 0) {
     let bestTrail = null;

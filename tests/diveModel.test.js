@@ -5584,3 +5584,82 @@ test('v139 Underwater Photo Mode Studio & Marine Field Guide Collector Cards', a
   assert.ok(drawnTexts.some((t) => t.includes('GOLD MASTER PHOTOGRAPH')), '3-star specimen card should display gold master banner');
   assert.ok(drawnTexts.some((t) => t.includes('64m')), 'Specimen card should display best depth badge');
 });
+
+test('v140 Hardcore Mode Diver-to-Diver Physical Collision: separation, rebound, cave-wall safety, AI buddy & exemptions', async () => {
+  const { resolveDiverPeerCollisions, DIVER_PEER_COLLISION_RADIUS } = await import('../public/js/game/collision.js');
+
+  const openPt = LEVEL_1.checkpoints[0];
+  assert.ok(evaluateCaveSDF(LEVEL_1, openPt.x, openPt.y) < -1.5, 'Test anchor must be in open cavern water');
+
+  // 1. Hardcore mode physically separates overlapping divers, rebounds velocity, and triggers impact sound + toast
+  const hc = createDiveSession(LEVEL_1, { diverName: 'Lead', difficulty: 'hardcore' });
+  hc.simTimeSec = 10;
+  hc.diver.x = openPt.x;
+  hc.diver.y = openPt.y;
+  hc.diver.vx = 2.4;
+  hc.diver.vy = 0;
+
+  const peer = { id: 'p2', name: 'Wingman', x: openPt.x + 0.55, y: openPt.y, vx: -0.6, vy: 0, alive: true, surfaced: false };
+  let impactCalled = 0;
+  let toastMsg = '';
+  stepDiveSession(hc, { x: 0.4, y: 0 }, 0.05, {
+    peers: [peer],
+    onImpactSound: (spd) => { impactCalled = spd; },
+    onToast: (msg) => { toastMsg = msg; },
+  });
+
+  const sepAfterHc = Math.hypot(hc.diver.x - peer.x, hc.diver.y - peer.y);
+  assert.ok(sepAfterHc > 0.72, `Hardcore diver should be pushed away from overlapping peer (dist=${sepAfterHc.toFixed(2)})`);
+  assert.ok(hc.diver.vx < 1.2, `Hardcore diver approaching velocity should rebound/dampen (vx=${hc.diver.vx.toFixed(2)})`);
+  assert.ok(impactCalled > 0.5, `Expected impact sound callback on hard buddy bump, got ${impactCalled}`);
+  assert.match(toastMsg, /Tank bump with Wingman/, 'Hard collision should display spacing reminder toast');
+  assert.ok(evaluateCaveSDF(LEVEL_1, hc.diver.x, hc.diver.y) < 0, 'Diver must remain in open water after peer push');
+
+  // 2. Standard Tech & Guided modes remain pass-through (zero buddy push)
+  for (const diff of ['standard', 'guided']) {
+    const s = createDiveSession(LEVEL_1, { diverName: 'Casual', difficulty: diff });
+    s.simTimeSec = 10;
+    s.diver.x = openPt.x;
+    s.diver.y = openPt.y;
+    s.diver.vx = 2.0;
+    s.diver.vy = 0;
+    let bumped = false;
+    stepDiveSession(s, { x: 0.2, y: 0 }, 0.05, {
+      peers: [{ id: 'p2', name: 'Wingman', x: openPt.x + 0.3, y: openPt.y, vx: 0, vy: 0, alive: true, surfaced: false }],
+      onImpactSound: () => { bumped = true; },
+    });
+    assert.equal(bumped, false, `${diff} mode should NOT collide with peers`);
+    assert.ok(s.diver.x > openPt.x, `${diff} mode diver should swim cleanly past peer`);
+  }
+
+  // 3. Spawn grace window (< 2.0s & shallow y <= 2.2m) prevents frame-0 entry pile-up
+  const spawnHc = createDiveSession(LEVEL_1, { diverName: 'Entry', difficulty: 'hardcore' });
+  spawnHc.simTimeSec = 0.4;
+  spawnHc.diver.x = LEVEL_1.spawn.x;
+  spawnHc.diver.y = 1.2;
+  let spawnBump = false;
+  stepDiveSession(spawnHc, { x: 0, y: 0 }, 0.05, {
+    peers: [{ id: 'p2', name: 'EntryPeer', x: LEVEL_1.spawn.x + 0.2, y: 1.2, vx: 0, vy: 0, alive: true, surfaced: false }],
+    onImpactSound: () => { spawnBump = true; },
+  });
+  assert.equal(spawnBump, false, 'Surface spawn grace window should prevent immediate frame-0 collisions');
+
+  // 4. Rescue & AI assist exemptions: dead/rescued peers and AI Buddy in assist-gas/assist-snag do NOT block
+  const diver = { x: openPt.x, y: openPt.y, vx: 1.5, vy: 0 };
+  const exemptRes = resolveDiverPeerCollisions(LEVEL_1, diver, [
+    { id: 'dead1', x: openPt.x + 0.1, y: openPt.y, alive: false, surfaced: false },
+    { id: 'surf1', x: openPt.x + 0.1, y: openPt.y, alive: true, surfaced: true },
+    { id: 'tow1', x: openPt.x + 0.1, y: openPt.y, alive: true, surfaced: false, rescuedBy: 'self' },
+    { id: 'ai1', isAiBuddy: true, mode: 'assist-gas', x: openPt.x + 0.1, y: openPt.y, alive: true, surfaced: false },
+  ]);
+  assert.equal(exemptRes.collided, false, 'Incapacitated, surfaced, towed, and gas-assisting peers must not collide');
+
+  // 5. Mutual separation with local AI Buddy APEX-2 pushes both divers apart cleanly
+  const player2 = { x: openPt.x, y: openPt.y, vx: 1.2, vy: 0 };
+  const aiBuddy = { id: 'ai-wingman-01', isAiBuddy: true, mode: 'follow', x: openPt.x + 0.4, y: openPt.y, vx: -0.8, vy: 0, alive: true, surfaced: false };
+  const aiHit = resolveDiverPeerCollisions(LEVEL_1, player2, [aiBuddy]);
+  assert.equal(aiHit.collided, true);
+  assert.ok(player2.x < openPt.x, 'Player should separate left from AI buddy on right');
+  assert.ok(aiBuddy.x > openPt.x + 0.4, 'AI buddy should separate right from player');
+  assert.ok(Math.hypot(player2.x - aiBuddy.x, player2.y - aiBuddy.y) >= DIVER_PEER_COLLISION_RADIUS * 2 - 0.02);
+});

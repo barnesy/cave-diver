@@ -559,7 +559,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=139" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=140" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -6233,7 +6233,7 @@ function getSetupModeDescription(diffId) {
     return 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.';
   }
   if (diffId === 'hardcore') {
-    return 'Hardcore Mode: No compass coaching, aggressive silt clouds, heavy surge currents, and strict emergency physiology (+score bonus).';
+    return 'Hardcore Mode: No compass coaching, physical diver-to-diver collision (avoid bumping buddies!), aggressive silt, heavy currents & strict physiology (+score bonus).';
   }
   return 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.';
 }
@@ -7977,7 +7977,7 @@ function stepSimulation(dt) {
     } else {
       rewindHoldTimer = 0;
     }
-    sessionStepCallbacks.peers = isMultiplayer ? lan.getPeers() : null;
+    sessionStepCallbacks.peers = getActivePeers();
     sessionStepCallbacks.torchAim = input.getTorchAim();
     const wasSubmerged = session._wasSubmerged ?? diver.y > 0.75;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);

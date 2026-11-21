@@ -1,6 +1,6 @@
 import { getAscentConfig } from '../levels/index.js';
 import { createDiveState, stepDivePhysiology, receiveGasIntoState, computeTissueCompartmentStatus } from '../physics/diveModel.js';
-import { resolveDiverCollision, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
+import { resolveDiverCollision, resolveDiverPeerCollisions, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS, MAX_DRILL_BONUS } from './scoring.js';
@@ -2791,8 +2791,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     diver.torchManualAim = false;
   }
 
-  // Cave Wall Collision & Floor/Impact Silt-Out + Stuck / Head-Bump Stress Detection
+  // Cave Wall Collision & Hardcore Diver-to-Diver Physical Collision (v140)
   const hit = resolveDiverCollision(level, diver, 0.52);
+  if ((session._peerBumpSoundCooldown || 0) > 0) session._peerBumpSoundCooldown = Math.max(0, session._peerBumpSoundCooldown - dt);
+  if ((session._peerBumpToastCooldown || 0) > 0) session._peerBumpToastCooldown = Math.max(0, session._peerBumpToastCooldown - dt);
+  let peerHit = { collided: false, impactSpeed: 0, hitPeer: null, nx: 0, ny: 0, pushCount: 0 };
+  if (
+    session.difficulty === 'hardcore' &&
+    peerList &&
+    peerList.length > 0 &&
+    !diver.surfaced &&
+    diveState.alive &&
+    (session.simTimeSec >= 2.0 || diver.y > 2.2)
+  ) {
+    peerHit = resolveDiverPeerCollisions(level, diver, peerList, {
+      excludePeerId: session.rescueTargetId || '',
+    });
+  }
   stepDiverBody(diver, dt, { thrustMag, level, lungFill: session.breath?.lungFill });
 
   const netSpeed = dt > 0 ? Math.hypot(diver.x - prevX, diver.y - prevDepthM) / dt : 0;
@@ -2808,6 +2823,24 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   if (hit.collided && hit.impactSpeed > 0.85) {
     // Ceiling/overhead rock bump spikes adrenaline extra hard
     headBumpImpulse = hit.impactSpeed * (hit.ny < -0.25 ? 1.4 : 1.0);
+  }
+  if (peerHit.collided && peerHit.impactSpeed > 0.75) {
+    headBumpImpulse = Math.max(headBumpImpulse, peerHit.impactSpeed * 0.75);
+    if ((session._peerBumpSoundCooldown || 0) <= 0) {
+      session._peerBumpSoundCooldown = 0.45;
+      callbacks.onImpactSound?.(Math.min(2.8, peerHit.impactSpeed * 0.9));
+    }
+    if (peerHit.impactSpeed > 1.15 && diver.y > 4.0) {
+      const puff = emitImpactSilt(siltClouds, diver.x, diver.y, -peerHit.nx, -peerHit.ny, peerHit.impactSpeed * 0.75, 'hardcore');
+      if (puff.length > 0) callbacks.onSiltSpawn?.(puff[0]);
+    }
+    if (peerHit.impactSpeed > 1.35 && (session._peerBumpToastCooldown || 0) <= 0) {
+      session._peerBumpToastCooldown = 5.5;
+      callbacks.onToast?.(
+        `⚠️ Tank bump with ${peerHit.hitPeer?.name || 'Buddy'}! Hold single-file spacing in Hardcore.`,
+        2.4
+      );
+    }
   }
 
   if (siltStirTimer.warnCooldown > 0) siltStirTimer.warnCooldown -= dt;
