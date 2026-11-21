@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "stress": "node scripts/stress-4diver.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.9.0",
