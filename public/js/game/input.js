@@ -222,15 +222,27 @@ export class InputController {
 
       this.torchStickKnobEl.style.transform = `translate(${kx}px, ${ky}px)`;
       const rawNorm = this.torchMaxRadius > 0 ? clamped / this.torchMaxRadius : 0;
-      if (rawNorm <= DEADZONE) {
+      const torchDeadzone = Math.max(DEADZONE, 0.2);
+      if (rawNorm <= torchDeadzone) {
         this.torchVec.x = 0;
         this.torchVec.y = 0;
         this.torchVec.active = false;
         this.torchStickBaseEl.classList.remove('aiming');
         return;
       }
-      this.torchVec.x = Math.cos(angle);
-      this.torchVec.y = Math.sin(angle);
+      const nextX = Math.cos(angle);
+      const nextY = Math.sin(angle);
+      if (this.torchVec.active) {
+        // Dampen micro-jitter while dragging thumb across the torch stick
+        const bx = this.torchVec.x * 0.52 + nextX * 0.48;
+        const by = this.torchVec.y * 0.52 + nextY * 0.48;
+        const bm = Math.hypot(bx, by) || 1;
+        this.torchVec.x = bx / bm;
+        this.torchVec.y = by / bm;
+      } else {
+        this.torchVec.x = nextX;
+        this.torchVec.y = nextY;
+      }
       this.torchVec.active = true;
       this.torchStickBaseEl.classList.add('aiming');
     };

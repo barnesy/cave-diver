@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="149" />
+  <meta name="app-version" content="150" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=149" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=149" />
-  <link rel="stylesheet" href="./css/style.css?v=149" />
+  <link rel="icon" href="./icons/icon-192.png?v=150" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=150" />
+  <link rel="stylesheet" href="./css/style.css?v=150" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=149" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=150" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,32 +57,19 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=149" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=150" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
           </div>
         </div>
         <div class="menu-header-actions">
-          <button
-            id="btn-github-account"
-            class="gh-account-pill"
-            type="button"
-            title="Sign in with GitHub to sync stats via Private Gist &amp; submit issues"
-          >
-            <svg class="gh-mark-svg" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-            <img id="gh-account-avatar" class="gh-account-avatar" alt="" hidden />
-            <span id="gh-account-label" class="gh-account-label">GitHub</span>
-            <span id="gh-sync-dot" class="gh-sync-dot" hidden title="Cloud synced"></span>
-          </button>
           <div class="home-menu-wrap">
             <button
               id="btn-home-menu"
               class="home-menu-btn"
               type="button"
-              title="Leaderboard, Music &amp; Version"
+              title="Account, Leaderboard, Music &amp; Version"
               aria-label="Open Menu"
               aria-haspopup="true"
               aria-expanded="false"
@@ -92,6 +79,27 @@
               <span id="home-menu-update-dot" class="home-menu-update-dot" hidden></span>
             </button>
             <div id="home-menu-popover" class="home-menu-popover" role="menu" aria-label="Expedition Menu" hidden>
+              <div class="home-menu-section-lbl">ACCOUNT</div>
+              <button
+                id="btn-github-account"
+                class="home-menu-item gh-account-pill gh-menu-account"
+                type="button"
+                role="menuitem"
+                title="Sign in with GitHub to sync stats via Private Gist &amp; submit issues"
+              >
+                <span class="gh-menu-account-left">
+                  <svg class="gh-mark-svg" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                  </svg>
+                  <img id="gh-account-avatar" class="gh-account-avatar" alt="" hidden />
+                  <span id="gh-account-label" class="gh-account-label">GitHub</span>
+                </span>
+                <span class="gh-menu-account-right">
+                  <span id="gh-sync-dot" class="gh-sync-dot" hidden title="Cloud synced"></span>
+                  <span class="home-menu-chevron" aria-hidden="true">›</span>
+                </span>
+              </button>
+              <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-section-lbl">EXPEDITIONS</div>
               <button id="btn-open-leaderboard" class="home-menu-item" type="button" role="menuitem">
                 <span id="home-menu-lb-label">🏆 Leaderboard</span>
@@ -157,7 +165,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v149</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v150</button>
               </div>
             </div>
           </div>
@@ -1311,82 +1319,82 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=149",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=149",
-        "./js/game/audio.js": "./js/game/audio.js?v=149",
-        "./js/game/collision.js": "./js/game/collision.js?v=149",
-        "./js/game/input.js": "./js/game/input.js?v=149",
-        "./js/game/hud.js": "./js/game/hud.js?v=149",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=149",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=149",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=149",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=149",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=149",
-        "./js/game/weather.js": "./js/game/weather.js?v=149",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=149",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=149",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=149",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=149",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=149",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=149",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=149",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=149",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=149",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=149",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=149",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=149",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=149",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=149",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=149",
-        "./js/game/silt.js": "./js/game/silt.js?v=149",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=149",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=149",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=149",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=149",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=149",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=149",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=149",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=149",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=149",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=149",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=149",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=149",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=149",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=149",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=149",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=149",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=149",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=149",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=149",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=149",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=149",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=149",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=149",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=149",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=149",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=149",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=149",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=149",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=149",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=149",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=149",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=149",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=149",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=149",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=149",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=149",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=149",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=149",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=149",
-        "./js/levels/index.js": "./js/levels/index.js?v=149",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=149",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=149",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=149",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=149",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=149"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=150",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=150",
+        "./js/game/audio.js": "./js/game/audio.js?v=150",
+        "./js/game/collision.js": "./js/game/collision.js?v=150",
+        "./js/game/input.js": "./js/game/input.js?v=150",
+        "./js/game/hud.js": "./js/game/hud.js?v=150",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=150",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=150",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=150",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=150",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=150",
+        "./js/game/weather.js": "./js/game/weather.js?v=150",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=150",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=150",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=150",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=150",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=150",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=150",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=150",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=150",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=150",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=150",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=150",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=150",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=150",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=150",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=150",
+        "./js/game/silt.js": "./js/game/silt.js?v=150",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=150",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=150",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=150",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=150",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=150",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=150",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=150",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=150",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=150",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=150",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=150",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=150",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=150",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=150",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=150",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=150",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=150",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=150",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=150",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=150",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=150",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=150",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=150",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=150",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=150",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=150",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=150",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=150",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=150",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=150",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=150",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=150",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=150",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=150",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=150",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=150",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=150",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=150",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=150",
+        "./js/levels/index.js": "./js/levels/index.js?v=150",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=150",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=150",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=150",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=150",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=150"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=149"></script>
+  <script type="module" src="./js/main.js?v=150"></script>
 </body>
 </html>

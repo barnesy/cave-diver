@@ -6534,3 +6534,38 @@ test('v149 Mobile Phone Width Radical HUD Simplification: 1-button Gas Pill, 2-c
   assert.ok(hudSrc.includes('setGasDrawerOpen') && hudSrc.includes('all-nominal'), 'hud.js must manage mobile gas drawer & nominal vitals class');
   assert.ok(mainSrc.includes('isGasDrawerOpen') && mainSrc.includes('btnKitCamera') && mainSrc.includes('btnKitTorch'), 'main.js must wire Escape gas close & mobile kit buttons');
 });
+
+test('v150 Home Menu GitHub Account relocation & smoother flashlight joystick response', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  // 1. #btn-github-account must live inside #home-menu-popover, leaving .menu-header-actions clear for the title
+  const headerActionsIdx = html.indexOf('<div class="menu-header-actions">');
+  const menuWrapIdx = html.indexOf('<div class="home-menu-wrap">');
+  const popoverStart = html.indexOf('id="home-menu-popover"');
+  const popoverEnd = html.indexOf('</div>\n        </div>\n      </div>', popoverStart);
+  const ghBtnIdx = html.indexOf('id="btn-github-account"');
+  assert.ok(headerActionsIdx > 0 && menuWrapIdx > headerActionsIdx && popoverStart > menuWrapIdx);
+  assert.ok(ghBtnIdx > popoverStart, '#btn-github-account must be inside #home-menu-popover');
+  assert.ok(popoverEnd === -1 || ghBtnIdx < popoverEnd, '#btn-github-account must appear within the Home Menu popover');
+  const betweenHeaderAndWrap = html.slice(headerActionsIdx, menuWrapIdx);
+  assert.equal(betweenHeaderAndWrap.includes('btn-github-account'), false, 'Header bar must not contain #btn-github-account');
+
+  // 2. Flashlight manual aim slews smoothly (bounded step per frame) and converges cleanly over ~0.6s
+  const s = createDiveSession(LEVEL_1, { diverName: 'TorchSmooth' });
+  s.diver.angle = 0;
+  s.diver.torchAngle = 0;
+  const target = Math.PI / 2; // 90 deg turn
+
+  // Single 50ms step should not snap > 60% of the turn (previous k=18 snapped ~59% and unbounded)
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05, { torchAim: { active: true, angle: target } });
+  const firstStepFrac = s.diver.torchAngle / target;
+  assert.ok(firstStepFrac > 0.05 && firstStepFrac <= 0.35, `Expected calm initial torch slew fraction, got ${firstStepFrac.toFixed(3)}`);
+  assert.equal(s.diver.torchManualAim, true);
+
+  // Over ~0.75s total (14 more 50ms ticks), torch smoothly converges near target
+  for (let i = 0; i < 14; i++) {
+    stepDiveSession(s, { x: 0, y: 0 }, 0.05, { torchAim: { active: true, angle: target } });
+  }
+  assert.ok(Math.abs(target - s.diver.torchAngle) < 0.08, `Torch should converge near target after ~0.75s (angle=${s.diver.torchAngle.toFixed(3)})`);
+});

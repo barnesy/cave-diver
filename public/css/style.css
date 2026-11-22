@@ -5181,6 +5181,30 @@ button.mode-badge:hover {
   background: rgba(6, 78, 59, 0.28);
   padding: 0 9px 0 6px;
 }
+.home-menu-popover .gh-menu-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 9px;
+}
+.gh-menu-account-left,
+.gh-menu-account-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.gh-menu-account-left .gh-account-label {
+  max-width: 155px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .gh-mark-svg {
   width: 15px;
   height: 15px;

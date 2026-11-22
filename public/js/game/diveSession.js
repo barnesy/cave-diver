@@ -2920,14 +2920,16 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   diver.angVel = (diver.angVel + diff * turnStiffness * dt) * Math.exp(-6.5 * dt);
   diver.angle += diver.angVel * dt;
 
-  // Flashlight direction: follows diver heading by default, smoothly overridden while left torch stick is aimed
+  // Flashlight direction: follows diver heading by default, smoothly & deliberately overridden while left torch stick is aimed
   const torchAim = callbacks.torchAim;
   const curTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
   if (torchAim?.active && Number.isFinite(torchAim.angle)) {
     let tDiff = torchAim.angle - curTorchAng;
     while (tDiff > Math.PI) tDiff -= Math.PI * 2;
     while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-18 * dt));
+    const step = tDiff * (1 - Math.exp(-6.2 * dt));
+    const maxStep = 4.8 * dt;
+    diver.torchAngle = curTorchAng + Math.max(-maxStep, Math.min(maxStep, step));
     diver.torchManualAim = true;
   } else {
     let targetAng = diver.angle;
@@ -2943,7 +2945,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     let tDiff = targetAng - curTorchAng;
     while (tDiff > Math.PI) tDiff -= Math.PI * 2;
     while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-14 * dt));
+    diver.torchAngle = curTorchAng + tDiff * (1 - Math.exp(-7.5 * dt));
     diver.torchManualAim = false;
   }
 

@@ -1513,7 +1513,7 @@ export class CaveRenderer {
       const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
       const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
       const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY;
-      const camAlpha = Math.min(1, dt * (isManualPeek ? 5.2 : 6.0));
+      const camAlpha = Math.min(1, dt * (isManualPeek ? 3.2 : 6.0));
       this.camX += (lookX - this.camX) * camAlpha;
       this.camY += (lookY - this.camY) * camAlpha;
     }
