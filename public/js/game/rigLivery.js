@@ -702,15 +702,15 @@ export function drawLiveryPreview(
     }
   }
 
-  const cx = w * 0.33;
-  const cy = h * 0.55 + Math.sin(timeSec * 1.9) * 3.2;
-  const u = Math.min(w, h) * 0.30;
+  const cx = w * 0.39;
+  const cy = h * 0.54 + Math.sin(timeSec * 1.9) * 3.8;
+  const u = Math.min(w * 0.142, h * 0.33);
 
   // Volumetric torch cone preview — in Silt mode, visibly demonstrates torch.siltPierce clarity!
-  const torchX = cx + u * 0.84;
-  const torchY = cy + u * 0.20;
+  const torchX = cx + u * 0.86;
+  const torchY = cy + u * 0.21;
   const siltPenalty = isSilt ? Math.max(0.45, 0.68 + (torch.siltPierce || 0) * 1.05) : 1.0;
-  const coneLen = w * 0.58 * torch.rangeMult * siltPenalty;
+  const coneLen = w * 0.50 * torch.rangeMult * siltPenalty;
   const sweepAng = Math.sin(timeSec * 1.15) * 0.08;
   const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, coneLen * 0.68);
   const coreAlpha = isNight ? 0.78 : isSilt ? 0.56 + (torch.siltPierce || 0) * 0.55 : 0.62;

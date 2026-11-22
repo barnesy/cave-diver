@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="153" />
+  <meta name="app-version" content="154" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=153" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=153" />
-  <link rel="stylesheet" href="./css/style.css?v=153" />
+  <link rel="icon" href="./icons/icon-192.png?v=154" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=154" />
+  <link rel="stylesheet" href="./css/style.css?v=154" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=153" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=154" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=153" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=154" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -165,7 +165,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v153</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v154</button>
               </div>
             </div>
           </div>
@@ -1205,7 +1205,7 @@
             <button id="btn-livery-random" class="livery-tank-pill accent" type="button" title="Randomize an unlocked rig combination">🎲 Mix</button>
           </div>
         </div>
-        <canvas id="livery-preview-canvas" width="560" height="176" aria-label="Live interactive test-tank diver rig and torch beam preview"></canvas>
+        <canvas id="livery-preview-canvas" width="640" height="248" aria-label="Live interactive test-tank diver rig and torch beam preview"></canvas>
       </div>
 
       <div class="livery-section-label">1-TAP EXPEDITION KITS</div>
@@ -1361,82 +1361,82 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=153",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=153",
-        "./js/game/audio.js": "./js/game/audio.js?v=153",
-        "./js/game/collision.js": "./js/game/collision.js?v=153",
-        "./js/game/input.js": "./js/game/input.js?v=153",
-        "./js/game/hud.js": "./js/game/hud.js?v=153",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=153",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=153",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=153",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=153",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=153",
-        "./js/game/weather.js": "./js/game/weather.js?v=153",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=153",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=153",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=153",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=153",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=153",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=153",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=153",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=153",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=153",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=153",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=153",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=153",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=153",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=153",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=153",
-        "./js/game/silt.js": "./js/game/silt.js?v=153",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=153",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=153",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=153",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=153",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=153",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=153",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=153",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=153",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=153",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=153",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=153",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=153",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=153",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=153",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=153",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=153",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=153",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=153",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=153",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=153",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=153",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=153",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=153",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=153",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=153",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=153",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=153",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=153",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=153",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=153",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=153",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=153",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=153",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=153",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=153",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=153",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=153",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=153",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=153",
-        "./js/levels/index.js": "./js/levels/index.js?v=153",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=153",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=153",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=153",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=153",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=153"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=154",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=154",
+        "./js/game/audio.js": "./js/game/audio.js?v=154",
+        "./js/game/collision.js": "./js/game/collision.js?v=154",
+        "./js/game/input.js": "./js/game/input.js?v=154",
+        "./js/game/hud.js": "./js/game/hud.js?v=154",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=154",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=154",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=154",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=154",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=154",
+        "./js/game/weather.js": "./js/game/weather.js?v=154",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=154",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=154",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=154",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=154",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=154",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=154",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=154",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=154",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=154",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=154",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=154",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=154",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=154",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=154",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=154",
+        "./js/game/silt.js": "./js/game/silt.js?v=154",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=154",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=154",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=154",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=154",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=154",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=154",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=154",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=154",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=154",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=154",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=154",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=154",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=154",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=154",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=154",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=154",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=154",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=154",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=154",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=154",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=154",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=154",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=154",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=154",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=154",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=154",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=154",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=154",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=154",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=154",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=154",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=154",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=154",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=154",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=154",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=154",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=154",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=154",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=154",
+        "./js/levels/index.js": "./js/levels/index.js?v=154",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=154",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=154",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=154",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=154",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=154"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=153"></script>
+  <script type="module" src="./js/main.js?v=154"></script>
 </body>
 </html>

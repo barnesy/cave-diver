@@ -6543,21 +6543,25 @@ button.mode-badge:hover {
 
 /* Diver Gear Workshop & Custom Rig Livery Modal (v138) */
 .livery-modal-card {
-  width: min(600px, calc(100vw - 24px));
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(90dvh, 780px);
 }
 .livery-preview-wrap {
-  margin: 10px 0 12px;
-  border-radius: 12px;
+  position: sticky;
+  top: -16px;
+  z-index: 6;
+  margin: 10px 0 14px;
+  border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(56, 189, 248, 0.34);
+  border: 1px solid rgba(56, 189, 248, 0.42);
   background: #041224;
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 30px rgba(2, 8, 20, 0.85), inset 0 0 24px rgba(0, 0, 0, 0.55);
 }
 #livery-preview-canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 560 / 148;
+  aspect-ratio: 640 / 248;
 }
 .livery-section-label {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -7795,19 +7799,18 @@ summary,
 }
 
 .livery-preview-wrap {
-  position: relative;
+  position: sticky;
+  top: -16px;
+  z-index: 6;
 }
 .livery-tank-toolbar {
-  position: absolute;
-  top: 7px;
-  left: 8px;
-  right: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  z-index: 2;
-  pointer-events: none;
+  padding: 7px 9px;
+  background: rgba(4, 14, 28, 0.96);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.22);
 }
 .livery-env-tabs,
 .livery-preview-toggles {
@@ -7918,15 +7921,17 @@ summary,
     width: 48px;
     height: 28px;
   }
+  .livery-preview-wrap {
+    top: -12px;
+  }
   .livery-tank-toolbar {
-    top: 5px;
-    left: 5px;
-    right: 5px;
+    padding: 6px 7px;
     gap: 4px;
+    flex-wrap: wrap;
   }
   .livery-tank-pill {
-    font-size: 0.62rem;
-    padding: 3px 6px;
+    font-size: 0.64rem;
+    padding: 3px 7px;
   }
   .livery-cat-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
