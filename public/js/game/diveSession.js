@@ -16,6 +16,11 @@ import {
   toggleLiftBag,
   stepSalvageBuoyancy,
 } from './salvagePhysics.js';
+import {
+  createMechanicalFxState,
+  recordMechanicalEvent,
+  stepMechanicalFx,
+} from './mechanicalFx.js';
 
 export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
@@ -229,6 +234,7 @@ export function createDiveSession(
     crankTickAccum: 0,
     hatchBonusScore: 0,
     salvage: createSalvageState(),
+    mechFx: createMechanicalFxState(),
     wreckActionPrompt: null,
     thirdWarned: false,
     stuckDuration: 0,
@@ -694,6 +700,7 @@ export function claimSurveyBeacon(session, callbacks = {}) {
     });
   }
   callbacks.onBeaconClaimed?.(bc, addedBar);
+  if (session.mechFx) recordMechanicalEvent(session.mechFx, 'claim-beacon', { x: bc.x, y: bc.y, targetId: bc.id });
   callbacks.onWreckSync?.('beacon', bc.id || 'beacon');
   const gasTxt = addedBar >= 1 ? ` · +${Math.round(addedBar)}b reserve` : '';
   callbacks.onToast?.(`📡 ${bc.label} salvaged! (+${pts} pts · 15m sonar map${gasTxt})`, 3.4);
@@ -1143,6 +1150,13 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
     if (session.equalizedHatchIds.has(msg.targetId)) return false;
     session.equalizedHatchIds.add(msg.targetId);
     const hatch = session.level?.watertightHatches?.find((h) => h.id === msg.targetId);
+    if (session.mechFx && hatch) {
+      recordMechanicalEvent(session.mechFx, 'valve-equalize', {
+        x: hatch.x + (hatch.radius || 1.9) * 0.62,
+        y: hatch.y - (hatch.radius || 1.9) * 0.62,
+        targetId: hatch.id,
+      });
+    }
     callbacks.onValveEqualize?.(hatch);
     callbacks.onToast?.(`🔧 ${by} equalized pressure on ${hatch?.label || 'Bulkhead'}!`, 2.4);
     return true;
@@ -1156,6 +1170,14 @@ export function applyPeerWreckAction(session, msg, callbacks = {}) {
       session.crankingHatchProgress = 0;
     }
     const hatch = session.level?.watertightHatches?.find((h) => h.id === msg.targetId);
+    if (session.mechFx && hatch) {
+      recordMechanicalEvent(session.mechFx, 'hatch-open', {
+        x: hatch.x,
+        y: hatch.y,
+        radius: hatch.radius || 1.9,
+        targetId: hatch.id,
+      });
+    }
     session.hatchBonusScore = (session.hatchBonusScore || 0) + (hatch?.bonusPoints || 150);
     callbacks.onHatchOpen?.(hatch);
     callbacks.onToast?.(`🔓 ${by} unsealed ${hatch?.label || 'Watertight Hatch'}!`, 2.6);
@@ -1349,6 +1371,7 @@ export function dropStageTank(session, callbacks = {}) {
   }
 
   const encoded = `${stage.id}|${stage.gasId}|${stage.x.toFixed(1)}|${stage.y.toFixed(1)}|${stage.bar}`;
+  if (session.mechFx) recordMechanicalEvent(session.mechFx, 'drop-stage', { x: stage.x, y: stage.y, targetId: stage.id });
   callbacks.onWreckSync?.('stage-drop', encoded);
   callbacks.onStageDrop?.(stage);
   callbacks.onToast?.(
@@ -1389,6 +1412,7 @@ export function retrieveStageTank(session, stageId = null, callbacks = {}) {
   const added = receiveGasIntoState(diveState, stage.gasId, totalFill);
   session.droppedStages.splice(idx, 1);
   if (stage.isLocal) session.spareStageDropped = false;
+  if (session.mechFx) recordMechanicalEvent(session.mechFx, 'retrieve-stage', { x: stage.x, y: stage.y, targetId: stage.id });
 
   if (Array.isArray(session.bubbles)) {
     for (let k = 0; k < 8; k++) {
@@ -1503,6 +1527,7 @@ export function resolveEmergencyDrill(session, expectedKind = null, callbacks = 
     callbacks.onDrillClear?.(resolvedKind, points);
     callbacks.onToast?.(`🔧 Regulator free-flow isolated! (+${points} Emergency Mastery)`, 3.0);
   }
+  if (session.mechFx) recordMechanicalEvent(session.mechFx, 'drill-clear', { x: diver.x, y: diver.y });
   return { ok: true, kind: resolvedKind, points, totalBonus: session.drills.bonusScore };
 }
 
@@ -1583,6 +1608,15 @@ export function triggerWreckAction(session, callbacks = {}) {
       session.buddySnagIndex = -1;
       diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.28);
       diveState.heartRateBpm = Math.max(72, (diveState.heartRateBpm || 80) - 14);
+      if (session.mechFx) {
+        recordMechanicalEvent(session.mechFx, 'cut-net', {
+          x: snag.x,
+          y: snag.y,
+          targetId: snagKey,
+          angle: Math.atan2(snag.y - diver.y, snag.x - diver.x),
+          isLineTrap: snag.kind === 'linetrap',
+        });
+      }
       callbacks.onLineCut?.(snag);
       callbacks.onWreckSync?.('snag', snagKey);
       const snagTitle = snag.label || (snag.kind === 'linetrap' ? 'tangled cave line' : 'net snag');
@@ -1627,6 +1661,15 @@ export function triggerWreckAction(session, callbacks = {}) {
                 0.08 + Math.random() * 0.08
               );
             }
+          }
+          if (session.mechFx) {
+            const hr = hatch.radius || 1.9;
+            recordMechanicalEvent(session.mechFx, 'valve-equalize', {
+              x: hatch.x + hr * 0.62,
+              y: hatch.y - hr * 0.62,
+              targetId: hatch.id,
+              angle: -Math.PI * 0.25,
+            });
           }
           callbacks.onValveEqualize?.(hatch);
           callbacks.onWreckSync?.('valve', hatch.id);
@@ -1680,6 +1723,9 @@ export function triggerWreckAction(session, callbacks = {}) {
           }
         }
         callbacks.onStageRefill?.(cache, added);
+        if (session.mechFx) {
+          recordMechanicalEvent(session.mechFx, 'refill-stage', { x: cache.x, y: cache.y, targetId: cache.id });
+        }
         callbacks.onToast?.(`⛽ Topped up ${gasName} (+${Math.round(added)} bar) from ${cache.label}!`, 3.0);
         return { handled: true, kind: 'refill-stage', targetId: cache.id, gasId: cache.gasId, addedBar: added };
       }
@@ -1713,6 +1759,9 @@ export function triggerWreckAction(session, callbacks = {}) {
         session.reelRemainingM = (session.reelRemainingM || 0) + bonusM;
         session.reelMaxMeters = (session.reelMaxMeters || 0) + bonusM;
         callbacks.onMarkerPlaced?.(anchor, bonusM);
+        if (session.mechFx) {
+          recordMechanicalEvent(session.mechFx, 'place-marker', { x: anchor.x, y: anchor.y, targetId: anchor.id });
+        }
         callbacks.onWreckSync?.('marker', anchor.id);
         callbacks.onToast?.(`🪢 Tagged ${anchor.label} & clipped +${bonusM}m jump spool!`, 3.0);
         return { handled: true, kind: 'place-marker', targetId: anchor.id, reelBonusM: bonusM };
@@ -1735,6 +1784,7 @@ export function triggerWreckAction(session, callbacks = {}) {
   if (level.shotLine) {
     if (session.clippedToShotLine) {
       session.clippedToShotLine = false;
+      if (session.mechFx) recordMechanicalEvent(session.mechFx, 'unclip-line', { x: diver.x, y: diver.y });
       callbacks.onClipLine?.(false);
       callbacks.onToast?.('🔓 Unclipped from shot line — free swimming.', 1.8);
       return { handled: true, kind: 'unclip-line' };
@@ -1743,6 +1793,7 @@ export function triggerWreckAction(session, callbacks = {}) {
     const shotBottom = level.shotLine.bottomY ?? level.wreckDeckY ?? 40;
     if (Math.abs(diver.x - shotX) <= 5.0 && diver.y >= 1.8 && diver.y <= shotBottom - 0.8) {
       session.clippedToShotLine = true;
+      if (session.mechFx) recordMechanicalEvent(session.mechFx, 'clip-line', { x: shotX, y: diver.y });
       callbacks.onClipLine?.(true);
       callbacks.onToast?.('⚓ Clipped to shot line! Hold Down to zip-descend or Up for steady ascent.', 2.8);
       return { handled: true, kind: 'clip-line' };
@@ -1766,6 +1817,14 @@ function _completeHatchOpen(session, hatch, callbacks, siltClouds, bubbles) {
   session.crankingHatchProgress = 0;
   session.crankTickAccum = 0;
   session.hatchBonusScore = (session.hatchBonusScore || 0) + (hatch.bonusPoints || 150);
+  if (session.mechFx) {
+    recordMechanicalEvent(session.mechFx, 'hatch-open', {
+      x: hatch.x,
+      y: hatch.y,
+      radius: hatch.radius || 1.9,
+      targetId: hatch.id,
+    });
+  }
   callbacks.onHatchOpen?.(hatch);
   callbacks.onWreckSync?.('hatch', hatch.id);
   callbacks.onToast?.(`🔓 ${hatch.label || 'Watertight Hatch'} unsealed! (+${hatch.bonusPoints || 150} pts)`, 3.0);
@@ -2373,6 +2432,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   const salvageBuo = stepSalvageBuoyancy(session, dt, callbacks);
+  stepMechanicalFx(session.mechFx, dt);
   const effectiveExertion = dpvThrusting ? exertion * 0.52 : exertion;
   const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;

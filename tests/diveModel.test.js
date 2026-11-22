@@ -129,6 +129,12 @@ import {
   LIFT_BAG_CAPACITY_KG,
 } from '../public/js/game/salvagePhysics.js';
 import {
+  MAX_MECH_PARTICLES,
+  createMechanicalFxState,
+  recordMechanicalEvent,
+  stepMechanicalFx,
+} from '../public/js/game/mechanicalFx.js';
+import {
   buildExploreCells,
   markExploredAround,
   exploreGridKey,
@@ -6377,4 +6383,130 @@ test('v147 Heavy Salvage, Lift-Bag Buoyancy Physics & Pressurized Bulkhead Valve
   assert.ok(html.includes('id="hud-trim-pill"'), 'Passive Salvage Trim pill must exist in HUD');
   assert.ok(html.includes('id="btn-hud-liftbag"'), 'Lift Bag button must exist in Dive Kit popover');
   assert.ok(html.includes('salvagePhysics.js'), 'index.html importmap must register salvagePhysics.js');
+});
+
+test('v148 Mechanical Craft & Articulated Apparatus Overhaul: mechanicalFx pool, 3D hatch swing, Bourdon gauge, detailed stages & working arm', () => {
+  // 1. mechanicalFx state machine, animations, and bounded particle cap
+  const fx = createMechanicalFxState();
+  recordMechanicalEvent(fx, 'valve-equalize', { x: 10, y: 72, targetId: 'h1' });
+  assert.ok(fx.valveAnims.get('h1') > 0 && fx.valveAnims.get('h1') < 1);
+  assert.equal(fx.activeAction?.kind, 'valve-equalize');
+  assert.ok(fx.particles.some((p) => p.kind === 'jet'));
+
+  recordMechanicalEvent(fx, 'hatch-open', { x: 10, y: 72, radius: 2.0, targetId: 'h1' });
+  assert.ok(fx.hatchOpenAnims.get('h1') > 0 && fx.hatchOpenAnims.get('h1') < 1);
+  assert.ok(fx.particles.some((p) => p.kind === 'rust'));
+
+  recordMechanicalEvent(fx, 'cut-net', { x: 14, y: 50, targetId: 's1', angle: 0.4 });
+  assert.equal(fx.activeAction?.kind, 'cut-net');
+  assert.ok(fx.particles.some((p) => p.kind === 'filament'));
+
+  // Stress-test bounded particle ring cap
+  for (let i = 0; i < 15; i++) {
+    recordMechanicalEvent(fx, 'hatch-open', { x: i, y: 20, targetId: `h_${i}` });
+  }
+  assert.ok(fx.particles.length <= MAX_MECH_PARTICLES, `Particles must stay <= ${MAX_MECH_PARTICLES}`);
+
+  // Stepping advances valve needle, door swing, clears activeAction & prunes expired particles
+  for (let i = 0; i < 40; i++) stepMechanicalFx(fx, 0.1);
+  assert.equal(fx.valveAnims.get('h1'), 1);
+  assert.equal(fx.hatchOpenAnims.get('h1'), 1);
+  assert.equal(fx.activeAction, null);
+  assert.equal(fx.particles.length, 0);
+
+  // 2. Live DiveSession integration fires mechFx on deep wreck valve/hatch + lift bag + stage drop
+  const u1206 = getLevelById('u1206-north-sea-sub');
+  const sess = createDiveSession(u1206, { mode: 'solo', difficulty: 'standard' });
+  switchGas(sess.diveState, 'TMX1455');
+  const hatch = u1206.watertightHatches[0];
+  sess.diver.x = hatch.x + hatch.radius + 1.0;
+  sess.diver.y = hatch.y;
+  triggerWreckAction(sess, {}); // valve equalize
+  assert.ok(sess.mechFx.valveAnims.has(hatch.id), 'Valve equalize must start Bourdon gauge animation');
+  assert.ok(sess.mechFx.particles.length > 0, 'Valve equalize must emit compressed-gas bleed mist');
+
+  triggerWreckAction(sess, {}); // start cranking
+  for (let i = 0; i < 22; i++) stepDiveSession(sess, { x: 0, y: 0, boost: false }, 0.1, {});
+  assert.ok(sess.mechFx.hatchOpenAnims.has(hatch.id), 'Hatch completion must trigger 3D hinged swing-open');
+
+  toggleLiftBag(sess, {});
+  assert.equal(sess.mechFx.activeAction?.kind, 'liftbag-inflate');
+
+  // 3. Renderer executes every upgraded v148 mechanical pass cleanly with zero exceptions
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = u1206;
+  r.glowStamps = { warm: null, cyan: null };
+  r._perfBudget = { tier: 'high' };
+  const toX = (x) => 400 + x * 24;
+  const toY = (y) => 200 + y * 24;
+
+  // Hatch states: pressurized ΔP, mid-equalize jet, cranking with retracting dogs, swinging open in 3D
+  const fxRender = createMechanicalFxState();
+  recordMechanicalEvent(fxRender, 'valve-equalize', { x: hatch.x + 1.1, y: hatch.y - 1.1, targetId: hatch.id });
+  r._drawWatertightHatches(noopCtx, -200, 400, -50, 300, toX, toY, 24, 2.5, {
+    openedHatchIds: new Set(),
+    equalizedHatchIds: new Set([hatch.id]),
+    crankingHatchId: hatch.id,
+    crankingHatchProgress: 0.55,
+  }, fxRender);
+  recordMechanicalEvent(fxRender, 'hatch-open', { x: hatch.x, y: hatch.y, targetId: hatch.id });
+  r._drawWatertightHatches(noopCtx, -200, 400, -50, 300, toX, toY, 24, 2.8, {
+    openedHatchIds: new Set([hatch.id]),
+    equalizedHatchIds: new Set([hatch.id]),
+  }, fxRender);
+
+  // Lift bag: inflating + heavy salvage mesh sling + Boyle's-Law float dump flutter
+  r._drawDiverLiftBag(noopCtx, { x: 10, y: 18, vx: 0.5, vy: -0.6 }, {
+    liftBagActive: true,
+    inflateAnim: 0.72,
+    payloadKg: 18,
+    status: 'float-warn',
+  }, toX, toY, 24, 3.1, fxRender);
+
+  // Detailed stage cylinder + cave jump-spools & notched arrows
+  r._drawDetailedStageCylinder(noopCtx, 24, { bodyCol: '#38bdf8', trimCol: '#bae6fd', claimed: false, timeSec: 2.0 });
+  const ojamo = getLevelById('ojamo-iron-mine');
+  r.level = ojamo;
+  r._stalactiteCache = [];
+  r._drawCaveInteractives(noopCtx, -200, 400, -50, 300, toX, toY, 24, 2.0, { x: 0, y: 20 }, {
+    claimedStageIds: new Set(),
+    placedMarkerIds: new Set(),
+    cutSnagIds: new Set(),
+    openedHatchIds: new Set(),
+  }, fxRender);
+
+  // Articulated working arm across cranking, shears cut, spinning Delrin spool & shot-line clip
+  r.level = u1206;
+  const mockDiver = { x: hatch.x + 1.5, y: hatch.y, angle: Math.PI, torchOn: true };
+  r._drawDiver(noopCtx, mockDiver, toX, toY, 24, 2.2, false, {
+    wreckState: { clippedToShotLine: true, crankingHatchId: hatch.id, crankingHatchProgress: 0.5 },
+    mechFx: fxRender,
+    reelingActive: false,
+  });
+  recordMechanicalEvent(fxRender, 'cut-net', { x: hatch.x + 2.2, y: hatch.y, angle: 0.2 });
+  r._drawDiver(noopCtx, mockDiver, toX, toY, 24, 2.3, false, {
+    wreckState: { clippedToShotLine: false },
+    mechFx: fxRender,
+    reelingActive: false,
+  });
+  fxRender.activeAction = null;
+  r._drawDiver(noopCtx, mockDiver, toX, toY, 24, 2.4, false, {
+    wreckState: { clippedToShotLine: false },
+    mechFx: fxRender,
+    reelingActive: true,
+  });
+
+  // Post-lighting mechanical FX pass on both high and performance tiers
+  recordMechanicalEvent(fxRender, 'cut-net', { x: 10, y: 20, angle: 0.5 });
+  r._drawMechanicalFx(noopCtx, fxRender, toX, toY, 24, 2.5);
+  r._perfBudget = { tier: 'performance' };
+  r._drawMechanicalFx(noopCtx, fxRender, toX, toY, 24, 2.6);
 });

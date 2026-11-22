@@ -568,7 +568,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=147" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=148" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1595,6 +1595,8 @@ function savePhotoStudioSnapshot() {
       encounters: session.encounters || null,
       hazards: session.hazards || null,
       salvage: session.salvage || null,
+      mechFx: session.mechFx || null,
+      reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       droppedStages: session.droppedStages || null,
@@ -8567,6 +8569,8 @@ function frame(nowMs) {
       encounters: session.encounters || null,
       hazards: session.hazards || null,
       salvage: session.salvage || null,
+      mechFx: session.mechFx || null,
+      reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       buddyPing: session.buddyPing || null,

@@ -1475,6 +1475,8 @@ export class CaveRenderer {
     encounters = null,
     hazards = null,
     salvage = null,
+    mechFx = null,
+    reelingActive = false,
     bioWake = null,
     surfaceRipples = null,
     buddyPing = null,
@@ -1728,9 +1730,9 @@ export class CaveRenderer {
 
     // 8a-ii. Shipwreck Foreground Hazards OR Cave Interactive Features (Stages, Line Markers, Flows, Siphons & Line Traps)
     if (this.level.isWreck) {
-      this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
+      this._drawWreckForegroundHazards(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState, mechFx);
     } else {
-      this._drawCaveInteractives(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState);
+      this._drawCaveInteractives(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, diver, wreckState, mechFx);
     }
     if (Array.isArray(droppedStages) && droppedStages.length > 0) {
       this._drawDroppedStages(ctx, droppedStages, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec);
@@ -1753,9 +1755,9 @@ export class CaveRenderer {
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
     }
-    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false);
+    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, { wreckState, mechFx, reelingActive });
     if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
-      this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec);
+      this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx);
     }
 
     // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering
@@ -1810,6 +1812,9 @@ export class CaveRenderer {
       this._drawBuddyLocatePing(ctx, diver, buddyPing, toScreenX, toScreenY, scale, timeSec, cw, ch);
     }
     this._drawCollectBursts(ctx, collectBursts, toScreenX, toScreenY, scale);
+    if (mechFx && ((mechFx.particles && mechFx.particles.length > 0) || mechFx.activeAction)) {
+      this._drawMechanicalFx(ctx, mechFx, toScreenX, toScreenY, scale, timeSec);
+    }
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
@@ -4391,7 +4396,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawWreckForegroundHazards(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null) {
+  _drawWreckForegroundHazards(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null, mechFx = null) {
     const level = this.level;
     ctx.save();
 
@@ -4528,7 +4533,7 @@ export class CaveRenderer {
     }
 
     // 4. Interactive Watertight Bulkhead Hatches (heavy steel door + spinning brass handwheel!)
-    this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState);
+    this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState, mechFx);
 
     // 5. Cuttable Fishing-Net & Cable Entanglement Zones (with taut snare strands when hooked!)
     if (Array.isArray(level.snagZones)) {
@@ -4599,10 +4604,12 @@ export class CaveRenderer {
   }
 
   /**
-   * Shared Interactive Watertight Bulkhead / Mine Blast-Door Hatch renderer
-   * used on both Technical Shipwrecks and Flooded Underground Mines.
+   * Shared Interactive Watertight Bulkhead / Mine Blast-Door Hatch renderer (v148 Mechanical Craft Overhaul):
+   * Brushed naval steel bevel, cast-iron hinges, 4 retracting perimeter locking dogs,
+   * spinning brass dogging handwheel, analog Bourdon pressure gauge + bypass bleed valve,
+   * and smooth 3D foreshortened hinged swing-open animation.
    */
-  _drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null) {
+  _drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState = null, mechFx = null) {
     const level = this.level;
     if (!Array.isArray(level.watertightHatches) || level.watertightHatches.length === 0) return;
     const openedSet = wreckState?.openedHatchIds;
@@ -4618,81 +4625,296 @@ export class CaveRenderer {
       const sr = hr * scale;
       const isOpen = openedSet?.has(hatch.id);
       const isCranking = !isOpen && crankId === hatch.id;
+      const pressurized = isHatchPressurized(level, hatch);
+      const equalized = Boolean(wreckState?.equalizedHatchIds?.has(hatch.id));
+      const valveProg = mechFx?.valveAnims?.get(hatch.id) ?? (equalized ? 1 : 0);
+      const openProg = isOpen ? (mechFx?.hatchOpenAnims?.get(hatch.id) ?? 1) : 0;
+
+      // Subtle mechanical shudder during active pressure bleed or high-torque cranking
+      const shudderAmp =
+        valveProg > 0 && valveProg < 0.62
+          ? (1 - valveProg / 0.62) * 0.045 * scale
+          : isCranking
+            ? 0.022 * scale
+            : 0;
+      const jx = shudderAmp > 0 ? Math.sin(timeSec * 52 + h * 3) * shudderAmp : 0;
+      const jy = shudderAmp > 0 ? Math.cos(timeSec * 47 + h * 5) * shudderAmp : 0;
 
       ctx.save();
-      ctx.translate(sx, sy);
+      ctx.translate(sx + jx, sy + jy);
+
+      // Outer bolted bulkhead coaming flange (always anchored to hull)
+      ctx.strokeStyle = isOpen ? 'rgba(52, 211, 153, 0.58)' : 'rgba(71, 85, 105, 0.92)';
+      ctx.lineWidth = Math.max(2.6, 0.17 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.97, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Heavy cast-iron twin hinge knuckles bolted on the right coaming
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+      for (const hy of [-sr * 0.42, sr * 0.42]) {
+        ctx.fillRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
+        ctx.strokeRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
+        // Brass hinge pin
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.arc(sr * 0.96, hy, Math.max(1.5, 0.055 * scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#334155';
+      }
+
       if (isOpen) {
-        ctx.strokeStyle = 'rgba(52, 211, 153, 0.65)';
-        ctx.lineWidth = Math.max(2.5, 0.14 * scale);
+        // Open passable interior portal ring + subtle safe emerald clearance glow
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.72)';
+        ctx.lineWidth = Math.max(2.2, 0.12 * scale);
         ctx.beginPath();
         ctx.arc(0, 0, sr * 0.86, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(51, 65, 85, 0.62)';
-        ctx.fillRect(sr * 0.75, -sr * 0.7, sr * 0.28, sr * 1.4);
-      } else {
-        ctx.fillStyle = '#293548';
+
+        // Smooth 3D foreshortened hinged door swing-open animation (0 -> 1 over ~0.68s)
+        const easeOpen = 1 - Math.pow(1 - Math.max(0, Math.min(1, openProg)), 3);
+        const doorScaleX = Math.max(0.16, 1 - easeOpen * 0.84);
+        ctx.save();
+        ctx.translate(sr * 0.88, 0);
+        ctx.scale(doorScaleX, 1);
+        ctx.translate(-sr * 0.88, 0);
+
+        const openDoorGrad = ctx.createLinearGradient(-sr, -sr, sr, sr);
+        openDoorGrad.addColorStop(0, '#475569');
+        openDoorGrad.addColorStop(0.5, '#1e293b');
+        openDoorGrad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = openDoorGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, sr * 0.92, 0, Math.PI * 2);
+        ctx.arc(0, 0, sr * 0.88, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = isCranking ? '#38bdf8' : '#f59e0b';
-        ctx.lineWidth = Math.max(2.4, 0.14 * scale);
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = Math.max(1.8, 0.09 * scale);
         ctx.stroke();
 
-        ctx.fillStyle = '#94a3b8';
-        for (let b = 0; b < 8; b++) {
-          const ba = (b / 8) * Math.PI * 2;
+        // Retracted brass wheel rim silhouette visible on the swung door
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.72)';
+        ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // Sealed heavy naval steel door plate with radial metallic bevel shading
+        const plateGrad = ctx.createRadialGradient(-sr * 0.28, -sr * 0.28, sr * 0.08, 0, 0, sr * 0.96);
+        plateGrad.addColorStop(0, '#475569');
+        plateGrad.addColorStop(0.45, '#293548');
+        plateGrad.addColorStop(0.84, '#1e293b');
+        plateGrad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = plateGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.91, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Oxidized corrosion halo + gasket ring
+        ctx.strokeStyle = 'rgba(146, 64, 14, 0.48)';
+        ctx.lineWidth = Math.max(2.4, 0.16 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.83, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Active status rim (amber sealed / cyan cranking / emerald equalized ready)
+        ctx.strokeStyle = isCranking ? '#38bdf8' : pressurized && !equalized ? '#f87171' : '#f59e0b';
+        ctx.lineWidth = Math.max(2.2, 0.12 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.91, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner stamped stiffening dish ring
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.62, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4 Mechanical Locking Dogs (perimeter steel wedges that retract inward as wheel cranks!)
+        const dogRetract = isCranking ? crankProg : 0;
+        for (let d = 0; d < 4; d++) {
+          const da = (d / 4) * Math.PI * 2 + Math.PI * 0.25;
+          ctx.save();
+          ctx.rotate(da);
+          const dogX = sr * (0.86 - dogRetract * 0.22);
+          ctx.translate(dogX, 0);
+          ctx.rotate(dogRetract * 0.65);
+          ctx.fillStyle = dogRetract > 0.55 ? '#94a3b8' : '#cbd5e1';
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+          ctx.fillRect(-sr * 0.11, -sr * 0.065, sr * 0.22, sr * 0.13);
+          ctx.strokeRect(-sr * 0.11, -sr * 0.065, sr * 0.22, sr * 0.13);
+          ctx.restore();
+        }
+
+        // 10 Forged Perimeter Rivets with metallic top glint
+        for (let b = 0; b < 10; b++) {
+          const ba = (b / 10) * Math.PI * 2;
+          const bx = Math.cos(ba) * sr * 0.76;
+          const by = Math.sin(ba) * sr * 0.76;
+          const br = Math.max(1.5, 0.06 * scale);
+          ctx.fillStyle = '#64748b';
           ctx.beginPath();
-          ctx.arc(Math.cos(ba) * sr * 0.76, Math.sin(ba) * sr * 0.76, Math.max(1.4, 0.06 * scale), 0, Math.PI * 2);
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(bx - br * 0.28, by - br * 0.28, br * 0.36, 0, Math.PI * 2);
           ctx.fill();
         }
 
+        // Central Brass Dogging Handwheel (tapered spokes + knurled rim + hex center nut)
         ctx.save();
-        const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.06;
+        const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.05;
         ctx.rotate(wheelRot);
-        ctx.strokeStyle = '#fbbf24';
-        ctx.lineWidth = Math.max(2, 0.11 * scale);
+
+        // Soft cast shadow behind wheel
+        ctx.strokeStyle = 'rgba(2, 6, 23, 0.45)';
+        ctx.lineWidth = Math.max(2.6, 0.14 * scale);
         ctx.beginPath();
-        ctx.arc(0, 0, sr * 0.44, 0, Math.PI * 2);
+        ctx.arc(0.04 * scale, 0.05 * scale, sr * 0.45, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Brass wheel spokes & rim
+        const brassGrad = ctx.createLinearGradient(-sr * 0.45, -sr * 0.45, sr * 0.45, sr * 0.45);
+        brassGrad.addColorStop(0, '#fef08a');
+        brassGrad.addColorStop(0.45, '#f59e0b');
+        brassGrad.addColorStop(1, '#92400e');
+        ctx.strokeStyle = brassGrad;
+        ctx.lineWidth = Math.max(2.2, 0.12 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, sr * 0.45, 0, Math.PI * 2);
         for (let sp = 0; sp < 6; sp++) {
           const sa = (sp / 6) * Math.PI * 2;
           ctx.moveTo(0, 0);
-          ctx.lineTo(Math.cos(sa) * sr * 0.44, Math.sin(sa) * sr * 0.44);
+          ctx.lineTo(Math.cos(sa) * sr * 0.45, Math.sin(sa) * sr * 0.45);
         }
         ctx.stroke();
+
+        // Outer grip lugs around brass wheel
+        ctx.fillStyle = '#fde047';
+        for (let sp = 0; sp < 6; sp++) {
+          const sa = (sp / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(Math.cos(sa) * sr * 0.45, Math.sin(sa) * sr * 0.45, Math.max(1.6, 0.065 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Center brass spindle hub + hex locknut
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.17 * scale, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = '#fef08a';
         ctx.beginPath();
-        ctx.arc(0, 0, 0.14 * scale, 0, Math.PI * 2);
+        ctx.arc(0, 0, 0.095 * scale, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
+        // Outer radial cranking progress ring
         if (isCranking && crankProg > 0) {
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = Math.max(3, 0.16 * scale);
           ctx.beginPath();
-          ctx.arc(0, 0, sr * 1.08, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
+          ctx.arc(0, 0, sr * 1.1, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
           ctx.stroke();
         }
 
-        // Pressurized Deep Wreck Bulkhead ΔP Relief Valve Indicator (v147)
-        if (isHatchPressurized(level, hatch)) {
-          const equalized = Boolean(wreckState?.equalizedHatchIds?.has(hatch.id));
-          const vx = sr * 0.62;
-          const vy = -sr * 0.62;
-          const vr = Math.max(4.5, 0.28 * scale);
-          const pulse = 0.65 + 0.35 * Math.sin(timeSec * 4.2 + h);
-          ctx.fillStyle = equalized ? '#064e3b' : '#450a0a';
-          ctx.strokeStyle = equalized ? '#34d399' : `rgba(248, 113, 113, ${pulse.toFixed(2)})`;
-          ctx.lineWidth = Math.max(1.6, 0.08 * scale);
+        // Pressurized Deep Wreck Bulkhead Copper Bypass Valve & Analog Bourdon Gauge (v148)
+        if (pressurized) {
+          const vx = sr * 0.64;
+          const vy = -sr * 0.64;
+          const vr = Math.max(5.5, 0.34 * scale);
+          const pulse = 0.65 + 0.35 * Math.sin(timeSec * 4.4 + h);
+
+          // Copper bypass conduit connecting door cavity to bleed gauge
+          ctx.strokeStyle = '#b45309';
+          ctx.lineWidth = Math.max(2, 0.11 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sr * 0.34, -sr * 0.56);
+          ctx.quadraticCurveTo(sr * 0.56, -sr * 0.72, vx, vy);
+          ctx.stroke();
+
+          // Spinning miniature red/brass bleed valve wheel beside the gauge
+          const miniX = sr * 0.32;
+          const miniY = -sr * 0.58;
+          ctx.save();
+          ctx.translate(miniX, miniY);
+          ctx.rotate(valveProg * Math.PI * 6);
+          ctx.strokeStyle = equalized ? '#34d399' : '#f87171';
+          ctx.lineWidth = Math.max(1.4, 0.065 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(3, 0.16 * scale), 0, Math.PI * 2);
+          ctx.moveTo(-0.15 * scale, 0);
+          ctx.lineTo(0.15 * scale, 0);
+          ctx.moveTo(0, -0.15 * scale);
+          ctx.lineTo(0, 0.15 * scale);
+          ctx.stroke();
+          ctx.restore();
+
+          // Active directional high-pressure bleed jet cone while valve is equalizing!
+          if (valveProg > 0 && valveProg < 0.78) {
+            const jetFade = Math.sin((valveProg / 0.78) * Math.PI);
+            const jetLen = (0.8 + jetFade * 1.35) * scale;
+            const jetGrad = ctx.createLinearGradient(vx, vy, vx + jetLen * 0.75, vy - jetLen * 0.75);
+            jetGrad.addColorStop(0, `rgba(224, 242, 254, ${(0.82 * jetFade).toFixed(2)})`);
+            jetGrad.addColorStop(0.5, `rgba(125, 211, 252, ${(0.45 * jetFade).toFixed(2)})`);
+            jetGrad.addColorStop(1, 'rgba(125, 211, 252, 0)');
+            ctx.fillStyle = jetGrad;
+            ctx.beginPath();
+            ctx.moveTo(vx, vy);
+            ctx.lineTo(vx + jetLen * 0.55, vy - jetLen * 0.95);
+            ctx.lineTo(vx + jetLen * 0.98, vy - jetLen * 0.52);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          // Brass Bourdon Gauge Housing + Glass Face
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = equalized ? '#34d399' : `rgba(251, 191, 36, ${pulse.toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.8, 0.085 * scale);
           ctx.beginPath();
           ctx.arc(vx, vy, vr, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
+
+          // Red High-ΔP & Green Equalized dial arcs
+          ctx.lineWidth = Math.max(1.2, 0.055 * scale);
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)';
+          ctx.beginPath();
+          ctx.arc(vx, vy, vr * 0.7, Math.PI * 0.78, Math.PI * 1.32);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(248, 113, 113, ${equalized ? 0.3 : pulse.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(vx, vy, vr * 0.7, Math.PI * 1.48, Math.PI * 2.18);
+          ctx.stroke();
+
+          // Sweeping Analog Needle (High ΔP red -> Equalized 0 green)
+          const needleEase = 1 - Math.pow(1 - Math.max(0, Math.min(1, valveProg)), 2);
+          const needleAng = equalized || valveProg > 0
+            ? (0.35 - needleEase * 2.15)
+            : (0.35 + Math.sin(timeSec * 8 + h) * 0.08);
+          ctx.strokeStyle = equalized && valveProg >= 0.8 ? '#6ee7b7' : '#fca5a5';
+          ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+          ctx.beginPath();
+          ctx.moveTo(vx, vy);
+          ctx.lineTo(vx + Math.cos(needleAng) * vr * 0.72, vy + Math.sin(needleAng) * vr * 0.72);
+          ctx.stroke();
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(vx, vy, Math.max(1.2, 0.05 * scale), 0, Math.PI * 2);
+          ctx.fill();
+
+          // Compact status badge just below gauge
           if (scale >= 12) {
-            ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+            ctx.font = `800 ${Math.max(8, Math.round(scale * 0.25))}px ui-monospace, monospace`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.textBaseline = 'top';
             ctx.fillStyle = equalized ? '#6ee7b7' : '#fca5a5';
-            ctx.fillText(equalized ? 'EQ' : 'ΔP', vx, vy + 0.5);
+            ctx.fillText(equalized ? 'EQ' : 'ΔP', vx, vy + vr + 1.5);
           }
         }
       }
@@ -4701,70 +4923,184 @@ export class CaveRenderer {
   }
 
   /**
-   * Render an inflated Safety-Orange Commercial Parachute Lift Bag tethered above the diver (v147).
+   * Render an inflated Safety-Orange Commercial Parachute Lift Bag tethered above the diver (v148):
+   * Multi-gore ripstop canopy, SOLAS tape, top spring dump valve + pull-cord lanyard,
+   * stainless bolt-snap hardware, pressurized inflator shimmer plume & slung salvage load mesh.
    */
-  _drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec) {
+  _drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx = null) {
     if (!diver || !salvage) return;
     const anim = Math.max(0, Math.min(1, salvage.inflateAnim || (salvage.liftBagActive ? 1 : 0)));
     if (anim <= 0.02) return;
 
     const anchorX = toScreenX(diver.x);
     const anchorY = toScreenY(diver.y);
-    const swayX = Math.max(-0.55, Math.min(0.55, -(diver.vx || 0) * 0.16)) + Math.sin(timeSec * 2.4) * 0.08;
-    const strapLen = (1.15 + anim * 0.65) * scale;
+    const swayX = Math.max(-0.58, Math.min(0.58, -(diver.vx || 0) * 0.16)) + Math.sin(timeSec * 2.4) * 0.085;
+    const strapLen = (1.18 + anim * 0.7) * scale;
     const bagX = anchorX + swayX * scale;
     const bagY = anchorY - strapLen;
-    const bagW = (0.38 + anim * 0.42) * scale;
-    const bagH = (0.42 + anim * 0.52) * scale;
+    // Subtle Boyle's-Law breathing expansion when ascending or floating empty
+    const boylePulse = salvage.status === 'float-warn' ? 1 + 0.06 * Math.sin(timeSec * 5.2) : 1;
+    const bagW = (0.36 + anim * 0.46) * scale * boylePulse;
+    const bagH = (0.4 + anim * 0.56) * scale * boylePulse;
+    const isInflating = anim < 0.92 || mechFx?.activeAction?.kind === 'liftbag-inflate';
+    const isDumping = salvage.status === 'float-warn' || (diver.vy || 0) < -0.35;
 
     ctx.save();
-    // Taut braided yellow lifting tether + twin canopy shroud lines
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.92)';
-    ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+
+    // 1. Initial pressurized gas-injection shimmer plume from inflator into open canopy mouth
+    if (isInflating) {
+      const infFade = Math.max(0.15, 1 - anim * 0.72);
+      const plumeGrad = ctx.createLinearGradient(anchorX, anchorY - 0.25 * scale, bagX, bagY + bagH * 0.2);
+      plumeGrad.addColorStop(0, `rgba(254, 243, 199, ${(0.72 * infFade).toFixed(2)})`);
+      plumeGrad.addColorStop(0.6, `rgba(186, 230, 253, ${(0.38 * infFade).toFixed(2)})`);
+      plumeGrad.addColorStop(1, 'rgba(186, 230, 253, 0)');
+      ctx.fillStyle = plumeGrad;
+      ctx.beginPath();
+      ctx.moveTo(anchorX - 0.06 * scale, anchorY - 0.18 * scale);
+      ctx.lineTo(anchorX + 0.06 * scale, anchorY - 0.18 * scale);
+      ctx.lineTo(bagX + bagW * 0.34, bagY + bagH * 0.18);
+      ctx.lineTo(bagX - bagW * 0.34, bagY + bagH * 0.18);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 2. Catenary braided yellow lifting tether + 4-point shroud bridle
+    const bridleY = bagY + bagH * 0.52;
+    const midStrapX = (anchorX + bagX) * 0.5 + swayX * 0.16 * scale;
+    const midStrapY = (anchorY + bridleY) * 0.5;
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.94)';
+    ctx.lineWidth = Math.max(1.6, 0.068 * scale);
     ctx.beginPath();
     ctx.moveTo(anchorX, anchorY - 0.12 * scale);
-    ctx.lineTo(bagX, bagY + bagH * 0.48);
-    ctx.moveTo(bagX, bagY + bagH * 0.48);
-    ctx.lineTo(bagX - bagW * 0.56, bagY + bagH * 0.16);
-    ctx.moveTo(bagX, bagY + bagH * 0.48);
-    ctx.lineTo(bagX + bagW * 0.56, bagY + bagH * 0.16);
+    ctx.quadraticCurveTo(midStrapX, midStrapY, bagX, bridleY);
     ctx.stroke();
 
-    // Safety-orange commercial parachute canopy with glossy top highlight
-    const grad = ctx.createRadialGradient(bagX - bagW * 0.18, bagY - bagH * 0.35, bagW * 0.1, bagX, bagY, bagH);
-    grad.addColorStop(0, '#fdba74');
-    grad.addColorStop(0.38, '#f97316');
-    grad.addColorStop(1, '#c2410c');
+    // 4 canopy shroud lines (outer + inner webbing straps)
+    ctx.strokeStyle = 'rgba(253, 224, 71, 0.85)';
+    ctx.lineWidth = Math.max(1.1, 0.042 * scale);
+    ctx.beginPath();
+    for (const frac of [-0.58, -0.22, 0.22, 0.58]) {
+      ctx.moveTo(bagX, bridleY);
+      ctx.lineTo(bagX + bagW * frac, bagY + bagH * 0.15);
+    }
+    ctx.stroke();
+
+    // Gleaming stainless steel harness bolt-snap carabiner & bridle D-ring
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+    ctx.beginPath();
+    ctx.arc(anchorX, anchorY - 0.16 * scale, Math.max(2.2, 0.095 * scale), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.arc(bagX, bridleY, Math.max(2, 0.08 * scale), 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy Salvage Load Mesh Sling visibly suspended beneath the carabiner when carrying >= 6kg!
+    if ((salvage.payloadKg || 0) >= 6) {
+      const slingX = anchorX + swayX * 0.22 * scale;
+      const slingY = anchorY + 0.28 * scale;
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.82)';
+      ctx.lineWidth = Math.max(1.1, 0.042 * scale);
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorY - 0.08 * scale);
+      ctx.lineTo(slingX, slingY);
+      ctx.stroke();
+      const loadR = Math.min(0.32, 0.16 + ((salvage.payloadKg || 6) / 30) * 0.15) * scale;
+      const loadGrad = ctx.createRadialGradient(slingX - loadR * 0.3, slingY - loadR * 0.25, loadR * 0.1, slingX, slingY, loadR);
+      loadGrad.addColorStop(0, '#fcd34d');
+      loadGrad.addColorStop(0.55, '#b45309');
+      loadGrad.addColorStop(1, '#451a03');
+      ctx.fillStyle = loadGrad;
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = Math.max(1, 0.038 * scale);
+      ctx.beginPath();
+      ctx.arc(slingX, slingY + loadR * 0.45, loadR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 3. Multi-Gore Safety-Orange Commercial Ripstop Parachute Canopy
+    // Dark open skirt interior shadow
+    ctx.fillStyle = 'rgba(67, 20, 7, 0.72)';
+    ctx.beginPath();
+    ctx.ellipse(bagX, bagY + bagH * 0.16, bagW * 0.6, bagH * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const grad = ctx.createRadialGradient(bagX - bagW * 0.22, bagY - bagH * 0.36, bagW * 0.08, bagX, bagY, bagH * 1.08);
+    grad.addColorStop(0, '#fed7aa');
+    grad.addColorStop(0.32, '#fb923c');
+    grad.addColorStop(0.72, '#ea580c');
+    grad.addColorStop(1, '#9a3412');
     ctx.fillStyle = grad;
     ctx.strokeStyle = '#7c2d12';
-    ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+    ctx.lineWidth = Math.max(1.4, 0.058 * scale);
     ctx.beginPath();
-    ctx.moveTo(bagX - bagW * 0.6, bagY + bagH * 0.18);
+    ctx.moveTo(bagX - bagW * 0.62, bagY + bagH * 0.18);
     ctx.bezierCurveTo(
-      bagX - bagW * 0.85,
-      bagY - bagH * 0.65,
-      bagX + bagW * 0.85,
-      bagY - bagH * 0.65,
-      bagX + bagW * 0.6,
+      bagX - bagW * 0.88,
+      bagY - bagH * 0.68,
+      bagX + bagW * 0.88,
+      bagY - bagH * 0.68,
+      bagX + bagW * 0.62,
       bagY + bagH * 0.18
     );
-    ctx.quadraticCurveTo(bagX, bagY + bagH * 0.04, bagX - bagW * 0.6, bagY + bagH * 0.18);
+    ctx.quadraticCurveTo(bagX, bagY + bagH * 0.04, bagX - bagW * 0.62, bagY + bagH * 0.18);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Reflective safety band + top overpressure dump valve cap
-    ctx.strokeStyle = 'rgba(254, 249, 195, 0.85)';
-    ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+    // Vertical curved ripstop gore seam stitching
+    ctx.strokeStyle = 'rgba(124, 45, 18, 0.52)';
+    ctx.lineWidth = Math.max(1, 0.036 * scale);
     ctx.beginPath();
-    ctx.moveTo(bagX - bagW * 0.56, bagY - bagH * 0.06);
-    ctx.quadraticCurveTo(bagX, bagY - bagH * 0.18, bagX + bagW * 0.56, bagY - bagH * 0.06);
+    ctx.moveTo(bagX, bagY - bagH * 0.44);
+    ctx.quadraticCurveTo(bagX - bagW * 0.36, bagY - bagH * 0.16, bagX - bagW * 0.24, bagY + bagH * 0.12);
+    ctx.moveTo(bagX, bagY - bagH * 0.44);
+    ctx.quadraticCurveTo(bagX + bagW * 0.36, bagY - bagH * 0.16, bagX + bagW * 0.24, bagY + bagH * 0.12);
     ctx.stroke();
 
-    ctx.fillStyle = '#0f172a';
+    // Segmented SOLAS retro-reflective safety tape band
+    ctx.strokeStyle = 'rgba(254, 249, 195, 0.92)';
+    ctx.lineWidth = Math.max(1.5, 0.072 * scale);
+    ctx.setLineDash([Math.max(3, 0.16 * scale), Math.max(2, 0.07 * scale)]);
     ctx.beginPath();
-    ctx.arc(bagX, bagY - bagH * 0.44, Math.max(2, 0.09 * scale), 0, Math.PI * 2);
+    ctx.moveTo(bagX - bagW * 0.58, bagY - bagH * 0.05);
+    ctx.quadraticCurveTo(bagX, bagY - bagH * 0.18, bagX + bagW * 0.58, bagY - bagH * 0.05);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 4. Top Spring-Loaded Overpressure Dump Valve + Fluttering Pull-Cord Lanyard
+    const valveLift = isDumping ? (0.04 + 0.03 * Math.sin(timeSec * 18)) * scale : 0;
+    const valveY = bagY - bagH * 0.46;
+    if (isDumping) {
+      // Soft escaping white gas flutter at cracked dump cap
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(bagX, valveY - valveLift - 0.08 * scale, 0.16 * scale, 0.07 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = Math.max(1, 0.04 * scale);
+    ctx.beginPath();
+    ctx.arc(bagX, valveY - valveLift, Math.max(2.2, 0.095 * scale), 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+
+    // Dangling dump pull-cord + bright red toggle ball
+    const cordSway = Math.sin(timeSec * (isDumping ? 9.5 : 3.2)) * 0.1 * scale;
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.78)';
+    ctx.lineWidth = Math.max(1, 0.032 * scale);
+    ctx.beginPath();
+    ctx.moveTo(bagX + 0.08 * scale, valveY);
+    ctx.quadraticCurveTo(bagX + bagW * 0.72 + cordSway, bagY + bagH * 0.1, bagX + bagW * 0.42 + cordSway * 1.4, bagY + bagH * 0.58);
+    ctx.stroke();
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(bagX + bagW * 0.42 + cordSway * 1.4, bagY + bagH * 0.58, Math.max(1.8, 0.065 * scale), 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   }
 
@@ -4773,7 +5109,117 @@ export class CaveRenderer {
    * clipped staged bailout/deco cylinders, unlined cave junction line-markers & jump spools, and
    * abandoned tangled cave line traps cuttable with shears.
    */
-  _drawCaveInteractives(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null) {
+  /**
+   * Shared high-detail AL80 technical stage cylinder renderer (v148):
+   * Brushed metallic cylindrical gradient, color-coded gas band, cam/bungee hose retainers,
+   * brass DIN valve + chrome turret, coiled HP hose + glowing mini SPG pressure dial,
+   * and a stainless steel bolt-snap carabiner clipped cleanly to the line.
+   */
+  _drawDetailedStageCylinder(ctx, scale, { bodyCol, trimCol, claimed = false, cordColor = 'rgba(226, 232, 240, 0.8)', tiltRad = -0.4, timeSec = 0 }) {
+    // Braided rigging tether cord + gleaming stainless bolt-snap carabiner
+    ctx.strokeStyle = cordColor;
+    ctx.lineWidth = Math.max(1.2, 0.046 * scale);
+    ctx.beginPath();
+    ctx.moveTo(0, -0.5 * scale);
+    ctx.lineTo(0, -1.04 * scale);
+    ctx.stroke();
+
+    // Stainless steel bolt-snap clip at top anchor
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = Math.max(1.3, 0.052 * scale);
+    ctx.beginPath();
+    ctx.arc(0, -1.04 * scale, Math.max(2.1, 0.095 * scale), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(tiltRad);
+    const cw = 0.98 * scale;
+    const ch = 0.4 * scale;
+
+    // Metallic brushed-aluminum cylindrical body gradient
+    const cylGrad = ctx.createLinearGradient?.(0, -ch * 0.55, 0, ch * 0.55);
+    if (cylGrad) {
+      if (claimed) {
+        cylGrad.addColorStop(0, '#94a3b8');
+        cylGrad.addColorStop(0.32, '#475569');
+        cylGrad.addColorStop(1, '#1e293b');
+      } else {
+        cylGrad.addColorStop(0, '#f8fafc');
+        cylGrad.addColorStop(0.28, '#cbd5e1');
+        cylGrad.addColorStop(0.7, '#64748b');
+        cylGrad.addColorStop(1, '#1e293b');
+      }
+      ctx.fillStyle = cylGrad;
+    } else {
+      ctx.fillStyle = claimed ? '#475569' : '#cbd5e1';
+    }
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(-cw * 0.5, -ch * 0.5, cw, ch, ch * 0.46);
+    } else {
+      ctx.rect(-cw * 0.5, -ch * 0.5, cw, ch);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // Color-coded gas mix shoulder band + glossy specular stripe
+    ctx.fillStyle = bodyCol;
+    ctx.fillRect(-cw * 0.22, -ch * 0.46, cw * 0.42, ch * 0.92);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
+    ctx.fillRect(-cw * 0.4, -ch * 0.34, cw * 0.8, ch * 0.14);
+
+    // Dual matte-black bungee hose-retainer cam bands
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-cw * 0.36, -ch * 0.5, cw * 0.06, ch);
+    ctx.fillRect(cw * 0.24, -ch * 0.5, cw * 0.06, ch);
+
+    // Coiled black regulator hose tucked along cylinder + mini glowing SPG pressure dial
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = Math.max(1.5, 0.062 * scale);
+    ctx.beginPath();
+    ctx.moveTo(cw * 0.54, 0.06 * scale);
+    ctx.bezierCurveTo(cw * 0.52, ch * 0.85, -cw * 0.15, ch * 0.9, -cw * 0.32, ch * 0.28);
+    ctx.stroke();
+
+    // Mini SPG dial face (emerald/cyan full vs dim red empty/claimed)
+    const spgX = -cw * 0.32;
+    const spgY = ch * 0.32;
+    const spgR = Math.max(2.3, 0.105 * scale);
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = Math.max(1, 0.036 * scale);
+    ctx.beginPath();
+    ctx.arc(spgX, spgY, spgR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = claimed ? '#ef4444' : trimCol;
+    ctx.beginPath();
+    ctx.arc(spgX, spgY, spgR * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Brass DIN valve manifold + chrome 1st stage turret + knurled rubber knob
+    ctx.fillStyle = '#eab308';
+    ctx.fillRect(cw * 0.44, -ch * 0.22, 0.14 * scale, ch * 0.44);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(cw * 0.54, -ch * 0.24, 0.14 * scale, ch * 0.48);
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(cw * 0.68, -ch * 0.12, Math.max(2, 0.088 * scale), 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stainless stage-rigging bolt-snap at cylinder neck
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = Math.max(1.1, 0.044 * scale);
+    ctx.beginPath();
+    ctx.arc(cw * 0.4, -ch * 0.55, Math.max(1.6, 0.068 * scale), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  _drawCaveInteractives(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, diver = null, wreckState = null, mechFx = null) {
     const level = this.level;
     ctx.save();
 
@@ -4972,40 +5418,14 @@ export class CaveRenderer {
           ctx.stroke();
         }
 
-        // Nylon clip tether cord & bolt-snap ring
-        ctx.strokeStyle = 'rgba(226, 232, 240, 0.72)';
-        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
-        ctx.beginPath();
-        ctx.moveTo(0, -0.58 * scale);
-        ctx.lineTo(0, -1.05 * scale);
-        ctx.stroke();
-
-        // Scuba AL80 cylinder tilted cleanly at 24°
-        ctx.save();
-        ctx.rotate(-0.42);
-        const cw = 0.96 * scale;
-        const ch = 0.38 * scale;
-        // Cylinder body
-        ctx.fillStyle = bodyCol;
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-        ctx.beginPath();
-        ctx.roundRect(-cw * 0.5, -ch * 0.5, cw, ch, ch * 0.45);
-        ctx.fill();
-        ctx.stroke();
-
-        // Reflective depth-band collar stripe
-        ctx.fillStyle = trimCol;
-        ctx.fillRect(-cw * 0.14, -ch * 0.46, cw * 0.28, ch * 0.92);
-
-        // Brass DIN valve + regulator first stage
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(cw * 0.46, -ch * 0.22, 0.2 * scale, ch * 0.44);
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(cw * 0.66, 0, 0.09 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        CaveRenderer.prototype._drawDetailedStageCylinder(ctx, scale, {
+          bodyCol,
+          trimCol,
+          claimed,
+          cordColor: 'rgba(226, 232, 240, 0.78)',
+          tiltRad: -0.42 + Math.sin(timeSec * 1.4 + i) * 0.04,
+          timeSec,
+        });
 
         // Crisp stenciled tag below cylinder
         if (scale >= 12) {
@@ -5033,21 +5453,49 @@ export class CaveRenderer {
         ctx.save();
         ctx.translate(sx, sy);
         if (placed) {
-          // Clipped directional yellow cave arrow ("REM cookie") pointing toward exit!
+          // Clipped 3D beveled hi-vis yellow ABS cave arrow ("REM cookie") with line-wrap notches!
           ctx.rotate(anchor.dirAngle || -Math.PI * 0.5);
-          ctx.fillStyle = '#facc15';
+          // Taut cave guideline threaded through arrow wrap notches
+          ctx.strokeStyle = 'rgba(248, 250, 252, 0.82)';
+          ctx.lineWidth = Math.max(1.1, 0.042 * scale);
+          ctx.beginPath();
+          ctx.moveTo(-0.78 * scale, 0);
+          ctx.lineTo(0.86 * scale, 0);
+          ctx.stroke();
+
+          const arrowGrad = ctx.createLinearGradient?.(-0.45 * scale, -0.38 * scale, 0.72 * scale, 0.38 * scale);
+          if (arrowGrad) {
+            arrowGrad.addColorStop(0, '#fef08a');
+            arrowGrad.addColorStop(0.5, '#facc15');
+            arrowGrad.addColorStop(1, '#ca8a04');
+            ctx.fillStyle = arrowGrad;
+          } else {
+            ctx.fillStyle = '#facc15';
+          }
           ctx.strokeStyle = '#713f12';
           ctx.lineWidth = Math.max(1.2, 0.05 * scale);
           ctx.beginPath();
-          ctx.moveTo(0.68 * scale, 0);
-          ctx.lineTo(-0.42 * scale, -0.36 * scale);
+          ctx.moveTo(0.72 * scale, 0);
+          ctx.lineTo(-0.36 * scale, -0.38 * scale);
+          ctx.lineTo(-0.22 * scale, -0.14 * scale);
+          // Authentic cave-arrow wrap notch
+          ctx.lineTo(-0.36 * scale, -0.06 * scale);
           ctx.lineTo(-0.24 * scale, 0);
-          ctx.lineTo(-0.42 * scale, 0.36 * scale);
+          ctx.lineTo(-0.36 * scale, 0.06 * scale);
+          ctx.lineTo(-0.22 * scale, 0.14 * scale);
+          ctx.lineTo(-0.36 * scale, 0.38 * scale);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+          // Glossy bevel ridge
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.lineWidth = Math.max(0.9, 0.032 * scale);
+          ctx.beginPath();
+          ctx.moveTo(-0.18 * scale, -0.18 * scale);
+          ctx.lineTo(0.46 * scale, 0);
+          ctx.stroke();
         } else {
-          // Waiting jump-spool station with dashed junction ring
+          // Waiting machined Delrin jump-spool station with radial lightening holes & double-ender bolt-snap
           const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.0 + i * 1.4);
           ctx.strokeStyle = `rgba(250, 204, 21, ${0.32 + pulse * 0.35})`;
           ctx.lineWidth = Math.max(1.3, 0.05 * scale);
@@ -5057,18 +5505,45 @@ export class CaveRenderer {
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Finger spool wheel + wrapped white nylon line
+          ctx.save();
+          ctx.rotate(timeSec * 0.75 + i);
+          // Wound white nylon cave line visible inside flange
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.34 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          // Machined Delrin spool flange
           ctx.fillStyle = '#1e293b';
           ctx.strokeStyle = '#facc15';
-          ctx.lineWidth = Math.max(1.5, 0.07 * scale);
+          ctx.lineWidth = Math.max(1.5, 0.068 * scale);
           ctx.beginPath();
-          ctx.arc(0, 0, 0.38 * scale, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.42 * scale, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
+          // 6 machined lightening holes showing wound white line underneath
           ctx.fillStyle = '#f8fafc';
+          for (let h = 0; h < 6; h++) {
+            const ha = (h / 6) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(Math.cos(ha) * 0.27 * scale, Math.sin(ha) * 0.27 * scale, Math.max(1.2, 0.055 * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Center finger-hole hub
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(1, 0.04 * scale);
           ctx.beginPath();
-          ctx.arc(0, 0, 0.16 * scale, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.14 * scale, 0, Math.PI * 2);
           ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+
+          // Clipped stainless double-ender bolt-snap hanging on side
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = Math.max(1.3, 0.05 * scale);
+          ctx.beginPath();
+          ctx.arc(0.42 * scale, -0.22 * scale, Math.max(2, 0.085 * scale), 0, Math.PI * 2);
+          ctx.stroke();
 
           if (scale >= 12) {
             ctx.font = `700 ${Math.max(9, Math.round(scale * 0.3))}px "JetBrains Mono", monospace`;
@@ -5145,7 +5620,7 @@ export class CaveRenderer {
 
     // 6. Crankable Mine / Subterranean Blast-Door Bulkhead Hatches (e.g., Ojamo Flooded Iron Mine)
     if (typeof this._drawWatertightHatches === 'function') {
-      this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState);
+      this._drawWatertightHatches(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, wreckState, mechFx);
     }
 
     ctx.restore();
@@ -5184,43 +5659,14 @@ export class CaveRenderer {
       ctx.arc(0, 0, (0.92 + pulse * 0.24) * scale, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Bolt-snap line clip & rigging cord
-      ctx.strokeStyle = 'rgba(253, 224, 71, 0.85)';
-      ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-      ctx.beginPath();
-      ctx.moveTo(0, -0.52 * scale);
-      ctx.lineTo(0, -1.02 * scale);
-      ctx.stroke();
-
-      // Clipped AL80 aluminum stage bottle
-      ctx.save();
-      ctx.rotate(-0.36);
-      const cw = 0.94 * scale;
-      const ch = 0.36 * scale;
-      ctx.fillStyle = '#cbd5e1';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(-cw * 0.5, -ch * 0.5, cw, ch, ch * 0.45);
-      } else {
-        ctx.rect(-cw * 0.5, -ch * 0.5, cw, ch);
-      }
-      ctx.fill();
-      ctx.stroke();
-
-      // Color-coded gas mix band
-      ctx.fillStyle = bodyCol;
-      ctx.fillRect(-cw * 0.18, -ch * 0.46, cw * 0.36, ch * 0.92);
-
-      // DIN valve & rigged reg hose loop
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(cw * 0.45, -ch * 0.2, 0.19 * scale, ch * 0.4);
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(cw * 0.64, 0, 0.08 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      CaveRenderer.prototype._drawDetailedStageCylinder(ctx, scale, {
+        bodyCol,
+        trimCol,
+        claimed: false,
+        cordColor: 'rgba(253, 224, 71, 0.88)',
+        tiltRad: -0.36 + Math.sin(timeSec * 1.5 + i) * 0.04,
+        timeSec,
+      });
 
       // Crisp stenciled bar + mix tag
       if (scale >= 11) {
@@ -7595,11 +8041,22 @@ export class CaveRenderer {
       const tx = toScreenX(bx);
       const ty = toScreenY(by);
 
-      ctx.strokeStyle = rt.kind === 'probe' ? 'rgba(94, 234, 212, 0.9)' : 'rgba(251, 191, 36, 0.88)';
-      ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+      // Catenary braided recovery tow bridle + stainless shackle carabiners
+      const midTowX = (cx + tx) * 0.5;
+      const midTowY = (cy + ty) * 0.5 + 0.22 * scale + Math.sin(timeSec * 3.1) * 0.05 * scale;
+      ctx.strokeStyle = rt.kind === 'probe' ? 'rgba(94, 234, 212, 0.92)' : 'rgba(251, 191, 36, 0.92)';
+      ctx.lineWidth = Math.max(1.6, 0.06 * scale);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(tx, ty);
+      ctx.quadraticCurveTo(midTowX, midTowY, tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = Math.max(1.2, 0.048 * scale);
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1.8, 0.075 * scale), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(tx, ty, Math.max(1.8, 0.075 * scale), 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.save();
@@ -7859,6 +8316,115 @@ export class CaveRenderer {
       ctx.fillStyle = `rgba(254, 240, 138, ${alpha})`;
       ctx.fillText(`+${b.points}`, sx, sy);
     }
+    ctx.restore();
+  }
+
+  /**
+   * Post-lighting mechanical interaction FX pass (v148):
+   * Titanium shears slash arcs, 4-point stainless carabiner specular star glints,
+   * tumbling iron-oxide bulkhead rust flakes, recoiling severed monofilament curls,
+   * and luminous compressed-gas bleed mist (capped cleanly under performance tier).
+   */
+  _drawMechanicalFx(ctx, mechFx, toScreenX, toScreenY, scale, timeSec) {
+    if (!mechFx) return;
+    ctx.save();
+
+    // 1. Titanium Shears Curved Slash Arc during net / cave-line snag cuts
+    const act = mechFx.activeAction;
+    if (act && act.kind === 'cut-net' && act.timer < 0.34) {
+      const t = act.timer / 0.34;
+      const alpha = Math.max(0, 1 - t);
+      const sx = toScreenX(act.x);
+      const sy = toScreenY(act.y);
+      const r = (0.72 + t * 0.45) * scale;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate((act.angle || 0) - 0.55 + t * 1.15);
+      ctx.strokeStyle = `rgba(248, 250, 252, ${(alpha * 0.95).toFixed(2)})`;
+      ctx.lineWidth = Math.max(2.2, (0.14 * (1 - t * 0.55)) * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(0, 0, r, -0.95, 0.85);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(alpha * 0.72).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.84, -0.75, 0.75);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 2. Pooled Mechanical Micro-Particles
+    const list = mechFx.particles;
+    if (Array.isArray(list) && list.length > 0) {
+      const stride = this._perfBudget?.tier === 'performance' ? 2 : 1;
+      for (let i = 0; i < list.length; i += stride) {
+        const p = list[i];
+        const frac = Math.min(1, p.age / Math.max(0.05, p.life));
+        const alpha = Math.max(0, 1 - frac);
+        const px = toScreenX(p.x);
+        const py = toScreenY(p.y);
+
+        if (p.kind === 'rust') {
+          const s = p.size * scale;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(p.rot);
+          ctx.globalAlpha = alpha * 0.88;
+          ctx.fillStyle = p.color || '#92400e';
+          ctx.beginPath();
+          ctx.moveTo(-s, -s * 0.55);
+          ctx.lineTo(s * 0.8, -s * 0.85);
+          ctx.lineTo(s, s * 0.45);
+          ctx.lineTo(-s * 0.65, s * 0.75);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (p.kind === 'filament') {
+          const r = p.size * scale;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(p.rot);
+          ctx.globalAlpha = alpha * 0.9;
+          ctx.strokeStyle = p.color || '#fbbf24';
+          ctx.lineWidth = Math.max(1.1, 0.042 * scale);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.6, 0, Math.PI * (0.95 + frac * 0.45));
+          ctx.stroke();
+          ctx.restore();
+        } else if (p.kind === 'jet') {
+          const r = (p.size * (1 + frac * 1.6)) * scale;
+          ctx.globalAlpha = alpha * 0.52;
+          ctx.fillStyle = p.color || '#e0f2fe';
+          ctx.beginPath();
+          ctx.arc(px, py, r, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.kind === 'glint') {
+          const pulse = Math.sin(frac * Math.PI);
+          const arm = p.size * (0.45 + pulse * 0.95) * scale;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(p.rot);
+          ctx.globalAlpha = pulse * 0.95;
+          ctx.strokeStyle = p.color || '#f8fafc';
+          ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-arm, 0);
+          ctx.lineTo(arm, 0);
+          ctx.moveTo(0, -arm);
+          ctx.lineTo(0, arm);
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(2, 0.09 * scale) * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
     ctx.restore();
   }
 
@@ -8421,7 +8987,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, isPeer) {
+  _drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, isPeer, mechCtx = null) {
     const body = diver.body || createDiverBody(diver.x, diver.y, diver.angle);
     const sx = toScreenX(diver.x);
     const sy = toScreenY(diver.y);
@@ -8537,6 +9103,110 @@ export class CaveRenderer {
       }
     }
     ctx.restore();
+
+    // 5b. Articulated Working Arm & Mechanical Hardware Rig (v148: Wheel Crank, Valve Bleed, Shears, Delrin Reel, Shot-Line Lanyard)
+    if (!isPeer && mechCtx) {
+      const ws = mechCtx.wreckState;
+      const mfx = mechCtx.mechFx;
+
+      // Shot-line stainless carabiner & yellow braided clip lanyard when clipped onto descent line
+      if (ws?.clippedToShotLine && this.level?.shotLine) {
+        const lineX = toScreenX(this.level.shotLine.x ?? this.level.spawn?.x ?? diver.x);
+        const lineY = sy - 0.08 * scale;
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.94)';
+        ctx.lineWidth = Math.max(1.5, 0.058 * scale);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo((sx + lineX) * 0.5, sy + 0.16 * scale, lineX, lineY);
+        ctx.stroke();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+        ctx.beginPath();
+        ctx.arc(lineX, lineY, Math.max(2.2, 0.095 * scale), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Compute working-hand screen target for active mechanical interactions
+      let workTargetX = null;
+      let workTargetY = null;
+      let workTool = null;
+
+      if (ws?.crankingHatchId && Array.isArray(this.level?.watertightHatches)) {
+        const hObj = this.level.watertightHatches.find((h) => h && h.id === ws.crankingHatchId);
+        if (hObj) {
+          const hr = (hObj.radius || 1.9) * scale;
+          const wheelRot = (ws.crankingHatchProgress || 0) * Math.PI * 5;
+          workTargetX = toScreenX(hObj.x) + Math.cos(wheelRot) * hr * 0.44;
+          workTargetY = toScreenY(hObj.y) + Math.sin(wheelRot) * hr * 0.44;
+          workTool = 'crank';
+        }
+      } else if (mfx?.activeAction) {
+        const a = mfx.activeAction;
+        const reach = Math.sin(Math.min(1, a.timer / Math.max(0.1, a.duration)) * Math.PI);
+        if (reach > 0.05) {
+          const tx = toScreenX(a.x);
+          const ty = toScreenY(a.y);
+          const distPx = Math.hypot(tx - shoulderX, ty - shoulderY);
+          const clamped = Math.min(distPx, 2.6 * scale);
+          const ratio = distPx > 0.01 ? (clamped / distPx) * reach : 0;
+          workTargetX = shoulderX + (tx - shoulderX) * ratio;
+          workTargetY = shoulderY + (ty - shoulderY) * ratio;
+          workTool = a.kind;
+        }
+      } else if (mechCtx.reelingActive) {
+        // Off-hand holds the spinning machined Delrin cave guideline spool
+        const offAng = torsoAngle + body.facingSign * 0.55;
+        workTargetX = shoulderX + Math.cos(offAng) * 0.52 * scale;
+        workTargetY = shoulderY + Math.sin(offAng) * 0.52 * scale;
+        workTool = 'spool';
+      }
+
+      if (workTargetX !== null && workTargetY !== null) {
+        const elbowX = (shoulderX + workTargetX) * 0.5 - Math.sin(torsoAngle) * body.facingSign * (0.14 * scale);
+        const elbowY = (shoulderY + workTargetY) * 0.5 + Math.cos(torsoAngle) * body.facingSign * (0.14 * scale);
+        this._drawLimbSegment(ctx, shoulderX, shoulderY, elbowX, elbowY, 0.125 * scale, '#1e293b');
+        this._drawLimbSegment(ctx, elbowX, elbowY, workTargetX, workTargetY, 0.11 * scale, '#0f172a');
+        // Neoprene gloved hand
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.arc(workTargetX, workTargetY, Math.max(2.2, 0.075 * scale), 0, Math.PI * 2);
+        ctx.fill();
+
+        if (workTool === 'spool') {
+          // Spinning machined Delrin guideline finger-spool in hand
+          ctx.save();
+          ctx.translate(workTargetX, workTargetY);
+          ctx.rotate(timeSec * 5.2);
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(3.2, 0.16 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(1.4, 0.07 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (workTool === 'cut-net') {
+          // Gleaming titanium trauma shears blades at hand
+          const shearAng = Math.atan2(workTargetY - elbowY, workTargetX - elbowX);
+          ctx.save();
+          ctx.translate(workTargetX, workTargetY);
+          ctx.rotate(shearAng);
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0.24 * scale, -0.07 * scale);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0.24 * scale, 0.07 * scale);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
 
     ctx.restore();
 

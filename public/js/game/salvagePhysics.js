@@ -5,6 +5,8 @@
  * Pure deterministic physics module (zero DOM dependencies).
  */
 
+import { recordMechanicalEvent } from './mechanicalFx.js';
+
 export const LIFT_BAG_CAPACITY_KG = 24;
 export const LIFT_BAG_INFLATE_BAR = 3.5;
 
@@ -210,6 +212,9 @@ export function toggleLiftBag(session, callbacks = {}) {
     }
     const buo = computeSalvageBuoyancy(session);
     Object.assign(s, buo);
+    if (session.mechFx) {
+      recordMechanicalEvent(session.mechFx, 'liftbag-vent', { x: session.diver.x, y: session.diver.y });
+    }
     callbacks.onLiftBagToggle?.(false, buo);
     callbacks.onToast?.('🎈 Lift Bag vented & stowed.', 1.8);
     return { ok: true, active: false, buoyancy: buo };
@@ -245,6 +250,9 @@ export function toggleLiftBag(session, callbacks = {}) {
   }
   const buo = computeSalvageBuoyancy(session);
   Object.assign(s, buo);
+  if (session.mechFx) {
+    recordMechanicalEvent(session.mechFx, 'liftbag-inflate', { x: session.diver.x, y: session.diver.y });
+  }
   callbacks.onLiftBagToggle?.(true, buo);
   const msg =
     buo.payloadKg >= 6
