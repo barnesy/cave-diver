@@ -27,6 +27,9 @@ import {
   receiveGasIntoState,
 } from './physics/diveModel.js';
 import { resolveDiverCollision } from './game/collision.js';
+import { createPerfMonitor } from './game/perfMonitor.js';
+import { createModalManager } from './ui/modalManager.js';
+import { renderDebriefDepthChart } from './ui/debriefChart.js';
 import {
   createEmptyLogbook,
   mergeCareerLogbooks,
@@ -564,7 +567,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=143" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=144" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1166,70 +1169,31 @@ const hud = new DiveComputerHUD({
   },
 });
 
-// Centralized stack-ordered overlay/modal dismissal & keyboard focus restore (v143):
-// Innermost child modals ALWAYS close before their parent modals (e.g. Gear Workshop -> Dive Setup, Collector Card -> Logbook).
-let lastModalFocusTrigger = null;
-document.addEventListener(
-  'pointerdown',
-  (e) => {
-    const btn = e.target?.closest?.('button, [role="button"]');
-    if (btn && !btn.closest?.('.lb-stats-modal')) {
-      lastModalFocusTrigger = btn;
-    }
-  },
-  { passive: true }
-);
+// Centralized stack-ordered overlay/modal manager & focus restoration (v144 module)
+const modalManager = createModalManager([
+  { isOpen: () => photoModeState.active, close: () => setPhotoModeActive(false) },
+  { isOpen: () => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, close: () => closeFieldGuideCardModal() },
+  { isOpen: () => typeof replayModal !== 'undefined' && replayModal && !replayModal.hidden, close: () => closeReplayModal() },
+  { isOpen: () => typeof lbStatsModalEl !== 'undefined' && lbStatsModalEl && !lbStatsModalEl.hidden, close: () => closeLeaderboardStatsModal() },
+  { isOpen: () => typeof liveryModalEl !== 'undefined' && liveryModalEl && !liveryModalEl.hidden, close: () => closeLiveryModal() },
+  { isOpen: () => typeof gasPlannerModal !== 'undefined' && gasPlannerModal && !gasPlannerModal.hidden, close: () => closeGasPlannerModal() },
+  { isOpen: () => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, close: () => closeChallengeModal() },
+  { isOpen: () => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, close: () => closeProceduralModal() },
+  { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
+  { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
+  { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
+  { isOpen: () => typeof modalDiveGuide !== 'undefined' && modalDiveGuide && !modalDiveGuide.hidden, close: () => closeDiveGuideModal(false) },
+  { isOpen: () => typeof diveSetupModalEl !== 'undefined' && diveSetupModalEl && !diveSetupModalEl.hidden, close: () => closeDiveSetupModal() },
+  { isOpen: () => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, close: () => closeLogbookModal() },
+  { isOpen: () => Boolean(signalWheelOpen), close: () => toggleSignalWheel(false) },
+  { isOpen: () => Boolean(shearwaterOpen), close: () => toggleShearwaterComputer(false) },
+  { isOpen: () => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, close: () => setHudMenuOpen(false) },
+  { isOpen: () => typeof homeMenuPopover !== 'undefined' && homeMenuPopover && !homeMenuPopover.hidden, close: () => setHomeMenuOpen(false) },
+]);
 
 function closeTopmostOverlay() {
-  const stack = [
-    [() => photoModeState.active, () => setPhotoModeActive(false)],
-    [() => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, () => closeFieldGuideCardModal()],
-    [() => typeof replayModal !== 'undefined' && replayModal && !replayModal.hidden, () => closeReplayModal()],
-    [() => typeof lbStatsModalEl !== 'undefined' && lbStatsModalEl && !lbStatsModalEl.hidden, () => closeLeaderboardStatsModal()],
-    [() => typeof liveryModalEl !== 'undefined' && liveryModalEl && !liveryModalEl.hidden, () => closeLiveryModal()],
-    [() => typeof gasPlannerModal !== 'undefined' && gasPlannerModal && !gasPlannerModal.hidden, () => closeGasPlannerModal()],
-    [() => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, () => closeChallengeModal()],
-    [() => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, () => closeProceduralModal()],
-    [() => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, () => closeDailyCalendarModal()],
-    [() => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, () => closeAudioMixerModal()],
-    [() => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, () => closeIssueModal()],
-    [() => typeof modalDiveGuide !== 'undefined' && modalDiveGuide && !modalDiveGuide.hidden, () => closeDiveGuideModal(false)],
-    [() => typeof diveSetupModalEl !== 'undefined' && diveSetupModalEl && !diveSetupModalEl.hidden, () => closeDiveSetupModal()],
-    [() => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, () => closeLogbookModal()],
-    [() => Boolean(signalWheelOpen), () => toggleSignalWheel(false)],
-    [() => Boolean(shearwaterOpen), () => toggleShearwaterComputer(false)],
-    [() => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, () => setHudMenuOpen(false)],
-    [() => typeof homeMenuPopover !== 'undefined' && homeMenuPopover && !homeMenuPopover.hidden, () => setHomeMenuOpen(false)],
-  ];
-  for (const [isOpen, closeFn] of stack) {
-    try {
-      if (isOpen()) {
-        closeFn();
-        // If no more modals remain open, restore keyboard focus to the triggering control
-        const anyStillOpen = stack.some(([check]) => {
-          try { return check(); } catch { return false; }
-        });
-        if (!anyStillOpen && lastModalFocusTrigger?.focus && !lastModalFocusTrigger.hidden) {
-          try { lastModalFocusTrigger.focus({ preventScroll: true }); } catch {}
-        }
-        return true;
-      }
-    } catch {}
-  }
-  return false;
+  return modalManager.closeTopmost();
 }
-
-window.addEventListener(
-  'keydown',
-  (e) => {
-    if (e.key !== 'Escape') return;
-    if (closeTopmostOverlay()) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  },
-  true
-);
 
 const input = new InputController({
   stickBaseEl: document.getElementById('touch-stick'),
@@ -4485,154 +4449,17 @@ function refreshActiveGhostTrack(level) {
 }
 
 function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = null) {
-  const wrap = document.getElementById('debrief-profile-wrap');
-  const svg = document.getElementById('debrief-profile-svg');
-  if (!wrap || !svg) return;
-  if (!Array.isArray(profile) || profile.length < 2) {
-    wrap.hidden = true;
-    return;
-  }
-  wrap.hidden = false;
-  const buddyTraces = [];
-  if (peerProfiles instanceof Map) {
-    for (const rec of peerProfiles.values()) {
-      if (rec && Array.isArray(rec.points) && rec.points.length >= 2) {
-        buddyTraces.push(rec);
-      }
-    }
-  }
-  const W = 420;
-  const H = 124;
-  const padL = 34;
-  const padR = 12;
-  const padT = 14;
-  const padB = 20;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  let maxT = Math.max(10, profile[profile.length - 1].t || 10);
-  let peakAllD = Math.max(maxDepthM || 0, ...profile.map((p) => p.d));
-  for (const bt of buddyTraces) {
-    const lastPt = bt.points[bt.points.length - 1];
-    if (lastPt?.t > maxT) maxT = lastPt.t;
-    for (const pt of bt.points) {
-      if (pt.d > peakAllD) peakAllD = pt.d;
-    }
-  }
-  const maxD = Math.max(12, Math.ceil(peakAllD / 10) * 10);
-
-  const sx = (t) => padL + (t / maxT) * plotW;
-  const sy = (d) => padT + (d / maxD) * plotH;
-
-  const gasColor = (g) => (g === 'O2' ? '#34d399' : g === 'TMX1455' ? '#fbbf24' : '#38bdf8');
-  const buddyPalette = ['#f472b6', '#c084fc', '#fb923c'];
-
-  let markup = '';
-  // Subtle depth horizontal grid lines (0m, 50%, 100%)
-  for (const frac of [0, 0.5, 1]) {
-    const dVal = Math.round(maxD * frac);
-    const y = sy(dVal).toFixed(1);
-    markup += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(148,163,184,0.16)" stroke-dasharray="${frac === 0 ? '' : '3 3'}"/>`;
-    markup += `<text x="${padL - 5}" y="${Number(y) + 3}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${dVal}m</text>`;
-  }
-
-  // Soft translucent area fill under local diver profile curve
-  let areaPts = `${sx(profile[0].t).toFixed(1)},${padT} `;
-  for (const p of profile) {
-    areaPts += `${sx(p.t).toFixed(1)},${sy(p.d).toFixed(1)} `;
-  }
-  areaPts += `${sx(profile[profile.length - 1].t).toFixed(1)},${padT}`;
-  markup += `<polygon points="${areaPts}" fill="rgba(14,165,233,0.12)"/>`;
-
-  // Co-op buddy comparison depth traces (dashed warm accent overlays, v117)
-  buddyTraces.forEach((bt, bIdx) => {
-    const col = buddyPalette[bIdx % buddyPalette.length];
-    const polyPts = bt.points.map((pt) => `${sx(pt.t).toFixed(1)},${sy(pt.d).toFixed(1)}`).join(' ');
-    markup += `<polyline points="${polyPts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round" opacity="0.88"/>`;
+  renderDebriefDepthChart({
+    wrapEl: document.getElementById('debrief-profile-wrap'),
+    svgEl: document.getElementById('debrief-profile-svg'),
+    scrubEl: document.getElementById('debrief-profile-scrub'),
+    profile,
+    maxDepthM,
+    success,
+    peerProfiles,
+    formatRunClock,
+    escapeHtml,
   });
-
-  // Highlight deco-stop segments with soft emerald shading
-  for (let i = 1; i < profile.length; i++) {
-    const a = profile[i - 1];
-    const b = profile[i];
-    const x1 = sx(a.t).toFixed(1);
-    const y1 = sy(a.d).toFixed(1);
-    const x2 = sx(b.t).toFixed(1);
-    const y2 = sy(b.d).toFixed(1);
-    if (b.deco > 0 && Math.abs(b.d - b.deco) <= 2.2) {
-      markup += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(52,211,153,0.35)" stroke-width="6" stroke-linecap="round"/>`;
-    }
-    markup += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${gasColor(b.gas)}" stroke-width="2.3" stroke-linecap="round"/>`;
-  }
-
-  // Peak depth marker pin
-  let peak = profile[0];
-  for (const p of profile) {
-    if (p.d > peak.d) peak = p;
-  }
-  const px = sx(peak.t).toFixed(1);
-  const py = sy(peak.d).toFixed(1);
-  markup += `<circle cx="${px}" cy="${py}" r="3.4" fill="#f87171" stroke="#0f172a" stroke-width="1.2"/>`;
-  markup += `<text x="${Math.min(W - 44, Math.max(padL + 24, Number(px)))}" y="${Math.min(H - 5, Number(py) + 12)}" text-anchor="middle" fill="#fca5a5" font-size="9" font-weight="700" font-family="ui-monospace,monospace">MAX ${peak.d.toFixed(0)}m</text>`;
-
-  // Final point (surface or incident marker)
-  const endP = profile[profile.length - 1];
-  markup += `<circle cx="${sx(endP.t).toFixed(1)}" cy="${sy(endP.d).toFixed(1)}" r="3.4" fill="${success ? '#34d399' : '#ef4444'}" stroke="#0f172a" stroke-width="1.2"/>`;
-  markup += `<text x="${W - padR}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${formatRunClock(maxT)}</text>`;
-
-  // Compact co-op legend in top-right when buddy trace(s) are overlaid
-  if (buddyTraces.length > 0) {
-    const names = buddyTraces
-      .slice(0, 2)
-      .map((bt, idx) => `<tspan fill="${buddyPalette[idx % buddyPalette.length]}">╌ ${escapeHtml((bt.name || 'Buddy').slice(0, 10))}</tspan>`)
-      .join('  ');
-    markup += `<text x="${W - padR}" y="10" text-anchor="end" font-size="8.5" font-weight="700" font-family="ui-monospace,monospace"><tspan fill="#38bdf8">━ You</tspan>  ${names}</text>`;
-  }
-
-  // Interactive telemetry scrubber crosshair overlay (v126)
-  markup += `<g id="debrief-scrub-cursor" visibility="hidden">`;
-  markup += `<line id="debrief-scrub-line" x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="3 2"/>`;
-  markup += `<circle id="debrief-scrub-dot" cx="${padL}" cy="${padT}" r="4.2" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.8"/>`;
-  markup += `</g>`;
-
-  svg.innerHTML = markup;
-
-  const scrubEl = document.getElementById('debrief-profile-scrub');
-  const cursorGroup = svg.querySelector('#debrief-scrub-cursor');
-  const cursorLine = svg.querySelector('#debrief-scrub-line');
-  const cursorDot = svg.querySelector('#debrief-scrub-dot');
-  const defaultScrubHint = 'Hover or drag across the depth curve to inspect PPO₂, CNS%, GF99%, Heart Rate & Tank Bar';
-  if (scrubEl) scrubEl.textContent = defaultScrubHint;
-
-  const updateScrubFromClientX = (clientX) => {
-    const rect = svg.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return;
-    const svgX = ((clientX - rect.left) / rect.width) * W;
-    const clampedFrac = Math.max(0, Math.min(1, (svgX - padL) / plotW));
-    const sample = sampleDiveProfileAtTime(profile, clampedFrac * maxT);
-    if (!sample) return;
-    const cx = sx(sample.t).toFixed(1);
-    const cy = sy(sample.d).toFixed(1);
-    if (cursorGroup) cursorGroup.setAttribute('visibility', 'visible');
-    if (cursorLine) {
-      cursorLine.setAttribute('x1', cx);
-      cursorLine.setAttribute('x2', cx);
-    }
-    if (cursorDot) {
-      cursorDot.setAttribute('cx', cx);
-      cursorDot.setAttribute('cy', cy);
-    }
-    if (scrubEl) {
-      const decoTxt = sample.deco > 0 ? ` · STOP ${sample.deco}m` : '';
-      scrubEl.textContent =
-        `⏱ ${formatRunClock(sample.t)} · ${sample.d.toFixed(1)}m · ${sample.gas} (${sample.bar}b) · PPO₂ ${sample.ppo2.toFixed(2)} · CNS ${sample.cns}% · GF99 ${sample.gf99}% · ♥ ${sample.hr}bpm${decoTxt}`;
-    }
-  };
-  svg.onpointermove = (e) => updateScrubFromClientX(e.clientX);
-  svg.onpointerdown = (e) => updateScrubFromClientX(e.clientX);
-  svg.onpointerleave = () => {
-    if (cursorGroup) cursorGroup.setAttribute('visibility', 'hidden');
-    if (scrubEl) scrubEl.textContent = defaultScrubHint;
-  };
 }
 
 function renderDebriefCertifications(logbook) {
@@ -8503,35 +8330,73 @@ function stepSimulation(dt) {
   }
 }
 
+// Zero-GC frame scratch objects & Adaptive 60 FPS Performance Governor (v144)
+const perfMonitor = createPerfMonitor({ isMobile: Boolean(renderer?._isCoarseMobile) });
+renderer.setPerfBudget(perfMonitor.getBudget());
+const _frameWreckState = {
+  clippedToShotLine: false,
+  cutSnagIds: null,
+  activeSnagIndex: -1,
+  openedHatchIds: null,
+  crankingHatchId: null,
+  crankingHatchProgress: 0,
+  claimedStageIds: null,
+  placedMarkerIds: null,
+};
+const _frameGhostPose = { x: 0, y: 0, angle: 0, finished: false, isPar: false };
+
 function frame(nowMs) {
-  const dt = lastFrameMs ? Math.min(0.05, (nowMs - lastFrameMs) / 1000) : 0.016;
+  const rawDeltaMs = lastFrameMs ? nowMs - lastFrameMs : 16.67;
+  const dt = lastFrameMs ? Math.min(0.05, rawDeltaMs / 1000) : 0.016;
   lastFrameMs = nowMs;
   menuTimeSec = nowMs * 0.001;
 
   stepSimulation(dt);
 
   if (typeof document !== 'undefined' && document.hidden) {
+    perfMonitor.reset();
     requestAnimationFrame(frame);
     return;
+  }
+
+  if (mode === 'diving' && !divePaused && perfMonitor.recordFrame(rawDeltaMs)) {
+    renderer.setPerfBudget(perfMonitor.getBudget());
   }
 
   if ((mode === 'diving' || mode === 'debrief') && session) {
     if (mode === 'debrief') {
       session.simTimeSec += dt;
     }
-    const nextCheckpoint =
-      session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
+    let nextCheckpoint = null;
+    const cps = session.level.checkpoints;
+    for (let i = 0; i < cps.length; i++) {
+      if (!session.checkpointsHit.has(cps[i].id)) {
+        nextCheckpoint = cps[i];
+        break;
+      }
+    }
     const peers = getActivePeers();
-    const humanFramePeers = isMultiplayer ? lan.getPeers() : [];
-    const activeSpectatePeers = spectatingPeer
-      ? humanFramePeers.filter((p) => p && p.alive !== false && !p.surfaced)
-      : [];
-    const spectateTarget =
-      spectatingPeer && humanFramePeers.length > 0
-        ? activeSpectatePeers.length > 0
-          ? activeSpectatePeers[spectatePeerIdx % activeSpectatePeers.length]
-          : humanFramePeers[0]
-        : null;
+    const humanFramePeers = isMultiplayer ? lan.getPeers() : EMPTY_ARR;
+    let spectateTarget = null;
+    if (spectatingPeer && humanFramePeers.length > 0) {
+      let aliveCount = 0;
+      for (let i = 0; i < humanFramePeers.length; i++) {
+        const p = humanFramePeers[i];
+        if (p && p.alive !== false && !p.surfaced) aliveCount++;
+      }
+      if (aliveCount > 0) {
+        let pick = spectatePeerIdx % aliveCount;
+        for (let i = 0; i < humanFramePeers.length; i++) {
+          const p = humanFramePeers[i];
+          if (p && p.alive !== false && !p.surfaced) {
+            if (pick === 0) { spectateTarget = p; break; }
+            pick--;
+          }
+        }
+      } else {
+        spectateTarget = humanFramePeers[0];
+      }
+    }
     const playerLines = _framePlayerLines;
     playerLines.length = 0;
     if (session.guidelineChains?.length > 0) {
@@ -8567,6 +8432,28 @@ function frame(nowMs) {
         }
       }
     }
+    _frameWreckState.clippedToShotLine = session.clippedToShotLine;
+    _frameWreckState.cutSnagIds = session.cutSnagIds;
+    _frameWreckState.activeSnagIndex = session.activeSnagIndex;
+    _frameWreckState.openedHatchIds = session.openedHatchIds;
+    _frameWreckState.crankingHatchId = session.crankingHatchId;
+    _frameWreckState.crankingHatchProgress = session.crankingHatchProgress;
+    _frameWreckState.claimedStageIds = session.claimedStageIds;
+    _frameWreckState.placedMarkerIds = session.placedMarkerIds;
+
+    let frameGhost = null;
+    if (ghostEnabled && activeGhostTrack) {
+      const pose = sampleGhostPose(activeGhostTrack, session.simTimeSec);
+      if (pose) {
+        _frameGhostPose.x = pose.x;
+        _frameGhostPose.y = pose.y;
+        _frameGhostPose.angle = pose.angle;
+        _frameGhostPose.finished = Boolean(pose.finished);
+        _frameGhostPose.isPar = activeGhostIsPar;
+        frameGhost = _frameGhostPose;
+      }
+    }
+
     renderer.render({
       diver: session.diver,
       diveState: session.diveState,
@@ -8584,21 +8471,8 @@ function frame(nowMs) {
       localSiltDensity: session.localSiltDensity,
       bubbles: session.bubbles,
       ecosystem,
-      wreckState: {
-        clippedToShotLine: session.clippedToShotLine,
-        cutSnagIds: session.cutSnagIds,
-        activeSnagIndex: session.activeSnagIndex,
-        openedHatchIds: session.openedHatchIds,
-        crankingHatchId: session.crankingHatchId,
-        crankingHatchProgress: session.crankingHatchProgress,
-        claimedStageIds: session.claimedStageIds,
-        placedMarkerIds: session.placedMarkerIds,
-      },
-      ghostPose: (() => {
-        if (!ghostEnabled || !activeGhostTrack) return null;
-        const pose = sampleGhostPose(activeGhostTrack, session.simTimeSec);
-        return pose ? { ...pose, isPar: activeGhostIsPar } : null;
-      })(),
+      wreckState: _frameWreckState,
+      ghostPose: frameGhost,
       sonarPulse: session.sonar?.activePulse || null,
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,

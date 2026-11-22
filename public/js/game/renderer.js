@@ -253,6 +253,13 @@ export class CaveRenderer {
     this._activePeerKeysScratch = new Set();
     this._torchPeerIdsScratch = new Set();
     this._visibleTorchPeersScratch = [];
+    this._siltLightsScratch = [
+      { x: 0, y: 0, fx: 1, fy: 0, torchOn: true },
+      { x: 0, y: 0, fx: 1, fy: 0, torchOn: true },
+      { x: 0, y: 0, fx: 1, fy: 0, torchOn: true },
+      { x: 0, y: 0, fx: 1, fy: 0, torchOn: true },
+    ];
+    this._perfBudget = null;
     this._airGradCache = null;
     this._skyCutGradCache = null;
     this._auroraStamps = this._buildAuroraStamps();
@@ -1292,24 +1299,46 @@ export class CaveRenderer {
     return { x0: cx0, x1: cx1, y0: cy0, y1: cy1, canvas: c };
   }
 
+  /**
+   * Apply adaptive 60 FPS mobile quality budget from perfMonitor (v144).
+   * Smoothly scales DPR cap, lightmap resolution, ray count, silt tendrils & bioluminescence stride.
+   */
+  setPerfBudget(budget) {
+    if (!budget) return;
+    const prev = this._perfBudget;
+    this._perfBudget = budget;
+    if (!prev || prev.dprCap !== budget.dprCap || prev.lightmapScale !== budget.lightmapScale) {
+      this._needsResize = true;
+    }
+  }
+
   resize(force = false) {
     if (!force && !this._needsResize && this.canvas.width > 0 && this.canvas.height > 0) {
       return;
     }
     this._needsResize = false;
-    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2);
+    const dprCap = this._perfBudget?.dprCap ?? (this._isCoarseMobile ? 1.75 : 2);
+    const lightScale = this._perfBudget?.lightmapScale ?? 0.35;
+    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, dprCap);
     const w = this.canvas.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1280) || 1280;
     const h = this.canvas.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 720) || 720;
     const targetW = Math.max(1, Math.floor(w * dpr));
     const targetH = Math.max(1, Math.floor(h * dpr));
-    if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+    const targetLW = Math.max(1, Math.floor(targetW * lightScale));
+    const targetLH = Math.max(1, Math.floor(targetH * lightScale));
+    if (
+      this.canvas.width !== targetW ||
+      this.canvas.height !== targetH ||
+      this.lightCanvas.width !== targetLW ||
+      this.lightCanvas.height !== targetLH
+    ) {
       this.canvas.width = targetW;
       this.canvas.height = targetH;
-      // 0.35x lightmap resolution gives soft penumbras and fast mobile fill-rate
-      this.lightCanvas.width = Math.max(1, Math.floor(this.canvas.width * 0.35));
-      this.lightCanvas.height = Math.max(1, Math.floor(this.canvas.height * 0.35));
+      this.lightCanvas.width = targetLW;
+      this.lightCanvas.height = targetLH;
       this._skyGradCache = null;
       this._vignetteCache = null;
+      this._skyCutGradCache = null;
     }
     this._cachedDpr = this.canvas.width / w;
     // Scale pixels-per-meter so ~20–26m vertical span is visible on mobile & desktop
@@ -7682,10 +7711,11 @@ export class CaveRenderer {
     const cyanStamp = this.glowStamps.cyan;
     const magStamp = this.glowStamps.magenta;
     const alphaScale = nightBiolum ? 0.85 : 0.65;
+    const stride = Math.max(1, this._perfBudget?.bioStride ?? 1);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const drawList = (motes) => {
-      for (let i = 0; i < motes.length; i++) {
+      for (let i = 0; i < motes.length; i += stride) {
         const m = motes[i];
         if (m.bx < visX0 - 1.5 || m.bx > visX1 + 1.5 || m.by < visY0 - 1.5 || m.by > visY1 + 1.5) continue;
         const wx = m.bx + Math.sin(timeSec * 0.55 + m.r2 * 6.28) * 0.72;
@@ -8942,6 +8972,7 @@ export class CaveRenderer {
     }
 
     const localTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
+    const localRayCount = Math.max(26, Math.round(52 * (this._perfBudget?.rayScale ?? 1)));
     const localTorch = diver.torchOn !== false
       ? {
           ox: diver.body?.hand ? diver.body.hand.x : diver.x,
@@ -8953,7 +8984,7 @@ export class CaveRenderer {
             localTorchAng,
             0.44,
             16.5 * (getTorchOptic(diver?.livery?.torchId).rangeMult || 1.0),
-            52,
+            localRayCount,
             siltClouds
           ),
         }
@@ -8999,7 +9030,8 @@ export class CaveRenderer {
     }
 
     // Adaptive ray budget + pose-delta raycast cache per peer (cuts co-op CPU by 70-90%!)
-    const peerRayCount = (this._isCoarseMobile || visibleTorchPeers.length >= 2 || cw < 900) ? 16 : 22;
+    const basePeerRays = (this._isCoarseMobile || visibleTorchPeers.length >= 2 || cw < 900) ? 16 : 22;
+    const peerRayCount = Math.min(basePeerRays, this._perfBudget?.peerRayMax ?? basePeerRays);
     const hasSilt = siltClouds && siltClouds.length > 0;
     const cacheMaxAgeMs = hasSilt ? 55 : 135;
 
@@ -9337,37 +9369,40 @@ export class CaveRenderer {
     const warmStamp = this.glowStamps.warm;
 
     const localBeamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
-    const lights = [
-      {
-        x: diver.x,
-        y: diver.y,
-        fx: Math.cos(localBeamAng),
-        fy: Math.sin(localBeamAng),
-        torchOn: diver.torchOn !== false,
-      },
-    ];
+    // Zero-GC reusable light source pool for silt backscatter (v144)
+    const lights = this._siltLightsScratch || (this._siltLightsScratch = []);
+    let lightCount = 1;
+    if (!lights[0]) lights[0] = { x: 0, y: 0, fx: 1, fy: 0, torchOn: true };
+    lights[0].x = diver.x;
+    lights[0].y = diver.y;
+    lights[0].fx = Math.cos(localBeamAng);
+    lights[0].fy = Math.sin(localBeamAng);
+    lights[0].torchOn = diver.torchOn !== false;
     if (Array.isArray(peerList)) {
       for (let i = 0; i < peerList.length; i++) {
         const p = peerList[i];
         if (!p || p.alive === false) continue;
         const pBeamAng = Number.isFinite(p.torchAngle) ? p.torchAngle : (p.angle || 0);
-        lights.push({
-          x: p.x,
-          y: p.y,
-          fx: Math.cos(pBeamAng),
-          fy: Math.sin(pBeamAng),
-          torchOn: p.torchOn !== false,
-        });
+        if (!lights[lightCount]) lights[lightCount] = { x: 0, y: 0, fx: 1, fy: 0, torchOn: true };
+        const slot = lights[lightCount++];
+        slot.x = p.x;
+        slot.y = p.y;
+        slot.fx = Math.cos(pBeamAng);
+        slot.fy = Math.sin(pBeamAng);
+        slot.torchOn = p.torchOn !== false;
       }
     }
 
     // Pass 1: all source-over silt bodies & wispy tendrils; collect lit glare records for Pass 2
     const glareList = this._siltGlareScratch;
     glareList.length = 0;
+    const tendrilLimit = this._perfBudget?.siltTendrilLimit ?? (this._isCoarseMobile ? 24 : 999);
+    const skipSmallAlpha = this._perfBudget?.siltSkipSmallBelow ?? 0;
     ctx.globalCompositeOperation = 'source-over';
 
     for (let i = 0; i < siltClouds.length; i++) {
       const s = siltClouds[i];
+      if (skipSmallAlpha > 0 && s.alpha < skipSmallAlpha) continue;
       const sx = toScreenX(s.x);
       const sy = toScreenY(s.y);
       const r = s.radius * scale;
@@ -9375,7 +9410,7 @@ export class CaveRenderer {
 
       let lit = 0.24;
       let glare = 0;
-      for (let l = 0; l < lights.length; l++) {
+      for (let l = 0; l < lightCount; l++) {
         const src = lights[l];
         const dx = s.x - src.x;
         const dy = s.y - src.y;
@@ -9406,8 +9441,8 @@ export class CaveRenderer {
       ctx.globalAlpha = Math.min(0.88, s.alpha * (0.48 + lit * 0.44));
       ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 1.15, -r * 1.05, r * 2.3, r * 2.1);
 
-      // Counter-rotating secondary billowing tendril (skipped on mobile under dense silt to save fill-rate)
-      if (lifeRatio < 0.96 && (!this._isCoarseMobile || siltClouds.length <= 24)) {
+      // Counter-rotating secondary billowing tendril (governed by adaptive 60 FPS mobile budget)
+      if (lifeRatio < 0.96 && siltClouds.length <= tendrilLimit) {
         ctx.rotate(-rot * 1.7 + 1.1);
         ctx.globalAlpha = Math.min(0.54, s.alpha * 0.42);
         ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 0.85, -r * 0.95, r * 1.9, r * 1.75);

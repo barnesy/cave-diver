@@ -5948,8 +5948,8 @@ test('v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul: modal 
   const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
 
   // 1. Centralized Modal Escape Stack orders child modals BEFORE parent modals
-  const stackStart = mainSrc.indexOf('function closeTopmostOverlay()');
-  assert.ok(stackStart > 0, 'main.js must define centralized closeTopmostOverlay()');
+  const stackStart = mainSrc.indexOf('createModalManager([');
+  assert.ok(stackStart > 0, 'main.js must wire centralized createModalManager([...])');
   const stackBlock = mainSrc.slice(stackStart, stackStart + 2600);
   assert.ok(stackBlock.indexOf('fgCardModalEl') < stackBlock.indexOf('modalLogbook'), 'Collector card must close before Logbook');
   assert.ok(stackBlock.indexOf('replayModal') < stackBlock.indexOf('modalLogbook'), 'Replay modal must close before Logbook');
@@ -6043,4 +6043,141 @@ test('v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul: modal 
   } finally {
     globalThis.document = prevDoc;
   }
+});
+
+test('v144 Modular Architecture & Adaptive 60 FPS Mobile Performance Engine: perfMonitor hysteresis, modalManager focus stack, debriefChart & zero-GC renderer', async () => {
+  const { createPerfMonitor, PERF_TIERS } = await import('../public/js/game/perfMonitor.js');
+  const { createModalManager } = await import('../public/js/ui/modalManager.js');
+  const { buildDebriefDepthChartData, renderDebriefDepthChart } = await import('../public/js/ui/debriefChart.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Adaptive 60 FPS Performance Monitor & Mobile Quality Governor
+  const pm = createPerfMonitor({ isMobile: true });
+  assert.equal(pm.getBudget().tier, 'high');
+  assert.equal(pm.getBudget().dprCap, 1.75, 'Mobile high tier should cap DPR at 1.75x');
+
+  // Tab-switch spike (>250ms) must be ignored (no false downgrade)
+  for (let i = 0; i < 60; i++) pm.recordFrame(600);
+  assert.equal(pm.getBudget().tier, 'high', 'Tab-switch spikes must not falsely downgrade tier');
+
+  // Sustained slow frames (~26ms) step smoothly from high -> balanced
+  let downgraded = false;
+  for (let i = 0; i < 60; i++) {
+    if (pm.recordFrame(26)) downgraded = true;
+  }
+  assert.equal(downgraded, true);
+  assert.equal(pm.getBudget().tier, 'balanced');
+  assert.ok(pm.getBudget().rayScale < 1 && pm.getBudget().siltTendrilLimit < 24);
+
+  // Sustained heavy mobile load (~36ms) steps balanced -> performance
+  for (let i = 0; i < 60; i++) pm.recordFrame(36);
+  assert.equal(pm.getBudget().tier, 'performance');
+  assert.equal(pm.getBudget().siltTendrilLimit, 0);
+  assert.ok(pm.getBudget().lightmapScale < 0.3);
+
+  // Sustained smooth 60 FPS headroom steps cleanly back up performance -> balanced -> high
+  for (let i = 0; i < 200; i++) pm.recordFrame(14.5);
+  assert.equal(pm.getBudget().tier, 'balanced');
+  for (let i = 0; i < 200; i++) pm.recordFrame(14.0);
+  assert.equal(pm.getBudget().tier, 'high');
+  assert.ok(pm.getStats().fps >= 55 && pm.getStats().transitions >= 4);
+
+  // 2. Reusable Modal Manager: stack order, Escape capture & keyboard focus restoration
+  let childOpen = true;
+  let parentOpen = true;
+  let focusedTrigger = false;
+  const listeners = new Map();
+  const mockTrigger = { hidden: false, closest: () => null, focus: () => { focusedTrigger = true; } };
+  const mockDoc = {
+    addEventListener(type, fn) { listeners.set(`doc:${type}`, fn); },
+    removeEventListener(type) { listeners.delete(`doc:${type}`); },
+  };
+  const mockWin = {
+    addEventListener(type, fn) { listeners.set(`win:${type}`, fn); },
+    removeEventListener(type) { listeners.delete(`win:${type}`); },
+  };
+  const mm = createModalManager(
+    [
+      { isOpen: () => childOpen, close: () => { childOpen = false; } },
+      { isOpen: () => parentOpen, close: () => { parentOpen = false; } },
+    ],
+    { doc: mockDoc, win: mockWin }
+  );
+  listeners.get('doc:pointerdown')({ target: { closest: () => mockTrigger } });
+  assert.equal(mm.getOpenCount(), 2);
+  let prevented = false;
+  listeners.get('win:keydown')({ key: 'Escape', preventDefault: () => { prevented = true; }, stopPropagation: () => {} });
+  assert.equal(prevented, true);
+  assert.equal(childOpen, false, 'Innermost child modal must close first');
+  assert.equal(parentOpen, true, 'Parent modal must remain open after first Escape');
+  assert.equal(focusedTrigger, false, 'Focus must wait until all overlays close');
+
+  listeners.get('win:keydown')({ key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
+  assert.equal(parentOpen, false);
+  assert.equal(mm.getOpenCount(), 0);
+  assert.equal(focusedTrigger, true, 'Closing final overlay must restore focus to triggering button');
+  mm.destroy();
+  assert.equal(listeners.size, 0, 'destroy() must clean up global listeners');
+
+  // 3. Standalone Debrief Depth Profile SVG Chart & Scrubber
+  const sampleProfile = [
+    { t: 0, d: 1, gas: 'EAN32', deco: 0, ppo2: 0.35, cns: 0, gf99: 10, hr: 72, bar: 200 },
+    { t: 45, d: 42, gas: 'TMX1455', deco: 0, ppo2: 0.73, cns: 8, gf99: 48, hr: 96, bar: 145 },
+    { t: 90, d: 6, gas: 'O2', deco: 6, ppo2: 1.56, cns: 22, gf99: 65, hr: 80, bar: 110 },
+    { t: 120, d: 0.5, gas: 'O2', deco: 0, ppo2: 1.05, cns: 24, gf99: 20, hr: 74, bar: 102 },
+  ];
+  const buddies = new Map([['p2', { name: 'APEX-2', points: [{ t: 0, d: 1 }, { t: 60, d: 39 }, { t: 120, d: 0.5 }] }]]);
+  const chartData = buildDebriefDepthChartData(sampleProfile, 42, { success: true, peerProfiles: buddies });
+  assert.ok(chartData && chartData.markup.includes('MAX 42m') && chartData.markup.includes('APEX-2'));
+  assert.equal(chartData.buddyCount, 1);
+
+  const wrapEl = { hidden: true };
+  const scrubEl = { textContent: '' };
+  const attrs = {};
+  const svgEl = {
+    innerHTML: '',
+    querySelector: () => ({ setAttribute: (k, v) => { attrs[k] = v; } }),
+    getBoundingClientRect: () => ({ left: 0, width: 420 }),
+  };
+  renderDebriefDepthChart({ wrapEl, svgEl, scrubEl, profile: sampleProfile, maxDepthM: 42, success: true, peerProfiles: buddies });
+  assert.equal(wrapEl.hidden, false);
+  svgEl.onpointermove({ clientX: 210 });
+  assert.ok(scrubEl.textContent.includes('PPO₂') && scrubEl.textContent.includes('GF99'));
+
+  // 4. Renderer setPerfBudget & Zero-GC _siltLightsScratch pool
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.glowStamps = { silt: {}, siltWisp: {}, rustSilt: {}, warm: {} };
+  r._siltGlareScratch = [];
+  r._siltLightsScratch = [];
+  r._needsResize = false;
+  r.setPerfBudget(PERF_TIERS.performance);
+  assert.equal(r._needsResize, true, 'Changing performance tier DPR/lightmap must flag resize');
+  assert.equal(r._perfBudget.tier, 'performance');
+
+  const clouds = Array.from({ length: 30 }, (_, i) => ({
+    x: 10 + i * 0.4,
+    y: 20 + (i % 5) * 0.4,
+    radius: 2.2,
+    alpha: i < 5 ? 0.1 : 0.65,
+    life: 4,
+    maxLife: 10,
+    seed: i,
+  }));
+  const peers = [
+    { x: 12, y: 20, angle: 0, alive: true, torchOn: true },
+    { x: 14, y: 21, angle: 0.2, alive: true, torchOn: true },
+    { x: 16, y: 22, angle: -0.2, alive: true, torchOn: true },
+  ];
+  r._drawSiltClouds(noopCtx, 800, 600, (x) => x * 20, (y) => y * 20, 20, clouds, { x: 10, y: 20, angle: 0, torchOn: true }, peers, 5.0);
+  const firstPoolRef = r._siltLightsScratch[0];
+  r._drawSiltClouds(noopCtx, 800, 600, (x) => x * 20, (y) => y * 20, 20, clouds, { x: 11, y: 20, angle: 0.1, torchOn: true }, peers, 5.1);
+  assert.equal(r._siltLightsScratch[0], firstPoolRef, '_drawSiltClouds must reuse light scratch slots with zero per-frame allocation');
 });
