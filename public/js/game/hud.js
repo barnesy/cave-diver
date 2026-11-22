@@ -880,6 +880,14 @@ export class DiveComputerHUD {
       narc: bindVital(document.getElementById('vital-narc')),
       hyp: bindVital(document.getElementById('vital-hyp')),
     };
+    this.elVitalsRow = document.getElementById('dc-vitals');
+    this._lastVitalsNominal = null;
+    this.elGasZone = document.getElementById('hud-gas-zone');
+    this.btnGasCompact = document.getElementById('btn-gas-compact');
+    this.elGasCompactName = document.getElementById('gas-compact-name');
+    this.elGasCompactBar = document.getElementById('gas-compact-bar');
+    this.elGasCompactFill = document.getElementById('gas-compact-fill');
+    this._gasDrawerOpen = false;
     this._lastObjectiveHtml = '';
     this.tankButtons = {};
 
@@ -903,9 +911,13 @@ export class DiveComputerHUD {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         onGasSelect(id);
+        this.setGasDrawerOpen(false);
       });
       btn.addEventListener('click', (e) => {
-        if (e.detail === 0) onGasSelect(id);
+        if (e.detail === 0) {
+          onGasSelect(id);
+          this.setGasDrawerOpen(false);
+        }
       });
       gasRack.appendChild(btn);
       this.tankButtons[id] = {
@@ -916,6 +928,36 @@ export class DiveComputerHUD {
         fill: btn.querySelector('.tank-gauge-fill'),
       };
     }
+
+    if (this.btnGasCompact) {
+      this.btnGasCompact.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.setGasDrawerOpen(!this._gasDrawerOpen);
+      });
+    }
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('pointerdown', (e) => {
+        if (!this._gasDrawerOpen) return;
+        if (this.elGasZone && this.elGasZone.contains(e.target)) return;
+        this.setGasDrawerOpen(false);
+      });
+    }
+  }
+
+  setGasDrawerOpen(open) {
+    const next = Boolean(open);
+    this._gasDrawerOpen = next;
+    if (this.elGasZone) this.elGasZone.classList.toggle('gas-open', next);
+    if (this.btnGasCompact) {
+      this.btnGasCompact.classList.toggle('open', next);
+      this.btnGasCompact.setAttribute('aria-expanded', next ? 'true' : 'false');
+      const caret = this.btnGasCompact.querySelector('.gas-compact-caret');
+      if (caret) caret.textContent = next ? '▾' : '▴';
+    }
+  }
+
+  isGasDrawerOpen() {
+    return Boolean(this._gasDrawerOpen);
   }
 
   _updateVitalBar(vital, pct, warnAt, dangerAt) {
@@ -1039,6 +1081,17 @@ export class DiveComputerHUD {
     this._updateVitalBar(this.vitalEls.dcs, diveState.dcsStress, 22, 65);
     this._updateVitalBar(this.vitalEls.narc, (diveState.narcosisLevel || 0) * 100, 28, 68);
     this._updateVitalBar(this.vitalEls.hyp, diveState.hypoxiaStress, 22, 65);
+    if (this.elVitalsRow) {
+      const allNominal =
+        (diveState.cnsPercent || 0) < 5 &&
+        (diveState.dcsStress || 0) < 5 &&
+        ((diveState.narcosisLevel || 0) * 100) < 5 &&
+        (diveState.hypoxiaStress || 0) < 5;
+      if (this._lastVitalsNominal !== allNominal) {
+        this._lastVitalsNominal = allNominal;
+        this.elVitalsRow.classList.toggle('all-nominal', allNominal);
+      }
+    }
 
     // Local Heartbeat, Self Name & EKG Waveform Monitor
     const myBpm = diveState.alive === false ? 0 : Math.round(diveState.heartRateBpm ?? 68);
@@ -1092,18 +1145,22 @@ export class DiveComputerHUD {
         setText(this.elReelMeters, `${remM}m / ${reelMaxMeters}m`);
         if (this.btnReelToggle) {
           setClass(this.btnReelToggle, reelingActive ? 'reel-btn active' : 'reel-btn');
-          const prefix = this._isTouchDevice ? '' : '[G] ';
+          const narrowPhone = typeof window !== 'undefined' && window.innerWidth <= 680;
+          const prefix = this._isTouchDevice || narrowPhone ? '' : '[G] ';
           setText(
             this.btnReelToggle,
             reelingActive
               ? `${prefix}TIE OFF`
               : remM < 1
-                ? 'SPOOL EMPTY'
-                : `${prefix}DEPLOY LINE`
+                ? 'EMPTY'
+                : narrowPhone
+                  ? '🧵 LINE'
+                  : `${prefix}DEPLOY LINE`
           );
         }
         if (this.btnReelRewind) {
-          setText(this.btnReelRewind, this._isTouchDevice ? 'REWIND ↩' : '[R] REWIND ↩');
+          const narrowPhone = typeof window !== 'undefined' && window.innerWidth <= 680;
+          setText(this.btnReelRewind, narrowPhone ? '↩' : this._isTouchDevice ? 'REWIND ↩' : '[R] REWIND ↩');
         }
       } else {
         setHidden(this.elReelRow, true);
@@ -1175,6 +1232,24 @@ export class DiveComputerHUD {
       const fillPct = Math.max(0, Math.min(100, Math.round((tank.bar / mix.startBar) * 200) * 0.5));
       setStyleProp(ui.fill, 'width', `${fillPct}%`);
       setStyleProp(ui.fill, 'backgroundColor', tank.bar < 45 ? '#ef4444' : mix.color);
+    }
+
+    // Mobile Compact Single-Button Active Gas Pill (v149)
+    if (this.btnGasCompact) {
+      const actId = diveState.activeGasId;
+      const actTank = diveState.tanks[actId];
+      const actMix = mixMap[actId] || GAS_MIXES[actId];
+      const targetRecId = calloutPrompt?.targetGas || (recGasId !== actId ? recGasId : null);
+      const needsSwitch = Boolean(targetRecId && targetRecId !== actId);
+      const isUrgent = Boolean(needsSwitch && calloutPrompt?.severity === 'danger');
+      const recMix = targetRecId ? (mixMap[targetRecId] || GAS_MIXES[targetRecId]) : null;
+      const compactCls = `gas-compact-btn${this._gasDrawerOpen ? ' open' : ''}${needsSwitch ? ' needs-switch' : ''}${isUrgent ? ' urgent' : ''}`;
+      setClass(this.btnGasCompact, compactCls);
+      setText(this.elGasCompactName, needsSwitch && recMix ? `→ ${recMix.name}` : actMix.name);
+      setText(this.elGasCompactBar, `${Math.round(actTank?.bar ?? 0)}b`);
+      const actPct = Math.max(0, Math.min(100, Math.round(((actTank?.bar ?? 0) / (actMix.startBar || 200)) * 200) * 0.5));
+      setStyleProp(this.elGasCompactFill, 'width', `${actPct}%`);
+      setStyleProp(this.elGasCompactFill, 'backgroundColor', (actTank?.bar ?? 0) < 45 ? '#ef4444' : actMix.color);
     }
 
     // Alerts Strip (uses active level mixMap so gasOverrides on L12–L20 display accurately)

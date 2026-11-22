@@ -6510,3 +6510,27 @@ test('v148 Mechanical Craft & Articulated Apparatus Overhaul: mechanicalFx pool,
   r._perfBudget = { tier: 'performance' };
   r._drawMechanicalFx(noopCtx, fxRender, toX, toY, 24, 2.6);
 });
+
+test('v149 Mobile Phone Width Radical HUD Simplification: 1-button Gas Pill, 2-col Dive Kit, 3-icon top bar & zero-overlap comms', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const hudSrc = fs.readFileSync(new URL('../public/js/game/hud.js', import.meta.url), 'utf8');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Compact single-button gas selector + mobile Dive Kit tools exist in index.html
+  assert.ok(html.includes('id="btn-gas-compact"'), 'Mobile single-button Gas Pill must exist');
+  assert.ok(html.includes('id="hud-gas-zone"'), 'Gas zone container must expose #hud-gas-zone');
+  assert.ok(html.includes('id="btn-kit-sonar"') && html.includes('id="btn-kit-dpv"'), 'Mobile Dive Kit must include Sonar & DPV');
+  assert.ok(html.includes('id="btn-kit-camera"') && html.includes('id="btn-kit-torch"'), 'Mobile Dive Kit must include Camera & Torch');
+
+  // 2. CSS simplifies phone width (<= 680px): hides redundant top/comms/gear buttons, collapses gas drawer & nominal vitals
+  assert.ok(css.includes('.coop-comms .comm-btn[data-signal]'), 'Mobile CSS must hide static 5-pill quick-comms bar that overlapped Reel');
+  assert.ok(css.includes('.hud-gas-zone.gas-open .dc-gas-rack'), 'Mobile CSS must float 3-tank gas drawer above compact gas pill');
+  assert.ok(css.includes('.dc-vitals-row.all-nominal'), 'Mobile CSS must auto-hide 0% nominal stress bars');
+  assert.ok(css.includes('grid-template-columns: 1fr 1fr') && css.includes('.mobile-only-kit:not([hidden])'), 'Mobile Dive Kit must render as clean 2-col grid');
+
+  // 3. HUD & main.js wire gas drawer toggle, Escape close, nominal vitals class & mobile kit delegates
+  assert.ok(hudSrc.includes('setGasDrawerOpen') && hudSrc.includes('all-nominal'), 'hud.js must manage mobile gas drawer & nominal vitals class');
+  assert.ok(mainSrc.includes('isGasDrawerOpen') && mainSrc.includes('btnKitCamera') && mainSrc.includes('btnKitTorch'), 'main.js must wire Escape gas close & mobile kit buttons');
+});
