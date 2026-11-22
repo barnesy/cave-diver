@@ -6188,3 +6188,32 @@ test('v144 Modular Architecture & Adaptive 60 FPS Mobile Performance Engine: per
   r._drawSiltClouds(noopCtx, 800, 600, (x) => x * 20, (y) => y * 20, 20, clouds, { x: 11, y: 20, angle: 0.1, torchOn: true }, peers, 5.1);
   assert.equal(r._siltLightsScratch[0], firstPoolRef, '_drawSiltClouds must reuse light scratch slots with zero per-frame allocation');
 });
+
+test('v146 Zoned Right-Wing Dive Console & Floating Dive Kit Popover: passive pills relocated, 3 visual zones & Escape wiring', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Passive status pills (CCR & DRILLS) live in .hud-self-row (NOT mixed into right-wing action dock)
+  const selfRowStart = html.indexOf('<div class="hud-self-row">');
+  const selfRowEnd = html.indexOf('</div>', selfRowStart);
+  const selfRowHtml = html.slice(selfRowStart, selfRowEnd);
+  assert.ok(selfRowHtml.includes('id="hud-ccr-pill"'), 'Passive CCR pill should reside in top-left .hud-self-row');
+  assert.ok(selfRowHtml.includes('id="hud-drill-pill"'), 'Passive Drills pill should reside in top-left .hud-self-row');
+
+  // 2. Right wing is cleanly zoned: Gear bar + Floating Dive Kit popover | Reel zone | Gas Manifold zone
+  const rwStart = html.indexOf('<div class="hud-right-wing">');
+  const rwEnd = html.indexOf('<div id="shearwater-panel"', rwStart);
+  const rwHtml = html.slice(rwStart, rwEnd);
+  assert.equal(rwHtml.includes('id="hud-ccr-pill"'), false, 'Right wing should not mix passive CCR pill with buttons');
+  assert.equal(rwHtml.includes('id="hud-drill-pill"'), false, 'Right wing should not mix passive Drills pill with buttons');
+  assert.ok(rwHtml.includes('id="hud-kit-popover"'), 'Right wing must include floating #hud-kit-popover');
+  assert.ok(rwHtml.includes('class="gear-bar-row"'), 'Right wing must include compact single-row .gear-bar-row');
+  assert.ok(rwHtml.includes('class="hud-gas-zone"') && rwHtml.includes('GAS MANIFOLD'), 'Right wing must zone the Gas Manifold');
+  assert.ok(rwHtml.includes('reel-zone-tag'), 'Right wing must clearly label the Guideline Reel zone');
+
+  // 3. Dive Kit popover is styled as floating overlay and wired into modalManager Escape stack
+  assert.ok(css.includes('.hud-kit-popover') && css.includes('bottom: calc(100% + 6px)'), 'Dive Kit popover must float cleanly above right wing');
+  assert.ok(mainSrc.includes('hudKitPopoverEl') && mainSrc.includes('setKitPopoverOpen(false)'), 'main.js must wire Dive Kit popover toggle & Escape close');
+});

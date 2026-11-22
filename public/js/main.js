@@ -567,7 +567,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=145" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=146" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1188,6 +1188,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, close: () => closeLogbookModal() },
   { isOpen: () => Boolean(signalWheelOpen), close: () => toggleSignalWheel(false) },
   { isOpen: () => Boolean(shearwaterOpen), close: () => toggleShearwaterComputer(false) },
+  { isOpen: () => typeof hudKitPopoverEl !== 'undefined' && hudKitPopoverEl && !hudKitPopoverEl.hidden, close: () => setKitPopoverOpen(false) },
   { isOpen: () => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, close: () => setHudMenuOpen(false) },
   { isOpen: () => typeof homeMenuPopover !== 'undefined' && homeMenuPopover && !homeMenuPopover.hidden, close: () => setHomeMenuOpen(false) },
 ]);
@@ -1303,6 +1304,7 @@ if (signalWheelGridEl) {
 }
 btnHudSignalsEl?.addEventListener('click', (e) => {
   e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   toggleSignalWheel();
 });
 btnSignalWheelClose?.addEventListener('click', (e) => {
@@ -1336,6 +1338,7 @@ function toggleShearwaterComputer(forceState) {
 }
 btnHudComputerEl?.addEventListener('click', (e) => {
   e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   toggleShearwaterComputer();
 });
 btnShearwaterCloseEl?.addEventListener('click', (e) => {
@@ -2059,6 +2062,7 @@ btnHudDpv?.addEventListener('click', (e) => {
 });
 btnHudStage?.addEventListener('click', (e) => {
   e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   handleStageDrop();
 });
 
@@ -2113,23 +2117,25 @@ function syncTechGearHud(sess) {
     if (drillsOn) {
       if (activeDrillKind === 'mask-flood') {
         hudDrillPill.textContent = '🫧 MASK FLOOD [E]';
-        hudDrillPill.className = 'gear-hud-pill drill alert';
+        hudDrillPill.className = 'gear-hud-pill drill status-strip-pill alert';
       } else if (activeDrillKind === 'torch-fail') {
         hudDrillPill.textContent = '🔦 LIGHT FAIL [L]';
-        hudDrillPill.className = 'gear-hud-pill drill alert';
+        hudDrillPill.className = 'gear-hud-pill drill status-strip-pill alert';
       } else if (activeDrillKind === 'free-flow') {
         hudDrillPill.textContent = '🔧 FREE-FLOW [E]';
-        hudDrillPill.className = 'gear-hud-pill drill alert';
+        hudDrillPill.className = 'gear-hud-pill drill status-strip-pill alert';
       } else {
         hudDrillPill.textContent = drillsDone > 0 ? `⚡ DRILLS · ${drillsDone}✓` : '⚡ DRILLS';
-        hudDrillPill.className = 'gear-hud-pill drill';
+        hudDrillPill.className = 'gear-hud-pill drill status-strip-pill';
       }
     }
   }
   if (btnHudStage) {
     btnHudStage.hidden = false;
-    btnHudStage.innerHTML = staged ? '🛢 STAGED (+6%)' : '🛢 STAGE <span class="kbd-hint">[T]</span>';
-    btnHudStage.className = `gear-hud-btn stage gear-secondary ${staged ? 'staged' : canStage ? '' : 'low'}`;
+    btnHudStage.innerHTML = staged
+      ? '<span class="kit-item-label">🛢 Stage Staged (+6%)</span><span class="kbd-hint kit-kbd">✓</span>'
+      : '<span class="kit-item-label">🛢 Stage Bailout</span><span class="kbd-hint kit-kbd">T</span>';
+    btnHudStage.className = `kit-item stage ${staged ? 'staged' : canStage ? '' : 'low'}`;
   }
   if (btnHudSonar) {
     btnHudSonar.hidden = !hasSonar;
@@ -2141,7 +2147,7 @@ function syncTechGearHud(sess) {
   if (btnHudDpv) {
     btnHudDpv.hidden = !hasDpv;
     if (hasDpv) {
-      btnHudDpv.textContent = dpvPct <= 0 ? '🔋 DPV 0%' : dpvOn ? `🛴 DPV ON · ${dpvPct}%` : `🛴 DPV · ${dpvPct}%`;
+      btnHudDpv.textContent = dpvPct <= 0 ? '🔋 DPV 0%' : dpvOn ? `🛴 DPV ON · ${dpvPct}%` : `🛴 DPV ${dpvPct}%`;
       btnHudDpv.className = `gear-hud-btn dpv ${dpvPct <= 0 ? 'empty' : dpvOn ? 'active' : ''}`;
     }
   }
@@ -2149,8 +2155,11 @@ function syncTechGearHud(sess) {
     hudCcrPill.hidden = !hasCcr;
     if (hasCcr) {
       hudCcrPill.textContent = ccrPct <= 0 ? '🫁 CCR BAILOUT' : `🫁 CCR ${ccrPct}%`;
-      hudCcrPill.className = `gear-hud-pill ccr ${ccrPct < 20 ? 'low' : ''}`;
+      hudCcrPill.className = `gear-hud-pill ccr status-strip-pill ${ccrPct < 20 ? 'low' : ''}`;
     }
+  }
+  if (typeof btnHudGearMoreEl !== 'undefined' && btnHudGearMoreEl) {
+    btnHudGearMoreEl.classList.toggle('has-active', Boolean(staged || shearwaterOpen || signalWheelOpen));
   }
 }
 
@@ -4579,6 +4588,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   pendingUnsafeGasId = '';
   pendingUnsafeGasAt = 0;
   resetAbortArmState();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   try { document.activeElement?.blur?.(); } catch {}
   rewindHoldTimer = 0;
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
@@ -6374,12 +6384,26 @@ btnHudCompactEl?.addEventListener('click', () => {
 });
 
 const btnHudGearMoreEl = document.getElementById('btn-hud-gear-more');
-btnHudGearMoreEl?.addEventListener('click', () => {
-  if (!hudGearDockEl) return;
-  const next = !hudGearDockEl.classList.contains('gear-expanded');
-  hudGearDockEl.classList.toggle('gear-expanded', next);
-  btnHudGearMoreEl.setAttribute('aria-expanded', next ? 'true' : 'false');
-  btnHudGearMoreEl.textContent = next ? '🧰 TOOLS ▴' : '🧰 TOOLS ▾';
+const hudKitPopoverEl = document.getElementById('hud-kit-popover');
+function setKitPopoverOpen(open) {
+  const next = Boolean(open);
+  if (hudKitPopoverEl) hudKitPopoverEl.hidden = !next;
+  if (btnHudGearMoreEl) {
+    btnHudGearMoreEl.classList.toggle('open', next);
+    btnHudGearMoreEl.setAttribute('aria-expanded', next ? 'true' : 'false');
+    const caret = btnHudGearMoreEl.querySelector('.kit-caret');
+    if (caret) caret.textContent = next ? '▾' : '▴';
+  }
+}
+btnHudGearMoreEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const currentlyOpen = Boolean(hudKitPopoverEl && !hudKitPopoverEl.hidden);
+  setKitPopoverOpen(!currentlyOpen);
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!hudKitPopoverEl || hudKitPopoverEl.hidden) return;
+  if (hudGearDockEl && hudGearDockEl.contains(e.target)) return;
+  setKitPopoverOpen(false);
 });
 
 btnSetupDrawerEl?.addEventListener('click', () => {

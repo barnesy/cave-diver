@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="145" />
+  <meta name="app-version" content="146" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=145" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=145" />
-  <link rel="stylesheet" href="./css/style.css?v=145" />
+  <link rel="icon" href="./icons/icon-192.png?v=146" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=146" />
+  <link rel="stylesheet" href="./css/style.css?v=146" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=145" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=146" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=145" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=146" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -157,7 +157,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v145</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v146</button>
               </div>
             </div>
           </div>
@@ -384,6 +384,8 @@
         <span id="dc-self-name" class="self-tag" title="Your Callsign">YOU</span>
         <span id="dc-mode-badge" class="mode-badge hud-mode-badge mode-standard" title="Active Dive Realism Mode">🤿 TECH</span>
         <span id="dc-daily-badge" class="daily-hud-badge" hidden title="Active Daily Expedition Mutator"></span>
+        <span id="hud-ccr-pill" class="gear-hud-pill ccr status-strip-pill" hidden title="Closed-Circuit Rebreather CO₂ Scrubber">🫁 CCR 100%</span>
+        <span id="hud-drill-pill" class="gear-hud-pill drill status-strip-pill" hidden title="Emergency Failure Drills Active">⚡ DRILLS</span>
       </div>
       <div id="coop-wait-banner" class="coop-wait-banner" hidden role="status" aria-live="polite">
         <div class="coop-wait-info">
@@ -546,23 +548,41 @@
         </div>
       </div>
 
-      <!-- Right Wing: Tech Gear Controls + Guideline Controls + Gas Tank Controls -->
+      <!-- Right Wing: Zoned Dive Console (1. Active Gear & Kit Popover | 2. Guideline Reel | 3. Gas Manifold) -->
       <div class="hud-right-wing">
-        <div id="hud-gear-dock" class="hud-gear-dock" hidden aria-label="Tech Gear Controls">
-          <span id="hud-drill-pill" class="gear-hud-pill drill" hidden title="Emergency Failure Drills Active">⚡ DRILLS</span>
-          <button id="btn-hud-gear-more" class="gear-hud-btn gear-more-btn" type="button" aria-expanded="false" title="Show or hide secondary dive tools (Signals, Computer, Stage)">🧰 TOOLS ▾</button>
-          <button id="btn-hud-signals" class="gear-hud-btn signals gear-secondary" type="button" title="Scuba Hand-Signals &amp; Torch Light-Signaling Wheel (H)">🤙 SIGNAL <span class="kbd-hint">[H]</span></button>
-          <button id="btn-hud-computer" class="gear-hud-btn computer gear-secondary" type="button" title="Toggle Shearwater ZH-L16C Tissue Dive Computer (X)">🖥 COMP <span class="kbd-hint">[X]</span></button>
-          <button id="btn-hud-stage" class="gear-hud-btn stage gear-secondary" type="button" title="Clip AL80 Stage Bottle for Exit Bailout (T)">🛢 STAGE <span class="kbd-hint">[T]</span></button>
-          <button id="btn-hud-sonar" class="gear-hud-btn sonar" type="button" hidden title="Pulse Cave Sonar (Q)">📡 SONAR <span class="kbd-hint">[Q]</span></button>
-          <button id="btn-hud-dpv" class="gear-hud-btn dpv" type="button" hidden title="Toggle DPV Scooter (V)">🛴 DPV 100%</button>
-          <span id="hud-ccr-pill" class="gear-hud-pill ccr" hidden title="Closed-Circuit Rebreather CO₂ Scrubber">🫁 CCR 100%</span>
+        <div id="hud-gear-dock" class="hud-gear-dock" hidden aria-label="Active Dive Gear &amp; Kit">
+          <div id="hud-kit-popover" class="hud-kit-popover" role="menu" aria-label="Dive Kit Tools" hidden>
+            <div class="kit-pop-hdr">DIVE KIT</div>
+            <button id="btn-hud-stage" class="kit-item stage" type="button" role="menuitem" title="Clip AL80 Stage Bottle for Exit Bailout (T)">
+              <span class="kit-item-label">🛢 Stage Bailout</span>
+              <span class="kbd-hint kit-kbd">T</span>
+            </button>
+            <button id="btn-hud-computer" class="kit-item computer" type="button" role="menuitem" title="Toggle Shearwater ZH-L16C Tissue Dive Computer (X)">
+              <span class="kit-item-label">🖥 Tissue Computer</span>
+              <span class="kbd-hint kit-kbd">X</span>
+            </button>
+            <button id="btn-hud-signals" class="kit-item signals" type="button" role="menuitem" title="Scuba Hand-Signals &amp; Torch Light-Signaling Wheel (H)">
+              <span class="kit-item-label">🤙 Hand Signals</span>
+              <span class="kbd-hint kit-kbd">H</span>
+            </button>
+          </div>
+          <div class="gear-bar-row">
+            <button id="btn-hud-sonar" class="gear-hud-btn sonar" type="button" hidden title="Pulse Cave Sonar (Q)">📡 SONAR <span class="kbd-hint">[Q]</span></button>
+            <button id="btn-hud-dpv" class="gear-hud-btn dpv" type="button" hidden title="Toggle DPV Scooter (V)">🛴 DPV 100%</button>
+            <button id="btn-hud-gear-more" class="gear-hud-btn kit-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="hud-kit-popover" title="Open Dive Kit (Stage Bailout, Tissue Computer, Hand Signals)">🧰 KIT <span class="kit-caret" aria-hidden="true">▴</span></button>
+          </div>
         </div>
         <div id="hud-reel-dock" class="hud-reel-dock" hidden aria-label="Guideline Spool Controls">
-          <button id="btn-reel-toggle" class="reel-btn" type="button" title="Deploy or Terminate Guideline (G)"><span class="kbd-hint">[G] </span>DEPLOY LINE</button>
-          <button id="btn-reel-rewind" class="reel-btn ghost" type="button" title="Rewind Last Segment (R)"><span class="kbd-hint">[R] </span>REWIND ↩</button>
+          <span class="zone-micro-tag reel-zone-tag" aria-hidden="true">REEL</span>
+          <div class="reel-btn-group">
+            <button id="btn-reel-toggle" class="reel-btn" type="button" title="Deploy or Terminate Guideline (G)"><span class="kbd-hint">[G] </span>DEPLOY LINE</button>
+            <button id="btn-reel-rewind" class="reel-btn ghost" type="button" title="Rewind Last Segment (R)"><span class="kbd-hint">[R] </span>REWIND ↩</button>
+          </div>
         </div>
-        <div id="dc-gas-rack" class="dc-gas-rack" aria-label="Gas Cylinder Controls"></div>
+        <div class="hud-gas-zone">
+          <div class="zone-micro-hdr" aria-hidden="true"><span>GAS MANIFOLD</span><span class="kbd-hint">1 · 2 · 3</span></div>
+          <div id="dc-gas-rack" class="dc-gas-rack" aria-label="Gas Cylinder Controls"></div>
+        </div>
       </div>
       <div id="shearwater-panel" class="shearwater-panel" hidden aria-label="Shearwater Technical Dive Computer">
         <div class="shearwater-head">
@@ -1266,80 +1286,80 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=145",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=145",
-        "./js/game/audio.js": "./js/game/audio.js?v=145",
-        "./js/game/collision.js": "./js/game/collision.js?v=145",
-        "./js/game/input.js": "./js/game/input.js?v=145",
-        "./js/game/hud.js": "./js/game/hud.js?v=145",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=145",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=145",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=145",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=145",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=145",
-        "./js/game/weather.js": "./js/game/weather.js?v=145",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=145",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=145",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=145",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=145",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=145",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=145",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=145",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=145",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=145",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=145",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=145",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=145",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=145",
-        "./js/game/silt.js": "./js/game/silt.js?v=145",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=145",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=145",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=145",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=145",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=145",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=145",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=145",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=145",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=145",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=145",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=145",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=145",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=145",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=145",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=145",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=145",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=145",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=145",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=145",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=145",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=145",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=145",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=145",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=145",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=145",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=145",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=145",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=145",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=145",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=145",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=145",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=145",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=145",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=145",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=145",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=145",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=145",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=145",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=145",
-        "./js/levels/index.js": "./js/levels/index.js?v=145",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=145",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=145",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=145",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=145",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=145"
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=146",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=146",
+        "./js/game/audio.js": "./js/game/audio.js?v=146",
+        "./js/game/collision.js": "./js/game/collision.js?v=146",
+        "./js/game/input.js": "./js/game/input.js?v=146",
+        "./js/game/hud.js": "./js/game/hud.js?v=146",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=146",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=146",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=146",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=146",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=146",
+        "./js/game/weather.js": "./js/game/weather.js?v=146",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=146",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=146",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=146",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=146",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=146",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=146",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=146",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=146",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=146",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=146",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=146",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=146",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=146",
+        "./js/game/silt.js": "./js/game/silt.js?v=146",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=146",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=146",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=146",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=146",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=146",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=146",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=146",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=146",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=146",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=146",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=146",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=146",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=146",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=146",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=146",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=146",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=146",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=146",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=146",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=146",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=146",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=146",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=146",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=146",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=146",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=146",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=146",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=146",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=146",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=146",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=146",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=146",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=146",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=146",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=146",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=146",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=146",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=146",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=146",
+        "./js/levels/index.js": "./js/levels/index.js?v=146",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=146",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=146",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=146",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=146",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=146"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=145"></script>
+  <script type="module" src="./js/main.js?v=146"></script>
 </body>
 </html>

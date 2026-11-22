@@ -7060,29 +7060,277 @@ button.mode-badge:hover {
   }
 }
 
-/* Mobile Secondary Tools Drawer in HUD Gear Dock */
-.gear-more-btn {
-  display: none;
+/* ============================================================================
+   v146 Zoned Right-Wing Dive Console & Floating Dive Kit Popover
+   (Zone 1: Active Gear + Kit Popover | Zone 2: Guideline Reel | Zone 3: Gas Manifold)
+   ============================================================================ */
+
+/* Passive status pills relocated from right wing into top-left status strip */
+.hud-self-row .status-strip-pill {
+  padding: 2px 7px;
+  font-size: 0.62rem;
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
+.hud-self-row .gear-hud-pill.drill.alert {
+  border-color: rgba(248, 113, 113, 0.9);
+  background: rgba(153, 27, 27, 0.72);
+  color: #fee2e2;
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.48);
+  animation: abortArmPulse 0.75s ease-in-out infinite alternate;
+}
+
+/* Right Wing Zoned Container */
+.hud-right-wing {
+  gap: 6px;
+}
+
+/* ZONE 1: Single-Row Active Gear Bar + Floating Dive Kit Popover */
+.hud-gear-dock {
+  position: relative;
+  display: block;
+  margin-bottom: 0;
+  pointer-events: auto;
+}
+.hud-gear-dock[hidden] {
+  display: none !important;
+}
+.gear-bar-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 11px;
+  background: rgba(6, 15, 29, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.gear-bar-row .gear-hud-btn {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+.gear-bar-row .kit-toggle-btn {
+  flex: 0 0 auto;
+  position: relative;
+  border-color: rgba(148, 163, 184, 0.36);
+  background: rgba(15, 27, 46, 0.92);
+  color: #cbd5e1;
+}
+.gear-bar-row .kit-toggle-btn:hover,
+.gear-bar-row .kit-toggle-btn.open {
+  border-color: rgba(56, 189, 248, 0.75);
+  background: rgba(14, 116, 144, 0.38);
+  color: #f0f9ff;
+}
+.gear-bar-row .kit-toggle-btn.has-active::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+/* Floating Dive Kit Popover (anchored cleanly above the right wing — zero layout shift) */
+.hud-kit-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 196px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(5, 13, 26, 0.97);
+  border: 1px solid rgba(56, 189, 248, 0.44);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(186, 230, 253, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: var(--z-popover);
+  pointer-events: auto;
+  animation: kitPopRise 0.14s ease-out both;
+}
+.hud-kit-popover[hidden] {
+  display: none !important;
+}
+@keyframes kitPopRise {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.kit-pop-hdr {
+  padding: 2px 6px 3px;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  margin-bottom: 2px;
+}
+.kit-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.kit-item:hover {
+  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(14, 116, 144, 0.28);
+  color: #f8fafc;
+}
+.kit-item.active {
+  border-color: rgba(56, 189, 248, 0.85);
+  background: rgba(14, 116, 144, 0.42);
+  color: #bae6fd;
+}
+.kit-item.staged {
+  border-color: rgba(74, 222, 128, 0.72);
+  background: rgba(20, 83, 45, 0.42);
+  color: #bbf7d0;
+}
+.kit-item.low {
+  opacity: 0.62;
+}
+.kit-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+/* ZONE 2: Guideline Reel Bar (warm amber navigation module) */
+.hud-reel-dock {
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 5px;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(16, 14, 10, 0.9);
+}
+.zone-micro-tag {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fbbf24;
+  opacity: 0.85;
+  padding-left: 2px;
+  line-height: 1;
+}
+.reel-btn-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+}
+.reel-btn-group .reel-btn {
+  text-align: center;
+  padding: 5px 6px;
+}
+
+/* ZONE 3: Anchored Gas Manifold Container */
+.hud-gas-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 12px;
+  background: rgba(6, 15, 29, 0.94);
+  border: 1.5px solid var(--bezel-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  pointer-events: auto;
+}
+.zone-micro-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px 2px;
+  background: rgba(10, 22, 40, 0.92);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.18);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #7dd3fc;
+}
+.zone-micro-hdr .kbd-hint {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.hud-gas-zone .dc-gas-rack {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Mobile Portrait Zoning Refinements (<= 600px) */
 @media (max-width: 600px) {
-  .gear-more-btn {
-    display: inline-flex;
+  .gear-bar-row {
+    flex-wrap: wrap;
+    padding: 3px;
+    gap: 3px;
   }
-  .hud-gear-dock:not(.gear-expanded) .gear-secondary {
-    display: none;
-  }
-  .gear-hud-btn,
-  .gear-hud-pill {
+  .gear-bar-row .gear-hud-btn {
     min-height: 32px;
-    padding: 5px 8px;
-    font-size: 0.68rem;
+    padding: 5px 6px;
+    font-size: 0.64rem;
+  }
+  .hud-kit-popover {
+    min-width: 178px;
+  }
+  .kit-item {
+    min-height: 42px;
+    font-size: 0.74rem;
+  }
+  .reel-btn-group {
+    grid-template-columns: 1fr;
+  }
+  .zone-micro-hdr {
+    padding: 2px 6px;
+    font-size: 0.5rem;
   }
 }
 
 /* Compact / Immersion HUD Mode (toggled from HUD menu) */
 .hud-layer.hud-compact .hud-self-row,
 .hud-layer.hud-compact .dc-vitals-row,
-.hud-layer.hud-compact .hud-gear-dock .gear-secondary,
+.hud-layer.hud-compact .zone-micro-hdr,
+.hud-layer.hud-compact .zone-micro-tag,
 .hud-layer.hud-compact .obj-hint {
   display: none !important;
 }
@@ -7092,6 +7340,7 @@ button.mode-badge:hover {
 }
 .hud-layer.hud-compact .dive-telemetry,
 .hud-layer.hud-compact .self-health-card,
-.hud-layer.hud-compact .dc-gas-rack {
+.hud-layer.hud-compact .hud-gas-zone,
+.hud-layer.hud-compact .gear-bar-row {
   background: rgba(4, 12, 24, 0.72);
 }
