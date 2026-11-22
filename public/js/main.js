@@ -76,6 +76,7 @@ import {
   getEffectiveReelRemainingM,
   triggerWreckAction,
   dropStageTank,
+  toggleLiftBag,
   resolveEmergencyDrill,
   toggleDpvScooter,
   triggerSonarPing,
@@ -567,7 +568,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=146" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=147" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1244,6 +1245,7 @@ const input = new InputController({
   onCameraSnap: () => (photoModeState.active ? savePhotoStudioSnapshot() : handleCameraSnap()),
   onBuddyPing: () => handleBuddyLocatePing(''),
   onStageDrop: () => handleStageDrop(),
+  onLiftBagToggle: () => handleLiftBagToggle(),
   onComputerToggle: () => toggleShearwaterComputer(),
   onSignalWheelToggle: () => toggleSignalWheel(),
   onPhotoModeToggle: () => {
@@ -1584,6 +1586,7 @@ function savePhotoStudioSnapshot() {
         cutSnagIds: session.cutSnagIds,
         activeSnagIndex: session.activeSnagIndex,
         openedHatchIds: session.openedHatchIds,
+        equalizedHatchIds: session.equalizedHatchIds,
         crankingHatchId: session.crankingHatchId,
         crankingHatchProgress: session.crankingHatchProgress,
         claimedStageIds: session.claimedStageIds,
@@ -1591,6 +1594,7 @@ function savePhotoStudioSnapshot() {
       },
       encounters: session.encounters || null,
       hazards: session.hazards || null,
+      salvage: session.salvage || null,
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       droppedStages: session.droppedStages || null,
@@ -1715,9 +1719,11 @@ const gearDockSubEl = document.getElementById('gear-dock-sub');
 const hudGearDockEl = document.getElementById('hud-gear-dock');
 const hudDrillPill = document.getElementById('hud-drill-pill');
 const btnHudStage = document.getElementById('btn-hud-stage');
+const btnHudLiftBag = document.getElementById('btn-hud-liftbag');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
+const hudTrimPill = document.getElementById('hud-trim-pill');
 const debriefGearBadgeEl = document.getElementById('debrief-gear-badge');
 const dailyChallengeCardEl = document.getElementById('daily-challenge-card');
 const dailyDateLabelEl = document.getElementById('daily-date-label');
@@ -2065,6 +2071,26 @@ btnHudStage?.addEventListener('click', (e) => {
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   handleStageDrop();
 });
+btnHudLiftBag?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+  handleLiftBagToggle();
+});
+
+function handleLiftBagToggle() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  audio.unlock();
+  const res = toggleLiftBag(session, {
+    onLiftBagToggle: (inflated) => {
+      if (inflated) audio.playFreeFlowHiss?.();
+      audio.playClipLine?.(inflated);
+      audio.vibrate?.(inflated ? [18, 26, 22] : 14);
+    },
+    onToast: (txt, sec) => showToast(txt, sec),
+  });
+  syncTechGearHud(session);
+  return Boolean(res?.ok);
+}
 
 function handleStageDrop() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
@@ -2107,7 +2133,11 @@ function syncTechGearHud(sess) {
   const dpvPct = Math.round(sess.dpv?.batteryPct ?? 100);
   const dpvOn = Boolean(sess.dpv?.active);
   const ccrPct = Math.round(sess.diveState?.ccrScrubberPct ?? 100);
-  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
+  const lbActive = Boolean(sess.salvage?.liftBagActive);
+  const trimStatus = sess.salvage?.status || 'neutral';
+  const trimLabel = sess.salvage?.label || '';
+  const payloadKg = Math.round(sess.salvage?.payloadKg || 0);
+  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}`;
   if (key === lastGearHudKey) return;
   lastGearHudKey = key;
   hudGearDockEl.hidden = false;
@@ -2137,6 +2167,24 @@ function syncTechGearHud(sess) {
       : '<span class="kit-item-label">🛢 Stage Bailout</span><span class="kbd-hint kit-kbd">T</span>';
     btnHudStage.className = `kit-item stage ${staged ? 'staged' : canStage ? '' : 'low'}`;
   }
+  if (btnHudLiftBag) {
+    btnHudLiftBag.hidden = false;
+    btnHudLiftBag.innerHTML = lbActive
+      ? '<span class="kit-item-label">🎈 Vent Lift Bag</span><span class="kbd-hint kit-kbd">Y</span>'
+      : payloadKg >= 6
+        ? `<span class="kit-item-label">🎈 Lift Bag (-${payloadKg}kg)</span><span class="kbd-hint kit-kbd">Y</span>`
+        : '<span class="kit-item-label">🎈 Lift Bag</span><span class="kbd-hint kit-kbd">Y</span>';
+    btnHudLiftBag.className = `kit-item liftbag${lbActive ? ' active' : ''}`;
+  }
+  if (hudTrimPill) {
+    const showTrim = Boolean(trimLabel);
+    hudTrimPill.hidden = !showTrim;
+    if (showTrim) {
+      hudTrimPill.textContent = trimLabel;
+      const trimCls = lbActive && trimStatus === 'neutral' ? 'liftbag-ok' : trimStatus;
+      hudTrimPill.className = `gear-hud-pill trim status-strip-pill ${trimCls}`;
+    }
+  }
   if (btnHudSonar) {
     btnHudSonar.hidden = !hasSonar;
     if (hasSonar) {
@@ -2159,7 +2207,7 @@ function syncTechGearHud(sess) {
     }
   }
   if (typeof btnHudGearMoreEl !== 'undefined' && btnHudGearMoreEl) {
-    btnHudGearMoreEl.classList.toggle('has-active', Boolean(staged || shearwaterOpen || signalWheelOpen));
+    btnHudGearMoreEl.classList.toggle('has-active', Boolean(staged || lbActive || shearwaterOpen || signalWheelOpen));
   }
 }
 
@@ -4494,6 +4542,9 @@ function renderDebriefCertifications(logbook) {
 function handleWreckAction() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
   const res = triggerWreckAction(session, sessionStepCallbacks);
+  if (res?.kind === 'inflate-liftbag') {
+    syncTechGearHud(session);
+  }
   return Boolean(res?.handled);
 }
 
@@ -4517,10 +4568,10 @@ function syncWreckActionHud(prompt) {
   if (key === lastWreckActionKey) return;
   lastWreckActionKey = key;
   btnWreckAction.classList.toggle('is-cut', prompt.kind === 'cut-net');
-  btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch');
+  btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch' || prompt.kind === 'equalize-valve');
   btnWreckAction.classList.toggle('is-clip', prompt.kind === 'clip-line');
   btnWreckAction.classList.toggle('is-unclip', prompt.kind === 'unclip-line');
-  btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage');
+  btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage' || prompt.kind === 'inflate-liftbag');
   btnWreckAction.classList.toggle('is-marker', prompt.kind === 'place-marker');
   if (wreckActionLabelEl) wreckActionLabelEl.textContent = prompt.label;
   if (wreckActionDetailEl) wreckActionDetailEl.textContent = prompt.detail || '';
@@ -7900,6 +7951,16 @@ const sessionStepCallbacks = {
   onHullGroan: (depthRatio) => audio.playHullGroan(depthRatio),
   onHatchCrank: (progress) => audio.playHatchCrank(progress),
   onHatchOpen: () => audio.playHatchOpen(),
+  onValveEqualize: () => {
+    audio.playFreeFlowHiss();
+    audio.playClipLine(true);
+    audio.vibrate?.([14, 22, 16]);
+  },
+  onLiftBagToggle: (inflated) => {
+    if (inflated) audio.playFreeFlowHiss();
+    audio.playClipLine(inflated);
+    audio.vibrate?.(inflated ? [18, 26, 22] : 14);
+  },
   onLineCut: () => audio.playLineCut(),
   onClipLine: (clipped) => audio.playClipLine(clipped),
   onStageRefill: () => audio.playGasShare(),
@@ -8364,6 +8425,7 @@ const _frameWreckState = {
   cutSnagIds: null,
   activeSnagIndex: -1,
   openedHatchIds: null,
+  equalizedHatchIds: null,
   crankingHatchId: null,
   crankingHatchProgress: 0,
   claimedStageIds: null,
@@ -8462,6 +8524,7 @@ function frame(nowMs) {
     _frameWreckState.cutSnagIds = session.cutSnagIds;
     _frameWreckState.activeSnagIndex = session.activeSnagIndex;
     _frameWreckState.openedHatchIds = session.openedHatchIds;
+    _frameWreckState.equalizedHatchIds = session.equalizedHatchIds;
     _frameWreckState.crankingHatchId = session.crankingHatchId;
     _frameWreckState.crankingHatchProgress = session.crankingHatchProgress;
     _frameWreckState.claimedStageIds = session.claimedStageIds;
@@ -8503,6 +8566,7 @@ function frame(nowMs) {
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,
       hazards: session.hazards || null,
+      salvage: session.salvage || null,
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       buddyPing: session.buddyPing || null,

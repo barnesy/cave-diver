@@ -9,6 +9,15 @@ import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
+import {
+  createSalvageState,
+  isHatchPressurized,
+  computeSalvageBuoyancy,
+  toggleLiftBag,
+  stepSalvageBuoyancy,
+} from './salvagePhysics.js';
+
+export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
 const MAX_BUBBLES = 240;
 const _bubbleNormalScratch = { nx: 0, ny: -1 };
@@ -214,10 +223,12 @@ export function createDiveSession(
     buddySnagIndex: -1,
     buddySnagName: '',
     openedHatchIds: new Set(),
+    equalizedHatchIds: new Set(),
     crankingHatchId: null,
     crankingHatchProgress: 0,
     crankTickAccum: 0,
     hatchBonusScore: 0,
+    salvage: createSalvageState(),
     wreckActionPrompt: null,
     thirdWarned: false,
     stuckDuration: 0,
@@ -1127,9 +1138,19 @@ export function recordPeerDepthProfiles(session, peers, simTimeSec = 0) {
 export function applyPeerWreckAction(session, msg, callbacks = {}) {
   if (!session || !msg || !msg.actionKind || !msg.targetId) return false;
   const by = msg.by || 'Buddy';
+  if (msg.actionKind === 'valve') {
+    if (!session.equalizedHatchIds) session.equalizedHatchIds = new Set();
+    if (session.equalizedHatchIds.has(msg.targetId)) return false;
+    session.equalizedHatchIds.add(msg.targetId);
+    const hatch = session.level?.watertightHatches?.find((h) => h.id === msg.targetId);
+    callbacks.onValveEqualize?.(hatch);
+    callbacks.onToast?.(`🔧 ${by} equalized pressure on ${hatch?.label || 'Bulkhead'}!`, 2.4);
+    return true;
+  }
   if (msg.actionKind === 'hatch') {
     if (session.openedHatchIds.has(msg.targetId)) return false;
     session.openedHatchIds.add(msg.targetId);
+    session.equalizedHatchIds?.add(msg.targetId);
     if (session.crankingHatchId === msg.targetId) {
       session.crankingHatchId = null;
       session.crankingHatchProgress = 0;
@@ -1591,6 +1612,27 @@ export function triggerWreckAction(session, callbacks = {}) {
       const dist = Math.hypot(diver.x - hatch.x, diver.y - hatch.y);
       const reach = (hatch.radius || 2.0) + 2.5;
       if (dist <= reach) {
+        if (!session.equalizedHatchIds) session.equalizedHatchIds = new Set();
+        // Step 1 on deep pressurized shipwreck bulkheads (>=62m): bleed ΔP pressure valve before cranking!
+        if (isHatchPressurized(level, hatch) && !session.equalizedHatchIds.has(hatch.id)) {
+          session.equalizedHatchIds.add(hatch.id);
+          if (Array.isArray(bubbles)) {
+            for (let k = 0; k < 14; k++) {
+              spawnExhaustBubble(
+                bubbles,
+                hatch.x + (Math.random() - 0.5) * 0.6,
+                hatch.y + (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 1.4,
+                -1.0 - Math.random() * 1.1,
+                0.08 + Math.random() * 0.08
+              );
+            }
+          }
+          callbacks.onValveEqualize?.(hatch);
+          callbacks.onWreckSync?.('valve', hatch.id);
+          callbacks.onToast?.(`🔧 Pressure equalized on ${hatch.label || 'Bulkhead'} — press [E] again to crank open!`, 2.6);
+          return { handled: true, kind: 'equalize-valve', targetId: hatch.id };
+        }
         if (session.crankingHatchId !== hatch.id) {
           session.crankingHatchId = hatch.id;
           session.crankingHatchProgress = Math.max(0.18, session.crankingHatchProgress || 0);
@@ -1704,6 +1746,14 @@ export function triggerWreckAction(session, callbacks = {}) {
       callbacks.onClipLine?.(true);
       callbacks.onToast?.('⚓ Clipped to shot line! Hold Down to zip-descend or Up for steady ascent.', 2.8);
       return { handled: true, kind: 'clip-line' };
+    }
+  }
+
+  // 6. Priority 6: Deploy commercial Lift Bag when weighed down by heavy salvage (>=10kg uncompensated)
+  if (!session.salvage?.liftBagActive && (session.salvage?.netTrimKg || 0) >= 10 && diver.y > 4) {
+    const lbRes = toggleLiftBag(session, callbacks);
+    if (lbRes.ok) {
+      return { handled: true, kind: 'inflate-liftbag', buoyancy: lbRes.buoyancy };
     }
   }
 
@@ -2322,11 +2372,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
+  const salvageBuo = stepSalvageBuoyancy(session, dt, callbacks);
   const effectiveExertion = dpvThrusting ? exertion * 0.52 : exertion;
   const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
   const stageTrimMult = session.spareStageDropped ? 1.06 : 1.0;
-  const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult;
+  const salvageDragMult = salvageBuo?.swimDragMult ?? 1.0;
+  const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult * salvageDragMult;
   const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
@@ -2670,13 +2722,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       };
     }
   } else if (nearbyHatch) {
+    const needsValve = isHatchPressurized(level, nearbyHatch) && !session.equalizedHatchIds?.has(nearbyHatch.id);
     const isCranking = session.crankingHatchId === nearbyHatch.id;
-    session.wreckActionPrompt = {
-      kind: 'open-hatch',
-      label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
-      detail: nearbyHatch.label || 'Watertight Hatch',
-      progress: isCranking ? session.crankingHatchProgress : 0,
-    };
+    if (needsValve) {
+      session.wreckActionPrompt = {
+        kind: 'equalize-valve',
+        label: '🔧 EQUALIZE VALVE [E]',
+        detail: `Bleed hull ΔP pressure · ${nearbyHatch.label || 'Pressurized Bulkhead'}`,
+        progress: 0,
+      };
+    } else {
+      session.wreckActionPrompt = {
+        kind: 'open-hatch',
+        label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
+        detail: nearbyHatch.label || 'Watertight Hatch',
+        progress: isCranking ? session.crankingHatchProgress : 0,
+      };
+    }
   } else if (nearbyStage) {
     const gasShort = diveState.mixes?.[nearbyStage.gasId]?.shortName || nearbyStage.gasId || 'GAS';
     session.wreckActionPrompt = {
@@ -2718,6 +2780,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       kind: 'clip-line',
       label: '⚓ CLIP SHOT LINE [E]',
       detail: 'Fast Zip Descent / Deco Hold',
+      progress: 0,
+    };
+  } else if (!session.salvage?.liftBagActive && (session.salvage?.netTrimKg || 0) >= 12 && diver.y > 4) {
+    session.wreckActionPrompt = {
+      kind: 'inflate-liftbag',
+      label: '🎈 DEPLOY LIFT BAG [E / Y]',
+      detail: `Neutralize ${Math.round(session.salvage.payloadKg)}kg heavy salvage trim`,
       progress: 0,
     };
   } else {

@@ -119,7 +119,15 @@ import {
   sampleGhostPose,
   applyPeerWreckAction,
   stepSurfaceRipples,
+  toggleLiftBag,
+  isHatchPressurized,
+  computeSalvageBuoyancy,
 } from '../public/js/game/diveSession.js';
+import {
+  computeCollectibleWeightKg,
+  LIFT_BAG_INFLATE_BAR,
+  LIFT_BAG_CAPACITY_KG,
+} from '../public/js/game/salvagePhysics.js';
 import {
   buildExploreCells,
   markExploredAround,
@@ -6216,4 +6224,157 @@ test('v146 Zoned Right-Wing Dive Console & Floating Dive Kit Popover: passive pi
   // 3. Dive Kit popover is styled as floating overlay and wired into modalManager Escape stack
   assert.ok(css.includes('.hud-kit-popover') && css.includes('bottom: calc(100% + 6px)'), 'Dive Kit popover must float cleanly above right wing');
   assert.ok(mainSrc.includes('hudKitPopoverEl') && mainSrc.includes('setKitPopoverOpen(false)'), 'main.js must wire Dive Kit popover toggle & Escape close');
+});
+
+test('v147 Heavy Salvage, Lift-Bag Buoyancy Physics & Pressurized Bulkhead Valve Equalization', async () => {
+  const fs = await import('node:fs');
+
+  // 1. Neutral trim at zero payload preserves exact legacy physics (no vertical drift, drag = 1.0)
+  const oriskany = getLevelById('uss-oriskany-carrier');
+  const u1206 = getLevelById('u1206-north-sea-sub');
+  const sess = createDiveSession(u1206, { mode: 'solo', difficulty: 'standard' });
+  sess.diver.x = 12;
+  sess.diver.y = 35;
+
+  const emptyTrim = computeSalvageBuoyancy(sess);
+  assert.equal(emptyTrim.payloadKg, 0);
+  assert.equal(emptyTrim.netTrimKg, 0);
+  assert.equal(emptyTrim.verticalAccel, 0);
+  assert.equal(emptyTrim.swimDragMult, 1.0);
+  assert.equal(emptyTrim.status, 'neutral');
+
+  // 2. Heavy wreck salvage relics + carryingBody create measurable negative buoyancy & swim drag
+  const firstRelic = u1206.collectibles[0];
+  const relicKg = computeCollectibleWeightKg(firstRelic, true);
+  assert.ok(relicKg >= 4 && relicKg <= 16, `Expected realistic wreck relic weight (4-16kg), got ${relicKg}`);
+  for (const item of u1206.collectibles.slice(0, 3)) {
+    sess.collectedIds.add(item.id);
+  }
+  sess.carryingBody = true;
+  const heavyTrim = computeSalvageBuoyancy(sess);
+  assert.ok(heavyTrim.payloadKg >= 20, `Expected heavy salvage + recovery payload >= 20kg, got ${heavyTrim.payloadKg}`);
+  assert.ok(heavyTrim.verticalAccel > 0.3, 'Uncompensated heavy salvage must pull diver downward (+vy)');
+  assert.ok(heavyTrim.swimDragMult < 0.96, 'Heavy uncompensated salvage must add realistic swim drag');
+  assert.ok(heavyTrim.status === 'heavy' || heavyTrim.status === 'critical-heavy');
+
+  // 3. Inflating the Lift Bag consumes 3.5 bar, neutralizes negative trim, and restores swim agility
+  const activeGas = sess.diveState.activeGasId;
+  const barBefore = sess.diveState.tanks[activeGas].bar;
+  let toggledState = null;
+  const infRes = toggleLiftBag(sess, {
+    onLiftBagToggle: (active) => {
+      toggledState = active;
+    },
+  });
+  assert.equal(infRes.ok, true);
+  assert.equal(infRes.active, true);
+  assert.equal(toggledState, true);
+  assert.equal(sess.salvage.liftBagActive, true);
+  assert.ok(Math.abs(barBefore - sess.diveState.tanks[activeGas].bar - LIFT_BAG_INFLATE_BAR) < 0.05);
+  assert.ok(sess.salvage.liftForceKg > 0 && sess.salvage.liftForceKg <= LIFT_BAG_CAPACITY_KG * 1.3);
+
+  const liftedTrim = computeSalvageBuoyancy(sess);
+  assert.ok(liftedTrim.netTrimKg < heavyTrim.netTrimKg, 'Lift bag must offset heavy salvage negative trim');
+  assert.ok(liftedTrim.verticalAccel < heavyTrim.verticalAccel, 'Lift bag must reduce downward sink force');
+  assert.ok(liftedTrim.swimDragMult > heavyTrim.swimDragMult, 'Neutralized load should improve swim agility');
+
+  // 4. Boyle's-Law positive float warning when inflated with zero salvage at shallow depth
+  const lightSess = createDiveSession(u1206, { mode: 'solo', difficulty: 'standard' });
+  lightSess.diver.y = 8;
+  const lightInf = toggleLiftBag(lightSess, {});
+  assert.equal(lightInf.ok, true);
+  for (let i = 0; i < 10; i++) {
+    stepDiveSession(lightSess, { x: 0, y: 0, boost: false }, 0.05, {});
+  }
+  const floatTrim = computeSalvageBuoyancy(lightSess);
+  assert.equal(floatTrim.status, 'float-warn', 'Empty lift bag must trigger uncontrolled ascent float warning');
+  assert.ok(floatTrim.verticalAccel < -0.5, 'Fully inflated unloaded lift bag must pull diver upward (-vy)');
+
+  // 5. Venting lift bag stows canopy & releases exhaust bubbles; low-gas guard blocks inflation (< 6 bar)
+  const bubblesBefore = lightSess.bubbles.length;
+  const ventRes = toggleLiftBag(lightSess, {});
+  assert.equal(ventRes.ok, true);
+  assert.equal(ventRes.active, false);
+  assert.ok(lightSess.bubbles.length > bubblesBefore, 'Venting lift bag should spawn exhaust bubbles');
+
+  lightSess.diveState.tanks[lightSess.diveState.activeGasId].bar = 4.5;
+  const dryRes = toggleLiftBag(lightSess, {});
+  assert.equal(dryRes.ok, false);
+  assert.equal(dryRes.reason, 'low-gas');
+
+  // 6. Contextual [E] action deploys lift bag when heavily weighed down and not near another wreck interactive
+  sess.salvage.liftBagActive = false;
+  sess.salvage.liftForceKg = 0;
+  sess.salvage.inflateAnim = 0;
+  sess.diver.x = 500; // far from any hatch/net/line
+  sess.diver.y = 25;
+  const ctxRes = triggerWreckAction(sess, {});
+  assert.equal(ctxRes.handled, true);
+  assert.equal(ctxRes.kind, 'inflate-liftbag');
+  assert.equal(sess.salvage.liftBagActive, true);
+
+  // 7. Pressurized Bulkhead Valve Equalization on deep tier wrecks (>= 62m) vs shallow Oriskany (1-step)
+  assert.equal(isHatchPressurized(oriskany, oriskany.watertightHatches[0]), false, 'Oriskany shallow hatch stays 1-step');
+  const deepHatch = u1206.watertightHatches[0];
+  assert.equal(isHatchPressurized(u1206, deepHatch), true, 'Deep U-1206 hatch (>= 62m) must require valve equalization');
+
+  const hSess = createDiveSession(u1206, { mode: 'solo', difficulty: 'standard' });
+  switchGas(hSess.diveState, 'TMX1455');
+  hSess.diver.x = deepHatch.x + deepHatch.radius + 1.0;
+  hSess.diver.y = deepHatch.y;
+  // Step simulation once to confirm prompt is equalize-valve before open-hatch
+  stepDiveSession(hSess, { x: 0, y: 0, boost: false }, 0.016, {});
+  assert.equal(hSess.wreckActionPrompt?.kind, 'equalize-valve');
+
+  let syncedAction = null;
+  let valveSoundPlayed = false;
+  const step1 = triggerWreckAction(hSess, {
+    onWreckSync: (k, id) => {
+      syncedAction = { k, id };
+    },
+    onValveEqualize: () => {
+      valveSoundPlayed = true;
+    },
+  });
+  assert.equal(step1.handled, true);
+  assert.equal(step1.kind, 'equalize-valve');
+  assert.equal(hSess.equalizedHatchIds.has(deepHatch.id), true);
+  assert.equal(hSess.openedHatchIds.has(deepHatch.id), false, 'Step 1 only bleeds ΔP pressure, does not open hatch yet');
+  assert.deepEqual(syncedAction, { k: 'valve', id: deepHatch.id });
+  assert.equal(valveSoundPlayed, true);
+
+  // Step 2 now cranks and opens the equalized bulkhead normally
+  const step2 = triggerWreckAction(hSess, {});
+  assert.equal(step2.handled, true);
+  assert.equal(step2.kind, 'open-hatch');
+  assert.equal(hSess.crankingHatchId, deepHatch.id);
+  for (let i = 0; i < 22; i++) {
+    stepDiveSession(hSess, { x: 0, y: 0, boost: false }, 0.1, {});
+  }
+  assert.equal(hSess.openedHatchIds.has(deepHatch.id), true);
+
+  // Co-op peer valve sync applies cleanly
+  const peerSess = createDiveSession(u1206, { mode: 'coop', difficulty: 'standard' });
+  applyPeerWreckAction(peerSess, { actionKind: 'valve', targetId: deepHatch.id }, {});
+  assert.equal(peerSess.equalizedHatchIds.has(deepHatch.id), true);
+
+  // 8. Renderer draws Lift Bag canopy & Pressurized/Equalized Bulkhead Valve badges cleanly + HUD wiring
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = u1206;
+  r._drawDiverLiftBag(noopCtx, { x: 12, y: 35, vx: 0.4, vy: -0.2 }, { liftBagActive: true, liftBagVisualScale: 0.95, status: 'liftbag-ok' }, (x) => x * 20, (y) => y * 20, 20, 4.2);
+  r._drawWatertightHatches(noopCtx, (x) => x * 20, (y) => y * 20, 20, 4.2, { openedHatchIds: new Set(), equalizedHatchIds: new Set() });
+  r._drawWatertightHatches(noopCtx, (x) => x * 20, (y) => y * 20, 20, 4.2, { openedHatchIds: new Set(), equalizedHatchIds: new Set([deepHatch.id]) });
+
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="hud-trim-pill"'), 'Passive Salvage Trim pill must exist in HUD');
+  assert.ok(html.includes('id="btn-hud-liftbag"'), 'Lift Bag button must exist in Dive Kit popover');
+  assert.ok(html.includes('salvagePhysics.js'), 'index.html importmap must register salvagePhysics.js');
 });

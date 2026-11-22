@@ -5,6 +5,7 @@ import { getScubaSignalById } from './diveSignals.js';
 import { getWeatherById, computeStormLightningFlash } from './weather.js';
 import { getSuitLivery, getTorchOptic, getMilestonePatch } from './rigLivery.js';
 import { applyPhotoViewportOverlay } from './photoStudio.js';
+import { isHatchPressurized } from './salvagePhysics.js';
 import { sampleSiltDensity } from './silt.js';
 import { computeSurgeWave } from './diveSession.js';
 import { getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
@@ -1473,6 +1474,7 @@ export class CaveRenderer {
     cameraFlash = null,
     encounters = null,
     hazards = null,
+    salvage = null,
     bioWake = null,
     surfaceRipples = null,
     buddyPing = null,
@@ -1752,6 +1754,9 @@ export class CaveRenderer {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
     }
     this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false);
+    if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
+      this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec);
+    }
 
     // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering
     this._drawLighting(
@@ -4667,9 +4672,100 @@ export class CaveRenderer {
           ctx.arc(0, 0, sr * 1.08, -Math.PI * 0.5, -Math.PI * 0.5 + crankProg * Math.PI * 2);
           ctx.stroke();
         }
+
+        // Pressurized Deep Wreck Bulkhead ΔP Relief Valve Indicator (v147)
+        if (isHatchPressurized(level, hatch)) {
+          const equalized = Boolean(wreckState?.equalizedHatchIds?.has(hatch.id));
+          const vx = sr * 0.62;
+          const vy = -sr * 0.62;
+          const vr = Math.max(4.5, 0.28 * scale);
+          const pulse = 0.65 + 0.35 * Math.sin(timeSec * 4.2 + h);
+          ctx.fillStyle = equalized ? '#064e3b' : '#450a0a';
+          ctx.strokeStyle = equalized ? '#34d399' : `rgba(248, 113, 113, ${pulse.toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.6, 0.08 * scale);
+          ctx.beginPath();
+          ctx.arc(vx, vy, vr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          if (scale >= 12) {
+            ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = equalized ? '#6ee7b7' : '#fca5a5';
+            ctx.fillText(equalized ? 'EQ' : 'ΔP', vx, vy + 0.5);
+          }
+        }
       }
       ctx.restore();
     }
+  }
+
+  /**
+   * Render an inflated Safety-Orange Commercial Parachute Lift Bag tethered above the diver (v147).
+   */
+  _drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec) {
+    if (!diver || !salvage) return;
+    const anim = Math.max(0, Math.min(1, salvage.inflateAnim || (salvage.liftBagActive ? 1 : 0)));
+    if (anim <= 0.02) return;
+
+    const anchorX = toScreenX(diver.x);
+    const anchorY = toScreenY(diver.y);
+    const swayX = Math.max(-0.55, Math.min(0.55, -(diver.vx || 0) * 0.16)) + Math.sin(timeSec * 2.4) * 0.08;
+    const strapLen = (1.15 + anim * 0.65) * scale;
+    const bagX = anchorX + swayX * scale;
+    const bagY = anchorY - strapLen;
+    const bagW = (0.38 + anim * 0.42) * scale;
+    const bagH = (0.42 + anim * 0.52) * scale;
+
+    ctx.save();
+    // Taut braided yellow lifting tether + twin canopy shroud lines
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.92)';
+    ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+    ctx.beginPath();
+    ctx.moveTo(anchorX, anchorY - 0.12 * scale);
+    ctx.lineTo(bagX, bagY + bagH * 0.48);
+    ctx.moveTo(bagX, bagY + bagH * 0.48);
+    ctx.lineTo(bagX - bagW * 0.56, bagY + bagH * 0.16);
+    ctx.moveTo(bagX, bagY + bagH * 0.48);
+    ctx.lineTo(bagX + bagW * 0.56, bagY + bagH * 0.16);
+    ctx.stroke();
+
+    // Safety-orange commercial parachute canopy with glossy top highlight
+    const grad = ctx.createRadialGradient(bagX - bagW * 0.18, bagY - bagH * 0.35, bagW * 0.1, bagX, bagY, bagH);
+    grad.addColorStop(0, '#fdba74');
+    grad.addColorStop(0.38, '#f97316');
+    grad.addColorStop(1, '#c2410c');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = '#7c2d12';
+    ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(bagX - bagW * 0.6, bagY + bagH * 0.18);
+    ctx.bezierCurveTo(
+      bagX - bagW * 0.85,
+      bagY - bagH * 0.65,
+      bagX + bagW * 0.85,
+      bagY - bagH * 0.65,
+      bagX + bagW * 0.6,
+      bagY + bagH * 0.18
+    );
+    ctx.quadraticCurveTo(bagX, bagY + bagH * 0.04, bagX - bagW * 0.6, bagY + bagH * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Reflective safety band + top overpressure dump valve cap
+    ctx.strokeStyle = 'rgba(254, 249, 195, 0.85)';
+    ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(bagX - bagW * 0.56, bagY - bagH * 0.06);
+    ctx.quadraticCurveTo(bagX, bagY - bagH * 0.18, bagX + bagW * 0.56, bagY - bagH * 0.06);
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(bagX, bagY - bagH * 0.44, Math.max(2, 0.09 * scale), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   /**
