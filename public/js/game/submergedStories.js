@@ -56,6 +56,10 @@ const WRECK_LORE_BY_KIND = Object.freeze({
     'Steam Boiler Manifold — shattered Bourdon gauges frozen at zero atmosphere.',
     'Auxiliary Pipework Header — copper pressure lines encrusted in orange iron-oxide rusticles.',
   ],
+  'air-dome': [
+    'Trapped Overhead Air Dome — silver mercury ceiling pocket holding decades of compressed exhaust.',
+    'Flooded Deckhouse Air Bell — mirror-like meniscus rippling with every bubble you exhale.',
+  ],
 });
 
 const CAVE_LORE_BY_KIND = Object.freeze({
@@ -87,6 +91,10 @@ const CAVE_LORE_BY_KIND = Object.freeze({
   'survey-station': [
     'Explorer Survey Piton — weathered brass station tag left by the first cartography team.',
     'Historic Cave-Line Tie-Off — tarnished aluminum survey cookie marking an old exploration lead.',
+  ],
+  'air-dome': [
+    'Subterranean Air Bell — mirror-bright trapped air pocket beneath the vaulted limestone ceiling.',
+    'Ceiling Percolation Dome — shimmering silver meniscus where diver exhaust gathers into a calm pocket.',
   ],
 });
 
@@ -302,21 +310,109 @@ export function createSubmergedStories(level) {
     }
   }
 
+  // Ensure every site has at least 1 shimmering Trapped Overhead Air Dome in a vaulted bell/hold (v156)
+  let airDomePlaced = false;
+  for (let i = 1; i < level.segments.length && !airDomePlaced; i++) {
+    const seg = level.segments[i];
+    const mx = (seg.ax + seg.bx) * 0.5;
+    const my = (seg.ay + seg.by) * 0.5;
+    const r = Math.min(seg.ra || 2.2, seg.rb || 2.2);
+    if (my < 7 || r < 2.1 || evaluateCaveSDF(level, mx, my) >= -0.8) continue;
+    const ceil = probeWall(level, mx, my, 0, -1, r + 3.5);
+    if (!ceil || ceil.y < 3.5) continue;
+    if (isTooClose(ceil.x, ceil.y + 0.35, 6.0)) continue;
+    const idx = idCounter++;
+    setPieces.push({
+      id: `story-dome-${idx}`,
+      kind: 'air-dome',
+      title: 'Trapped Overhead Air Dome',
+      lore: pickLore(isWreck ? WRECK_LORE_BY_KIND : CAVE_LORE_BY_KIND, 'air-dome', idx),
+      x: ceil.x,
+      y: ceil.y + 0.32,
+      halfWidth: Math.min(3.4, Math.max(1.7, r * 0.88)),
+      size: 1.0,
+      phase: hash01(idx * 19.7) * Math.PI * 2,
+      emissive: true,
+      discovered: false,
+    });
+    airDomePlaced = true;
+  }
+
+  // Overhead Pelagic Shadow Crossing for open-water ocean wrecks & sunlit blue holes / tropical cenotes (v156)
+  const allowPelagicShadow =
+    (isWreck && themeId !== 'superior-memorial-wreck') ||
+    themeId === 'bahamas-bluehole' ||
+    themeId === 'yucatan-cenote' ||
+    themeId === 'bermuda-sargasso';
+  const b = level.bounds || { xMin: -20, xMax: 120, yMin: 0, yMax: 60 };
+  const pelagicShadow = allowPelagicShadow
+    ? {
+        kind: isWreck ? 'whaleshark' : 'manta',
+        xMin: (b.xMin ?? -20) - 18,
+        xMax: (b.xMax ?? 120) + 18,
+        y: isWreck ? Math.min(12, Math.max(5.5, deckY * 0.24)) : 4.2,
+        periodSec: isWreck ? 46 : 38,
+        size: isWreck ? 6.2 : 4.4,
+      }
+    : null;
+
   return {
     setPieces,
+    pelagicShadow,
     discoveredIds: new Set(),
     discoveredCount: 0,
     totalDiscoverable: setPieces.length,
     lastToastAt: -99,
+    inAirDome: false,
+    chatterSent: { plunge: false, decoClear: false, recovery: false },
   };
+}
+
+/**
+ * Authentic 1-line topside support boat / dive-deck radio chatter callouts (v156).
+ */
+export function getTopsideRadioChatter(phase, level) {
+  const site = level?.name || 'the site';
+  if (phase === 'plunge') {
+    return level?.isWreck
+      ? `📻 Topside Boat: Copy you submerging on the shot line at ${site} — light swell, comms locked.`
+      : `📻 Surface Support: Copy you dropping into ${site} — telemetry green, watch your Rule of Thirds.`;
+  }
+  if (phase === 'decoClear') {
+    return level?.isWreck
+      ? '📻 Topside Boat: Copy you clear of 6m O₂ deco — stern ladder is down, surface when ready.'
+      : '📻 Surface Support: Copy deco ceiling clear — basin entry is clear, easy ascent to surface.';
+  }
+  if (phase === 'recovery') {
+    return '📻 Topside Boat: Deck winch standing by for your recovery lift — keep a steady ascent pace!';
+  }
+  return '';
 }
 
 /**
  * Check whether the diver has illuminated or approached any undiscovered storytelling landmark.
  * Triggers a concise expedition lore toast & gentle chime (throttled so it never spams).
  */
-export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {}) {
+export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {}, diveState = null) {
   if (!stories || !Array.isArray(stories.setPieces) || !diver) return null;
+
+  // Check if diver is resting calmly beneath a Trapped Overhead Air Dome (v156)
+  let insideDome = false;
+  for (let i = 0; i < stories.setPieces.length; i++) {
+    const sp = stories.setPieces[i];
+    if (sp?.kind !== 'air-dome') continue;
+    const hw = sp.halfWidth || 2.2;
+    if (Math.abs(diver.x - sp.x) <= hw && diver.y >= sp.y - 0.35 && diver.y <= sp.y + 1.35) {
+      insideDome = true;
+      if (diveState) {
+        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.008);
+        diveState.heartRateBpm = Math.max(66, (diveState.heartRateBpm || 76) - 0.12);
+      }
+      break;
+    }
+  }
+  stories.inAirDome = insideDome;
+
   if (simTimeSec - (stories.lastToastAt ?? -99) < 4.5) return null;
 
   for (let i = 0; i < stories.setPieces.length; i++) {

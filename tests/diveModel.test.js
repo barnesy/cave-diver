@@ -6934,3 +6934,144 @@ test('v155 Submerged Storytelling Set-Pieces (all 33 sites), Torch Lore Discover
   });
   assert.equal(cardOk, true);
 });
+
+test('v156 Living Signature Moments, Dive Contracts, Crew Roles, PB Split Timers, Dive Plan Slate & Diegetic Immersion Tape', async () => {
+  const {
+    CREW_ROLES,
+    getCrewRole,
+    cycleCrewRoleId,
+    rollDiveContracts,
+    evaluateDiveContracts,
+    computeGhostCheckpointSplits,
+    formatSplitDelta,
+  } = await import('../public/js/game/expeditionContracts.js');
+  const { createSubmergedStories, stepSubmergedStories, getTopsideRadioChatter } = await import(
+    '../public/js/game/submergedStories.js'
+  );
+  const { recordLoreDiscoveryInLogbook } = await import('../public/js/game/logbookModel.js');
+  const { drawDivePlanSlate } = await import('../public/js/game/diveCard.js');
+
+  const u1206 = LEVELS.find((l) => l.id === 'u1206-north-sea') || LEVELS.find((l) => l.isWreck);
+  const blueHole = LEVELS.find((l) => l.id === 'dahab-blue-hole') || LEVEL_1;
+
+  // 1. Living Signature Moments: Air Dome in every site, Pelagic Shadow on wrecks/blue holes, Topside Radio Chatter
+  const caveStories = createSubmergedStories(LEVEL_1);
+  assert.ok(caveStories.setPieces.some((sp) => sp.kind === 'air-dome'), 'Cave site must include a Trapped Overhead Air Dome');
+  const wreckStories = createSubmergedStories(u1206);
+  assert.ok(wreckStories.setPieces.some((sp) => sp.kind === 'air-dome'), 'Wreck site must include a Trapped Overhead Air Dome');
+  assert.ok(wreckStories.pelagicShadow && wreckStories.pelagicShadow.kind === 'whaleshark', 'Open-water wreck should enable Overhead Pelagic Shadow crossing');
+  assert.match(getTopsideRadioChatter('plunge', u1206), /Topside/i);
+  assert.match(getTopsideRadioChatter('decoClear', blueHole), /Surface Support|Topside/i);
+  assert.match(getTopsideRadioChatter('recovery', LEVEL_1), /Topside/i);
+
+  // Air dome calms panic & HR when diver surfaces into it
+  const dome = caveStories.setPieces.find((sp) => sp.kind === 'air-dome');
+  const calmDiveState = { panicLevel: 0.65, heartRateBpm: 132 };
+  stepSubmergedStories(
+    caveStories,
+    { x: dome.x, y: dome.y + 0.4, angle: 0, torchOn: false },
+    15.0,
+    {},
+    calmDiveState
+  );
+  assert.ok(calmDiveState.panicLevel < 0.65 && calmDiveState.heartRateBpm < 132, 'Air dome should calm panic & HR');
+
+  // 2. Crew Specialty Roles & Dynamic Dive Contracts
+  assert.equal(CREW_ROLES.length, 4);
+  assert.equal(getCrewRole('navigator').sonarRangeMult >= 1.2, true);
+  assert.equal(getCrewRole('safety').gasBurnMult < 1.0, true);
+  assert.equal(cycleCrewRoleId('balanced'), 'navigator');
+  assert.equal(cycleCrewRoleId('safety'), 'balanced');
+
+  const sess = createDiveSession(LEVEL_1, { crewRoleId: 'navigator' });
+  assert.equal(sess.crewRole.id, 'navigator');
+  assert.equal(sess.contracts.length, 2, 'Dive session should roll 2 dynamic dive contracts');
+  // Manually satisfy a rolled contract and confirm checkoff callback + bonus points
+  const rolled = rollDiveContracts(LEVEL_1, { seed: 42 });
+  assert.equal(rolled.length, 2);
+  sess.contracts = [
+    { id: 'lore-scout', icon: '🧭', title: 'Submerged Historian', target: 2, progress: 0, rewardPts: 150, completed: false },
+  ];
+  sess.stories.discoveredCount = 2;
+  const completedNames = [];
+  evaluateDiveContracts(sess, { onContractComplete: (c) => completedNames.push(c.id) });
+  assert.deepEqual(completedNames, ['lore-scout']);
+  assert.equal(sess.contractBonusScore, 150);
+
+  // 3. Live PB Split Timers from ghost track
+  const cp0 = LEVEL_1.checkpoints[0];
+  const mockTrack = {
+    levelId: LEVEL_1.id,
+    points: [
+      { t: 0, x: LEVEL_1.spawn.x, y: LEVEL_1.spawn.y },
+      { t: 24.5, x: cp0.x, y: cp0.y },
+    ],
+  };
+  const splits = computeGhostCheckpointSplits(LEVEL_1, mockTrack);
+  assert.equal(splits[cp0.id], 24.5);
+  assert.match(formatSplitDelta(-3.4), /-3\.4s ahead/i);
+  assert.match(formatSplitDelta(2.1), /\+2\.1s behind/i);
+
+  // 4. Persistent Submerged Lore Archive & Gist merge
+  const resA = recordLoreDiscoveryInLogbook(createEmptyLogbook(), {
+    kind: 'air-dome',
+    title: 'Trapped Air Dome',
+    lore: 'Silver mercury ceiling pocket.',
+    siteName: LEVEL_1.name,
+  });
+  assert.equal(resA.isNew, true);
+  let bookA = resA.book;
+  let bookB = recordLoreDiscoveryInLogbook(createEmptyLogbook(), {
+    kind: 'brass-telegraph',
+    title: 'Chadburn Telegraph',
+    lore: 'Locked on ALL STOP.',
+    siteName: u1206.name,
+  }).book;
+  bookB = recordDiveInLogbook(bookB, {
+    levelId: u1206.id,
+    success: true,
+    score: 2600,
+    grade: 'A',
+    maxDepthM: 72,
+    diveTimeSec: 210,
+    milestones: { contractsCompleted: 2 },
+  });
+  const merged = mergeCareerLogbooks(bookA, bookB);
+  assert.ok(merged.loreArchive['air-dome'] && merged.loreArchive['brass-telegraph']);
+  assert.equal(merged.milestones.contractsCompleted, 2);
+
+  // 5. Visual Dive Plan Slate & Diegetic Immersion Tape + Pelagic Shadow rendering on mock canvas
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 520, height: 132 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t || '').length * 7 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  assert.equal(
+    drawDivePlanSlate(noopCtx, 520, 132, {
+      level: u1206,
+      mixes: u1206.gasMixes,
+      customGasPlan: { enabled: true, o2Pct: 16, hePct: 50 },
+    }),
+    true
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = u1206;
+  r._cachedDpr = 1;
+  const toX = (x) => 300 + x * 18;
+  const toY = (y) => 80 + y * 18;
+  r._drawSubmergedStories(noopCtx, wreckStories, -50, 200, -10, 100, toX, toY, 18, 4.0, 'world');
+  r._drawSubmergedStories(noopCtx, wreckStories, -50, 200, -10, 100, toX, toY, 18, 4.0, 'emissive');
+  r._drawDiegeticImmersionTape(
+    noopCtx,
+    1280,
+    720,
+    { x: 10, y: 28, facingX: 1, facingY: 0 },
+    { depth: 28.4, decoCeilingM: 6, activeTankBar: 175, activeMix: { shortName: 'TMX' } },
+    cp0,
+    12.3
+  );
+});

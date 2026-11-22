@@ -32,7 +32,9 @@ export function createEmptyLogbook() {
       cleanSalvageLifts: 0,
       drillsCompleted: 0,
       zeroSiltClears: 0,
+      contractsCompleted: 0,
     },
+    loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
   };
 }
 
@@ -100,6 +102,18 @@ function normalizeBook(raw) {
     base.milestones.cleanSalvageLifts = Math.max(0, Math.round(Number(m.cleanSalvageLifts) || 0));
     base.milestones.drillsCompleted = Math.max(0, Math.round(Number(m.drillsCompleted) || 0));
     base.milestones.zeroSiltClears = Math.max(0, Math.round(Number(m.zeroSiltClears) || 0));
+    base.milestones.contractsCompleted = Math.max(0, Math.round(Number(m.contractsCompleted) || 0));
+  }
+  if (raw.loreArchive && typeof raw.loreArchive === 'object') {
+    for (const [k, rec] of Object.entries(raw.loreArchive)) {
+      if (!rec || typeof rec !== 'object') continue;
+      base.loreArchive[k] = {
+        title: typeof rec.title === 'string' ? rec.title.slice(0, 64) : k,
+        count: Math.max(1, Math.round(Number(rec.count) || 1)),
+        sampleLore: typeof rec.sampleLore === 'string' ? rec.sampleLore.slice(0, 180) : '',
+        firstSiteName: typeof rec.firstSiteName === 'string' ? rec.firstSiteName.slice(0, 64) : '',
+      };
+    }
   }
   return base;
 }
@@ -237,6 +251,27 @@ export function mergeCareerLogbooks(rawA, rawB) {
     a.milestones?.zeroSiltClears || 0,
     b.milestones?.zeroSiltClears || 0
   );
+  out.milestones.contractsCompleted = Math.max(
+    a.milestones?.contractsCompleted || 0,
+    b.milestones?.contractsCompleted || 0
+  );
+
+  // Merge Submerged Lore Archive (v156)
+  const loreKeys = new Set([...Object.keys(a.loreArchive || {}), ...Object.keys(b.loreArchive || {})]);
+  for (const lk of loreKeys) {
+    const la = a.loreArchive?.[lk];
+    const lb = b.loreArchive?.[lk];
+    if (la && !lb) out.loreArchive[lk] = { ...la };
+    else if (lb && !la) out.loreArchive[lk] = { ...lb };
+    else if (la && lb) {
+      out.loreArchive[lk] = {
+        title: la.title || lb.title,
+        count: Math.max(la.count || 1, lb.count || 1),
+        sampleLore: la.sampleLore || lb.sampleLore,
+        firstSiteName: la.firstSiteName || lb.firstSiteName,
+      };
+    }
+  }
 
   return out;
 }
@@ -332,6 +367,8 @@ export function recordDiveInLogbook(
     const dr = Math.max(0, Math.round(Number(milestones.drillsCompleted) || 0));
     if (eq > 0) book.milestones.pressurizedEqualizations += eq;
     if (dr > 0) book.milestones.drillsCompleted += dr;
+    const cc = Math.max(0, Math.round(Number(milestones.contractsCompleted) || 0));
+    if (cc > 0) book.milestones.contractsCompleted += cc;
     if (success && milestones.cleanSalvageLift) book.milestones.cleanSalvageLifts += 1;
     if (success && milestones.zeroSiltCaveClear) book.milestones.zeroSiltClears += 1;
   }
@@ -366,6 +403,23 @@ export function recordDiveInLogbook(
     }
   }
   return book;
+}
+
+export function recordLoreDiscoveryInLogbook(rawBook, { kind, title, lore, siteName = '' } = {}) {
+  const book = normalizeBook(rawBook);
+  if (!kind) return { book, isNew: false };
+  const prev = book.loreArchive[kind];
+  if (!prev) {
+    book.loreArchive[kind] = {
+      title: String(title || kind).slice(0, 64),
+      count: 1,
+      sampleLore: String(lore || '').slice(0, 180),
+      firstSiteName: String(siteName || '').slice(0, 64),
+    };
+    return { book, isNew: true };
+  }
+  prev.count = (prev.count || 1) + 1;
+  return { book, isNew: false };
 }
 
 export function seedLogbookFromEntries(rawBook, entries) {

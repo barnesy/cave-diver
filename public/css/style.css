@@ -8006,3 +8006,66 @@ summary,
   background: rgba(6, 78, 59, 0.45);
   color: #a7f3d0;
 }
+
+/* Visual Depth-Profile & Gas-Switch Dive Slate + Submerged Lore Archive (v156) */
+.gas-slate-wrap {
+  margin: 0 0 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  background: rgba(2, 11, 20, 0.92);
+  box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.14);
+}
+.gas-slate-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 520 / 132;
+}
+.logbook-lore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.lore-archive-card {
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lore-archive-card.locked {
+  opacity: 0.56;
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.42);
+}
+.lore-archive-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #e0f2fe;
+}
+.lore-archive-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.22);
+  color: #7dd3fc;
+}
+.lore-archive-body {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+.lore-archive-site {
+  font-size: 0.62rem;
+  color: #64748b;
+  font-style: italic;
+}

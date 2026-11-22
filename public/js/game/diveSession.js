@@ -24,7 +24,13 @@ import {
 import {
   createSubmergedStories,
   stepSubmergedStories,
+  getTopsideRadioChatter,
 } from './submergedStories.js';
+import {
+  getCrewRole,
+  rollDiveContracts,
+  evaluateDiveContracts,
+} from './expeditionContracts.js';
 
 export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
@@ -97,6 +103,7 @@ export function createDiveSession(
     drillsEnabled = false,
     weatherId = 'clear-day',
     livery = null,
+    crewRoleId = 'balanced',
   } = {}
 ) {
   const spawnX = level.spawn.x + spawnOffsetX;
@@ -240,6 +247,11 @@ export function createDiveSession(
     salvage: createSalvageState(),
     mechFx: createMechanicalFxState(),
     stories: createSubmergedStories(level),
+    crewRole: getCrewRole(crewRoleId || 'balanced'),
+    contracts: rollDiveContracts(level, `${diverName || 'diver'}:${cleanDailyKey || level.id}`),
+    contractBonusScore: 0,
+    _contractEvalTimer: 0,
+    _hadDecoCeiling: false,
     spaceClearanceM: 4.0,
     runMilestones: {
       usedLiftBagWithHeavySalvage: false,
@@ -316,7 +328,7 @@ export function triggerSonarPing(session, callbacks = {}) {
   }
 
   const { level, diver } = session;
-  const maxRadiusM = 28.0;
+  const maxRadiusM = 28.0 * (session.crewRole?.sonarRangeMult || 1.0);
   const rayCount = 48;
   const wallHits = [];
   for (let i = 0; i < rayCount; i++) {
@@ -2481,7 +2493,11 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
   const stageTrimMult = session.spareStageDropped ? 1.06 : 1.0;
-  const salvageDragMult = salvageBuo?.swimDragMult ?? 1.0;
+  const rawSalvageDrag = salvageBuo?.swimDragMult ?? 1.0;
+  const salvageDragMult =
+    rawSalvageDrag < 1.0 && (session.crewRole?.salvageDragBonus || 0) > 0
+      ? Math.min(1.0, rawSalvageDrag + session.crewRole.salvageDragBonus)
+      : rawSalvageDrag;
   const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult * salvageDragMult;
   const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
@@ -3103,10 +3119,39 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   // Reactive Cave & Wreck Hazards: Cold Thermoclines, Overhead Bubble Percolation & Shifting Surge Hatches (v141)
   const hazRes = stepDynamicHazards(session, dt, callbacks);
-  // Submerged Storytelling Set-Pieces: Torch-lit lore discovery & cavern wall clearance tracking (v155)
+  // Submerged Storytelling Set-Pieces: Torch-lit lore discovery, Air Dome calm & Topside Radio Chatter (v155/v156)
   session.spaceClearanceM = Math.max(0.5, -evaluateCaveSDF(level, diver.x, diver.y));
   if (session.stories) {
-    stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks);
+    stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks, diveState);
+    const ch = session.stories.chatterSent;
+    if (ch) {
+      if (!ch.plunge && session.simTimeSec > 2.6 && diver.y > 2.4) {
+        ch.plunge = true;
+        callbacks.onTopsideChatter?.(getTopsideRadioChatter('plunge', level), 'plunge');
+      }
+      if ((diveState.stopDepthM || 0) > 0) session._hadDecoCeiling = true;
+      if (!ch.decoClear && session._hadDecoCeiling && (diveState.stopDepthM || 0) === 0 && diver.y <= 8.0 && diver.y > 0.8) {
+        ch.decoClear = true;
+        callbacks.onTopsideChatter?.(getTopsideRadioChatter('decoClear', level), 'decoClear');
+      }
+      if (!ch.recovery && (session.carryingBody || (session.salvage?.payloadKg || 0) >= 12) && diver.vy < -0.35) {
+        ch.recovery = true;
+        callbacks.onTopsideChatter?.(getTopsideRadioChatter('recovery', level), 'recovery');
+      }
+    }
+  }
+  // Apply Crew Specialty Role subtle perks & evaluate Dynamic Expedition Contracts (v156)
+  const role = session.crewRole;
+  if (role && role.id === 'safety' && diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8) {
+    // Gas & Deco Safety role accelerates deco stop off-gassing slightly
+    if (diveState.decoRemainingSec > 0) {
+      diveState.decoRemainingSec = Math.max(0, diveState.decoRemainingSec - dt * 0.15);
+    }
+  }
+  session._contractEvalTimer = (session._contractEvalTimer || 0) + dt;
+  if (session._contractEvalTimer >= 0.45) {
+    session._contractEvalTimer = 0;
+    evaluateDiveContracts(session, callbacks);
   }
 
   // Step physiology & dive computer (including HR & gas-burn coupling; DPV lowers physical fin exertion)
@@ -3121,7 +3166,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     gasBurnMultiplier:
       (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
       (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
-      (hazRes.gasRateMult || 1.0),
+      (hazRes.gasRateMult || 1.0) *
+      (role?.gasBurnMult || 1.0),
   });
 
   if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;

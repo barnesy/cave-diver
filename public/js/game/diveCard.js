@@ -620,3 +620,130 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
   ctx.restore();
   return true;
 }
+
+/**
+ * Interactive Pre-Dive Bathymetry & Gas-Switch MOD Dive Slate Renderer (v156).
+ * Overlays color-coded O2 Deco (0-6m), EAN32 Travel (6m-MOD), and Custom/Default Trimix
+ * Bottom zones directly across the selected expedition's real depth contour.
+ */
+export function drawDivePlanSlate(ctx, width, height, { level, mixes = null, customGasPlan = null } = {}) {
+  if (!ctx || width <= 0 || height <= 0) return false;
+  const maxD = Math.max(24, Number(level?.maxDepthM || level?.bounds?.yMax || 50));
+  const o2Pct = customGasPlan?.enabled ? Number(customGasPlan.o2Pct || 14) : Number((mixes?.TMX1455?.fO2 || 0.14) * 100);
+  const hePct = customGasPlan?.enabled ? Number(customGasPlan.hePct || 55) : Number((mixes?.TMX1455?.fHe || 0.55) * 100);
+  const fO2 = Math.max(0.06, Math.min(0.4, o2Pct / 100));
+  const fN2 = Math.max(0, 1 - fO2 - Math.max(0, hePct / 100));
+  const eanModM = 30; // EAN32 @ 1.28-1.4 PPO2 switch zone
+  const tmxModM = Math.max(12, Math.round(((1.4 / fO2) - 1) * 10));
+  const endAtMaxM = Math.max(0, Math.round(((maxD / 10 + 1) * (fN2 / 0.79) - 1) * 10));
+  const scaleD = Math.max(maxD * 1.12, 36);
+  const padL = 36;
+  const padR = 12;
+  const padT = 18;
+  const padB = 20;
+  const gw = Math.max(40, width - padL - padR);
+  const gh = Math.max(30, height - padT - padB);
+  const toY = (d) => padT + (Math.min(scaleD, Math.max(0, d)) / scaleD) * gh;
+
+  ctx.save();
+  // Slate background
+  const bg = ctx.createLinearGradient?.(0, 0, 0, height);
+  if (bg && typeof bg.addColorStop === 'function') {
+    bg.addColorStop(0, '#041428');
+    bg.addColorStop(1, '#020814');
+    ctx.fillStyle = bg;
+  } else {
+    ctx.fillStyle = '#041428';
+  }
+  ctx.fillRect(0, 0, width, height);
+
+  // 1. Color-coded Gas Depth Bands (O2 Deco | EAN32 Travel | Trimix Bottom)
+  const y0 = toY(0);
+  const y6 = toY(6);
+  const ySwitch = toY(Math.min(maxD, eanModM));
+  const yBot = toY(scaleD);
+  ctx.fillStyle = 'rgba(74, 222, 128, 0.14)';
+  ctx.fillRect(padL, y0, gw, Math.max(2, y6 - y0));
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.13)';
+  ctx.fillRect(padL, y6, gw, Math.max(2, ySwitch - y6));
+  ctx.fillStyle = 'rgba(192, 132, 252, 0.14)';
+  ctx.fillRect(padL, ySwitch, gw, Math.max(2, yBot - ySwitch));
+
+  // 2. Site Depth Contour Silhouette derived from real level segments
+  const segs = Array.isArray(level?.segments) ? level.segments : [];
+  if (segs.length > 0) {
+    const b = level.bounds || { xMin: 0, xMax: 100 };
+    const spanX = Math.max(10, (b.xMax || 100) - (b.xMin || 0));
+    const bins = 24;
+    const depths = new Float32Array(bins + 1);
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      for (const [px, py] of [[s.ax, s.ay], [s.bx, s.by], [(s.ax + s.bx) * 0.5, (s.ay + s.by) * 0.5]]) {
+        const idx = Math.max(0, Math.min(bins, Math.round(((px - (b.xMin || 0)) / spanX) * bins)));
+        if (py > depths[idx]) depths[idx] = py;
+      }
+    }
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.72)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padL, y0);
+    for (let k = 0; k <= bins; k++) {
+      const lx = padL + (k / bins) * gw;
+      const ly = toY(depths[k] || (k === 0 || k === bins ? 1 : maxD * 0.5));
+      ctx.lineTo(lx, ly);
+    }
+    ctx.lineTo(padL + gw, y0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    for (let k = 0; k <= bins; k++) {
+      const lx = padL + (k / bins) * gw;
+      const ly = toY(depths[k] || (k === 0 || k === bins ? 1 : maxD * 0.5));
+      if (k === 0) ctx.moveTo(lx, ly);
+      else ctx.lineTo(lx, ly);
+    }
+    ctx.stroke();
+  }
+
+  // 3. Dashed MOD line for current Bottom Trimix blend
+  const yMod = toY(tmxModM);
+  const modSafe = tmxModM >= maxD;
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = modSafe ? 'rgba(74, 222, 128, 0.82)' : 'rgba(248, 113, 113, 0.92)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(padL, yMod);
+  ctx.lineTo(padL + gw, yMod);
+  ctx.stroke();
+  ctx.restore();
+
+  // 4. Depth Axis & Zone Labels
+  ctx.font = '700 10px ui-monospace, monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#94a3b8';
+  for (const dm of [0, 6, Math.round(maxD * 0.5), Math.round(maxD)]) {
+    ctx.fillText(`${dm}m`, padL - 5, toY(dm));
+  }
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#86efac';
+  ctx.fillText('O₂ 100% DECO (0-6m)', padL + 6, Math.min(y6 - 4, y0 + 8));
+  ctx.fillStyle = '#7dd3fc';
+  ctx.fillText('EAN32 TRAVEL', padL + 6, (y6 + ySwitch) * 0.5);
+  ctx.fillStyle = '#e9d5ff';
+  ctx.fillText(`TMX ${Math.round(o2Pct)}/${Math.round(hePct)} · MOD ${tmxModM}m`, padL + 6, Math.min(height - 26, ySwitch + 12));
+
+  // Top-right END & Rule-of-Thirds summary pill
+  ctx.textAlign = 'right';
+  ctx.fillStyle = modSafe ? '#4ade80' : '#fca5a5';
+  ctx.fillText(
+    `${modSafe ? '✓ MOD OK' : '⚠ SHALLOW MOD'} · END ${endAtMaxM}m @ ${Math.round(maxD)}m · ⅓ TURN`,
+    width - padR,
+    9
+  );
+  ctx.restore();
+  return true;
+}

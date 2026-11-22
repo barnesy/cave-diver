@@ -1489,6 +1489,7 @@ export class CaveRenderer {
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
+    compactHud = false,
     timeSec,
     dt,
   }) {
@@ -1854,6 +1855,9 @@ export class CaveRenderer {
       }
       if (!endedState) {
         this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
+        if (compactHud) {
+          this._drawDiegeticImmersionTape(ctx, cw, ch, diver, diveState, nextCheckpoint, timeSec);
+        }
       }
     }
 
@@ -7224,6 +7228,85 @@ export class CaveRenderer {
    *   glacial sapphire inner shimmer, and survey-tag reflector glints.
    */
   _drawSubmergedStories(ctx, stories, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
+    // Overhead Pelagic Shadow Crossing: slow colossal Whale Shark or Giant Manta silhouette gliding across open-water light (v156)
+    const pelagic = stories?.pelagicShadow;
+    if (pass === 'world' && pelagic && (pelagic.enabled !== false)) {
+      const period = pelagic.periodSec || 46;
+      const crossDur = pelagic.crossingDurationSec || Math.min(22, period * 0.48);
+      const phaseTime = (((timeSec + (pelagic.phaseOffset || 0)) % period) + period) % period;
+      if (phaseTime < crossDur) {
+        const u = phaseTime / crossDur;
+        const span = Math.max(24, (pelagic.xMax - pelagic.xMin) + 28);
+        const dir = (pelagic.direction ?? 1) >= 0 ? 1 : -1;
+        const wx = dir > 0 ? pelagic.xMin - 14 + u * span : pelagic.xMax + 14 - u * span;
+        const baseY = Number.isFinite(pelagic.y) ? pelagic.y : (pelagic.depthM || 6.0);
+        const wy = baseY + Math.sin(u * Math.PI * 2) * 0.85;
+        const psx = toScreenX(wx);
+        const psy = toScreenY(wy);
+        const len = (pelagic.size || pelagic.sizeM || 6.2) * scale;
+        const fade = Math.sin(Math.min(1, Math.max(0, u)) * Math.PI);
+        const alpha = 0.24 * fade;
+        if (alpha > 0.01) {
+          ctx.save();
+          const sg = ctx.createLinearGradient?.(psx, psy, psx, psy + len * 1.45);
+          if (sg && typeof sg.addColorStop === 'function') {
+            sg.addColorStop(0, `rgba(2, 6, 23, ${(alpha * 0.85).toFixed(3)})`);
+            sg.addColorStop(0.55, `rgba(2, 6, 23, ${(alpha * 0.38).toFixed(3)})`);
+            sg.addColorStop(1, 'rgba(2, 6, 23, 0)');
+            ctx.fillStyle = sg;
+          } else {
+            ctx.fillStyle = `rgba(2, 6, 23, ${(alpha * 0.45).toFixed(3)})`;
+          }
+          ctx.beginPath();
+          ctx.moveTo(psx - len * 0.42, psy);
+          ctx.lineTo(psx + len * 0.42, psy);
+          ctx.lineTo(psx + len * 0.72, psy + len * 1.45);
+          ctx.lineTo(psx - len * 0.72, psy + len * 1.45);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.translate(psx, psy);
+          ctx.scale(dir, 1);
+          ctx.fillStyle = `rgba(3, 12, 26, ${(alpha * 1.65).toFixed(3)})`;
+          if (pelagic.kind === 'manta' || pelagic.species === 'giant-manta') {
+            const wingFlap = Math.sin(timeSec * 1.65) * len * 0.08;
+            ctx.beginPath();
+            ctx.moveTo(len * 0.36, 0);
+            ctx.quadraticCurveTo(len * 0.08, -len * 0.28 + wingFlap, -len * 0.12, -len * 0.32 + wingFlap);
+            ctx.quadraticCurveTo(-len * 0.2, -len * 0.06, -len * 0.48, 0);
+            ctx.quadraticCurveTo(-len * 0.2, len * 0.06, -len * 0.12, len * 0.28 - wingFlap * 0.7);
+            ctx.quadraticCurveTo(len * 0.08, len * 0.24 - wingFlap * 0.7, len * 0.36, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = `rgba(3, 12, 26, ${(alpha * 1.5).toFixed(3)})`;
+            ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+            ctx.beginPath();
+            ctx.moveTo(-len * 0.42, 0);
+            ctx.quadraticCurveTo(-len * 0.64, Math.sin(timeSec * 2.2) * len * 0.05, -len * 0.84, 0);
+            ctx.stroke();
+          } else {
+            const tailWag = Math.sin(timeSec * 1.35) * len * 0.055;
+            ctx.beginPath();
+            ctx.moveTo(len * 0.46, -len * 0.03);
+            ctx.quadraticCurveTo(len * 0.12, -len * 0.16, -len * 0.34, -len * 0.04 + tailWag * 0.4);
+            ctx.lineTo(-len * 0.56, -len * 0.18 + tailWag);
+            ctx.lineTo(-len * 0.48, tailWag * 0.5);
+            ctx.lineTo(-len * 0.54, len * 0.13 + tailWag);
+            ctx.lineTo(-len * 0.34, len * 0.05 + tailWag * 0.4);
+            ctx.quadraticCurveTo(len * 0.1, len * 0.14, len * 0.46, len * 0.04);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(len * 0.04, -len * 0.12);
+            ctx.lineTo(-len * 0.06, -len * 0.23);
+            ctx.lineTo(-len * 0.12, -len * 0.1);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+    }
     const list = stories?.setPieces;
     if (!Array.isArray(list) || list.length === 0) return;
 
@@ -7350,6 +7433,49 @@ export class CaveRenderer {
           ctx.moveTo(sx - sz * 0.55, cy0);
           ctx.quadraticCurveTo(sx, cy0 + sz * 0.9, sx + sz * 0.55, cy0);
           ctx.stroke();
+          ctx.restore();
+        } else if (sp.kind === 'air-dome') {
+          // Trapped Overhead Air Dome: liquid-mercury mirror meniscus clinging to the ceiling pocket (v156)
+          const hw = (sp.halfWidth || 2.1) * scale;
+          const ripple = Math.sin(timeSec * 2.4 + sp.phase) * 0.06 * scale;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const ag = ctx.createLinearGradient?.(sx, sy - 0.52 * scale, sx, sy + 0.42 * scale);
+          if (ag && typeof ag.addColorStop === 'function') {
+            ag.addColorStop(0, 'rgba(186, 230, 253, 0.04)');
+            ag.addColorStop(0.45, 'rgba(224, 242, 254, 0.56)');
+            ag.addColorStop(0.62, 'rgba(255, 255, 255, 0.72)');
+            ag.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            ctx.fillStyle = ag;
+          } else {
+            ctx.fillStyle = 'rgba(224, 242, 254, 0.48)';
+          }
+          ctx.beginPath();
+          ctx.ellipse(sx, sy + ripple * 0.35, hw, 0.34 * scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Liquid-mirror undulating meniscus line
+          ctx.strokeStyle = 'rgba(240, 249, 255, 0.85)';
+          ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+          ctx.beginPath();
+          const steps = 14;
+          for (let k = 0; k <= steps; k++) {
+            const u = (k / steps) * 2 - 1;
+            const wx = sx + u * hw;
+            const env = Math.max(0, 1 - u * u);
+            const wy = sy + Math.sin(timeSec * 3.1 + u * 5.8 + sp.phase) * 0.09 * scale * env;
+            if (k === 0) ctx.moveTo(wx, wy);
+            else ctx.lineTo(wx, wy);
+          }
+          ctx.stroke();
+          // Tiny silver exhaust bubbles coalescing along the mirror ceiling
+          ctx.fillStyle = 'rgba(248, 250, 252, 0.78)';
+          for (let b = 0; b < 4; b++) {
+            const bx = sx + Math.sin(timeSec * 0.9 + b * 2.3 + sp.phase) * hw * 0.65;
+            const by = sy + (0.04 + 0.05 * Math.cos(timeSec * 2.1 + b)) * scale;
+            ctx.beginPath();
+            ctx.arc(bx, by, Math.max(1.3, (0.045 + (b % 2) * 0.02) * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
           ctx.restore();
         } else if (sp.kind === 'survey-station') {
           // Retro-reflective tape glint on vintage explorer cave survey marker
@@ -7657,6 +7783,121 @@ export class CaveRenderer {
         ctx.stroke();
       }
     }
+    ctx.restore();
+  }
+
+  /**
+   * Ultra-Minimal "Diegetic Immersion Mode" wrist-computer depth tape & heading compass ribbon (v156).
+   * Drawn directly on the canvas edge when Compact HUD is enabled so players can fly near-zero-chrome.
+   */
+  _drawDiegeticImmersionTape(ctx, cw, ch, diver, diveState, nextCheckpoint, timeSec = 0) {
+    if (!diver || !diveState) return;
+    const dpr = this._cachedDpr || 1;
+    const depthM = Math.max(0, Number(diveState.depth) || 0);
+    const ceilingM = Math.max(0, Number(diveState.decoCeilingM) || 0);
+    const bar = Math.max(0, Math.round(Number(diveState.activeTankBar) || 0));
+    const mixName = diveState.activeMix?.shortName || diveState.activeMix?.name || 'GAS';
+    const fontScale = Math.max(10, Math.round(11 * dpr));
+
+    ctx.save();
+    const tapeW = 46 * dpr;
+    const tapeH = Math.min(ch * 0.44, 210 * dpr);
+    const tapeX = cw - tapeW - 14 * dpr;
+    const tapeY = Math.round((ch - tapeH) * 0.52);
+
+    ctx.fillStyle = 'rgba(2, 12, 24, 0.42)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.32)';
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(tapeX, tapeY, tapeW, tapeH, 8 * dpr);
+    } else {
+      ctx.rect(tapeX, tapeY, tapeW, tapeH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    const pxPerTickM = tapeH / 24;
+    const centerY = tapeY + tapeH * 0.5;
+    ctx.font = `600 ${Math.round(fontScale * 0.82)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const minTickM = Math.max(0, Math.floor((depthM - 12) / 5) * 5);
+    const maxTickM = Math.ceil((depthM + 12) / 5) * 5;
+    for (let m = minTickM; m <= maxTickM; m += 5) {
+      const ty = centerY + (m - depthM) * pxPerTickM;
+      if (ty < tapeY + 8 * dpr || ty > tapeY + tapeH - 8 * dpr) continue;
+      ctx.strokeStyle = m === 0 ? 'rgba(125, 211, 252, 0.72)' : 'rgba(148, 163, 184, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(tapeX + 4 * dpr, ty);
+      ctx.lineTo(tapeX + 12 * dpr, ty);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(203, 213, 225, 0.78)';
+      ctx.fillText(`${m}`, tapeX + tapeW - 6 * dpr, ty);
+    }
+
+    if (ceilingM > 0.4) {
+      const ceilY = Math.max(tapeY + 6 * dpr, Math.min(tapeY + tapeH - 6 * dpr, centerY + (ceilingM - depthM) * pxPerTickM));
+      ctx.strokeStyle = 'rgba(248, 113, 113, 0.92)';
+      ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+      ctx.beginPath();
+      ctx.moveTo(tapeX + 2 * dpr, ceilY);
+      ctx.lineTo(tapeX + tapeW - 2 * dpr, ceilY);
+      ctx.stroke();
+    }
+
+    const pillH = 20 * dpr;
+    ctx.fillStyle = 'rgba(14, 165, 233, 0.28)';
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.9)';
+    ctx.lineWidth = Math.max(1.2, 1.2 * dpr);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(tapeX - 6 * dpr, centerY - pillH * 0.5, tapeW + 8 * dpr, pillH, 5 * dpr);
+    } else {
+      ctx.rect(tapeX - 6 * dpr, centerY - pillH * 0.5, tapeW + 8 * dpr, pillH);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f0f9ff';
+    ctx.font = `700 ${fontScale}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${depthM.toFixed(1)}m`, tapeX + tapeW * 0.5 - 2 * dpr, centerY);
+
+    ctx.fillStyle = bar < 50 ? '#fca5a5' : '#93c5fd';
+    ctx.font = `700 ${Math.round(fontScale * 0.78)}px "JetBrains Mono", monospace`;
+    ctx.fillText(`${mixName} ${bar}`, tapeX + tapeW * 0.5, tapeY + tapeH + 11 * dpr);
+
+    const ribW = Math.min(cw * 0.38, 210 * dpr);
+    const ribH = 22 * dpr;
+    const ribX = Math.round((cw - ribW) * 0.5);
+    const ribY = 12 * dpr;
+    ctx.fillStyle = 'rgba(2, 12, 24, 0.42)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(ribX, ribY, ribW, ribH, 11 * dpr);
+    } else {
+      ctx.rect(ribX, ribY, ribW, ribH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    const headingDeg = ((Math.round((Math.atan2(diver.facingY || 0, diver.facingX || 1) * 180) / Math.PI) + 90) % 360 + 360) % 360;
+    const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const card = cardinals[Math.round(headingDeg / 45) % 8];
+    let navTxt = `HDG ${String(headingDeg).padStart(3, '0')}° ${card}`;
+    if (nextCheckpoint && Number.isFinite(nextCheckpoint.x) && Number.isFinite(nextCheckpoint.y)) {
+      const dist = Math.hypot(nextCheckpoint.x - diver.x, nextCheckpoint.y - diver.y);
+      navTxt += ` · WP ${Math.round(dist)}m`;
+    }
+    const pulse = 0.85 + 0.15 * Math.sin(timeSec * 3.0);
+    ctx.fillStyle = `rgba(224, 242, 254, ${pulse.toFixed(3)})`;
+    ctx.font = `700 ${Math.round(fontScale * 0.84)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(navTxt, ribX + ribW * 0.5, ribY + ribH * 0.5 + 0.5 * dpr);
     ctx.restore();
   }
 

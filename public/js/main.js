@@ -50,6 +50,7 @@ import {
   recordDailyClear,
   getDailyStatus,
   recordFieldGuidePhoto,
+  recordLoreDiscoveryInLogbook,
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
@@ -58,9 +59,16 @@ import {
 import {
   decodeReplayTrack,
   drawReplayFrame,
+  drawDivePlanSlate,
   renderExpeditionPostcard,
   formatReplayTime,
 } from './game/diveCard.js';
+import {
+  getCrewRole,
+  cycleCrewRoleId,
+  computeGhostCheckpointSplits,
+  formatSplitDelta,
+} from './game/expeditionContracts.js';
 import {
   buildChallengeUrl,
   parseChallengeFromSearch,
@@ -580,7 +588,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=155" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=156" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1620,6 +1628,7 @@ function savePhotoStudioSnapshot() {
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
+      compactHud: Boolean(compactHudEnabled),
       timeSec: session.simTimeSec,
       dt: 0,
     });
@@ -2382,6 +2391,38 @@ function toggleAiBuddyPreference() {
 menuAiBuddyPillEl?.addEventListener('click', toggleAiBuddyPreference);
 syncAiBuddyUi();
 
+// Crew Specialty Role selector (v156)
+const CREW_ROLE_PREF_KEY = 'caveDiverCrewRole_v1';
+let activeCrewRoleId = 'balanced';
+try {
+  const savedRole = localStorage.getItem(CREW_ROLE_PREF_KEY);
+  if (savedRole) activeCrewRoleId = getCrewRole(savedRole).id;
+} catch {}
+const menuRolePillEl = document.getElementById('menu-role-pill');
+function syncCrewRoleUi() {
+  const role = getCrewRole(activeCrewRoleId);
+  if (menuRolePillEl) {
+    menuRolePillEl.textContent = `${role.icon} ${role.shortLabel || role.name}`;
+    menuRolePillEl.classList.toggle('active', role.id !== 'balanced');
+  }
+  const roleDescEl = document.getElementById('setup-role-desc');
+  if (roleDescEl) {
+    roleDescEl.textContent = `${role.name}: ${role.perkText}`;
+  }
+  syncSetupDrawerSummary();
+}
+function cycleCrewRolePreference() {
+  activeCrewRoleId = cycleCrewRoleId(activeCrewRoleId);
+  try {
+    localStorage.setItem(CREW_ROLE_PREF_KEY, activeCrewRoleId);
+  } catch {}
+  const role = getCrewRole(activeCrewRoleId);
+  syncCrewRoleUi();
+  showToast(`${role.icon} Crew Role: ${role.name} — ${role.perkText}`, 3.0);
+}
+menuRolePillEl?.addEventListener('click', cycleCrewRolePreference);
+syncCrewRoleUi();
+
 // Dynamic Surface Weather & Time-of-Day preference (v137)
 let weatherPrefId = 'clear-day';
 try {
@@ -3080,6 +3121,7 @@ function openLogbookModal() {
       <div class="logbook-kpi"><span>S-Ranks</span><strong>${certInfo.sGrades}</strong></div>
       <div class="logbook-kpi"><span>Daily Streak</span><strong>🔥 ${dailyStatus.activeStreak}d${dailyStatus.bestStreak > 0 ? ` · Best ${dailyStatus.bestStreak}d` : ''}</strong></div>
       <div class="logbook-kpi"><span>Field Guide</span><strong>📷 ${fgStats.discoveredCount}/${fgStats.totalCount}</strong></div>
+      <div class="logbook-kpi"><span>Contracts</span><strong>📋 ${book.milestones?.contractsCompleted || 0}</strong></div>
     `;
   }
   if (logbookCertsEl) {
@@ -3106,6 +3148,37 @@ function openLogbookModal() {
   const fgGrid = document.getElementById('logbook-field-guide-grid');
   if (fgGrid) {
     renderFieldGuideGallery(book, fgHeading, fgTrophyEl, fgGrid);
+  }
+  const loreHeading = document.getElementById('logbook-lore-heading');
+  const loreGrid = document.getElementById('logbook-lore-grid');
+  if (loreGrid) {
+    const LORE_CATALOG = [
+      { kind: 'air-dome', icon: '🫧', title: 'Trapped Air Dome' },
+      { kind: 'speleothem-cathedral', icon: '🏛️', title: 'Speleothem Cathedral' },
+      { kind: 'halocline-lens', icon: '🌊', title: 'Halocline Lens' },
+      { kind: 'emergency-lamp', icon: '🚨', title: 'Emergency Bulkhead Lamp' },
+      { kind: 'brass-telegraph', icon: '🧭', title: 'Chadburn Telegraph' },
+      { kind: 'ship-wheel', icon: '⚓', title: 'Corroded Ship Helm' },
+      { kind: 'porthole-shaft', icon: '🔆', title: 'Bronze Porthole Shaft' },
+      { kind: 'boiler-panel', icon: '⚙️', title: 'Steam Boiler Manifold' },
+      { kind: 'mayan-vessel', icon: '🏺', title: 'Mayan Offering Vessel' },
+      { kind: 'mine-timber', icon: '⛏️', title: 'Flooded Mine Shoring' },
+      { kind: 'ice-arch', icon: '🧊', title: 'Subglacial Blue-Ice Arch' },
+      { kind: 'fossil-bed', icon: '🐚', title: 'Ammonite Fossil Wall' },
+      { kind: 'survey-station', icon: '📍', title: 'Explorer Survey Piton' },
+    ];
+    const arch = book.loreArchive || {};
+    const foundCnt = LORE_CATALOG.filter((it) => arch[it.kind]).length;
+    if (loreHeading) {
+      loreHeading.textContent = `SUBMERGED LORE ARCHIVE (${foundCnt}/${LORE_CATALOG.length} DISCOVERED)`;
+    }
+    loreGrid.innerHTML = LORE_CATALOG.map((it) => {
+      const rec = arch[it.kind];
+      if (!rec) {
+        return `<div class="lore-archive-card locked"><div class="lore-archive-head"><span>🔒 ${escapeHtml(it.title)}</span><span class="lore-archive-badge">Unexplored</span></div><div class="lore-archive-body">Illuminate with your primary dive torch during an expedition to archive.</div></div>`;
+      }
+      return `<div class="lore-archive-card"><div class="lore-archive-head"><span>${it.icon} ${escapeHtml(rec.title || it.title)}</span><span class="lore-archive-badge">×${rec.count || 1}</span></div><div class="lore-archive-body">${escapeHtml(rec.sampleLore || '')}</div>${rec.firstSiteName ? `<div class="lore-archive-site">First logged: ${escapeHtml(rec.firstSiteName)}</div>` : ''}</div>`;
+    }).join('');
   }
   if (logbookSitesEl) {
     const sitesHeading = document.getElementById('logbook-sites-heading');
@@ -3790,6 +3863,17 @@ function renderGasPlannerModal() {
         : !draftGasPlan.useDefault && Number(btn.dataset.o2) === blend.o2Pct && Number(btn.dataset.he) === blend.hePct;
       btn.classList.toggle('active', match);
     });
+  }
+  const slateCanvas = document.getElementById('gas-slate-canvas');
+  if (slateCanvas) {
+    const sctx = slateCanvas.getContext('2d');
+    if (sctx) {
+      drawDivePlanSlate(sctx, slateCanvas.width, slateCanvas.height, {
+        level: lvl,
+        mixes: lvl.gasMixes,
+        customGasPlan: draftGasPlan.useDefault ? null : { enabled: true, o2Pct: blend.o2Pct, hePct: blend.hePct },
+      });
+    }
   }
 }
 
@@ -5079,6 +5163,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     drillsEnabled,
     weatherId: weatherPrefId,
     livery: activeRigLivery,
+    crewRoleId: activeCrewRoleId,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
@@ -5092,6 +5177,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   syncTechGearHud(session);
   syncMinimapButtonUi();
   refreshActiveGhostTrack(activeLevel);
+  session._pbSplits = activeGhostTrack ? computeGhostCheckpointSplits(activeLevel, activeGhostTrack) : {};
+  session._pbSplitsLabel = activeGhostIsPar ? 'Par' : 'PB';
   session.endedState = null;
   session.localOutcome = null;
   session._awaitingHostStart = Boolean(restoredState?.awaitingHostStart);
@@ -5427,6 +5514,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       drillsCompleted: session.drills?.completedCount || 0,
       cleanSalvageLift: Boolean(success && runMs.usedLiftBagWithHeavySalvage && !runMs.floatUpIncident),
       zeroSiltCaveClear: Boolean(success && !level.isWreck && (runMs.heavySiltEvents || 0) === 0),
+      contractsCompleted: (session.contracts || []).filter((c) => c.completed).length,
     },
   });
   if (success && session.dailyDateKey) {
@@ -5520,6 +5608,16 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       pts: teamSummary.drillBonusScore,
       pct: Math.round((teamSummary.drillBonusScore / 600) * 100),
       cls: 'gold',
+    });
+  }
+  const doneContracts = (session.contracts || []).filter((c) => c.completed);
+  if (doneContracts.length > 0) {
+    const cPts = session.contractBonusScore || doneContracts.reduce((acc, c) => acc + (c.rewardPts || 150), 0);
+    rows.push({
+      label: `📋 Dive Contracts (${doneContracts.length}/${session.contracts.length})`,
+      pts: cPts,
+      pct: Math.round((doneContracts.length / Math.max(1, session.contracts.length)) * 100),
+      cls: 'green',
     });
   }
   if (teamSummary.isTeam) {
@@ -6654,6 +6752,13 @@ function syncSetupDrawerSummary() {
     aiMod = currentAiCount > 0;
     if (aiMod) activeCount++;
   } catch {}
+  let roleMod = false;
+  let currentRole = getCrewRole('balanced');
+  try {
+    currentRole = getCrewRole(activeCrewRoleId);
+    roleMod = currentRole.id !== 'balanced';
+    if (roleMod) activeCount++;
+  } catch {}
   try {
     currentMutId = activeSandboxMutatorId || '';
     mutMod = Boolean(currentMutId);
@@ -6677,6 +6782,7 @@ function syncSetupDrawerSummary() {
   document.getElementById('setup-card-weather')?.classList.toggle('active-card', weatherMod);
   document.getElementById('setup-card-livery')?.classList.toggle('active-card', liveryMod);
   document.getElementById('setup-card-ai')?.classList.toggle('active-card', aiMod);
+  document.getElementById('setup-card-role')?.classList.toggle('active-card', roleMod);
   document.getElementById('setup-card-gas')?.classList.toggle('active-card', gasMod);
   document.getElementById('setup-card-drills')?.classList.toggle('active-card', drillsMod);
   document.getElementById('setup-card-mutator')?.classList.toggle('active-card', mutMod);
@@ -6758,6 +6864,9 @@ function syncSetupDrawerSummary() {
     }
     if (aiMod) {
       chips.push(`<button type="button" class="mod-chip mod-ai" data-mod-target="setup">🤖 ${currentAiCount} AI</button>`);
+    }
+    if (roleMod) {
+      chips.push(`<button type="button" class="mod-chip mod-role" data-mod-target="setup">${currentRole.icon} ${escapeHtml(currentRole.shortLabel || currentRole.name)}</button>`);
     }
     if (weatherMod) {
       const rw = resolveEffectiveWeather(currentWeatherPref, { level: activeLevel });
@@ -6905,6 +7014,11 @@ btnSetupResetEl?.addEventListener('click', () => {
     aiSquadCount = 0;
     try { localStorage.setItem(AI_BUDDY_PREF_KEY, '0'); } catch {}
     syncAiBuddyUi();
+  }
+  if (activeCrewRoleId !== 'balanced') {
+    activeCrewRoleId = 'balanced';
+    try { localStorage.setItem(CREW_ROLE_PREF_KEY, activeCrewRoleId); } catch {}
+    syncCrewRoleUi();
   }
   if (drillsEnabled) {
     drillsEnabled = false;
@@ -8471,7 +8585,12 @@ const sessionStepCallbacks = {
   },
   onCheckpoint: (cp) => {
     audio.playCheckpoint();
-    showToast(`✓ ${cp.name} — ${cp.hint}`, 3.5);
+    let splitSuffix = '';
+    const pbSec = session?._pbSplits?.[cp.id];
+    if (Number.isFinite(pbSec) && Number.isFinite(session?.simTimeSec)) {
+      splitSuffix = ` · ${formatSplitDelta(session.simTimeSec - pbSec)} vs ${session._pbSplitsLabel || 'PB'}`;
+    }
+    showToast(`✓ ${cp.name}${splitSuffix} — ${cp.hint}`, 3.8);
     if (isMultiplayer) lan.sendCheckpoint(cp.id);
   },
   onCollect: (item) => {
@@ -8483,6 +8602,22 @@ const sessionStepCallbacks = {
   onStoryDiscovered: (sp) => {
     audio.playStoryDiscovery?.();
     showToast(`🧭 ${sp.title} — ${sp.lore}`, 4.4);
+    try {
+      const res = recordLoreDiscoveryInLogbook(loadCareerLogbook(), {
+        kind: sp.kind,
+        title: sp.title,
+        lore: sp.lore,
+        siteName: session?.level?.name || '',
+      });
+      if (res?.book) saveCareerLogbook(res.book);
+    } catch {}
+  },
+  onContractComplete: (c) => {
+    audio.playDrillClear?.();
+    showToast(`📋 Contract Complete: ${c.icon || '✓'} ${c.title} (+${c.rewardPts || 150} pts)!`, 4.0);
+  },
+  onTopsideChatter: (msg) => {
+    if (msg) showToast(msg, 4.0);
   },
   onBodyRecovered: (rt) => {
     audio.playRecovery();
@@ -9078,6 +9213,7 @@ function frame(nowMs) {
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
+      compactHud: Boolean(compactHudEnabled),
       timeSec: session.simTimeSec,
       dt,
     });
