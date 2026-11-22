@@ -119,14 +119,22 @@ import {
   SUIT_LIVERIES,
   TORCH_OPTICS,
   MILESTONE_PATCHES,
+  HEADGEAR_STYLES,
+  ACCENT_TRIMS,
+  TANK_FINISHES,
+  VISOR_TINTS,
+  OUTFITTER_PRESETS,
   DEFAULT_RIG_LIVERY,
   getSuitLivery,
   getTorchOptic,
   getMilestonePatch,
+  resolveDiverLiveryPalette,
   computeUnlockedLiveries,
   sanitizeRigLivery,
   isDefaultRigLivery,
+  randomizeUnlockedLivery,
   drawLiveryPreview,
+  drawMiniDiverAvatar,
 } from './game/rigLivery.js';
 import {
   PHOTO_FILTERS,
@@ -569,7 +577,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=152" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=153" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2420,28 +2428,63 @@ try {
   }
 } catch {}
 const menuLiveryPillEl = document.getElementById('menu-livery-pill');
+const btnHomeAvatarBadgeEl = document.getElementById('btn-home-avatar-badge');
+const homeAvatarCanvasEl = document.getElementById('home-avatar-canvas');
+const homeAvatarCtx = homeAvatarCanvasEl?.getContext?.('2d') || null;
 const liveryModalEl = document.getElementById('livery-modal');
 const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
 const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
+const liveryPresetRowEl = document.getElementById('livery-preset-row');
+const liveryCatTabsEl = document.getElementById('livery-cat-tabs');
+const liveryEnvTabsEl = document.getElementById('livery-env-tabs');
+const btnLiveryPrevCcrEl = document.getElementById('btn-livery-prev-ccr');
+const btnLiveryPrevDpvEl = document.getElementById('btn-livery-prev-dpv');
+const btnLiveryRandomEl = document.getElementById('btn-livery-random');
 const liverySuitGridEl = document.getElementById('livery-suit-grid');
+const liveryTrimGridEl = document.getElementById('livery-trim-grid');
+const liveryHeadgearGridEl = document.getElementById('livery-headgear-grid');
+const liveryVisorGridEl = document.getElementById('livery-visor-grid');
+const liveryTankGridEl = document.getElementById('livery-tank-grid');
 const liveryTorchGridEl = document.getElementById('livery-torch-grid');
 const liveryPatchGridEl = document.getElementById('livery-patch-grid');
 const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
 const btnLiveryCloseEl = document.getElementById('btn-livery-close');
 const btnLiveryResetEl = document.getElementById('btn-livery-reset');
 const btnLiveryDoneEl = document.getElementById('btn-livery-done');
+const liveryPanels = {
+  suit: document.getElementById('livery-panel-suit'),
+  head: document.getElementById('livery-panel-head'),
+  gear: document.getElementById('livery-panel-gear'),
+  patch: document.getElementById('livery-panel-patch'),
+};
+let activeLiveryTab = 'suit';
+let liveryPreviewEnv = 'clear';
+let liveryPreviewCcr = null; // null = follow player's equipped loadout
+let liveryPreviewDpv = null;
 
 function saveRigLivery() {
   try { localStorage.setItem(LIVERY_PREF_KEY, JSON.stringify(activeRigLivery)); } catch {}
 }
 
+function renderHomeAvatarBadge() {
+  if (!homeAvatarCtx || !homeAvatarCanvasEl) return;
+  let hasCcr = false;
+  try { hasCcr = Boolean(getEffectiveGearLoadout()?.ccr); } catch {}
+  drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr });
+}
+
 function syncLiveryUi() {
-  const suit = getSuitLivery(activeRigLivery.suitId);
+  const pal = resolveDiverLiveryPalette(activeRigLivery);
   const custom = !isDefaultRigLivery(activeRigLivery);
   if (menuLiveryPillEl) {
-    menuLiveryPillEl.textContent = `🎨 ${suit.name}`;
+    menuLiveryPillEl.textContent = `🎨 ${pal.suit.name}${pal.headgear.id !== 'zissou-cap' ? ` · ${pal.headgear.icon}` : ''}`;
     menuLiveryPillEl.classList.toggle('active', custom);
   }
+  if (btnHomeAvatarBadgeEl) {
+    btnHomeAvatarBadgeEl.classList.toggle('custom', custom);
+    btnHomeAvatarBadgeEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name} (tap to customize)`;
+  }
+  renderHomeAvatarBadge();
   if (session?.diver) {
     session.diver.livery = { ...activeRigLivery };
   }
@@ -2457,20 +2500,115 @@ function renderLiveryPreviewFrame(timeSec = 0) {
     hasCcr = Boolean(eq?.ccr);
     hasDpv = Boolean(eq?.dpv);
   } catch {}
+  const showCcr = liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr;
+  const showDpv = liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv;
   drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, activeRigLivery, {
-    hasCcr,
-    hasDpv,
+    hasCcr: showCcr,
+    hasDpv: showDpv,
+    envMode: liveryPreviewEnv,
     timeSec,
   });
+}
+
+function setLiveryActiveTab(tabId) {
+  if (!liveryPanels[tabId]) return;
+  activeLiveryTab = tabId;
+  liveryCatTabsEl?.querySelectorAll?.('button[data-livery-tab]')?.forEach?.((btn) => {
+    const on = btn.getAttribute('data-livery-tab') === tabId;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  for (const [k, el] of Object.entries(liveryPanels)) {
+    if (el) el.hidden = k !== tabId;
+  }
+}
+
+function updateActiveLiveryField(patchObj) {
+  const unlocks = getCurrentLiveryUnlocks();
+  activeRigLivery = sanitizeRigLivery({ ...activeRigLivery, ...patchObj }, unlocks);
+  saveRigLivery();
+  syncLiveryUi();
+  renderLiveryWorkshopModal();
 }
 
 function renderLiveryWorkshopModal() {
   const unlocks = getCurrentLiveryUnlocks();
   activeRigLivery = sanitizeRigLivery(activeRigLivery, unlocks);
-  const totalItems = SUIT_LIVERIES.length + TORCH_OPTICS.length + MILESTONE_PATCHES.length;
-  const totalUnlocked = unlocks.suits.size + unlocks.torches.size + unlocks.patches.size;
+  const pal = resolveDiverLiveryPalette(activeRigLivery);
+
+  const totalItems =
+    SUIT_LIVERIES.length +
+    ACCENT_TRIMS.length +
+    HEADGEAR_STYLES.length +
+    VISOR_TINTS.length +
+    TANK_FINISHES.length +
+    TORCH_OPTICS.length +
+    MILESTONE_PATCHES.length;
+  const totalUnlocked =
+    unlocks.suits.size +
+    unlocks.trims.size +
+    unlocks.headgears.size +
+    unlocks.visors.size +
+    unlocks.tanks.size +
+    unlocks.torches.size +
+    unlocks.patches.size;
   if (liveryUnlockSummaryEl) {
-    liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} Workshop items unlocked (${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${unlocks.stats.speciesLogged} species). Syncs live in co-op.`;
+    liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces unlocked (${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${unlocks.stats.speciesLogged} species). Syncs live in co-op.`;
+  }
+
+  // Sync Test-Tank toolbar pill states
+  liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
+    const on = btn.getAttribute('data-livery-env') === liveryPreviewEnv;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  let eqCcr = false;
+  let eqDpv = false;
+  try {
+    const eq = getEffectiveGearLoadout();
+    eqCcr = Boolean(eq?.ccr);
+    eqDpv = Boolean(eq?.dpv);
+  } catch {}
+  const showCcr = liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr;
+  const showDpv = liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv;
+  if (btnLiveryPrevCcrEl) {
+    btnLiveryPrevCcrEl.classList.toggle('active', showCcr);
+    btnLiveryPrevCcrEl.setAttribute('aria-pressed', showCcr ? 'true' : 'false');
+  }
+  if (btnLiveryPrevDpvEl) {
+    btnLiveryPrevDpvEl.classList.toggle('active', showDpv);
+    btnLiveryPrevDpvEl.setAttribute('aria-pressed', showDpv ? 'true' : 'false');
+  }
+
+  // 1-Tap Expedition Kit Presets strip
+  if (liveryPresetRowEl) {
+    liveryPresetRowEl.innerHTML = OUTFITTER_PRESETS.map((pr) => {
+      const clamped = sanitizeRigLivery(pr.livery, unlocks);
+      const isMatch =
+        clamped.suitId === activeRigLivery.suitId &&
+        clamped.torchId === activeRigLivery.torchId &&
+        (clamped.headgearId || 'zissou-cap') === pal.headgear.id &&
+        (clamped.trimId || 'suit-default') === pal.trimSpec.id &&
+        (clamped.tankId || 'al80-silver') === pal.tank.id &&
+        (clamped.visorId || 'clear-cyan') === pal.visor.id;
+      const suit = getSuitLivery(pr.livery.suitId);
+      const lockedParts =
+        (!unlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
+        (!unlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
+        (!unlocks.tanks.has(pr.livery.tankId) ? 1 : 0);
+      return `<button type="button" class="livery-preset-chip${isMatch ? ' active' : ''}" data-preset-id="${pr.id}" title="${escapeHtml(pr.name)}${lockedParts > 0 ? ' (applies unlocked items from this kit)' : ''}">
+        <span class="livery-preset-dot" style="background: linear-gradient(135deg, ${suit.suitTop}, ${suit.accent});" aria-hidden="true"></span>
+        <span>${pr.icon} ${escapeHtml(pr.name)}</span>
+      </button>`;
+    }).join('');
+    liveryPresetRowEl.querySelectorAll('button[data-preset-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pid = btn.getAttribute('data-preset-id');
+        const pr = OUTFITTER_PRESETS.find((x) => x.id === pid);
+        if (!pr) return;
+        updateActiveLiveryField(pr.livery);
+      });
+    });
   }
 
   if (liverySuitGridEl) {
@@ -2490,10 +2628,97 @@ function renderLiveryWorkshopModal() {
       btn.addEventListener('click', () => {
         const sid = btn.getAttribute('data-suit-id');
         if (!sid || !unlocks.suits.has(sid)) return;
-        activeRigLivery = { ...activeRigLivery, suitId: sid };
-        saveRigLivery();
-        syncLiveryUi();
-        renderLiveryWorkshopModal();
+        updateActiveLiveryField({ suitId: sid });
+      });
+    });
+  }
+
+  if (liveryTrimGridEl) {
+    liveryTrimGridEl.innerHTML = ACCENT_TRIMS.map((tr) => {
+      const unlocked = unlocks.trims.has(tr.id);
+      const selected = pal.trimSpec.id === tr.id;
+      const chipStyle =
+        tr.id === 'suit-default'
+          ? `background: linear-gradient(135deg, ${pal.suit.accent} 0%, ${pal.suit.trim} 100%);`
+          : `background: linear-gradient(135deg, ${tr.swatchA} 0%, ${tr.swatchB} 100%);`;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-trim-id="${tr.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(tr.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : tr.unlockHint) : `Locked · ${tr.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryTrimGridEl.querySelectorAll('button[data-trim-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tid = btn.getAttribute('data-trim-id');
+        if (!tid || !unlocks.trims.has(tid)) return;
+        updateActiveLiveryField({ trimId: tid });
+      });
+    });
+  }
+
+  if (liveryHeadgearGridEl) {
+    liveryHeadgearGridEl.innerHTML = HEADGEAR_STYLES.map((h) => {
+      const unlocked = unlocks.headgears.has(h.id);
+      const selected = pal.headgear.id === h.id;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-headgear-id="${h.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="background: rgba(15, 23, 42, 0.92);" aria-hidden="true">${unlocked ? h.icon : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(h.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? h.specText : `Locked · ${h.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryHeadgearGridEl.querySelectorAll('button[data-headgear-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const hid = btn.getAttribute('data-headgear-id');
+        if (!hid || !unlocks.headgears.has(hid)) return;
+        updateActiveLiveryField({ headgearId: hid });
+      });
+    });
+  }
+
+  if (liveryVisorGridEl) {
+    liveryVisorGridEl.innerHTML = VISOR_TINTS.map((v) => {
+      const unlocked = unlocks.visors.has(v.id);
+      const selected = pal.visor.id === v.id;
+      const chipStyle = `background: linear-gradient(135deg, ${v.top} 0%, ${v.mid} 50%, ${v.bot} 100%);`;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-visor-id="${v.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(v.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : v.unlockHint) : `Locked · ${v.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryVisorGridEl.querySelectorAll('button[data-visor-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const vid = btn.getAttribute('data-visor-id');
+        if (!vid || !unlocks.visors.has(vid)) return;
+        updateActiveLiveryField({ visorId: vid });
+      });
+    });
+  }
+
+  if (liveryTankGridEl) {
+    liveryTankGridEl.innerHTML = TANK_FINISHES.map((tk) => {
+      const unlocked = unlocks.tanks.has(tk.id);
+      const selected = pal.tank.id === tk.id;
+      const chipStyle = `background: linear-gradient(180deg, ${tk.top} 0%, ${tk.mid} 50%, ${tk.bot} 100%);`;
+      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-tank-id="${tk.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-name">${escapeHtml(tk.name)}</span>
+          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : tk.unlockHint) : `Locked · ${tk.unlockHint}`)}</span>
+        </span>
+      </button>`;
+    }).join('');
+    liveryTankGridEl.querySelectorAll('button[data-tank-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const kid = btn.getAttribute('data-tank-id');
+        if (!kid || !unlocks.tanks.has(kid)) return;
+        updateActiveLiveryField({ tankId: kid });
       });
     });
   }
@@ -2515,10 +2740,7 @@ function renderLiveryWorkshopModal() {
       btn.addEventListener('click', () => {
         const tid = btn.getAttribute('data-torch-id');
         if (!tid || !unlocks.torches.has(tid)) return;
-        activeRigLivery = { ...activeRigLivery, torchId: tid };
-        saveRigLivery();
-        syncLiveryUi();
-        renderLiveryWorkshopModal();
+        updateActiveLiveryField({ torchId: tid });
       });
     });
   }
@@ -2539,14 +2761,12 @@ function renderLiveryWorkshopModal() {
       btn.addEventListener('click', () => {
         const pid = btn.getAttribute('data-patch-id');
         if (!pid || !unlocks.patches.has(pid)) return;
-        activeRigLivery = { ...activeRigLivery, patchId: pid };
-        saveRigLivery();
-        syncLiveryUi();
-        renderLiveryWorkshopModal();
+        updateActiveLiveryField({ patchId: pid });
       });
     });
   }
 
+  setLiveryActiveTab(activeLiveryTab);
   if (btnLiveryResetEl) {
     btnLiveryResetEl.disabled = isDefaultRigLivery(activeRigLivery);
   }
@@ -2566,6 +2786,42 @@ function closeLiveryModal() {
   liveryModalEl.hidden = true;
 }
 
+liveryCatTabsEl?.querySelectorAll?.('button[data-livery-tab]')?.forEach?.((btn) => {
+  btn.addEventListener('click', () => {
+    const tid = btn.getAttribute('data-livery-tab');
+    if (tid) setLiveryActiveTab(tid);
+  });
+});
+liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
+  btn.addEventListener('click', () => {
+    const env = btn.getAttribute('data-livery-env');
+    if (!env) return;
+    liveryPreviewEnv = env;
+    renderLiveryWorkshopModal();
+  });
+});
+btnLiveryPrevCcrEl?.addEventListener('click', () => {
+  let eqCcr = false;
+  try { eqCcr = Boolean(getEffectiveGearLoadout()?.ccr); } catch {}
+  const cur = liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr;
+  liveryPreviewCcr = !cur;
+  renderLiveryWorkshopModal();
+});
+btnLiveryPrevDpvEl?.addEventListener('click', () => {
+  let eqDpv = false;
+  try { eqDpv = Boolean(getEffectiveGearLoadout()?.dpv); } catch {}
+  const cur = liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv;
+  liveryPreviewDpv = !cur;
+  renderLiveryWorkshopModal();
+});
+btnLiveryRandomEl?.addEventListener('click', () => {
+  const unlocks = getCurrentLiveryUnlocks();
+  activeRigLivery = randomizeUnlockedLivery(unlocks);
+  saveRigLivery();
+  syncLiveryUi();
+  renderLiveryWorkshopModal();
+});
+btnHomeAvatarBadgeEl?.addEventListener('click', openLiveryModal);
 menuLiveryPillEl?.addEventListener('click', openLiveryModal);
 btnLiveryCloseEl?.addEventListener('click', closeLiveryModal);
 btnLiveryDoneEl?.addEventListener('click', closeLiveryModal);

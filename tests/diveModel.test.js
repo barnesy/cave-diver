@@ -6707,3 +6707,118 @@ test('v152 Safari Anti-Zoom-Trap Hardening: >=16px touch inputs, scale-aware pin
   assert.ok(mainSrc.includes("document.addEventListener('focusout'"), 'main.js must auto-recover Safari zoom after input/select blur');
   assert.ok(mainSrc.includes("window.addEventListener('orientationchange'"), 'main.js must recover viewport zoom & canvas on orientationchange');
 });
+
+test('v153 Modular Expedition Outfitter, Headgear Silhouettes, Cert-Linked Unlocks, Test-Tank Preview & P2P Relay', async () => {
+  const {
+    HEADGEAR_STYLES,
+    ACCENT_TRIMS,
+    TANK_FINISHES,
+    VISOR_TINTS,
+    OUTFITTER_PRESETS,
+    DEFAULT_RIG_LIVERY,
+    resolveDiverLiveryPalette,
+    computeUnlockedLiveries,
+    sanitizeRigLivery,
+    isDefaultRigLivery,
+    randomizeUnlockedLivery,
+    drawLiveryPreview,
+    drawMiniDiverAvatar,
+  } = await import('../public/js/game/rigLivery.js');
+
+  assert.equal(HEADGEAR_STYLES.length, 4);
+  assert.equal(ACCENT_TRIMS.length, 7);
+  assert.equal(TANK_FINISHES.length, 5);
+  assert.equal(VISOR_TINTS.length, 4);
+  assert.equal(OUTFITTER_PRESETS.length, 6);
+
+  // 1. Fresh diver unlocks standard gear only; v151 certification milestones unlock signature modular gear
+  const freshBook = createEmptyLogbook();
+  const freshUnlocks = computeUnlockedLiveries(freshBook);
+  assert.equal(freshUnlocks.headgears.has('zissou-cap'), true);
+  assert.equal(freshUnlocks.headgears.has('cave-hood'), true);
+  assert.equal(freshUnlocks.headgears.has('cave-helmet'), false);
+  assert.equal(freshUnlocks.headgears.has('exo-mask'), false);
+  assert.equal(freshUnlocks.tanks.has('carbon-stealth'), false);
+  assert.equal(freshUnlocks.tanks.has('salvage-brass'), false);
+
+  const certBook = recordDiveInLogbook(createEmptyLogbook(), {
+    levelId: 'u1206-submarine',
+    success: true,
+    score: 3200,
+    grade: 'S',
+    maxDepthM: 76,
+    diveTimeSec: 260,
+    milestones: { equalizedBulkheads: 1, cleanSalvageLift: true, drillsCompleted: 3, zeroSiltCaveClear: true },
+  });
+  const certUnlocks = computeUnlockedLiveries(certBook);
+  assert.equal(certUnlocks.headgears.has('cave-helmet'), true, 'Bulkhead Engineer milestone must unlock Carbon Cave Helmet');
+  assert.equal(certUnlocks.headgears.has('exo-mask'), true, 'Emergency Troubleshooter milestone must unlock Full-Face Exo Mask');
+  assert.equal(certUnlocks.trims.has('salvage-gold'), true, 'Salvage Master milestone must unlock Salvage Gold trim');
+  assert.equal(certUnlocks.tanks.has('carbon-stealth'), true, 'Zero-Silt Trim milestone must unlock Carbon Stealth tank');
+  assert.equal(certUnlocks.tanks.has('salvage-brass'), true, 'Bulkhead Engineer milestone must unlock Patina Salvage Brass tank');
+  assert.equal(certUnlocks.visors.has('night-emerald'), true, 'Emergency Troubleshooter milestone must unlock Night-Ops Emerald visor');
+
+  // 2. Sanitization preserves compact default shape & keeps valid custom modular overrides
+  const fullCustom = {
+    suitId: 'wreck-titanium',
+    torchId: 'warm-halogen',
+    patchId: 'wreck-penetrator',
+    headgearId: 'exo-mask',
+    trimId: 'salvage-gold',
+    tankId: 'salvage-brass',
+    visorId: 'night-emerald',
+  };
+  const sanitized = sanitizeRigLivery(fullCustom, certUnlocks);
+  assert.deepEqual(sanitized, fullCustom);
+  assert.equal(isDefaultRigLivery(sanitized), false);
+  assert.equal(isDefaultRigLivery(DEFAULT_RIG_LIVERY), true);
+
+  const clampedFresh = sanitizeRigLivery(fullCustom, freshUnlocks);
+  assert.equal(clampedFresh.headgearId, undefined, 'Locked headgear must clamp back to omitted default');
+  assert.equal(clampedFresh.tankId, undefined, 'Locked tank finish must clamp back to omitted default');
+
+  const pal = resolveDiverLiveryPalette(sanitized);
+  assert.equal(pal.headgearId, 'exo-mask');
+  assert.equal(pal.accent, '#f59e0b');
+  assert.equal(pal.tankFinish.id, 'salvage-brass');
+  assert.equal(pal.visorTint.id, 'night-emerald');
+
+  const randLiv = randomizeUnlockedLivery(certUnlocks, () => 0.75);
+  assert.deepEqual(sanitizeRigLivery(randLiv, certUnlocks), randLiv);
+
+  // 3. Test-Tank preview renders all 4 headgear silhouettes across Clear / Silt / Night + Mini-Avatar badge
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 560, height: 176 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 24 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  for (const hg of HEADGEAR_STYLES) {
+    for (const envMode of ['clear', 'silt', 'night']) {
+      drawLiveryPreview(
+        noopCtx,
+        560,
+        176,
+        { ...sanitized, headgearId: hg.id },
+        { hasCcr: hg.id === 'exo-mask', hasDpv: hg.id === 'cave-helmet', envMode, timeSec: 1.5 }
+      );
+    }
+  }
+  drawMiniDiverAvatar(noopCtx, 58, 34, sanitized, { hasCcr: true });
+
+  // 4. Co-op P2pRoomCoordinator relays full modular livery overrides cleanly
+  const peerPkts = [];
+  const coord = new P2pRoomCoordinator({ code: 'FIT1', hostId: 'h1', hostName: 'Host', levelId: LEVEL_1.id });
+  coord.bindPlayerSender('h1', () => {});
+  coord.handleRemoteJoin({ name: 'Guest' }, (m) => peerPkts.push(m), 'p2');
+  coord.handleMessage('h1', { type: 'start_dive', force: true });
+  coord.handleMessage('h1', {
+    type: 'player_state',
+    state: { seq: 1, x: 10, y: 12, vx: 0, vy: 0, angle: 0, torchOn: true, alive: true, livery: sanitized },
+  });
+  const relayed = peerPkts.find((m) => m.type === 'peer_state');
+  assert.deepEqual(relayed?.state?.livery, sanitized);
+});

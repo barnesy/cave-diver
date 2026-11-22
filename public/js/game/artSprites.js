@@ -610,13 +610,17 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.restore();
   }
 
+  const tankFinish = pal?.tankFinish || null;
+  const visorTint = pal?.visorTint || null;
+  const headgearId = pal?.headgearId || 'zissou-cap';
+
   if (hasCcr) {
-    // Closed-Circuit Rebreather (CCR) back-mount yellow/graphite canister & corrugated breathing loop
-    ctx.fillStyle = '#eab308';
+    // Closed-Circuit Rebreather (CCR) back-mount canister (supports custom tank/shell finish!) & corrugated breathing loop
+    ctx.fillStyle = tankFinish?.ccrShell || '#eab308';
     ctx.beginPath();
     ctx.roundRect(-u * 0.92, -u * 0.62, u * 1.18, u * 0.40, u * 0.14);
     ctx.fill();
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = tankFinish?.stroke || '#1e293b';
     ctx.lineWidth = Math.max(1.2, u * 0.045);
     ctx.stroke();
     // Graphite scrubber head cap & twin corrugated loop hoses arching over shoulder to mouthpiece
@@ -640,17 +644,29 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.arc(u * 0.66, -u * 0.24, Math.max(1.5, u * 0.055), 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // Twin Backgas Cylinders (brushed aluminum metallic gradient)
-    ctx.fillStyle = tankGrad;
+    // Twin Backgas Cylinders (supports custom anodized/carbon/brass/yellow metallic finishes!)
+    let cylFill = tankGrad;
+    if (tankFinish && tankFinish.id !== 'al80-silver' && typeof ctx.createLinearGradient === 'function') {
+      const cg = ctx.createLinearGradient(0, -u * 0.58, 0, -u * 0.23);
+      if (cg && typeof cg.addColorStop === 'function') {
+        cg.addColorStop(0, tankFinish.top);
+        cg.addColorStop(0.52, tankFinish.mid);
+        cg.addColorStop(1, tankFinish.bot);
+        cylFill = cg;
+      } else {
+        cylFill = tankFinish.mid;
+      }
+    }
+    ctx.fillStyle = cylFill;
     ctx.beginPath();
     ctx.roundRect(-u * 0.9, -u * 0.58, u * 1.15, u * 0.35, u * 0.15);
     ctx.fill();
-    ctx.strokeStyle = '#475569';
+    ctx.strokeStyle = tankFinish?.stroke || '#475569';
     ctx.lineWidth = Math.max(1, u * 0.035);
     ctx.stroke();
 
     // Specular streak & manifold valve
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillStyle = tankFinish?.id === 'carbon-stealth' ? 'rgba(148,163,184,0.32)' : 'rgba(255,255,255,0.55)';
     ctx.fillRect(-u * 0.8, -u * 0.53, u * 0.9, u * 0.05);
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(u * 0.16, -u * 0.55, u * 0.15, u * 0.28);
@@ -665,39 +681,154 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.fillStyle = stageBandColor;
   ctx.fillRect(-u * 0.2, u * 0.26, u * 0.14, u * 0.24);
 
-  // Hood / Helmet with subtle Zissou-inspired stripe accent & top rim catchlight
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.arc(u * 0.44, -u * 0.02 * Math.sign(rollScale || 1), u * 0.32, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = accent;
-  ctx.beginPath();
-  ctx.arc(u * 0.40, -u * 0.14, u * 0.22, Math.PI * 1.05, Math.PI * 1.95);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(224, 242, 254, 0.28)';
-  ctx.lineWidth = Math.max(1, u * 0.032);
-  ctx.beginPath();
-  ctx.arc(u * 0.44, -u * 0.02 * Math.sign(rollScale || 1), u * 0.30, Math.PI * 1.15, Math.PI * 1.82);
-  ctx.stroke();
+  // Modular Headgear Silhouette (v153): Zissou Beanie | Neoprene Cave Hood | Carbon Cave Helmet | Full-Face Exo Mask
+  const headY = -u * 0.02 * Math.sign(rollScale || 1);
+  if (headgearId === 'cave-helmet') {
+    // Hard-shell technical cave/wreck helmet with crown ridge, chinstrap & side-mounted backup LED pod
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = Math.max(1.2, u * 0.04);
+    ctx.stroke();
+    // Armored crown shell & accent ridge stripe
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY - u * 0.04, u * 0.33, Math.PI * 0.92, Math.PI * 2.02);
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(2, u * 0.075);
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY - u * 0.03, u * 0.29, Math.PI * 1.12, Math.PI * 1.88);
+    ctx.stroke();
+    // Chinstrap + side-mounted dual backup cave torch pod
+    ctx.strokeStyle = trim;
+    ctx.lineWidth = Math.max(1, u * 0.036);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.34, headY + u * 0.12);
+    ctx.lineTo(u * 0.54, headY + u * 0.28);
+    ctx.stroke();
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.roundRect(u * 0.28, headY - u * 0.34, u * 0.24, u * 0.11, u * 0.04);
+    ctx.fill();
+    ctx.fillStyle = '#fef9c3';
+    ctx.beginPath();
+    ctx.arc(u * 0.52, headY - u * 0.285, Math.max(1.4, u * 0.045), 0, Math.PI * 2);
+    ctx.fill();
+  } else if (headgearId === 'cave-hood') {
+    // Contoured 7mm technical neoprene cave hood with twin high-vis reflective trim lines
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.33, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = trim;
+    ctx.lineWidth = Math.max(1.4, u * 0.05);
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY, u * 0.26, Math.PI * 1.08, Math.PI * 1.78);
+    ctx.stroke();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(1.1, u * 0.035);
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY, u * 0.19, Math.PI * 1.14, Math.PI * 1.72);
+    ctx.stroke();
+  } else if (headgearId === 'exo-mask') {
+    // Full-Face Commercial/Tech Exo Mask shell with armored neck seal & dorsal accent fin
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(1.4, u * 0.05);
+    ctx.beginPath();
+    ctx.arc(u * 0.43, headY, u * 0.32, Math.PI * 0.9, Math.PI * 1.9);
+    ctx.stroke();
+  } else {
+    // Classic Zissou Beanie with subtle stripe accent & top rim catchlight
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(u * 0.40, -u * 0.14, u * 0.22, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.28)';
+    ctx.lineWidth = Math.max(1, u * 0.032);
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.30, Math.PI * 1.15, Math.PI * 1.82);
+    ctx.stroke();
+  }
 
-  // Frameless Dive Mask with Cyan Glass Reflection & Curved Specular Glint
-  ctx.fillStyle = '#083344';
-  ctx.beginPath();
-  ctx.roundRect(u * 0.50, -u * 0.2, u * 0.25, u * 0.26, u * 0.07);
-  ctx.fill();
-  ctx.fillStyle = glassGrad;
-  ctx.beginPath();
-  ctx.roundRect(u * 0.53, -u * 0.18, u * 0.20, u * 0.21, u * 0.05);
-  ctx.fill();
-  // Diagonal curved lens specular highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.78)';
-  ctx.beginPath();
-  ctx.moveTo(u * 0.56, -u * 0.155);
-  ctx.quadraticCurveTo(u * 0.62, -u * 0.165, u * 0.685, -u * 0.125);
-  ctx.lineTo(u * 0.655, -u * 0.095);
-  ctx.quadraticCurveTo(u * 0.60, -u * 0.128, u * 0.555, -u * 0.12);
-  ctx.closePath();
-  ctx.fill();
+  // Custom Visor Glass Gradient (Crystal Cyan, High-Contrast Amber, Iridescent Mirror, Night-Ops Emerald)
+  let maskGlassFill = glassGrad;
+  if (visorTint && visorTint.id !== 'clear-cyan' && typeof ctx.createLinearGradient === 'function') {
+    const vg = ctx.createLinearGradient(u * 0.52, -u * 0.2, u * 0.76, u * 0.14);
+    if (vg && typeof vg.addColorStop === 'function') {
+      vg.addColorStop(0, visorTint.top);
+      vg.addColorStop(0.5, visorTint.mid);
+      vg.addColorStop(1, visorTint.bot);
+      maskGlassFill = vg;
+    } else {
+      maskGlassFill = visorTint.mid;
+    }
+  }
+
+  if (headgearId === 'exo-mask') {
+    // Panoramic Full-Face Exo Visor + glowing inner HUD rim + integrated chin comms pod
+    ctx.fillStyle = visorTint?.frame || '#083344';
+    ctx.beginPath();
+    ctx.roundRect(u * 0.48, -u * 0.24, u * 0.30, u * 0.38, u * 0.10);
+    ctx.fill();
+    ctx.fillStyle = maskGlassFill;
+    ctx.beginPath();
+    ctx.roundRect(u * 0.51, -u * 0.21, u * 0.24, u * 0.30, u * 0.07);
+    ctx.fill();
+    // Subtle glowing interior comms HUD bar
+    ctx.strokeStyle = visorTint?.hudGlow || '#38bdf8';
+    ctx.lineWidth = Math.max(1.2, u * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.55, -u * 0.16);
+    ctx.lineTo(u * 0.70, -u * 0.16);
+    ctx.stroke();
+    // Diagonal curved visor specular highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.beginPath();
+    ctx.moveTo(u * 0.55, -u * 0.13);
+    ctx.quadraticCurveTo(u * 0.62, -u * 0.14, u * 0.71, -u * 0.08);
+    ctx.lineTo(u * 0.68, -u * 0.04);
+    ctx.quadraticCurveTo(u * 0.60, -u * 0.09, u * 0.54, -u * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    // Integrated lower-chin comms regulator block
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = trim;
+    ctx.lineWidth = Math.max(1, u * 0.035);
+    ctx.beginPath();
+    ctx.roundRect(u * 0.55, u * 0.08, u * 0.22, u * 0.14, u * 0.05);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    // Frameless Dive Mask with Custom Visor Tint & Curved Specular Glint
+    ctx.fillStyle = visorTint?.frame || '#083344';
+    ctx.beginPath();
+    ctx.roundRect(u * 0.50, -u * 0.2, u * 0.25, u * 0.26, u * 0.07);
+    ctx.fill();
+    ctx.fillStyle = maskGlassFill;
+    ctx.beginPath();
+    ctx.roundRect(u * 0.53, -u * 0.18, u * 0.20, u * 0.21, u * 0.05);
+    ctx.fill();
+    // Diagonal curved lens specular highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    ctx.beginPath();
+    ctx.moveTo(u * 0.56, -u * 0.155);
+    ctx.quadraticCurveTo(u * 0.62, -u * 0.165, u * 0.685, -u * 0.125);
+    ctx.lineTo(u * 0.655, -u * 0.095);
+    ctx.quadraticCurveTo(u * 0.60, -u * 0.128, u * 0.555, -u * 0.12);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // Regulator 2nd Stage & Curved Long Hose
   ctx.fillStyle = '#facc15';

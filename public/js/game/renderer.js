@@ -3,7 +3,7 @@ import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
 import { getWeatherById, computeStormLightningFlash } from './weather.js';
-import { getSuitLivery, getTorchOptic, getMilestonePatch } from './rigLivery.js';
+import { resolveDiverLiveryPalette, getTorchOptic } from './rigLivery.js';
 import { applyPhotoViewportOverlay } from './photoStudio.js';
 import { isHatchPressurized } from './salvagePhysics.js';
 import { sampleSiltDensity } from './silt.js';
@@ -9136,31 +9136,19 @@ export class CaveRenderer {
 
     ctx.save();
 
-    const liverySuit = diver.livery ? getSuitLivery(diver.livery.suitId) : null;
-    const liveryPatch = diver.livery ? getMilestonePatch(diver.livery.patchId) : null;
-    const liveryPalette = liverySuit
-      ? {
-          suitTop: liverySuit.suitTop,
-          suitMid: liverySuit.suitMid,
-          suitBot: liverySuit.suitBot,
-          accent: liverySuit.accent,
-          trim: liverySuit.trim,
-          stageBand: liverySuit.stageBand,
-          patchIcon: liveryPatch && liveryPatch.id !== 'none' ? liveryPatch.icon : '',
-        }
-      : null;
+    const liveryPalette = diver.livery ? resolveDiverLiveryPalette(diver.livery) : null;
 
     // 1. Far leg (behind torso)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liverySuit);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liveryPalette);
 
     // 2. Articulated Torso connecting shoulders (sx, sy) to pelvis (px, py)
-    const accent = liverySuit ? liverySuit.trim : (isPeer ? '#fb923c' : '#22d3ee');
+    const accent = liveryPalette ? liveryPalette.trim : (isPeer ? '#fb923c' : '#22d3ee');
     const torsoAngle = Math.atan2(sy - py, sx - px);
     const rollScale = Math.abs(body.rollVisual) < 0.15 ? 0.15 : body.rollVisual;
     const facingLeft = body.facingSign < 0;
 
     // Flexible drysuit spine core
-    this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, liverySuit ? liverySuit.suitMid : '#0f172a');
+    this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, liveryPalette ? liveryPalette.suitMid : '#0f172a');
     // Subtle shoulder / hip trim stripe
     ctx.strokeStyle = accent;
     ctx.lineWidth = Math.max(1.5, 0.04 * scale);
@@ -9188,7 +9176,7 @@ export class CaveRenderer {
     ctx.restore();
 
     // 4. Near leg (in front of pelvis)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liverySuit);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liveryPalette);
 
     // 5. Articulated Arm, Wrist Dive Computer & Goodman-handle Primary Torch
     const shoulderX = sx + Math.cos(torsoAngle) * (0.08 * scale);

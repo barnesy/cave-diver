@@ -7760,3 +7760,175 @@ summary,
     font-size: max(16px, 1rem) !important;
   }
 }
+
+/* ============================================================================
+   v153 Modular Expedition Outfitter, Live Test-Tank Preview & Home Avatar Badge
+   ============================================================================ */
+.home-avatar-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(7, 26, 48, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.home-avatar-badge:hover {
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+}
+.home-avatar-badge:active {
+  transform: scale(0.95);
+}
+.home-avatar-badge.custom {
+  border-color: rgba(250, 204, 21, 0.55);
+}
+.home-avatar-badge canvas {
+  display: block;
+  width: 58px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+.livery-preview-wrap {
+  position: relative;
+}
+.livery-tank-toolbar {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  z-index: 2;
+  pointer-events: none;
+}
+.livery-env-tabs,
+.livery-preview-toggles {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+.livery-tank-pill {
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(5, 13, 26, 0.78);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.livery-tank-pill.active {
+  border-color: rgba(56, 189, 248, 0.78);
+  background: rgba(14, 116, 144, 0.55);
+  color: #f0f9ff;
+}
+.livery-tank-pill.accent {
+  border-color: rgba(250, 204, 21, 0.52);
+  color: #fef08a;
+}
+.livery-tank-pill.accent:hover {
+  background: rgba(161, 98, 7, 0.45);
+}
+
+.livery-preset-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+  scrollbar-width: none;
+}
+.livery-preset-row::-webkit-scrollbar {
+  display: none;
+}
+.livery-preset-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.86);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.livery-preset-chip.active {
+  border-color: rgba(56, 189, 248, 0.82);
+  background: rgba(14, 116, 144, 0.34);
+  color: #f0f9ff;
+}
+.livery-preset-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  flex-shrink: 0;
+}
+
+.livery-cat-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin: 4px 0 10px;
+}
+.livery-cat-tab {
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.82);
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 7px 6px;
+  border-radius: 9px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.livery-cat-tab.active {
+  border-color: rgba(56, 189, 248, 0.78);
+  background: rgba(8, 47, 73, 0.78);
+  color: #e0f2fe;
+}
+.livery-tab-panel[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 560px) {
+  .home-avatar-badge canvas {
+    width: 48px;
+    height: 28px;
+  }
+  .livery-tank-toolbar {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    gap: 4px;
+  }
+  .livery-tank-pill {
+    font-size: 0.62rem;
+    padding: 3px 6px;
+  }
+  .livery-cat-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

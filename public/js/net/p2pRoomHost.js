@@ -71,11 +71,23 @@ function sanitizePlayerState(raw) {
     dpvThrusting: Boolean(raw.dpvThrusting),
     livery:
       raw.livery && typeof raw.livery === 'object'
-        ? {
-            suitId: typeof raw.livery.suitId === 'string' ? raw.livery.suitId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
-            torchId: typeof raw.livery.torchId === 'string' ? raw.livery.torchId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
-            patchId: typeof raw.livery.patchId === 'string' ? raw.livery.patchId.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '',
-          }
+        ? (() => {
+            const cleanId = (v) => (typeof v === 'string' ? v.replace(/[^a-z0-9-]/gi, '').slice(0, 24) : '');
+            const out = {
+              suitId: cleanId(raw.livery.suitId),
+              torchId: cleanId(raw.livery.torchId),
+              patchId: cleanId(raw.livery.patchId),
+            };
+            const hg = cleanId(raw.livery.headgearId);
+            const tr = cleanId(raw.livery.trimId);
+            const tk = cleanId(raw.livery.tankId);
+            const vs = cleanId(raw.livery.visorId);
+            if (hg) out.headgearId = hg;
+            if (tr) out.trimId = tr;
+            if (tk) out.tankId = tk;
+            if (vs) out.visorId = vs;
+            return out;
+          })()
         : null,
     alive: raw.alive !== false,
     carryingBody: Boolean(raw.carryingBody),
