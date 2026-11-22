@@ -69,7 +69,7 @@ export class InputController {
   _bindKeyboard() {
     window.addEventListener('keydown', (e) => {
       const tag = e.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && !e.target?.closest?.('[hidden]')) return;
       const code = e.code;
       this.keys.add(code);
       if (code === 'Digit1') this.onGasSelect?.('EAN32');

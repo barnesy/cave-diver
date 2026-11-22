@@ -6106,8 +6106,15 @@ test('v144 Modular Architecture & Adaptive 60 FPS Mobile Performance Engine: per
   listeners.get('doc:pointerdown')({ target: { closest: () => mockTrigger } });
   assert.equal(mm.getOpenCount(), 2);
   let prevented = false;
-  listeners.get('win:keydown')({ key: 'Escape', preventDefault: () => { prevented = true; }, stopPropagation: () => {} });
+  let stoppedImmediate = false;
+  listeners.get('win:keydown')({
+    key: 'Escape',
+    preventDefault: () => { prevented = true; },
+    stopImmediatePropagation: () => { stoppedImmediate = true; },
+    stopPropagation: () => {},
+  });
   assert.equal(prevented, true);
+  assert.equal(stoppedImmediate, true, 'Modal Escape must call stopImmediatePropagation so window pause handler does not fire simultaneously');
   assert.equal(childOpen, false, 'Innermost child modal must close first');
   assert.equal(parentOpen, true, 'Parent modal must remain open after first Escape');
   assert.equal(focusedTrigger, false, 'Focus must wait until all overlays close');

@@ -567,7 +567,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=144" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=145" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1075,7 +1075,8 @@ function handleReelRewind() {
 
 function setDivePaused(paused) {
   if (photoModeState.active) setPhotoModeActive(false);
-  const next = Boolean(paused) && mode === 'diving' && !isMultiplayer && Boolean(session && !session.endedState);
+  const hasHumanPeers = Boolean(isMultiplayer && lan.getPeers().length > 0);
+  const next = Boolean(paused) && mode === 'diving' && !hasHumanPeers && Boolean(session && !session.endedState);
   divePaused = next;
   if (next) {
     input?.resetAll?.();
@@ -1218,7 +1219,7 @@ const input = new InputController({
   onPauseToggle: () => {
     if (closeTopmostOverlay()) return true;
     if (mode !== 'diving' || !session || session.endedState) return false;
-    if (isMultiplayer) {
+    if (isMultiplayer && lan.getPeers().length > 0) {
       showToast('Co-op dives run live — pause is solo-only.', 1.8);
       return true;
     }
@@ -1523,7 +1524,7 @@ function setPhotoModeActive(nextActive) {
   const want = Boolean(nextActive);
   if (want) {
     if (mode !== 'diving' || !session || session.endedState) return false;
-    if (isMultiplayer) {
+    if (isMultiplayer && lan.getPeers().length > 0) {
       showToast('📸 Photo Mode freezes time — available on solo dives!', 2.2);
       return false;
     }
@@ -4577,7 +4578,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   spectatePeerIdx = 0;
   pendingUnsafeGasId = '';
   pendingUnsafeGasAt = 0;
-  pendingAbortAt = 0;
+  resetAbortArmState();
+  try { document.activeElement?.blur?.(); } catch {}
   rewindHoldTimer = 0;
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   if (btnDropTow) btnDropTow.hidden = true;
@@ -7226,7 +7228,7 @@ function resetAbortArmState() {
 }
 btnAbortEl?.addEventListener('click', () => {
   const inLiveDive = mode === 'diving' && session && !session.endedState && !divePaused;
-  const elapsed = session?.diveState?.diveTimeSec || 0;
+  const elapsed = Math.max(session?.diveState?.diveTimeSec || 0, session?.simTimeSec || 0);
   if (inLiveDive && elapsed > 3) {
     const now = performance.now();
     if (now - pendingAbortAt > 3000) {

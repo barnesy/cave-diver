@@ -48,6 +48,7 @@ export function createModalManager(entries = [], { doc = typeof document !== 'un
     if (e?.key !== 'Escape') return;
     if (closeTopmost()) {
       e.preventDefault?.();
+      e.stopImmediatePropagation?.();
       e.stopPropagation?.();
     }
   };
