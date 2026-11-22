@@ -90,23 +90,39 @@ export class DiveAudio {
     return buf;
   }
 
-  setEnvironmentFilter(depthM = 0, narcosisLevel = 0) {
+  setEnvironmentFilter(depthM = 0, narcosisLevel = 0, clearanceM = 4.0) {
     this.radio.setDepthMuffle?.(depthM, narcosisLevel);
     if (!this.ctx || this.ctx.state !== 'running') return;
     const mf = this._ensureMasterFilter();
     if (!mf) return;
     // Surface air = crisp 18kHz; shallow submerged = 4.2kHz; deep/narcotic = warm muffled 1.15kHz
+    // Acoustic space coloration (v155): tight cave squeezes (<1.8m) feel warmer/intimate; vast caverns (>6m) open slightly
     let targetHz = 18000;
+    let targetQ = 0.65;
     if (depthM > 0.65) {
       const depthFrac = Math.min(1, (depthM - 0.65) / 140);
       const narcFrac = Math.min(1, Math.max(0, narcosisLevel || 0));
-      targetHz = Math.max(1050, 4400 - depthFrac * 2400 - narcFrac * 950);
+      const clr = Number.isFinite(clearanceM) ? clearanceM : 4.0;
+      const spaceOffset = clr < 2.0 ? -(2.0 - clr) * 260 : Math.min(480, Math.max(0, clr - 4.0) * 85);
+      targetHz = Math.max(920, 4400 - depthFrac * 2400 - narcFrac * 950 + spaceOffset);
+      targetQ = clr < 1.8 ? 1.15 : clr > 6.5 ? 0.55 : 0.72;
     }
     if (Math.abs(targetHz - this._lastFilterHz) < 15 && targetHz !== 18000) return;
     this._lastFilterHz = targetHz;
     try {
       mf.frequency.setTargetAtTime(targetHz, this.ctx.currentTime, 0.16);
+      mf.Q.setTargetAtTime(targetQ, this.ctx.currentTime, 0.22);
     } catch {}
+  }
+
+  /**
+   * Subtle atmospheric two-note discovery harmonic when illuminating a submerged lore landmark (v155).
+   */
+  playStoryDiscovery() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(523.25, 0.22, 'sine', 0.036, 0, { pan: -0.18, bus: 'ambience' });
+    this.playTone(783.99, 0.34, 'triangle', 0.032, 0.11, { pan: 0.18, bus: 'ambience' });
+    this.vibrate?.(12);
   }
 
   resetEnvironmentFilter() {

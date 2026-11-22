@@ -137,6 +137,9 @@ import {
   drawMiniDiverAvatar,
 } from './game/rigLivery.js';
 import {
+  getCollectibleLoreNote,
+} from './game/submergedStories.js';
+import {
   PHOTO_FILTERS,
   PHOTO_FRAMES,
   createPhotoModeState,
@@ -577,7 +580,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=154" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=155" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1607,6 +1610,7 @@ function savePhotoStudioSnapshot() {
       hazards: session.hazards || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
+      stories: session.stories || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
@@ -2435,6 +2439,8 @@ const liveryModalEl = document.getElementById('livery-modal');
 const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
 const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
 const liveryPresetRowEl = document.getElementById('livery-preset-row');
+const liverySavedSlotsEl = document.getElementById('livery-saved-slots');
+const btnLiveryTeamUniformEl = document.getElementById('btn-livery-team-uniform');
 const liveryCatTabsEl = document.getElementById('livery-cat-tabs');
 const liveryEnvTabsEl = document.getElementById('livery-env-tabs');
 const btnLiveryPrevCcrEl = document.getElementById('btn-livery-prev-ccr');
@@ -2461,6 +2467,25 @@ let activeLiveryTab = 'suit';
 let liveryPreviewEnv = 'clear';
 let liveryPreviewCcr = null; // null = follow player's equipped loadout
 let liveryPreviewDpv = null;
+
+const LIVERY_SLOTS_KEY = 'caveDiverLiverySlots_v1';
+const SQUAD_UNIFORM_KEY = 'caveDiverSquadUniform_v1';
+const SAVED_KIT_LABELS = ['Cave Kit', 'Wreck Kit', 'Night Ops'];
+let savedLiverySlots = [null, null, null];
+try {
+  const rawSlots = JSON.parse(localStorage.getItem(LIVERY_SLOTS_KEY) || 'null');
+  if (Array.isArray(rawSlots)) {
+    savedLiverySlots = [0, 1, 2].map((i) => (rawSlots[i] && typeof rawSlots[i] === 'object' ? rawSlots[i] : null));
+  }
+} catch {}
+let aiSquadTeamUniform = false;
+try {
+  aiSquadTeamUniform = localStorage.getItem(SQUAD_UNIFORM_KEY) === '1';
+} catch {}
+
+function saveLiverySlotsToStorage() {
+  try { localStorage.setItem(LIVERY_SLOTS_KEY, JSON.stringify(savedLiverySlots)); } catch {}
+}
 
 function saveRigLivery() {
   try { localStorage.setItem(LIVERY_PREF_KEY, JSON.stringify(activeRigLivery)); } catch {}
@@ -2609,6 +2634,52 @@ function renderLiveryWorkshopModal() {
         updateActiveLiveryField(pr.livery);
       });
     });
+  }
+
+  // 3 Saved Custom Loadout Slots + AI Squad Team Uniform toggle (v155)
+  if (liverySavedSlotsEl) {
+    liverySavedSlotsEl.innerHTML = SAVED_KIT_LABELS.map((label, idx) => {
+      const saved = savedLiverySlots[idx] ? sanitizeRigLivery(savedLiverySlots[idx], unlocks) : null;
+      const dotStyle = saved
+        ? (() => {
+            const p = resolveDiverLiveryPalette(saved);
+            return `background: linear-gradient(135deg, ${p.suitTop}, ${p.accent});`;
+          })()
+        : 'background: rgba(148, 163, 184, 0.25);';
+      return `<div class="livery-slot-pill${saved ? ' filled' : ''}">
+        <button type="button" class="livery-slot-load" data-slot-load="${idx}" ${saved ? '' : 'disabled'} title="${saved ? `Load ${label}` : `Save a rig to ${label} first`}">
+          <span class="livery-preset-dot" style="${dotStyle}" aria-hidden="true"></span>
+          <span>${escapeHtml(label)}</span>
+        </button>
+        <button type="button" class="livery-slot-save" data-slot-save="${idx}" title="Save current rig to ${label}" aria-label="Save current rig to ${label}">💾</button>
+      </div>`;
+    }).join('');
+    liverySavedSlotsEl.querySelectorAll('button[data-slot-load]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-slot-load'));
+        const slot = savedLiverySlots[idx];
+        if (!slot) return;
+        activeRigLivery = sanitizeRigLivery(slot, getCurrentLiveryUnlocks());
+        saveRigLivery();
+        syncLiveryUi();
+        renderLiveryWorkshopModal();
+        showToast(`🎨 Loaded ${SAVED_KIT_LABELS[idx]}!`, 1.8);
+      });
+    });
+    liverySavedSlotsEl.querySelectorAll('button[data-slot-save]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-slot-save'));
+        savedLiverySlots[idx] = { ...activeRigLivery };
+        saveLiverySlotsToStorage();
+        renderLiveryWorkshopModal();
+        showToast(`💾 Saved current rig to ${SAVED_KIT_LABELS[idx]}!`, 1.8);
+      });
+    });
+  }
+  if (btnLiveryTeamUniformEl) {
+    btnLiveryTeamUniformEl.classList.toggle('active', aiSquadTeamUniform);
+    btnLiveryTeamUniformEl.setAttribute('aria-pressed', aiSquadTeamUniform ? 'true' : 'false');
+    btnLiveryTeamUniformEl.textContent = aiSquadTeamUniform ? '🤝 Squad Uniform: Team Match' : '🤝 Squad Uniform: Solo';
   }
 
   if (liverySuitGridEl) {
@@ -2820,6 +2891,17 @@ btnLiveryRandomEl?.addEventListener('click', () => {
   saveRigLivery();
   syncLiveryUi();
   renderLiveryWorkshopModal();
+});
+btnLiveryTeamUniformEl?.addEventListener('click', () => {
+  aiSquadTeamUniform = !aiSquadTeamUniform;
+  try { localStorage.setItem(SQUAD_UNIFORM_KEY, aiSquadTeamUniform ? '1' : '0'); } catch {}
+  renderLiveryWorkshopModal();
+  showToast(
+    aiSquadTeamUniform
+      ? '🤝 AI Squad will match your drysuit, headgear & tanks with unique wingman stripes!'
+      : '🤝 AI Squad restored to individual expedition liveries.',
+    2.4
+  );
 });
 btnHomeAvatarBadgeEl?.addEventListener('click', openLiveryModal);
 menuLiveryPillEl?.addEventListener('click', openLiveryModal);
@@ -5016,7 +5098,11 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   session.restoredPeerLines = new Map();
   session.aiSquad =
     aiSquadCount > 0 && (!multiplayer || lan.getPeers().length === 0)
-      ? createAiSquad(activeLevel, session.diver, aiSquadCount, { initialGasId: session.diveState.activeGasId })
+      ? createAiSquad(activeLevel, session.diver, aiSquadCount, {
+          initialGasId: session.diveState.activeGasId,
+          teamUniform: aiSquadTeamUniform,
+          leaderLivery: activeRigLivery,
+        })
       : [];
   session.aiBuddy = session.aiSquad[0] || null;
 
@@ -5321,6 +5407,8 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     difficulty: runDiff,
     customMixLabel: customGasPlan.enabled ? diveState.mixes?.TMX1455?.name || '' : '',
     dailyBadge: session._dailyBadgeLabel || '',
+    livery: diver.livery ? { ...diver.livery } : { ...activeRigLivery },
+    hasCcr: Boolean(session.gear?.ccr),
     track: replayTrack,
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
   };
@@ -8388,8 +8476,13 @@ const sessionStepCallbacks = {
   },
   onCollect: (item) => {
     audio.playCollect();
-    showToast(`💎 Collected ${item.name} (+${item.points} pts)!`, 2.6);
+    const lore = getCollectibleLoreNote(item, session?.level);
+    showToast(`💎 ${item.name} (+${item.points} pts) — ${lore}`, 3.8);
     if (isMultiplayer) lan.sendCollectible(item.id);
+  },
+  onStoryDiscovered: (sp) => {
+    audio.playStoryDiscovery?.();
+    showToast(`🧭 ${sp.title} — ${sp.lore}`, 4.4);
   },
   onBodyRecovered: (rt) => {
     audio.playRecovery();
@@ -8475,7 +8568,7 @@ function stepSimulation(dt) {
       audio.playSplash(nowSubmerged);
     }
     session._wasSubmerged = nowSubmerged;
-    audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel);
+    audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel, session.spaceClearanceM);
     if (diveState.alive) {
       audio.stepAmbience(dt, level, diver.y, diver);
     }
@@ -8972,6 +9065,7 @@ function frame(nowMs) {
       hazards: session.hazards || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
+      stories: session.stories || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,

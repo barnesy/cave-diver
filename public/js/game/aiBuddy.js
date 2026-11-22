@@ -176,14 +176,33 @@ export function createAiBuddyState(level, diver, opts = {}) {
   return buddy;
 }
 
+const SQUAD_UNIFORM_TRIMS = Object.freeze(['tech-cyan', 'safety-orange', 'cavern-yellow']);
+
 /**
  * Create a full solo AI Dive Squad of 1 to 3 distinct wingmen (2-diver up to 4-diver squad).
+ * When `opts.teamUniform` is enabled with `opts.leaderLivery`, wingmen share the player's
+ * drysuit, headgear, tank finish & visor with distinct high-vis wingman trim stripes (v155).
  */
 export function createAiSquad(level, diver, count = 1, opts = {}) {
   const cleanCount = Math.max(0, Math.min(AI_SQUAD_ROSTER.length, Math.floor(Number(count) || 0)));
+  const useUniform = Boolean(opts.teamUniform && opts.leaderLivery && typeof opts.leaderLivery === 'object');
   const squad = [];
   for (let i = 0; i < cleanCount; i++) {
-    squad.push(createAiBuddyState(level, diver, { ...opts, slotIndex: i }));
+    const roster = AI_SQUAD_ROSTER[i] || AI_SQUAD_ROSTER[0];
+    const buddyLivery = useUniform
+      ? {
+          ...opts.leaderLivery,
+          trimId: SQUAD_UNIFORM_TRIMS[i % SQUAD_UNIFORM_TRIMS.length],
+          patchId: roster.livery?.patchId || opts.leaderLivery.patchId || 'cave-arrow',
+        }
+      : undefined;
+    squad.push(
+      createAiBuddyState(level, diver, {
+        ...opts,
+        slotIndex: i,
+        ...(buddyLivery ? { livery: buddyLivery } : {}),
+      })
+    );
   }
   return squad;
 }

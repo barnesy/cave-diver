@@ -1476,6 +1476,7 @@ export class CaveRenderer {
     hazards = null,
     salvage = null,
     mechFx = null,
+    stories = null,
     reelingActive = false,
     bioWake = null,
     surfaceRipples = null,
@@ -1749,6 +1750,9 @@ export class CaveRenderer {
     if (hazards && typeof this._drawDynamicHazards === 'function') {
       this._drawDynamicHazards(ctx, hazards, visX0 - 8, visX1 + 8, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, diver);
     }
+    if (stories && typeof this._drawSubmergedStories === 'function') {
+      this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'world');
+    }
 
     // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
@@ -1803,6 +1807,9 @@ export class CaveRenderer {
     }
     if (encounters && typeof this._drawDynamicEncounters === 'function') {
       this._drawDynamicEncounters(ctx, encounters, visX0 - 10, visX1 + 10, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, 'emissive');
+    }
+    if (stories && typeof this._drawSubmergedStories === 'function') {
+      this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'emissive');
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -7036,46 +7043,48 @@ export class CaveRenderer {
       ctx.restore();
     }
 
-    // Translucent diver silhouette oriented along PB travel angle
+    // Translucent holographic diver rig matching the player's actual custom headgear & silhouette (v155)
     ctx.save();
     ctx.rotate(ghost.angle || 0);
     if (Math.cos(ghost.angle || 0) < 0) ctx.scale(1, -1);
-    ctx.globalAlpha = (ghost.finished ? 0.38 : 0.78) * pulse;
-    ctx.strokeStyle = strokeCol;
-    ctx.fillStyle = fillCol;
-    ctx.lineWidth = Math.max(1.6, u * 0.06);
+    ctx.globalAlpha = (ghost.finished ? 0.34 : 0.68) * pulse;
 
-    // Twinset cylinder pack on back
-    ctx.beginPath();
-    ctx.roundRect(-u * 0.34, -u * 0.28, u * 0.58, u * 0.14, u * 0.06);
-    ctx.fill();
-    ctx.stroke();
-
-    // Torso
-    ctx.beginPath();
-    ctx.ellipse(0, 0, u * 0.44, u * 0.16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Head & glowing mask visor
-    ctx.beginPath();
-    ctx.arc(u * 0.52, -u * 0.04, u * 0.14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    const ghostPal = diver?.livery ? resolveDiverLiveryPalette(diver.livery) : null;
+    drawStyledDiverRig(ctx, u * 0.55, u, isPar, 1, {
+      hasCcr: Boolean(diver?.hasCcr),
+      hasDpv: false,
+      timeSec,
+      liveryPalette: ghostPal
+        ? {
+            ...ghostPal,
+            accent: strokeCol,
+            trim: strokeCol,
+          }
+        : {
+            suitTop: fillCol,
+            suitMid: fillCol,
+            suitBot: fillCol,
+            accent: strokeCol,
+            trim: strokeCol,
+            stageBand: strokeCol,
+          },
+    });
 
     // Soft forward holographic torch cone
     if (!ghost.finished) {
-      ctx.fillStyle = isPar ? 'rgba(192, 132, 252, 0.13)' : 'rgba(34, 211, 238, 0.14)';
+      ctx.fillStyle = isPar ? 'rgba(192, 132, 252, 0.14)' : 'rgba(34, 211, 238, 0.15)';
       ctx.beginPath();
-      ctx.moveTo(u * 0.62, -u * 0.02);
+      ctx.moveTo(u * 0.56, -u * 0.02);
       ctx.lineTo(u * 2.2, -u * 0.48);
       ctx.lineTo(u * 2.2, u * 0.44);
       ctx.closePath();
       ctx.fill();
     }
 
-    // Sweeping animated fin stroke
+    // Sweeping animated holographic fin stroke
     const kick = Math.sin(timeSec * 6.5) * u * 0.14;
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = Math.max(1.6, u * 0.06);
     ctx.beginPath();
     ctx.moveTo(-u * 0.42, 0);
     ctx.lineTo(-u * 0.86, -u * 0.09 + kick);
@@ -7201,6 +7210,453 @@ export class CaveRenderer {
       }
     }
 
+    ctx.restore();
+  }
+
+  /**
+   * Submerged Storytelling & Atmospheric Set-Pieces Renderer (v155):
+   * - pass === 'world' (pre-lighting): speleothem cathedrals, historic mine shoring,
+   *   glacial ice arches, Chadburn engine telegraphs, ship helm wheels, boiler gauge panels,
+   *   bolted bronze portholes, caged bulkhead sconces, Mayan ceramic vessels, ammonite fossils,
+   *   and vintage brass explorer survey pitons.
+   * - pass === 'emissive' (post-lighting): flickering crimson emergency bulkhead lamp pools,
+   *   volumetric diagonal porthole dust shafts, undulating halocline optical refraction waves,
+   *   glacial sapphire inner shimmer, and survey-tag reflector glints.
+   */
+  _drawSubmergedStories(ctx, stories, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
+    const list = stories?.setPieces;
+    if (!Array.isArray(list) || list.length === 0) return;
+
+    ctx.save();
+    for (let i = 0; i < list.length; i++) {
+      const sp = list[i];
+      if (!sp || sp.x < xMin || sp.x > xMax || sp.y < yMin || sp.y > yMax) continue;
+
+      const sx = toScreenX(sp.x);
+      const sy = toScreenY(sp.y);
+      const sz = (sp.size || 1.0) * scale;
+
+      if (pass === 'emissive') {
+        if (sp.kind === 'emergency-lamp') {
+          // Erratic dying-battery red-amber emergency bulkhead lamp glow
+          const flick =
+            0.38 +
+            0.35 * Math.max(0, Math.sin(timeSec * 3.1 + sp.phase)) +
+            0.27 * (Math.sin(timeSec * 19.3 + sp.phase * 2.7) > 0.72 ? 0.15 : 1);
+          const rad = sz * 3.6;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const g = ctx.createRadialGradient?.(sx, sy + sz * 0.25, sz * 0.1, sx, sy + sz * 0.25, rad);
+          if (g && typeof g.addColorStop === 'function') {
+            g.addColorStop(0, `rgba(248, 113, 113, ${(0.55 * flick).toFixed(3)})`);
+            g.addColorStop(0.35, `rgba(220, 38, 38, ${(0.24 * flick).toFixed(3)})`);
+            g.addColorStop(1, 'rgba(185, 28, 28, 0)');
+            ctx.fillStyle = g;
+          } else {
+            ctx.fillStyle = `rgba(220, 38, 38, ${(0.28 * flick).toFixed(3)})`;
+          }
+          ctx.beginPath();
+          ctx.arc(sx, sy + sz * 0.25, rad, 0, Math.PI * 2);
+          ctx.fill();
+          // Glowing crimson bulb filament core
+          ctx.fillStyle = `rgba(254, 202, 202, ${(0.85 * flick).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy + sz * 0.22, Math.max(2, sz * 0.14), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (sp.kind === 'porthole-shaft') {
+          // Volumetric tilted cobalt-cyan porthole light shaft with drifting dust motes
+          const len = (sp.shaftLen || 4.8) * scale;
+          const ang = sp.shaftAngle || 0.44;
+          const sway = Math.sin(timeSec * 1.1 + sp.phase) * 0.04;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(ang + sway);
+          ctx.globalCompositeOperation = 'screen';
+          const sg = ctx.createLinearGradient?.(0, 0, 0, len);
+          if (sg && typeof sg.addColorStop === 'function') {
+            sg.addColorStop(0, 'rgba(125, 211, 252, 0.32)');
+            sg.addColorStop(0.5, 'rgba(56, 189, 248, 0.12)');
+            sg.addColorStop(1, 'rgba(14, 165, 233, 0)');
+            ctx.fillStyle = sg;
+          } else {
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+          }
+          ctx.beginPath();
+          ctx.moveTo(-sz * 0.34, 0);
+          ctx.lineTo(sz * 0.34, 0);
+          ctx.lineTo(sz * 1.28, len);
+          ctx.lineTo(-sz * 1.05, len);
+          ctx.closePath();
+          ctx.fill();
+          // Backlit dust motes suspended inside the porthole shaft
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.42)';
+          for (let m = 0; m < 5; m++) {
+            const frac = ((timeSec * 0.12 + m * 0.21 + sp.phase) % 1);
+            const mx = Math.sin(timeSec * 1.4 + m * 2.1) * sz * (0.28 + frac * 0.52);
+            const my = frac * len * 0.92;
+            ctx.beginPath();
+            ctx.arc(mx, my, Math.max(1.1, 0.038 * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } else if (sp.kind === 'halocline-lens') {
+          // Undulating translucent freshwater-over-saltwater halocline optical shimmer wave
+          const hw = (sp.halfWidth || 3.4) * scale;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const hg = ctx.createLinearGradient?.(sx, sy - 0.55 * scale, sx, sy + 0.55 * scale);
+          if (hg && typeof hg.addColorStop === 'function') {
+            hg.addColorStop(0, 'rgba(56, 189, 248, 0)');
+            hg.addColorStop(0.45, 'rgba(103, 232, 249, 0.22)');
+            hg.addColorStop(0.55, 'rgba(240, 249, 255, 0.32)');
+            hg.addColorStop(1, 'rgba(14, 165, 233, 0)');
+            ctx.fillStyle = hg;
+          } else {
+            ctx.fillStyle = 'rgba(103, 232, 249, 0.18)';
+          }
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, hw, 0.48 * scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Twin undulating liquid-glass refraction ripples
+          for (let wIdx = 0; wIdx < 2; wIdx++) {
+            ctx.strokeStyle = wIdx === 0 ? 'rgba(224, 242, 254, 0.44)' : 'rgba(56, 189, 248, 0.32)';
+            ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+            ctx.beginPath();
+            const steps = 14;
+            for (let k = 0; k <= steps; k++) {
+              const u = (k / steps) * 2 - 1;
+              const wx = sx + u * hw;
+              const env = Math.max(0, 1 - u * u);
+              const wy =
+                sy +
+                (wIdx === 0 ? -0.06 : 0.08) * scale +
+                Math.sin(timeSec * (2.2 + wIdx * 0.7) + u * 5.2 + sp.phase) * 0.14 * scale * env;
+              if (k === 0) ctx.moveTo(wx, wy);
+              else ctx.lineTo(wx, wy);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else if (sp.kind === 'ice-arch' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
+          // Subtle subglacial sapphire crystal refraction pulse along the ice arch
+          const cy0 = toScreenY(sp.ceilY);
+          const shimmer = 0.25 + 0.25 * Math.sin(timeSec * 1.9 + sp.phase);
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = `rgba(125, 211, 252, ${shimmer.toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.5, 0.07 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx - sz * 0.55, cy0);
+          ctx.quadraticCurveTo(sx, cy0 + sz * 0.9, sx + sz * 0.55, cy0);
+          ctx.stroke();
+          ctx.restore();
+        } else if (sp.kind === 'survey-station') {
+          // Retro-reflective tape glint on vintage explorer cave survey marker
+          const glint = 0.35 + 0.65 * Math.max(0, Math.sin(timeSec * 2.8 + sp.phase));
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = `rgba(254, 240, 138, ${(0.55 * glint).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy - sz * 0.42, Math.max(1.8, 0.075 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        continue;
+      }
+
+      // === PRE-LIGHTING WORLD GEOMETRY PASS ===
+      if (sp.kind === 'speleothem-cathedral' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
+        // Monumental Ice-Age fluted calcite stalactite & stalagmite cathedral pillars
+        const cy0 = toScreenY(sp.ceilY);
+        const fy0 = toScreenY(sp.floorY);
+        const span = Math.max(scale * 1.5, fy0 - cy0);
+        const topLen = Math.min(span * 0.42, sz * 1.95);
+        const botLen = Math.min(span * 0.44, sz * 2.1);
+
+        // Twin ceiling stalactite icicles
+        for (let k = -1; k <= 1; k++) {
+          const ox = sx + k * sz * 0.34;
+          const len = topLen * (k === 0 ? 1.0 : 0.68);
+          const halfW = sz * (k === 0 ? 0.22 : 0.14);
+          ctx.fillStyle = k === 0 ? '#786852' : '#615342';
+          ctx.beginPath();
+          ctx.moveTo(ox - halfW, cy0);
+          ctx.lineTo(ox + halfW, cy0);
+          ctx.lineTo(ox + halfW * 0.18, cy0 + len);
+          ctx.lineTo(ox - halfW * 0.18, cy0 + len);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(214, 198, 170, 0.45)';
+          ctx.lineWidth = Math.max(1, 0.03 * scale);
+          ctx.beginPath();
+          ctx.moveTo(ox - halfW * 0.2, cy0 + 2);
+          ctx.lineTo(ox - halfW * 0.06, cy0 + len * 0.88);
+          ctx.stroke();
+        }
+        // Twin floor stalagmite domes reaching upward
+        for (let k = -1; k <= 1; k++) {
+          const ox = sx + k * sz * 0.36;
+          const len = botLen * (k === 0 ? 1.0 : 0.62);
+          const halfW = sz * (k === 0 ? 0.28 : 0.18);
+          ctx.fillStyle = k === 0 ? '#85735a' : '#6b5c48';
+          ctx.beginPath();
+          ctx.moveTo(ox - halfW, fy0);
+          ctx.quadraticCurveTo(ox - halfW * 0.55, fy0 - len * 0.65, ox, fy0 - len);
+          ctx.quadraticCurveTo(ox + halfW * 0.55, fy0 - len * 0.65, ox + halfW, fy0);
+          ctx.closePath();
+          ctx.fill();
+          // Mineral drip rings
+          ctx.strokeStyle = 'rgba(226, 211, 186, 0.32)';
+          ctx.lineWidth = Math.max(1, 0.032 * scale);
+          ctx.beginPath();
+          ctx.moveTo(ox - halfW * 0.45, fy0 - len * 0.35);
+          ctx.lineTo(ox + halfW * 0.45, fy0 - len * 0.35);
+          ctx.stroke();
+        }
+      } else if (sp.kind === 'mine-timber' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
+        // Historic flooded wooden mine drift shoring timbers & rusted iron joiner plates
+        const cy0 = toScreenY(sp.ceilY);
+        const fy0 = toScreenY(sp.floorY);
+        const halfW = sz * 0.72;
+        const beamW = Math.max(3, 0.18 * scale);
+        ctx.fillStyle = '#452b17';
+        ctx.strokeStyle = '#29180b';
+        ctx.lineWidth = Math.max(1, 0.04 * scale);
+        // Left & right vertical shoring posts
+        ctx.fillRect(sx - halfW, cy0, beamW, fy0 - cy0);
+        ctx.strokeRect(sx - halfW, cy0, beamW, fy0 - cy0);
+        ctx.fillRect(sx + halfW - beamW, cy0, beamW, fy0 - cy0);
+        ctx.strokeRect(sx + halfW - beamW, cy0, beamW, fy0 - cy0);
+        // Overhead cross-lintel timber
+        ctx.fillStyle = '#5c3a1e';
+        ctx.fillRect(sx - halfW - beamW * 0.3, cy0, halfW * 2 + beamW * 0.6, beamW * 1.15);
+        ctx.strokeRect(sx - halfW - beamW * 0.3, cy0, halfW * 2 + beamW * 0.6, beamW * 1.15);
+        // Rusted iron corner gusset plates with bolts
+        ctx.fillStyle = '#7c2d12';
+        ctx.fillRect(sx - halfW, cy0 + beamW * 0.85, beamW * 1.25, beamW * 1.25);
+        ctx.fillRect(sx + halfW - beamW * 1.25, cy0 + beamW * 0.85, beamW * 1.25, beamW * 1.25);
+      } else if (sp.kind === 'ice-arch' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
+        // Sculpted translucent subglacial blue-ice ribs
+        const cy0 = toScreenY(sp.ceilY);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.65)';
+        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+        ctx.beginPath();
+        ctx.moveTo(sx - sz * 0.7, cy0);
+        ctx.quadraticCurveTo(sx, cy0 + sz * 1.15, sx + sz * 0.7, cy0);
+        ctx.lineTo(sx + sz * 0.42, cy0);
+        ctx.quadraticCurveTo(sx, cy0 + sz * 0.65, sx - sz * 0.42, cy0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (sp.kind === 'emergency-lamp') {
+        // Cast-iron caged bulkhead sconce
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(sx - sz * 0.24, sy - sz * 0.08, sz * 0.48, sz * 0.14);
+        ctx.fillStyle = '#7f1d1d';
+        ctx.beginPath();
+        ctx.arc(sx, sy + sz * 0.2, sz * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        // Brass protective cage bars
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(1, 0.04 * scale);
+        ctx.beginPath();
+        ctx.arc(sx, sy + sz * 0.2, sz * 0.22, 0, Math.PI);
+        ctx.moveTo(sx, sy + sz * 0.04);
+        ctx.lineTo(sx, sy + sz * 0.42);
+        ctx.stroke();
+      } else if (sp.kind === 'porthole-shaft') {
+        // Heavy bolted bronze ship porthole frame
+        ctx.fillStyle = '#0c4a6e';
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(2.2, 0.1 * scale);
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // 6 brass perimeter clamping dogs
+        ctx.fillStyle = '#f59e0b';
+        for (let b = 0; b < 6; b++) {
+          const a = (b / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(sx + Math.cos(a) * sz * 0.44, sy + Math.sin(a) * sz * 0.44, Math.max(1.4, 0.045 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (sp.kind === 'brass-telegraph') {
+        // Tilted Chadburn Engine-Room Brass Telegraph pedestal
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(sp.tilt || 0);
+        // Cast-bronze flared base & column
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.24, 0);
+        ctx.lineTo(sz * 0.24, 0);
+        ctx.lineTo(sz * 0.1, -sz * 0.78);
+        ctx.lineTo(-sz * 0.1, -sz * 0.78);
+        ctx.closePath();
+        ctx.fill();
+        // Brass circular engraved dial head
+        ctx.fillStyle = '#d97706';
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+        ctx.beginPath();
+        ctx.arc(0, -sz * 0.92, sz * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Cream enamel inner dial & order pointer
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.arc(0, -sz * 0.92, sz * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = Math.max(1.2, 0.04 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -sz * 0.92);
+        ctx.lineTo(sz * 0.15, -sz * 0.98);
+        ctx.stroke();
+        // Brass telegraph control lever sticking out top
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -sz * 0.92);
+        ctx.lineTo(sz * 0.34, -sz * 1.18);
+        ctx.stroke();
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath();
+        ctx.arc(sz * 0.34, -sz * 1.18, Math.max(2, sz * 0.07), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (sp.kind === 'ship-wheel') {
+        // Corroded 8-spoke teak & brass ship's helm wheel
+        ctx.save();
+        ctx.translate(sx, sy - sz * 0.56);
+        ctx.rotate((sp.tilt || 0) * 1.5);
+        const r = sz * 0.44;
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = Math.max(2.2, 0.08 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(1.3, 0.048 * scale);
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * r * 1.28, Math.sin(a) * r * 1.28);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (sp.kind === 'boiler-panel') {
+        // Riveted iron boiler gauge board + twin cracked dials + copper pipes
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate((sp.tilt || 0) * 0.5);
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+        ctx.fillRect(-sz * 0.48, -sz * 0.72, sz * 0.96, sz * 0.68);
+        ctx.strokeRect(-sz * 0.48, -sz * 0.72, sz * 0.96, sz * 0.68);
+        // Copper steam lines
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.22, -sz * 0.04);
+        ctx.lineTo(-sz * 0.22, -sz * 0.88);
+        ctx.moveTo(sz * 0.22, -sz * 0.04);
+        ctx.lineTo(sz * 0.22, -sz * 0.88);
+        ctx.stroke();
+        // Twin Bourdon dials
+        for (const ox of [-sz * 0.22, sz * 0.22]) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+          ctx.beginPath();
+          ctx.arc(ox, -sz * 0.42, sz * 0.16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = Math.max(1, 0.03 * scale);
+          ctx.beginPath();
+          ctx.moveTo(ox, -sz * 0.42);
+          ctx.lineTo(ox - sz * 0.09, -sz * 0.34);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (sp.kind === 'mayan-vessel') {
+        // Sculpted submerged Mayan ceramic offering vessel resting on cenote silt
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(sp.tilt || 0);
+        ctx.fillStyle = '#9a3412';
+        ctx.strokeStyle = '#431407';
+        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+        ctx.beginPath();
+        ctx.ellipse(0, -sz * 0.28, sz * 0.32, sz * 0.26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Flared ceramic neck & rim
+        ctx.fillStyle = '#c2410c';
+        ctx.beginPath();
+        ctx.roundRect(-sz * 0.17, -sz * 0.62, sz * 0.34, sz * 0.16, sz * 0.05);
+        ctx.fill();
+        ctx.stroke();
+        // Ochre geometric rim band
+        ctx.strokeStyle = '#fdba74';
+        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.26, -sz * 0.3);
+        ctx.lineTo(sz * 0.26, -sz * 0.3);
+        ctx.stroke();
+        ctx.restore();
+      } else if (sp.kind === 'fossil-bed') {
+        // Embedded logarithmic spiral ammonite fossil in limestone slab
+        ctx.save();
+        ctx.translate(sx, sy - sz * 0.24);
+        ctx.fillStyle = '#57534e';
+        ctx.beginPath();
+        ctx.ellipse(0, sz * 0.08, sz * 0.44, sz * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#d6d3d1';
+        ctx.lineWidth = Math.max(1.4, 0.05 * scale);
+        ctx.beginPath();
+        for (let t = 0; t <= 18; t++) {
+          const ang = t * 0.58;
+          const rad = (t / 18) * sz * 0.26;
+          const fx = Math.cos(ang) * rad;
+          const fy = Math.sin(ang) * rad;
+          if (t === 0) ctx.moveTo(fx, fy);
+          else ctx.lineTo(fx, fy);
+        }
+        ctx.stroke();
+        ctx.restore();
+      } else if (sp.kind === 'survey-station') {
+        // Hammered stainless cave survey piton & weathered brass station plate
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(1.6, 0.055 * scale);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx, sy - sz * 0.45);
+        ctx.stroke();
+        ctx.fillStyle = '#eab308';
+        ctx.strokeStyle = '#713f12';
+        ctx.lineWidth = Math.max(1, 0.035 * scale);
+        ctx.beginPath();
+        ctx.moveTo(sx - sz * 0.22, sy - sz * 0.42);
+        ctx.lineTo(sx + sz * 0.14, sy - sz * 0.54);
+        ctx.lineTo(sx + sz * 0.24, sy - sz * 0.42);
+        ctx.lineTo(sx + sz * 0.14, sy - sz * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 

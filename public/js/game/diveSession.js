@@ -21,6 +21,10 @@ import {
   recordMechanicalEvent,
   stepMechanicalFx,
 } from './mechanicalFx.js';
+import {
+  createSubmergedStories,
+  stepSubmergedStories,
+} from './submergedStories.js';
 
 export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
@@ -235,6 +239,8 @@ export function createDiveSession(
     hatchBonusScore: 0,
     salvage: createSalvageState(),
     mechFx: createMechanicalFxState(),
+    stories: createSubmergedStories(level),
+    spaceClearanceM: 4.0,
     runMilestones: {
       usedLiftBagWithHeavySalvage: false,
       floatUpIncident: false,
@@ -3097,6 +3103,11 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
 
   // Reactive Cave & Wreck Hazards: Cold Thermoclines, Overhead Bubble Percolation & Shifting Surge Hatches (v141)
   const hazRes = stepDynamicHazards(session, dt, callbacks);
+  // Submerged Storytelling Set-Pieces: Torch-lit lore discovery & cavern wall clearance tracking (v155)
+  session.spaceClearanceM = Math.max(0.5, -evaluateCaveSDF(level, diver.x, diver.y));
+  if (session.stories) {
+    stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks);
+  }
 
   // Step physiology & dive computer (including HR & gas-burn coupling; DPV lowers physical fin exertion)
   stepDivePhysiology(diveState, {

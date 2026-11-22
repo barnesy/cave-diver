@@ -7937,3 +7937,72 @@ summary,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* v155 Saved Gear Loadout Slots & AI Squad Team Uniform Toggle */
+.livery-locker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.livery-saved-slots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.livery-slot-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.86);
+  overflow: hidden;
+}
+.livery-slot-pill.filled {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+.livery-slot-load,
+.livery-slot-save {
+  border: 0;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.livery-slot-load:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.livery-slot-save {
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 4px 6px;
+  font-size: 0.66rem;
+}
+.livery-slot-save:hover,
+.livery-slot-load:not(:disabled):hover {
+  background: rgba(56, 189, 248, 0.16);
+}
+.livery-uniform-toggle {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.86);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.livery-uniform-toggle.active {
+  border-color: rgba(52, 211, 153, 0.72);
+  background: rgba(6, 78, 59, 0.45);
+  color: #a7f3d0;
+}

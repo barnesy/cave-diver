@@ -5,6 +5,7 @@
  */
 
 import { buildExploreCells } from './scoring.js';
+import { drawMiniDiverAvatar, resolveDiverLiveryPalette } from './rigLivery.js';
 
 export function formatReplayTime(sec) {
   const s = Math.max(0, Math.floor(Number(sec) || 0));
@@ -322,6 +323,8 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
     difficulty = 'standard',
     customMixLabel = '',
     dailyBadge = '',
+    livery = null,
+    hasCcr = false,
     track = [],
     profile = [],
     version = 'v121',
@@ -418,6 +421,35 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
   ctx.fillStyle = '#94a3b8';
   ctx.font = '600 19px system-ui, -apple-system, sans-serif';
   ctx.fillText(level?.location || 'Submerged Overhead System', padX, 118);
+
+  // 2b. Custom Diver Rig Emblem framed beside the Grade Seal (v155)
+  if (livery) {
+    const embW = 148;
+    const embH = 88;
+    const embX = width - 356;
+    const embY = 66;
+    const pal = resolveDiverLiveryPalette(livery);
+    ctx.save();
+    ctx.fillStyle = 'rgba(4, 18, 36, 0.92)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.lineWidth = 2;
+    fillRoundedRect(ctx, embX, embY, embW, embH, 14);
+    strokeRoundedRect(ctx, embX, embY, embW, embH, 14);
+    ctx.save();
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(embX + 2, embY + 2, embW - 4, embH - 22, 12);
+    else ctx.rect(embX + 2, embY + 2, embW - 4, embH - 22);
+    ctx.clip?.();
+    ctx.translate(embX + 2, embY + 2);
+    drawMiniDiverAvatar(ctx, embW - 4, embH - 22, livery, { hasCcr });
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#bae6fd';
+    ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`${pal.suit.name} · ${pal.headgear.icon}`, embX + embW * 0.5, embY + embH - 11);
+    ctx.restore();
+  }
 
   // 3. Giant Grade Seal (Top Right)
   const sealX = width - 118;

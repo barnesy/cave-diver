@@ -528,25 +528,16 @@ function _getRigGradients(ctx, u) {
   if (cached) return cached;
 
   const q = uKey * 0.5 || 1;
-  const suitGrad = ctx.createLinearGradient(0, -q * 0.4, 0, q * 0.45);
-  suitGrad.addColorStop(0, '#1e293b');
-  suitGrad.addColorStop(0.55, '#0f172a');
-  suitGrad.addColorStop(1, '#020617');
-
-  const tankGrad = ctx.createLinearGradient(0, -q * 0.62, 0, -q * 0.24);
-  tankGrad.addColorStop(0, '#f8fafc');
-  tankGrad.addColorStop(0.4, '#cbd5e1');
-  tankGrad.addColorStop(1, '#64748b');
-
-  const stageGrad = ctx.createLinearGradient(0, q * 0.24, 0, q * 0.52);
-  stageGrad.addColorStop(0, '#e2e8f0');
-  stageGrad.addColorStop(0.5, '#94a3b8');
-  stageGrad.addColorStop(1, '#475569');
-
-  const glassGrad = ctx.createLinearGradient(q * 0.5, -q * 0.2, q * 0.75, q * 0.06);
-  glassGrad.addColorStop(0, '#cffafe');
-  glassGrad.addColorStop(0.45, '#22d3ee');
-  glassGrad.addColorStop(1, '#0e7490');
+  const makeGrad = (x0, y0, x1, y1, stops, fallback) => {
+    const g = ctx.createLinearGradient?.(x0, y0, x1, y1);
+    if (!g || typeof g.addColorStop !== 'function') return fallback;
+    for (let i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+    return g;
+  };
+  const suitGrad = makeGrad(0, -q * 0.4, 0, q * 0.45, [[0, '#1e293b'], [0.55, '#0f172a'], [1, '#020617']], '#0f172a');
+  const tankGrad = makeGrad(0, -q * 0.62, 0, -q * 0.24, [[0, '#f8fafc'], [0.4, '#cbd5e1'], [1, '#64748b']], '#cbd5e1');
+  const stageGrad = makeGrad(0, q * 0.24, 0, q * 0.52, [[0, '#e2e8f0'], [0.5, '#94a3b8'], [1, '#475569']], '#94a3b8');
+  const glassGrad = makeGrad(q * 0.5, -q * 0.2, q * 0.75, q * 0.06, [[0, '#cffafe'], [0.45, '#22d3ee'], [1, '#0e7490']], '#22d3ee');
 
   cached = { suitGrad, tankGrad, stageGrad, glassGrad };
   if (ctxMap.size > 24) ctxMap.clear();
@@ -572,11 +563,15 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
 
   // Sculpted drysuit torso shell with shading (supports custom livery drysuit colorway)
   if (pal?.suitTop && pal?.suitMid && pal?.suitBot) {
-    const customSuitGrad = ctx.createLinearGradient(0, -u * 0.4, 0, u * 0.45);
-    customSuitGrad.addColorStop(0, pal.suitTop);
-    customSuitGrad.addColorStop(0.55, pal.suitMid);
-    customSuitGrad.addColorStop(1, pal.suitBot);
-    ctx.fillStyle = customSuitGrad;
+    const customSuitGrad = ctx.createLinearGradient?.(0, -u * 0.4, 0, u * 0.45);
+    if (customSuitGrad && typeof customSuitGrad.addColorStop === 'function') {
+      customSuitGrad.addColorStop(0, pal.suitTop);
+      customSuitGrad.addColorStop(0.55, pal.suitMid);
+      customSuitGrad.addColorStop(1, pal.suitBot);
+      ctx.fillStyle = customSuitGrad;
+    } else {
+      ctx.fillStyle = pal.suitMid;
+    }
   } else {
     ctx.fillStyle = suitGrad;
   }

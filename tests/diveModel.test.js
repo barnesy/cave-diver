@@ -6822,3 +6822,115 @@ test('v153 Modular Expedition Outfitter, Headgear Silhouettes, Cert-Linked Unloc
   const relayed = peerPkts.find((m) => m.type === 'peer_state');
   assert.deepEqual(relayed?.state?.livery, sanitized);
 });
+
+test('v155 Submerged Storytelling Set-Pieces (all 33 sites), Torch Lore Discovery, Postcard Diver Emblem & AI Squad Team Uniform', async () => {
+  const { createSubmergedStories, stepSubmergedStories, getCollectibleLoreNote } = await import('../public/js/game/submergedStories.js');
+  const { createAiSquad } = await import('../public/js/game/aiBuddy.js');
+  const { renderExpeditionPostcard } = await import('../public/js/game/diveCard.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. All 33 campaign sites generate rich, SDF-validated submerged storytelling set-pieces
+  let totalSetPieces = 0;
+  const seenKinds = new Set();
+  for (const lvl of LEVELS) {
+    const st = createSubmergedStories(lvl);
+    assert.ok(st.setPieces.length >= 2, `${lvl.id} should generate at least 2 submerged storytelling set-pieces (got ${st.setPieces.length})`);
+    totalSetPieces += st.setPieces.length;
+    for (const sp of st.setPieces) {
+      seenKinds.add(sp.kind);
+      assert.ok(sp.title && sp.lore, `${lvl.id} set-piece ${sp.id} must have title & lore`);
+      assert.ok(evaluateCaveSDF(lvl, sp.x, sp.y) < 0.25, `${lvl.id} set-piece ${sp.kind} must not be buried deep in solid rock`);
+    }
+  }
+  assert.ok(totalSetPieces >= 180, `Expected rich campaign-wide storytelling density (>=180), got ${totalSetPieces}`);
+  for (const expected of ['emergency-lamp', 'brass-telegraph', 'ship-wheel', 'porthole-shaft', 'boiler-panel', 'speleothem-cathedral', 'halocline-lens', 'mayan-vessel', 'mine-timber', 'ice-arch', 'fossil-bed', 'survey-station']) {
+    assert.ok(seenKinds.has(expected), `Expected campaign to include storytelling set-piece kind "${expected}"`);
+  }
+
+  // 2. Torch-lit lore discovery fires once per landmark and respects cooldown
+  const u1206 = getLevelById('u1206-submarine');
+  const wStories = createSubmergedStories(u1206);
+  const targetSp = wStories.setPieces[0];
+  let discoveredSp = null;
+  const beamDiver = {
+    x: targetSp.x - 4.2,
+    y: targetSp.y,
+    angle: 0,
+    torchAngle: 0,
+    torchOn: true,
+    livery: { suitId: 'wreck-titanium', torchId: 'amber-silt', patchId: 'wreck-penetrator', headgearId: 'cave-helmet', tankId: 'salvage-brass', visorId: 'amber-contrast' },
+  };
+  const found = stepSubmergedStories(wStories, beamDiver, 10.0, {
+    onStoryDiscovered: (sp) => { discoveredSp = sp; },
+  });
+  assert.equal(found?.id, targetSp.id);
+  assert.equal(discoveredSp?.id, targetSp.id);
+  assert.equal(wStories.discoveredCount, 1);
+  // Calling again at same spot does not re-trigger
+  assert.equal(stepSubmergedStories(wStories, beamDiver, 20.0), null);
+
+  assert.match(getCollectibleLoreNote({ name: 'Brass Compass' }, u1206), /radium/i);
+  assert.match(getCollectibleLoreNote({ name: 'Gypsum Crystal Cluster' }, LEVEL_1), /mineral/i);
+
+  // 3. Renderer executes both world & emissive storytelling passes across all 12 kinds + custom PB ghost silhouette
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 1200, height: 630 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t || '').length * 8 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = u1206;
+  r.glowStamps = { cyan: { width: 16, height: 16 } };
+  const toX = (x) => 400 + x * 20;
+  const toY = (y) => 100 + y * 20;
+  const allKindPieces = [...seenKinds].map((kind, idx) => ({
+    id: `mock-${idx}`,
+    kind,
+    x: 10 + idx * 2,
+    y: 20,
+    ceilY: 16,
+    floorY: 24,
+    size: 1.0,
+    shaftLen: 4.5,
+    shaftAngle: 0.4,
+    halfWidth: 3.5,
+    tilt: 0.15,
+    phase: idx,
+  }));
+  r._drawSubmergedStories(noopCtx, { setPieces: allKindPieces }, -50, 200, -10, 100, toX, toY, 20, 3.2, 'world');
+  r._drawSubmergedStories(noopCtx, { setPieces: allKindPieces }, -50, 200, -10, 100, toX, toY, 20, 3.2, 'emissive');
+  r._drawGhostDiver(noopCtx, { x: 12, y: 20, angle: 0.2, finished: false, isPar: false }, toX, toY, 20, 3.2, 800, 600, beamDiver);
+
+  // 4. AI Squad Team Uniform matches player's drysuit/headgear/tank/visor with 3 distinct wingman trims
+  const squad = createAiSquad(LEVEL_1, { x: LEVEL_1.spawn.x, y: 2, angle: 0 }, 3, {
+    teamUniform: true,
+    leaderLivery: beamDiver.livery,
+  });
+  assert.equal(squad.length, 3);
+  for (const b of squad) {
+    assert.equal(b.livery.suitId, 'wreck-titanium');
+    assert.equal(b.livery.headgearId, 'cave-helmet');
+    assert.equal(b.livery.tankId, 'salvage-brass');
+  }
+  assert.equal(new Set(squad.map((b) => b.livery.trimId)).size, 3, 'Team uniform wingmen must have 3 distinct high-vis trim stripes');
+
+  // 5. Expedition Postcard stamps custom diver rig emblem cleanly
+  const cardOk = renderExpeditionPostcard(noopCtx, 1200, 630, {
+    level: u1206,
+    diverName: 'Cousteau',
+    success: true,
+    grade: 'S',
+    score: 3420,
+    maxDepthM: 76.2,
+    diveTimeSec: 245,
+    exploredPct: 92,
+    livery: beamDiver.livery,
+    hasCcr: true,
+    version: 'v155',
+  });
+  assert.equal(cardOk, true);
+});
