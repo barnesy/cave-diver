@@ -78,6 +78,7 @@ import {
   dropStageTank,
   toggleLiftBag,
   resolveEmergencyDrill,
+  recordGasSwitchFx,
   toggleDpvScooter,
   triggerSonarPing,
   captureCameraPhoto,
@@ -568,7 +569,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=150" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=151" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1127,6 +1128,7 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
     if (session.drills?.active?.kind === 'free-flow') {
       resolveEmergencyDrill(session, 'free-flow', sessionStepCallbacks);
     } else {
+      recordGasSwitchFx(session, gasId);
       showToast(`Switched regulator to ${getActiveGasName(gasId)}`, 1.8);
     }
     return true;
@@ -2117,9 +2119,7 @@ function handleLiftBagToggle() {
   audio.unlock();
   const res = toggleLiftBag(session, {
     onLiftBagToggle: (inflated) => {
-      if (inflated) audio.playFreeFlowHiss?.();
-      audio.playClipLine?.(inflated);
-      audio.vibrate?.(inflated ? [18, 26, 22] : 14);
+      audio.playLiftBag?.(inflated);
     },
     onToast: (txt, sec) => showToast(txt, sec),
   });
@@ -2746,16 +2746,21 @@ function openLogbookModal() {
   }
   if (logbookCertsEl) {
     logbookCertsEl.innerHTML = certInfo.certs
-      .map(
-        (c) => `
-        <div class="logbook-cert-card ${c.earned ? '' : 'locked'}">
+      .map((c) => {
+        const pct = Math.max(0, Math.min(100, Number(c.progressPct) || (c.earned ? 100 : 0)));
+        const progLine = !c.earned && c.progressText
+          ? `<div class="logbook-cert-prog"><div class="logbook-cert-bar"><div class="logbook-cert-fill" style="width:${pct}%"></div></div><em>${escapeHtml(c.progressText)}</em></div>`
+          : '';
+        return `
+        <div class="logbook-cert-card ${c.earned ? '' : 'locked'}${c.specialty ? ' specialty' : ''}">
           <span class="logbook-cert-icon" aria-hidden="true">${c.earned ? c.icon : '🔒'}</span>
           <div class="logbook-cert-copy">
             <strong>${escapeHtml(c.title)}</strong>
             <span>${escapeHtml(c.requirement)}</span>
+            ${progLine}
           </div>
-        </div>`
-      )
+        </div>`;
+      })
       .join('');
   }
   const fgHeading = document.getElementById('logbook-field-guide-heading');
@@ -4588,7 +4593,8 @@ function renderDebriefCertifications(logbook) {
     html += `<span class="cert-pill" title="${escapeHtml(c.requirement)}">${c.icon} ${escapeHtml(c.title)}</span>`;
   }
   if (info.next) {
-    html += `<span class="cert-pill locked" title="${escapeHtml(info.next.requirement)}">🔒 Next: ${escapeHtml(info.next.title)} (${escapeHtml(info.next.requirement)})</span>`;
+    const pTxt = info.next.progressText ? ` · ${info.next.progressText}` : '';
+    html += `<span class="cert-pill locked" title="${escapeHtml(info.next.requirement)}">🔒 Next: ${escapeHtml(info.next.title)} (${escapeHtml(info.next.requirement)}${escapeHtml(pTxt)})</span>`;
   }
   el.innerHTML = html;
 }
@@ -4604,8 +4610,14 @@ function handleWreckAction() {
 
 btnWreckAction?.addEventListener('click', (e) => {
   e.preventDefault();
+  audio.triggerHaptic?.('action');
   handleWreckAction();
 });
+
+function formatActionLabelHtml(rawLabel) {
+  const safe = escapeHtml(String(rawLabel || ''));
+  return safe.replace(/\s*(\[[A-Z0-9 /]+\])$/i, ' <span class="kbd-hint">$1</span>');
+}
 
 function syncWreckActionHud(prompt) {
   if (!btnWreckAction) return;
@@ -4625,9 +4637,9 @@ function syncWreckActionHud(prompt) {
   btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch' || prompt.kind === 'equalize-valve');
   btnWreckAction.classList.toggle('is-clip', prompt.kind === 'clip-line');
   btnWreckAction.classList.toggle('is-unclip', prompt.kind === 'unclip-line');
-  btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage' || prompt.kind === 'inflate-liftbag');
-  btnWreckAction.classList.toggle('is-marker', prompt.kind === 'place-marker');
-  if (wreckActionLabelEl) wreckActionLabelEl.textContent = prompt.label;
+  btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage' || prompt.kind === 'inflate-liftbag' || prompt.kind === 'retrieve-stage');
+  btnWreckAction.classList.toggle('is-marker', prompt.kind === 'place-marker' || prompt.kind === 'claim-beacon');
+  if (wreckActionLabelEl) wreckActionLabelEl.innerHTML = formatActionLabelHtml(prompt.label);
   if (wreckActionDetailEl) wreckActionDetailEl.textContent = prompt.detail || '';
   if (wreckActionProgressEl) wreckActionProgressEl.style.width = `${pct}%`;
 }
@@ -5056,6 +5068,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
   };
 
+  const runMs = session.runMilestones || {};
   let updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
     levelId: level.id,
     success,
@@ -5064,6 +5077,12 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     maxDepthM: diveState.maxDepthM,
     diveTimeSec: diveState.diveTimeSec,
     difficulty: runDiff,
+    milestones: {
+      equalizedBulkheads: session.equalizedHatchIds?.size || 0,
+      drillsCompleted: session.drills?.completedCount || 0,
+      cleanSalvageLift: Boolean(success && runMs.usedLiftBagWithHeavySalvage && !runMs.floatUpIncident),
+      zeroSiltCaveClear: Boolean(success && !level.isWreck && (runMs.heavySiltEvents || 0) === 0),
+    },
   });
   if (success && session.dailyDateKey) {
     updatedLogbook = recordDailyClear(updatedLogbook, {
@@ -8007,14 +8026,10 @@ const sessionStepCallbacks = {
   onHatchCrank: (progress) => audio.playHatchCrank(progress),
   onHatchOpen: () => audio.playHatchOpen(),
   onValveEqualize: () => {
-    audio.playFreeFlowHiss();
-    audio.playClipLine(true);
-    audio.vibrate?.([14, 22, 16]);
+    audio.playValveEqualize();
   },
   onLiftBagToggle: (inflated) => {
-    if (inflated) audio.playFreeFlowHiss();
-    audio.playClipLine(inflated);
-    audio.vibrate?.(inflated ? [18, 26, 22] : 14);
+    audio.playLiftBag(inflated);
   },
   onLineCut: () => audio.playLineCut(),
   onClipLine: (clipped) => audio.playClipLine(clipped),

@@ -19,6 +19,9 @@ export const HAPTIC_PRESETS = Object.freeze({
   photo: [12],
   checkpoint: [16, 20, 24],
   test: [16, 40, 22],
+  valve: [14, 24, 18, 28, 12],
+  liftbag: [24, 30, 18],
+  action: [15],
 });
 
 /**
@@ -297,15 +300,45 @@ export class DiveAudio {
 
   playGasSwitch() {
     this.unlock();
-    this.playTone(620, 0.07, 'triangle', 0.08, 0);
-    this.playTone(880, 0.09, 'sine', 0.07, 0.06);
+    // Bolt-snap click + brief 2nd-stage regulator purge hiss + confirmation chirp (v151)
+    this.playTone(940, 0.032, 'triangle', 0.052, 0);
+    this.playTone(620, 0.07, 'triangle', 0.07, 0.025);
+    this.playTone(880, 0.09, 'sine', 0.065, 0.085);
+    const noise = this._getNoiseBuffer();
+    if (!this.muted && noise && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime + 0.02;
+      const src = this.ctx.createBufferSource();
+      src.buffer = noise;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(1650, t);
+      filt.frequency.exponentialRampToValueAtTime(780, t + 0.14);
+      filt.Q.value = 2.1;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.055, t + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+      src.connect(filt);
+      filt.connect(g);
+      const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+        try { filt.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
+      src.start(t);
+      src.stop(t + 0.17);
+    }
     this.vibrate(18);
   }
 
   playReelClick() {
     this.unlock();
-    this.playTone(1420, 0.035, 'square', 0.035, 0);
-    this.vibrate(12);
+    // Machined Delrin finger-spool pawl tick + nylon body resonance (v151)
+    this.playTone(1360, 0.024, 'triangle', 0.042, 0);
+    this.playTone(640, 0.032, 'sine', 0.028, 0.012);
+    this.vibrate(10);
   }
 
   playGasShare() {
@@ -645,44 +678,222 @@ export class DiveAudio {
   }
 
   /**
-   * Heavy iron bulkhead door unsealing + pressurized trapped bubble burst.
+   * Pressurized bulkhead copper bypass valve equalization: brass handwheel ratchets,
+   * pressurized water/gas bleed hiss sweeping down as hull ΔP equalizes, and gauge settle chime (v151).
    */
-  playHatchOpen() {
+  playValveEqualize() {
     this.unlock();
-    this.playTone(112, 0.28, 'sawtooth', 0.08, 0);
-    this.playTone(74, 0.38, 'triangle', 0.09, 0.06);
-    this.playTone(440, 0.16, 'sine', 0.06, 0.18);
-    this.playTone(587.3, 0.24, 'sine', 0.065, 0.26);
+    // Brass handwheel 3-click turn
+    this.playTone(760, 0.032, 'triangle', 0.055, 0);
+    this.playTone(910, 0.032, 'triangle', 0.058, 0.065);
+    this.playTone(1080, 0.036, 'triangle', 0.055, 0.13);
+    // Bourdon needle settled at 0 ΔP confirmation chime
+    this.playTone(587.3, 0.12, 'sine', 0.05, 0.44);
+    this.playTone(880, 0.16, 'sine', 0.055, 0.52);
     const noise = this._getNoiseBuffer();
-    if (noise && this.ctx && this.ctx.state === 'running') {
-      const t = this.ctx.currentTime;
+    if (!this.muted && noise && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime + 0.09;
       const src = this.ctx.createBufferSource();
       src.buffer = noise;
       const filt = this.ctx.createBiquadFilter();
       filt.type = 'bandpass';
-      filt.frequency.setValueAtTime(520, t);
-      filt.frequency.exponentialRampToValueAtTime(190, t + 0.42);
-      filt.Q.value = 1.6;
+      filt.frequency.setValueAtTime(2400, t);
+      filt.frequency.exponentialRampToValueAtTime(420, t + 0.48);
+      filt.Q.value = 3.2;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.075, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.085, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
       src.connect(filt);
       filt.connect(g);
-      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+        try { filt.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
       src.start(t);
-      src.stop(t + 0.45);
+      src.stop(t + 0.52);
+    }
+    this.triggerHaptic('valve');
+  }
+
+  /**
+   * Commercial lift-bag nylon inflation whump + LP gas fill rush, or dump-valve bubble burp (v151).
+   */
+  playLiftBag(inflated = true) {
+    this.unlock();
+    if (!this.muted && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime;
+      if (inflated) {
+        // Muffled nylon canopy fill "whump"
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(142, t + 0.04);
+        osc.frequency.exponentialRampToValueAtTime(54, t + 0.28);
+        g.gain.setValueAtTime(0.0001, t + 0.04);
+        g.gain.linearRampToValueAtTime(0.11, t + 0.085);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.31);
+        osc.connect(g);
+        const p1 = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+        osc.onended = () => {
+          try { osc.disconnect(); } catch {}
+          try { g.disconnect(); } catch {}
+          try { p1?.disconnect(); } catch {}
+        };
+        osc.start(t + 0.04);
+        osc.stop(t + 0.33);
+
+        // LP inflator gas rush into open-bottom skirt
+        const noise = this._getNoiseBuffer();
+        if (noise) {
+          const src = this.ctx.createBufferSource();
+          src.buffer = noise;
+          const filt = this.ctx.createBiquadFilter();
+          filt.type = 'bandpass';
+          filt.frequency.setValueAtTime(1150, t);
+          filt.frequency.exponentialRampToValueAtTime(340, t + 0.34);
+          filt.Q.value = 1.9;
+          const ng = this.ctx.createGain();
+          ng.gain.setValueAtTime(0.0001, t);
+          ng.gain.linearRampToValueAtTime(0.075, t + 0.04);
+          ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+          src.connect(filt);
+          filt.connect(ng);
+          const p2 = this._connectSpatial(ng, { pan: 0, bus: 'sfx' });
+          src.onended = () => {
+            try { src.disconnect(); } catch {}
+            try { filt.disconnect(); } catch {}
+            try { ng.disconnect(); } catch {}
+            try { p2?.disconnect(); } catch {}
+          };
+          src.start(t);
+          src.stop(t + 0.38);
+        }
+        this.playTone(860, 0.045, 'triangle', 0.05, 0);
+      } else {
+        // Pull-cord dump valve pop + rising bubble-burp triplet
+        this.playTone(320, 0.05, 'triangle', 0.06, 0);
+        this.playTone(430, 0.065, 'sine', 0.055, 0.055);
+        this.playTone(610, 0.075, 'sine', 0.05, 0.115);
+        this.playTone(790, 0.085, 'sine', 0.04, 0.18);
+      }
+    }
+    this.vibrate(inflated ? HAPTIC_PRESETS.liftbag : 14);
+  }
+
+  /**
+   * Heavy iron bulkhead door unsealing: metallic hinge creak, deep hull-stop thud,
+   * and pressurized trapped bubble burst (upgraded v151).
+   */
+  playHatchOpen() {
+    this.unlock();
+    this.playTone(112, 0.28, 'sawtooth', 0.075, 0);
+    this.playTone(74, 0.38, 'triangle', 0.085, 0.06);
+    this.playTone(440, 0.16, 'sine', 0.055, 0.24);
+    this.playTone(587.3, 0.24, 'sine', 0.06, 0.32);
+    if (!this.muted && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime;
+      // Corroded iron hinge creak sweep
+      const creak = this.ctx.createOscillator();
+      const cFilt = this.ctx.createBiquadFilter();
+      const cGain = this.ctx.createGain();
+      creak.type = 'sawtooth';
+      creak.frequency.setValueAtTime(192, t + 0.03);
+      creak.frequency.exponentialRampToValueAtTime(116, t + 0.36);
+      cFilt.type = 'lowpass';
+      cFilt.frequency.value = 460;
+      cGain.gain.setValueAtTime(0.0001, t + 0.03);
+      cGain.gain.linearRampToValueAtTime(0.05, t + 0.12);
+      cGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+      creak.connect(cFilt);
+      cFilt.connect(cGain);
+      const cp = this._connectSpatial(cGain, { pan: 0, bus: 'sfx' });
+      creak.onended = () => {
+        try { creak.disconnect(); } catch {}
+        try { cFilt.disconnect(); } catch {}
+        try { cGain.disconnect(); } catch {}
+        try { cp?.disconnect(); } catch {}
+      };
+      creak.start(t + 0.03);
+      creak.stop(t + 0.4);
+
+      // Deep underwater steel door-stop thud
+      const thud = this.ctx.createOscillator();
+      const tGain = this.ctx.createGain();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(68, t + 0.22);
+      thud.frequency.exponentialRampToValueAtTime(34, t + 0.48);
+      tGain.gain.setValueAtTime(0.0001, t + 0.22);
+      tGain.gain.linearRampToValueAtTime(0.11, t + 0.245);
+      tGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      thud.connect(tGain);
+      const tp = this._connectSpatial(tGain, { pan: 0, bus: 'sfx' });
+      thud.onended = () => {
+        try { thud.disconnect(); } catch {}
+        try { tGain.disconnect(); } catch {}
+        try { tp?.disconnect(); } catch {}
+      };
+      thud.start(t + 0.22);
+      thud.stop(t + 0.52);
+
+      const noise = this._getNoiseBuffer();
+      if (noise) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = noise;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(520, t);
+        filt.frequency.exponentialRampToValueAtTime(190, t + 0.42);
+        filt.Q.value = 1.6;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.075, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+        src.connect(filt);
+        filt.connect(g);
+        const np = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+        src.onended = () => {
+          try { src.disconnect(); } catch {}
+          try { filt.disconnect(); } catch {}
+          try { g.disconnect(); } catch {}
+          try { np?.disconnect(); } catch {}
+        };
+        src.start(t);
+        src.stop(t + 0.45);
+      }
     }
     this.vibrate([26, 20, 35]);
   }
 
   /**
-   * Crisp titanium shears snip when cutting free from a trawler net or cable snag.
+   * Crisp titanium shears dual-blade snip + snapping monofilament line twang (upgraded v151).
    */
   playLineCut() {
     this.unlock();
-    this.playTone(1480, 0.045, 'sawtooth', 0.07, 0);
-    this.playTone(2150, 0.06, 'triangle', 0.065, 0.025);
-    this.playTone(620, 0.11, 'sine', 0.055, 0.06);
+    this.playTone(1520, 0.036, 'sawtooth', 0.068, 0);
+    this.playTone(2340, 0.048, 'triangle', 0.064, 0.018);
+    if (!this.muted && this.ctx && this.ctx.state === 'running') {
+      const t = this.ctx.currentTime + 0.042;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(740, t);
+      osc.frequency.exponentialRampToValueAtTime(340, t + 0.14);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.058, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+      osc.connect(g);
+      const p = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { p?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 0.17);
+    }
     this.vibrate([18, 15, 22]);
   }
 

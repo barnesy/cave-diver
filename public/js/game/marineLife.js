@@ -501,6 +501,29 @@ export function createMarineEcosystem(level) {
 }
 
 /**
+ * Compute smooth [0..1] exposure of a world point to the diver's active torch beam (v151).
+ * Used for natural torch-reactive wildlife banking and subtle deep-water eyeshine glints.
+ */
+export function computeTorchBeamExposure(diver, wx, wy, maxRange = 14.5) {
+  if (!diver || diver.torchOn === false) return 0;
+  const dx = wx - diver.x;
+  const dy = wy - diver.y;
+  const distSq = dx * dx + dy * dy;
+  if (distSq < 0.04 || distSq > maxRange * maxRange) return 0;
+  const dist = Math.sqrt(distSq);
+  const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+  let diff = Math.atan2(dy, dx) - beamAng;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  const absDiff = Math.abs(diff);
+  const halfCone = 0.54; // ~31 deg outer cone
+  if (absDiff >= halfCone) return 0;
+  const angFalloff = 1 - absDiff / halfCone;
+  const distFalloff = 1 - dist / maxRange;
+  return Math.max(0, Math.min(1, angFalloff * (0.45 + 0.55 * distFalloff)));
+}
+
+/**
  * Advances authentic Yucatan fish schools, cave remipedes/prawns, and cenote slider turtles.
  */
 export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
@@ -510,8 +533,9 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
   const hasDiver = Boolean(diver);
   const divX = hasDiver ? diver.x : 0;
   const divY = hasDiver ? diver.y : 0;
+  const lightLerp = Math.min(1, dt * 5.0);
 
-  // Fish schooling + gentle swim-away near diver (distance-culled for distant chambers)
+  // Fish schooling + gentle swim-away near diver & torch-beam avoidance (distance-culled for distant chambers)
   for (let i = 0; i < eco.fish.length; i++) {
     const f = eco.fish[i];
     if (hasDiver) {
@@ -534,6 +558,17 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
         f.vx += (dx / dist) * push * dt;
         f.vy += (dy / dist) * push * dt;
       }
+      // Torch-reactive schooling: sighted fish gently dart/bank out of bright close beams (blind cavefish unaffected)
+      const lit = computeTorchBeamExposure(diver, f.x, f.y, 13.5);
+      f.litIntensity = (f.litIntensity || 0) + (lit - (f.litIntensity || 0)) * lightLerp;
+      if (f.kind !== 'cavefish' && lit > 0.32 && distSq > 0.25 && distSq < 64) {
+        const dist = Math.sqrt(distSq);
+        const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+        const perpSign = ((f.phase * 10) % 2 >= 1) ? 1 : -1;
+        const evade = (lit - 0.3) * 3.4;
+        f.vx += ((dx / dist) * 0.55 - Math.sin(beamAng) * perpSign * 0.85) * evade * dt;
+        f.vy += ((dy / dist) * 0.55 + Math.cos(beamAng) * perpSign * 0.85) * evade * dt;
+      }
     }
 
     const nx = f.x + f.vx * dt;
@@ -554,6 +589,8 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
       const cdx = r.homeX - divX;
       const cdy = r.homeY - divY;
       if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+      const lit = computeTorchBeamExposure(diver, r.x, r.y, 13.5);
+      r.litIntensity = (r.litIntensity || 0) + (lit - (r.litIntensity || 0)) * lightLerp;
     }
     const prevX = r.x;
     const prevY = r.y;
@@ -608,6 +645,8 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
         const cdx = m.homeX - divX;
         const cdy = m.homeY - divY;
         if (cdx * cdx + cdy * cdy > 60 * 60) continue;
+        const lit = computeTorchBeamExposure(diver, m.x, m.y, 17.5);
+        m.litIntensity = (m.litIntensity || 0) + (lit - (m.litIntensity || 0)) * lightLerp;
       }
       const speed = m.kind === 'shark' ? 0.16 : 0.22;
       m.phase += dt * speed;

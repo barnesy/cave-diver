@@ -6569,3 +6569,123 @@ test('v150 Home Menu GitHub Account relocation & smoother flashlight joystick re
   }
   assert.ok(Math.abs(target - s.diver.torchAngle) < 0.08, `Torch should converge near target after ~0.75s (angle=${s.diver.torchAngle.toFixed(3)})`);
 });
+
+test('v151 Mechanical Foley Audio, Diver Craft Animations, Living Torch-Reactive Biomes, Landscape Mobile Parity & Skill Certifications', async () => {
+  const { DiveAudio, HAPTIC_PRESETS } = await import('../public/js/game/audio.js');
+  const { createMechanicalFxState, recordMechanicalEvent, stepMechanicalFx } = await import('../public/js/game/mechanicalFx.js');
+  const { createMarineEcosystem, stepMarineEcosystem, computeTorchBeamExposure } = await import('../public/js/game/marineLife.js');
+  const { resolveEmergencyDrill, recordGasSwitchFx } = await import('../public/js/game/diveSession.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Procedural Mechanical Foley methods & haptic presets exist and run cleanly without throwing
+  assert.ok(Array.isArray(HAPTIC_PRESETS.valve) && Array.isArray(HAPTIC_PRESETS.liftbag));
+  const audio = new DiveAudio();
+  audio.muted = true; // headless Node safe
+  audio.playValveEqualize();
+  audio.playLiftBag(true);
+  audio.playLiftBag(false);
+  audio.playHatchOpen();
+  audio.playLineCut();
+  audio.playGasSwitch();
+  audio.playReelClick();
+
+  // 2. Diver Craft Mechanical FX: gas-switch purge, mask-purge & free-flow-shutoff + renderer passes
+  const fx = createMechanicalFxState();
+  recordMechanicalEvent(fx, 'gas-switch', { x: 10, y: 20, gasId: 'O2' });
+  assert.equal(fx.activeAction?.kind, 'gas-switch');
+  assert.equal(fx.activeAction?.gasId, 'O2');
+  assert.ok(fx.particles.length >= 9);
+
+  const sDrill = createDiveSession(LEVEL_1, { diverName: 'CraftTech', drillsEnabled: true });
+  sDrill.drills.active = { kind: 'mask-flood', severity: 0.7, elapsedSec: 1.5 };
+  resolveEmergencyDrill(sDrill, 'mask-flood');
+  assert.equal(sDrill.mechFx.activeAction?.kind, 'mask-purge');
+
+  sDrill.drills.active = { kind: 'free-flow', severity: 0.8, elapsedSec: 1.5 };
+  resolveEmergencyDrill(sDrill, 'free-flow');
+  assert.equal(sDrill.mechFx.activeAction?.kind, 'free-flow-shutoff');
+
+  recordGasSwitchFx(sDrill, 'TMX1455');
+  assert.equal(sDrill.mechFx.activeAction?.kind, 'gas-switch');
+  stepMechanicalFx(sDrill.mechFx, 0.1);
+
+  // 3. Torch-reactive wildlife exposure + sighted fish banking vs blind cavefish immunity
+  const beamDiver = { x: 10, y: 12, vx: 1.8, vy: 0.2, angle: 0, torchAngle: 0, torchOn: true };
+  assert.ok(computeTorchBeamExposure(beamDiver, 16, 12) > 0.5, 'Target directly in torch cone should have high exposure');
+  assert.equal(computeTorchBeamExposure(beamDiver, 4, 12), 0, 'Target behind diver must have 0 exposure');
+  assert.equal(computeTorchBeamExposure({ ...beamDiver, torchOn: false }, 16, 12), 0, 'Torch off must yield 0 exposure');
+
+  const eco = createMarineEcosystem(LEVEL_1);
+  stepMarineEcosystem(eco, beamDiver, 0.1, 1.5, LEVEL_1);
+
+  // Renderer passes: fin-wash flora deflection, post-lighting eyeshine, yellow 2m long-hose & drill working arm
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 800, height: 600 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 24 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r.glowStamps = { warm: { width: 8, height: 8 } };
+  const toX = (x) => 400 + x * 20;
+  const toY = (y) => 100 + y * 20;
+  r._drawAnchoredLife(noopCtx, eco, -50, 200, -10, 100, toX, toY, 20, 2.0, beamDiver);
+  r._drawFaunaEyeshine(noopCtx, eco, beamDiver, -50, 200, -10, 100, toX, toY, 20, 2.0);
+  r._drawBuddyRescueTethers(
+    noopCtx,
+    beamDiver,
+    [{ id: 'p2', name: 'Wingman', x: 12.5, y: 12.2, alive: true }],
+    toX,
+    toY,
+    20,
+    2.0,
+    [{ peerId: 'p2', fromSelf: true, gasId: 'EAN32', amountBar: 35, timer: 1.5, duration: 2.6 }]
+  );
+  r._drawDiver(noopCtx, beamDiver, toX, toY, 20, 2.0, false, {
+    mechFx: sDrill.mechFx,
+    drills: { active: { kind: 'mask-flood' } },
+  });
+  r._drawDiver(noopCtx, beamDiver, toX, toY, 20, 2.1, false, {
+    mechFx: sDrill.mechFx,
+    drills: { active: { kind: 'free-flow' } },
+  });
+
+  // 4. Skill-based Technical Certifications + commutative cloud Gist merge
+  let bookA = createEmptyLogbook();
+  bookA = recordDiveInLogbook(bookA, {
+    levelId: 'u1206-submarine',
+    success: true,
+    score: 3100,
+    grade: 'S',
+    maxDepthM: 76,
+    diveTimeSec: 280,
+    milestones: { equalizedBulkheads: 1, cleanSalvageLift: true, drillsCompleted: 2, zeroSiltCaveClear: false },
+  });
+  let bookB = createEmptyLogbook();
+  bookB = recordDiveInLogbook(bookB, {
+    levelId: 'cenote-el-abismo',
+    success: true,
+    score: 2600,
+    grade: 'A',
+    maxDepthM: 42,
+    diveTimeSec: 170,
+    milestones: { equalizedBulkheads: 0, cleanSalvageLift: false, drillsCompleted: 3, zeroSiltCaveClear: true },
+  });
+  const merged = mergeCareerLogbooks(bookA, bookB);
+  assert.equal(merged.milestones.pressurizedEqualizations, 1);
+  assert.equal(merged.milestones.cleanSalvageLifts, 1);
+  assert.equal(merged.milestones.drillsCompleted, 3);
+  assert.equal(merged.milestones.zeroSiltClears, 1);
+
+  const certInfo = computeCertifications(merged, LEVELS);
+  const earnedIds = new Set(certInfo.earned.map((c) => c.id));
+  assert.ok(earnedIds.has('bulkhead-engineer'), 'Equalizing a pressurized bulkhead must earn Bulkhead Engineer');
+  assert.ok(earnedIds.has('salvage-master'), 'Clean heavy salvage lift must earn Salvage Master');
+  assert.ok(earnedIds.has('abyssal-troubleshooter'), '3+ drills must earn Emergency Troubleshooter');
+  assert.ok(earnedIds.has('zero-silt-surgeon'), 'Zero-silt cave clear must earn Zero-Silt Trim');
+  assert.ok(certInfo.certs.every((c) => typeof c.progressPct === 'number' && typeof c.progressText === 'string'));
+});

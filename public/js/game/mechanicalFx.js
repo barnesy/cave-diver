@@ -253,6 +253,108 @@ export function recordMechanicalEvent(fx, kind, payload = {}) {
     return;
   }
 
+  if (kind === 'gas-switch') {
+    fx.activeAction = {
+      kind: 'gas-switch',
+      x,
+      y,
+      targetId,
+      angle,
+      gasId: payload.gasId || 'EAN32',
+      timer: 0,
+      duration: 0.44,
+    };
+    const purgeCol = payload.gasId === 'O2' ? '#6ee7b7' : payload.gasId === 'TMX1455' ? '#fde68a' : '#bae6fd';
+    for (let i = 0; i < 9; i++) {
+      const a = angle + (Math.random() - 0.5) * 1.1;
+      const spd = 1.0 + Math.random() * 1.5;
+      pushParticle(fx, {
+        kind: 'jet',
+        x: x + (Math.random() - 0.5) * 0.12,
+        y: y + (Math.random() - 0.5) * 0.12,
+        vx: Math.cos(a) * spd * 0.65,
+        vy: Math.sin(a) * spd * 0.4 - 0.65 - Math.random() * 0.5,
+        size: 0.055 + Math.random() * 0.055,
+        rot: 0,
+        vRot: 0,
+        age: 0,
+        life: 0.34 + Math.random() * 0.24,
+        color: purgeCol,
+      });
+    }
+    pushParticle(fx, {
+      kind: 'glint',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      size: 0.44,
+      rot: 0.25,
+      vRot: 3.1,
+      age: 0,
+      life: 0.34,
+      color: purgeCol,
+    });
+    return;
+  }
+
+  if (kind === 'mask-purge') {
+    fx.activeAction = { kind: 'mask-purge', x, y, targetId, angle, timer: 0, duration: 0.58 };
+    for (let i = 0; i < 14; i++) {
+      const spread = (Math.random() - 0.5) * 0.9;
+      const spd = 0.8 + Math.random() * 1.5;
+      pushParticle(fx, {
+        kind: 'jet',
+        x: x + (Math.random() - 0.5) * 0.16,
+        y: y - 0.06,
+        vx: Math.sin(spread) * spd * 0.7,
+        vy: -0.9 - Math.random() * 1.4,
+        size: 0.06 + Math.random() * 0.065,
+        rot: 0,
+        vRot: 0,
+        age: 0,
+        life: 0.42 + Math.random() * 0.3,
+        color: i % 2 === 0 ? '#e0f2fe' : '#a5f3fc',
+      });
+    }
+    return;
+  }
+
+  if (kind === 'free-flow-shutoff') {
+    fx.activeAction = { kind: 'free-flow-shutoff', x, y, targetId, angle, timer: 0, duration: 0.62 };
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.3;
+      const spd = 1.2 + Math.random() * 1.8;
+      pushParticle(fx, {
+        kind: 'jet',
+        x,
+        y: y - 0.12,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd,
+        size: 0.065 + Math.random() * 0.06,
+        rot: 0,
+        vRot: 0,
+        age: 0,
+        life: 0.38 + Math.random() * 0.28,
+        color: '#fef3c7',
+      });
+    }
+    pushParticle(fx, {
+      kind: 'glint',
+      x,
+      y: y - 0.14,
+      vx: 0,
+      vy: 0,
+      size: 0.5,
+      rot: 0,
+      vRot: 3.6,
+      age: 0,
+      life: 0.44,
+      color: '#fde047',
+    });
+    return;
+  }
+
   if (kind === 'drill-clear') {
     fx.activeAction = { kind: 'drill-clear', x, y, targetId, angle, timer: 0, duration: 0.42 };
     for (let i = 0; i < 8; i++) {

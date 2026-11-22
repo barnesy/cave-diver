@@ -1740,7 +1740,7 @@ export class CaveRenderer {
 
     // 8b. Authentic Cenote & Cave Flora, Calcite Formations, Fishes, Slider Turtles & Remipedes
     if (ecosystem) {
-      this._drawAnchoredLife(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
+      this._drawAnchoredLife(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec, diver);
       this._drawSwimmers(ctx, ecosystem, visX0 - 4, visX1 + 4, visY0 - 4, visY1 + 4, toScreenX, toScreenY, scale, timeSec);
     }
     if (encounters && typeof this._drawDynamicEncounters === 'function') {
@@ -1755,7 +1755,7 @@ export class CaveRenderer {
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
     }
-    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, { wreckState, mechFx, reelingActive });
+    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, { wreckState, mechFx, reelingActive, drills });
     if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
       this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx);
     }
@@ -1791,6 +1791,9 @@ export class CaveRenderer {
     }
     if (ecosystem) {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
+      if (diver && diver.torchOn !== false) {
+        this._drawFaunaEyeshine(ctx, ecosystem, diver, visX0 - 4, visX1 + 4, visY0 - 4, visY1 + 4, toScreenX, toScreenY, scale, timeSec);
+      }
     }
     if (ghostPose) {
       this._drawGhostDiver(ctx, ghostPose, toScreenX, toScreenY, scale, timeSec, cw, ch, diver);
@@ -6711,15 +6714,35 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawAnchoredLife(ctx, eco, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec) {
+  _drawAnchoredLife(ctx, eco, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, diver = null) {
     ctx.save();
+    const hasDiver = Boolean(diver);
+    const divX = hasDiver ? diver.x : 0;
+    const divY = hasDiver ? diver.y : 0;
+    const divVx = hasDiver ? (diver.vx || 0) : 0;
+    const divVy = hasDiver ? (diver.vy || 0) : 0;
+    const divSpd = hasDiver ? Math.hypot(divVx, divVy) : 0;
+
     for (let i = 0; i < eco.anchored.length; i++) {
       const a = eco.anchored[i];
       if (a.x < xMin || a.x > xMax || a.y < yMin || a.y > yMax) continue;
 
       const sx = toScreenX(a.x);
       const sy = toScreenY(a.y);
-      const sway = Math.sin(timeSec * 1.8 + a.phase) * 0.09 * scale;
+      let sway = Math.sin(timeSec * 1.8 + a.phase) * 0.09 * scale;
+      // Fin-wash hydrodynamic deflection when diver swims past flexible flora (v151)
+      if (hasDiver && divSpd > 0.25 && (a.kind === 'vine' || a.kind === 'chara' || a.kind === 'biofilm' || a.kind === 'seafan')) {
+        const dx = a.x - divX;
+        const dy = a.y - divY;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < 27.0) {
+          const dist = Math.sqrt(dSq);
+          const falloff = (1 - dist / 5.2);
+          const pushDir = Math.abs(divVx) > 0.2 ? Math.sign(divVx) : Math.sign(dx || 1);
+          const flutter = 0.72 + 0.28 * Math.sin(timeSec * 8.5 + a.phase);
+          sway += pushDir * Math.min(0.42, falloff * falloff * (0.14 + divSpd * 0.14)) * flutter * scale;
+        }
+      }
 
       if (a.kind === 'vine') {
         // Floating lily pad + hanging green cenote vine
@@ -7106,6 +7129,78 @@ export class CaveRenderer {
       ctx.arc(sx, sy - 0.1 * scale, Math.max(1, 0.03 * scale), 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /**
+   * Subtle deep-water tapetum-lucidum eyeshine glint for lurking megafauna (sharks, groupers, lake trout)
+   * and dark-zone catfish/barracuda caught near the outer edge of the diver's torch cone (v151).
+   */
+  _drawFaunaEyeshine(ctx, eco, diver, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec) {
+    if (!eco || !diver || diver.torchOn === false) return;
+    const beamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    const drawGlint = (wx, wy, dirX, radiusPx, col, alpha) => {
+      if (alpha <= 0.04) return;
+      const sx = toScreenX(wx);
+      const sy = toScreenY(wy);
+      const ex = sx + dirX * radiusPx * 2.1;
+      const ey = sy - radiusPx * 0.45;
+      ctx.globalAlpha = Math.min(0.85, alpha);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(ex, ey, radiusPx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = Math.min(0.32, alpha * 0.45);
+      ctx.beginPath();
+      ctx.arc(ex, ey, radiusPx * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    const checkArc = (wx, wy, maxD) => {
+      const dx = wx - diver.x;
+      const dy = wy - diver.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < 6.25 || dSq > maxD * maxD) return 0; // glint appears at dim mid/far rim (2.5m..maxD)
+      const d = Math.sqrt(dSq);
+      let diff = Math.atan2(dy, dx) - beamAng;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const ad = Math.abs(diff);
+      if (ad > 0.62) return 0;
+      return (1 - ad / 0.62) * (1 - d / maxD) * Math.min(1, (d - 2.5) / 3.5);
+    };
+
+    if (Array.isArray(eco.megafauna)) {
+      for (let i = 0; i < eco.megafauna.length; i++) {
+        const m = eco.megafauna[i];
+        if (!m || m.x < xMin || m.x > xMax || m.y < yMin || m.y > yMax || m.y < 8) continue;
+        const g = checkArc(m.x, m.y, 19.5);
+        if (g > 0.05) {
+          const dirX = (m.vx || 0) >= 0 ? 1 : -1;
+          const col = m.kind === 'shark' ? '#a7f3d0' : '#fde047';
+          const pulse = 0.78 + 0.22 * Math.sin(timeSec * 4.5 + i * 1.7);
+          drawGlint(m.x, m.y, dirX, Math.max(1.8, (m.size || 1) * 0.055 * scale), col, g * 0.95 * pulse);
+        }
+      }
+    }
+
+    if (Array.isArray(eco.fish)) {
+      for (let i = 0; i < eco.fish.length; i++) {
+        const f = eco.fish[i];
+        if (!f || f.kind === 'cavefish' || f.y < 14) continue;
+        if (f.x < xMin || f.x > xMax || f.y < yMin || f.y > yMax) continue;
+        const g = checkArc(f.x, f.y, 14.0);
+        if (g > 0.1) {
+          const dirX = (f.vx || 0) >= 0 ? 1 : -1;
+          const col = f.kind === 'barracuda' ? '#bae6fd' : '#fde68a';
+          drawGlint(f.x, f.y, dirX, Math.max(1.2, (f.size || 0.2) * 0.14 * scale), col, g * 0.68);
+        }
+      }
+    }
+
     ctx.restore();
   }
 
@@ -7788,7 +7883,7 @@ export class CaveRenderer {
       ctx.fill();
     }
 
-    // 3. Active Air-Share Octo-Hose Transfer Beams (v117)
+    // 3. Active Air-Share 2m Braided Yellow Primary-Donate Long Hose (upgraded v151)
     if (Array.isArray(airShareBeams) && airShareBeams.length > 0) {
       for (let i = 0; i < airShareBeams.length; i++) {
         const b = airShareBeams[i];
@@ -7802,25 +7897,59 @@ export class CaveRenderer {
         const x2 = toScreenX(recv.x);
         const y2 = toScreenY(recv.y);
         const alpha = Math.min(1, b.timer / 0.55) * Math.min(1, ((b.duration || 2.6) - b.timer) / 0.18 + 0.25);
-        const hoseCol = b.gasId === 'O2' ? '52, 211, 153' : b.gasId === 'TMX1455' ? '251, 191, 36' : '56, 189, 248';
         const mx = (x1 + x2) * 0.5;
-        const my = (y1 + y2) * 0.5 + 0.35 * scale;
+        const my = (y1 + y2) * 0.5 + 0.42 * scale + Math.sin(timeSec * 3.6 + i) * 0.06 * scale;
 
-        ctx.strokeStyle = `rgba(${hoseCol}, ${(0.28 * alpha).toFixed(3)})`;
-        ctx.lineWidth = Math.max(5, 0.18 * scale);
+        // Soft underwater glow halo around high-vis safety-yellow primary-donate hose
+        ctx.strokeStyle = `rgba(250, 204, 21, ${(0.24 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(6, 0.22 * scale);
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.quadraticCurveTo(mx, my, x2, y2);
         ctx.stroke();
 
-        ctx.strokeStyle = `rgba(${hoseCol}, ${(0.9 * alpha).toFixed(3)})`;
-        ctx.lineWidth = Math.max(2, 0.07 * scale);
+        // Dark rubber outer jacket border
+        ctx.strokeStyle = `rgba(15, 23, 42, ${(0.88 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(3.6, 0.13 * scale);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.quadraticCurveTo(mx, my, x2, y2);
         ctx.stroke();
 
-        // Flowing pressurized gas pulses along the quadratic hose curve
+        // High-visibility safety-yellow braided long-hose core
+        ctx.strokeStyle = `rgba(250, 204, 21, ${(0.95 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2.1, 0.075 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.stroke();
+
+        // Subtle braided weave dash highlight along the hose
+        ctx.save();
+        ctx.setLineDash([Math.max(3, 0.12 * scale), Math.max(3, 0.12 * scale)]);
+        ctx.strokeStyle = `rgba(254, 249, 195, ${(0.75 * alpha).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.1, 0.035 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Brass 1st-stage swivel fitting (donor) & yellow 2nd-stage octo housing (receiver)
+        ctx.fillStyle = `rgba(217, 119, 6, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x1, y1, Math.max(2.6, 0.095 * scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(250, 204, 21, ${alpha.toFixed(3)})`;
+        ctx.strokeStyle = `rgba(15, 23, 42, ${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x2, y2, Math.max(3.0, 0.11 * scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Flowing pressurized gas pulses + twin synced regulator exhaust bubble wisps
         for (let k = 0; k < 4; k++) {
           const u = ((timeSec * 1.45 + k * 0.25) % 1);
           const inv = 1 - u;
@@ -7828,14 +7957,23 @@ export class CaveRenderer {
           const py = inv * inv * y1 + 2 * inv * u * my + u * u * y2;
           ctx.fillStyle = `rgba(240, 249, 255, ${(0.92 * alpha).toFixed(3)})`;
           ctx.beginPath();
-          ctx.arc(px, py, Math.max(2.4, 0.085 * scale), 0, Math.PI * 2);
+          ctx.arc(px, py, Math.max(2.1, 0.075 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (let p = 0; p < 3; p++) {
+          const rise = ((timeSec * 1.6 + p * 0.33) % 1);
+          const rBub = Math.max(1.4, (0.045 + rise * 0.03) * scale);
+          const bAlpha = (1 - rise) * 0.65 * alpha;
+          ctx.fillStyle = `rgba(224, 242, 254, ${bAlpha.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(x2 + Math.sin(timeSec * 4 + p) * 0.1 * scale, y2 - rise * 0.65 * scale, rBub, 0, Math.PI * 2);
           ctx.fill();
         }
 
         ctx.font = `800 ${Math.max(10, Math.round(0.34 * scale))}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
-        ctx.fillStyle = `rgba(224, 242, 254, ${alpha.toFixed(3)})`;
-        ctx.fillText(`🎁 +${b.amountBar}b`, mx, my - 0.32 * scale);
+        ctx.fillStyle = `rgba(254, 249, 195, ${alpha.toFixed(3)})`;
+        ctx.fillText(`🟡 LONG-HOSE +${b.amountBar}b`, mx, my - 0.32 * scale);
       }
     }
     ctx.restore();
@@ -9131,6 +9269,7 @@ export class CaveRenderer {
       let workTargetY = null;
       let workTool = null;
 
+      const activeDrillKind = mechCtx?.drills?.active?.kind || null;
       if (ws?.crankingHatchId && Array.isArray(this.level?.watertightHatches)) {
         const hObj = this.level.watertightHatches.find((h) => h && h.id === ws.crankingHatchId);
         if (hObj) {
@@ -9139,6 +9278,29 @@ export class CaveRenderer {
           workTargetX = toScreenX(hObj.x) + Math.cos(wheelRot) * hr * 0.44;
           workTargetY = toScreenY(hObj.y) + Math.sin(wheelRot) * hr * 0.44;
           workTool = 'crank';
+        }
+      } else if (activeDrillKind === 'mask-flood' || mfx?.activeAction?.kind === 'mask-purge') {
+        // Working hand rises to upper mask visor rim to press & exhale-purge flooded mask (v151)
+        const headX = sx + Math.cos(torsoAngle) * 0.36 * scale;
+        const headY = sy + Math.sin(torsoAngle) * 0.36 * scale - 0.08 * scale;
+        workTargetX = headX + Math.cos(torsoAngle + body.facingSign * 0.25) * 0.12 * scale;
+        workTargetY = headY + Math.sin(torsoAngle + body.facingSign * 0.25) * 0.12 * scale;
+        workTool = 'mask-purge';
+      } else if (activeDrillKind === 'free-flow' || mfx?.activeAction?.kind === 'free-flow-shutoff') {
+        // Working arm reaches back over the shoulder to crank the rear tank isolator manifold valve (v151)
+        const backAng = torsoAngle + Math.PI - body.facingSign * 0.48;
+        const twist = Math.sin(timeSec * 12) * 0.05 * scale;
+        workTargetX = shoulderX + Math.cos(backAng) * 0.38 * scale + twist;
+        workTargetY = shoulderY + Math.sin(backAng) * 0.38 * scale - 0.12 * scale;
+        workTool = 'free-flow-shutoff';
+      } else if (mfx?.activeAction?.kind === 'gas-switch') {
+        // Gloved hand clips/switches color-coded 2nd-stage regulator at chest/mouthpiece (v151)
+        const reach = Math.sin(Math.min(1, mfx.activeAction.timer / Math.max(0.1, mfx.activeAction.duration)) * Math.PI);
+        if (reach > 0.05) {
+          const regAng = torsoAngle + body.facingSign * 0.28;
+          workTargetX = shoulderX + Math.cos(regAng) * (0.26 + reach * 0.18) * scale;
+          workTargetY = shoulderY + Math.sin(regAng) * (0.26 + reach * 0.18) * scale;
+          workTool = 'gas-switch';
         }
       } else if (mfx?.activeAction) {
         const a = mfx.activeAction;
@@ -9204,6 +9366,35 @@ export class CaveRenderer {
           ctx.lineTo(0.24 * scale, 0.07 * scale);
           ctx.stroke();
           ctx.restore();
+        } else if (workTool === 'gas-switch') {
+          // Color-coded 2nd-stage regulator housing + stainless bolt-snap glint
+          const gId = mfx?.activeAction?.gasId || 'EAN32';
+          const regCol = gId === 'O2' ? '#22c55e' : gId === 'TMX1455' ? '#f59e0b' : '#38bdf8';
+          ctx.fillStyle = regCol;
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+          ctx.beginPath();
+          ctx.arc(workTargetX, workTargetY, Math.max(2.6, 0.105 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (workTool === 'free-flow-shutoff') {
+          // Brass tank isolator valve knob + turning arc highlight
+          ctx.fillStyle = '#fbbf24';
+          ctx.strokeStyle = '#78350f';
+          ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+          ctx.beginPath();
+          ctx.arc(workTargetX, workTargetY, Math.max(2.4, 0.095 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (workTool === 'mask-purge') {
+          // Rising silver nasal-purge micro-bubbles escaping bottom skirt of mask
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.82)';
+          for (let pb = 0; pb < 3; pb++) {
+            const lift = ((timeSec * 3.8 + pb * 0.33) % 1) * 0.42 * scale;
+            ctx.beginPath();
+            ctx.arc(workTargetX + (pb - 1) * 0.07 * scale, workTargetY - lift, Math.max(1.2, 0.038 * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }

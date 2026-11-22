@@ -40,8 +40,12 @@ export class InputController {
 
     this.stickBaseEl = stickBaseEl;
     this.stickKnobEl = stickKnobEl;
+    this.stickRingEl = stickBaseEl?.querySelector?.('.touch-ring') || null;
     this.torchStickBaseEl = torchStickBaseEl;
     this.torchStickKnobEl = torchStickKnobEl;
+    this.torchStickRingEl = torchStickBaseEl?.querySelector?.('.touch-ring') || null;
+    this._stickAnchorShift = { x: 0, y: 0 };
+    this._torchAnchorShift = { x: 0, y: 0 };
     this.onGasSelect = onGasSelect;
     this.onRecommendedGasSwitch = onRecommendedGasSwitch;
     this.onTorchToggle = onTorchToggle;
@@ -142,8 +146,8 @@ export class InputController {
       const dist = Math.hypot(dx, dy);
       const clamped = Math.min(dist, this.maxRadius);
       const angle = Math.atan2(dy, dx);
-      const kx = Math.cos(angle) * clamped;
-      const ky = Math.sin(angle) * clamped;
+      const kx = Math.cos(angle) * clamped + this._stickAnchorShift.x;
+      const ky = Math.sin(angle) * clamped + this._stickAnchorShift.y;
 
       this.stickKnobEl.style.transform = `translate(${kx}px, ${ky}px)`;
       const rawNorm = this.maxRadius > 0 ? clamped / this.maxRadius : 0;
@@ -167,7 +171,7 @@ export class InputController {
       const rect = this.stickBaseEl.getBoundingClientRect();
       // Clamp maxRadius cleanly inside ring so the knob never overflows neighboring HUD cards
       this.maxRadius = Math.max(22, rect.width * 0.34);
-      // Softly recenter origin toward touch point (capped within 35% of radius) to prevent wall-jolt on landing
+      // Dynamic floating anchor: softly glide the stick ring toward the landing thumb (v151)
       const boxCx = rect.left + rect.width / 2;
       const boxCy = rect.top + rect.height / 2;
       const offX = e.clientX - boxCx;
@@ -175,10 +179,17 @@ export class InputController {
       const offD = Math.hypot(offX, offY);
       const maxShift = this.maxRadius * 0.45;
       const shiftRatio = offD > maxShift && offD > 0 ? maxShift / offD : 1;
+      const sx = offX * shiftRatio;
+      const sy = offY * shiftRatio;
+      this._stickAnchorShift = { x: sx, y: sy };
       this.stickCenter = {
-        x: boxCx + offX * shiftRatio,
-        y: boxCy + offY * shiftRatio,
+        x: boxCx + sx,
+        y: boxCy + sy,
       };
+      if (this.stickRingEl) {
+        this.stickRingEl.style.transform = `translate(${sx}px, ${sy}px)`;
+      }
+      this.stickBaseEl.classList.add('active');
       updateStick(e.clientX, e.clientY);
     });
 
@@ -202,9 +213,14 @@ export class InputController {
     this.activePointerId = null;
     this.stickVec.x = 0;
     this.stickVec.y = 0;
+    this._stickAnchorShift = { x: 0, y: 0 };
     if (this.stickKnobEl) {
       this.stickKnobEl.style.transform = 'translate(0px, 0px)';
     }
+    if (this.stickRingEl) {
+      this.stickRingEl.style.transform = 'translate(0px, 0px)';
+    }
+    this.stickBaseEl?.classList?.remove('active');
   }
 
   _bindTorchStick() {
@@ -217,8 +233,8 @@ export class InputController {
       const dist = Math.hypot(dx, dy);
       const clamped = Math.min(dist, this.torchMaxRadius);
       const angle = Math.atan2(dy, dx);
-      const kx = Math.cos(angle) * clamped;
-      const ky = Math.sin(angle) * clamped;
+      const kx = Math.cos(angle) * clamped + this._torchAnchorShift.x;
+      const ky = Math.sin(angle) * clamped + this._torchAnchorShift.y;
 
       this.torchStickKnobEl.style.transform = `translate(${kx}px, ${ky}px)`;
       const rawNorm = this.torchMaxRadius > 0 ? clamped / this.torchMaxRadius : 0;
@@ -259,12 +275,18 @@ export class InputController {
       const offX = e.clientX - boxCx;
       const offY = e.clientY - boxCy;
       const offD = Math.hypot(offX, offY);
-      const maxShift = this.torchMaxRadius * 0.32;
+      const maxShift = this.torchMaxRadius * 0.36;
       const shiftRatio = offD > maxShift && offD > 0 ? maxShift / offD : 1;
+      const sx = offX * shiftRatio;
+      const sy = offY * shiftRatio;
+      this._torchAnchorShift = { x: sx, y: sy };
       this.torchCenter = {
-        x: boxCx + offX * shiftRatio,
-        y: boxCy + offY * shiftRatio,
+        x: boxCx + sx,
+        y: boxCy + sy,
       };
+      if (this.torchStickRingEl) {
+        this.torchStickRingEl.style.transform = `translate(${sx}px, ${sy}px)`;
+      }
       updateTorch(e.clientX, e.clientY);
     });
 
@@ -289,8 +311,12 @@ export class InputController {
     this.torchVec.x = 0;
     this.torchVec.y = 0;
     this.torchVec.active = false;
+    this._torchAnchorShift = { x: 0, y: 0 };
     if (this.torchStickKnobEl) {
       this.torchStickKnobEl.style.transform = 'translate(0px, 0px)';
+    }
+    if (this.torchStickRingEl) {
+      this.torchStickRingEl.style.transform = 'translate(0px, 0px)';
     }
     this.torchStickBaseEl?.classList.remove('aiming');
   }

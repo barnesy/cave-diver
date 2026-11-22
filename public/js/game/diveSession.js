@@ -235,6 +235,11 @@ export function createDiveSession(
     hatchBonusScore: 0,
     salvage: createSalvageState(),
     mechFx: createMechanicalFxState(),
+    runMilestones: {
+      usedLiftBagWithHeavySalvage: false,
+      floatUpIncident: false,
+      heavySiltEvents: 0,
+    },
     wreckActionPrompt: null,
     thirdWarned: false,
     stuckDuration: 0,
@@ -1527,8 +1532,33 @@ export function resolveEmergencyDrill(session, expectedKind = null, callbacks = 
     callbacks.onDrillClear?.(resolvedKind, points);
     callbacks.onToast?.(`🔧 Regulator free-flow isolated! (+${points} Emergency Mastery)`, 3.0);
   }
-  if (session.mechFx) recordMechanicalEvent(session.mechFx, 'drill-clear', { x: diver.x, y: diver.y });
+  if (session.mechFx) {
+    const fxKind =
+      resolvedKind === 'mask-flood'
+        ? 'mask-purge'
+        : resolvedKind === 'free-flow'
+          ? 'free-flow-shutoff'
+          : 'drill-clear';
+    recordMechanicalEvent(session.mechFx, fxKind, {
+      x: diver.x,
+      y: diver.y,
+      angle: diver.angle || 0,
+    });
+  }
   return { ok: true, kind: resolvedKind, points, totalBonus: session.drills.bonusScore };
+}
+
+/**
+ * Trigger tactile working-arm + 2nd-stage regulator purge bubble FX when switching breathing gas (v151).
+ */
+export function recordGasSwitchFx(session, gasId = 'EAN32') {
+  if (!session?.mechFx || !session?.diver) return;
+  recordMechanicalEvent(session.mechFx, 'gas-switch', {
+    x: session.diver.x,
+    y: session.diver.y,
+    angle: session.diver.angle || 0,
+    gasId,
+  });
 }
 
 /**
@@ -2432,6 +2462,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   const salvageBuo = stepSalvageBuoyancy(session, dt, callbacks);
+  if (session.runMilestones && salvageBuo) {
+    if (session.salvage?.liftBagActive && (salvageBuo.payloadKg || 0) >= 8) {
+      session.runMilestones.usedLiftBagWithHeavySalvage = true;
+    }
+    if (salvageBuo.status === 'float-warn') {
+      session.runMilestones.floatUpIncident = true;
+    }
+  }
   stepMechanicalFx(session.mechFx, dt);
   const effectiveExertion = dpvThrusting ? exertion * 0.52 : exertion;
   const kickPulse = dpvThrusting ? 1.0 : (thrustMag > 0.1 && diver.body ? 0.68 + 0.72 * diver.body.kickSurge : 1.0);
@@ -3027,6 +3065,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
+    if (session.runMilestones) session.runMilestones.heavySiltEvents += 1;
     callbacks.onToast?.(
       dpvThrusting
         ? 'DPV propwash stirring heavy silt! Lift off bottom or toggle DPV off [V].'
@@ -3051,6 +3090,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
     if (hit.impactSpeed > 2.4 && siltStirTimer.warnCooldown <= 0) {
       siltStirTimer.warnCooldown = 4.5;
+      if (session.runMilestones) session.runMilestones.heavySiltEvents += 1;
       callbacks.onToast?.('Cave impact! Dense silt cloud reducing visibility.', 2.4);
     }
   }

@@ -7592,3 +7592,149 @@ button.mode-badge:hover {
 .hud-layer.hud-compact .gear-bar-row {
   background: rgba(4, 12, 24, 0.72);
 }
+
+/* ============================================================================
+   v151 Native Mobile Feel (Floating Thumb Rings, Tactile Action Pill,
+   Landscape Phone HUD Simplification) & Skill Certification Progress Bars
+   ============================================================================ */
+.touch-ring {
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.16s ease, box-shadow 0.16s ease;
+  will-change: transform;
+}
+.touch-stick.active .touch-ring {
+  border-color: rgba(56, 189, 248, 0.62);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.24);
+}
+.torch-stick.aiming .touch-ring {
+  border-color: rgba(250, 204, 21, 0.72);
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.28);
+}
+
+@keyframes actionPillPulse {
+  0%, 100% { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65), 0 0 0 0 rgba(56, 189, 248, 0.36); }
+  50% { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7), 0 0 0 5px rgba(56, 189, 248, 0); }
+}
+.wreck-action-btn:not([hidden]) {
+  animation: actionPillPulse 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wreck-action-btn:not([hidden]) {
+    animation: none;
+  }
+}
+
+/* Skill-Based Technical Certification Progress Bars (v151) */
+.logbook-cert-card.specialty:not(.locked) {
+  border-color: rgba(250, 204, 21, 0.48);
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.24), rgba(15, 23, 42, 0.84));
+}
+.logbook-cert-prog {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.logbook-cert-bar {
+  flex: 1 1 auto;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+.logbook-cert-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8, #34d399);
+  transition: width 0.25s ease;
+}
+.logbook-cert-prog em {
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* Mobile Landscape (sideways phone, max-height: 460px) HUD Simplification Parity (v151) */
+@media (max-height: 460px) and (orientation: landscape) {
+  .hud-util-btns #btn-camera,
+  .hud-util-btns #btn-torch {
+    display: none !important;
+  }
+  .coop-comms .comm-btn[data-signal] {
+    display: none !important;
+  }
+  .hud-right-wing {
+    width: auto;
+    min-width: 124px;
+    max-width: 158px;
+    gap: 4px;
+  }
+  .gear-bar-row #btn-hud-sonar,
+  .gear-bar-row #btn-hud-dpv {
+    display: none !important;
+  }
+  .mobile-only-kit:not([hidden]) {
+    display: flex !important;
+  }
+  .hud-kit-popover {
+    width: 248px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    padding: 7px;
+  }
+  .hud-kit-popover[hidden] {
+    display: none;
+  }
+  .hud-kit-popover .kit-pop-hdr {
+    grid-column: 1 / -1;
+  }
+  .hud-kit-popover .kit-item {
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 0.68rem;
+  }
+  .hud-kit-popover .kit-kbd {
+    display: none;
+  }
+  .hud-gas-zone {
+    position: relative;
+    overflow: visible;
+  }
+  .hud-gas-zone .zone-micro-hdr {
+    display: none;
+  }
+  .gas-compact-btn {
+    display: flex;
+    min-height: 38px;
+    padding: 5px 8px;
+  }
+  .hud-gas-zone .dc-gas-rack {
+    display: none;
+  }
+  .hud-gas-zone.gas-open .dc-gas-rack {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 0;
+    width: 168px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 6px;
+    border-radius: 12px;
+    background: rgba(5, 13, 26, 0.97);
+    border: 1.5px solid rgba(56, 189, 248, 0.48);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.78);
+    z-index: var(--z-popover);
+    animation: kitPopRise 0.14s ease-out both;
+  }
+  .dc-vitals-row.all-nominal {
+    display: none !important;
+  }
+  .wreck-action-btn {
+    bottom: max(92px, calc(env(safe-area-inset-bottom) + 86px));
+    padding: 6px 14px;
+    min-width: 146px;
+  }
+}

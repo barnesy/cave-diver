@@ -27,6 +27,12 @@ export function createEmptyLogbook() {
       records: {},
     },
     fieldGuide: {}, // entryId -> { count, bestStars, firstSiteId, bestSiteName, bestDepthM }
+    milestones: {
+      pressurizedEqualizations: 0,
+      cleanSalvageLifts: 0,
+      drillsCompleted: 0,
+      zeroSiltClears: 0,
+    },
   };
 }
 
@@ -87,6 +93,13 @@ function normalizeBook(raw) {
         bestDepthM: Math.max(0, Math.round((Number(rec.bestDepthM) || 0) * 10) / 10),
       };
     }
+  }
+  if (raw.milestones && typeof raw.milestones === 'object') {
+    const m = raw.milestones;
+    base.milestones.pressurizedEqualizations = Math.max(0, Math.round(Number(m.pressurizedEqualizations) || 0));
+    base.milestones.cleanSalvageLifts = Math.max(0, Math.round(Number(m.cleanSalvageLifts) || 0));
+    base.milestones.drillsCompleted = Math.max(0, Math.round(Number(m.drillsCompleted) || 0));
+    base.milestones.zeroSiltClears = Math.max(0, Math.round(Number(m.zeroSiltClears) || 0));
   }
   return base;
 }
@@ -207,6 +220,24 @@ export function mergeCareerLogbooks(rawA, rawB) {
     }
   }
 
+  // Merge technical skill milestones (v151)
+  out.milestones.pressurizedEqualizations = Math.max(
+    a.milestones?.pressurizedEqualizations || 0,
+    b.milestones?.pressurizedEqualizations || 0
+  );
+  out.milestones.cleanSalvageLifts = Math.max(
+    a.milestones?.cleanSalvageLifts || 0,
+    b.milestones?.cleanSalvageLifts || 0
+  );
+  out.milestones.drillsCompleted = Math.max(
+    a.milestones?.drillsCompleted || 0,
+    b.milestones?.drillsCompleted || 0
+  );
+  out.milestones.zeroSiltClears = Math.max(
+    a.milestones?.zeroSiltClears || 0,
+    b.milestones?.zeroSiltClears || 0
+  );
+
   return out;
 }
 
@@ -281,11 +312,29 @@ export function mergeGhostTracks(rawA, rawB, { maxSites = 30, maxPoints = 360 } 
 
 export function recordDiveInLogbook(
   rawBook,
-  { levelId, success, score = 0, grade = 'C', maxDepthM = 0, diveTimeSec = 0, difficulty = 'standard' }
+  {
+    levelId,
+    success,
+    score = 0,
+    grade = 'C',
+    maxDepthM = 0,
+    diveTimeSec = 0,
+    difficulty = 'standard',
+    milestones = null,
+  }
 ) {
   const book = normalizeBook(rawBook);
   book.totalDives += 1;
   book.totalTimeSec = Math.round((book.totalTimeSec + Math.max(0, Number(diveTimeSec) || 0)) * 10) / 10;
+
+  if (milestones && typeof milestones === 'object') {
+    const eq = Math.max(0, Math.round(Number(milestones.equalizedBulkheads) || 0));
+    const dr = Math.max(0, Math.round(Number(milestones.drillsCompleted) || 0));
+    if (eq > 0) book.milestones.pressurizedEqualizations += eq;
+    if (dr > 0) book.milestones.drillsCompleted += dr;
+    if (success && milestones.cleanSalvageLift) book.milestones.cleanSalvageLifts += 1;
+    if (success && milestones.zeroSiltCaveClear) book.milestones.zeroSiltClears += 1;
+  }
 
   if (success && levelId) {
     book.deepestM = Math.max(book.deepestM, Math.round((Number(maxDepthM) || 0) * 10) / 10);
@@ -410,6 +459,13 @@ export function computeCertifications(rawBook, levels = []) {
     if (lvl && (lvl.reelMetersPerDiver || 0) > 0) unlinedCleared++;
   }
 
+  const ms = book.milestones || {};
+  const eqCount = ms.pressurizedEqualizations || 0;
+  const liftCount = ms.cleanSalvageLifts || 0;
+  const drillCount = ms.drillsCompleted || 0;
+  const zeroSiltCount = ms.zeroSiltClears || 0;
+  const pct = (cur, goal) => Math.max(0, Math.min(100, Math.round((cur / Math.max(1, goal)) * 100)));
+
   const certs = [
     {
       id: 'open-water',
@@ -417,6 +473,8 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Open Water',
       requirement: 'Clear 1 expedition',
       earned: clearedCount >= 1,
+      progressPct: pct(clearedCount, 1),
+      progressText: `${Math.min(clearedCount, 1)}/1 site`,
     },
     {
       id: 'cavern',
@@ -424,6 +482,8 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Cavern Diver',
       requirement: 'Clear 3 sites',
       earned: clearedCount >= 3,
+      progressPct: pct(clearedCount, 3),
+      progressText: `${Math.min(clearedCount, 3)}/3 sites`,
     },
     {
       id: 'trimix-normoxic',
@@ -431,6 +491,8 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Normoxic Trimix',
       requirement: 'Reach 60m+ depth',
       earned: book.deepestM >= 60,
+      progressPct: pct(book.deepestM, 60),
+      progressText: `${Math.min(Math.round(book.deepestM), 60)}/60m`,
     },
     {
       id: 'full-cave',
@@ -438,6 +500,11 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Full Cave',
       requirement: 'Clear 6 sites (incl. unlined reel)',
       earned: clearedCount >= 6 && (unlinedCleared >= 1 || levels.length === 0),
+      progressPct: Math.min(
+        100,
+        Math.round((Math.min(clearedCount, 6) / 6) * 80 + (unlinedCleared >= 1 || levels.length === 0 ? 20 : 0))
+      ),
+      progressText: `${Math.min(clearedCount, 6)}/6 sites${unlinedCleared >= 1 ? ' · reel ✓' : ' · +1 unlined'}`,
     },
     {
       id: 'wreck-penetration',
@@ -445,6 +512,8 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Wreck Penetration',
       requirement: 'Clear 2 shipwrecks',
       earned: wrecksCleared >= 2,
+      progressPct: pct(wrecksCleared, 2),
+      progressText: `${Math.min(wrecksCleared, 2)}/2 wrecks`,
     },
     {
       id: 'hypoxic-120',
@@ -452,6 +521,8 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Hypoxic 120m',
       requirement: 'Reach 120m+ depth',
       earned: book.deepestM >= 120,
+      progressPct: pct(book.deepestM, 120),
+      progressText: `${Math.min(Math.round(book.deepestM), 120)}/120m`,
     },
     {
       id: 'master-explorer',
@@ -459,6 +530,48 @@ export function computeCertifications(rawBook, levels = []) {
       title: 'Master Explorer',
       requirement: 'Clear 15+ sites & 5+ S-ranks',
       earned: clearedCount >= 15 && sGrades >= 5,
+      progressPct: Math.min(100, Math.round((Math.min(clearedCount, 15) / 15) * 65 + (Math.min(sGrades, 5) / 5) * 35)),
+      progressText: `${Math.min(clearedCount, 15)}/15 sites · ${Math.min(sGrades, 5)}/5 S`,
+    },
+    {
+      id: 'bulkhead-engineer',
+      icon: '⚙️',
+      title: 'Bulkhead Engineer',
+      requirement: 'Equalize a pressurized deep bulkhead',
+      earned: eqCount >= 1,
+      progressPct: pct(eqCount, 1),
+      progressText: `${Math.min(eqCount, 1)}/1 valve`,
+      specialty: true,
+    },
+    {
+      id: 'salvage-master',
+      icon: '🎈',
+      title: 'Salvage Master',
+      requirement: 'Extract heavy salvage cleanly with lift bag',
+      earned: liftCount >= 1,
+      progressPct: pct(liftCount, 1),
+      progressText: `${Math.min(liftCount, 1)}/1 clean lift`,
+      specialty: true,
+    },
+    {
+      id: 'abyssal-troubleshooter',
+      icon: '🩺',
+      title: 'Emergency Troubleshooter',
+      requirement: 'Resolve 3+ technical failure drills',
+      earned: drillCount >= 3,
+      progressPct: pct(drillCount, 3),
+      progressText: `${Math.min(drillCount, 3)}/3 drills`,
+      specialty: true,
+    },
+    {
+      id: 'zero-silt-surgeon',
+      icon: '🫧',
+      title: 'Zero-Silt Trim',
+      requirement: 'Clear a cave dive with zero heavy silt-outs',
+      earned: zeroSiltCount >= 1,
+      progressPct: pct(zeroSiltCount, 1),
+      progressText: `${Math.min(zeroSiltCount, 1)}/1 clean cave`,
+      specialty: true,
     },
   ];
 
