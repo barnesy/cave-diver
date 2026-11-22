@@ -6689,3 +6689,21 @@ test('v151 Mechanical Foley Audio, Diver Craft Animations, Living Torch-Reactive
   assert.ok(earnedIds.has('zero-silt-surgeon'), 'Zero-silt cave clear must earn Zero-Silt Trim');
   assert.ok(certInfo.certs.every((c) => typeof c.progressPct === 'number' && typeof c.progressText === 'string'));
 });
+
+test('v152 Safari Anti-Zoom-Trap Hardening: >=16px touch inputs, scale-aware pinch-out escape valve & viewport zoom reset', async () => {
+  const fs = await import('node:fs');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Touch devices enforce >=16px font-size on text/select inputs to prevent iOS Safari focus auto-zoom
+  assert.ok(css.includes('@media (pointer: coarse), (hover: none)'), 'CSS must target touch/coarse pointers for Safari input anti-zoom');
+  assert.ok(css.includes('font-size: max(16px, 1rem) !important;'), 'Touch inputs/selects must be >=16px to prevent iOS Safari focus zoom');
+  assert.ok(css.includes('touch-action: manipulation;'), 'Interactive buttons/controls must declare touch-action: manipulation');
+
+  // 2. main.js never traps users when visualViewport.scale > 1.02 and auto-resets zoom on blur/orientation/dive start
+  assert.ok(mainSrc.includes('function getVisualViewportScale()'), 'main.js must inspect window.visualViewport.scale');
+  assert.ok(mainSrc.includes('function resetSafariViewportZoom('), 'main.js must provide Safari viewport zoom reset helper');
+  assert.ok(mainSrc.includes('if (getVisualViewportScale() > 1.02) return;'), 'touchmove pinch guard must allow pinch-out when zoomed in');
+  assert.ok(mainSrc.includes("document.addEventListener('focusout'"), 'main.js must auto-recover Safari zoom after input/select blur');
+  assert.ok(mainSrc.includes("window.addEventListener('orientationchange'"), 'main.js must recover viewport zoom & canvas on orientationchange');
+});

@@ -569,7 +569,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=151" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=152" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -4707,6 +4707,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   resetAbortArmState();
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   try { document.activeElement?.blur?.(); } catch {}
+  resetSafariViewportZoom(true);
   rewindHoldTimer = 0;
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   if (btnDropTow) btnDropTow.hidden = true;
@@ -7240,8 +7241,54 @@ function resumeAudioOnGesture() {
 window.addEventListener('pointerdown', resumeAudioOnGesture, { passive: true });
 window.addEventListener('keydown', resumeAudioOnGesture, { passive: true });
 
-// Block accidental iOS/Android pinch-zoom during dual-thumb diving (keeps single-tap clicks & dual-stick pointer events intact)
+// Safari Anti-Zoom-Trap & Accidental Pinch-Zoom Guard (v152):
+// 1. Blocks accidental pinch-zoom-IN during dual-thumb diving at normal 1.0x scale.
+// 2. NEVER traps the player if Safari zooms in anyway (e.g. input focus / rotation):
+//    when visualViewport.scale > 1.02, pinch-OUT is always permitted and zoom auto-resets.
+const BASE_VIEWPORT_CONTENT =
+  'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+let _viewportResetTimer = 0;
+
+function getVisualViewportScale() {
+  const s = typeof window !== 'undefined' ? window.visualViewport?.scale : 1;
+  return Number.isFinite(s) && s > 0 ? s : 1;
+}
+
+function resetSafariViewportZoom(force = false) {
+  const scale = getVisualViewportScale();
+  if (!force && scale <= 1.02) return;
+  try {
+    window.scrollTo(0, 0);
+  } catch {}
+  const vpMeta = document.querySelector?.('meta[name="viewport"]');
+  if (vpMeta && scale > 1.02) {
+    // Re-applying viewport content across a frame nudges WebKit Safari to snap scale cleanly back to 1.0
+    vpMeta.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+    );
+    clearTimeout(_viewportResetTimer);
+    _viewportResetTimer = setTimeout(() => {
+      vpMeta.setAttribute('content', BASE_VIEWPORT_CONTENT);
+      try {
+        window.scrollTo(0, 0);
+      } catch {}
+      renderer?.resize?.(true);
+    }, 60);
+  } else {
+    renderer?.resize?.(true);
+  }
+}
+
 const preventPinchGesture = (e) => {
+  const vvScale = getVisualViewportScale();
+  // If Safari is already zoomed in, allow pinching OUT (e.scale < 1) so the user is never stuck!
+  if (vvScale > 1.02) {
+    if (e.type === 'gesturechange' && typeof e.scale === 'number' && e.scale > 1.01) {
+      e.preventDefault();
+    }
+    return;
+  }
   e.preventDefault();
 };
 document.addEventListener('gesturestart', preventPinchGesture, { passive: false });
@@ -7251,11 +7298,42 @@ document.addEventListener(
   'touchmove',
   (e) => {
     if (e.touches && e.touches.length > 1) {
+      // Allow two-finger pinch-out recovery whenever Safari is currently zoomed in (> 1.02x)
+      if (getVisualViewportScale() > 1.02) return;
       e.preventDefault();
     }
   },
   { passive: false }
 );
+// Prevent iOS Safari rapid double-tap zoom on non-interactive background space
+// (never cancels synthetic click on buttons, links, inputs, or sticks; those use CSS touch-action: manipulation/none)
+let _lastTouchEndAt = 0;
+document.addEventListener(
+  'touchend',
+  (e) => {
+    const tgt = e.target;
+    if (tgt?.closest?.('button, a, input, select, textarea, label, summary, [role="button"], .touch-stick')) return;
+    const now = performance.now();
+    if (now - _lastTouchEndAt < 280 && e.touches?.length === 0 && getVisualViewportScale() <= 1.02) {
+      e.preventDefault();
+    }
+    _lastTouchEndAt = now;
+  },
+  { passive: false }
+);
+document.addEventListener('focusout', (e) => {
+  const tag = e.target?.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+    setTimeout(() => resetSafariViewportZoom(false), 120);
+  }
+});
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => resetSafariViewportZoom(true), 180);
+});
+window.visualViewport?.addEventListener?.('resize', () => {
+  renderer?.resize?.(true);
+  if (!screenMenu.hidden) syncMenuDescToggle();
+});
 
 const btnMute = document.getElementById('btn-mute');
 function syncMuteUi() {

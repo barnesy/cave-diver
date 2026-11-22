@@ -7738,3 +7738,25 @@ button.mode-badge:hover {
     min-width: 146px;
   }
 }
+
+/* ============================================================================
+   v152 iOS / iPadOS Safari Anti-Zoom-Trap Hardening
+   - Enforces >=16px font-size on focused form fields on touch devices so
+     Safari never triggers automatic visual-viewport zoom on input/select tap.
+   - Applies touch-action: manipulation to interactive controls to prevent
+     accidental double-tap-to-zoom while preserving smooth vertical scrolling.
+   ============================================================================ */
+button,
+a,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+}
+@media (pointer: coarse), (hover: none) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: max(16px, 1rem) !important;
+  }
+}
