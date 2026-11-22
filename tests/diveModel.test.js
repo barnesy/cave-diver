@@ -5938,3 +5938,109 @@ test('v142 Underwater Acoustic Sonar Hazard Overlay & Live Thermal HUD: biome te
     globalThis.document = prevDoc;
   }
 });
+
+test('v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul: modal Escape stack, Active Modifiers strip, Compact HUD, colorblind glyphs & CSS cleanup', async () => {
+  const fs = await import('node:fs');
+  const { DiveComputerHUD } = await import('../public/js/game/hud.js');
+
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Centralized Modal Escape Stack orders child modals BEFORE parent modals
+  const stackStart = mainSrc.indexOf('function closeTopmostOverlay()');
+  assert.ok(stackStart > 0, 'main.js must define centralized closeTopmostOverlay()');
+  const stackBlock = mainSrc.slice(stackStart, stackStart + 2600);
+  assert.ok(stackBlock.indexOf('fgCardModalEl') < stackBlock.indexOf('modalLogbook'), 'Collector card must close before Logbook');
+  assert.ok(stackBlock.indexOf('replayModal') < stackBlock.indexOf('modalLogbook'), 'Replay modal must close before Logbook');
+  assert.ok(stackBlock.indexOf('liveryModalEl') < stackBlock.indexOf('diveSetupModalEl'), 'Gear Workshop must close before Dive Setup');
+  assert.ok(stackBlock.indexOf('gasPlannerModal') < stackBlock.indexOf('diveSetupModalEl'), 'Gas Blender must close before Dive Setup');
+  assert.ok(stackBlock.indexOf('challengeModal') < stackBlock.indexOf('diveSetupModalEl'), 'Challenge Sandbox must close before Dive Setup');
+  assert.ok(stackBlock.indexOf('proceduralModal') < stackBlock.indexOf('diveSetupModalEl'), 'Uncharted Sump must close before Dive Setup');
+
+  // 2. Home Screen Streamline: Active Modifiers Strip, Hamburger Setup parity, Collapsible Co-op Dock & Sticky Debrief CTA
+  assert.ok(html.includes('id="menu-active-modifiers"'), 'Missing Active Modifiers Chip Strip above DIVE CTA');
+  assert.ok(html.includes('id="btn-home-open-setup"'), 'Hamburger menu must link directly to Dive Setup');
+  assert.ok(html.includes('id="btn-home-open-livery"'), 'Hamburger menu must link directly to Gear Workshop');
+  assert.ok(html.includes('id="btn-coop-dock-toggle"'), 'Co-op Join Dock must have collapsible toggle');
+  assert.ok(html.includes('debrief-sticky-actions'), 'Debrief actions must be sticky at bottom');
+
+  // 3. Mobile & HUD Ergonomics: Compact HUD toggle, Secondary Gear Tools drawer, Touch Keycap Hiding & Two-Tap Abort Arming
+  assert.ok(html.includes('id="btn-hud-compact"'), 'Missing Compact / Immersion HUD toggle');
+  assert.ok(html.includes('id="btn-hud-gear-more"'), 'Missing Mobile Secondary Tools drawer toggle');
+  assert.ok(html.includes('class="kbd-hint"'), 'HUD keycaps should use .kbd-hint spans for coarse-pointer hiding');
+  assert.ok(css.includes('@media (pointer: coarse)') && css.includes('.kbd-hint'), 'Coarse pointer media query must hide .kbd-hint');
+  assert.ok(css.includes('.util-btn.danger.armed'), 'Abort button must have visual two-tap armed styling');
+  assert.ok(css.includes('.hud-layer.hud-compact'), 'Compact HUD mode CSS must exist');
+
+  // 4. Stale Copy & Onboarding Updates + Design System Cleanup
+  assert.equal(html.includes('30 SITES'), false, 'Stale 30 SITES copy must be updated to 33 SITES');
+  assert.equal(html.includes('30 expeditions'), false, 'Stale 30 expeditions tooltip must be updated to 33 expeditions');
+  assert.equal(html.includes('v114 · Solo'), false, 'Stale v114 diagnostics placeholder must be updated');
+  assert.ok(html.includes('4 Essentials to Survive Deep Overhead'), 'Dive Guide should include 4th step on Reactive Hazards & Sonar');
+  assert.ok(css.includes('--surface-0:') && css.includes('--font-mono:') && css.includes('--radius-pill:'), 'Expanded semantic CSS tokens missing');
+  assert.equal(css.includes('.menu-tabs {'), false, 'Orphaned .menu-tabs dead CSS should be removed');
+  assert.equal(css.includes('.dive-setup-drawer {'), false, 'Orphaned .dive-setup-drawer dead CSS should be removed');
+
+  // 5. Colorblind-Safe Micro-Glyphs on PPO2 & Alert Bar
+  const makeEl = () => ({
+    textContent: '',
+    className: '',
+    innerHTML: '',
+    hidden: false,
+    style: {},
+    dataset: {},
+    classList: { toggle() {}, add() {}, remove() {} },
+    querySelector: () => makeEl(),
+    addEventListener() {},
+    appendChild() {},
+    setAttribute() {},
+  });
+  const domMap = new Map();
+  const prevDoc = globalThis.document;
+  globalThis.document = {
+    getElementById(id) {
+      if (!domMap.has(id)) domMap.set(id, makeEl());
+      return domMap.get(id);
+    },
+    createElement() { return makeEl(); },
+  };
+  try {
+    const hud = new DiveComputerHUD({ onGasSelect() {}, onReelToggle() {}, onReelRewind() {}, onHeartbeatPulse() {} });
+    const dsDanger = createDiveState();
+    dsDanger.depthM = 45;
+    dsDanger.ppo2 = 1.76;
+    dsDanger.warnings = ['HIGH PPO2 — SWITCH TO TRIMIX'];
+    dsDanger.criticalAlarm = true;
+    hud.update({
+      diveState: dsDanger,
+      diver: { x: LEVEL_1.spawn.x, y: 45 },
+      nextCheckpoint: LEVEL_1.checkpoints[0],
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: new Set(),
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      dt: 0.016,
+    });
+    assert.ok(domMap.get('dc-ppo2').textContent.startsWith('⛔'), `High PPO2 should include ⛔ glyph, got ${domMap.get('dc-ppo2').textContent}`);
+    assert.ok(domMap.get('dc-alerts').textContent.startsWith('⛔'), `Critical alert should include ⛔ glyph, got ${domMap.get('dc-alerts').textContent}`);
+
+    const dsWarn = createDiveState();
+    dsWarn.depthM = 35;
+    dsWarn.ppo2 = 1.48;
+    dsWarn.warnings = [];
+    hud.update({
+      diveState: dsWarn,
+      diver: { x: LEVEL_1.spawn.x, y: 35 },
+      nextCheckpoint: LEVEL_1.checkpoints[0],
+      exitZone: LEVEL_1.exitZone,
+      checkpointsHit: new Set(),
+      totalCheckpoints: LEVEL_1.checkpoints.length,
+      level: LEVEL_1,
+      dt: 0.016,
+    });
+    assert.ok(domMap.get('dc-ppo2').textContent.startsWith('⚠'), `Elevated PPO2 should include ⚠ glyph, got ${domMap.get('dc-ppo2').textContent}`);
+  } finally {
+    globalThis.document = prevDoc;
+  }
+});

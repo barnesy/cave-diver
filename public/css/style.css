@@ -1,7 +1,12 @@
 :root {
   --bg-deep: #020b14;
+  --surface-0: rgba(4, 12, 24, 0.94);
+  --surface-1: rgba(8, 17, 31, 0.92);
+  --surface-2: rgba(15, 27, 46, 0.88);
   --bezel: rgba(8, 15, 26, 0.9);
   --bezel-border: rgba(56, 189, 248, 0.28);
+  --border-subtle: rgba(148, 163, 184, 0.24);
+  --border-accent: rgba(56, 189, 248, 0.48);
   --text-main: #f1f5f9;
   --text-muted: #94a3b8;
   --ok: #4ade80;
@@ -9,6 +14,15 @@
   --danger: #f87171;
   --cyan: #38bdf8;
   --purple: #c084fc;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --z-hud: 28;
+  --z-popover: 45;
+  --z-modal: 55;
+  --z-toast: 60;
 }
 
 *, *::before, *::after {
@@ -139,54 +153,6 @@ html, body {
   box-shadow: 0 4px 14px rgba(14, 165, 233, 0.22);
 }
 
-.menu-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-  padding: 4px;
-  margin-bottom: 12px;
-  background: rgba(2, 8, 18, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.24);
-  border-radius: 12px;
-}
-
-.menu-tab {
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: 9px;
-  padding: 9px 8px;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
-}
-
-.menu-tab:hover:not(:disabled) {
-  color: #e0f2fe;
-}
-
-.menu-tab:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.menu-tab.active {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.22));
-  border-color: rgba(56, 189, 248, 0.55);
-  color: #f0f9ff;
-  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.22);
-}
-
-.menu-tab.has-rooms:not(.active) {
-  color: #7dd3fc;
-  border-color: rgba(56, 189, 248, 0.32);
-}
-
 .menu-eyebrow {
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.72rem;
@@ -209,11 +175,6 @@ html, body {
   .menu-brand-icon {
     width: 34px;
     height: 34px;
-  }
-  .menu-tab {
-    padding: 8px 4px;
-    font-size: 0.76rem;
-    letter-spacing: 0.01em;
   }
 }
 
@@ -2194,13 +2155,18 @@ html, body {
     justify-self: end;
     justify-content: flex-end;
     flex-wrap: nowrap;
-    gap: 4px;
+    gap: 5px;
   }
   .util-btn {
-    width: 31px;
-    height: 31px;
-    font-size: 0.86rem;
-    border-radius: 8px;
+    min-width: 38px;
+    min-height: 38px;
+    width: 38px;
+    height: 38px;
+    font-size: 0.94rem;
+    border-radius: 9px;
+  }
+  .util-btn.danger {
+    margin-left: 4px;
   }
   .dc-team-panel {
     grid-area: buddy;
@@ -2254,17 +2220,17 @@ html, body {
     border-radius: 6px;
   }
   .dc-lbl {
-    font-size: 0.54rem;
+    font-size: 0.6rem;
   }
   .dc-val {
-    font-size: 0.84rem;
+    font-size: 0.88rem;
   }
   .dc-val.big {
-    font-size: 0.94rem;
+    font-size: 0.98rem;
   }
   .dc-sub,
   .dc-sub-pair {
-    font-size: 0.54rem;
+    font-size: 0.6rem;
   }
   .dc-ascent-col {
     padding: 2px 4px;
@@ -2331,9 +2297,9 @@ html, body {
     border-radius: 9px;
   }
   .reel-btn {
-    padding: 6px 6px;
-    min-height: 30px;
-    font-size: 0.58rem;
+    padding: 7px 7px;
+    min-height: 36px;
+    font-size: 0.64rem;
   }
   .reel-dock-status {
     padding: 2px 7px;
@@ -2349,8 +2315,8 @@ html, body {
     border-radius: 9px;
   }
   .dc-tank-btn {
-    padding: 6px 6px;
-    min-height: 36px;
+    padding: 7px 6px;
+    min-height: 40px;
     gap: 2px;
   }
   .tank-meta {
@@ -3726,9 +3692,6 @@ select:focus-visible {
 #screen-menu:not([hidden]) .menu-desc-wrap {
   animation: sectionRise 0.38s var(--ease-buoyant) 0.08s both;
 }
-#screen-menu:not([hidden]) .menu-tabs {
-  animation: sectionRise 0.38s var(--ease-buoyant) 0.11s both;
-}
 #screen-menu:not([hidden]) .menu-name-row {
   animation: sectionRise 0.38s var(--ease-buoyant) 0.14s both;
 }
@@ -3745,42 +3708,6 @@ select:focus-visible {
 .menu-brand:hover .menu-brand-icon {
   transform: translateY(-2px) scale(1.06);
   box-shadow: 0 8px 22px rgba(56, 189, 248, 0.42);
-}
-
-/* Sliding liquid-glass pill on main menu tabs */
-.menu-tabs {
-  position: relative;
-  --tab-index: 0;
-}
-.menu-tabs::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc(50% - 6.5px);
-  border-radius: 9px;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(6, 182, 212, 0.22));
-  border: 1px solid rgba(56, 189, 248, 0.58);
-  box-shadow: 0 2px 14px rgba(14, 165, 233, 0.28), inset 0 1px 0 rgba(186, 230, 253, 0.2);
-  transform: translateX(calc(var(--tab-index, 0) * (100% + 5px)));
-  transition: transform 0.34s var(--ease-spring);
-  pointer-events: none;
-  z-index: 0;
-}
-.menu-tab {
-  position: relative;
-  z-index: 1;
-  transition: color 0.22s ease, transform 0.16s var(--ease-buoyant);
-}
-.menu-tab:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.menu-tab.active {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  color: #f0f9ff;
 }
 
 /* Sliding pill on Site View switcher (Split / Map / List) */
@@ -4938,11 +4865,6 @@ button.mode-badge:hover {
 }
 
 /* Live Sonar Cave & Wreck Cartography Minimap (v109) */
-.util-btn.active {
-  border-color: rgba(56, 189, 248, 0.72);
-  background: rgba(14, 116, 144, 0.36);
-  color: #e0f2fe;
-}
 .util-btn.disabled-mode {
   opacity: 0.42;
 }
@@ -6237,13 +6159,15 @@ button.mode-badge:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(30, 41, 59, 0.9);
   color: #f8fafc;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
@@ -6394,20 +6318,6 @@ button.mode-badge:hover {
   border-color: rgba(251, 191, 36, 0.65);
   background: rgba(245, 158, 11, 0.18);
   color: #fde68a;
-}
-.dive-setup-drawer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.68);
-  border: 1px solid rgba(56, 189, 248, 0.22);
-}
-.dive-setup-drawer[hidden] {
-  display: none !important;
 }
 .site-view-cycle-btn {
   display: inline-flex;
@@ -6977,4 +6887,211 @@ button.mode-badge:hover {
   color: #e0f2fe;
   text-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
   font-weight: 800;
+}
+
+/* ============================================================================
+   v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul
+   ============================================================================ */
+
+/* Active Dive Modifiers Chip Strip above Primary DIVE CTA */
+.active-modifiers-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: rgba(7, 17, 32, 0.72);
+  border: 1px solid var(--bezel-border);
+}
+.active-modifiers-bar.is-default {
+  justify-content: space-between;
+  border-color: var(--border-subtle);
+  background: rgba(7, 17, 32, 0.45);
+}
+.mod-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  background: rgba(14, 116, 144, 0.22);
+  color: #e0f2fe;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
+}
+.mod-chip:hover {
+  border-color: rgba(56, 189, 248, 0.75);
+  background: rgba(14, 165, 233, 0.28);
+}
+.mod-chip:active {
+  transform: scale(0.96);
+}
+.mod-chip.mode-hardcore,
+.mod-chip.mod-drills {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(153, 27, 27, 0.32);
+  color: #fecaca;
+}
+.mod-chip.mode-guided {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: rgba(22, 101, 52, 0.32);
+  color: #bbf7d0;
+}
+.mod-chip.mod-ai,
+.mod-chip.mod-livery {
+  border-color: rgba(192, 132, 252, 0.52);
+  background: rgba(88, 28, 135, 0.28);
+  color: #e9d5ff;
+}
+.mod-chip.mod-weather,
+.mod-chip.mod-gas,
+.mod-chip.mod-mut {
+  border-color: rgba(251, 191, 36, 0.52);
+  background: rgba(146, 64, 14, 0.28);
+  color: #fde68a;
+}
+.mod-chip.mod-default {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+.mod-chip.mod-edit {
+  margin-left: auto;
+  border-color: var(--border-subtle);
+  background: rgba(15, 23, 42, 0.85);
+  color: #bae6fd;
+}
+
+/* Streamlined Collapsible Co-op Join Dock */
+.dive-coop-meta-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.coop-dock-toggle {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  background: rgba(14, 165, 233, 0.14);
+  color: #bae6fd;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.coop-dock-toggle:hover {
+  border-color: rgba(56, 189, 248, 0.72);
+  background: rgba(14, 165, 233, 0.26);
+}
+.dive-coop-dock.collapsed .lan-coop-body {
+  display: none;
+}
+.dive-coop-dock .lan-coop-body {
+  margin-top: 8px;
+}
+
+/* Sticky Debrief Action Bar (instant Retry / Next Site without full scroll) */
+.debrief-sticky-actions {
+  position: sticky;
+  bottom: -1px;
+  z-index: 6;
+  margin: 14px -20px -24px;
+  padding: 12px 20px max(14px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(6, 13, 24, 0.82), rgba(4, 10, 20, 0.98) 32%);
+  border-top: 1px solid rgba(56, 189, 248, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 0 0 18px 18px;
+}
+@media (max-width: 440px) {
+  .debrief-sticky-actions {
+    margin: 12px -14px -16px;
+    padding: 10px 14px max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Semantic Modal Spacing & Layout Utilities (zero inline styles) */
+.modal-actions-mt {
+  margin-top: 12px;
+}
+.modal-head-mt {
+  margin-top: 8px;
+}
+.full-width-select {
+  width: 100%;
+}
+.proc-preview-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+/* Two-Tap Visual Arming on HUD Abort Button (prevents accidental mobile fat-finger aborts) */
+.util-btn.danger.armed {
+  background: rgba(220, 38, 38, 0.88);
+  border-color: #fca5a5;
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.72);
+  animation: abortArmPulse 0.75s ease-in-out infinite alternate;
+}
+@keyframes abortArmPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+
+/* Hide Desktop Keyboard Keycap Hints on Coarse Touch Pointers */
+@media (pointer: coarse) {
+  .kbd-hint {
+    display: none;
+  }
+}
+
+/* Mobile Secondary Tools Drawer in HUD Gear Dock */
+.gear-more-btn {
+  display: none;
+}
+@media (max-width: 600px) {
+  .gear-more-btn {
+    display: inline-flex;
+  }
+  .hud-gear-dock:not(.gear-expanded) .gear-secondary {
+    display: none;
+  }
+  .gear-hud-btn,
+  .gear-hud-pill {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.68rem;
+  }
+}
+
+/* Compact / Immersion HUD Mode (toggled from HUD menu) */
+.hud-layer.hud-compact .hud-self-row,
+.hud-layer.hud-compact .dc-vitals-row,
+.hud-layer.hud-compact .hud-gear-dock .gear-secondary,
+.hud-layer.hud-compact .obj-hint {
+  display: none !important;
+}
+.hud-layer.hud-compact .hud-top-bar {
+  padding: 4px 8px;
+  background: rgba(4, 12, 24, 0.68);
+}
+.hud-layer.hud-compact .dive-telemetry,
+.hud-layer.hud-compact .self-health-card,
+.hud-layer.hud-compact .dc-gas-rack {
+  background: rgba(4, 12, 24, 0.72);
 }

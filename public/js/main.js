@@ -564,7 +564,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=142" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=143" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1166,6 +1166,71 @@ const hud = new DiveComputerHUD({
   },
 });
 
+// Centralized stack-ordered overlay/modal dismissal & keyboard focus restore (v143):
+// Innermost child modals ALWAYS close before their parent modals (e.g. Gear Workshop -> Dive Setup, Collector Card -> Logbook).
+let lastModalFocusTrigger = null;
+document.addEventListener(
+  'pointerdown',
+  (e) => {
+    const btn = e.target?.closest?.('button, [role="button"]');
+    if (btn && !btn.closest?.('.lb-stats-modal')) {
+      lastModalFocusTrigger = btn;
+    }
+  },
+  { passive: true }
+);
+
+function closeTopmostOverlay() {
+  const stack = [
+    [() => photoModeState.active, () => setPhotoModeActive(false)],
+    [() => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, () => closeFieldGuideCardModal()],
+    [() => typeof replayModal !== 'undefined' && replayModal && !replayModal.hidden, () => closeReplayModal()],
+    [() => typeof lbStatsModalEl !== 'undefined' && lbStatsModalEl && !lbStatsModalEl.hidden, () => closeLeaderboardStatsModal()],
+    [() => typeof liveryModalEl !== 'undefined' && liveryModalEl && !liveryModalEl.hidden, () => closeLiveryModal()],
+    [() => typeof gasPlannerModal !== 'undefined' && gasPlannerModal && !gasPlannerModal.hidden, () => closeGasPlannerModal()],
+    [() => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, () => closeChallengeModal()],
+    [() => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, () => closeProceduralModal()],
+    [() => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, () => closeDailyCalendarModal()],
+    [() => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, () => closeAudioMixerModal()],
+    [() => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, () => closeIssueModal()],
+    [() => typeof modalDiveGuide !== 'undefined' && modalDiveGuide && !modalDiveGuide.hidden, () => closeDiveGuideModal(false)],
+    [() => typeof diveSetupModalEl !== 'undefined' && diveSetupModalEl && !diveSetupModalEl.hidden, () => closeDiveSetupModal()],
+    [() => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, () => closeLogbookModal()],
+    [() => Boolean(signalWheelOpen), () => toggleSignalWheel(false)],
+    [() => Boolean(shearwaterOpen), () => toggleShearwaterComputer(false)],
+    [() => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, () => setHudMenuOpen(false)],
+    [() => typeof homeMenuPopover !== 'undefined' && homeMenuPopover && !homeMenuPopover.hidden, () => setHomeMenuOpen(false)],
+  ];
+  for (const [isOpen, closeFn] of stack) {
+    try {
+      if (isOpen()) {
+        closeFn();
+        // If no more modals remain open, restore keyboard focus to the triggering control
+        const anyStillOpen = stack.some(([check]) => {
+          try { return check(); } catch { return false; }
+        });
+        if (!anyStillOpen && lastModalFocusTrigger?.focus && !lastModalFocusTrigger.hidden) {
+          try { lastModalFocusTrigger.focus({ preventScroll: true }); } catch {}
+        }
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key !== 'Escape') return;
+    if (closeTopmostOverlay()) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  },
+  true
+);
+
 const input = new InputController({
   stickBaseEl: document.getElementById('touch-stick'),
   stickKnobEl: document.getElementById('touch-knob'),
@@ -1187,66 +1252,7 @@ const input = new InputController({
     return true;
   },
   onPauseToggle: () => {
-    if (shearwaterOpen) {
-      toggleShearwaterComputer(false);
-      return true;
-    }
-    if (signalWheelOpen) {
-      toggleSignalWheel(false);
-      return true;
-    }
-    if (hudMenuPopover && !hudMenuPopover.hidden) {
-      setHudMenuOpen(false);
-      return true;
-    }
-    if (modalLogbook && !modalLogbook.hidden) {
-      closeLogbookModal();
-      return true;
-    }
-    if (dailyCalModalEl && !dailyCalModalEl.hidden) {
-      closeDailyCalendarModal();
-      return true;
-    }
-    if (proceduralModal && !proceduralModal.hidden) {
-      closeProceduralModal();
-      return true;
-    }
-    if (audioMixerModalEl && !audioMixerModalEl.hidden) {
-      closeAudioMixerModal();
-      return true;
-    }
-    if (diveSetupModalEl && !diveSetupModalEl.hidden) {
-      closeDiveSetupModal();
-      return true;
-    }
-    if (liveryModalEl && !liveryModalEl.hidden) {
-      closeLiveryModal();
-      return true;
-    }
-    if (fgCardModalEl && !fgCardModalEl.hidden) {
-      closeFieldGuideCardModal();
-      return true;
-    }
-    if (photoModeState.active) {
-      setPhotoModeActive(false);
-      return true;
-    }
-    if (gasPlannerModal && !gasPlannerModal.hidden) {
-      closeGasPlannerModal();
-      return true;
-    }
-    if (replayModal && !replayModal.hidden) {
-      closeReplayModal();
-      return true;
-    }
-    if (challengeModal && !challengeModal.hidden) {
-      closeChallengeModal();
-      return true;
-    }
-    if (modalDiveGuide && !modalDiveGuide.hidden) {
-      closeDiveGuideModal(false);
-      return true;
-    }
+    if (closeTopmostOverlay()) return true;
     if (mode !== 'diving' || !session || session.endedState) return false;
     if (isMultiplayer) {
       showToast('Co-op dives run live — pause is solo-only.', 1.8);
@@ -2157,13 +2163,13 @@ function syncTechGearHud(sess) {
   }
   if (btnHudStage) {
     btnHudStage.hidden = false;
-    btnHudStage.textContent = staged ? '🛢 STAGED (+6%)' : '🛢 STAGE [T]';
-    btnHudStage.className = `gear-hud-btn stage ${staged ? 'staged' : canStage ? '' : 'low'}`;
+    btnHudStage.innerHTML = staged ? '🛢 STAGED (+6%)' : '🛢 STAGE <span class="kbd-hint">[T]</span>';
+    btnHudStage.className = `gear-hud-btn stage gear-secondary ${staged ? 'staged' : canStage ? '' : 'low'}`;
   }
   if (btnHudSonar) {
     btnHudSonar.hidden = !hasSonar;
     if (hasSonar) {
-      btnHudSonar.textContent = cdSec > 0 ? `📡 ${cdSec}s` : '📡 SONAR [Q]';
+      btnHudSonar.innerHTML = cdSec > 0 ? `📡 ${cdSec}s` : '📡 SONAR <span class="kbd-hint">[Q]</span>';
       btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
     }
   }
@@ -6139,6 +6145,7 @@ function renderRoomsList(rooms = lan.rooms) {
     return;
   }
   lanRoomsSection.hidden = false;
+  if (typeof setCoopDockExpanded === 'function') setCoopDockExpanded(true);
   lanRoomsList.innerHTML = rooms
     .map((r) => {
       const lvl = getLevelById(r.levelId);
@@ -6432,7 +6439,119 @@ function syncSetupDrawerSummary() {
   if (resetBtn) {
     resetBtn.disabled = activeCount === 0;
   }
+
+  // Render live clickable Active Modifiers Chip Strip right above the primary DIVE button (v143)
+  const modBar = document.getElementById('menu-active-modifiers');
+  if (modBar) {
+    const chips = [];
+    if (modeMod) {
+      const mLbl = currentDiff === 'hardcore' ? '🔥 Hardcore' : '🧭 Guided';
+      chips.push(`<button type="button" class="mod-chip mode-${currentDiff}" data-mod-target="setup">${mLbl}</button>`);
+    }
+    if (aiMod) {
+      chips.push(`<button type="button" class="mod-chip mod-ai" data-mod-target="setup">🤖 ${currentAiCount} AI</button>`);
+    }
+    if (weatherMod) {
+      const rw = resolveEffectiveWeather(currentWeatherPref, { level: activeLevel });
+      chips.push(`<button type="button" class="mod-chip mod-weather" data-mod-target="setup">${rw.icon} ${escapeHtml(currentWeatherPref === 'auto' ? 'Auto' : rw.label)}</button>`);
+    }
+    if (liveryMod) {
+      const suit = getSuitLivery(currentLivery.suitId);
+      chips.push(`<button type="button" class="mod-chip mod-livery" data-mod-target="livery">🎨 ${escapeHtml(suit.shortName || suit.name)}</button>`);
+    }
+    if (gasMod) {
+      chips.push(`<button type="button" class="mod-chip mod-gas" data-mod-target="gas">🧪 Custom Mix</button>`);
+    }
+    if (drillsMod) {
+      chips.push(`<button type="button" class="mod-chip mod-drills" data-mod-target="setup">⚡ Drills</button>`);
+    }
+    if (mutMod) {
+      const mut = getDailyMutatorById(currentMutId);
+      chips.push(`<button type="button" class="mod-chip mod-mut" data-mod-target="mutator">${mut?.icon || '🎛️'} ${escapeHtml(mut?.shortName || mut?.name || 'Mutator')}</button>`);
+    }
+    if (procMod) {
+      chips.push(`<button type="button" class="mod-chip mod-proc" data-mod-target="proc">∞ Sump</button>`);
+    }
+    if (chips.length === 0) {
+      modBar.classList.add('is-default');
+      modBar.innerHTML = `<button type="button" class="mod-chip mod-default" data-mod-target="setup">🤿 Standard Tech · ☀️ Clear Day</button><button type="button" class="mod-chip mod-edit" data-mod-target="setup">⚙️ Setup</button>`;
+    } else {
+      modBar.classList.remove('is-default');
+      chips.push(`<button type="button" class="mod-chip mod-edit" data-mod-target="setup">⚙️ Edit</button>`);
+      modBar.innerHTML = chips.join('');
+    }
+  }
 }
+
+document.getElementById('menu-active-modifiers')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('button[data-mod-target]');
+  if (!chip) return;
+  const target = chip.dataset.modTarget;
+  if (target === 'livery') openLiveryModal();
+  else if (target === 'gas') openGasPlannerModal();
+  else if (target === 'mutator') openChallengeModal();
+  else if (target === 'proc') openProceduralModal();
+  else openDiveSetupModal();
+});
+
+document.getElementById('btn-home-open-setup')?.addEventListener('click', () => {
+  setHomeMenuOpen(false);
+  openDiveSetupModal();
+});
+document.getElementById('btn-home-open-livery')?.addEventListener('click', () => {
+  setHomeMenuOpen(false);
+  openLiveryModal();
+});
+
+// Collapsible Co-op Join Dock on Home Screen (v143)
+const btnCoopDockToggle = document.getElementById('btn-coop-dock-toggle');
+function setCoopDockExpanded(expanded) {
+  if (!lanSetupControls) return;
+  lanSetupControls.classList.toggle('collapsed', !expanded);
+  if (btnCoopDockToggle) {
+    btnCoopDockToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    btnCoopDockToggle.textContent = expanded ? 'Hide ▴' : 'Join Code ▾';
+  }
+}
+btnCoopDockToggle?.addEventListener('click', () => {
+  const isCollapsed = lanSetupControls?.classList.contains('collapsed');
+  setCoopDockExpanded(Boolean(isCollapsed));
+  if (isCollapsed) {
+    try { roomCodeInput?.focus(); } catch {}
+  }
+});
+
+// Compact / Immersion HUD Mode Toggle & Mobile Secondary Tools Drawer (v143)
+const COMPACT_HUD_KEY = 'caveDiverCompactHud_v1';
+let compactHudEnabled = false;
+try {
+  compactHudEnabled = localStorage.getItem(COMPACT_HUD_KEY) === '1';
+} catch {}
+const btnHudCompactEl = document.getElementById('btn-hud-compact');
+function syncCompactHudUi() {
+  screenHud?.classList.toggle('hud-compact', compactHudEnabled);
+  if (btnHudCompactEl) {
+    btnHudCompactEl.textContent = compactHudEnabled ? '👁️ HUD: Compact' : '👁️ HUD: Full';
+    btnHudCompactEl.classList.toggle('active', compactHudEnabled);
+  }
+}
+syncCompactHudUi();
+btnHudCompactEl?.addEventListener('click', () => {
+  compactHudEnabled = !compactHudEnabled;
+  try { localStorage.setItem(COMPACT_HUD_KEY, compactHudEnabled ? '1' : '0'); } catch {}
+  syncCompactHudUi();
+  setHudMenuOpen(false);
+  showToast(compactHudEnabled ? '👁️ Compact Immersion HUD enabled' : '👁️ Full Technical HUD restored', 1.8);
+});
+
+const btnHudGearMoreEl = document.getElementById('btn-hud-gear-more');
+btnHudGearMoreEl?.addEventListener('click', () => {
+  if (!hudGearDockEl) return;
+  const next = !hudGearDockEl.classList.contains('gear-expanded');
+  hudGearDockEl.classList.toggle('gear-expanded', next);
+  btnHudGearMoreEl.setAttribute('aria-expanded', next ? 'true' : 'false');
+  btnHudGearMoreEl.textContent = next ? '🧰 TOOLS ▴' : '🧰 TOOLS ▾';
+});
 
 btnSetupDrawerEl?.addEventListener('click', () => {
   if (diveSetupModalEl && !diveSetupModalEl.hidden) closeDiveSetupModal();
@@ -6653,13 +6772,6 @@ document.addEventListener('pointerdown', (e) => {
   }
 });
 
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (homeMenuPopover && !homeMenuPopover.hidden) setHomeMenuOpen(false);
-    if (modalLogbook && !modalLogbook.hidden) closeLogbookModal();
-  }
-});
-
 async function setActiveMenuTab(tab = 'solo') {
   const prevTab = activeMenuTab;
   activeMenuTab = tab === 'leaderboards' ? 'leaderboards' : 'solo';
@@ -6737,11 +6849,6 @@ debriefLeaderboardEl?.addEventListener('click', (e) => {
 btnLbStatsClose?.addEventListener('click', closeLeaderboardStatsModal);
 lbStatsModalEl?.addEventListener('click', (e) => {
   if (e.target === lbStatsModalEl) closeLeaderboardStatsModal();
-});
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && lbStatsModalEl && !lbStatsModalEl.hidden) {
-    closeLeaderboardStatsModal();
-  }
 });
 
 selectLbSite?.addEventListener('change', () => {
@@ -7144,13 +7251,7 @@ document.addEventListener('pointerdown', (e) => {
   }
 });
 
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (hudMenuPopover && !hudMenuPopover.hidden) setHudMenuOpen(false);
-    if (modalDiveGuide && !modalDiveGuide.hidden) closeDiveGuideModal(false);
-    if (modalIssue && !modalIssue.hidden) closeIssueModal();
-  }
-});
+// Global Escape dismissal is centralized in closeTopmostOverlay() above (v143).
 
 // Auto-resume AudioContext on any gesture after iOS Safari interruption or background tab suspend
 function resumeAudioOnGesture() {
@@ -7283,17 +7384,35 @@ function abortActiveDiveToMenu() {
 btnPauseResume?.addEventListener('click', () => setDivePaused(false));
 btnPauseAbort?.addEventListener('click', abortActiveDiveToMenu);
 
-document.getElementById('btn-abort').addEventListener('click', () => {
+const btnAbortEl = document.getElementById('btn-abort');
+let abortDisarmTimer = null;
+function resetAbortArmState() {
+  pendingAbortAt = 0;
+  if (abortDisarmTimer) {
+    clearTimeout(abortDisarmTimer);
+    abortDisarmTimer = null;
+  }
+  if (btnAbortEl) {
+    btnAbortEl.classList.remove('armed');
+    btnAbortEl.textContent = '✕';
+  }
+}
+btnAbortEl?.addEventListener('click', () => {
   const inLiveDive = mode === 'diving' && session && !session.endedState && !divePaused;
   const elapsed = session?.diveState?.diveTimeSec || 0;
-  if (inLiveDive && elapsed > 15) {
+  if (inLiveDive && elapsed > 3) {
     const now = performance.now();
     if (now - pendingAbortAt > 3000) {
       pendingAbortAt = now;
+      btnAbortEl.classList.add('armed');
+      btnAbortEl.textContent = '✕?';
+      if (abortDisarmTimer) clearTimeout(abortDisarmTimer);
+      abortDisarmTimer = setTimeout(resetAbortArmState, 3050);
       showToast('Tap ✕ again within 3s to abort dive', 2.8);
       return;
     }
   }
+  resetAbortArmState();
   abortActiveDiveToMenu();
 });
 

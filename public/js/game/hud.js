@@ -1013,15 +1013,19 @@ export class DiveComputerHUD {
       setClass(this.elDecoVal, `dc-val ${diveState.ndlMin <= 2 ? 'warn' : 'ok'}`);
     }
 
-    // PPO2 color grading
-    setText(this.elPPO2, diveState.ppo2.toFixed(2));
+    // PPO2 color grading + colorblind-safe micro-glyphs (v143)
+    const ppo2Str = diveState.ppo2.toFixed(2);
     if (diveState.ppo2 < 0.16 && diveState.depthM > 0.2) {
+      setText(this.elPPO2, `▼${ppo2Str}`);
       setClass(this.elPPO2, 'dc-val cyan blink');
     } else if (diveState.ppo2 > 1.6) {
+      setText(this.elPPO2, `⛔${ppo2Str}`);
       setClass(this.elPPO2, 'dc-val danger blink');
     } else if (diveState.ppo2 > 1.4) {
+      setText(this.elPPO2, `⚠${ppo2Str}`);
       setClass(this.elPPO2, 'dc-val warn');
     } else {
+      setText(this.elPPO2, ppo2Str);
       setClass(this.elPPO2, 'dc-val ok');
     }
 
@@ -1181,25 +1185,27 @@ export class DiveComputerHUD {
       setText(this.elAlerts, '✕ DIVER DOWN · AWAITING RESCUE');
       setClass(this.elAlerts, 'dc-alerts danger');
     } else if (gasCoach && gasCoach.severity === 'danger') {
-      setText(this.elAlerts, gasCoach.title);
+      setText(this.elAlerts, `⛔ ${gasCoach.title}`);
       setClass(this.elAlerts, 'dc-alerts danger');
     } else if (diveState.warnings.length > 0) {
-      setText(this.elAlerts, diveState.warnings[0]);
+      const wTxt = String(diveState.warnings[0] || '');
+      const hasGlyph = /^[⛔⚠✕♥■▲✓]/.test(wTxt);
+      setText(this.elAlerts, hasGlyph ? wTxt : `${diveState.criticalAlarm ? '⛔' : '⚠'} ${wTxt}`);
       setClass(this.elAlerts, `dc-alerts ${diveState.criticalAlarm ? 'danger' : 'warn'}`);
     } else if (myBpm >= 138) {
       setText(this.elAlerts, `♥ ${myBpm} BPM — RELEASE CONTROLS TO CALM`);
       setClass(this.elAlerts, 'dc-alerts warn');
     } else if (gasCoach) {
-      setText(this.elAlerts, gasCoach.title);
+      setText(this.elAlerts, `⚠ ${gasCoach.title}`);
       setClass(this.elAlerts, 'dc-alerts warn');
     } else if (ascentStep) {
-      setText(this.elAlerts, ascentStep.title);
+      setText(this.elAlerts, `${ascentStep.action === 'STOP' ? '■ ' : '▲ '}${ascentStep.title}`);
       setClass(this.elAlerts, `dc-alerts ${ascentStep.action === 'STOP' ? 'warn' : 'ok'}`);
     } else if (recGasId !== diveState.activeGasId) {
-      setText(this.elAlerts, `SWITCH → ${(mixMap[recGasId] || GAS_MIXES[recGasId]).name}`);
+      setText(this.elAlerts, `⚠ SWITCH → ${(mixMap[recGasId] || GAS_MIXES[recGasId]).name}`);
       setClass(this.elAlerts, 'dc-alerts warn');
     } else {
-      setText(this.elAlerts, `${(mixMap[diveState.activeGasId] || GAS_MIXES[diveState.activeGasId]).name} · NOMINAL`);
+      setText(this.elAlerts, `✓ ${(mixMap[diveState.activeGasId] || GAS_MIXES[diveState.activeGasId]).name} · NOMINAL`);
       setClass(this.elAlerts, 'dc-alerts ok');
     }
 
