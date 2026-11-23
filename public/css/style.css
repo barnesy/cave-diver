@@ -4737,24 +4737,32 @@ button.mode-badge:hover {
   color: #a7f3d0;
 }
 
-/* Live Sonar Cave & Wreck Cartography Minimap (v109) */
+/* Unified Docked Tactical Map: Sonar Minimap | Wetnotes Survey Slate (v109 / v173) */
 .util-btn.disabled-mode {
   opacity: 0.42;
 }
 .hud-minimap-wrap {
-  align-self: flex-start;
-  width: 176px;
-  border-radius: 11px;
+  position: fixed;
+  top: calc(max(8px, env(safe-area-inset-top)) + 98px);
+  left: max(10px, env(safe-area-inset-left));
+  z-index: 38;
+  width: 244px;
+  max-width: calc(100vw - 20px);
+  border-radius: 12px;
   overflow: hidden;
-  background: rgba(3, 13, 25, 0.88);
-  border: 1.5px solid rgba(56, 189, 248, 0.42);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.52), inset 0 0 12px rgba(14, 165, 233, 0.14);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(3, 13, 25, 0.9);
+  border: 1.5px solid rgba(56, 189, 248, 0.44);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.56), inset 0 0 12px rgba(14, 165, 233, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
-  cursor: pointer;
   user-select: none;
-  transition: border-color 0.16s ease, transform 0.12s ease;
+  transition: width 0.18s ease, border-color 0.16s ease;
+}
+.hud-minimap-wrap.mode-wetnotes {
+  width: min(326px, calc(100vw - 20px));
+  border-color: rgba(250, 204, 21, 0.56);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.66), inset 0 0 12px rgba(250, 204, 21, 0.12);
 }
 .hud-minimap-wrap[hidden] {
   display: none !important;
@@ -4762,51 +4770,118 @@ button.mode-badge:hover {
 .hud-minimap-wrap:hover {
   border-color: rgba(103, 232, 249, 0.78);
 }
-.hud-minimap-wrap:active {
-  transform: scale(0.98);
+.hud-minimap-wrap.mode-wetnotes:hover {
+  border-color: rgba(253, 224, 71, 0.85);
 }
 .hud-minimap-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 3px 7px;
-  background: rgba(6, 22, 42, 0.92);
+  gap: 5px;
+  padding: 4px 6px;
+  background: rgba(6, 22, 42, 0.94);
   border-bottom: 1px solid rgba(56, 189, 248, 0.24);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.hud-minimap-title {
-  font-size: 0.56rem;
+.tacmap-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.tacmap-tab {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.58);
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 0.53rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: #7dd3fc;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.tacmap-tab:hover:not(:disabled) {
+  color: #e2e8f0;
+  border-color: rgba(125, 211, 252, 0.5);
+}
+.tacmap-tab.active {
+  background: rgba(14, 165, 233, 0.26);
+  border-color: rgba(56, 189, 248, 0.65);
+  color: #e0f2fe;
+}
+#btn-minimap-slate.tacmap-tab.active {
+  background: rgba(250, 204, 21, 0.24);
+  border-color: rgba(250, 204, 21, 0.65);
+  color: #fef08a;
+}
+.tacmap-tab.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .hud-minimap-meta {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 .hud-minimap-pct {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 800;
   color: #bae6fd;
 }
 .hud-minimap-zoom {
-  font-size: 0.52rem;
+  appearance: none;
+  font-family: inherit;
+  font-size: 0.5rem;
   font-weight: 900;
-  letter-spacing: 0.05em;
-  padding: 1px 4px;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
   border-radius: 4px;
   background: rgba(56, 189, 248, 0.2);
   border: 1px solid rgba(56, 189, 248, 0.45);
   color: #e0f2fe;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hud-minimap-wrap.mode-wetnotes .hud-minimap-zoom {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fef08a;
+}
+.tacmap-close-btn {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tacmap-close-btn:hover {
+  color: #ffffff;
+  border-color: rgba(248, 113, 113, 0.65);
+}
+.hud-minimap-sonar-view[hidden] {
+  display: none !important;
 }
 .hud-minimap-canvas {
   display: block;
   width: 100%;
   height: 112px;
+  cursor: pointer;
 }
 
 /* Underwater Strobe Camera & Marine Field Guide (v110) */
@@ -4987,16 +5062,22 @@ button.mode-badge:hover {
     padding: 1px 6px;
   }
   .hud-minimap-wrap {
-    width: 138px;
+    top: calc(max(6px, env(safe-area-inset-top)) + 84px);
+    left: max(6px, env(safe-area-inset-left));
+    width: 200px;
+  }
+  .hud-minimap-wrap.mode-wetnotes {
+    width: min(296px, calc(100vw - 12px));
   }
   .hud-minimap-canvas {
     height: 86px;
   }
   .hud-minimap-head {
-    padding: 2px 5px;
+    padding: 3px 5px;
   }
-  .hud-minimap-title {
-    font-size: 0.5rem;
+  .tacmap-tab {
+    font-size: 0.48rem;
+    padding: 2px 4px;
   }
   .logbook-field-guide-grid {
     grid-template-columns: 1fr;
@@ -5004,7 +5085,12 @@ button.mode-badge:hover {
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .hud-minimap-wrap {
-    width: 126px;
+    top: calc(max(4px, env(safe-area-inset-top)) + 66px);
+    left: max(6px, env(safe-area-inset-left));
+    width: 190px;
+  }
+  .hud-minimap-wrap.mode-wetnotes {
+    width: min(264px, calc(100vw - 16px));
   }
   .hud-minimap-canvas {
     height: 76px;
@@ -8058,7 +8144,7 @@ summary,
 /* v168 Live Artifact Discovery Spotlight Card, Career Artifact Trophy Vault & Debrief Specimen Strip */
 .hud-artifact-spotlight {
   pointer-events: none;
-  align-self: flex-start;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -8304,19 +8390,8 @@ summary,
   color: #ffffff;
 }
 .survey-slate-panel {
-  position: fixed;
-  right: 14px;
-  left: auto;
-  top: 74px;
-  z-index: 45;
-  width: 336px;
-  max-width: calc(100vw - 16px);
-  padding: 8px;
-  border-radius: 14px;
-  background: rgba(4, 14, 28, 0.95);
-  border: 1.5px solid rgba(250, 204, 21, 0.55);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.68);
-  backdrop-filter: blur(10px);
+  padding: 7px 7px 6px;
+  background: rgba(4, 14, 28, 0.94);
   pointer-events: auto;
 }
 .survey-slate-panel[hidden] {
@@ -8397,12 +8472,6 @@ summary,
   }
   .photo-studio-badge span {
     display: none;
-  }
-  .survey-slate-panel {
-    right: 8px;
-    left: auto;
-    top: 66px;
-    width: min(296px, calc(100vw - 16px));
   }
 }
 

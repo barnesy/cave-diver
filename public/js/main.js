@@ -514,7 +514,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=172',
+  mapRasterUrl: './assets/map-expedition.jpg?v=173',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -984,11 +984,12 @@ shearwaterCanvasEl?.addEventListener('click', (e) => {
   toggleShearwaterComputer(false);
 });
 
-// Waterproof Wetnotes Survey Slate Overlay (v169-v170)
+// Unified Docked Tactical Map: Sonar Minimap | Wetnotes Survey Slate (v169-v173)
 const surveySlatePanelEl = document.getElementById('survey-slate-panel');
 const surveySlateCanvasEl = document.getElementById('survey-slate-canvas');
 const btnSurveySlateCloseEl = document.getElementById('btn-survey-slate-close');
-const btnSurveySlateZoomEl = document.getElementById('btn-survey-slate-zoom');
+const btnTacmapSonarEl = document.getElementById('btn-tacmap-sonar');
+const btnMinimapZoomEl = document.getElementById('hud-minimap-zoom');
 const btnSurveyDropPinEl = document.getElementById('btn-survey-drop-pin');
 const btnSurveyDropCookieEl = document.getElementById('btn-survey-drop-cookie');
 const btnSurveyClearPinsEl = document.getElementById('btn-survey-clear-pins');
@@ -1047,6 +1048,32 @@ function redrawSurveySlateNow() {
   }
 }
 
+function syncTacticalMapTabsUi() {
+  const diff = session?.difficulty || activeDifficulty;
+  const mut = session?.mutatorId || '';
+  const sonarAllowed = isMinimapAllowed(diff, mut);
+  if (hudMinimapWrapEl) {
+    hudMinimapWrapEl.classList.toggle('mode-wetnotes', Boolean(surveySlateOpen));
+  }
+  const sonarViewEl = document.getElementById('hud-minimap-sonar-view');
+  if (sonarViewEl) {
+    sonarViewEl.hidden = Boolean(surveySlateOpen || !sonarAllowed || !minimapVisible);
+  }
+  if (btnTacmapSonarEl) {
+    btnTacmapSonarEl.classList.toggle('active', !surveySlateOpen && sonarAllowed);
+    btnTacmapSonarEl.classList.toggle('locked', !sonarAllowed);
+    btnTacmapSonarEl.disabled = !sonarAllowed;
+    btnTacmapSonarEl.setAttribute('aria-selected', String(!surveySlateOpen && sonarAllowed));
+    btnTacmapSonarEl.textContent = sonarAllowed ? '📡 SONAR' : '🔒 SONAR';
+  }
+  if (btnMinimapSlateEl) {
+    btnMinimapSlateEl.classList.toggle('active', Boolean(surveySlateOpen));
+    btnMinimapSlateEl.setAttribute('aria-selected', String(Boolean(surveySlateOpen)));
+  }
+  btnHudSurveySlateEl?.classList.toggle('active', Boolean(surveySlateOpen));
+  syncMinimapButtonUi();
+}
+
 function toggleSurveySlate(forceState) {
   if (mode !== 'diving' && forceState !== false) return false;
   surveySlateOpen = typeof forceState === 'boolean' ? forceState : !surveySlateOpen;
@@ -1056,9 +1083,7 @@ function toggleSurveySlate(forceState) {
     btnHudComputerEl?.classList.remove('active');
   }
   if (surveySlatePanelEl) surveySlatePanelEl.hidden = !surveySlateOpen;
-  btnHudSurveySlateEl?.classList.toggle('active', surveySlateOpen);
-  btnMinimapSlateEl?.classList.toggle('active', surveySlateOpen);
-  if (btnSurveySlateZoomEl) btnSurveySlateZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
+  syncTacticalMapTabsUi();
   if (surveySlateOpen) redrawSurveySlateNow();
   return true;
 }
@@ -1069,19 +1094,45 @@ btnHudSurveySlateEl?.addEventListener('click', (e) => {
 });
 btnMinimapSlateEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  toggleSurveySlate();
+  toggleSurveySlate(true);
+});
+btnTacmapSonarEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const allowed = isMinimapAllowed(session?.difficulty || activeDifficulty, session?.mutatorId || '');
+  if (!allowed) {
+    showToast('🔒 Sonar Minimap disabled in Hardcore / Purist — use Wetnotes!', 2.2);
+    return;
+  }
+  minimapVisible = true;
+  try { localStorage.setItem(MINIMAP_PREF_KEY, '1'); } catch {}
+  toggleSurveySlate(false);
 });
 btnSurveySlateCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  toggleSurveySlate(false);
+  if (surveySlateOpen) {
+    toggleSurveySlate(false);
+    // If Sonar was hidden or locked, closing Wetnotes hides the whole dock
+    if (!isMinimapAllowed(session?.difficulty || activeDifficulty, session?.mutatorId || '')) return;
+  }
+  minimapVisible = false;
+  try { localStorage.setItem(MINIMAP_PREF_KEY, '0'); } catch {}
+  syncTacticalMapTabsUi();
+  showToast('🗺️ Tactical Map hidden — press [M] or [N] anytime.', 1.8);
 });
 const flipSurveySlateZoom = (e) => {
   e.stopPropagation();
   surveySlateFollowZoom = !surveySlateFollowZoom;
-  if (btnSurveySlateZoomEl) btnSurveySlateZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
+  if (btnMinimapZoomEl) btnMinimapZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
   redrawSurveySlateNow();
 };
-btnSurveySlateZoomEl?.addEventListener('click', flipSurveySlateZoom);
+btnMinimapZoomEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (surveySlateOpen) {
+    flipSurveySlateZoom(e);
+  } else {
+    toggleMinimapZoom();
+  }
+});
 surveySlateCanvasEl?.addEventListener('click', flipSurveySlateZoom);
 btnSurveyDropPinEl?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1155,12 +1206,18 @@ function handleMinimapToggle() {
   const allowed = isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '');
   if (!allowed) {
     toggleSurveySlate();
-    syncMinimapButtonUi();
+    return true;
+  }
+  if (surveySlateOpen) {
+    // Pressing [M] while Wetnotes is open switches cleanly back to Sonar tab
+    minimapVisible = true;
+    try { localStorage.setItem(MINIMAP_PREF_KEY, '1'); } catch {}
+    toggleSurveySlate(false);
     return true;
   }
   minimapVisible = !minimapVisible;
   try { localStorage.setItem(MINIMAP_PREF_KEY, minimapVisible ? '1' : '0'); } catch {}
-  syncMinimapButtonUi();
+  syncTacticalMapTabsUi();
   showToast(minimapVisible ? '📡 Sonar Minimap: On (tap map for Full Survey)' : '📡 Sonar Minimap: Hidden [M]', 1.8);
   return true;
 }
@@ -1194,6 +1251,7 @@ function hideHudPhotoCard() {
 
 function showHudPhotoCard(res, fgStats) {
   if (!hudPhotoCardEl || !res?.subject) return;
+  hideArtifactSpotlight();
   clearTimeout(hudPhotoCardTimer);
   const starStr = '★'.repeat(Math.max(1, Math.min(3, res.stars || 1)));
   if (hudPhotoIconEl) hudPhotoIconEl.textContent = res.subject.icon || '📷';
@@ -1483,13 +1541,15 @@ canvas?.addEventListener('wheel', (e) => {
   syncPhotoStudioUi();
 }, { passive: false });
 hudMinimapWrapEl?.addEventListener('click', (e) => {
+  if (e.target?.closest?.('button') || surveySlateOpen) return;
   e.stopPropagation();
   toggleMinimapZoom();
 });
 hudMinimapWrapEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.target?.closest?.('button')) {
     e.preventDefault();
-    toggleMinimapZoom();
+    if (surveySlateOpen) flipSurveySlateZoom(e);
+    else toggleMinimapZoom();
   }
 });
 
@@ -3046,7 +3106,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 Shoot SMB</span><span class="kbd-hint kit-kbd">U</span>`;
     btnHudSmb.disabled = false;
   }
-  syncMinimapButtonUi();
+  syncTacticalMapTabsUi();
   refreshActiveGhostTrack(activeLevel);
   session._pbSplits = activeGhostTrack ? computeGhostCheckpointSplits(activeLevel, activeGhostTrack) : {};
   session._pbSplitsLabel = activeGhostIsPar ? 'Par' : 'PB';
@@ -3213,7 +3273,10 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
       weatherBonusScore: session.weatherBonusScore || 0,
-      trimBonusScore: session.trimBonusScore || 0,
+      trimBonusScore:
+        session.trimStats && session.trimStats.blowouts === 0
+          ? Math.round(((session.trimStats.disciplinePct || 0) / 100) * 250)
+          : Math.round(((session.trimStats?.disciplinePct || 0) / 100) * 100),
       mutatorId: session.mutatorId || '',
     });
 
@@ -3626,10 +3689,12 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     });
   }
   if ((teamSummary.trimBonusScore || 0) > 0) {
+    const trimPct = Math.round(session.trimStats?.disciplinePct ?? 100);
+    const zeroSilt = Boolean(session.trimStats?.zeroSiltMaster);
     rows.push({
-      label: `🐸 Frog-Kick Trim Discipline (${session.trimDisciplinePct || 100}%)`,
+      label: `🐸 Frog-Kick Trim (${trimPct}%${zeroSilt ? ' · Zero-Silt Master' : ''})`,
       pts: teamSummary.trimBonusScore,
-      pct: Math.min(100, Math.round((teamSummary.trimBonusScore / 150) * 100)),
+      pct: Math.min(100, Math.round((teamSummary.trimBonusScore / 250) * 100)),
       cls: 'green',
     });
   }
@@ -6330,6 +6395,7 @@ function hideArtifactSpotlight() {
 
 function showArtifactSpotlight(item, lore = '', isNew = false) {
   if (!hudArtifactSpotlightEl || !item) return;
+  hideHudPhotoCard();
   if (_artifactSpotlightTimer) {
     clearTimeout(_artifactSpotlightTimer);
     _artifactSpotlightTimer = 0;
@@ -6893,6 +6959,8 @@ function stepSimulation(dt) {
     dailyMutatorLabel: session._dailyBadgeLabel || '',
     minimapVisible,
     minimapZoomMode,
+    surveySlateOpen,
+    surveySlateFollowZoom,
     exploreCells: session.exploreCells,
     exploredCells: session.exploredCells,
     exploredGrid: session.exploredGrid,

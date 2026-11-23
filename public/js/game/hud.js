@@ -840,6 +840,7 @@ export class DiveComputerHUD {
     this.elModeBadge = document.getElementById('dc-mode-badge');
     this.elDailyBadge = document.getElementById('dc-daily-badge');
     this.elMinimapWrap = document.getElementById('hud-minimap-wrap');
+    this.elMinimapSonarView = document.getElementById('hud-minimap-sonar-view');
     this.elMinimapCanvas = document.getElementById('hud-minimap-canvas');
     this.elMinimapPct = document.getElementById('hud-minimap-pct');
     this.elMinimapZoom = document.getElementById('hud-minimap-zoom');
@@ -1052,6 +1053,8 @@ export class DiveComputerHUD {
     dailyMutatorLabel = '',
     minimapVisible = true,
     minimapZoomMode = 'follow',
+    surveySlateOpen = false,
+    surveySlateFollowZoom = false,
     exploreCells = null,
     exploredCells = null,
     exploredGrid = null,
@@ -1599,14 +1602,23 @@ export class DiveComputerHUD {
       }
     }
 
-    // Live Sonar Cave & Wreck Cartography Minimap (throttled ~18 Hz for ultra-light GPU cost)
+    // Unified Docked Tactical Map: Sonar Minimap | Wetnotes Survey Slate (v173)
+    // Only draws the active tab's canvas (zero duplicate rendering).
     if (this.elMinimapWrap) {
       const allowed = isMinimapAllowed(cleanDiff, mutatorId);
-      const showMap = Boolean(allowed && minimapVisible && level);
-      setHidden(this.elMinimapWrap, !showMap);
-      if (showMap && this.elMinimapCanvas) {
+      const showWetnotes = Boolean(surveySlateOpen && level);
+      const showSonar = Boolean(!showWetnotes && allowed && minimapVisible && level);
+      const showDock = showWetnotes || showSonar;
+      setHidden(this.elMinimapWrap, !showDock);
+      if (this.elMinimapSonarView) setHidden(this.elMinimapSonarView, !showSonar);
+      if (showDock) {
         setText(this.elMinimapPct, `${Math.round(exploredPct || 0)}%`);
-        setText(this.elMinimapZoom, minimapZoomMode === 'full' ? 'FULL' : 'ZOOM');
+        setText(
+          this.elMinimapZoom,
+          showWetnotes ? (surveySlateFollowZoom ? 'FOLLOW' : 'FULL') : minimapZoomMode === 'full' ? 'FULL' : 'ZOOM'
+        );
+      }
+      if (showSonar && this.elMinimapCanvas) {
         this._minimapRedrawAccum += dt;
         const expSize = exploredCells ? exploredCells.size : 0;
         const needsRedraw =

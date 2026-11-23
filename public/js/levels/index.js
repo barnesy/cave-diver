@@ -104,8 +104,54 @@ export const LEVELS = [
   LEVEL_25,
 ];
 
+const LAZY_INTERACTIVE_KEYS = ['stageCaches', 'lineAnchors', 'caveCurrents', 'surgeZones', 'snagZones'];
+
+/**
+ * Lazily enrich a cave level's procedural interactives (stage caches, line anchors, currents,
+ * surge zones, line traps) on first access instead of running ~700 synchronous SDF evaluations at boot (v173).
+ */
+export function ensureLevelEnriched(level) {
+  if (!level || level.isWreck || level._caveInteractivesEnriched) return level;
+  level._caveInteractivesEnriched = true;
+  const orig = level._origInteractiveValues;
+  for (const key of LAZY_INTERACTIVE_KEYS) {
+    const desc = Object.getOwnPropertyDescriptor(level, key);
+    if (desc && typeof desc.get === 'function') {
+      delete level[key];
+      if (orig && key in orig) level[key] = orig[key];
+    }
+  }
+  delete level._origInteractiveValues;
+  enrichCaveInteractives(level);
+  return level;
+}
+
 for (const lvl of LEVELS) {
-  if (!lvl.isWreck) enrichCaveInteractives(lvl);
+  if (lvl.isWreck || lvl._caveInteractivesEnriched) continue;
+  const orig = {};
+  for (const key of LAZY_INTERACTIVE_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(lvl, key)) {
+      orig[key] = lvl[key];
+      delete lvl[key];
+    }
+    Object.defineProperty(lvl, key, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        ensureLevelEnriched(this);
+        return this[key];
+      },
+      set(val) {
+        Object.defineProperty(this, key, {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value: val,
+        });
+      },
+    });
+  }
+  if (Object.keys(orig).length > 0) lvl._origInteractiveValues = orig;
 }
 
 export const DEFAULT_LEVEL_ID = LEVEL_1.id;

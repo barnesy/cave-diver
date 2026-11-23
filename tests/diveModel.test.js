@@ -8514,3 +8514,42 @@ test('v172 Monolith Debt Paydown: Modular Renderers, Decomposed stepDiveSession,
   // 5. Shared escapeHtml helper behaves properly
   assert.equal(escapeHtml('<script>"&"</script>'), '&lt;script&gt;&quot;&amp;&quot;&lt;/script&gt;');
 });
+
+test('v173 Unified Docked Tactical Map, Lazy Level Enrichment, Compressed Icons & Coordinated Notification Lane', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const { LEVELS, ensureLevelEnriched } = await import('../public/js/levels/index.js');
+
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const pubDir = path.resolve(testDir, '..', 'public');
+  const html = fs.readFileSync(path.join(pubDir, 'index.html'), 'utf8');
+  const mainSrc = fs.readFileSync(path.join(pubDir, 'js/main.js'), 'utf8');
+
+  // 1. Unified Docked Tactical Map sits outside .hud-top-stack and embeds both Sonar & Wetnotes tabs
+  const topStackMatch = html.match(/<div class="hud-top-stack">([\s\S]*?)<\/div>\s*\n\s*<!-- Unified Docked Tactical Map/);
+  assert.ok(topStackMatch, 'Expected Unified Docked Tactical Map comment directly after .hud-top-stack');
+  assert.equal(topStackMatch[1].includes('id="hud-minimap-wrap"'), false, '#hud-minimap-wrap must live outside .hud-top-stack so alerts never shift it');
+  assert.ok(html.includes('id="btn-tacmap-sonar"'), 'Missing Sonar tab button in Unified Tactical Map');
+  assert.ok(html.includes('id="btn-minimap-slate"'), 'Missing Wetnotes tab button in Unified Tactical Map');
+  assert.ok(html.includes('id="hud-minimap-sonar-view"'), 'Missing Sonar view wrapper inside Unified Tactical Map');
+
+  // 2. Lazy cave interactive enrichment helper works cleanly and idempotently
+  const cave = LEVELS.find((l) => !l.isWreck);
+  assert.ok(cave, 'Expected at least one cave level');
+  ensureLevelEnriched(cave);
+  assert.equal(cave._caveInteractivesEnriched, true, 'ensureLevelEnriched must mark cave as enriched');
+  assert.ok(Array.isArray(cave.stageCaches), 'Enriched cave must expose stageCaches array');
+  assert.ok(Array.isArray(cave.caveCurrents), 'Enriched cave must expose caveCurrents array');
+
+  // 3. Compressed PWA icons stay compact (<60 KB for 512px, <20 KB for 192px)
+  const size512 = fs.statSync(path.join(pubDir, 'icons/icon-512.png')).size;
+  const size192 = fs.statSync(path.join(pubDir, 'icons/icon-192.png')).size;
+  assert.ok(size512 < 60_000, `icon-512.png should be compressed <60KB (got ${size512})`);
+  assert.ok(size192 < 20_000, `icon-192.png should be compressed <20KB (got ${size192})`);
+
+  // 4. Discovery card lane coordination & accurate Frog-Kick Trim debrief wiring
+  assert.ok(mainSrc.includes('hideArtifactSpotlight()'), 'showHudPhotoCard should clear Artifact Spotlight');
+  assert.ok(mainSrc.includes('hideHudPhotoCard()'), 'showArtifactSpotlight should clear Photo Card');
+  assert.ok(mainSrc.includes('session.trimStats?.disciplinePct'), 'Debrief trim row should read session.trimStats?.disciplinePct');
+});
