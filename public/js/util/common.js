@@ -48,3 +48,12 @@ export function strokeRoundedRect(ctx, x, y, w, h, r) {
   else ctx.rect(x, y, w, h);
   ctx.stroke();
 }
+
+/** Escape special HTML characters for safe innerHTML interpolation. */
+export function escapeHtml(raw) {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

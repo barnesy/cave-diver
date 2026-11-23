@@ -354,28 +354,6 @@ html, body {
   color: var(--text-muted);
   font-weight: 600;
 }
-.site-view-tabs {
-  display: inline-flex;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
-}
-.site-view-btn {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.site-view-btn.active {
-  background: rgba(14, 165, 233, 0.25);
-  color: #e0f2fe;
-}
 .site-browser {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
@@ -1356,22 +1334,6 @@ html, body {
 .hud-gas-callout.danger .gas-callout-cta {
   background: #fecaca;
   color: #7f1d1d;
-}
-@media (max-width: 680px) {
-  .hud-gas-callout {
-    padding: 6px 9px;
-    gap: 8px;
-  }
-  .gas-callout-copy strong {
-    font-size: 0.72rem;
-  }
-  .gas-callout-copy span {
-    font-size: 0.6rem;
-  }
-  .gas-callout-cta {
-    padding: 4px 7px;
-    font-size: 0.62rem;
-  }
 }
 .obj-name {
   font-size: 0.78rem;
@@ -2423,13 +2385,6 @@ select:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
 
 /* Animated Debrief Stats & Scoring */
 .debrief-overlay {
@@ -2484,25 +2439,12 @@ select:focus-visible {
   padding: 12px;
   margin-bottom: 12px;
 }
-@media (max-width: 560px) {
-  .debrief-hero {
-    grid-template-columns: 1fr;
-  }
-}
 .debrief-score-block {
   display: flex;
   flex-direction: column;
   justify-content: center;
   border-right: 1px solid rgba(148, 163, 184, 0.16);
   padding-right: 10px;
-}
-@media (max-width: 560px) {
-  .debrief-score-block {
-    border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-    padding-right: 0;
-    padding-bottom: 8px;
-  }
 }
 .debrief-score-label {
   font-size: 0.66rem;
@@ -3683,35 +3625,6 @@ select:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   --view-index: 0;
 }
-.site-view-tabs::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: calc((100% - 8px) / 3);
-  border-radius: 6px;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(2, 132, 199, 0.24));
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  box-shadow: 0 1px 8px rgba(14, 165, 233, 0.22);
-  transform: translateX(calc(var(--view-index, 0) * (100% + 2px)));
-  transition: transform 0.3s var(--ease-spring);
-  pointer-events: none;
-  z-index: 0;
-}
-.site-view-btn {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  transition: color 0.2s ease, transform 0.14s ease;
-}
-.site-view-btn:hover {
-  color: #e0f2fe;
-}
-.site-view-btn.active {
-  background: transparent;
-  color: #f0f9ff;
-}
 
 /* Sliding pill on Leaderboard mode switcher (Individual / Team / Daily) */
 .lb-tabs {
@@ -4254,11 +4167,6 @@ button.mode-badge:hover {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
-}
-@media (max-width: 540px) {
-  .logbook-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 .logbook-kpi {
   background: rgba(15, 23, 42, 0.85);
@@ -5048,6 +4956,9 @@ button.mode-badge:hover {
 }
 /* Unified Compact Mobile & Landscape Overrides (v107–v111) */
 @media (max-width: 540px) {
+  .logbook-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .gear-slot-btn {
     padding: 5px 6px;
   }
@@ -5089,17 +5000,6 @@ button.mode-badge:hover {
   }
   .logbook-field-guide-grid {
     grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 440px) {
-  .hud-util-btns {
-    gap: 3px;
-  }
-  .hud-util-btns .util-btn {
-    min-width: 38px;
-    height: 38px;
-    padding: 0 6px;
-    font-size: 0.84rem;
   }
 }
 @media (max-height: 500px) and (orientation: landscape) {
@@ -5358,14 +5258,6 @@ button.mode-badge:hover {
 }
 .issue-actions .btn {
   flex: 1 1 160px;
-}
-
-@media (max-width: 440px) {
-  .gh-account-pill {
-    padding: 0 8px;
-    max-width: 118px;
-    font-size: 0.72rem;
-  }
 }
 
 /* GitHub Verified Leaderboard Badges & Diver Profile Cards (v118) */
@@ -5938,11 +5830,6 @@ button.mode-badge:hover {
   color: #e0e7ff;
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
 }
-@media (max-width: 640px) {
-  .dive-setup-grid {
-    grid-template-columns: 1fr;
-  }
-}
 .gear-hud-pill.drill {
   border-color: rgba(251, 191, 36, 0.52);
   background: rgba(120, 53, 15, 0.42);
@@ -6196,16 +6083,6 @@ button.mode-badge:hover {
   text-align: center;
   min-height: 22px;
 }
-@media (max-width: 640px) {
-  .shearwater-panel {
-    right: 8px;
-    top: 66px;
-  }
-  .shearwater-panel canvas {
-    width: 204px;
-    height: 134px;
-  }
-}
 
 /* Scuba Hand-Signals & Torch Light-Signaling Wheel (v127) */
 .signal-wheel {
@@ -6330,9 +6207,6 @@ button.mode-badge:hover {
 .site-view-cycle-btn:hover {
   border-color: rgba(56, 189, 248, 0.6);
   color: #e0f2fe;
-}
-.site-view-tabs[hidden] {
-  display: none !important;
 }
 
 /* Daily Generated Sump Calendar Modal & Card Actions (v131) */
@@ -6611,14 +6485,6 @@ button.mode-badge:hover {
 .livery-swatch-btn.active .livery-swatch-meta {
   color: #bae6fd;
 }
-@media (max-width: 560px) {
-  .livery-grid {
-    grid-template-columns: 1fr;
-  }
-  .livery-patch-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 
 /* Underwater Photo Mode Studio Overlay & Marine Field Guide Gallery Polish (v139) */
 .photo-studio-overlay {
@@ -6868,11 +6734,6 @@ button.mode-badge:hover {
   height: auto;
   aspect-ratio: 960 / 560;
 }
-@media (max-width: 640px) {
-  .photo-studio-badge span {
-    display: none;
-  }
-}
 
 /* Live Water Temperature Readout & Thermocline Cold-Shock Indicator (v142) */
 .dc-temp {
@@ -7008,6 +6869,20 @@ button.mode-badge:hover {
   border-radius: 0 0 18px 18px;
 }
 @media (max-width: 440px) {
+  .hud-util-btns {
+    gap: 3px;
+  }
+  .hud-util-btns .util-btn {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 6px;
+    font-size: 0.84rem;
+  }
+  .gh-account-pill {
+    padding: 0 8px;
+    max-width: 118px;
+    font-size: 0.72rem;
+  }
   .debrief-sticky-actions {
     margin: 12px -14px -16px;
     padding: 10px 14px max(12px, env(safe-area-inset-bottom));
@@ -7389,6 +7264,20 @@ button.mode-badge:hover {
 
 /* ── v149 Mobile Phone Width Radical HUD Simplification (<= 680px) ── */
 @media (max-width: 680px) {
+  .hud-gas-callout {
+    padding: 6px 9px;
+    gap: 8px;
+  }
+  .gas-callout-copy strong {
+    font-size: 0.72rem;
+  }
+  .gas-callout-copy span {
+    font-size: 0.6rem;
+  }
+  .gas-callout-cta {
+    padding: 4px 7px;
+    font-size: 0.62rem;
+  }
   /* 1. Top Bar: 3 essential icons (Map, Menu, Abort) — Camera & Torch live in Dive Kit */
   #btn-camera,
   #btn-torch {
@@ -7592,6 +7481,11 @@ button.mode-badge:hover {
   animation: actionPillPulse 2.2s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
   .wreck-action-btn:not([hidden]) {
     animation: none;
   }
@@ -7884,28 +7778,6 @@ summary,
 }
 .livery-tab-panel[hidden] {
   display: none !important;
-}
-
-@media (max-width: 560px) {
-  .home-avatar-badge canvas {
-    width: 48px;
-    height: 28px;
-  }
-  .livery-preview-wrap {
-    top: -12px;
-  }
-  .livery-tank-toolbar {
-    padding: 6px 7px;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-  .livery-tank-pill {
-    font-size: 0.64rem;
-    padding: 3px 7px;
-  }
-  .livery-cat-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* v155 Saved Gear Loadout Slots & AI Squad Team Uniform Toggle */
@@ -8356,6 +8228,40 @@ summary,
   color: #fde047;
 }
 @media (max-width: 560px) {
+  .debrief-hero {
+    grid-template-columns: 1fr;
+  }
+  .debrief-score-block {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
+  .livery-grid {
+    grid-template-columns: 1fr;
+  }
+  .livery-patch-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home-avatar-badge canvas {
+    width: 48px;
+    height: 28px;
+  }
+  .livery-preview-wrap {
+    top: -12px;
+  }
+  .livery-tank-toolbar {
+    padding: 6px 7px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .livery-tank-pill {
+    font-size: 0.64rem;
+    padding: 3px 7px;
+  }
+  .livery-cat-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .hud-artifact-spotlight {
     max-width: calc(100vw - 20px);
     padding: 6px 9px 6px 6px;
@@ -8478,6 +8384,20 @@ summary,
   text-align: center;
 }
 @media (max-width: 640px) {
+  .dive-setup-grid {
+    grid-template-columns: 1fr;
+  }
+  .shearwater-panel {
+    right: 8px;
+    top: 66px;
+  }
+  .shearwater-panel canvas {
+    width: 204px;
+    height: 134px;
+  }
+  .photo-studio-badge span {
+    display: none;
+  }
   .survey-slate-panel {
     right: 8px;
     left: auto;
@@ -8617,3 +8537,4 @@ summary,
   justify-content: center;
   flex-wrap: wrap;
 }
+

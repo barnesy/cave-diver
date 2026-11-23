@@ -2897,7 +2897,11 @@ export function stepPeerBubbles(bubbles, peers, dt) {
 /**
  * Advance diver propulsion, collisions, silt clouds, physiology, checkpoints, and exit state by dt seconds.
  */
-export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+/**
+ * Phase 1 of stepDiveSession: drills, DPV propulsion, timers, salvage buoyancy,
+ * geothermal vents, ocean drift, karst spring currents & hull-breach surges.
+ */
+function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const { level, ascentConfig, diver, diveState, checkpointsHit, siltClouds, siltStirTimer } = session;
   session.simTimeSec += dt;
   const mutatorId = session.mutatorId || '';
@@ -3124,6 +3128,23 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     diver.vx += Math.sin(session.simTimeSec * 0.95) * 0.72 * dt;
   }
 
+  ctx.mutatorId = mutatorId;
+  ctx.exertion = exertion;
+  ctx.effectiveExertion = effectiveExertion;
+  ctx.ctrlX = ctrlX;
+  ctx.ctrlY = ctrlY;
+  ctx.thrustMag = thrustMag;
+  ctx.dpvThrusting = dpvThrusting;
+  ctx.clearanceM = clearanceM;
+}
+
+/**
+ * Phase 2 of stepDiveSession: entanglement snags, watertight hatches, shot-line zip,
+ * cave stage/junction stations, Hardcore AI buddy assists & contextual action prompt.
+ */
+function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
+  const { level, diver, diveState, siltClouds } = session;
+  const { ctrlX, ctrlY } = ctx;
   // Shipwreck fishing-net & dangling cable entanglement hazards (cuttable with shears [E] — self or co-op buddy!)
   if (session.snagWarnCooldown > 0) session.snagWarnCooldown -= dt;
   session.activeSnagIndex = -1;
@@ -3523,6 +3544,16 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     session.wreckActionPrompt = null;
   }
 
+  ctx.peerList = peerList;
+}
+
+/**
+ * Phase 3 of stepDiveSession: lateral nudges, restriction wash, deco hover, hydrodynamic drag,
+ * wall & Hardcore peer collisions, Frog-Kick trim, floor/impact silt, hazards & submerged stories.
+ */
+function stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx) {
+  const { level, diver, diveState, siltClouds, siltStirTimer } = session;
+  const { mutatorId, ctrlX, ctrlY, thrustMag, dpvThrusting, clearanceM, peerList } = ctx;
   // Soft open-ocean lateral boundary nudge on shipwrecks so divers stay near the boat & wreck site
   if (level.isWreck && level.bounds) {
     const padX = 5.5;
@@ -3838,6 +3869,19 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       }
     }
   }
+  ctx.prevDepthM = prevDepthM;
+  ctx.isStuck = isStuck;
+  ctx.headBumpImpulse = headBumpImpulse;
+  ctx.hazRes = hazRes;
+}
+
+/**
+ * Phase 4 of stepDiveSession: crew role offgassing, contracts, physiology, gas-switch coaching,
+ * checkpoints, recovery, exploration grid, collectibles, reel, swell, dSMB, black box & bubbles.
+ */
+function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
+  const { level, ascentConfig, diver, diveState, checkpointsHit, siltClouds } = session;
+  const { mutatorId, exertion, effectiveExertion, thrustMag, prevDepthM, isStuck, headBumpImpulse, hazRes } = ctx;
   // Apply Crew Specialty Role subtle perks & evaluate Dynamic Expedition Contracts (v156 / v171 real compartment offgassing)
   const role = session.crewRole;
   if (role && role.id === 'safety' && diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8 && Array.isArray(diveState.compartments)) {
@@ -4188,6 +4232,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
 
+}
+
+/**
+ * Phase 5 of stepDiveSession: depth profile & ghost sampling, score summary, failure outcome,
+ * exit readiness, Hardcore AI extraction gate, deco block & dive completion outcome.
+ */
+function stepTelemetryAndExitOutcome(session, dt, callbacks) {
+  const { level, diver, diveState, checkpointsHit } = session;
   // Record Dive Computer Depth Profile (every 1.5s or immediately on gas switch) & PB Ghost track (every 0.6s)
   const tDive = diveState.diveTimeSec || session.simTimeSec;
   if (session.diveProfile && session.diveProfile.length < 450) {
@@ -4335,4 +4387,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   }
 
   return { nextCheckpoint, outcome: null, blockedExitDecoDepthM: 0 };
+}
+
+export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+  const ctx = session._stepCtx || (session._stepCtx = {});
+  stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx);
+  stepWreckAndCaveInteractives(session, dt, callbacks, ctx);
+  stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx);
+  stepPhysiologyAndObjectives(session, dt, callbacks, ctx);
+  return stepTelemetryAndExitOutcome(session, dt, callbacks);
 }

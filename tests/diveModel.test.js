@@ -7917,7 +7917,7 @@ test('v166 Gear Workshop Persistence (TDZ Fix, Cloud Prefs Sync) & Unified Artic
   // 1. Guard against startup TDZ: CAREER_LOGBOOK_KEY & _cachedLogbook MUST be declared before activeRigLivery init
   const mainSrc = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
   const logbookDeclIdx = mainSrc.indexOf('const CAREER_LOGBOOK_KEY');
-  const liveryInitIdx = mainSrc.indexOf('let activeRigLivery =');
+  const liveryInitIdx = mainSrc.indexOf('createLiveryWorkshopController(');
   assert.ok(logbookDeclIdx > 0 && liveryInitIdx > 0);
   assert.ok(
     logbookDeclIdx < liveryInitIdx,
@@ -8439,4 +8439,78 @@ test('v171 Comprehensive Audit & Polish: Scoring/Rank, Vault Namespacing, Physic
   assert.equal(formatClock(125), '02:05');
   assert.ok(Math.abs(normalizeAngle(Math.PI * 3) - Math.PI) < 0.001 || Math.abs(normalizeAngle(Math.PI * 3) + Math.PI) < 0.001);
   assert.equal(hashStr('cave-diver'), hashStr('cave-diver'));
+});
+
+test('v172 Monolith Debt Paydown: Modular Renderers, Decomposed stepDiveSession, UI Controllers, CSS & SW Parity', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { escapeHtml } = await import('../public/js/util/common.js');
+
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const pubDir = path.resolve(testDir, '..', 'public');
+  const html = fs.readFileSync(path.join(pubDir, 'index.html'), 'utf8');
+  const swSrc = fs.readFileSync(path.join(pubDir, 'sw.js'), 'utf8');
+  const rendererSrc = fs.readFileSync(path.join(pubDir, 'js/game/renderer.js'), 'utf8');
+  const mainSrc = fs.readFileSync(path.join(pubDir, 'js/main.js'), 'utf8');
+  const sessionSrc = fs.readFileSync(path.join(pubDir, 'js/game/diveSession.js'), 'utf8');
+
+  // 1. CaveRenderer split: prototype retains all extracted renderer methods & renderer.js stays compact
+  const protoNames = new Set(Object.getOwnPropertyNames(CaveRenderer.prototype));
+  for (const m of [
+    '_buildRockChunk',
+    '_drawChunks',
+    '_drawSurfaceSky',
+    '_drawSurfaceTopEnvironment',
+    '_drawWreckShipArchitecture',
+    '_drawCaveInteractives',
+    '_drawVolumetricTorchBeam',
+    '_drawLighting',
+    '_drawImmersionGlassFx',
+  ]) {
+    assert.ok(protoNames.has(m), `CaveRenderer.prototype missing extracted method ${m}`);
+  }
+  assert.ok(rendererSrc.split(/\r?\n/).length < 5000, 'renderer.js should stay cleanly modularized (<5000L)');
+  assert.ok(mainSrc.split(/\r?\n/).length < 8200, 'main.js should stay cleanly modularized (<8200L)');
+
+  // 2. stepDiveSession decomposed into 5 named simulation phases
+  for (const phaseFn of [
+    'function stepPropulsionAndCurrents(',
+    'function stepWreckAndCaveInteractives(',
+    'function stepHydrodynamicsAndSilt(',
+    'function stepPhysiologyAndObjectives(',
+    'function stepTelemetryAndExitOutcome(',
+  ]) {
+    assert.ok(sessionSrc.includes(phaseFn), `diveSession.js missing phase function ${phaseFn}`);
+  }
+
+  // 3. Every getElementById(...) across ALL extracted public/js/ui/*.js controllers must exist in index.html
+  const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+  const uiDir = path.join(pubDir, 'js/ui');
+  const uiFiles = fs.readdirSync(uiDir).filter((f) => f.endsWith('.js'));
+  assert.ok(uiFiles.length >= 10, `Expected >=10 modular UI controller files, got ${uiFiles.length}`);
+  const missingUiIds = [];
+  for (const f of uiFiles) {
+    const src = fs.readFileSync(path.join(uiDir, f), 'utf8');
+    for (const m of src.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)) {
+      const id = m[1];
+      if (!htmlIds.has(id) && !src.includes(`id="${id}"`) && !src.includes(`id='${id}'`)) {
+        missingUiIds.push(`${f}:${id}`);
+      }
+    }
+    assert.ok(swSrc.includes(`./js/ui/${f}?v=`), `SW CORE_SHELL missing UI module ./js/ui/${f}`);
+  }
+  assert.deepEqual(missingUiIds, [], `UI controllers reference missing HTML IDs: ${missingUiIds.join(', ')}`);
+
+  // 4. Every extracted renderer module under public/js/game/renderers/*.js must be precached in SW CORE_SHELL
+  const renderersDir = path.join(pubDir, 'js/game/renderers');
+  const rendererFiles = fs.readdirSync(renderersDir).filter((f) => f.endsWith('.js'));
+  assert.ok(rendererFiles.length >= 6, `Expected >=6 modular renderer files, got ${rendererFiles.length}`);
+  for (const f of rendererFiles) {
+    assert.ok(swSrc.includes(`./js/game/renderers/${f}?v=`), `SW CORE_SHELL missing renderer ./js/game/renderers/${f}`);
+  }
+
+  // 5. Shared escapeHtml helper behaves properly
+  assert.equal(escapeHtml('<script>"&"</script>'), '&lt;script&gt;&quot;&amp;&quot;&lt;/script&gt;');
 });

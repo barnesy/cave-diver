@@ -1,18 +1,10 @@
 import {
   LEVELS,
   DEFAULT_LEVEL_ID,
-  CAMPAIGN_PLAN,
   getLevelById,
   getLevelMeta,
   getLevelMaxDepthM,
-  PROCEDURAL_TIERS,
-  PROCEDURAL_BIOMES,
-  normalizeProceduralSeed,
-  randomProceduralSeed,
-  buildProceduralLevelId,
-  buildProceduralShareUrl,
   parseProceduralFromSearch,
-  generateProceduralLevel,
   getDailyGeneratedConfig,
 } from './levels/index.js';
 import {
@@ -27,22 +19,27 @@ import {
   receiveGasIntoState,
 } from './physics/diveModel.js';
 import { resolveDiverCollision } from './game/collision.js';
+import { escapeHtml } from './util/common.js';
 import { createPerfMonitor } from './game/perfMonitor.js';
 import { createModalManager } from './ui/modalManager.js';
 import { renderDebriefDepthChart } from './ui/debriefChart.js';
+import { createReplayTheaterController } from './ui/replayController.js';
+import { createGasPlannerController } from './ui/gasPlannerController.js';
+import { createLeaderboardController } from './ui/leaderboardController.js';
+import { createSiteBrowserController, retriggerAnim } from './ui/siteBrowserController.js';
+import { createLiveryWorkshopController } from './ui/liveryWorkshopController.js';
+import { createLogbookModalController } from './ui/logbookModalController.js';
+import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralController.js';
+import { createGitHubSyncController } from './ui/githubSyncController.js';
 import {
   createEmptyLogbook,
-  mergeCareerLogbooks,
-  normalizeGhostTrack,
   recordDiveInLogbook,
   seedLogbookFromEntries,
-  formatLogbookSummary,
   computeCertifications,
   TECH_GEAR_CATALOG,
   computeUnlockedGear,
   sanitizeGearLoadout,
   DAILY_MUTATORS,
-  getDailyChallenge,
   getDailyMutatorById,
   getDailyMutatorForDate,
   getUtcDateKey,
@@ -54,23 +51,12 @@ import {
   recordCampaignClearInLogbook,
   recordCrewDiveInLogbook,
   recordArtifactInLogbook,
-  setPinnedArtifactInLogbook,
   getArtifactVaultStats,
-  ARTIFACT_COLLECTIONS,
   getFieldGuideStats,
-  exportLogbookToCsv,
-  exportLogbookToJson,
-  parseImportedLogbookJson,
 } from './game/logbookModel.js';
 import { drawStyledArtifact } from './game/artSprites.js';
 import { renderSurveySlate } from './game/surveySlate.js';
-import {
-  decodeReplayTrack,
-  drawReplayFrame,
-  drawDivePlanSlate,
-  renderExpeditionPostcard,
-  formatReplayTime,
-} from './game/diveCard.js';
+import { formatReplayTime } from './game/diveCard.js';
 import {
   getCrewRole,
   cycleCrewRoleId,
@@ -125,22 +111,14 @@ import {
   computeGasRemainingPct,
   markExploredAround,
 } from './game/scoring.js';
-import {
-  GLOBAL_MAP_VIEWBOX,
-  MAP_CONTOUR_LINES,
-  projectMapPoint,
-  computeSiteFocusViewBox,
-  formatLatLng,
-} from './game/worldMapData.js';
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
-import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDiveProfileAtTime } from './game/hud.js';
+import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer } from './game/hud.js';
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import {
   AI_SQUAD_ROSTER,
   getAiDifficultyProfile,
-  getCrewBondRank,
   createAiSquad,
   stepAiSquad,
   handlePlayerSignalForAiSquad,
@@ -150,29 +128,13 @@ import {
 } from './game/aiBuddy.js';
 import { WEATHER_CYCLE_ORDER, resolveEffectiveWeather } from './game/weather.js';
 import {
-  SUIT_LIVERIES,
-  TORCH_OPTICS,
-  MILESTONE_PATCHES,
-  HEADGEAR_STYLES,
-  ACCENT_TRIMS,
-  TANK_FINISHES,
-  VISOR_TINTS,
-  OUTFITTER_PRESETS,
   DEFAULT_RIG_LIVERY,
   getSuitLivery,
   getTorchOptic,
   getMilestonePatch,
-  resolveDiverLiveryPalette,
-  computeUnlockedLiveries,
-  sanitizeRigLivery,
   isDefaultRigLivery,
-  randomizeUnlockedLivery,
-  drawLiveryPreview,
-  drawMiniDiverAvatar,
 } from './game/rigLivery.js';
-import {
-  getCollectibleLoreNote,
-} from './game/submergedStories.js';
+import { getCollectibleLoreNote } from './game/submergedStories.js';
 import {
   PHOTO_FILTERS,
   PHOTO_FRAMES,
@@ -180,14 +142,12 @@ import {
   clampPhotoModeState,
   getPhotoFrame,
   renderPhotoSnapshot,
-  renderFieldGuideCollectorCard,
-  filterAndSortFieldGuide,
 } from './game/photoStudio.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
 import { LeaderboardClient } from './net/leaderboardClient.js';
-import { GitHubClient, buildPrefilledIssueUrl } from './net/githubClient.js';
+import { GitHubClient } from './net/githubClient.js';
 
 function parseRoomCodeFromLocation() {
   const params = new URLSearchParams(location.search);
@@ -544,475 +504,41 @@ function setLevelSelectionLocked(locked) {
 
 // Removed legacy inline MAP_LANDMASS_POLYGONS (moved to ./game/worldMapData.js)
 
-const SITE_COORDS_BY_ID = new Map(CAMPAIGN_PLAN.map((s) => [s.id, s]));
-let siteViewMode = 'split'; // 'split' | 'map' | 'list'
-let mapZoomMode = 'global'; // 'global' | 'site'
-let currentMapViewBox = { ...GLOBAL_MAP_VIEWBOX };
-let mapAnimFrameId = 0;
-let mapBaseInitialized = false;
-
-function formatViewBox(vb) {
-  return `${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`;
-}
-
-function animateMapViewBox(targetVb, instant = false) {
-  if (!siteWorldMapEl) return;
-  if (mapAnimFrameId) {
-    cancelAnimationFrame(mapAnimFrameId);
-    mapAnimFrameId = 0;
-  }
-  if (
-    instant ||
-    (Math.abs(currentMapViewBox.x - targetVb.x) < 0.05 &&
-      Math.abs(currentMapViewBox.y - targetVb.y) < 0.05 &&
-      Math.abs(currentMapViewBox.w - targetVb.w) < 0.05 &&
-      Math.abs(currentMapViewBox.h - targetVb.h) < 0.05)
-  ) {
-    currentMapViewBox = { ...targetVb };
-    siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
-    return;
-  }
-
-  const startVb = { ...currentMapViewBox };
-  const startTime = performance.now();
-  const durationMs = 480;
-
-  const tick = (now) => {
-    const rawT = Math.min(1, (now - startTime) / durationMs);
-    const ease = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
-    currentMapViewBox = {
-      x: startVb.x + (targetVb.x - startVb.x) * ease,
-      y: startVb.y + (targetVb.y - startVb.y) * ease,
-      w: startVb.w + (targetVb.w - startVb.w) * ease,
-      h: startVb.h + (targetVb.h - startVb.h) * ease,
-    };
-    siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
-    if (rawT < 1) {
-      mapAnimFrameId = requestAnimationFrame(tick);
-    } else {
-      mapAnimFrameId = 0;
-      currentMapViewBox = { ...targetVb };
-    }
-  };
-  mapAnimFrameId = requestAnimationFrame(tick);
-}
-
-function polylineToSvgPoints(coords) {
-  return coords
-    .map(([lng, lat]) => {
-      const pt = projectMapPoint(lng, lat);
-      return `${pt.x.toFixed(2)},${pt.y.toFixed(2)}`;
-    })
-    .join(' ');
-}
-
-function ensureSiteWorldMapBase() {
-  if (!siteWorldMapEl || mapBaseInitialized) return;
-  mapBaseInitialized = true;
-
-  const defs = `
-    <defs>
-      <radialGradient id="mapOceanGlow" cx="55%" cy="42%" r="68%">
-        <stop offset="0%" stop-color="#0a2540" />
-        <stop offset="65%" stop-color="#041425" />
-        <stop offset="100%" stop-color="#020a14" />
-      </radialGradient>
-      <linearGradient id="mapLandFill" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#174469" />
-        <stop offset="100%" stop-color="#0d2a44" />
-      </linearGradient>
-    </defs>
-  `;
-
-  const oceanRect = `<rect x="-80" y="-120" width="540" height="440" fill="url(#mapOceanGlow)" />`;
-
-  // Graticule (15° minor + 30° major + axis labels)
-  const gridParts = [];
-  for (let lng = -105; lng <= 75; lng += 15) {
-    const gx = (lng + 108) * 2;
-    const isMajor = lng % 30 === 0;
-    gridParts.push(
-      `<line x1="${gx}" y1="-40" x2="${gx}" y2="230" vector-effect="non-scaling-stroke" stroke="${
-        isMajor ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.05)'
-      }" stroke-width="${isMajor ? 0.8 : 0.5}" ${isMajor ? '' : 'stroke-dasharray="2,3"'} />`
-    );
-    if (isMajor && lng >= -90 && lng <= 60) {
-      const lbl = lng === 0 ? '0°' : `${Math.abs(lng)}°${lng > 0 ? 'E' : 'W'}`;
-      gridParts.push(
-        `<text x="${(gx + 1.5).toFixed(1)}" y="213" fill="rgba(125,211,252,0.34)" font-size="4.4" font-family="ui-monospace, monospace">${lbl}</text>`
-      );
-    }
-  }
-  for (let lat = -45; lat <= 75; lat += 15) {
-    const gy = projectMapPoint(0, lat).y;
-    const isMajor = lat % 30 === 0;
-    gridParts.push(
-      `<line x1="-20" y1="${gy.toFixed(2)}" x2="380" y2="${gy.toFixed(2)}" vector-effect="non-scaling-stroke" stroke="${
-        isMajor ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.05)'
-      }" stroke-width="${isMajor ? 0.8 : 0.5}" ${isMajor ? '' : 'stroke-dasharray="2,3"'} />`
-    );
-    if (isMajor && lat >= -30 && lat <= 60) {
-      const lbl = lat === 0 ? 'EQ' : `${Math.abs(lat)}°${lat > 0 ? 'N' : 'S'}`;
-      gridParts.push(
-        `<text x="-7" y="${(gy - 1.5).toFixed(1)}" fill="rgba(125,211,252,0.34)" font-size="4.4" font-family="ui-monospace, monospace">${lbl}</text>`
-      );
-    }
-  }
-
-  // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=171" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
-
-  // Mid-Atlantic tectonic rift ridge overlay
-  const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
-    .map(
-      ({ coords }) =>
-        `<polyline points="${polylineToSvgPoints(coords)}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="0.95" stroke-dasharray="3,3" stroke-linecap="round" stroke-linejoin="round" />`
-    )
-    .join('');
-
-  siteWorldMapEl.innerHTML = `${defs}<g id="map-base-layer">${oceanRect}${mapRaster}${gridParts.join('')}${trenchPaths}</g><g id="map-overlay-layer"></g>`;
-  siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
-}
-
-let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck' | 'todo'
-
-function setSiteCategoryFilter(nextCat) {
-  const valid = nextCat === 'wreck' || nextCat === 'cave' || nextCat === 'todo' ? nextCat : 'all';
-  siteCategoryFilter = valid;
-  if (siteCatTabsEl) {
-    const catIdx = valid === 'cave' ? 1 : valid === 'wreck' ? 2 : valid === 'todo' ? 3 : 0;
-    siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
-    for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
-      const isAct = b.dataset.siteCat === valid;
-      b.classList.toggle('active', isAct);
-      b.setAttribute('aria-selected', String(isAct));
-    }
-  }
-}
-
-function getFilteredLevels(bookOverride = null) {
-  if (siteCategoryFilter === 'wreck') return LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck'));
-  if (siteCategoryFilter === 'cave') return LEVELS.filter((l) => !l.isWreck && l.category !== 'wreck');
-  if (siteCategoryFilter === 'todo') {
-    const book = bookOverride || loadCareerLogbook();
-    return LEVELS.filter((l) => !book.cleared?.[l.id]);
-  }
-  return LEVELS;
-}
-
-function renderSiteWorldMap({ instantZoom = false, book: bookOverride = null } = {}) {
-  if (!siteWorldMapEl) return;
-  ensureSiteWorldMapBase();
-
-  const locked = Boolean(lan.room && !lan.isHost());
-  const book = bookOverride || loadCareerLogbook();
-  const visibleLevels = getFilteredLevels(book);
-  const activeSlot = SITE_COORDS_BY_ID.get(activeLevel.id);
-  const activeVisible = visibleLevels.some((l) => l.id === activeLevel.id);
-  const targetVb =
-    mapZoomMode === 'site' && activeVisible
-      ? computeSiteFocusViewBox(activeLevel.id, activeSlot)
-      : { ...GLOBAL_MAP_VIEWBOX };
-
-  if (btnMapZoom) {
-    btnMapZoom.textContent = mapZoomMode === 'site' ? '🌍 World' : '🎯 Focus';
-    btnMapZoom.title =
-      mapZoomMode === 'site' ? 'Zoom out to full global map' : 'Zoom & pan to active dive site';
-  }
-
-  const k = Math.max(0.14, Math.min(1, targetVb.w / GLOBAL_MAP_VIEWBOX.w));
-  const isZoomed = mapZoomMode === 'site';
-
-  // Pin coordinates (with slight declustering only when in wide global view)
-  const pins = visibleLevels.map((lvl) => {
-    const idx = Math.max(0, LEVELS.findIndex((l) => l.id === lvl.id));
-    const slot = SITE_COORDS_BY_ID.get(lvl.id);
-    const pt = projectMapPoint(slot?.lng ?? 0, slot?.lat ?? 20);
-    if (!isZoomed) {
-      if (lvl.id === 'ox-bel-ha-grand-traverse') {
-        pt.y += 2.6;
-        pt.x -= 1.2;
-      }
-      if (lvl.id === 'cenote-el-abismo') {
-        pt.y -= 2.2;
-        pt.x += 1.0;
-      }
-      if (lvl.id === 'strytan-hydrothermal-chimneys') {
-        pt.x -= 2.4;
-        pt.y -= 1.6;
-      }
-      if (lvl.id === 'grjotagja-kleifarvatn-rift') {
-        pt.x += 2.4;
-        pt.y -= 0.4;
-      }
-      if (lvl.id === 'kverkfjoll-subglacial-caves') {
-        pt.x += 2.2;
-        pt.y += 2.0;
-      }
-      if (lvl.id === 'silfra-katla-aurora-abyss') {
-        pt.x -= 2.0;
-        pt.y += 1.4;
-      }
-      if (lvl.id === 'uss-oriskany-carrier') {
-        pt.x -= 2.0;
-        pt.y -= 1.6;
-      }
-    }
-    return { lvl, idx, slot, x: pt.x, y: pt.y };
-  });
-
-  const routePts = pins.length >= 2 ? pins.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ') : '';
-  const routeLine = routePts
-    ? `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`
-    : '';
-
-  const pinMarkup = pins
-    .map(({ lvl, idx, slot, x, y }) => {
-      const isSelected = lvl.id === activeLevel.id;
-      const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
-      const isUnlined = lvl.reelMetersPerDiver > 0;
-      const clearRec = book.cleared?.[lvl.id] || null;
-      const best = Math.max(getSavedBestScore(lvl.id), clearRec?.score || 0);
-      const gradeTag = clearRec?.grade || '';
-      const pinColor = isWreck ? '#fb923c' : isUnlined ? '#fbbf24' : '#38bdf8';
-      const r = (isSelected ? 5.2 : 3.4) * k;
-
-      const halo = isSelected
-        ? `<circle class="map-pin-sonar" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(7.5 * k).toFixed(2)}" vector-effect="non-scaling-stroke" />
-           <circle class="map-pin-halo" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" />`
-        : '';
-      const crosshair = isSelected
-        ? `<g stroke="rgba(224,242,254,0.62)" vector-effect="non-scaling-stroke" stroke-width="1">
-             <line x1="${(x - 12 * k).toFixed(2)}" y1="${y.toFixed(2)}" x2="${(x - 6.6 * k).toFixed(2)}" y2="${y.toFixed(2)}" />
-             <line x1="${(x + 6.6 * k).toFixed(2)}" y1="${y.toFixed(2)}" x2="${(x + 12 * k).toFixed(2)}" y2="${y.toFixed(2)}" />
-             <line x1="${x.toFixed(2)}" y1="${(y - 12 * k).toFixed(2)}" x2="${x.toFixed(2)}" y2="${(y - 6.6 * k).toFixed(2)}" />
-             <line x1="${x.toFixed(2)}" y1="${(y + 6.6 * k).toFixed(2)}" x2="${x.toFixed(2)}" y2="${(y + 12 * k).toFixed(2)}" />
-           </g>`
-        : '';
-      const ring =
-        best > 0
-          ? `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(r + 2.0 * k).toFixed(2)}" fill="none" vector-effect="non-scaling-stroke" stroke="#34d399" stroke-width="1.4" />`
-          : '';
-
-      // Show short L# tag on selected or nearby zoomed pins; place to the left if near right edge or clustered west (Strytan L15)
-      let labelMarkup = '';
-      if (isSelected || isZoomed) {
-        const placeLeft =
-          x > targetVb.x + targetVb.w * 0.6 ||
-          lvl.id === 'strytan-hydrothermal-chimneys' ||
-          lvl.id === 'silfra-katla-aurora-abyss';
-        const anchor = placeLeft ? 'end' : 'start';
-        const lx = x + (placeLeft ? -7.2 * k : 7.2 * k);
-        const ly = y + 3.4 * k;
-        const labelText =
-          isSelected && isZoomed
-            ? `L${idx + 1} · ${lvl.name}${gradeTag ? ` [${gradeTag}]` : ''}`
-            : gradeTag
-              ? `L${idx + 1}·${gradeTag}`
-              : `L${idx + 1}`;
-        labelMarkup = `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" fill="${
-          isSelected ? '#f0f9ff' : '#bae6fd'
-        }" stroke="#020b14" stroke-width="${(3.4 * k).toFixed(2)}" paint-order="stroke" font-size="${(
-          (isSelected ? 11.0 : 9.2) * k
-        ).toFixed(2)}" font-weight="700" font-family="ui-monospace, monospace">${escapeHtml(labelText)}</text>`;
-      }
-
-      return `
-        <g class="map-pin-btn ${isSelected ? 'active' : ''} ${locked ? 'locked' : ''}" data-level-id="${lvl.id}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" tabindex="0">
-          <title>L${idx + 1}: ${escapeHtml(lvl.name)} (${escapeHtml(slot?.region || '')} · ${getLevelMaxDepthM(lvl)}m)</title>
-          ${halo}
-          ${crosshair}
-          <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" fill="transparent" />
-          ${ring}
-          <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${pinColor}" stroke="#020b14" vector-effect="non-scaling-stroke" stroke-width="1.4" />
-          ${labelMarkup}
-        </g>
-      `;
-    })
-    .join('');
-
-  const overlayLayer = siteWorldMapEl.querySelector('#map-overlay-layer');
-  if (overlayLayer) {
-    const emptyBanner =
-      pins.length === 0
-        ? `<g><rect x="74" y="82" width="210" height="32" rx="10" fill="rgba(2, 11, 20, 0.88)" stroke="rgba(52, 211, 153, 0.55)" stroke-width="1" /><text x="179" y="101.5" text-anchor="middle" fill="#a7f3d0" font-size="9.5" font-weight="700" font-family="ui-monospace, monospace">ALL ${LEVELS.length} EXPEDITIONS CLEARED!</text></g>`
-        : '';
-    overlayLayer.innerHTML = `${routeLine}${pinMarkup}${emptyBanner}`;
-  }
-
-  animateMapViewBox(targetVb, instantZoom);
-
-  const activeIdx = Math.max(0, LEVELS.findIndex((l) => l.id === activeLevel.id));
-  if (siteMapRegionBadgeEl) {
-    siteMapRegionBadgeEl.textContent = `L${activeIdx + 1} · ${activeSlot?.region || activeLevel.name} · ${getLevelMaxDepthM(activeLevel)}m`;
-  }
-  if (siteMapCoordsEl && activeSlot) {
-    siteMapCoordsEl.textContent = formatLatLng(activeSlot.lat, activeSlot.lng);
-  }
-}
-
-function renderLevelCards() {
-  if (!levelCardsEl) return;
-  const locked = Boolean(lan.room && !lan.isHost());
-  const book = loadCareerLogbook();
-  const clearedCount = Object.keys(book.cleared || {}).length;
-  const nextRecommendedId = LEVELS.find((l) => !book.cleared?.[l.id])?.id || null;
-  const visibleLevels = getFilteredLevels(book);
-  const pill = document.getElementById('campaign-progress-pill');
-  if (pill) {
-    pill.textContent =
-      siteCategoryFilter === 'wreck'
-        ? `${visibleLevels.length} Wrecks · ${clearedCount}/${LEVELS.length}`
-        : siteCategoryFilter === 'cave'
-          ? `${visibleLevels.length} Caves · ${clearedCount}/${LEVELS.length}`
-          : siteCategoryFilter === 'todo'
-            ? `${visibleLevels.length} Uncleared`
-            : `${clearedCount} / ${LEVELS.length} Cleared`;
-  }
-  if (visibleLevels.length === 0) {
-    levelCardsEl.innerHTML = `<div class="lvl-empty-msg" style="padding:18px;text-align:center;color:#a7f3d0;font-size:0.8rem;">🏆 All ${LEVELS.length} expeditions cleared! Switch to All to chase S+ records.</div>`;
-    renderSiteWorldMap({ book });
-    return;
-  }
-  levelCardsEl.innerHTML = visibleLevels.map((lvl) => {
-    const idx = Math.max(0, LEVELS.findIndex((l) => l.id === lvl.id));
-    const isSelected = lvl.id === activeLevel.id;
-    const isWreck = Boolean(lvl.isWreck || lvl.category === 'wreck');
-    const isCached = renderer.isLevelCached(lvl.id) || (renderer.ready && renderer.level?.id === lvl.id);
-    const clearRec = book.cleared?.[lvl.id] || null;
-    const best = Math.max(getSavedBestScore(lvl.id), clearRec?.score || 0);
-    const meta = getLevelMeta(lvl, idx);
-    const slot = SITE_COORDS_BY_ID.get(lvl.id);
-    const depth = `${meta.maxDepthM}m`;
-    const isNext = !clearRec && lvl.id === nextRecommendedId;
-    const grade = clearRec?.grade || '';
-    const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
-    const modePillHtml = renderModeBadgeHtml(clearRec?.bestDifficulty || clearRec?.lastDifficulty, { compact: true });
-    const badgesHtml = grade
-      ? `${modePillHtml}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>`
-      : isNext
-        ? `<span class="lvl-next-badge">NEXT</span>`
-        : '';
-    const timeStr = clearRec?.bestTimeSec > 0 ? ` · ${formatRunClock(clearRec.bestTimeSec)}` : '';
-    const metaText =
-      best > 0
-        ? `✓ ${best.toLocaleString()}${timeStr}`
-        : isCached
-          ? lvl.reelMetersPerDiver > 0
-            ? `✓ Ready · ${lvl.reelMetersPerDiver}m`
-            : `✓ Ready`
-          : lvl.reelMetersPerDiver > 0
-            ? `${isWreck ? 'Wreck Reel' : 'No Line'} · ${lvl.reelMetersPerDiver}m`
-            : isWreck
-              ? 'Wreck · Fixed Line'
-              : getLevelDifficultyLabel(idx, lvl);
-    const prefix = isWreck ? '🚢 ' : '';
-    const tierTag = lvl.reelMetersPerDiver > 0 ? `${prefix}L${idx + 1} · T${meta.tier}` : `${prefix}L${idx + 1}`;
-    return `
-      <button
-        type="button"
-        class="level-card-btn ${isWreck ? 'is-wreck' : ''} ${isSelected ? 'active' : ''}"
-        data-level-id="${lvl.id}"
-        role="option"
-        aria-selected="${isSelected ? 'true' : 'false'}"
-        ${locked ? 'disabled' : ''}
-      >
-        <div class="lvl-card-top">
-          <span>${tierTag} · ${slot?.region || ''}</span>
-          <span class="lvl-card-badges">${badgesHtml}<span class="lvl-card-depth">${depth}</span></span>
-        </div>
-        <span class="lvl-card-name">${lvl.name}</span>
-        <span class="lvl-card-meta ${best > 0 || isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
-      </button>
-    `;
-  }).join('');
-
-  const activeBtn = levelCardsEl.querySelector('.level-card-btn.active');
-  activeBtn?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-  renderSiteWorldMap({ book });
-}
-
-function retriggerAnim(el, className) {
-  if (!el) return;
-  el.classList.remove(className);
-  void el.offsetWidth;
-  el.classList.add(className);
-  const cleanup = () => el.classList.remove(className);
-  el.addEventListener('animationend', cleanup, { once: true });
-}
-
-let menuDescExpanded = false;
-
-function syncMenuDescToggle() {
-  if (!menuDescEl || !btnDescToggle) return;
-  if (menuDescExpanded) {
-    menuDescEl.classList.remove('clamped');
-    btnDescToggle.hidden = false;
-    btnDescToggle.textContent = 'Less ▴';
-    btnDescToggle.setAttribute('aria-expanded', 'true');
-    return;
-  }
-  menuDescEl.classList.add('clamped');
-  const overflows = menuDescEl.clientHeight > 0 && menuDescEl.scrollHeight > menuDescEl.clientHeight + 2;
-  btnDescToggle.hidden = !overflows;
-  btnDescToggle.textContent = 'More ▾';
-  btnDescToggle.setAttribute('aria-expanded', 'false');
-}
-
-btnDescToggle?.addEventListener('click', () => {
-  menuDescExpanded = !menuDescExpanded;
-  syncMenuDescToggle();
-  if (menuDescExpanded) {
-    retriggerAnim(menuDescEl, 'anim-telemetry-swap');
-  }
+// ── Site Browser, Global Dive Map SVG & Level Cards Controller (modularized v172) ──
+const siteBrowser = createSiteBrowserController({
+  lan,
+  renderer,
+  loadCareerLogbook,
+  getActiveLevel: () => activeLevel,
+  getSavedBestScore,
+  getLevelDifficultyLabel,
+  renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
+  formatRunClock: (...a) => formatRunClock(...a),
+  mapRasterUrl: './assets/map-expedition.jpg?v=172',
+  els: {
+    siteWorldMapEl,
+    btnMapZoom,
+    siteCatTabsEl,
+    siteMapRegionBadgeEl,
+    siteMapCoordsEl,
+    levelCardsEl,
+    selectLevel,
+    btnPlaySolo,
+    screenMenu,
+    screenLoader,
+    menuDescEl,
+    btnDescToggle,
+  },
 });
-
-window.addEventListener('resize', () => {
-  if (!screenMenu.hidden) syncMenuDescToggle();
-});
-
-function syncMenuLevelLabels(level, { animate = false } = {}) {
-  const idx = LEVELS.findIndex((l) => l.id === level.id);
-  const lvlNum = idx >= 0 ? idx + 1 : 1;
-  btnPlaySolo.textContent = level.isProcedural
-    ? `DIVE · ∞ #${level.proceduralMeta?.seed || 'SUMP'}`
-    : `DIVE · LEVEL ${lvlNum}`;
-  const menuTitle = screenMenu.querySelector('.menu-title');
-  const menuDesc = menuDescEl || screenMenu.querySelector('.menu-desc');
-  const loaderTitle = screenLoader.querySelector('.loader-title');
-  const loaderMetaSpan = screenLoader.querySelector('.loader-meta span');
-  if (menuTitle) {
-    menuTitle.textContent = level.name.toUpperCase();
-    if (animate) retriggerAnim(menuTitle, 'anim-telemetry-swap');
-  }
-  if (menuDesc && level.description) {
-    menuDescExpanded = false;
-    menuDesc.textContent = level.description;
-    requestAnimationFrame(syncMenuDescToggle);
-    if (animate) retriggerAnim(menuDesc, 'anim-telemetry-swap');
-  }
-  if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();
-  if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle.toUpperCase();
-  renderLevelCards();
-  if (animate) {
-    retriggerAnim(siteMapRegionBadgeEl, 'anim-badge-lock');
-    retriggerAnim(siteMapCoordsEl, 'anim-badge-lock');
-  }
-}
-
-function populateLevelSelect() {
-  if (selectLevel) {
-    selectLevel.innerHTML = '';
-    LEVELS.forEach((lvl, idx) => {
-      const opt = document.createElement('option');
-      opt.value = lvl.id;
-      opt.textContent = `L${idx + 1}: ${lvl.name}`;
-      selectLevel.appendChild(opt);
-    });
-    selectLevel.value = activeLevel.id;
-  }
-  syncMenuLevelLabels(activeLevel);
-}
+const {
+  setSiteCategoryFilter,
+  getFilteredLevels,
+  renderSiteWorldMap,
+  renderLevelCards,
+  syncMenuDescToggle,
+  syncMenuLevelLabels,
+  populateLevelSelect,
+} = siteBrowser;
 
 async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoad = false } = {}) {
   const nextLevel = getLevelById(levelId);
@@ -2731,593 +2257,36 @@ function cycleWeatherPreference() {
 menuWeatherPillEl?.addEventListener('click', cycleWeatherPreference);
 syncWeatherUi();
 
-// Diver Gear Workshop, Custom Rig Liveries & Technical Torch Optics (v138)
-const WRECK_LEVEL_ID_SET = new Set(LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck')).map((l) => l.id));
-function getCurrentLiveryUnlocks() {
-  let book = null;
-  try { book = loadCareerLogbook(); } catch {}
-  return computeUnlockedLiveries(book, WRECK_LEVEL_ID_SET);
-}
-let activeRigLivery = { ...DEFAULT_RIG_LIVERY };
-try {
-  const rawLiv = localStorage.getItem(LIVERY_PREF_KEY);
-  if (rawLiv) {
-    activeRigLivery = sanitizeRigLivery(JSON.parse(rawLiv), getCurrentLiveryUnlocks());
-  }
-} catch {}
-const menuLiveryPillEl = document.getElementById('menu-livery-pill');
-const btnHomeAvatarBadgeEl = document.getElementById('btn-home-avatar-badge');
-const homeAvatarCanvasEl = document.getElementById('home-avatar-canvas');
-const homeAvatarCtx = homeAvatarCanvasEl?.getContext?.('2d') || null;
-const liveryModalEl = document.getElementById('livery-modal');
-const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
-const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
-const liveryPresetRowEl = document.getElementById('livery-preset-row');
-const liverySavedSlotsEl = document.getElementById('livery-saved-slots');
-const btnLiveryTeamUniformEl = document.getElementById('btn-livery-team-uniform');
-const liveryCatTabsEl = document.getElementById('livery-cat-tabs');
-const liveryEnvTabsEl = document.getElementById('livery-env-tabs');
-const btnLiveryPrevCcrEl = document.getElementById('btn-livery-prev-ccr');
-const btnLiveryPrevDpvEl = document.getElementById('btn-livery-prev-dpv');
-const btnLiveryRandomEl = document.getElementById('btn-livery-random');
-const liverySuitGridEl = document.getElementById('livery-suit-grid');
-const liveryTrimGridEl = document.getElementById('livery-trim-grid');
-const liveryHeadgearGridEl = document.getElementById('livery-headgear-grid');
-const liveryVisorGridEl = document.getElementById('livery-visor-grid');
-const liveryTankGridEl = document.getElementById('livery-tank-grid');
-const liveryTorchGridEl = document.getElementById('livery-torch-grid');
-const liveryPatchGridEl = document.getElementById('livery-patch-grid');
-const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
-const btnLiveryCloseEl = document.getElementById('btn-livery-close');
-const btnLiveryResetEl = document.getElementById('btn-livery-reset');
-const btnLiveryDoneEl = document.getElementById('btn-livery-done');
-const liveryPanels = {
-  suit: document.getElementById('livery-panel-suit'),
-  head: document.getElementById('livery-panel-head'),
-  gear: document.getElementById('livery-panel-gear'),
-  patch: document.getElementById('livery-panel-patch'),
-};
-let activeLiveryTab = 'suit';
-let liveryPreviewEnv = 'clear';
-let liveryPreviewCcr = null; // null = follow player's equipped loadout
-let liveryPreviewDpv = null;
-
-const LIVERY_SLOTS_KEY = 'caveDiverLiverySlots_v1';
-const SQUAD_UNIFORM_KEY = 'caveDiverSquadUniform_v1';
-const SAVED_KIT_LABELS = ['Cave Kit', 'Wreck Kit', 'Night Ops'];
-let savedLiverySlots = [null, null, null];
-try {
-  const rawSlots = JSON.parse(localStorage.getItem(LIVERY_SLOTS_KEY) || 'null');
-  if (Array.isArray(rawSlots)) {
-    savedLiverySlots = [0, 1, 2].map((i) => (rawSlots[i] && typeof rawSlots[i] === 'object' ? rawSlots[i] : null));
-  }
-} catch {}
-let aiSquadTeamUniform = false;
-try {
-  aiSquadTeamUniform = localStorage.getItem(SQUAD_UNIFORM_KEY) === '1';
-} catch {}
-
-function saveLiverySlotsToStorage({ skipCloudSync = false } = {}) {
-  try { localStorage.setItem(LIVERY_SLOTS_KEY, JSON.stringify(savedLiverySlots)); } catch {}
-  if (!skipCloudSync) scheduleGitHubStatsSync();
-}
-
-function saveRigLivery({ skipCloudSync = false } = {}) {
-  try { localStorage.setItem(LIVERY_PREF_KEY, JSON.stringify(activeRigLivery)); } catch {}
-  if (!skipCloudSync) scheduleGitHubStatsSync();
-}
-
-function reconcileActiveRigLiveryFromStorage() {
-  try {
-    const rawLiv = localStorage.getItem(LIVERY_PREF_KEY);
-    if (rawLiv) {
-      activeRigLivery = sanitizeRigLivery(JSON.parse(rawLiv), getCurrentLiveryUnlocks());
-    }
-  } catch {}
-}
-
-function renderHomeAvatarBadge() {
-  if (!homeAvatarCtx || !homeAvatarCanvasEl) return;
-  let hasCcr = false;
-  let hasDpv = false;
-  try {
-    const eq = getEffectiveGearLoadout();
-    hasCcr = Boolean(eq?.ccr);
-    hasDpv = Boolean(eq?.dpv);
-  } catch {}
-  drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
-}
-
-function syncLiveryUi() {
-  const pal = resolveDiverLiveryPalette(activeRigLivery);
-  const custom = !isDefaultRigLivery(activeRigLivery);
-  if (menuLiveryPillEl) {
-    menuLiveryPillEl.textContent = `🎨 ${pal.suit.name}${pal.headgear.id !== 'zissou-cap' ? ` · ${pal.headgear.icon}` : ''}`;
-    menuLiveryPillEl.classList.toggle('active', custom);
-  }
-  if (btnHomeAvatarBadgeEl) {
-    btnHomeAvatarBadgeEl.classList.toggle('custom', custom);
-    btnHomeAvatarBadgeEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name} (tap to customize)`;
-  }
-  renderHomeAvatarBadge();
-  if (session?.diver) {
-    session.diver.livery = { ...activeRigLivery };
-  }
-  syncSetupDrawerSummary();
-}
-
-function renderLiveryPreviewFrame(timeSec = 0) {
-  if (!liveryPreviewCtx || !liveryPreviewCanvasEl) return;
-  let hasCcr = false;
-  let hasDpv = false;
-  let ccrUnlocked = false;
-  let dpvUnlocked = false;
-  try {
-    const eq = getEffectiveGearLoadout();
-    hasCcr = Boolean(eq?.ccr);
-    hasDpv = Boolean(eq?.dpv);
-    const { unlockedIds } = computeUnlockedGear(loadCareerLogbook(), LEVELS);
-    ccrUnlocked = unlockedIds.has('ccr');
-    dpvUnlocked = unlockedIds.has('dpv');
-  } catch {}
-  const showCcr = ccrUnlocked ? hasCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr);
-  const showDpv = dpvUnlocked ? hasDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv);
-  drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, activeRigLivery, {
-    hasCcr: showCcr,
-    hasDpv: showDpv,
-    envMode: liveryPreviewEnv,
-    timeSec,
-  });
-}
-
-function setLiveryActiveTab(tabId) {
-  if (!liveryPanels[tabId]) return;
-  activeLiveryTab = tabId;
-  liveryCatTabsEl?.querySelectorAll?.('button[data-livery-tab]')?.forEach?.((btn) => {
-    const on = btn.getAttribute('data-livery-tab') === tabId;
-    btn.classList.toggle('active', on);
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-  for (const [k, el] of Object.entries(liveryPanels)) {
-    if (el) el.hidden = k !== tabId;
-  }
-}
-
-function updateActiveLiveryField(patchObj) {
-  const unlocks = getCurrentLiveryUnlocks();
-  activeRigLivery = sanitizeRigLivery({ ...activeRigLivery, ...patchObj }, unlocks);
-  saveRigLivery();
-  syncLiveryUi();
-  renderLiveryWorkshopModal();
-}
-
-function renderLiveryWorkshopModal() {
-  const modalCard = liveryModalEl?.querySelector?.('.livery-modal-card') || null;
-  const prevScrollTop = modalCard ? modalCard.scrollTop : 0;
-  const unlocks = getCurrentLiveryUnlocks();
-  activeRigLivery = sanitizeRigLivery(activeRigLivery, unlocks);
-  const pal = resolveDiverLiveryPalette(activeRigLivery);
-
-  const totalItems =
-    SUIT_LIVERIES.length +
-    ACCENT_TRIMS.length +
-    HEADGEAR_STYLES.length +
-    VISOR_TINTS.length +
-    TANK_FINISHES.length +
-    TORCH_OPTICS.length +
-    MILESTONE_PATCHES.length;
-  const totalUnlocked =
-    unlocks.suits.size +
-    unlocks.trims.size +
-    unlocks.headgears.size +
-    unlocks.visors.size +
-    unlocks.tanks.size +
-    unlocks.torches.size +
-    unlocks.patches.size;
-  if (liveryUnlockSummaryEl) {
-    liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces unlocked (${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${unlocks.stats.speciesLogged} species). Syncs live in co-op.`;
-  }
-
-  // Sync Test-Tank toolbar pill states
-  liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
-    const on = btn.getAttribute('data-livery-env') === liveryPreviewEnv;
-    btn.classList.toggle('active', on);
-    btn.setAttribute('aria-checked', on ? 'true' : 'false');
-  });
-  let eqCcr = false;
-  let eqDpv = false;
-  let ccrUnlocked = false;
-  let dpvUnlocked = false;
-  try {
-    const eq = getEffectiveGearLoadout();
-    eqCcr = Boolean(eq?.ccr);
-    eqDpv = Boolean(eq?.dpv);
-    const { unlockedIds } = computeUnlockedGear(loadCareerLogbook(), LEVELS);
-    ccrUnlocked = unlockedIds.has('ccr');
-    dpvUnlocked = unlockedIds.has('dpv');
-  } catch {}
-  const showCcr = ccrUnlocked ? eqCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr);
-  const showDpv = dpvUnlocked ? eqDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv);
-  if (btnLiveryPrevCcrEl) {
-    btnLiveryPrevCcrEl.classList.toggle('active', showCcr);
-    btnLiveryPrevCcrEl.setAttribute('aria-pressed', showCcr ? 'true' : 'false');
-    btnLiveryPrevCcrEl.textContent = ccrUnlocked ? (showCcr ? '✓ CCR' : 'CCR') : '👁 CCR';
-    btnLiveryPrevCcrEl.title = ccrUnlocked
-      ? (showCcr ? 'CCR Rebreather equipped for dives (click to unequip)' : 'Equip CCR Rebreather for dives')
-      : 'Preview CCR Rebreather in Test Tank (locked — earn cert to equip in dives)';
-  }
-  if (btnLiveryPrevDpvEl) {
-    btnLiveryPrevDpvEl.classList.toggle('active', showDpv);
-    btnLiveryPrevDpvEl.setAttribute('aria-pressed', showDpv ? 'true' : 'false');
-    btnLiveryPrevDpvEl.textContent = dpvUnlocked ? (showDpv ? '✓ DPV' : 'DPV') : '👁 DPV';
-    btnLiveryPrevDpvEl.title = dpvUnlocked
-      ? (showDpv ? 'DPV Scooter equipped for dives (click to unequip)' : 'Equip DPV Scooter for dives')
-      : 'Preview DPV Scooter in Test Tank (locked — earn cert to equip in dives)';
-  }
-
-  // 1-Tap Expedition Kit Presets strip
-  if (liveryPresetRowEl) {
-    liveryPresetRowEl.innerHTML = OUTFITTER_PRESETS.map((pr) => {
-      const clamped = sanitizeRigLivery(pr.livery, unlocks);
-      const isMatch =
-        clamped.suitId === activeRigLivery.suitId &&
-        clamped.torchId === activeRigLivery.torchId &&
-        (clamped.headgearId || 'zissou-cap') === pal.headgear.id &&
-        (clamped.trimId || 'suit-default') === pal.trimSpec.id &&
-        (clamped.tankId || 'al80-silver') === pal.tank.id &&
-        (clamped.visorId || 'clear-cyan') === pal.visor.id;
-      const suit = getSuitLivery(pr.livery.suitId);
-      const lockedParts =
-        (!unlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
-        (!unlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
-        (!unlocks.tanks.has(pr.livery.tankId) ? 1 : 0);
-      return `<button type="button" class="livery-preset-chip${isMatch ? ' active' : ''}" data-preset-id="${pr.id}" title="${escapeHtml(pr.name)}${lockedParts > 0 ? ' (applies unlocked items from this kit)' : ''}">
-        <span class="livery-preset-dot" style="background: linear-gradient(135deg, ${suit.suitTop}, ${suit.accent});" aria-hidden="true"></span>
-        <span>${pr.icon} ${escapeHtml(pr.name)}</span>
-      </button>`;
-    }).join('');
-    liveryPresetRowEl.querySelectorAll('button[data-preset-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const pid = btn.getAttribute('data-preset-id');
-        const pr = OUTFITTER_PRESETS.find((x) => x.id === pid);
-        if (!pr) return;
-        const curUnlocks = getCurrentLiveryUnlocks();
-        const lockedCount =
-          (!curUnlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
-          (!curUnlocks.torches.has(pr.livery.torchId) ? 1 : 0) +
-          (!curUnlocks.patches.has(pr.livery.patchId) ? 1 : 0) +
-          (!curUnlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
-          (!curUnlocks.trims.has(pr.livery.trimId) ? 1 : 0) +
-          (!curUnlocks.tanks.has(pr.livery.tankId) ? 1 : 0) +
-          (!curUnlocks.visors.has(pr.livery.visorId) ? 1 : 0);
-        updateActiveLiveryField(pr.livery);
-        if (lockedCount > 0) {
-          showToast(`🎨 Applied ${pr.name} (${lockedCount} locked piece${lockedCount > 1 ? 's' : ''} kept Standard Issue).`, 2.4);
-        }
-      });
-    });
-  }
-
-  // 3 Saved Custom Loadout Slots + AI Squad Team Uniform toggle (v155)
-  if (liverySavedSlotsEl) {
-    liverySavedSlotsEl.innerHTML = SAVED_KIT_LABELS.map((label, idx) => {
-      const saved = savedLiverySlots[idx] ? sanitizeRigLivery(savedLiverySlots[idx], unlocks) : null;
-      const dotStyle = saved
-        ? (() => {
-            const p = resolveDiverLiveryPalette(saved);
-            return `background: linear-gradient(135deg, ${p.suitTop}, ${p.accent});`;
-          })()
-        : 'background: rgba(148, 163, 184, 0.25);';
-      return `<div class="livery-slot-pill${saved ? ' filled' : ''}">
-        <button type="button" class="livery-slot-load" data-slot-load="${idx}" ${saved ? '' : 'disabled'} title="${saved ? `Load ${label}` : `Save a rig to ${label} first`}">
-          <span class="livery-preset-dot" style="${dotStyle}" aria-hidden="true"></span>
-          <span>${escapeHtml(label)}</span>
-        </button>
-        <button type="button" class="livery-slot-save" data-slot-save="${idx}" title="Save current rig to ${label}" aria-label="Save current rig to ${label}">💾</button>
-      </div>`;
-    }).join('');
-    liverySavedSlotsEl.querySelectorAll('button[data-slot-load]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.getAttribute('data-slot-load'));
-        const slot = savedLiverySlots[idx];
-        if (!slot) return;
-        activeRigLivery = sanitizeRigLivery(slot, getCurrentLiveryUnlocks());
-        saveRigLivery();
-        syncLiveryUi();
-        renderLiveryWorkshopModal();
-        showToast(`🎨 Loaded ${SAVED_KIT_LABELS[idx]}!`, 1.8);
-      });
-    });
-    liverySavedSlotsEl.querySelectorAll('button[data-slot-save]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.getAttribute('data-slot-save'));
-        savedLiverySlots[idx] = { ...activeRigLivery };
-        saveLiverySlotsToStorage();
-        renderLiveryWorkshopModal();
-        showToast(`💾 Saved current rig to ${SAVED_KIT_LABELS[idx]}!`, 1.8);
-      });
-    });
-  }
-  if (btnLiveryTeamUniformEl) {
-    btnLiveryTeamUniformEl.classList.toggle('active', aiSquadTeamUniform);
-    btnLiveryTeamUniformEl.setAttribute('aria-pressed', aiSquadTeamUniform ? 'true' : 'false');
-    btnLiveryTeamUniformEl.textContent = aiSquadTeamUniform ? '🤝 Squad Uniform: Team Match' : '🤝 Squad Uniform: Solo';
-  }
-
-  if (liverySuitGridEl) {
-    liverySuitGridEl.innerHTML = SUIT_LIVERIES.map((s) => {
-      const unlocked = unlocks.suits.has(s.id);
-      const selected = activeRigLivery.suitId === s.id;
-      const chipStyle = `background: linear-gradient(135deg, ${s.suitTop} 0%, ${s.suitMid} 52%, ${s.accent} 53%, ${s.trim} 100%);`;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-suit-id="${s.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(s.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : s.unlockHint) : `Locked · ${s.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liverySuitGridEl.querySelectorAll('button[data-suit-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const sid = btn.getAttribute('data-suit-id');
-        if (!sid || !unlocks.suits.has(sid)) return;
-        updateActiveLiveryField({ suitId: sid });
-      });
-    });
-  }
-
-  if (liveryTrimGridEl) {
-    liveryTrimGridEl.innerHTML = ACCENT_TRIMS.map((tr) => {
-      const unlocked = unlocks.trims.has(tr.id);
-      const selected = pal.trimSpec.id === tr.id;
-      const chipStyle =
-        tr.id === 'suit-default'
-          ? `background: linear-gradient(135deg, ${pal.suit.accent} 0%, ${pal.suit.trim} 100%);`
-          : `background: linear-gradient(135deg, ${tr.swatchA} 0%, ${tr.swatchB} 100%);`;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-trim-id="${tr.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(tr.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : tr.unlockHint) : `Locked · ${tr.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryTrimGridEl.querySelectorAll('button[data-trim-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tid = btn.getAttribute('data-trim-id');
-        if (!tid || !unlocks.trims.has(tid)) return;
-        updateActiveLiveryField({ trimId: tid });
-      });
-    });
-  }
-
-  if (liveryHeadgearGridEl) {
-    liveryHeadgearGridEl.innerHTML = HEADGEAR_STYLES.map((h) => {
-      const unlocked = unlocks.headgears.has(h.id);
-      const selected = pal.headgear.id === h.id;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-headgear-id="${h.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="background: rgba(15, 23, 42, 0.92);" aria-hidden="true">${unlocked ? h.icon : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(h.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? h.specText : `Locked · ${h.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryHeadgearGridEl.querySelectorAll('button[data-headgear-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const hid = btn.getAttribute('data-headgear-id');
-        if (!hid || !unlocks.headgears.has(hid)) return;
-        updateActiveLiveryField({ headgearId: hid });
-      });
-    });
-  }
-
-  if (liveryVisorGridEl) {
-    liveryVisorGridEl.innerHTML = VISOR_TINTS.map((v) => {
-      const unlocked = unlocks.visors.has(v.id);
-      const selected = pal.visor.id === v.id;
-      const chipStyle = `background: linear-gradient(135deg, ${v.top} 0%, ${v.mid} 50%, ${v.bot} 100%);`;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-visor-id="${v.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(v.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : v.unlockHint) : `Locked · ${v.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryVisorGridEl.querySelectorAll('button[data-visor-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const vid = btn.getAttribute('data-visor-id');
-        if (!vid || !unlocks.visors.has(vid)) return;
-        updateActiveLiveryField({ visorId: vid });
-      });
-    });
-  }
-
-  if (liveryTankGridEl) {
-    liveryTankGridEl.innerHTML = TANK_FINISHES.map((tk) => {
-      const unlocked = unlocks.tanks.has(tk.id);
-      const selected = pal.tank.id === tk.id;
-      const chipStyle = `background: linear-gradient(180deg, ${tk.top} 0%, ${tk.mid} 50%, ${tk.bot} 100%);`;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-tank-id="${tk.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(tk.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : tk.unlockHint) : `Locked · ${tk.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryTankGridEl.querySelectorAll('button[data-tank-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const kid = btn.getAttribute('data-tank-id');
-        if (!kid || !unlocks.tanks.has(kid)) return;
-        updateActiveLiveryField({ tankId: kid });
-      });
-    });
-  }
-
-  if (liveryTorchGridEl) {
-    liveryTorchGridEl.innerHTML = TORCH_OPTICS.map((t) => {
-      const unlocked = unlocks.torches.has(t.id);
-      const selected = activeRigLivery.torchId === t.id;
-      const chipStyle = `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${t.swatch} 55%, #0f172a 100%);`;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-torch-id="${t.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${unlocked ? '' : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(t.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? t.specText : `Locked · ${t.unlockHint}`)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryTorchGridEl.querySelectorAll('button[data-torch-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tid = btn.getAttribute('data-torch-id');
-        if (!tid || !unlocks.torches.has(tid)) return;
-        updateActiveLiveryField({ torchId: tid });
-      });
-    });
-  }
-
-  if (liveryPatchGridEl) {
-    liveryPatchGridEl.innerHTML = MILESTONE_PATCHES.map((p) => {
-      const unlocked = unlocks.patches.has(p.id);
-      const selected = activeRigLivery.patchId === p.id;
-      return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-patch-id="${p.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip" style="background: rgba(15, 23, 42, 0.9);" aria-hidden="true">${unlocked ? escapeHtml(p.icon) : '🔒'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-swatch-name">${escapeHtml(p.name)}</span>
-          <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? 'Equipped' : p.unlockHint) : p.unlockHint)}</span>
-        </span>
-      </button>`;
-    }).join('');
-    liveryPatchGridEl.querySelectorAll('button[data-patch-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const pid = btn.getAttribute('data-patch-id');
-        if (!pid || !unlocks.patches.has(pid)) return;
-        updateActiveLiveryField({ patchId: pid });
-      });
-    });
-  }
-
-  setLiveryActiveTab(activeLiveryTab);
-  if (btnLiveryResetEl) {
-    btnLiveryResetEl.disabled = isDefaultRigLivery(activeRigLivery);
-  }
-  renderLiveryPreviewFrame(performance.now() * 0.001);
-  if (modalCard) modalCard.scrollTop = prevScrollTop;
-}
-
-function openLiveryModal() {
-  if (!liveryModalEl) return;
-  closeDiveSetupModal();
-  setHomeMenuOpen(false);
-  renderLiveryWorkshopModal();
-  liveryModalEl.hidden = false;
-}
-
-function closeLiveryModal() {
-  if (!liveryModalEl) return;
-  liveryModalEl.hidden = true;
-}
-
-liveryCatTabsEl?.querySelectorAll?.('button[data-livery-tab]')?.forEach?.((btn) => {
-  btn.addEventListener('click', () => {
-    const tid = btn.getAttribute('data-livery-tab');
-    if (tid) setLiveryActiveTab(tid);
-  });
+// ── Diver Gear Workshop, Custom Rig Liveries & Test-Tank Controller (modularized v172) ──
+const liveryWorkshop = createLiveryWorkshopController({
+  liveryPrefKey: LIVERY_PREF_KEY,
+  loadCareerLogbook,
+  getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
+  getSavedGearLoadout: () => savedGearLoadout,
+  saveGearLoadout: (...a) => saveGearLoadout(...a),
+  renderTechGearDock: () => renderTechGearDock(),
+  getSession: () => session,
+  syncSetupDrawerSummary: () => syncSetupDrawerSummary(),
+  closeDiveSetupModal: () => closeDiveSetupModal(),
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  scheduleGitHubStatsSync: () => scheduleGitHubStatsSync(),
+  showToast,
 });
-liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
-  btn.addEventListener('click', () => {
-    const env = btn.getAttribute('data-livery-env');
-    if (!env) return;
-    liveryPreviewEnv = env;
-    renderLiveryWorkshopModal();
-  });
-});
-btnLiveryPrevCcrEl?.addEventListener('click', () => {
-  let ccrUnlocked = false;
-  try { ccrUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('ccr'); } catch {}
-  if (ccrUnlocked) {
-    savedGearLoadout.ccr = !savedGearLoadout.ccr;
-    liveryPreviewCcr = null;
-    saveGearLoadout();
-    renderTechGearDock();
-    syncLiveryUi();
-    renderLiveryWorkshopModal();
-    showToast(
-      savedGearLoadout.ccr
-        ? '♻️ CCR Rebreather equipped for your next dive!'
-        : '♻️ CCR Rebreather unequipped (switched to twin backgas).',
-      2.0
-    );
-    return;
-  }
-  const cur = liveryPreviewCcr !== null ? liveryPreviewCcr : false;
-  liveryPreviewCcr = !cur;
-  renderLiveryWorkshopModal();
-  if (liveryPreviewCcr) {
-    showToast('👁 Previewing CCR in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
-  }
-});
-btnLiveryPrevDpvEl?.addEventListener('click', () => {
-  let dpvUnlocked = false;
-  try { dpvUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('dpv'); } catch {}
-  if (dpvUnlocked) {
-    savedGearLoadout.dpv = !savedGearLoadout.dpv;
-    liveryPreviewDpv = null;
-    saveGearLoadout();
-    renderTechGearDock();
-    syncLiveryUi();
-    renderLiveryWorkshopModal();
-    showToast(
-      savedGearLoadout.dpv
-        ? '🚀 DPV Scooter equipped for your next dive!'
-        : '🚀 DPV Scooter unequipped.',
-      2.0
-    );
-    return;
-  }
-  const cur = liveryPreviewDpv !== null ? liveryPreviewDpv : false;
-  liveryPreviewDpv = !cur;
-  renderLiveryWorkshopModal();
-  if (liveryPreviewDpv) {
-    showToast('👁 Previewing DPV in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
-  }
-});
-btnLiveryRandomEl?.addEventListener('click', () => {
-  const unlocks = getCurrentLiveryUnlocks();
-  activeRigLivery = randomizeUnlockedLivery(unlocks);
-  saveRigLivery();
-  syncLiveryUi();
-  renderLiveryWorkshopModal();
-});
-btnLiveryTeamUniformEl?.addEventListener('click', () => {
-  aiSquadTeamUniform = !aiSquadTeamUniform;
-  try { localStorage.setItem(SQUAD_UNIFORM_KEY, aiSquadTeamUniform ? '1' : '0'); } catch {}
-  scheduleGitHubStatsSync();
-  renderLiveryWorkshopModal();
-  showToast(
-    aiSquadTeamUniform
-      ? '🤝 AI Squad will match your drysuit, headgear & tanks with unique wingman stripes!'
-      : '🤝 AI Squad restored to individual expedition liveries.',
-    2.4
-  );
-});
-btnHomeAvatarBadgeEl?.addEventListener('click', openLiveryModal);
-menuLiveryPillEl?.addEventListener('click', openLiveryModal);
-btnLiveryCloseEl?.addEventListener('click', closeLiveryModal);
-btnLiveryDoneEl?.addEventListener('click', closeLiveryModal);
-liveryModalEl?.addEventListener('click', (e) => {
-  if (e.target === liveryModalEl) closeLiveryModal();
-});
-btnLiveryResetEl?.addEventListener('click', () => {
-  activeRigLivery = { ...DEFAULT_RIG_LIVERY };
-  saveRigLivery();
-  syncLiveryUi();
-  renderLiveryWorkshopModal();
-  showToast('🎨 Gear Workshop reset to Standard Issue (Zissou Tech · 6500K LED).', 2.2);
-});
+const {
+  liveryModalEl,
+  getCurrentLiveryUnlocks,
+  saveLiverySlotsToStorage,
+  saveRigLivery,
+  reconcileActiveRigLiveryFromStorage,
+  renderHomeAvatarBadge,
+  syncLiveryUi,
+  renderLiveryPreviewFrame,
+  renderLiveryWorkshopModal,
+  openLiveryModal,
+  closeLiveryModal,
+} = liveryWorkshop;
 syncLiveryUi();
+
 let activeGhostTrack = null;
 let activeGhostIsPar = false;
 let pendingGuideLaunch = false;
@@ -3445,1516 +2414,131 @@ const logbookCertsEl = document.getElementById('logbook-certs-grid');
 const logbookSitesEl = document.getElementById('logbook-sites-list');
 const logbookSubEl = document.getElementById('logbook-modal-sub');
 
-function formatBottomTime(sec) {
-  const s = Math.max(0, Math.round(sec || 0));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
-}
-
-function openLogbookModal() {
-  if (!modalLogbook) return;
-  setHomeMenuOpen(false);
-  const book = loadCareerLogbook();
-  const sum = formatLogbookSummary(book, LEVELS.length);
-  const certInfo = computeCertifications(book, LEVELS);
-  const locked = Boolean(lan.room && !lan.isHost());
-
-  if (logbookSubEl) {
-    const rankStr = certInfo.highest ? `${certInfo.highest.icon} ${certInfo.highest.title}` : sum.campaignMedal;
-    logbookSubEl.textContent = certInfo.next
-      ? `Current Rank: ${rankStr} · Next: ${certInfo.next.title} (${certInfo.next.requirement})`
-      : `Current Rank: ${rankStr} · All Technical Certifications Earned!`;
-  }
-  if (logbookKpisEl) {
-    const dailyStatus = getDailyStatus(book);
-    const fgStats = getFieldGuideStats(book);
-    logbookKpisEl.innerHTML = `
-      <div class="logbook-kpi"><span>Cleared</span><strong>${sum.clearedCount}/${sum.totalSites}</strong></div>
-      <div class="logbook-kpi"><span>Dives</span><strong>${sum.totalDives}</strong></div>
-      <div class="logbook-kpi"><span>Bottom Time</span><strong>${formatBottomTime(sum.totalTimeSec)}</strong></div>
-      <div class="logbook-kpi"><span>Deepest</span><strong>${sum.deepestM.toFixed(0)}m</strong></div>
-      <div class="logbook-kpi"><span>S-Ranks</span><strong>${certInfo.sGrades}</strong></div>
-      <div class="logbook-kpi"><span>Daily Streak</span><strong>🔥 ${dailyStatus.activeStreak}d${dailyStatus.bestStreak > 0 ? ` · Best ${dailyStatus.bestStreak}d` : ''}</strong></div>
-      <div class="logbook-kpi"><span>Field Guide</span><strong>📷 ${fgStats.discoveredCount}/${fgStats.totalCount}</strong></div>
-      <div class="logbook-kpi"><span>Contracts</span><strong>📋 ${book.milestones?.contractsCompleted || 0}</strong></div>
-    `;
-  }
-  if (logbookCertsEl) {
-    logbookCertsEl.innerHTML = certInfo.certs
-      .map((c) => {
-        const pct = Math.max(0, Math.min(100, Number(c.progressPct) || (c.earned ? 100 : 0)));
-        const progLine = !c.earned && c.progressText
-          ? `<div class="logbook-cert-prog"><div class="logbook-cert-bar"><div class="logbook-cert-fill" style="width:${pct}%"></div></div><em>${escapeHtml(c.progressText)}</em></div>`
-          : '';
-        return `
-        <div class="logbook-cert-card ${c.earned ? '' : 'locked'}${c.specialty ? ' specialty' : ''}">
-          <span class="logbook-cert-icon" aria-hidden="true">${c.earned ? c.icon : '🔒'}</span>
-          <div class="logbook-cert-copy">
-            <strong>${escapeHtml(c.title)}</strong>
-            <span>${escapeHtml(c.requirement)}</span>
-            ${progLine}
-          </div>
-        </div>`;
-      })
-      .join('');
-  }
-  const fgHeading = document.getElementById('logbook-field-guide-heading');
-  const fgTrophyEl = document.getElementById('logbook-fg-trophy');
-  const fgGrid = document.getElementById('logbook-field-guide-grid');
-  if (fgGrid) {
-    renderFieldGuideGallery(book, fgHeading, fgTrophyEl, fgGrid);
-  }
-  const vaultHeading = document.getElementById('logbook-vault-heading');
-  const collectionsBar = document.getElementById('logbook-collections-bar');
-  const vaultGrid = document.getElementById('logbook-artifact-vault');
-  if (vaultGrid) {
-    renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
-  }
-  const loreHeading = document.getElementById('logbook-lore-heading');
-  const loreGrid = document.getElementById('logbook-lore-grid');
-  if (loreGrid) {
-    const LORE_CATALOG = [
-      { kind: 'air-dome', icon: '🫧', title: 'Trapped Air Dome' },
-      { kind: 'speleothem-cathedral', icon: '🏛️', title: 'Speleothem Cathedral' },
-      { kind: 'halocline-lens', icon: '🌊', title: 'Halocline Lens' },
-      { kind: 'emergency-lamp', icon: '🚨', title: 'Emergency Bulkhead Lamp' },
-      { kind: 'brass-telegraph', icon: '🧭', title: 'Chadburn Telegraph' },
-      { kind: 'ship-wheel', icon: '⚓', title: 'Corroded Ship Helm' },
-      { kind: 'porthole-shaft', icon: '🔆', title: 'Bronze Porthole Shaft' },
-      { kind: 'boiler-panel', icon: '⚙️', title: 'Steam Boiler Manifold' },
-      { kind: 'mayan-vessel', icon: '🏺', title: 'Mayan Offering Vessel' },
-      { kind: 'mine-timber', icon: '⛏️', title: 'Flooded Mine Shoring' },
-      { kind: 'ice-arch', icon: '🧊', title: 'Subglacial Blue-Ice Arch' },
-      { kind: 'fossil-bed', icon: '🐚', title: 'Ammonite Fossil Wall' },
-      { kind: 'survey-station', icon: '📍', title: 'Explorer Survey Piton' },
-    ];
-    const arch = book.loreArchive || {};
-    const foundCnt = LORE_CATALOG.filter((it) => arch[it.kind]).length;
-    if (loreHeading) {
-      loreHeading.textContent = `SUBMERGED LORE ARCHIVE (${foundCnt}/${LORE_CATALOG.length} DISCOVERED)`;
-    }
-    loreGrid.innerHTML = LORE_CATALOG.map((it) => {
-      const rec = arch[it.kind];
-      if (!rec) {
-        return `<div class="lore-archive-card locked"><div class="lore-archive-head"><span>🔒 ${escapeHtml(it.title)}</span><span class="lore-archive-badge">Unexplored</span></div><div class="lore-archive-body">Illuminate with your primary dive torch during an expedition to archive.</div></div>`;
-      }
-      return `<div class="lore-archive-card"><div class="lore-archive-head"><span>${it.icon} ${escapeHtml(rec.title || it.title)}</span><span class="lore-archive-badge">×${rec.count || 1}</span></div><div class="lore-archive-body">${escapeHtml(rec.sampleLore || '')}</div>${rec.firstSiteName ? `<div class="lore-archive-site">First logged: ${escapeHtml(rec.firstSiteName)}</div>` : ''}</div>`;
-    }).join('');
-  }
-  if (logbookSitesEl) {
-    const sitesHeading = document.getElementById('logbook-sites-heading');
-    if (sitesHeading) sitesHeading.textContent = `EXPEDITION MASTERY (${LEVELS.length} SITES)`;
-    logbookSitesEl.innerHTML = LEVELS.map((lvl, idx) => {
-      const rec = book.cleared?.[lvl.id] || null;
-      const grade = rec?.grade || '—';
-      const gradeCls = grade.startsWith('S') ? 'grade-s' : grade === 'A' ? 'grade-a' : '';
-      const scoreTxt = rec ? `${rec.score.toLocaleString()} pts` : `${getLevelMaxDepthM(lvl)}m`;
-      const timeTxt = rec?.bestTimeSec > 0 ? formatRunClock(rec.bestTimeSec) : (lvl.isWreck ? 'Wreck' : 'Cave');
-      const modeBadge = renderModeBadgeHtml(rec?.bestDifficulty || rec?.lastDifficulty, { compact: true });
-      const hasPbTrack = Boolean(loadGhostTrack(lvl.id));
-      return `
-        <div class="logbook-site-row ${rec ? 'cleared' : ''}">
-          <span class="logbook-site-num">L${idx + 1}</span>
-          <span class="logbook-site-name">${lvl.isWreck ? '🚢 ' : ''}${escapeHtml(lvl.name)}</span>
-          <span class="logbook-site-stat">${escapeHtml(scoreTxt)} · ${escapeHtml(timeTxt)}</span>
-          ${rec ? `<span class="lvl-card-badges">${modeBadge}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span></span>` : '<span class="logbook-site-stat">—</span>'}
-          <span class="logbook-site-actions">
-            ${hasPbTrack ? `<button type="button" class="btn tiny secondary" data-logbook-replay="${lvl.id}" title="Watch PB Track Replay &amp; Share Card">🎬</button>` : ''}
-            <button type="button" class="btn tiny ghost" data-logbook-jump="${lvl.id}" ${locked ? 'disabled' : ''}>Select</button>
-          </span>
-        </div>`;
-    }).join('');
-  }
-  if (modalLogbook) {
-    renderGitHubAccountUi();
-    modalLogbook.hidden = false;
-  }
-}
-
-function closeLogbookModal() {
-  if (typeof closeArtifactInspector === 'function') closeArtifactInspector();
-  if (modalLogbook) modalLogbook.hidden = true;
-}
-
-// Interactive Artifact Museum Specimen Inspector & Curator Collections (v169)
-const artifactInspectorModalEl = document.getElementById('modal-artifact-inspector');
-const artifactInspectorColEl = document.getElementById('artifact-inspector-collection');
-const artifactInspectorTitleEl = document.getElementById('artifact-inspector-title');
-const artifactInspectorMetaEl = document.getElementById('artifact-inspector-meta');
-const artifactInspectorLoreEl = document.getElementById('artifact-inspector-lore');
-const artifactInspectorCanvasEl = document.getElementById('artifact-inspector-canvas');
-const btnArtifactInspectorClose = document.getElementById('btn-artifact-inspector-close');
-const btnArtifactInspectorDone = document.getElementById('btn-artifact-inspector-done');
-const btnArtifactPin = document.getElementById('btn-artifact-pin');
-let activeInspectorArtifact = null;
-let inspectorAnimRaf = 0;
-let inspectorLightAngle = 0.65;
-let inspectorDragging = false;
-
-function drawInspectorStage(tSec) {
-  if (!artifactInspectorCanvasEl || !activeInspectorArtifact) return;
-  const ctx = artifactInspectorCanvasEl.getContext?.('2d');
-  if (!ctx) return;
-  const w = artifactInspectorCanvasEl.width;
-  const h = artifactInspectorCanvasEl.height;
-  ctx.clearRect(0, 0, w, h);
-
-  // Interactive movable museum display spotlight
-  const lx = w * 0.5 + Math.cos(inspectorLightAngle) * (w * 0.28);
-  const ly = h * 0.45 + Math.sin(inspectorLightAngle) * (h * 0.24);
-  const spot = ctx.createRadialGradient(lx, ly, 8, w * 0.5, h * 0.5, w * 0.54);
-  spot.addColorStop(0, 'rgba(254, 243, 199, 0.34)');
-  spot.addColorStop(0.45, 'rgba(56, 189, 248, 0.14)');
-  spot.addColorStop(1, 'rgba(2, 8, 18, 0)');
-  ctx.fillStyle = spot;
-  ctx.fillRect(0, 0, w, h);
-
-  // Subtle brass pedestal plinth shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.44)';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.5, h * 0.82, w * 0.26, h * 0.055, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const bob = Math.sin(tSec * 2.1) * 4;
-  drawStyledArtifact(
-    ctx,
-    activeInspectorArtifact,
-    w * 0.5,
-    h * 0.48 + bob,
-    w * 0.31,
-    tSec + inspectorLightAngle * 1.4,
-    { index: 0, isGrand: true }
-  );
-}
-
-function stepInspectorAnim(nowMs) {
-  if (!artifactInspectorModalEl || artifactInspectorModalEl.hidden || !activeInspectorArtifact) {
-    inspectorAnimRaf = 0;
-    return;
-  }
-  drawInspectorStage(nowMs / 1000);
-  inspectorAnimRaf = requestAnimationFrame(stepInspectorAnim);
-}
-
-function updateInspectorPinButton() {
-  if (!btnArtifactPin || !activeInspectorArtifact) return;
-  const book = loadCareerLogbook();
-  const isPinned = book.pinnedArtifactId === activeInspectorArtifact.id;
-  btnArtifactPin.textContent = isPinned ? '★ Pinned to Postcard (Unpin)' : '📌 Pin to Expedition Postcard';
-  btnArtifactPin.classList.toggle('secondary', isPinned);
-  btnArtifactPin.classList.toggle('primary', !isPinned);
-}
-
-function openArtifactInspector(item) {
-  if (!artifactInspectorModalEl || !item) return;
-  activeInspectorArtifact = item;
-  const col = ARTIFACT_COLLECTIONS.find((c) => c.id === item.collectionId);
-  if (artifactInspectorColEl) {
-    artifactInspectorColEl.textContent = col ? `${col.icon} ${col.title.toUpperCase()}` : '🏛️ MUSEUM SPECIMEN';
-  }
-  if (artifactInspectorTitleEl) artifactInspectorTitleEl.textContent = item.name || 'Recovered Artifact';
-  if (artifactInspectorMetaEl) {
-    const parts = [`+${item.points || 0} PTS`];
-    if (item.siteName) parts.push(item.siteName);
-    if ((item.count || 1) > 1) parts.push(`Recovered ×${item.count}`);
-    artifactInspectorMetaEl.textContent = parts.join(' · ');
-  }
-  if (artifactInspectorLoreEl) {
-    const siteObj = LEVELS.find((l) => l.id === item.siteId) || null;
-    artifactInspectorLoreEl.textContent = item.lore || getCollectibleLoreNote(item, siteObj) || 'Preserved in your Career Artifact Trophy Vault.';
-  }
-  updateInspectorPinButton();
-  artifactInspectorModalEl.hidden = false;
-  inspectorLightAngle = 0.65;
-  if (inspectorAnimRaf) cancelAnimationFrame(inspectorAnimRaf);
-  inspectorAnimRaf = requestAnimationFrame(stepInspectorAnim);
-}
-
-function closeArtifactInspector() {
-  if (inspectorAnimRaf) {
-    cancelAnimationFrame(inspectorAnimRaf);
-    inspectorAnimRaf = 0;
-  }
-  activeInspectorArtifact = null;
-  if (artifactInspectorModalEl) artifactInspectorModalEl.hidden = true;
-}
-
-if (artifactInspectorCanvasEl) {
-  const updateLightFromEvent = (ev) => {
-    const rect = artifactInspectorCanvasEl.getBoundingClientRect();
-    if (!rect.width) return;
-    const dx = ev.clientX - (rect.left + rect.width * 0.5);
-    const dy = ev.clientY - (rect.top + rect.height * 0.5);
-    inspectorLightAngle = Math.atan2(dy, dx);
-  };
-  artifactInspectorCanvasEl.addEventListener('pointerdown', (ev) => {
-    inspectorDragging = true;
-    artifactInspectorCanvasEl.setPointerCapture?.(ev.pointerId);
-    updateLightFromEvent(ev);
-  });
-  artifactInspectorCanvasEl.addEventListener('pointermove', (ev) => {
-    if (!inspectorDragging) return;
-    updateLightFromEvent(ev);
-  });
-  const endDrag = () => { inspectorDragging = false; };
-  artifactInspectorCanvasEl.addEventListener('pointerup', endDrag);
-  artifactInspectorCanvasEl.addEventListener('pointercancel', endDrag);
-}
-btnArtifactInspectorClose?.addEventListener('click', closeArtifactInspector);
-btnArtifactInspectorDone?.addEventListener('click', closeArtifactInspector);
-artifactInspectorModalEl?.addEventListener('click', (e) => {
-  if (e.target === artifactInspectorModalEl) closeArtifactInspector();
+// ── Career Logbook, Artifact Trophy Vault, 3D Inspector & Field Guide (modularized v172) ──
+const logbookCtrl = createLogbookModalController({
+  lan,
+  github,
+  loadCareerLogbook,
+  saveCareerLogbook,
+  loadGhostTrack: (id) => loadGhostTrack(id),
+  getEnteredCallsign,
+  getDiverName: () => playerNameInput?.value.trim() || 'Diver',
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
+  formatRunClock: (...a) => formatRunClock(...a),
+  renderGitHubAccountUi: () => renderGitHubAccountUi(),
+  renderCareerSummary: () => renderCareerSummary(),
+  renderTechGearDock: () => renderTechGearDock(),
+  renderDailyChallengeCard: () => renderDailyChallengeCard(),
+  populateLevelSelect,
+  renderLevelCards,
+  showToast,
+  els: {
+    btnOpenLogbook,
+    btnProgressPill,
+    modalLogbook,
+    btnLogbookClose,
+    logbookKpisEl,
+    logbookCertsEl,
+    logbookSitesEl,
+    logbookSubEl,
+  },
 });
-btnArtifactPin?.addEventListener('click', () => {
-  if (!activeInspectorArtifact) return;
-  const cur = loadCareerLogbook();
-  const nextId = cur.pinnedArtifactId === activeInspectorArtifact.id ? '' : activeInspectorArtifact.id;
-  const nextBook = setPinnedArtifactInLogbook(cur, nextId);
-  saveCareerLogbook(nextBook);
-  updateInspectorPinButton();
-  renderArtifactVaultSection(nextBook);
-  showToast(nextId ? `★ Pinned ${activeInspectorArtifact.name} to your Expedition Postcard!` : 'Unpinned showcase relic.', 2.6);
+const {
+  artifactInspectorModalEl,
+  fgCardModalEl,
+  openLogbookModal,
+  closeLogbookModal,
+  openArtifactInspector,
+  closeArtifactInspector,
+  renderArtifactVaultSection,
+  renderFieldGuideGallery,
+  openFieldGuideCardModal,
+  closeFieldGuideCardModal,
+} = logbookCtrl;
+
+// ── Dive Replay Theater & Pre-Dive Gas Blender (modularized v172) ──
+const replayTheater = createReplayTheaterController({
+  github,
+  showToast,
+  loadGhostTrack,
+  loadCareerLogbook,
+  getDiverName: () => playerNameInput?.value.trim() || 'Diver',
+  getActiveDifficulty: () => activeDifficulty,
 });
+const {
+  replayModal,
+  debriefReplayWrapEl,
+  debriefReplay,
+  shareOrDownloadPostcard,
+  openLogbookReplayModal,
+  closeReplayModal,
+} = replayTheater;
 
-let activeVaultCollectionFilter = 'all';
-let vaultVisibleLimit = 48;
-
-function renderArtifactVaultSection(
-  bookOverride = null,
-  vaultHeading = document.getElementById('logbook-vault-heading'),
-  collectionsBar = document.getElementById('logbook-collections-bar'),
-  vaultGrid = document.getElementById('logbook-artifact-vault')
-) {
-  if (!vaultGrid) return;
-  const book = bookOverride || loadCareerLogbook();
-  const vault = getArtifactVaultStats(book, LEVELS);
-  const colProg = vault.collections;
-  if (vaultHeading) {
-    const rankTxt = colProg?.highestCuratorTitle ? ` · ${colProg.highestCuratorTitle.toUpperCase()}` : '';
-    vaultHeading.textContent = `🏛️ ARTIFACT TROPHY VAULT (${vault.recoveredCount}/${vault.totalCatalog} RECOVERED · ${vault.totalValue.toLocaleString()} PTS${rankTxt})`;
-  }
-  if (collectionsBar && colProg?.collections) {
-    collectionsBar.innerHTML = colProg.collections
-      .map(
-        (c) => `<button type="button" class="collection-chip${c.completed ? ' completed' : ''}${activeVaultCollectionFilter === c.id ? ' active' : ''}" data-collection-id="${c.id}" aria-pressed="${activeVaultCollectionFilter === c.id ? 'true' : 'false'}" title="Filter by ${escapeHtml(c.title)} · Unlocks Curator Title: ${escapeHtml(c.curatorTitle)}">
-          <div class="collection-chip-top">
-            <span>${c.icon} ${escapeHtml(c.title)}</span>
-            <span>${c.recovered}/${c.targetCount}</span>
-          </div>
-          <div class="collection-chip-prog"><div class="collection-chip-fill" style="width:${c.pct}%;background:${c.accent}"></div></div>
-          <div class="collection-chip-title">${c.completed ? `★ ${escapeHtml(c.curatorTitle)}` : `Goal: ${escapeHtml(c.curatorTitle)}`}</div>
-        </button>`
-      )
-      .join('');
-    collectionsBar.querySelectorAll('button.collection-chip').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const cid = btn.getAttribute('data-collection-id') || 'all';
-        activeVaultCollectionFilter = activeVaultCollectionFilter === cid ? 'all' : cid;
-        vaultVisibleLimit = 48;
-        renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
-      });
-    });
-  }
-  if (vault.items.length === 0) {
-    vaultGrid.innerHTML = `<div class="vault-empty-note">Explore cave chambers and shipwreck holds to recover relics, fossils, watches &amp; instruments for your Trophy Vault.</div>`;
-    return;
-  }
-  const filteredItems =
-    activeVaultCollectionFilter === 'all'
-      ? vault.items
-      : vault.items.filter((it) => it.collectionId === activeVaultCollectionFilter);
-  if (filteredItems.length === 0) {
-    vaultGrid.innerHTML = `<div class="vault-empty-note">No relics recovered in this collection yet. Click the active collection badge above to show all ${vault.items.length} relics.</div>`;
-    return;
-  }
-  const visibleItems = filteredItems.slice(0, vaultVisibleLimit);
-  const remaining = filteredItems.length - visibleItems.length;
-  vaultGrid.innerHTML =
-    visibleItems
-      .map(
-        (it, idx) => `<button type="button" class="vault-card${it.pinned ? ' pinned' : ''}" data-vault-idx="${idx}" title="Inspect ${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
-          ${it.pinned ? '<span class="vault-pin-badge" title="Pinned to Postcard">★</span>' : ''}
-          <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
-          <div class="vault-card-name">${escapeHtml(it.name)}</div>
-          <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
-          ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
-        </button>`
-      )
-      .join('') +
-    (remaining > 0
-      ? `<button type="button" class="vault-card vault-more-btn" data-vault-more="1" title="Show more relics">
-          <div class="vault-card-name">+${remaining} More Relics</div>
-          <div class="vault-card-meta">Show next ${Math.min(48, remaining)}</div>
-        </button>`
-      : '');
-  vaultGrid.querySelectorAll('canvas.vault-art-canvas').forEach((cv) => {
-    const idx = Number(cv.getAttribute('data-vault-idx'));
-    const it = visibleItems[idx];
-    const ctx = cv.getContext?.('2d');
-    if (!ctx || !it) return;
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    drawStyledArtifact(ctx, it, cv.width * 0.5, cv.height * 0.5, cv.width * 0.34, 2.2, {
-      index: idx,
-      isGrand: (it.scale || 1) >= 1.35 || it.pinned,
-    });
-  });
-  vaultGrid.querySelectorAll('button.vault-card[data-vault-idx]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.getAttribute('data-vault-idx'));
-      const it = visibleItems[idx];
-      if (it) openArtifactInspector(it);
-    });
-  });
-  vaultGrid.querySelector('button[data-vault-more]')?.addEventListener('click', () => {
-    vaultVisibleLimit += 48;
-    renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
-  });
-}
-
-btnOpenLogbook?.addEventListener('click', openLogbookModal);
-btnProgressPill?.addEventListener('click', openLogbookModal);
-btnLogbookClose?.addEventListener('click', closeLogbookModal);
-
-// Marine Field Guide Gallery Filter/Sort & Shareable Specimen Collector Cards (v139)
-let fgFilterMode = 'all';
-let fgSortMode = 'catalog';
-let activeFgCardEntry = null;
-const fgFilterTabsEl = document.getElementById('fg-filter-tabs');
-const fgSortSelectEl = document.getElementById('fg-sort-select');
-const fgCardModalEl = document.getElementById('fg-card-modal');
-const fgCardTitleEl = document.getElementById('fg-card-title');
-const fgCardSubEl = document.getElementById('fg-card-sub');
-const fgCardCanvasEl = document.getElementById('fg-card-canvas');
-const fgCardCtx = fgCardCanvasEl?.getContext?.('2d') || null;
-const btnFgCardClose = document.getElementById('btn-fg-card-close');
-const btnFgCardDownload = document.getElementById('btn-fg-card-download');
-const btnFgCardShare = document.getElementById('btn-fg-card-share');
-
-function renderFieldGuideGallery(
-  bookOverride = null,
-  fgHeading = document.getElementById('logbook-field-guide-heading'),
-  fgTrophyEl = document.getElementById('logbook-fg-trophy'),
-  fgGrid = document.getElementById('logbook-field-guide-grid')
-) {
-  if (!fgGrid) return;
-  const book = bookOverride || loadCareerLogbook();
-  const fgStats = getFieldGuideStats(book);
-  if (fgHeading) {
-    fgHeading.textContent = `EXPEDITION FIELD GUIDE (${fgStats.discoveredCount}/${fgStats.totalCount} PHOTOGRAPHED)`;
-  }
-  if (fgTrophyEl) {
-    fgTrophyEl.innerHTML = `
-      <div class="fg-trophy-top">
-        <span class="fg-trophy-rank">${escapeHtml(fgStats.naturalistRank)}</span>
-        <div class="fg-trophy-pills">
-          <span class="fg-trophy-pill gold">★★★ ${fgStats.goldCount}/${fgStats.totalCount}</span>
-          <span class="fg-trophy-pill">🐋 Rare/Epic ${fgStats.rareDiscovered}/${fgStats.rareTotal}</span>
-          <span class="fg-trophy-pill">📷 ${fgStats.totalPhotos} shots</span>
-        </div>
-      </div>
-      <div class="fg-trophy-bar"><div class="fg-trophy-fill" style="width:${fgStats.pct}%"></div></div>
-    `;
-  }
-  const filtered = filterAndSortFieldGuide(fgStats.entries, { filter: fgFilterMode, sort: fgSortMode });
-  if (filtered.length === 0) {
-    fgGrid.innerHTML = `<div class="fg-empty-note">No specimens match this filter yet — snap underwater wildlife with <strong>[C]</strong> or freeze-frame Photo Studio <strong>[O]</strong>!</div>`;
-    return;
-  }
-  fgGrid.innerHTML = filtered
-    .map((e) => {
-      if (!e.discovered) {
-        return `
-          <div class="fg-card locked">
-            <span class="fg-icon" aria-hidden="true">${e.icon}</span>
-            <div class="fg-copy">
-              <div class="fg-head"><strong>??? (${e.rarity.toUpperCase()})</strong></div>
-              <span class="fg-meta">Habitat: ${escapeHtml(e.habitat)}</span>
-            </div>
-          </div>`;
-      }
-      const stars = '★'.repeat(e.bestStars) + '☆'.repeat(3 - e.bestStars);
-      const sightTxt = e.bestSiteName
-        ? `${e.bestSiteName} · ×${e.count}`
-        : `×${e.count} Logged`;
-      const depthTxt = e.bestDepthM > 0 ? `${Math.round(e.bestDepthM)}m` : 'Shallow';
-      return `
-        <div class="fg-card clickable rarity-${e.rarity}${e.bestStars >= 3 ? ' gold-star' : ''}" data-fg-entry="${e.id}" role="button" tabindex="0" title="Inspect &amp; share ${escapeHtml(e.name)} collector card">
-          <span class="fg-icon" aria-hidden="true">${e.icon}</span>
-          <div class="fg-copy">
-            <div class="fg-head"><strong>${escapeHtml(e.name)}</strong><span class="fg-stars">${stars}</span></div>
-            <span class="fg-latin">${escapeHtml(e.latin)}</span>
-            <span class="fg-meta">${escapeHtml(sightTxt)}</span>
-            <div class="fg-badge-strip">
-              <span class="fg-depth-badge">⬇ ${escapeHtml(depthTxt)}</span>
-              <span class="fg-rarity-badge ${e.rarity}">${escapeHtml(e.rarity)}</span>
-              <span class="fg-card-cta">🪪 Card</span>
-            </div>
-          </div>
-        </div>`;
-    })
-    .join('');
-}
-
-function openFieldGuideCardModal(entryId) {
-  if (!fgCardModalEl || !entryId) return;
-  const book = loadCareerLogbook();
-  const fgStats = getFieldGuideStats(book);
-  const entry = fgStats.entries.find((e) => e.id === entryId && e.discovered);
-  if (!entry) return;
-  activeFgCardEntry = entry;
-  if (fgCardTitleEl) fgCardTitleEl.textContent = `${entry.icon} ${entry.name}`;
-  if (fgCardSubEl) {
-    const stars = '★'.repeat(entry.bestStars) + '☆'.repeat(3 - entry.bestStars);
-    fgCardSubEl.textContent = `${entry.latin} · ${stars} · ${entry.bestDepthM > 0 ? `${Math.round(entry.bestDepthM)}m` : 'Shallow'} · ${entry.bestSiteName || 'Expedition Archive'}`;
-  }
-  const verMeta = document.querySelector('meta[name="app-version"]')?.content || '139';
-  if (fgCardCtx && fgCardCanvasEl) {
-    renderFieldGuideCollectorCard(fgCardCtx, {
-      width: fgCardCanvasEl.width,
-      height: fgCardCanvasEl.height,
-      entry,
-      diverName: getEnteredCallsign() || 'Expedition Diver',
-      fgStats,
-      version: `v${verMeta}`,
-    });
-  }
-  if (btnFgCardShare) {
-    btnFgCardShare.hidden = typeof navigator?.share !== 'function';
-  }
-  fgCardModalEl.hidden = false;
-}
-
-function closeFieldGuideCardModal() {
-  if (fgCardModalEl) fgCardModalEl.hidden = true;
-}
-
-fgFilterTabsEl?.querySelectorAll('button[data-fg-filter]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const next = btn.getAttribute('data-fg-filter') || 'all';
-    fgFilterMode = next;
-    fgFilterTabsEl.querySelectorAll('button[data-fg-filter]').forEach((b) => {
-      const sel = b === btn;
-      b.classList.toggle('active', sel);
-      b.setAttribute('aria-selected', sel ? 'true' : 'false');
-    });
-    renderFieldGuideGallery();
-  });
+const gasPlanner = createGasPlannerController({
+  getActiveLevel: () => activeLevel,
+  setHomeMenuOpen,
+  closeDiveSetupModal,
+  syncSetupDrawerSummary,
+  showToast,
 });
-
-fgSortSelectEl?.addEventListener('change', () => {
-  fgSortMode = fgSortSelectEl.value || 'catalog';
-  renderFieldGuideGallery();
-});
-
-const fgGridClickRoot = document.getElementById('logbook-field-guide-grid');
-fgGridClickRoot?.addEventListener('click', (e) => {
-  const card = e.target?.closest?.('[data-fg-entry]');
-  if (!card) return;
-  openFieldGuideCardModal(card.getAttribute('data-fg-entry'));
-});
-fgGridClickRoot?.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  const card = e.target?.closest?.('[data-fg-entry]');
-  if (!card) return;
-  e.preventDefault();
-  openFieldGuideCardModal(card.getAttribute('data-fg-entry'));
-});
-
-btnFgCardClose?.addEventListener('click', closeFieldGuideCardModal);
-fgCardModalEl?.addEventListener('click', (e) => {
-  if (e.target === fgCardModalEl) closeFieldGuideCardModal();
-});
-btnFgCardDownload?.addEventListener('click', () => {
-  if (!fgCardCanvasEl || !activeFgCardEntry) return;
-  try {
-    const a = document.createElement('a');
-    a.href = fgCardCanvasEl.toDataURL('image/png');
-    a.download = `techno-dive-specimen-${activeFgCardEntry.id}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    showToast(`🪪 Saved ${activeFgCardEntry.name} Collector Card PNG!`, 2.2);
-  } catch {
-    showToast('Could not export Collector Card PNG.', 2.0);
-  }
-});
-btnFgCardShare?.addEventListener('click', async () => {
-  if (!fgCardCanvasEl || !activeFgCardEntry || typeof navigator?.share !== 'function') return;
-  try {
-    const blob = await new Promise((resolve) => fgCardCanvasEl.toBlob?.(resolve, 'image/png'));
-    if (blob && typeof File === 'function') {
-      const file = new File([blob], `techno-dive-specimen-${activeFgCardEntry.id}.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: `${activeFgCardEntry.name} — Techno Dive Marine Field Guide`,
-          text: `Logged ${activeFgCardEntry.name} (${activeFgCardEntry.latin}) at ${Math.round(activeFgCardEntry.bestDepthM || 0)}m!`,
-          files: [file],
-        });
-        return;
-      }
-    }
-    await navigator.share({
-      title: `${activeFgCardEntry.name} — Techno Dive Marine Field Guide`,
-      text: `Logged ${activeFgCardEntry.name} (${activeFgCardEntry.latin}) at ${Math.round(activeFgCardEntry.bestDepthM || 0)}m!`,
-    });
-  } catch {}
-});
-
-function downloadTextFile(filename, content, mimeType) {
-  try {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const btnLogbookExportCsv = document.getElementById('btn-logbook-export-csv');
-const btnLogbookExportJson = document.getElementById('btn-logbook-export-json');
-btnLogbookExportCsv?.addEventListener('click', () => {
-  const book = loadCareerLogbook();
-  const csv = exportLogbookToCsv(book, LEVELS);
-  const stamp = new Date().toISOString().slice(0, 10);
-  if (downloadTextFile(`techno-dive-logbook-${stamp}.csv`, csv, 'text/csv;charset=utf-8')) {
-    showToast(`📥 Exported Dive Logbook CSV (${Object.keys(book.cleared).length}/${LEVELS.length} sites)`, 2.6);
-  }
-});
-btnLogbookExportJson?.addEventListener('click', () => {
-  const book = loadCareerLogbook();
-  const appVer = document.querySelector('meta[name="app-version"]')?.content || '';
-  const json = exportLogbookToJson(book, LEVELS, {
-    diverName: playerNameInput?.value.trim() || 'Diver',
-    githubLogin: github.getStatus().user?.login || '',
-    version: appVer ? `v${appVer}` : '',
-  });
-  const stamp = new Date().toISOString().slice(0, 10);
-  if (downloadTextFile(`techno-dive-logbook-${stamp}.json`, json, 'application/json;charset=utf-8')) {
-    showToast('📄 Exported full Dive Logbook & Field Guide JSON!', 2.6);
-  }
-});
-
-const btnLogbookImportJson = document.getElementById('btn-logbook-import-json');
-const inputLogbookImport = document.getElementById('input-logbook-import');
-btnLogbookImportJson?.addEventListener('click', () => {
-  if (inputLogbookImport) {
-    inputLogbookImport.value = '';
-    inputLogbookImport.click();
-  }
-});
-inputLogbookImport?.addEventListener('change', async () => {
-  const file = inputLogbookImport.files?.[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const parsed = parseImportedLogbookJson(text);
-    if (!parsed.ok) {
-      showToast(`⚠️ Import failed: ${parsed.error}`, 3.0);
-      return;
-    }
-    const merged = mergeCareerLogbooks(loadCareerLogbook(), parsed.book);
-    saveCareerLogbook(merged);
-    renderCareerSummary();
-    renderTechGearDock();
-    renderDailyChallengeCard();
-    populateLevelSelect();
-    renderLevelCards();
-    openLogbookModal();
-    showToast(
-      `📤 Imported & merged ${parsed.siteCount} site clears & ${parsed.fieldGuideCount} Field Guide species!`,
-      3.2
-    );
-  } catch {
-    showToast('⚠️ Could not read backup JSON file.', 2.8);
-  }
-});
-
-// ── Dive Replay Theater & Shareable PNG Expedition Postcard (v121) ──
-const REPLAY_SPEEDS = [1, 2, 4];
-
-function createReplayController({ canvas, metaEl, playBtn, scrubber, speedBtn }) {
-  let state = {
-    level: null,
-    samples: [],
-    profile: null,
-    progress: 0,
-    playing: false,
-    speedIdx: 1, // default 2x
-    rafId: 0,
-    lastTs: 0,
-  };
-
-  function draw() {
-    if (!canvas || !state.level || state.samples.length === 0) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const pose = drawReplayFrame(ctx, canvas.width, canvas.height, {
-      level: state.level,
-      track: state.samples,
-      profile: state.profile,
-      progress: state.progress,
-    });
-    if (scrubber) scrubber.value = String(Math.round(state.progress * 1000));
-    if (metaEl && pose) {
-      const tCur = formatReplayTime(pose.t);
-      const tTot = formatReplayTime(pose.totalSec);
-      metaEl.textContent = `${tCur} / ${tTot} · ${Math.max(0, pose.y).toFixed(1)}m`;
-    }
-  }
-
-  function syncBtns() {
-    if (playBtn) playBtn.textContent = state.playing ? '⏸ Pause' : state.progress >= 0.999 ? '↺ Replay' : '▶ Play';
-    if (speedBtn) speedBtn.textContent = `${REPLAY_SPEEDS[state.speedIdx]}×`;
-  }
-
-  function stop() {
-    state.playing = false;
-    if (state.rafId) {
-      cancelAnimationFrame(state.rafId);
-      state.rafId = 0;
-    }
-    syncBtns();
-  }
-
-  function tick(ts) {
-    if (!state.playing) return;
-    if (!state.lastTs) state.lastTs = ts;
-    const dtSec = Math.min(0.1, Math.max(0, (ts - state.lastTs) / 1000));
-    state.lastTs = ts;
-    const totalSec = Math.max(4, state.samples[state.samples.length - 1]?.t || 20);
-    // Compressed theatrical playback: 1x finishes a 60s dive in ~10s, 2x in ~5s, 4x in ~2.5s
-    const speed = REPLAY_SPEEDS[state.speedIdx] * 6;
-    state.progress = Math.min(1, state.progress + (dtSec * speed) / totalSec);
-    draw();
-    if (state.progress >= 1) {
-      stop();
-      return;
-    }
-    state.rafId = requestAnimationFrame(tick);
-  }
-
-  function play() {
-    if (!state.level || state.samples.length < 2) return;
-    if (state.progress >= 0.995) state.progress = 0;
-    state.playing = true;
-    state.lastTs = 0;
-    syncBtns();
-    if (!state.rafId) state.rafId = requestAnimationFrame(tick);
-  }
-
-  function load({ level, track, profile = null, autoPlay = true }) {
-    stop();
-    const samples = decodeReplayTrack(track);
-    state.level = level || null;
-    state.samples = samples;
-    state.profile = Array.isArray(profile) ? profile : null;
-    state.progress = autoPlay ? 0 : 1;
-    syncBtns();
-    draw();
-    if (autoPlay && samples.length >= 2) play();
-    return samples.length >= 2;
-  }
-
-  playBtn?.addEventListener('click', () => {
-    if (state.playing) stop();
-    else play();
-  });
-  speedBtn?.addEventListener('click', () => {
-    state.speedIdx = (state.speedIdx + 1) % REPLAY_SPEEDS.length;
-    syncBtns();
-  });
-  scrubber?.addEventListener('input', () => {
-    stop();
-    state.progress = Math.max(0, Math.min(1, Number(scrubber.value) / 1000));
-    draw();
-  });
-
-  function seekToTime(tSec) {
-    if (!state.level || state.samples.length < 2) return;
-    stop();
-    const totalSec = Math.max(1, state.samples[state.samples.length - 1]?.t || 20);
-    state.progress = Math.max(0, Math.min(1, (Number(tSec) || 0) / totalSec));
-    draw();
-  }
-
-  return { load, play, stop, draw, seekToTime };
-}
-
-async function shareOrDownloadPostcard(cardData) {
-  if (!cardData?.level) return false;
-  const off = document.createElement('canvas');
-  off.width = 1200;
-  off.height = 630;
-  const ctx = off.getContext('2d');
-  if (!ctx) return false;
-
-  const appVer = document.querySelector('meta[name="app-version"]')?.content || '121';
-  renderExpeditionPostcard(ctx, 1200, 630, {
-    ...cardData,
-    githubLogin: github.getStatus().user?.login || '',
-    version: `v${appVer}`,
-  });
-
-  const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
-  if (!blob) return false;
-  const slug = String(cardData.level.id || 'expedition').replace(/[^a-z0-9-]+/gi, '-');
-  const gradeSlug = String(cardData.grade || 'S').replace(/[^a-z0-9]+/gi, '');
-  const filename = `techno-dive-${slug}-${gradeSlug}.png`;
-
-  try {
-    if (typeof File !== 'undefined' && navigator.share && navigator.canShare) {
-      const file = new File([blob], filename, { type: 'image/png' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Techno Dive · ${cardData.level.name} (${cardData.grade})`,
-          text: `Cleared ${cardData.level.name} (${Number(cardData.maxDepthM || 0).toFixed(1)}m · ${Number(cardData.score || 0).toLocaleString()} pts) in Techno Dive!`,
-        });
-        showToast('📸 Expedition Postcard shared!', 2.4);
-        return true;
-      }
-    }
-  } catch (err) {
-    if (err?.name === 'AbortError') return false;
-  }
-
-  try {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast(`📸 Saved Expedition Postcard (${filename})!`, 2.8);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const debriefReplayWrapEl = document.getElementById('debrief-replay-wrap');
-const debriefReplay = createReplayController({
-  canvas: document.getElementById('debrief-replay-canvas'),
-  metaEl: document.getElementById('debrief-replay-meta'),
-  playBtn: document.getElementById('btn-replay-play'),
-  scrubber: document.getElementById('replay-scrubber'),
-  speedBtn: document.getElementById('btn-replay-speed'),
-});
-let lastDebriefCardData = null;
-const btnDebriefShareCard = document.getElementById('btn-debrief-share-card');
-btnDebriefShareCard?.addEventListener('click', () => {
-  if (lastDebriefCardData) shareOrDownloadPostcard(lastDebriefCardData);
-});
-
-const replayModal = document.getElementById('replay-modal');
-const replayModalTitleEl = document.getElementById('replay-modal-title');
-const replayModalSubEl = document.getElementById('replay-modal-sub');
-const btnReplayModalClose = document.getElementById('btn-replay-modal-close');
-const btnModalReplayShare = document.getElementById('btn-modal-replay-share');
-const modalReplay = createReplayController({
-  canvas: document.getElementById('modal-replay-canvas'),
-  metaEl: document.getElementById('modal-replay-meta'),
-  playBtn: document.getElementById('btn-modal-replay-play'),
-  scrubber: document.getElementById('modal-replay-scrubber'),
-  speedBtn: document.getElementById('btn-modal-replay-speed'),
-});
-let activeModalReplayCardData = null;
-
-function openLogbookReplayModal(levelId) {
-  const lvl = getLevelById(levelId);
-  const track = loadGhostTrack(levelId);
-  if (!lvl || !track || track.length < 2 || !replayModal) {
-    showToast('No recorded PB track found for this site yet.', 2.2);
-    return;
-  }
-  const book = loadCareerLogbook();
-  const rec = book.cleared?.[lvl.id] || null;
-  const decoded = decodeReplayTrack(track);
-  const maxD = decoded.reduce((m, p) => Math.max(m, p.y), 0);
-  const totalSec = rec?.bestTimeSec || decoded[decoded.length - 1]?.t || 0;
-
-  if (replayModalTitleEl) replayModalTitleEl.textContent = lvl.name;
-  if (replayModalSubEl) {
-    replayModalSubEl.textContent = rec
-      ? `Grade ${rec.grade} · ${rec.score.toLocaleString()} pts · ${formatReplayTime(totalSec)} · Max ${maxD.toFixed(1)}m`
-      : `Recorded Run · ${formatReplayTime(totalSec)} · Max ${maxD.toFixed(1)}m`;
-  }
-  activeModalReplayCardData = {
-    level: lvl,
-    diverName: playerNameInput?.value.trim() || 'Diver',
-    success: Boolean(rec),
-    grade: rec?.grade || 'PB',
-    score: rec?.score || 0,
-    maxDepthM: maxD || getLevelMaxDepthM(lvl),
-    diveTimeSec: totalSec,
-    exploredPct: rec ? 100 : 0,
-    difficulty: rec?.bestDifficulty || activeDifficulty,
-    track,
-    profile: null,
-  };
-  replayModal.hidden = false;
-  modalReplay.load({ level: lvl, track, autoPlay: true });
-}
-
-function closeReplayModal() {
-  modalReplay.stop();
-  if (replayModal) replayModal.hidden = true;
-}
-
-btnReplayModalClose?.addEventListener('click', closeReplayModal);
-replayModal?.addEventListener('click', (e) => {
-  if (e.target === replayModal) closeReplayModal();
-});
-btnModalReplayShare?.addEventListener('click', () => {
-  if (activeModalReplayCardData) shareOrDownloadPostcard(activeModalReplayCardData);
-});
-
-// Pre-Dive Technical Trimix / Nitrox Gas Blender (v120)
-const CUSTOM_GAS_PREF_KEY = 'caveDiverCustomGas_v1';
-const gasPlannerModal = document.getElementById('gas-planner-modal');
-const btnOpenGasPlanner = document.getElementById('btn-open-gas-planner');
-const menuGasPillEl = document.getElementById('menu-gas-pill');
-const homeMenuGasLabelEl = document.getElementById('home-menu-gas-label');
-const btnGasPlannerClose = document.getElementById('btn-gas-planner-close');
-const gasPlannerSubEl = document.getElementById('gas-planner-sub');
-const gasPresetRowEl = document.getElementById('gas-preset-row');
-const gasO2Slider = document.getElementById('gas-o2-slider');
-const gasHeSlider = document.getElementById('gas-he-slider');
-const gasO2ValEl = document.getElementById('gas-o2-val');
-const gasHeValEl = document.getElementById('gas-he-val');
-const gasBarO2El = document.getElementById('gas-bar-o2');
-const gasBarHeEl = document.getElementById('gas-bar-he');
-const gasBarN2El = document.getElementById('gas-bar-n2');
-const gasLegO2El = document.getElementById('gas-leg-o2');
-const gasLegHeEl = document.getElementById('gas-leg-he');
-const gasLegN2El = document.getElementById('gas-leg-n2');
-const gasOutNameEl = document.getElementById('gas-out-name');
-const gasOutMod14El = document.getElementById('gas-out-mod14');
-const gasOutMod16El = document.getElementById('gas-out-mod16');
-const gasOutMinEl = document.getElementById('gas-out-min');
-const gasOutDepthLblEl = document.getElementById('gas-out-depth-lbl');
-const gasOutPpo2El = document.getElementById('gas-out-ppo2');
-const gasOutEndEl = document.getElementById('gas-out-end');
-const gasSafetyPillEl = document.getElementById('gas-safety-pill');
-const btnGasApply = document.getElementById('btn-gas-apply');
-const btnGasReset = document.getElementById('btn-gas-reset');
-
-let customGasPlan = { enabled: false, o2Pct: 18, hePct: 45 };
-let draftGasPlan = { o2Pct: 18, hePct: 45, useDefault: true };
-try {
-  const rawGas = localStorage.getItem(CUSTOM_GAS_PREF_KEY);
-  if (rawGas) {
-    const parsed = JSON.parse(rawGas);
-    if (parsed && typeof parsed === 'object') {
-      customGasPlan = {
-        enabled: Boolean(parsed.enabled),
-        o2Pct: Math.max(8, Math.min(40, Math.round(Number(parsed.o2Pct) || 18))),
-        hePct: Math.max(0, Math.min(75, Math.round(Number(parsed.hePct) || 45))),
-      };
-    }
-  }
-} catch {}
-
-function saveCustomGasPlan() {
-  try {
-    localStorage.setItem(CUSTOM_GAS_PREF_KEY, JSON.stringify(customGasPlan));
-  } catch {}
-}
-
-function getSiteDefaultBottomMix(lvl) {
-  const ov = lvl?.gasOverrides?.TMX1455;
-  return ov ? { ...GAS_MIXES.TMX1455, ...ov } : GAS_MIXES.TMX1455;
-}
-
-function getActiveCustomMixOverrides(lvl = activeLevel) {
-  if (!customGasPlan.enabled) return null;
-  const targetDepthM = getLevelMaxDepthM(lvl) || 50;
-  const baseGas = getSiteDefaultBottomMix(lvl);
-  const blend = buildCustomGasBlend({
-    o2Pct: customGasPlan.o2Pct,
-    hePct: customGasPlan.hePct,
-    targetDepthM,
-    baseGas,
-  });
-  return { TMX1455: blend.override };
-}
-
-function syncGasPlanBadges() {
-  const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
-  if (customGasPlan.enabled) {
-    const blend = buildCustomGasBlend({
-      o2Pct: customGasPlan.o2Pct,
-      hePct: customGasPlan.hePct,
-      targetDepthM,
-      baseGas: getSiteDefaultBottomMix(activeLevel),
-    });
-    if (menuGasPillEl) {
-      menuGasPillEl.textContent = `🧪 ${blend.name}`;
-      menuGasPillEl.classList.add('custom');
-    }
-    if (homeMenuGasLabelEl) {
-      homeMenuGasLabelEl.textContent = `🧪 Gas Blender (${blend.shortLabel})`;
-    }
-  } else {
-    if (menuGasPillEl) {
-      menuGasPillEl.textContent = '🧪 Default Mix';
-      menuGasPillEl.classList.remove('custom');
-    }
-    if (homeMenuGasLabelEl) {
-      homeMenuGasLabelEl.textContent = '🧪 Gas Blender';
-    }
-  }
-  syncSetupDrawerSummary();
-}
-
-function renderGasPlannerModal() {
-  if (!gasPlannerModal) return;
-  const lvl = activeLevel || LEVELS[0];
-  const targetDepthM = Math.round(getLevelMaxDepthM(lvl) || 50);
-  const siteBase = getSiteDefaultBottomMix(lvl);
-  const maxAllowedHe = Math.min(75, Math.max(0, 95 - draftGasPlan.o2Pct));
-  if (draftGasPlan.hePct > maxAllowedHe) draftGasPlan.hePct = maxAllowedHe;
-
-  const blend = buildCustomGasBlend({
-    o2Pct: draftGasPlan.o2Pct,
-    hePct: draftGasPlan.hePct,
-    targetDepthM,
-    baseGas: siteBase,
-  });
-
-  if (gasPlannerSubEl) {
-    gasPlannerSubEl.textContent = `${lvl.name} · Target Max Depth ${targetDepthM}m (Site Default: ${siteBase.name})`;
-  }
-  if (gasO2Slider) gasO2Slider.value = String(blend.o2Pct);
-  if (gasHeSlider) {
-    gasHeSlider.max = String(Math.min(75, Math.max(0, 95 - blend.o2Pct)));
-    gasHeSlider.value = String(blend.hePct);
-  }
-  if (gasO2ValEl) gasO2ValEl.textContent = `${blend.o2Pct}%`;
-  if (gasHeValEl) gasHeValEl.textContent = `${blend.hePct}%`;
-  if (gasBarO2El) gasBarO2El.style.width = `${blend.o2Pct}%`;
-  if (gasBarHeEl) gasBarHeEl.style.width = `${blend.hePct}%`;
-  if (gasBarN2El) gasBarN2El.style.width = `${blend.n2Pct}%`;
-  if (gasLegO2El) gasLegO2El.textContent = `${blend.o2Pct}%`;
-  if (gasLegHeEl) gasLegHeEl.textContent = `${blend.hePct}%`;
-  if (gasLegN2El) gasLegN2El.textContent = `${blend.n2Pct}%`;
-
-  if (gasOutNameEl) gasOutNameEl.textContent = draftGasPlan.useDefault ? `${siteBase.name} (Default)` : blend.name;
-  if (gasOutMod14El) gasOutMod14El.textContent = `${blend.mod14M.toFixed(1)}m`;
-  if (gasOutMod16El) gasOutMod16El.textContent = `${blend.mod16M.toFixed(1)}m`;
-  if (gasOutMinEl) gasOutMinEl.textContent = blend.minM > 0 ? `${blend.minM}m (Hypoxic)` : '0m (Normoxic)';
-  if (gasOutDepthLblEl) gasOutDepthLblEl.textContent = `PPO₂ @ ${targetDepthM}m`;
-  if (gasOutPpo2El) gasOutPpo2El.textContent = `${blend.ppo2AtTarget.toFixed(2)} bar`;
-  if (gasOutEndEl) gasOutEndEl.textContent = `${blend.endAtTargetM.toFixed(1)}m`;
-  if (gasSafetyPillEl) {
-    gasSafetyPillEl.textContent = blend.statusText;
-    gasSafetyPillEl.className = `gas-safety-pill ${blend.status}`;
-  }
-
-  if (gasPresetRowEl) {
-    gasPresetRowEl.querySelectorAll('.gas-preset-btn').forEach((btn) => {
-      const isDefBtn = btn.dataset.preset === 'default';
-      const match = isDefBtn
-        ? draftGasPlan.useDefault
-        : !draftGasPlan.useDefault && Number(btn.dataset.o2) === blend.o2Pct && Number(btn.dataset.he) === blend.hePct;
-      btn.classList.toggle('active', match);
-    });
-  }
-  const slateCanvas = document.getElementById('gas-slate-canvas');
-  if (slateCanvas) {
-    const sctx = slateCanvas.getContext('2d');
-    if (sctx) {
-      drawDivePlanSlate(sctx, slateCanvas.width, slateCanvas.height, {
-        level: lvl,
-        mixes: lvl.gasMixes,
-        customGasPlan: draftGasPlan.useDefault ? null : { enabled: true, o2Pct: blend.o2Pct, hePct: blend.hePct },
-      });
-    }
-  }
-}
-
-function openGasPlannerModal() {
-  if (!gasPlannerModal) return;
-  setHomeMenuOpen(false);
-  const siteBase = getSiteDefaultBottomMix(activeLevel);
-  if (customGasPlan.enabled) {
-    draftGasPlan = { o2Pct: customGasPlan.o2Pct, hePct: customGasPlan.hePct, useDefault: false };
-  } else {
-    draftGasPlan = {
-      o2Pct: Math.round((siteBase.fO2 || 0.14) * 100),
-      hePct: Math.round((siteBase.fHe || 0.55) * 100),
-      useDefault: true,
-    };
-  }
-  renderGasPlannerModal();
-  gasPlannerModal.hidden = false;
-}
-
-function closeGasPlannerModal() {
-  if (gasPlannerModal) gasPlannerModal.hidden = true;
-}
-
-btnOpenGasPlanner?.addEventListener('click', openGasPlannerModal);
-menuGasPillEl?.addEventListener('click', () => {
-  closeDiveSetupModal();
-  openGasPlannerModal();
-});
-btnGasPlannerClose?.addEventListener('click', closeGasPlannerModal);
-gasPlannerModal?.addEventListener('click', (e) => {
-  if (e.target === gasPlannerModal) closeGasPlannerModal();
-});
-gasO2Slider?.addEventListener('input', () => {
-  draftGasPlan.o2Pct = Number(gasO2Slider.value) || 18;
-  draftGasPlan.useDefault = false;
-  renderGasPlannerModal();
-});
-gasHeSlider?.addEventListener('input', () => {
-  draftGasPlan.hePct = Number(gasHeSlider.value) || 0;
-  draftGasPlan.useDefault = false;
-  renderGasPlannerModal();
-});
-gasPresetRowEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.gas-preset-btn');
-  if (!btn) return;
-  if (btn.dataset.preset === 'default') {
-    const siteBase = getSiteDefaultBottomMix(activeLevel);
-    draftGasPlan = {
-      o2Pct: Math.round((siteBase.fO2 || 0.14) * 100),
-      hePct: Math.round((siteBase.fHe || 0.55) * 100),
-      useDefault: true,
-    };
-  } else {
-    draftGasPlan = {
-      o2Pct: Number(btn.dataset.o2) || 18,
-      hePct: Number(btn.dataset.he) || 45,
-      useDefault: false,
-    };
-  }
-  renderGasPlannerModal();
-});
-btnGasApply?.addEventListener('click', () => {
-  if (draftGasPlan.useDefault) {
-    customGasPlan.enabled = false;
-    saveCustomGasPlan();
-    syncGasPlanBadges();
-    closeGasPlannerModal();
-    showToast('🧪 Using expedition site default bottom gas.', 2.2);
-    return;
-  }
-  customGasPlan = {
-    enabled: true,
-    o2Pct: draftGasPlan.o2Pct,
-    hePct: draftGasPlan.hePct,
-  };
-  saveCustomGasPlan();
-  syncGasPlanBadges();
-  closeGasPlannerModal();
-  const blend = buildCustomGasBlend({
-    o2Pct: customGasPlan.o2Pct,
-    hePct: customGasPlan.hePct,
-    targetDepthM: getLevelMaxDepthM(activeLevel) || 50,
-  });
-  showToast(`🧪 Custom bottom gas locked: ${blend.name} (MOD ${blend.mod14M.toFixed(0)}m)`, 2.8);
-});
-btnGasReset?.addEventListener('click', () => {
-  customGasPlan.enabled = false;
-  saveCustomGasPlan();
-  syncGasPlanBadges();
-  closeGasPlannerModal();
-  showToast('🧪 Reset to expedition site default gas mix.', 2.2);
-});
+const {
+  gasPlannerModal,
+  saveCustomGasPlan,
+  getSiteDefaultBottomMix,
+  getActiveCustomMixOverrides,
+  syncGasPlanBadges,
+  renderGasPlannerModal,
+  openGasPlannerModal,
+  closeGasPlannerModal,
+} = gasPlanner;
+// Mutable proxy accessor kept for callers reading/mutating getCustomGasPlan() directly
+const getCustomGasPlan = () => gasPlanner.getPlan();
 syncGasPlanBadges();
 
-// ── Custom Challenge Links & Mutator Sandbox (v123) ──
-const challengeModal = document.getElementById('challenge-modal');
-const btnOpenChallenge = document.getElementById('btn-open-challenge');
-const menuMutatorPillEl = document.getElementById('menu-mutator-pill');
-const homeMenuSandboxLabelEl = document.getElementById('home-menu-sandbox-label');
-const btnChallengeModalClose = document.getElementById('btn-challenge-modal-close');
-const sandboxMutatorGridEl = document.getElementById('sandbox-mutator-grid');
-const sandboxDiffSelect = document.getElementById('sandbox-diff-select');
-const sandboxTargetInput = document.getElementById('sandbox-target-input');
-const sandboxDrillsCheck = document.getElementById('sandbox-drills-check');
-const sandboxGasCheck = document.getElementById('sandbox-gas-check');
-const sandboxGasLabelEl = document.getElementById('sandbox-gas-label');
-const sandboxUrlInput = document.getElementById('sandbox-url-input');
-const btnSandboxCopy = document.getElementById('btn-sandbox-copy');
-const btnSandboxShare = document.getElementById('btn-sandbox-share');
-const btnSandboxLaunch = document.getElementById('btn-sandbox-launch');
-const btnSandboxApply = document.getElementById('btn-sandbox-apply');
-const challengeBannerEl = document.getElementById('challenge-banner');
-const challengeBannerTitleEl = document.getElementById('challenge-banner-title');
-const challengeBannerTagsEl = document.getElementById('challenge-banner-tags');
-const btnChallengeAccept = document.getElementById('btn-challenge-accept');
-const btnChallengeDismiss = document.getElementById('btn-challenge-dismiss');
-const debriefChallengeBannerEl = document.getElementById('debrief-challenge-banner');
-const btnDebriefChallenge = document.getElementById('btn-debrief-challenge');
-
-let activeSandboxMutatorId = '';
-let activeIncomingChallenge = null;
-let draftSandbox = {
-  mutatorId: '',
-  difficulty: 'standard',
-  drillsEnabled: false,
-  customGas: false,
-  targetScore: 0,
-};
-let lastDebriefChallengeUrl = '';
-let lastDebriefChallengeText = '';
-
-function syncSandboxPillUi() {
-  const mut = activeSandboxMutatorId ? getDailyMutatorById(activeSandboxMutatorId) : null;
-  if (menuMutatorPillEl) {
-    menuMutatorPillEl.textContent = mut ? `${mut.icon} ${mut.shortName}` : '🎛️ Sandbox';
-    menuMutatorPillEl.classList.toggle('active', Boolean(mut));
-  }
-  if (homeMenuSandboxLabelEl) {
-    homeMenuSandboxLabelEl.textContent = mut ? `🎛️ Sandbox (${mut.shortName})` : '🎛️ Challenge Sandbox';
-  }
-  syncSetupDrawerSummary();
-}
-
-function getDraftChallengeConfig() {
-  return {
-    siteId: activeLevel?.id || DEFAULT_LEVEL_ID,
-    difficulty: draftSandbox.difficulty,
-    mutatorId: draftSandbox.mutatorId,
-    customGas: draftSandbox.customGas,
-    o2Pct: customGasPlan.o2Pct,
-    hePct: customGasPlan.hePct,
-    drillsEnabled: draftSandbox.drillsEnabled,
-    challengerName: playerNameInput?.value.trim() || '',
-    targetScore: Math.max(0, Math.round(Number(draftSandbox.targetScore) || 0)),
-  };
-}
-
-function renderSandboxModal() {
-  if (!challengeModal) return;
-  if (sandboxMutatorGridEl) {
-    const items = [
-      { id: '', icon: '✨', shortName: 'No Mutator', desc: 'Standard site rules & conditions' },
-      ...DAILY_MUTATORS,
-    ];
-    sandboxMutatorGridEl.innerHTML = items
-      .map(
-        (m) => `
-        <button type="button" class="sandbox-mut-btn${draftSandbox.mutatorId === m.id ? ' active' : ''}" data-sandbox-mut="${m.id}">
-          <strong>${m.icon} ${escapeHtml(m.shortName)}</strong>
-          <span>${escapeHtml(m.desc || '')}</span>
-        </button>`
-      )
-      .join('');
-  }
-  if (sandboxDiffSelect) sandboxDiffSelect.value = draftSandbox.difficulty;
-  if (sandboxTargetInput) sandboxTargetInput.value = draftSandbox.targetScore > 0 ? String(draftSandbox.targetScore) : '';
-  if (sandboxDrillsCheck) sandboxDrillsCheck.checked = draftSandbox.drillsEnabled;
-  if (sandboxGasCheck) sandboxGasCheck.checked = draftSandbox.customGas;
-  if (sandboxGasLabelEl) {
-    const mixTxt = customGasPlan.hePct > 0 ? `TMX ${customGasPlan.o2Pct}/${customGasPlan.hePct}` : `EAN${customGasPlan.o2Pct}`;
-    sandboxGasLabelEl.textContent = `🧪 Include Custom Trimix (${mixTxt})`;
-  }
-  const url = buildChallengeUrl(`${location.origin}${location.pathname}`, getDraftChallengeConfig());
-  if (sandboxUrlInput) sandboxUrlInput.value = url;
-  if (btnSandboxShare) btnSandboxShare.hidden = typeof navigator.share !== 'function';
-}
-
-function openChallengeModal() {
-  if (!challengeModal) return;
-  setHomeMenuOpen(false);
-  const pbRec = loadCareerLogbook().cleared?.[activeLevel?.id];
-  draftSandbox = {
-    mutatorId: activeSandboxMutatorId,
-    difficulty: activeDifficulty,
-    drillsEnabled,
-    customGas: customGasPlan.enabled,
-    targetScore: pbRec?.score || 0,
-  };
-  renderSandboxModal();
-  challengeModal.hidden = false;
-}
-
-function closeChallengeModal() {
-  if (challengeModal) challengeModal.hidden = true;
-}
-
-function applyDraftSandboxToMenu() {
-  activeSandboxMutatorId = draftSandbox.mutatorId || '';
-  activeDifficulty = draftSandbox.difficulty;
-  try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
-  syncPreferenceMenuButtons();
-
-  drillsEnabled = Boolean(draftSandbox.drillsEnabled);
-  try { localStorage.setItem(DRILLS_PREF_KEY, drillsEnabled ? '1' : '0'); } catch {}
-  syncDrillsUi();
-
-  customGasPlan.enabled = Boolean(draftSandbox.customGas);
-  saveCustomGasPlan();
-  syncGasPlanBadges();
-  syncSandboxPillUi();
-}
-
-async function copyOrShareChallengeUrl(url, shareText) {
-  if (!url) return false;
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Techno Dive Expedition Challenge', text: shareText, url });
-      showToast('🔗 Challenge link shared!', 2.4);
-      return true;
-    }
-  } catch (err) {
-    if (err?.name === 'AbortError') return false;
-  }
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      showToast('📋 Challenge link copied! Send it to a friend to race!', 2.8);
-      return true;
-    }
-  } catch {}
-  showToast('Select & copy the Challenge URL above!', 2.4);
-  return false;
-}
-
-function renderIncomingChallengeBanner() {
-  if (!challengeBannerEl) return;
-  if (!activeIncomingChallenge) {
-    challengeBannerEl.hidden = true;
-    return;
-  }
-  const lvl = getLevelById(activeIncomingChallenge.siteId);
-  const mut = activeIncomingChallenge.mutatorId ? getDailyMutatorById(activeIncomingChallenge.mutatorId) : null;
-  const { tags } = formatChallengeSummary(activeIncomingChallenge, { levelName: lvl?.name || 'Expedition', mutator: mut });
-  const who = activeIncomingChallenge.challengerName
-    ? `🏆 ${activeIncomingChallenge.challengerName.toUpperCase()} CHALLENGED YOU`
-    : '🏆 EXPEDITION CHALLENGE RECEIVED';
-  if (challengeBannerTitleEl) challengeBannerTitleEl.textContent = `${who} · ${lvl?.name || ''}`;
-  if (challengeBannerTagsEl) challengeBannerTagsEl.textContent = tags.join(' · ');
-  challengeBannerEl.hidden = false;
-}
-
-async function applyIncomingChallenge(ch) {
-  if (!ch) return;
-  activeIncomingChallenge = ch;
-  activeDifficulty = ch.difficulty;
-  try { localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty); } catch {}
-  syncPreferenceMenuButtons();
-
-  activeSandboxMutatorId = ch.mutatorId || '';
-  syncSandboxPillUi();
-
-  drillsEnabled = Boolean(ch.drillsEnabled);
-  try { localStorage.setItem(DRILLS_PREF_KEY, drillsEnabled ? '1' : '0'); } catch {}
-  syncDrillsUi();
-
-  if (ch.customGas) {
-    customGasPlan = { enabled: true, o2Pct: ch.o2Pct, hePct: ch.hePct };
-    saveCustomGasPlan();
-  } else {
-    customGasPlan.enabled = false;
-    saveCustomGasPlan();
-  }
-  syncGasPlanBadges();
-
-  if (ch.siteId && ch.siteId !== activeLevel?.id) {
-    await selectAndLoadLevel(ch.siteId, { focusMap: false });
-  }
-  renderIncomingChallengeBanner();
-  // Clean URL query params cleanly without reloading so refresh doesn't re-apply stale challenge
-  try {
-    const cleanUrl = `${location.origin}${location.pathname}`;
-    history.replaceState(null, '', cleanUrl);
-  } catch {}
-}
-
-btnOpenChallenge?.addEventListener('click', openChallengeModal);
-menuMutatorPillEl?.addEventListener('click', () => {
-  closeDiveSetupModal();
-  openChallengeModal();
+// ── Custom Challenge Links, Mutator Sandbox & Procedural Generator (modularized v172) ──
+const sandboxCtrl = createSandboxAndProceduralController({
+  difficultyPrefKey: DIFFICULTY_PREF_KEY,
+  drillsPrefKey: DRILLS_PREF_KEY,
+  getActiveLevel: () => activeLevel,
+  getActiveDifficulty: () => activeDifficulty,
+  setActiveDifficulty: (v) => { activeDifficulty = v; },
+  getDrillsEnabled: () => drillsEnabled,
+  setDrillsEnabled: (v) => { drillsEnabled = v; },
+  getCustomGasPlan,
+  setCustomGasPlan: (plan) => gasPlanner.setPlan(plan),
+  saveCustomGasPlan,
+  syncGasPlanBadges,
+  syncPreferenceMenuButtons: () => syncPreferenceMenuButtons(),
+  syncDrillsUi: () => syncDrillsUi(),
+  syncSetupDrawerSummary: () => syncSetupDrawerSummary(),
+  loadCareerLogbook,
+  getDiverName: () => playerNameInput?.value.trim() || '',
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  closeDiveSetupModal: () => closeDiveSetupModal(),
+  selectAndLoadLevel: (...a) => selectAndLoadLevel(...a),
+  btnPlaySolo,
+  showToast,
 });
-btnChallengeModalClose?.addEventListener('click', closeChallengeModal);
-challengeModal?.addEventListener('click', (e) => {
-  if (e.target === challengeModal) closeChallengeModal();
-});
-sandboxMutatorGridEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-sandbox-mut]');
-  if (!btn) return;
-  draftSandbox.mutatorId = btn.dataset.sandboxMut || '';
-  renderSandboxModal();
-});
-sandboxDiffSelect?.addEventListener('change', () => {
-  draftSandbox.difficulty = sandboxDiffSelect.value || 'standard';
-  renderSandboxModal();
-});
-sandboxTargetInput?.addEventListener('input', () => {
-  draftSandbox.targetScore = Math.max(0, Math.round(Number(sandboxTargetInput.value) || 0));
-  renderSandboxModal();
-});
-sandboxDrillsCheck?.addEventListener('change', () => {
-  draftSandbox.drillsEnabled = Boolean(sandboxDrillsCheck.checked);
-  renderSandboxModal();
-});
-sandboxGasCheck?.addEventListener('change', () => {
-  draftSandbox.customGas = Boolean(sandboxGasCheck.checked);
-  renderSandboxModal();
-});
-btnSandboxCopy?.addEventListener('click', async () => {
-  const url = sandboxUrlInput?.value || '';
-  if (!url) return;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      showToast('📋 Challenge URL copied to clipboard!', 2.4);
-      return;
-    }
-  } catch {}
-  sandboxUrlInput?.select();
-  showToast('Challenge URL selected — press Ctrl+C to copy.', 2.2);
-});
-btnSandboxShare?.addEventListener('click', () => {
-  const cfg = getDraftChallengeConfig();
-  const mut = cfg.mutatorId ? getDailyMutatorById(cfg.mutatorId) : null;
-  const { shareText } = formatChallengeSummary(cfg, { levelName: activeLevel?.name || 'Expedition', mutator: mut });
-  copyOrShareChallengeUrl(sandboxUrlInput?.value || '', shareText);
-});
-btnSandboxApply?.addEventListener('click', () => {
-  applyDraftSandboxToMenu();
-  closeChallengeModal();
-  showToast('🎛️ Sandbox settings applied! Hit DIVE SOLO whenever ready.', 2.4);
-});
-btnSandboxLaunch?.addEventListener('click', () => {
-  applyDraftSandboxToMenu();
-  closeChallengeModal();
-  btnPlaySolo?.click();
-});
-
-// ─── Procedural Endless Expeditions ("Uncharted Sump Generator", v125) ───
-const proceduralModal = document.getElementById('procedural-modal');
-const btnOpenProcedural = document.getElementById('btn-open-procedural');
-const menuProcPillEl = document.getElementById('menu-proc-pill');
-const btnProcModalClose = document.getElementById('btn-proc-modal-close');
-const procSeedInput = document.getElementById('proc-seed-input');
-const btnProcRandom = document.getElementById('btn-proc-random');
-const procTierSelect = document.getElementById('proc-tier-select');
-const procBiomeSelect = document.getElementById('proc-biome-select');
-const procUnlinedCheck = document.getElementById('proc-unlined-check');
-const procPreviewBox = document.getElementById('proc-preview-box');
-const procUrlInput = document.getElementById('proc-url-input');
-const btnProcCopy = document.getElementById('btn-proc-copy');
-const btnProcLaunch = document.getElementById('btn-proc-launch');
-const btnProcSelect = document.getElementById('btn-proc-select');
-
-let draftProcedural = {
-  seed: randomProceduralSeed(),
-  tier: 'deep',
-  biome: 'cenote',
-  unlined: false,
-};
-
-function renderProceduralModal() {
-  if (!proceduralModal) return;
-  draftProcedural.seed = normalizeProceduralSeed(procSeedInput?.value || draftProcedural.seed);
-  draftProcedural.tier = PROCEDURAL_TIERS[procTierSelect?.value] ? procTierSelect.value : 'deep';
-  draftProcedural.biome = PROCEDURAL_BIOMES[procBiomeSelect?.value] ? procBiomeSelect.value : 'cenote';
-  draftProcedural.unlined = Boolean(procUnlinedCheck?.checked);
-
-  const previewLevel = generateProceduralLevel(draftProcedural);
-  const gasLabel = previewLevel.gasOverrides?.TMX1455?.name || 'TMX 14/55';
-  if (procPreviewBox) {
-    procPreviewBox.innerHTML =
-      `<strong>${previewLevel.name}</strong><br/>` +
-      `Max Depth: <strong>${previewLevel.proceduralMeta.targetDepthM}m</strong> · ` +
-      `Segments: <strong>${previewLevel.segments.length}</strong> · ` +
-      `Relics: <strong>${previewLevel.collectibles.length}</strong> · ` +
-      `Bottom Mix: <strong>${gasLabel}</strong>` +
-      (previewLevel.reelMetersPerDiver > 0 ? ` · <strong>🧵 ${previewLevel.reelMetersPerDiver}m Unlined Reel</strong>` : ' · <strong>Fixed Guideline</strong>');
-  }
-  if (procUrlInput) {
-    procUrlInput.value = buildProceduralShareUrl(`${location.origin}${location.pathname}`, draftProcedural);
-  }
-}
-
-function openProceduralModal() {
-  if (!proceduralModal) return;
-  setHomeMenuOpen(false);
-  if (procSeedInput) procSeedInput.value = draftProcedural.seed;
-  if (procTierSelect) procTierSelect.value = draftProcedural.tier;
-  if (procBiomeSelect) procBiomeSelect.value = draftProcedural.biome;
-  if (procUnlinedCheck) procUnlinedCheck.checked = draftProcedural.unlined;
-  renderProceduralModal();
-  proceduralModal.hidden = false;
-}
-
-function closeProceduralModal() {
-  if (proceduralModal) proceduralModal.hidden = true;
-}
-
-async function applyProceduralLevelToMenu(cfg, { launchImmediately = false } = {}) {
-  const procId = buildProceduralLevelId(cfg);
-  await selectAndLoadLevel(procId, { focusMap: false });
-  if (menuProcPillEl) {
-    const s = normalizeProceduralSeed(cfg.seed);
-    menuProcPillEl.textContent = `∞ #${s}`;
-    menuProcPillEl.classList.add('active');
-  }
-  syncSetupDrawerSummary();
-  if (launchImmediately) {
-    btnPlaySolo?.click();
-  } else {
-    showToast(`∞ Uncharted Sump #${normalizeProceduralSeed(cfg.seed)} carved & ready!`, 2.6);
-  }
-}
-
-btnOpenProcedural?.addEventListener('click', openProceduralModal);
-menuProcPillEl?.addEventListener('click', () => {
-  closeDiveSetupModal();
-  openProceduralModal();
-});
-btnProcModalClose?.addEventListener('click', closeProceduralModal);
-proceduralModal?.addEventListener('click', (e) => {
-  if (e.target === proceduralModal) closeProceduralModal();
-});
-procSeedInput?.addEventListener('input', renderProceduralModal);
-procTierSelect?.addEventListener('change', renderProceduralModal);
-procBiomeSelect?.addEventListener('change', renderProceduralModal);
-procUnlinedCheck?.addEventListener('change', renderProceduralModal);
-btnProcRandom?.addEventListener('click', () => {
-  draftProcedural.seed = randomProceduralSeed();
-  if (procSeedInput) procSeedInput.value = draftProcedural.seed;
-  renderProceduralModal();
-});
-btnProcCopy?.addEventListener('click', async () => {
-  const url = procUrlInput?.value || '';
-  if (!url) return;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      showToast('📋 Uncharted Sump seed URL copied!', 2.4);
-      return;
-    }
-  } catch {}
-  procUrlInput?.select();
-  showToast('Seed URL selected — press Ctrl+C to copy.', 2.2);
-});
-btnProcSelect?.addEventListener('click', async () => {
-  renderProceduralModal();
-  closeProceduralModal();
-  await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: false });
-});
-btnProcLaunch?.addEventListener('click', async () => {
-  renderProceduralModal();
-  closeProceduralModal();
-  await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: true });
-});
+const {
+  challengeModal,
+  proceduralModal,
+  menuProcPillEl,
+  debriefChallengeBannerEl,
+  btnChallengeAccept,
+  btnChallengeDismiss,
+  btnDebriefChallenge,
+  draftProcedural,
+  syncSandboxPillUi,
+  openChallengeModal,
+  closeChallengeModal,
+  copyOrShareChallengeUrl,
+  renderIncomingChallengeBanner,
+  applyIncomingChallenge,
+  openProceduralModal,
+  closeProceduralModal,
+  applyProceduralLevelToMenu,
+} = sandboxCtrl;
 
 // === Multi-Dive Expedition Campaigns & Repetitive Surface Intervals (v160) ===
 const campaignsModal = document.getElementById('campaigns-modal');
@@ -5129,12 +2713,13 @@ btnChallengeAccept?.addEventListener('click', () => {
   btnPlaySolo?.click();
 });
 btnChallengeDismiss?.addEventListener('click', () => {
-  activeIncomingChallenge = null;
+  sandboxCtrl.setActiveIncomingChallenge(null);
   renderIncomingChallengeBanner();
 });
 btnDebriefChallenge?.addEventListener('click', () => {
-  if (lastDebriefChallengeUrl) {
-    copyOrShareChallengeUrl(lastDebriefChallengeUrl, lastDebriefChallengeText);
+  const lastCh = sandboxCtrl.getLastDebriefChallenge();
+  if (lastCh.url) {
+    copyOrShareChallengeUrl(lastCh.url, lastCh.text);
   }
 });
 syncSandboxPillUi();
@@ -5162,494 +2747,68 @@ modalLogbook?.addEventListener('click', (e) => {
     const lid = jumpBtn.dataset.logbookJump;
     closeLogbookModal();
     setActiveMenuTab('solo');
-    if (lid) selectAndLoadLevel(lid, { focusMap: mapZoomMode === 'site' });
+    if (lid) selectAndLoadLevel(lid, { focusMap: siteBrowser.getMapZoomMode() === 'site' });
   }
 });
 
-// ── GitHub OAuth Cloud Save (Private Gist) & In-App Issue Reporter (v115) ──
-const btnGithubAccount = document.getElementById('btn-github-account');
-const ghAccountAvatarEl = document.getElementById('gh-account-avatar');
-const ghAccountLabelEl = document.getElementById('gh-account-label');
-const ghSyncDotEl = document.getElementById('gh-sync-dot');
-const logbookGithubBarEl = document.getElementById('logbook-github-bar');
-const btnOpenIssue = document.getElementById('btn-open-issue');
-const btnHudIssue = document.getElementById('btn-hud-issue');
-const modalIssue = document.getElementById('issue-modal');
-const btnIssueClose = document.getElementById('btn-issue-close');
-const issueModalSubEl = document.getElementById('issue-modal-sub');
-const issueKindTabsEl = document.getElementById('issue-kind-tabs');
-const issueTitleInput = document.getElementById('issue-title-input');
-const issueDescInput = document.getElementById('issue-desc-input');
-const issueAttachDiagInput = document.getElementById('issue-attach-diag');
-const issueDiagPreviewEl = document.getElementById('issue-diag-preview');
-const issueResultEl = document.getElementById('issue-result');
-const btnIssueSubmit = document.getElementById('btn-issue-submit');
-const btnIssueOpenGh = document.getElementById('btn-issue-open-gh');
-
-let activeIssueKind = 'bug';
-let ghSyncDebounceTimer = 0;
-
-function getCurrentAppVersionLabel() {
-  const ver = document.querySelector('meta[name="app-version"]')?.getAttribute('content');
-  return ver ? `v${ver}` : 'v115';
-}
-
-function formatSyncTimeLabel(isoStr) {
-  if (!isoStr) return 'Private Gist ready';
-  try {
-    const dt = new Date(isoStr);
-    if (Number.isNaN(dt.getTime())) return 'Private Gist synced';
-    return `Synced ${dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-  } catch {
-    return 'Private Gist synced';
-  }
-}
-
-function buildCurrentPrefsForSync() {
-  const prefs = {
-    difficulty: activeDifficulty,
-    gear: { ...savedGearLoadout },
-    ghostEnabled: Boolean(ghostEnabled),
-    torchStickEnabled: Boolean(torchStickEnabled),
-    livery: { ...activeRigLivery },
-    liverySlots: savedLiverySlots.map((s) => (s ? { ...s } : null)),
-    aiSquadTeamUniform: Boolean(aiSquadTeamUniform),
-  };
-  const callsign = getEnteredCallsign();
-  if (callsign) prefs.playerName = callsign;
-  return prefs;
-}
-
-function collectLocalGhostTracks() {
-  const out = {};
-  for (const lvl of LEVELS) {
-    const raw = loadGhostTrack(lvl.id);
-    if (!raw) continue;
-    const compact = normalizeGhostTrack(raw, 360);
-    if (compact) out[lvl.id] = compact;
-  }
-  return out;
-}
-
-function applyMergedGhostTracks(mergedGhosts) {
-  if (!mergedGhosts || typeof mergedGhosts !== 'object') return 0;
-  let updated = 0;
-  for (const [lid, track] of Object.entries(mergedGhosts)) {
-    const clean = normalizeGhostTrack(track, 360);
-    if (!clean) continue;
-    const local = loadGhostTrack(lid);
-    const localDur = local && local.length >= 2 ? local[local.length - 1][0] : Infinity;
-    const cloudDur = clean[clean.length - 1][0];
-    if (!local || (cloudDur > 0 && cloudDur < localDur)) {
-      saveGhostTrack(lid, clean);
-      updated += 1;
-    }
-  }
-  if (updated > 0) {
-    refreshActiveGhostTrack(session?.level || activeLevel);
-  }
-  return updated;
-}
-
-function renderGitHubAccountUi() {
-  const st = github.getStatus();
-  if (btnGithubAccount) {
-    btnGithubAccount.classList.toggle('connected', st.authenticated);
-    const markSvg = btnGithubAccount.querySelector('.gh-mark-svg');
-    if (st.authenticated && st.user) {
-      if (markSvg) markSvg.hidden = Boolean(st.user.avatarUrl);
-      if (ghAccountAvatarEl) {
-        if (st.user.avatarUrl) {
-          ghAccountAvatarEl.src = st.user.avatarUrl;
-          ghAccountAvatarEl.hidden = false;
-        } else {
-          ghAccountAvatarEl.hidden = true;
-        }
-      }
-      if (ghAccountLabelEl) ghAccountLabelEl.textContent = `@${st.user.login}`;
-      if (ghSyncDotEl) {
-        ghSyncDotEl.hidden = false;
-        ghSyncDotEl.classList.toggle('syncing', st.syncing);
-        ghSyncDotEl.title = st.syncing ? 'Syncing Private Gist...' : formatSyncTimeLabel(st.lastSyncedAt);
-      }
-      btnGithubAccount.title = `Signed in as @${st.user.login} · ${formatSyncTimeLabel(st.lastSyncedAt)} (Open Logbook)`;
-    } else {
-      if (markSvg) markSvg.hidden = false;
-      if (ghAccountAvatarEl) ghAccountAvatarEl.hidden = true;
-      if (ghAccountLabelEl) ghAccountLabelEl.textContent = st.configured ? 'Sign in' : 'GitHub';
-      if (ghSyncDotEl) ghSyncDotEl.hidden = true;
-      btnGithubAccount.title = st.configured
-        ? 'Sign in with GitHub to cloud-save stats via Private Gist & submit issues'
-        : 'Open GitHub Cloud Save & Issue Reporter';
-    }
-  }
-
-  if (logbookGithubBarEl) {
-    logbookGithubBarEl.classList.toggle('connected', st.authenticated);
-    if (st.authenticated && st.user) {
-      const syncMeta = st.syncing ? 'Syncing private Gist...' : formatSyncTimeLabel(st.lastSyncedAt);
-      const ghostMeta = st.ghostCount > 0 ? ` · ${st.ghostCount} PB ghost${st.ghostCount === 1 ? '' : 's'}` : '';
-      const gistLink = st.gistUrl
-        ? `<a class="btn tiny ghost" href="${escapeHtml(st.gistUrl)}" target="_blank" rel="noopener noreferrer">Gist ↗</a>`
-        : '';
-      logbookGithubBarEl.innerHTML = `
-        <div class="logbook-gh-left">
-          ${st.user.avatarUrl ? `<img class="logbook-gh-avatar" src="${escapeHtml(st.user.avatarUrl)}" alt="" />` : ''}
-          <div class="logbook-gh-copy">
-            <strong>🐙 @${escapeHtml(st.user.login)} · Cloud Save Active</strong>
-            <span>${escapeHtml(syncMeta)}${escapeHtml(ghostMeta)} · Private Gist sync across devices</span>
-          </div>
-        </div>
-        <div class="logbook-gh-actions">
-          <button type="button" class="btn tiny secondary" data-gh-action="sync" ${st.syncing ? 'disabled' : ''}>${st.syncing ? 'Syncing...' : '☁ Sync Now'}</button>
-          ${gistLink}
-          <button type="button" class="btn tiny ghost" data-gh-action="issue">🐛 Issue</button>
-          <button type="button" class="btn tiny ghost" data-gh-action="logout">Sign Out</button>
-        </div>
-      `;
-    } else if (st.configured) {
-      logbookGithubBarEl.innerHTML = `
-        <div class="logbook-gh-left">
-          <div class="logbook-gh-copy">
-            <strong>☁ Sync Your Dive Career with GitHub</strong>
-            <span>Save clears, Field Guide &amp; streaks in your own Private Gist + submit issues directly.</span>
-          </div>
-        </div>
-        <div class="logbook-gh-actions">
-          <button type="button" class="btn tiny primary" data-gh-action="login">Sign in with GitHub</button>
-          <button type="button" class="btn tiny ghost" data-gh-action="issue">🐛 Report Issue</button>
-        </div>
-      `;
-    } else {
-      logbookGithubBarEl.innerHTML = `
-        <div class="logbook-gh-left">
-          <div class="logbook-gh-copy">
-            <strong>🐙 GitHub Cloud Save &amp; Issues</strong>
-            <span>Add GITHUB_CLIENT_ID &amp; GITHUB_CLIENT_SECRET in Vercel to enable 1-click OAuth Gist sync.</span>
-          </div>
-        </div>
-        <div class="logbook-gh-actions">
-          <button type="button" class="btn tiny secondary" data-gh-action="issue">🐛 Report Issue</button>
-        </div>
-      `;
-    }
-  }
-
-  if (btnIssueSubmit) {
-    if (st.authenticated && st.user) {
-      btnIssueSubmit.textContent = `Submit as @${st.user.login}`;
-      btnIssueSubmit.hidden = false;
-    } else if (st.configured) {
-      btnIssueSubmit.textContent = 'Sign in with GitHub to Submit';
-      btnIssueSubmit.hidden = false;
-    } else {
-      btnIssueSubmit.hidden = true;
-    }
-  }
-  if (issueModalSubEl) {
-    issueModalSubEl.textContent =
-      st.authenticated && st.user
-        ? `Signed in as @${st.user.login} — submits directly to ${st.repo}`
-        : `Sign in with GitHub to submit directly, or open a pre-filled issue on ${st.repo}`;
-  }
-}
-
-async function syncCareerStatsWithGitHub({ quiet = true } = {}) {
-  if (!github.authenticated) return { ok: false };
-  renderGitHubAccountUi();
-  const localBook = loadCareerLogbook();
-  const localGhosts = collectLocalGhostTracks();
-  const res = await github.syncStats(localBook, buildCurrentPrefsForSync(), localGhosts);
-  if (res.ok && res.logbook) {
-    const merged = mergeCareerLogbooks(localBook, res.logbook);
-    saveCareerLogbook(merged, { skipCloudSync: true });
-    applyMergedGhostTracks(res.ghosts);
-
-    // Restore cloud callsign & loadout/preferences on fresh devices (without clobbering explicit local overrides)
-    const prefs = res.prefs || {};
-    if (!getEnteredCallsign() && (prefs.playerName || github.user?.login)) {
-      const nextName = sanitizeCallsignInput(prefs.playerName || github.user?.login || '');
-      if (nextName && playerNameInput) {
-        playerNameInput.value = nextName;
-        syncCallsignCount();
-        try {
-          localStorage.setItem('caveDiverCallsign', nextName);
-        } catch {}
-      }
-    }
-    try {
-      if (prefs.gear && !localStorage.getItem(GEAR_LOADOUT_KEY)) {
-        const { unlockedIds } = computeUnlockedGear(merged, LEVELS);
-        savedGearLoadout = sanitizeGearLoadout(prefs.gear, unlockedIds);
-        saveGearLoadout({ skipCloudSync: true });
-      }
-      if (
-        (prefs.difficulty === 'guided' || prefs.difficulty === 'standard' || prefs.difficulty === 'hardcore') &&
-        !localStorage.getItem(DIFFICULTY_PREF_KEY)
-      ) {
-        activeDifficulty = prefs.difficulty;
-        localStorage.setItem(DIFFICULTY_PREF_KEY, activeDifficulty);
-      }
-      if (typeof prefs.ghostEnabled === 'boolean' && localStorage.getItem(GHOST_PREF_KEY) === null) {
-        ghostEnabled = prefs.ghostEnabled;
-        localStorage.setItem(GHOST_PREF_KEY, ghostEnabled ? '1' : '0');
-      }
-      if (typeof prefs.torchStickEnabled === 'boolean' && localStorage.getItem(TORCH_STICK_PREF_KEY) === null) {
-        torchStickEnabled = prefs.torchStickEnabled;
-        localStorage.setItem(TORCH_STICK_PREF_KEY, torchStickEnabled ? '1' : '0');
-      }
-      if (prefs.livery && typeof prefs.livery === 'object' && !localStorage.getItem(LIVERY_PREF_KEY)) {
-        activeRigLivery = sanitizeRigLivery(prefs.livery, computeUnlockedLiveries(merged, WRECK_LEVEL_ID_SET));
-        saveRigLivery({ skipCloudSync: true });
-      } else {
-        // Re-evaluate saved local livery against newly merged cloud unlocks
-        reconcileActiveRigLiveryFromStorage();
-      }
-      if (Array.isArray(prefs.liverySlots) && !localStorage.getItem(LIVERY_SLOTS_KEY)) {
-        savedLiverySlots = [0, 1, 2].map((i) =>
-          prefs.liverySlots[i] && typeof prefs.liverySlots[i] === 'object' ? { ...prefs.liverySlots[i] } : null
-        );
-        saveLiverySlotsToStorage({ skipCloudSync: true });
-      }
-      if (typeof prefs.aiSquadTeamUniform === 'boolean' && localStorage.getItem(SQUAD_UNIFORM_KEY) === null) {
-        aiSquadTeamUniform = prefs.aiSquadTeamUniform;
-        localStorage.setItem(SQUAD_UNIFORM_KEY, aiSquadTeamUniform ? '1' : '0');
-      }
-    } catch {}
-
-    syncPreferenceMenuButtons();
-    syncLiveryUi();
-    renderCareerSummary();
-    renderTechGearDock();
-    renderDailyChallengeCard();
-    renderLevelCards();
-    if (modalLogbook && !modalLogbook.hidden) {
-      openLogbookModal();
-    }
-    if (!quiet) {
-      const gCount = Object.keys(res.ghosts || {}).length;
-      const gTxt = gCount > 0 ? ` + ${gCount} PB ghost${gCount === 1 ? '' : 's'}` : '';
-      showToast(`☁ Synced career stats${gTxt} to @${github.user?.login}'s Private Gist!`, 2.8);
-    }
-  } else if (!quiet && res.error) {
-    showToast(res.error, 3.0);
-  }
-  renderGitHubAccountUi();
-  return res;
-}
-
-function scheduleGitHubStatsSync() {
-  if (!github.authenticated) return;
-  if (ghSyncDebounceTimer) clearTimeout(ghSyncDebounceTimer);
-  ghSyncDebounceTimer = setTimeout(() => {
-    ghSyncDebounceTimer = 0;
-    syncCareerStatsWithGitHub({ quiet: true });
-  }, 900);
-}
-
-function triggerGitHubLogin() {
-  if (!github.configured) {
-    openLogbookModal();
-    showToast('Set GITHUB_CLIENT_ID & GITHUB_CLIENT_SECRET in Vercel to activate GitHub Sign-In.', 3.8);
-    return;
-  }
-  window.location.href = github.getLoginUrl();
-}
-
-btnGithubAccount?.addEventListener('click', () => {
-  setHomeMenuOpen(false);
-  if (github.authenticated) {
-    openLogbookModal();
-  } else if (github.configured) {
-    triggerGitHubLogin();
-  } else {
-    openLogbookModal();
-  }
+// ── GitHub OAuth Cloud Save (Private Gist) & In-App Issue Reporter (modularized v172) ──
+const githubSync = createGitHubSyncController({
+  github,
+  urlParams: URL_PARAMS,
+  prefKeys: {
+    gear: GEAR_LOADOUT_KEY,
+    difficulty: DIFFICULTY_PREF_KEY,
+    ghost: GHOST_PREF_KEY,
+    torchStick: TORCH_STICK_PREF_KEY,
+    livery: LIVERY_PREF_KEY,
+  },
+  loadCareerLogbook,
+  saveCareerLogbook,
+  loadGhostTrack: (id) => loadGhostTrack(id),
+  saveGhostTrack: (id, t) => saveGhostTrack(id, t),
+  refreshActiveGhostTrack: (lvl) => refreshActiveGhostTrack(lvl),
+  liveryWorkshop,
+  getEnteredCallsign,
+  sanitizeCallsignInput,
+  syncCallsignCount,
+  playerNameInput,
+  getActiveLevel: () => activeLevel,
+  getSession: () => session,
+  getMode: () => mode,
+  getIsMultiplayer: () => isMultiplayer,
+  getActiveDifficulty: () => activeDifficulty,
+  setActiveDifficulty: (v) => { activeDifficulty = v; },
+  getGhostEnabled: () => ghostEnabled,
+  setGhostEnabled: (v) => { ghostEnabled = v; },
+  getTorchStickEnabled: () => torchStickEnabled,
+  setTorchStickEnabled: (v) => { torchStickEnabled = v; },
+  getSavedGearLoadout: () => savedGearLoadout,
+  setSavedGearLoadout: (v) => { savedGearLoadout = v; },
+  saveGearLoadout: (...a) => saveGearLoadout(...a),
+  syncPreferenceMenuButtons: () => syncPreferenceMenuButtons(),
+  syncLiveryUi,
+  renderCareerSummary: () => renderCareerSummary(),
+  renderTechGearDock: () => renderTechGearDock(),
+  renderDailyChallengeCard: () => renderDailyChallengeCard(),
+  renderLevelCards,
+  modalLogbook,
+  openLogbookModal,
+  closeLogbookModal,
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  setHudMenuOpen: (v) => setHudMenuOpen(v),
+  setDivePaused: (v) => setDivePaused(v),
+  showToast,
 });
-
-logbookGithubBarEl?.addEventListener('click', async (e) => {
-  const actBtn = e.target.closest('button[data-gh-action]');
-  if (!actBtn) return;
-  const action = actBtn.dataset.ghAction;
-  if (action === 'login') {
-    triggerGitHubLogin();
-  } else if (action === 'sync') {
-    await syncCareerStatsWithGitHub({ quiet: false });
-  } else if (action === 'logout') {
-    await github.logout();
-    renderGitHubAccountUi();
-    showToast('Signed out of GitHub (local logbook preserved).', 2.4);
-  } else if (action === 'issue') {
-    closeLogbookModal();
-    openIssueModal();
-  }
-});
-
-function collectIssueDiagnostics() {
-  const book = loadCareerLogbook();
-  const sum = formatLogbookSummary(book, LEVELS.length);
-  const lvl = session?.level || activeLevel;
-  const diff = session?.difficulty || activeDifficulty;
-  const vp = typeof window !== 'undefined' ? `${window.innerWidth}×${window.innerHeight} @${(window.devicePixelRatio || 1).toFixed(1)}x` : '';
-  return {
-    appVersion: getCurrentAppVersionLabel(),
-    levelId: lvl?.id || '',
-    levelName: lvl?.name || '',
-    difficulty: diff,
-    multiplayer: Boolean(isMultiplayer),
-    careerSummary: `${sum.clearedCount}/${sum.totalSites} cleared · ${sum.totalDives} dives · ${sum.deepestM.toFixed(0)}m max`,
-    viewport: vp,
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-  };
-}
-
-function setIssueKind(kind) {
-  activeIssueKind = kind === 'feature' || kind === 'feedback' ? kind : 'bug';
-  if (issueKindTabsEl) {
-    for (const btn of issueKindTabsEl.querySelectorAll('.issue-kind-btn')) {
-      const active = btn.dataset.issueKind === activeIssueKind;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-selected', String(active));
-    }
-  }
-  if (issueTitleInput) {
-    issueTitleInput.placeholder =
-      activeIssueKind === 'feature'
-        ? 'Short feature title (e.g. Add dive log export)'
-        : activeIssueKind === 'feedback'
-          ? 'Short feedback summary'
-          : 'Short bug summary (e.g. Co-op banner overlap on mobile)';
-  }
-}
-
-function openIssueModal(defaultKind = 'bug') {
-  if (!modalIssue) return;
-  setHomeMenuOpen(false);
-  setHudMenuOpen(false);
-  setIssueKind(defaultKind);
-  if (issueResultEl) {
-    issueResultEl.hidden = true;
-    issueResultEl.className = 'issue-result';
-    issueResultEl.innerHTML = '';
-  }
-  const diag = collectIssueDiagnostics();
-  if (issueDiagPreviewEl) {
-    issueDiagPreviewEl.textContent = `${diag.appVersion} · ${diag.levelName || 'Menu'} · ${diag.multiplayer ? 'Co-op' : 'Solo'}`;
-  }
-  renderGitHubAccountUi();
-  modalIssue.hidden = false;
-  issueTitleInput?.focus();
-}
-
-function closeIssueModal() {
-  if (modalIssue) modalIssue.hidden = true;
-}
-
-btnOpenIssue?.addEventListener('click', () => openIssueModal('bug'));
-btnHudIssue?.addEventListener('click', () => {
-  if (mode === 'diving' && !isMultiplayer && session && !session.endedState) {
-    setDivePaused(true);
-  }
-  openIssueModal('bug');
-});
-btnIssueClose?.addEventListener('click', closeIssueModal);
-modalIssue?.addEventListener('click', (e) => {
-  if (e.target === modalIssue) closeIssueModal();
-});
-issueKindTabsEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.issue-kind-btn');
-  if (btn?.dataset?.issueKind) setIssueKind(btn.dataset.issueKind);
-});
-
-btnIssueOpenGh?.addEventListener('click', () => {
-  const title = issueTitleInput?.value.trim() || '';
-  const description = issueDescInput?.value.trim() || '';
-  const context = issueAttachDiagInput?.checked ? collectIssueDiagnostics() : {};
-  const url = buildPrefilledIssueUrl({
-    kind: activeIssueKind,
-    title,
-    description,
-    context,
-    repo: github.repo,
-  });
-  window.open(url, '_blank', 'noopener,noreferrer');
-});
-
-btnIssueSubmit?.addEventListener('click', async () => {
-  if (!github.authenticated) {
-    triggerGitHubLogin();
-    return;
-  }
-  const title = issueTitleInput?.value.trim() || '';
-  const description = issueDescInput?.value.trim() || '';
-  if (title.length < 3 || description.length < 5) {
-    if (issueResultEl) {
-      issueResultEl.hidden = false;
-      issueResultEl.className = 'issue-result err';
-      issueResultEl.textContent = 'Please enter a short title (3+ chars) and details (5+ chars).';
-    }
-    return;
-  }
-  btnIssueSubmit.disabled = true;
-  btnIssueSubmit.textContent = 'Submitting...';
-  const context = issueAttachDiagInput?.checked ? collectIssueDiagnostics() : {};
-  const res = await github.submitIssue({
-    kind: activeIssueKind,
-    title,
-    description,
-    context,
-  });
-  btnIssueSubmit.disabled = false;
-  renderGitHubAccountUi();
-
-  if (res.ok && res.issue) {
-    if (issueTitleInput) issueTitleInput.value = '';
-    if (issueDescInput) issueDescInput.value = '';
-    if (issueResultEl) {
-      issueResultEl.hidden = false;
-      issueResultEl.className = 'issue-result ok';
-      issueResultEl.innerHTML = `✓ Issue <strong>#${escapeHtml(String(res.issue.number))}</strong> created! <a href="${escapeHtml(res.issue.url)}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a>`;
-    }
-    showToast(`🐙 GitHub Issue #${res.issue.number} submitted!`, 3.2);
-  } else {
-    if (issueResultEl) {
-      issueResultEl.hidden = false;
-      issueResultEl.className = 'issue-result err';
-      const fallback = res.fallbackUrl
-        ? ` <a href="${escapeHtml(res.fallbackUrl)}" target="_blank" rel="noopener noreferrer">Open on GitHub ↗</a>`
-        : '';
-      issueResultEl.innerHTML = `${escapeHtml(res.error || 'Could not submit issue.')}${fallback}`;
-    }
-  }
-});
-
-async function initGitHubAuth() {
-  const ghFlag = URL_PARAMS.get('gh');
-  if (ghFlag && typeof history !== 'undefined' && typeof history.replaceState === 'function') {
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete('gh');
-    history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-  }
-  await github.fetchSession();
-  renderGitHubAccountUi();
-  if (github.authenticated) {
-    if (!getEnteredCallsign() && github.user?.login && playerNameInput) {
-      const cleanName = sanitizeCallsignInput(github.user.name || github.user.login);
-      if (cleanName) {
-        playerNameInput.value = cleanName;
-        syncCallsignCount();
-        try {
-          localStorage.setItem('caveDiverCallsign', cleanName);
-        } catch {}
-      }
-    }
-    await syncCareerStatsWithGitHub({ quiet: ghFlag !== 'connected' });
-  } else if (ghFlag === 'not_configured') {
-    showToast('GitHub OAuth not configured yet — add GITHUB_CLIENT_ID & GITHUB_CLIENT_SECRET in Vercel.', 4.2);
-  } else if (ghFlag && ghFlag !== 'connected') {
-    showToast(`GitHub sign-in canceled or failed (${ghFlag}).`, 3.2);
-  }
-}
+const {
+  modalIssue,
+  renderGitHubAccountUi,
+  syncCareerStatsWithGitHub,
+  scheduleGitHubStatsSync,
+  triggerGitHubLogin,
+  openIssueModal,
+  closeIssueModal,
+  initGitHubAuth,
+} = githubSync;
 
 function loadGhostTrack(levelId) {
   if (!levelId) return null;
@@ -5852,7 +3011,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     !multiplayer && activeDailyChallenge && activeDailyChallenge.levelId === activeLevel.id
       ? activeDailyChallenge
       : null;
-  const effectiveMutatorId = dailyRun?.mutatorId || (!multiplayer ? activeSandboxMutatorId : '') || '';
+  const effectiveMutatorId = dailyRun?.mutatorId || (!multiplayer ? sandboxCtrl.getActiveSandboxMutatorId() : '') || '';
   session = createDiveSession(activeLevel, {
     diverName,
     spawnOffsetX,
@@ -5863,7 +3022,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
     drillsEnabled,
     weatherId: weatherPrefId,
-    livery: activeRigLivery,
+    livery: liveryWorkshop.getActiveRigLivery(),
     crewRoleId: activeCrewRoleId,
   });
   session.surveyPins = loadSavedSurveyPins(activeLevel.id);
@@ -5899,8 +3058,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     aiSquadCount > 0 && (!multiplayer || lan.getPeers().length === 0)
       ? createAiSquad(activeLevel, session.diver, aiSquadCount, {
           initialGasId: session.diveState.activeGasId,
-          teamUniform: aiSquadTeamUniform,
-          leaderLivery: activeRigLivery,
+          teamUniform: liveryWorkshop.getAiSquadTeamUniform(),
+          leaderLivery: liveryWorkshop.getActiveRigLivery(),
         })
       : [];
   session.aiBuddy = session.aiSquad[0] || null;
@@ -6133,18 +3292,20 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     siteId: level.id,
     difficulty: runDiff,
     mutatorId: session.mutatorId || '',
-    customGas: customGasPlan.enabled,
-    o2Pct: customGasPlan.o2Pct,
-    hePct: customGasPlan.hePct,
+    customGas: getCustomGasPlan().enabled,
+    o2Pct: getCustomGasPlan().o2Pct,
+    hePct: getCustomGasPlan().hePct,
     drillsEnabled: Boolean(session.drills?.enabled),
     challengerName: diver.name || playerNameInput?.value.trim() || '',
     targetScore: success ? teamSummary.teamScore : 0,
   };
-  lastDebriefChallengeUrl = buildChallengeUrl(`${location.origin}${location.pathname}`, runChallengeCfg);
-  lastDebriefChallengeText = formatChallengeSummary(runChallengeCfg, {
-    levelName: level.name,
-    mutator: session.mutatorId ? getDailyMutatorById(session.mutatorId) : null,
-  }).shareText;
+  sandboxCtrl.setLastDebriefChallenge(
+      buildChallengeUrl(`${location.origin}${location.pathname}`, runChallengeCfg),
+      formatChallengeSummary(runChallengeCfg, {
+        levelName: level.name,
+        mutator: session.mutatorId ? getDailyMutatorById(session.mutatorId) : null,
+      }).shareText
+    );
 
   const scoreLblEl = document.getElementById('debrief-score-label');
   const totalScoreEl = document.getElementById('debrief-total-score');
@@ -6329,7 +3490,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       debriefCampaignBoxEl.innerHTML = '';
     }
   }
-  lastDebriefCardData = {
+  replayTheater.setLastDebriefCardData({
     level,
     diverName: diver.name || playerNameInput?.value.trim() || 'Diver',
     success,
@@ -6339,15 +3500,15 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     diveTimeSec: diveState.diveTimeSec,
     exploredPct: teamSummary.exploredPct,
     difficulty: runDiff,
-    customMixLabel: customGasPlan.enabled ? diveState.mixes?.TMX1455?.name || '' : '',
+    customMixLabel: getCustomGasPlan().enabled ? diveState.mixes?.TMX1455?.name || '' : '',
     dailyBadge: session._dailyBadgeLabel || '',
-    livery: diver.livery ? { ...diver.livery } : { ...activeRigLivery },
+    livery: diver.livery ? { ...diver.livery } : { ...liveryWorkshop.getActiveRigLivery() },
     hasCcr: Boolean(session.gear?.ccr),
     recoveredArtifacts: (level.collectibles || []).filter((it) => session.collectedIds?.has(it.id)),
     pinnedArtifact: getArtifactVaultStats(loadCareerLogbook(), LEVELS).pinnedArtifact || null,
     track: replayTrack,
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
-  };
+  });
 
   const runMs = session.runMilestones || {};
   let updatedLogbook = recordDiveInLogbook(loadCareerLogbook(), {
@@ -6751,14 +3912,14 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         const boardLabel = subMode === 'team' ? 'TEAM LEADERBOARD' : 'INDIVIDUAL LEADERBOARD';
         const srcTag = res.source === 'global' ? 'Global' : res.pendingSync ? 'Saved Offline · Auto-Sync' : 'Local PB';
         const rankText = res.rank ? `${srcTag} Rank #${res.rank} of ${res.total || res.rank}` : srcTag;
-        lastDebriefLbEntries = (res.entries || []).slice(0, 5);
+        leaderboardCtrl.setLastDebriefEntries((res.entries || []).slice(0, 5));
         debriefLeaderboardEl.hidden = false;
         debriefLeaderboardEl.innerHTML = `
           <div class="debrief-lb-head">
             <span class="debrief-section-title" style="margin:0">${boardLabel} · ${escapeHtml(level.name)}</span>
             <span class="debrief-lb-rank">${escapeHtml(rankText)}</span>
           </div>
-          ${renderLeaderboardRowsHtml(lastDebriefLbEntries, { highlightKey: res.entry?.entryKey })}
+          ${renderLeaderboardRowsHtml(leaderboardCtrl.getLastDebriefEntries(), { highlightKey: res.entry?.entryKey })}
         `;
         if (leaderboardPanel && !leaderboardPanel.hidden) {
           refreshMenuLeaderboard();
@@ -6770,266 +3931,40 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   }
 }
 
-function escapeHtml(raw) {
-  return String(raw || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-let lastMenuLbEntries = [];
-let lastDebriefLbEntries = [];
-
-function formatLbDate(ts) {
-  if (!Number.isFinite(Number(ts)) || Number(ts) <= 0) return 'Recorded Dive';
-  try {
-    return new Date(Number(ts)).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return 'Recorded Dive';
-  }
-}
-
-let lbStatsCloseTimer = 0;
-function closeLeaderboardStatsModal() {
-  if (!lbStatsModalEl || lbStatsModalEl.hidden) return;
-  clearTimeout(lbStatsCloseTimer);
-  lbStatsModalEl.classList.add('is-closing');
-  lbStatsCloseTimer = setTimeout(() => {
-    lbStatsCloseTimer = 0;
-    lbStatsModalEl.classList.remove('is-closing');
-    lbStatsModalEl.hidden = true;
-  }, 190);
-}
-
-function openLeaderboardStatsModal(entry, rankNum = 1) {
-  if (!entry || !lbStatsModalEl || !lbStatsBodyEl) return;
-  clearTimeout(lbStatsCloseTimer);
-  lbStatsCloseTimer = 0;
-  lbStatsModalEl.classList.remove('is-closing');
-  const isOverall = entry.levelId === 'overall';
-  const isDaily = entry.mode === 'daily';
-  const lvl = !isOverall ? getLevelById(entry.levelId) : null;
-  const lvlIdx = lvl ? LEVELS.findIndex((l) => l.id === lvl.id) + 1 : 0;
-  const meta = lvl ? getLevelMeta(lvl, Math.max(0, lvlIdx - 1)) : null;
-  const modeLabel = entry.mode === 'team' ? 'CO-OP TEAM' : isDaily ? 'DAILY EXPEDITION' : 'SOLO DIVER';
-  const dailyMut = entry.mutatorId ? getDailyMutatorById(entry.mutatorId) : null;
-  const siteTitle = isOverall
-    ? isDaily
-      ? `All-Time Daily Champions (${entry.sitesCompleted || 0} Daily Clears)`
-      : `Overall Campaign (${entry.sitesCompleted || 0}/${entry.totalSites || LEVELS.length} Sites)`
-    : isDaily && entry.dailyDateKey
-      ? `Daily ${entry.dailyDateKey} · L${lvlIdx}: ${lvl?.name || entry.levelId}`
-      : `L${lvlIdx}: ${lvl?.name || entry.levelId}`;
-
-  if (lbStatsKickerEl) {
-    lbStatsKickerEl.textContent = `${modeLabel} · RANK #${rankNum}`;
-  }
-  if (lbStatsTitleEl) {
-    lbStatsTitleEl.textContent = entry.displayName || 'Diver';
-  }
-  if (lbStatsSubEl) {
-    const regionPart = meta?.region ? ` · ${meta.region}` : '';
-    const mutPart = dailyMut ? ` · ${dailyMut.icon} ${dailyMut.shortName}` : '';
-    lbStatsSubEl.textContent = `${siteTitle}${regionPart}${mutPart} · ${formatLbDate(entry.createdAt)}`;
-  }
-
-  const st = entry.stats || null;
-  const entryDiff = entry.difficulty || st?.difficulty || '';
-  const entryDiffMeta = getDifficultyMeta(entryDiff);
-  const collectMax = entry.collectiblesTotal ?? (lvl?.collectibles?.length || 0);
-  const cells = [
-    ['Dive Time', formatRunClock(entry.timeSec || 0)],
-    ['Cave Explored', `${entry.exploredPct ?? 0}%`],
-    ['Collectables', `${entry.collectiblesFound ?? 0} / ${collectMax}`],
-    [
-      isOverall ? 'Sites Cleared' : 'Max Depth',
-      isOverall
-        ? `${entry.sitesCompleted || 0} / ${entry.totalSites || LEVELS.length}`
-        : `${(st?.maxDepthM ?? meta?.maxDepthM ?? getLevelMaxDepthM(lvl)).toFixed?.(1) ?? (st?.maxDepthM ?? meta?.maxDepthM)} m`,
-    ],
-  ];
-  if (entryDiffMeta) cells.unshift(['Dive Mode', entryDiffMeta.fullBadge]);
-  if (st?.avgHealthPct !== undefined) cells.push(['Avg Health', `${st.avgHealthPct}%`]);
-  if (st?.avgSpeedPct !== undefined) cells.push(['Speed Rating', `${st.avgSpeedPct}%`]);
-  if (st?.avgGasRemainingPct !== undefined) cells.push(['Gas Reserve', `${st.avgGasRemainingPct}%`]);
-  if (st?.peakHeartRateBpm !== undefined) cells.push(['Peak Heart Rate', `${st.peakHeartRateBpm} BPM`]);
-  if (st?.checkpointsHit !== undefined) {
-    cells.push(['Checkpoints', `${st.checkpointsHit} / ${st.totalCheckpoints ?? (lvl?.checkpoints?.length || 0)}`]);
-  }
-  if (st?.eanBar !== undefined || st?.tmxBar !== undefined) {
-    cells.push(['Tanks Left', `${st.eanBar ?? '-'} / ${st.tmxBar ?? '-'} / ${st.o2Bar ?? '-'}b`]);
-  }
-
-  let breakdownHtml = '';
-  if (st && (st.healthScore !== undefined || st.speedScore !== undefined)) {
-    const barRows = [
-      { label: 'Survival & Health', pts: st.healthScore || 0, pct: Math.round(((st.healthScore || 0) / 1000) * 100), cls: 'green' },
-      { label: `Speed (${formatRunClock(entry.timeSec || 0)})`, pts: st.speedScore || 0, pct: Math.round(((st.speedScore || 0) / 800) * 100), cls: '' },
-      { label: `Collectables (${entry.collectiblesFound ?? 0}/${collectMax})`, pts: st.collectiblesScore || 0, pct: Math.round(((entry.collectiblesFound ?? 0) / Math.max(1, collectMax)) * 100), cls: 'gold' },
-      { label: `Exploration (${entry.exploredPct ?? 0}%)`, pts: st.explorationScore || 0, pct: entry.exploredPct ?? 0, cls: 'purple' },
-    ];
-    if (st.rescueBonus > 0) {
-      barRows.push({ label: 'Buddy Rescue', pts: st.rescueBonus, pct: 100, cls: 'gold' });
-    }
-    if (entry.mode === 'team' && st.teamSurvivalBonus !== undefined) {
-      barRows.push({ label: 'Team Extraction', pts: st.teamSurvivalBonus, pct: st.teamSurvivalBonus > 0 ? 100 : 0, cls: 'green' });
-    }
-    breakdownHtml = `
-      <div class="lb-stats-section">
-        <div class="lb-stats-section-title">Score Breakdown</div>
-        ${barRows
-          .map(
-            (r, idx) => `
-          <div class="score-bar-row">
-            <span class="score-bar-lbl">${escapeHtml(r.label)}</span>
-            <div class="score-bar-track"><div class="score-bar-fill ${r.cls}" data-target-w="${Math.max(0, Math.min(100, r.pct))}%" style="width:0%;transition-delay:${idx * 70}ms"></div></div>
-            <span class="score-bar-pts">+${r.pts}</span>
-          </div>
-        `
-          )
-          .join('')}
-      </div>
-    `;
-  }
-
-  let crewHtml = '';
-  if (Array.isArray(entry.crew) && entry.crew.length > 0 && (entry.teamSize > 1 || entry.crew[0]?.healthPct !== undefined)) {
-    crewHtml = `
-      <div class="lb-stats-section">
-        <div class="lb-stats-section-title">${entry.teamSize > 1 ? `Dive Crew (${entry.teamSize} Divers)` : 'Diver Telemetry'}</div>
-        ${entry.crew
-          .map((m) => {
-            const parts = [];
-            if (m.healthPct !== undefined) parts.push(`${m.healthPct}% HP`);
-            if (m.diveTimeSec !== undefined) parts.push(formatRunClock(m.diveTimeSec));
-            if (m.gasRemainingPct !== undefined) parts.push(`${m.gasRemainingPct}% Gas`);
-            const detail = m.alive === false ? (m.rescued ? '🛟 RESCUED' : 'DOWN') : parts.join(' · ') || 'Surfaced';
-            return `
-              <div class="team-roster-row">
-                <strong>${escapeHtml(m.name)}</strong>
-                <span>${escapeHtml(detail)}</span>
-                <strong>${Number(m.score || 0).toLocaleString()} pts</strong>
-              </div>
-            `;
-          })
-          .join('')}
-      </div>
-    `;
-  }
-
-  let siteRunsHtml = '';
-  if (isOverall && Array.isArray(entry.siteRuns) && entry.siteRuns.length > 0) {
-    siteRunsHtml = `
-      <div class="lb-stats-section">
-        <div class="lb-stats-section-title">Cleared Expedition Sites (${entry.siteRuns.length})</div>
-        <div class="lb-stats-sitelist">
-          ${entry.siteRuns
-            .map((sr) => {
-              const idx = LEVELS.findIndex((l) => l.id === sr.levelId) + 1;
-              const name = getLevelById(sr.levelId)?.name || sr.levelId;
-              const srModeBadge = renderModeBadgeHtml(sr.difficulty || sr.stats?.difficulty, { compact: true });
-              return `
-                <div class="lb-stats-siterow">
-                  <span class="lb-name">L${Math.max(1, idx)}: ${escapeHtml(name)}</span>
-                  <span class="lb-meta">${srModeBadge} ${formatRunClock(sr.timeSec)} · ${sr.exploredPct}%</span>
-                  <span class="lb-grade">${escapeHtml(sr.grade)}</span>
-                  <span class="lb-score">${Number(sr.score || 0).toLocaleString()}</span>
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  const legacyNote = !st && !isOverall ? '<div class="lb-stats-note">Detailed physiology & score breakdown is recorded on new dives completed in v81+.</div>' : '';
-
-  const ghProfileBanner =
-    entry.githubVerified && entry.githubLogin
-      ? `
-        <div class="lb-profile-banner">
-          <div class="lb-profile-left">
-            ${entry.githubAvatar ? `<img class="lb-profile-avatar" src="${escapeHtml(entry.githubAvatar)}" alt="" />` : ''}
-            <div class="lb-profile-copy">
-              <strong>✓ @${escapeHtml(entry.githubLogin)} · GitHub Verified Diver</strong>
-              <span>Authenticated expedition record synced via GitHub</span>
-            </div>
-          </div>
-          <a class="btn tiny secondary" href="https://github.com/${encodeURIComponent(entry.githubLogin)}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
-        </div>
-      `
-      : '';
-
-  lbStatsBodyEl.innerHTML = `
-    ${ghProfileBanner}
-    <div class="lb-stats-hero">
-      <div>
-        <div class="lb-stats-score-lbl">Total Score</div>
-        <div class="lb-stats-score-val">${Number(entry.score || 0).toLocaleString()}</div>
-      </div>
-      <div class="lb-stats-grade-pill">${escapeHtml(entry.grade || 'B')}</div>
-    </div>
-    <div class="lb-stats-grid">
-      ${cells.map(([k, v]) => `<div class="lb-stats-cell"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join('')}
-    </div>
-    ${breakdownHtml}
-    ${crewHtml}
-    ${siteRunsHtml}
-    ${legacyNote}
-  `;
-
-  lbStatsModalEl.hidden = false;
-  requestAnimationFrame(() => {
-    for (const fill of lbStatsBodyEl.querySelectorAll('.score-bar-fill[data-target-w]')) {
-      fill.style.width = fill.dataset.targetW || '0%';
-    }
-  });
-}
-
-function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
-  if (!Array.isArray(entries) || entries.length === 0) {
-    return '<div class="lb-empty">No completed expeditions recorded here yet. Finish a dive to claim #1!</div>';
-  }
-  const myGhLogin = github.authenticated && github.user?.login ? github.user.login.toLowerCase() : '';
-  return entries
-    .map((e, i) => {
-      const isMe =
-        (highlightKey && e.entryKey === highlightKey) ||
-        (e.playerId && e.playerId === leaderboard.playerId) ||
-        (myGhLogin && e.githubVerified && String(e.githubLogin || '').toLowerCase() === myGhLogin);
-      const teamTag = e.teamSize > 1 ? ` · ${e.teamSize}P` : '';
-      const rowModeBadge = renderModeBadgeHtml(e.difficulty || e.stats?.difficulty, { compact: true });
-      const ghAvatarHtml =
-        e.githubVerified && e.githubAvatar
-          ? `<img class="lb-gh-avatar" src="${escapeHtml(e.githubAvatar)}" alt="" />`
-          : '';
-      const ghBadgeHtml =
-        e.githubVerified && e.githubLogin
-          ? `<span class="lb-gh-badge" title="GitHub Verified Diver">✓ @${escapeHtml(e.githubLogin)}</span>`
-          : '';
-      const mutMeta = e.mode === 'daily' && e.mutatorId ? getDailyMutatorById(e.mutatorId) : null;
-      const mutPillHtml = mutMeta
-        ? `<span class="lb-mutator-pill">${mutMeta.icon} ${escapeHtml(mutMeta.shortName)}</span>`
-        : '';
-      return `
-        <button type="button" class="lb-row ${isMe ? 'me' : ''}" style="--row-i:${i}" data-lb-idx="${i}" title="View diver profile &amp; full dive stats">
-          <span class="lb-rank">#${i + 1}</span>
-          <span class="lb-name"><span class="lb-name-wrap">${ghAvatarHtml}<span>${escapeHtml(e.displayName)}</span><small class="lb-meta">${teamTag}</small>${ghBadgeHtml}${mutPillHtml}${rowModeBadge}</span></span>
-          <span class="lb-meta">${formatRunClock(e.timeSec)} · ${e.exploredPct}%</span>
-          <span class="lb-grade">${escapeHtml(e.grade)}</span>
-          <span class="lb-score">${Number(e.score || 0).toLocaleString()}</span>
-          <span class="lb-chevron" aria-hidden="true">›</span>
-        </button>
-      `;
-    })
-    .join('');
-}
+// ── Leaderboard & Career Summary Controller (modularized v172) ──
+const leaderboardCtrl = createLeaderboardController({
+  github,
+  leaderboard,
+  loadCareerLogbook,
+  getActiveLevel: () => activeLevel,
+  getDifficultyMeta,
+  renderModeBadgeHtml,
+  formatRunClock,
+  getLbMode: () => lbMode,
+  getLbFilterLevelId: () => lbFilterLevelId,
+  setLbFilterLevelId: (v) => {
+    lbFilterLevelId = v;
+  },
+  els: {
+    lbStatsModalEl,
+    lbStatsBodyEl,
+    lbStatsKickerEl,
+    lbStatsTitleEl,
+    lbStatsSubEl,
+    lbCareerSummaryEl,
+    selectLbSite,
+    leaderboardRowsEl,
+    leaderboardSubEl,
+  },
+});
+const {
+  closeLeaderboardStatsModal,
+  openLeaderboardStatsModal,
+  renderLeaderboardRowsHtml,
+  renderCareerSummary,
+  populateLbSiteSelect,
+  refreshMenuLeaderboard,
+} = leaderboardCtrl;
 
 // (Career Logbook helpers moved to top of main.js to eliminate startup TDZ for Gear Workshop & Tech Gear)
 
@@ -7089,94 +4024,6 @@ function buildPlayerStatePayload(sess, overrides = {}) {
     name: diver.name,
     ...overrides,
   };
-}
-
-function renderCareerSummary() {
-  if (!lbCareerSummaryEl) return;
-  const book = loadCareerLogbook();
-  const s = formatLogbookSummary(book, LEVELS.length);
-  const certInfo = computeCertifications(book, LEVELS);
-  const certLabel = certInfo.highest ? `${certInfo.highest.icon} ${certInfo.highest.title}` : s.campaignMedal;
-  lbCareerSummaryEl.hidden = false;
-  lbCareerSummaryEl.innerHTML = `
-    <div class="lb-career-cell"><span>Sites</span><strong>${s.clearedCount}/${s.totalSites}</strong></div>
-    <div class="lb-career-cell"><span>Dives</span><strong>${s.totalDives}</strong></div>
-    <div class="lb-career-cell"><span>Deepest</span><strong>${s.deepestM.toFixed(0)}m</strong></div>
-    <div class="lb-career-cell"><span>Cert</span><strong>${escapeHtml(certLabel)}</strong></div>
-  `;
-}
-
-function getRecentUtcDateKeys(count = 7) {
-  const keys = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
-    keys.push(d.toISOString().slice(0, 10));
-  }
-  return keys;
-}
-
-function populateLbSiteSelect() {
-  if (!selectLbSite) return;
-  if (lbMode === 'daily') {
-    const recentDates = getRecentUtcDateKeys(7);
-    const dateOpts = recentDates.map((dk, idx) => {
-      const ch = getDailyChallenge(LEVELS, dk);
-      const dayTag = idx === 0 ? 'Today' : idx === 1 ? 'Yesterday' : dk;
-      return `<option value="${dk}">📅 ${dayTag} (${dk}) · ${ch.level.name} · ${ch.mutator.icon} ${ch.mutator.shortName}</option>`;
-    });
-    selectLbSite.innerHTML = [
-      ...dateOpts,
-      `<option value="overall">🏆 All-Time Daily Champions</option>`,
-    ].join('');
-    if (!lbFilterLevelId || (lbFilterLevelId !== 'overall' && !/^\d{4}-\d{2}-\d{2}$/.test(lbFilterLevelId))) {
-      lbFilterLevelId = recentDates[0];
-    }
-    selectLbSite.value = lbFilterLevelId;
-    return;
-  }
-  const opts = [
-    `<option value="overall">🌐 All ${LEVELS.length} Sites (Overall)</option>`,
-    ...LEVELS.map((lvl, idx) => `<option value="${lvl.id}">L${idx + 1}: ${lvl.name} (${getLevelMaxDepthM(lvl)}m)</option>`),
-  ];
-  selectLbSite.innerHTML = opts.join('');
-  if (!lbFilterLevelId || /^\d{4}-\d{2}-\d{2}$/.test(lbFilterLevelId)) {
-    lbFilterLevelId = activeLevel.id;
-  }
-  selectLbSite.value = lbFilterLevelId || activeLevel.id;
-}
-
-async function refreshMenuLeaderboard() {
-  renderCareerSummary();
-  if (!leaderboardRowsEl || !leaderboardSubEl) return;
-  populateLbSiteSelect();
-  const targetLevel = lbFilterLevelId || (lbMode === 'daily' ? getRecentUtcDateKeys(1)[0] : activeLevel.id);
-  if (selectLbSite) selectLbSite.value = targetLevel;
-  leaderboardSubEl.textContent = 'Syncing rankings...';
-  const board = await leaderboard.fetchBoard({ mode: lbMode, levelId: targetLevel, limit: 20 });
-  const modeLabel = lbMode === 'team' ? 'Co-op Teams' : lbMode === 'daily' ? 'Daily Expedition' : 'Individual Divers';
-  let scopeLabel = '';
-  if (lbMode === 'daily') {
-    if (targetLevel === 'overall') {
-      scopeLabel = 'All-Time Daily Champions';
-    } else {
-      const ch = getDailyChallenge(LEVELS, targetLevel);
-      scopeLabel = `${targetLevel} · ${ch.level.name} (${ch.mutator.icon} ${ch.mutator.shortName})`;
-    }
-  } else {
-    const lvlIdx = LEVELS.findIndex((l) => l.id === targetLevel);
-    scopeLabel =
-      targetLevel === 'overall'
-        ? `Overall Campaign (All ${LEVELS.length} Sites)`
-        : `L${Math.max(1, lvlIdx + 1)}: ${getLevelById(targetLevel).name}`;
-  }
-  const originNote =
-    board.source === 'global'
-      ? (board.pendingSync > 0 ? `Global Rankings (${board.pendingSync} pending sync)` : 'Global Rankings')
-      : 'Local Device Records (auto-syncs when online)';
-  leaderboardSubEl.textContent = `${modeLabel} · ${scopeLabel} · ${originNote}`;
-  lastMenuLbEntries = board.entries || [];
-  leaderboardRowsEl.innerHTML = renderLeaderboardRowsHtml(lastMenuLbEntries);
 }
 
 // --- Menu & LAN Lobby Wiring ---
@@ -7492,11 +4339,11 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   inFlightLoad = null;
   const nextLevel = getLevelById(chosenId);
   activeLevel = nextLevel;
-  if (siteCategoryFilter !== 'all' && !getFilteredLevels().some((l) => l.id === nextLevel.id)) {
+  if (siteBrowser.getSiteCategoryFilter() !== 'all' && !getFilteredLevels().some((l) => l.id === nextLevel.id)) {
     setSiteCategoryFilter('all');
   }
   if (focusMap) {
-    mapZoomMode = 'site';
+    siteBrowser.setMapZoomMode('site');
   }
   if (selectLevel) selectLevel.value = nextLevel.id;
   if (lbFilterLevelId !== 'overall') {
@@ -7548,7 +4395,7 @@ if (siteWorldMapEl) {
 
 if (btnMapZoom) {
   btnMapZoom.addEventListener('click', () => {
-    mapZoomMode = mapZoomMode === 'site' ? 'global' : 'site';
+    siteBrowser.setMapZoomMode(siteBrowser.getMapZoomMode() === 'site' ? 'global' : 'site');
     renderSiteWorldMap();
   });
 }
@@ -7561,11 +4408,11 @@ if (siteCatTabsEl) {
       btn.dataset.siteCat === 'wreck' || btn.dataset.siteCat === 'cave' || btn.dataset.siteCat === 'todo'
         ? btn.dataset.siteCat
         : 'all';
-    if (nextCat === siteCategoryFilter) return;
+    if (nextCat === siteBrowser.getSiteCategoryFilter()) return;
     setSiteCategoryFilter(nextCat);
     const visible = getFilteredLevels();
     if (visible.length > 0 && !visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
-      selectAndLoadLevel(visible[0].id, { focusMap: mapZoomMode === 'site' });
+      selectAndLoadLevel(visible[0].id, { focusMap: siteBrowser.getMapZoomMode() === 'site' });
     } else {
       renderLevelCards();
     }
@@ -7633,12 +4480,12 @@ function syncSetupDrawerSummary() {
     if (weatherMod) activeCount++;
   } catch {}
   try {
-    currentLivery = activeRigLivery || DEFAULT_RIG_LIVERY;
+    currentLivery = liveryWorkshop.getActiveRigLivery() || DEFAULT_RIG_LIVERY;
     liveryMod = !isDefaultRigLivery(currentLivery);
     if (liveryMod) activeCount++;
   } catch {}
   try {
-    gasMod = Boolean(customGasPlan?.enabled);
+    gasMod = Boolean(getCustomGasPlan()?.enabled);
     if (gasMod) activeCount++;
   } catch {}
   try {
@@ -7659,7 +4506,7 @@ function syncSetupDrawerSummary() {
     if (roleMod) activeCount++;
   } catch {}
   try {
-    currentMutId = activeSandboxMutatorId || '';
+    currentMutId = sandboxCtrl.getActiveSandboxMutatorId() || '';
     mutMod = Boolean(currentMutId);
     if (mutMod) activeCount++;
   } catch {}
@@ -7724,8 +4571,8 @@ function syncSetupDrawerSummary() {
       try {
         const targetDepthM = getLevelMaxDepthM(activeLevel) || 50;
         const b = buildCustomGasBlend({
-          o2Pct: customGasPlan.o2Pct,
-          hePct: customGasPlan.hePct,
+          o2Pct: getCustomGasPlan().o2Pct,
+          hePct: getCustomGasPlan().hePct,
           targetDepthM,
           baseGas: getSiteDefaultBottomMix(activeLevel),
         });
@@ -7925,13 +4772,13 @@ btnSetupResetEl?.addEventListener('click', () => {
     try { localStorage.setItem(DRILLS_PREF_KEY, '0'); } catch {}
     syncDrillsUi();
   }
-  if (customGasPlan?.enabled) {
-    customGasPlan.enabled = false;
+  if (getCustomGasPlan()?.enabled) {
+    getCustomGasPlan().enabled = false;
     saveCustomGasPlan();
     syncGasPlanBadges();
   }
-  if (activeSandboxMutatorId) {
-    activeSandboxMutatorId = '';
+  if (sandboxCtrl.getActiveSandboxMutatorId()) {
+    sandboxCtrl.setActiveSandboxMutatorId('');
     syncSandboxPillUi();
   }
   if (activeLevel?.isProcedural) {
@@ -7951,13 +4798,13 @@ const SITE_VIEW_LABELS = { split: '◫ Split', map: '🗺 Map', list: '☰ List'
 
 function applySiteViewMode(nextMode) {
   const cleanMode = nextMode === 'map' || nextMode === 'list' ? nextMode : 'split';
-  if (cleanMode === siteViewMode && siteBrowserEl?.classList.contains(`view-${cleanMode}`)) return;
-  siteViewMode = cleanMode;
+  if (cleanMode === siteBrowser.getSiteViewMode() && siteBrowserEl?.classList.contains(`view-${cleanMode}`)) return;
+  siteBrowser.setSiteViewMode(cleanMode);
   if (btnCycleSiteView) {
     btnCycleSiteView.textContent = SITE_VIEW_LABELS[cleanMode] || '◫ Split';
   }
   if (siteBrowserEl) {
-    siteBrowserEl.className = `site-browser view-${siteViewMode}`;
+    siteBrowserEl.className = `site-browser view-${siteBrowser.getSiteViewMode()}`;
     retriggerAnim(siteBrowserEl, 'anim-view-morph');
   }
   if (cleanMode !== 'list') {
@@ -7966,7 +4813,7 @@ function applySiteViewMode(nextMode) {
 }
 
 btnCycleSiteView?.addEventListener('click', () => {
-  const idx = SITE_VIEW_ORDER.indexOf(siteViewMode);
+  const idx = SITE_VIEW_ORDER.indexOf(siteBrowser.getSiteViewMode());
   const next = SITE_VIEW_ORDER[(idx + 1) % SITE_VIEW_ORDER.length];
   applySiteViewMode(next);
 });
@@ -8156,7 +5003,7 @@ leaderboardPanel?.addEventListener('click', (e) => {
   const rowBtn = e.target.closest('button[data-lb-idx]');
   if (rowBtn) {
     const idx = Number(rowBtn.dataset.lbIdx);
-    const entry = Number.isInteger(idx) ? lastMenuLbEntries[idx] : null;
+    const entry = Number.isInteger(idx) ? leaderboardCtrl.getLastMenuEntries()[idx] : null;
     if (entry) openLeaderboardStatsModal(entry, idx + 1);
   }
 });
@@ -8165,7 +5012,7 @@ debriefLeaderboardEl?.addEventListener('click', (e) => {
   const rowBtn = e.target.closest('button[data-lb-idx]');
   if (!rowBtn) return;
   const idx = Number(rowBtn.dataset.lbIdx);
-  const entry = Number.isInteger(idx) ? lastDebriefLbEntries[idx] : null;
+  const entry = Number.isInteger(idx) ? leaderboardCtrl.getLastDebriefEntries()[idx] : null;
   if (entry) openLeaderboardStatsModal(entry, idx + 1);
 });
 
@@ -8711,7 +5558,7 @@ btnMenuRadio?.addEventListener('click', handleRadioCycle);
 btnHudRadio?.addEventListener('click', handleRadioCycle);
 
 function reconcileSiteFilterOnMenuReturn() {
-  if (siteCategoryFilter !== 'todo') return;
+  if (siteBrowser.getSiteCategoryFilter() !== 'todo') return;
   const visible = getFilteredLevels();
   if (visible.length === 0) {
     setSiteCategoryFilter('all');
@@ -10380,7 +7227,7 @@ function frame(nowMs) {
   } else if (renderer.ready && renderer.level?.id === activeLevel.id) {
     menuPreviewDiver.x = activeLevel.spawn.x + 7 + Math.sin(nowMs * 0.0003) * 4;
     menuPreviewDiver.y = Math.min(activeLevel.spawn.y + 6.5, 9);
-    menuPreviewDiver.livery = activeRigLivery;
+    menuPreviewDiver.livery = liveryWorkshop.getActiveRigLivery();
     renderer.render({
       diver: menuPreviewDiver,
       diveState: MENU_PREVIEW_DIVE_STATE,
