@@ -1009,6 +1009,76 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.beginPath();
     ctx.arc(sz * 1.02, -sz * 0.05, Math.max(1.5, sz * 0.045), 0, Math.PI * 2);
     ctx.fill();
+  } else if (m.kind === 'manta') {
+    // Majestic Giant Oceanic Manta / Eagle Ray with undulating diamond wing-beats & whip tail (v162)
+    const flap = Math.sin(timeSec * 2.4 + (m.phase || 0));
+    ctx.globalAlpha = 0.86;
+    // Whip tail trailing aft
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = Math.max(1.5, sz * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.65, 0);
+    ctx.quadraticCurveTo(-sz * 1.35, flap * sz * 0.14, -sz * 1.95, -flap * sz * 0.12);
+    ctx.stroke();
+
+    // Sweeping dorsal wing (rises & dips smoothly)
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.72, 0);
+    ctx.quadraticCurveTo(sz * 0.18, -sz * (0.95 + flap * 0.36), -sz * 0.35, -sz * (0.58 + flap * 0.25));
+    ctx.lineTo(-sz * 0.72, 0);
+    ctx.lineTo(-sz * 0.32, sz * (0.42 - flap * 0.18));
+    ctx.quadraticCurveTo(sz * 0.24, sz * (0.64 - flap * 0.22), sz * 0.72, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Pale silver-white ventral belly & gill curve
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.66, sz * 0.04);
+    ctx.quadraticCurveTo(sz * 0.1, sz * (0.44 - flap * 0.12), -sz * 0.56, sz * 0.04);
+    ctx.quadraticCurveTo(sz * 0.1, sz * 0.14, sz * 0.66, sz * 0.04);
+    ctx.fill();
+
+    // Twin forward cephalic feeding lobes
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.68, -sz * 0.08);
+    ctx.quadraticCurveTo(sz * 0.98, -sz * 0.16, sz * 1.05, -sz * 0.02);
+    ctx.lineTo(sz * 0.68, sz * 0.06);
+    ctx.closePath();
+    ctx.fill();
+  } else if (m.kind === 'beluga') {
+    // Graceful Arctic Beluga Whale with pale-ivory melon & sweeping horizontal fluke kick (v162)
+    const kick = Math.sin(timeSec * 2.6 + (m.phase || 0));
+    ctx.globalAlpha = 0.88;
+    // Horizontal tail flukes
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.moveTo(-sz * 1.05, 0);
+    ctx.quadraticCurveTo(-sz * 1.52, -sz * 0.36 + kick * sz * 0.2, -sz * 1.72, kick * sz * 0.18);
+    ctx.quadraticCurveTo(-sz * 1.52, sz * 0.34 + kick * sz * 0.2, -sz * 1.05, 0);
+    ctx.fill();
+
+    // Iconic pale ivory torso with rounded melon forehead
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.moveTo(sz * 1.25, sz * 0.05);
+    ctx.bezierCurveTo(sz * 1.28, -sz * 0.36, sz * 0.65, -sz * 0.42, -sz * 0.35, -sz * 0.26);
+    ctx.quadraticCurveTo(-sz * 0.85, -sz * 0.14, -sz * 1.15, 0);
+    ctx.quadraticCurveTo(-sz * 0.8, sz * 0.18, -sz * 0.25, sz * 0.28);
+    ctx.bezierCurveTo(sz * 0.45, sz * 0.32, sz * 1.12, sz * 0.28, sz * 1.25, sz * 0.05);
+    ctx.fill();
+
+    // Soft paddle pectoral flipper & dark eye
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.ellipse(sz * 0.32, sz * 0.22, sz * 0.24, sz * 0.11, 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(sz * 0.88, -sz * 0.02, Math.max(1.6, sz * 0.045), 0, Math.PI * 2);
+    ctx.fill();
   } else {
     // Massive Goliath Grouper (or deep Lake Trout) lurking in dark ship holds
     const isTrout = m.kind === 'laketrout';
@@ -1057,6 +1127,169 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.beginPath();
     ctx.arc(sz * 0.7, -sz * 0.1, Math.max(1, sz * 0.038), 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Gentle golden wildlife-harmony halo when peacefully escorting a calm diver (v162)
+  if (m.behavior === 'escort') {
+    const pulse = 0.55 + 0.45 * Math.sin(timeSec * 3.8);
+    ctx.strokeStyle = `rgba(253, 224, 71, ${(0.28 * pulse).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1.2, scale * 0.055);
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 1.55, sz * 0.72, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draw torch-reactive Wreck & Karst Crevice Denizens (v162):
+ *  - Giant Pacific Octopus with 6 undulating tentacles, live chromatophore color shift & black defensive ink
+ *  - Emerald Moray Eel peeking sinuously from its hull/karst den with rhythmically breathing jaws
+ */
+export function drawStyledDenizen(ctx, d, sx, sy, scale, timeSec) {
+  if (!d) return;
+  const sz = (d.size || 0.85) * scale;
+  const em = Math.max(0.12, Math.min(1, Number(d.emergence) || 0.4));
+  const outAng = Math.atan2(d.ny || 0, d.nx || 1);
+
+  // 1. Swirling black defensive octopus ink puffs in world space
+  if (Array.isArray(d.inkPuffs) && d.inkPuffs.length > 0) {
+    ctx.save();
+    for (let i = 0; i < d.inkPuffs.length; i++) {
+      const p = d.inkPuffs[i];
+      const px = sx + (p.x - d.x) * scale;
+      const py = sy + (p.y - d.y) * scale;
+      const pr = (p.r || 0.5) * scale;
+      const alpha = Math.max(0, Math.min(0.75, (p.life / Math.max(0.1, p.maxLife || 4.8)) * 0.72));
+      ctx.fillStyle = `rgba(15, 23, 42, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(outAng);
+
+  // Dark den crevice shadow
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
+  ctx.beginPath();
+  ctx.ellipse(-sz * 0.08, 0, sz * 0.28, sz * 0.52, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const reach = sz * (0.22 + em * 0.88);
+  if (d.kind === 'octopus') {
+    // Chromatophore color shift: camouflaged stone-brown -> curious coral-gold -> startled crimson
+    const bodyCol =
+      d.state === 'startled'
+        ? '#dc2626'
+        : d.state === 'curious'
+          ? '#f97316'
+          : '#785a46';
+    const accentCol =
+      d.state === 'startled'
+        ? '#fca5a5'
+        : d.state === 'curious'
+          ? '#fde047'
+          : '#a8a29e';
+
+    // 6 curling undulating tentacles extending outward from den
+    ctx.strokeStyle = bodyCol;
+    ctx.lineCap = 'round';
+    for (let t = 0; t < 6; t++) {
+      const spread = (t - 2.5) * 0.24;
+      const wave = Math.sin(timeSec * (d.state === 'startled' ? 7.5 : 3.2) + d.phase + t * 1.1);
+      ctx.lineWidth = Math.max(1.8, sz * (0.11 - Math.abs(t - 2.5) * 0.012));
+      ctx.beginPath();
+      ctx.moveTo(reach * 0.2, spread * sz * 0.22);
+      ctx.quadraticCurveTo(
+        reach * 0.72,
+        spread * sz * 0.78 + wave * sz * 0.16,
+        reach * (1.05 + em * 0.32),
+        spread * sz * 1.15 - wave * sz * 0.22
+      );
+      ctx.stroke();
+    }
+
+    // Bulbous mantle head
+    ctx.fillStyle = bodyCol;
+    ctx.beginPath();
+    ctx.ellipse(reach * 0.34, 0, sz * 0.38, sz * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Chromatophore spots
+    ctx.fillStyle = accentCol;
+    ctx.beginPath();
+    ctx.arc(reach * 0.24, -sz * 0.1, sz * 0.06, 0, Math.PI * 2);
+    ctx.arc(reach * 0.38, sz * 0.09, sz * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    // Expressive horizontal-slit octopus eye
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(reach * 0.52, -sz * 0.09, Math.max(1.8, sz * 0.075), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(reach * 0.49, -sz * 0.105, sz * 0.07, Math.max(1.2, sz * 0.028));
+  } else {
+    // Emerald Moray Eel emerging sinuously with rhythmically breathing jaws
+    const sway = Math.sin(timeSec * 3.1 + d.phase) * sz * 0.12;
+    const jawOpen = 0.08 + 0.12 * Math.max(0, Math.sin(timeSec * 2.4 + d.phase));
+    // Dorsal crest
+    ctx.strokeStyle = '#84cc16';
+    ctx.lineWidth = Math.max(2, sz * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(0, -sz * 0.12);
+    ctx.quadraticCurveTo(reach * 0.55, sway - sz * 0.18, reach * 0.92, sway * 0.6 - sz * 0.1);
+    ctx.stroke();
+
+    // Muscular emerald body
+    ctx.strokeStyle = '#15803d';
+    ctx.lineWidth = Math.max(3.5, sz * 0.24);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.05, 0);
+    ctx.quadraticCurveTo(reach * 0.5, sway, reach * 0.95, sway * 0.65);
+    ctx.stroke();
+
+    // Upper & lower breathing jaws
+    const hx = reach * 0.96;
+    const hy = sway * 0.65;
+    ctx.fillStyle = '#166534';
+    ctx.beginPath();
+    ctx.moveTo(hx - sz * 0.08, hy - sz * 0.08);
+    ctx.lineTo(hx + sz * 0.28, hy - sz * jawOpen);
+    ctx.lineTo(hx, hy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(hx - sz * 0.08, hy + sz * 0.08);
+    ctx.lineTo(hx + sz * 0.25, hy + sz * jawOpen);
+    ctx.lineTo(hx, hy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Piercing golden moray eye
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(hx + sz * 0.04, hy - sz * 0.07, Math.max(1.6, sz * 0.055), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(hx + sz * 0.05, hy - sz * 0.07, Math.max(1, sz * 0.026), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Subtle stealth photo cue ring when curiously emerged!
+  if (d.state === 'curious' && em >= 0.72) {
+    ctx.strokeStyle = 'rgba(253, 224, 71, 0.45)';
+    ctx.lineWidth = Math.max(1.2, scale * 0.05);
+    ctx.beginPath();
+    ctx.arc(reach * 0.55, 0, sz * 0.68, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   ctx.restore();

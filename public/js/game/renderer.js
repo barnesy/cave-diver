@@ -18,6 +18,7 @@ import {
   drawStyledDiverRig,
   drawStyledJellyfish,
   drawStyledMegafauna,
+  drawStyledDenizen,
 } from './artSprites.js';
 
 const CACHE_PX_PER_M = 24;
@@ -1476,6 +1477,8 @@ export class CaveRenderer {
     hazards = null,
     blackBox = null,
     lineCookies = null,
+    powerRelays = null,
+    smb = null,
     salvage = null,
     mechFx = null,
     stories = null,
@@ -1801,7 +1804,9 @@ export class CaveRenderer {
       scale,
       timeSec,
       bodyRecovered,
-      localSiltDensity
+      localSiltDensity,
+      powerRelays,
+      smb
     );
 
     // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint, Spectral Optics & Collect Bursts
@@ -1835,6 +1840,12 @@ export class CaveRenderer {
     }
     if ((blackBox || (Array.isArray(lineCookies) && lineCookies.length > 0)) && typeof this._drawBlackBoxAndCookies === 'function') {
       this._drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, Boolean(sonarPulse));
+    }
+    if (Array.isArray(powerRelays) && powerRelays.length > 0 && typeof this._drawPowerRelays === 'function') {
+      this._drawPowerRelays(ctx, powerRelays, diver, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (smb?.active && typeof this._drawSurfaceMarkerBuoy === 'function') {
+      this._drawSurfaceMarkerBuoy(ctx, smb, toScreenX, toScreenY, scale, timeSec);
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -6950,12 +6961,20 @@ export class CaveRenderer {
       }
     }
 
-    // 5. Shipwreck Megafauna (Cruising Oceanic Reef Sharks & Lurking Goliath Groupers)
+    // 5. Reactive Megafauna (Reef Sharks, Giant Manta Rays, Arctic Belugas & Goliath Groupers)
     if (Array.isArray(eco.megafauna)) {
       for (let i = 0; i < eco.megafauna.length; i++) {
         const m = eco.megafauna[i];
         if (m.x < xMin - 6 || m.x > xMax + 6 || m.y < yMin - 4 || m.y > yMax + 4) continue;
         drawStyledMegafauna(ctx, m, toScreenX(m.x), toScreenY(m.y), scale, timeSec);
+      }
+    }
+    // 6. Interactive Wreck & Karst Crevice Denizens (Giant Octopuses & Emerald Moray Eels, v162)
+    if (Array.isArray(eco.denizens)) {
+      for (let i = 0; i < eco.denizens.length; i++) {
+        const d = eco.denizens[i];
+        if (d.x < xMin - 3 || d.x > xMax + 3 || d.y < yMin - 3 || d.y > yMax + 3) continue;
+        drawStyledDenizen(ctx, d, toScreenX(d.x), toScreenY(d.y), scale, timeSec);
       }
     }
     ctx.restore();
@@ -10620,7 +10639,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0) {
+  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0, powerRelays = null, smb = null) {
     const lctx = this.lightCtx;
     const lw = this.lightCanvas.width;
     const lh = this.lightCanvas.height;
@@ -10899,6 +10918,47 @@ export class CaveRenderer {
       const p = peerList[i];
       if (!p || (p.id && torchPeerIds.has(p.id)) || p.alive !== false && p.torchOn !== false) continue;
       carveDiverLight(p, null, 0);
+    }
+
+    // Active Emergency Wreck Power Relay Chamber Floodlights punch huge 17.5m holes through darkness! (v162)
+    if (Array.isArray(powerRelays)) {
+      for (let i = 0; i < powerRelays.length; i++) {
+        const rel = powerRelays[i];
+        if (!rel || !rel.active) continue;
+        const rSx = toScreenX(rel.x) * rx;
+        const rSy = toScreenY(rel.y) * ry;
+        const flick = 0.92 + 0.08 * Math.sin(timeSec * 14 + (rel.flickerPhase || 0)) * Math.sin(timeSec * 3.7);
+        const floodR = (rel.radius || 17.5) * scale * rx * flick;
+        if (rSx + floodR < 0 || rSx - floodR > lw || rSy + floodR < 0 || rSy - floodR > lh) continue;
+        const fg = lctx.createRadialGradient(rSx, rSy, floodR * 0.06, rSx, rSy, floodR);
+        fg.addColorStop(0, 'rgba(0,0,0,0.96)');
+        fg.addColorStop(0.55, 'rgba(0,0,0,0.78)');
+        fg.addColorStop(1, 'rgba(0,0,0,0)');
+        lctx.fillStyle = fg;
+        lctx.fillRect(rSx - floodR, rSy - floodR, floodR * 2, floodR * 2);
+      }
+    }
+    // Topside Support Boat Spotlight cutting down onto a surfaced orange dSMB (v162)
+    if (smb?.active && smb.surfaced) {
+      const smx = toScreenX(smb.x) * rx;
+      const smTop = toScreenY(0) * ry;
+      const smBot = toScreenY(16) * ry;
+      const halfTop = 2.6 * scale * rx;
+      const halfBot = 7.2 * scale * rx;
+      lctx.save();
+      lctx.beginPath();
+      lctx.moveTo(smx - halfTop, smTop);
+      lctx.lineTo(smx + halfTop, smTop);
+      lctx.lineTo(smx + halfBot, smBot);
+      lctx.lineTo(smx - halfBot, smBot);
+      lctx.closePath();
+      const sg = lctx.createLinearGradient(0, smTop, 0, smBot);
+      sg.addColorStop(0, 'rgba(0,0,0,0.88)');
+      sg.addColorStop(0.65, 'rgba(0,0,0,0.42)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      lctx.fillStyle = sg;
+      lctx.fill();
+      lctx.restore();
     }
 
     // Faint marker glows at visible checkpoints via pre-baked cutout stamp
@@ -11894,6 +11954,143 @@ export class CaveRenderer {
         ctx.fillText(`#${ck.index} 🏠${ck.distToExitM}m`, cx, cy - rPx * 1.45);
       }
     }
+
+    ctx.restore();
+  }
+
+  /**
+   * Render Emergency Wreck Hull Power Relays & Warm Tungsten-Amber Floodlight Glow (v162).
+   */
+  _drawPowerRelays(ctx, powerRelays, diver, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(powerRelays) || powerRelays.length === 0) return;
+    ctx.save();
+    for (let i = 0; i < powerRelays.length; i++) {
+      const rel = powerRelays[i];
+      if (!rel) continue;
+      const sx = toScreenX(rel.x);
+      const sy = toScreenY(rel.y);
+      const bw = Math.max(12, 0.72 * scale);
+      const bh = Math.max(15, 0.88 * scale);
+
+      if (rel.active) {
+        // Warm tungsten-amber volumetric chamber bloom
+        const flick = 0.93 + 0.07 * Math.sin(timeSec * 14 + (rel.flickerPhase || 0));
+        const glowR = (rel.radius || 17.5) * 0.72 * scale * flick;
+        const g = ctx.createRadialGradient(sx, sy, bw * 0.3, sx, sy, glowR);
+        g.addColorStop(0, 'rgba(251, 191, 36, 0.32)');
+        g.addColorStop(0.45, 'rgba(245, 158, 11, 0.12)');
+        g.addColorStop(1, 'rgba(245, 158, 11, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Watertight steel breaker box housing
+      ctx.fillStyle = rel.active ? '#334155' : '#1e293b';
+      ctx.strokeStyle = rel.active ? '#fbbf24' : '#64748b';
+      ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(sx - bw * 0.5, sy - bh * 0.5, bw, bh, Math.max(2, 0.08 * scale));
+      } else {
+        ctx.rect(sx - bw * 0.5, sy - bh * 0.5, bw, bh);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Status LED (pulsing red standby vs steady emerald-amber active)
+      const ledPulse = 0.55 + 0.45 * Math.sin(timeSec * (rel.active ? 2.5 : 5.5));
+      ctx.fillStyle = rel.active
+        ? `rgba(74, 222, 128, ${(0.75 + 0.25 * ledPulse).toFixed(2)})`
+        : `rgba(248, 113, 113, ${ledPulse.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy - bh * 0.22, Math.max(2.5, 0.13 * scale), 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heavy breaker throw handle
+      ctx.strokeStyle = rel.active ? '#fde047' : '#cbd5e1';
+      ctx.lineWidth = Math.max(2, 0.09 * scale);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy + bh * 0.05);
+      ctx.lineTo(sx + bw * 0.34, sy + (rel.active ? -bh * 0.12 : bh * 0.28));
+      ctx.stroke();
+
+      const distM = diver ? Math.hypot(diver.x - rel.x, diver.y - rel.y) : 99;
+      if (distM <= 11) {
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.33))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = rel.active ? '#fde68a' : '#fca5a5';
+        ctx.fillText(rel.active ? '⚡ FLOODLIGHTS ON' : '⚡ AUX POWER [E]', sx, sy - bh * 0.72);
+      }
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Render Deployed Delayed Surface Marker Buoy (dSMB): taut finger-spool line, bobbing 1.8m
+   * fluorescent-orange inflatable sausage with SOLAS collar & Topside Boat Spotlight beam (v162).
+   */
+  _drawSurfaceMarkerBuoy(ctx, smb, toScreenX, toScreenY, scale, timeSec) {
+    if (!smb?.active) return;
+    ctx.save();
+    const sx = toScreenX(smb.x);
+    const bobY = smb.surfaced ? Math.sin(timeSec * 3.1) * 0.14 : 0;
+    const sy = toScreenY((smb.y || 0.3) + bobY);
+    const ax = toScreenX(smb.anchorX ?? smb.x);
+    const ay = toScreenY(smb.anchorY ?? (smb.y + 6));
+
+    // 1. Subtle Topside Support Boat amber-white searchlight cone once SMB hits surface
+    if (smb.surfaced) {
+      const topY = toScreenY(0);
+      const botY = toScreenY(15);
+      const g = ctx.createLinearGradient(0, topY, 0, botY);
+      g.addColorStop(0, 'rgba(254, 240, 138, 0.24)');
+      g.addColorStop(0.55, 'rgba(254, 240, 138, 0.08)');
+      g.addColorStop(1, 'rgba(254, 240, 138, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(sx - 1.8 * scale, topY);
+      ctx.lineTo(sx + 1.8 * scale, topY);
+      ctx.lineTo(sx + 5.6 * scale, botY);
+      ctx.lineTo(sx - 5.6 * scale, botY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 2. Taut white finger-spool line from diver/anchor up to the SMB
+    ctx.strokeStyle = 'rgba(248, 250, 252, 0.72)';
+    ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(sx, sy + 0.55 * scale);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 3. Fluorescent-orange 1.8m inflatable dSMB sausage with SOLAS reflective silver collar
+    const wPx = Math.max(7, 0.28 * scale);
+    const hPx = Math.max(26, 1.55 * scale);
+    ctx.fillStyle = '#f97316';
+    ctx.strokeStyle = '#ffedd5';
+    ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(sx - wPx * 0.5, sy - hPx * 0.65, wPx, hPx, wPx * 0.45);
+    } else {
+      ctx.rect(sx - wPx * 0.5, sy - hPx * 0.65, wPx, hPx);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // SOLAS reflective silver band near top
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(sx - wPx * 0.48, sy - hPx * 0.44, wPx * 0.96, Math.max(3, hPx * 0.14));
+
+    ctx.font = `800 ${Math.max(9, Math.round(scale * 0.32))}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fed7aa';
+    ctx.fillText(smb.surfaced ? '🎈 SMB · TOPSIDE COPY' : '🎈 SMB RISING', sx, sy - hPx * 0.78);
 
     ctx.restore();
   }

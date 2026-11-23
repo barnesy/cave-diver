@@ -7696,3 +7696,194 @@ test('v161 Zero-Config Named AI Crew (Maya/Kai/Elena), Passive Veteran Bond & AA
   r._drawImmersionGlassFx(noopCtx, 1280, 720, { y: 0.9 }, { heartRateBpm: 128 }, { thermoclineColdFactor: 0.65 }, 'exhale', 0.5);
   assert.ok(drawCalls >= 16, `Expected droplets + splash + cold rim + exhale bubbles draw calls, got ${drawCalls}`);
 });
+
+test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas, Belugas, Octopuses & Morays)', async () => {
+  const {
+    createPowerRelays,
+    activatePowerRelay,
+    deploySurfaceMarkerBuoy,
+    applyPeerWreckAction,
+    triggerWreckAction,
+    captureCameraPhoto,
+    POWER_RELAY_BONUS_PTS,
+    SMB_DEPLOY_BONUS_PTS,
+  } = await import('../public/js/game/diveSession.js');
+  const { createMarineEcosystem, stepMarineEcosystem } = await import('../public/js/game/marineLife.js');
+  const { drawStyledMegafauna, drawStyledDenizen } = await import('../public/js/game/artSprites.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  const wreck = getLevelById('uss-oriskany-carrier');
+  assert.ok(wreck && wreck.isWreck, 'Expected USS Oriskany wreck level');
+
+  // 1. Emergency Hull Power Relays on shipwrecks (+220 pts, 18m map sweep, contextual [E], co-op sync)
+  const relays = createPowerRelays(wreck);
+  assert.equal(relays.length, 2, 'Shipwreck should deterministically spawn 2 Emergency Hull Power Relays');
+  assert.equal(createPowerRelays(LEVEL_1).length, 0, 'Natural karst cenote should not spawn industrial power relays');
+
+  const sess = createDiveSession(wreck, { diverName: 'Sparky', difficulty: 'standard' });
+  assert.equal(sess.powerRelays.length, 2);
+  const relay0 = sess.powerRelays[0];
+  sess.diver.x = relay0.x + 1.0;
+  sess.diver.y = relay0.y;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.05);
+  assert.equal(sess.wreckActionPrompt?.kind, 'power-relay', 'Contextual [E] prompt should surface near inactive relay');
+
+  const synced = [];
+  let relayEventFired = false;
+  const actRes = triggerWreckAction(sess, {
+    onPowerRelay: () => { relayEventFired = true; },
+    onWreckSync: (k, id) => synced.push([k, id]),
+  });
+  assert.equal(actRes.handled, true);
+  assert.equal(actRes.kind, 'power-relay');
+  assert.equal(relay0.active, true);
+  assert.equal(relayEventFired, true);
+  assert.equal(sess.relayBonusScore, POWER_RELAY_BONUS_PTS);
+  assert.deepEqual(synced[0], ['relay', relay0.id]);
+  assert.equal(activatePowerRelay(sess, relay0.id).ok, false, 'Already-active relay cannot be flipped twice');
+
+  // Peer co-op sync flips matching relay cleanly
+  const peerSess = createDiveSession(wreck, { diverName: 'Wingman' });
+  assert.equal(
+    applyPeerWreckAction(peerSess, { actionKind: 'relay', targetId: relay0.id, by: 'Sparky' }),
+    true
+  );
+  assert.equal(peerSess.powerRelays[0].active, true);
+  assert.equal(
+    applyPeerWreckAction(peerSess, { actionKind: 'relay', targetId: relay0.id, by: 'Sparky' }),
+    false
+  );
+
+  // 2. Deployable Delayed Surface Marker Buoy (dSMB): overhead safety check, rise physics, Topside ack & drift dampen
+  const caveSess = createDiveSession(LEVEL_1, { diverName: 'Tech', difficulty: 'standard' });
+  // Place diver deep inside a cave tunnel beneath solid rock ceiling
+  const deepSeg = LEVEL_1.segments.find((s) => (s.ay + s.by) * 0.5 > 14);
+  caveSess.diver.x = (deepSeg.ax + deepSeg.bx) * 0.5;
+  caveSess.diver.y = (deepSeg.ay + deepSeg.by) * 0.5;
+  const blocked = deploySurfaceMarkerBuoy(caveSess);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, 'overhead-blocked', 'dSMB must refuse launch under solid overhead ceiling');
+
+  // Open water along shipwreck shot line succeeds
+  const shotX = wreck.shotLine?.x ?? wreck.spawn.x;
+  sess.diver.x = shotX;
+  sess.diver.y = 9.0;
+  let smbCb = false;
+  const smbRes = deploySurfaceMarkerBuoy(sess, { onSmbDeploy: () => { smbCb = true; } });
+  assert.equal(smbRes.ok, true);
+  assert.equal(smbCb, true);
+  assert.equal(sess.smbBonusScore, SMB_DEPLOY_BONUS_PTS);
+  assert.equal(sess.smb.active, true);
+  assert.equal(sess.smb.surfaced, false);
+
+  let topsideAck = '';
+  for (let i = 0; i < 60; i++) {
+    stepDiveSession(sess, { x: 0, y: 0 }, 0.1, {
+      onTopsideChatter: (m) => { if (m.includes('TOPSIDE')) topsideAck = m; },
+    });
+  }
+  assert.equal(sess.smb.surfaced, true, 'dSMB should reach the surface and float at targetY');
+  assert.ok(topsideAck.includes('TOPSIDE'), 'Surfaced dSMB should trigger Topside boat radio confirmation');
+  assert.equal(deploySurfaceMarkerBuoy(sess).reason, 'already-deployed');
+
+  // 3. Reactive Marine Life: Giant Manta Ray, Arctic Beluga, Octopus & Moray Eel + escort/spook/ink AI + 3-star photo
+  const eco = createMarineEcosystem(wreck);
+  const manta = eco.megafauna.find((m) => m.kind === 'manta');
+  assert.ok(manta, 'Ocean shipwreck ecosystem should spawn a Giant Oceanic Manta Ray');
+  assert.ok(eco.denizens.length >= 2, 'Ocean shipwreck ecosystem should spawn Octopus & Moray Eel denizens');
+
+  const polar = getLevelById('scoresby-sund-iceberg');
+  const polarEco = createMarineEcosystem(polar);
+  assert.ok(polarEco.megafauna.some((m) => m.kind === 'beluga'), 'Polar iceberg site should spawn an Arctic Beluga Whale');
+
+  // Calm low-silt diver draws Manta from patrol -> curious -> escort & fires onWildlifeEscort
+  const calmDiver = { x: manta.x - 4.0, y: manta.y, vx: 0.2, vy: 0, angle: 0, torchOn: true, dpvActive: false };
+  let escorted = null;
+  for (let i = 0; i < 20; i++) {
+    stepMarineEcosystem(eco, calmDiver, 0.12, i * 0.12, wreck, {
+      siltLevel: 0.05,
+      onWildlifeEscort: (m) => { escorted = m; },
+    });
+  }
+  assert.equal(manta.behavior, 'escort', 'Calm low-silt diver should earn Manta Ray escort');
+  assert.equal(escorted, manta, 'onWildlifeEscort callback should fire once when escort begins');
+
+  // 3-star camera capture on escorting Manta Ray maps to 'mantaray' Field Guide entry
+  sess.diver.x = manta.x - 3.0;
+  sess.diver.y = manta.y;
+  sess.diver.angle = 0;
+  sess.diver.flashlightAngle = 0;
+  sess.diver.torchOn = true;
+  sess.camera.cooldownSec = 0;
+  const photo = captureCameraPhoto(sess, eco);
+  assert.equal(photo.ok, true);
+  assert.equal(photo.subject?.id, 'mantaray');
+  assert.equal(photo.stars, 3, 'Escorting Manta Ray in beam should award 3-star golden shot');
+
+  // Loud/DPV/high-silt diver spooks Manta away
+  stepMarineEcosystem(eco, { x: manta.x - 3.0, y: manta.y, vx: 3.5, vy: 0, dpvActive: true }, 0.1, 3.0, wreck, {
+    siltLevel: 0.7,
+  });
+  assert.equal(manta.behavior, 'spooked', 'High-silt / DPV diver should spook megafauna');
+
+  // Torch-reactive Giant Pacific Octopus: dim/stealth approach coaxes emergence; close bright torch blast fires defensive ink cloud
+  const octo = eco.denizens.find((d) => d.kind === 'octopus');
+  assert.ok(octo, 'Expected Giant Pacific Octopus denizen on ocean shipwreck');
+  let emerged = false;
+  for (let i = 0; i < 25; i++) {
+    stepMarineEcosystem(eco, { x: octo.x + (octo.nx || 1) * 4.0, y: octo.y, vx: 0.2, vy: 0, angle: 0, torchOn: false }, 0.15, i * 0.15, wreck, {
+      onDenizenEmerge: () => { emerged = true; },
+    });
+  }
+  assert.equal(octo.state, 'curious');
+  assert.equal(emerged, true, 'Calm stealth approach should coax Octopus out of its den');
+
+  let inked = false;
+  const toOctoAng = Math.atan2(octo.y - (octo.y), octo.x - (octo.x + 3.0));
+  stepMarineEcosystem(
+    eco,
+    { x: octo.x + 3.0, y: octo.y, vx: 0, vy: 0, angle: toOctoAng, torchOn: true },
+    0.1,
+    5.0,
+    wreck,
+    { onDenizenInk: () => { inked = true; } }
+  );
+  assert.equal(octo.state, 'startled');
+  assert.equal(inked, true, 'Direct close torch blast should startle Octopus and trigger ink defense');
+  assert.ok(octo.inkPuffs.length >= 3, 'Startled Octopus must emit lingering black ink puffs');
+
+  // 4. Renderer & Audio smoke test for v162 floodlights, dSMB, Manta, Beluga, Octopus+Ink & Moray
+  const noopCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 64 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const rendererMock = Object.create(CaveRenderer.prototype);
+  rendererMock._drawPowerRelays(noopCtx, sess.powerRelays, sess.diver, (x) => 400 + x * 12, (y) => 120 + y * 12, 12, 4.0);
+  rendererMock._drawSurfaceMarkerBuoy(noopCtx, sess.smb, (x) => 400 + x * 12, (y) => 120 + y * 12, 12, 4.0);
+  drawStyledMegafauna(noopCtx, { ...manta, behavior: 'escort' }, 420, 260, 14, 4.0);
+  drawStyledMegafauna(noopCtx, polarEco.megafauna.find((m) => m.kind === 'beluga'), 480, 220, 14, 4.0);
+  drawStyledDenizen(noopCtx, octo, 500, 310, 14, 4.0);
+  const moray = eco.denizens.find((d) => d.kind === 'moray');
+  if (moray) drawStyledDenizen(noopCtx, moray, 560, 320, 14, 4.0);
+
+  const audio = new DiveAudio();
+  const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {} });
+  audio.ctx = {
+    state: 'running',
+    currentTime: 2,
+    sampleRate: 44100,
+    destination: {},
+    createOscillator: () => ({ type: 'sine', frequency: param(), connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+    createBiquadFilter: () => ({ type: 'lowpass', frequency: param(), Q: param(), connect() {}, disconnect() {} }),
+    createGain: () => ({ gain: param(), connect() {}, disconnect() {} }),
+    createBuffer: (c, l) => ({ getChannelData: () => new Float32Array(l) }),
+    createBufferSource: () => ({ connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+  };
+  audio.playBreakerSwitch();
+  audio.playSmbDeploy();
+  audio.playWildlifeHarmony();
+});

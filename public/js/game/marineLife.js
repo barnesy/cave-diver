@@ -35,7 +35,8 @@ export function createMarineEcosystem(level) {
   const remipedes = []; // Cave crustaceans (remipedes, white prawns, Florida blind cave crayfish)
   const turtles = []; // Freshwater sliders / turtles in sunlit surface pools
   const jellies = []; // Pelagic drifting moon jellyfish along shipwreck shot lines
-  const megafauna = []; // Goliath groupers & cruising pelagic reef sharks on shipwrecks
+  const megafauna = []; // Goliath groupers, cruising reef sharks, giant manta rays & arctic belugas
+  const denizens = []; // Interactive crevice denizens: chromatophore Giant Octopuses & Emerald Moray Eels (v162)
   const themeId = level.theme?.id || 'yucatan-cenote';
 
   // Dedicated Artificial-Reef & Pelagic Shipwreck Ecosystem (no cenote vines, turtles, or blind cavefish!)
@@ -107,13 +108,15 @@ export function createMarineEcosystem(level) {
       }
     }
 
-    // 3. Iconic Wreck Megafauna: Cruising Reef Sharks in the blue + Giant Goliath Groupers in dark holds
+    // 3. Iconic Wreck Megafauna: Cruising Reef Sharks, Giant Manta Rays & Giant Goliath Groupers
     if (!isFreshwater) {
       const sharkY1 = Math.max(14, deckY * 0.58);
       const sharkX1 = (hMin + hMax) * 0.45;
       if (evaluateCaveSDF(level, sharkX1, sharkY1) < -2.0) {
         megafauna.push({
+          id: `mega_shark_1_${level.id || 'w'}`,
           kind: 'shark',
+          label: 'Gray Reef Shark',
           x: sharkX1,
           y: sharkY1,
           homeX: sharkX1,
@@ -124,6 +127,34 @@ export function createMarineEcosystem(level) {
           vy: 0,
           size: 1.45,
           phase: 0.4,
+          behavior: 'patrol',
+          escortTimeSec: 0,
+          escortAwarded: false,
+          spookTimer: 0,
+        });
+      }
+      // Graceful Giant Manta Ray gliding across the blue above the superstructure (v162)
+      const mantaY = Math.max(10, Math.min(deckY - 6, deckY * 0.42));
+      const mantaX = shotX + 12;
+      if (evaluateCaveSDF(level, mantaX, mantaY) < -2.2) {
+        megafauna.push({
+          id: `mega_manta_1_${level.id || 'w'}`,
+          kind: 'manta',
+          label: 'Giant Oceanic Manta Ray',
+          x: mantaX,
+          y: mantaY,
+          homeX: mantaX,
+          homeY: mantaY,
+          patrolRx: 24,
+          patrolRy: 2.8,
+          vx: -1.3,
+          vy: 0,
+          size: 1.72,
+          phase: 2.1,
+          behavior: 'patrol',
+          escortTimeSec: 0,
+          escortAwarded: false,
+          spookTimer: 0,
         });
       }
       if (isWarmReef && deckY > 36) {
@@ -131,7 +162,9 @@ export function createMarineEcosystem(level) {
         const sharkX2 = shotX + 18;
         if (evaluateCaveSDF(level, sharkX2, sharkY2) < -2.0) {
           megafauna.push({
+            id: `mega_shark_2_${level.id || 'w'}`,
             kind: 'shark',
+            label: 'Oceanic Whitetip Shark',
             x: sharkX2,
             y: sharkY2,
             homeX: sharkX2,
@@ -142,6 +175,10 @@ export function createMarineEcosystem(level) {
             vy: 0,
             size: 1.25,
             phase: 3.2,
+            behavior: 'patrol',
+            escortTimeSec: 0,
+            escortAwarded: false,
+            spookTimer: 0,
           });
         }
       }
@@ -219,7 +256,39 @@ export function createMarineEcosystem(level) {
       }
     }
 
-    return { anchored, fish, remipedes, turtles, jellies, megafauna };
+    // 5. Interactive Wreck Denizens: Chromatophore Giant Octopuses & Peeking Emerald Moray Eels (v162)
+    if (!isFreshwater) {
+      for (let sIdx = 0; sIdx < level.segments.length && denizens.length < 3; sIdx++) {
+        const seg = level.segments[sIdx];
+        const mx = (seg.ax + seg.bx) * 0.5;
+        const my = (seg.ay + seg.by) * 0.5;
+        if (my < deckY - 2) continue;
+        const probeAng = denizens.length % 2 === 0 ? 0.35 : Math.PI - 0.35;
+        const anchor = findWallAnchor(level, mx, my, Math.cos(probeAng), Math.sin(probeAng), Math.max(seg.ra, seg.rb) + 2.5);
+        if (!anchor) continue;
+        if (denizens.some((d) => Math.hypot(d.x - anchor.x, d.y - anchor.y) < 12)) continue;
+        const isOcto = denizens.length % 2 === 0;
+        denizens.push({
+          id: `denizen_${denizens.length}_${level.id || 'w'}`,
+          kind: isOcto ? 'octopus' : 'moray',
+          label: isOcto ? 'Giant Pacific Octopus' : 'Emerald Moray Eel',
+          x: anchor.x,
+          y: anchor.y,
+          nx: anchor.nx,
+          ny: anchor.ny,
+          size: isOcto ? 0.92 : 0.85,
+          phase: denizens.length * 2.3 + 0.6,
+          state: 'peeking', // 'peeking' | 'curious' | 'startled'
+          emergence: 0.42, // [0.12..1.0]
+          chromaBlend: 0, // [0..1] color shift intensity
+          emergeNotified: false,
+          inkCooldown: 0,
+          inkPuffs: [],
+        });
+      }
+    }
+
+    return { anchored, fish, remipedes, turtles, jellies, megafauna, denizens };
   }
   const isFlorida = themeId === 'florida-karst';
   const isNordic = themeId === 'nordic-marble';
@@ -497,7 +566,70 @@ export function createMarineEcosystem(level) {
     }
   }
 
-  return { anchored, fish, remipedes, turtles, jellies, megafauna };
+  // 6. Cave & Polar Megafauna + Interactive Crevice Denizens (v162)
+  const idLower = `${level.id || ''} ${themeId}`.toLowerCase();
+  const isPolar = /arctic|ice|scoresby|silfra|strytan|kverkfjoll|aurora|glacier/.test(idLower);
+  const isWarmCoastal = /cenote|yucatan|blue-hole|bahamas|abaco|bimini|bermuda|lanzarote|eagle|lagoa/.test(idLower);
+  if ((isPolar || isWarmCoastal) && Array.isArray(level.segments)) {
+    for (let sIdx = 0; sIdx < level.segments.length && megafauna.length < 1; sIdx++) {
+      const seg = level.segments[sIdx];
+      const mx = (seg.ax + seg.bx) * 0.5;
+      const my = (seg.ay + seg.by) * 0.5;
+      if (my >= 6 && my <= 36 && Math.min(seg.ra, seg.rb) >= 3.4 && evaluateCaveSDF(level, mx, my) < -2.2) {
+        megafauna.push({
+          id: `mega_cave_${level.id || 'c'}`,
+          kind: isPolar ? 'beluga' : 'manta',
+          label: isPolar ? 'Arctic Beluga Whale' : 'Spotted Eagle Ray',
+          x: mx,
+          y: my,
+          homeX: mx,
+          homeY: my,
+          patrolRx: Math.min(12, Math.max(5.5, Math.min(seg.ra, seg.rb) * 1.6)),
+          patrolRy: 1.8,
+          vx: 0.9,
+          vy: 0,
+          size: isPolar ? 1.55 : 1.28,
+          phase: 1.1,
+          behavior: 'patrol',
+          escortTimeSec: 0,
+          escortAwarded: false,
+          spookTimer: 0,
+        });
+      }
+    }
+  }
+  if (isWarmCoastal && Array.isArray(level.segments)) {
+    for (let sIdx = 1; sIdx < level.segments.length && denizens.length < 2; sIdx++) {
+      const seg = level.segments[sIdx];
+      const mx = (seg.ax + seg.bx) * 0.5;
+      const my = (seg.ay + seg.by) * 0.5;
+      if (my < 10) continue;
+      const probeAng = denizens.length % 2 === 0 ? 0.45 : Math.PI - 0.45;
+      const anchor = findWallAnchor(level, mx, my, Math.cos(probeAng), Math.sin(probeAng), Math.max(seg.ra, seg.rb) + 2.4);
+      if (!anchor) continue;
+      if (denizens.some((d) => Math.hypot(d.x - anchor.x, d.y - anchor.y) < 14)) continue;
+      const isOcto = denizens.length % 2 === 0;
+      denizens.push({
+        id: `denizen_cave_${denizens.length}_${level.id || 'c'}`,
+        kind: isOcto ? 'octopus' : 'moray',
+        label: isOcto ? 'Reef Octopus' : 'Emerald Moray Eel',
+        x: anchor.x,
+        y: anchor.y,
+        nx: anchor.nx,
+        ny: anchor.ny,
+        size: isOcto ? 0.82 : 0.78,
+        phase: denizens.length * 2.7 + 0.9,
+        state: 'peeking',
+        emergence: 0.4,
+        chromaBlend: 0,
+        emergeNotified: false,
+        inkCooldown: 0,
+        inkPuffs: [],
+      });
+    }
+  }
+
+  return { anchored, fish, remipedes, turtles, jellies, megafauna, denizens };
 }
 
 /**
@@ -526,13 +658,17 @@ export function computeTorchBeamExposure(diver, wx, wy, maxRange = 14.5) {
 /**
  * Advances authentic Yucatan fish schools, cave remipedes/prawns, and cenote slider turtles.
  */
-export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
+export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
   if (!eco) return;
   const lerp = Math.min(1, dt * 2.2);
   const cullDistSq = 42 * 42;
   const hasDiver = Boolean(diver);
   const divX = hasDiver ? diver.x : 0;
   const divY = hasDiver ? diver.y : 0;
+  const diverSpeed = hasDiver ? Math.hypot(diver.vx || 0, diver.vy || 0) : 0;
+  const siltDens = Math.max(0, Number(opts?.localSiltDensity) || 0);
+  const isCalmDiver = hasDiver && diverSpeed <= 1.35 && !diver.dpvThrusting && siltDens < 0.3;
+  const isLoudDiver = hasDiver && (diverSpeed > 2.35 || Boolean(diver.dpvThrusting) || siltDens >= 0.42);
   const lightLerp = Math.min(1, dt * 5.0);
 
   // Fish schooling + gentle swim-away near diver & torch-beam avoidance (distance-culled for distant chambers)
@@ -554,7 +690,8 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
       const distSq = dx * dx + dy * dy;
       if (distSq > 0.0025 && distSq < 9.0) {
         const dist = Math.sqrt(distSq);
-        const push = ((3.0 - dist) / 3.0) * 4.2;
+        const siltScatter = siltDens > 0.35 ? 1.85 : 1.0;
+        const push = ((3.0 - dist) / 3.0) * 4.2 * siltScatter;
         f.vx += (dx / dist) * push * dt;
         f.vy += (dy / dist) * push * dt;
       }
@@ -637,28 +774,138 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level) {
     }
   }
 
-  // Shipwreck Megafauna: Cruising Reef Sharks & Territorial Goliath Groupers
+  // Reactive Megafauna: Cruising Reef Sharks, Giant Manta Rays, Arctic Belugas & Goliath Groupers (v162)
   if (Array.isArray(eco.megafauna)) {
     for (let i = 0; i < eco.megafauna.length; i++) {
       const m = eco.megafauna[i];
+      if (!m.behavior) m.behavior = 'patrol';
+      if (m.spookTimer > 0) m.spookTimer = Math.max(0, m.spookTimer - dt);
+      const canEscort = m.kind === 'shark' || m.kind === 'manta' || m.kind === 'beluga';
+      let distToDiver = 999;
       if (hasDiver) {
-        const cdx = m.homeX - divX;
-        const cdy = m.homeY - divY;
-        if (cdx * cdx + cdy * cdy > 60 * 60) continue;
+        const cdx = m.x - divX;
+        const cdy = m.y - divY;
+        distToDiver = Math.hypot(cdx, cdy);
+        if (Math.hypot(m.homeX - divX, m.homeY - divY) > 65 && distToDiver > 65) continue;
         const lit = computeTorchBeamExposure(diver, m.x, m.y, 17.5);
         m.litIntensity = (m.litIntensity || 0) + (lit - (m.litIntensity || 0)) * lightLerp;
       }
-      const speed = m.kind === 'shark' ? 0.16 : 0.22;
-      m.phase += dt * speed;
-      const tx = m.homeX + Math.cos(m.phase) * (m.patrolRx || 6);
-      const ty = m.homeY + Math.sin(m.phase * 2) * (m.patrolRy || 1.2);
-      const nx = m.x + (tx - m.x) * Math.min(1, dt * 1.5);
-      const ny = m.y + (ty - m.y) * Math.min(1, dt * 1.5);
+
+      if (hasDiver && canEscort && distToDiver <= 16.5) {
+        if (isLoudDiver) {
+          m.behavior = 'spooked';
+          m.spookTimer = 6.5;
+          m.escortTimeSec = 0;
+        } else if (m.spookTimer <= 0 && isCalmDiver) {
+          m.escortTimeSec = (m.escortTimeSec || 0) + dt;
+          if (m.escortTimeSec >= 1.4 && distToDiver <= 12.5) {
+            m.behavior = 'escort';
+            if (!m.escortAwarded) {
+              m.escortAwarded = true;
+              opts?.onWildlifeEscort?.(m);
+            }
+          } else {
+            m.behavior = 'curious';
+          }
+        } else if (m.spookTimer <= 0) {
+          m.behavior = 'patrol';
+        }
+      } else if (m.spookTimer <= 0) {
+        m.behavior = 'patrol';
+        m.escortTimeSec = Math.max(0, (m.escortTimeSec || 0) - dt * 0.5);
+      }
+
+      let tx = m.homeX;
+      let ty = m.homeY;
+      let steerRate = 1.5;
+      if (m.behavior === 'spooked' && hasDiver) {
+        const awayX = m.x - divX;
+        const awayY = m.y - divY;
+        const awayD = Math.hypot(awayX, awayY) || 1;
+        tx = m.x + (awayX / awayD) * 14;
+        ty = Math.max(3.5, m.y + (awayY / awayD) * 6);
+        steerRate = 2.8;
+      } else if ((m.behavior === 'curious' || m.behavior === 'escort') && hasDiver) {
+        // Gracefully orbit/glide alongside the calm diver's wing
+        const orbitAng = timeSec * 0.45 + (m.phase || 0);
+        const wingDist = m.behavior === 'escort' ? 4.1 : 6.4;
+        tx = divX + Math.cos(orbitAng) * wingDist;
+        ty = Math.max(3.0, divY - 1.1 + Math.sin(orbitAng * 1.4) * 1.35);
+        steerRate = 1.35;
+      } else {
+        const speed = m.kind === 'shark' ? 0.16 : m.kind === 'manta' ? 0.14 : m.kind === 'beluga' ? 0.12 : 0.22;
+        m.phase += dt * speed;
+        tx = m.homeX + Math.cos(m.phase) * (m.patrolRx || 6);
+        ty = m.homeY + Math.sin(m.phase * 2) * (m.patrolRy || 1.2);
+      }
+
+      const nx = m.x + (tx - m.x) * Math.min(1, dt * steerRate);
+      const ny = m.y + (ty - m.y) * Math.min(1, dt * steerRate);
       if (evaluateCaveSDF(level, nx, ny) < -0.8) {
         m.vx = (nx - m.x) / Math.max(0.01, dt);
         m.vy = (ny - m.y) / Math.max(0.01, dt);
         m.x = nx;
         m.y = ny;
+      }
+    }
+  }
+
+  // Interactive Wreck & Karst Crevice Denizens: Chromatophore Giant Octopuses & Emerald Moray Eels (v162)
+  if (Array.isArray(eco.denizens)) {
+    for (let i = 0; i < eco.denizens.length; i++) {
+      const d = eco.denizens[i];
+      if (d.inkCooldown > 0) d.inkCooldown = Math.max(0, d.inkCooldown - dt);
+      // Step any lingering black octopus ink puffs
+      if (Array.isArray(d.inkPuffs) && d.inkPuffs.length > 0) {
+        for (let k = d.inkPuffs.length - 1; k >= 0; k--) {
+          const p = d.inkPuffs[k];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.r = Math.min(p.maxR, p.r + dt * 0.55);
+          p.life -= dt;
+          if (p.life <= 0) d.inkPuffs.splice(k, 1);
+        }
+      }
+      if (!hasDiver) continue;
+      const dist = Math.hypot(d.x - divX, d.y - divY);
+      if (dist > 36) continue;
+      const lit = computeTorchBeamExposure(diver, d.x, d.y, 13.0);
+      d.litIntensity = (d.litIntensity || 0) + (lit - (d.litIntensity || 0)) * lightLerp;
+
+      if (lit > 0.52 && dist < 6.8) {
+        // Direct bright torch blast startles the denizen back into its crevice!
+        d.state = 'startled';
+        d.emergence += (0.12 - d.emergence) * Math.min(1, dt * 4.2);
+        d.chromaBlend += (1.0 - d.chromaBlend) * Math.min(1, dt * 5.0);
+        if (d.kind === 'octopus' && d.inkCooldown <= 0) {
+          d.inkCooldown = 14;
+          for (let p = 0; p < 4; p++) {
+            d.inkPuffs.push({
+              x: d.x + (d.nx || 0) * 0.55 + (Math.random() - 0.5) * 0.3,
+              y: d.y + (d.ny || 0) * 0.55 + (Math.random() - 0.5) * 0.3,
+              vx: (d.nx || 0) * (0.45 + Math.random() * 0.4) + (Math.random() - 0.5) * 0.25,
+              vy: (d.ny || 0) * 0.35 - 0.12,
+              r: 0.35,
+              maxR: 1.55 + Math.random() * 0.45,
+              life: 4.8,
+              maxLife: 4.8,
+            });
+          }
+          opts?.onDenizenInk?.(d);
+        }
+      } else if (dist < 10.5 && (diver.torchOn === false || lit < 0.28) && diverSpeed <= 1.45) {
+        // Stealth / low-beam calm approach coaxes the denizen curiously out of its den!
+        d.state = 'curious';
+        d.emergence += (1.0 - d.emergence) * Math.min(1, dt * 1.45);
+        d.chromaBlend += (0.55 - d.chromaBlend) * Math.min(1, dt * 2.2);
+        if (d.emergence >= 0.78 && !d.emergeNotified) {
+          d.emergeNotified = true;
+          opts?.onDenizenEmerge?.(d);
+        }
+      } else {
+        d.state = 'peeking';
+        d.emergence += (0.42 - d.emergence) * Math.min(1, dt * 1.2);
+        d.chromaBlend += (0 - d.chromaBlend) * Math.min(1, dt * 1.8);
       }
     }
   }

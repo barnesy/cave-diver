@@ -91,6 +91,167 @@ export function computeBreathProfile(diveState, exertion = 0) {
  */
 export const MAX_LINE_COOKIES = 6;
 export const BLACK_BOX_BONUS_PTS = 350;
+export const POWER_RELAY_BONUS_PTS = 220;
+export const SMB_DEPLOY_BONUS_PTS = 120;
+export const WILDLIFE_HARMONY_BONUS_PTS = 150;
+
+/**
+ * Deterministically place 2 Emergency Hull Power Relays inside dark shipwreck compartments
+ * or industrial flooded mine shafts (v162). Activating a relay permanently illuminates a 17m chamber!
+ */
+export function createPowerRelays(level) {
+  if (!level) return [];
+  const isMine = /mine|ojamo/i.test(`${level.id || ''} ${level.name || ''}`);
+  if (!level.isWreck && !isMine) return [];
+  const segs = Array.isArray(level.segments) ? level.segments : [];
+  if (segs.length === 0) return [];
+  const deckY = level.wreckDeckY ?? 14;
+  const relayNames = level.isWreck
+    ? ['Engine Room Aux Relay', 'Promenade Floodlight Bus', 'Bridge Battery Breaker']
+    : ['Main Shaft Floodlight Bus', 'Pump Station Aux Relay'];
+
+  const relays = [];
+  for (let i = 0; i < segs.length && relays.length < 2; i++) {
+    const s = segs[i];
+    const mx = (s.ax + s.bx) * 0.5;
+    const my = (s.ay + s.by) * 0.5;
+    if (my < deckY + 2) continue;
+    if (evaluateCaveSDF(level, mx, my) >= -1.2) continue;
+    if (relays.some((r) => Math.hypot(r.x - mx, r.y - my) < 18)) continue;
+    relays.push({
+      id: `relay_${relays.length}_${level.id || 'w'}`,
+      x: Math.round(mx * 10) / 10,
+      y: Math.round(my * 10) / 10,
+      label: relayNames[relays.length % relayNames.length],
+      radius: 17.5,
+      active: false,
+      points: POWER_RELAY_BONUS_PTS,
+      flickerPhase: relays.length * 2.1 + 0.5,
+    });
+  }
+  return relays;
+}
+
+/**
+ * Flip a submerged Emergency Hull Power Relay to restore warm tungsten-amber chamber floodlights (v162).
+ */
+export function activatePowerRelay(session, relayId = null, callbacks = {}) {
+  if (!session || !Array.isArray(session.powerRelays) || session.diveState?.alive === false) {
+    return { ok: false };
+  }
+  const { diver } = session;
+  let target = null;
+  if (relayId) {
+    target = session.powerRelays.find((r) => r && r.id === relayId && !r.active) || null;
+  } else {
+    for (let i = 0; i < session.powerRelays.length; i++) {
+      const r = session.powerRelays[i];
+      if (!r || r.active) continue;
+      if (Math.hypot(diver.x - r.x, diver.y - r.y) <= 4.0) {
+        target = r;
+        break;
+      }
+    }
+  }
+  if (!target) return { ok: false };
+  target.active = true;
+  const pts = target.points || POWER_RELAY_BONUS_PTS;
+  session.relayBonusScore = (session.relayBonusScore || 0) + pts;
+  const newlyMapped = markExploredAround(
+    session.exploreCells,
+    session.exploredCells,
+    target.x,
+    target.y,
+    18.0,
+    session.exploredGrid
+  );
+  if (newlyMapped > 0 && session.exploreCells?.length > 0) {
+    session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
+  }
+  if (Array.isArray(session.collectBursts)) {
+    session.collectBursts.push({
+      x: target.x,
+      y: target.y,
+      points: pts,
+      kind: 'relay',
+      age: 0,
+      duration: 1.8,
+    });
+  }
+  recordDiveHighlight(session, {
+    kind: 'moment',
+    icon: '⚡',
+    label: `${target.label} Lit`,
+    depthM: target.y,
+  });
+  callbacks.onPowerRelay?.(target, pts);
+  callbacks.onWreckSync?.('relay', target.id);
+  callbacks.onToast?.(`⚡ ${target.label} restored! Emergency floodlights online (+${pts} pts)`, 3.4);
+  return { ok: true, relay: target, points: pts };
+}
+
+/**
+ * Shoot a Delayed Surface Marker Buoy (dSMB) to the surface during open-water ascent / deco (v162).
+ * Checks overhead SDF clearance first; dampens lateral drift by 65% & signals Topside boat overhead!
+ */
+export function deploySurfaceMarkerBuoy(session, callbacks = {}) {
+  if (!session || !session.diver || !session.level || session.diveState?.alive === false) {
+    return { ok: false, reason: 'inactive' };
+  }
+  if (session.smb?.active) {
+    callbacks.onToast?.('🎈 Orange dSMB is already flying overhead on the surface!', 2.2);
+    return { ok: false, reason: 'already-deployed' };
+  }
+  const { diver, level } = session;
+  if (diver.y < 1.8) {
+    callbacks.onToast?.('🎈 Already at the surface — no SMB needed!', 2.0);
+    return { ok: false, reason: 'too-shallow' };
+  }
+  // Authentic technical safety check: verify clear open water straight up to the surface!
+  for (let probeY = diver.y - 0.8; probeY >= 0.6; probeY -= 0.75) {
+    if (evaluateCaveSDF(level, diver.x, probeY) >= -0.25) {
+      callbacks.onToast?.('⛔ Solid overhead ceiling above you — swim to open water / shot line before shooting SMB!', 3.2);
+      return { ok: false, reason: 'overhead-blocked' };
+    }
+  }
+
+  const smb = {
+    active: true,
+    x: diver.x,
+    y: diver.y - 0.5,
+    targetY: 0.28,
+    anchorX: diver.x,
+    anchorY: diver.y,
+    surfaced: false,
+    riseSec: 0,
+    driftDampen: 0.65,
+    topsideAckSent: false,
+  };
+  session.smb = smb;
+  const pts = SMB_DEPLOY_BONUS_PTS;
+  session.smbBonusScore = (session.smbBonusScore || 0) + pts;
+  if (Array.isArray(session.bubbles)) {
+    for (let k = 0; k < 14; k++) {
+      spawnExhaustBubble(
+        session.bubbles,
+        diver.x + (Math.random() - 0.5) * 0.4,
+        diver.y - 0.4,
+        (Math.random() - 0.5) * 0.6,
+        -1.8 - Math.random() * 1.4,
+        { primary: k < 8, intensity: 1.0, depthM: diver.y }
+      );
+    }
+  }
+  recordDiveHighlight(session, {
+    kind: 'moment',
+    icon: '🎈',
+    label: `dSMB Shot (${Math.round(diver.y)}m)`,
+    depthM: diver.y,
+  });
+  callbacks.onSmbDeploy?.(smb, pts);
+  callbacks.onToast?.(`🎈 Orange dSMB shot from ${Math.round(diver.y)}m! Drift stabilized -65% · Topside alerted (+${pts} pts)`, 3.6);
+  return { ok: true, smb, points: pts };
+}
 
 /**
  * Bookmark a notable dive highlight for the Debrief Black-Box Highlight Reel (v160).
@@ -358,6 +519,11 @@ export function createDiveSession(
     hazards: createDynamicHazards(level),
     blackBox: createBlackBoxTarget(level),
     blackBoxBonusScore: 0,
+    powerRelays: createPowerRelays(level),
+    relayBonusScore: 0,
+    smb: null,
+    smbBonusScore: 0,
+    wildlifeHarmonyScore: 0,
     lineCookies: [],
     maxLineCookies: MAX_LINE_COOKIES,
     squadAssistActive: false,
@@ -637,7 +803,7 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
   const silt = session.localSiltDensity || 0;
   const candidates = [];
 
-  const consider = (entryId, tx, ty) => {
+  const consider = (entryId, tx, ty, bonusStars = 0) => {
     const entry = getFieldGuideEntry(entryId);
     if (!entry) return;
     const dx = tx - diver.x;
@@ -655,7 +821,7 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
     q += angDiff <= 0.34 ? 1.0 : angDiff <= 0.62 ? 0.6 : 0.2;
     q += dist >= 1.2 && dist <= 8.5 ? 1.0 : dist <= 11.0 ? 0.6 : 0.3;
     q += silt < 0.22 ? 1.0 : silt < 0.48 ? 0.5 : 0.15;
-    const stars = Math.max(1, Math.min(3, Math.round(q)));
+    const stars = Math.max(1, Math.min(3, Math.round(q) + (bonusStars || 0)));
 
     const isNewInGuide = knownIds instanceof Set ? !knownIds.has(entry.id) : false;
     const isNewThisDive = !session.camera.photographedIds.has(entry.id);
@@ -672,7 +838,15 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
   };
 
   if (ecosystem) {
-    for (const m of ecosystem.megafauna || []) consider(m.kind, m.x, m.y);
+    for (const m of ecosystem.megafauna || []) {
+      const fid = m.kind === 'manta' ? 'mantaray' : m.kind === 'beluga' ? 'whaleshark' : m.kind;
+      consider(fid, m.x, m.y, m.behavior === 'escort' ? 1 : 0);
+    }
+    for (const d of ecosystem.denizens || []) {
+      if ((d.emergence || 0) >= 0.4) {
+        consider('grouper', d.x, d.y, d.state === 'curious' && d.emergence >= 0.72 ? 2 : 0);
+      }
+    }
     for (const t of ecosystem.turtles || []) consider('slider', t.x, t.y);
     for (const j of ecosystem.jellies || []) consider('jellyfish', j.x, j.y);
     for (const f of ecosystem.fish || []) {
@@ -1372,6 +1546,15 @@ export function recordPeerDepthProfiles(session, peers, simTimeSec = 0) {
 export function applyPeerWreckAction(session, msg, callbacks = {}) {
   if (!session || !msg || !msg.actionKind || !msg.targetId) return false;
   const by = msg.by || 'Buddy';
+  if (msg.actionKind === 'relay') {
+    const relay = Array.isArray(session.powerRelays) ? session.powerRelays.find((r) => r && r.id === msg.targetId) : null;
+    if (!relay || relay.active) return false;
+    relay.active = true;
+    session.relayBonusScore = (session.relayBonusScore || 0) + (relay.points || POWER_RELAY_BONUS_PTS);
+    callbacks.onPowerRelay?.(relay, relay.points || POWER_RELAY_BONUS_PTS);
+    callbacks.onToast?.(`⚡ ${by} restored ${relay.label}! Emergency floodlights online!`, 2.8);
+    return true;
+  }
   if (msg.actionKind === 'valve') {
     if (!session.equalizedHatchIds) session.equalizedHatchIds = new Set();
     if (session.equalizedHatchIds.has(msg.targetId)) return false;
@@ -2090,6 +2273,14 @@ export function triggerWreckAction(session, callbacks = {}) {
     }
   }
 
+  // 5a. Priority 5a: Restore Emergency Hull Power Relay (Living Shipwrecks / Flooded Mines, v162)
+  if (Array.isArray(session.powerRelays) && session.powerRelays.length > 0) {
+    const relayRes = activatePowerRelay(session, null, callbacks);
+    if (relayRes.ok) {
+      return { handled: true, kind: 'power-relay', targetId: relayRes.relay.id, points: relayRes.points };
+    }
+  }
+
   // 5b. Priority 5b: Recover Acoustic Black Box / Lost Hydro-Probe (v159)
   if (session.blackBox && !session.blackBox.recovered) {
     const bbDist = Math.hypot(diver.x - session.blackBox.x, diver.y - session.blackBox.y);
@@ -2106,6 +2297,14 @@ export function triggerWreckAction(session, callbacks = {}) {
     const lbRes = toggleLiftBag(session, callbacks);
     if (lbRes.ok) {
       return { handled: true, kind: 'inflate-liftbag', buoyancy: lbRes.buoyancy };
+    }
+  }
+
+  // 7. Priority 7: Shoot orange Delayed Surface Marker Buoy (dSMB) during open-water deco stop (<=14m) (v162)
+  if (!session.smb?.active && (diveState.stopDepthM || 0) >= 3 && diver.y >= 2.5 && diver.y <= 14.5) {
+    const smbRes = deploySurfaceMarkerBuoy(session, callbacks);
+    if (smbRes.ok) {
+      return { handled: true, kind: 'deploy-smb', points: smbRes.points };
     }
   }
 
@@ -3204,6 +3403,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       detail: `+${nearbyAnchor.reelBonusM || 40}m Spool · ${nearbyAnchor.label}`,
       progress: 0,
     };
+  } else if (Array.isArray(session.powerRelays) && session.powerRelays.some((r) => r && !r.active && Math.hypot(diver.x - r.x, diver.y - r.y) <= 4.0)) {
+    const nearRelay = session.powerRelays.find((r) => r && !r.active && Math.hypot(diver.x - r.x, diver.y - r.y) <= 4.0);
+    session.wreckActionPrompt = {
+      kind: 'power-relay',
+      label: '⚡ RESTORE AUX POWER [E]',
+      detail: `${nearRelay.label} · 17m Emergency Floodlights (+${nearRelay.points || POWER_RELAY_BONUS_PTS})`,
+      progress: 0,
+    };
   } else if (session.blackBox && !session.blackBox.recovered && Math.hypot(diver.x - session.blackBox.x, diver.y - session.blackBox.y) <= 3.8) {
     session.wreckActionPrompt = {
       kind: 'recover-blackbox',
@@ -3237,6 +3444,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       kind: 'inflate-liftbag',
       label: '🎈 DEPLOY LIFT BAG [E / Y]',
       detail: `Neutralize ${Math.round(session.salvage.payloadKg)}kg heavy salvage trim`,
+      progress: 0,
+    };
+  } else if (!session.smb?.active && (diveState.stopDepthM || 0) >= 3 && diver.y >= 2.5 && diver.y <= 14.5) {
+    session.wreckActionPrompt = {
+      kind: 'deploy-smb',
+      label: '🎈 SHOOT ORANGE SMB [E / U]',
+      detail: 'Signal Topside boat & stabilize deco drift -65% (+120)',
       progress: 0,
     };
   } else {
@@ -3700,6 +3914,45 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       if (session.airShareBeams[i].timer <= 0) session.airShareBeams.splice(i, 1);
     }
   }
+  // Step deployed Delayed Surface Marker Buoy (dSMB): rockets to surface, stabilizes drift -65% & summons Topside spotlight (v162)
+  if (session.smb?.active) {
+    const smb = session.smb;
+    smb.riseSec = (smb.riseSec || 0) + dt;
+    if (!smb.surfaced) {
+      smb.y = Math.max(smb.targetY || 0.28, smb.y - dt * 5.6);
+      if (Array.isArray(session.bubbles) && Math.random() < dt * 16) {
+        spawnExhaustBubble(session.bubbles, smb.x, smb.y + 0.3, (Math.random() - 0.5) * 0.3, -1.2, {
+          primary: false,
+          intensity: 0.7,
+          depthM: smb.y,
+        });
+      }
+      if (smb.y <= (smb.targetY || 0.28) + 0.05) {
+        smb.surfaced = true;
+        if (!smb.topsideAckSent) {
+          smb.topsideAckSent = true;
+          callbacks.onTopsideChatter?.(
+            '🚤 TOPSIDE: Visual on your orange dSMB! Holding boat spotlight overhead — complete your deco safely.',
+            'smb'
+          );
+        }
+      }
+    }
+    // Keep anchor reel following diver while within 6.8m horizontally & dampen tidal/swell drift by 65%!
+    const horizDist = Math.abs(diver.x - smb.x);
+    if (horizDist <= 6.8 && diver.y >= 1.2) {
+      smb.anchorX = diver.x;
+      smb.anchorY = diver.y;
+      if (thrustMag < 0.15) {
+        diver.vx *= Math.exp(-2.8 * dt);
+      }
+      // Subtle extra deco comfort when holding steady on SMB line
+      if ((diveState.stopDepthM || 0) >= 3 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8 && diveState.decoRemainingSec > 0) {
+        diveState.decoRemainingSec = Math.max(0, diveState.decoRemainingSec - dt * 0.12);
+      }
+    }
+  }
+
   // Step periodic Acoustic Black-Box / Lost Hydro-Probe directional hydrophone ping (v159)
   if (session.blackBox && !session.blackBox.recovered) {
     const bb = session.blackBox;
@@ -3767,7 +4020,12 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore: (session.hatchBonusScore || 0) + (session.blackBoxBonusScore || 0),
+      hatchBonusScore:
+        (session.hatchBonusScore || 0) +
+        (session.blackBoxBonusScore || 0) +
+        (session.relayBonusScore || 0) +
+        (session.smbBonusScore || 0) +
+        (session.wildlifeHarmonyScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,

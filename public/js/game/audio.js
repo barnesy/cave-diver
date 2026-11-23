@@ -1440,4 +1440,56 @@ export class DiveAudio {
     this.playTone(620, 0.08, 'sine', 0.014, 0, { pan, bus: 'ambience' });
     this.playTone(840, 0.12, 'sine', 0.011, 0.06, { pan: pan * 0.6, bus: 'ambience' });
   }
+
+  /**
+   * Heavy waterproof shipwreck breaker clunk + rising tungsten floodlight ballast hum (v162).
+   */
+  playBreakerSwitch() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    // Heavy steel toggle clunk
+    this.playTone(145, 0.065, 'square', 0.085, 0, { bus: 'sfx' });
+    this.playTone(92, 0.09, 'sawtooth', 0.075, 0.03, { bus: 'sfx' });
+    // Rising ballast power-on hum
+    const t = this.ctx.currentTime + 0.07;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(240, t + 0.65);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.055, t + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.72);
+    osc.connect(g);
+    const dest = this._getBusNode('sfx');
+    if (dest) g.connect(dest);
+    osc.onended = () => {
+      try { osc.disconnect(); g.disconnect(); } catch {}
+    };
+    osc.start(t);
+    osc.stop(t + 0.75);
+    this.vibrate?.([18, 25, 30]);
+  }
+
+  /**
+   * Crisp octo purge inflation hiss + rapid rising dSMB ascent whoosh (v162).
+   */
+  playSmbDeploy() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(540, 0.14, 'sawtooth', 0.04, 0, { bus: 'sfx' });
+    this.playTone(880, 0.18, 'sine', 0.045, 0.1, { bus: 'sfx' });
+    this.playTone(1320, 0.22, 'triangle', 0.04, 0.22, { bus: 'sfx' });
+    this.vibrate?.([14, 18, 14]);
+  }
+
+  /**
+   * Serene harmonic underwater shimmer chord when a curious Megafauna glides in to escort you (v162).
+   */
+  playWildlifeHarmony() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(440, 0.32, 'sine', 0.036, 0, { bus: 'ambience' });
+    this.playTone(554.37, 0.36, 'sine', 0.032, 0.09, { bus: 'ambience' });
+    this.playTone(659.25, 0.44, 'triangle', 0.034, 0.18, { bus: 'ambience' });
+  }
 }

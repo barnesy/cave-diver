@@ -97,6 +97,8 @@ import {
   dropStageTank,
   toggleLiftBag,
   dropLineCookie,
+  deploySurfaceMarkerBuoy,
+  WILDLIFE_HARMONY_BONUS_PTS,
   recordDiveHighlight,
   resolveEmergencyDrill,
   recordGasSwitchFx,
@@ -606,7 +608,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=161" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=162" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1288,6 +1290,7 @@ const input = new InputController({
   onStageDrop: () => handleStageDrop(),
   onLiftBagToggle: () => handleLiftBagToggle(),
   onDropLineCookie: () => handleDropLineCookie(),
+  onDeploySmb: () => handleDeploySmb(),
   onComputerToggle: () => toggleShearwaterComputer(),
   onSignalWheelToggle: () => toggleSignalWheel(),
   onPhotoModeToggle: () => {
@@ -1639,6 +1642,8 @@ function savePhotoStudioSnapshot() {
       hazards: session.hazards || null,
       blackBox: session.blackBox || null,
       lineCookies: session.lineCookies || null,
+      powerRelays: session.powerRelays || null,
+      smb: session.smb || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,
@@ -1772,6 +1777,7 @@ const hudDrillPill = document.getElementById('hud-drill-pill');
 const btnHudStage = document.getElementById('btn-hud-stage');
 const btnHudLiftBag = document.getElementById('btn-hud-liftbag');
 const btnHudCookie = document.getElementById('btn-hud-cookie');
+const btnHudSmb = document.getElementById('btn-hud-smb');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
@@ -2154,6 +2160,10 @@ btnKitTorch?.addEventListener('click', (e) => {
     btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
     btnHudCookie.disabled = false;
   }
+  if (btnHudSmb) {
+    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 Shoot SMB</span><span class="kbd-hint kit-kbd">U</span>`;
+    btnHudSmb.disabled = false;
+  }
 });
 btnHudStage?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2170,6 +2180,25 @@ btnHudCookie?.addEventListener('click', (e) => {
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   handleDropLineCookie();
 });
+btnHudSmb?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+  handleDeploySmb();
+});
+
+function handleDeploySmb() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  audio.unlock();
+  const res = deploySurfaceMarkerBuoy(session, {
+    onSmbDeploy: () => audio.playSmbDeploy?.(),
+    onToast: (txt, sec) => showToast(txt, sec),
+  });
+  if (btnHudSmb && res?.ok) {
+    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 SMB Flying</span><span class="kbd-hint kit-kbd">✓</span>`;
+    btnHudSmb.disabled = true;
+  }
+  return Boolean(res?.ok);
+}
 
 function handleDropLineCookie() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
@@ -5311,6 +5340,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
     btnHudCookie.disabled = false;
   }
+  if (btnHudSmb) {
+    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 Shoot SMB</span><span class="kbd-hint kit-kbd">U</span>`;
+    btnHudSmb.disabled = false;
+  }
   syncMinimapButtonUi();
   refreshActiveGhostTrack(activeLevel);
   session._pbSplits = activeGhostTrack ? computeGhostCheckpointSplits(activeLevel, activeGhostTrack) : {};
@@ -5464,7 +5497,12 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore: (session.hatchBonusScore || 0) + (session.blackBoxBonusScore || 0),
+      hatchBonusScore:
+        (session.hatchBonusScore || 0) +
+        (session.blackBoxBonusScore || 0) +
+        (session.relayBonusScore || 0) +
+        (session.smbBonusScore || 0) +
+        (session.wildlifeHarmonyScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
@@ -8882,6 +8920,14 @@ const sessionStepCallbacks = {
   onBeaconClaimed: () => audio.playEncounterChime('beacon'),
   onBlackBoxPing: (_bb, distM, pan) => audio.playBlackBoxPing?.(distM, pan),
   onBlackBoxRecovered: () => audio.playEncounterChime('beacon'),
+  onPowerRelay: () => audio.playBreakerSwitch?.(),
+  onSmbDeploy: () => {
+    audio.playSmbDeploy?.();
+    if (btnHudSmb) {
+      btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 SMB Flying</span><span class="kbd-hint kit-kbd">✓</span>`;
+      btnHudSmb.disabled = true;
+    }
+  },
   onBuddyPing: () => audio.playEncounterChime('buddy-ping'),
   onMaskPurge: () => {
     audio.playMaskPurge();
@@ -8979,7 +9025,30 @@ function stepSimulation(dt) {
     return;
   }
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
-    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel);
+    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, {
+      localSiltDensity: session?.localSiltDensity || 0,
+      onWildlifeEscort: (m) => {
+        if (!session) return;
+        session.wildlifeHarmonyScore = (session.wildlifeHarmonyScore || 0) + WILDLIFE_HARMONY_BONUS_PTS;
+        audio.playWildlifeHarmony?.();
+        recordDiveHighlight(session, {
+          kind: 'moment',
+          icon: m.kind === 'manta' ? '🌊' : m.kind === 'beluga' ? '🐋' : '🦈',
+          label: `${m.label || 'Megafauna'} Escort`,
+          depthM: session.diver?.y,
+        });
+        showToast(
+          `✨ ${m.label || 'Megafauna'} is calmly escorting your dive! Hold steady for a 3★ photo [C] (+${WILDLIFE_HARMONY_BONUS_PTS} pts)`,
+          4.2
+        );
+      },
+      onDenizenEmerge: (d) => {
+        showToast(`🐙 ${d.label || 'Denizen'} emerging curiously in dim light — snap a 3★ stealth photo [C]!`, 3.4);
+      },
+      onDenizenInk: (d) => {
+        showToast(`💨 Bright torch startled ${d.label || 'Octopus'} — defensive ink cloud deployed! Try dimming [L].`, 2.8);
+      },
+    });
   }
 
   if (celebrationParticles.length > 0) {
@@ -9582,6 +9651,8 @@ function frame(nowMs) {
       hazards: session.hazards || null,
       blackBox: session.blackBox || null,
       lineCookies: session.lineCookies || null,
+      powerRelays: session.powerRelays || null,
+      smb: session.smb || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,

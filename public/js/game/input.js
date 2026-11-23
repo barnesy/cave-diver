@@ -22,6 +22,7 @@ export class InputController {
     onStageDrop,
     onLiftBagToggle,
     onDropLineCookie,
+    onDeploySmb,
     onComputerToggle,
     onSignalWheelToggle,
     onPhotoModeToggle,
@@ -61,6 +62,7 @@ export class InputController {
     this.onStageDrop = onStageDrop;
     this.onLiftBagToggle = onLiftBagToggle;
     this.onDropLineCookie = onDropLineCookie;
+    this.onDeploySmb = onDeploySmb;
     this.onComputerToggle = onComputerToggle;
     this.onSignalWheelToggle = onSignalWheelToggle;
     this.onPhotoModeToggle = onPhotoModeToggle;
@@ -115,6 +117,9 @@ export class InputController {
       }
       if (code === 'KeyK' && !e.repeat) {
         if (this.onDropLineCookie?.()) e.preventDefault();
+      }
+      if (code === 'KeyU' && !e.repeat) {
+        if (this.onDeploySmb?.()) e.preventDefault();
       }
       if (code === 'KeyX' && !e.repeat) {
         if (this.onComputerToggle?.()) e.preventDefault();
