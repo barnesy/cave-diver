@@ -31,6 +31,8 @@ import { createLiveryWorkshopController } from './ui/liveryWorkshopController.js
 import { createLogbookModalController } from './ui/logbookModalController.js';
 import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralController.js';
 import { createGitHubSyncController } from './ui/githubSyncController.js';
+import { createRescueDrillsController } from './ui/rescueDrillsController.js';
+import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
 import {
   createEmptyLogbook,
   recordDiveInLogbook,
@@ -49,6 +51,7 @@ import {
   recordFieldGuidePhoto,
   recordLoreDiscoveryInLogbook,
   recordCampaignClearInLogbook,
+  recordRescueDrillClearInLogbook,
   recordCrewDiveInLogbook,
   recordArtifactInLogbook,
   getArtifactVaultStats,
@@ -514,7 +517,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=173',
+  mapRasterUrl: './assets/map-expedition.jpg?v=174',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -801,6 +804,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, close: () => closeChallengeModal() },
   { isOpen: () => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, close: () => closeProceduralModal() },
   { isOpen: () => typeof campaignsModal !== 'undefined' && campaignsModal && !campaignsModal.hidden, close: () => closeCampaignsModal() },
+  { isOpen: () => typeof drillsModal !== 'undefined' && drillsModal && !drillsModal.hidden, close: () => closeDrillsModal() },
   { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
   { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
   { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
@@ -2624,12 +2628,16 @@ function renderCampaignsModal() {
         return `<div>Leg ${idx + 1}: ${lv ? `${lv.name} (${lv.maxDepthM || lv.targetDepthM || '?'}m)` : lid}</div>`;
       })
       .join('');
+    const rewardHtml = camp.reward
+      ? `<div class="campaign-reward-strip${isCleared ? ' unlocked' : ''}"><span>${isCleared ? '✓ Unlocked:' : '🎁 Reward:'} ${escapeHtml(camp.reward.label)}</span></div>`
+      : '';
     card.innerHTML = `
       <div class="campaign-arc-head">
         <span class="campaign-arc-title">${camp.icon} ${camp.name}</span>
         ${isCleared ? `<span class="campaign-patch-badge">🏅 ${camp.patchName}</span>` : `<span class="campaign-patch-badge" style="opacity:0.65">3 Dives</span>`}
       </div>
       <p class="campaign-arc-desc">${camp.desc}</p>
+      ${rewardHtml}
       <div class="campaign-legs-list">${legLines}</div>
       <button class="btn primary tiny" type="button" data-start-campaign="${camp.id}">${isCleared ? '↺ REPLAY EXPEDITION' : '🚀 START EXPEDITION'}</button>
     `;
@@ -2671,6 +2679,28 @@ campaignsGridEl?.addEventListener('click', (e) => {
   const cid = btn.getAttribute('data-start-campaign');
   if (cid) startExpeditionCampaign(cid);
 });
+
+// === Technical Rescue Drills Mode (v174) ===
+let activeRescueDrill = null;
+async function launchRescueDrill(drill) {
+  if (!drill) return;
+  activeCampaignRun = null;
+  activeRescueDrill = drill;
+  await selectAndLoadLevel(drill.levelId, { focusMap: false });
+  if (drill.needsAiBuddy && aiSquadCount < 1) {
+    aiSquadCount = 1;
+    syncAiBuddyUi();
+  }
+  startDiveRun(false);
+  showToast(drill.briefing, 4.4);
+}
+const rescueDrillsCtrl = createRescueDrillsController({
+  loadCareerLogbook,
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  closeDiveSetupModal: () => closeDiveSetupModal(),
+  launchRescueDrill,
+});
+const { drillsModal, openDrillsModal, closeDrillsModal } = rescueDrillsCtrl;
 
 // ─── Spatial 3D Underwater Audio Mixer & Mobile Haptics (v133) ───
 const AUDIO_MIXER_PREF_KEY = 'caveDiverAudioMix_v1';
@@ -2905,8 +2935,9 @@ function refreshActiveGhostTrack(level) {
   }
 }
 
-function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = null) {
-  renderDebriefDepthChart({
+let activeDebriefChartCtrl = null;
+function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = null, highlights = null) {
+  activeDebriefChartCtrl = renderDebriefDepthChart({
     wrapEl: document.getElementById('debrief-profile-wrap'),
     svgEl: document.getElementById('debrief-profile-svg'),
     scrubEl: document.getElementById('debrief-profile-scrub'),
@@ -2914,8 +2945,15 @@ function renderDebriefDepthProfile(profile, maxDepthM, success, peerProfiles = n
     maxDepthM,
     success,
     peerProfiles,
+    highlights,
+    onScrubTime: (tSec) => {
+      debriefReplay.seekToTime(tSec, { notify: false });
+    },
     formatRunClock,
     escapeHtml,
+  });
+  debriefReplay.setOnTimeUpdate((tSec) => {
+    activeDebriefChartCtrl?.setCursorTime(tSec, { notify: false });
   });
 }
 
@@ -3123,6 +3161,17 @@ function startDiveRun(multiplayer = false, restoredState = null) {
         })
       : [];
   session.aiBuddy = session.aiSquad[0] || null;
+  if (activeRescueDrill && !multiplayer && activeLevel.id === activeRescueDrill.levelId) {
+    if (activeRescueDrill.needsAiBuddy && session.aiSquad.length === 0) {
+      session.aiSquad = createAiSquad(activeLevel, session.diver, 1, {
+        initialGasId: session.diveState.activeGasId,
+        teamUniform: liveryWorkshop.getAiSquadTeamUniform(),
+        leaderLivery: liveryWorkshop.getActiveRigLivery(),
+      });
+      session.aiBuddy = session.aiSquad[0] || null;
+    }
+    applyRescueDrillScenario(session, activeRescueDrill);
+  }
 
   if (restoredState?.checkpoints) {
     for (const cpId of restoredState.checkpoints) session.checkpointsHit.add(cpId);
@@ -3420,7 +3469,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       gf99: 0,
     });
   }
-  renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success, session?.peerProfiles);
+  renderDebriefDepthProfile(session?.diveProfile, diveState.maxDepthM, success, session?.peerProfiles, session?.highlights);
 
   const replayTrack = Array.isArray(session?.ghostTrack) ? session.ghostTrack.slice(0, 1199) : [];
   if (replayTrack.length > 0) {
@@ -3477,10 +3526,31 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     }
   }
 
-  // Multi-Dive Expedition Campaign Surface Interval & Next Leg Panel (v160)
+  // Multi-Dive Expedition Campaign Surface Interval, Campaign Rewards & Technical Rescue Drill Panel (v160 / v174)
   if (debriefCampaignBoxEl) {
     const camp = activeCampaignRun ? getExpeditionCampaignById(activeCampaignRun.campaignId) : null;
-    if (camp && activeCampaignRun) {
+    if (activeRescueDrill && session?.activeRescueDrillId === activeRescueDrill.id) {
+      const drillRes = evaluateRescueDrillResult(activeRescueDrill, session, { success });
+      if (drillRes) {
+        debriefCampaignBoxEl.hidden = false;
+        if (drillRes.passed) {
+          const recRes = recordRescueDrillClearInLogbook(loadCareerLogbook(), {
+            drillId: activeRescueDrill.id,
+            grade: drillRes.grade,
+            timeSec: drillRes.elapsedSec,
+            score: drillRes.score,
+          });
+          if (recRes?.book) saveCareerLogbook(recRes.book);
+        }
+        debriefCampaignBoxEl.innerHTML = `
+          <div class="debrief-campaign-head">
+            <span class="debrief-campaign-title">${activeRescueDrill.icon} ${escapeHtml(activeRescueDrill.name)} · ${drillRes.passed ? 'DRILL MASTERED!' : 'DRILL INCOMPLETE'}</span>
+            <span class="campaign-patch-badge">🏅 Grade ${escapeHtml(drillRes.grade)} · ${drillRes.elapsedSec.toFixed(1)}s / ${drillRes.parTimeSec}s</span>
+          </div>
+          <div style="font-size:0.78rem;color:#cbd5e1;">${escapeHtml(drillRes.summary)}</div>
+        `;
+      }
+    } else if (camp && activeCampaignRun) {
       debriefCampaignBoxEl.hidden = false;
       const curLegIdx = activeCampaignRun.legIndex || 0;
       const isFinalLeg = curLegIdx >= camp.legs.length - 1;
@@ -3492,14 +3562,22 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         if (isFinalLeg) {
           const patchRes = recordCampaignClearInLogbook(loadCareerLogbook(), camp.id);
           if (patchRes?.book) saveCareerLogbook(patchRes.book);
+          const rewardBanner = camp.reward
+            ? `<div class="campaign-reward-strip unlocked" style="margin-top:8px;"><span>🎁 Outfitter Unlocked: ${escapeHtml(camp.reward.label)}</span><button type="button" class="btn tiny primary" id="btn-campaign-equip-reward">🎨 Equip in Outfitter</button></div>`
+            : '';
           debriefCampaignBoxEl.innerHTML = `
             <div class="debrief-campaign-head">
               <span class="debrief-campaign-title">${camp.icon} ${camp.name} · EXPEDITION COMPLETE!</span>
               <span class="campaign-patch-badge">🏅 ${camp.patchName}</span>
             </div>
             <div style="font-size:0.78rem;color:#cbd5e1;">All 3 legs cleared · Cumulative Score: <b>${activeCampaignRun.totalScore.toLocaleString()} pts</b> · Expedition Patch stitched to your Diver Logbook!</div>
+            ${rewardBanner}
           `;
+          debriefCampaignBoxEl.querySelector('#btn-campaign-equip-reward')?.addEventListener('click', () => {
+            openLiveryModal();
+          });
           activeCampaignRun = null;
+  activeRescueDrill = null;
         } else {
           const nextLegId = camp.legs[curLegIdx + 1];
           const nextLvl = getLevelById(nextLegId);
@@ -5775,6 +5853,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 
 document.getElementById('btn-menu').addEventListener('click', () => {
   activeCampaignRun = null;
+  activeRescueDrill = null;
   const prevCode = lan.room?.code || '';
   activeDailyChallenge = null;
   cancelDebriefAnimations();
@@ -6258,7 +6337,8 @@ function shareGasWithTargetPeer(targetPeer, preferredGasId = '') {
     return false;
   }
   if (targetPeer.isAiBuddy) {
-    receiveGasForAiBuddy(targetPeer, donation.donatedBar, donation.gasId, session, performance.now(), {
+    if (session?.rescueDrillMeta) session.rescueDrillMeta.sharedGasWithBuddy = true;
+  receiveGasForAiBuddy(targetPeer, donation.donatedBar, donation.gasId, session, performance.now(), {
       onBuddyIssueResolved: (buddy, issue, info) => {
         audio.playDrillClear?.();
         showToast(

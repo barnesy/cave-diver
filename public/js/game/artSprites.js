@@ -740,6 +740,32 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.arc(u * 0.43, headY, u * 0.32, Math.PI * 0.9, Math.PI * 1.9);
     ctx.stroke();
+  } else if (headgearId === 'brass-hardhat') {
+    // Riveted Mark V antique bronze/brass deep-salvage dome with heavy breastplate collar
+    ctx.fillStyle = '#92400e';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.37, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#d97706';
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY - u * 0.04, u * 0.31, Math.PI * 0.95, Math.PI * 2.05);
+    ctx.fill();
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = Math.max(1.4, u * 0.048);
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.36, 0, Math.PI * 2);
+    ctx.stroke();
+    // Brass neck breastplate collar ring + top vent knob
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = Math.max(1.8, u * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.16, headY - u * 0.24);
+    ctx.lineTo(u * 0.16, headY + u * 0.24);
+    ctx.stroke();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY - u * 0.37, Math.max(1.6, u * 0.06), 0, Math.PI * 2);
+    ctx.fill();
   } else {
     // Classic Zissou Beanie with subtle stripe accent & top rim catchlight
     ctx.fillStyle = '#0f172a';

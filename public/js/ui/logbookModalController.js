@@ -16,6 +16,7 @@ import {
 import { drawStyledArtifact } from '../game/artSprites.js';
 import { getCollectibleLoreNote } from '../game/submergedStories.js';
 import { renderFieldGuideCollectorCard, filterAndSortFieldGuide } from '../game/photoStudio.js';
+import { RESCUE_DRILLS } from '../game/rescueDrills.js';
 
 const LORE_CATALOG = [
   { kind: 'air-dome', icon: '🫧', title: 'Trapped Air Dome' },
@@ -443,6 +444,26 @@ export function createLogbookModalController({
         </div>`;
         })
         .join('');
+    }
+    const drillsHeading = document.getElementById('logbook-drills-heading');
+    const drillsGrid = document.getElementById('logbook-drills-grid');
+    if (drillsGrid) {
+      const dm = book.drillMastery || {};
+      const clearedDrills = RESCUE_DRILLS.filter((d) => Boolean(dm[d.id])).length;
+      if (drillsHeading) {
+        drillsHeading.textContent = `⚡ TECHNICAL RESCUE DRILLS MASTERY (${clearedDrills}/${RESCUE_DRILLS.length})`;
+      }
+      drillsGrid.innerHTML = RESCUE_DRILLS.map((d) => {
+        const rec = dm[d.id] || null;
+        return `
+          <div class="drill-mastery-card${rec ? ' cleared' : ' locked'}">
+            <span class="drill-mastery-icon" aria-hidden="true">${rec ? d.icon : '🔒'}</span>
+            <div class="drill-mastery-copy">
+              <strong>${escapeHtml(d.shortName)}</strong>
+              <span>${rec ? `Best ${escapeHtml(rec.bestGrade)} · ${rec.bestTimeSec.toFixed(0)}s (Par ${d.parTimeSec}s)` : `Par ${d.parTimeSec}s · Not yet mastered`}</span>
+            </div>
+          </div>`;
+      }).join('');
     }
     const fgHeading = document.getElementById('logbook-field-guide-heading');
     const fgTrophyEl = document.getElementById('logbook-fg-trophy');

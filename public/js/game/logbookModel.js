@@ -36,6 +36,7 @@ export function createEmptyLogbook() {
     },
     loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
     completedCampaigns: [], // unlocked multi-dive expedition campaign IDs (v160)
+    drillMastery: {}, // drillId -> { clears, bestGrade, bestTimeSec, bestScore } (v174 Rescue Drills)
     crewBonds: {}, // aiBuddyId -> { dives, clears, rescues } (v161 zero-config passive veteran bond)
     artifacts: {}, // artifactId -> { name, kind, siteId, siteName, lore, points, count, scale } (v168-v169 Trophy Museum Vault)
     pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
@@ -123,6 +124,17 @@ function normalizeBook(raw) {
     base.completedCampaigns = Array.from(
       new Set(raw.completedCampaigns.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))
     ).slice(0, 24);
+  }
+  if (raw.drillMastery && typeof raw.drillMastery === 'object') {
+    for (const [did, rec] of Object.entries(raw.drillMastery).slice(0, 16)) {
+      if (!rec || typeof rec !== 'object') continue;
+      base.drillMastery[did] = {
+        clears: Math.max(1, Math.round(Number(rec.clears) || 1)),
+        bestGrade: typeof rec.bestGrade === 'string' && GRADE_RANK[rec.bestGrade] ? rec.bestGrade : 'B',
+        bestTimeSec: Math.max(0, Math.round((Number(rec.bestTimeSec) || 0) * 10) / 10),
+        bestScore: Math.max(0, Math.round(Number(rec.bestScore) || 0)),
+      };
+    }
   }
   if (raw.crewBonds && typeof raw.crewBonds === 'object') {
     for (const [cid, rec] of Object.entries(raw.crewBonds)) {
@@ -315,6 +327,23 @@ export function mergeCareerLogbooks(rawA, rawB) {
   out.completedCampaigns = Array.from(
     new Set([...(a.completedCampaigns || []), ...(b.completedCampaigns || [])])
   ).slice(0, 24);
+  const drillIds = new Set([...Object.keys(a.drillMastery || {}), ...Object.keys(b.drillMastery || {})]);
+  for (const did of drillIds) {
+    const da = a.drillMastery?.[did];
+    const db = b.drillMastery?.[did];
+    if (da && !db) out.drillMastery[did] = { ...da };
+    else if (db && !da) out.drillMastery[did] = { ...db };
+    else if (da && db) {
+      const gradeWinner = (GRADE_RANK[db.bestGrade] || 0) > (GRADE_RANK[da.bestGrade] || 0) ? db.bestGrade : da.bestGrade;
+      out.drillMastery[did] = {
+        clears: Math.max(da.clears || 1, db.clears || 1),
+        bestGrade: gradeWinner || 'B',
+        bestTimeSec:
+          da.bestTimeSec > 0 && db.bestTimeSec > 0 ? Math.min(da.bestTimeSec, db.bestTimeSec) : da.bestTimeSec || db.bestTimeSec || 0,
+        bestScore: Math.max(da.bestScore || 0, db.bestScore || 0),
+      };
+    }
+  }
   const bondIds = new Set([...Object.keys(a.crewBonds || {}), ...Object.keys(b.crewBonds || {})]);
   for (const bid of bondIds) {
     const ba = a.crewBonds?.[bid] || {};
@@ -503,6 +532,33 @@ export function recordCampaignClearInLogbook(rawBook, campaignId) {
   const existed = book.completedCampaigns.includes(cleanId);
   if (!existed) book.completedCampaigns.push(cleanId);
   return { book, isNew: !existed };
+}
+
+/**
+ * Record a passed Technical Rescue Drill in Career Logbook Drill Mastery (v174).
+ */
+export function recordRescueDrillClearInLogbook(rawBook, { drillId, grade = 'B', timeSec = 0, score = 0 } = {}) {
+  const book = normalizeBook(rawBook);
+  const cleanId = typeof drillId === 'string' ? drillId.trim() : '';
+  if (!cleanId) return { book, isNew: false };
+  const cleanGrade = GRADE_RANK[grade] ? grade : 'B';
+  const cleanTime = Math.max(0, Math.round((Number(timeSec) || 0) * 10) / 10);
+  const cleanScore = Math.max(0, Math.round(Number(score) || 0));
+  const prev = book.drillMastery[cleanId];
+  if (!prev) {
+    book.drillMastery[cleanId] = {
+      clears: 1,
+      bestGrade: cleanGrade,
+      bestTimeSec: cleanTime,
+      bestScore: cleanScore,
+    };
+    return { book, isNew: true };
+  }
+  prev.clears = (prev.clears || 1) + 1;
+  if ((GRADE_RANK[cleanGrade] || 0) > (GRADE_RANK[prev.bestGrade] || 0)) prev.bestGrade = cleanGrade;
+  if (cleanTime > 0 && (prev.bestTimeSec <= 0 || cleanTime < prev.bestTimeSec)) prev.bestTimeSec = cleanTime;
+  if (cleanScore > (prev.bestScore || 0)) prev.bestScore = cleanScore;
+  return { book, isNew: false };
 }
 
 /**

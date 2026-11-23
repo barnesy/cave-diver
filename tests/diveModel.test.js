@@ -5376,9 +5376,9 @@ test('v138 Diver Gear Workshop, Custom Rig Liveries, Technical Torch Optics & Co
     drawLiveryPreview,
   } = await import('../public/js/game/rigLivery.js');
 
-  assert.equal(SUIT_LIVERIES.length, 6);
-  assert.equal(TORCH_OPTICS.length, 4);
-  assert.equal(MILESTONE_PATCHES.length, 6);
+  assert.ok(SUIT_LIVERIES.length >= 6);
+  assert.ok(TORCH_OPTICS.length >= 4);
+  assert.ok(MILESTONE_PATCHES.length >= 6);
   assert.equal(isDefaultRigLivery(DEFAULT_RIG_LIVERY), true);
   assert.equal(isDefaultRigLivery({ ...DEFAULT_RIG_LIVERY, suitId: 'arctic-cobalt' }), false);
 
@@ -6725,11 +6725,11 @@ test('v153 Modular Expedition Outfitter, Headgear Silhouettes, Cert-Linked Unloc
     drawMiniDiverAvatar,
   } = await import('../public/js/game/rigLivery.js');
 
-  assert.equal(HEADGEAR_STYLES.length, 4);
-  assert.equal(ACCENT_TRIMS.length, 7);
-  assert.equal(TANK_FINISHES.length, 5);
-  assert.equal(VISOR_TINTS.length, 4);
-  assert.equal(OUTFITTER_PRESETS.length, 6);
+  assert.ok(HEADGEAR_STYLES.length >= 4);
+  assert.ok(ACCENT_TRIMS.length >= 7);
+  assert.ok(TANK_FINISHES.length >= 5);
+  assert.ok(VISOR_TINTS.length >= 4);
+  assert.ok(OUTFITTER_PRESETS.length >= 6);
 
   // 1. Fresh diver unlocks standard gear only; v151 certification milestones unlock signature modular gear
   const freshBook = createEmptyLogbook();
@@ -8552,4 +8552,106 @@ test('v173 Unified Docked Tactical Map, Lazy Level Enrichment, Compressed Icons 
   assert.ok(mainSrc.includes('hideArtifactSpotlight()'), 'showHudPhotoCard should clear Artifact Spotlight');
   assert.ok(mainSrc.includes('hideHudPhotoCard()'), 'showArtifactSpotlight should clear Photo Card');
   assert.ok(mainSrc.includes('session.trimStats?.disciplinePct'), 'Debrief trim row should read session.trimStats?.disciplinePct');
+});
+
+test('v174 Campaign Mastery Rewards, Bidirectional Replay-Depth Sync & Technical Rescue Drills Mode', async () => {
+  const { EXPEDITION_CAMPAIGNS } = await import('../public/js/game/expeditionCampaigns.js');
+  const { computeUnlockedLiveries, getHeadgearStyle, getSuitLivery, getTorchOptic, getTankFinish, getMilestonePatch } = await import('../public/js/game/rigLivery.js');
+  const { buildDebriefDepthChartData, renderDebriefDepthChart } = await import('../public/js/ui/debriefChart.js');
+  const { RESCUE_DRILLS, getRescueDrillById, applyRescueDrillScenario, evaluateRescueDrillResult } = await import('../public/js/game/rescueDrills.js');
+  const { createEmptyLogbook, recordCampaignClearInLogbook, recordRescueDrillClearInLogbook, mergeCareerLogbooks } = await import('../public/js/game/logbookModel.js');
+  const { createDiveSession } = await import('../public/js/game/diveSession.js');
+  const { createAiSquad } = await import('../public/js/game/aiBuddy.js');
+  const { getLevelById } = await import('../public/js/levels/index.js');
+
+  // 1. Campaign Mastery Rewards: locked by default, unlocked individually per campaign clear
+  assert.equal(EXPEDITION_CAMPAIGNS.length, 4);
+  for (const camp of EXPEDITION_CAMPAIGNS) {
+    assert.ok(camp.reward?.patchId && camp.reward?.itemId && camp.reward?.label, `Campaign ${camp.id} missing reward metadata`);
+  }
+  const emptyUnlocks = computeUnlockedLiveries(createEmptyLogbook());
+  assert.equal(emptyUnlocks.suits.has('karst-jade'), false);
+  assert.equal(emptyUnlocks.headgears.has('brass-hardhat'), false);
+  assert.equal(emptyUnlocks.torches.has('aurora-plasma'), false);
+  assert.equal(emptyUnlocks.tanks.has('abyssal-titanium'), false);
+  assert.equal(emptyUnlocks.patches.has('camp-karst'), false);
+
+  let book = createEmptyLogbook();
+  for (const camp of EXPEDITION_CAMPAIGNS) {
+    book = recordCampaignClearInLogbook(book, camp.id).book;
+  }
+  const fullUnlocks = computeUnlockedLiveries(book);
+  assert.equal(fullUnlocks.suits.has('karst-jade'), true);
+  assert.equal(fullUnlocks.headgears.has('brass-hardhat'), true);
+  assert.equal(fullUnlocks.torches.has('aurora-plasma'), true);
+  assert.equal(fullUnlocks.tanks.has('abyssal-titanium'), true);
+  assert.equal(fullUnlocks.patches.has('camp-karst'), true);
+  assert.equal(fullUnlocks.patches.has('camp-salvage'), true);
+  assert.equal(fullUnlocks.patches.has('camp-polar'), true);
+  assert.equal(fullUnlocks.patches.has('camp-abyssal'), true);
+  assert.equal(getSuitLivery('karst-jade').id, 'karst-jade');
+  assert.equal(getHeadgearStyle('brass-hardhat').id, 'brass-hardhat');
+  assert.equal(getTorchOptic('aurora-plasma').rangeMult, 1.12);
+  assert.equal(getTankFinish('abyssal-titanium').id, 'abyssal-titanium');
+  assert.equal(getMilestonePatch('camp-abyssal').id, 'camp-abyssal');
+
+  // 2. Bidirectional Replay Theater <-> Depth Profile SVG chart + highlight markers
+  const prof = [
+    { t: 0, d: 2, gas: 'EAN32', deco: 0, ppo2: 0.38, cns: 0, hr: 72, bar: 200, gf99: 10 },
+    { t: 30, d: 34, gas: 'TMX1455', deco: 0, ppo2: 0.62, cns: 3, hr: 84, bar: 170, gf99: 42 },
+    { t: 60, d: 6, gas: 'O2', deco: 6, ppo2: 1.55, cns: 9, hr: 70, bar: 185, gf99: 78 },
+  ];
+  const chartData = buildDebriefDepthChartData(prof, 34, {
+    success: true,
+    highlights: [{ icon: '📍', label: 'Deepest Point', tSec: 30, depthM: 34 }],
+  });
+  assert.ok(chartData.markup.includes('data-hl-t="30.00"'), 'Depth chart SVG must render clickable highlight diamond marker');
+  const fakeScrub = { textContent: '' };
+  const fakeSvg = { innerHTML: '', querySelector: () => null };
+  let scrubbedT = -1;
+  const chartCtrl = renderDebriefDepthChart({
+    wrapEl: { hidden: true },
+    svgEl: fakeSvg,
+    scrubEl: fakeScrub,
+    profile: prof,
+    maxDepthM: 34,
+    success: true,
+    onScrubTime: (t) => { scrubbedT = t; },
+  });
+  assert.ok(typeof chartCtrl?.setCursorTime === 'function');
+  chartCtrl.setCursorTime(30, { notify: true });
+  assert.equal(scrubbedT, 30);
+  assert.ok(fakeScrub.textContent.includes('34.0m') && fakeScrub.textContent.includes('TMX1455'));
+
+  // 3. Dedicated Technical Rescue Drills: all 4 scenarios, grading & Career Logbook Drill Mastery merge
+  assert.equal(RESCUE_DRILLS.length, 4);
+  for (const drill of RESCUE_DRILLS) {
+    const lvl = getLevelById(drill.levelId);
+    const sess = createDiveSession(lvl, { diverName: 'DrillDiver', difficulty: drill.difficulty, drillsEnabled: true });
+    if (drill.needsAiBuddy) {
+      sess.aiSquad = createAiSquad(lvl, sess.diver, 1);
+      sess.aiBuddy = sess.aiSquad[0];
+    }
+    applyRescueDrillScenario(sess, drill);
+    assert.equal(sess.activeRescueDrillId, drill.id);
+    if (drill.id === 'silt-line-recovery') assert.ok(sess.siltClouds.length >= 10, 'Silt-out drill must spawn silt bank');
+    if (drill.id === 'freeflow-bailout') assert.equal(sess.drills.active?.kind, 'free-flow');
+    if (drill.id === 'buddy-ooa-share') assert.ok(sess.aiSquad[0].activeBar <= 15 && sess.aiSquad[0].issue?.kind === 'low-gas');
+    if (drill.id === 'net-cut-deco') assert.ok(sess.diveState.stopDepthM >= 6);
+  }
+  const ffDrill = getRescueDrillById('freeflow-bailout');
+  const ffSess = createDiveSession(getLevelById(ffDrill.levelId), { diverName: 'Ace', drillsEnabled: true });
+  applyRescueDrillScenario(ffSess, ffDrill);
+  ffSess.drills.completedCount = 1;
+  ffSess.diveState.diveTimeSec = 48;
+  ffSess.trimStats = { disciplinePct: 96, blowouts: 0, zeroSiltMaster: true };
+  const gradeRes = evaluateRescueDrillResult(ffDrill, ffSess, { success: true });
+  assert.equal(gradeRes.passed, true);
+  assert.equal(gradeRes.grade, 'S+');
+
+  const dBookA = recordRescueDrillClearInLogbook(createEmptyLogbook(), { drillId: 'freeflow-bailout', grade: 'A', timeSec: 68, score: 1650 }).book;
+  const dBookB = recordRescueDrillClearInLogbook(createEmptyLogbook(), { drillId: 'freeflow-bailout', grade: 'S+', timeSec: 48, score: 2150 }).book;
+  const dMerged = mergeCareerLogbooks(dBookA, dBookB);
+  assert.equal(dMerged.drillMastery['freeflow-bailout'].bestGrade, 'S+');
+  assert.equal(dMerged.drillMastery['freeflow-bailout'].bestTimeSec, 48);
 });

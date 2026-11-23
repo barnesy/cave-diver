@@ -50,6 +50,12 @@ export const EXPEDITION_CAMPAIGNS = Object.freeze([
     accent: '#2dd4bf',
     desc: 'Master crystal cenote haloclines, Florida sinkholes, and deep unlined Yucatán traverses across 3 linked dives.',
     legs: Object.freeze(['cenote-el-abismo', 'eagles-nest-sink', 'ox-bel-ha-grand-traverse']),
+    reward: Object.freeze({
+      patchId: 'camp-karst',
+      itemType: 'suit',
+      itemId: 'karst-jade',
+      label: '🌿 Karst Jade Drysuit + 🧭 Crest Patch',
+    }),
   }),
   Object.freeze({
     id: 'wreck-salvage',
@@ -59,6 +65,12 @@ export const EXPEDITION_CAMPAIGNS = Object.freeze([
     accent: '#fb923c',
     desc: 'Descend from Red Sea WWII cargo holds to North Sea U-boats and the 120m Aegean hull of HMHS Britannic.',
     legs: Object.freeze(['ss-thistlegorm-wreck', 'u1206-north-sea-sub', 'hmhs-britannic']),
+    reward: Object.freeze({
+      patchId: 'camp-salvage',
+      itemType: 'headgear',
+      itemId: 'brass-hardhat',
+      label: '🪖 Brass Salvage Helmet + ⚓ Crest Patch',
+    }),
   }),
   Object.freeze({
     id: 'iceland-survey',
@@ -72,6 +84,12 @@ export const EXPEDITION_CAMPAIGNS = Object.freeze([
       'strytan-hydrothermal-chimneys',
       'kverkfjoll-subglacial-caves',
     ]),
+    reward: Object.freeze({
+      patchId: 'camp-polar',
+      itemType: 'torch',
+      itemId: 'aurora-plasma',
+      label: '🌌 Aurora Plasma 9000K Optic + 🌋 Crest Patch',
+    }),
   }),
   Object.freeze({
     id: 'abyssal-record',
@@ -81,6 +99,12 @@ export const EXPEDITION_CAMPAIGNS = Object.freeze([
     accent: '#c084fc',
     desc: 'Extreme hypoxic Trimix progression across three of Earth’s deepest flooded shafts culminating in 198m Krubera-Voronya.',
     legs: Object.freeze(['boesmansgat-abyss', 'boy-bulok-asian-sump', 'krubera-voronya-sump']),
+    reward: Object.freeze({
+      patchId: 'camp-abyssal',
+      itemType: 'tank',
+      itemId: 'abyssal-titanium',
+      label: '💠 Abyssal Carbon-Ti Twinset + 🌌 Crest Patch',
+    }),
   }),
 ]);
 

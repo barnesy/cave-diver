@@ -3,7 +3,7 @@ import { getLevelById, getLevelMaxDepthM } from '../levels/index.js';
 
 const REPLAY_SPEEDS = [1, 2, 4];
 
-export function createReplayPlayer({ canvas, metaEl, playBtn, scrubber, speedBtn }) {
+export function createReplayPlayer({ canvas, metaEl, playBtn, scrubber, speedBtn, onTimeUpdate = null }) {
   const state = {
     level: null,
     samples: [],
@@ -15,7 +15,9 @@ export function createReplayPlayer({ canvas, metaEl, playBtn, scrubber, speedBtn
     lastTs: 0,
   };
 
-  function draw() {
+  let timeListener = typeof onTimeUpdate === 'function' ? onTimeUpdate : null;
+
+  function draw({ notify = true } = {}) {
     if (!canvas || !state.level || state.samples.length === 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -30,6 +32,9 @@ export function createReplayPlayer({ canvas, metaEl, playBtn, scrubber, speedBtn
       const tCur = formatReplayTime(pose.t);
       const tTot = formatReplayTime(pose.totalSec);
       metaEl.textContent = `${tCur} / ${tTot} · ${Math.max(0, pose.y).toFixed(1)}m`;
+    }
+    if (notify && pose && typeof timeListener === 'function') {
+      timeListener(pose.t, state.progress);
     }
   }
 
@@ -100,15 +105,19 @@ export function createReplayPlayer({ canvas, metaEl, playBtn, scrubber, speedBtn
     draw();
   });
 
-  function seekToTime(tSec) {
+  function seekToTime(tSec, { notify = true } = {}) {
     if (!state.level || state.samples.length < 2) return;
     stop();
     const totalSec = Math.max(1, state.samples[state.samples.length - 1]?.t || 20);
     state.progress = Math.max(0, Math.min(1, (Number(tSec) || 0) / totalSec));
-    draw();
+    draw({ notify });
   }
 
-  return { load, play, stop, draw, seekToTime };
+  function setOnTimeUpdate(fn) {
+    timeListener = typeof fn === 'function' ? fn : null;
+  }
+
+  return { load, play, stop, draw, seekToTime, setOnTimeUpdate };
 }
 
 /**

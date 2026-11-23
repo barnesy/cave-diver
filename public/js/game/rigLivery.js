@@ -95,6 +95,20 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: 'Clear 12+ sites or log 8+ species',
     isUnlocked: (stats) => stats.sitesCleared >= 12 || stats.speciesLogged >= 8,
   },
+  {
+    id: 'karst-jade',
+    name: 'Karst Jade Explorer',
+    suitTop: '#0f766e',
+    suitMid: '#115e59',
+    suitBot: '#042f2e',
+    accent: '#f59e0b',
+    trim: '#99f6e4',
+    finColor: '#134e4a',
+    finTip: '#2dd4bf',
+    stageBand: '#fbbf24',
+    unlockHint: 'Complete Yucatán & Karst Circuit Campaign',
+    isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('cenote-circuit')),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -154,6 +168,20 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: 'Clear 5+ sites or log 4+ species',
     isUnlocked: (stats) => stats.sitesCleared >= 5 || stats.speciesLogged >= 4,
   },
+  {
+    id: 'aurora-plasma',
+    name: '9000K Aurora Plasma',
+    shortLabel: 'Aurora 9000K',
+    swatch: '#38bdf8',
+    coreRgb: '207, 250, 254',
+    shaftRgb: '56, 189, 248',
+    warmRgb: '165, 243, 252',
+    rangeMult: 1.12,
+    siltPierce: 0.22,
+    specText: 'Subglacial aurora arc · +12% reach & +22% silt pierce',
+    unlockHint: 'Complete Iceland Geothermal Survey Campaign',
+    isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('iceland-survey')),
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -163,6 +191,10 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'wreck-penetrator', icon: '⚓', name: 'Wreck Tech', unlockHint: '1+ wreck or 5+ clears', isUnlocked: (s) => s.wreckClears >= 1 || s.sitesCleared >= 5 },
   { id: 'wildlife-biologist', icon: '📷', name: 'Marine Bio', unlockHint: '5+ Field Guide species', isUnlocked: (s) => s.speciesLogged >= 5 },
   { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', unlockHint: '10+ clears', isUnlocked: (s) => s.sitesCleared >= 10 },
+  { id: 'camp-karst', icon: '🧭', name: 'Karst Pioneer', unlockHint: 'Yucatán & Karst Circuit Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('cenote-circuit')) },
+  { id: 'camp-salvage', icon: '🎖️', name: 'Master Salvager', unlockHint: 'Maritime Wreck Salvage Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')) },
+  { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', unlockHint: 'Iceland Geothermal Survey Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
+  { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', unlockHint: 'Abyssal World Record Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -197,6 +229,14 @@ export const HEADGEAR_STYLES = Object.freeze([
     specText: 'Comms full-face visor + interior HUD glow',
     unlockHint: 'Emergency Troubleshooter or 5+ sites',
     isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 5,
+  },
+  {
+    id: 'brass-hardhat',
+    name: 'Brass Salvage Helmet',
+    icon: '🪖',
+    specText: 'Riveted bronze deep-salvage dome + heavy collar',
+    unlockHint: 'Complete Maritime Wreck Salvage Campaign',
+    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')),
   },
 ]);
 
@@ -342,6 +382,17 @@ export const TANK_FINISHES = Object.freeze([
     ccrShell: '#d97706',
     unlockHint: 'Bulkhead Engineer cert or 2+ wrecks',
     isUnlocked: (s) => (s.pressurizedEqualizations || 0) >= 1 || s.wreckClears >= 2,
+  },
+  {
+    id: 'abyssal-titanium',
+    name: 'Abyssal Carbon-Ti',
+    top: '#e0e7ff',
+    mid: '#6366f1',
+    bot: '#1e1b4b',
+    stroke: '#c084fc',
+    ccrShell: '#818cf8',
+    unlockHint: 'Complete Abyssal World Record Campaign',
+    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')),
   },
 ]);
 
@@ -542,10 +593,12 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     ? Object.keys(logbook.fieldGuide).length
     : 0;
   const ms = logbook?.milestones && typeof logbook.milestones === 'object' ? logbook.milestones : {};
+  const completedCampaigns = new Set(Array.isArray(logbook?.completedCampaigns) ? logbook.completedCampaigns : []);
   const stats = {
     sitesCleared,
     wreckClears,
     speciesLogged,
+    completedCampaigns,
     pressurizedEqualizations: Math.max(0, Number(ms.pressurizedEqualizations) || 0),
     cleanSalvageLifts: Math.max(0, Number(ms.cleanSalvageLifts) || 0),
     drillsCompleted: Math.max(0, Number(ms.drillsCompleted) || 0),

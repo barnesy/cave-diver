@@ -8607,3 +8607,64 @@ summary,
   flex-wrap: wrap;
 }
 
+/* v174 Campaign Mastery Rewards & Technical Rescue Drills Mode */
+.campaign-reward-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  font-size: 0.7rem;
+  color: #fde68a;
+  font-weight: 700;
+}
+.campaign-reward-strip.unlocked {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.52);
+  color: #a7f3d0;
+}
+.drill-mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.drill-mastery-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.36);
+}
+.drill-mastery-card.locked {
+  opacity: 0.58;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+.drill-mastery-card.cleared {
+  border-color: rgba(52, 211, 153, 0.52);
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.32), rgba(15, 23, 42, 0.88));
+}
+.drill-mastery-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.drill-mastery-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.drill-mastery-copy strong {
+  font-size: 0.74rem;
+  color: #f1f5f9;
+}
+.drill-mastery-copy span {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+

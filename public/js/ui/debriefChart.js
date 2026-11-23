@@ -36,7 +36,7 @@ function defaultEscapeHtml(str) {
 export function buildDebriefDepthChartData(
   profile,
   maxDepthM,
-  { success = true, peerProfiles = null, formatRunClock = defaultFormatClock, escapeHtml = defaultEscapeHtml } = {}
+  { success = true, peerProfiles = null, highlights = null, formatRunClock = defaultFormatClock, escapeHtml = defaultEscapeHtml } = {}
 ) {
   if (!Array.isArray(profile) || profile.length < 2) {
     return null;
@@ -112,6 +112,20 @@ export function buildDebriefDepthChartData(
   markup += `<circle cx="${sx(endP.t).toFixed(1)}" cy="${sy(endP.d).toFixed(1)}" r="3.4" fill="${success ? '#34d399' : '#ef4444'}" stroke="#0f172a" stroke-width="1.2"/>`;
   markup += `<text x="${CHART_W - PAD_R}" y="${CHART_H - 4}" text-anchor="end" fill="#94a3b8" font-size="9" font-family="ui-monospace,monospace">${formatRunClock(maxT)}</text>`;
 
+  // Clickable Black-Box Highlight & Pin diamond markers along the depth profile (v174)
+  if (Array.isArray(highlights) && highlights.length > 0) {
+    for (let hi = 0; hi < Math.min(8, highlights.length); hi++) {
+      const hl = highlights[hi];
+      const ht = Math.max(0, Math.min(maxT, Number(hl?.tSec) || 0));
+      const sample = sampleDiveProfileAtTime(profile, ht);
+      const hd = Number.isFinite(hl?.depthM) && hl.depthM > 0 ? hl.depthM : (sample?.d ?? 0);
+      const hx = sx(ht).toFixed(1);
+      const hy = sy(Math.min(maxD, Math.max(0, hd))).toFixed(1);
+      const titleTxt = escapeHtml(`${hl.icon || '★'} ${hl.label || 'Highlight'} (${formatRunClock(ht)})`);
+      markup += `<g class="debrief-hl-marker" data-hl-t="${ht.toFixed(2)}" style="cursor:pointer"><title>${titleTxt}</title><polygon points="${hx},${(Number(hy) - 4.4).toFixed(1)} ${(Number(hx) + 4.4).toFixed(1)},${hy} ${hx},${(Number(hy) + 4.4).toFixed(1)} ${(Number(hx) - 4.4).toFixed(1)},${hy}" fill="#facc15" stroke="#0f172a" stroke-width="1.1"/></g>`;
+    }
+  }
+
   if (buddyTraces.length > 0) {
     const names = buddyTraces
       .slice(0, 2)
@@ -147,19 +161,22 @@ export function renderDebriefDepthChart({
   maxDepthM,
   success,
   peerProfiles = null,
+  highlights = null,
+  onScrubTime = null,
   formatRunClock = defaultFormatClock,
   escapeHtml = defaultEscapeHtml,
 }) {
-  if (!wrapEl || !svgEl) return;
+  if (!wrapEl || !svgEl) return null;
   const chart = buildDebriefDepthChartData(profile, maxDepthM, {
     success,
     peerProfiles,
+    highlights,
     formatRunClock,
     escapeHtml,
   });
   if (!chart) {
     wrapEl.hidden = true;
-    return;
+    return null;
   }
   wrapEl.hidden = false;
   svgEl.innerHTML = chart.markup;
@@ -167,16 +184,13 @@ export function renderDebriefDepthChart({
   const cursorGroup = svgEl.querySelector?.('#debrief-scrub-cursor');
   const cursorLine = svgEl.querySelector?.('#debrief-scrub-line');
   const cursorDot = svgEl.querySelector?.('#debrief-scrub-dot');
-  const defaultScrubHint = 'Hover or drag across the depth curve to inspect PPO₂, CNS%, GF99%, Heart Rate & Tank Bar';
+  const defaultScrubHint = 'Hover or drag across the depth curve to scrub Dive Replay & inspect PPO₂, CNS%, GF99%, HR & Bar';
   if (scrubEl) scrubEl.textContent = defaultScrubHint;
 
-  const updateScrubFromClientX = (clientX) => {
-    const rect = svgEl.getBoundingClientRect?.();
-    if (!rect || rect.width <= 0) return;
-    const svgX = ((clientX - rect.left) / rect.width) * CHART_W;
-    const clampedFrac = Math.max(0, Math.min(1, (svgX - PAD_L) / PLOT_W));
-    const sample = sampleDiveProfileAtTime(profile, clampedFrac * chart.maxT);
-    if (!sample) return;
+  const setCursorTime = (tSec, { notify = false } = {}) => {
+    const clampedT = Math.max(0, Math.min(chart.maxT, Number(tSec) || 0));
+    const sample = sampleDiveProfileAtTime(profile, clampedT);
+    if (!sample) return null;
     const cx = chart.sx(sample.t).toFixed(1);
     const cy = chart.sy(sample.d).toFixed(1);
     if (cursorGroup) cursorGroup.setAttribute('visibility', 'visible');
@@ -193,11 +207,37 @@ export function renderDebriefDepthChart({
       scrubEl.textContent =
         `⏱ ${formatRunClock(sample.t)} · ${sample.d.toFixed(1)}m · ${sample.gas} (${sample.bar}b) · PPO₂ ${sample.ppo2.toFixed(2)} · CNS ${sample.cns}% · GF99 ${sample.gf99}% · ♥ ${sample.hr}bpm${decoTxt}`;
     }
+    if (notify && typeof onScrubTime === 'function') {
+      onScrubTime(sample.t);
+    }
+    return sample;
   };
-  svgEl.onpointermove = (e) => updateScrubFromClientX(e.clientX);
-  svgEl.onpointerdown = (e) => updateScrubFromClientX(e.clientX);
-  svgEl.onpointerleave = () => {
+
+  const clearCursor = () => {
     if (cursorGroup) cursorGroup.setAttribute('visibility', 'hidden');
     if (scrubEl) scrubEl.textContent = defaultScrubHint;
   };
+
+  const updateScrubFromClientX = (clientX) => {
+    const rect = svgEl.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0) return;
+    const svgX = ((clientX - rect.left) / rect.width) * CHART_W;
+    const clampedFrac = Math.max(0, Math.min(1, (svgX - PAD_L) / PLOT_W));
+    setCursorTime(clampedFrac * chart.maxT, { notify: true });
+  };
+  svgEl.onpointermove = (e) => updateScrubFromClientX(e.clientX);
+  svgEl.onpointerdown = (e) => {
+    const hlEl = e.target?.closest?.('[data-hl-t]');
+    if (hlEl) {
+      setCursorTime(Number(hlEl.getAttribute('data-hl-t')) || 0, { notify: true });
+      return;
+    }
+    updateScrubFromClientX(e.clientX);
+  };
+  svgEl.onpointerleave = () => {
+    // Keep cursor visible when Replay Theater is actively synced; reset hint text only if no active sync callback
+    if (typeof onScrubTime !== 'function') clearCursor();
+  };
+
+  return { setCursorTime, clearCursor, maxT: chart.maxT };
 }
