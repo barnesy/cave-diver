@@ -628,6 +628,14 @@ export function createDiveSession(
     handOnLinePt: null,
     squeezeDust: [],
     _tankScrapeCooldown: 0,
+    spottedArtifacts: new Set(), // v169 torch-illuminated relics plotted on Wetnotes Survey Slate
+    trimStats: {
+      frogSec: 0,
+      flutterSec: 0,
+      blowouts: 0,
+      disciplinePct: 100,
+      zeroSiltMaster: true,
+    },
     runMilestones: {
       usedLiftBagWithHeavySalvage: false,
       floatUpIncident: false,
@@ -3591,7 +3599,26 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       excludePeerId: session.rescueTargetId || '',
     });
   }
-  stepDiverBody(diver, dt, { thrustMag, level, lungFill: session.breath?.lungFill });
+  // v169 Frog-Kick vs. Flutter-Kick Trim Physics: level controlled swimming = frog-kick, boosted/steep/panicked = flutter-kick
+  const pitchSin = Math.abs(Math.sin(diver.angle));
+  const isBoosting = Boolean(thrust?.boost || dpvThrusting);
+  if (thrustMag < 0.14) {
+    diver.finTechnique = 'glide';
+  } else if (!isBoosting && pitchSin < 0.55 && (diveState.panicLevel || 0) < 0.45) {
+    diver.finTechnique = 'frog';
+  } else {
+    diver.finTechnique = 'flutter';
+  }
+  if (session.trimStats && diver.y > 4.0 && diveState.alive) {
+    if (diver.finTechnique === 'frog') session.trimStats.frogSec += dt;
+    else if (diver.finTechnique === 'flutter') session.trimStats.flutterSec += dt;
+  }
+  stepDiverBody(diver, dt, {
+    thrustMag,
+    level,
+    lungFill: session.breath?.lungFill,
+    finTechnique: diver.finTechnique,
+  });
 
   const netSpeed = dt > 0 ? Math.hypot(diver.x - prevX, diver.y - prevDepthM) / dt : 0;
   const pushingAgainstRock = hit.collided && thrustMag > 0.2 && netSpeed < 1.25 * thrustMag;
@@ -3636,6 +3663,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     difficulty: session.difficulty || 'standard',
     dpvBoost: dpvThrusting,
     mutatorMult: isSiltStorm ? 1.75 : 1.0,
+    finTechnique: diver.finTechnique || 'frog',
   });
   if (isSiltStorm && diver.y > 5.0 && thrustMag > 0.18 && siltClouds.length < 135 && Math.random() < dt * 0.85) {
     const wisp = spawnSiltPlume(siltClouds, {
@@ -3653,12 +3681,43 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   if (heavyWash && siltStirTimer.warnCooldown <= 0) {
     siltStirTimer.warnCooldown = 5.5;
     if (session.runMilestones) session.runMilestones.heavySiltEvents += 1;
+    if (session.trimStats) {
+      session.trimStats.blowouts += 1;
+      session.trimStats.zeroSiltMaster = false;
+    }
     callbacks.onToast?.(
       dpvThrusting
         ? 'DPV propwash stirring heavy silt! Lift off bottom or toggle DPV off [V].'
-        : 'Fin wash stirring floor silt! Lift off the bottom for visibility.',
+        : diver.finTechnique === 'flutter'
+          ? 'Flutter-kick silt blowout! Level trim & ease thrust for clean frog-kick.'
+          : 'Fin wash stirring floor silt! Lift off the bottom for visibility.',
       2.2
     );
+  }
+  if (session.trimStats) {
+    const activeSec = session.trimStats.frogSec + session.trimStats.flutterSec;
+    const frogRatio = activeSec > 1.5 ? session.trimStats.frogSec / activeSec : 1;
+    const blowoutPen = session.trimStats.blowouts * 18;
+    session.trimStats.disciplinePct = Math.max(0, Math.min(100, Math.round(frogRatio * 100 - blowoutPen)));
+    session.trimStats.zeroSiltMaster = session.trimStats.blowouts === 0 && session.trimStats.disciplinePct >= 75;
+  }
+
+  // v169 Wetnotes Survey Slate: spot uncollected relics illuminated by primary torch or proximity
+  if (session.spottedArtifacts && level.collectibles?.length) {
+    const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
+    const tfx = Math.cos(tang);
+    const tfy = Math.sin(tang);
+    const torchActive = diver.torchOn !== false;
+    for (let ci = 0; ci < level.collectibles.length; ci++) {
+      const item = level.collectibles[ci];
+      if (session.collectedIds?.has(item.id) || session.spottedArtifacts.has(item.id)) continue;
+      const cdx = item.x - diver.x;
+      const cdy = item.y - diver.y;
+      const cdist = Math.hypot(cdx, cdy);
+      if (cdist <= 5.2 || (torchActive && cdist <= 13.5 && (cdx * tfx + cdy * tfy) / Math.max(0.01, cdist) > 0.72)) {
+        session.spottedArtifacts.add(item.id);
+      }
+    }
   }
 
   if (hit.collided && hit.impactSpeed > 1.1) {
@@ -4124,6 +4183,10 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
+      trimBonusScore:
+        session.trimStats && session.trimStats.blowouts === 0
+          ? Math.round(((session.trimStats.disciplinePct || 0) / 100) * 250)
+          : Math.round(((session.trimStats?.disciplinePct || 0) / 100) * 100),
       mutatorId: session.mutatorId || '',
     });
 

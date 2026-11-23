@@ -37,7 +37,8 @@ export function createEmptyLogbook() {
     loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
     completedCampaigns: [], // unlocked multi-dive expedition campaign IDs (v160)
     crewBonds: {}, // aiBuddyId -> { dives, clears, rescues } (v161 zero-config passive veteran bond)
-    artifacts: {}, // artifactId -> { name, kind, siteId, siteName, points, count, scale } (v168 Trophy Museum Vault)
+    artifacts: {}, // artifactId -> { name, kind, siteId, siteName, lore, points, count, scale } (v168-v169 Trophy Museum Vault)
+    pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
   };
 }
 
@@ -142,11 +143,16 @@ function normalizeBook(raw) {
         kind: typeof rec.kind === 'string' ? rec.kind.slice(0, 24) : 'relic',
         siteId: typeof rec.siteId === 'string' ? rec.siteId.slice(0, 48) : '',
         siteName: typeof rec.siteName === 'string' ? rec.siteName.slice(0, 64) : '',
+        lore: typeof rec.lore === 'string' ? rec.lore.slice(0, 220) : '',
         points: Math.max(0, Math.round(Number(rec.points) || 0)),
         count: Math.max(1, Math.round(Number(rec.count) || 1)),
         scale: Math.max(0.7, Math.min(2.2, Number(rec.scale) || 1.0)),
       };
     }
+  }
+  if (typeof raw.pinnedArtifactId === 'string') {
+    const pid = raw.pinnedArtifactId.trim().slice(0, 64);
+    if (pid && base.artifacts[pid]) base.pinnedArtifactId = pid;
   }
   return base;
 }
@@ -331,12 +337,15 @@ export function mergeCareerLogbooks(rawA, rawB) {
         kind: aa.kind || ab.kind || 'relic',
         siteId: aa.siteId || ab.siteId || '',
         siteName: aa.siteName || ab.siteName || '',
+        lore: (aa.lore || '').length >= (ab.lore || '').length ? (aa.lore || '') : (ab.lore || ''),
         points: Math.max(aa.points || 0, ab.points || 0),
         count: Math.max(aa.count || 1, ab.count || 1),
         scale: Math.max(aa.scale || 1, ab.scale || 1),
       };
     }
   }
+  const candPin = a.pinnedArtifactId || b.pinnedArtifactId || '';
+  out.pinnedArtifactId = candPin && out.artifacts[candPin] ? candPin : '';
 
   return out;
 }
@@ -1446,6 +1455,7 @@ export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
         entries: book.fieldGuide,
       },
       artifacts: book.artifacts,
+      pinnedArtifactId: book.pinnedArtifactId || '',
       sites,
     },
     null,
@@ -1502,6 +1512,7 @@ export function parseImportedLogbookJson(rawInput) {
       },
       fieldGuide: fgEntries,
       artifacts: data.artifacts && typeof data.artifacts === 'object' ? data.artifacts : {},
+      pinnedArtifactId: typeof data.pinnedArtifactId === 'string' ? data.pinnedArtifactId : '',
     };
   } else if (data.cleared && typeof data.cleared === 'object' && !Array.isArray(data.cleared)) {
     candidate = data;
@@ -1531,9 +1542,71 @@ export function parseImportedLogbookJson(rawInput) {
 }
 
 /**
- * Record a recovered collectible artifact into the persistent Career Trophy Vault (v168).
+ * Curated Museum Artifact Collections (v169).
+ * Groups recovered relics into themed exhibitions with Curator Titles & prestige badges.
  */
-export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', siteId = '', siteName = '', points = 0, scale = 1.0 } = {}) {
+export const ARTIFACT_COLLECTIONS = Object.freeze([
+  {
+    id: 'mayan-cenote',
+    title: 'Mayan & Karst Offerings',
+    icon: '🏺',
+    targetCount: 4,
+    curatorTitle: 'Cenote Archaeologist',
+    accent: '#34d399',
+    matchRe: /maya|jade|obsidian|copal|cenote|amphora|ceramic|pottery|speleothem|offering|ritual|mask|idol|talisman/i,
+  },
+  {
+    id: 'wwii-naval',
+    title: 'WWII Naval & Cargo Relics',
+    icon: '⚓',
+    targetCount: 4,
+    curatorTitle: 'Wreck Historian',
+    accent: '#fb923c',
+    matchRe: /enigma|bedford|motorcycle|bsa|kriegsmarine|telegraph|bridge|wheel|helm|porthole|binocular|spyglass|hoist|bell|naval|carrier|flight|pri-fly|wardroom|radar|gauge|periscope/i,
+  },
+  {
+    id: 'ocean-liner',
+    title: 'Ocean Liner First-Class',
+    icon: '🕰️',
+    targetCount: 4,
+    curatorTitle: 'Maritime Archivist',
+    accent: '#facc15',
+    matchRe: /watch|porcelain|ginori|candelabra|silver|crystal|champagne|stateroom|violin|chime|locket|goblet|tea|plate|china|brooch|ring|pendant|jewelry/i,
+  },
+  {
+    id: 'abyssal-minerals',
+    title: 'Abyssal Fossils & Crystals',
+    icon: '💎',
+    targetCount: 4,
+    curatorTitle: 'Speleo-Mineralogist',
+    accent: '#c084fc',
+    matchRe: /megalodon|tooth|nautilus|trilobite|fossil|pearl|calcite|geode|amethyst|pyrite|quartz|gypsum|selenite|amber|ivory|tusk|coral|mineral|crystal|spire|heart/i,
+  },
+  {
+    id: 'polar-expedition',
+    title: 'Frontier & Polar Instruments',
+    icon: '🧭',
+    targetCount: 4,
+    curatorTitle: 'Expedition Curator',
+    accent: '#38bdf8',
+    matchRe: /sextant|compass|lamp|carbide|bathysphere|core|survey|altimeter|barometer|chronometer|logbook|reel|valve|helmet|regulator|arctic|glacial|nordic|volcanic|basalt|thermal/i,
+  },
+]);
+
+export function classifyArtifactCollection(item) {
+  const name = `${item?.name || ''} ${item?.siteName || ''} ${item?.kind || ''}`;
+  for (const col of ARTIFACT_COLLECTIONS) {
+    if (col.matchRe.test(name)) return col.id;
+  }
+  if (item?.kind === 'fossil' || item?.kind === 'crystal' || item?.kind === 'pearl') return 'abyssal-minerals';
+  if (item?.kind === 'compass' || item?.kind === 'gear') return 'polar-expedition';
+  return 'mayan-cenote';
+}
+
+/**
+ * Record a recovered collectible artifact into the persistent Career Trophy Vault (v168-v169).
+ */
+export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', siteId = '', siteName = '', lore = '', points = 0, scale = 1.0 } = {}) {
   const book = normalizeBook(rawBook);
   const key = String(id || name || '').trim().slice(0, 64);
   if (!key) return { book, isNew: false };
@@ -1544,6 +1617,7 @@ export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', sit
     kind: String(kind || prev?.kind || 'relic').slice(0, 24),
     siteId: String(siteId || prev?.siteId || '').slice(0, 48),
     siteName: String(siteName || prev?.siteName || '').slice(0, 64),
+    lore: String(lore || prev?.lore || '').slice(0, 220),
     points: Math.max(prev?.points || 0, Math.round(Number(points) || 0)),
     count: (prev?.count || 0) + 1,
     scale: Math.max(prev?.scale || 1, Number(scale) || 1),
@@ -1552,7 +1626,57 @@ export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', sit
 }
 
 /**
- * Summarize the player's Career Artifact Trophy Vault against all campaign levels (v168).
+ * Pin (or unpin) a recovered relic as the featured Expedition Postcard & Curator showcase artifact (v169).
+ */
+export function setPinnedArtifactInLogbook(rawBook, artifactId = '') {
+  const book = normalizeBook(rawBook);
+  const cleanId = String(artifactId || '').trim().slice(0, 64);
+  book.pinnedArtifactId = cleanId && book.artifacts[cleanId] ? cleanId : '';
+  return book;
+}
+
+/**
+ * Compute curated museum collection completion & Curator Titles from the Career Trophy Vault (v169).
+ */
+export function getArtifactCollectionProgress(rawBook) {
+  const book = normalizeBook(rawBook);
+  const counts = Object.fromEntries(ARTIFACT_COLLECTIONS.map((c) => [c.id, 0]));
+  for (const [id, rec] of Object.entries(book.artifacts)) {
+    const cid = classifyArtifactCollection({ id, ...rec });
+    counts[cid] = (counts[cid] || 0) + 1;
+  }
+  const collections = ARTIFACT_COLLECTIONS.map((c) => {
+    const recovered = counts[c.id] || 0;
+    const completed = recovered >= c.targetCount;
+    return {
+      id: c.id,
+      title: c.title,
+      icon: c.icon,
+      curatorTitle: c.curatorTitle,
+      accent: c.accent,
+      recovered,
+      targetCount: c.targetCount,
+      completed,
+      pct: Math.min(100, Math.round((recovered / Math.max(1, c.targetCount)) * 100)),
+    };
+  });
+  const completedCount = collections.filter((c) => c.completed).length;
+  const highestCuratorTitle =
+    completedCount >= 5
+      ? 'Grand Abyssal Curator'
+      : completedCount > 0
+        ? collections.find((c) => c.completed).curatorTitle
+        : 'Field Collector';
+  return {
+    collections,
+    completedCount,
+    totalCollections: collections.length,
+    highestCuratorTitle,
+  };
+}
+
+/**
+ * Summarize the player's Career Artifact Trophy Vault against all campaign levels (v168-v169).
  */
 export function getArtifactVaultStats(rawBook, levels = []) {
   const book = normalizeBook(rawBook);
@@ -1560,12 +1684,23 @@ export function getArtifactVaultStats(rawBook, levels = []) {
   for (let i = 0; i < levels.length; i++) {
     totalCatalog += Array.isArray(levels[i]?.collectibles) ? levels[i].collectibles.length : 0;
   }
-  const items = Object.entries(book.artifacts).map(([id, rec]) => ({ id, ...rec }));
-  items.sort((a, b) => (b.points || 0) - (a.points || 0) || a.name.localeCompare(b.name));
+  const items = Object.entries(book.artifacts).map(([id, rec]) => ({
+    id,
+    ...rec,
+    collectionId: classifyArtifactCollection({ id, ...rec }),
+    pinned: book.pinnedArtifactId === id,
+  }));
+  items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.points || 0) - (a.points || 0) || a.name.localeCompare(b.name));
+  const pinnedArtifact = book.pinnedArtifactId && book.artifacts[book.pinnedArtifactId]
+    ? { id: book.pinnedArtifactId, ...book.artifacts[book.pinnedArtifactId] }
+    : null;
   return {
     recoveredCount: items.length,
     totalCatalog: Math.max(items.length, totalCatalog),
     totalValue: items.reduce((acc, x) => acc + (x.points || 0), 0),
+    pinnedArtifactId: book.pinnedArtifactId || '',
+    pinnedArtifact,
+    collections: getArtifactCollectionProgress(book),
     items,
   };
 }

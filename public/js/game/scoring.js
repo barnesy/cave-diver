@@ -113,6 +113,7 @@ export const MAX_PHOTO_BONUS = 300;
 export const MAX_ENCOUNTER_BONUS = 180;
 export const MAX_DRILL_BONUS = 600;
 export const MAX_WEATHER_BONUS = 250;
+export const MAX_TRIM_BONUS = 250;
 
 /**
  * Score a single diver's completed (or aborted) cave traverse across:
@@ -132,6 +133,7 @@ export function computeDiverScoreSummary({
   encounterBonusScore = 0,
   drillBonusScore = 0,
   weatherBonusScore = 0,
+  trimBonusScore = 0,
   mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
@@ -175,6 +177,7 @@ export function computeDiverScoreSummary({
   const cleanEncounterBonus = alive ? Math.min(MAX_ENCOUNTER_BONUS, Math.max(0, Math.round(Number(encounterBonusScore) || 0))) : 0;
   const cleanDrillBonus = alive ? Math.min(MAX_DRILL_BONUS, Math.max(0, Math.round(Number(drillBonusScore) || 0))) : 0;
   const cleanWeatherBonus = alive ? Math.min(MAX_WEATHER_BONUS, Math.max(0, Math.round(Number(weatherBonusScore) || 0))) : 0;
+  const cleanTrimBonus = alive ? Math.min(MAX_TRIM_BONUS, Math.max(0, Math.round(Number(trimBonusScore) || 0))) : 0;
   const totalScore =
     healthScore +
     speedScore +
@@ -185,9 +188,10 @@ export function computeDiverScoreSummary({
     cleanPhotoBonus +
     cleanEncounterBonus +
     cleanDrillBonus +
-    cleanWeatherBonus;
+    cleanWeatherBonus +
+    cleanTrimBonus;
   const baseMaxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
-  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS + MAX_WEATHER_BONUS;
+  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS + MAX_WEATHER_BONUS + MAX_TRIM_BONUS;
   const rank = assignScoreRank(totalScore, alive, baseMaxPossible);
 
   return {
@@ -214,6 +218,7 @@ export function computeDiverScoreSummary({
     encounterBonusScore: cleanEncounterBonus,
     drillBonusScore: cleanDrillBonus,
     weatherBonusScore: cleanWeatherBonus,
+    trimBonusScore: cleanTrimBonus,
     healthScore,
     speedScore,
     totalScore,

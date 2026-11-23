@@ -24,6 +24,7 @@ export class InputController {
     onDropLineCookie,
     onDeploySmb,
     onComputerToggle,
+    onSurveySlateToggle,
     onSignalWheelToggle,
     onPhotoModeToggle,
     onPauseToggle,
@@ -64,6 +65,7 @@ export class InputController {
     this.onDropLineCookie = onDropLineCookie;
     this.onDeploySmb = onDeploySmb;
     this.onComputerToggle = onComputerToggle;
+    this.onSurveySlateToggle = onSurveySlateToggle;
     this.onSignalWheelToggle = onSignalWheelToggle;
     this.onPhotoModeToggle = onPhotoModeToggle;
     this.onPauseToggle = onPauseToggle;
@@ -123,6 +125,9 @@ export class InputController {
       }
       if (code === 'KeyX' && !e.repeat) {
         if (this.onComputerToggle?.()) e.preventDefault();
+      }
+      if (code === 'KeyN' && !e.repeat) {
+        if (this.onSurveySlateToggle?.()) e.preventDefault();
       }
       if (code === 'KeyH' && !e.repeat) {
         if (this.onSignalWheelToggle?.()) e.preventDefault();

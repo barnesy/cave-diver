@@ -136,14 +136,16 @@ function constrainJoint(
 }
 
 /**
- * Advances articulated limbs with a cave-diver frog kick cycle and wall deflection.
+ * Advances articulated limbs with adaptive cave-diver frog-kick vs. flutter-kick cycles and wall deflection (v169).
  */
-export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill = null } = {}) {
+export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill = null, finTechnique = 'frog' } = {}) {
   if (!diver.body) {
     diver.body = createDiverBody(diver.x, diver.y, diver.angle);
   }
   const body = diver.body;
   const speed = Math.hypot(diver.vx || 0, diver.vy || 0);
+  const isFlutter = finTechnique === 'flutter';
+  body.finTechnique = finTechnique;
 
   const cosA = Math.cos(diver.angle);
   if (Math.abs(cosA) > 0.15) {
@@ -151,11 +153,13 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill
   }
   body.rollVisual += (body.facingSign - body.rollVisual) * Math.min(1, dt * 10);
 
-  // Frog kick cadence: built directly into swimming; settles into trim glide when coasting
+  // Frog kick cadence is smooth & deliberate; flutter kick is rapid scissor-beating when sprinting or steep-pitched
   const targetPower = clamp(thrustMag * 1.12 + speed * 0.08, 0, 1.25);
   body.kickPower += (targetPower - body.kickPower) * Math.min(1, dt * 5.5);
 
-  const cycleSpeed = body.kickPower > 0.08 ? 0.95 + body.kickPower * 0.85 : 0.25;
+  const cycleSpeed = body.kickPower > 0.08
+    ? (isFlutter ? 1.85 + body.kickPower * 1.45 : 0.95 + body.kickPower * 0.85)
+    : 0.25;
   body.kickPhase = (body.kickPhase + cycleSpeed * dt) % 1.0;
   if (Number.isFinite(lungFill)) {
     body.breathPhase = (lungFill - 0.5) * Math.PI;
@@ -163,7 +167,7 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill
     body.breathPhase += dt * 1.4;
   }
 
-  // Frog kick envelope over normalized cycle u in [0, 1)
+  // Kick envelope over normalized cycle u in [0, 1)
   const u = body.kickPhase;
   const p = clamp(body.kickPower, 0, 1.15);
 
@@ -172,7 +176,7 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill
   const sweepSpread = (smoothstep(0.56, 0.74, u) * (1 - smoothstep(0.84, 0.97, u))) * p;
   const powerSnap = (smoothstep(0.66, 0.82, u) * (1 - smoothstep(0.86, 0.99, u))) * p;
 
-  body.kickSurge = powerSnap;
+  body.kickSurge = isFlutter ? (0.28 + 0.36 * Math.abs(Math.sin(u * Math.PI * 2))) * p : powerSnap;
 
   const fx = Math.cos(diver.angle);
   const fy = Math.sin(diver.angle);
@@ -190,34 +194,43 @@ export function stepDiverBody(diver, dt, { thrustMag = 0, level = null, lungFill
   const targetPelvisY = diver.y - fy * 0.42 + uy * 0.03;
   constrainJoint(torsoAnchor, body.pelvis, targetPelvisX, targetPelvisY, 0.42, 56, dt, level, 0.26, pelvisGuard, upVec);
 
-  // 2. Frog-kick legs (symmetrical in horizontal plane; staggered vertically in 2D side-view)
+  // 2. Articulated legs: elevated high-heel Frog Kick vs. rapid scissor Flutter Kick (v169)
   for (let i = 0; i < 2; i++) {
     const leg = body.legs[i];
     const sideSign = i === 0 ? -1 : 1; // -1 = near/lower leg, +1 = far/upper leg
+    const flutterOsc = isFlutter ? Math.sin((u + i * 0.5) * Math.PI * 2) * p : 0;
 
-    // Base high-heel cave trim: thighs straight back, knees bent upward so fins never drag silt
-    const kneeBack = 0.37 - recoveryAmt * 0.05;
-    const kneeUp = 0.01 + sideSign * (0.035 + sweepSpread * 0.10) - recoveryAmt * 0.02;
+    // Frog-kick keeps knees/heels elevated away from silty floor; flutter-kick scissors downward
+    const kneeBack = isFlutter ? 0.37 : 0.37 - recoveryAmt * 0.05;
+    const kneeUp = isFlutter
+      ? -0.02 + flutterOsc * 0.13 + sideSign * 0.02
+      : 0.02 + sideSign * (0.04 + sweepSpread * 0.12) - recoveryAmt * 0.015;
     const kneeTargetX = body.pelvis.x - fx * kneeBack + ux * kneeUp;
     const kneeTargetY = body.pelvis.y - fy * kneeBack + uy * kneeUp;
     constrainJoint(body.pelvis, leg.knee, kneeTargetX, kneeTargetY, 0.38, 52, dt, level, 0.15, pelvisGuard, upVec);
 
-    // Calf lifts gently in recovery and extends streamlined in power snap
-    const calfBack = 0.31 - recoveryAmt * 0.08 + powerSnap * 0.05;
-    const calfUp = 0.13 + recoveryAmt * 0.09 + sideSign * (0.03 + sweepSpread * 0.11) - powerSnap * 0.06;
+    // Calf lifts high in frog-kick recovery; sweeps lower in scissor flutter-kick
+    const calfBack = isFlutter ? 0.33 : 0.31 - recoveryAmt * 0.08 + powerSnap * 0.05;
+    const calfUp = isFlutter
+      ? 0.02 + flutterOsc * 0.22
+      : 0.16 + recoveryAmt * 0.10 + sideSign * (0.035 + sweepSpread * 0.12) - powerSnap * 0.05;
     const ankleTargetX = leg.knee.x - fx * calfBack + ux * calfUp;
     const ankleTargetY = leg.knee.y - fy * calfBack + uy * calfUp;
     constrainJoint(leg.knee, leg.ankle, ankleTargetX, ankleTargetY, 0.36, 48, dt, level, 0.13, calfGuard, upVec);
 
     // Fin trails smoothly behind ankle aligned with swim direction
     const finBack = 0.42;
-    const finPitch = (recoveryAmt * 0.04 - powerSnap * 0.06) + sideSign * sweepSpread * 0.05;
+    const finPitch = isFlutter
+      ? flutterOsc * 0.18
+      : (recoveryAmt * 0.04 - powerSnap * 0.06) + sideSign * sweepSpread * 0.05;
     const finTargetX = leg.ankle.x - fx * finBack + ux * finPitch;
     const finTargetY = leg.ankle.y - fy * finBack + uy * finPitch;
     constrainJoint(leg.ankle, leg.finTip, finTargetX, finTargetY, 0.42, 54, dt, level, 0.09, finGuard, upVec);
 
     // Blade feathering: thin edge-on during recovery, wide cupped paddle during power snap
-    const targetOpen = clamp(0.55 - recoveryAmt * 0.32 + powerSnap * 0.55, 0.22, 1.1);
+    const targetOpen = isFlutter
+      ? clamp(0.62 + Math.abs(flutterOsc) * 0.42, 0.3, 1.1)
+      : clamp(0.55 - recoveryAmt * 0.32 + powerSnap * 0.55, 0.22, 1.1);
     leg.finOpen += (targetOpen - leg.finOpen) * Math.min(1, dt * 12);
   }
 

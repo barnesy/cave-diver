@@ -8165,3 +8165,140 @@ test('v168 Expedition Masterpiece: Artifact Trophy Vault, Wreck Interiors, Tensi
   });
   assert.equal(okCard, true);
 });
+
+test('v169 Curator Museum Inspector, Topside Atmosphere, Wetnotes Survey Slate, Frog-Kick Trim & Underwater Lighting', async () => {
+  const {
+    ARTIFACT_COLLECTIONS,
+    classifyArtifactCollection,
+    recordArtifactInLogbook,
+    setPinnedArtifactInLogbook,
+    getArtifactCollectionProgress,
+    getArtifactVaultStats,
+  } = await import('../public/js/game/logbookModel.js');
+  const { renderSurveySlate } = await import('../public/js/game/surveySlate.js');
+  const { stirFloorSilt } = await import('../public/js/game/silt.js');
+  const { computeDiverScoreSummary, MAX_TRIM_BONUS } = await import('../public/js/game/scoring.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Curator Collections, Lore Persistence & Pinned Postcard Relic
+  assert.equal(ARTIFACT_COLLECTIONS.length, 5);
+  assert.equal(classifyArtifactCollection({ name: 'Maya Jade Pendant', kind: 'relic' }), 'mayan-cenote');
+  assert.equal(classifyArtifactCollection({ name: 'Kriegsmarine Enigma Rotor', kind: 'relic' }), 'wwii-naval');
+  assert.equal(classifyArtifactCollection({ name: 'Ginori Porcelain Dinner Plate', kind: 'relic' }), 'ocean-liner');
+  assert.equal(classifyArtifactCollection({ name: 'Megalodon Tooth', kind: 'fossil' }), 'abyssal-minerals');
+  assert.equal(classifyArtifactCollection({ name: '1899 Arctic Brass Sextant', kind: 'relic' }), 'polar-expedition');
+
+  let book = createEmptyLogbook();
+  for (const [id, name] of [
+    ['m1', 'Maya Jade Pendant'],
+    ['m2', 'Obsidian Offering Mask'],
+    ['m3', 'Submerged Copal Amber'],
+    ['m4', 'Sunken Provençal Amphora'],
+  ]) {
+    book = recordArtifactInLogbook(book, { id, name, kind: 'relic', siteId: LEVEL_1.id, siteName: LEVEL_1.name, lore: 'Historical provenance', points: 300 }).book;
+  }
+  book = setPinnedArtifactInLogbook(book, 'm2');
+  const colProg = getArtifactCollectionProgress(book);
+  assert.equal(colProg.completedCount, 1);
+  assert.equal(colProg.highestCuratorTitle, 'Cenote Archaeologist');
+  const vault = getArtifactVaultStats(book, LEVELS);
+  assert.equal(vault.pinnedArtifactId, 'm2');
+  assert.equal(vault.items[0].id, 'm2', 'Pinned showcase relic should sort first');
+
+  const merged = mergeCareerLogbooks(createEmptyLogbook(), book);
+  assert.equal(merged.pinnedArtifactId, 'm2');
+  assert.equal(merged.artifacts.m2.lore, 'Historical provenance');
+  const parsed = parseImportedLogbookJson(exportLogbookToJson({ ...book, totalDives: 1 }, LEVELS));
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.book.pinnedArtifactId, 'm2');
+
+  // 2. Frog-Kick vs Flutter-Kick Trim Physics & Silt Discipline Scoring
+  const sess = createDiveSession(LEVEL_1, { diverName: 'TrimMaster' });
+  const glPt = LEVEL_1.guideline[1];
+  sess.diver.x = glPt.x;
+  sess.diver.y = Math.max(8, glPt.y);
+  sess.diver.angle = 0.05; // level cave trim
+  stepDiveSession(sess, { x: 0.65, y: 0, boost: false }, 0.12, {});
+  assert.equal(sess.diver.finTechnique, 'frog', 'Controlled level swimming must engage Frog-Kick trim');
+
+  stepDiveSession(sess, { x: 1.0, y: 0.7, boost: true }, 0.12, {});
+  assert.equal(sess.diver.finTechnique, 'flutter', 'Boosted steep swimming must engage Flutter-Kick');
+
+  // Verify Frog-Kick cuts floor silt accumulation drastically vs Flutter-Kick
+  const tFrog = { accum: 0 };
+  const tFlut = { accum: 0 };
+  const cFrog = [];
+  const cFlut = [];
+  const floorProbeDiver = { x: LEVEL_1.guideline[2].x, y: LEVEL_1.guideline[2].y + 1.2, vx: 1.1, vy: 0, angle: 0 };
+  // Find a spot near floor
+  let testY = floorProbeDiver.y;
+  for (let probe = 0; probe < 12; probe += 0.25) {
+    if (evaluateCaveSDF(LEVEL_1, floorProbeDiver.x, floorProbeDiver.y + probe) >= 0) {
+      testY = floorProbeDiver.y + probe - 0.55;
+      break;
+    }
+  }
+  floorProbeDiver.y = testY;
+  for (let k = 0; k < 25; k++) {
+    stirFloorSilt(LEVEL_1, floorProbeDiver, cFrog, { dt: 0.1, thrustMag: 0.8, timerState: tFrog, finTechnique: 'frog' });
+    stirFloorSilt(LEVEL_1, floorProbeDiver, cFlut, { dt: 0.1, thrustMag: 0.8, timerState: tFlut, finTechnique: 'flutter' });
+  }
+  assert.ok(cFlut.length > cFrog.length, `Flutter kick (${cFlut.length}) should stir more floor silt than Frog kick (${cFrog.length})`);
+
+  const sumTrim = computeDiverScoreSummary({
+    level: LEVEL_1,
+    diveState: sess.diveState,
+    checkpointsHit: new Set(LEVEL_1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(LEVEL_1.collectibles.map((c) => c.id)),
+    exploredCount: 100,
+    totalExploreCells: 100,
+    trimBonusScore: MAX_TRIM_BONUS,
+  });
+  assert.equal(sumTrim.trimBonusScore, MAX_TRIM_BONUS);
+  assert.ok(sumTrim.totalScore <= computeLevelMaxScore(LEVEL_1.id, false), 'Trim bonus must stay within leaderboard max ceiling');
+
+  // 3. Wetnotes Fog-of-War Survey Slate + Torch Artifact Spotting
+  const firstRelic = LEVEL_1.collectibles[0];
+  sess.diver.x = firstRelic.x - 2.0;
+  sess.diver.y = firstRelic.y;
+  sess.diver.angle = 0;
+  sess.diver.torchAngle = 0;
+  sess.diver.torchOn = true;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.05, {});
+  assert.equal(sess.spottedArtifacts.has(firstRelic.id), true, 'Torch/proximity must plot uncollected relics on Wetnotes Survey Slate');
+
+  const noopCtx = new Proxy(
+    {
+      globalAlpha: 1,
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 52 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  assert.equal(renderSurveySlate(noopCtx, 280, 196, sess, 2.5), true);
+
+  // 4. Living Topside Atmosphere + AAA Underwater Lighting smoke test across Wreck, Polar, Cenote
+  const rMock = Object.create(CaveRenderer.prototype);
+  for (const lid of ['ss-thistlegorm-wreck', 'strytan-thermal-vent', LEVEL_1.id]) {
+    rMock.level = LEVELS.find((l) => l.id === lid) || LEVEL_1;
+    rMock._activeWeather = { forceBiolum: true };
+    rMock._drawTopsideAtmosphereExtras(noopCtx, -50, 150, (x) => x * 14, (y) => y * 14, 14, 3.2);
+    rMock._drawTorchMarineSnowAndCaustics(noopCtx, sess.diver, -50, 150, -5, 40, (x) => x * 14, (y) => y * 14, 14, 3.2, 0.9);
+  }
+
+  // 5. Postcard with pinned Curator showcase artifact renders cleanly
+  const okPinnedCard = renderExpeditionPostcard(noopCtx, 1200, 630, {
+    level: LEVEL_1,
+    diverName: 'Curator',
+    grade: 'S+',
+    score: 11200,
+    maxDepthM: 42,
+    diveTimeSec: 185,
+    exploredPct: 98,
+    pinnedArtifact: vault.pinnedArtifact,
+    recoveredArtifacts: LEVEL_1.collectibles.slice(0, 2),
+    version: 'v169',
+  });
+  assert.equal(okPinnedCard, true);
+});

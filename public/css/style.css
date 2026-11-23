@@ -8395,3 +8395,154 @@ summary,
     height: 40px;
   }
 }
+
+/* v169 Wetnotes Survey Slate, Curator Collections & Interactive Museum Specimen Inspector */
+.survey-slate-panel {
+  position: fixed;
+  left: 14px;
+  top: 74px;
+  z-index: 35;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(4, 14, 28, 0.94);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+.survey-slate-panel canvas {
+  display: block;
+  width: 280px;
+  height: 196px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .survey-slate-panel {
+    left: 8px;
+    top: 66px;
+  }
+  .survey-slate-panel canvas {
+    width: 224px;
+    height: 156px;
+  }
+}
+
+.logbook-collections-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.collection-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(9, 21, 39, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+.collection-chip.completed {
+  border-color: rgba(250, 204, 21, 0.68);
+  background: linear-gradient(135deg, rgba(30, 24, 12, 0.88), rgba(10, 24, 44, 0.9));
+}
+.collection-chip-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+.collection-chip-prog {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+.collection-chip-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.collection-chip-title {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.62rem;
+  color: #94a3b8;
+}
+.collection-chip.completed .collection-chip-title {
+  color: #fde047;
+}
+
+.vault-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.vault-card:hover,
+.vault-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(253, 224, 71, 0.75);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  outline: none;
+}
+.vault-card.pinned {
+  border-color: rgba(253, 224, 71, 0.82);
+  box-shadow: 0 0 0 1px rgba(253, 224, 71, 0.32);
+}
+.vault-pin-badge {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  font-size: 0.72rem;
+  color: #fde047;
+}
+
+.artifact-inspector-modal {
+  z-index: 96;
+}
+.artifact-inspector-card {
+  width: min(440px, calc(100vw - 24px));
+}
+.artifact-inspector-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 42%, rgba(24, 52, 92, 0.75), rgba(3, 10, 22, 0.96));
+  border: 1px solid rgba(250, 204, 21, 0.34);
+}
+.artifact-inspector-stage canvas {
+  width: 210px;
+  height: 210px;
+  border-radius: 12px;
+  cursor: grab;
+  touch-action: none;
+}
+.artifact-inspector-stage canvas:active {
+  cursor: grabbing;
+}
+.artifact-inspector-hint {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.64rem;
+  color: #7dd3fc;
+  opacity: 0.82;
+}
+.artifact-inspector-lore {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.48;
+  color: #cbd5e1;
+  text-align: center;
+}
+.artifact-inspector-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}

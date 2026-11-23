@@ -1744,6 +1744,9 @@ export class CaveRenderer {
     if (visY0 < 4.5) {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
+    if (visY0 < 18) {
+      this._drawTopsideAtmosphereExtras(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
+    }
     if (visY0 < 3.8 && surfY >= -24 && surfY <= ch + 24) {
       this._drawSurfaceRipples(ctx, surfaceRipples, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
@@ -1861,6 +1864,7 @@ export class CaveRenderer {
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
     }
+    this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics);
     if (!this.level.isWreck) {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
@@ -8809,6 +8813,318 @@ export class CaveRenderer {
       ctx.textBaseline = 'middle';
       ctx.fillText(lbl, lx, pillY + pillH * 0.5 + 0.5);
     }
+    ctx.restore();
+  }
+
+  /**
+   * Living Topside Entry & Extraction Atmosphere (v169):
+   * - Shipwrecks: Bobbing Diver-Down Float Buoy & taut weighted descent shot-line with 6m O2 deco ring.
+   * - Cenotes/Karst: Overhanging banyan/jungle canopy roots, swaying lianas & drifting surface leaves.
+   * - Arctic/Glacial: Translucent bobbing sea-ice floes with turquoise submerged keels & polar aurora ribbons.
+   */
+  _drawTopsideAtmosphereExtras(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
+    const style = this.level.theme?.surfaceStyle || "";
+    const surfY = toScreenY(0);
+    ctx.save();
+
+    // 1. Shipwrecks: Weighted Descent Shot-Line + Diver-Down Surface Float Buoy
+    if (this.level.isWreck || style === "open-ocean-wreck") {
+      const spawnX = this.level.spawn?.x ?? 0;
+      const buoyX = spawnX + 4.4;
+      if (buoyX + 6 >= visX0 && buoyX - 10 <= visX1) {
+        const shotX = spawnX + 0.35;
+        const sxShot = toScreenX(shotX);
+        const shotBottomM = Math.min(18, Math.max(8, (this.level.spawn?.y ?? 2) + 11));
+        const syBot = toScreenY(shotBottomM);
+        const sway = Math.sin(timeSec * 1.45) * 0.16 * scale;
+
+        // Taut weighted descent shot-line hanging from charter boat into the wreck
+        ctx.strokeStyle = "rgba(254, 240, 138, 0.56)";
+        ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+        ctx.beginPath();
+        ctx.moveTo(sxShot, surfY);
+        ctx.quadraticCurveTo(sxShot + sway, (surfY + syBot) * 0.5, sxShot + sway * 0.4, syBot);
+        ctx.stroke();
+
+        // 6m O2 Deco Stop ring & 12m depth knot tag along the shot-line
+        for (const dm of [6, 12]) {
+          if (dm >= shotBottomM - 1) continue;
+          const dy = toScreenY(dm);
+          const t = dm / shotBottomM;
+          const dx = sxShot + sway * (2 * t * (1 - t) + 0.4 * t * t);
+          ctx.fillStyle = dm === 6 ? "#4ade80" : "#facc15";
+          ctx.beginPath();
+          ctx.arc(dx, dy, Math.max(2.6, 0.11 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          if (scale >= 16) {
+            ctx.font = "800 9px ui-monospace, SFMono-Regular, Menlo, monospace";
+            ctx.fillStyle = dm === 6 ? "rgba(134, 239, 172, 0.88)" : "rgba(253, 224, 71, 0.8)";
+            ctx.textAlign = "left";
+            ctx.fillText(dm === 6 ? "6m O₂ STOP" : "12m SHOT", dx + 6, dy + 3);
+          }
+        }
+
+        // Bobbing Red-and-White Diver-Down Surface Marker Float tethered near boat stern
+        const bx = toScreenX(buoyX);
+        const bob = Math.sin(timeSec * 2.3 + 0.8) * 0.12 * scale;
+        const by = surfY + bob;
+        ctx.strokeStyle = "rgba(226, 232, 240, 0.45)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(sxShot + 2.2 * scale, surfY + 0.08 * scale);
+        ctx.quadraticCurveTo((sxShot + bx) * 0.5, surfY + 0.45 * scale, bx, by + 0.1 * scale);
+        ctx.stroke();
+
+        // Orange-red float body + alpha/diver-down pennant flag
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 0.48 * scale, 0.24 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.fillRect(bx - 0.12 * scale, by - 0.22 * scale, 0.24 * scale, 0.12 * scale);
+        // Flag mast + red/white diagonal diver-down flag
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.beginPath();
+        ctx.moveTo(bx, by - 0.2 * scale);
+        ctx.lineTo(bx, by - 1.15 * scale);
+        ctx.stroke();
+        const fw = 0.72 * scale;
+        const fh = 0.46 * scale;
+        const wave = Math.sin(timeSec * 4.2) * 0.06 * scale;
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.moveTo(bx, by - 1.12 * scale);
+        ctx.lineTo(bx + fw, by - 1.12 * scale + wave);
+        ctx.lineTo(bx + fw, by - 1.12 * scale + fh + wave);
+        ctx.lineTo(bx, by - 1.12 * scale + fh);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.max(1.6, 0.09 * scale);
+        ctx.beginPath();
+        ctx.moveTo(bx + 0.06 * scale, by - 1.06 * scale);
+        ctx.lineTo(bx + fw - 0.06 * scale, by - 1.12 * scale + fh - 0.05 * scale + wave);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    // 2. Arctic / Glacial / Polar Sites: Bobbing Sea-Ice Floes with Cyan Submerged Keels + Aurora Ribbons
+    const isPolar = /nordic|fjord|glacier|iceberg|aurora|strytan|kverk|grjota/i.test(style) || /arctic|ice|glacier|orda|strytan|greenland/i.test(this.level.name || "");
+    if (isPolar) {
+      // Shimmering polar aurora curtains high above the waterline
+      if (surfY > 40) {
+        ctx.globalCompositeOperation = "screen";
+        for (let b = 0; b < 2; b++) {
+          const g = ctx.createLinearGradient(0, Math.max(0, surfY - 210), 0, surfY - 28);
+          g.addColorStop(0, "rgba(52, 211, 153, 0)");
+          g.addColorStop(0.45, b === 0 ? "rgba(52, 211, 153, 0.16)" : "rgba(56, 189, 248, 0.14)");
+          g.addColorStop(1, "rgba(167, 139, 250, 0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          const xStart = toScreenX(visX0 - 4);
+          const xEnd = toScreenX(visX1 + 4);
+          ctx.moveTo(xStart, surfY - 28);
+          for (let px = xStart; px <= xEnd; px += 48) {
+            const wy = surfY - 125 - b * 36 + Math.sin(px * 0.012 + timeSec * (0.55 + b * 0.2) + b * 2) * 26;
+            ctx.lineTo(px, wy);
+          }
+          ctx.lineTo(xEnd, surfY - 28);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
+      }
+      // Translucent floating ice floes inside open basins
+      for (const basin of this.level.openBasins || []) {
+        if (basin.xMax + 4 < visX0 || basin.xMin - 4 > visX1) continue;
+        for (let f = 0; f < 3; f++) {
+          const fx = basin.xMin + 1.8 + ((basin.xMax - basin.xMin - 3.6) * (f + 0.35)) / 3;
+          if (evaluateCaveSDF(this.level, fx, 0.2) > -0.3) continue;
+          const sx = toScreenX(fx);
+          const bob = Math.sin(timeSec * 1.4 + f * 2.1) * 0.08 * scale;
+          const fw = (1.05 + (f % 2) * 0.55) * scale;
+          // Submerged turquoise keel
+          ctx.fillStyle = "rgba(56, 189, 248, 0.42)";
+          ctx.beginPath();
+          ctx.moveTo(sx - fw * 0.88, surfY + bob);
+          ctx.lineTo(sx - fw * 0.55, surfY + bob + 0.58 * scale);
+          ctx.lineTo(sx + fw * 0.45, surfY + bob + 0.66 * scale);
+          ctx.lineTo(sx + fw * 0.85, surfY + bob);
+          ctx.closePath();
+          ctx.fill();
+          // Snow-capped top shelf
+          ctx.fillStyle = "#e0f2fe";
+          ctx.beginPath();
+          ctx.moveTo(sx - fw, surfY + bob);
+          ctx.lineTo(sx - fw * 0.68, surfY + bob - 0.34 * scale);
+          ctx.lineTo(sx + fw * 0.52, surfY + bob - 0.38 * scale);
+          ctx.lineTo(sx + fw, surfY + bob);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      return;
+    }
+
+    // 3. Cenotes & Karst Caves: Hanging Banyan Roots, Swaying Jungle Lianas & Drifting Leaves
+    for (const basin of this.level.openBasins || []) {
+      if (basin.xMax + 8 < visX0 || basin.xMin - 8 > visX1) continue;
+      const waterL = this._basinEdgeCache && typeof this._findBasinCliffEdgeX === "function" ? this._findBasinCliffEdgeX(basin, -0.35, -1) : basin.xMin + 0.5;
+      const waterR = this._basinEdgeCache && typeof this._findBasinCliffEdgeX === "function" ? this._findBasinCliffEdgeX(basin, -0.35, 1) : basin.xMax - 0.5;
+      for (let side = 0; side < 2; side++) {
+        const rimProbeX = side === 0 ? waterL - 1.2 : waterR + 1.2;
+        const rimY = typeof this._getHorizonGroundY === "function" ? this._getHorizonGroundY(this.level, rimProbeX) : -3.4;
+        const baseX = side === 0 ? waterL : waterR;
+        const dir = side === 0 ? 1 : -1;
+        for (let v = 0; v < 3; v++) {
+          const rx = baseX + dir * (0.12 + v * 0.34);
+          const sx = toScreenX(rx);
+          const startWorldY = Math.min(-0.6, rimY + 0.25 + v * 0.18);
+          const topY = toScreenY(startWorldY);
+          const lenM = Math.max(1.4, Math.abs(startWorldY) * (0.72 + (v % 2) * 0.35));
+          const botY = toScreenY(startWorldY + lenM);
+          const sway = Math.sin(timeSec * (1.1 + v * 0.25) + v * 1.7 + side) * 0.26 * scale;
+          ctx.strokeStyle = v === 0 ? "rgba(78, 56, 36, 0.82)" : "rgba(45, 92, 52, 0.72)";
+          ctx.lineWidth = Math.max(1.2, (v === 0 ? 0.08 : 0.045) * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx, topY);
+          ctx.quadraticCurveTo(sx + sway, (topY + botY) * 0.5, sx + sway * 1.25, botY);
+          ctx.stroke();
+          // Tiny hanging vine leaves
+          if (v > 0 && scale >= 12) {
+            ctx.fillStyle = "rgba(74, 152, 82, 0.76)";
+            for (let k = 1; k <= 3; k++) {
+              const lt = k / 4;
+              const lx = sx + sway * (2 * lt * (1 - lt) + 1.25 * lt * lt);
+              const ly = topY + (botY - topY) * lt;
+              ctx.beginPath();
+              ctx.ellipse(lx + (k % 2 === 0 ? 3 : -3), ly, 3.2, 1.5, (k % 2 === 0 ? 0.5 : -0.5), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  /**
+   * AAA Underwater Lighting Pass (v169):
+   * 1. Torch-Beam Volumetric Marine Snow / Rust Motes (deterministic spatial hash, 0 allocations/frame)
+   * 2. Sunlit Shallow Caustic Shimmer Filaments
+   * 3. Bioluminescent Fin-Wake Plankton Sparks in Night-Dive / Bioluminescent biomes
+   */
+  _drawTorchMarineSnowAndCaustics(ctx, diver, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, weatherCaustics = 1) {
+    if (!diver) return;
+    const isWreck = Boolean(this.level.isWreck);
+    const isPolar = /arctic|ice|glacier|orda|strytan|greenland/i.test(this.level.name || "");
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+
+    // 1. Torch-Beam Volumetric Marine Snow / Rust Motes inside primary cone
+    if (diver.torchOn !== false && diver.y > 0.6) {
+      const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+      const tfx = Math.cos(tang);
+      const tfy = Math.sin(tang);
+      const originX = diver.body?.hand?.x ?? (diver.x + tfx * 0.45);
+      const originY = diver.body?.hand?.y ?? (diver.y + tfy * 0.45);
+      const cellM = 1.65;
+      const gx0 = Math.floor((originX - 11) / cellM);
+      const gx1 = Math.ceil((originX + 11) / cellM);
+      const gy0 = Math.floor(Math.max(0.4, originY - 11) / cellM);
+      const gy1 = Math.ceil((originY + 11) / cellM);
+      const baseRgb = isWreck ? "251, 186, 116" : isPolar ? "186, 230, 253" : "248, 250, 224";
+
+      for (let gx = gx0; gx <= gx1; gx++) {
+        for (let gy = gy0; gy <= gy1; gy++) {
+          const h = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
+          const f1 = h - Math.floor(h);
+          const h2 = Math.sin(gx * 269.5 + gy * 183.3) * 19532.173;
+          const f2 = h2 - Math.floor(h2);
+          const wx = (gx + f1) * cellM + Math.sin(timeSec * 0.55 + f2 * 6.28) * 0.24;
+          const wy = (gy + f2) * cellM + Math.cos(timeSec * 0.42 + f1 * 6.28) * 0.18;
+          if (wy < 0.4) continue;
+          const dx = wx - originX;
+          const dy = wy - originY;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < 0.35 || distSq > 132) continue;
+          const dist = Math.sqrt(distSq);
+          const dot = (dx * tfx + dy * tfy) / dist;
+          if (dot < 0.78) continue; // Strictly inside primary torch cone
+          const coneFade = (dot - 0.78) / 0.22;
+          const distFade = Math.max(0, 1 - dist / 11.5);
+          const twinkle = 0.65 + 0.35 * Math.sin(timeSec * 3.1 + f1 * 18);
+          const alpha = Math.min(0.68, coneFade * distFade * twinkle * 0.62);
+          if (alpha < 0.04) continue;
+          const sx = toScreenX(wx);
+          const sy = toScreenY(wy);
+          const r = Math.max(0.9, (0.028 + f2 * 0.042) * scale);
+          ctx.fillStyle = `rgba(${baseRgb}, ${alpha.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 2. Rippling Shallow Solar Caustic Web Filaments in sunlit entry water
+    if (visY0 < 17 && weatherCaustics > 0.14) {
+      const cAlpha = Math.min(0.26, weatherCaustics * 0.22);
+      ctx.strokeStyle = isWreck ? `rgba(125, 211, 252, ${cAlpha.toFixed(3)})` : `rgba(165, 243, 252, ${cAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, 0.045 * scale);
+      for (const basin of this.level.openBasins || []) {
+        if (basin.xMax + 6 < visX0 || basin.xMin - 6 > visX1) continue;
+        const bx0 = Math.max(visX0, basin.xMin - 2);
+        const bx1 = Math.min(visX1, basin.xMax + 2);
+        for (let row = 1; row <= 5; row++) {
+          const wy = row * 2.5;
+          if (wy < visY0 - 2 || wy > visY1 + 2) continue;
+          const depthFade = Math.max(0, 1 - wy / 16);
+          if (depthFade <= 0.05) continue;
+          ctx.globalAlpha = depthFade;
+          ctx.beginPath();
+          let first = true;
+          for (let wx = bx0; wx <= bx1; wx += 0.9) {
+            const ripple = Math.sin(wx * 0.85 + timeSec * 1.9 + row * 1.3) * 0.34 + Math.cos(wx * 1.45 - timeSec * 1.4 + row) * 0.18;
+            const sx = toScreenX(wx);
+            const sy = toScreenY(wy + ripple);
+            if (first) { ctx.moveTo(sx, sy); first = false; } else { ctx.lineTo(sx, sy); }
+          }
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. Bioluminescent Fin-Wake Sparks directly behind articulated fin tips in Night/Biolum mode
+    const bioActive = Boolean(this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum);
+    if (bioActive && diver.body?.legs && diver.y > 1.0) {
+      const spd = Math.hypot(diver.vx || 0, diver.vy || 0);
+      if (spd > 0.25) {
+        const bx = -Math.cos(diver.angle || 0);
+        const by = -Math.sin(diver.angle || 0);
+        const inten = Math.min(1, spd * 0.45);
+        for (let li = 0; li < diver.body.legs.length; li++) {
+          const tip = diver.body.legs[li].finTip;
+          if (!tip) continue;
+          for (let k = 0; k < 5; k++) {
+            const t = (k + ((timeSec * 3.8 + li * 0.5) % 1)) * 0.34;
+            const px = tip.x + bx * t * 1.45 + Math.sin(timeSec * 5 + k * 2.1 + li) * 0.18;
+            const py = tip.y + by * t * 1.45 + Math.cos(timeSec * 4.4 + k * 1.9) * 0.15;
+            const a = Math.max(0, (1 - k / 5) * 0.72 * inten);
+            ctx.fillStyle = k % 2 === 0 ? `rgba(56, 232, 255, ${a.toFixed(3)})` : `rgba(110, 231, 183, ${(a * 0.85).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(toScreenX(px), toScreenY(py), Math.max(1.3, (0.065 - k * 0.008) * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+
     ctx.restore();
   }
 

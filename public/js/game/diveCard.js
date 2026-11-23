@@ -327,9 +327,10 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
     livery = null,
     hasCcr = false,
     recoveredArtifacts = [],
+    pinnedArtifact = null,
     track = [],
     profile = [],
-    version = 'v168',
+    version = 'v169',
     dateLabel = new Date().toISOString().slice(0, 10),
   } = data;
 
@@ -616,21 +617,41 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
   ctx.fillStyle = '#64748b';
   ctx.font = '700 14px ui-monospace, SFMono-Regular, Menlo, monospace';
   ctx.fillText(`cave-diver.vercel.app  ·  ${version}`, padX, height - 34);
-  if (Array.isArray(recoveredArtifacts) && recoveredArtifacts.length > 0) {
-    const shown = recoveredArtifacts.slice(0, 3);
+  const relicList = [];
+  if (pinnedArtifact && pinnedArtifact.name) {
+    relicList.push({ ...pinnedArtifact, _isPinned: true });
+  }
+  if (Array.isArray(recoveredArtifacts)) {
+    for (const item of recoveredArtifacts) {
+      if (!item) continue;
+      if (pinnedArtifact && item.name === pinnedArtifact.name) continue;
+      relicList.push(item);
+      if (relicList.length >= 3) break;
+    }
+  }
+  if (relicList.length > 0) {
+    const shown = relicList.slice(0, 3);
     const stepX = 36;
     const startX = width * 0.5 - ((shown.length - 1) * stepX) * 0.5;
     for (let a = 0; a < shown.length; a++) {
       const ax = startX + a * stepX;
       const ay = height - 34;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
-      ctx.lineWidth = 1.2;
+      const isPin = Boolean(shown[a]._isPinned);
+      ctx.fillStyle = isPin ? 'rgba(30, 24, 12, 0.94)' : 'rgba(15, 23, 42, 0.9)';
+      ctx.strokeStyle = isPin ? 'rgba(253, 224, 71, 0.92)' : 'rgba(250, 204, 21, 0.45)';
+      ctx.lineWidth = isPin ? 1.8 : 1.2;
       ctx.beginPath();
       ctx.arc(ax, ay, 15, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      drawStyledArtifact(ctx, shown[a], ax, ay, 10.5, 1.8, { index: a, isGrand: false });
+      drawStyledArtifact(ctx, shown[a], ax, ay, 10.5, 1.8, { index: a, isGrand: isPin });
+      if (isPin) {
+        ctx.fillStyle = '#fde047';
+        ctx.font = '800 9px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', ax + 11, ay - 11);
+      }
     }
   }
   ctx.textAlign = 'right';

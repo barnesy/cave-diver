@@ -54,13 +54,16 @@ import {
   recordCampaignClearInLogbook,
   recordCrewDiveInLogbook,
   recordArtifactInLogbook,
+  setPinnedArtifactInLogbook,
   getArtifactVaultStats,
+  ARTIFACT_COLLECTIONS,
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
   parseImportedLogbookJson,
 } from './game/logbookModel.js';
 import { drawStyledArtifact } from './game/artSprites.js';
+import { renderSurveySlate } from './game/surveySlate.js';
 import {
   decodeReplayTrack,
   drawReplayFrame,
@@ -648,7 +651,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=168" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=169" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1256,6 +1259,7 @@ const hud = new DiveComputerHUD({
 const modalManager = createModalManager([
   { isOpen: () => photoModeState.active, close: () => setPhotoModeActive(false) },
   { isOpen: () => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, close: () => closeFieldGuideCardModal() },
+  { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && artifactInspectorModalEl && !artifactInspectorModalEl.hidden, close: () => closeArtifactInspector() },
   { isOpen: () => typeof replayModal !== 'undefined' && replayModal && !replayModal.hidden, close: () => closeReplayModal() },
   { isOpen: () => typeof lbStatsModalEl !== 'undefined' && lbStatsModalEl && !lbStatsModalEl.hidden, close: () => closeLeaderboardStatsModal() },
   { isOpen: () => typeof liveryModalEl !== 'undefined' && liveryModalEl && !liveryModalEl.hidden, close: () => closeLiveryModal() },
@@ -1271,6 +1275,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, close: () => closeLogbookModal() },
   { isOpen: () => Boolean(signalWheelOpen), close: () => toggleSignalWheel(false) },
   { isOpen: () => Boolean(shearwaterOpen), close: () => toggleShearwaterComputer(false) },
+  { isOpen: () => Boolean(surveySlateOpen), close: () => toggleSurveySlate(false) },
   { isOpen: () => typeof hudKitPopoverEl !== 'undefined' && hudKitPopoverEl && !hudKitPopoverEl.hidden, close: () => setKitPopoverOpen(false) },
   { isOpen: () => typeof hud !== 'undefined' && hud?.isGasDrawerOpen?.(), close: () => hud?.setGasDrawerOpen?.(false) },
   { isOpen: () => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, close: () => setHudMenuOpen(false) },
@@ -1332,6 +1337,7 @@ const input = new InputController({
   onDropLineCookie: () => handleDropLineCookie(),
   onDeploySmb: () => handleDeploySmb(),
   onComputerToggle: () => toggleShearwaterComputer(),
+  onSurveySlateToggle: () => toggleSurveySlate(),
   onSignalWheelToggle: () => toggleSignalWheel(),
   onPhotoModeToggle: () => {
     if (mode !== 'diving' || !session || session.endedState) return false;
@@ -1436,6 +1442,39 @@ btnShearwaterCloseEl?.addEventListener('click', (e) => {
 shearwaterCanvasEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleShearwaterComputer(false);
+});
+
+// Waterproof Wetnotes Survey Slate Overlay (v169)
+const surveySlatePanelEl = document.getElementById('survey-slate-panel');
+const surveySlateCanvasEl = document.getElementById('survey-slate-canvas');
+const btnSurveySlateCloseEl = document.getElementById('btn-survey-slate-close');
+const btnHudSurveySlateEl = document.getElementById('btn-hud-survey-slate');
+let surveySlateOpen = false;
+let lastSurveySlateDrawMs = 0;
+
+function toggleSurveySlate(forceState) {
+  if (mode !== 'diving' && forceState !== false) return false;
+  surveySlateOpen = typeof forceState === 'boolean' ? forceState : !surveySlateOpen;
+  if (surveySlatePanelEl) surveySlatePanelEl.hidden = !surveySlateOpen;
+  if (btnHudSurveySlateEl) btnHudSurveySlateEl.classList.toggle('active', surveySlateOpen);
+  if (surveySlateOpen && session && surveySlateCanvasEl) {
+    const sctx = surveySlateCanvasEl.getContext('2d');
+    if (sctx) renderSurveySlate(sctx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, performance.now() / 1000);
+  }
+  return true;
+}
+btnHudSurveySlateEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+  toggleSurveySlate();
+});
+btnSurveySlateCloseEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSurveySlate(false);
+});
+surveySlateCanvasEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSurveySlate(false);
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -3359,38 +3398,10 @@ function openLogbookModal() {
     renderFieldGuideGallery(book, fgHeading, fgTrophyEl, fgGrid);
   }
   const vaultHeading = document.getElementById('logbook-vault-heading');
+  const collectionsBar = document.getElementById('logbook-collections-bar');
   const vaultGrid = document.getElementById('logbook-artifact-vault');
   if (vaultGrid) {
-    const vault = getArtifactVaultStats(book, LEVELS);
-    if (vaultHeading) {
-      vaultHeading.textContent = `🏛️ ARTIFACT TROPHY VAULT (${vault.recoveredCount}/${vault.totalCatalog} RECOVERED · ${vault.totalValue.toLocaleString()} PTS)`;
-    }
-    if (vault.items.length === 0) {
-      vaultGrid.innerHTML = `<div class="vault-empty-note">Explore cave chambers and shipwreck holds to recover relics, fossils, watches &amp; instruments for your Trophy Vault.</div>`;
-    } else {
-      vaultGrid.innerHTML = vault.items
-        .slice(0, 48)
-        .map(
-          (it, idx) => `<div class="vault-card" title="${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
-            <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
-            <div class="vault-card-name">${escapeHtml(it.name)}</div>
-            <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
-            ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
-          </div>`
-        )
-        .join('');
-      vaultGrid.querySelectorAll('canvas.vault-art-canvas').forEach((cv) => {
-        const idx = Number(cv.getAttribute('data-vault-idx'));
-        const it = vault.items[idx];
-        const ctx = cv.getContext?.('2d');
-        if (!ctx || !it) return;
-        ctx.clearRect(0, 0, cv.width, cv.height);
-        drawStyledArtifact(ctx, it, cv.width * 0.5, cv.height * 0.5, cv.width * 0.34, 2.2, {
-          index: idx,
-          isGrand: (it.scale || 1) >= 1.35,
-        });
-      });
-    }
+    renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
   }
   const loreHeading = document.getElementById('logbook-lore-heading');
   const loreGrid = document.getElementById('logbook-lore-grid');
@@ -3454,7 +3465,212 @@ function openLogbookModal() {
 }
 
 function closeLogbookModal() {
+  if (typeof closeArtifactInspector === 'function') closeArtifactInspector();
   if (modalLogbook) modalLogbook.hidden = true;
+}
+
+// Interactive Artifact Museum Specimen Inspector & Curator Collections (v169)
+const artifactInspectorModalEl = document.getElementById('modal-artifact-inspector');
+const artifactInspectorColEl = document.getElementById('artifact-inspector-collection');
+const artifactInspectorTitleEl = document.getElementById('artifact-inspector-title');
+const artifactInspectorMetaEl = document.getElementById('artifact-inspector-meta');
+const artifactInspectorLoreEl = document.getElementById('artifact-inspector-lore');
+const artifactInspectorCanvasEl = document.getElementById('artifact-inspector-canvas');
+const btnArtifactInspectorClose = document.getElementById('btn-artifact-inspector-close');
+const btnArtifactInspectorDone = document.getElementById('btn-artifact-inspector-done');
+const btnArtifactPin = document.getElementById('btn-artifact-pin');
+let activeInspectorArtifact = null;
+let inspectorAnimRaf = 0;
+let inspectorLightAngle = 0.65;
+let inspectorDragging = false;
+
+function drawInspectorStage(tSec) {
+  if (!artifactInspectorCanvasEl || !activeInspectorArtifact) return;
+  const ctx = artifactInspectorCanvasEl.getContext?.('2d');
+  if (!ctx) return;
+  const w = artifactInspectorCanvasEl.width;
+  const h = artifactInspectorCanvasEl.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Interactive movable museum display spotlight
+  const lx = w * 0.5 + Math.cos(inspectorLightAngle) * (w * 0.28);
+  const ly = h * 0.45 + Math.sin(inspectorLightAngle) * (h * 0.24);
+  const spot = ctx.createRadialGradient(lx, ly, 8, w * 0.5, h * 0.5, w * 0.54);
+  spot.addColorStop(0, 'rgba(254, 243, 199, 0.34)');
+  spot.addColorStop(0.45, 'rgba(56, 189, 248, 0.14)');
+  spot.addColorStop(1, 'rgba(2, 8, 18, 0)');
+  ctx.fillStyle = spot;
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle brass pedestal plinth shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.44)';
+  ctx.beginPath();
+  ctx.ellipse(w * 0.5, h * 0.82, w * 0.26, h * 0.055, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const bob = Math.sin(tSec * 2.1) * 4;
+  drawStyledArtifact(
+    ctx,
+    activeInspectorArtifact,
+    w * 0.5,
+    h * 0.48 + bob,
+    w * 0.31,
+    tSec + inspectorLightAngle * 1.4,
+    { index: 0, isGrand: true }
+  );
+}
+
+function stepInspectorAnim(nowMs) {
+  if (!artifactInspectorModalEl || artifactInspectorModalEl.hidden || !activeInspectorArtifact) {
+    inspectorAnimRaf = 0;
+    return;
+  }
+  drawInspectorStage(nowMs / 1000);
+  inspectorAnimRaf = requestAnimationFrame(stepInspectorAnim);
+}
+
+function updateInspectorPinButton() {
+  if (!btnArtifactPin || !activeInspectorArtifact) return;
+  const book = loadCareerLogbook();
+  const isPinned = book.pinnedArtifactId === activeInspectorArtifact.id;
+  btnArtifactPin.textContent = isPinned ? '★ Pinned to Postcard (Unpin)' : '📌 Pin to Expedition Postcard';
+  btnArtifactPin.classList.toggle('secondary', isPinned);
+  btnArtifactPin.classList.toggle('primary', !isPinned);
+}
+
+function openArtifactInspector(item) {
+  if (!artifactInspectorModalEl || !item) return;
+  activeInspectorArtifact = item;
+  const col = ARTIFACT_COLLECTIONS.find((c) => c.id === item.collectionId);
+  if (artifactInspectorColEl) {
+    artifactInspectorColEl.textContent = col ? `${col.icon} ${col.title.toUpperCase()}` : '🏛️ MUSEUM SPECIMEN';
+  }
+  if (artifactInspectorTitleEl) artifactInspectorTitleEl.textContent = item.name || 'Recovered Artifact';
+  if (artifactInspectorMetaEl) {
+    const parts = [`+${item.points || 0} PTS`];
+    if (item.siteName) parts.push(item.siteName);
+    if ((item.count || 1) > 1) parts.push(`Recovered ×${item.count}`);
+    artifactInspectorMetaEl.textContent = parts.join(' · ');
+  }
+  if (artifactInspectorLoreEl) {
+    const siteObj = LEVELS.find((l) => l.id === item.siteId) || null;
+    artifactInspectorLoreEl.textContent = item.lore || getCollectibleLoreNote(item, siteObj) || 'Preserved in your Career Artifact Trophy Vault.';
+  }
+  updateInspectorPinButton();
+  artifactInspectorModalEl.hidden = false;
+  inspectorLightAngle = 0.65;
+  if (inspectorAnimRaf) cancelAnimationFrame(inspectorAnimRaf);
+  inspectorAnimRaf = requestAnimationFrame(stepInspectorAnim);
+}
+
+function closeArtifactInspector() {
+  if (inspectorAnimRaf) {
+    cancelAnimationFrame(inspectorAnimRaf);
+    inspectorAnimRaf = 0;
+  }
+  activeInspectorArtifact = null;
+  if (artifactInspectorModalEl) artifactInspectorModalEl.hidden = true;
+}
+
+if (artifactInspectorCanvasEl) {
+  const updateLightFromEvent = (ev) => {
+    const rect = artifactInspectorCanvasEl.getBoundingClientRect();
+    if (!rect.width) return;
+    const dx = ev.clientX - (rect.left + rect.width * 0.5);
+    const dy = ev.clientY - (rect.top + rect.height * 0.5);
+    inspectorLightAngle = Math.atan2(dy, dx);
+  };
+  artifactInspectorCanvasEl.addEventListener('pointerdown', (ev) => {
+    inspectorDragging = true;
+    artifactInspectorCanvasEl.setPointerCapture?.(ev.pointerId);
+    updateLightFromEvent(ev);
+  });
+  artifactInspectorCanvasEl.addEventListener('pointermove', (ev) => {
+    if (!inspectorDragging) return;
+    updateLightFromEvent(ev);
+  });
+  const endDrag = () => { inspectorDragging = false; };
+  artifactInspectorCanvasEl.addEventListener('pointerup', endDrag);
+  artifactInspectorCanvasEl.addEventListener('pointercancel', endDrag);
+}
+btnArtifactInspectorClose?.addEventListener('click', closeArtifactInspector);
+btnArtifactInspectorDone?.addEventListener('click', closeArtifactInspector);
+artifactInspectorModalEl?.addEventListener('click', (e) => {
+  if (e.target === artifactInspectorModalEl) closeArtifactInspector();
+});
+btnArtifactPin?.addEventListener('click', () => {
+  if (!activeInspectorArtifact) return;
+  const cur = loadCareerLogbook();
+  const nextId = cur.pinnedArtifactId === activeInspectorArtifact.id ? '' : activeInspectorArtifact.id;
+  const nextBook = setPinnedArtifactInLogbook(cur, nextId);
+  saveCareerLogbook(nextBook);
+  updateInspectorPinButton();
+  renderArtifactVaultSection(nextBook);
+  showToast(nextId ? `★ Pinned ${activeInspectorArtifact.name} to your Expedition Postcard!` : 'Unpinned showcase relic.', 2.6);
+});
+
+function renderArtifactVaultSection(
+  bookOverride = null,
+  vaultHeading = document.getElementById('logbook-vault-heading'),
+  collectionsBar = document.getElementById('logbook-collections-bar'),
+  vaultGrid = document.getElementById('logbook-artifact-vault')
+) {
+  if (!vaultGrid) return;
+  const book = bookOverride || loadCareerLogbook();
+  const vault = getArtifactVaultStats(book, LEVELS);
+  const colProg = vault.collections;
+  if (vaultHeading) {
+    const rankTxt = colProg?.highestCuratorTitle ? ` · ${colProg.highestCuratorTitle.toUpperCase()}` : '';
+    vaultHeading.textContent = `🏛️ ARTIFACT TROPHY VAULT (${vault.recoveredCount}/${vault.totalCatalog} RECOVERED · ${vault.totalValue.toLocaleString()} PTS${rankTxt})`;
+  }
+  if (collectionsBar && colProg?.collections) {
+    collectionsBar.innerHTML = colProg.collections
+      .map(
+        (c) => `<div class="collection-chip${c.completed ? ' completed' : ''}" title="${escapeHtml(c.title)} · Unlocks Curator Title: ${escapeHtml(c.curatorTitle)}">
+          <div class="collection-chip-top">
+            <span>${c.icon} ${escapeHtml(c.title)}</span>
+            <span>${c.recovered}/${c.targetCount}</span>
+          </div>
+          <div class="collection-chip-prog"><div class="collection-chip-fill" style="width:${c.pct}%;background:${c.accent}"></div></div>
+          <div class="collection-chip-title">${c.completed ? `★ ${escapeHtml(c.curatorTitle)}` : `Goal: ${escapeHtml(c.curatorTitle)}`}</div>
+        </div>`
+      )
+      .join('');
+  }
+  if (vault.items.length === 0) {
+    vaultGrid.innerHTML = `<div class="vault-empty-note">Explore cave chambers and shipwreck holds to recover relics, fossils, watches &amp; instruments for your Trophy Vault.</div>`;
+    return;
+  }
+  vaultGrid.innerHTML = vault.items
+    .slice(0, 48)
+    .map(
+      (it, idx) => `<button type="button" class="vault-card${it.pinned ? ' pinned' : ''}" data-vault-idx="${idx}" title="Inspect ${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
+        ${it.pinned ? '<span class="vault-pin-badge" title="Pinned to Postcard">★</span>' : ''}
+        <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
+        <div class="vault-card-name">${escapeHtml(it.name)}</div>
+        <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
+        ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
+      </button>`
+    )
+    .join('');
+  vaultGrid.querySelectorAll('canvas.vault-art-canvas').forEach((cv) => {
+    const idx = Number(cv.getAttribute('data-vault-idx'));
+    const it = vault.items[idx];
+    const ctx = cv.getContext?.('2d');
+    if (!ctx || !it) return;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    drawStyledArtifact(ctx, it, cv.width * 0.5, cv.height * 0.5, cv.width * 0.34, 2.2, {
+      index: idx,
+      isGrand: (it.scale || 1) >= 1.35 || it.pinned,
+    });
+  });
+  vaultGrid.querySelectorAll('button.vault-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.getAttribute('data-vault-idx'));
+      const it = vault.items[idx];
+      if (it) openArtifactInspector(it);
+    });
+  });
 }
 
 btnOpenLogbook?.addEventListener('click', openLogbookModal);
@@ -5458,6 +5674,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   input?.resetAll?.();
   closeLogbookModal();
   toggleShearwaterComputer(false);
+  toggleSurveySlate(false);
   toggleSignalWheel(false);
   setPhotoModeActive(false);
   closeDiveGuideModal(false);
@@ -5818,6 +6035,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     // ignore storage restriction
   }
   toggleShearwaterComputer(false);
+  toggleSurveySlate(false);
   toggleSignalWheel(false);
   // Append final profile point and render the Dive Computer Depth Profile Graph + Earned Certifications
   if (session?.diveProfile) {
@@ -5981,6 +6199,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     livery: diver.livery ? { ...diver.livery } : { ...activeRigLivery },
     hasCcr: Boolean(session.gear?.ccr),
     recoveredArtifacts: (level.collectibles || []).filter((it) => session.collectedIds?.has(it.id)),
+    pinnedArtifact: getArtifactVaultStats(loadCareerLogbook(), LEVELS).pinnedArtifact || null,
     track: replayTrack,
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
   };
@@ -8353,6 +8572,7 @@ function abortActiveDiveToMenu() {
   hideHudPhotoCard();
   screenHud.classList.remove('hud-team-hold');
   toggleShearwaterComputer(false);
+  toggleSurveySlate(false);
   toggleSignalWheel(false);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
@@ -9186,6 +9406,7 @@ const sessionStepCallbacks = {
         kind: item.kind,
         siteId: session?.level?.id || '',
         siteName: session?.level?.name || '',
+        lore,
         points: item.points || 0,
         scale: item.scale || 1,
       });
@@ -9593,6 +9814,16 @@ function stepSimulation(dt) {
           waterTempC: session.hazards?.waterTempC,
           inThermocline: Boolean(session.hazards?.inThermocline),
         });
+      }
+    }
+  }
+  if (surveySlateOpen && surveySlateCanvasEl) {
+    const slateNowMs = performance.now();
+    if (slateNowMs - lastSurveySlateDrawMs >= 140) {
+      lastSurveySlateDrawMs = slateNowMs;
+      const slCtx = surveySlateCanvasEl.getContext('2d');
+      if (slCtx) {
+        renderSurveySlate(slCtx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, slateNowMs / 1000);
       }
     }
   }
