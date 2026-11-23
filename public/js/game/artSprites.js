@@ -2204,3 +2204,1409 @@ export function drawStyledDenizen(ctx, d, sx, sy, scale, timeSec) {
 
   ctx.restore();
 }
+
+// ============================================================================
+// MUSEUM-GRADE BESPOKE ARTIFACT & COLLECTIBLE ILLUSTRATION LIBRARY (v167)
+// ============================================================================
+
+function _safeLinGrad(ctx, x0, y0, x1, y1, stops, fallback) {
+  const g = ctx.createLinearGradient?.(x0, y0, x1, y1);
+  if (g && typeof g.addColorStop === 'function') {
+    for (let i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+    return g;
+  }
+  return fallback;
+}
+
+function _safeRadGrad(ctx, x0, y0, r0, x1, y1, r1, stops, fallback) {
+  const g = ctx.createRadialGradient?.(x0, y0, r0, x1, y1, r1);
+  if (g && typeof g.addColorStop === 'function') {
+    for (let i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+    return g;
+  }
+  return fallback;
+}
+
+function _deriveMineralPalette(nameLower) {
+  if (/jade|emerald|olivine|algae|green/.test(nameLower)) {
+    return { hi: '#a7f3d0', mid: '#10b981', deep: '#064e3b', edge: '#d1fae5', glow: 'emerald' };
+  }
+  if (/amber|copal|gold|sulfur|pyrite|citrine|ochre|honey/.test(nameLower)) {
+    return { hi: '#fef08a', mid: '#f59e0b', deep: '#78350f', edge: '#fef9c3', glow: 'warm' };
+  }
+  if (/garnet|ruby|coral|red|crimson|magma/.test(nameLower)) {
+    return { hi: '#fda4af', mid: '#e11d48', deep: '#4c0519', edge: '#ffe4e6', glow: 'magenta' };
+  }
+  if (/sapphire|cobalt|blue|ice|celestite|glacial|indigo|aqua/.test(nameLower)) {
+    return { hi: '#bae6fd', mid: '#0284c7', deep: '#0c4a6e', edge: '#e0f2fe', glow: 'cyan' };
+  }
+  if (/obsidian|onyx|black|magnetite|meteorite|basalt|scoria|tephra|smoky|ironstone/.test(nameLower)) {
+    return { hi: '#94a3b8', mid: '#334155', deep: '#090d16', edge: '#cbd5e1', glow: 'cyan' };
+  }
+  if (/selenite|gypsum|marble|alabaster|white|milky|chalk|pale|calcite|aragonite|barite|feldspar|dolomite|travertine/.test(nameLower)) {
+    return { hi: '#ffffff', mid: '#cbd5e1', deep: '#64748b', edge: '#f8fafc', glow: 'cyan' };
+  }
+  // Classic quartz / amethyst / fluorite
+  return { hi: '#e9d5ff', mid: '#a855f7', deep: '#4c1d95', edge: '#f3e8ff', glow: 'magenta' };
+}
+
+/**
+ * Resolve any collectible item (by name & kind) to its exact visual archetype & material palette (v167).
+ */
+export function classifyArtifactVisual(item) {
+  const n = String(item?.name || '').toLowerCase();
+  const k = String(item?.kind || '').toLowerCase();
+  const mineral = _deriveMineralPalette(n);
+
+  if (/pocket watch|watch|chronometer/.test(n)) return { type: 'watch', glow: 'warm', mineral };
+  if (/mask|idol|jaguar|censer/.test(n)) return { type: 'mask', glow: /gold/.test(n) ? 'warm' : 'emerald', mineral };
+  if (/pearl/.test(n) || k === 'pearl') return { type: 'pearl', glow: 'magenta', mineral };
+  if (/pendant|gorget|amulet|medallion|pendulum|offering|sunstone|token/.test(n) && !/blade|vessel/.test(n)) {
+    return { type: 'pendant', glow: /jade/.test(n) ? 'emerald' : 'warm', mineral };
+  }
+  if (/amber|copal/.test(n) && !/geode|pearl/.test(n)) return { type: 'amber', glow: 'warm', mineral };
+  if (/sextant/.test(n)) return { type: 'sextant', glow: 'warm', mineral };
+  if (/compass|azimuth|binnacle|transit/.test(n) || k === 'compass') return { type: 'compass', glow: 'warm', mineral };
+  if (/telegraph|telemotor/.test(n)) return { type: 'telegraph', glow: 'warm', mineral };
+  if (/\bbell\b/.test(n)) return { type: 'bell', glow: 'warm', mineral };
+  if (/candelabra/.test(n)) return { type: 'candelabra', glow: 'warm', mineral };
+  if (/porcelain|dinner plate|china/.test(n)) return { type: 'plate', glow: 'cyan', mineral };
+  if (/chalice|bowl/.test(n)) return { type: 'chalice', glow: 'warm', mineral };
+  if (/amphora|decanter|vase|urn/.test(n)) return { type: 'amphora', glow: 'warm', mineral };
+  if (/lamp|lantern|headlamp|strobe/.test(n)) return { type: 'lamp', glow: 'warm', mineral };
+  if (/porthole/.test(n)) return { type: 'porthole', glow: 'cyan', mineral };
+  if (/propeller|prop /.test(n)) return { type: 'propeller', glow: 'warm', mineral };
+  if (/safe/.test(n) && !/plaque/.test(n)) return { type: 'safe', glow: 'warm', mineral };
+  if (/wheel/.test(n)) return { type: 'wheel', glow: 'warm', mineral };
+  if (/enigma|cipher|detonator/.test(n)) return { type: 'enigma', glow: 'warm', mineral };
+  if (/slate|manifest| log/.test(n)) return { type: 'slate', glow: 'cyan', mineral };
+  if (/spyglass|periscope|sight|speaking tube|whistle/.test(n)) return { type: 'spyglass', glow: 'warm', mineral };
+  if (/gauge|oscilloscope|calculator|dial|rangefinder/.test(n)) return { type: 'gauge', glow: 'warm', mineral };
+  if (/tooth/.test(n)) return { type: 'tooth', glow: 'emerald', mineral };
+  if (/tusk/.test(n)) return { type: 'tusk', glow: 'cyan', mineral };
+  if (/blade|spear|dagger/.test(n)) return { type: 'blade', glow: mineral.glow, mineral };
+  if (/anchor/.test(n)) return { type: 'anchor', glow: 'warm', mineral };
+  if (/vial|capsule|sample/.test(n) || (/core/.test(n) && !/meteorite|ammonite|scallop|limestone/.test(n))) {
+    return { type: 'vial', glow: 'cyan', mineral };
+  }
+  if (/cookie|arrow/.test(n)) return { type: 'cookie', glow: 'warm', mineral };
+  if (/reel|spool|weight/.test(n)) return { type: 'reel', glow: 'warm', mineral };
+  if (/beacon|sensor|probe|relay|transponder|hydrophone|magnetometer|sonar|node|cell|scan/.test(n) || k === 'beacon') {
+    return { type: 'beacon', glow: 'cyan', mineral };
+  }
+  if (/trilobite|crustacean|prawn/.test(n)) return { type: 'trilobite', glow: 'emerald', mineral };
+  if (/coral|gorgonian|starfish|sponge|crinoid/.test(n)) return { type: 'coral', glow: 'emerald', mineral };
+  if (/nautilus|ammonite|nautiloid|conch|snail|shell|limpet|scallop|vertebra|mastodon|stromatolite/.test(n) || k === 'fossil') {
+    return { type: 'nautilus', glow: 'emerald', mineral };
+  }
+  if (/pearl|orb|drop/.test(n) || k === 'pearl') return { type: 'pearl', glow: 'magenta', mineral };
+  if (/geode/.test(n)) return { type: 'geode', glow: mineral.glow, mineral };
+  if (/pyrite/.test(n)) return { type: 'pyrite', glow: 'warm', mineral };
+  if (/crown/.test(n)) return { type: 'crown', glow: mineral.glow, mineral };
+  if (/bolt|pin|axle|wedge/.test(n)) return { type: 'hardware', glow: 'warm', mineral };
+  if (/plaque|plate|tag|seal|emblem|keystone|monolith|tribute|hatch/.test(n)) {
+    return { type: 'plaque', glow: 'warm', mineral };
+  }
+  if (k === 'crystal' || /crystal|quartz|fluorite|calcite|amethyst|selenite|barite|aragonite|garnet|olivine|obsidian|meteorite|ice|prism|spar|shard|needle|mineral|basalt|rhyolite|breccia|tephra|smectite|scoria|silicate/.test(n)) {
+    return { type: 'crystal', glow: mineral.glow, mineral };
+  }
+  if (k === 'gear') return { type: 'gauge', glow: 'warm', mineral };
+  if (k === 'survey') return { type: 'reel', glow: 'warm', mineral };
+  return { type: 'pendant', glow: 'warm', mineral };
+}
+
+/**
+ * Draw a museum-grade, bespoke illustrated artifact matching the item's exact name & material (v167).
+ * Drawn centered at (sx, sy) with display radius `r`.
+ */
+export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, isGrand = false } = {}) {
+  const vis = classifyArtifactVisual(item);
+  const { type, mineral } = vis;
+  const nameLower = String(item?.name || '').toLowerCase();
+  const lw = Math.max(1.0, r * 0.085);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Subtle floating micro-sparkles orbiting prized artifacts
+  const moteCount = isGrand ? 4 : 2;
+  for (let m = 0; m < moteCount; m++) {
+    const a = timeSec * (0.9 + m * 0.25) + index * 1.7 + m * ((Math.PI * 2) / moteCount);
+    const dist = r * (1.22 + 0.22 * Math.sin(timeSec * 2.4 + m * 2.1));
+    const mx = Math.cos(a) * dist;
+    const my = Math.sin(a) * dist * 0.78;
+    const tw = 0.35 + 0.65 * Math.max(0, Math.sin(timeSec * 4.5 + m * 1.9 + index));
+    ctx.fillStyle = `rgba(254, 249, 195, ${(0.72 * tw).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(mx, my, Math.max(1.0, r * 0.075 * tw), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Gentle suspended underwater buoyancy sway
+  ctx.rotate(Math.sin(timeSec * 1.55 + index * 1.3) * 0.14);
+
+  const brassGrad = _safeLinGrad(ctx, -r, -r, r, r, [
+    [0, '#fef08a'],
+    [0.38, '#d97706'],
+    [0.75, '#92400e'],
+    [1, '#fde047'],
+  ], '#d97706');
+  const silverGrad = _safeLinGrad(ctx, -r, -r, r, r, [
+    [0, '#ffffff'],
+    [0.42, '#cbd5e1'],
+    [0.78, '#64748b'],
+    [1, '#e2e8f0'],
+  ], '#cbd5e1');
+
+  if (type === 'pendant') {
+    // Ornate carved Pendant / Gorget / Amulet with golden bail cord loop & sculpted gemstone cabochon
+    // Braided bail loop at top
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.4, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.86, r * 0.22, Math.PI * 0.85, Math.PI * 2.15);
+    ctx.stroke();
+
+    // Sculpted teardrop / oval hammered gold filigree bezel
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.72);
+    ctx.bezierCurveTo(r * 0.72, -r * 0.45, r * 0.78, r * 0.42, 0, r * 0.96);
+    ctx.bezierCurveTo(-r * 0.78, r * 0.42, -r * 0.72, -r * 0.45, 0, -r * 0.72);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Beaded filigree rim dots
+    ctx.fillStyle = '#fef9c3';
+    for (let b = 0; b < 8; b++) {
+      const ba = (b / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(ba) * r * 0.50, r * 0.12 + Math.sin(ba) * r * 0.60, Math.max(0.9, r * 0.055), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Carved gemstone centerpiece (Imperial Jade / Nacre Shell / Copal / Sunstone)
+    const isJade = /jade|cenote|maya/.test(nameLower);
+    const isShell = /shell|gorget|bone/.test(nameLower);
+    const gemGrad = isShell
+      ? _safeRadGrad(ctx, -r * 0.12, -r * 0.02, r * 0.05, 0, r * 0.12, r * 0.52, [
+          [0, '#ffffff'], [0.45, '#fde68a'], [0.8, '#f472b6'], [1, '#94a3b8'],
+        ], '#fde68a')
+      : isJade
+        ? _safeRadGrad(ctx, -r * 0.14, -r * 0.04, r * 0.05, 0, r * 0.12, r * 0.52, [
+            [0, '#a7f3d0'], [0.45, '#10b981'], [0.88, '#065f46'], [1, '#022c22'],
+          ], '#10b981')
+        : _safeRadGrad(ctx, -r * 0.14, -r * 0.04, r * 0.05, 0, r * 0.12, r * 0.52, [
+            [0, mineral.hi], [0.5, mineral.mid], [1, mineral.deep],
+          ], mineral.mid);
+    ctx.fillStyle = gemGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.12, r * 0.38, r * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Incised ceremonial spiral/sun glyph inside cabochon
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = Math.max(0.9, r * 0.055);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.12, r * 0.18, 0, Math.PI * 1.65);
+    ctx.stroke();
+
+    // Crisp glass-like gemstone specular glint
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.14, -r * 0.08, r * 0.09, r * 0.16, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'watch') {
+    // Antique Brass Pocket Watch / Marine Chronometer with winding crown, bow loop, Roman enamel dial & ticking hands
+    // Top bow ring & knurled winding crown
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.4, r * 0.11);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.96, r * 0.24, Math.PI * 0.72, Math.PI * 2.28);
+    ctx.stroke();
+    ctx.fillStyle = brassGrad;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.15, -r * 0.86, r * 0.30, r * 0.18, r * 0.05);
+    ctx.fill();
+
+    // Polished hinged brass hunter case
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, r * 0.08, r * 0.80, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner recessed bezel & ivory porcelain enamel dial
+    ctx.fillStyle = '#fffbeb';
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = Math.max(1.0, r * 0.06);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.08, r * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 12 radial Roman-dial hour ticks
+    ctx.strokeStyle = '#1e293b';
+    for (let h = 0; h < 12; h++) {
+      const a = (h / 12) * Math.PI * 2 - Math.PI * 0.5;
+      const major = h % 3 === 0;
+      ctx.lineWidth = major ? Math.max(1.2, r * 0.065) : Math.max(0.7, r * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * (major ? 0.44 : 0.49), r * 0.08 + Math.sin(a) * r * (major ? 0.44 : 0.49));
+      ctx.lineTo(Math.cos(a) * r * 0.57, r * 0.08 + Math.sin(a) * r * 0.57);
+      ctx.stroke();
+    }
+
+    // Miniature sub-seconds dial at 6 o'clock
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.55)';
+    ctx.lineWidth = Math.max(0.7, r * 0.03);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.35, r * 0.14, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Blued-steel hour & sweeping minute hands
+    const minAng = -Math.PI * 0.35 + timeSec * 0.18;
+    const hrAng = -Math.PI * 0.82;
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.4, r * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.08);
+    ctx.lineTo(Math.cos(hrAng) * r * 0.32, r * 0.08 + Math.sin(hrAng) * r * 0.32);
+    ctx.stroke();
+    ctx.strokeStyle = '#1d4ed8';
+    ctx.lineWidth = Math.max(1.1, r * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.08);
+    ctx.lineTo(Math.cos(minAng) * r * 0.46, r * 0.08 + Math.sin(minAng) * r * 0.46);
+    ctx.stroke();
+
+    // Brass center pin & curved sapphire crystal glint
+    ctx.fillStyle = '#d97706';
+    ctx.beginPath();
+    ctx.arc(0, r * 0.08, Math.max(1.2, r * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.16, r * 0.22, r * 0.09, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'mask') {
+    // Sculpted Obsidian Offering Mask / Golden Idol with glowing turquoise eyes & ceremonial crest
+    const isGold = /gold|idol/.test(nameLower) && !/obsidian/.test(nameLower);
+    const bodyGrad = isGold
+      ? brassGrad
+      : _safeLinGrad(ctx, -r * 0.7, -r, r * 0.7, r, [
+          [0, '#475569'], [0.35, '#1e293b'], [0.7, '#090d16'], [1, '#334155'],
+        ], '#0f172a');
+
+    // Stepped ceremonial headdress crest
+    ctx.fillStyle = isGold ? '#b45309' : '#0f766e';
+    ctx.strokeStyle = isGold ? '#fef08a' : '#5eead4';
+    ctx.lineWidth = Math.max(1.0, r * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, -r * 0.46);
+    ctx.lineTo(-r * 0.78, -r * 0.82);
+    ctx.lineTo(-r * 0.34, -r * 0.72);
+    ctx.lineTo(0, -r * 1.02);
+    ctx.lineTo(r * 0.34, -r * 0.72);
+    ctx.lineTo(r * 0.78, -r * 0.82);
+    ctx.lineTo(r * 0.62, -r * 0.46);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Carved facial shield
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = isGold ? '#fef9c3' : '#94a3b8';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.64, -r * 0.48);
+    ctx.quadraticCurveTo(0, -r * 0.62, r * 0.64, -r * 0.48);
+    ctx.lineTo(r * 0.54, r * 0.46);
+    ctx.quadraticCurveTo(0, r * 0.96, -r * 0.54, r * 0.46);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing turquoise / jade inlaid almond eyes
+    ctx.fillStyle = isGold ? '#10b981' : '#2dd4bf';
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(dir * r * 0.24, -r * 0.08, r * 0.16, r * 0.085, dir * -0.15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Carved nose ridge & ceremonial mouth bar
+    ctx.strokeStyle = isGold ? '#fef08a' : '#cbd5e1';
+    ctx.lineWidth = Math.max(1.1, r * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.20);
+    ctx.lineTo(0, r * 0.20);
+    ctx.moveTo(-r * 0.24, r * 0.44);
+    ctx.lineTo(r * 0.24, r * 0.44);
+    ctx.stroke();
+  } else if (type === 'amber') {
+    // Translucent Honey-Cognac Copal Amber teardrop with prehistoric inclusions
+    const ambGrad = _safeRadGrad(ctx, -r * 0.18, -r * 0.20, r * 0.08, 0, r * 0.08, r * 0.92, [
+      [0, '#fef9c3'],
+      [0.32, '#f59e0b'],
+      [0.72, '#b45309'],
+      [1, '#451a03'],
+    ], '#d97706');
+    ctx.fillStyle = ambGrad;
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.92);
+    ctx.bezierCurveTo(r * 0.68, -r * 0.42, r * 0.84, r * 0.56, 0, r * 0.90);
+    ctx.bezierCurveTo(-r * 0.84, r * 0.56, -r * 0.68, -r * 0.42, 0, -r * 0.92);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Trapped prehistoric botanical speck & suspended golden micro-bubbles
+    ctx.fillStyle = 'rgba(69, 26, 3, 0.72)';
+    ctx.beginPath();
+    ctx.ellipse(r * 0.06, r * 0.14, r * 0.18, r * 0.07, 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(254, 249, 195, 0.88)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.16, r * 0.11, r * 0.22, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(r * 0.22, r * 0.34, Math.max(1.0, r * 0.06), 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'sextant') {
+    // 1899 Brass Marine Sextant — iconic 60° A-frame graduated arc + index arm + mirror + spyglass
+    ctx.strokeStyle = brassGrad;
+    ctx.lineWidth = Math.max(2.0, r * 0.15);
+    ctx.lineCap = 'round';
+    // Curved graduated limb arc at bottom
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.45, r * 1.05, Math.PI * 0.25, Math.PI * 0.75);
+    ctx.stroke();
+    // Side A-frame struts
+    ctx.lineWidth = Math.max(1.5, r * 0.11);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.74);
+    ctx.lineTo(-r * 0.74, r * 0.28);
+    ctx.moveTo(0, -r * 0.74);
+    ctx.lineTo(r * 0.74, r * 0.28);
+    ctx.moveTo(-r * 0.42, -r * 0.14);
+    ctx.lineTo(r * 0.42, -r * 0.14);
+    ctx.stroke();
+    // Silver graduated degree strip
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = Math.max(1.0, r * 0.055);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.45, r * 1.05, Math.PI * 0.28, Math.PI * 0.72);
+    ctx.stroke();
+    // Pivoting index arm & top index mirror
+    const armAng = Math.PI * 0.5 + Math.sin(timeSec * 0.9) * 0.18;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.72);
+    ctx.lineTo(Math.cos(armAng) * r * 1.05, -r * 0.45 + Math.sin(armAng) * r * 1.05);
+    ctx.stroke();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.72, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'compass') {
+    // Brass Expedition Compass with gimbal ring, navy compass rose & glowing oscillating north needle
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.3, r * 0.09);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.88, r * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, r * 0.04, r * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#071426';
+    ctx.beginPath();
+    ctx.arc(0, r * 0.04, r * 0.64, 0, Math.PI * 2);
+    ctx.fill();
+    // Cardinal 4-point rose ticks
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.75)';
+    ctx.lineWidth = Math.max(1.0, r * 0.055);
+    for (let c = 0; c < 4; c++) {
+      const a = (c / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.44, r * 0.04 + Math.sin(a) * r * 0.44);
+      ctx.lineTo(Math.cos(a) * r * 0.60, r * 0.04 + Math.sin(a) * r * 0.60);
+      ctx.stroke();
+    }
+    // Oscillating diamond compass needle (crimson North + radium cyan South)
+    const nAng = -Math.PI * 0.35 + Math.sin(timeSec * 1.9 + index) * 0.25;
+    ctx.save();
+    ctx.translate(0, r * 0.04);
+    ctx.rotate(nAng);
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.52, 0);
+    ctx.lineTo(0, -r * 0.14);
+    ctx.lineTo(0, r * 0.14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#67e8f9';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.48, 0);
+    ctx.lineTo(0, -r * 0.12);
+    ctx.lineTo(0, r * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(1.2, r * 0.09), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Domed glass reflection
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.20, r * 0.22, r * 0.08, -0.55, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'bell') {
+    // Cast Bronze Ship's Bell / Dive Bell with mounting yoke, lathe bands & hanging clapper
+    // Top crown yoke
+    ctx.fillStyle = '#78350f';
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.24, -r * 0.92, r * 0.48, r * 0.24, r * 0.08);
+    ctx.fill();
+    // Bell flared bronze body
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.36, -r * 0.68);
+    ctx.quadraticCurveTo(0, -r * 0.80, r * 0.36, -r * 0.68);
+    ctx.bezierCurveTo(r * 0.42, -r * 0.10, r * 0.62, r * 0.36, r * 0.84, r * 0.62);
+    ctx.quadraticCurveTo(0, r * 0.78, -r * 0.84, r * 0.62);
+    ctx.bezierCurveTo(-r * 0.62, r * 0.36, -r * 0.42, -r * 0.10, -r * 0.36, -r * 0.68);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Lathe bands & subtle verdigris patina
+    ctx.strokeStyle = 'rgba(120, 53, 15, 0.75)';
+    ctx.lineWidth = Math.max(1.1, r * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.48, r * 0.18);
+    ctx.quadraticCurveTo(0, r * 0.28, r * 0.48, r * 0.18);
+    ctx.stroke();
+    // Hanging brass clapper ball underneath
+    ctx.fillStyle = '#92400e';
+    ctx.beginPath();
+    ctx.arc(0, r * 0.76, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    // Specular flank highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.08, r * 0.09, r * 0.36, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'telegraph') {
+    // Chadburn Ship's Brass Engine Order Telegraph with circular sector dial & throttle lever
+    // Pedestal base
+    ctx.fillStyle = '#78350f';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, r * 0.42);
+    ctx.lineTo(r * 0.24, r * 0.42);
+    ctx.lineTo(r * 0.42, r * 0.92);
+    ctx.lineTo(-r * 0.42, r * 0.92);
+    ctx.closePath();
+    ctx.fill();
+    // Protruding brass throttle handle
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.8, r * 0.13);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.12);
+    ctx.lineTo(r * 0.72, -r * 0.72);
+    ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(r * 0.74, -r * 0.74, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    // Main circular brass dial housing
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.12, r * 0.66, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Iconic white/black Chadburn order wedges
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.12, r * 0.50, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    for (let s = 0; s < 4; s++) {
+      const a0 = (s * 2) * (Math.PI / 4) - Math.PI * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.12);
+      ctx.arc(0, -r * 0.12, r * 0.50, a0, a0 + Math.PI / 4);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.12, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'lamp') {
+    // Antique Carbide Miner Lamp / Ship's Brass Lantern with glowing amber Fresnel lens
+    // Top bail ring & vented dome hood
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.2, r * 0.09);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.82, r * 0.22, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.48, -r * 0.42);
+    ctx.quadraticCurveTo(0, -r * 0.86, r * 0.48, -r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Glowing amber glass lantern chamber
+    const lampGlow = _safeRadGrad(ctx, 0, 0, r * 0.05, 0, 0, r * 0.55, [
+      [0, '#ffffff'], [0.4, '#fde047'], [0.85, '#f97316'], [1, '#7c2d12'],
+    ], '#fbbf24');
+    ctx.fillStyle = lampGlow;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.42, -r * 0.42, r * 0.84, r * 0.90, r * 0.12);
+    ctx.fill();
+    // Protective brass cage bars
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = Math.max(1.1, r * 0.07);
+    for (const bx of [-r * 0.24, 0, r * 0.24]) {
+      ctx.beginPath();
+      ctx.moveTo(bx, -r * 0.42);
+      ctx.lineTo(bx, r * 0.48);
+      ctx.stroke();
+    }
+    // Heavy weighted brass fuel base
+    ctx.fillStyle = brassGrad;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.56, r * 0.46, r * 1.12, r * 0.34, r * 0.12);
+    ctx.fill();
+    ctx.stroke();
+  } else if (type === 'amphora') {
+    // Sunken Greco-Roman Amphora / Crystal Decanter with twin arched neck handles
+    const isCrystal = /crystal|decanter/.test(nameLower);
+    const bodyG = isCrystal
+      ? _safeLinGrad(ctx, -r * 0.5, -r, r * 0.5, r, [[0, '#e0f2fe'], [0.5, '#7dd3fc'], [1, '#0284c7']], '#7dd3fc')
+      : _safeLinGrad(ctx, -r * 0.5, -r, r * 0.5, r, [[0, '#fdba74'], [0.45, '#c2410c'], [1, '#431407']], '#c2410c');
+    // Twin arched handles
+    ctx.strokeStyle = isCrystal ? '#bae6fd' : '#ea580c';
+    ctx.lineWidth = Math.max(1.5, r * 0.11);
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(dir * r * 0.20, -r * 0.68);
+      ctx.quadraticCurveTo(dir * r * 0.72, -r * 0.52, dir * r * 0.48, -r * 0.12);
+      ctx.stroke();
+    }
+    // Tapered vessel silhouette
+    ctx.fillStyle = bodyG;
+    ctx.strokeStyle = isCrystal ? '#ffffff' : '#fed7aa';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.30, -r * 0.86);
+    ctx.lineTo(r * 0.30, -r * 0.86);
+    ctx.lineTo(r * 0.20, -r * 0.48);
+    ctx.bezierCurveTo(r * 0.66, -r * 0.22, r * 0.56, r * 0.45, r * 0.16, r * 0.88);
+    ctx.lineTo(-r * 0.16, r * 0.88);
+    ctx.bezierCurveTo(-r * 0.56, r * 0.45, -r * 0.66, -r * 0.22, -r * 0.20, -r * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Painted shoulder stripe
+    ctx.strokeStyle = isCrystal ? 'rgba(255,255,255,0.65)' : '#fef08a';
+    ctx.lineWidth = Math.max(1.0, r * 0.065);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.44, -r * 0.10);
+    ctx.quadraticCurveTo(0, r * 0.04, r * 0.44, -r * 0.10);
+    ctx.stroke();
+  } else if (type === 'plate') {
+    // Shipwreck Fine Porcelain Plate with cobalt maritime laurel band & gilded rim
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = Math.max(1.4, r * 0.095);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.84, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#1d4ed8';
+    ctx.lineWidth = Math.max(1.8, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#93c5fd';
+    ctx.lineWidth = Math.max(0.8, r * 0.045);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.44, 0, Math.PI * 2);
+    ctx.stroke();
+    // Subtle center maritime crest
+    ctx.fillStyle = '#1e40af';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'candelabra') {
+    // First-Class Silver 3-Branch Candelabra
+    ctx.strokeStyle = silverGrad;
+    ctx.lineWidth = Math.max(1.6, r * 0.12);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.72);
+    ctx.lineTo(0, r * 0.78);
+    ctx.moveTo(-r * 0.46, r * 0.80);
+    ctx.lineTo(r * 0.46, r * 0.80);
+    ctx.moveTo(0, r * 0.06);
+    ctx.quadraticCurveTo(-r * 0.56, r * 0.12, -r * 0.62, -r * 0.50);
+    ctx.moveTo(0, r * 0.06);
+    ctx.quadraticCurveTo(r * 0.56, r * 0.12, r * 0.62, -r * 0.50);
+    ctx.stroke();
+    ctx.fillStyle = '#fef9c3';
+    for (const [cx, cy] of [[-r * 0.62, -r * 0.58], [0, -r * 0.80], [r * 0.62, -r * 0.58]]) {
+      ctx.beginPath();
+      ctx.roundRect(cx - r * 0.14, cy, r * 0.28, r * 0.14, r * 0.04);
+      ctx.fill();
+    }
+  } else if (type === 'chalice') {
+    // Ceremonial Hammered Copper / Gold Chalice Bowl
+    const cupGrad = /copper/.test(nameLower)
+      ? _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fed7aa'], [0.45, '#c2410c'], [1, '#7c2d12']], '#c2410c')
+      : brassGrad;
+    ctx.fillStyle = cupGrad;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.72, -r * 0.58);
+    ctx.lineTo(r * 0.72, -r * 0.58);
+    ctx.quadraticCurveTo(r * 0.62, r * 0.22, 0, r * 0.28);
+    ctx.quadraticCurveTo(-r * 0.62, r * 0.22, -r * 0.72, -r * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.14, r * 0.26);
+    ctx.lineTo(r * 0.14, r * 0.26);
+    ctx.lineTo(r * 0.44, r * 0.82);
+    ctx.lineTo(-r * 0.44, r * 0.82);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (type === 'porthole') {
+    // Bolted Brass Stateroom Porthole with deep-sea glass & wing-dog latches
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    const glassG = _safeRadGrad(ctx, -r * 0.2, -r * 0.2, r * 0.08, 0, 0, r * 0.6, [
+      [0, '#bae6fd'], [0.55, '#0284c7'], [1, '#082f49'],
+    ], '#0284c7');
+    ctx.fillStyle = glassG;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.56, 0, Math.PI * 2);
+    ctx.fill();
+    // 6 perimeter bolts
+    ctx.fillStyle = '#78350f';
+    for (let b = 0; b < 6; b++) {
+      const a = (b / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.71, Math.sin(a) * r * 0.71, Math.max(1.1, r * 0.065), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.18, -r * 0.18, r * 0.20, r * 0.07, -0.65, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'propeller') {
+    // 4-Blade Cast Bronze Ship Propeller
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = lw;
+    for (let b = 0; b < 4; b++) {
+      ctx.save();
+      ctx.rotate((b / 4) * Math.PI * 2 + 0.35);
+      ctx.beginPath();
+      ctx.ellipse(0, -r * 0.48, r * 0.24, r * 0.42, 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#92400e';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (type === 'safe') {
+    // Forepeak Captain's Riveted Steel & Brass Safe
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48, r * 0.16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = Math.max(1.2, r * 0.08);
+    ctx.strokeRect(-r * 0.56, -r * 0.56, r * 1.12, r * 1.12);
+    ctx.fillStyle = brassGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'wheel') {
+    // 6-Spoke Brass Valve Wheel / Ship's Steering Wheel
+    ctx.strokeStyle = brassGrad;
+    ctx.lineWidth = Math.max(2.0, r * 0.15);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1.3, r * 0.095);
+    for (let s = 0; s < 6; s++) {
+      const a = (s / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * r * 0.88, Math.sin(a) * r * 0.88);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.20, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'enigma') {
+    // Kriegsmarine Enigma Cipher Rotor — notched brass wheel with 26 alphabet teeth & contact pins
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = brassGrad;
+    ctx.lineWidth = Math.max(1.8, r * 0.13);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Notched outer thumb ratchet teeth
+    ctx.fillStyle = '#fde047';
+    for (let t = 0; t < 12; t++) {
+      const a = (t / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.86, Math.sin(a) * r * 0.86, Math.max(1.0, r * 0.065), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Inner silver electrical spring contact pins
+    ctx.fillStyle = '#e2e8f0';
+    for (let p = 0; p < 8; p++) {
+      const a = (p / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.48, Math.sin(a) * r * 0.48, Math.max(0.9, r * 0.055), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'slate') {
+    // Waterproof Dive Log Slate / Ship's Manifest with ruled lines & brass clasp
+    ctx.fillStyle = '#e2e8f0';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.64, -r * 0.80, r * 1.28, r * 1.60, r * 0.14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(-r * 0.28, -r * 0.90, r * 0.56, r * 0.20);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = Math.max(0.9, r * 0.055);
+    for (let ln = -2; ln <= 2; ln++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.44, ln * r * 0.24);
+      ctx.lineTo(r * (ln === 2 ? 0.18 : 0.44), ln * r * 0.24);
+      ctx.stroke();
+    }
+  } else if (type === 'spyglass') {
+    // 3-Stage Telescoping Wardroom Brass Spyglass / Periscope Prism
+    ctx.save();
+    ctx.rotate(-0.48);
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = Math.max(0.9, r * 0.06);
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.90, -r * 0.16, r * 0.56, r * 0.32, r * 0.06);
+    ctx.roundRect(-r * 0.36, -r * 0.22, r * 0.62, r * 0.44, r * 0.07);
+    ctx.roundRect(r * 0.24, -r * 0.28, r * 0.64, r * 0.56, r * 0.08);
+    ctx.fill();
+    ctx.stroke();
+    // Leather grip sleeve on middle barrel
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-r * 0.28, -r * 0.20, r * 0.44, r * 0.40);
+    // Cyan optical objective lens
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.ellipse(r * 0.86, 0, r * 0.08, r * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'gauge') {
+    // Vintage Brass Submersible Pressure / Depth Gauge (or CRT Radar Oscilloscope)
+    const isOsc = /oscilloscope/.test(nameLower);
+    ctx.fillStyle = isOsc ? '#334155' : brassGrad;
+    ctx.strokeStyle = isOsc ? '#94a3b8' : '#fef08a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = isOsc ? '#022c22' : '#0f172a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+    ctx.fill();
+    if (isOsc) {
+      // Glowing green CRT oscilloscope sine waveform
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = Math.max(1.2, r * 0.075);
+      ctx.beginPath();
+      for (let k = 0; k <= 12; k++) {
+        const x = -r * 0.48 + (k / 12) * r * 0.96;
+        const y = Math.sin(k * 0.9 + timeSec * 4.2) * r * 0.26;
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = Math.max(1.2, r * 0.075);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.48, -Math.PI * 0.85, Math.PI * 0.35);
+      ctx.stroke();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = Math.max(1.2, r * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(r * 0.42, -r * 0.24);
+      ctx.stroke();
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(1.2, r * 0.09), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.22, r * 0.20, r * 0.07, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'tooth') {
+    // Prehistoric Megalodon / Miocene Shark Tooth — dark curved bourlette root + serrated ivory enamel blade
+    ctx.fillStyle = '#3f3f46';
+    ctx.strokeStyle = '#71717a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.72, -r * 0.36);
+    ctx.quadraticCurveTo(0, -r * 0.84, r * 0.72, -r * 0.36);
+    ctx.quadraticCurveTo(0, -r * 0.14, -r * 0.72, -r * 0.36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    const enamGrad = _safeLinGrad(ctx, -r * 0.5, -r * 0.3, r * 0.5, r * 0.85, [
+      [0, '#f5f5f4'], [0.45, '#d6d3d1'], [1, '#78716c'],
+    ], '#d6d3d1');
+    ctx.fillStyle = enamGrad;
+    ctx.strokeStyle = '#e7e5e4';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, -r * 0.30);
+    ctx.quadraticCurveTo(0, -r * 0.16, r * 0.62, -r * 0.30);
+    ctx.quadraticCurveTo(r * 0.42, r * 0.42, 0, r * 0.94);
+    ctx.quadraticCurveTo(-r * 0.42, r * 0.42, -r * 0.62, -r * 0.30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (type === 'tusk') {
+    // Spiraled Narwhal Ivory Tusk Lance
+    ctx.save();
+    ctx.rotate(-0.58);
+    ctx.fillStyle = _safeLinGrad(ctx, -r, 0, r, 0, [[0, '#fef3c7'], [0.6, '#f8fafc'], [1, '#cbd5e1']], '#fef3c7');
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = Math.max(0.9, r * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.96, -r * 0.22);
+    ctx.lineTo(r * 1.02, 0);
+    ctx.lineTo(-r * 0.96, r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(180, 83, 9, 0.55)';
+    for (let s = -3; s <= 3; s++) {
+      const x = s * r * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.08, -r * 0.15);
+      ctx.lineTo(x + r * 0.08, r * 0.15);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (type === 'blade') {
+    // Knapped Ritual Obsidian / Onyx / Calcite Ceremonial Blade with wrapped gold hilt
+    ctx.save();
+    ctx.rotate(-0.52);
+    const blGrad = _safeLinGrad(ctx, -r, -r * 0.3, r, r * 0.3, [
+      [0, mineral.hi], [0.45, mineral.mid], [1, mineral.deep],
+    ], mineral.mid);
+    ctx.fillStyle = blGrad;
+    ctx.strokeStyle = mineral.edge;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.34, 0);
+    ctx.quadraticCurveTo(r * 0.26, -r * 0.38, r * 1.02, 0);
+    ctx.quadraticCurveTo(r * 0.26, r * 0.38, -r * 0.34, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Center ridge gleam
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = Math.max(0.9, r * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, 0);
+    ctx.lineTo(r * 0.90, 0);
+    ctx.stroke();
+    // Wrapped gold/bone handle
+    ctx.fillStyle = '#b45309';
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.92, -r * 0.14, r * 0.58, r * 0.28, r * 0.08);
+    ctx.fill();
+    ctx.strokeStyle = '#fde047';
+    ctx.stroke();
+    ctx.restore();
+  } else if (type === 'trilobite') {
+    // Segmented Fossilized Trilobite / Blind Crustacean Carapace
+    ctx.fillStyle = '#d6b88e';
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.62, r * 0.86, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Cephalon head shield + twin eye ridges
+    ctx.fillStyle = '#b48a5a';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.34, r * 0.54, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // Axial lobe & horizontal thoracic ribs
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = Math.max(0.9, r * 0.06);
+    for (let seg = -2; seg <= 3; seg++) {
+      const y = seg * r * 0.20;
+      const hw = r * (0.54 - Math.abs(seg) * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(-hw, y);
+      ctx.lineTo(hw, y);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.20, -r * 0.64);
+    ctx.lineTo(-r * 0.14, r * 0.72);
+    ctx.moveTo(r * 0.20, -r * 0.64);
+    ctx.lineTo(r * 0.14, r * 0.72);
+    ctx.stroke();
+  } else if (type === 'coral') {
+    // Delicate Branching Fossil Coral / Starfish Skeleton
+    ctx.strokeStyle = '#fed7aa';
+    ctx.lineWidth = Math.max(1.8, r * 0.13);
+    ctx.lineCap = 'round';
+    if (/starfish/.test(nameLower)) {
+      ctx.fillStyle = '#fdba74';
+      ctx.beginPath();
+      for (let p = 0; p < 10; p++) {
+        const a = (p / 10) * Math.PI * 2 - Math.PI * 0.5;
+        const rad = p % 2 === 0 ? r * 0.88 : r * 0.34;
+        if (p === 0) ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+        else ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, r * 0.82);
+      ctx.lineTo(0, -r * 0.76);
+      ctx.moveTo(0, r * 0.24);
+      ctx.lineTo(-r * 0.62, -r * 0.36);
+      ctx.moveTo(0, r * 0.10);
+      ctx.lineTo(r * 0.64, -r * 0.42);
+      ctx.moveTo(-r * 0.32, -r * 0.06);
+      ctx.lineTo(-r * 0.36, -r * 0.62);
+      ctx.moveTo(r * 0.32, -r * 0.16);
+      ctx.lineTo(r * 0.36, -r * 0.68);
+      ctx.stroke();
+    }
+  } else if (type === 'nautilus') {
+    // Golden-Ratio Chambered Nautilus / Ammonite Fossil with pearlescent ribbed septa
+    const shellGrad = _safeRadGrad(ctx, -r * 0.18, -r * 0.18, r * 0.08, 0, 0, r * 0.88, [
+      [0, '#fef3c7'], [0.55, '#e2b887'], [1, '#78350f'],
+    ], '#e2b887');
+    ctx.fillStyle = shellGrad;
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Logarithmic spiral & curved chamber ribs
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = Math.max(1.1, r * 0.065);
+    ctx.beginPath();
+    for (let s = 0; s <= 22; s++) {
+      const a = s * 0.42;
+      const sr = r * 0.06 + (s / 22) * r * 0.72;
+      const px = Math.cos(a) * sr;
+      const py = Math.sin(a) * sr;
+      if (s === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 251, 235, 0.58)';
+    ctx.lineWidth = Math.max(0.8, r * 0.045);
+    for (let rib = 0; rib < 10; rib++) {
+      const a = (rib / 10) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.34, Math.sin(a) * r * 0.34);
+      ctx.lineTo(Math.cos(a + 0.2) * r * 0.76, Math.sin(a + 0.2) * r * 0.76);
+      ctx.stroke();
+    }
+  } else if (type === 'pearl') {
+    // Iridescent Pearl cradled in fluted bivalve shell (ivory, blue-ice, Tahitian black, or golden sulfur)
+    const isBlack = /black|volcanic|obsidian/.test(nameLower);
+    const isBlue = /blue|ice|sapphire|cathedral/.test(nameLower);
+    const isGold = /sulfur|amber|gold/.test(nameLower);
+    // Fluted oyster shell cradle
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.38, r * 0.86, r * 0.40, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Luminous multi-stop radial pearl sphere
+    const pGrad = isBlack
+      ? _safeRadGrad(ctx, -r * 0.18, -r * 0.22, r * 0.06, 0, -r * 0.04, r * 0.58, [
+          [0, '#e9d5ff'], [0.35, '#4c1d95'], [0.78, '#1e1b4b'], [1, '#020617'],
+        ], '#312e81')
+      : isBlue
+        ? _safeRadGrad(ctx, -r * 0.18, -r * 0.22, r * 0.06, 0, -r * 0.04, r * 0.58, [
+            [0, '#ffffff'], [0.42, '#bae6fd'], [0.85, '#0284c7'], [1, '#0c4a6e'],
+          ], '#7dd3fc')
+        : isGold
+          ? _safeRadGrad(ctx, -r * 0.18, -r * 0.22, r * 0.06, 0, -r * 0.04, r * 0.58, [
+              [0, '#ffffff'], [0.4, '#fef08a'], [0.85, '#d97706'], [1, '#78350f'],
+            ], '#fde047')
+          : _safeRadGrad(ctx, -r * 0.18, -r * 0.22, r * 0.06, 0, -r * 0.04, r * 0.58, [
+              [0, '#ffffff'], [0.45, '#f8fafc'], [0.78, '#fbcfe8'], [1, '#94a3b8'],
+            ], '#f8fafc');
+    ctx.fillStyle = pGrad;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.06, r * 0.56, 0, Math.PI * 2);
+    ctx.fill();
+    // Crisp specular pinpoint glint
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+    ctx.beginPath();
+    ctx.arc(-r * 0.18, -r * 0.24, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'geode') {
+    // Cracked Volcanic/Limestone Geode revealing glittering crystalline interior
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.88, r * 0.76, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = mineral.deep;
+    ctx.strokeStyle = mineral.edge;
+    ctx.lineWidth = Math.max(1.2, r * 0.08);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.64, r * 0.52, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Sparkling micro-crystal teeth lining the hollow
+    ctx.fillStyle = mineral.mid;
+    for (let c = 0; c < 7; c++) {
+      const a = (c / 7) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.52, Math.sin(a) * r * 0.42);
+      ctx.lineTo(Math.cos(a + 0.18) * r * 0.20, Math.sin(a + 0.18) * r * 0.16);
+      ctx.lineTo(Math.cos(a - 0.18) * r * 0.24, Math.sin(a - 0.18) * r * 0.20);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = mineral.hi;
+    ctx.beginPath();
+    ctx.arc(-r * 0.12, -r * 0.08, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'pyrite') {
+    // Interlocking Mirror-Gold Isometric Pyrite Cubes
+    const drawCube = (ox, oy, sz) => {
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.moveTo(ox, oy - sz);
+      ctx.lineTo(ox + sz * 0.86, oy - sz * 0.5);
+      ctx.lineTo(ox, oy);
+      ctx.lineTo(ox - sz * 0.86, oy - sz * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(ox - sz * 0.86, oy - sz * 0.5);
+      ctx.lineTo(ox, oy);
+      ctx.lineTo(ox, oy + sz);
+      ctx.lineTo(ox - sz * 0.86, oy + sz * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.moveTo(ox + sz * 0.86, oy - sz * 0.5);
+      ctx.lineTo(ox, oy);
+      ctx.lineTo(ox, oy + sz);
+      ctx.lineTo(ox + sz * 0.86, oy + sz * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawCube(-r * 0.30, r * 0.16, r * 0.42);
+    drawCube(r * 0.32, r * 0.18, r * 0.38);
+    drawCube(0, -r * 0.14, r * 0.52);
+  } else if (type === 'crown' || type === 'crystal') {
+    // Faceted Translucent Hexagonal Crystal Cluster / 5-Spire Crown colored by exact mineral
+    const spires = type === 'crown'
+      ? [[-0.52, 0.72], [-0.26, 0.96], [0, 1.18], [0.26, 0.94], [0.52, 0.70]]
+      : [[-0.36, 0.84], [0, 1.16], [0.34, 0.80]];
+    for (let i = 0; i < spires.length; i++) {
+      const [ang, lenMul] = spires[i];
+      ctx.save();
+      ctx.rotate(ang);
+      const pw = r * (i === Math.floor(spires.length / 2) ? 0.30 : 0.22);
+      // Left lit facet
+      ctx.fillStyle = _safeLinGrad(ctx, -pw, -r * lenMul, 0, r * 0.65, [[0, mineral.hi], [1, mineral.mid]], mineral.hi);
+      ctx.beginPath();
+      ctx.moveTo(0, -r * lenMul);
+      ctx.lineTo(0, r * 0.62);
+      ctx.lineTo(-pw * 0.85, r * 0.62);
+      ctx.lineTo(-pw, -r * lenMul * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      // Right shadow facet
+      ctx.fillStyle = _safeLinGrad(ctx, 0, -r * lenMul, pw, r * 0.65, [[0, mineral.mid], [1, mineral.deep]], mineral.deep);
+      ctx.beginPath();
+      ctx.moveTo(0, -r * lenMul);
+      ctx.lineTo(pw, -r * lenMul * 0.28);
+      ctx.lineTo(pw * 0.85, r * 0.62);
+      ctx.lineTo(0, r * 0.62);
+      ctx.closePath();
+      ctx.fill();
+      // Crisp prismatic highlight rim
+      ctx.strokeStyle = mineral.edge;
+      ctx.lineWidth = Math.max(0.9, r * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(0, -r * lenMul);
+      ctx.lineTo(pw, -r * lenMul * 0.28);
+      ctx.lineTo(pw * 0.85, r * 0.62);
+      ctx.lineTo(-pw * 0.85, r * 0.62);
+      ctx.lineTo(-pw, -r * lenMul * 0.28);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+  } else if (type === 'vial') {
+    // Pressurized Scientific Borosilicate Core Vial with machined endcaps & glowing specimen
+    ctx.save();
+    ctx.rotate(-0.32);
+    // Glass cylinder body
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.28)';
+    ctx.strokeStyle = '#e0f2fe';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.34, -r * 0.68, r * 0.68, r * 1.36, r * 0.14);
+    ctx.fill();
+    ctx.stroke();
+    // Glowing liquid / mineral core inside
+    ctx.fillStyle = _safeLinGrad(ctx, 0, -r * 0.2, 0, r * 0.56, [[0, mineral.hi], [1, mineral.mid]], '#38bdf8');
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.25, -r * 0.14, r * 0.50, r * 0.72, r * 0.08);
+    ctx.fill();
+    // Top & bottom machined titanium/brass caps
+    ctx.fillStyle = silverGrad;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.40, -r * 0.86, r * 0.80, r * 0.24, r * 0.07);
+    ctx.roundRect(-r * 0.40, r * 0.62, r * 0.80, r * 0.24, r * 0.07);
+    ctx.fill();
+    // Glass glint streak
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = Math.max(1.0, r * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.18, -r * 0.52);
+    ctx.lineTo(-r * 0.18, r * 0.48);
+    ctx.stroke();
+    ctx.restore();
+  } else if (type === 'cookie') {
+    // Technical Cave Line Arrow / Round Notched Line Cookie
+    const isArrow = /arrow/.test(nameLower);
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    if (isArrow) {
+      ctx.beginPath();
+      ctx.moveTo(r * 0.88, 0);
+      ctx.lineTo(-r * 0.68, -r * 0.56);
+      ctx.lineTo(-r * 0.38, 0);
+      ctx.lineTo(-r * 0.68, r * 0.56);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.76, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (type === 'reel') {
+    // Technical Cave Exploration Spool / Brass Reel with wound gold line drum
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.80, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Wound bright cave-line gold spool ring
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = Math.max(2.6, r * 0.22);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.52, 0, Math.PI * 2);
+    ctx.stroke();
+    // Center finger hole & machined perimeter lightening holes
+    ctx.fillStyle = '#090d16';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e2e8f0';
+    for (let h = 0; h < 4; h++) {
+      const a = (h / 4) * Math.PI * 2 + 0.4;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.68, Math.sin(a) * r * 0.68, Math.max(1.0, r * 0.065), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (type === 'beacon') {
+    // Subsea Acoustic Transponder / Telemetry Sensor with blinking cyan status LED
+    // Top antenna prongs
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = Math.max(1.2, r * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.20, -r * 0.56);
+    ctx.lineTo(-r * 0.36, -r * 0.94);
+    ctx.moveTo(r * 0.20, -r * 0.56);
+    ctx.lineTo(r * 0.36, -r * 0.94);
+    ctx.stroke();
+    // Anodized yellow/titanium pressure cylinder
+    ctx.fillStyle = _safeLinGrad(ctx, -r * 0.5, 0, r * 0.5, 0, [[0, '#fef08a'], [0.5, '#eab308'], [1, '#854d0e']], '#eab308');
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.42, -r * 0.58, r * 0.84, r * 1.32, r * 0.20);
+    ctx.fill();
+    ctx.stroke();
+    // Dark acoustic collar & blinking telemetry LED
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-r * 0.42, -r * 0.16, r * 0.84, r * 0.34);
+    const blink = 0.45 + 0.55 * Math.max(0, Math.sin(timeSec * 4.5 + index));
+    ctx.fillStyle = `rgba(56, 189, 248, ${blink.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(1.6, r * 0.14), 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'anchor') {
+    // Sunken Admiralty Anchor
+    ctx.strokeStyle = silverGrad;
+    ctx.lineWidth = Math.max(2.0, r * 0.15);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.72, r * 0.18, 0, Math.PI * 2);
+    ctx.moveTo(0, -r * 0.54);
+    ctx.lineTo(0, r * 0.76);
+    ctx.moveTo(-r * 0.46, -r * 0.34);
+    ctx.lineTo(r * 0.46, -r * 0.34);
+    ctx.moveTo(-r * 0.68, r * 0.32);
+    ctx.quadraticCurveTo(0, r * 0.96, r * 0.68, r * 0.32);
+    ctx.stroke();
+  } else if (type === 'hardware') {
+    // Machined Titanium Bolt / Ore-Cart Coupling Pin
+    ctx.save();
+    ctx.rotate(-0.45);
+    ctx.fillStyle = silverGrad;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.72, -r * 0.24, r * 1.18, r * 0.48, r * 0.08);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = brassGrad;
+    ctx.beginPath();
+    ctx.roundRect(r * 0.34, -r * 0.44, r * 0.42, r * 0.88, r * 0.10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    // Engraved Expedition Brass Plaque / Builder's Plate / Embossed Seal
+    const isSeal = /seal|emblem/.test(nameLower);
+    ctx.fillStyle = brassGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = lw;
+    if (isSeal) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.80, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = Math.max(1.0, r * 0.06);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.58, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.20, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.roundRect(-r * 0.82, -r * 0.58, r * 1.64, r * 1.16, r * 0.14);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = Math.max(0.9, r * 0.055);
+      ctx.strokeRect(-r * 0.64, -r * 0.42, r * 1.28, r * 0.84);
+      // 4 corner brass rivets + engraved inscription bars
+      ctx.fillStyle = '#fef9c3';
+      for (const [rx, ry] of [[-0.68, -0.44], [0.68, -0.44], [-0.68, 0.44], [0.68, 0.44]]) {
+        ctx.beginPath();
+        ctx.arc(rx * r, ry * r, Math.max(0.9, r * 0.055), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = '#78350f';
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.42, -r * 0.12);
+      ctx.lineTo(r * 0.42, -r * 0.12);
+      ctx.moveTo(-r * 0.28, r * 0.16);
+      ctx.lineTo(r * 0.28, r * 0.16);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}

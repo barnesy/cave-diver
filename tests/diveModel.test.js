@@ -7970,3 +7970,81 @@ test('v166 Gear Workshop Persistence (TDZ Fix, Cloud Prefs Sync) & Unified Artic
   }
   drawMiniDiverAvatar(noopCtx, 124, 72, customRig, { hasCcr: true, hasDpv: true });
 });
+
+test('v167 SDF-Sealed Air Pockets & Museum-Grade Bespoke Artifact Visuals', async () => {
+  const { createSubmergedStories, stepSubmergedStories } = await import('../public/js/game/submergedStories.js');
+  const { classifyArtifactVisual, drawStyledArtifact } = await import('../public/js/game/artSprites.js');
+
+  // 1. Every placed Air Pocket across all 33 levels must sit strictly under solid overhead rock/hull (0 floating/leaky domes)
+  let totalPlaced = 0;
+  let naturalVaults = 0;
+  for (const lvl of LEVELS) {
+    const stories = createSubmergedStories(lvl);
+    const dome = stories.setPieces.find((sp) => sp.kind === 'air-dome');
+    if (!dome) continue;
+    totalPlaced++;
+    if (dome.isNaturalVault) naturalVaults++;
+    assert.ok(Array.isArray(dome.ceilingProfile) && dome.ceilingProfile.length >= 2, `${lvl.id} air pocket must have ceilingProfile`);
+    assert.ok(Number.isFinite(dome.leftX) && Number.isFinite(dome.rightX) && dome.rightX > dome.leftX);
+    for (const pt of dome.ceilingProfile) {
+      const above = evaluateCaveSDF(lvl, pt.x, pt.ceilY - 0.35);
+      assert.ok(above > 0, `${lvl.id} air pocket point (${pt.x.toFixed(1)}, ${pt.ceilY.toFixed(1)}) must be sealed by solid overhead rock (got SDF=${above.toFixed(2)})`);
+    }
+  }
+  assert.ok(totalPlaced >= 30, `Expected >=30 sites with valid sealed air pockets, got ${totalPlaced}`);
+  assert.ok(naturalVaults >= 20, `Expected >=20 natural concave cave/wreck ceiling vaults, got ${naturalVaults}`);
+
+  // Level 1 air pocket must NOT be floating near the open sunlit cenote spawn basin
+  const l1Dome = createSubmergedStories(LEVEL_1).setPieces.find((sp) => sp.kind === 'air-dome');
+  assert.ok(l1Dome && Math.hypot(l1Dome.x - LEVEL_1.spawn.x, l1Dome.y - LEVEL_1.spawn.y) >= 13, 'Level 1 air pocket must be inside the overhead cave, away from open entry basin');
+
+  // Hovering beneath an air pocket calms panic & HR and sets activeAirDome
+  const st1 = createSubmergedStories(LEVEL_1);
+  const d1 = st1.setPieces.find((sp) => sp.kind === 'air-dome');
+  const diveSt = { panicLevel: 0.6, heartRateBpm: 118 };
+  stepSubmergedStories(st1, { x: d1.x, y: d1.y + 0.6, angle: 0, torchOn: true }, 10, {}, diveSt);
+  assert.equal(st1.inAirDome, true);
+  assert.equal(st1.activeAirDome, d1);
+  assert.ok(diveSt.panicLevel < 0.6 && diveSt.heartRateBpm < 118);
+
+  // 2. Bespoke Artifact Visual Classifier accuracy & smoke rendering across all 350 collectibles
+  const expectedTypes = [
+    [{ name: 'Maya Jade Pendant', kind: 'relic' }, 'pendant'],
+    [{ name: 'East Tool-Drift Pocket Watch', kind: 'relic' }, 'watch'],
+    [{ name: 'Obsidian Offering Mask', kind: 'relic' }, 'mask'],
+    [{ name: 'Bells Reef Black Pearl', kind: 'pearl' }, 'pearl'],
+    [{ name: 'Submerged Copal Amber', kind: 'relic' }, 'amber'],
+    [{ name: '1899 Arctic Brass Sextant', kind: 'relic' }, 'sextant'],
+    [{ name: 'Pri-Fly Bridge Compass', kind: 'compass' }, 'compass'],
+    [{ name: 'Brass Hoist Bell', kind: 'relic' }, 'bell'],
+    [{ name: 'Engine Order Telegraph', kind: 'relic' }, 'telegraph'],
+    [{ name: '1924 Carbide Miner Lamp', kind: 'gear' }, 'lamp'],
+    [{ name: 'Sunken Provençal Amphora', kind: 'relic' }, 'amphora'],
+    [{ name: 'Kriegsmarine Enigma Rotor', kind: 'relic' }, 'enigma'],
+    [{ name: 'Megalodon Tooth', kind: 'fossil' }, 'tooth'],
+    [{ name: 'Blue Calcite Geode', kind: 'crystal' }, 'geode'],
+    [{ name: 'Colossal Marble Pyrite Heart', kind: 'crystal' }, 'pyrite'],
+  ];
+  for (const [sample, expected] of expectedTypes) {
+    assert.equal(classifyArtifactVisual(sample).type, expected, `${sample.name} should classify as ${expected}`);
+  }
+
+  const noopCtx = new Proxy(
+    {
+      globalAlpha: 1,
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 48 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const seenTypes = new Set();
+  for (const lvl of LEVELS) {
+    for (const col of (lvl.collectibles || [])) {
+      const vis = classifyArtifactVisual(col);
+      seenTypes.add(vis.type);
+      drawStyledArtifact(noopCtx, col, 200, 200, 24, 2.5, { isGrand: (col.scale || 1) >= 1.35 });
+    }
+  }
+  assert.ok(seenTypes.size >= 30, `Expected >=30 distinct bespoke artifact silhouettes across campaign, got ${seenTypes.size}`);
+});

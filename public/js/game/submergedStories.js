@@ -98,6 +98,222 @@ const CAVE_LORE_BY_KIND = Object.freeze({
   ],
 });
 
+function probeWallFine(level, ox, oy, dx, dy, maxDist = 9, step = 0.12) {
+  for (let t = step; t <= maxDist; t += step) {
+    const px = ox + dx * t;
+    const py = oy + dy * t;
+    if (evaluateCaveSDF(level, px, py) >= 0) {
+      return { x: px - dx * (step * 0.5), y: py - dy * (step * 0.5), dist: t };
+    }
+  }
+  return null;
+}
+
+/**
+ * Physically scan a level's SDF ceiling geometry for a true sealed overhead Air Pocket:
+ *  - Priority 1: Natural concave ceiling vault where rock curves down to seal BOTH left and right ends.
+ *  - Priority 2: Flat overhead ceiling bay (wreck deck beams / flat karst roof) verified 100% under
+ *    solid overhead rock/hull across the entire width, with zero bleed into open water or diagonal walls.
+ * Never spawns inside open sunlit surface basins or right next to spawn/exit shafts (v167).
+ */
+function findBestAirDomeVault(level, isWreck, isTooClose) {
+  const openBasins = Array.isArray(level.openBasins) ? level.openBasins : [];
+  const spawnX = level.spawn?.x ?? 0;
+  const spawnY = level.spawn?.y ?? 2;
+  const exitX = level.exitZone?.x ?? spawnX;
+  const exitY = level.exitZone?.y ?? spawnY;
+  const deckY = level.wreckDeckY ?? 36;
+  const minCeilingY = isWreck ? Math.max(8, deckY + 1.5) : 7.0;
+
+  const isInOrNearOpenBasin = (x, y) => {
+    for (let i = 0; i < openBasins.length; i++) {
+      const ob = openBasins[i];
+      if (x >= ob.xMin - 4.5 && x <= ob.xMax + 4.5 && y <= (ob.yMax ?? 16) + 4.0) return true;
+    }
+    return false;
+  };
+
+  // Gather candidate probe points from all interior segments (including vertices/crests) + caverns
+  const probes = [];
+  for (let i = 0; i < level.segments.length; i++) {
+    const seg = level.segments[i];
+    const r = Math.min(seg.ra || 2.2, seg.rb || 2.2);
+    if (r < 1.65) continue;
+    for (const t of [0.0, 0.25, 0.5, 0.75, 1.0]) {
+      const px = seg.ax + (seg.bx - seg.ax) * t;
+      const py = seg.ay + (seg.by - seg.ay) * t;
+      probes.push({ x: px, y: py, r, segIdx: i });
+    }
+  }
+  if (Array.isArray(level.caverns)) {
+    for (let i = 0; i < level.caverns.length; i++) {
+      const cv = level.caverns[i];
+      if ((cv.r || 0) >= 2.2) probes.push({ x: cv.x, y: cv.y, r: cv.r, segIdx: 1000 + i });
+    }
+  }
+
+  let bestVault = null;
+  let bestScore = -Infinity;
+
+  for (let p = 0; p < probes.length; p++) {
+    const { x: cx, y: openY, r } = probes[p];
+    if (openY < minCeilingY + 1.0) continue;
+    if (evaluateCaveSDF(level, cx, openY) >= -0.75) continue;
+    if (isInOrNearOpenBasin(cx, openY)) continue;
+    if (Math.hypot(cx - spawnX, openY - spawnY) < 13.0) continue;
+
+    const topHit = probeWallFine(level, cx, openY, 0, -1, r + 4.5, 0.12);
+    if (!topHit || topHit.y < minCeilingY) continue;
+    const topY = topHit.y;
+    // Must have thick solid overhead rock/hull directly above
+    if (evaluateCaveSDF(level, cx, topY - 0.55) <= 0.12) continue;
+    if (evaluateCaveSDF(level, cx, topY - 1.25) <= 0.08) continue;
+    if (isInOrNearOpenBasin(cx, topY)) continue;
+    if (isTooClose(cx, topY + 0.45, 5.0)) continue;
+
+    // 1. Try natural sealed concave ceiling vault across realistic pocket depths
+    let foundNatural = false;
+    for (const domeDepth of [0.46, 0.68, 0.92, 1.18]) {
+      const waterY = topY + domeDepth;
+      if (evaluateCaveSDF(level, cx, waterY + 0.85) >= -0.4) continue;
+
+      let leftX = cx;
+      let leftSealed = false;
+      let leftLeaky = false;
+      for (let dx = 0.16; dx <= 3.6; dx += 0.16) {
+        const lx = cx - dx;
+        if (evaluateCaveSDF(level, lx, waterY) >= -0.04) {
+          leftX = lx + 0.08;
+          leftSealed = true;
+          break;
+        }
+        const up = probeWallFine(level, lx, waterY, 0, -1, domeDepth + 0.65, 0.12);
+        if (!up || up.y < topY - 0.16) {
+          leftLeaky = true;
+          break;
+        }
+      }
+      if (!leftSealed || leftLeaky) continue;
+
+      let rightX = cx;
+      let rightSealed = false;
+      let rightLeaky = false;
+      for (let dx = 0.16; dx <= 3.6; dx += 0.16) {
+        const rx = cx + dx;
+        if (evaluateCaveSDF(level, rx, waterY) >= -0.04) {
+          rightX = rx - 0.08;
+          rightSealed = true;
+          break;
+        }
+        const up = probeWallFine(level, rx, waterY, 0, -1, domeDepth + 0.65, 0.12);
+        if (!up || up.y < topY - 0.16) {
+          rightLeaky = true;
+          break;
+        }
+      }
+      if (!rightSealed || rightLeaky) continue;
+
+      const span = rightX - leftX;
+      if (span < 1.35 || span > 6.0) continue;
+
+      // Sample exact SDF ceiling profile across [leftX, rightX]
+      const steps = 10;
+      const profile = [];
+      let allSealedAbove = true;
+      let maxPocketH = 0;
+      for (let k = 0; k <= steps; k++) {
+        const u = k / steps;
+        const sx = leftX + span * u;
+        if (k === 0 || k === steps) {
+          profile.push({ x: sx, ceilY: waterY });
+          continue;
+        }
+        const up = probeWallFine(level, sx, waterY, 0, -1, domeDepth + 0.45, 0.1);
+        if (!up || evaluateCaveSDF(level, sx, up.y - 0.35) <= 0.04) {
+          allSealedAbove = false;
+          break;
+        }
+        const cY = Math.min(waterY - 0.04, up.y);
+        maxPocketH = Math.max(maxPocketH, waterY - cY);
+        profile.push({ x: sx, ceilY: cY });
+      }
+      if (!allSealedAbove || maxPocketH < 0.30) continue;
+
+      const midX = (leftX + rightX) * 0.5;
+      const distExit = Math.hypot(midX - exitX, waterY - exitY);
+      const depthSweetSpot = Math.max(0, 1 - Math.abs(waterY - 26) / 38);
+      const spanSweetSpot = Math.max(0, 1 - Math.abs(span - 3.0) / 2.6);
+      const score = 140 + depthSweetSpot * 24 + spanSweetSpot * 18 + Math.min(1.0, maxPocketH) * 16 + (distExit > 10 ? 8 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestVault = {
+          x: midX,
+          y: waterY,
+          topY: waterY - maxPocketH,
+          leftX,
+          rightX,
+          halfWidth: span * 0.5,
+          ceilingProfile: profile,
+          isNaturalVault: true,
+          bayCoaming: false,
+        };
+      }
+      foundNatural = true;
+      break;
+    }
+
+    if (foundNatural || bestScore >= 130) continue;
+
+    // 2. Fallback: Flat overhead deck-beam bay (wrecks) or flat karst ceiling bay verified 100% sealed above
+    for (const bayHalf of isWreck ? [1.55, 1.15] : [1.35, 0.95]) {
+      const bayDepth = 0.48;
+      const leftX = cx - bayHalf;
+      const rightX = cx + bayHalf;
+      const steps = 8;
+      const profile = [];
+      let flatOk = true;
+      let lowestCeil = -Infinity;
+      let highestCeil = Infinity;
+      for (let k = 0; k <= steps; k++) {
+        const sx = leftX + (bayHalf * 2) * (k / steps);
+        if (isInOrNearOpenBasin(sx, topY)) { flatOk = false; break; }
+        const up = probeWallFine(level, sx, openY, 0, -1, r + 4.0, 0.12);
+        if (!up || up.y < minCeilingY) { flatOk = false; break; }
+        if (evaluateCaveSDF(level, sx, up.y - 0.4) <= 0.08) { flatOk = false; break; }
+        if (evaluateCaveSDF(level, sx, up.y + bayDepth + 0.55) >= -0.3) { flatOk = false; break; }
+        if (Math.abs(up.y - topY) > 0.36) { flatOk = false; break; }
+        lowestCeil = Math.max(lowestCeil, up.y);
+        highestCeil = Math.min(highestCeil, up.y);
+        profile.push({ x: sx, ceilY: up.y });
+      }
+      if (!flatOk) continue;
+
+      const waterY = lowestCeil + bayDepth;
+      const depthSweetSpot = Math.max(0, 1 - Math.abs(waterY - (isWreck ? deckY + 8 : 26)) / 36);
+      const flatnessBonus = Math.max(0, 1 - (lowestCeil - highestCeil) / 0.36) * 14;
+      const widthBonus = bayHalf >= 1.3 ? 8 : 0;
+      const score = 60 + depthSweetSpot * 20 + flatnessBonus + widthBonus;
+      if (score > bestScore) {
+        bestScore = score;
+        bestVault = {
+          x: cx,
+          y: waterY,
+          topY: highestCeil,
+          leftX,
+          rightX,
+          halfWidth: bayHalf,
+          ceilingProfile: profile,
+          isNaturalVault: false,
+          bayCoaming: true,
+        };
+      }
+      break;
+    }
+  }
+
+  return bestVault;
+}
+
 function pickLore(table, kind, idx) {
   const list = table[kind];
   if (!Array.isArray(list) || list.length === 0) return 'Uncharted submerged landmark.';
@@ -310,32 +526,31 @@ export function createSubmergedStories(level) {
     }
   }
 
-  // Ensure every site has at least 1 shimmering Trapped Overhead Air Dome in a vaulted bell/hold (v156)
-  let airDomePlaced = false;
-  for (let i = 1; i < level.segments.length && !airDomePlaced; i++) {
-    const seg = level.segments[i];
-    const mx = (seg.ax + seg.bx) * 0.5;
-    const my = (seg.ay + seg.by) * 0.5;
-    const r = Math.min(seg.ra || 2.2, seg.rb || 2.2);
-    if (my < 7 || r < 2.1 || evaluateCaveSDF(level, mx, my) >= -0.8) continue;
-    const ceil = probeWall(level, mx, my, 0, -1, r + 3.5);
-    if (!ceil || ceil.y < 3.5) continue;
-    if (isTooClose(ceil.x, ceil.y + 0.35, 6.0)) continue;
+  // Place an authentic, SDF-sealed Trapped Overhead Air Pocket in a genuine concave ceiling vault
+  // or flat steel deck-beam bay (never floating in open water or protruding out of diagonal walls — v167).
+  const vault = findBestAirDomeVault(level, isWreck, isTooClose);
+  if (vault) {
     const idx = idCounter++;
     setPieces.push({
       id: `story-dome-${idx}`,
       kind: 'air-dome',
-      title: 'Trapped Overhead Air Dome',
+      title: isWreck ? 'Trapped Deckhouse Air Pocket' : 'Subterranean Air Bell',
       lore: pickLore(isWreck ? WRECK_LORE_BY_KIND : CAVE_LORE_BY_KIND, 'air-dome', idx),
-      x: ceil.x,
-      y: ceil.y + 0.32,
-      halfWidth: Math.min(3.4, Math.max(1.7, r * 0.88)),
+      x: vault.x,
+      y: vault.y,
+      topY: vault.topY,
+      leftX: vault.leftX,
+      rightX: vault.rightX,
+      halfWidth: vault.halfWidth,
+      ceilingProfile: vault.ceilingProfile,
+      isNaturalVault: vault.isNaturalVault,
+      bayCoaming: vault.bayCoaming,
+      isWreckBay: isWreck,
       size: 1.0,
       phase: hash01(idx * 19.7) * Math.PI * 2,
       emissive: true,
       discovered: false,
     });
-    airDomePlaced = true;
   }
 
   // Overhead Pelagic Shadow Crossing ONLY for open-water ocean wrecks & wide marine blue holes (never inland freshwater cenotes!)
@@ -414,22 +629,27 @@ export function getTopsideRadioChatter(phase, level) {
 export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {}, diveState = null) {
   if (!stories || !Array.isArray(stories.setPieces) || !diver) return null;
 
-  // Check if diver is resting calmly beneath a Trapped Overhead Air Dome (v156)
+  // Check if diver is resting calmly beneath a Trapped Overhead Air Pocket (v156 / v167)
   let insideDome = false;
+  let activeDome = null;
   for (let i = 0; i < stories.setPieces.length; i++) {
     const sp = stories.setPieces[i];
     if (sp?.kind !== 'air-dome') continue;
-    const hw = sp.halfWidth || 2.2;
-    if (Math.abs(diver.x - sp.x) <= hw && diver.y >= sp.y - 0.35 && diver.y <= sp.y + 1.35) {
+    const lx = Number.isFinite(sp.leftX) ? sp.leftX : sp.x - (sp.halfWidth || 2.0);
+    const rx = Number.isFinite(sp.rightX) ? sp.rightX : sp.x + (sp.halfWidth || 2.0);
+    const topBound = Number.isFinite(sp.topY) ? sp.topY - 0.15 : sp.y - 0.85;
+    if (diver.x >= lx - 0.25 && diver.x <= rx + 0.25 && diver.y >= topBound && diver.y <= sp.y + 1.55) {
       insideDome = true;
+      activeDome = sp;
       if (diveState) {
-        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.008);
-        diveState.heartRateBpm = Math.max(66, (diveState.heartRateBpm || 76) - 0.12);
+        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.028);
+        diveState.heartRateBpm = Math.max(64, (diveState.heartRateBpm || 76) - 0.38);
       }
       break;
     }
   }
   stories.inAirDome = insideDome;
+  stories.activeAirDome = activeDome;
 
   if (simTimeSec - (stories.lastToastAt ?? -99) < 4.5) return null;
 

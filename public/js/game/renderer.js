@@ -22,6 +22,8 @@ import {
   drawStyledMegafauna,
   drawStyledWhaleShark,
   drawStyledDenizen,
+  classifyArtifactVisual,
+  drawStyledArtifact,
 } from './artSprites.js';
 
 const CACHE_PX_PER_M = 24;
@@ -7447,37 +7449,33 @@ export class CaveRenderer {
           }
           ctx.restore();
         } else if (sp.kind === 'halocline-lens') {
-          // Undulating translucent freshwater-over-saltwater halocline optical shimmer wave
-          const hw = (sp.halfWidth || 3.4) * scale;
+          // Soft edge-faded freshwater-over-saltwater halocline density shimmer (no hard oval boundary — v167)
+          const hw = (sp.halfWidth || 3.2) * scale;
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
-          const hg = ctx.createLinearGradient?.(sx, sy - 0.55 * scale, sx, sy + 0.55 * scale);
-          if (hg && typeof hg.addColorStop === 'function') {
-            hg.addColorStop(0, 'rgba(56, 189, 248, 0)');
-            hg.addColorStop(0.45, 'rgba(103, 232, 249, 0.22)');
-            hg.addColorStop(0.55, 'rgba(240, 249, 255, 0.32)');
-            hg.addColorStop(1, 'rgba(14, 165, 233, 0)');
-            ctx.fillStyle = hg;
-          } else {
-            ctx.fillStyle = 'rgba(103, 232, 249, 0.18)';
-          }
-          ctx.beginPath();
-          ctx.ellipse(sx, sy, hw, 0.48 * scale, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Twin undulating liquid-glass refraction ripples
-          for (let wIdx = 0; wIdx < 2; wIdx++) {
-            ctx.strokeStyle = wIdx === 0 ? 'rgba(224, 242, 254, 0.44)' : 'rgba(56, 189, 248, 0.32)';
-            ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+          // 3 gentle liquid-glass refraction wave filaments fading cleanly to 0 at left & right ends
+          const ribbonGrad = ctx.createLinearGradient?.(sx - hw, sy, sx + hw, sy);
+          const strokeCol = (a) => {
+            if (!ribbonGrad || typeof ribbonGrad.addColorStop !== 'function') return `rgba(125, 211, 252, ${a})`;
+            const g = ctx.createLinearGradient(sx - hw, sy, sx + hw, sy);
+            g.addColorStop(0, 'rgba(56, 189, 248, 0)');
+            g.addColorStop(0.22, `rgba(103, 232, 249, ${(a * 0.65).toFixed(3)})`);
+            g.addColorStop(0.5, `rgba(224, 242, 254, ${a.toFixed(3)})`);
+            g.addColorStop(0.78, `rgba(103, 232, 249, ${(a * 0.65).toFixed(3)})`);
+            g.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            return g;
+          };
+          for (let wIdx = 0; wIdx < 3; wIdx++) {
+            const yOff = (wIdx - 1) * 0.11 * scale;
+            ctx.strokeStyle = strokeCol(wIdx === 1 ? 0.36 : 0.20);
+            ctx.lineWidth = Math.max(1.1, (wIdx === 1 ? 0.06 : 0.038) * scale);
             ctx.beginPath();
-            const steps = 14;
+            const steps = 16;
             for (let k = 0; k <= steps; k++) {
               const u = (k / steps) * 2 - 1;
               const wx = sx + u * hw;
               const env = Math.max(0, 1 - u * u);
-              const wy =
-                sy +
-                (wIdx === 0 ? -0.06 : 0.08) * scale +
-                Math.sin(timeSec * (2.2 + wIdx * 0.7) + u * 5.2 + sp.phase) * 0.14 * scale * env;
+              const wy = sy + yOff + Math.sin(timeSec * (1.8 + wIdx * 0.55) + u * 5.4 + sp.phase + wIdx) * 0.11 * scale * env;
               if (k === 0) ctx.moveTo(wx, wy);
               else ctx.lineTo(wx, wy);
             }
@@ -7498,46 +7496,92 @@ export class CaveRenderer {
           ctx.stroke();
           ctx.restore();
         } else if (sp.kind === 'air-dome') {
-          // Trapped Overhead Air Dome: liquid-mercury mirror meniscus clinging to the ceiling pocket (v156)
-          const hw = (sp.halfWidth || 2.1) * scale;
-          const ripple = Math.sin(timeSec * 2.4 + sp.phase) * 0.06 * scale;
+          // Trapped Overhead Air Pocket: razor-flat horizontal water-air total-internal-reflection meniscus
+          // strictly clipped to [leftX, rightX] so it never floats into open water or bleeds onto rock (v167).
+          const lx = Number.isFinite(sp.leftX) ? toScreenX(sp.leftX) : sx - (sp.halfWidth || 1.8) * scale;
+          const rx = Number.isFinite(sp.rightX) ? toScreenX(sp.rightX) : sx + (sp.halfWidth || 1.8) * scale;
+          const spanPx = Math.max(8, rx - lx);
+          const midX = (lx + rx) * 0.5;
+          const isCalming = Boolean(stories.inAirDome && stories.activeAirDome === sp);
           ctx.save();
+          // Subtle thin underside mirror sheen fading smoothly to 0 at left & right rock walls
           ctx.globalCompositeOperation = 'screen';
-          const ag = ctx.createLinearGradient?.(sx, sy - 0.52 * scale, sx, sy + 0.42 * scale);
-          if (ag && typeof ag.addColorStop === 'function') {
-            ag.addColorStop(0, 'rgba(186, 230, 253, 0.04)');
-            ag.addColorStop(0.45, 'rgba(224, 242, 254, 0.56)');
-            ag.addColorStop(0.62, 'rgba(255, 255, 255, 0.72)');
-            ag.addColorStop(1, 'rgba(56, 189, 248, 0)');
-            ctx.fillStyle = ag;
+          const hg = ctx.createLinearGradient?.(lx, sy, rx, sy);
+          if (hg && typeof hg.addColorStop === 'function') {
+            hg.addColorStop(0, 'rgba(186, 230, 253, 0)');
+            hg.addColorStop(0.14, isCalming ? 'rgba(125, 211, 252, 0.34)' : 'rgba(186, 230, 253, 0.22)');
+            hg.addColorStop(0.5, isCalming ? 'rgba(224, 242, 254, 0.48)' : 'rgba(224, 242, 254, 0.30)');
+            hg.addColorStop(0.86, isCalming ? 'rgba(125, 211, 252, 0.34)' : 'rgba(186, 230, 253, 0.22)');
+            hg.addColorStop(1, 'rgba(186, 230, 253, 0)');
+            ctx.fillStyle = hg;
           } else {
-            ctx.fillStyle = 'rgba(224, 242, 254, 0.48)';
+            ctx.fillStyle = 'rgba(186, 230, 253, 0.22)';
           }
           ctx.beginPath();
-          ctx.ellipse(sx, sy + ripple * 0.35, hw, 0.34 * scale, 0, 0, Math.PI * 2);
+          ctx.rect(lx, sy - 0.04 * scale, spanPx, 0.16 * scale);
           ctx.fill();
-          // Liquid-mirror undulating meniscus line
-          ctx.strokeStyle = 'rgba(240, 249, 255, 0.85)';
-          ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+
+          // Crisp horizontal liquid-mercury surface tension meniscus line with delicate ripples
+          const lineGrad = ctx.createLinearGradient?.(lx, sy, rx, sy);
+          if (lineGrad && typeof lineGrad.addColorStop === 'function') {
+            lineGrad.addColorStop(0, 'rgba(224, 242, 254, 0.05)');
+            lineGrad.addColorStop(0.12, 'rgba(224, 242, 254, 0.82)');
+            lineGrad.addColorStop(0.5, isCalming ? 'rgba(125, 211, 252, 0.98)' : 'rgba(248, 250, 252, 0.90)');
+            lineGrad.addColorStop(0.88, 'rgba(224, 242, 254, 0.82)');
+            lineGrad.addColorStop(1, 'rgba(224, 242, 254, 0.05)');
+            ctx.strokeStyle = lineGrad;
+          } else {
+            ctx.strokeStyle = 'rgba(240, 249, 255, 0.86)';
+          }
+          ctx.lineWidth = Math.max(1.4, (isCalming ? 0.068 : 0.052) * scale);
           ctx.beginPath();
-          const steps = 14;
+          const steps = 16;
           for (let k = 0; k <= steps; k++) {
-            const u = (k / steps) * 2 - 1;
-            const wx = sx + u * hw;
-            const env = Math.max(0, 1 - u * u);
-            const wy = sy + Math.sin(timeSec * 3.1 + u * 5.8 + sp.phase) * 0.09 * scale * env;
+            const frac = k / steps;
+            const wx = lx + spanPx * frac;
+            const env = Math.sin(frac * Math.PI);
+            const wy = sy + Math.sin(timeSec * 3.0 + frac * 11.0 + sp.phase) * 0.038 * scale * env;
             if (k === 0) ctx.moveTo(wx, wy);
             else ctx.lineTo(wx, wy);
           }
           ctx.stroke();
-          // Tiny silver exhaust bubbles coalescing along the mirror ceiling
-          ctx.fillStyle = 'rgba(248, 250, 252, 0.78)';
+
+          // Delicate rising micro-bubbles flattening against the horizontal water-air boundary
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
           for (let b = 0; b < 4; b++) {
-            const bx = sx + Math.sin(timeSec * 0.9 + b * 2.3 + sp.phase) * hw * 0.65;
-            const by = sy + (0.04 + 0.05 * Math.cos(timeSec * 2.1 + b)) * scale;
+            const bPhase = ((timeSec * 0.55 + b * 0.27 + sp.phase) % 1);
+            const bx = lx + spanPx * (0.18 + 0.64 * ((b * 0.31 + 0.12) % 1)) + Math.sin(timeSec * 2.2 + b * 2.1) * 0.06 * scale;
+            const by = sy + (1 - bPhase) * 0.42 * scale;
+            const br = Math.max(1.1, (0.032 + bPhase * 0.025) * scale);
+            ctx.globalAlpha = Math.min(0.85, (1 - Math.abs(bPhase - 0.75)) * 0.9);
             ctx.beginPath();
-            ctx.arc(bx, by, Math.max(1.3, (0.045 + (b % 2) * 0.02) * scale), 0, Math.PI * 2);
+            ctx.ellipse(bx, by, br * (1 + bPhase * 0.65), br * (1 - bPhase * 0.42), 0, 0, Math.PI * 2);
             ctx.fill();
+          }
+
+          // Clear, subtle diegetic callout so players immediately know what the Air Pocket is & when it's calming HR
+          if (isCalming || sp.discovered) {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = isCalming ? 0.96 : 0.68;
+            const label = isCalming ? 'AIR POCKET · CALMING HR' : 'AIR POCKET';
+            const fontPx = Math.max(9, Math.min(12, Math.round(scale * 0.25)));
+            ctx.font = `700 ${fontPx}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+            const tw = ctx.measureText ? ctx.measureText(label).width : label.length * 6;
+            const padX = 7;
+            const pillH = fontPx + 6;
+            const topYSc = Number.isFinite(sp.topY) ? toScreenY(sp.topY) : sy - 0.55 * scale;
+            const pillY = Math.min(sy - pillH - 4, (topYSc + sy) * 0.5 - pillH * 0.5);
+            ctx.fillStyle = isCalming ? 'rgba(8, 47, 73, 0.84)' : 'rgba(6, 17, 31, 0.66)';
+            ctx.strokeStyle = isCalming ? 'rgba(125, 211, 252, 0.82)' : 'rgba(148, 163, 184, 0.38)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(midX - tw * 0.5 - padX, pillY, tw + padX * 2, pillH, 999);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = isCalming ? '#e0f2fe' : '#bae6fd';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, midX, pillY + pillH * 0.5 + 0.5);
           }
           ctx.restore();
         } else if (sp.kind === 'survey-station') {
@@ -7555,7 +7599,74 @@ export class CaveRenderer {
       }
 
       // === PRE-LIGHTING WORLD GEOMETRY PASS ===
-      if (sp.kind === 'speleothem-cathedral' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
+      if (sp.kind === 'air-dome') {
+        // Dark dry-air pocket cavity carved snugly beneath the real SDF ceiling contour down to flat waterY (v167)
+        const lx = Number.isFinite(sp.leftX) ? toScreenX(sp.leftX) : sx - (sp.halfWidth || 1.8) * scale;
+        const rx = Number.isFinite(sp.rightX) ? toScreenX(sp.rightX) : sx + (sp.halfWidth || 1.8) * scale;
+        const topYSc = Number.isFinite(sp.topY) ? toScreenY(sp.topY) : sy - 0.55 * scale;
+        const prof = Array.isArray(sp.ceilingProfile) && sp.ceilingProfile.length >= 2 ? sp.ceilingProfile : null;
+        ctx.save();
+        const airGrad = ctx.createLinearGradient?.(sx, topYSc, sx, sy);
+        if (airGrad && typeof airGrad.addColorStop === 'function') {
+          airGrad.addColorStop(0, 'rgba(2, 6, 14, 0.92)');
+          airGrad.addColorStop(0.65, 'rgba(10, 24, 42, 0.78)');
+          airGrad.addColorStop(1, 'rgba(30, 64, 96, 0.42)');
+          ctx.fillStyle = airGrad;
+        } else {
+          ctx.fillStyle = 'rgba(4, 12, 24, 0.85)';
+        }
+        ctx.beginPath();
+        ctx.moveTo(lx, sy);
+        if (prof) {
+          for (let k = 0; k < prof.length; k++) {
+            ctx.lineTo(toScreenX(prof[k].x), toScreenY(prof[k].ceilY));
+          }
+        } else {
+          ctx.quadraticCurveTo(sx, topYSc, rx, sy);
+        }
+        ctx.lineTo(rx, sy);
+        ctx.closePath();
+        ctx.fill();
+
+        // For flat deck-beam bays / flat karst roofs, draw authentic structural coaming lips trapping the air
+        if (sp.bayCoaming) {
+          const lipW = Math.max(4, 0.16 * scale);
+          const lipTop = topYSc - 0.08 * scale;
+          const lipBot = sy + 0.12 * scale;
+          if (sp.isWreckBay) {
+            // Riveted corroded steel transverse hull I-beam coamings
+            ctx.fillStyle = '#3b2820';
+            ctx.strokeStyle = '#6b422d';
+            ctx.lineWidth = Math.max(1, 0.03 * scale);
+            ctx.fillRect(lx - lipW * 0.6, lipTop, lipW, lipBot - lipTop);
+            ctx.strokeRect(lx - lipW * 0.6, lipTop, lipW, lipBot - lipTop);
+            ctx.fillRect(rx - lipW * 0.4, lipTop, lipW, lipBot - lipTop);
+            ctx.strokeRect(rx - lipW * 0.4, lipTop, lipW, lipBot - lipTop);
+            // I-beam lower flange lip
+            ctx.fillStyle = '#523426';
+            ctx.fillRect(lx - lipW * 0.9, lipBot - lipW * 0.35, lipW * 1.6, lipW * 0.38);
+            ctx.fillRect(rx - lipW * 0.7, lipBot - lipW * 0.35, lipW * 1.6, lipW * 0.38);
+          } else {
+            // Natural downward-protruding dark limestone rock lips sealing left & right ends
+            ctx.fillStyle = '#1f2937';
+            ctx.beginPath();
+            ctx.moveTo(lx - lipW * 1.2, lipTop);
+            ctx.lineTo(lx + lipW * 0.7, lipTop);
+            ctx.quadraticCurveTo(lx + lipW * 0.1, lipBot, lx - lipW * 0.5, lipBot + 0.06 * scale);
+            ctx.lineTo(lx - lipW * 1.4, lipTop);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(rx + lipW * 1.2, lipTop);
+            ctx.lineTo(rx - lipW * 0.7, lipTop);
+            ctx.quadraticCurveTo(rx - lipW * 0.1, lipBot, rx + lipW * 0.5, lipBot + 0.06 * scale);
+            ctx.lineTo(rx + lipW * 1.4, lipTop);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      } else if (sp.kind === 'speleothem-cathedral' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
         // Monumental Ice-Age fluted calcite stalactite & stalagmite cathedral pillars
         const cy0 = toScreenY(sp.ceilY);
         const fy0 = toScreenY(sp.floorY);
@@ -8409,167 +8520,47 @@ export class CaveRenderer {
       if (collectedIds && collectedIds.has(item.id)) continue;
       if (item.x < visX0 - 4 || item.x > visX1 + 4) continue;
 
-      const bobY = Math.sin(timeSec * 2.3 + i * 1.4) * 0.14;
+      const bobY = Math.sin(timeSec * 2.1 + i * 1.4) * 0.13;
       const sx = toScreenX(item.x);
       const sy = toScreenY(item.y + bobY);
       const itemScale = item.scale || 1.0;
       const isGrand = itemScale >= 1.35;
-      const pulse = 0.85 + 0.15 * Math.sin(timeSec * 4.2 + i);
-      const r = 0.36 * scale * itemScale;
+      const pulse = 0.86 + 0.14 * Math.sin(timeSec * 3.8 + i);
+      const r = 0.48 * scale * itemScale;
 
+      const vis = classifyArtifactVisual(item);
       const stamp =
-        item.kind === 'relic' || item.kind === 'gear'
+        vis.glow === 'warm'
           ? this.glowStamps.warm
-          : item.kind === 'crystal' || item.kind === 'pearl'
+          : vis.glow === 'magenta'
             ? this.glowStamps.magenta
-            : item.kind === 'fossil'
+            : vis.glow === 'emerald'
               ? this.glowStamps.emerald
               : this.glowStamps.cyan;
       if (stamp) {
-        const gs = r * (isGrand ? 5.2 : 4.2) * pulse;
+        const gs = r * (isGrand ? 4.8 : 3.9) * pulse;
         ctx.drawImage(stamp, sx - gs * 0.5, sy - gs * 0.5, gs, gs);
       }
 
       if (isGrand) {
         ctx.save();
         ctx.translate(sx, sy);
-        ctx.rotate(timeSec * 0.45 + i);
-        ctx.strokeStyle = 'rgba(254, 240, 138, 0.42)';
-        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+        ctx.rotate(timeSec * 0.36 + i);
+        ctx.globalCompositeOperation = 'screen';
         for (let ray = 0; ray < 6; ray++) {
           const ang = (ray / 6) * Math.PI * 2;
+          ctx.fillStyle = 'rgba(254, 240, 138, 0.16)';
           ctx.beginPath();
-          ctx.moveTo(Math.cos(ang) * r * 1.05, Math.sin(ang) * r * 1.05);
-          ctx.lineTo(Math.cos(ang) * r * 1.85 * pulse, Math.sin(ang) * r * 1.85 * pulse);
-          ctx.stroke();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(ang - 0.08) * r * 1.9 * pulse, Math.sin(ang - 0.08) * r * 1.9 * pulse);
+          ctx.lineTo(Math.cos(ang + 0.08) * r * 1.9 * pulse, Math.sin(ang + 0.08) * r * 1.9 * pulse);
+          ctx.closePath();
+          ctx.fill();
         }
         ctx.restore();
       }
 
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.rotate(Math.sin(timeSec * 1.6 + i) * 0.18);
-
-      if (item.kind === 'relic') {
-        // Ornate carved golden jade sunstone medallion
-        ctx.fillStyle = '#eab308';
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-        ctx.beginPath();
-        for (let p = 0; p < 8; p++) {
-          const a = (p / 8) * Math.PI * 2;
-          const rad = (p & 1) ? r * 0.72 : r * 1.05;
-          const px = Math.cos(a) * rad;
-          const py = Math.sin(a) * rad;
-          if (p === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#10b981';
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.36, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (item.kind === 'crystal') {
-        // Luminous faceted hexagonal quartz cluster
-        ctx.fillStyle = '#c084fc';
-        ctx.strokeStyle = '#f3e8ff';
-        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-        for (const [ang, lenMul] of [[-0.28, 0.85], [0.0, 1.15], [0.28, 0.82]]) {
-          ctx.save();
-          ctx.rotate(ang);
-          ctx.beginPath();
-          ctx.moveTo(0, -r * lenMul);
-          ctx.lineTo(r * 0.28, -r * 0.25);
-          ctx.lineTo(r * 0.24, r * 0.65);
-          ctx.lineTo(-r * 0.24, r * 0.65);
-          ctx.lineTo(-r * 0.28, -r * 0.25);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        }
-      } else if (item.kind === 'fossil') {
-        // Cream-amber spiral fossil / shark tooth silhouette
-        ctx.fillStyle = '#f5d0a9';
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        for (let s = 0; s < 18; s++) {
-          const a = s * 0.45;
-          const sr = r * 0.08 + (s / 18) * r * 0.65;
-          const px = Math.cos(a) * sr;
-          const py = Math.sin(a) * sr;
-          if (s === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.stroke();
-      } else if (item.kind === 'pearl') {
-        // Iridescent nacre oyster pearl nestled in a fluted dark shell
-        ctx.fillStyle = '#334155';
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
-        ctx.beginPath();
-        ctx.ellipse(0, r * 0.36, r * 0.88, r * 0.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#f8fafc';
-        ctx.strokeStyle = '#e0e7ff';
-        ctx.beginPath();
-        ctx.arc(0, -r * 0.06, r * 0.56, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(244, 114, 182, 0.32)';
-        ctx.beginPath();
-        ctx.arc(r * 0.14, r * 0.08, r * 0.32, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-        ctx.beginPath();
-        ctx.arc(-r * 0.18, -r * 0.24, r * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (item.kind === 'gear') {
-        // Vintage brass submersible pressure gauge (SPG) / expedition compass
-        ctx.fillStyle = '#b45309';
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = Math.max(1.3, 0.05 * scale);
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.52, -Math.PI * 0.85, Math.PI * 0.35);
-        ctx.stroke();
-        ctx.strokeStyle = '#f87171';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(r * 0.42, -r * 0.24);
-        ctx.stroke();
-      } else {
-        // Survey exploration reel / brass marker tag
-        ctx.fillStyle = '#38bdf8';
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-        ctx.beginPath();
-        ctx.roundRect(-r * 0.8, -r * 0.55, r * 1.6, r * 1.1, r * 0.22);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
+      drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index: i, isGrand });
     }
     ctx.restore();
   }
