@@ -7642,3 +7642,57 @@ test('v160 Multi-Dive Expedition Campaigns, Repetitive Surface Intervals & Debri
   recordDiveHighlight(sess, { kind: 'lore', icon: '🧭', label: 'Cenote Altar', tSec: 30, depthM: 18 });
   assert.ok(sess.highlights[1].tSec >= sess.highlights[0].tSec, 'Highlights should stay sorted chronologically');
 });
+
+test('v161 Zero-Config Named AI Crew (Maya/Kai/Elena), Passive Veteran Bond & AAA Mask-Glass Immersion Pass', async () => {
+  const { AI_SQUAD_ROSTER, getCrewBondRank, createAiSquad, handlePlayerSignalForAiBuddy } = await import(
+    '../public/js/game/aiBuddy.js'
+  );
+  const { recordCrewDiveInLogbook } = await import('../public/js/game/logbookModel.js');
+
+  // 1. Named zero-config crew traits
+  assert.equal(AI_SQUAD_ROSTER.length, 3);
+  assert.equal(AI_SQUAD_ROSTER[0].callsign, 'Maya');
+  assert.equal(AI_SQUAD_ROSTER[1].callsign, 'Kai');
+  assert.equal(AI_SQUAD_ROSTER[2].callsign, 'Elena');
+
+  const sess = createDiveSession(LEVEL_1, { diverName: 'Lead', difficulty: 'standard' });
+  const squad = createAiSquad(LEVEL_1, sess.diver, 3, { initialGasId: 'EAN32' });
+  assert.equal(squad[0].spotlightBonusM, 4, 'Maya (Torch) gets wider spotlight bonus');
+  assert.equal(squad[1].activeBar, 230, 'Kai (Tanks) starts with +25 bar twin-stage reserve');
+  assert.ok(squad[2].snagSpeedMult > 1.25, 'Elena (Line) cuts snags faster');
+  const okReply = handlePlayerSignalForAiBuddy(squad[0], 'ok', sess, 1000);
+  assert.match(okReply.toast || '', /Torch steady/i);
+
+  // 2. Passive Veteran Bond tracking & cloud merge
+  let book = createEmptyLogbook();
+  for (let i = 0; i < 4; i++) {
+    book = recordCrewDiveInLogbook(book, ['ai-wingman-01'], { cleared: true, rescuedIds: i === 0 ? ['ai-wingman-01'] : [] });
+  }
+  const rank = getCrewBondRank(book.crewBonds['ai-wingman-01']);
+  assert.equal(rank.tier, 1);
+  assert.match(rank.badge, /Trusted Wingman/);
+  const highBook = recordCrewDiveInLogbook(createEmptyLogbook(), ['ai-wingman-02'], { cleared: true });
+  highBook.crewBonds['ai-wingman-02'].dives = 16;
+  assert.equal(getCrewBondRank(highBook.crewBonds['ai-wingman-02']).tier, 3);
+  const merged = mergeCareerLogbooks(book, highBook);
+  assert.equal(merged.crewBonds['ai-wingman-01'].dives, 4);
+  assert.equal(merged.crewBonds['ai-wingman-02'].dives, 16);
+
+  // 3. Renderer AAA Mask-Glass Immersion Pass executes cleanly across surface droplets, plunge splash, cold fog & exhale bubbles
+  let drawCalls = 0;
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 1280, height: 720 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      arc: () => { drawCalls++; },
+      ellipse: () => { drawCalls++; },
+      fillRect: () => { drawCalls++; },
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r._reducedMotion = false;
+  r._drawImmersionGlassFx(noopCtx, 1280, 720, { y: 0.9 }, { heartRateBpm: 128 }, { thermoclineColdFactor: 0.65 }, 'exhale', 0.5);
+  assert.ok(drawCalls >= 16, `Expected droplets + splash + cold rim + exhale bubbles draw calls, got ${drawCalls}`);
+});

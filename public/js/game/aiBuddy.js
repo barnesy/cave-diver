@@ -15,7 +15,7 @@ import { GAS_MIXES, getRecommendedGas, receiveGasIntoState } from '../physics/di
 import { pushAirShareBeam } from './diveSession.js';
 
 export const AI_BUDDY_ID = 'ai-wingman-01';
-export const AI_BUDDY_DEFAULT_NAME = '🤖 APEX-2';
+export const AI_BUDDY_DEFAULT_NAME = '🔦 Maya';
 export const HARDCORE_LEADERSHIP_BONUS_PTS = 175;
 
 /**
@@ -159,23 +159,62 @@ export const HARDCORE_ISSUE_SPECS = Object.freeze({
 export const AI_SQUAD_ROSTER = Object.freeze([
   {
     id: 'ai-wingman-01',
-    name: '🤖 APEX-2',
-    role: 'Lead Wingman',
+    name: '🔦 Maya',
+    callsign: 'Maya',
+    nickname: 'Torch',
+    role: 'Point Scout',
+    specialty: 'torch',
+    spotlightBonusM: 4,
+    extraStartBar: 0,
+    extraDonateBar: 0,
+    snagSpeedMult: 1.0,
+    quipOk: '🔦 Torch steady — right on your wing!',
+    quipScout: '🔦 Sweeping ahead with high-CRI beam!',
     livery: { suitId: 'arctic-cobalt', torchId: 'amber-silt', patchId: 'cenote-explorer' },
   },
   {
     id: 'ai-wingman-02',
-    name: '🤖 COBRA-3',
-    role: 'Flank Scout',
+    name: '⛽ Kai',
+    callsign: 'Kai',
+    nickname: 'Tanks',
+    role: 'Gas Mule',
+    specialty: 'gas',
+    spotlightBonusM: 0,
+    extraStartBar: 25,
+    extraDonateBar: 10,
+    snagSpeedMult: 1.0,
+    quipOk: '⛽ Full stages on my hip — rolling with you!',
+    quipScout: '⛽ Checking the corridor — plenty of gas on tap!',
     livery: { suitId: 'expedition-amber', torchId: 'warm-halogen', patchId: 'wreck-penetrator' },
   },
   {
     id: 'ai-wingman-03',
-    name: '🤖 ORCA-4',
-    role: 'Tail Guard',
+    name: '🪢 Elena',
+    callsign: 'Elena',
+    nickname: 'Line',
+    role: 'Safety & Line',
+    specialty: 'line',
+    spotlightBonusM: 0,
+    extraStartBar: 0,
+    extraDonateBar: 0,
+    snagSpeedMult: 1.32,
+    quipOk: '🪢 Line clear — holding trim on your six!',
+    quipScout: '🪢 Scouting the line — keeping exit bearing locked!',
     livery: { suitId: 'wreck-titanium', torchId: 'emerald-spot', patchId: 'abyss-veteran' },
   },
 ]);
+
+/**
+ * Passive zero-config Veteran Bond tier based on dives survived together (v161).
+ */
+export function getCrewBondRank(bond = null) {
+  const dives = Math.max(0, Number(bond?.dives) || 0);
+  const rescues = Math.max(0, Number(bond?.rescues) || 0);
+  if (dives >= 15 || rescues >= 5) return { tier: 3, badge: '⭐ Blood-Sworn Buddy', dives, rescues };
+  if (dives >= 8 || rescues >= 2) return { tier: 2, badge: '🎖️ Dive Veteran', dives, rescues };
+  if (dives >= 3 || rescues >= 1) return { tier: 1, badge: '🤝 Trusted Wingman', dives, rescues };
+  return { tier: 0, badge: '🤿 Dive Partner', dives, rescues };
+}
 
 const _normScratch = { nx: 0, ny: 0 };
 
@@ -246,7 +285,15 @@ export function createAiBuddyState(level, diver, opts = {}) {
   const buddy = {
     id: opts.id || roster.id,
     name: opts.name || roster.name,
+    callsign: roster.callsign || 'Maya',
+    nickname: roster.nickname || 'Torch',
     role: roster.role,
+    specialty: roster.specialty || 'torch',
+    spotlightBonusM: roster.spotlightBonusM || 0,
+    extraDonateBar: roster.extraDonateBar || 0,
+    snagSpeedMult: roster.snagSpeedMult || 1.0,
+    quipOk: roster.quipOk || '👌 OK — back on your wing',
+    quipScout: roster.quipScout || '👀 Scouting passage ahead!',
     slotIndex,
     isAiBuddy: true,
     livery: opts.livery ? { ...opts.livery } : { ...roster.livery },
@@ -265,8 +312,8 @@ export function createAiBuddyState(level, diver, opts = {}) {
     rescuedBy: '',
     rescueTargetId: '',
     gasId: opts.initialGasId || 'EAN32',
-    activeBar: 205,
-    maxBar: 205,
+    activeBar: 205 + (roster.extraStartBar || 0),
+    maxBar: 205 + (roster.extraStartBar || 0),
     heartRateBpm: 72,
     cnsPercent: 0,
     dcsStress: 0,
@@ -557,7 +604,7 @@ export function handlePlayerSignalForAiBuddy(buddy, idOrText, session, nowMs = D
       responded: true,
       replySignalId: 'ok',
       mode: buddy.mode,
-      toast: `${buddy.name}: 👌 OK — back on your wing`,
+      toast: `${buddy.name}: ${buddy.quipOk || '👌 OK — back on your wing'}`,
     };
   }
 
@@ -1093,7 +1140,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
       callbacks.onBuddySignal?.(buddy, 'attention');
     }
     if (distToPlayer <= 2.9) {
-      buddy.snagAssistTimer = (buddy.snagAssistTimer || 0) + clampedDt;
+      buddy.snagAssistTimer = (buddy.snagAssistTimer || 0) + clampedDt * (buddy.snagSpeedMult || 1.0);
       if (buddy.snagAssistTimer >= profile.snagCutTimeSec) {
         buddy.snagAssistTimer = 0;
         const snags = level.snagZones || [];
@@ -1139,7 +1186,8 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
 
   if ((autoGasNeed || requestedGasNeed) && distToPlayer <= 3.2) {
-    const donateBar = Math.min(profile.maxDonateBar, Math.max(12, Math.round(buddy.activeBar - Math.max(42, profile.minGasFloor - 20))));
+    const maxCap = profile.maxDonateBar + (profile.id === 'hardcore' ? 0 : buddy.extraDonateBar || 0);
+    const donateBar = Math.min(maxCap, Math.max(12, Math.round(buddy.activeBar - Math.max(42, profile.minGasFloor - 20))));
     const safeGasId = diveState.activeGasId || buddy.gasId || 'EAN32';
     const added = receiveGasIntoState(diveState, safeGasId, donateBar);
     if (added > 0) {
@@ -1184,7 +1232,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
       triggerDiverSignal(buddy, 'hold', nowMs);
       callbacks.onBuddySignal?.(buddy, 'hold');
     } else if (buddy.calloutCooldowns.collectible <= 0) {
-      const colRange = profile.leadsWaypoints ? 22 : 10.5;
+      const colRange = (profile.leadsWaypoints ? 22 : 10.5) + (buddy.spotlightBonusM || 0);
       const spotted = findNearestUncollected(level, session.collectedIds, buddy.x, buddy.y, colRange);
       if (spotted && !buddy.spottedCollectibleIds.has(spotted.item.id)) {
         buddy.spottedCollectibleIds.add(spotted.item.id);

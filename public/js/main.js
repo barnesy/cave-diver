@@ -52,6 +52,7 @@ import {
   recordFieldGuidePhoto,
   recordLoreDiscoveryInLogbook,
   recordCampaignClearInLogbook,
+  recordCrewDiveInLogbook,
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
@@ -131,6 +132,7 @@ import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import {
   AI_SQUAD_ROSTER,
   getAiDifficultyProfile,
+  getCrewBondRank,
   createAiSquad,
   stepAiSquad,
   handlePlayerSignalForAiSquad,
@@ -604,7 +606,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=160" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=161" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1650,6 +1652,8 @@ function savePhotoStudioSnapshot() {
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
       compactHud: Boolean(compactHudEnabled),
+      spaceClearanceM: session.spaceClearanceM ?? 4.0,
+      breathState: session.breath?.state || 'hold',
       timeSec: session.simTimeSec,
       dt: 0,
     });
@@ -5396,7 +5400,12 @@ function startDiveRun(multiplayer = false, restoredState = null) {
         : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
   const aiSquadTag =
     session.aiSquad.length > 0
-      ? ` · AI Squad: ${getAiDifficultyProfile(session.difficulty).badge}`
+      ? (() => {
+          const lead = session.aiSquad[0];
+          const bRec = loadCareerLogbook()?.crewBonds?.[lead.id];
+          const bondStr = bRec && bRec.dives > 0 ? ` · ${lead.callsign || lead.name} (${bRec.dives} dives)` : ` · ${session.aiSquad.map((b) => b.callsign || b.name).join(', ')}`;
+          return ` · AI: ${getAiDifficultyProfile(session.difficulty).badge}${bondStr}`;
+        })()
       : '';
   let campaignTag = '';
   if (activeCampaignRun && activeCampaignRun.residualTissues && activeCampaignRun.legIndex > 0) {
@@ -5776,6 +5785,16 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       score: teamSummary.teamScore,
       grade: teamSummary.teamRank.grade,
       timeSec: diveState.diveTimeSec,
+    });
+  }
+  if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
+    const squadIds = session.aiSquad.map((b) => b.id).filter(Boolean);
+    const rescuedIds = session.aiSquad
+      .filter((b) => b.rescued || (b.issuesResolvedByLeader || 0) > 0)
+      .map((b) => b.id);
+    updatedLogbook = recordCrewDiveInLogbook(updatedLogbook, squadIds, {
+      cleared: Boolean(success),
+      rescuedIds,
     });
   }
   saveCareerLogbook(updatedLogbook);
@@ -9579,6 +9598,8 @@ function frame(nowMs) {
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
       compactHud: Boolean(compactHudEnabled),
+      spaceClearanceM: session.spaceClearanceM ?? 4.0,
+      breathState: session.breath?.state || 'hold',
       timeSec: session.simTimeSec,
       dt,
     });

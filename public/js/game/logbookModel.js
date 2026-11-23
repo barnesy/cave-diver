@@ -36,6 +36,7 @@ export function createEmptyLogbook() {
     },
     loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
     completedCampaigns: [], // unlocked multi-dive expedition campaign IDs (v160)
+    crewBonds: {}, // aiBuddyId -> { dives, clears, rescues } (v161 zero-config passive veteran bond)
   };
 }
 
@@ -120,6 +121,16 @@ function normalizeBook(raw) {
     base.completedCampaigns = Array.from(
       new Set(raw.completedCampaigns.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))
     ).slice(0, 24);
+  }
+  if (raw.crewBonds && typeof raw.crewBonds === 'object') {
+    for (const [cid, rec] of Object.entries(raw.crewBonds)) {
+      if (!rec || typeof rec !== 'object') continue;
+      base.crewBonds[cid] = {
+        dives: Math.max(0, Math.round(Number(rec.dives) || 0)),
+        clears: Math.max(0, Math.round(Number(rec.clears) || 0)),
+        rescues: Math.max(0, Math.round(Number(rec.rescues) || 0)),
+      };
+    }
   }
   return base;
 }
@@ -282,6 +293,16 @@ export function mergeCareerLogbooks(rawA, rawB) {
   out.completedCampaigns = Array.from(
     new Set([...(a.completedCampaigns || []), ...(b.completedCampaigns || [])])
   ).slice(0, 24);
+  const bondIds = new Set([...Object.keys(a.crewBonds || {}), ...Object.keys(b.crewBonds || {})]);
+  for (const bid of bondIds) {
+    const ba = a.crewBonds?.[bid] || {};
+    const bb = b.crewBonds?.[bid] || {};
+    out.crewBonds[bid] = {
+      dives: Math.max(ba.dives || 0, bb.dives || 0),
+      clears: Math.max(ba.clears || 0, bb.clears || 0),
+      rescues: Math.max(ba.rescues || 0, bb.rescues || 0),
+    };
+  }
 
   return out;
 }
@@ -439,6 +460,24 @@ export function recordCampaignClearInLogbook(rawBook, campaignId) {
   const existed = book.completedCampaigns.includes(cleanId);
   if (!existed) book.completedCampaigns.push(cleanId);
   return { book, isNew: !existed };
+}
+
+/**
+ * Passively increment zero-config AI Crewmate Veteran Bond counters after each squad dive (v161).
+ */
+export function recordCrewDiveInLogbook(rawBook, squadIds = [], { cleared = false, rescuedIds = [] } = {}) {
+  const book = normalizeBook(rawBook);
+  const rescSet = new Set(Array.isArray(rescuedIds) ? rescuedIds : []);
+  for (const cid of Array.isArray(squadIds) ? squadIds : []) {
+    if (!cid || typeof cid !== 'string') continue;
+    const prev = book.crewBonds[cid] || { dives: 0, clears: 0, rescues: 0 };
+    book.crewBonds[cid] = {
+      dives: prev.dives + 1,
+      clears: prev.clears + (cleared ? 1 : 0),
+      rescues: prev.rescues + (rescSet.has(cid) ? 1 : 0),
+    };
+  }
+  return book;
 }
 
 export function seedLogbookFromEntries(rawBook, entries) {

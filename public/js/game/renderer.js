@@ -1492,6 +1492,8 @@ export class CaveRenderer {
     difficulty = 'standard',
     mutatorId = '',
     compactHud = false,
+    spaceClearanceM = 4.0,
+    breathState = 'hold',
     timeSec,
     dt,
   }) {
@@ -1504,7 +1506,15 @@ export class CaveRenderer {
     const ch = this.canvas.height;
     const dpr = this._cachedDpr || 1;
     const photoZoom = isPhotoMode ? Math.max(0.65, Math.min(2.2, Number(photoMode.zoom) || 1.0)) : 1.0;
-    const scale = this.pxPerM * dpr * photoZoom;
+    // Dynamic Restriction Camera Framing (v161): subtle zoom-in when threading tight cave squeezes
+    const targetRestrictZoom =
+      !isPhotoMode && !this._reducedMotion && Number.isFinite(spaceClearanceM) && spaceClearanceM < 2.2 && (diver?.y || 0) > 3.5
+        ? 1.0 + Math.min(0.13, ((2.2 - spaceClearanceM) / 1.5) * 0.13)
+        : 1.0;
+    this._restrictionZoom = Number.isFinite(this._restrictionZoom)
+      ? this._restrictionZoom + (targetRestrictZoom - this._restrictionZoom) * Math.min(1, (dt || 0.016) * 2.6)
+      : 1.0;
+    const scale = this.pxPerM * dpr * photoZoom * this._restrictionZoom;
 
     // Smooth camera follow + Torch-Coupled Peek Look-Ahead (or direct pan/zoom in Photo Mode Studio)
     const camAnchor = cameraTarget || diver;
@@ -1516,7 +1526,11 @@ export class CaveRenderer {
       const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * 3.4 : 0;
       const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
       const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
-      const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY;
+      // Subtle plunge-entry camera settle during the first 1.5s of submerging (v161)
+      const plungeDrop = !this._reducedMotion && timeSec >= 0 && timeSec < 1.5 && (camAnchor.y || 0) < 4.5
+        ? Math.sin((1 - timeSec / 1.5) * Math.PI) * 0.42
+        : 0;
+      const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY + plungeDrop;
       const camAlpha = Math.min(1, dt * (isManualPeek ? 3.2 : 6.0));
       this.camX += (lookX - this.camX) * camAlpha;
       this.camY += (lookY - this.camY) * camAlpha;
@@ -1879,6 +1893,9 @@ export class CaveRenderer {
       }
       if (drills?.active || drills?.backupTorchActive) {
         this._drawEmergencyDrillOverlay(ctx, cw, ch, drills, timeSec);
+      }
+      if (typeof this._drawImmersionGlassFx === 'function') {
+        this._drawImmersionGlassFx(ctx, cw, ch, diver, diveState, hazards, breathState, timeSec);
       }
     }
 
@@ -11893,6 +11910,91 @@ export class CaveRenderer {
     g.addColorStop(1, `rgba(125, 211, 252, ${alpha.toFixed(3)})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+  }
+
+  /**
+   * Tactile AAA Mask-Glass Immersion Pass (v161):
+   *  - Sparkling water droplets on mask glass near/breaking the surface (<2.0m)
+   *  - Plunge-entry surface splash sheen during the first 1.4s
+   *  - Cold thermocline mask rim condensation
+   *  - Soft foreground exhale bubble parallax during heavy breathing / exhale
+   */
+  _drawImmersionGlassFx(ctx, cw, ch, diver, diveState, hazards, breathState, timeSec) {
+    if (!diver || this._reducedMotion) return;
+    const depthM = Math.max(0, Number(diver.y) || 0);
+    const hr = Number(diveState?.heartRateBpm) || 72;
+    const cold = Math.max(0, Math.min(1, hazards?.thermoclineColdFactor || 0));
+    const nearSurface = depthM < 2.0;
+    const plungeSplash = timeSec >= 0 && timeSec < 1.4 && depthM < 3.8;
+    const showExhaleBubbles = depthM >= 1.5 && (breathState === 'exhale' || hr >= 112);
+    if (!nearSurface && !plungeSplash && cold < 0.14 && !showExhaleBubbles) return;
+
+    ctx.save();
+
+    // 1. Sparkling surface mask droplets & gentle sun-glare sheen
+    if (nearSurface) {
+      const surfFactor = Math.max(0, Math.min(1, (2.0 - depthM) / 1.6));
+      for (let i = 0; i < 12; i++) {
+        const side = i % 2 === 0 ? 1 : -1;
+        const edgeFrac = 0.04 + ((i * 37) % 14) * 0.012;
+        const x = side > 0 ? cw * edgeFrac : cw * (1 - edgeFrac);
+        const slide = ((timeSec * (18 + (i % 4) * 9) + i * 73) % (ch * 0.78)) + ch * 0.08;
+        const r = (3.5 + (i % 4) * 2.1) * (cw > 900 ? 1.15 : 0.9);
+        ctx.fillStyle = `rgba(224, 242, 254, ${(0.24 * surfFactor).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(x, slide, r * 0.82, r * 1.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.55 * surfFactor).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x - r * 0.24, slide - r * 0.32, r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 2. Entry plunge splash curtain
+    if (plungeSplash) {
+      const splashAlpha = Math.max(0, (1 - timeSec / 1.4) * 0.28);
+      const grad = ctx.createLinearGradient(0, 0, 0, ch * 0.42);
+      grad.addColorStop(0, `rgba(186, 230, 253, ${splashAlpha.toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(186, 230, 253, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, cw, ch * 0.42);
+    }
+
+    // 3. Cold thermocline mask rim fog condensation
+    if (cold >= 0.14) {
+      const fogAlpha = Math.min(0.26, (cold - 0.12) * 0.3);
+      const cornerR = Math.min(cw, ch) * 0.34;
+      const corners = [[0, 0], [cw, 0], [0, ch], [cw, ch]];
+      for (let i = 0; i < corners.length; i++) {
+        const [cx, cy] = corners[i];
+        const fg = ctx.createRadialGradient(cx, cy, cornerR * 0.1, cx, cy, cornerR);
+        fg.addColorStop(0, `rgba(224, 242, 254, ${fogAlpha.toFixed(3)})`);
+        fg.addColorStop(1, 'rgba(224, 242, 254, 0)');
+        ctx.fillStyle = fg;
+        ctx.fillRect(cx - cornerR, cy - cornerR, cornerR * 2, cornerR * 2);
+      }
+    }
+
+    // 4. Soft out-of-focus foreground exhale bubble parallax near viewport margins
+    if (showExhaleBubbles) {
+      const intensity = Math.min(1, (breathState === 'exhale' ? 0.55 : 0.25) + Math.max(0, (hr - 95) / 85) * 0.55);
+      for (let i = 0; i < 6; i++) {
+        const side = i % 2 === 0 ? 0.055 : 0.945;
+        const bx = cw * side + Math.sin(timeSec * 3.1 + i * 2.1) * 18;
+        const by = ch - (((timeSec * (115 + i * 22) + i * 140) % (ch + 60)) - 30);
+        const br = 6 + (i % 3) * 4.5;
+        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.18 * intensity).toFixed(3)})`;
+        ctx.fillStyle = `rgba(224, 242, 254, ${(0.06 * intensity).toFixed(3)})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 }
