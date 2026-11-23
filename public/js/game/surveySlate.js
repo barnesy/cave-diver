@@ -19,9 +19,11 @@ function clamp(v, lo, hi) {
  * @param {number} height
  * @param {object} session - Live dive session state
  * @param {number} [timeSec=0]
+ * @param {object} [opts]
+ * @param {boolean} [opts.followZoom=false]
  * @returns {boolean}
  */
-export function renderSurveySlate(ctx, width, height, session, timeSec = 0) {
+export function renderSurveySlate(ctx, width, height, session, timeSec = 0, { followZoom = false } = {}) {
   if (!ctx || !session?.level) return false;
   const level = session.level;
   const diver = session.diver;
@@ -86,12 +88,12 @@ export function renderSurveySlate(ctx, width, height, session, timeSec = 0) {
   ctx.fillText(`${pct}% MAPPED`, width - 8, 13);
 
   // Compute bounding box from explored cells + diver + spawn (never leaks unexplored extremities!)
-  let minX = (diver?.x ?? level.spawn?.x ?? 0) - 18;
-  let maxX = (diver?.x ?? level.spawn?.x ?? 0) + 18;
-  let minY = Math.min(0, (diver?.y ?? 2) - 10);
-  let maxY = Math.max(20, (diver?.y ?? 2) + 14);
+  let minX = (diver?.x ?? level.spawn?.x ?? 0) - (followZoom ? 22 : 18);
+  let maxX = (diver?.x ?? level.spawn?.x ?? 0) + (followZoom ? 22 : 18);
+  let minY = Math.min(followZoom ? (diver?.y ?? 2) - 14 : 0, (diver?.y ?? 2) - 10);
+  let maxY = Math.max(followZoom ? (diver?.y ?? 2) + 14 : 20, (diver?.y ?? 2) + 14);
 
-  if (exploredSet && exploredSet.size > 0 && cells.length > 0) {
+  if (!followZoom && exploredSet && exploredSet.size > 0 && cells.length > 0) {
     for (const idx of exploredSet) {
       const c = cells[idx];
       if (!c) continue;
@@ -257,6 +259,34 @@ export function renderSurveySlate(ctx, width, height, session, timeSec = 0) {
     }
   }
 
+  // 6b. Player-placed custom Wetnotes Survey Pins (v170)
+  const pins = session.surveyPins || [];
+  if (pins.length > 0) {
+    ctx.font = '800 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    for (let pi = 0; pi < pins.length; pi++) {
+      const pin = pins[pi];
+      const px = toX(pin.x);
+      const py = toY(pin.y);
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, py - 9);
+      ctx.stroke();
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 9);
+      ctx.lineTo(px + 6, py - 6.5);
+      ctx.lineTo(px, py - 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fef08a';
+      ctx.fillText(`#${pi + 1} ${pin.tag || 'PIN'} ${Math.round(pin.depthM || pin.y)}m`, px + 8, py - 6.5);
+    }
+  }
+
   // 7. Spawn / Exit beacon (if explored)
   if (level.exitZone && isPointExplored(level.exitZone.x, level.exitZone.y)) {
     const ex = toX(level.exitZone.x);
@@ -313,7 +343,7 @@ export function renderSurveySlate(ctx, width, height, session, timeSec = 0) {
   ctx.fillText(`◆RELIC  ☁AIR  ●COOKIE  [${depthTxt}]`, 8, height - 9);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#64748b';
-  ctx.fillText('[M] HIDE', width - 8, height - 9);
+  ctx.fillText('[N] HIDE', width - 8, height - 9);
 
   ctx.restore();
   return true;

@@ -651,7 +651,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=169" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=170" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1444,23 +1444,41 @@ shearwaterCanvasEl?.addEventListener('click', (e) => {
   toggleShearwaterComputer(false);
 });
 
-// Waterproof Wetnotes Survey Slate Overlay (v169)
+// Waterproof Wetnotes Survey Slate Overlay (v169-v170)
 const surveySlatePanelEl = document.getElementById('survey-slate-panel');
 const surveySlateCanvasEl = document.getElementById('survey-slate-canvas');
 const btnSurveySlateCloseEl = document.getElementById('btn-survey-slate-close');
+const btnSurveySlateZoomEl = document.getElementById('btn-survey-slate-zoom');
+const btnSurveyDropPinEl = document.getElementById('btn-survey-drop-pin');
+const btnSurveyDropCookieEl = document.getElementById('btn-survey-drop-cookie');
+const btnSurveyClearPinsEl = document.getElementById('btn-survey-clear-pins');
 const btnHudSurveySlateEl = document.getElementById('btn-hud-survey-slate');
+const btnHudSlateBarEl = document.getElementById('btn-hud-slate-bar');
+const btnMinimapSlateEl = document.getElementById('btn-minimap-slate');
+const SURVEY_PIN_TAGS = ['JUNCTION', 'RELIC', 'SQUEEZE', 'AIR', 'TURN'];
 let surveySlateOpen = false;
+let surveySlateFollowZoom = false;
 let lastSurveySlateDrawMs = 0;
+
+function redrawSurveySlateNow() {
+  if (!surveySlateOpen || !session || !surveySlateCanvasEl) return;
+  const sctx = surveySlateCanvasEl.getContext('2d');
+  if (sctx) {
+    renderSurveySlate(sctx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, performance.now() / 1000, {
+      followZoom: surveySlateFollowZoom,
+    });
+  }
+}
 
 function toggleSurveySlate(forceState) {
   if (mode !== 'diving' && forceState !== false) return false;
   surveySlateOpen = typeof forceState === 'boolean' ? forceState : !surveySlateOpen;
   if (surveySlatePanelEl) surveySlatePanelEl.hidden = !surveySlateOpen;
-  if (btnHudSurveySlateEl) btnHudSurveySlateEl.classList.toggle('active', surveySlateOpen);
-  if (surveySlateOpen && session && surveySlateCanvasEl) {
-    const sctx = surveySlateCanvasEl.getContext('2d');
-    if (sctx) renderSurveySlate(sctx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, performance.now() / 1000);
-  }
+  btnHudSurveySlateEl?.classList.toggle('active', surveySlateOpen);
+  btnHudSlateBarEl?.classList.toggle('active', surveySlateOpen);
+  btnMinimapSlateEl?.classList.toggle('active', surveySlateOpen);
+  if (btnSurveySlateZoomEl) btnSurveySlateZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
+  if (surveySlateOpen) redrawSurveySlateNow();
   return true;
 }
 btnHudSurveySlateEl?.addEventListener('click', (e) => {
@@ -1468,13 +1486,56 @@ btnHudSurveySlateEl?.addEventListener('click', (e) => {
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   toggleSurveySlate();
 });
+btnHudSlateBarEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+  toggleSurveySlate();
+});
+btnMinimapSlateEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleSurveySlate();
+});
 btnSurveySlateCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleSurveySlate(false);
 });
-surveySlateCanvasEl?.addEventListener('click', (e) => {
+const flipSurveySlateZoom = (e) => {
   e.stopPropagation();
-  toggleSurveySlate(false);
+  surveySlateFollowZoom = !surveySlateFollowZoom;
+  if (btnSurveySlateZoomEl) btnSurveySlateZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
+  redrawSurveySlateNow();
+};
+btnSurveySlateZoomEl?.addEventListener('click', flipSurveySlateZoom);
+surveySlateCanvasEl?.addEventListener('click', flipSurveySlateZoom);
+btnSurveyDropPinEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!session?.diver) return;
+  if (!Array.isArray(session.surveyPins)) session.surveyPins = [];
+  if (session.surveyPins.length >= 12) session.surveyPins.shift();
+  const tag = SURVEY_PIN_TAGS[session.surveyPins.length % SURVEY_PIN_TAGS.length];
+  const depthM = Math.max(0, Math.round(session.diver.y));
+  session.surveyPins.push({
+    id: `pin-${Date.now()}`,
+    x: session.diver.x,
+    y: session.diver.y,
+    depthM,
+    tag,
+  });
+  audio.playUiClick?.();
+  showToast(`📍 Wetnotes Pin #${session.surveyPins.length} (${tag} · ${depthM}m) marked!`, 2.4);
+  redrawSurveySlateNow();
+});
+btnSurveyDropCookieEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('btn-hud-cookie')?.click();
+  redrawSurveySlateNow();
+});
+btnSurveyClearPinsEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!session) return;
+  session.surveyPins = [];
+  showToast('📋 Cleared custom Wetnotes pins.', 2.0);
+  redrawSurveySlateNow();
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -9823,7 +9884,9 @@ function stepSimulation(dt) {
       lastSurveySlateDrawMs = slateNowMs;
       const slCtx = surveySlateCanvasEl.getContext('2d');
       if (slCtx) {
-        renderSurveySlate(slCtx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, slateNowMs / 1000);
+        renderSurveySlate(slCtx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, slateNowMs / 1000, {
+          followZoom: surveySlateFollowZoom,
+        });
       }
     }
   }

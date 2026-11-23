@@ -629,6 +629,7 @@ export function createDiveSession(
     squeezeDust: [],
     _tankScrapeCooldown: 0,
     spottedArtifacts: new Set(), // v169 torch-illuminated relics plotted on Wetnotes Survey Slate
+    surveyPins: [], // v170 player-placed Wetnotes field survey pins ({ id, x, y, depthM, tag })
     trimStats: {
       frogSec: 0,
       flutterSec: 0,
