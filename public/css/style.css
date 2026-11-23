@@ -4599,7 +4599,101 @@ button.mode-badge:hover {
 }
 
 .menu-actions-primary {
+  margin-bottom: 8px;
+}
+
+.menu-actions-secondary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.home-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+}
+.home-action-btn:active {
+  transform: scale(0.98);
+}
+.setup-drawer-toggle.home-action-btn {
+  border: 1px solid rgba(56, 189, 248, 0.48);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.28), rgba(15, 23, 42, 0.9));
+  color: #e0f2fe;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.16), inset 0 1px 0 rgba(186, 230, 253, 0.16);
+}
+.setup-drawer-toggle.home-action-btn:hover,
+.setup-drawer-toggle.home-action-btn.open {
+  border-color: rgba(56, 189, 248, 0.82);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(15, 23, 42, 0.92));
+  color: #f0f9ff;
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.24);
+}
+.setup-drawer-toggle.home-action-btn.has-mods {
+  border-color: rgba(251, 191, 36, 0.72);
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.34), rgba(15, 23, 42, 0.9));
+  color: #fef08a;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(254, 243, 199, 0.18);
+}
+
+.home-daily-btn {
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.26), rgba(14, 116, 144, 0.22) 60%, rgba(15, 23, 42, 0.9));
+  color: #fef3c7;
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.18), inset 0 1px 0 rgba(254, 243, 199, 0.16);
+}
+.home-daily-btn:hover {
+  border-color: rgba(251, 191, 36, 0.82);
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.34), rgba(14, 116, 144, 0.28) 60%, rgba(15, 23, 42, 0.92));
+  color: #fffbeb;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.24), inset 0 1px 0 rgba(254, 243, 199, 0.24);
+}
+.home-daily-btn.cleared {
+  border-color: rgba(52, 211, 153, 0.62);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(14, 116, 144, 0.22) 60%, rgba(15, 23, 42, 0.9));
+  color: #d1fae5;
+}
+.home-daily-streak-badge {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid rgba(251, 191, 36, 0.48);
+  color: #fde68a;
+}
+.home-daily-btn.cleared .home-daily-streak-badge {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(52, 211, 153, 0.56);
+  color: #a7f3d0;
+}
+
+.dive-setup-card .gear-loadout-dock {
+  margin: 4px 0 10px;
+}
+.daily-cal-card .daily-challenge-card {
+  margin: 2px 0 8px;
+  padding: 7px 10px;
+}
+@media (max-width: 420px) {
+  .home-action-btn {
+    padding: 8px 8px;
+    font-size: 0.74rem;
+    gap: 5px;
+  }
 }
 
 /* Daily Expedition Challenge & Mutators (v108) */
@@ -5807,6 +5901,7 @@ button.mode-badge:hover {
 
 /* Dedicated Dive Setup & Modifiers Modal Panel (v135) */
 .dive-setup-card {
+  width: min(620px, calc(100vw - 24px));
   max-width: 680px;
 }
 .dive-setup-grid {
@@ -6247,32 +6342,6 @@ button.mode-badge:hover {
   text-transform: uppercase;
   pointer-events: none;
 }
-.setup-drawer-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  background: rgba(15, 23, 42, 0.78);
-  color: #cbd5e1;
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  font-size: 0.66rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-.setup-drawer-toggle:hover,
-.setup-drawer-toggle.open {
-  border-color: rgba(56, 189, 248, 0.65);
-  background: rgba(14, 165, 233, 0.2);
-  color: #e0f2fe;
-}
-.setup-drawer-toggle.has-mods {
-  border-color: rgba(251, 191, 36, 0.65);
-  background: rgba(245, 158, 11, 0.18);
-  color: #fde68a;
-}
 .site-view-cycle-btn {
   display: inline-flex;
   align-items: center;
@@ -6341,16 +6410,16 @@ button.mode-badge:hover {
   margin-bottom: 10px;
 }
 .daily-cal-spacer {
-  min-height: 42px;
+  min-height: 36px;
 }
 .daily-cal-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-height: 44px;
-  padding: 4px 2px;
+  gap: 1px;
+  min-height: 36px;
+  padding: 3px 2px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(15, 23, 42, 0.72);
@@ -6834,83 +6903,6 @@ button.mode-badge:hover {
 /* ============================================================================
    v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul
    ============================================================================ */
-
-/* Active Dive Modifiers Chip Strip above Primary DIVE CTA */
-.active-modifiers-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 8px;
-  padding: 6px 8px;
-  border-radius: var(--radius-md);
-  background: rgba(7, 17, 32, 0.72);
-  border: 1px solid var(--bezel-border);
-}
-.active-modifiers-bar.is-default {
-  justify-content: space-between;
-  border-color: var(--border-subtle);
-  background: rgba(7, 17, 32, 0.45);
-}
-.mod-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(56, 189, 248, 0.36);
-  background: rgba(14, 116, 144, 0.22);
-  color: #e0f2fe;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
-}
-.mod-chip:hover {
-  border-color: rgba(56, 189, 248, 0.75);
-  background: rgba(14, 165, 233, 0.28);
-}
-.mod-chip:active {
-  transform: scale(0.96);
-}
-.mod-chip.mode-hardcore,
-.mod-chip.mod-drills {
-  border-color: rgba(248, 113, 113, 0.55);
-  background: rgba(153, 27, 27, 0.32);
-  color: #fecaca;
-}
-.mod-chip.mode-guided {
-  border-color: rgba(74, 222, 128, 0.55);
-  background: rgba(22, 101, 52, 0.32);
-  color: #bbf7d0;
-}
-.mod-chip.mod-ai,
-.mod-chip.mod-livery {
-  border-color: rgba(192, 132, 252, 0.52);
-  background: rgba(88, 28, 135, 0.28);
-  color: #e9d5ff;
-}
-.mod-chip.mod-weather,
-.mod-chip.mod-gas,
-.mod-chip.mod-mut {
-  border-color: rgba(251, 191, 36, 0.52);
-  background: rgba(146, 64, 14, 0.28);
-  color: #fde68a;
-}
-.mod-chip.mod-default {
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-  padding-left: 2px;
-}
-.mod-chip.mod-edit {
-  margin-left: auto;
-  border-color: var(--border-subtle);
-  background: rgba(15, 23, 42, 0.85);
-  color: #bae6fd;
-}
 
 /* Streamlined Collapsible Co-op Join Dock */
 .dive-coop-meta-right {

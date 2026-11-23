@@ -517,7 +517,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=174',
+  mapRasterUrl: './assets/map-expedition.jpg?v=175',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1579,6 +1579,7 @@ const dailySiteTitleEl = document.getElementById('daily-site-title');
 const dailyMutatorBadgeEl = document.getElementById('daily-mutator-badge');
 const dailyMutatorDescEl = document.getElementById('daily-mutator-desc');
 const btnPlayDaily = document.getElementById('btn-play-daily');
+const homeDailyStreakBadgeEl = document.getElementById('home-daily-streak-badge');
 const debriefDailyBadgeEl = document.getElementById('debrief-daily-badge');
 let activeDailyChallenge = null;
 let savedGearLoadout = { sonar: false, dpv: false, ccr: false };
@@ -1658,6 +1659,17 @@ function renderDailyChallengeCard() {
   }
   if (btnPlayDaily) {
     btnPlayDaily.textContent = status.clearedToday ? '↻ REPLAY DAILY' : '▶ PLAY DAILY';
+  }
+  if (homeDailyStreakBadgeEl) {
+    homeDailyStreakBadgeEl.textContent = status.clearedToday
+      ? `✓ 🔥 ${status.activeStreak}d`
+      : `🔥 ${status.activeStreak}d`;
+  }
+  if (btnOpenDailyCalendar) {
+    btnOpenDailyCalendar.classList.toggle('cleared', status.clearedToday);
+    btnOpenDailyCalendar.title = status.clearedToday
+      ? `Daily Dive cleared today (${status.activeStreak}d streak) — open archive calendar or replay`
+      : `Open Today’s Daily Dive (${daily.dateKey}) & Archive Calendar`;
   }
 }
 
@@ -1753,10 +1765,12 @@ function renderDailyCalendarModal() {
 
 function openDailyCalendarModal() {
   if (!dailyCalModalEl) return;
+  setHomeMenuOpen(false);
   const todayKey = getUtcDateKey();
   dailyCalYear = Number(todayKey.slice(0, 4));
   dailyCalMonth0 = Number(todayKey.slice(5, 7)) - 1;
   dailyCalSelectedKey = todayKey;
+  renderDailyChallengeCard();
   renderDailyCalendarModal();
   dailyCalModalEl.hidden = false;
 }
@@ -1848,6 +1862,7 @@ gearDockGridEl?.addEventListener('click', (e) => {
   saveGearLoadout();
   renderTechGearDock();
   renderHomeAvatarBadge();
+  syncSetupDrawerSummary();
   showToast(
     savedGearLoadout[gid] ? `${item.icon} ${item.name} equipped — ${item.summary}` : `${item.icon} ${item.name} unequipped`,
     2.6
@@ -4584,6 +4599,7 @@ function openDiveSetupModal() {
   const modal = document.getElementById('dive-setup-modal');
   if (!modal) return;
   setHomeMenuOpen(false);
+  renderTechGearDock();
   modal.hidden = false;
   syncSetupDrawerSummary();
 }
@@ -4657,10 +4673,16 @@ function syncSetupDrawerSummary() {
     procMod = Boolean(activeLevel?.isProcedural);
     if (procMod) activeCount++;
   } catch {}
+  try {
+    const effGear = getEffectiveGearLoadout();
+    if (effGear.sonar) activeCount++;
+    if (effGear.dpv) activeCount++;
+    if (effGear.ccr) activeCount++;
+  } catch {}
 
   const isOpen = Boolean(modal && !modal.hidden);
   if (btn) {
-    btn.textContent = activeCount > 0 ? `⚙️ Setup · ${activeCount}` : '⚙️ Setup';
+    btn.textContent = activeCount > 0 ? `⚙️ Dive Setup · ${activeCount}` : '⚙️ Dive Setup';
     btn.classList.toggle('has-mods', activeCount > 0);
     btn.classList.toggle('open', isOpen);
     btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
@@ -4743,63 +4765,7 @@ function syncSetupDrawerSummary() {
   if (resetBtn) {
     resetBtn.disabled = activeCount === 0;
   }
-
-  // Render live clickable Active Modifiers Chip Strip right above the primary DIVE button (v143)
-  const modBar = document.getElementById('menu-active-modifiers');
-  if (modBar) {
-    const chips = [];
-    if (modeMod) {
-      const mLbl = currentDiff === 'hardcore' ? '🔥 Hardcore' : '🧭 Guided';
-      chips.push(`<button type="button" class="mod-chip mode-${currentDiff}" data-mod-target="setup">${mLbl}</button>`);
-    }
-    if (aiMod) {
-      chips.push(`<button type="button" class="mod-chip mod-ai" data-mod-target="setup">🤖 ${currentAiCount} AI</button>`);
-    }
-    if (roleMod) {
-      chips.push(`<button type="button" class="mod-chip mod-role" data-mod-target="setup">${currentRole.icon} ${escapeHtml(currentRole.shortLabel || currentRole.name)}</button>`);
-    }
-    if (weatherMod) {
-      const rw = resolveEffectiveWeather(currentWeatherPref, { level: activeLevel });
-      chips.push(`<button type="button" class="mod-chip mod-weather" data-mod-target="setup">${rw.icon} ${escapeHtml(currentWeatherPref === 'auto' ? 'Auto' : rw.label)}</button>`);
-    }
-    if (liveryMod) {
-      const suit = getSuitLivery(currentLivery.suitId);
-      chips.push(`<button type="button" class="mod-chip mod-livery" data-mod-target="livery">🎨 ${escapeHtml(suit.shortName || suit.name)}</button>`);
-    }
-    if (gasMod) {
-      chips.push(`<button type="button" class="mod-chip mod-gas" data-mod-target="gas">🧪 Custom Mix</button>`);
-    }
-    if (drillsMod) {
-      chips.push(`<button type="button" class="mod-chip mod-drills" data-mod-target="setup">⚡ Drills</button>`);
-    }
-    if (mutMod) {
-      const mut = getDailyMutatorById(currentMutId);
-      chips.push(`<button type="button" class="mod-chip mod-mut" data-mod-target="mutator">${mut?.icon || '🎛️'} ${escapeHtml(mut?.shortName || mut?.name || 'Mutator')}</button>`);
-    }
-    if (procMod) {
-      chips.push(`<button type="button" class="mod-chip mod-proc" data-mod-target="proc">∞ Sump</button>`);
-    }
-    if (chips.length === 0) {
-      modBar.classList.add('is-default');
-      modBar.innerHTML = `<button type="button" class="mod-chip mod-default" data-mod-target="setup">🤿 Standard Tech · ☀️ Clear Day</button><button type="button" class="mod-chip mod-edit" data-mod-target="setup">⚙️ Setup</button>`;
-    } else {
-      modBar.classList.remove('is-default');
-      chips.push(`<button type="button" class="mod-chip mod-edit" data-mod-target="setup">⚙️ Edit</button>`);
-      modBar.innerHTML = chips.join('');
-    }
-  }
 }
-
-document.getElementById('menu-active-modifiers')?.addEventListener('click', (e) => {
-  const chip = e.target.closest('button[data-mod-target]');
-  if (!chip) return;
-  const target = chip.dataset.modTarget;
-  if (target === 'livery') openLiveryModal();
-  else if (target === 'gas') openGasPlannerModal();
-  else if (target === 'mutator') openChallengeModal();
-  else if (target === 'proc') openProceduralModal();
-  else openDiveSetupModal();
-});
 
 document.getElementById('btn-home-open-setup')?.addEventListener('click', () => {
   setHomeMenuOpen(false);
@@ -4931,6 +4897,12 @@ btnSetupResetEl?.addEventListener('click', () => {
     }
     selectAndLoadLevel(DEFAULT_LEVEL_ID);
   }
+  if (savedGearLoadout.sonar || savedGearLoadout.dpv || savedGearLoadout.ccr) {
+    savedGearLoadout = { sonar: false, dpv: false, ccr: false };
+    saveGearLoadout();
+    renderTechGearDock();
+    renderHomeAvatarBadge();
+  }
   syncSetupDrawerSummary();
   showToast('↺ Dive Setup reset to Standard Tech defaults.', 2.2);
 });
@@ -5054,6 +5026,7 @@ async function launchDailyChallenge(dailyOverride = null) {
 }
 
 btnPlayDaily?.addEventListener('click', () => {
+  closeDailyCalendarModal();
   launchDailyChallenge();
 });
 

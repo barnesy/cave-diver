@@ -5972,8 +5972,8 @@ test('v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul: modal 
   assert.ok(stackBlock.indexOf('challengeModal') < stackBlock.indexOf('diveSetupModalEl'), 'Challenge Sandbox must close before Dive Setup');
   assert.ok(stackBlock.indexOf('proceduralModal') < stackBlock.indexOf('diveSetupModalEl'), 'Uncharted Sump must close before Dive Setup');
 
-  // 2. Home Screen Streamline: Active Modifiers Strip, Hamburger Setup parity, Collapsible Co-op Dock & Sticky Debrief CTA
-  assert.ok(html.includes('id="menu-active-modifiers"'), 'Missing Active Modifiers Chip Strip above DIVE CTA');
+  // 2. Home Screen Streamline: Prominent Dive Setup & Daily Dive buttons, Hamburger Setup parity, Collapsible Co-op Dock & Sticky Debrief CTA
+  assert.ok(html.includes('id="btn-setup-drawer"') && html.includes('menu-actions-secondary'), 'Prominent Dive Setup & Daily Dive action row must exist');
   assert.ok(html.includes('id="btn-home-open-setup"'), 'Hamburger menu must link directly to Dive Setup');
   assert.ok(html.includes('id="btn-home-open-livery"'), 'Hamburger menu must link directly to Gear Workshop');
   assert.ok(html.includes('id="btn-coop-dock-toggle"'), 'Co-op Join Dock must have collapsible toggle');
@@ -8654,4 +8654,28 @@ test('v174 Campaign Mastery Rewards, Bidirectional Replay-Depth Sync & Technical
   const dMerged = mergeCareerLogbooks(dBookA, dBookB);
   assert.equal(dMerged.drillMastery['freeflow-bailout'].bestGrade, 'S+');
   assert.equal(dMerged.drillMastery['freeflow-bailout'].bestTimeSec, 48);
+});
+
+test('v175 Streamlined Home Interface: removes setup strip, gear dock & daily card from homepage; moves gear into Dive Setup and Daily card into Daily Dive panel', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const menuStart = html.indexOf('<section id="screen-menu"');
+  const menuEnd = html.indexOf('</section>', menuStart);
+  const homeHtml = html.slice(menuStart, menuEnd);
+
+  assert.ok(!homeHtml.includes('id="menu-active-modifiers"'), 'Setup modifier strip must be removed from homepage');
+  assert.ok(!homeHtml.includes('id="menu-gear-dock"'), 'Tech Gear Loadout panel must be removed from homepage');
+  assert.ok(!homeHtml.includes('id="daily-challenge-card"'), 'Daily Dive card must be removed from homepage');
+  assert.ok(homeHtml.includes('class="menu-actions menu-actions-secondary"'), 'Homepage must render prominent Setup & Daily Dive secondary action row');
+  assert.ok(homeHtml.includes('id="btn-setup-drawer"') && homeHtml.includes('home-action-btn'), 'Existing Setup button must be prominent on homepage');
+  assert.ok(homeHtml.includes('id="btn-open-daily-calendar"') && homeHtml.includes('id="home-daily-streak-badge"'), 'Daily Dive button with compact streak badge must be on homepage');
+
+  const dailyModalStart = html.indexOf('<div id="daily-calendar-modal"');
+  const setupModalStart = html.indexOf('<div id="dive-setup-modal"');
+  const liveryModalStart = html.indexOf('<div id="livery-modal"');
+  const dailyModalHtml = html.slice(dailyModalStart, setupModalStart);
+  const setupModalHtml = html.slice(setupModalStart, liveryModalStart);
+
+  assert.ok(dailyModalHtml.includes('id="daily-challenge-card"') && dailyModalHtml.includes('id="btn-play-daily"'), 'Daily Dive panel must host today’s Daily Sump card & PLAY DAILY button');
+  assert.ok(setupModalHtml.includes('id="menu-gear-dock"') && setupModalHtml.includes('id="gear-dock-grid"'), 'Dive Setup modal must host Tech Gear Loadout dock');
 });
