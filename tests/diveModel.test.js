@@ -7075,3 +7075,156 @@ test('v156 Living Signature Moments, Dive Contracts, Crew Roles, PB Split Timers
     12.3
   );
 });
+
+test('v157 Hardcore Mode AI Diver Leadership, Incident Solving & Leave-No-Diver-Behind Rescue', async () => {
+  const {
+    HARDCORE_LEADERSHIP_BONUS_PTS,
+    createAiSquad,
+    stepAiBuddy,
+    handlePlayerSignalForAiBuddy,
+    triggerHardcoreBuddyIssue,
+    receiveGasForAiBuddy,
+    assistHardcoreBuddyIssue,
+    updateTowedAiBuddy,
+  } = await import('../public/js/game/aiBuddy.js');
+
+  const sess = createDiveSession(LEVEL_1, { diverName: 'Lead', difficulty: 'hardcore' });
+  const squad = createAiSquad(LEVEL_1, sess.diver, 1, { initialGasId: 'EAN32' });
+  sess.aiSquad = squad;
+  const buddy = squad[0];
+  const openPt = LEVEL_1.checkpoints[0];
+  sess.simTimeSec = 25;
+  sess.diver.x = openPt.x;
+  sess.diver.y = openPt.y;
+  buddy.x = openPt.x - 1.8;
+  buddy.y = openPt.y;
+
+  // 1. Hardcore Separation (NO magical teleport) & Rejoin when leader returns
+  sess.diver.x = openPt.x + 18;
+  let separatedFlag = false;
+  let rejoinedFlag = false;
+  for (let i = 0; i < 40; i++) {
+    stepAiBuddy(buddy, sess, 0.1, {
+      onBuddySeparated: () => { separatedFlag = true; },
+      onBuddyRejoined: () => { rejoinedFlag = true; },
+    });
+  }
+  assert.equal(separatedFlag, true, 'Hardcore AI buddy should enter separated state when outrun');
+  assert.equal(buddy.separated, true);
+  assert.equal(buddy.condition, 'SEPARATED');
+  assert.ok(Math.hypot(sess.diver.x - buddy.x, sess.diver.y - buddy.y) > 12, 'Hardcore AI buddy must NOT magically teleport');
+
+  // Swim back to re-establish visual lead
+  sess.diver.x = buddy.x + 4.0;
+  sess.diver.y = buddy.y;
+  stepAiBuddy(buddy, sess, 0.1, { onBuddyRejoined: () => { rejoinedFlag = true; } });
+  assert.equal(rejoinedFlag, true);
+  assert.equal(buddy.separated, false);
+
+  // 2. Primary Light Failure: buddy torch turns off; leading them under player torchlight + OK signal resolves it
+  const tf = triggerHardcoreBuddyIssue(buddy, 'torch-fail', sess, 1000);
+  assert.ok(tf && buddy.torchOn === false && buddy.condition === 'NO LIGHT');
+  sess.diver.torchOn = true;
+  sess.diver.x = buddy.x + 2.4;
+  let resolvedCount = 0;
+  for (let i = 0; i < 35 && buddy.issue; i++) {
+    sess.diver.x += 0.18;
+    stepAiBuddy(buddy, sess, 0.1, {
+      onBuddyIssueResolved: () => { resolvedCount++; },
+    });
+  }
+  if (buddy.issue) {
+    handlePlayerSignalForAiBuddy(buddy, 'ok', sess, 4000, {
+      onBuddyIssueResolved: () => { resolvedCount++; },
+    });
+  }
+  assert.equal(buddy.issue, null, 'Leading buddy under torchlight should resolve light failure');
+  assert.equal(buddy.torchOn, true);
+  assert.equal(resolvedCount, 1);
+  assert.equal(sess.aiLeadBonusScore, HARDCORE_LEADERSHIP_BONUS_PTS);
+
+  // 3. Nitrogen Narcosis: leading shallower + ASCEND signal clears narcosis
+  buddy.x = openPt.x;
+  buddy.y = openPt.y;
+  buddy.depthM = 28;
+  sess.diver.x = buddy.x + 1.5;
+  sess.diver.y = openPt.y - 0.5;
+  sess.diver.vy = -0.6;
+  triggerHardcoreBuddyIssue(buddy, 'narcosis', sess, 6000);
+  assert.equal(buddy.condition, 'NARCOSIS');
+  handlePlayerSignalForAiBuddy(buddy, 'ascend', sess, 6200);
+  handlePlayerSignalForAiBuddy(buddy, 'ok', sess, 6400);
+  assistHardcoreBuddyIssue(buddy, sess, 6600);
+  assert.equal(buddy.issue, null, 'Coaching & leading shallower should clear narcosis');
+
+  // 4. Snagged AI Buddy: pinned at snag anchor, contextual prompt shows CUT FREE [E], triggerWreckAction cuts them free
+  buddy.x = openPt.x;
+  buddy.y = openPt.y;
+  triggerHardcoreBuddyIssue(buddy, 'snagged', sess, 8000, { snagKey: 'test-snag' });
+  const anchorX = buddy.x;
+  const anchorY = buddy.y;
+  stepAiBuddy(buddy, sess, 0.1, {});
+  assert.equal(buddy.x, anchorX, 'Snagged AI buddy must remain immobilized');
+  assert.equal(buddy.y, anchorY);
+  sess.diver.x = anchorX + 1.4;
+  sess.diver.y = anchorY;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.05, { peers: squad });
+  assert.match(sess.wreckActionPrompt?.label || '', /CUT .* FREE \[E\]/);
+  const cutRes = triggerWreckAction(sess, {
+    onAssistAiBuddy: (b) => Boolean(assistHardcoreBuddyIssue(b, sess, 8200).handled),
+  });
+  assert.equal(cutRes.handled, true);
+  assert.equal(buddy.issue, null, 'Pressing [E] beside snagged Hardcore AI buddy should slice them free');
+
+  // 5. Low-Gas Free-Flow & Emergency Gas Share (and Downed state if starved to 0 bar)
+  triggerHardcoreBuddyIssue(buddy, 'low-gas', sess, 9000);
+  assert.ok(buddy.activeBar <= 45);
+  const shareRes = receiveGasForAiBuddy(buddy, 30, 'EAN32', sess, 9100);
+  assert.equal(shareRes.accepted, true);
+  assert.equal(buddy.issue, null, 'Sharing gas with low-gas Hardcore AI buddy should resolve emergency');
+
+  // 6. Hardcore "Leave No Diver Behind" Exit Gate + Downed Tow Extraction
+  // Tag all checkpoints and move player to exit while buddy is DOWN & untowed -> exit MUST be blocked!
+  for (const cp of LEVEL_1.checkpoints) sess.checkpointsHit.add(cp.id);
+  buddy.alive = false;
+  buddy.condition = 'DOWN';
+  buddy.x = openPt.x;
+  buddy.y = openPt.y;
+  sess.diver.x = LEVEL_1.exitZone.x;
+  sess.diver.y = 0.9;
+  let blockedToast = '';
+  const blockedStep = stepDiveSession(sess, { x: 0, y: 0 }, 0.05, {
+    peers: squad,
+    onToast: (m) => { blockedToast = m; },
+  });
+  assert.equal(blockedStep.outcome, null, 'Hardcore exit MUST be blocked while AI buddy is downed & untowed');
+  assert.match(blockedToast, /Leave no diver behind/i);
+
+  // Clip tow line onto downed AI buddy, glide them smoothly behind player, and exit cleanly!
+  sess.rescueTargetId = buddy.id;
+  sess.diver.rescueTargetId = buddy.id;
+  buddy.rescuedBy = 'self';
+  updateTowedAiBuddy(buddy, sess.diver, LEVEL_1, 0.1);
+  assert.ok(Math.hypot(buddy.x - sess.diver.x, buddy.y - sess.diver.y) < Math.hypot(openPt.x - sess.diver.x, openPt.y - sess.diver.y));
+  const rescuedStep = stepDiveSession(sess, { x: 0, y: 0 }, 0.05, { peers: squad });
+  assert.equal(rescuedStep.outcome?.success, true, 'Surfacing while towing downed Hardcore AI buddy must complete extraction');
+
+  // 7. Renderer renders Hardcore issue beacon ring + progress arc + off-screen edge pill cleanly
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 1280, height: 720 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t || '').length * 7 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r._cachedDpr = 1;
+  const toX = (x) => 400 + x * 20;
+  const toY = (y) => 100 + y * 20;
+  const visualBuddy = { ...buddy, alive: true, condition: 'NO LIGHT', issue: { kind: 'torch-fail', hudLabel: '🔦 LEAD W/ LIGHT', progress: 0.65, countdownSec: 40 } };
+  r._drawBuddyRescueTethers(noopCtx, sess.diver, [visualBuddy], toX, toY, 20, 4.2, []);
+  r._drawPeerEdgeIndicators(noopCtx, 1280, 720, sess.diver, [{ ...visualBuddy, x: sess.diver.x + 90 }], toX, toY, 4.2);
+});

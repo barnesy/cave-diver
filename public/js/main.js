@@ -121,6 +121,9 @@ import {
   createAiSquad,
   stepAiSquad,
   handlePlayerSignalForAiSquad,
+  receiveGasForAiBuddy,
+  assistHardcoreBuddyIssue,
+  updateTowedAiBuddy,
 } from './game/aiBuddy.js';
 import { WEATHER_CYCLE_ORDER, resolveEffectiveWeather } from './game/weather.js';
 import {
@@ -588,7 +591,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=156" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=157" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1295,8 +1298,9 @@ function dispatchScubaSignal(idOrText) {
     if (aiRes?.responded) {
       const leadAi = session.aiSquad[0];
       const mix = computeSpatialMix(session.diver.x, session.diver.y, leadAi.x, leadAi.y);
-      audio.playSignal?.(mix.pan);
-      showToast(aiRes.toast || `${leadAi.name}: 👌 Copy`, 2.4);
+      if (aiRes.resolvedIssue) audio.playDrillClear?.();
+      else audio.playSignal?.(mix.pan);
+      showToast(aiRes.toast || `${leadAi.name}: 👌 Copy`, aiRes.resolvedIssue ? 3.8 : 2.6);
       toggleSignalWheel(false);
       return true;
     }
@@ -5620,6 +5624,17 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       cls: 'green',
     });
   }
+  if ((session.aiLeadBonusScore || 0) > 0 || (session.aiBuddiesRescued || 0) > 0) {
+    const leadPts = (session.aiLeadBonusScore || 0) + (session.aiBuddiesRescued || 0) * 450;
+    const solved = session.aiIssuesResolved || 0;
+    const rescued = session.aiBuddiesRescued || 0;
+    rows.push({
+      label: `🏅 Hardcore Squad Lead (${solved} solved${rescued > 0 ? ` · ${rescued} towed` : ''})`,
+      pts: leadPts,
+      pct: 100,
+      cls: 'gold',
+    });
+  }
   if (teamSummary.isTeam) {
     if (teamSummary.rescueBonus > 0) {
       rows.push({
@@ -6686,7 +6701,7 @@ function getSetupModeDescription(diffId) {
     return 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.';
   }
   if (diffId === 'hardcore') {
-    return 'Hardcore Mode: No compass coaching, physical diver-to-diver collision (avoid bumping buddies!), aggressive silt, heavy currents & strict physiology (+score bonus).';
+    return 'Hardcore Mode: No compass coaching, physical diver-to-diver collision, aggressive silt & strict physiology. With AI Squad active, you must lead wingmen through light failures, narcosis, snags, low gas & tow downed buddies back (+175/+450 pts)!';
   }
   return 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.';
 }
@@ -6813,7 +6828,7 @@ function syncSetupDrawerSummary() {
   if (aiDescEl) {
     if (currentAiCount > 0) {
       const names = AI_SQUAD_ROSTER.slice(0, currentAiCount).map((r) => r.name.replace(/^🤖\s*/, '')).join(', ');
-      aiDescEl.textContent = `${currentAiCount + 1}-Diver Solo Squad (${names}): staggered single-file torches, hand-signals, snag-cut rescue, gas share${currentDiff === 'hardcore' ? ' & Hardcore physical diver collision' : ''}.`;
+      aiDescEl.textContent = `${currentAiCount + 1}-Diver Solo Squad (${names}): staggered torches, hand-signals, snag-cut rescue & gas share${currentDiff === 'hardcore' ? ' — Hardcore Leadership ACTIVE: guide wingmen through light failures, narcosis, snags, low gas & tow downed buddies home!' : ''}.`;
     } else {
       aiDescEl.textContent = 'Cycle 1–3 autonomous AI wingmen (APEX-2, COBRA-3, ORCA-4) on solo dives: staggered torches, hand-signals, snag-cut rescue & 4-diver Hardcore practice.';
     }
@@ -7552,7 +7567,7 @@ coopCommsEl?.addEventListener('click', (e) => {
     const targetGas = btn.dataset.targetGas || session.diveState.activeGasId;
     const targetName = btn.dataset.targetName || 'Buddy';
     if (!targetId) return;
-    const targetPeer = lan.getPeers().find((p) => p && p.id === targetId);
+    const targetPeer = getActivePeers().find((p) => p && p.id === targetId);
     if (
       !targetPeer ||
       targetPeer.alive === false ||
@@ -7563,44 +7578,27 @@ coopCommsEl?.addEventListener('click', (e) => {
       showToast(`${targetName} moved out of gas-sharing reach.`, 2.0);
       return;
     }
-    const candidate = getShareableGasCandidate(session.diveState, targetGas, 25, session.diveState.depthM);
-    if (!candidate) {
-      showToast('No safe gas cylinder with enough reserve to share here.', 2.2);
-      return;
-    }
-    const donation = donateGasFromState(session.diveState, candidate.gasId, candidate.donatedBar);
-    if (!donation) {
-      showToast('Reserve too low to share gas safely.', 2.0);
-      return;
-    }
-    lan.sendGasShare(targetId, donation.gasId, donation.donatedBar);
-    pushAirShareBeam(session, {
-      peerId: targetId,
-      peerName: targetName,
-      fromSelf: true,
-      gasId: donation.gasId,
-      amountBar: donation.donatedBar,
-    });
-    audio.playGasShare();
-    showToast(`🎁 Shared +${donation.donatedBar} bar ${getActiveGasName(donation.gasId)} with ${targetName}!`, 2.6);
-    btn.hidden = true;
+    const shared = shareGasWithTargetPeer(targetPeer, targetGas);
+    if (shared) btn.hidden = true;
     return;
   }
   if (btn.id === 'btn-tow-buddy') {
-    const peer = lan.getPeers().find((p) => p && p.id === btn.dataset.targetId);
+    const peer = getActivePeers().find((p) => p && p.id === btn.dataset.targetId);
     if (peer) attachBuddyTow(peer);
     btn.hidden = true;
     return;
   }
   if (btn.id === 'btn-drop-tow') {
     if (session.rescueTargetId) {
-      const dropped = lan.getPeers().find((p) => p && p.id === session.rescueTargetId);
+      const dropped = getActivePeers().find((p) => p && p.id === session.rescueTargetId);
       const droppedId = session.rescueTargetId;
       const droppedName = dropped?.name || 'Buddy';
       if (dropped) dropped.rescuedBy = '';
       session.rescueTargetId = null;
       session.diver.rescueTargetId = '';
-      lan.sendBuddyRescue(droppedId, droppedName, 'dropped');
+      if (isMultiplayer && !dropped?.isAiBuddy) {
+        lan.sendBuddyRescue(droppedId, droppedName, 'dropped');
+      }
       audio.playReelClick();
       showToast(`🔓 Released tow line on ${droppedName}.`, 2.2);
     }
@@ -8460,6 +8458,45 @@ lan.on('peer_body_recovered', (msg) => {
   showToast(`🛟 ${who} secured ${targetName}! Escort back to surface exit.`, 4.0);
 });
 
+function shareGasWithTargetPeer(targetPeer, preferredGasId = '') {
+  if (!session || !targetPeer || targetPeer.alive === false || targetPeer.surfaced) return false;
+  const targetGas = preferredGasId || targetPeer.gasId || session.diveState.activeGasId;
+  const targetName = targetPeer.name || 'Buddy';
+  const candidate = getShareableGasCandidate(session.diveState, targetGas, 25, session.diveState.depthM);
+  if (!candidate) {
+    showToast('No safe gas cylinder with enough reserve to share here.', 2.2);
+    return false;
+  }
+  const donation = donateGasFromState(session.diveState, candidate.gasId, candidate.donatedBar);
+  if (!donation) {
+    showToast('Reserve too low to share gas safely.', 2.0);
+    return false;
+  }
+  if (targetPeer.isAiBuddy) {
+    receiveGasForAiBuddy(targetPeer, donation.donatedBar, donation.gasId, session, performance.now(), {
+      onBuddyIssueResolved: (buddy, issue, info) => {
+        audio.playDrillClear?.();
+        showToast(
+          `🏅 Rescued ${buddy.name} from ${issue.title} via long hose (+${info.bonusPts} Leadership pts)!`,
+          3.8
+        );
+      },
+    });
+  } else if (isMultiplayer) {
+    lan.sendGasShare(targetPeer.id, donation.gasId, donation.donatedBar);
+  }
+  pushAirShareBeam(session, {
+    peerId: targetPeer.id,
+    peerName: targetName,
+    fromSelf: true,
+    gasId: donation.gasId,
+    amountBar: donation.donatedBar,
+  });
+  audio.playGasShare();
+  showToast(`🎁 Shared +${donation.donatedBar} bar ${getActiveGasName(donation.gasId)} with ${targetName}!`, 2.8);
+  return true;
+}
+
 function attachBuddyTow(peer) {
   if (!session || !peer || peer.alive !== false || peer.rescued) return false;
   session.rescueTargetId = peer.id;
@@ -8467,7 +8504,9 @@ function attachBuddyTow(peer) {
   peer.rescuedBy = lan.clientId || 'self';
   audio.playRecovery();
   showToast(`🛟 Towing ${peer.name || 'Buddy'}! Haul safely through deco to surface exit (+450 pts)!`, 3.6);
-  lan.sendBuddyRescue(peer.id, peer.name || 'Buddy', 'towing');
+  if (isMultiplayer && !peer.isAiBuddy) {
+    lan.sendBuddyRescue(peer.id, peer.name || 'Buddy', 'towing');
+  }
   return true;
 }
 
@@ -8619,6 +8658,22 @@ const sessionStepCallbacks = {
   onTopsideChatter: (msg) => {
     if (msg) showToast(msg, 4.0);
   },
+  onAttachBuddyTow: (buddy) => attachBuddyTow(buddy),
+  onShareGasWithBuddy: (buddy) => shareGasWithTargetPeer(buddy),
+  onAssistAiBuddy: (buddy) => {
+    const res = assistHardcoreBuddyIssue(buddy, session, performance.now(), {
+      onBuddyIssueResolved: (b, issue, info) => {
+        if (issue.kind === 'snagged') audio.playLineCut?.();
+        else audio.playDrillClear?.();
+        showToast(`🏅 Led ${b.name} through ${issue.title} (+${info.bonusPts} Leadership pts)!`, 3.8);
+      },
+    });
+    if (res?.handled && !res.resolved) {
+      audio.playSignal?.();
+      if (res.toast) showToast(res.toast, 2.8);
+    }
+    return Boolean(res?.handled);
+  },
   onBodyRecovered: (rt) => {
     audio.playRecovery();
     showToast(`🛟 Secured ${rt.name}! Tow carefully back through deep deco to the surface!`, 4.2);
@@ -8738,7 +8793,36 @@ function stepSimulation(dt) {
         audio.playLineCut?.();
         showToast(`🤖 ${buddy.name} cut your entanglement free!`, 2.6);
       },
+      onBuddyIssueStarted: (buddy, issue) => {
+        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
+        audio.playSignal?.(mix.pan);
+        showToast(`🚨 ${buddy.name}: ${issue.icon} ${issue.title}! ${issue.hint}`, 4.6);
+      },
+      onBuddyIssueResolved: (buddy, issue, info) => {
+        audio.playDrillClear?.();
+        showToast(`🏅 Led ${buddy.name} through ${issue.title} (+${info.bonusPts} Leadership pts)!`, 3.8);
+      },
+      onBuddyDowned: (buddy, causeTitle) => {
+        audio.playDrillAlarm?.();
+        showToast(`🆘 ${buddy.name} DOWN (${causeTitle})! Swim back & tow them to the surface exit (+450 pts)!`, 5.0);
+      },
+      onBuddySeparated: (buddy, distM) => {
+        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
+        audio.playSignal?.(mix.pan);
+        showToast(`🧭 ${buddy.name} separated (${Math.round(distM)}m behind)! Swim back to lead them through!`, 3.8);
+      },
+      onBuddyRejoined: (buddy) => {
+        audio.playSignal?.();
+        showToast(`👌 ${buddy.name} locked back onto your lead!`, 2.4);
+      },
     });
+    // If towing a downed Hardcore AI buddy, glide them cleanly along our rescue umbilical
+    if (session.rescueTargetId) {
+      const towedAi = session.aiSquad.find((b) => b && b.id === session.rescueTargetId && b.alive === false);
+      if (towedAi) {
+        updateTowedAiBuddy(towedAi, diver, level, dt);
+      }
+    }
   }
 
   const peers = getActivePeers();
@@ -8813,14 +8897,14 @@ function stepSimulation(dt) {
   }
 
   if (btnDropTow) {
-    btnDropTow.hidden = !(isMultiplayer && diveState.alive && !session.endedState && session.rescueTargetId);
+    btnDropTow.hidden = !(diveState.alive && !session.endedState && session.rescueTargetId);
   }
 
   if (btnTowBuddy) {
     let downedPeer = null;
-    if (isMultiplayer && diveState.alive && !session.endedState && !session.rescueTargetId) {
+    if (peers.length > 0 && diveState.alive && !session.endedState && !session.rescueTargetId) {
       let bestDist = 3.6;
-      for (const p of humanPeers) {
+      for (const p of peers) {
         if (!p || p.alive !== false || p.rescued || p.rescuedBy) continue;
         const d = Math.hypot(p.x - diver.x, p.y - diver.y);
         if (d <= 1.45) {
@@ -8845,12 +8929,16 @@ function stepSimulation(dt) {
   if (btnShareGas) {
     let needyPeer = null;
     let shareCand = null;
-    if (isMultiplayer && diveState.alive && !session.endedState) {
+    if (peers.length > 0 && diveState.alive && !session.endedState) {
       let bestDist = 3.6;
-      for (const p of humanPeers) {
+      for (const p of peers) {
         if (!p || p.alive === false || p.surfaced) continue;
         const d = Math.hypot(p.x - diver.x, p.y - diver.y);
-        const lowGas = (p.activeBar ?? 200) < 95 || p.condition === 'NO GAS' || p.condition === 'LOW GAS';
+        const lowGas =
+          (p.activeBar ?? 200) < 95 ||
+          p.condition === 'NO GAS' ||
+          p.condition === 'LOW GAS' ||
+          p.issue?.kind === 'low-gas';
         if (lowGas && d <= bestDist) {
           const cand = getShareableGasCandidate(diveState, p.gasId || diveState.activeGasId, 25, diveState.depthM);
           if (cand) {
@@ -8963,11 +9051,15 @@ function stepSimulation(dt) {
     if (result.outcome.success) {
       audio.playSplash(false);
     }
-    if (result.outcome.success && isMultiplayer && session.rescueTargetId) {
+    if (result.outcome.success && session.rescueTargetId) {
       const towed = peers.find((p) => p && p.id === session.rescueTargetId);
       if (towed) {
         towed.rescued = true;
-        lan.sendBuddyRescue(towed.id, towed.name || 'Buddy', 'extracted');
+        if (towed.isAiBuddy) {
+          session.aiBuddiesRescued = (session.aiBuddiesRescued || 0) + 1;
+        } else if (isMultiplayer) {
+          lan.sendBuddyRescue(towed.id, towed.name || 'Buddy', 'extracted');
+        }
         result.outcome.title = `Buddy Rescued · ${level.name}!`;
         result.outcome.detail = `You hauled ${towed.name || 'your buddy'} through the cave to the surface exit (+450 Rescue Bonus)!`;
       }

@@ -250,6 +250,9 @@ export function createDiveSession(
     crewRole: getCrewRole(crewRoleId || 'balanced'),
     contracts: rollDiveContracts(level, `${diverName || 'diver'}:${cleanDailyKey || level.id}`),
     contractBonusScore: 0,
+    aiLeadBonusScore: 0,
+    aiIssuesResolved: 0,
+    aiBuddiesRescued: 0,
     _contractEvalTimer: 0,
     _hadDecoCeiling: false,
     spaceClearanceM: 4.0,
@@ -1686,6 +1689,44 @@ export function triggerWreckAction(session, callbacks = {}) {
     }
   }
 
+  // 1c. Priority 1c: Hardcore AI Squad Leadership, Rescue Tow, Snag Cut & Emergency Gas Share (v157)
+  if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
+    let bestBuddy = null;
+    let bestMode = '';
+    let bestDist = 4.6;
+    for (let i = 0; i < session.aiSquad.length; i++) {
+      const b = session.aiSquad[i];
+      if (!b || b.surfaced) continue;
+      const d = Math.hypot(diver.x - b.x, diver.y - b.y);
+      if (b.alive === false && !b.rescued && !b.rescuedBy && !session.rescueTargetId && d <= 3.6) {
+        bestBuddy = b;
+        bestMode = 'tow';
+        bestDist = d;
+        break;
+      }
+      if (b.alive !== false && b.issue) {
+        const reach = b.issue.kind === 'snagged' || b.issue.kind === 'low-gas' ? 3.8 : 4.6;
+        if (d <= reach && d < bestDist) {
+          bestBuddy = b;
+          bestMode = b.issue.kind === 'low-gas' ? 'share-gas' : 'assist';
+          bestDist = d;
+        }
+      }
+    }
+    if (bestBuddy) {
+      if (bestMode === 'tow' && callbacks.onAttachBuddyTow) {
+        const ok = callbacks.onAttachBuddyTow(bestBuddy);
+        if (ok) return { handled: true, kind: 'ai-tow', targetId: bestBuddy.id };
+      } else if (bestMode === 'share-gas' && callbacks.onShareGasWithBuddy) {
+        const ok = callbacks.onShareGasWithBuddy(bestBuddy);
+        if (ok) return { handled: true, kind: 'ai-share-gas', targetId: bestBuddy.id };
+      } else if (bestMode === 'assist' && callbacks.onAssistAiBuddy) {
+        const ok = callbacks.onAssistAiBuddy(bestBuddy);
+        if (ok) return { handled: true, kind: `ai-assist-${bestBuddy.issue?.kind || 'lead'}`, targetId: bestBuddy.id };
+      }
+    }
+  }
+
   // 2. Priority 2: Crank open a nearby sealed watertight bulkhead hatch (shipwrecks)
   if (Array.isArray(level.watertightHatches)) {
     for (let i = 0; i < level.watertightHatches.length; i++) {
@@ -2800,6 +2841,54 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const bc = session.encounters?.beacon;
   const nearBeacon = Boolean(bc && !bc.claimed && Math.hypot(diver.x - bc.x, diver.y - bc.y) <= 4.0);
 
+  // Check for nearby Hardcore AI buddy needing rescue, snag-cut, gas-share, or leadership assist (v157)
+  let aiHelpPrompt = null;
+  if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
+    for (let i = 0; i < session.aiSquad.length; i++) {
+      const b = session.aiSquad[i];
+      if (!b || b.surfaced) continue;
+      const d = Math.hypot(diver.x - b.x, diver.y - b.y);
+      const shortName = (b.name || 'BUDDY').replace(/^🤖\s*/, '');
+      if (b.alive === false && !b.rescued && !b.rescuedBy && !session.rescueTargetId && d <= 3.6) {
+        aiHelpPrompt = {
+          kind: 'ai-tow',
+          label: `🛟 TOW ${shortName} TO EXIT [E]`,
+          detail: 'Downed wingman — clip rescue line & haul to surface (+450)',
+          progress: 0,
+        };
+        break;
+      }
+      if (b.alive !== false && b.issue) {
+        const ik = b.issue.kind;
+        if (ik === 'snagged' && d <= 3.8) {
+          aiHelpPrompt = {
+            kind: 'cut-net',
+            label: `✂️ CUT ${shortName} FREE [E]`,
+            detail: `${b.issue.title} (+175 Leadership)`,
+            progress: 0,
+          };
+          break;
+        } else if (ik === 'low-gas' && d <= 3.8) {
+          aiHelpPrompt = {
+            kind: 'ai-gas',
+            label: `🎁 SHARE GAS W/ ${shortName} [E]`,
+            detail: `${Math.round(b.activeBar || 0)} bar left — feed long hose (+175)`,
+            progress: 0,
+          };
+          break;
+        } else if ((ik === 'torch-fail' || ik === 'narcosis' || ik === 'panic') && d <= 4.6) {
+          aiHelpPrompt = {
+            kind: 'ai-lead',
+            label: `${b.issue.icon} LEAD & CALM ${shortName} [E]`,
+            detail: `${b.issue.title} · ${Math.round((b.issue.progress || 0) * 100)}% (+175)`,
+            progress: b.issue.progress || 0,
+          };
+          break;
+        }
+      }
+    }
+  }
+
   // Publish contextual cave / shipwreck action prompt for HUD button
   if (session.activeSnagIndex >= 0) {
     const sn = level.snagZones?.[session.activeSnagIndex];
@@ -2841,6 +2930,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         progress: 0,
       };
     }
+  } else if (aiHelpPrompt) {
+    session.wreckActionPrompt = aiHelpPrompt;
   } else if (nearbyHatch) {
     const needsValve = isHatchPressurized(level, nearbyHatch) && !session.equalizedHatchIds?.has(nearbyHatch.id);
     const isCranking = session.crankingHatchId === nearbyHatch.id;
@@ -3423,8 +3514,36 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       callbacks.onToast?.(`Exit blocked (${checkpointsHit.size}/${level.checkpoints.length})! Tag ${cpDetail} first.`, 3.5);
     }
   }
+  // Hardcore Mode "Leave No Diver Behind" AI Squad Extraction Gate (v157)
+  let strandedAiBuddy = null;
+  if (session.difficulty === 'hardcore' && Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
+    for (let i = 0; i < session.aiSquad.length; i++) {
+      const b = session.aiSquad[i];
+      if (!b || b.surfaced || b.rescued) continue;
+      if (b.alive === false) {
+        if (session.rescueTargetId !== b.id) {
+          strandedAiBuddy = { buddy: b, reason: 'down' };
+          break;
+        }
+      } else if (b.issue || b.separated || Math.hypot(b.x - diver.x, b.y - diver.y) > 16) {
+        strandedAiBuddy = { buddy: b, reason: b.issue ? b.issue.title : 'separated' };
+        break;
+      }
+    }
+  }
   const recoveryReady = !level.recoveryTarget || session.bodyRecovered;
-  if (allHit && recoveryReady && inExit && diver.y <= 1.2) {
+  if (allHit && recoveryReady && inExit && diver.y <= 1.2 && strandedAiBuddy) {
+    if (session.recoveryWarnCooldown <= 0) {
+      session.recoveryWarnCooldown = 3.5;
+      const b = strandedAiBuddy.buddy;
+      const msg =
+        strandedAiBuddy.reason === 'down'
+          ? `🆘 Leave no diver behind! Swim back & tow ${b.name} (${Math.round(b.y)}m) to the exit!`
+          : `🧭 Exit blocked! Return & lead ${b.name} (${strandedAiBuddy.reason}) safely to the exit!`;
+      callbacks.onToast?.(msg, 3.8);
+    }
+  }
+  if (allHit && recoveryReady && !strandedAiBuddy && inExit && diver.y <= 1.2) {
     if (diveState.ceilingM > 0.6) {
       return {
         nextCheckpoint,

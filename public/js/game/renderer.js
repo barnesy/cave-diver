@@ -8541,6 +8541,39 @@ export class CaveRenderer {
     }
 
     // 2. Braided catenary umbilical tow line between rescuer and towed teammate
+    // 1b. Hardcore AI Wingman Leadership / Issue Beacon & Live Resolution Progress Arc (v157)
+    for (let i = 0; i < peerList.length; i++) {
+      const p = peerList[i];
+      if (!p || p.alive === false || p.surfaced) continue;
+      if (!p.issue && !p.separated) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.8 + i);
+      const r = (1.05 + pulse * 0.25) * scale;
+      const isCrit = p.issue && (p.issue.kind === 'snagged' || p.issue.kind === 'low-gas' || (p.issue.countdownSec || 99) < 15);
+      ctx.strokeStyle = isCrit ? 'rgba(248, 113, 113, 0.85)' : 'rgba(251, 191, 36, 0.85)';
+      ctx.lineWidth = Math.max(1.8, 0.06 * scale);
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const prog = Math.max(0, Math.min(1, Number(p.issue?.progress) || 0));
+      if (prog > 0.02) {
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = Math.max(2.6, 0.085 * scale);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 0.14 * scale, -Math.PI * 0.5, -Math.PI * 0.5 + prog * Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.font = `800 ${Math.max(9, Math.round(0.31 * scale))}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isCrit ? '#fecaca' : '#fde68a';
+      const baseLbl = p.issue ? (p.issue.hudLabel || p.issue.condition) : '🧭 SEPARATED · LEAD';
+      const pctSuffix = p.issue && prog > 0.02 ? ` ${Math.round(prog * 100)}%` : '';
+      ctx.fillText(`${baseLbl}${pctSuffix}`, sx, sy - r - 0.3 * scale);
+    }
     for (let i = 0; i < allDivers.length; i++) {
       const rescuer = allDivers[i];
       if (!rescuer?.rescueTargetId) continue;
@@ -10108,6 +10141,11 @@ export class CaveRenderer {
         cond === 'O2 TOX' ||
         cond === 'DCS' ||
         cond === 'SNAGGED!' ||
+        cond === 'NO LIGHT' ||
+        cond === 'NARCOSIS' ||
+        cond === 'PANIC' ||
+        cond === 'LOW GAS' ||
+        cond === 'SEPARATED' ||
         stress >= 65 ||
         bpm >= 150
           ? '#ef4444'
@@ -10309,6 +10347,11 @@ export class CaveRenderer {
         cond === 'O2 TOX' ||
         cond === 'DCS' ||
         cond === 'SNAGGED!' ||
+        cond === 'NO LIGHT' ||
+        cond === 'NARCOSIS' ||
+        cond === 'PANIC' ||
+        cond === 'LOW GAS' ||
+        cond === 'SEPARATED' ||
         stress >= 65 ||
         bpm >= 150;
       const isWarn = !distressed && ((cond !== 'NOMINAL' && !isDecoHold) || bar < 50 || stress >= 25 || bpm >= 118);

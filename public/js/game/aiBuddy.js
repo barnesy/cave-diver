@@ -16,6 +16,55 @@ import { pushAirShareBeam } from './diveSession.js';
 
 export const AI_BUDDY_ID = 'ai-wingman-01';
 export const AI_BUDDY_DEFAULT_NAME = '🤖 APEX-2';
+export const HARDCORE_LEADERSHIP_BONUS_PTS = 175;
+
+export const HARDCORE_ISSUE_SPECS = Object.freeze({
+  'torch-fail': {
+    kind: 'torch-fail',
+    condition: 'NO LIGHT',
+    icon: '🔦',
+    title: 'Primary Light Failure',
+    hudLabel: '🔦 LEAD W/ LIGHT',
+    hint: 'Shine your torch nearby & lead them forward slowly (or press [E] / signal OK)',
+    countdownSec: 65,
+  },
+  narcosis: {
+    kind: 'narcosis',
+    condition: 'NARCOSIS',
+    icon: '🫧',
+    title: 'Nitrogen Narcosis',
+    hudLabel: '🫧 LEAD SHALLOWER',
+    hint: 'Swim close & lead them shallower (4m up) or signal ASCEND / OK [E]',
+    countdownSec: 62,
+  },
+  panic: {
+    kind: 'panic',
+    condition: 'PANIC',
+    icon: '💓',
+    title: 'Claustrophobic Panic',
+    hudLabel: '💓 CALM & HOVER',
+    hint: 'Hover calmly beside them, signal OK / HOLD [E], or lead into an Air Dome',
+    countdownSec: 58,
+  },
+  snagged: {
+    kind: 'snagged',
+    condition: 'SNAGGED!',
+    icon: '✂️',
+    title: 'Line Entanglement',
+    hudLabel: '✂️ SNAGGED · [E]',
+    hint: 'Swim back to them and press [E] / Cut Free before their gas drains!',
+    countdownSec: 55,
+  },
+  'low-gas': {
+    kind: 'low-gas',
+    condition: 'LOW GAS',
+    icon: '⛽',
+    title: 'Regulator Free-Flow',
+    hudLabel: '⛽ SHARE AIR [E]',
+    hint: 'Close in and share gas via [E] or the Share Gas button before they run dry!',
+    countdownSec: 60,
+  },
+});
 
 export const AI_SQUAD_ROSTER = Object.freeze([
   {
@@ -167,6 +216,14 @@ export function createAiBuddyState(level, diver, opts = {}) {
     gasDonationsCount: 0,
     snagsAssisted: 0,
     signalsExchanged: 0,
+
+    // Hardcore AI Leadership & Incident state (v157)
+    issue: null,
+    separated: false,
+    hardcoreIncidentCooldown: 20 + slotIndex * 18,
+    issuesResolvedCount: 0,
+    _lastLeadX: spawn.x,
+    _lastLeadY: spawn.y,
   };
 
   if (level) {
@@ -208,13 +265,196 @@ export function createAiSquad(level, diver, count = 1, opts = {}) {
 }
 
 /**
+ * Trigger a Hardcore Mode AI wingman technical emergency that the player must lead
+ * them through or physically help solve (v157).
+ */
+export function triggerHardcoreBuddyIssue(buddy, kind, session, nowMs = Date.now(), callbacks = {}) {
+  if (!buddy || buddy.alive === false || buddy.issue) return null;
+  const spec = HARDCORE_ISSUE_SPECS[kind] || HARDCORE_ISSUE_SPECS['torch-fail'];
+  const issue = {
+    kind: spec.kind,
+    condition: spec.condition,
+    icon: spec.icon,
+    title: spec.title,
+    hudLabel: spec.hudLabel,
+    hint: spec.hint,
+    progress: 0,
+    startedAt: nowMs,
+    startDepthM: Math.max(0, Number(buddy.depthM ?? buddy.y) || 0),
+    anchorX: buddy.x,
+    anchorY: buddy.y,
+    snagIndex: Number.isInteger(callbacks.snagIndex) ? callbacks.snagIndex : -1,
+    snagKey: callbacks.snagKey || '',
+    countdownSec: spec.countdownSec,
+    maxCountdownSec: spec.countdownSec,
+  };
+  buddy.issue = issue;
+  buddy.condition = spec.condition;
+  buddy.mode = 'follow';
+  buddy.modeTimer = 0;
+  buddy._lastLeadX = buddy.x;
+  buddy._lastLeadY = buddy.y;
+  if (spec.kind === 'torch-fail') {
+    buddy.torchOn = false;
+  } else if (spec.kind === 'low-gas') {
+    buddy.activeBar = Math.min(buddy.activeBar || 140, 42);
+  } else if (spec.kind === 'narcosis') {
+    buddy.narcosisLevel = Math.max(buddy.narcosisLevel || 0, 0.72);
+  } else if (spec.kind === 'panic') {
+    buddy.heartRateBpm = Math.max(buddy.heartRateBpm || 90, 148);
+  }
+  const sig = spec.kind === 'low-gas' ? 'share-air' : spec.kind === 'narcosis' ? 'ascend' : 'attention';
+  triggerDiverSignal(buddy, sig, nowMs);
+  callbacks.onBuddySignal?.(buddy, sig);
+  callbacks.onBuddyIssueStarted?.(buddy, issue);
+  return issue;
+}
+
+/**
+ * Mark an active Hardcore AI buddy issue resolved and award Leadership Mastery bonus.
+ */
+export function resolveHardcoreBuddyIssue(buddy, session, nowMs = Date.now(), callbacks = {}, reason = '') {
+  if (!buddy || !buddy.issue) return false;
+  const resolved = buddy.issue;
+  buddy.issue = null;
+  buddy.torchOn = true;
+  buddy.narcosisLevel = 0;
+  buddy.condition = buddy.separated ? 'SEPARATED' : 'NOMINAL';
+  buddy.hardcoreIncidentCooldown = 34 + (buddy.slotIndex || 0) * 10;
+  buddy.issuesResolvedCount = (buddy.issuesResolvedCount || 0) + 1;
+  if (session) {
+    session.aiIssuesResolved = (session.aiIssuesResolved || 0) + 1;
+    session.aiLeadBonusScore = (session.aiLeadBonusScore || 0) + HARDCORE_LEADERSHIP_BONUS_PTS;
+  }
+  triggerDiverSignal(buddy, 'ok', nowMs);
+  callbacks.onBuddySignal?.(buddy, 'ok');
+  callbacks.onBuddyIssueResolved?.(buddy, resolved, {
+    bonusPts: HARDCORE_LEADERSHIP_BONUS_PTS,
+    reason,
+  });
+  return true;
+}
+
+/**
+ * Receive emergency donated gas from the player into an AI wingman's tank (resolves Hardcore low-gas!).
+ */
+export function receiveGasForAiBuddy(buddy, amountBar, gasId, session, nowMs = Date.now(), callbacks = {}) {
+  if (!buddy || buddy.alive === false) return { accepted: false, addedBar: 0 };
+  const add = Math.max(0, Number(amountBar) || 0);
+  if (add <= 0) return { accepted: false, addedBar: 0 };
+  const prev = Number(buddy.activeBar) || 0;
+  const maxBar = Number(buddy.maxBar) || 205;
+  buddy.activeBar = Math.min(maxBar, prev + add);
+  const addedBar = Math.round(buddy.activeBar - prev);
+  if (gasId) buddy.gasId = gasId;
+  if (buddy.issue?.kind === 'low-gas' && buddy.activeBar >= 48) {
+    resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'shared gas via long hose');
+  } else if (buddy.condition === 'LOW GAS' || buddy.condition === 'NO GAS') {
+    buddy.condition = 'NOMINAL';
+    triggerDiverSignal(buddy, 'ok', nowMs);
+  }
+  return { accepted: true, addedBar };
+}
+
+/**
+ * Direct close-range player assistance (`[E]`) for a Hardcore distressed AI buddy:
+ * cuts snagged buddies free, or hands over backup light / steadies panicked & narc'd buddies.
+ */
+export function assistHardcoreBuddyIssue(buddy, session, nowMs = Date.now(), callbacks = {}) {
+  if (!buddy || buddy.alive === false || !buddy.issue) return { handled: false };
+  const kind = buddy.issue.kind;
+  if (kind === 'snagged') {
+    if (buddy.issue.snagKey && session?.cutSnagIds) {
+      session.cutSnagIds.add(buddy.issue.snagKey);
+    }
+    resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'cut entanglement free');
+    return { handled: true, resolved: true, kind };
+  }
+  if (kind === 'torch-fail' || kind === 'narcosis' || kind === 'panic') {
+    buddy.issue.progress = Math.min(1, (buddy.issue.progress || 0) + 0.5);
+    buddy.issue.countdownSec = Math.min(buddy.issue.maxCountdownSec, (buddy.issue.countdownSec || 20) + 12);
+    if (buddy.issue.progress >= 1) {
+      resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'direct buddy assist & leadership');
+      return { handled: true, resolved: true, kind };
+    }
+    triggerDiverSignal(buddy, 'ok', nowMs);
+    return {
+      handled: true,
+      resolved: false,
+      kind,
+      progress: buddy.issue.progress,
+      toast:
+        kind === 'torch-fail'
+          ? `${buddy.name}: 🔦 Locked on your beam (${Math.round(buddy.issue.progress * 100)}%) — lead forward slowly!`
+          : kind === 'narcosis'
+            ? `${buddy.name}: 🫧 Focusing on your eyes (${Math.round(buddy.issue.progress * 100)}%) — lead me shallower!`
+            : `${buddy.name}: 💓 Slowing breathing (${Math.round(buddy.issue.progress * 100)}%) — stay calm beside me!`,
+    };
+  }
+  return { handled: false, kind };
+}
+
+/**
+ * Glide a downed AI buddy smoothly behind the rescuing player during an active umbilical tow.
+ */
+export function updateTowedAiBuddy(buddy, diver, level, dt) {
+  if (!buddy || !diver || dt <= 0) return;
+  const clampedDt = Math.min(0.1, dt);
+  const ang = Number(diver.angle) || 0;
+  const tx = diver.x - Math.cos(ang) * 1.55;
+  const ty = Math.max(0.75, diver.y - Math.sin(ang) * 1.55);
+  buddy.x += (tx - buddy.x) * Math.min(1, clampedDt * 7.5);
+  buddy.y += (ty - buddy.y) * Math.min(1, clampedDt * 7.5);
+  buddy.vx = 0;
+  buddy.vy = 0;
+  buddy.angle = lerpAngle(buddy.angle || 0, ang, clampedDt * 6);
+  if (level) {
+    resolveDiverCollision(level, buddy, 0.52);
+  }
+  buddy.depthM = Math.max(0, buddy.y);
+  stepDiverBody(buddy, clampedDt, { thrustMag: 0, level });
+}
+
+/**
  * React immediately when the local diver flashes a scuba hand-signal / torch gesture.
  */
-export function handlePlayerSignalForAiBuddy(buddy, idOrText, session, nowMs = Date.now()) {
+export function handlePlayerSignalForAiBuddy(buddy, idOrText, session, nowMs = Date.now(), callbacks = {}) {
   if (!buddy || buddy.alive === false) return { responded: false };
   const spec = getScubaSignalById(idOrText);
   const sigId = spec?.id || 'ok';
   buddy.signalsExchanged = (buddy.signalsExchanged || 0) + 1;
+
+  // Hardcore Leadership Signal Coaching: signaling OK / HOLD / LOOK / ASCEND near a distressed AI buddy actively calms & rallies them!
+  const diver = session?.diver;
+  const distToPlayer = diver ? Math.hypot(diver.x - buddy.x, diver.y - buddy.y) : 0;
+  if (buddy.issue && distToPlayer <= 8.0) {
+    const kind = buddy.issue.kind;
+    const helpfulSignal =
+      (kind === 'torch-fail' && (sigId === 'ok' || sigId === 'attention')) ||
+      (kind === 'narcosis' && (sigId === 'ok' || sigId === 'ascend')) ||
+      (kind === 'panic' && (sigId === 'ok' || sigId === 'hold'));
+    if (helpfulSignal) {
+      buddy.issue.progress = Math.min(1, (buddy.issue.progress || 0) + 0.38);
+      buddy.issue.countdownSec = Math.min(buddy.issue.maxCountdownSec, (buddy.issue.countdownSec || 20) + 10);
+      if (buddy.issue.progress >= 1) {
+        resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, `led via ${sigId.toUpperCase()} signal`);
+        return {
+          responded: true,
+          replySignalId: 'ok',
+          mode: buddy.mode,
+          resolvedIssue: kind,
+          toast: `${buddy.name}: 👌 Stabilized! Back on your wing (+${HARDCORE_LEADERSHIP_BONUS_PTS} Leadership pts)!`,
+        };
+      }
+      triggerDiverSignal(buddy, 'ok', nowMs);
+      return {
+        responded: true,
+        replySignalId: 'ok',
+        mode: buddy.mode,
+        toast: `${buddy.name}: ${buddy.issue.icon} Copy! (${Math.round(buddy.issue.progress * 100)}%) — ${buddy.issue.hint}`,
+      };
+    }
+  }
 
   if (sigId === 'ok') {
     buddy.mode = 'follow';
@@ -482,14 +722,131 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     buddy.gasId = diveState.activeGasId;
   }
   const ata = 1 + Math.max(0, buddy.depthM) / 10;
-  buddy.activeBar = Math.max(40, buddy.activeBar - 0.055 * ata * clampedDt);
+  const isHardcore = session.difficulty === 'hardcore';
+  const baseGasRate = isHardcore
+    ? buddy.issue?.kind === 'low-gas'
+      ? 0.42
+      : buddy.issue?.kind === 'snagged' || buddy.issue?.kind === 'panic'
+        ? 0.16
+        : 0.085
+    : 0.055;
+  const minGasFloor = isHardcore ? 0 : 40;
+  buddy.activeBar = Math.max(minGasFloor, buddy.activeBar - baseGasRate * ata * clampedDt);
 
   const distToPlayer = Math.hypot(diver.x - buddy.x, diver.y - buddy.y);
   const activeTank = diveState.tanks?.[diveState.activeGasId];
   const playerBar = Number.isFinite(activeTank?.bar) ? activeTank.bar : 200;
 
-  // --- Priority 1: Emergency Wreck Snag / Line Entanglement Assist ---
-  if (Number.isInteger(session.activeSnagIndex) && session.activeSnagIndex >= 0) {
+  // === HARDCORE MODE: AI WINGMAN SEPARATION, REAL INCIDENTS & LEADERSHIP RESOLUTION (v157) ===
+  if (isHardcore) {
+    // 1. Separation detection (no magical teleport in Hardcore — you must return to lead!)
+    if (buddy.mode !== 'hold') {
+      if (!buddy.separated && distToPlayer > 14.5) {
+        buddy.separated = true;
+        if (!buddy.issue) buddy.condition = 'SEPARATED';
+        triggerDiverSignal(buddy, 'attention', nowMs);
+        callbacks.onBuddySignal?.(buddy, 'attention');
+        callbacks.onBuddySeparated?.(buddy, distToPlayer);
+      } else if (buddy.separated && distToPlayer <= 8.5) {
+        buddy.separated = false;
+        if (!buddy.issue) buddy.condition = 'NOMINAL';
+        triggerDiverSignal(buddy, 'ok', nowMs);
+        callbacks.onBuddyRejoined?.(buddy);
+      }
+    }
+
+    // 2. Physical snag-zone hazard check for AI wingmen in Hardcore
+    if (!buddy.issue && Array.isArray(level.snagZones) && session.simTimeSec >= 10) {
+      for (let s = 0; s < level.snagZones.length; s++) {
+        const sn = level.snagZones[s];
+        const snKey = sn?.id || `snag_${s}`;
+        if (!sn || session.cutSnagIds?.has(snKey)) continue;
+        if (Math.hypot(buddy.x - sn.x, buddy.y - sn.y) <= (sn.radius || 2.2) * 0.85) {
+          triggerHardcoreBuddyIssue(buddy, 'snagged', session, nowMs, {
+            ...callbacks,
+            snagIndex: s,
+            snagKey: snKey,
+          });
+          break;
+        }
+      }
+    }
+
+    // 3. Organic paced Hardcore technical incident trigger (max 1 active issue across squad at once)
+    const squadList = Array.isArray(callbacks.squadPeers) ? callbacks.squadPeers : [buddy];
+    const squadHasActiveIssue = squadList.some((p) => p && p.alive !== false && Boolean(p.issue));
+    if (!buddy.issue && !buddy.separated && !squadHasActiveIssue && session.simTimeSec >= 18 && buddy.depthM >= 7.0) {
+      buddy.hardcoreIncidentCooldown = Math.max(0, (buddy.hardcoreIncidentCooldown ?? 24) - clampedDt);
+      if (buddy.hardcoreIncidentCooldown <= 0) {
+        const rollPool = ['torch-fail', 'panic', 'low-gas'];
+        if (buddy.depthM >= 22) rollPool.push('narcosis', 'narcosis');
+        const idx = Math.floor(Math.abs(Math.sin(session.simTimeSec * 12.7 + (buddy.slotIndex || 0) * 3.1)) * rollPool.length) % rollPool.length;
+        triggerHardcoreBuddyIssue(buddy, rollPool[idx], session, nowMs, callbacks);
+      }
+    }
+
+    // 4. Step active Hardcore incident: player leadership resolves it; total abandonment downs the buddy!
+    if (buddy.issue) {
+      const iss = buddy.issue;
+      const playerNear = distToPlayer <= 6.5;
+      const playerSpeed = Math.hypot(diver.vx || 0, diver.vy || 0);
+      // Pause/slow countdown generously whenever the leader is actively nearby helping
+      const decayRate = playerNear ? 0.18 : 1.0;
+      iss.countdownSec = Math.max(0, (iss.countdownSec ?? 55) - clampedDt * decayRate);
+
+      if (iss.kind === 'torch-fail') {
+        buddy.torchOn = false;
+        if (playerNear && diver.torchOn !== false) {
+          const stepDist = Math.hypot(buddy.x - (buddy._lastLeadX ?? buddy.x), buddy.y - (buddy._lastLeadY ?? buddy.y));
+          buddy._lastLeadX = buddy.x;
+          buddy._lastLeadY = buddy.y;
+          // Progress fills as leader shines torch nearby & leads buddy forward
+          iss.progress = Math.min(1, iss.progress + clampedDt * 0.14 + stepDist * 0.085);
+          if (iss.progress >= 1) {
+            resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'led safely under your torchlight');
+          }
+        }
+      } else if (iss.kind === 'narcosis') {
+        buddy.narcosisLevel = Math.max(0.25, 0.78 * (1 - iss.progress));
+        if (playerNear) {
+          const depthGain = Math.max(0, (iss.startDepthM || buddy.depthM) - buddy.depthM);
+          const climbProg = depthGain / 4.2;
+          iss.progress = Math.min(1, Math.max(iss.progress, climbProg) + (diver.vy < -0.15 ? clampedDt * 0.12 : clampedDt * 0.06));
+          if (iss.progress >= 1) {
+            resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'led shallower to clear narcosis');
+          }
+        }
+      } else if (iss.kind === 'panic') {
+        const calmNearby = distToPlayer <= 4.4 && playerSpeed <= 1.25;
+        const inAirDome = Boolean(session.stories?.inAirDome && distToPlayer <= 5.0);
+        if (calmNearby || inAirDome) {
+          iss.progress = Math.min(1, iss.progress + clampedDt * (inAirDome ? 0.34 : 0.2));
+          if (iss.progress >= 1) {
+            resolveHardcoreBuddyIssue(buddy, session, nowMs, callbacks, 'calmed & stabilized');
+          }
+        }
+      } else if (iss.kind === 'low-gas') {
+        if (buddy.activeBar <= 10) buddy.condition = 'NO GAS';
+      }
+
+      // If completely abandoned until countdown hits 0 or tank runs dry -> buddy goes DOWN and must be towed!
+      if (buddy.issue && (buddy.activeBar <= 0.2 || iss.countdownSec <= 0)) {
+        const causeTitle = buddy.activeBar <= 0.2 ? 'Out of Gas' : iss.title;
+        buddy.alive = false;
+        buddy.torchOn = false;
+        buddy.vx = 0;
+        buddy.vy = 0;
+        buddy.condition = 'DOWN';
+        buddy.issue = null;
+        buddy.separated = false;
+        callbacks.onBuddyDowned?.(buddy, causeTitle);
+        return { mode: 'down', distToPlayer, torchAngle: buddy.torchAngle };
+      }
+    }
+  }
+
+  // --- Priority 1: Emergency Wreck Snag / Line Entanglement Assist (skip if buddy has own Hardcore emergency!) ---
+  if (!buddy.issue && !buddy.separated && Number.isInteger(session.activeSnagIndex) && session.activeSnagIndex >= 0) {
     buddy.mode = 'assist-snag';
     buddy.modeTimer = 4.0;
     buddy.condition = 'NET ASSIST';
@@ -520,10 +877,10 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     buddy.snagAssistTimer = 0;
   }
 
-  // --- Priority 2: Automatic or Requested Emergency Gas Share ---
-  const autoGasNeed = playerBar < 34 && buddy.activeBar >= 62 && buddy.gasShareCooldown <= 0;
+  // --- Priority 2: Automatic or Requested Emergency Gas Share (skip if buddy has own Hardcore emergency!) ---
+  const autoGasNeed = !buddy.issue && !buddy.separated && playerBar < 34 && buddy.activeBar >= 62 && buddy.gasShareCooldown <= 0;
   const requestedGasNeed =
-    buddy.mode === 'assist-gas' && playerBar < 165 && buddy.activeBar >= 58 && buddy.gasShareCooldown <= 0;
+    !buddy.issue && buddy.mode === 'assist-gas' && playerBar < 165 && buddy.activeBar >= 58 && buddy.gasShareCooldown <= 0;
 
   if (autoGasNeed && buddy.mode !== 'assist-gas' && buddy.mode !== 'assist-snag') {
     buddy.mode = 'assist-gas';
@@ -610,14 +967,26 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   const distToTarget = Math.hypot(dx, dy);
 
   const urgent = buddy.mode === 'assist-gas' || buddy.mode === 'assist-snag';
-  const maxSpeed = urgent ? 4.35 : distToPlayer > 10 ? 4.1 : 3.1;
+  const issueKind = buddy.issue?.kind || '';
+  const pinnedByIssue = issueKind === 'snagged' || (issueKind === 'panic' && distToPlayer > 3.5) || buddy.separated;
+  const needsLeadNear = (issueKind === 'torch-fail' && (distToPlayer > 6.5 || diver.torchOn === false)) || (issueKind === 'narcosis' && distToPlayer > 6.5);
+  let maxSpeed = urgent ? 4.35 : distToPlayer > 10 ? 4.1 : 3.1;
+  if (issueKind === 'torch-fail') maxSpeed = 2.05;
+  else if (issueKind === 'narcosis') maxSpeed = 2.15;
+  else if (issueKind === 'low-gas') maxSpeed = 2.35;
   const desiredSpeed =
-    distToTarget < 0.35
+    pinnedByIssue || needsLeadNear
       ? 0
-      : Math.min(maxSpeed, Math.max(0.55, distToTarget * (urgent ? 2.4 : 1.55)));
+      : distToTarget < 0.35
+        ? 0
+        : Math.min(maxSpeed, Math.max(0.55, distToTarget * (urgent ? 2.4 : 1.55)));
 
-  let desVx = distToTarget > 0.05 ? (dx / distToTarget) * desiredSpeed : 0;
-  let desVy = distToTarget > 0.05 ? (dy / distToTarget) * desiredSpeed : 0;
+  let desVx = !pinnedByIssue && !needsLeadNear && distToTarget > 0.05 ? (dx / distToTarget) * desiredSpeed : 0;
+  let desVy = !pinnedByIssue && !needsLeadNear && distToTarget > 0.05 ? (dy / distToTarget) * desiredSpeed : 0;
+  if (issueKind === 'narcosis' && !needsLeadNear) {
+    // Slight disoriented lateral sway until player guides them shallower
+    desVx += Math.sin(nowMs * 0.0022 + (buddy.slotIndex || 0)) * 0.45;
+  }
 
   // Gentle wall-clearance repulsion using cave SDF gradient (normal points INTO rock, so push along -normal)
   const wallClear = openWaterClearance(level, buddy.x, buddy.y);
@@ -650,12 +1019,20 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   buddy.vx += (desVx - buddy.vx) * accel;
   buddy.vy += (desVy - buddy.vy) * accel;
 
-  buddy.x += buddy.vx * clampedDt;
-  buddy.y = Math.max(0.65, buddy.y + buddy.vy * clampedDt);
-  resolveDiverCollision(level, buddy, 0.52);
+  if (issueKind === 'snagged' && buddy.issue) {
+    // Physically anchored at snag entanglement point until leader cuts them free
+    buddy.x = buddy.issue.anchorX;
+    buddy.y = buddy.issue.anchorY;
+    buddy.vx = 0;
+    buddy.vy = 0;
+  } else {
+    buddy.x += buddy.vx * clampedDt;
+    buddy.y = Math.max(0.65, buddy.y + buddy.vy * clampedDt);
+    resolveDiverCollision(level, buddy, 0.52);
+  }
 
-  // Anti-stranding warp if player zipped far down a shot line or strong surge separated them
-  if (buddy.mode !== 'hold' && distToPlayer > 22) {
+  // Anti-stranding warp ONLY in Standard/Guided — in Hardcore you must swim back to lead separated buddies!
+  if (!isHardcore && buddy.mode !== 'hold' && distToPlayer > 22) {
     buddy.strandedTimer = (buddy.strandedTimer || 0) + clampedDt;
     if (buddy.strandedTimer >= 2.6) {
       buddy.strandedTimer = 0;
@@ -681,10 +1058,11 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   const desiredTorchAngle = chooseTorchAimAngle(buddy, session, clampedDt);
   buddy.torchAngle = lerpAngle(buddy.torchAngle, desiredTorchAngle, clampedDt * 6.5);
   buddy.torchManualAim = true;
-  buddy.torchOn = true;
+  buddy.torchOn = buddy.issue?.kind !== 'torch-fail';
 
-  // Realistic calm physiological heart rate reflecting exertion
-  const targetHr = Math.round(68 + Math.min(1, speed / 3.8) * 32 + (urgent ? 18 : 0));
+  // Realistic calm physiological heart rate reflecting exertion & Hardcore distress
+  const distressHr = buddy.issue ? (buddy.issue.kind === 'panic' ? 54 : 36) : buddy.separated ? 20 : 0;
+  const targetHr = Math.round(68 + Math.min(1, speed / 3.8) * 32 + (urgent ? 18 : 0) + distressHr);
   buddy.heartRateBpm += (targetHr - buddy.heartRateBpm) * Math.min(1, clampedDt * 2.0);
 
   // Update articulated limbs & fins
@@ -726,7 +1104,7 @@ export function stepAiSquad(squad, session, dt, callbacks = {}) {
  * Dispatch a player hand-signal across an AI Dive Squad (closest wingman handles emergency gas/snag assists;
  * full squad responds to OK / HOLD / ATTENTION / ASCEND).
  */
-export function handlePlayerSignalForAiSquad(squad, idOrText, session, nowMs = Date.now()) {
+export function handlePlayerSignalForAiSquad(squad, idOrText, session, nowMs = Date.now(), callbacks = {}) {
   if (!Array.isArray(squad) || squad.length === 0) return { responded: false };
   const spec = getScubaSignalById(idOrText);
   const sigId = spec?.id || 'ok';
@@ -737,24 +1115,31 @@ export function handlePlayerSignalForAiSquad(squad, idOrText, session, nowMs = D
     let bestScore = -Infinity;
     for (let i = 0; i < squad.length; i++) {
       const b = squad[i];
+      if (!b || b.alive === false) continue;
       const d = diver ? Math.hypot(b.x - diver.x, b.y - diver.y) : 0;
-      const score = (b.activeBar || 0) - d * 6;
+      const score = (b.activeBar || 0) - d * 6 - (b.issue ? 90 : 0);
       if (score > bestScore) {
         bestScore = score;
         best = b;
       }
     }
-    return handlePlayerSignalForAiBuddy(best, idOrText, session, nowMs);
+    return handlePlayerSignalForAiBuddy(best, idOrText, session, nowMs, callbacks);
   }
 
   let primaryRes = null;
+  let issueRes = null;
   for (let i = 0; i < squad.length; i++) {
-    const res = handlePlayerSignalForAiBuddy(squad[i], idOrText, session, nowMs);
+    const b = squad[i];
+    if (!b || b.alive === false) continue;
+    const hadIssue = Boolean(b.issue);
+    const res = handlePlayerSignalForAiBuddy(b, idOrText, session, nowMs, callbacks);
+    if (hadIssue && res.responded && !issueRes) issueRes = res;
     if (!primaryRes && res.responded) primaryRes = res;
   }
+  if (issueRes) return issueRes;
   if (!primaryRes) return { responded: false };
   if (squad.length > 1) {
-    const names = squad.map((b) => b.name.replace(/^🤖\s*/, '')).join(', ');
+    const names = squad.filter((b) => b && b.alive !== false).map((b) => b.name.replace(/^🤖\s*/, '')).join(', ');
     primaryRes = {
       ...primaryRes,
       toast: `🤖 Squad (${names}): ${primaryRes.toast.replace(/^[^:]+:\s*/, '')}`,
