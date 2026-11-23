@@ -35,6 +35,7 @@ export function createEmptyLogbook() {
       contractsCompleted: 0,
     },
     loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
+    completedCampaigns: [], // unlocked multi-dive expedition campaign IDs (v160)
   };
 }
 
@@ -114,6 +115,11 @@ function normalizeBook(raw) {
         firstSiteName: typeof rec.firstSiteName === 'string' ? rec.firstSiteName.slice(0, 64) : '',
       };
     }
+  }
+  if (Array.isArray(raw.completedCampaigns)) {
+    base.completedCampaigns = Array.from(
+      new Set(raw.completedCampaigns.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))
+    ).slice(0, 24);
   }
   return base;
 }
@@ -273,6 +279,10 @@ export function mergeCareerLogbooks(rawA, rawB) {
     }
   }
 
+  out.completedCampaigns = Array.from(
+    new Set([...(a.completedCampaigns || []), ...(b.completedCampaigns || [])])
+  ).slice(0, 24);
+
   return out;
 }
 
@@ -420,6 +430,15 @@ export function recordLoreDiscoveryInLogbook(rawBook, { kind, title, lore, siteN
   }
   prev.count = (prev.count || 1) + 1;
   return { book, isNew: false };
+}
+
+export function recordCampaignClearInLogbook(rawBook, campaignId) {
+  const book = normalizeBook(rawBook);
+  const cleanId = typeof campaignId === 'string' ? campaignId.trim() : '';
+  if (!cleanId) return { book, isNew: false };
+  const existed = book.completedCampaigns.includes(cleanId);
+  if (!existed) book.completedCampaigns.push(cleanId);
+  return { book, isNew: !existed };
 }
 
 export function seedLogbookFromEntries(rawBook, entries) {

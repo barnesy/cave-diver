@@ -93,6 +93,39 @@ export const MAX_LINE_COOKIES = 6;
 export const BLACK_BOX_BONUS_PTS = 350;
 
 /**
+ * Bookmark a notable dive highlight for the Debrief Black-Box Highlight Reel (v160).
+ * Keeps up to 6 chronological key moments (deepest depth, closest brush, black box, lore, rescue, extraction).
+ */
+export function recordDiveHighlight(session, { kind = 'moment', icon = '🎬', label = '', tSec = null, depthM = null } = {}) {
+  if (!session) return null;
+  if (!Array.isArray(session.highlights)) session.highlights = [];
+  const t = Number.isFinite(tSec) ? Math.max(0, Math.round(tSec * 10) / 10) : Math.max(0, Math.round((session.simTimeSec || 0) * 10) / 10);
+  const d = Number.isFinite(depthM) ? Math.max(0, Math.round(depthM * 10) / 10) : Math.max(0, Math.round((session.diver?.y || 0) * 10) / 10);
+  const entry = { kind, icon, label: String(label || kind).slice(0, 42), tSec: t, depthM: d };
+
+  if (kind === 'deepest' || kind === 'close-call' || kind === 'blackbox' || kind === 'extract') {
+    const idx = session.highlights.findIndex((h) => h.kind === kind);
+    if (idx >= 0) {
+      session.highlights[idx] = entry;
+      session.highlights.sort((a, b) => a.tSec - b.tSec);
+      return entry;
+    }
+  } else if (session.highlights.some((h) => h.kind === kind && Math.abs(h.tSec - t) < 4)) {
+    return null;
+  }
+
+  if (session.highlights.length >= 6) {
+    // Preserve deepest, close-call, blackbox, rescue & extract first
+    const dropIdx = session.highlights.findIndex((h) => h.kind === 'lore' || h.kind === 'moment');
+    if (dropIdx >= 0) session.highlights.splice(dropIdx, 1);
+    else return null;
+  }
+  session.highlights.push(entry);
+  session.highlights.sort((a, b) => a.tSec - b.tSec);
+  return entry;
+}
+
+/**
  * Deterministically place an optional hidden Acoustic Black Box (shipwrecks) or Lost Hydro-Probe
  * (caves) in a deep open-water alcove for directional hydrophone / sonar hunting (v159).
  */
@@ -186,6 +219,12 @@ export function recoverBlackBox(session, callbacks = {}) {
     recordMechanicalEvent(session.mechFx, 'claim-beacon', { x: bb.x, y: bb.y, targetId: bb.id });
   }
   callbacks.onBlackBoxRecovered?.(bb, pts);
+  recordDiveHighlight(session, {
+    kind: 'blackbox',
+    icon: '📟',
+    label: bb.isWreck ? 'Black Box Recovered' : 'Hydro-Probe Recovered',
+    depthM: bb.y,
+  });
   callbacks.onWreckSync?.('blackbox', bb.id);
   callbacks.onToast?.(`📟 ${bb.label} recovered! (+${pts} pts · 18m acoustic scan)`, 3.6);
   return { ok: true, blackBox: bb, points: pts };
@@ -322,6 +361,9 @@ export function createDiveSession(
     lineCookies: [],
     maxLineCookies: MAX_LINE_COOKIES,
     squadAssistActive: false,
+    highlights: [],
+    _peakHighlightDepthM: 0,
+    _closeCallSeverity: 0,
     bioWake: [],
     _bioWakeAccum: 0,
     surfaceRipples: [],
@@ -3496,6 +3538,34 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     callbacks.onAlarm?.('critical');
   } else if (diveState.warnings.length > 0) {
     callbacks.onAlarm?.('warn');
+  }
+
+  // Auto-bookmark Deepest Depth & Closest Brush with Death for the Debrief Black-Box Highlight Reel (v160)
+  if (curDepthM >= 10 && curDepthM >= (session._peakHighlightDepthM || 0) + 3.5) {
+    session._peakHighlightDepthM = curDepthM;
+    recordDiveHighlight(session, {
+      kind: 'deepest',
+      icon: '⬇️',
+      label: `Peak ${Math.round(curDepthM)}m`,
+      depthM: curDepthM,
+    });
+  }
+  const activeTankBar = diveState.tanks?.[diveState.activeGasId]?.bar ?? 200;
+  const crisisScore = Math.max(
+    diveState.criticalAlarm ? 0.9 : 0,
+    (diveState.cnsPercent || 0) / 100,
+    (diveState.hypoxiaStress || 0) / 100,
+    (diveState.dcsStress || 0) / 100,
+    activeTankBar <= 20 ? 0.78 : 0
+  );
+  if (crisisScore >= 0.58 && crisisScore > (session._closeCallSeverity || 0) + 0.08) {
+    session._closeCallSeverity = crisisScore;
+    recordDiveHighlight(session, {
+      kind: 'close-call',
+      icon: '⚡',
+      label: activeTankBar <= 20 ? `Close Call (${Math.round(activeTankBar)}b)` : `Close Call (${Math.round(curDepthM)}m)`,
+      depthM: curDepthM,
+    });
   }
 
   // Checkpoints (on shipwrecks, gate post-turnaround ascent checkpoints so shot-line cp5/cp6 don't auto-fire during descent!)

@@ -7566,3 +7566,79 @@ test('v159 Living Sump Hydrology, Acoustic Black-Box Hunts, Line Cookies & Squad
   assert.ok(texts.some((t) => t.includes('BLACK BOX')), 'Renderer should label nearby Black Box');
   assert.ok(texts.some((t) => t.includes('#1 🏠')), 'Renderer should label placed Line Cookies');
 });
+
+test('v160 Multi-Dive Expedition Campaigns, Repetitive Surface Intervals & Debrief Black-Box Highlight Reel', async () => {
+  const {
+    EXPEDITION_CAMPAIGNS,
+    SURFACE_INTERVAL_OPTIONS,
+    getExpeditionCampaignById,
+    createCampaignRunState,
+    computeResidualTissueLoadPct,
+    computeSurfaceIntervalOffgas,
+    applyResidualTissuesToDiveState,
+  } = await import('../public/js/game/expeditionCampaigns.js');
+  const { recordDiveHighlight } = await import('../public/js/game/diveSession.js');
+  const { recordCampaignClearInLogbook } = await import('../public/js/game/logbookModel.js');
+
+  // 1. All 4 Expedition Campaigns reference real registered campaign sites
+  assert.equal(EXPEDITION_CAMPAIGNS.length, 4);
+  for (const camp of EXPEDITION_CAMPAIGNS) {
+    assert.equal(camp.legs.length, 3, `Campaign ${camp.id} must have 3 legs`);
+    for (const lid of camp.legs) {
+      assert.ok(getLevelById(lid), `Campaign ${camp.id} references valid site ${lid}`);
+    }
+  }
+  const run = createCampaignRunState('wreck-salvage');
+  assert.ok(run && getExpeditionCampaignById('wreck-salvage').patchName.includes('Wreck'));
+
+  // 2. Repetitive Surface Interval ZH-L16C tissue off-gassing physics
+  const loadedComps = [
+    { pN2: 2.1, pHe: 0.45 },
+    { pN2: 1.85, pHe: 0.35 },
+    { pN2: 1.45, pHe: 0.22 },
+    { pN2: 1.15, pHe: 0.12 },
+  ];
+  const initialLoad = computeResidualTissueLoadPct(loadedComps);
+  assert.ok(initialLoad >= 60, `Expected high initial tissue load, got ${initialLoad}%`);
+
+  const quickOff = computeSurfaceIntervalOffgas(loadedComps, 40, 'quick');
+  const stdOff = computeSurfaceIntervalOffgas(loadedComps, 40, 'standard');
+  const o2Off = computeSurfaceIntervalOffgas(loadedComps, 40, 'o2-offgas');
+  assert.equal(SURFACE_INTERVAL_OPTIONS.length, 3);
+  assert.ok(quickOff.residualLoadPct < initialLoad, '15m Air Rest should reduce tissue load');
+  assert.ok(stdOff.residualLoadPct < quickOff.residualLoadPct, '45m Air Rest should off-gas more than 15m');
+  assert.ok(o2Off.compartments[0].pN2 < quickOff.compartments[0].pN2, '20m Surface O2 should wash out fast-compartment N2 rapidly');
+  assert.ok(stdOff.cnsPercent < 40, 'Surface interval should decay CNS%');
+
+  const freshState = createDiveState();
+  applyResidualTissuesToDiveState(freshState, quickOff);
+  assert.ok(freshState.compartments[0].pN2 > 1.0, 'Residual N2 should carry over into next repetitive leg');
+  assert.equal(freshState.cnsPercent, quickOff.cnsPercent);
+
+  // 3. Logbook Expedition Patch unlock & cloud merge
+  const b0 = createEmptyLogbook();
+  const res1 = recordCampaignClearInLogbook(b0, 'cenote-circuit');
+  assert.equal(res1.isNew, true);
+  assert.deepEqual(res1.book.completedCampaigns, ['cenote-circuit']);
+  const res2 = recordCampaignClearInLogbook(res1.book, 'cenote-circuit');
+  assert.equal(res2.isNew, false);
+  const bOther = recordCampaignClearInLogbook(createEmptyLogbook(), 'abyssal-record').book;
+  const merged = mergeCareerLogbooks(res1.book, bOther);
+  assert.equal(merged.completedCampaigns.includes('cenote-circuit'), true);
+  assert.equal(merged.completedCampaigns.includes('abyssal-record'), true);
+
+  // 4. Debrief Black-Box Highlight Reel auto-bookmarks
+  const sess = createDiveSession(LEVEL_1, { diverName: 'Recorder', difficulty: 'standard' });
+  sess.simTimeSec = 18;
+  sess.diver.y = 24;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.05, {});
+  assert.ok(sess.highlights.some((h) => h.kind === 'deepest'), 'Should auto-bookmark deepest depth peak');
+
+  sess.simTimeSec = 42;
+  sess.diveState.cnsPercent = 72;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.05, {});
+  assert.ok(sess.highlights.some((h) => h.kind === 'close-call'), 'Should auto-bookmark close-call crisis');
+
+  recordDiveHighlight(sess, { kind: 'lore', icon: '🧭', label: 'Cenote Altar', tSec: 30, depthM: 18 });
+  assert.ok(sess.highlights[1].tSec >= sess.highlights[0].tSec, 'Highlights should stay sorted chronologically');
+});

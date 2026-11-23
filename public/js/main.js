@@ -51,6 +51,7 @@ import {
   getDailyStatus,
   recordFieldGuidePhoto,
   recordLoreDiscoveryInLogbook,
+  recordCampaignClearInLogbook,
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
@@ -70,6 +71,15 @@ import {
   formatSplitDelta,
 } from './game/expeditionContracts.js';
 import {
+  EXPEDITION_CAMPAIGNS,
+  SURFACE_INTERVAL_OPTIONS,
+  getExpeditionCampaignById,
+  createCampaignRunState,
+  computeResidualTissueLoadPct,
+  computeSurfaceIntervalOffgas,
+  applyResidualTissuesToDiveState,
+} from './game/expeditionCampaigns.js';
+import {
   buildChallengeUrl,
   parseChallengeFromSearch,
   formatChallengeSummary,
@@ -86,6 +96,7 @@ import {
   dropStageTank,
   toggleLiftBag,
   dropLineCookie,
+  recordDiveHighlight,
   resolveEmergencyDrill,
   recordGasSwitchFx,
   toggleDpvScooter,
@@ -593,7 +604,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=159" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=160" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1207,6 +1218,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof gasPlannerModal !== 'undefined' && gasPlannerModal && !gasPlannerModal.hidden, close: () => closeGasPlannerModal() },
   { isOpen: () => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, close: () => closeChallengeModal() },
   { isOpen: () => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, close: () => closeProceduralModal() },
+  { isOpen: () => typeof campaignsModal !== 'undefined' && campaignsModal && !campaignsModal.hidden, close: () => closeCampaignsModal() },
   { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
   { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
   { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
@@ -3614,7 +3626,15 @@ function createReplayController({ canvas, metaEl, playBtn, scrubber, speedBtn })
     draw();
   });
 
-  return { load, play, stop, draw };
+  function seekToTime(tSec) {
+    if (!state.level || state.samples.length < 2) return;
+    stop();
+    const totalSec = Math.max(1, state.samples[state.samples.length - 1]?.t || 20);
+    state.progress = Math.max(0, Math.min(1, (Number(tSec) || 0) / totalSec));
+    draw();
+  }
+
+  return { load, play, stop, draw, seekToTime };
 }
 
 async function shareOrDownloadPostcard(cardData) {
@@ -4383,6 +4403,78 @@ btnProcLaunch?.addEventListener('click', async () => {
   renderProceduralModal();
   closeProceduralModal();
   await applyProceduralLevelToMenu(draftProcedural, { launchImmediately: true });
+});
+
+// === Multi-Dive Expedition Campaigns & Repetitive Surface Intervals (v160) ===
+const campaignsModal = document.getElementById('campaigns-modal');
+const btnOpenCampaigns = document.getElementById('btn-open-campaigns');
+const btnCampaignsClose = document.getElementById('btn-campaigns-close');
+const campaignsGridEl = document.getElementById('campaigns-grid');
+const debriefHighlightPillsEl = document.getElementById('debrief-highlight-pills');
+const debriefCampaignBoxEl = document.getElementById('debrief-campaign-box');
+let activeCampaignRun = null;
+
+function renderCampaignsModal() {
+  if (!campaignsGridEl) return;
+  const book = loadCareerLogbook();
+  const clearedSet = new Set(Array.isArray(book.completedCampaigns) ? book.completedCampaigns : []);
+  campaignsGridEl.innerHTML = '';
+  for (const camp of EXPEDITION_CAMPAIGNS) {
+    const isCleared = clearedSet.has(camp.id);
+    const card = document.createElement('div');
+    card.className = `campaign-arc-card${isCleared ? ' cleared' : ''}`;
+    const legLines = camp.legs
+      .map((lid, idx) => {
+        const lv = getLevelById(lid);
+        return `<div>Leg ${idx + 1}: ${lv ? `${lv.name} (${lv.maxDepthM || lv.targetDepthM || '?'}m)` : lid}</div>`;
+      })
+      .join('');
+    card.innerHTML = `
+      <div class="campaign-arc-head">
+        <span class="campaign-arc-title">${camp.icon} ${camp.name}</span>
+        ${isCleared ? `<span class="campaign-patch-badge">🏅 ${camp.patchName}</span>` : `<span class="campaign-patch-badge" style="opacity:0.65">3 Dives</span>`}
+      </div>
+      <p class="campaign-arc-desc">${camp.desc}</p>
+      <div class="campaign-legs-list">${legLines}</div>
+      <button class="btn primary tiny" type="button" data-start-campaign="${camp.id}">${isCleared ? '↺ REPLAY EXPEDITION' : '🚀 START EXPEDITION'}</button>
+    `;
+    campaignsGridEl.appendChild(card);
+  }
+}
+
+function openCampaignsModal() {
+  if (!campaignsModal) return;
+  if (typeof setHomeMenuOpen === 'function') setHomeMenuOpen(false);
+  renderCampaignsModal();
+  campaignsModal.hidden = false;
+}
+
+function closeCampaignsModal() {
+  if (campaignsModal) campaignsModal.hidden = true;
+}
+
+async function startExpeditionCampaign(campaignId) {
+  const run = createCampaignRunState(campaignId);
+  const camp = getExpeditionCampaignById(campaignId);
+  if (!run || !camp) return;
+  activeCampaignRun = run;
+  closeCampaignsModal();
+  const firstLegId = camp.legs[0];
+  await selectAndLoadLevel(firstLegId);
+  launchOpenCoopDive();
+  showToast(`${camp.icon} ${camp.name} — Leg 1/3 launched!`, 3.4);
+}
+
+btnOpenCampaigns?.addEventListener('click', openCampaignsModal);
+btnCampaignsClose?.addEventListener('click', closeCampaignsModal);
+campaignsModal?.addEventListener('click', (e) => {
+  if (e.target === campaignsModal) closeCampaignsModal();
+});
+campaignsGridEl?.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('[data-start-campaign]');
+  if (!btn) return;
+  const cid = btn.getAttribute('data-start-campaign');
+  if (cid) startExpeditionCampaign(cid);
 });
 
 // ─── Spatial 3D Underwater Audio Mixer & Mobile Haptics (v133) ───
@@ -5306,7 +5398,14 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     session.aiSquad.length > 0
       ? ` · AI Squad: ${getAiDifficultyProfile(session.difficulty).badge}`
       : '';
-  showToast(`${openMsg}${aiSquadTag}`, 4.8);
+  let campaignTag = '';
+  if (activeCampaignRun && activeCampaignRun.residualTissues && activeCampaignRun.legIndex > 0) {
+    applyResidualTissuesToDiveState(session.diveState, activeCampaignRun.residualTissues);
+    const camp = getExpeditionCampaignById(activeCampaignRun.campaignId);
+    const loadPct = activeCampaignRun.residualTissues.residualLoadPct ?? computeResidualTissueLoadPct(session.diveState.compartments);
+    campaignTag = ` · ${camp?.icon || '🗺️'} Leg ${activeCampaignRun.legIndex + 1}/3 (Residual N₂ ${loadPct}%)`;
+  }
+  showToast(`${openMsg}${aiSquadTag}${campaignTag}`, 4.8);
 }
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {
@@ -5524,6 +5623,114 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       });
     } else {
       debriefReplay.stop();
+    }
+    if (debriefHighlightPillsEl) {
+      if (success) {
+        recordDiveHighlight(session, {
+          kind: 'extract',
+          icon: '🏆',
+          label: 'Safe Extraction',
+          tSec: session.simTimeSec || diveState.diveTimeSec || 0,
+          depthM: 0,
+        });
+      }
+      const hlList = Array.isArray(session?.highlights) ? session.highlights : [];
+      if (hasReplay && hlList.length > 0) {
+        debriefHighlightPillsEl.hidden = false;
+        debriefHighlightPillsEl.innerHTML = '';
+        for (const hl of hlList) {
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = 'highlight-pill';
+          pill.innerHTML = `<span>${hl.icon} ${hl.label}</span> <span class="hl-time">${formatReplayTime(hl.tSec)}</span>`;
+          pill.addEventListener('click', () => {
+            debriefReplay.seekToTime(hl.tSec);
+            debriefHighlightPillsEl.querySelectorAll('.highlight-pill.active').forEach((p) => p.classList.remove('active'));
+            pill.classList.add('active');
+          });
+          debriefHighlightPillsEl.appendChild(pill);
+        }
+      } else {
+        debriefHighlightPillsEl.hidden = true;
+        debriefHighlightPillsEl.innerHTML = '';
+      }
+    }
+  }
+
+  // Multi-Dive Expedition Campaign Surface Interval & Next Leg Panel (v160)
+  if (debriefCampaignBoxEl) {
+    const camp = activeCampaignRun ? getExpeditionCampaignById(activeCampaignRun.campaignId) : null;
+    if (camp && activeCampaignRun) {
+      debriefCampaignBoxEl.hidden = false;
+      const curLegIdx = activeCampaignRun.legIndex || 0;
+      const isFinalLeg = curLegIdx >= camp.legs.length - 1;
+      if (success) {
+        activeCampaignRun.totalScore = (activeCampaignRun.totalScore || 0) + (teamSummary.teamScore || 0);
+        if (!activeCampaignRun.completedLegs.includes(level.id)) {
+          activeCampaignRun.completedLegs.push(level.id);
+        }
+        if (isFinalLeg) {
+          const patchRes = recordCampaignClearInLogbook(loadCareerLogbook(), camp.id);
+          if (patchRes?.book) saveCareerLogbook(patchRes.book);
+          debriefCampaignBoxEl.innerHTML = `
+            <div class="debrief-campaign-head">
+              <span class="debrief-campaign-title">${camp.icon} ${camp.name} · EXPEDITION COMPLETE!</span>
+              <span class="campaign-patch-badge">🏅 ${camp.patchName}</span>
+            </div>
+            <div style="font-size:0.78rem;color:#cbd5e1;">All 3 legs cleared · Cumulative Score: <b>${activeCampaignRun.totalScore.toLocaleString()} pts</b> · Expedition Patch stitched to your Diver Logbook!</div>
+          `;
+          activeCampaignRun = null;
+        } else {
+          const nextLegId = camp.legs[curLegIdx + 1];
+          const nextLvl = getLevelById(nextLegId);
+          const rawComps = Array.isArray(diveState.compartments) ? diveState.compartments.map((c) => ({ ...c })) : [];
+          const rawCns = Number(diveState.cnsPercent) || 0;
+          const renderSiPanel = () => {
+            const sim = computeSurfaceIntervalOffgas(rawComps, rawCns, activeCampaignRun.selectedIntervalId || 'standard');
+            activeCampaignRun.residualTissues = sim;
+            const btnsHtml = SURFACE_INTERVAL_OPTIONS.map(
+              (o) =>
+                `<button type="button" class="si-opt-btn${activeCampaignRun.selectedIntervalId === o.id ? ' active' : ''}" data-si-opt="${o.id}">${o.label}</button>`
+            ).join('');
+            debriefCampaignBoxEl.innerHTML = `
+              <div class="debrief-campaign-head">
+                <span class="debrief-campaign-title">${camp.icon} ${camp.name} · Leg ${curLegIdx + 1}/3 Cleared</span>
+                <span class="debrief-campaign-load">Residual N₂: ${sim.residualLoadPct}% · CNS: ${Math.round(sim.cnsPercent)}%</span>
+              </div>
+              <div style="font-size:0.74rem;color:#94a3b8;">Surface Interval before <b>${nextLvl?.name || nextLegId}</b> (${sim.option.desc})</div>
+              <div class="debrief-si-row">${btnsHtml}</div>
+              <button type="button" class="btn primary tiny" id="btn-campaign-next-leg">🚀 LAUNCH LEG ${curLegIdx + 2}/3: ${nextLvl?.name || nextLegId} →</button>
+            `;
+            debriefCampaignBoxEl.querySelectorAll('[data-si-opt]').forEach((b) => {
+              b.addEventListener('click', () => {
+                activeCampaignRun.selectedIntervalId = b.getAttribute('data-si-opt');
+                renderSiPanel();
+              });
+            });
+            debriefCampaignBoxEl.querySelector('#btn-campaign-next-leg')?.addEventListener('click', async () => {
+              activeCampaignRun.legIndex = curLegIdx + 1;
+              cancelDebriefAnimations();
+              audio.resetEnvironmentFilter();
+              await selectAndLoadLevel(nextLegId);
+              screenDebrief.hidden = true;
+              debriefReplay.stop();
+              launchOpenCoopDive();
+            });
+          };
+          renderSiPanel();
+        }
+      } else {
+        debriefCampaignBoxEl.innerHTML = `
+          <div class="debrief-campaign-head">
+            <span class="debrief-campaign-title">${camp.icon} ${camp.name} · Leg ${curLegIdx + 1}/3 Aborted</span>
+            <span class="debrief-campaign-load" style="color:#f87171;">Retry Leg</span>
+          </div>
+          <div style="font-size:0.75rem;color:#cbd5e1;">Tap <b>DIVE AGAIN</b> to re-attempt Leg ${curLegIdx + 1}, or <b>MAIN MENU</b> to end the expedition.</div>
+        `;
+      }
+    } else {
+      debriefCampaignBoxEl.hidden = true;
+      debriefCampaignBoxEl.innerHTML = '';
     }
   }
   lastDebriefCardData = {
@@ -8031,6 +8238,7 @@ document.getElementById('btn-retry').addEventListener('click', () => {
 });
 
 document.getElementById('btn-menu').addEventListener('click', () => {
+  activeCampaignRun = null;
   const prevCode = lan.room?.code || '';
   activeDailyChallenge = null;
   cancelDebriefAnimations();
@@ -8684,6 +8892,7 @@ const sessionStepCallbacks = {
   onStoryDiscovered: (sp) => {
     audio.playStoryDiscovery?.();
     showToast(`🧭 ${sp.title} — ${sp.lore}`, 4.4);
+    recordDiveHighlight(session, { kind: 'lore', icon: '🧭', label: sp.title, depthM: session?.diver?.y });
     try {
       const res = recordLoreDiscoveryInLogbook(loadCareerLogbook(), {
         kind: sp.kind,
