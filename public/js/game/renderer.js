@@ -16,6 +16,8 @@ import {
   drawStyledTurtle,
   drawStyledRemipede,
   drawStyledDiverRig,
+  drawArticulatedDiverLeg,
+  drawDiverArmAndTorch,
   drawStyledJellyfish,
   drawStyledMegafauna,
   drawStyledWhaleShark,
@@ -9411,94 +9413,22 @@ export class CaveRenderer {
   }
 
   _drawArticulatedLeg(ctx, pelvis, leg, toScreenX, toScreenY, scale, isPeer, isBackLeg, liverySuit = null) {
-    const px = toScreenX(pelvis.x);
-    const py = toScreenY(pelvis.y);
-    const kx = toScreenX(leg.knee.x);
-    const ky = toScreenY(leg.knee.y);
-    const ax = toScreenX(leg.ankle.x);
-    const ay = toScreenY(leg.ankle.y);
-    const fx = toScreenX(leg.finTip.x);
-    const fy = toScreenY(leg.finTip.y);
-
-    const suitColor = liverySuit
-      ? (isBackLeg ? liverySuit.suitBot : liverySuit.suitMid)
-      : (isBackLeg ? '#09111e' : '#111c2d');
-    const trimColor = liverySuit
-      ? (isBackLeg ? liverySuit.finColor : liverySuit.finTip)
-      : isPeer
-        ? (isBackLeg ? '#9a3412' : '#fb923c')
-        : (isBackLeg ? '#0369a1' : '#38bdf8');
-
-    // Thigh & calf
-    this._drawLimbSegment(ctx, px, py, kx, ky, 0.21 * scale, suitColor);
-    this._drawLimbSegment(ctx, kx, ky, ax, ay, 0.16 * scale, suitColor);
-
-    // Ankle & Boot Heel anchored at (ax, ay) aligned with fin direction
-    const ang = Math.atan2(fy - ay, fx - ax);
-    const dirX = Math.cos(ang);
-    const dirY = Math.sin(ang);
-    const nx = -dirY;
-    const ny = dirX;
-    const finLen = Math.hypot(fx - ax, fy - ay);
-
-    const heelX = ax - dirX * (0.04 * scale);
-    const heelY = ay - dirY * (0.04 * scale);
-    const pocketX = ax + dirX * (0.14 * scale);
-    const pocketY = ay + dirY * (0.14 * scale);
-    this._drawLimbSegment(ctx, heelX, heelY, pocketX, pocketY, 0.135 * scale, '#1e293b');
-
-    // Scuba Jet Fin blade extending cleanly from foot pocket to finTip
-    const open = leg.finOpen ?? 0.65;
-    const baseHalfW = Math.max(1.5, 0.045 * scale * (0.55 + open * 0.45));
-    const tipHalfW = Math.max(2.0, 0.115 * scale * (0.35 + open * 0.75));
-    const bladeStartX = ax + dirX * (0.08 * scale);
-    const bladeStartY = ay + dirY * (0.08 * scale);
-    const midX = bladeStartX * 0.46 + fx * 0.54;
-    const midY = bladeStartY * 0.46 + fy * 0.54;
-
-    ctx.fillStyle = trimColor;
-    ctx.beginPath();
-    ctx.moveTo(bladeStartX + nx * baseHalfW, bladeStartY + ny * baseHalfW);
-    ctx.quadraticCurveTo(
-      midX + nx * (baseHalfW * 0.6 + tipHalfW * 0.45),
-      midY + ny * (baseHalfW * 0.6 + tipHalfW * 0.45),
-      fx + nx * tipHalfW,
-      fy + ny * tipHalfW
+    drawArticulatedDiverLeg(
+      ctx,
+      toScreenX(pelvis.x),
+      toScreenY(pelvis.y),
+      toScreenX(leg.knee.x),
+      toScreenY(leg.knee.y),
+      toScreenX(leg.ankle.x),
+      toScreenY(leg.ankle.y),
+      toScreenX(leg.finTip.x),
+      toScreenY(leg.finTip.y),
+      leg.finOpen ?? 0.65,
+      scale,
+      isPeer,
+      isBackLeg,
+      liverySuit
     );
-    // Scalloped jet-fin trailing tip
-    ctx.quadraticCurveTo(
-      fx - dirX * (0.03 * scale),
-      fy - dirY * (0.03 * scale),
-      fx - nx * tipHalfW,
-      fy - ny * tipHalfW
-    );
-    ctx.quadraticCurveTo(
-      midX - nx * (baseHalfW * 0.6 + tipHalfW * 0.45),
-      midY - ny * (baseHalfW * 0.6 + tipHalfW * 0.45),
-      bladeStartX - nx * baseHalfW,
-      bladeStartY - ny * baseHalfW
-    );
-    ctx.closePath();
-    ctx.fill();
-
-    // Side rails & vent highlights
-    if (finLen > 5) {
-      ctx.strokeStyle = isBackLeg ? 'rgba(15,23,42,0.55)' : 'rgba(15,23,42,0.75)';
-      ctx.lineWidth = Math.max(1, 0.028 * scale);
-      ctx.beginPath();
-      ctx.moveTo(bladeStartX + nx * baseHalfW, bladeStartY + ny * baseHalfW);
-      ctx.lineTo(fx + nx * tipHalfW, fy + ny * tipHalfW);
-      ctx.moveTo(bladeStartX - nx * baseHalfW, bladeStartY - ny * baseHalfW);
-      ctx.lineTo(fx - nx * tipHalfW, fy - ny * tipHalfW);
-      ctx.stroke();
-
-      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-      ctx.lineWidth = Math.max(1, 0.02 * scale);
-      ctx.beginPath();
-      ctx.moveTo(pocketX, pocketY);
-      ctx.lineTo(ax + dirX * (finLen * 0.62), ay + dirY * (finLen * 0.62));
-      ctx.stroke();
-    }
   }
 
   /**
@@ -9941,57 +9871,26 @@ export class CaveRenderer {
     // 4. Near leg (in front of pelvis)
     this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liveryPalette);
 
-    // 5. Articulated Arm, Wrist Dive Computer & Goodman-handle Primary Torch
+    // 5. Articulated Arm, Wrist Dive Computer & Goodman-handle Primary Torch (shared with Workshop Preview)
     const shoulderX = sx + Math.cos(torsoAngle) * (0.08 * scale);
     const shoulderY = sy + Math.sin(torsoAngle) * (0.08 * scale);
     const midArmX = (shoulderX + hx) * 0.5 + Math.sin(torsoAngle) * body.facingSign * (0.12 * scale);
     const midArmY = (shoulderY + hy) * 0.5 - Math.cos(torsoAngle) * body.facingSign * (0.12 * scale);
-    this._drawLimbSegment(ctx, shoulderX, shoulderY, midArmX, midArmY, 0.14 * scale, '#1e293b');
-    this._drawLimbSegment(ctx, midArmX, midArmY, hx, hy, 0.12 * scale, '#0f172a');
-
-    // Glowing cyan wrist dive computer on forearm
-    const wrX = midArmX * 0.46 + hx * 0.54;
-    const wrY = midArmY * 0.46 + hy * 0.54;
-    ctx.save();
-    ctx.translate(wrX, wrY);
-    ctx.rotate(Math.atan2(hy - midArmY, hx - midArmX));
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.roundRect(-0.07 * scale, -0.055 * scale, 0.14 * scale, 0.11 * scale, 0.025 * scale);
-    ctx.fill();
-    ctx.fillStyle = isPeer ? '#fdba74' : '#22d3ee';
-    ctx.fillRect(-0.045 * scale, -0.032 * scale, 0.09 * scale, 0.064 * scale);
-    const wrGlow = isPeer ? this.glowStamps.warm : this.glowStamps.cyan;
-    if (wrGlow) {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.42;
-      const gR = 0.22 * scale;
-      ctx.drawImage(wrGlow, -gR, -gR, gR * 2, gR * 2);
-    }
-    ctx.restore();
-
-    // Torch body at hand (aims along manual flashlight joystick override when active, else diver heading)
     const torchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
-    ctx.save();
-    ctx.translate(hx, hy);
-    ctx.rotate(torchAng);
-    ctx.fillStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.roundRect(-0.1 * scale, -0.055 * scale, 0.28 * scale, 0.11 * scale, 0.03 * scale);
-    ctx.fill();
-    if (diver.torchOn !== false) {
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(0.18 * scale, 0, 0.05 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      if (this.glowStamps.warm) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.55;
-        const lR = 0.26 * scale;
-        ctx.drawImage(this.glowStamps.warm, 0.18 * scale - lR, -lR, lR * 2, lR * 2);
-      }
-    }
-    ctx.restore();
+    drawDiverArmAndTorch(
+      ctx,
+      shoulderX,
+      shoulderY,
+      midArmX,
+      midArmY,
+      hx,
+      hy,
+      torchAng,
+      scale,
+      isPeer,
+      liveryPalette,
+      { torchOn: diver.torchOn !== false, glowStamps: this.glowStamps }
+    );
 
     // 5b. Articulated Working Arm & Mechanical Hardware Rig (v148: Wheel Crank, Valve Bleed, Shears, Delrin Reel, Shot-Line Lanyard)
     if (!isPeer && mechCtx) {

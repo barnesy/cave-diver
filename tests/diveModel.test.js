@@ -7899,3 +7899,74 @@ test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas
   audio.playSmbDeploy();
   audio.playWildlifeHarmony();
 });
+
+test('v166 Gear Workshop Persistence (TDZ Fix, Cloud Prefs Sync) & Unified Articulated Diver Avatar', async () => {
+  const { readFileSync } = await import('node:fs');
+  const {
+    drawDiverLimbSegment,
+    drawArticulatedDiverLeg,
+    drawDiverArmAndTorch,
+  } = await import('../public/js/game/artSprites.js');
+  const {
+    resolveDiverLiveryPalette,
+    drawLiveryPreview,
+    drawMiniDiverAvatar,
+  } = await import('../public/js/game/rigLivery.js');
+  const { sanitizePrefs } = await import('../api/_githubAuth.js');
+
+  // 1. Guard against startup TDZ: CAREER_LOGBOOK_KEY & _cachedLogbook MUST be declared before activeRigLivery init
+  const mainSrc = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  const logbookDeclIdx = mainSrc.indexOf('const CAREER_LOGBOOK_KEY');
+  const liveryInitIdx = mainSrc.indexOf('let activeRigLivery =');
+  assert.ok(logbookDeclIdx > 0 && liveryInitIdx > 0);
+  assert.ok(
+    logbookDeclIdx < liveryInitIdx,
+    'CAREER_LOGBOOK_KEY & loadCareerLogbook must be declared before activeRigLivery initializes to avoid TDZ wipe on reload'
+  );
+
+  // 2. Cloud Save sanitizePrefs preserves modular livery, 3 saved kit slots & AI Squad uniform flag
+  const customRig = {
+    suitId: 'wreck-titanium',
+    torchId: 'amber-silt',
+    patchId: 'wreck-penetrator',
+    headgearId: 'cave-helmet',
+    trimId: 'salvage-gold',
+    tankId: 'salvage-brass',
+    visorId: 'reef-mirror',
+  };
+  const prefs = sanitizePrefs({
+    playerName: 'Chris',
+    difficulty: 'standard',
+    gear: { sonar: true, dpv: true, ccr: true },
+    livery: customRig,
+    liverySlots: [customRig, null, { suitId: 'arctic-cobalt', torchId: 'tech-led', patchId: 'cave-arrow' }],
+    aiSquadTeamUniform: true,
+  });
+  assert.deepEqual(prefs.livery, customRig);
+  assert.equal(prefs.liverySlots.length, 3);
+  assert.equal(prefs.liverySlots[0]?.suitId, 'wreck-titanium');
+  assert.equal(prefs.liverySlots[1], null);
+  assert.equal(prefs.liverySlots[2]?.suitId, 'arctic-cobalt');
+  assert.equal(prefs.aiSquadTeamUniform, true);
+
+  // 3. Shared articulated diver helpers + Workshop Test-Tank Preview + Home Avatar Badge render cleanly
+  const noopCtx = new Proxy(
+    {
+      globalAlpha: 1,
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 48 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const pal = resolveDiverLiveryPalette(customRig);
+  drawDiverLimbSegment(noopCtx, 100, 100, 140, 100, 18, pal.suitMid);
+  drawArticulatedDiverLeg(noopCtx, 100, 100, 70, 104, 48, 92, 18, 90, 0.7, 80, false, true, pal);
+  drawArticulatedDiverLeg(noopCtx, 100, 100, 70, 96, 48, 86, 18, 84, 0.7, 80, false, false, pal);
+  drawDiverArmAndTorch(noopCtx, 145, 100, 165, 114, 182, 116, 0.05, 80, false, pal, { torchOn: true });
+
+  for (const envMode of ['clear', 'silt', 'night']) {
+    drawLiveryPreview(noopCtx, 640, 248, customRig, { hasCcr: envMode === 'night', hasDpv: envMode === 'silt', envMode, timeSec: 1.75 });
+  }
+  drawMiniDiverAvatar(noopCtx, 124, 72, customRig, { hasCcr: true, hasDpv: true });
+});

@@ -135,6 +135,24 @@ export function sanitizePrefs(raw) {
   if (typeof raw.torchStickEnabled === 'boolean') {
     out.torchStickEnabled = raw.torchStickEnabled;
   }
+  const sanitizeLiveryObj = (liv) => {
+    if (!liv || typeof liv !== 'object' || Array.isArray(liv)) return null;
+    const clean = {};
+    for (const k of ['suitId', 'torchId', 'patchId', 'headgearId', 'trimId', 'tankId', 'visorId']) {
+      if (typeof liv[k] === 'string' && liv[k].trim()) {
+        clean[k] = liv[k].trim().slice(0, 32);
+      }
+    }
+    return Object.keys(clean).length > 0 ? clean : null;
+  };
+  const cleanLivery = sanitizeLiveryObj(raw.livery);
+  if (cleanLivery) out.livery = cleanLivery;
+  if (Array.isArray(raw.liverySlots)) {
+    out.liverySlots = [0, 1, 2].map((i) => sanitizeLiveryObj(raw.liverySlots[i]));
+  }
+  if (typeof raw.aiSquadTeamUniform === 'boolean') {
+    out.aiSquadTeamUniform = raw.aiSquadTeamUniform;
+  }
   return out;
 }
 

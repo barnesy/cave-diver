@@ -890,6 +890,229 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
 }
 
 /**
+ * Shared rounded-cap drysuit limb segment used identically by CaveRenderer,
+ * Gear Workshop Test-Tank Preview, and Home Screen Mini-Avatar Badge (v166).
+ */
+export function drawDiverLimbSegment(ctx, x1, y1, x2, y2, width, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.5, width);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+/**
+ * Shared articulated diver leg + boot + scalloped Jet Fin renderer (v166).
+ * Keeps fin blade color cohesive across both legs (using finColor for blade + finTip for
+ * trailing edge & rail accents) so live gameplay and Gear Workshop preview match 1:1.
+ */
+export function drawArticulatedDiverLeg(
+  ctx,
+  px,
+  py,
+  kx,
+  ky,
+  ax,
+  ay,
+  fx,
+  fy,
+  finOpen,
+  scale,
+  isPeer,
+  isBackLeg,
+  liveryPalette = null
+) {
+  const suitColor = liveryPalette
+    ? (isBackLeg ? liveryPalette.suitBot : liveryPalette.suitMid)
+    : (isBackLeg ? '#09111e' : '#111c2d');
+  const finBladeColor = liveryPalette
+    ? liveryPalette.finColor
+    : isPeer
+      ? (isBackLeg ? '#7c2d12' : '#9a3412')
+      : (isBackLeg ? '#0c4a6e' : '#0369a1');
+  const finAccentColor = liveryPalette
+    ? liveryPalette.finTip
+    : isPeer
+      ? '#fb923c'
+      : '#38bdf8';
+
+  ctx.save();
+  if (isBackLeg) ctx.globalAlpha *= 0.86;
+
+  // Thigh & calf drysuit segments
+  drawDiverLimbSegment(ctx, px, py, kx, ky, 0.21 * scale, suitColor);
+  drawDiverLimbSegment(ctx, kx, ky, ax, ay, 0.16 * scale, suitColor);
+
+  // Subtle Kevlar knee pad cap
+  if (scale >= 14) {
+    ctx.fillStyle = liveryPalette?.suitTop || '#1e293b';
+    ctx.beginPath();
+    ctx.arc(kx, ky, Math.max(1.4, 0.085 * scale), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Ankle & Boot Heel anchored at (ax, ay) aligned with fin direction
+  const ang = Math.atan2(fy - ay, fx - ax);
+  const dirX = Math.cos(ang);
+  const dirY = Math.sin(ang);
+  const nx = -dirY;
+  const ny = dirX;
+  const finLen = Math.hypot(fx - ax, fy - ay);
+
+  const heelX = ax - dirX * (0.04 * scale);
+  const heelY = ay - dirY * (0.04 * scale);
+  const pocketX = ax + dirX * (0.14 * scale);
+  const pocketY = ay + dirY * (0.14 * scale);
+  drawDiverLimbSegment(ctx, heelX, heelY, pocketX, pocketY, 0.135 * scale, '#1e293b');
+
+  // Scuba Jet Fin blade extending cleanly from foot pocket to finTip
+  const open = finOpen ?? 0.65;
+  const baseHalfW = Math.max(1.5, 0.045 * scale * (0.55 + open * 0.45));
+  const tipHalfW = Math.max(2.0, 0.115 * scale * (0.35 + open * 0.75));
+  const bladeStartX = ax + dirX * (0.08 * scale);
+  const bladeStartY = ay + dirY * (0.08 * scale);
+  const midX = bladeStartX * 0.46 + fx * 0.54;
+  const midY = bladeStartY * 0.46 + fy * 0.54;
+
+  ctx.fillStyle = finBladeColor;
+  ctx.beginPath();
+  ctx.moveTo(bladeStartX + nx * baseHalfW, bladeStartY + ny * baseHalfW);
+  ctx.quadraticCurveTo(
+    midX + nx * (baseHalfW * 0.6 + tipHalfW * 0.45),
+    midY + ny * (baseHalfW * 0.6 + tipHalfW * 0.45),
+    fx + nx * tipHalfW,
+    fy + ny * tipHalfW
+  );
+  // Scalloped jet-fin trailing tip
+  ctx.quadraticCurveTo(
+    fx - dirX * (0.03 * scale),
+    fy - dirY * (0.03 * scale),
+    fx - nx * tipHalfW,
+    fy - ny * tipHalfW
+  );
+  ctx.quadraticCurveTo(
+    midX - nx * (baseHalfW * 0.6 + tipHalfW * 0.45),
+    midY - ny * (baseHalfW * 0.6 + tipHalfW * 0.45),
+    bladeStartX - nx * baseHalfW,
+    bladeStartY - ny * baseHalfW
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Bold high-vis trailing fin-tip accent band + side rails matching Workshop Trim/Fin Accent
+  if (finLen > 4) {
+    ctx.strokeStyle = finAccentColor;
+    ctx.lineWidth = Math.max(1.4, 0.042 * scale);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(fx + nx * tipHalfW, fy + ny * tipHalfW);
+    ctx.quadraticCurveTo(
+      fx - dirX * (0.03 * scale),
+      fy - dirY * (0.03 * scale),
+      fx - nx * tipHalfW,
+      fy - ny * tipHalfW
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle = isBackLeg ? 'rgba(15,23,42,0.5)' : 'rgba(15,23,42,0.72)';
+    ctx.lineWidth = Math.max(1, 0.025 * scale);
+    ctx.beginPath();
+    ctx.moveTo(bladeStartX + nx * baseHalfW, bladeStartY + ny * baseHalfW);
+    ctx.lineTo(fx + nx * tipHalfW, fy + ny * tipHalfW);
+    ctx.moveTo(bladeStartX - nx * baseHalfW, bladeStartY - ny * baseHalfW);
+    ctx.lineTo(fx - nx * tipHalfW, fy - ny * tipHalfW);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = Math.max(1, 0.02 * scale);
+    ctx.beginPath();
+    ctx.moveTo(pocketX, pocketY);
+    ctx.lineTo(ax + dirX * (finLen * 0.62), ay + dirY * (finLen * 0.62));
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Shared articulated diver arm, glowing wrist dive computer, and Goodman-handle primary torch (v166).
+ * Uses custom drysuit sleeve colors and equipped torch optic lens tint across gameplay & Workshop.
+ */
+export function drawDiverArmAndTorch(
+  ctx,
+  shoulderX,
+  shoulderY,
+  elbowX,
+  elbowY,
+  hx,
+  hy,
+  torchAng,
+  scale,
+  isPeer,
+  liveryPalette = null,
+  opts = null
+) {
+  const torchOn = opts?.torchOn !== false;
+  const glowStamps = opts?.glowStamps || null;
+  const upperColor = liveryPalette?.suitTop || '#1e293b';
+  const foreColor = liveryPalette?.suitMid || '#0f172a';
+  const trimColor = liveryPalette?.trim || (isPeer ? '#fdba74' : '#22d3ee');
+  const lensColor = liveryPalette?.torch?.swatch || '#fef08a';
+
+  // Articulated upper arm & forearm in custom drysuit colorway
+  drawDiverLimbSegment(ctx, shoulderX, shoulderY, elbowX, elbowY, 0.14 * scale, upperColor);
+  drawDiverLimbSegment(ctx, elbowX, elbowY, hx, hy, 0.12 * scale, foreColor);
+
+  // Glowing wrist dive computer on forearm
+  const wrX = elbowX * 0.46 + hx * 0.54;
+  const wrY = elbowY * 0.46 + hy * 0.54;
+  ctx.save();
+  ctx.translate(wrX, wrY);
+  ctx.rotate(Math.atan2(hy - elbowY, hx - elbowX));
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.roundRect(-0.07 * scale, -0.055 * scale, 0.14 * scale, 0.11 * scale, 0.025 * scale);
+  ctx.fill();
+  ctx.fillStyle = trimColor;
+  ctx.fillRect(-0.045 * scale, -0.032 * scale, 0.09 * scale, 0.064 * scale);
+  const wrGlow = isPeer ? glowStamps?.warm : glowStamps?.cyan;
+  if (wrGlow) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.42;
+    const gR = 0.22 * scale;
+    ctx.drawImage(wrGlow, -gR, -gR, gR * 2, gR * 2);
+  }
+  ctx.restore();
+
+  // Goodman-handle primary torch canister & lens gripped in hand
+  ctx.save();
+  ctx.translate(hx, hy);
+  ctx.rotate(torchAng);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.roundRect(-0.1 * scale, -0.055 * scale, 0.28 * scale, 0.11 * scale, 0.03 * scale);
+  ctx.fill();
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = Math.max(0.8, 0.018 * scale);
+  ctx.stroke();
+  if (torchOn) {
+    ctx.fillStyle = lensColor;
+    ctx.beginPath();
+    ctx.arc(0.18 * scale, 0, 0.052 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    if (glowStamps?.warm) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55;
+      const lR = 0.26 * scale;
+      ctx.drawImage(glowStamps.warm, 0.18 * scale - lR, -lR, lR * 2, lR * 2);
+    }
+  }
+  ctx.restore();
+}
+
+/**
  * Translucent pelagic moon jellyfish pulsing gently along open-water shipwreck shot lines.
  */
 export function drawStyledJellyfish(ctx, j, sx, sy, scale, timeSec) {

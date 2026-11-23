@@ -3,7 +3,12 @@
  * Pure data catalog, career unlock evaluation, sanitization, and animated workshop preview renderer.
  */
 
-import { drawStyledDiverRig } from './artSprites.js';
+import {
+  drawStyledDiverRig,
+  drawDiverLimbSegment,
+  drawArticulatedDiverLeg,
+  drawDiverArmAndTorch,
+} from './artSprites.js';
 
 export const SUIT_LIVERIES = Object.freeze([
   {
@@ -632,9 +637,128 @@ export function randomizeUnlockedLivery(unlocked = null, rng = Math.random) {
   );
 }
 
+function _smoothstep(e0, e1, x) {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Shared articulated diver renderer for both the Gear Workshop Test-Tank Preview
+ * and the Home Screen Mini-Avatar Badge — mirrors CaveRenderer._drawDiver 1:1 (v166).
+ */
+function _drawArticulatedPreviewDiver(
+  ctx,
+  sx,
+  sy,
+  scale,
+  pal,
+  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true } = {}
+) {
+  const u = scale * 0.55;
+  const kickPower = !animateKick ? 0.12 : hasDpv ? 0.14 : 0.72;
+  const kickPhase = animateKick ? ((timeSec * (hasDpv ? 0.35 : 0.72)) % 1 + 1) % 1 : 0.18;
+  const recoveryAmt = _smoothstep(0.35, 0.62, kickPhase) * (1 - _smoothstep(0.68, 0.86, kickPhase)) * kickPower;
+  const sweepSpread = _smoothstep(0.56, 0.74, kickPhase) * (1 - _smoothstep(0.84, 0.97, kickPhase)) * kickPower;
+  const powerSnap = _smoothstep(0.66, 0.82, kickPhase) * (1 - _smoothstep(0.86, 0.99, kickPhase)) * kickPower;
+
+  // Pelvis in flat cave trim behind shoulders (matches diverBody.js geometry)
+  const px = sx - 0.42 * scale;
+  const py = sy - 0.03 * scale;
+  const torsoAngle = Math.atan2(sy - py, sx - px);
+
+  const computeLeg = (sideSign) => {
+    const kneeBack = 0.37 - recoveryAmt * 0.05;
+    const kneeUp = 0.01 + sideSign * (0.035 + sweepSpread * 0.10) - recoveryAmt * 0.02;
+    const kx = px - kneeBack * scale;
+    const ky = py - kneeUp * scale;
+
+    const calfBack = 0.31 - recoveryAmt * 0.08 + powerSnap * 0.05;
+    const calfUp = 0.13 + recoveryAmt * 0.09 + sideSign * (0.03 + sweepSpread * 0.11) - powerSnap * 0.06;
+    const ax = kx - calfBack * scale;
+    const ay = ky - calfUp * scale;
+
+    const finBack = 0.42;
+    const finPitch = (recoveryAmt * 0.04 - powerSnap * 0.06) + sideSign * sweepSpread * 0.05;
+    const fx = ax - finBack * scale;
+    const fy = ay - finPitch * scale;
+    const finOpen = Math.max(0.22, Math.min(1.1, 0.55 - recoveryAmt * 0.32 + powerSnap * 0.55));
+    return { kx, ky, ax, ay, fx, fy, finOpen };
+  };
+
+  const farLeg = computeLeg(1);
+  const nearLeg = computeLeg(-1);
+
+  // 1. Far articulated leg (behind torso)
+  drawArticulatedDiverLeg(
+    ctx, px, py, farLeg.kx, farLeg.ky, farLeg.ax, farLeg.ay, farLeg.fx, farLeg.fy,
+    farLeg.finOpen, scale, false, true, pal
+  );
+
+  // 2. Flexible drysuit spine core + trim stripe (identical to CaveRenderer._drawDiver)
+  drawDiverLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, pal.suitMid);
+  ctx.strokeStyle = pal.trim;
+  ctx.lineWidth = Math.max(1.4, 0.04 * scale);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(sx, sy);
+  ctx.stroke();
+
+  // 3. Sculpted rig, cylinders/CCR, headgear silhouette, visor & optional DPV scooter
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(torsoAngle);
+  drawStyledDiverRig(ctx, u, scale, false, 1, {
+    hasCcr,
+    hasDpv,
+    dpvActive: hasDpv,
+    dpvThrusting: hasDpv,
+    timeSec,
+    liveryPalette: pal,
+  });
+  ctx.restore();
+
+  // 4. Near articulated leg (in front of pelvis)
+  drawArticulatedDiverLeg(
+    ctx, px, py, nearLeg.kx, nearLeg.ky, nearLeg.ax, nearLeg.ay, nearLeg.fx, nearLeg.fy,
+    nearLeg.finOpen, scale, false, false, pal
+  );
+
+  // 5. Articulated arm, glowing wrist dive computer & Goodman-handle primary torch in hand
+  const breath = animateKick ? Math.sin(timeSec * 1.7) * 0.02 : 0;
+  const hx = sx + (hasDpv ? 0.44 : 0.48) * scale;
+  const hy = sy + (hasDpv ? 0.16 : 0.21 + breath) * scale;
+  const shoulderX = sx + Math.cos(torsoAngle) * (0.08 * scale);
+  const shoulderY = sy + Math.sin(torsoAngle) * (0.08 * scale);
+  const elbowX = (shoulderX + hx) * 0.5 + Math.sin(torsoAngle) * (0.12 * scale);
+  const elbowY = (shoulderY + hy) * 0.5 + Math.cos(torsoAngle) * (0.12 * scale);
+  drawDiverArmAndTorch(
+    ctx,
+    shoulderX,
+    shoulderY,
+    elbowX,
+    elbowY,
+    hx,
+    hy,
+    sweepAng,
+    scale,
+    false,
+    pal,
+    { torchOn: true }
+  );
+
+  // Return exact world-space torch lens tip & regulator mouthpiece coords for beam & bubbles
+  return {
+    torchTipX: hx + Math.cos(sweepAng) * (0.18 * scale),
+    torchTipY: hy + Math.sin(sweepAng) * (0.18 * scale),
+    mouthX: sx + u * 0.68,
+    mouthY: sy + u * 0.12,
+  };
+}
+
 /**
  * Render a live animated "Test Tank" diorama preview of the customized diver rig + torch beam
- * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153).
+ * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153 / v166).
  */
 export function drawLiveryPreview(
   ctx,
@@ -702,16 +826,20 @@ export function drawLiveryPreview(
     }
   }
 
-  const cx = w * 0.39;
-  const cy = h * 0.54 + Math.sin(timeSec * 1.9) * 3.8;
-  const u = Math.min(w * 0.142, h * 0.33);
-
-  // Volumetric torch cone preview — in Silt mode, visibly demonstrates torch.siltPierce clarity!
-  const torchX = cx + u * 0.86;
-  const torchY = cy + u * 0.21;
-  const siltPenalty = isSilt ? Math.max(0.45, 0.68 + (torch.siltPierce || 0) * 1.05) : 1.0;
-  const coneLen = w * 0.50 * torch.rangeMult * siltPenalty;
+  // Frame the full articulated in-game diver (fin tips to outstretched torch hand) cleanly inside tank
+  const scale = Math.min(w * 0.215, h * 0.56);
+  const sx = w * 0.445;
+  const sy = h * 0.54 + Math.sin(timeSec * 1.8) * 3.4;
   const sweepAng = Math.sin(timeSec * 1.15) * 0.08;
+  const breath = Math.sin(timeSec * 1.7) * 0.02;
+  const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
+  const hyPre = sy + (hasDpv ? 0.16 : 0.21 + breath) * scale;
+  const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
+  const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+
+  // Volumetric torch cone preview emanating from the actual Goodman-handle torch lens in hand
+  const siltPenalty = isSilt ? Math.max(0.45, 0.68 + (torch.siltPierce || 0) * 1.05) : 1.0;
+  const coneLen = w * 0.46 * torch.rangeMult * siltPenalty;
   const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, coneLen * 0.68);
   const coreAlpha = isNight ? 0.78 : isSilt ? 0.56 + (torch.siltPierce || 0) * 0.55 : 0.62;
   coneGrad.addColorStop(0, `rgba(${torch.coreRgb}, ${Math.min(0.92, coreAlpha).toFixed(2)})`);
@@ -736,11 +864,12 @@ export function drawLiveryPreview(
   ctx.restore();
 
   // Rising regulator exhaust bubbles (or whisper-fine CCR loop bubbles)
+  const u = scale * 0.55;
   const bubCount = hasCcr ? 3 : 7;
   for (let b = 0; b < bubCount; b++) {
     const phase = ((timeSec * (hasCcr ? 0.55 : 0.85) + b / bubCount) % 1);
-    const bx = cx + u * 0.58 + Math.sin(timeSec * 3.4 + b * 2.1) * 5 - phase * 10;
-    const by = cy - u * 0.05 - phase * (h * 0.52);
+    const bx = sx + u * 0.66 + Math.sin(timeSec * 3.4 + b * 2.1) * 5 - phase * 14;
+    const by = sy + u * 0.08 - phase * (h * 0.54);
     const br = hasCcr ? 1.5 + phase * 1.4 : 2.2 + phase * 3.0;
     ctx.fillStyle = `rgba(224, 242, 254, ${((1 - phase) * (hasCcr ? 0.45 : 0.7)).toFixed(2)})`;
     ctx.beginPath();
@@ -748,54 +877,14 @@ export function drawLiveryPreview(
     ctx.fill();
   }
 
-  // Twin articulated trailing fins behind torso using custom finColor & finTip
-  const kickA = Math.sin(timeSec * 3.6) * 0.17;
-  const kickB = Math.sin(timeSec * 3.6 + Math.PI) * 0.15;
-  for (let legIdx = 0; legIdx < 2; legIdx++) {
-    const isBack = legIdx === 0;
-    ctx.save();
-    ctx.translate(cx - u * (isBack ? 0.82 : 0.86), cy + u * (isBack ? -0.02 : 0.12));
-    ctx.rotate(isBack ? kickB : kickA);
-    ctx.globalAlpha = isBack ? 0.72 : 1;
-    ctx.fillStyle = pal.finColor;
-    ctx.beginPath();
-    ctx.moveTo(0, -u * 0.08);
-    ctx.lineTo(-u * 0.78, -u * 0.23);
-    ctx.lineTo(-u * 0.82, u * 0.17);
-    ctx.lineTo(0, u * 0.09);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = pal.finTip;
-    ctx.lineWidth = isBack ? 1.8 : 2.5;
-    ctx.beginPath();
-    ctx.moveTo(-u * 0.78, -u * 0.23);
-    ctx.lineTo(-u * 0.82, u * 0.17);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Draw the authentic styled diver rig with full modular headgear, tank finish, visor & trim
-  ctx.save();
-  ctx.translate(cx, cy);
-  drawStyledDiverRig(ctx, u, u / 0.55, false, 1, {
+  // Draw the exact 1:1 in-game articulated diver (both legs, scalloped Jet Fins, torso, rig, arm, wrist computer, torch)
+  _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
-    dpvActive: hasDpv,
-    dpvThrusting: hasDpv,
     timeSec,
-    liveryPalette: pal,
+    sweepAng,
+    animateKick: true,
   });
-  ctx.restore();
-
-  // Torch canister in hand
-  ctx.fillStyle = '#e2e8f0';
-  ctx.beginPath();
-  ctx.roundRect(torchX - 10, torchY - 4, 18, 8, 3);
-  ctx.fill();
-  ctx.fillStyle = torch.swatch;
-  ctx.beginPath();
-  ctx.arc(torchX + 8, torchY, 4.2, 0, Math.PI * 2);
-  ctx.fill();
 
   // Corner optical & gear telemetry tag
   ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
@@ -807,9 +896,9 @@ export function drawLiveryPreview(
 }
 
 /**
- * Render a crisp compact diver portrait badge for the Home Screen & Co-op Lobby (v153).
+ * Render a crisp compact articulated diver portrait badge for the Home Screen & Co-op Lobby (v153 / v166).
  */
-export function drawMiniDiverAvatar(ctx, w, h, livery, { hasCcr = false } = {}) {
+export function drawMiniDiverAvatar(ctx, w, h, livery, { hasCcr = false, hasDpv = false } = {}) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
   ctx.save();
@@ -820,22 +909,27 @@ export function drawMiniDiverAvatar(ctx, w, h, livery, { hasCcr = false } = {}) 
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
 
-  // Subtle torch glow wedge on right edge
-  ctx.fillStyle = `rgba(${pal.torch.shaftRgb}, 0.26)`;
+  const scale = Math.min(w * 0.34, h * 0.64);
+  const sx = w * 0.61;
+  const sy = h * 0.56;
+  const torchX = sx + (hasDpv ? 0.44 : 0.48) * scale + 0.18 * scale;
+  const torchY = sy + (hasDpv ? 0.16 : 0.21) * scale;
+
+  // Subtle torch glow wedge emanating from hand torch
+  ctx.fillStyle = `rgba(${pal.torch.shaftRgb}, 0.28)`;
   ctx.beginPath();
-  ctx.moveTo(w * 0.58, h * 0.56);
-  ctx.lineTo(w, h * 0.2);
-  ctx.lineTo(w, h * 0.92);
+  ctx.moveTo(torchX, torchY);
+  ctx.lineTo(w + 4, Math.max(0, torchY - h * 0.38));
+  ctx.lineTo(w + 4, Math.min(h, torchY + h * 0.38));
   ctx.closePath();
   ctx.fill();
 
-  ctx.translate(w * 0.45, h * 0.56);
-  const u = Math.min(w, h) * 0.46;
-  drawStyledDiverRig(ctx, u, u / 0.55, false, 1, {
+  _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
-    hasDpv: false,
+    hasDpv,
     timeSec: 0,
-    liveryPalette: pal,
+    sweepAng: 0,
+    animateKick: false,
   });
   ctx.restore();
 }

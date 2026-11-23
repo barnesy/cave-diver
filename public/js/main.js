@@ -211,6 +211,43 @@ const lan = new LanClient();
 const leaderboard = new LeaderboardClient();
 const github = new GitHubClient();
 
+// Career Logbook storage helpers (initialized early so startup Gear Workshop & Tech Gear unlocks never hit TDZ)
+const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
+let _cachedLogbook = null;
+
+function invalidateCareerLogbookCache() {
+  _cachedLogbook = null;
+}
+window.addEventListener('storage', (e) => {
+  if (!e?.key || e.key === CAREER_LOGBOOK_KEY) invalidateCareerLogbookCache();
+});
+
+function loadCareerLogbook() {
+  if (_cachedLogbook) return _cachedLogbook;
+  try {
+    let book = createEmptyLogbook();
+    const raw = localStorage.getItem(CAREER_LOGBOOK_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') book = parsed;
+    }
+    _cachedLogbook = seedLogbookFromEntries(book, leaderboard._loadLocalCache());
+    return _cachedLogbook;
+  } catch {
+    return createEmptyLogbook();
+  }
+}
+
+function saveCareerLogbook(book, { skipCloudSync = false } = {}) {
+  _cachedLogbook = book || null;
+  try {
+    localStorage.setItem(CAREER_LOGBOOK_KEY, JSON.stringify(book));
+  } catch {}
+  if (!skipCloudSync) {
+    scheduleGitHubStatsSync();
+  }
+}
+
 // UI Elements
 const screenLoader = document.getElementById('screen-loader');
 const loaderStepEl = document.getElementById('loader-step');
@@ -608,7 +645,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=165" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=166" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -2058,6 +2095,7 @@ gearDockGridEl?.addEventListener('click', (e) => {
   savedGearLoadout[gid] = !savedGearLoadout[gid];
   saveGearLoadout();
   renderTechGearDock();
+  renderHomeAvatarBadge();
   showToast(
     savedGearLoadout[gid] ? `${item.icon} ${item.name} equipped — ${item.summary}` : `${item.icon} ${item.name} unequipped`,
     2.6
@@ -2604,19 +2642,35 @@ try {
   aiSquadTeamUniform = localStorage.getItem(SQUAD_UNIFORM_KEY) === '1';
 } catch {}
 
-function saveLiverySlotsToStorage() {
+function saveLiverySlotsToStorage({ skipCloudSync = false } = {}) {
   try { localStorage.setItem(LIVERY_SLOTS_KEY, JSON.stringify(savedLiverySlots)); } catch {}
+  if (!skipCloudSync) scheduleGitHubStatsSync();
 }
 
-function saveRigLivery() {
+function saveRigLivery({ skipCloudSync = false } = {}) {
   try { localStorage.setItem(LIVERY_PREF_KEY, JSON.stringify(activeRigLivery)); } catch {}
+  if (!skipCloudSync) scheduleGitHubStatsSync();
+}
+
+function reconcileActiveRigLiveryFromStorage() {
+  try {
+    const rawLiv = localStorage.getItem(LIVERY_PREF_KEY);
+    if (rawLiv) {
+      activeRigLivery = sanitizeRigLivery(JSON.parse(rawLiv), getCurrentLiveryUnlocks());
+    }
+  } catch {}
 }
 
 function renderHomeAvatarBadge() {
   if (!homeAvatarCtx || !homeAvatarCanvasEl) return;
   let hasCcr = false;
-  try { hasCcr = Boolean(getEffectiveGearLoadout()?.ccr); } catch {}
-  drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr });
+  let hasDpv = false;
+  try {
+    const eq = getEffectiveGearLoadout();
+    hasCcr = Boolean(eq?.ccr);
+    hasDpv = Boolean(eq?.dpv);
+  } catch {}
+  drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
 }
 
 function syncLiveryUi() {
@@ -2641,13 +2695,18 @@ function renderLiveryPreviewFrame(timeSec = 0) {
   if (!liveryPreviewCtx || !liveryPreviewCanvasEl) return;
   let hasCcr = false;
   let hasDpv = false;
+  let ccrUnlocked = false;
+  let dpvUnlocked = false;
   try {
     const eq = getEffectiveGearLoadout();
     hasCcr = Boolean(eq?.ccr);
     hasDpv = Boolean(eq?.dpv);
+    const { unlockedIds } = computeUnlockedGear(loadCareerLogbook(), LEVELS);
+    ccrUnlocked = unlockedIds.has('ccr');
+    dpvUnlocked = unlockedIds.has('dpv');
   } catch {}
-  const showCcr = liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr;
-  const showDpv = liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv;
+  const showCcr = ccrUnlocked ? hasCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr);
+  const showDpv = dpvUnlocked ? hasDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv);
   drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, activeRigLivery, {
     hasCcr: showCcr,
     hasDpv: showDpv,
@@ -2678,6 +2737,8 @@ function updateActiveLiveryField(patchObj) {
 }
 
 function renderLiveryWorkshopModal() {
+  const modalCard = liveryModalEl?.querySelector?.('.livery-modal-card') || null;
+  const prevScrollTop = modalCard ? modalCard.scrollTop : 0;
   const unlocks = getCurrentLiveryUnlocks();
   activeRigLivery = sanitizeRigLivery(activeRigLivery, unlocks);
   const pal = resolveDiverLiveryPalette(activeRigLivery);
@@ -2710,20 +2771,33 @@ function renderLiveryWorkshopModal() {
   });
   let eqCcr = false;
   let eqDpv = false;
+  let ccrUnlocked = false;
+  let dpvUnlocked = false;
   try {
     const eq = getEffectiveGearLoadout();
     eqCcr = Boolean(eq?.ccr);
     eqDpv = Boolean(eq?.dpv);
+    const { unlockedIds } = computeUnlockedGear(loadCareerLogbook(), LEVELS);
+    ccrUnlocked = unlockedIds.has('ccr');
+    dpvUnlocked = unlockedIds.has('dpv');
   } catch {}
-  const showCcr = liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr;
-  const showDpv = liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv;
+  const showCcr = ccrUnlocked ? eqCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr);
+  const showDpv = dpvUnlocked ? eqDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv);
   if (btnLiveryPrevCcrEl) {
     btnLiveryPrevCcrEl.classList.toggle('active', showCcr);
     btnLiveryPrevCcrEl.setAttribute('aria-pressed', showCcr ? 'true' : 'false');
+    btnLiveryPrevCcrEl.textContent = ccrUnlocked ? (showCcr ? '✓ CCR' : 'CCR') : '👁 CCR';
+    btnLiveryPrevCcrEl.title = ccrUnlocked
+      ? (showCcr ? 'CCR Rebreather equipped for dives (click to unequip)' : 'Equip CCR Rebreather for dives')
+      : 'Preview CCR Rebreather in Test Tank (locked — earn cert to equip in dives)';
   }
   if (btnLiveryPrevDpvEl) {
     btnLiveryPrevDpvEl.classList.toggle('active', showDpv);
     btnLiveryPrevDpvEl.setAttribute('aria-pressed', showDpv ? 'true' : 'false');
+    btnLiveryPrevDpvEl.textContent = dpvUnlocked ? (showDpv ? '✓ DPV' : 'DPV') : '👁 DPV';
+    btnLiveryPrevDpvEl.title = dpvUnlocked
+      ? (showDpv ? 'DPV Scooter equipped for dives (click to unequip)' : 'Equip DPV Scooter for dives')
+      : 'Preview DPV Scooter in Test Tank (locked — earn cert to equip in dives)';
   }
 
   // 1-Tap Expedition Kit Presets strip
@@ -2752,7 +2826,19 @@ function renderLiveryWorkshopModal() {
         const pid = btn.getAttribute('data-preset-id');
         const pr = OUTFITTER_PRESETS.find((x) => x.id === pid);
         if (!pr) return;
+        const curUnlocks = getCurrentLiveryUnlocks();
+        const lockedCount =
+          (!curUnlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
+          (!curUnlocks.torches.has(pr.livery.torchId) ? 1 : 0) +
+          (!curUnlocks.patches.has(pr.livery.patchId) ? 1 : 0) +
+          (!curUnlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
+          (!curUnlocks.trims.has(pr.livery.trimId) ? 1 : 0) +
+          (!curUnlocks.tanks.has(pr.livery.tankId) ? 1 : 0) +
+          (!curUnlocks.visors.has(pr.livery.visorId) ? 1 : 0);
         updateActiveLiveryField(pr.livery);
+        if (lockedCount > 0) {
+          showToast(`🎨 Applied ${pr.name} (${lockedCount} locked piece${lockedCount > 1 ? 's' : ''} kept Standard Issue).`, 2.4);
+        }
       });
     });
   }
@@ -2963,6 +3049,7 @@ function renderLiveryWorkshopModal() {
     btnLiveryResetEl.disabled = isDefaultRigLivery(activeRigLivery);
   }
   renderLiveryPreviewFrame(performance.now() * 0.001);
+  if (modalCard) modalCard.scrollTop = prevScrollTop;
 }
 
 function openLiveryModal() {
@@ -2993,18 +3080,54 @@ liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) 
   });
 });
 btnLiveryPrevCcrEl?.addEventListener('click', () => {
-  let eqCcr = false;
-  try { eqCcr = Boolean(getEffectiveGearLoadout()?.ccr); } catch {}
-  const cur = liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr;
+  let ccrUnlocked = false;
+  try { ccrUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('ccr'); } catch {}
+  if (ccrUnlocked) {
+    savedGearLoadout.ccr = !savedGearLoadout.ccr;
+    liveryPreviewCcr = null;
+    saveGearLoadout();
+    renderTechGearDock();
+    syncLiveryUi();
+    renderLiveryWorkshopModal();
+    showToast(
+      savedGearLoadout.ccr
+        ? '♻️ CCR Rebreather equipped for your next dive!'
+        : '♻️ CCR Rebreather unequipped (switched to twin backgas).',
+      2.0
+    );
+    return;
+  }
+  const cur = liveryPreviewCcr !== null ? liveryPreviewCcr : false;
   liveryPreviewCcr = !cur;
   renderLiveryWorkshopModal();
+  if (liveryPreviewCcr) {
+    showToast('👁 Previewing CCR in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
+  }
 });
 btnLiveryPrevDpvEl?.addEventListener('click', () => {
-  let eqDpv = false;
-  try { eqDpv = Boolean(getEffectiveGearLoadout()?.dpv); } catch {}
-  const cur = liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv;
+  let dpvUnlocked = false;
+  try { dpvUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('dpv'); } catch {}
+  if (dpvUnlocked) {
+    savedGearLoadout.dpv = !savedGearLoadout.dpv;
+    liveryPreviewDpv = null;
+    saveGearLoadout();
+    renderTechGearDock();
+    syncLiveryUi();
+    renderLiveryWorkshopModal();
+    showToast(
+      savedGearLoadout.dpv
+        ? '🚀 DPV Scooter equipped for your next dive!'
+        : '🚀 DPV Scooter unequipped.',
+      2.0
+    );
+    return;
+  }
+  const cur = liveryPreviewDpv !== null ? liveryPreviewDpv : false;
   liveryPreviewDpv = !cur;
   renderLiveryWorkshopModal();
+  if (liveryPreviewDpv) {
+    showToast('👁 Previewing DPV in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
+  }
 });
 btnLiveryRandomEl?.addEventListener('click', () => {
   const unlocks = getCurrentLiveryUnlocks();
@@ -3016,6 +3139,7 @@ btnLiveryRandomEl?.addEventListener('click', () => {
 btnLiveryTeamUniformEl?.addEventListener('click', () => {
   aiSquadTeamUniform = !aiSquadTeamUniform;
   try { localStorage.setItem(SQUAD_UNIFORM_KEY, aiSquadTeamUniform ? '1' : '0'); } catch {}
+  scheduleGitHubStatsSync();
   renderLiveryWorkshopModal();
   showToast(
     aiSquadTeamUniform
@@ -4693,6 +4817,9 @@ function buildCurrentPrefsForSync() {
     gear: { ...savedGearLoadout },
     ghostEnabled: Boolean(ghostEnabled),
     torchStickEnabled: Boolean(torchStickEnabled),
+    livery: { ...activeRigLivery },
+    liverySlots: savedLiverySlots.map((s) => (s ? { ...s } : null)),
+    aiSquadTeamUniform: Boolean(aiSquadTeamUniform),
   };
   const callsign = getEnteredCallsign();
   if (callsign) prefs.playerName = callsign;
@@ -4877,9 +5004,27 @@ async function syncCareerStatsWithGitHub({ quiet = true } = {}) {
         torchStickEnabled = prefs.torchStickEnabled;
         localStorage.setItem(TORCH_STICK_PREF_KEY, torchStickEnabled ? '1' : '0');
       }
+      if (prefs.livery && typeof prefs.livery === 'object' && !localStorage.getItem(LIVERY_PREF_KEY)) {
+        activeRigLivery = sanitizeRigLivery(prefs.livery, computeUnlockedLiveries(merged, WRECK_LEVEL_ID_SET));
+        saveRigLivery({ skipCloudSync: true });
+      } else {
+        // Re-evaluate saved local livery against newly merged cloud unlocks
+        reconcileActiveRigLiveryFromStorage();
+      }
+      if (Array.isArray(prefs.liverySlots) && !localStorage.getItem(LIVERY_SLOTS_KEY)) {
+        savedLiverySlots = [0, 1, 2].map((i) =>
+          prefs.liverySlots[i] && typeof prefs.liverySlots[i] === 'object' ? { ...prefs.liverySlots[i] } : null
+        );
+        saveLiverySlotsToStorage({ skipCloudSync: true });
+      }
+      if (typeof prefs.aiSquadTeamUniform === 'boolean' && localStorage.getItem(SQUAD_UNIFORM_KEY) === null) {
+        aiSquadTeamUniform = prefs.aiSquadTeamUniform;
+        localStorage.setItem(SQUAD_UNIFORM_KEY, aiSquadTeamUniform ? '1' : '0');
+      }
     } catch {}
 
     syncPreferenceMenuButtons();
+    syncLiveryUi();
     renderCareerSummary();
     renderTechGearDock();
     renderDailyChallengeCard();
@@ -6417,41 +6562,7 @@ function renderLeaderboardRowsHtml(entries, { highlightKey = '' } = {}) {
     .join('');
 }
 
-const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
-let _cachedLogbook = null;
-
-function invalidateCareerLogbookCache() {
-  _cachedLogbook = null;
-}
-window.addEventListener('storage', (e) => {
-  if (!e?.key || e.key === CAREER_LOGBOOK_KEY) invalidateCareerLogbookCache();
-});
-
-function loadCareerLogbook() {
-  if (_cachedLogbook) return _cachedLogbook;
-  try {
-    let book = createEmptyLogbook();
-    const raw = localStorage.getItem(CAREER_LOGBOOK_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') book = parsed;
-    }
-    _cachedLogbook = seedLogbookFromEntries(book, leaderboard._loadLocalCache());
-    return _cachedLogbook;
-  } catch {
-    return createEmptyLogbook();
-  }
-}
-
-function saveCareerLogbook(book, { skipCloudSync = false } = {}) {
-  _cachedLogbook = book || null;
-  try {
-    localStorage.setItem(CAREER_LOGBOOK_KEY, JSON.stringify(book));
-  } catch {}
-  if (!skipCloudSync) {
-    scheduleGitHubStatsSync();
-  }
-}
+// (Career Logbook helpers moved to top of main.js to eliminate startup TDZ for Gear Workshop & Tech Gear)
 
 /**
  * Single source of truth for outgoing co-op diver telemetry snapshots.
@@ -7324,11 +7435,6 @@ btnSetupResetEl?.addEventListener('click', () => {
     weatherPrefId = 'clear-day';
     try { localStorage.setItem(WEATHER_PREF_KEY, weatherPrefId); } catch {}
     syncWeatherUi();
-  }
-  if (!isDefaultRigLivery(activeRigLivery)) {
-    activeRigLivery = { ...DEFAULT_RIG_LIVERY };
-    saveRigLivery();
-    syncLiveryUi();
   }
   if (aiSquadCount > 0) {
     aiSquadCount = 0;
