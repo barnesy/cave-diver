@@ -6,6 +6,7 @@
 
 import { buildExploreCells } from './scoring.js';
 import { drawMiniDiverAvatar, resolveDiverLiveryPalette } from './rigLivery.js';
+import { drawStyledArtifact } from './artSprites.js';
 
 export function formatReplayTime(sec) {
   const s = Math.max(0, Math.floor(Number(sec) || 0));
@@ -325,9 +326,10 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
     dailyBadge = '',
     livery = null,
     hasCcr = false,
+    recoveredArtifacts = [],
     track = [],
     profile = [],
-    version = 'v121',
+    version = 'v168',
     dateLabel = new Date().toISOString().slice(0, 10),
   } = data;
 
@@ -608,13 +610,31 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
     }
   }
 
-  // 6. Footer Signature Strip
+  // 6. Footer Signature Strip + Recovered Artifacts Collector Medallions (v168)
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#64748b';
   ctx.font = '700 14px ui-monospace, SFMono-Regular, Menlo, monospace';
   ctx.fillText(`cave-diver.vercel.app  ·  ${version}`, padX, height - 34);
+  if (Array.isArray(recoveredArtifacts) && recoveredArtifacts.length > 0) {
+    const shown = recoveredArtifacts.slice(0, 3);
+    const stepX = 36;
+    const startX = width * 0.5 - ((shown.length - 1) * stepX) * 0.5;
+    for (let a = 0; a < shown.length; a++) {
+      const ax = startX + a * stepX;
+      const ay = height - 34;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(ax, ay, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawStyledArtifact(ctx, shown[a], ax, ay, 10.5, 1.8, { index: a, isGrand: false });
+    }
+  }
   ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
   ctx.fillText(dateLabel, width - padX, height - 34);
 
   ctx.restore();

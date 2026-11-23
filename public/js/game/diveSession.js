@@ -623,6 +623,11 @@ export function createDiveSession(
     _contractEvalTimer: 0,
     _hadDecoCeiling: false,
     spaceClearanceM: 4.0,
+    inTightSqueeze: false,
+    handOnLine: false,
+    handOnLinePt: null,
+    squeezeDust: [],
+    _tankScrapeCooldown: 0,
     runMilestones: {
       usedLiftBagWithHeavySalvage: false,
       floatUpIncident: false,
@@ -3681,6 +3686,38 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const hazRes = stepDynamicHazards(session, dt, callbacks);
   // Submerged Storytelling Set-Pieces: Torch-lit lore discovery, Air Dome calm & Topside Radio Chatter (v155/v156)
   session.spaceClearanceM = Math.max(0.5, -evaluateCaveSDF(level, diver.x, diver.y));
+  // Tactile Tight-Squeeze Restriction Dust & Cylinder Scrape Foley (v168)
+  session.inTightSqueeze = session.spaceClearanceM < 0.88 && diver.y > 5.0;
+  if (session._tankScrapeCooldown > 0) session._tankScrapeCooldown = Math.max(0, session._tankScrapeCooldown - dt);
+  const diverSpeed = Math.hypot(diver.vx || 0, diver.vy || 0);
+  if (session.inTightSqueeze && (diverSpeed > 0.72 || hit.collided)) {
+    if (session._tankScrapeCooldown <= 0 && (hit.collided || diverSpeed > 1.15)) {
+      session._tankScrapeCooldown = 1.65;
+      callbacks.onTankScrape?.(Math.min(1, 0.45 + diverSpeed * 0.25));
+    }
+    if (Array.isArray(session.squeezeDust) && session.squeezeDust.length < 36 && Math.random() < dt * 16) {
+      session.squeezeDust.push({
+        x: diver.x + (Math.random() - 0.5) * 0.55,
+        y: diver.y - 0.28 + (Math.random() - 0.5) * 0.25,
+        vx: -diver.vx * 0.22 + (Math.random() - 0.5) * 0.35,
+        vy: 0.12 + Math.random() * 0.28,
+        r: 0.04 + Math.random() * 0.06,
+        life: 0.9 + Math.random() * 0.8,
+        maxLife: 1.7,
+        isRust: Boolean(level.isWreck),
+      });
+    }
+  }
+  if (Array.isArray(session.squeezeDust) && session.squeezeDust.length > 0) {
+    for (let i = session.squeezeDust.length - 1; i >= 0; i--) {
+      const p = session.squeezeDust[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.exp(-2.2 * dt);
+      p.life -= dt;
+      if (p.life <= 0) session.squeezeDust.splice(i, 1);
+    }
+  }
   if (session.stories) {
     stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks, diveState);
     const ch = session.stories.chatterSent;
@@ -3993,6 +4030,48 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     currentVx: hazRes.tidalCurrent?.vx || 0,
   });
   session.localSiltDensity = Math.min(1, rawSilt + (session.encounters?.fogDensity || 0) * 0.65);
+
+  // Tactile "Hand-on-the-Line" Silt-Out Guidance: locate nearest guideline point during low visibility (v168)
+  session.handOnLine = false;
+  session.handOnLinePt = null;
+  if (session.localSiltDensity >= 0.34) {
+    const lineLists = [];
+    if (Array.isArray(level.guideline) && level.guideline.length >= 2) lineLists.push(level.guideline);
+    if (Array.isArray(session.guidelineChains)) {
+      for (let c = 0; c < session.guidelineChains.length; c++) {
+        if (Array.isArray(session.guidelineChains[c]) && session.guidelineChains[c].length >= 2) {
+          lineLists.push(session.guidelineChains[c]);
+        }
+      }
+    }
+    let bestD2 = 3.5 * 3.5;
+    let bestPt = null;
+    for (let li = 0; li < lineLists.length; li++) {
+      const pts = lineLists[li];
+      for (let k = 0; k < pts.length - 1; k++) {
+        const a = pts[k];
+        const b = pts[k + 1];
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const abLen2 = abx * abx + aby * aby || 1e-6;
+        const t = Math.max(0, Math.min(1, ((diver.x - a.x) * abx + (diver.y - a.y) * aby) / abLen2));
+        const px = a.x + abx * t;
+        const py = a.y + aby * t;
+        const d2 = (diver.x - px) ** 2 + (diver.y - py) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          bestPt = { x: px, y: py, prevX: a.x, prevY: a.y, nextX: b.x, nextY: b.y, distM: Math.sqrt(d2) };
+        }
+      }
+    }
+    if (bestPt) {
+      session.handOnLine = true;
+      session.handOnLinePt = bestPt;
+      if (diveState) {
+        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - dt * 0.06);
+      }
+    }
+  }
 
   // Record Dive Computer Depth Profile (every 1.5s or immediately on gas switch) & PB Ghost track (every 0.6s)
   const tDive = diveState.diveTimeSec || session.simTimeSec;

@@ -8212,3 +8212,186 @@ summary,
   background: rgba(14, 165, 233, 0.28);
   color: #f0f9ff;
 }
+
+/* v168 Live Artifact Discovery Spotlight Card, Career Artifact Trophy Vault & Debrief Specimen Strip */
+.hud-artifact-spotlight {
+  pointer-events: none;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(330px, calc(100vw - 24px));
+  padding: 7px 11px 7px 8px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(8, 22, 42, 0.92), rgba(15, 23, 42, 0.88));
+  border: 1px solid rgba(250, 204, 21, 0.52);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.72), 0 0 18px rgba(250, 204, 21, 0.16);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: artifactSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hud-artifact-spotlight[hidden] {
+  display: none !important;
+}
+.hud-artifact-spotlight canvas {
+  width: 48px;
+  height: 48px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(30, 58, 95, 0.65), rgba(3, 10, 22, 0.95));
+  border: 1px solid rgba(250, 204, 21, 0.32);
+}
+.hud-artifact-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hud-artifact-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.60rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fde047;
+}
+.hud-artifact-pts {
+  color: #4ade80;
+}
+.hud-artifact-name {
+  font-size: 0.80rem;
+  font-weight: 800;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-artifact-lore {
+  font-size: 0.66rem;
+  line-height: 1.28;
+  color: #cbd5e1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@keyframes artifactSlideIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.logbook-artifact-vault {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+  max-height: 248px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.vault-empty-note {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.52);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  text-align: center;
+}
+.vault-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 7px;
+  border-radius: 11px;
+  background: linear-gradient(160deg, rgba(12, 27, 48, 0.88), rgba(4, 12, 24, 0.94));
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.vault-card canvas {
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 50% 45%, rgba(23, 45, 76, 0.68), rgba(2, 8, 18, 0.95));
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+.vault-card-name {
+  font-size: 0.70rem;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.vault-card-meta {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.60rem;
+  color: #fde047;
+}
+.vault-card-site {
+  font-size: 0.60rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.debrief-artifact-shelf {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 6px;
+}
+.debrief-artifact-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border-radius: 10px;
+  background: rgba(12, 27, 48, 0.86);
+  border: 1px solid rgba(250, 204, 21, 0.34);
+}
+.debrief-artifact-chip canvas {
+  width: 38px;
+  height: 38px;
+  border-radius: 7px;
+  background: radial-gradient(circle at 50% 45%, rgba(23, 45, 76, 0.72), rgba(2, 8, 18, 0.96));
+  flex-shrink: 0;
+}
+.debrief-artifact-chip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+.debrief-artifact-chip-copy strong {
+  font-size: 0.72rem;
+  color: #f8fafc;
+  white-space: nowrap;
+}
+.debrief-artifact-chip-copy span {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.62rem;
+  color: #fde047;
+}
+@media (max-width: 560px) {
+  .hud-artifact-spotlight {
+    max-width: calc(100vw - 20px);
+    padding: 6px 9px 6px 6px;
+  }
+  .hud-artifact-spotlight canvas {
+    width: 40px;
+    height: 40px;
+  }
+}

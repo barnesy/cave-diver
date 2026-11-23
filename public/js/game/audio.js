@@ -1115,8 +1115,42 @@ export class DiveAudio {
    * - Shipwrecks: distant humpback whale song, deep steel hull settling creak & oceanic swell sub-thrum
    * - Geothermal / Glacial Iceland & Arctic: mineral vent crackle or crystalline ice-creak chime
    */
-  stepAmbience(dt, level, depthM = 0, diver = null) {
+  stepAmbience(dt, level, depthM = 0, diver = null, tensionState = null) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level || depthM < 2.2) return;
+
+    // Adaptive underwater tension pulse when silt-out, tight squeeze, or reserve gas kicks in (v168)
+    if (tensionState) {
+      const siltT = Math.max(0, ((tensionState.siltDensity || 0) - 0.42) / 0.55);
+      const sqT = tensionState.inTightSqueeze ? 0.55 : 0;
+      const gasT = tensionState.lowGas ? 0.65 : 0;
+      const calmMult = tensionState.inAirDome ? 0.15 : 1.0;
+      const tension = Math.min(1, Math.max(siltT, sqT, gasT) * calmMult);
+      this._tensionTimer = (this._tensionTimer ?? 1.8) - dt;
+      if (tension > 0.28 && this._tensionTimer <= 0) {
+        this._tensionTimer = Math.max(1.8, 3.6 - tension * 1.5);
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        const f0 = 46 + tension * 8;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.78, t + 1.45);
+        const peak = 0.012 + tension * 0.022;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.32);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+        osc.connect(g);
+        const panner = this._connectSpatial(g, { pan: 0, bus: 'ambience' });
+        osc.onended = () => {
+          try { osc.disconnect(); } catch {}
+          try { g.disconnect(); } catch {}
+          try { panner?.disconnect(); } catch {}
+        };
+        osc.start(t);
+        osc.stop(t + 1.55);
+      }
+    }
+
     this._ambienceTimer -= dt;
     if (this._ambienceTimer > 0) return;
 
@@ -1208,13 +1242,32 @@ export class DiveAudio {
         osc.start(t);
         osc.stop(t + 2.25);
       }
-    } else if (isGlacier && Math.random() < 0.6) {
+    } else if (isGlacier && Math.random() < 0.65) {
       // Crystalline subglacial ice groan & harmonic shimmer (spatialized onto ambienceBus)
-      this._ambienceTimer = 5.5 + Math.random() * 5.5;
+      this._ambienceTimer = 5.2 + Math.random() * 5.2;
       const f = 540 + Math.random() * 420;
       this.playTone(f, 0.55, 'sine', 0.018, 0, { pan: ambPan, bus: 'ambience' });
       this.playTone(f * 1.498, 0.72, 'triangle', 0.012, 0.08, { pan: ambPan * 0.85, bus: 'ambience' });
       this.playTone(f * 2.0, 0.42, 'sine', 0.006, 0.22, { pan: ambPan * 0.65, bus: 'ambience' });
+      // Deep glacial pressure groan underneath the crystalline ping
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(118, t);
+      osc.frequency.exponentialRampToValueAtTime(58, t + 1.4);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.016, t + 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.45);
+      osc.connect(g);
+      const panner = this._connectSpatial(g, { pan: ambPan, bus: 'ambience' });
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 1.5);
     } else if (hasVents && Math.random() < 0.55) {
       // Delicate hydrothermal mineral hiss burst (spatialized onto ambienceBus)
       this._ambienceTimer = 4.2 + Math.random() * 4.0;
@@ -1251,6 +1304,55 @@ export class DiveAudio {
       this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14, { pan: ambPan * 0.7, bus: 'ambience' });
       this.playTone(base * 1.16, 0.22, 'sine', 0.0055, 0.32, { pan: ambPan * 0.4, bus: 'ambience' });
     }
+  }
+
+  /**
+   * Tactile metallic cylinder-on-limestone scrape & grit foley in tight cave restrictions (v168).
+   */
+  playTankScrape(intensity = 0.6, pan = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const lvl = Math.max(0.25, Math.min(1, Number(intensity) || 0.6));
+    // Metallic aluminum cylinder ring + harmonic overtone
+    this.playTone(1080 + Math.random() * 140, 0.14, 'triangle', 0.022 * lvl, 0, { pan, bus: 'sfx' });
+    this.playTone(1640 + Math.random() * 180, 0.11, 'sine', 0.014 * lvl, 0.015, { pan, bus: 'sfx' });
+    const noise = this._getNoiseBuffer?.();
+    if (noise) {
+      const t = this.ctx.currentTime;
+      const src = this.ctx.createBufferSource();
+      src.buffer = noise;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.value = 1450;
+      filt.Q.value = 2.6;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.026 * lvl, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      src.connect(filt);
+      filt.connect(g);
+      const panner = this._connectSpatial(g, { pan, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+        try { filt.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
+      src.start(t, Math.random() * 0.4);
+      src.stop(t + 0.26);
+    }
+    this.vibrate?.(12);
+  }
+
+  /**
+   * Crystalline expedition treasure chime when recovering an artifact into the Trophy Vault (v168).
+   */
+  playArtifactDiscover(isGrand = false) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const notes = isGrand ? [587.33, 739.99, 880, 1174.66, 1318.5] : [587.33, 880, 1174.66];
+    notes.forEach((hz, idx) => {
+      this.playTone(hz, isGrand ? 0.34 : 0.22, 'sine', isGrand ? 0.045 : 0.036, idx * 0.055, { bus: 'sfx' });
+    });
+    this.vibrate?.(isGrand ? [16, 22, 30] : 16);
   }
 
   /**

@@ -53,11 +53,14 @@ import {
   recordLoreDiscoveryInLogbook,
   recordCampaignClearInLogbook,
   recordCrewDiveInLogbook,
+  recordArtifactInLogbook,
+  getArtifactVaultStats,
   getFieldGuideStats,
   exportLogbookToCsv,
   exportLogbookToJson,
   parseImportedLogbookJson,
 } from './game/logbookModel.js';
+import { drawStyledArtifact } from './game/artSprites.js';
 import {
   decodeReplayTrack,
   drawReplayFrame,
@@ -645,7 +648,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=167" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=168" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1696,6 +1699,8 @@ function savePhotoStudioSnapshot() {
       compactHud: Boolean(compactHudEnabled),
       spaceClearanceM: session.spaceClearanceM ?? 4.0,
       breathState: session.breath?.state || 'hold',
+      squeezeDust: session.squeezeDust || null,
+      handOnLinePt: session.handOnLinePt || null,
       timeSec: session.simTimeSec,
       dt: 0,
     });
@@ -3352,6 +3357,40 @@ function openLogbookModal() {
   const fgGrid = document.getElementById('logbook-field-guide-grid');
   if (fgGrid) {
     renderFieldGuideGallery(book, fgHeading, fgTrophyEl, fgGrid);
+  }
+  const vaultHeading = document.getElementById('logbook-vault-heading');
+  const vaultGrid = document.getElementById('logbook-artifact-vault');
+  if (vaultGrid) {
+    const vault = getArtifactVaultStats(book, LEVELS);
+    if (vaultHeading) {
+      vaultHeading.textContent = `🏛️ ARTIFACT TROPHY VAULT (${vault.recoveredCount}/${vault.totalCatalog} RECOVERED · ${vault.totalValue.toLocaleString()} PTS)`;
+    }
+    if (vault.items.length === 0) {
+      vaultGrid.innerHTML = `<div class="vault-empty-note">Explore cave chambers and shipwreck holds to recover relics, fossils, watches &amp; instruments for your Trophy Vault.</div>`;
+    } else {
+      vaultGrid.innerHTML = vault.items
+        .slice(0, 48)
+        .map(
+          (it, idx) => `<div class="vault-card" title="${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
+            <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
+            <div class="vault-card-name">${escapeHtml(it.name)}</div>
+            <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
+            ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
+          </div>`
+        )
+        .join('');
+      vaultGrid.querySelectorAll('canvas.vault-art-canvas').forEach((cv) => {
+        const idx = Number(cv.getAttribute('data-vault-idx'));
+        const it = vault.items[idx];
+        const ctx = cv.getContext?.('2d');
+        if (!ctx || !it) return;
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        drawStyledArtifact(ctx, it, cv.width * 0.5, cv.height * 0.5, cv.width * 0.34, 2.2, {
+          index: idx,
+          isGrand: (it.scale || 1) >= 1.35,
+        });
+      });
+    }
   }
   const loreHeading = document.getElementById('logbook-lore-heading');
   const loreGrid = document.getElementById('logbook-lore-grid');
@@ -5442,6 +5481,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   if (btnShareGas) btnShareGas.hidden = true;
   syncWreckActionHud(null);
   hideHudPhotoCard();
+  hideArtifactSpotlight();
   celebrationParticles = [];
   if (debriefAnimFrame) {
     cancelAnimationFrame(debriefAnimFrame);
@@ -5607,6 +5647,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   setHudMenuOpen(false);
   if (hudPauseOverlay) hudPauseOverlay.hidden = true;
   hideHudPhotoCard();
+  hideArtifactSpotlight();
   screenHud.classList.remove('hud-team-hold');
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
@@ -5939,6 +5980,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     dailyBadge: session._dailyBadgeLabel || '',
     livery: diver.livery ? { ...diver.livery } : { ...activeRigLivery },
     hasCcr: Boolean(session.gear?.ccr),
+    recoveredArtifacts: (level.collectibles || []).filter((it) => session.collectedIds?.has(it.id)),
     track: replayTrack,
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
   };
@@ -6142,17 +6184,43 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     }
   `;
 
-  // Collectibles Trophy Shelf
+  // Collectibles Trophy Shelf — renders actual bespoke artifact close-ups for every recovered relic (v168)
   const artifactsEl = document.getElementById('debrief-artifacts');
   const levelCollectibles = level.collectibles || [];
-  artifactsEl.innerHTML = levelCollectibles
+  const recoveredList = levelCollectibles.filter((it) => session.collectedIds?.has(it.id));
+  const missedList = levelCollectibles.filter((it) => !session.collectedIds?.has(it.id));
+  const shelfHtml =
+    recoveredList.length > 0
+      ? `<div class="debrief-artifact-shelf">${recoveredList
+          .map(
+            (item, idx) => `<div class="debrief-artifact-chip" title="${escapeHtml(item.name)} (+${item.points} pts)">
+              <canvas class="debrief-art-canvas" data-debrief-art="${idx}" width="76" height="76" aria-hidden="true"></canvas>
+              <div class="debrief-artifact-chip-copy">
+                <strong>${(item.scale || 1) >= 1.35 ? '★ ' : ''}${escapeHtml(item.name)}</strong>
+                <span>+${item.points} PTS</span>
+              </div>
+            </div>`
+          )
+          .join('')}</div>`
+      : '';
+  const missedHtml = missedList
     .map((item, idx) => {
-      const found = session.collectedIds?.has(item.id);
-      const icon = item.kind === 'relic' ? '🏺' : item.kind === 'crystal' ? '💎' : item.kind === 'fossil' ? '🐚' : '🧭';
       const star = (item.scale || 1) >= 1.35 ? '★ ' : '';
-      return `<span class="artifact-chip ${found ? 'found' : ''}" style="animation-delay:${idx * 55}ms">${star}${icon} ${item.name}${found ? ` +${item.points}` : ''}</span>`;
+      return `<span class="artifact-chip" style="animation-delay:${idx * 40}ms">${star}${escapeHtml(item.name)}</span>`;
     })
     .join('');
+  artifactsEl.innerHTML = shelfHtml + missedHtml;
+  artifactsEl.querySelectorAll('canvas.debrief-art-canvas').forEach((cv) => {
+    const idx = Number(cv.getAttribute('data-debrief-art'));
+    const it = recoveredList[idx];
+    const ctx = cv.getContext?.('2d');
+    if (!ctx || !it) return;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    drawStyledArtifact(ctx, it, cv.width * 0.5, cv.height * 0.5, cv.width * 0.35, 2.2, {
+      index: idx,
+      isGrand: (it.scale || 1) >= 1.35,
+    });
+  });
 
   document.getElementById('debrief-stats').innerHTML = `
     <div><span>Max Depth</span><strong>${diveState.maxDepthM.toFixed(1)} m</strong></div>
@@ -9002,6 +9070,57 @@ const EMPTY_ARR = [];
 const menuPreviewDiver = { x: 0, y: 0, vx: 0, vy: 0, angle: 0.2, torchOn: true };
 const _framePlayerLines = [];
 const _frameHandledPeerIds = new Set();
+const hudArtifactSpotlightEl = document.getElementById('hud-artifact-spotlight');
+const hudArtifactCanvasEl = document.getElementById('hud-artifact-canvas');
+const hudArtifactTagEl = document.getElementById('hud-artifact-tag');
+const hudArtifactPtsEl = document.getElementById('hud-artifact-pts');
+const hudArtifactNameEl = document.getElementById('hud-artifact-name');
+const hudArtifactLoreEl = document.getElementById('hud-artifact-lore');
+let _artifactSpotlightTimer = 0;
+
+function hideArtifactSpotlight() {
+  if (_artifactSpotlightTimer) {
+    clearTimeout(_artifactSpotlightTimer);
+    _artifactSpotlightTimer = 0;
+  }
+  if (hudArtifactSpotlightEl) {
+    hudArtifactSpotlightEl.hidden = true;
+  }
+}
+
+function showArtifactSpotlight(item, lore = '', isNew = false) {
+  if (!hudArtifactSpotlightEl || !item) return;
+  if (_artifactSpotlightTimer) {
+    clearTimeout(_artifactSpotlightTimer);
+    _artifactSpotlightTimer = 0;
+  }
+  if (hudArtifactTagEl) {
+    hudArtifactTagEl.textContent = isNew ? '✨ NEW VAULT RELIC' : '🏛️ RELIC RECOVERED';
+  }
+  if (hudArtifactPtsEl) {
+    hudArtifactPtsEl.textContent = `+${Math.round(Number(item.points) || 0)} PTS`;
+  }
+  if (hudArtifactNameEl) {
+    hudArtifactNameEl.textContent = item.name || 'Recovered Artifact';
+  }
+  if (hudArtifactLoreEl) {
+    hudArtifactLoreEl.textContent = lore || 'Added to your Career Artifact Trophy Vault.';
+  }
+  const ctx = hudArtifactCanvasEl?.getContext?.('2d');
+  if (ctx && hudArtifactCanvasEl) {
+    ctx.clearRect(0, 0, hudArtifactCanvasEl.width, hudArtifactCanvasEl.height);
+    drawStyledArtifact(ctx, item, hudArtifactCanvasEl.width * 0.5, hudArtifactCanvasEl.height * 0.5, hudArtifactCanvasEl.width * 0.35, 2.2, {
+      index: 0,
+      isGrand: (item.scale || 1) >= 1.35,
+    });
+  }
+  hudArtifactSpotlightEl.hidden = false;
+  _artifactSpotlightTimer = setTimeout(() => {
+    hudArtifactSpotlightEl.hidden = true;
+    _artifactSpotlightTimer = 0;
+  }, 4200);
+}
+
 const sessionStepCallbacks = {
   onToast: showToast,
   onImpactSound: (spd) => audio.playImpact(spd),
@@ -9055,10 +9174,29 @@ const sessionStepCallbacks = {
     if (isMultiplayer) lan.sendCheckpoint(cp.id);
   },
   onCollect: (item) => {
-    audio.playCollect();
+    const isGrand = (item.scale || 1) >= 1.35;
+    if (typeof audio.playArtifactDiscover === 'function') audio.playArtifactDiscover(isGrand);
+    else audio.playCollect();
     const lore = getCollectibleLoreNote(item, session?.level);
-    showToast(`💎 ${item.name} (+${item.points} pts) — ${lore}`, 3.8);
+    let isNew = false;
+    try {
+      const res = recordArtifactInLogbook(loadCareerLogbook(), {
+        id: item.id,
+        name: item.name,
+        kind: item.kind,
+        siteId: session?.level?.id || '',
+        siteName: session?.level?.name || '',
+        points: item.points || 0,
+        scale: item.scale || 1,
+      });
+      isNew = Boolean(res?.isNew);
+      if (res?.book) saveCareerLogbook(res.book);
+    } catch {}
+    showArtifactSpotlight(item, lore, isNew);
     if (isMultiplayer) lan.sendCollectible(item.id);
+  },
+  onTankScrape: (intensity) => {
+    audio.playTankScrape?.(intensity);
   },
   onStoryDiscovered: (sp) => {
     audio.playStoryDiscovery?.();
@@ -9210,7 +9348,13 @@ function stepSimulation(dt) {
     session._wasSubmerged = nowSubmerged;
     audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel, session.spaceClearanceM);
     if (diveState.alive) {
-      audio.stepAmbience(dt, level, diver.y, diver);
+      const curTank = diveState.tanks?.[diveState.activeGasId];
+      audio.stepAmbience(dt, level, diver.y, diver, {
+        siltDensity: session.localSiltDensity || 0,
+        inTightSqueeze: Boolean(session.inTightSqueeze),
+        lowGas: Boolean(curTank && curTank.bar <= 52),
+        inAirDome: Boolean(session.stories?.inAirDome),
+      });
     }
     syncWreckActionHud(session.wreckActionPrompt);
     syncTechGearHud(session);
@@ -9781,6 +9925,8 @@ function frame(nowMs) {
       compactHud: Boolean(compactHudEnabled),
       spaceClearanceM: session.spaceClearanceM ?? 4.0,
       breathState: session.breath?.state || 'hold',
+      squeezeDust: session.squeezeDust || null,
+      handOnLinePt: session.handOnLinePt || null,
       timeSec: session.simTimeSec,
       dt,
     });

@@ -37,6 +37,7 @@ export function createEmptyLogbook() {
     loreArchive: {}, // storyKind -> { title, count, sampleLore, firstSiteName }
     completedCampaigns: [], // unlocked multi-dive expedition campaign IDs (v160)
     crewBonds: {}, // aiBuddyId -> { dives, clears, rescues } (v161 zero-config passive veteran bond)
+    artifacts: {}, // artifactId -> { name, kind, siteId, siteName, points, count, scale } (v168 Trophy Museum Vault)
   };
 }
 
@@ -129,6 +130,21 @@ function normalizeBook(raw) {
         dives: Math.max(0, Math.round(Number(rec.dives) || 0)),
         clears: Math.max(0, Math.round(Number(rec.clears) || 0)),
         rescues: Math.max(0, Math.round(Number(rec.rescues) || 0)),
+      };
+    }
+  }
+  if (raw.artifacts && typeof raw.artifacts === 'object') {
+    const entries = Object.entries(raw.artifacts).slice(0, 420);
+    for (const [aid, rec] of entries) {
+      if (!rec || typeof rec !== 'object') continue;
+      base.artifacts[aid] = {
+        name: typeof rec.name === 'string' ? rec.name.slice(0, 72) : aid,
+        kind: typeof rec.kind === 'string' ? rec.kind.slice(0, 24) : 'relic',
+        siteId: typeof rec.siteId === 'string' ? rec.siteId.slice(0, 48) : '',
+        siteName: typeof rec.siteName === 'string' ? rec.siteName.slice(0, 64) : '',
+        points: Math.max(0, Math.round(Number(rec.points) || 0)),
+        count: Math.max(1, Math.round(Number(rec.count) || 1)),
+        scale: Math.max(0.7, Math.min(2.2, Number(rec.scale) || 1.0)),
       };
     }
   }
@@ -302,6 +318,24 @@ export function mergeCareerLogbooks(rawA, rawB) {
       clears: Math.max(ba.clears || 0, bb.clears || 0),
       rescues: Math.max(ba.rescues || 0, bb.rescues || 0),
     };
+  }
+  const artIds = new Set([...Object.keys(a.artifacts || {}), ...Object.keys(b.artifacts || {})]);
+  for (const aid of artIds) {
+    const aa = a.artifacts?.[aid];
+    const ab = b.artifacts?.[aid];
+    if (aa && !ab) out.artifacts[aid] = { ...aa };
+    else if (ab && !aa) out.artifacts[aid] = { ...ab };
+    else if (aa && ab) {
+      out.artifacts[aid] = {
+        name: aa.name || ab.name,
+        kind: aa.kind || ab.kind || 'relic',
+        siteId: aa.siteId || ab.siteId || '',
+        siteName: aa.siteName || ab.siteName || '',
+        points: Math.max(aa.points || 0, ab.points || 0),
+        count: Math.max(aa.count || 1, ab.count || 1),
+        scale: Math.max(aa.scale || 1, ab.scale || 1),
+      };
+    }
   }
 
   return out;
@@ -1411,6 +1445,7 @@ export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
         naturalistRank: fieldGuide.naturalistRank,
         entries: book.fieldGuide,
       },
+      artifacts: book.artifacts,
       sites,
     },
     null,
@@ -1466,6 +1501,7 @@ export function parseImportedLogbookJson(rawInput) {
         records: daily.records && typeof daily.records === 'object' ? daily.records : {},
       },
       fieldGuide: fgEntries,
+      artifacts: data.artifacts && typeof data.artifacts === 'object' ? data.artifacts : {},
     };
   } else if (data.cleared && typeof data.cleared === 'object' && !Array.isArray(data.cleared)) {
     candidate = data;
@@ -1491,5 +1527,45 @@ export function parseImportedLogbookJson(rawInput) {
     dailyCount,
     exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '',
     diverName: typeof data.diverName === 'string' ? data.diverName : '',
+  };
+}
+
+/**
+ * Record a recovered collectible artifact into the persistent Career Trophy Vault (v168).
+ */
+export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', siteId = '', siteName = '', points = 0, scale = 1.0 } = {}) {
+  const book = normalizeBook(rawBook);
+  const key = String(id || name || '').trim().slice(0, 64);
+  if (!key) return { book, isNew: false };
+  const prev = book.artifacts[key];
+  const isNew = !prev;
+  book.artifacts[key] = {
+    name: String(name || prev?.name || key).slice(0, 72),
+    kind: String(kind || prev?.kind || 'relic').slice(0, 24),
+    siteId: String(siteId || prev?.siteId || '').slice(0, 48),
+    siteName: String(siteName || prev?.siteName || '').slice(0, 64),
+    points: Math.max(prev?.points || 0, Math.round(Number(points) || 0)),
+    count: (prev?.count || 0) + 1,
+    scale: Math.max(prev?.scale || 1, Number(scale) || 1),
+  };
+  return { book, isNew };
+}
+
+/**
+ * Summarize the player's Career Artifact Trophy Vault against all campaign levels (v168).
+ */
+export function getArtifactVaultStats(rawBook, levels = []) {
+  const book = normalizeBook(rawBook);
+  let totalCatalog = 0;
+  for (let i = 0; i < levels.length; i++) {
+    totalCatalog += Array.isArray(levels[i]?.collectibles) ? levels[i].collectibles.length : 0;
+  }
+  const items = Object.entries(book.artifacts).map(([id, rec]) => ({ id, ...rec }));
+  items.sort((a, b) => (b.points || 0) - (a.points || 0) || a.name.localeCompare(b.name));
+  return {
+    recoveredCount: items.length,
+    totalCatalog: Math.max(items.length, totalCatalog),
+    totalValue: items.reduce((acc, x) => acc + (x.points || 0), 0),
+    items,
   };
 }

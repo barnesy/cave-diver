@@ -1502,6 +1502,8 @@ export class CaveRenderer {
     compactHud = false,
     spaceClearanceM = 4.0,
     breathState = 'hold',
+    squeezeDust = null,
+    handOnLinePt = null,
     timeSec,
     dt,
   }) {
@@ -1843,6 +1845,9 @@ export class CaveRenderer {
     }
     if (stories && typeof this._drawSubmergedStories === 'function') {
       this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'emissive');
+    }
+    if ((Array.isArray(squeezeDust) && squeezeDust.length > 0) || handOnLinePt) {
+      this._drawTactileSqueezeAndLineFeel(ctx, diver, squeezeDust, handOnLinePt, localSiltDensity, toScreenX, toScreenY, scale, timeSec);
     }
     if ((blackBox || (Array.isArray(lineCookies) && lineCookies.length > 0)) && typeof this._drawBlackBoxAndCookies === 'function') {
       this._drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, Boolean(sonarPulse));
@@ -7674,6 +7679,17 @@ export class CaveRenderer {
         const topLen = Math.min(span * 0.42, sz * 1.95);
         const botLen = Math.min(span * 0.44, sz * 2.1);
 
+        // Delicate translucent calcite soda-straws flanking cathedral column (v168)
+        ctx.strokeStyle = 'rgba(226, 211, 186, 0.42)';
+        ctx.lineWidth = Math.max(1, 0.028 * scale);
+        for (const strawOff of [-0.62, -0.48, 0.50, 0.66]) {
+          const stX = sx + strawOff * sz;
+          const stL = topLen * (0.32 + Math.abs(strawOff) * 0.28);
+          ctx.beginPath();
+          ctx.moveTo(stX, cy0);
+          ctx.lineTo(stX, cy0 + stL);
+          ctx.stroke();
+        }
         // Twin ceiling stalactite icicles
         for (let k = -1; k <= 1; k++) {
           const ox = sx + k * sz * 0.34;
@@ -7783,6 +7799,202 @@ export class CaveRenderer {
           ctx.arc(sx + Math.cos(a) * sz * 0.44, sy + Math.sin(a) * sz * 0.44, Math.max(1.4, 0.045 * scale), 0, Math.PI * 2);
           ctx.fill();
         }
+      } else if (sp.kind === 'cargo-vehicle') {
+        // Iconic submerged WWII Bedford QL Cargo Truck / Lorry resting inside flooded ship hold (v168)
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(sp.tilt || 0);
+        const w = sz * 1.65;
+        const h = sz * 0.92;
+        // Rusted steel chassis rail
+        ctx.fillStyle = '#3b2419';
+        ctx.strokeStyle = '#6b3e28';
+        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+        ctx.fillRect(-w * 0.55, -h * 0.32, w * 1.12, h * 0.14);
+        // Rear cargo flatbed & corroded arched canvas canopy hoops
+        ctx.fillStyle = '#4a2e1f';
+        ctx.fillRect(-w * 0.54, -h * 0.58, w * 0.68, h * 0.28);
+        ctx.strokeRect(-w * 0.54, -h * 0.58, w * 0.68, h * 0.28);
+        ctx.strokeStyle = '#7c4a30';
+        ctx.lineWidth = Math.max(1.2, 0.042 * scale);
+        for (let hoop = 0; hoop < 4; hoop++) {
+          const hx = -w * 0.50 + hoop * (w * 0.20);
+          ctx.beginPath();
+          ctx.moveTo(hx, -h * 0.58);
+          ctx.quadraticCurveTo(hx + w * 0.02, -h * 1.02, hx + w * 0.08, -h * 0.98);
+          ctx.stroke();
+        }
+        // Forward armored cab & shattered windshield bay
+        ctx.fillStyle = '#442b1d';
+        ctx.beginPath();
+        ctx.moveTo(w * 0.16, -h * 0.30);
+        ctx.lineTo(w * 0.16, -h * 0.86);
+        ctx.lineTo(w * 0.44, -h * 0.86);
+        ctx.lineTo(w * 0.56, -h * 0.56);
+        ctx.lineTo(w * 0.58, -h * 0.30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#0c1d30';
+        ctx.fillRect(w * 0.24, -h * 0.78, w * 0.18, h * 0.20);
+        // Twin heavy spoked military rubber tires resting on deck
+        for (const tx of [-w * 0.34, w * 0.36]) {
+          ctx.fillStyle = '#18181b';
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth = Math.max(1.2, 0.04 * scale);
+          ctx.beginPath();
+          ctx.arc(tx, -h * 0.18, h * 0.21, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#78350f';
+          ctx.beginPath();
+          ctx.arc(tx, -h * 0.18, h * 0.08, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Soft coral & rusticle encrustation tufts on roof
+        ctx.fillStyle = 'rgba(244, 114, 182, 0.45)';
+        ctx.beginPath();
+        ctx.arc(-w * 0.30, -h * 0.62, h * 0.09, 0, Math.PI * 2);
+        ctx.arc(w * 0.30, -h * 0.88, h * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (sp.kind === 'carrier-aircraft') {
+        // Submerged Naval Swept-Wing Carrier Airframe on Oriskany Hangar / Flight Deck (v168)
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(sp.tilt || 0);
+        const L = sz * 1.9;
+        const H = sz * 0.85;
+        // Swept tail stabilizer fin
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = Math.max(1.1, 0.036 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.56, -H * 0.36);
+        ctx.lineTo(-L * 0.72, -H * 0.96);
+        ctx.lineTo(-L * 0.46, -H * 0.92);
+        ctx.lineTo(-L * 0.32, -H * 0.38);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Riveted aluminum naval fuselage & pointed nosecone
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.58, -H * 0.24);
+        ctx.lineTo(L * 0.28, -H * 0.42);
+        ctx.quadraticCurveTo(L * 0.68, -H * 0.34, L * 0.64, -H * 0.20);
+        ctx.lineTo(-L * 0.56, -H * 0.14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Flooded plexiglass cockpit canopy bubble
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.ellipse(L * 0.16, -H * 0.44, L * 0.18, H * 0.12, -0.08, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Swept low delta wing & landing gear struts
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.18, -H * 0.24);
+        ctx.lineTo(L * 0.18, -H * 0.22);
+        ctx.lineTo(-L * 0.08, -H * 0.06);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#64748b';
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.06, -H * 0.18);
+        ctx.lineTo(-L * 0.06, 0);
+        ctx.moveTo(L * 0.34, -H * 0.22);
+        ctx.lineTo(L * 0.34, 0);
+        ctx.stroke();
+        ctx.restore();
+      } else if (sp.kind === 'grand-staircase') {
+        // Ornate Ocean-Liner First-Class Grand Staircase & Gilded Bronze Balustrade (v168)
+        ctx.save();
+        ctx.translate(sx, sy);
+        const w = sz * 1.45;
+        const h = sz * 1.15;
+        // Sweeping stepped oak/marble stair stringer
+        ctx.fillStyle = '#3f2a1d';
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = Math.max(1.1, 0.036 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.55, 0);
+        const steps = 6;
+        for (let st = 0; st < steps; st++) {
+          const x0 = -w * 0.55 + (st / steps) * w * 0.95;
+          const y0 = -(st / steps) * h * 0.85;
+          const x1 = -w * 0.55 + ((st + 1) / steps) * w * 0.95;
+          const y1 = -((st + 1) / steps) * h * 0.85;
+          ctx.lineTo(x0, y1);
+          ctx.lineTo(x1, y1);
+        }
+        ctx.lineTo(w * 0.45, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Gilded bronze sweeping handrail & vertical wrought-iron balusters
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.52, -h * 0.24);
+        ctx.quadraticCurveTo(-w * 0.05, -h * 0.62, w * 0.42, -h * 1.06);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.65)';
+        ctx.lineWidth = Math.max(1.0, 0.03 * scale);
+        for (let b = 0; b <= 5; b++) {
+          const frac = b / 5;
+          const bx = -w * 0.48 + frac * w * 0.86;
+          const byBot = -frac * h * 0.78;
+          const byTop = byBot - h * 0.24;
+          ctx.beginPath();
+          ctx.moveTo(bx, byBot);
+          ctx.lineTo(bx, byTop);
+          ctx.stroke();
+        }
+        // Ornate gilded brass newel post orb at foot of stairs
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-w * 0.58, -h * 0.30, w * 0.11, h * 0.30);
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(-w * 0.525, -h * 0.34, Math.max(2.2, sz * 0.08), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (sp.kind === 'gorgonian-fan') {
+        // Swaying Deep-Water Crimson/Magenta Gorgonian Sea Fan Colony (v168)
+        ctx.save();
+        ctx.translate(sx, sy);
+        const sway = Math.sin(timeSec * 1.45 + (sp.phase || 0)) * 0.12;
+        ctx.rotate(sway);
+        ctx.strokeStyle = '#e11d48';
+        ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -sz * 0.78);
+        ctx.moveTo(0, -sz * 0.22);
+        ctx.quadraticCurveTo(-sz * 0.28, -sz * 0.42, -sz * 0.46, -sz * 0.74);
+        ctx.moveTo(0, -sz * 0.26);
+        ctx.quadraticCurveTo(sz * 0.28, -sz * 0.44, sz * 0.48, -sz * 0.76);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(251, 113, 133, 0.72)';
+        ctx.lineWidth = Math.max(1.0, 0.032 * scale);
+        for (const [x0, y0, x1, y1] of [
+          [-sz * 0.20, -sz * 0.42, -sz * 0.28, -sz * 0.88],
+          [-sz * 0.34, -sz * 0.56, -sz * 0.62, -sz * 0.62],
+          [sz * 0.20, -sz * 0.44, sz * 0.28, -sz * 0.90],
+          [sz * 0.34, -sz * 0.58, sz * 0.60, -sz * 0.64],
+          [0, -sz * 0.54, -sz * 0.14, -sz * 0.94],
+          [0, -sz * 0.58, sz * 0.16, -sz * 0.92],
+        ]) {
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
+        ctx.restore();
       } else if (sp.kind === 'brass-telegraph') {
         // Tilted Chadburn Engine-Room Brass Telegraph pedestal
         ctx.save();
@@ -8508,6 +8720,95 @@ export class CaveRenderer {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#bae6fd';
     ctx.fillText('SURFACE EXIT', exX, exY - 1.15 * scale);
+    ctx.restore();
+  }
+
+  /**
+   * Draws tight-squeeze tank-scrape limestone/rust dust flakes & tactile "Hand-on-the-Line"
+   * luminescent guideline grip feedback during zero-visibility silt-outs (v168).
+   */
+  _drawTactileSqueezeAndLineFeel(ctx, diver, squeezeDust, handOnLinePt, localSiltDensity, toScreenX, toScreenY, scale, timeSec) {
+    ctx.save();
+    if (Array.isArray(squeezeDust) && squeezeDust.length > 0) {
+      for (let i = 0; i < squeezeDust.length; i++) {
+        const p = squeezeDust[i];
+        const alpha = Math.max(0, Math.min(0.85, (p.life / (p.maxLife || 1.5)) * 0.8));
+        ctx.fillStyle = p.isRust
+          ? `rgba(194, 98, 52, ${alpha.toFixed(3)})`
+          : `rgba(226, 214, 192, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(toScreenX(p.x), toScreenY(p.y), Math.max(1.2, p.r * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (handOnLinePt && diver) {
+      const dx = toScreenX(diver.x);
+      const dy = toScreenY(diver.y);
+      const lx = toScreenX(handOnLinePt.x);
+      const ly = toScreenY(handOnLinePt.y);
+      const ax = toScreenX(handOnLinePt.prevX);
+      const ay = toScreenY(handOnLinePt.prevY);
+      const bx = toScreenX(handOnLinePt.nextX);
+      const by = toScreenY(handOnLinePt.nextY);
+      const pulse = 0.65 + 0.35 * Math.sin(timeSec * 5.2);
+      const siltGain = Math.min(1, Math.max(0.45, ((localSiltDensity || 0.4) - 0.25) * 1.8));
+
+      // Glowing tactile segment of the guideline cutting cleanly through silt fog
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = `rgba(250, 204, 21, ${(0.32 * siltGain * pulse).toFixed(3)})`;
+      ctx.lineWidth = Math.max(5, 0.24 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(254, 240, 138, ${(0.92 * siltGain).toFixed(3)})`;
+      ctx.lineWidth = Math.max(2, 0.065 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      // Tactile OK-grip tether line from diver to closest point on line
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = `rgba(253, 224, 71, ${(0.68 * siltGain).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.2, 0.04 * scale);
+      ctx.beginPath();
+      ctx.moveTo(dx, dy);
+      ctx.lineTo(lx, ly);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Glowing contact ring on the line + subtle diegetic label
+      ctx.fillStyle = `rgba(254, 249, 195, ${(0.9 * pulse).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(lx, ly, Math.max(3, 0.12 * scale), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = 'source-over';
+      const lblFontPx = Math.max(10, Math.min(12, Math.round(scale * 0.26)));
+      ctx.font = `800 ${lblFontPx}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      const lbl = '✋ HAND ON LINE';
+      const tw = ctx.measureText(lbl).width;
+      const padX = 8, pillH = lblFontPx + 8;
+      const pillW = tw + padX * 2;
+      const pillX = lx - pillW * 0.5;
+      const pillY = ly - Math.max(24, 0.72 * scale) - pillH * 0.5;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.78)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(pillX, pillY, pillW, pillH, pillH * 0.5);
+      else ctx.rect(pillX, pillY, pillW, pillH);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, lx, pillY + pillH * 0.5 + 0.5);
+    }
     ctx.restore();
   }
 

@@ -8048,3 +8048,120 @@ test('v167 SDF-Sealed Air Pockets & Museum-Grade Bespoke Artifact Visuals', asyn
   }
   assert.ok(seenTypes.size >= 30, `Expected >=30 distinct bespoke artifact silhouettes across campaign, got ${seenTypes.size}`);
 });
+
+test('v168 Expedition Masterpiece: Artifact Trophy Vault, Wreck Interiors, Tension Audio, Tactile Silt-Out & Postcard Relics', async () => {
+  const {
+    createEmptyLogbook,
+    recordArtifactInLogbook,
+    getArtifactVaultStats,
+    mergeCareerLogbooks,
+    exportLogbookToJson,
+    parseImportedLogbookJson,
+  } = await import('../public/js/game/logbookModel.js');
+  const { createSubmergedStories } = await import('../public/js/game/submergedStories.js');
+  const { renderExpeditionPostcard } = await import('../public/js/game/diveCard.js');
+
+  // 1. Career Artifact Trophy Vault: record, dedupe/count, cloud smart-merge & JSON backup round-trip
+  let book = createEmptyLogbook();
+  const r1 = recordArtifactInLogbook(book, { id: 'l1-jade', name: 'Maya Jade Pendant', kind: 'relic', siteId: 'cenote-el-abismo', siteName: 'Cenote El Abismo', points: 300 });
+  assert.equal(r1.isNew, true);
+  book = r1.book;
+  const r2 = recordArtifactInLogbook(book, { id: 'l1-jade', name: 'Maya Jade Pendant', kind: 'relic', siteId: 'cenote-el-abismo', siteName: 'Cenote El Abismo', points: 300 });
+  assert.equal(r2.isNew, false);
+  book = r2.book;
+  assert.equal(book.artifacts['l1-jade'].count, 2);
+
+  const otherBook = recordArtifactInLogbook(createEmptyLogbook(), { id: 'oja_c10', name: 'East Tool-Drift Pocket Watch', kind: 'relic', siteId: 'ojamo-iron-mine', siteName: 'Ojamo Mine', points: 520 }).book;
+  const merged = mergeCareerLogbooks(book, otherBook);
+  const vault = getArtifactVaultStats(merged, LEVELS);
+  assert.equal(vault.recoveredCount, 2);
+  assert.equal(vault.totalValue, 820);
+  assert.equal(vault.items[0].id, 'oja_c10', 'Vault should sort highest-value relics first');
+
+  const jsonStr = exportLogbookToJson({ ...merged, totalDives: 1 }, LEVELS);
+  const parsed = parseImportedLogbookJson(jsonStr);
+  assert.equal(parsed.ok, true);
+  assert.equal(Object.keys(parsed.book.artifacts).length, 2);
+
+  // 2. Signature Shipwreck Interior Set-Pieces: Thistlegorm WWII truck, Oriskany carrier aircraft, Britannic grand staircase
+  const thist = LEVELS.find((l) => l.id === 'ss-thistlegorm-wreck');
+  const orisk = LEVELS.find((l) => l.id === 'uss-oriskany-carrier');
+  const brit = LEVELS.find((l) => l.id === 'hmhs-britannic');
+  const stThist = createSubmergedStories(thist);
+  const stOrisk = createSubmergedStories(orisk);
+  const stBrit = createSubmergedStories(brit);
+  assert.ok(stThist.setPieces.some((sp) => sp.kind === 'cargo-vehicle'), 'SS Thistlegorm should spawn iconic WWII cargo truck');
+  assert.ok(stOrisk.setPieces.some((sp) => sp.kind === 'carrier-aircraft'), 'USS Oriskany should spawn iconic carrier airframe');
+  assert.ok(stBrit.setPieces.some((sp) => sp.kind === 'grand-staircase'), 'HMHS Britannic should spawn iconic Grand Staircase');
+
+  // 3. Tactile Silt-Out "Hand-on-the-Line" & Tight-Squeeze Dust + Renderer smoke test
+  const sess = createDiveSession(LEVEL_1, { diverName: 'TactileTester' });
+  const glPt = LEVEL_1.guideline[1];
+  sess.diver.x = glPt.x + 0.5;
+  sess.diver.y = glPt.y + 0.3;
+  sess.siltClouds.push({ x: sess.diver.x, y: sess.diver.y, radius: 3.5, maxRadius: 4, life: 12, maxLife: 14, alpha: 0.82, peakAlpha: 0.85, vx: 0, vy: 0 });
+  sess.diveState.panicLevel = 0.5;
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.1, {});
+  assert.equal(sess.handOnLine, true, 'Dense silt near guideline must activate Hand-on-the-Line tactile guidance');
+  assert.ok(sess.handOnLinePt && Number.isFinite(sess.handOnLinePt.x));
+
+  const noopCtx = new Proxy(
+    {
+      globalAlpha: 1,
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 52 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock.level = thist;
+  rMock._drawSubmergedStories(noopCtx, stThist, -200, 400, -20, 200, (x) => x * 12, (y) => y * 12, 12, 3.0, 'world');
+  rMock._drawSubmergedStories(noopCtx, stOrisk, -200, 400, -20, 200, (x) => x * 12, (y) => y * 12, 12, 3.0, 'world');
+  rMock._drawSubmergedStories(noopCtx, stBrit, -200, 400, -20, 200, (x) => x * 12, (y) => y * 12, 12, 3.0, 'world');
+  rMock._drawTactileSqueezeAndLineFeel(
+    noopCtx,
+    sess.diver,
+    [{ x: sess.diver.x, y: sess.diver.y, r: 0.06, life: 0.8, maxLife: 1.5, isRust: false }],
+    sess.handOnLinePt,
+    0.72,
+    (x) => x * 12,
+    (y) => y * 12,
+    12,
+    3.0
+  );
+
+  // 4. Adaptive Tension Audio, Tank-Scrape Foley & Artifact Discovery Chime
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  const audio = new DiveAudio();
+  const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {} });
+  audio.ctx = {
+    state: 'running',
+    currentTime: 2,
+    sampleRate: 44100,
+    destination: {},
+    createOscillator: () => ({ type: 'sine', frequency: param(), connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+    createBiquadFilter: () => ({ type: 'lowpass', frequency: param(), Q: param(), connect() {}, disconnect() {} }),
+    createGain: () => ({ gain: param(), connect() {}, disconnect() {} }),
+    createBuffer: (c, l) => ({ getChannelData: () => new Float32Array(l) }),
+    createBufferSource: () => ({ connect() {}, disconnect() {}, start() {}, stop() { this.onended?.(); } }),
+  };
+  audio._tensionTimer = 0;
+  audio.stepAmbience(0.1, thist, 28, sess.diver, { siltDensity: 0.78, inTightSqueeze: true, lowGas: true, inAirDome: false });
+  audio.playTankScrape(0.8);
+  audio.playArtifactDiscover(true);
+
+  // 5. Expedition Postcard renders recovered artifact medallions cleanly
+  const okCard = renderExpeditionPostcard(noopCtx, 1200, 630, {
+    level: LEVEL_1,
+    diverName: 'Chris',
+    grade: 'S',
+    score: 9650,
+    maxDepthM: 48.2,
+    diveTimeSec: 210,
+    exploredPct: 94,
+    recoveredArtifacts: LEVEL_1.collectibles.slice(0, 3),
+    version: 'v168',
+  });
+  assert.equal(okCard, true);
+});

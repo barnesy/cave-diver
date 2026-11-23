@@ -60,6 +60,21 @@ const WRECK_LORE_BY_KIND = Object.freeze({
     'Trapped Overhead Air Dome — silver mercury ceiling pocket holding decades of compressed exhaust.',
     'Flooded Deckhouse Air Bell — mirror-like meniscus rippling with every bubble you exhale.',
   ],
+  'cargo-vehicle': [
+    'Submerged WWII Bedford QL Cargo Truck — rusted canvas hoops and rubber tires intact inside the flooded hold.',
+    'Hold #2 Supply Transport — BSA motorcycle crating and chassis rails encrusted in soft coral.',
+  ],
+  'carrier-aircraft': [
+    'Hangar Bay Naval Airframe — swept aluminum wings draped in sea fans beneath the darkened flight deck.',
+    'Carrier Deck Fighter Silhouette — riveted fuselage resting silently beside the hydraulic catapult tracks.',
+  ],
+  'grand-staircase': [
+    'First-Class Grand Staircase — gilded bronze balustrade and scrolled ironwork sweeping down into the gloom.',
+    'Ocean-Liner Promenade Landing — ornate oak-and-brass newel post colonized by translucent gorgonians.',
+  ],
+  'gorgonian-fan': [
+    'Deep-Water Gorgonian Sea Fan — delicate scarlet coral lattice filtering plankton from the wreck surge.',
+  ],
 });
 
 const CAVE_LORE_BY_KIND = Object.freeze({
@@ -396,17 +411,53 @@ export function createSubmergedStories(level) {
         continue;
       }
 
-      // 3. Floor-mounted Wreck Set-Pieces: Chadburn Telegraph, Ship's Helm Wheel, Steam Boiler Panel
-      if (floor && !isTooClose(floor.x, floor.y, 9.0)) {
+      // 3. Floor-mounted Wreck Set-Pieces: Site-Signature Landmarks (WWII Trucks, Carrier Airframe, Grand Staircase),
+      //    Chadburn Telegraph, Ship's Helm Wheel, Steam Boiler Panel & Deep Gorgonian Fans (v168)
+      if (floor && !isTooClose(floor.x, floor.y, 8.2)) {
         const idx = idCounter++;
-        const roll = idx % 3;
-        const kind = roll === 0 ? 'brass-telegraph' : roll === 1 ? 'ship-wheel' : 'boiler-panel';
-        const title =
-          kind === 'brass-telegraph'
-            ? 'Engine-Room Telegraph'
-            : kind === 'ship-wheel'
-              ? 'Corroded Ship’s Helm'
-              : 'Boiler Gauge Manifold';
+        const lid = String(level.id || '');
+        const hasSignatureTruck = lid.includes('thistlegorm') || lid.includes('zenobia');
+        const hasSignatureJet = lid.includes('oriskany');
+        const hasSignatureStair = lid.includes('britannic') || lid.includes('andrea-doria');
+        const alreadyPlacedSig = setPieces.some(
+          (sp) => sp.kind === 'cargo-vehicle' || sp.kind === 'carrier-aircraft' || sp.kind === 'grand-staircase'
+        );
+
+        let kind;
+        let title;
+        let size = 0.92 + h * 0.28;
+        if (hasSignatureTruck && !alreadyPlacedSig && r >= 2.1) {
+          kind = 'cargo-vehicle';
+          title = lid.includes('zenobia') ? 'Submerged Cargo Lorry' : 'Hold #2 WWII Bedford Truck';
+          size = 1.45;
+        } else if (hasSignatureJet && !alreadyPlacedSig && r >= 2.2) {
+          kind = 'carrier-aircraft';
+          title = 'Hangar Bay Carrier Airframe';
+          size = 1.55;
+        } else if (hasSignatureStair && !alreadyPlacedSig && r >= 2.1) {
+          kind = 'grand-staircase';
+          title = 'First-Class Grand Staircase';
+          size = 1.48;
+        } else {
+          const roll = idx % 4;
+          kind =
+            roll === 0
+              ? 'brass-telegraph'
+              : roll === 1
+                ? 'ship-wheel'
+                : roll === 2
+                  ? 'boiler-panel'
+                  : 'gorgonian-fan';
+          title =
+            kind === 'brass-telegraph'
+              ? 'Engine-Room Telegraph'
+              : kind === 'ship-wheel'
+                ? 'Corroded Ship’s Helm'
+                : kind === 'boiler-panel'
+                  ? 'Boiler Gauge Manifold'
+                  : 'Deep Gorgonian Sea Fan';
+          if (kind === 'gorgonian-fan') size = 0.85 + h * 0.4;
+        }
         setPieces.push({
           id: `story-wprop-${idx}`,
           kind,
@@ -414,8 +465,8 @@ export function createSubmergedStories(level) {
           lore: pickLore(WRECK_LORE_BY_KIND, kind, idx),
           x: floor.x,
           y: floor.y - 0.05,
-          tilt: (h - 0.5) * 0.38,
-          size: 0.92 + h * 0.28,
+          tilt: (h - 0.5) * (kind === 'cargo-vehicle' || kind === 'carrier-aircraft' || kind === 'grand-staircase' ? 0.14 : 0.38),
+          size,
           phase: h * Math.PI * 2,
           emissive: false,
           discovered: false,
