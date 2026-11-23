@@ -18,6 +18,96 @@ export const AI_BUDDY_ID = 'ai-wingman-01';
 export const AI_BUDDY_DEFAULT_NAME = '🤖 APEX-2';
 export const HARDCORE_LEADERSHIP_BONUS_PTS = 175;
 
+/**
+ * Mode-specific AI Squad behavioral profiles (v158):
+ *  - Guided   -> Pro Instructor & Guardian Angel (finds artifacts/lore & keeps you alive)
+ *  - Standard -> Expert Technical Co-Diver (balanced flank partner & reserve backup)
+ *  - Hardcore -> Vulnerable Rookies (unhelpful — YOU are the pro who leads & rescues them)
+ */
+export const AI_DIFFICULTY_PROFILES = Object.freeze({
+  guided: Object.freeze({
+    id: 'guided',
+    badge: '🛡️ Pro Guide',
+    title: 'Pro Instructor & Guardian',
+    shortDesc:
+      'Pro AI leads you to every artifact & lore landmark, paces deco stops, shares gas early (<65b), cuts snags fast (0.65s) & actively stabilizes your vitals so you stay safe.',
+    leadsWaypoints: true,
+    guideCollectibleRangeM: 28,
+    guideLoreRangeM: 20,
+    spotlightCollectibles: true,
+    spotlightRangeM: 28,
+    canAutoCutPlayerSnag: true,
+    snagCutTimeSec: 0.65,
+    canAutoShareGas: true,
+    autoShareThresholdBar: 65,
+    maxDonateBar: 45,
+    gasShareCooldownSec: 6,
+    minGasFloor: 85,
+    gasBurnRate: 0.03,
+    guardianStabilize: true,
+    canScoutMode: true,
+    allowTeleportRegroup: true,
+    triggersHardcoreIssues: false,
+    requireExtraction: false,
+  }),
+  standard: Object.freeze({
+    id: 'standard',
+    badge: '🤿 Expert Co-Diver',
+    title: 'Expert Technical Co-Diver',
+    shortDesc:
+      'Balanced technical partner — holds disciplined flank trim, spotlights nearby artifacts (14m), obeys hand-signals, cuts snags & shares reserve gas in true emergencies (<34b).',
+    leadsWaypoints: false,
+    guideCollectibleRangeM: 0,
+    guideLoreRangeM: 0,
+    spotlightCollectibles: true,
+    spotlightRangeM: 14,
+    canAutoCutPlayerSnag: true,
+    snagCutTimeSec: 1.55,
+    canAutoShareGas: true,
+    autoShareThresholdBar: 34,
+    maxDonateBar: 35,
+    gasShareCooldownSec: 14,
+    minGasFloor: 40,
+    gasBurnRate: 0.055,
+    guardianStabilize: false,
+    canScoutMode: true,
+    allowTeleportRegroup: true,
+    triggersHardcoreIssues: false,
+    requireExtraction: false,
+  }),
+  hardcore: Object.freeze({
+    id: 'hardcore',
+    badge: '🔥 Rookie Squad (You Lead)',
+    title: 'Vulnerable Rookies — You Are The Pro',
+    shortDesc:
+      'Unhelpful rookies who cling behind you, never scout, never auto-cut your snags or auto-share gas, suffer real emergencies (light fail, narcosis, panic, snags, low gas) & must be led home.',
+    leadsWaypoints: false,
+    guideCollectibleRangeM: 0,
+    guideLoreRangeM: 0,
+    spotlightCollectibles: false,
+    spotlightRangeM: 0,
+    canAutoCutPlayerSnag: false,
+    snagCutTimeSec: 999,
+    canAutoShareGas: false,
+    autoShareThresholdBar: 0,
+    maxDonateBar: 15,
+    gasShareCooldownSec: 28,
+    minGasFloor: 0,
+    gasBurnRate: 0.085,
+    guardianStabilize: false,
+    canScoutMode: false,
+    allowTeleportRegroup: false,
+    triggersHardcoreIssues: true,
+    requireExtraction: true,
+  }),
+});
+
+export function getAiDifficultyProfile(difficulty = 'standard') {
+  if (difficulty === 'guided') return AI_DIFFICULTY_PROFILES.guided;
+  if (difficulty === 'hardcore') return AI_DIFFICULTY_PROFILES.hardcore;
+  return AI_DIFFICULTY_PROFILES.standard;
+}
+
 export const HARDCORE_ISSUE_SPECS = Object.freeze({
   'torch-fail': {
     kind: 'torch-fail',
@@ -205,8 +295,10 @@ export function createAiBuddyState(level, diver, opts = {}) {
       deco: 0,
       collectible: 0,
       snag: 0,
+      guardian: 0,
     },
     spottedCollectibleIds: new Set(),
+    spottedStoryIds: new Set(),
     playerTrail: [{ x: Number(diver?.x) || 0, y: Number(diver?.y) || 1.2 }],
     _lastTrailX: Number(diver?.x) || 0,
     _lastTrailY: Number(diver?.y) || 1.2,
@@ -485,22 +577,36 @@ export function handlePlayerSignalForAiBuddy(buddy, idOrText, session, nowMs = D
   }
 
   if (sigId === 'low-gas' || sigId === 'share-air') {
+    const prof = getAiDifficultyProfile(session?.difficulty);
+    const minReqBar = prof.id === 'hardcore' ? 95 : 55;
+    const hasReserve = !buddy.issue && buddy.activeBar >= minReqBar;
     buddy.mode = 'assist-gas';
     buddy.modeTimer = 14;
-    buddy.condition = 'GAS ASSIST';
-    const hasReserve = buddy.activeBar >= 55;
+    buddy.condition = hasReserve ? 'GAS ASSIST' : 'LOW GAS';
     triggerDiverSignal(buddy, hasReserve ? 'share-air' : 'low-gas', nowMs);
     return {
       responded: true,
       replySignalId: hasReserve ? 'share-air' : 'low-gas',
       mode: buddy.mode,
       toast: hasReserve
-        ? `${buddy.name}: 🆘 Closing in to share emergency gas!`
+        ? prof.id === 'hardcore'
+          ? `${buddy.name}: 😰 Nervous — can only spare a small ${prof.maxDonateBar}b sip, turn dive!`
+          : `${buddy.name}: 🆘 Closing in to share emergency gas!`
         : `${buddy.name}: ⛽ Low reserve (${Math.round(buddy.activeBar)}b) — turn dive!`,
     };
   }
 
   if (sigId === 'attention') {
+    const prof = getAiDifficultyProfile(session?.difficulty);
+    if (!prof.canScoutMode) {
+      triggerDiverSignal(buddy, 'hold', nowMs);
+      return {
+        responded: true,
+        replySignalId: 'hold',
+        mode: buddy.mode,
+        toast: `${buddy.name}: 😰 Staying behind your fins — you're on point, lead the way!`,
+      };
+    }
     buddy.mode = 'scout';
     buddy.modeTimer = 9;
     buddy.condition = 'SCOUTING';
@@ -509,7 +615,10 @@ export function handlePlayerSignalForAiBuddy(buddy, idOrText, session, nowMs = D
       responded: true,
       replySignalId: 'attention',
       mode: buddy.mode,
-      toast: `${buddy.name}: 🔦 Sweeping passage & scanning targets`,
+      toast:
+        prof.id === 'guided'
+          ? `${buddy.name}: 🛡️ Sweeping ahead for every artifact & landmark — follow my light!`
+          : `${buddy.name}: 🔦 Sweeping passage & scanning targets`,
     };
   }
 
@@ -547,14 +656,32 @@ function findNearestUncollected(level, collectedIds, x, y, maxRangeM) {
   return best ? { item: best, dist: bestD } : null;
 }
 
-function chooseFormationTarget(level, diver, buddy, hardcore = false) {
+function findNearestUndiscoveredStory(stories, x, y, maxRangeM) {
+  const list = stories?.setPieces;
+  if (!Array.isArray(list) || list.length === 0) return null;
+  let best = null;
+  let bestD = maxRangeM;
+  for (let i = 0; i < list.length; i++) {
+    const sp = list[i];
+    if (!sp || sp.discovered) continue;
+    const d = Math.hypot(sp.x - x, sp.y - y);
+    if (d < bestD) {
+      bestD = d;
+      best = sp;
+    }
+  }
+  return best ? { item: best, dist: bestD } : null;
+}
+
+function chooseFormationTarget(level, diver, buddy, session = null, profile = AI_DIFFICULTY_PROFILES.standard) {
+  const hardcore = profile.id === 'hardcore';
   const backX = -Math.cos(diver.angle || 0);
   const backY = -Math.sin(diver.angle || 0);
   const perpX = -backY;
   const perpY = backX;
 
-  if (buddy.mode === 'assist-gas' || buddy.mode === 'assist-snag') {
-    // Pull right alongside diver (1.35m) for hose transfer or line-shears assist
+  if (buddy.mode === 'assist-gas' || buddy.mode === 'assist-snag' || buddy.condition === 'SAFETY GUARD') {
+    // Pull right alongside diver (1.35m) for hose transfer, line-shears assist, or Guardian stabilization
     const closeCandidates = [
       { x: diver.x + perpX * 1.35, y: Math.max(0.75, diver.y + perpY * 1.35) },
       { x: diver.x - perpX * 1.35, y: Math.max(0.75, diver.y - perpY * 1.35) },
@@ -588,9 +715,49 @@ function chooseFormationTarget(level, diver, buddy, hardcore = false) {
     }
   }
 
+  // Guided Mode Pro Instructor: lead wingman (slot 0) swims on point toward artifacts, lore, checkpoints & deco depth!
+  const slot = Math.max(0, Number(buddy?.slotIndex) || 0);
+  if (profile.leadsWaypoints && slot === 0 && (buddy.mode === 'follow' || buddy.mode === 'scout')) {
+    const stopDepth = Number(session?.diveState?.stopDepthM) || 0;
+    if (stopDepth >= 3 && Math.abs((diver.y || 0) - stopDepth) <= 6) {
+      const decX = diver.x + (diver.facingX || Math.cos(diver.angle || 0) || 1) * 1.9;
+      const decY = Math.max(1.2, stopDepth);
+      if (openWaterClearance(level, decX, decY) >= 0.65) {
+        return { x: decX, y: decY };
+      }
+    }
+    let guideTarget = null;
+    const nearCol = findNearestUncollected(level, session?.collectedIds, diver.x, diver.y, profile.guideCollectibleRangeM);
+    if (nearCol) {
+      guideTarget = nearCol.item;
+    } else {
+      const nearLore = findNearestUndiscoveredStory(session?.stories, diver.x, diver.y, profile.guideLoreRangeM);
+      if (nearLore) {
+        guideTarget = nearLore.item;
+      } else {
+        const nextCp = Array.isArray(level?.checkpoints)
+          ? level.checkpoints.find((cp) => cp && !session?.checkpointsHit?.has(cp.id))
+          : null;
+        guideTarget = nextCp || level?.exitZone || null;
+      }
+    }
+    if (guideTarget && Number.isFinite(guideTarget.x) && Number.isFinite(guideTarget.y)) {
+      const gx = guideTarget.x - diver.x;
+      const gy = guideTarget.y - diver.y;
+      const gDist = Math.hypot(gx, gy);
+      if (gDist > 1.2) {
+        const leadDist = Math.min(2.65, gDist * 0.72);
+        const tx = diver.x + (gx / gDist) * leadDist;
+        const ty = Math.max(0.85, diver.y + (gy / gDist) * leadDist);
+        if (openWaterClearance(level, tx, ty) >= 0.68) {
+          return { x: tx, y: ty };
+        }
+      }
+    }
+  }
+
   // Standard wingman formation: evaluate flanking & staggered single-file slots for 1..3 AI wingmen
   // In Hardcore mode, trail slightly wider to avoid bumping tanks during diver-to-diver collisions
-  const slot = Math.max(0, Number(buddy?.slotIndex) || 0);
   const hcPad = hardcore ? 0.55 : 0;
   const trailStep = slot * (hardcore ? 1.85 : 1.5);
   const sideSign = slot % 2 === 0 ? 1 : -1;
@@ -630,9 +797,15 @@ function chooseFormationTarget(level, diver, buddy, hardcore = false) {
   return { x: bestSlot.x, y: bestSlot.y };
 }
 
-function chooseTorchAimAngle(buddy, session, dt) {
+function chooseTorchAimAngle(buddy, session, dt, profile = AI_DIFFICULTY_PROFILES.standard) {
   const { level, diver, collectedIds, checkpointsHit, drills } = session;
-  buddy.sweepPhase = (buddy.sweepPhase || 0) + dt * 1.15;
+  buddy.sweepPhase = (buddy.sweepPhase || 0) + dt * (profile.id === 'hardcore' ? 1.65 : 1.15);
+
+  // Hardcore rookies do NOT spotlight artifacts, checkpoints, or bail out your light failures!
+  if (!profile.spotlightCollectibles) {
+    const baseHeading = Number.isFinite(buddy.angle) ? buddy.angle : diver.angle || 0;
+    return baseHeading + Math.sin(buddy.sweepPhase) * 0.22;
+  }
 
   // 1. Primary torch failure backup: lock beam directly ahead of player
   if (!diver.torchOn || drills?.active?.kind === 'torch-fail') {
@@ -641,19 +814,27 @@ function chooseTorchAimAngle(buddy, session, dt) {
     return Math.atan2(aheadY - buddy.y, aheadX - buddy.x);
   }
 
-  // 2. Assisting player close-up (snag cut or gas share): illuminate player workspace
-  if (buddy.mode === 'assist-snag' || buddy.mode === 'assist-gas') {
+  // 2. Assisting player close-up (snag cut, gas share, or safety guard): illuminate player workspace
+  if (buddy.mode === 'assist-snag' || buddy.mode === 'assist-gas' || buddy.condition === 'SAFETY GUARD') {
     return Math.atan2(diver.y - buddy.y, diver.x - buddy.x);
   }
 
-  // 3. Spotlight nearest uncollected collectible within 14m (24m while actively scouting)
-  const searchRange = buddy.mode === 'scout' ? 24 : 14;
+  // 3. Spotlight nearest uncollected collectible (Guided: 28m, Standard: 14m / 24m scouting)
+  const searchRange = buddy.mode === 'scout' ? Math.max(24, profile.spotlightRangeM) : profile.spotlightRangeM;
   const nearCol = findNearestUncollected(level, collectedIds, buddy.x, buddy.y, searchRange);
   if (nearCol) {
     return Math.atan2(nearCol.item.y - buddy.y, nearCol.item.x - buddy.x);
   }
 
-  // 4. Scout or guide toward next unhit checkpoint (within 18m) or exit during ascent
+  // 3b. Guided Pro Instructor also spotlights undiscovered Submerged Lore landmarks!
+  if (profile.guideLoreRangeM > 0) {
+    const nearLore = findNearestUndiscoveredStory(session?.stories, buddy.x, buddy.y, profile.guideLoreRangeM);
+    if (nearLore) {
+      return Math.atan2(nearLore.item.y - buddy.y, nearLore.item.x - buddy.x);
+    }
+  }
+
+  // 4. Scout or guide toward next unhit checkpoint or exit during ascent
   if (buddy.mode === 'ascend' && level?.exitZone) {
     return Math.atan2(level.exitZone.y - buddy.y, level.exitZone.x - buddy.x);
   }
@@ -662,7 +843,8 @@ function chooseTorchAimAngle(buddy, session, dt) {
     : null;
   if (nextCp) {
     const cpDist = Math.hypot(nextCp.x - buddy.x, nextCp.y - buddy.y);
-    if (cpDist <= (buddy.mode === 'scout' ? 26 : 16)) {
+    const cpRange = profile.leadsWaypoints ? 30 : buddy.mode === 'scout' ? 26 : 16;
+    if (cpDist <= cpRange) {
       return Math.atan2(nextCp.y - buddy.y, nextCp.x - buddy.x);
     }
   }
@@ -722,15 +904,16 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     buddy.gasId = diveState.activeGasId;
   }
   const ata = 1 + Math.max(0, buddy.depthM) / 10;
-  const isHardcore = session.difficulty === 'hardcore';
+  const profile = getAiDifficultyProfile(session.difficulty);
+  const isHardcore = profile.triggersHardcoreIssues;
   const baseGasRate = isHardcore
     ? buddy.issue?.kind === 'low-gas'
       ? 0.42
       : buddy.issue?.kind === 'snagged' || buddy.issue?.kind === 'panic'
         ? 0.16
-        : 0.085
-    : 0.055;
-  const minGasFloor = isHardcore ? 0 : 40;
+        : profile.gasBurnRate
+    : profile.gasBurnRate;
+  const minGasFloor = profile.minGasFloor;
   buddy.activeBar = Math.max(minGasFloor, buddy.activeBar - baseGasRate * ata * clampedDt);
 
   const distToPlayer = Math.hypot(diver.x - buddy.x, diver.y - buddy.y);
@@ -845,8 +1028,62 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     }
   }
 
-  // --- Priority 1: Emergency Wreck Snag / Line Entanglement Assist (skip if buddy has own Hardcore emergency!) ---
-  if (!buddy.issue && !buddy.separated && Number.isInteger(session.activeSnagIndex) && session.activeSnagIndex >= 0) {
+  // === GUIDED MODE PRO INSTRUCTOR: GUARDIAN ANGEL LIFE-SAVING & WAYPOINT GUIDING (v158) ===
+  if (profile.guardianStabilize && buddy.mode !== 'hold') {
+    const pCns = Number(diveState.cnsPercent) || 0;
+    const pHyp = Number(diveState.hypoxiaStress) || 0;
+    const pDcs = Number(diveState.dcsStress) || 0;
+    const pPanic = Number(diveState.panicLevel) || 0;
+    const pHealth = Number.isFinite(diveState.health) ? diveState.health : 100;
+    const playerInDanger = pCns >= 40 || pHyp >= 30 || pDcs >= 32 || pPanic >= 0.52 || pHealth <= 65;
+
+    if (playerInDanger) {
+      buddy.condition = 'SAFETY GUARD';
+      if (distToPlayer <= 5.8) {
+        // Actively buffer physiological stress & stabilize vitals so Guided players survive while listening to coaching
+        if (pPanic > 0.15) diveState.panicLevel = Math.max(0.1, pPanic - 0.28 * clampedDt);
+        if ((diveState.heartRateBpm || 75) > 95) {
+          diveState.heartRateBpm = Math.max(85, diveState.heartRateBpm - 18 * clampedDt);
+        }
+        if (pCns > 25) diveState.cnsPercent = Math.max(25, pCns - 7.5 * clampedDt);
+        if (pHyp > 18) diveState.hypoxiaStress = Math.max(18, pHyp - 9.0 * clampedDt);
+        if (pDcs > 18) diveState.dcsStress = Math.max(18, pDcs - 7.5 * clampedDt);
+        if (pHealth < 78) diveState.health = Math.min(78, pHealth + 5.5 * clampedDt);
+      }
+      if ((buddy.calloutCooldowns.guardian || 0) <= 0) {
+        buddy.calloutCooldowns.guardian = 9.5;
+        const playerRecGas = getRecommendedGas(diveState, { ascending: Boolean(diveState.stopDepthM >= 3) });
+        let coachMsg = '';
+        if (pHyp >= 30 || pCns >= 40) {
+          coachMsg = `🛡️ ${buddy.name}: Switch to ${playerRecGas || 'recommended gas'} now — stabilizing your breathing!`;
+        } else if (pDcs >= 32 || (diveState.stopDepthM || 0) >= 3) {
+          coachMsg = `🛡️ ${buddy.name}: Hold steady at ${Math.max(3, Math.round(diveState.stopDepthM || 6))}m deco stop — I've got you!`;
+        } else {
+          coachMsg = `🛡️ ${buddy.name}: Slow your fins & breathe easy — stabilizing your vitals!`;
+        }
+        triggerDiverSignal(buddy, 'hold', nowMs);
+        callbacks.onBuddySignal?.(buddy, 'hold');
+        callbacks.onBuddyCoach?.(buddy, coachMsg);
+      }
+    } else if (buddy.condition === 'SAFETY GUARD') {
+      buddy.condition = 'NOMINAL';
+    } else if (buddy.slotIndex === 0 && buddy.mode === 'follow') {
+      if ((diveState.stopDepthM || 0) >= 3 && Math.abs((diver.y || 0) - diveState.stopDepthM) <= 6) {
+        buddy.condition = 'DECO PACE';
+      } else {
+        buddy.condition = 'GUIDING';
+      }
+    }
+  }
+
+  // --- Priority 1: Emergency Wreck Snag / Line Entanglement Assist (Guided fast / Standard / OFF in Hardcore!) ---
+  if (
+    profile.canAutoCutPlayerSnag &&
+    !buddy.issue &&
+    !buddy.separated &&
+    Number.isInteger(session.activeSnagIndex) &&
+    session.activeSnagIndex >= 0
+  ) {
     buddy.mode = 'assist-snag';
     buddy.modeTimer = 4.0;
     buddy.condition = 'NET ASSIST';
@@ -857,7 +1094,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     }
     if (distToPlayer <= 2.9) {
       buddy.snagAssistTimer = (buddy.snagAssistTimer || 0) + clampedDt;
-      if (buddy.snagAssistTimer >= 1.55) {
+      if (buddy.snagAssistTimer >= profile.snagCutTimeSec) {
         buddy.snagAssistTimer = 0;
         const snags = level.snagZones || [];
         const snag = snags[session.activeSnagIndex];
@@ -877,10 +1114,21 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     buddy.snagAssistTimer = 0;
   }
 
-  // --- Priority 2: Automatic or Requested Emergency Gas Share (skip if buddy has own Hardcore emergency!) ---
-  const autoGasNeed = !buddy.issue && !buddy.separated && playerBar < 34 && buddy.activeBar >= 62 && buddy.gasShareCooldown <= 0;
+  // --- Priority 2: Automatic or Requested Emergency Gas Share (Guided <65b / Standard <34b / Hardcore NO auto!) ---
+  const minDonateReserve = profile.id === 'hardcore' ? 95 : 58;
+  const autoGasNeed =
+    profile.canAutoShareGas &&
+    !buddy.issue &&
+    !buddy.separated &&
+    playerBar < profile.autoShareThresholdBar &&
+    buddy.activeBar >= Math.max(62, profile.minGasFloor) &&
+    buddy.gasShareCooldown <= 0;
   const requestedGasNeed =
-    !buddy.issue && buddy.mode === 'assist-gas' && playerBar < 165 && buddy.activeBar >= 58 && buddy.gasShareCooldown <= 0;
+    !buddy.issue &&
+    buddy.mode === 'assist-gas' &&
+    playerBar < 165 &&
+    buddy.activeBar >= minDonateReserve &&
+    buddy.gasShareCooldown <= 0;
 
   if (autoGasNeed && buddy.mode !== 'assist-gas' && buddy.mode !== 'assist-snag') {
     buddy.mode = 'assist-gas';
@@ -891,12 +1139,12 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
 
   if ((autoGasNeed || requestedGasNeed) && distToPlayer <= 3.2) {
-    const donateBar = Math.min(35, Math.max(15, Math.round(buddy.activeBar - 42)));
+    const donateBar = Math.min(profile.maxDonateBar, Math.max(12, Math.round(buddy.activeBar - Math.max(42, profile.minGasFloor - 20))));
     const safeGasId = diveState.activeGasId || buddy.gasId || 'EAN32';
     const added = receiveGasIntoState(diveState, safeGasId, donateBar);
     if (added > 0) {
-      buddy.activeBar = Math.max(40, buddy.activeBar - added);
-      buddy.gasShareCooldown = 14;
+      buddy.activeBar = Math.max(profile.minGasFloor, buddy.activeBar - added);
+      buddy.gasShareCooldown = profile.gasShareCooldownSec;
       buddy.gasDonatedTotalBar = Math.round((buddy.gasDonatedTotalBar + added) * 10) / 10;
       buddy.gasDonationsCount = (buddy.gasDonationsCount || 0) + 1;
       buddy.mode = 'follow';
@@ -919,16 +1167,15 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
 
   // --- Auto-rejoin if player swims far past a HOLD position ---
-  if (buddy.mode === 'hold' && distToPlayer > 24) {
+  if (buddy.mode === 'hold' && distToPlayer > 24 && profile.allowTeleportRegroup) {
     buddy.mode = 'follow';
     buddy.modeTimer = 0;
     buddy.condition = 'NOMINAL';
   }
 
-  // --- Proactive Technical Safety & Discovery Callouts ---
-  if (buddy.mode === 'follow' || buddy.mode === 'scout') {
-    // Low-gas warning before critical auto-share
-    if (playerBar < 58 && playerBar >= 34 && buddy.calloutCooldowns.lowGas <= 0) {
+  // --- Proactive Technical Safety & Discovery Callouts (Guided spots ALL loot+lore / Standard spots nearby / Hardcore silent) ---
+  if (profile.spotlightCollectibles && (buddy.mode === 'follow' || buddy.mode === 'scout')) {
+    if (playerBar < Math.max(58, profile.autoShareThresholdBar + 15) && playerBar >= profile.autoShareThresholdBar && buddy.calloutCooldowns.lowGas <= 0) {
       buddy.calloutCooldowns.lowGas = 26;
       triggerDiverSignal(buddy, 'low-gas', nowMs);
       callbacks.onBuddySignal?.(buddy, 'low-gas');
@@ -937,18 +1184,32 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
       triggerDiverSignal(buddy, 'hold', nowMs);
       callbacks.onBuddySignal?.(buddy, 'hold');
     } else if (buddy.calloutCooldowns.collectible <= 0) {
-      const spotted = findNearestUncollected(level, session.collectedIds, buddy.x, buddy.y, 10.5);
+      const colRange = profile.leadsWaypoints ? 22 : 10.5;
+      const spotted = findNearestUncollected(level, session.collectedIds, buddy.x, buddy.y, colRange);
       if (spotted && !buddy.spottedCollectibleIds.has(spotted.item.id)) {
         buddy.spottedCollectibleIds.add(spotted.item.id);
-        buddy.calloutCooldowns.collectible = 14;
+        buddy.calloutCooldowns.collectible = profile.leadsWaypoints ? 9 : 14;
         triggerDiverSignal(buddy, 'attention', nowMs);
         callbacks.onBuddySignal?.(buddy, 'attention');
+        if (profile.leadsWaypoints) {
+          callbacks.onBuddyCoach?.(buddy, `🔦 ${buddy.name}: Spotted ${spotted.item.name} ahead — follow my light!`);
+        }
+      } else if (profile.guideLoreRangeM > 0) {
+        const spottedLore = findNearestUndiscoveredStory(session?.stories, buddy.x, buddy.y, 16);
+        if (spottedLore && !buddy.spottedStoryIds?.has(spottedLore.item.id)) {
+          if (!buddy.spottedStoryIds) buddy.spottedStoryIds = new Set();
+          buddy.spottedStoryIds.add(spottedLore.item.id);
+          buddy.calloutCooldowns.collectible = 10;
+          triggerDiverSignal(buddy, 'attention', nowMs);
+          callbacks.onBuddySignal?.(buddy, 'attention');
+          callbacks.onBuddyCoach?.(buddy, `🧭 ${buddy.name}: Submerged landmark nearby (${spottedLore.item.title}) — shine your torch here!`);
+        }
       }
     }
   }
 
   // --- Steering & SDF-Safe Wall Avoidance ---
-  let target = chooseFormationTarget(level, diver, buddy, session.difficulty === 'hardcore');
+  let target = chooseFormationTarget(level, diver, buddy, session, profile);
   // If far away, follow the player's recent breadcrumb trail so buddy navigates around rock bends cleanly
   if (buddy.mode !== 'hold' && distToPlayer > 7.5 && buddy.playerTrail.length > 0) {
     let bestTrail = null;
@@ -1055,7 +1316,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     speed > 0.32 ? Math.atan2(buddy.vy, buddy.vx) : Math.atan2(diver.y - buddy.y, diver.x - buddy.x);
   buddy.angle = lerpAngle(buddy.angle, desiredBodyAngle, clampedDt * 5.2);
 
-  const desiredTorchAngle = chooseTorchAimAngle(buddy, session, clampedDt);
+  const desiredTorchAngle = chooseTorchAimAngle(buddy, session, clampedDt, profile);
   buddy.torchAngle = lerpAngle(buddy.torchAngle, desiredTorchAngle, clampedDt * 6.5);
   buddy.torchManualAim = true;
   buddy.torchOn = buddy.issue?.kind !== 'torch-fail';

@@ -118,6 +118,7 @@ import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, sampleDivePr
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
 import {
   AI_SQUAD_ROSTER,
+  getAiDifficultyProfile,
   createAiSquad,
   stepAiSquad,
   handlePlayerSignalForAiSquad,
@@ -591,7 +592,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=157" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=158" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -5266,7 +5267,11 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       : activeLevel.reelMetersPerDiver > 0
         ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
         : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
-  showToast(openMsg, 4.8);
+  const aiSquadTag =
+    session.aiSquad.length > 0
+      ? ` · AI Squad: ${getAiDifficultyProfile(session.difficulty).badge}`
+      : '';
+  showToast(`${openMsg}${aiSquadTag}`, 4.8);
 }
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {
@@ -6698,12 +6703,12 @@ const btnSetupResetEl = document.getElementById('btn-setup-reset');
 
 function getSetupModeDescription(diffId) {
   if (diffId === 'guided') {
-    return 'Guided Mode: Gentle silt & currents with full compass guidance and forgiving technical margins — ideal for exploring.';
+    return 'Guided Mode: Gentle silt & currents with full compass guidance. With AI Squad active, Pro Instructors lead you to every artifact & lore landmark and actively stabilize your vitals so you stay safe.';
   }
   if (diffId === 'hardcore') {
-    return 'Hardcore Mode: No compass coaching, physical diver-to-diver collision, aggressive silt & strict physiology. With AI Squad active, you must lead wingmen through light failures, narcosis, snags, low gas & tow downed buddies back (+175/+450 pts)!';
+    return 'Hardcore Mode: No compass coaching, physical diver-to-diver collision, aggressive silt & strict physiology. With AI Squad active, unhelpful rookies rely on YOU to lead them through emergencies & tow downed buddies home (+175/+450 pts)!';
   }
-  return 'Standard Tech: Balanced technical cave & wreck diving with realistic decompression stops, silt wake, currents, and gas switches.';
+  return 'Standard Tech: Balanced technical cave & wreck diving. With AI Squad active, Expert Co-Divers flank your trim, spotlight nearby artifacts, obey signals & back you up in true emergencies.';
 }
 
 function openDiveSetupModal() {
@@ -6826,11 +6831,12 @@ function syncSetupDrawerSummary() {
   }
   const aiDescEl = document.getElementById('setup-ai-desc');
   if (aiDescEl) {
+    const aiProf = getAiDifficultyProfile(currentDiff);
     if (currentAiCount > 0) {
       const names = AI_SQUAD_ROSTER.slice(0, currentAiCount).map((r) => r.name.replace(/^🤖\s*/, '')).join(', ');
-      aiDescEl.textContent = `${currentAiCount + 1}-Diver Solo Squad (${names}): staggered torches, hand-signals, snag-cut rescue & gas share${currentDiff === 'hardcore' ? ' — Hardcore Leadership ACTIVE: guide wingmen through light failures, narcosis, snags, low gas & tow downed buddies home!' : ''}.`;
+      aiDescEl.textContent = `${aiProf.badge} · ${currentAiCount + 1}-Diver Squad (${names}): ${aiProf.shortDesc}`;
     } else {
-      aiDescEl.textContent = 'Cycle 1–3 autonomous AI wingmen (APEX-2, COBRA-3, ORCA-4) on solo dives: staggered torches, hand-signals, snag-cut rescue & 4-diver Hardcore practice.';
+      aiDescEl.textContent = `Cycle 1–3 AI wingmen (APEX-2, COBRA-3, ORCA-4). Active profile in this mode — ${aiProf.badge}: ${aiProf.shortDesc}`;
     }
   }
   const gasDescEl = document.getElementById('setup-gas-desc');
@@ -8792,6 +8798,9 @@ function stepSimulation(dt) {
       onBuddyCutSnag: (buddy) => {
         audio.playLineCut?.();
         showToast(`🤖 ${buddy.name} cut your entanglement free!`, 2.6);
+      },
+      onBuddyCoach: (buddy, msg) => {
+        if (msg) showToast(msg, 3.6);
       },
       onBuddyIssueStarted: (buddy, issue) => {
         const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);

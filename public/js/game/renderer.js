@@ -8541,11 +8541,31 @@ export class CaveRenderer {
     }
 
     // 2. Braided catenary umbilical tow line between rescuer and towed teammate
-    // 1b. Hardcore AI Wingman Leadership / Issue Beacon & Live Resolution Progress Arc (v157)
+    // 1b. Hardcore AI Wingman Leadership / Issue Beacon & Guided Pro Guide Halo (v157/v158)
     for (let i = 0; i < peerList.length; i++) {
       const p = peerList[i];
       if (!p || p.alive === false || p.surfaced) continue;
-      if (!p.issue && !p.separated) continue;
+      if (!p.issue && !p.separated) {
+        if (p.isAiBuddy && (p.condition === 'SAFETY GUARD' || p.condition === 'DECO PACE')) {
+          const sx = toScreenX(p.x);
+          const sy = toScreenY(p.y);
+          const pulse = 0.55 + 0.45 * Math.sin(timeSec * 4.2 + i);
+          const r = (1.02 + pulse * 0.16) * scale;
+          const isGuard = p.condition === 'SAFETY GUARD';
+          ctx.strokeStyle = isGuard ? 'rgba(52, 211, 153, 0.78)' : 'rgba(56, 189, 248, 0.65)';
+          ctx.lineWidth = Math.max(1.5, 0.05 * scale);
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.font = `800 ${Math.max(9, Math.round(0.28 * scale))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = isGuard ? '#a7f3d0' : '#bae6fd';
+          ctx.fillText(isGuard ? '🛡️ SAFETY GUARD' : '🛡️ DECO PACE', sx, sy - r - 0.26 * scale);
+        }
+        continue;
+      }
       const sx = toScreenX(p.x);
       const sy = toScreenY(p.y);
       const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.8 + i);

@@ -7228,3 +7228,211 @@ test('v157 Hardcore Mode AI Diver Leadership, Incident Solving & Leave-No-Diver-
   r._drawBuddyRescueTethers(noopCtx, sess.diver, [visualBuddy], toX, toY, 20, 4.2, []);
   r._drawPeerEdgeIndicators(noopCtx, 1280, 720, sess.diver, [{ ...visualBuddy, x: sess.diver.x + 90 }], toX, toY, 4.2);
 });
+
+test('v158 Mode-Specific AI Squad Profiles: Guided Pro Guide, Standard Tech Co-Diver & Hardcore Vulnerable Rookies', async () => {
+  const {
+    AI_DIFFICULTY_PROFILES,
+    getAiDifficultyProfile,
+    createAiSquad,
+    stepAiBuddy,
+    handlePlayerSignalForAiBuddy,
+  } = await import('../public/js/game/aiBuddy.js');
+
+  // 1. Verify 3-tier profile definitions & fallback
+  const pGuided = getAiDifficultyProfile('guided');
+  const pStandard = getAiDifficultyProfile('standard');
+  const pHardcore = getAiDifficultyProfile('hardcore');
+  assert.equal(pGuided, AI_DIFFICULTY_PROFILES.guided);
+  assert.equal(pStandard, AI_DIFFICULTY_PROFILES.standard);
+  assert.equal(pHardcore, AI_DIFFICULTY_PROFILES.hardcore);
+  assert.equal(getAiDifficultyProfile('unknown'), AI_DIFFICULTY_PROFILES.standard);
+
+  assert.equal(pGuided.leadsWaypoints, true);
+  assert.equal(pGuided.guardianStabilize, true);
+  assert.equal(pGuided.snagCutTimeSec < pStandard.snagCutTimeSec, true);
+  assert.equal(pGuided.autoShareThresholdBar > pStandard.autoShareThresholdBar, true);
+
+  assert.equal(pStandard.leadsWaypoints, false);
+  assert.equal(pStandard.guardianStabilize, false);
+  assert.equal(pStandard.canAutoCutPlayerSnag, true);
+  assert.equal(pStandard.canAutoShareGas, true);
+  assert.equal(pStandard.canScoutMode, true);
+
+  assert.equal(pHardcore.leadsWaypoints, false);
+  assert.equal(pHardcore.guardianStabilize, false);
+  assert.equal(pHardcore.spotlightCollectibles, false);
+  assert.equal(pHardcore.canAutoCutPlayerSnag, false);
+  assert.equal(pHardcore.canAutoShareGas, false);
+  assert.equal(pHardcore.canScoutMode, false);
+  assert.equal(pHardcore.triggersHardcoreIssues, true);
+  assert.equal(pHardcore.requireExtraction, true);
+
+  const openPt = LEVEL_1.checkpoints[0];
+  const col0 = LEVEL_1.collectibles[0];
+
+  // 2. GUIDED MODE: Pro Instructor leads to collectibles, coaches, cuts snags rapidly, shares gas early & stabilizes vitals
+  const gSess = createDiveSession(LEVEL_1, { diverName: 'Student', difficulty: 'guided' });
+  const gSquad = createAiSquad(LEVEL_1, gSess.diver, 1, { initialGasId: 'EAN32' });
+  const gBuddy = gSquad[0];
+  gSess.aiSquad = gSquad;
+  gSess.diver.x = col0.x - 5.5;
+  gSess.diver.y = col0.y;
+  gBuddy.x = col0.x - 4.5;
+  gBuddy.y = col0.y;
+  const gCoachMsgs = [];
+  stepAiBuddy(gBuddy, gSess, 0.1, {
+    onBuddyCoach: (_b, msg) => gCoachMsgs.push(msg),
+  });
+  assert.equal(gBuddy.condition, 'GUIDING', 'Guided slot-0 AI should enter GUIDING state');
+  assert.ok(gCoachMsgs.some((m) => m.includes(col0.name)), 'Guided AI should coach player toward nearby artifact');
+
+  // Guided Guardian Angel vital stabilization
+  gSess.diver.x = openPt.x;
+  gSess.diver.y = openPt.y;
+  gBuddy.x = openPt.x + 1.8;
+  gBuddy.y = openPt.y;
+  gSess.diveState.cnsPercent = 58;
+  gSess.diveState.hypoxiaStress = 45;
+  gSess.diveState.dcsStress = 48;
+  gSess.diveState.panicLevel = 0.72;
+  gSess.diveState.health = 52;
+  gCoachMsgs.length = 0;
+  for (let i = 0; i < 10; i++) {
+    stepAiBuddy(gBuddy, gSess, 0.1, {
+      onBuddyCoach: (_b, msg) => gCoachMsgs.push(msg),
+    });
+  }
+  assert.equal(gBuddy.condition, 'SAFETY GUARD');
+  assert.ok(gSess.diveState.health > 52, 'Guided Guardian must actively recover critically low health');
+  assert.ok(gSess.diveState.cnsPercent < 58, 'Guided Guardian must buffer CNS stress');
+  assert.ok(gSess.diveState.hypoxiaStress < 45, 'Guided Guardian must buffer hypoxia stress');
+  assert.ok(gSess.diveState.dcsStress < 48, 'Guided Guardian must buffer DCS stress');
+  assert.ok(gSess.diveState.panicLevel < 0.72, 'Guided Guardian must calm player panic');
+  assert.ok(gCoachMsgs.some((m) => m.includes('🛡️')), 'Guided Guardian should deliver protective coaching toast');
+
+  // Guided DECO PACE when healthy at deco stop
+  gSess.diveState.cnsPercent = 5;
+  gSess.diveState.hypoxiaStress = 0;
+  gSess.diveState.dcsStress = 0;
+  gSess.diveState.panicLevel = 0;
+  gSess.diveState.health = 100;
+  gSess.diveState.stopDepthM = 6;
+  gSess.diver.y = 7.5;
+  gBuddy.y = 7.5;
+  stepAiBuddy(gBuddy, gSess, 0.1, {});
+  stepAiBuddy(gBuddy, gSess, 0.1, {});
+  assert.equal(gBuddy.condition, 'DECO PACE', 'Guided AI should pace player during active deco stops');
+
+  // Guided early auto-share gas (< 65 bar) & fast snag cut (0.65s)
+  gSess.diveState.stopDepthM = 0;
+  gSess.diveState.tanks.EAN32.bar = 55;
+  gSess.diveState.tanks.EAN32.litersRemaining = 55 * gSess.diveState.tanks.EAN32.volumeL;
+  gBuddy.activeBar = 180;
+  gBuddy.x = gSess.diver.x + 1.5;
+  gBuddy.y = gSess.diver.y;
+  let guidedSharedBar = 0;
+  stepAiBuddy(gBuddy, gSess, 0.1, {
+    onBuddyGasShare: (e) => { guidedSharedBar = e.amountBar; },
+  });
+  assert.ok(guidedSharedBar >= 35, `Guided AI should auto-share gas early at 55 bar (shared ${guidedSharedBar}b)`);
+
+  gSess.activeSnagIndex = 0;
+  gBuddy.x = gSess.diver.x + 1.4;
+  gBuddy.y = gSess.diver.y;
+  let guidedCut = false;
+  for (let i = 0; i < 8; i++) {
+    stepAiBuddy(gBuddy, gSess, 0.1, { onBuddyCutSnag: () => { guidedCut = true; } });
+  }
+  assert.equal(guidedCut, true, 'Guided AI must cut player snag within ~0.7s');
+
+  // 3. STANDARD TECH MODE: Balanced Co-Diver (no vital magic, no early 55b share, shares < 34b, scouts on command)
+  const sSess = createDiveSession(LEVEL_1, { diverName: 'TechDiver', difficulty: 'standard' });
+  const sSquad = createAiSquad(LEVEL_1, sSess.diver, 1, { initialGasId: 'EAN32' });
+  const sBuddy = sSquad[0];
+  sSess.aiSquad = sSquad;
+  sSess.diver.x = openPt.x;
+  sSess.diver.y = openPt.y;
+  sBuddy.x = openPt.x + 1.5;
+  sBuddy.y = openPt.y;
+  sSess.diveState.health = 52;
+  sSess.diveState.cnsPercent = 58;
+  sSess.diveState.tanks.EAN32.bar = 55;
+  sSess.diveState.tanks.EAN32.litersRemaining = 55 * sSess.diveState.tanks.EAN32.volumeL;
+  let stdEarlyShare = false;
+  stepAiBuddy(sBuddy, sSess, 0.1, { onBuddyGasShare: () => { stdEarlyShare = true; } });
+  assert.equal(stdEarlyShare, false, 'Standard AI must NOT auto-share gas at 55 bar');
+  assert.equal(sSess.diveState.health, 52, 'Standard AI must NOT magically heal player');
+  assert.equal(sSess.diveState.cnsPercent, 58, 'Standard AI must NOT magically lower player CNS');
+
+  // Standard DOES obey attention scout & auto-share below 34 bar
+  handlePlayerSignalForAiBuddy(sBuddy, 'attention', sSess, 1000);
+  assert.equal(sBuddy.mode, 'scout', 'Standard AI should scout ahead when signaled LOOK');
+  sSess.diveState.tanks.EAN32.bar = 26;
+  sSess.diveState.tanks.EAN32.litersRemaining = 26 * sSess.diveState.tanks.EAN32.volumeL;
+  sBuddy.x = sSess.diver.x + 1.5;
+  sBuddy.y = sSess.diver.y;
+  let stdEmergShare = false;
+  stepAiBuddy(sBuddy, sSess, 0.1, { onBuddyGasShare: () => { stdEmergShare = true; } });
+  assert.equal(stdEmergShare, true, 'Standard AI should auto-share gas in true emergency (< 34 bar)');
+
+  // 4. HARDCORE MODE: Vulnerable Rookies refuse scout, never auto-cut player snag, never auto-share gas
+  const hSess = createDiveSession(LEVEL_1, { diverName: 'ProLead', difficulty: 'hardcore' });
+  const hSquad = createAiSquad(LEVEL_1, hSess.diver, 1, { initialGasId: 'EAN32' });
+  const hBuddy = hSquad[0];
+  hSess.aiSquad = hSquad;
+  hSess.diver.x = openPt.x;
+  hSess.diver.y = openPt.y;
+  hBuddy.x = openPt.x - 1.4;
+  hBuddy.y = openPt.y;
+  const scoutReply = handlePlayerSignalForAiBuddy(hBuddy, 'attention', hSess, 2000);
+  assert.notEqual(hBuddy.mode, 'scout', 'Hardcore rookie must refuse scout-ahead command');
+  assert.match(scoutReply.toast || '', /on point|lead the way/i);
+
+  hSess.activeSnagIndex = 0;
+  hSess.diveState.tanks.EAN32.bar = 20;
+  hSess.diveState.tanks.EAN32.litersRemaining = 20 * hSess.diveState.tanks.EAN32.volumeL;
+  let hcAutoCut = false;
+  let hcAutoGas = false;
+  for (let i = 0; i < 20; i++) {
+    stepAiBuddy(hBuddy, hSess, 0.1, {
+      onBuddyCutSnag: () => { hcAutoCut = true; },
+      onBuddyGasShare: () => { hcAutoGas = true; },
+    });
+  }
+  assert.equal(hcAutoCut, false, 'Hardcore rookie must NOT auto-cut player snags');
+  assert.equal(hSess.activeSnagIndex, 0, 'Player snag must remain active in Hardcore until player cuts themselves free');
+  assert.equal(hcAutoGas, false, 'Hardcore rookie must NOT auto-share gas even when player is at 20 bar');
+
+  // 5. Renderer draws Guided SAFETY GUARD & DECO PACE halos cleanly
+  const drawnTexts = [];
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 1280, height: 720 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t || '').length * 7 }),
+      fillText: (t) => drawnTexts.push(String(t)),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r._cachedDpr = 1;
+  const toX = (x) => 400 + x * 20;
+  const toY = (y) => 100 + y * 20;
+  r._drawBuddyRescueTethers(
+    noopCtx,
+    gSess.diver,
+    [
+      { ...gBuddy, alive: true, condition: 'SAFETY GUARD', issue: null },
+      { ...gBuddy, id: 'ai-2', alive: true, condition: 'DECO PACE', issue: null },
+    ],
+    toX,
+    toY,
+    20,
+    5.0,
+    []
+  );
+  assert.ok(drawnTexts.some((t) => t.includes('SAFETY GUARD')), 'Renderer should draw SAFETY GUARD halo badge');
+  assert.ok(drawnTexts.some((t) => t.includes('DECO PACE')), 'Renderer should draw DECO PACE halo badge');
+});
