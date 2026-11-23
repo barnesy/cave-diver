@@ -18,6 +18,7 @@ import {
   drawStyledDiverRig,
   drawStyledJellyfish,
   drawStyledMegafauna,
+  drawStyledWhaleShark,
   drawStyledDenizen,
 } from './artSprites.js';
 
@@ -7236,13 +7237,15 @@ export class CaveRenderer {
     if (Array.isArray(eco.megafauna)) {
       for (let i = 0; i < eco.megafauna.length; i++) {
         const m = eco.megafauna[i];
-        if (!m || m.x < xMin || m.x > xMax || m.y < yMin || m.y > yMax || m.y < 8) continue;
+        if (!m || m.kind === 'manta' || m.kind === 'beluga' || m.x < xMin || m.x > xMax || m.y < yMin || m.y > yMax || m.y < 8) continue;
         const g = checkArc(m.x, m.y, 19.5);
         if (g > 0.05) {
-          const dirX = (m.vx || 0) >= 0 ? 1 : -1;
+          const dirX = (m.facing ?? ((m.vx || 0) >= 0 ? 1 : -1)) >= 0 ? 1 : -1;
+          const eyeOffX = dirX * (m.size || 1.2) * (m.kind === 'shark' ? 0.98 : 0.72);
+          const eyeOffY = -(m.size || 1.2) * (m.kind === 'shark' ? 0.05 : 0.09);
           const col = m.kind === 'shark' ? '#a7f3d0' : '#fde047';
           const pulse = 0.78 + 0.22 * Math.sin(timeSec * 4.5 + i * 1.7);
-          drawGlint(m.x, m.y, dirX, Math.max(1.8, (m.size || 1) * 0.055 * scale), col, g * 0.95 * pulse);
+          drawGlint(m.x + eyeOffX, m.y + eyeOffY, dirX, Math.max(1.4, (m.size || 1) * 0.032 * scale), col, g * 0.65 * pulse);
         }
       }
     }
@@ -9559,87 +9562,39 @@ export class CaveRenderer {
         ctx.restore();
       }
 
-      // 2. Majestic Passing Pelagic Silhouettes (Whale Shark & Oceanic Manta Ray)
+      // 2. Monumental Passing Pelagic Giants (Cathedral-Scale Whale Shark & Giant Oceanic Manta Ray) (v165)
       const visitors = encounters.visitors || [];
       for (let i = 0; i < visitors.length; i++) {
         const v = visitors[i];
         if (v.kind === 'biolum-swarm') continue;
-        if (v.x + v.size * 2 < xMin || v.x - v.size * 2 > xMax || v.y + v.size < yMin || v.y - v.size > yMax) continue;
+        if (v.x + v.size * 2.4 < xMin || v.x - v.size * 2.4 > xMax || v.y + v.size * 1.6 < yMin || v.y - v.size * 1.6 > yMax) continue;
         const sx = toScreenX(v.x);
         const sy = toScreenY(v.y);
         const fade = Math.min(1, v.ageSec / 2.2) * Math.min(1, (v.durationSec - v.ageSec) / 2.4);
-        const sz = v.size * scale;
-
+        if (fade <= 0.01) continue;
         ctx.save();
-        ctx.translate(sx, sy);
-        if (v.dir < 0) ctx.scale(-1, 1);
-        ctx.globalAlpha = 0.78 * fade;
-
+        ctx.globalAlpha = 0.92 * fade;
         if (v.kind === 'whaleshark') {
-          const tailWag = Math.sin(timeSec * 2.1 + v.phase) * sz * 0.08;
-          // Deep-blue pelagic body silhouette
-          ctx.fillStyle = '#0c2742';
-          ctx.beginPath();
-          ctx.moveTo(sz * 0.56, -sz * 0.02);
-          ctx.quadraticCurveTo(sz * 0.35, -sz * 0.2, -sz * 0.12, -sz * 0.14);
-          ctx.quadraticCurveTo(-sz * 0.44, -sz * 0.08, -sz * 0.62, tailWag - sz * 0.26);
-          ctx.lineTo(-sz * 0.52, tailWag);
-          ctx.lineTo(-sz * 0.6, tailWag + sz * 0.19);
-          ctx.quadraticCurveTo(-sz * 0.38, sz * 0.09, -sz * 0.06, sz * 0.13);
-          ctx.quadraticCurveTo(sz * 0.36, sz * 0.17, sz * 0.56, sz * 0.04);
-          ctx.closePath();
-          ctx.fill();
-
-          // Pale belly & dorsal/pectoral fins
-          ctx.fillStyle = '#1e3a5f';
-          ctx.beginPath();
-          ctx.moveTo(sz * 0.02, -sz * 0.14);
-          ctx.lineTo(-sz * 0.14, -sz * 0.3);
-          ctx.lineTo(-sz * 0.22, -sz * 0.12);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(sz * 0.22, sz * 0.09);
-          ctx.lineTo(sz * 0.02, sz * 0.31);
-          ctx.lineTo(-sz * 0.06, sz * 0.11);
-          ctx.closePath();
-          ctx.fill();
-
-          // Iconic Whale Shark constellation polka-dot spots
-          ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
-          for (let r = 0; r < 3; r++) {
-            for (let c = 0; c < 6; c++) {
-              const px = sz * (0.32 - c * 0.12);
-              const py = sz * (-0.09 + r * 0.065);
-              ctx.beginPath();
-              ctx.arc(px, py, Math.max(1.2, sz * 0.015), 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
+          drawStyledWhaleShark(ctx, v, sx, sy, scale, timeSec);
         } else if (v.kind === 'mantaray') {
-          const flap = Math.sin(timeSec * 3.1 + v.phase) * sz * 0.18;
-          ctx.fillStyle = '#0e2a47';
-          ctx.beginPath();
-          ctx.moveTo(sz * 0.42, 0);
-          ctx.quadraticCurveTo(sz * 0.12, -sz * 0.46 + flap, -sz * 0.18, -sz * 0.32 + flap * 0.7);
-          ctx.quadraticCurveTo(-sz * 0.26, -sz * 0.08, -sz * 0.46, 0);
-          ctx.quadraticCurveTo(-sz * 0.26, sz * 0.08, -sz * 0.18, sz * 0.32 - flap * 0.7);
-          ctx.quadraticCurveTo(sz * 0.12, sz * 0.46 - flap, sz * 0.42, 0);
-          ctx.closePath();
-          ctx.fill();
-
-          // Trailing whip tail & pale ventral underside highlight
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
-          ctx.lineWidth = Math.max(1.2, sz * 0.022);
-          ctx.beginPath();
-          ctx.moveTo(-sz * 0.42, 0);
-          ctx.quadraticCurveTo(-sz * 0.66, flap * 0.3, -sz * 0.85, -flap * 0.2);
-          ctx.stroke();
-
-          ctx.fillStyle = 'rgba(186, 230, 253, 0.36)';
-          ctx.beginPath();
-          ctx.ellipse(sz * 0.05, 0, sz * 0.22, sz * 0.09, 0, 0, Math.PI * 2);
-          ctx.fill();
+          drawStyledMegafauna(
+            ctx,
+            {
+              kind: 'manta',
+              x: v.x,
+              y: v.y,
+              vx: v.vx,
+              vy: v.vy || 0,
+              facing: v.dir,
+              size: v.size || 2.5,
+              phase: v.phase || 0,
+              litIntensity: 0.35,
+            },
+            sx,
+            sy,
+            scale,
+            timeSec
+          );
         }
         ctx.restore();
       }
@@ -10976,14 +10931,15 @@ export class CaveRenderer {
     if (Array.isArray(ecosystem?.megafauna)) {
       for (let i = 0; i < ecosystem.megafauna.length; i++) {
         const m = ecosystem.megafauna[i];
-        if (!m || m.behavior !== 'escort') continue;
+        if (!m || (m.behavior !== 'escort' && m.behavior !== 'curious')) continue;
+        const isEsc = m.behavior === 'escort';
         const mx = toScreenX(m.x) * rx;
         const my = toScreenY(m.y) * ry;
-        const mr = Math.max(4.6, (m.size || 1.4) * 3.1) * scale * rx;
+        const mr = Math.max(5.2, (m.size || 1.8) * (isEsc ? 3.2 : 2.3)) * scale * rx;
         if (mx + mr < 0 || mx - mr > lw || my + mr < 0 || my - mr > lh) continue;
         const mg = lctx.createRadialGradient(mx, my, mr * 0.08, mx, my, mr);
-        mg.addColorStop(0, 'rgba(0,0,0,0.72)');
-        mg.addColorStop(0.55, 'rgba(0,0,0,0.34)');
+        mg.addColorStop(0, isEsc ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.45)');
+        mg.addColorStop(0.55, isEsc ? 'rgba(0,0,0,0.38)' : 'rgba(0,0,0,0.18)');
         mg.addColorStop(1, 'rgba(0,0,0,0)');
         lctx.fillStyle = mg;
         lctx.fillRect(mx - mr, my - mr, mr * 2, mr * 2);

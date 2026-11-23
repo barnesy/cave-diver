@@ -1149,7 +1149,7 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
     vx: dir * speed,
     vy: 0,
     dir,
-    size: kind === 'whaleshark' ? 4.4 : kind === 'mantaray' ? 2.6 : 1.9,
+    size: kind === 'whaleshark' ? 5.8 : kind === 'mantaray' ? 2.6 : 1.9,
     phase: enc.visitorCount * 1.9,
     ageSec: 0,
     durationSec: kind === 'biolum-swarm' ? 22 : 24,

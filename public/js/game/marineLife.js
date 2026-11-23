@@ -125,15 +125,21 @@ export function createMarineEcosystem(level) {
           patrolRy: 3.2,
           vx: 1.6,
           vy: 0,
-          size: 1.45,
+          size: 1.85,
           phase: 0.4,
+          facing: 1,
+          pitch: 0,
+          swimPhase: 0.4,
           behavior: 'patrol',
           escortTimeSec: 0,
           escortAwarded: false,
+          nearTriggered: false,
           spookTimer: 0,
+          trail: [],
+          bubbleRings: [],
         });
       }
-      // Graceful Giant Manta Ray gliding across the blue above the superstructure (v162)
+      // Graceful Giant Manta Ray gliding across the blue above the superstructure (v165 monumental scale)
       const mantaY = Math.max(10, Math.min(deckY - 6, deckY * 0.42));
       const mantaX = shotX + 12;
       if (evaluateCaveSDF(level, mantaX, mantaY) < -2.2) {
@@ -149,12 +155,18 @@ export function createMarineEcosystem(level) {
           patrolRy: 2.8,
           vx: -1.3,
           vy: 0,
-          size: 1.72,
+          size: 2.35,
           phase: 2.1,
+          facing: -1,
+          pitch: 0,
+          swimPhase: 2.1,
           behavior: 'patrol',
           escortTimeSec: 0,
           escortAwarded: false,
+          nearTriggered: false,
           spookTimer: 0,
+          trail: [],
+          bubbleRings: [],
         });
       }
       if (isWarmReef && deckY > 36) {
@@ -173,12 +185,18 @@ export function createMarineEcosystem(level) {
             patrolRy: 2.6,
             vx: -1.4,
             vy: 0,
-            size: 1.25,
+            size: 1.65,
             phase: 3.2,
+            facing: -1,
+            pitch: 0,
+            swimPhase: 3.2,
             behavior: 'patrol',
             escortTimeSec: 0,
             escortAwarded: false,
+            nearTriggered: false,
             spookTimer: 0,
+            trail: [],
+            bubbleRings: [],
           });
         }
       }
@@ -201,7 +219,10 @@ export function createMarineEcosystem(level) {
           patrolRy: 0.7,
           vx: grouperCount % 2 === 0 ? 0.35 : -0.35,
           vy: 0,
-          size: isFreshwater ? 0.72 : 1.05 + grouperCount * 0.12,
+          facing: grouperCount % 2 === 0 ? 1 : -1,
+          pitch: 0,
+          swimPhase: grouperCount * 2.1,
+          size: isFreshwater ? 0.92 : 1.35 + grouperCount * 0.14,
           phase: grouperCount * 2.1,
         });
         grouperCount++;
@@ -276,7 +297,7 @@ export function createMarineEcosystem(level) {
           y: anchor.y,
           nx: anchor.nx,
           ny: anchor.ny,
-          size: isOcto ? 0.92 : 0.85,
+          size: isOcto ? 1.26 : 1.12,
           phase: denizens.length * 2.3 + 0.6,
           state: 'peeking', // 'peeking' | 'curious' | 'startled'
           emergence: 0.42, // [0.12..1.0]
@@ -589,12 +610,18 @@ export function createMarineEcosystem(level) {
           patrolRy: 1.8,
           vx: 0.9,
           vy: 0,
-          size: isPolar ? 1.55 : 1.28,
+          facing: 1,
+          pitch: 0,
+          swimPhase: 1.1,
+          size: isPolar ? 2.15 : 1.85,
           phase: 1.1,
           behavior: 'patrol',
           escortTimeSec: 0,
           escortAwarded: false,
+          nearTriggered: false,
           spookTimer: 0,
+          trail: [],
+          bubbleRings: [],
         });
       }
     }
@@ -793,6 +820,10 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
       }
 
       if (hasDiver && canEscort && distToDiver <= 16.5) {
+        if (!m.nearTriggered && distToDiver <= 13.5 && (m.kind === 'manta' || m.kind === 'beluga')) {
+          m.nearTriggered = true;
+          opts?.onMegafaunaNear?.(m);
+        }
         if (isLoudDiver) {
           m.behavior = 'spooked';
           m.spookTimer = 6.5;
@@ -818,35 +849,116 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
 
       let tx = m.homeX;
       let ty = m.homeY;
-      let steerRate = 1.5;
+      let maxSpeed = m.kind === 'shark' ? 2.4 : m.kind === 'manta' ? 2.1 : m.kind === 'beluga' ? 1.85 : 0.95;
+      let accel = 1.65;
       if (m.behavior === 'spooked' && hasDiver) {
         const awayX = m.x - divX;
         const awayY = m.y - divY;
         const awayD = Math.hypot(awayX, awayY) || 1;
-        tx = m.x + (awayX / awayD) * 14;
+        tx = m.x + (awayX / awayD) * 16;
         ty = Math.max(3.5, m.y + (awayY / awayD) * 6);
-        steerRate = 2.8;
+        maxSpeed *= 1.95;
+        accel = 3.2;
       } else if ((m.behavior === 'curious' || m.behavior === 'escort') && hasDiver) {
-        // Gracefully orbit/glide alongside the calm diver's wing
-        const orbitAng = timeSec * 0.45 + (m.phase || 0);
-        const wingDist = m.behavior === 'escort' ? 4.1 : 6.4;
+        // Wide, slow majestic wing-glide orbit alongside the calm diver
+        const orbitAng = timeSec * 0.32 + (m.phase || 0);
+        const wingDist = m.behavior === 'escort' ? 5.2 : 7.4;
         tx = divX + Math.cos(orbitAng) * wingDist;
-        ty = Math.max(3.0, divY - 1.1 + Math.sin(orbitAng * 1.4) * 1.35);
-        steerRate = 1.35;
+        ty = Math.max(3.4, divY - 1.3 + Math.sin(orbitAng * 1.15) * 1.5);
+        maxSpeed *= 0.85;
+        accel = 1.25;
       } else {
-        const speed = m.kind === 'shark' ? 0.16 : m.kind === 'manta' ? 0.14 : m.kind === 'beluga' ? 0.12 : 0.22;
+        const speed = m.kind === 'shark' ? 0.14 : m.kind === 'manta' ? 0.11 : m.kind === 'beluga' ? 0.1 : 0.18;
         m.phase += dt * speed;
         tx = m.homeX + Math.cos(m.phase) * (m.patrolRx || 6);
         ty = m.homeY + Math.sin(m.phase * 2) * (m.patrolRy || 1.2);
       }
 
-      const nx = m.x + (tx - m.x) * Math.min(1, dt * steerRate);
-      const ny = m.y + (ty - m.y) * Math.min(1, dt * steerRate);
-      if (evaluateCaveSDF(level, nx, ny) < -0.8) {
-        m.vx = (nx - m.x) / Math.max(0.01, dt);
-        m.vy = (ny - m.y) / Math.max(0.01, dt);
+      // Weighted inertial steering for graceful heavy aquatic momentum (v165)
+      const dxT = tx - m.x;
+      const dyT = ty - m.y;
+      const dT = Math.hypot(dxT, dyT) || 0.001;
+      const desiredSpeed = Math.min(maxSpeed, dT * 0.85);
+      const desVx = (dxT / dT) * desiredSpeed;
+      const desVy = (dyT / dT) * desiredSpeed;
+      const blend = Math.min(1, dt * accel);
+      const nextVx = (m.vx || 0) + (desVx - (m.vx || 0)) * blend;
+      const nextVy = (m.vy || 0) + (desVy - (m.vy || 0)) * blend;
+      const nx = m.x + nextVx * dt;
+      const ny = m.y + nextVy * dt;
+      if (evaluateCaveSDF(level, nx, ny) < -0.95) {
+        m.vx = nextVx;
+        m.vy = nextVy;
         m.x = nx;
         m.y = ny;
+      } else {
+        m.vx *= 0.65;
+        m.vy *= 0.65;
+      }
+
+      // Smooth facing hysteresis + natural pitch inclination + speed-coupled swim wave (v165)
+      const spd = Math.hypot(m.vx || 0, m.vy || 0);
+      if (m.facing === undefined) m.facing = (m.vx || 1) >= 0 ? 1 : -1;
+      if (m.vx > 0.22) m.facing = 1;
+      else if (m.vx < -0.22) m.facing = -1;
+      const targetPitch = Math.max(-0.34, Math.min(0.34, Math.atan2(m.vy || 0, Math.max(0.55, Math.abs(m.vx || 0)))));
+      m.pitch = (m.pitch || 0) + (targetPitch - (m.pitch || 0)) * Math.min(1, dt * 3.5);
+      const baseCadence = m.kind === 'manta' ? 1.55 : m.kind === 'beluga' ? 1.75 : m.kind === 'shark' ? 2.55 : 2.1;
+      m.swimPhase = (m.swimPhase ?? m.phase ?? 0) + dt * (baseCadence + spd * 0.72);
+
+      // Delicate plankton / wingtip vortex trail motes (especially luminous when peacefully escorting!)
+      if (!Array.isArray(m.trail)) m.trail = [];
+      for (let k = m.trail.length - 1; k >= 0; k--) {
+        const pt = m.trail[k];
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+        pt.life -= dt;
+        if (pt.life <= 0) m.trail.splice(k, 1);
+      }
+      if (canEscort && (m.behavior === 'escort' || m.behavior === 'curious' || spd > 0.7) && m.trail.length < 18) {
+        m._trailAccum = (m._trailAccum || 0) + dt * (m.behavior === 'escort' ? 7.5 : 3.0);
+        if (m._trailAccum >= 1) {
+          m._trailAccum = 0;
+          const tailOff = -(m.facing || 1) * (m.size || 1.8) * 0.65;
+          const yJitter = (Math.sin(timeSec * 3.7 + i * 2.1) * 0.45) * (m.size || 1.5);
+          m.trail.push({
+            x: m.x + tailOff,
+            y: m.y + yJitter,
+            vx: -(m.vx || 0) * 0.12,
+            vy: -0.14 - Math.random() * 0.12,
+            r: m.behavior === 'escort' ? 0.08 + Math.random() * 0.07 : 0.05 + Math.random() * 0.05,
+            life: m.behavior === 'escort' ? 2.4 : 1.5,
+            maxLife: m.behavior === 'escort' ? 2.4 : 1.5,
+            golden: m.behavior === 'escort',
+          });
+        }
+      }
+
+      // Playful Arctic Beluga silver air bubble rings when curious or escorting! (v165)
+      if (m.kind === 'beluga') {
+        if (!Array.isArray(m.bubbleRings)) m.bubbleRings = [];
+        for (let k = m.bubbleRings.length - 1; k >= 0; k--) {
+          const br = m.bubbleRings[k];
+          br.y -= 0.72 * dt;
+          br.x += Math.sin(timeSec * 2.1 + k) * 0.14 * dt;
+          br.r = Math.min(br.maxR, br.r + 0.22 * dt);
+          br.life -= dt;
+          if (br.life <= 0) m.bubbleRings.splice(k, 1);
+        }
+        if ((m.behavior === 'curious' || m.behavior === 'escort') && m.bubbleRings.length < 4) {
+          m._ringTimer = (m._ringTimer || 1.4) - dt;
+          if (m._ringTimer <= 0) {
+            m._ringTimer = 2.6 + Math.random() * 1.6;
+            m.bubbleRings.push({
+              x: m.x + (m.facing || 1) * (m.size || 2.0) * 0.78,
+              y: m.y - 0.12,
+              r: 0.14,
+              maxR: 0.62,
+              life: 3.8,
+              maxLife: 3.8,
+            });
+          }
+        }
       }
     }
   }

@@ -7709,7 +7709,7 @@ test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas
     SMB_DEPLOY_BONUS_PTS,
   } = await import('../public/js/game/diveSession.js');
   const { createMarineEcosystem, stepMarineEcosystem } = await import('../public/js/game/marineLife.js');
-  const { drawStyledMegafauna, drawStyledDenizen } = await import('../public/js/game/artSprites.js');
+  const { drawStyledMegafauna, drawStyledWhaleShark, drawStyledDenizen } = await import('../public/js/game/artSprites.js');
   const { DiveAudio } = await import('../public/js/game/audio.js');
 
   const wreck = getLevelById('uss-oriskany-carrier');
@@ -7875,8 +7875,9 @@ test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas
   const rendererMock = Object.create(CaveRenderer.prototype);
   rendererMock._drawPowerRelays(noopCtx, sess.powerRelays, sess.diver, (x) => 400 + x * 12, (y) => 120 + y * 12, 12, 4.0);
   rendererMock._drawSurfaceMarkerBuoy(noopCtx, sess.smb, (x) => 400 + x * 12, (y) => 120 + y * 12, 12, 4.0);
-  drawStyledMegafauna(noopCtx, { ...manta, behavior: 'escort' }, 420, 260, 14, 4.0);
-  drawStyledMegafauna(noopCtx, polarEco.megafauna.find((m) => m.kind === 'beluga'), 480, 220, 14, 4.0);
+  drawStyledMegafauna(noopCtx, { ...manta, behavior: 'escort', facing: 1, pitch: -0.05, trail: [{ x: manta.x - 1, y: manta.y, r: 0.08, life: 1.2, maxLife: 2, golden: true }] }, 420, 260, 14, 4.0);
+  drawStyledMegafauna(noopCtx, { ...polarEco.megafauna.find((m) => m.kind === 'beluga'), behavior: 'escort', bubbleRings: [{ x: 10, y: 8, r: 0.3, maxR: 0.6, life: 2.0, maxLife: 3.8 }] }, 480, 220, 14, 4.0);
+  drawStyledWhaleShark(noopCtx, { size: 5.8, dir: 1, phase: 0.5 }, 460, 200, 14, 4.0);
   drawStyledDenizen(noopCtx, octo, 500, 310, 14, 4.0);
   const moray = eco.denizens.find((d) => d.kind === 'moray');
   if (moray) drawStyledDenizen(noopCtx, moray, 560, 320, 14, 4.0);
