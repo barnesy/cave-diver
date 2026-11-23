@@ -44,6 +44,68 @@ export function computeShiftingHatchOpenness(hatch, timeSec) {
 }
 
 /**
+ * Compute deterministic living sump hydrology: tidal siphon inflow/slack/outflow cycle (v159).
+ * Strongest on open-ocean wrecks, sea caves, Blue Hole, and karst spring siphons; gentle in cenotes.
+ */
+export function computeTidalCurrent(level, simTimeSec = 0) {
+  if (!level) {
+    return { enabled: false, vx: 0, vy: 0, strength: 0, phase: 0, label: 'CALM', isStrong: false };
+  }
+  const idStr = `${level.id || ''} ${level.theme?.surfaceStyle || ''} ${level.name || ''}`;
+  const isWreck = Boolean(level.isWreck);
+  const isStrongTide = isWreck || /blue-hole|wakulla|dahab|lanzarote|abaco|bimini|bermuda|red-sea|thistlegorm|zenobia|britannic|andrea-doria|u1206|oriskany/i.test(idStr);
+  const isMildSiphon = /cenote|yucatan|sac-actun|dos-ojos|vaucluse|ressel|silfra|strytan|lagoa|eagle/i.test(idStr);
+
+  if (!isStrongTide && !isMildSiphon) {
+    return { enabled: false, vx: 0, vy: 0, strength: 0, phase: 0, label: 'CALM', isStrong: false };
+  }
+
+  const seed = hashStr(level.id || level.name || 'tide');
+  const periodSec = isStrongTide ? 68 + (seed % 26) : 92 + (seed % 34);
+  const phaseOffset = ((seed >>> 8) % 628) / 100;
+  const phase = ((simTimeSec || 0) / periodSec) * Math.PI * 2 + phaseOffset;
+  const wave = Math.sin(phase);
+  const peakSpeed = isStrongTide ? 0.62 : 0.34;
+  const vx = Math.round(wave * peakSpeed * 1000) / 1000;
+  const vy = Math.round(Math.cos(phase * 1.5) * peakSpeed * 0.14 * 1000) / 1000;
+  const strength = Math.abs(vx);
+  const label = strength < 0.14 ? 'SLACK TIDE' : vx > 0 ? 'INFLOW' : 'OUTFLOW';
+  return {
+    enabled: true,
+    vx,
+    vy,
+    strength,
+    phase,
+    label,
+    isStrong: strength >= 0.32,
+  };
+}
+
+/**
+ * Compute deterministic freshwater/saltwater Halocline refraction layer for cenotes & coastal karst (v159).
+ */
+export function computeHaloclineLayer(level) {
+  if (!level || level.isWreck) {
+    return { enabled: false, depthM: 0, thicknessM: 0, salinityDelta: 0 };
+  }
+  const idStr = `${level.id || ''} ${level.theme?.surfaceStyle || ''} ${level.name || ''}`;
+  const hasHalocline = /cenote|yucatan|sac-actun|dos-ojos|angelita|bahamas|abaco|bimini|bermuda|blue-hole|lanzarote|eagle|wakulla|lagoa/i.test(idStr);
+  if (!hasHalocline) {
+    return { enabled: false, depthM: 0, thicknessM: 0, salinityDelta: 0 };
+  }
+  const maxD = Number(level.maxDepthM) || 35;
+  const seed = hashStr(level.id || 'halo');
+  const rawDepth = Math.min(maxD * 0.48, 12.5 + (seed % 7));
+  const depthM = Math.round(Math.max(9.5, Math.min(24, rawDepth)) * 10) / 10;
+  return {
+    enabled: true,
+    depthM,
+    thicknessM: 2.4,
+    salinityDelta: 32, // PSU fresh-to-salt jump
+  };
+}
+
+/**
  * Compute realistic biome-calibrated ambient water temperature (°C) at current depth,
  * factoring in weather surface cooling, geothermal vents, and cold thermocline pockets (v142).
  */
@@ -199,11 +261,17 @@ export function createDynamicHazards(level) {
   }));
 
   const startTempC = computeAmbientWaterTempC(level, level.spawn?.y || 1, null, null);
+  const halocline = computeHaloclineLayer(level);
+  const tidalCurrent = computeTidalCurrent(level, 0);
   return {
     thermoclines,
     percolationZones,
     shiftingHatches,
+    halocline,
+    tidalCurrent,
     inThermocline: false,
+    inHalocline: false,
+    haloclineStrength: 0,
     thermoclineColdFactor: 0,
     thermoclineTempDropC: 0,
     baselineTempC: startTempC,
@@ -213,6 +281,7 @@ export function createDynamicHazards(level) {
     _thermoToastCd: 0,
     _percToastCd: 0,
     _hatchToastCd: 0,
+    _haloclineNotified: false,
   };
 }
 
@@ -385,10 +454,44 @@ export function stepDynamicHazards(session, dt, callbacks = {}) {
   }
   haz.activeHatchAlert = anyHatchAlert;
 
+  // --- 4. Living Sump Hydrology: Tidal Siphon / Outflow Current & Halocline Refraction (v159) ---
+  const tidal = computeTidalCurrent(session.level, timeSec);
+  haz.tidalCurrent = tidal;
+  if (tidal.enabled && diver.y >= 3.5 && !session.clippedToShotLine) {
+    const tideDiffScale = session.difficulty === 'guided' ? 0.55 : session.difficulty === 'hardcore' ? 1.15 : 0.85;
+    diver.vx += tidal.vx * 0.52 * tideDiffScale * dt;
+    diver.vy += tidal.vy * 0.35 * tideDiffScale * dt;
+  }
+
+  const halo = haz.halocline;
+  let inHalocline = false;
+  let haloStrength = 0;
+  if (halo?.enabled) {
+    const dHalo = Math.abs((diver.y || 0) - halo.depthM);
+    if (dHalo <= halo.thicknessM) {
+      inHalocline = true;
+      haloStrength = Math.max(0.15, 1 - dHalo / halo.thicknessM);
+      // Crossing into denser saltwater below applies a gentle buoyancy trim nudge
+      const belowCenter = (diver.y || 0) > halo.depthM ? -0.32 : 0.12;
+      diver.vy += belowCenter * haloStrength * dt;
+      if (!haz._haloclineNotified && haloStrength > 0.35) {
+        haz._haloclineNotified = true;
+        callbacks.onToast?.(
+          `🌊 Halocline at ${Math.round(halo.depthM)}m — freshwater/saltwater mixing shimmer & buoyancy shift!`,
+          3.0
+        );
+      }
+    }
+  }
+  haz.inHalocline = inHalocline;
+  haz.haloclineStrength += ((inHalocline ? haloStrength : 0) - (haz.haloclineStrength || 0)) * Math.min(1, dt * 4.0);
+
   return {
     gasRateMult,
     coldHeartRateBonus,
     percolationTriggered,
     hatchPushApplied,
+    tidalCurrent: tidal,
+    inHalocline,
   };
 }

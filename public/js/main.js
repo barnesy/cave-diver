@@ -85,6 +85,7 @@ import {
   triggerWreckAction,
   dropStageTank,
   toggleLiftBag,
+  dropLineCookie,
   resolveEmergencyDrill,
   recordGasSwitchFx,
   toggleDpvScooter,
@@ -592,7 +593,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=158" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=159" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1272,6 +1273,7 @@ const input = new InputController({
   onBuddyPing: () => handleBuddyLocatePing(''),
   onStageDrop: () => handleStageDrop(),
   onLiftBagToggle: () => handleLiftBagToggle(),
+  onDropLineCookie: () => handleDropLineCookie(),
   onComputerToggle: () => toggleShearwaterComputer(),
   onSignalWheelToggle: () => toggleSignalWheel(),
   onPhotoModeToggle: () => {
@@ -1621,6 +1623,8 @@ function savePhotoStudioSnapshot() {
       },
       encounters: session.encounters || null,
       hazards: session.hazards || null,
+      blackBox: session.blackBox || null,
+      lineCookies: session.lineCookies || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,
@@ -1751,6 +1755,7 @@ const hudGearDockEl = document.getElementById('hud-gear-dock');
 const hudDrillPill = document.getElementById('hud-drill-pill');
 const btnHudStage = document.getElementById('btn-hud-stage');
 const btnHudLiftBag = document.getElementById('btn-hud-liftbag');
+const btnHudCookie = document.getElementById('btn-hud-cookie');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
@@ -2128,6 +2133,11 @@ btnKitTorch?.addEventListener('click', (e) => {
   session.diver.torchOn = !session.diver.torchOn;
   lastGearHudKey = '';
   syncTechGearHud(session);
+  if (btnHudCookie) {
+    const maxCk = session.maxLineCookies || 6;
+    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
+    btnHudCookie.disabled = false;
+  }
 });
 btnHudStage?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2139,6 +2149,26 @@ btnHudLiftBag?.addEventListener('click', (e) => {
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   handleLiftBagToggle();
 });
+btnHudCookie?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+  handleDropLineCookie();
+});
+
+function handleDropLineCookie() {
+  if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
+  audio.unlock();
+  const res = dropLineCookie(session, {
+    onLineCookiePlaced: () => audio.playCookieClip?.(),
+    onToast: (txt, sec) => showToast(txt, sec),
+  });
+  if (btnHudCookie && session) {
+    const left = Math.max(0, (session.maxLineCookies || 6) - (session.lineCookies?.length || 0));
+    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${left})</span><span class="kbd-hint kit-kbd">K</span>`;
+    btnHudCookie.disabled = left <= 0;
+  }
+  return Boolean(res?.ok);
+}
 
 function handleLiftBagToggle() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
@@ -5180,6 +5210,11 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       : null;
   lastGearHudKey = '';
   syncTechGearHud(session);
+  if (btnHudCookie) {
+    const maxCk = session.maxLineCookies || 6;
+    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
+    btnHudCookie.disabled = false;
+  }
   syncMinimapButtonUi();
   refreshActiveGhostTrack(activeLevel);
   session._pbSplits = activeGhostTrack ? computeGhostCheckpointSplits(activeLevel, activeGhostTrack) : {};
@@ -5321,7 +5356,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore: session.hatchBonusScore || 0,
+      hatchBonusScore: (session.hatchBonusScore || 0) + (session.blackBoxBonusScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
@@ -8618,6 +8653,8 @@ const sessionStepCallbacks = {
   onMarkerPlaced: () => audio.playClipLine(true),
   onEncounterSpawn: (visitor) => audio.playEncounterChime(visitor?.kind || 'whaleshark'),
   onBeaconClaimed: () => audio.playEncounterChime('beacon'),
+  onBlackBoxPing: (_bb, distM, pan) => audio.playBlackBoxPing?.(distM, pan),
+  onBlackBoxRecovered: () => audio.playEncounterChime('beacon'),
   onBuddyPing: () => audio.playEncounterChime('buddy-ping'),
   onMaskPurge: () => {
     audio.playMaskPurge();
@@ -9197,6 +9234,22 @@ function frame(nowMs) {
       }
     }
     const peers = getActivePeers();
+    // Subtle periodic Biome Hydrophone Soundscape pulse (ice crack, volcanic rumble, hull groan, cenote drop) (v159)
+    if (!divePaused && !session.endedState && (session.diver?.y || 0) >= 6.0) {
+      session._biomeCueTimer = (session._biomeCueTimer ?? 9.0) - dt;
+      if (session._biomeCueTimer <= 0) {
+        session._biomeCueTimer = 14.5 + Math.random() * 8.5;
+        const lvId = `${session.level?.id || ''} ${session.level?.theme?.surfaceStyle || ''} ${session.level?.name || ''}`;
+        const biomeKind = session.level?.isWreck
+          ? 'wreck'
+          : /arctic|ice|scoresby|kverkfjoll|silfra/i.test(lvId)
+            ? 'ice'
+            : /katla|strytan|grjotagja|volcanic|lanzarote/i.test(lvId)
+              ? 'volcanic'
+              : 'cenote';
+        audio.playBiomeHydrophoneCue?.(biomeKind, (Math.random() - 0.5) * 1.4);
+      }
+    }
     const humanFramePeers = isMultiplayer ? lan.getPeers() : EMPTY_ARR;
     let spectateTarget = null;
     if (spectatingPeer && humanFramePeers.length > 0) {
@@ -9299,6 +9352,8 @@ function frame(nowMs) {
       cameraFlash: session.camera?.activeFlash || null,
       encounters: session.encounters || null,
       hazards: session.hazards || null,
+      blackBox: session.blackBox || null,
+      lineCookies: session.lineCookies || null,
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,

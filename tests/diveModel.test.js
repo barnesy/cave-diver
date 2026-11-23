@@ -7436,3 +7436,133 @@ test('v158 Mode-Specific AI Squad Profiles: Guided Pro Guide, Standard Tech Co-D
   assert.ok(drawnTexts.some((t) => t.includes('SAFETY GUARD')), 'Renderer should draw SAFETY GUARD halo badge');
   assert.ok(drawnTexts.some((t) => t.includes('DECO PACE')), 'Renderer should draw DECO PACE halo badge');
 });
+
+test('v159 Living Sump Hydrology, Acoustic Black-Box Hunts, Line Cookies & Squad-Assisted Bulkheads', async () => {
+  const { computeTidalCurrent, computeHaloclineLayer, stepDynamicHazards } = await import(
+    '../public/js/game/dynamicHazards.js'
+  );
+  const {
+    BLACK_BOX_BONUS_PTS,
+    MAX_LINE_COOKIES,
+    createBlackBoxTarget,
+    recoverBlackBox,
+    dropLineCookie,
+  } = await import('../public/js/game/diveSession.js');
+  const { stepSiltPhysics, spawnSiltPlume } = await import('../public/js/game/silt.js');
+
+  const wreck = LEVELS.find((l) => l.isWreck && Array.isArray(l.watertightHatches) && l.watertightHatches.length > 0);
+  assert.ok(wreck, 'Expected a shipwreck level with watertight hatches');
+
+  // 1. Tidal Siphon / Outflow cycle & Halocline layer
+  const t0 = computeTidalCurrent(wreck, 0);
+  const tQuarter = computeTidalCurrent(wreck, 22);
+  assert.equal(t0.enabled, true);
+  assert.ok(['INFLOW', 'SLACK TIDE', 'OUTFLOW'].includes(t0.label));
+  assert.notEqual(t0.vx, tQuarter.vx, 'Tidal current should cycle smoothly over time');
+
+  const haloCenote = computeHaloclineLayer(LEVEL_1);
+  const haloWreck = computeHaloclineLayer(wreck);
+  assert.equal(haloCenote.enabled, true, 'Cenote Level 1 should have an active halocline layer');
+  assert.ok(haloCenote.depthM >= 9.5 && haloCenote.depthM <= 24);
+  assert.equal(haloWreck.enabled, false, 'Open-ocean wreck should not have a cenote halocline');
+
+  // Step diver through halocline -> buoyancy shift + 1-time toast
+  const hSess = createDiveSession(LEVEL_1, { diverName: 'Hydro', difficulty: 'standard' });
+  hSess.diver.y = haloCenote.depthM + 0.5;
+  hSess.diver.vy = 0;
+  let haloToast = '';
+  const hazOut = stepDynamicHazards(hSess, 0.1, { onToast: (m) => { haloToast = m; } });
+  assert.equal(hazOut.inHalocline, true);
+  assert.ok(hSess.diver.vy < 0, 'Crossing into denser saltwater below halocline should apply slight upward buoyancy nudge');
+  assert.match(haloToast, /Halocline/i);
+
+  // Silt clouds drift with active tidal current
+  const testClouds = [];
+  const c = spawnSiltPlume(testClouds, { x: LEVEL_1.checkpoints[0].x, y: LEVEL_1.checkpoints[0].y, vx: 0, vy: 0 });
+  const startVx = c.vx;
+  stepSiltPhysics(LEVEL_1, testClouds, null, 0.25, { currentVx: 1.5 });
+  assert.ok(c.vx > startVx, 'Positive tidal current should carry silt plumes downstream');
+
+  // 2. Acoustic Black-Box / Lost Hydro-Probe placement, ping & [E] recovery
+  const bbCave = createBlackBoxTarget(LEVEL_1);
+  const bbWreck = createBlackBoxTarget(wreck);
+  assert.ok(bbCave && !bbCave.isWreck && bbCave.points === BLACK_BOX_BONUS_PTS);
+  assert.ok(bbWreck && bbWreck.isWreck && bbWreck.label.includes('Black Box'));
+
+  hSess.blackBox.pingTimer = 0.02;
+  hSess.diver.x = hSess.blackBox.x - 10;
+  hSess.diver.y = hSess.blackBox.y;
+  let pingedDist = -1;
+  let pingPan = 0;
+  stepDiveSession(hSess, { x: 0, y: 0 }, 0.05, {
+    onBlackBoxPing: (_bb, d, pan) => {
+      pingedDist = d;
+      pingPan = pan;
+    },
+  });
+  assert.ok(pingedDist > 0 && pingedDist < 15, 'Black Box should emit periodic ping when diver is within 34m');
+  assert.ok(pingPan > 0, 'Stereo pan should point right toward Black Box located +X of diver');
+
+  hSess.diver.x = hSess.blackBox.x + 1.0;
+  hSess.diver.y = hSess.blackBox.y;
+  stepDiveSession(hSess, { x: 0, y: 0 }, 0.05, {});
+  assert.match(hSess.wreckActionPrompt?.label || '', /RECOVER .* \[E\]/);
+  const recRes = triggerWreckAction(hSess, {});
+  assert.equal(recRes.handled, true);
+  assert.equal(recRes.kind, 'recover-blackbox');
+  assert.equal(hSess.blackBox.recovered, true);
+  assert.equal(hSess.blackBoxBonusScore, BLACK_BOX_BONUS_PTS);
+  assert.equal(recoverBlackBox(hSess).ok, false, 'Black Box cannot be recovered twice');
+
+  // 3. Personal Glowing Directional Line Cookies (up to 6 per dive)
+  for (let i = 1; i <= MAX_LINE_COOKIES; i++) {
+    const ck = dropLineCookie(hSess, {});
+    assert.equal(ck.ok, true);
+    assert.equal(ck.cookie.index, i);
+    assert.equal(Number.isFinite(ck.cookie.exitAngle), true);
+  }
+  assert.equal(hSess.lineCookies.length, MAX_LINE_COOKIES);
+  assert.equal(dropLineCookie(hSess, {}).ok, false, 'Should cap Line Cookies at MAX_LINE_COOKIES');
+
+  // 4. Squad-Assisted Bulkhead Cranking (2x speed when buddy is within 5.8m)
+  const wSessSolo = createDiveSession(wreck, { diverName: 'Solo', difficulty: 'standard' });
+  const wSessTeam = createDiveSession(wreck, { diverName: 'Team', difficulty: 'standard' });
+  const hatch = wreck.watertightHatches[0];
+  for (const s of [wSessSolo, wSessTeam]) {
+    s.equalizedHatchIds.add(hatch.id);
+    s.diver.x = hatch.x + 0.8;
+    s.diver.y = hatch.y;
+    s.crankingHatchId = hatch.id;
+    s.crankingHatchProgress = 0.2;
+  }
+  wSessTeam.aiSquad = [{ id: 'ai-1', x: hatch.x - 1.5, y: hatch.y, alive: true, surfaced: false, issue: null }];
+  stepDiveSession(wSessSolo, { x: 0, y: 0 }, 0.2, {});
+  stepDiveSession(wSessTeam, { x: 0, y: 0 }, 0.2, {});
+  assert.equal(wSessTeam.squadAssistActive, true);
+  assert.ok(
+    wSessTeam.crankingHatchProgress > wSessSolo.crankingHatchProgress + 0.1,
+    `Squad-assisted cranking (${wSessTeam.crankingHatchProgress}) should be ~2x faster than solo (${wSessSolo.crankingHatchProgress})`
+  );
+
+  // 5. Renderer draws Tidal Streaks, Black Box & Line Cookies cleanly
+  const texts = [];
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 1280, height: 720 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t || '').length * 7 }),
+      fillText: (t) => texts.push(String(t)),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = wreck;
+  r._cachedDpr = 1;
+  const toX = (x) => 400 + x * 20;
+  const toY = (y) => 100 + y * 20;
+  r._drawDynamicHazards(noopCtx, { thermoclines: [], percolationZones: [], shiftingHatches: [], tidalCurrent: { enabled: true, vx: 0.5, vy: 0.05, strength: 0.5 } }, -40, 80, 0, 80, toX, toY, 20, 4.0, wSessSolo.diver);
+  r._drawBlackBoxAndCookies(noopCtx, { ...bbWreck, pingPulse: 0.6 }, hSess.lineCookies, { x: bbWreck.x + 2, y: bbWreck.y }, toX, toY, 20, 4.0, true);
+  assert.ok(texts.some((t) => t.includes('BLACK BOX')), 'Renderer should label nearby Black Box');
+  assert.ok(texts.some((t) => t.includes('#1 🏠')), 'Renderer should label placed Line Cookies');
+});

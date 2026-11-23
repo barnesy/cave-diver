@@ -120,12 +120,13 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
     const spread = (Math.random() - 0.5) * 1.4;
     const radScale = (difficulty === 'hardcore' ? 1.16 : difficulty === 'guided' ? 0.82 : 1.0) * (dpvBoost ? 1.18 : 1.0);
     const alphaScale = (difficulty === 'hardcore' ? 1.09 : difficulty === 'guided' ? 0.78 : 1.0) * (dpvBoost ? 1.06 : 1.0);
-    // Prop-wash jets backward & billows upward from the limestone silt bed
+    // Prop-wash & fin-wash wake jets backward along swim/kick axis & billows upward from the floor (v159)
+    const finWashMag = 0.85 + Math.min(1.4, activity * 0.65) + (dpvBoost ? 0.9 : 0);
     const cloud = spawnSiltPlume(siltClouds, {
-      x: stirX + spread * 0.6,
+      x: stirX - fx * 0.35 + spread * 0.5,
       y: stirY - Math.random() * 0.22,
-      vx: -fx * (0.65 + Math.random() * 0.85) + spread * 0.6,
-      vy: -fy * 0.25 - (0.42 + Math.random() * 0.65),
+      vx: -fx * (finWashMag + Math.random() * 0.65) + spread * 0.45,
+      vy: -fy * 0.35 - (0.38 + Math.random() * 0.58),
       radius: (0.75 + proximity * 0.55 + Math.random() * 0.35) * radScale,
       maxRadius: (3.4 + proximity * 2.1) * radScale,
       life: (28.0 + Math.random() * 12.0) * (difficulty === 'guided' ? 0.8 : difficulty === 'hardcore' ? 1.15 : 1.0),
@@ -142,9 +143,10 @@ export function stirFloorSilt(level, diver, siltClouds, { dt, thrustMag, timerSt
  * Diffuses silt clouds outward along cave corridors while bouncing off rock boundaries.
  * Also computes local silt density at (diver.x, diver.y) for telemetry/testing.
  */
-export function stepSiltPhysics(level, siltClouds, diver, dt) {
+export function stepSiltPhysics(level, siltClouds, diver, dt, opts = {}) {
   const dampX = Math.exp(-0.48 * dt);
   const dampY = Math.exp(-0.58 * dt);
+  const currentVx = Number(opts?.currentVx) || 0;
   for (let i = siltClouds.length - 1; i >= 0; i--) {
     const s = siltClouds[i];
     // Bud secondary cavern-diffusing tendrils as energetic floor plumes rise into the passage
@@ -186,8 +188,8 @@ export function stepSiltPhysics(level, siltClouds, diver, dt) {
       s.y -= n.ny * 0.06;
     }
 
-    // Cavern eddy curls & broad diffusion throughout the chamber (rust percolation gently rains downward)
-    s.vx = (s.vx + Math.sin(s.life * 1.15 + s.seed) * 0.26 * dt) * dampX;
+    // Cavern eddy curls, tidal drift & broad diffusion throughout the chamber (rust percolation gently rains downward)
+    s.vx = (s.vx + (Math.sin(s.life * 1.15 + s.seed) * 0.26 + currentVx * 0.42) * dt) * dampX;
     if (s.isRust) {
       s.vy = (s.vy + (0.28 + Math.cos(s.life * 0.85 + s.seed) * 0.08) * dt) * dampY;
     } else {

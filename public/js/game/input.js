@@ -21,6 +21,7 @@ export class InputController {
     onBuddyPing,
     onStageDrop,
     onLiftBagToggle,
+    onDropLineCookie,
     onComputerToggle,
     onSignalWheelToggle,
     onPhotoModeToggle,
@@ -59,6 +60,7 @@ export class InputController {
     this.onBuddyPing = onBuddyPing;
     this.onStageDrop = onStageDrop;
     this.onLiftBagToggle = onLiftBagToggle;
+    this.onDropLineCookie = onDropLineCookie;
     this.onComputerToggle = onComputerToggle;
     this.onSignalWheelToggle = onSignalWheelToggle;
     this.onPhotoModeToggle = onPhotoModeToggle;
@@ -110,6 +112,9 @@ export class InputController {
       }
       if (code === 'KeyY' && !e.repeat) {
         if (this.onLiftBagToggle?.()) e.preventDefault();
+      }
+      if (code === 'KeyK' && !e.repeat) {
+        if (this.onDropLineCookie?.()) e.preventDefault();
       }
       if (code === 'KeyX' && !e.repeat) {
         if (this.onComputerToggle?.()) e.preventDefault();

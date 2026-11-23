@@ -1361,4 +1361,83 @@ export class DiveAudio {
     osc.start(t);
     osc.stop(t + 1.24);
   }
+
+  /**
+   * Directional underwater locator beacon (ULB) ping for hidden Black Boxes & Lost Hydro-Probes (v159).
+   * Stereo pan & distance attenuation let players hunt by ear + sonar.
+   */
+  playBlackBoxPing(distM = 18, pan = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const prox = Math.max(0.12, Math.min(1, 1 - (Number(distM) || 0) / 36));
+    const gain = 0.015 + prox * 0.055;
+    this.playTone(2640, 0.065, 'sine', gain, 0, { pan, bus: 'sfx' });
+    this.playTone(3120, 0.045, 'triangle', gain * 0.42, 0.08, { pan, bus: 'sfx' });
+  }
+
+  /**
+   * Tactile polymer-on-line snap click when clipping a directional Line Cookie (v159).
+   */
+  playCookieClip() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(1480, 0.025, 'triangle', 0.05, 0, { bus: 'sfx' });
+    this.playTone(2220, 0.032, 'sine', 0.04, 0.028, { bus: 'sfx' });
+    this.vibrate?.(12);
+  }
+
+  /**
+   * Subtle procedural biome hydrophone ambience cues on the ambience bus (v159/v160):
+   *  - 'ice'     -> crystalline ice-shelf stress crack
+   *  - 'volcanic'-> deep geothermal sub-bass rumble
+   *  - 'wreck'   -> distant metallic hull creak
+   *  - 'cenote'  -> resonant cavern water-drip / limestone echo
+   */
+  playBiomeHydrophoneCue(biomeKind = 'cenote', pan = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    if (biomeKind === 'ice') {
+      this.playTone(1860, 0.045, 'sawtooth', 0.018, 0, { pan, bus: 'ambience' });
+      this.playTone(1120, 0.14, 'triangle', 0.022, 0.04, { pan: pan * 0.7, bus: 'ambience' });
+      return;
+    }
+    if (biomeKind === 'volcanic') {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(54, t);
+      osc.frequency.exponentialRampToValueAtTime(38, t + 1.4);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.035, t + 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.45);
+      osc.connect(g);
+      const panner = this._connectSpatial(g, { pan, bus: 'ambience' });
+      osc.onended = () => {
+        try { osc.disconnect(); g.disconnect(); panner?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 1.48);
+      return;
+    }
+    if (biomeKind === 'wreck') {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(118, t);
+      osc.frequency.exponentialRampToValueAtTime(84, t + 0.95);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.024, t + 0.22);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+      osc.connect(g);
+      const panner = this._connectSpatial(g, { pan, bus: 'ambience' });
+      osc.onended = () => {
+        try { osc.disconnect(); g.disconnect(); panner?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 1.04);
+      return;
+    }
+    // Cenote / Karst resonant drop & shimmer
+    this.playTone(620, 0.08, 'sine', 0.014, 0, { pan, bus: 'ambience' });
+    this.playTone(840, 0.12, 'sine', 0.011, 0.06, { pan: pan * 0.6, bus: 'ambience' });
+  }
 }

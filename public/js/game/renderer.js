@@ -1474,6 +1474,8 @@ export class CaveRenderer {
     cameraFlash = null,
     encounters = null,
     hazards = null,
+    blackBox = null,
+    lineCookies = null,
     salvage = null,
     mechFx = null,
     stories = null,
@@ -1611,9 +1613,14 @@ export class CaveRenderer {
       this._drawWaterSurfaceWaves(ctx, cw, toScreenX, toScreenY, scale, timeSec, surfY, narcX);
     }
 
-    // 4. Multi-Layer Refractive Halocline / Thermocline Interface Shimmer + Optical Shear Waves
-    if (Number.isFinite(this.level.haloclineY)) {
-      const haloY = toScreenY(this.level.haloclineY);
+    // 4. Multi-Layer Refractive Halocline / Thermocline Interface Shimmer + Optical Shear Waves (v159 dynamic hydrology)
+    const effectiveHaloY = Number.isFinite(this.level.haloclineY)
+      ? this.level.haloclineY
+      : hazards?.halocline?.enabled
+        ? hazards.halocline.depthM
+        : NaN;
+    if (Number.isFinite(effectiveHaloY)) {
+      const haloY = toScreenY(effectiveHaloY);
       if (haloY > -90 && haloY < ch + 90) {
         ctx.save();
         const bandH = 2.6 * scale;
@@ -1811,6 +1818,9 @@ export class CaveRenderer {
     }
     if (stories && typeof this._drawSubmergedStories === 'function') {
       this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'emissive');
+    }
+    if ((blackBox || (Array.isArray(lineCookies) && lineCookies.length > 0)) && typeof this._drawBlackBoxAndCookies === 'function') {
+      this._drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, Boolean(sonarPulse));
     }
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
@@ -11744,6 +11754,127 @@ export class CaveRenderer {
         ctx.beginPath();
         ctx.arc(sx, sy, rPx * 0.9, 0, Math.PI * 2);
         ctx.stroke();
+      }
+    }
+
+    // 4. Living Sump Hydrology: Subtle Tidal Siphon / Outflow Current Drift Streaks (v159)
+    const tide = hazards.tidalCurrent;
+    if (tide?.enabled && tide.strength >= 0.16 && diver) {
+      const dir = Math.sign(tide.vx || 1);
+      const streakAlpha = Math.min(0.36, tide.strength * 0.48);
+      ctx.strokeStyle = `rgba(186, 230, 253, ${streakAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, 0.045 * scale);
+      ctx.lineCap = 'round';
+      const spanX = Math.max(14, visX1 - visX0);
+      const spanY = Math.max(10, visY1 - visY0);
+      for (let i = 0; i < 14; i++) {
+        const seed = i * 19.37;
+        const speed = 1.6 + tide.strength * 3.8 + (i % 3) * 0.45;
+        const rawX = (((seed * 7.3 + timeSec * speed * dir) % spanX) + spanX) % spanX;
+        const wx = visX0 + rawX;
+        const wy = Math.max(2.5, visY0 + ((seed * 3.1) % spanY));
+        const sx = toScreenX(wx);
+        const sy = toScreenY(wy);
+        const lenPx = (0.75 + tide.strength * 1.4) * scale;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + dir * lenPx, sy + (tide.vy || 0) * lenPx * 0.4);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Render hidden Acoustic Black-Box / Lost Hydro-Probe (with sonar-piercing ping waves)
+   * and player-clipped glowing directional Line Cookies (v159).
+   */
+  _drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, sonarActive = false) {
+    ctx.save();
+
+    if (blackBox && !blackBox.recovered) {
+      const bx = toScreenX(blackBox.x);
+      const by = toScreenY(blackBox.y);
+      const distM = diver ? Math.hypot(diver.x - blackBox.x, diver.y - blackBox.y) : 99;
+      const pulse = Math.max(0, Math.min(1, blackBox.pingPulse || 0));
+
+      if (pulse > 0.02 && (distM <= 28 || sonarActive)) {
+        const expand = 1 - pulse;
+        const ringR = (0.9 + expand * 7.5) * scale;
+        ctx.strokeStyle = blackBox.isWreck
+          ? `rgba(251, 146, 60, ${(pulse * 0.72).toFixed(3)})`
+          : `rgba(250, 204, 21, ${(pulse * 0.72).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+        ctx.beginPath();
+        ctx.arc(bx, by, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (distM <= 18 || sonarActive) {
+        const boxW = Math.max(10, 0.56 * scale);
+        const boxH = Math.max(7, 0.36 * scale);
+        ctx.fillStyle = blackBox.isWreck ? '#f97316' : '#eab308';
+        ctx.strokeStyle = '#fff7ed';
+        ctx.lineWidth = Math.max(1.2, 0.055 * scale);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bx - boxW * 0.5, by - boxH * 0.5, boxW, boxH, Math.max(2, 0.08 * scale));
+        } else {
+          ctx.rect(bx - boxW * 0.5, by - boxH * 0.5, boxW, boxH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        const ledOn = Math.sin(timeSec * 6.5) > 0;
+        ctx.fillStyle = ledOn ? '#38bdf8' : '#7dd3fc';
+        ctx.beginPath();
+        ctx.arc(bx + boxW * 0.28, by - boxH * 0.12, Math.max(2, 0.09 * scale), 0, Math.PI * 2);
+        ctx.fill();
+
+        if (distM <= 9.5) {
+          ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fed7aa';
+          ctx.fillText(`📟 ${blackBox.isWreck ? 'BLACK BOX' : 'HYDRO-PROBE'}`, bx, by - boxH - Math.max(4, 0.18 * scale));
+        }
+      }
+    }
+
+    if (Array.isArray(lineCookies) && lineCookies.length > 0) {
+      for (let i = 0; i < lineCookies.length; i++) {
+        const ck = lineCookies[i];
+        if (!ck) continue;
+        const cx = toScreenX(ck.x);
+        const cy = toScreenY(ck.y);
+        const rPx = Math.max(6, 0.3 * scale);
+        const glow = 0.75 + 0.25 * Math.sin(timeSec * 3.4 + i);
+
+        ctx.fillStyle = `rgba(251, 146, 60, ${(0.24 * glow).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rPx * 1.9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ck.exitAngle || 0);
+        ctx.fillStyle = '#fb923c';
+        ctx.strokeStyle = '#ffedd5';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.beginPath();
+        ctx.moveTo(rPx * 1.25, 0);
+        ctx.lineTo(-rPx * 0.85, -rPx * 0.78);
+        ctx.lineTo(-rPx * 0.42, 0);
+        ctx.lineTo(-rPx * 0.85, rPx * 0.78);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255, 237, 213, 0.92)';
+        ctx.fillText(`#${ck.index} 🏠${ck.distToExitM}m`, cx, cy - rPx * 1.45);
       }
     }
 

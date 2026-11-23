@@ -89,6 +89,160 @@ export function computeBreathProfile(diveState, exertion = 0) {
 /**
  * Create a self-contained dive simulation session for any registered level.
  */
+export const MAX_LINE_COOKIES = 6;
+export const BLACK_BOX_BONUS_PTS = 350;
+
+/**
+ * Deterministically place an optional hidden Acoustic Black Box (shipwrecks) or Lost Hydro-Probe
+ * (caves) in a deep open-water alcove for directional hydrophone / sonar hunting (v159).
+ */
+export function createBlackBoxTarget(level) {
+  if (!level) return null;
+  const segs = Array.isArray(level.segments) ? level.segments : [];
+  if (segs.length === 0) return null;
+  const spawnX = level.spawn?.x || 0;
+  const spawnY = level.spawn?.y || 1;
+  const maxD = Math.max(18, Number(level.maxDepthM) || 35);
+  const minTargetDepth = Math.max(8, maxD * 0.42);
+  let h = 2166136261;
+  const idStr = String(level.id || level.name || 'site');
+  for (let i = 0; i < idStr.length; i++) {
+    h ^= idStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+
+  let best = null;
+  let bestScore = -1;
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    const mx = (s.ax + s.bx) * 0.5;
+    const my = (s.ay + s.by) * 0.5;
+    if (my < minTargetDepth) continue;
+    const distSpawn = Math.hypot(mx - spawnX, my - spawnY);
+    if (distSpawn < 14) continue;
+    const sdf = evaluateCaveSDF(level, mx, my);
+    if (sdf >= -1.1) continue;
+    // Prefer an alcove slightly off the main checkpoints
+    let minCpDist = 999;
+    for (const cp of level.checkpoints || []) {
+      const d = Math.hypot(mx - cp.x, my - cp.y);
+      if (d < minCpDist) minCpDist = d;
+    }
+    const jitter = (((h ^ (i * 2654435761)) >>> 0) % 100) / 100;
+    const score = my * 0.5 + Math.min(18, minCpDist) * 1.4 + jitter * 6;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x: Math.round(mx * 10) / 10, y: Math.round(my * 10) / 10 };
+    }
+  }
+  if (!best) return null;
+  const isWreck = Boolean(level.isWreck);
+  return {
+    id: `blackbox_${level.id || 'site'}`,
+    x: best.x,
+    y: best.y,
+    isWreck,
+    label: isWreck ? 'Voyage Black Box' : 'Lost Hydro-Probe',
+    points: BLACK_BOX_BONUS_PTS,
+    recovered: false,
+    pingTimer: 1.8,
+    pingIntervalSec: 3.4,
+    pingPulse: 0, // [0..1] expanding acoustic ring animation
+  };
+}
+
+/**
+ * Recover the site's acoustic pinging Black Box / Lost Hydro-Probe (+350 pts + 18m sonar sweep) (v159).
+ */
+export function recoverBlackBox(session, callbacks = {}) {
+  const bb = session?.blackBox;
+  if (!bb || bb.recovered) return { ok: false };
+  bb.recovered = true;
+  bb.pingPulse = 1;
+  const pts = bb.points || BLACK_BOX_BONUS_PTS;
+  session.blackBoxBonusScore = (session.blackBoxBonusScore || 0) + pts;
+  const newlyMapped = markExploredAround(
+    session.exploreCells,
+    session.exploredCells,
+    bb.x,
+    bb.y,
+    18.0,
+    session.exploredGrid
+  );
+  if (newlyMapped > 0 && session.exploreCells?.length > 0) {
+    session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
+  }
+  if (Array.isArray(session.collectBursts)) {
+    session.collectBursts.push({
+      x: bb.x,
+      y: bb.y,
+      points: pts,
+      kind: 'blackbox',
+      age: 0,
+      duration: 1.8,
+    });
+  }
+  if (session.mechFx) {
+    recordMechanicalEvent(session.mechFx, 'claim-beacon', { x: bb.x, y: bb.y, targetId: bb.id });
+  }
+  callbacks.onBlackBoxRecovered?.(bb, pts);
+  callbacks.onWreckSync?.('blackbox', bb.id);
+  callbacks.onToast?.(`📟 ${bb.label} recovered! (+${pts} pts · 18m acoustic scan)`, 3.6);
+  return { ok: true, blackBox: bb, points: pts };
+}
+
+/**
+ * Drop a glowing personal directional Line Cookie pointing back toward the exit / shot line (v159).
+ */
+export function dropLineCookie(session, callbacks = {}) {
+  if (!session || !session.diver || !session.level || session.diveState?.alive === false) {
+    return { ok: false, reason: 'inactive' };
+  }
+  if (!Array.isArray(session.lineCookies)) session.lineCookies = [];
+  const maxCookies = session.maxLineCookies || MAX_LINE_COOKIES;
+  if (session.lineCookies.length >= maxCookies) {
+    callbacks.onToast?.(`🟠 All ${maxCookies} Line Cookies placed!`, 2.2);
+    return { ok: false, reason: 'empty' };
+  }
+  const { diver, level } = session;
+  const exitPt = level.exitZone || level.spawn || { x: 0, y: 1 };
+  // Point toward the nearest preceding guideline node heading homeward, or straight toward exit/spawn
+  let aimX = exitPt.x;
+  let aimY = exitPt.y;
+  const gl = Array.isArray(level.guideline) ? level.guideline : [];
+  if (gl.length >= 2) {
+    let bestIdx = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < gl.length; i++) {
+      const d = Math.hypot(gl[i].x - diver.x, gl[i].y - diver.y);
+      if (d < bestD) {
+        bestD = d;
+        bestIdx = i;
+      }
+    }
+    const homeIdx = Math.max(0, bestIdx - 1);
+    if (bestD <= 14 && gl[homeIdx]) {
+      aimX = gl[homeIdx].x;
+      aimY = gl[homeIdx].y;
+    }
+  }
+  const distToExitM = Math.round(Math.hypot(exitPt.x - diver.x, exitPt.y - diver.y));
+  const cookie = {
+    id: `cookie_${session.lineCookies.length + 1}`,
+    index: session.lineCookies.length + 1,
+    x: Math.round(diver.x * 100) / 100,
+    y: Math.round(diver.y * 100) / 100,
+    exitAngle: Math.atan2(aimY - diver.y, aimX - diver.x),
+    distToExitM,
+    placedAt: session.simTimeSec || 0,
+  };
+  session.lineCookies.push(cookie);
+  const remaining = maxCookies - session.lineCookies.length;
+  callbacks.onLineCookiePlaced?.(cookie, remaining);
+  callbacks.onToast?.(`🟠 Line Cookie #${cookie.index} clipped (Exit ${distToExitM}m · ${remaining} left)`, 2.3);
+  return { ok: true, cookie, remaining };
+}
+
 export function createDiveSession(
   level,
   {
@@ -163,6 +317,11 @@ export function createDiveSession(
     },
     encounters: createDynamicEncounters(level),
     hazards: createDynamicHazards(level),
+    blackBox: createBlackBoxTarget(level),
+    blackBoxBonusScore: 0,
+    lineCookies: [],
+    maxLineCookies: MAX_LINE_COOKIES,
+    squadAssistActive: false,
     bioWake: [],
     _bioWakeAccum: 0,
     surfaceRipples: [],
@@ -1889,6 +2048,17 @@ export function triggerWreckAction(session, callbacks = {}) {
     }
   }
 
+  // 5b. Priority 5b: Recover Acoustic Black Box / Lost Hydro-Probe (v159)
+  if (session.blackBox && !session.blackBox.recovered) {
+    const bbDist = Math.hypot(diver.x - session.blackBox.x, diver.y - session.blackBox.y);
+    if (bbDist <= 3.8) {
+      const bbRes = recoverBlackBox(session, callbacks);
+      if (bbRes.ok) {
+        return { handled: true, kind: 'recover-blackbox', targetId: bbRes.blackBox.id, points: bbRes.points };
+      }
+    }
+  }
+
   // 6. Priority 6: Deploy commercial Lift Bag when weighed down by heavy salvage (>=10kg uncompensated)
   if (!session.salvage?.liftBagActive && (session.salvage?.netTrimKg || 0) >= 10 && diver.y > 4) {
     const lbRes = toggleLiftBag(session, callbacks);
@@ -2739,14 +2909,32 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
         // Swam away before unsealing
         session.crankingHatchId = null;
         session.crankingHatchProgress = 0;
+        session.squadAssistActive = false;
       } else {
-        session.crankingHatchProgress = Math.min(1, (session.crankingHatchProgress || 0) + dt / 1.35);
+        // Squad-Assisted Bulkhead Equalization/Cranking: nearby AI or Co-op buddy doubles speed (v159)
+        let hasSquadHelper = false;
+        const helpers = [
+          ...(Array.isArray(session.aiSquad) ? session.aiSquad : []),
+          ...(Array.isArray(callbacks.peers) ? callbacks.peers : []),
+        ];
+        for (let hi = 0; hi < helpers.length; hi++) {
+          const hp = helpers[hi];
+          if (!hp || hp.alive === false || hp.surfaced || hp.issue) continue;
+          if (Math.hypot((hp.x || 0) - activeHatch.x, (hp.y || 0) - activeHatch.y) <= 5.8) {
+            hasSquadHelper = true;
+            break;
+          }
+        }
+        session.squadAssistActive = hasSquadHelper;
+        const crankMult = hasSquadHelper ? 2.0 : 1.0;
+        session.crankingHatchProgress = Math.min(1, (session.crankingHatchProgress || 0) + (dt / 1.35) * crankMult);
         session.crankTickAccum = (session.crankTickAccum || 0) + dt;
         if (session.crankTickAccum >= 0.28) {
           session.crankTickAccum = 0;
           callbacks.onHatchCrank?.(session.crankingHatchProgress, activeHatch);
         }
         if (session.crankingHatchProgress >= 1) {
+          session.squadAssistActive = false;
           _completeHatchOpen(session, activeHatch, callbacks, siltClouds, session.bubbles);
         }
       }
@@ -2946,7 +3134,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       session.wreckActionPrompt = {
         kind: 'open-hatch',
         label: isCranking ? `⚙️ CRANKING ${Math.round((session.crankingHatchProgress || 0) * 100)}%` : `⚙️ OPEN HATCH [E]`,
-        detail: nearbyHatch.label || 'Watertight Hatch',
+        detail: session.squadAssistActive
+          ? `🤝 Squad Assisting Bulkhead (2×) · ${nearbyHatch.label || 'Watertight Hatch'}`
+          : nearbyHatch.label || 'Watertight Hatch',
         progress: isCranking ? session.crankingHatchProgress : 0,
       };
     }
@@ -2970,6 +3160,13 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       kind: 'place-marker',
       label: `🪢 TAG MARKER [E]`,
       detail: `+${nearbyAnchor.reelBonusM || 40}m Spool · ${nearbyAnchor.label}`,
+      progress: 0,
+    };
+  } else if (session.blackBox && !session.blackBox.recovered && Math.hypot(diver.x - session.blackBox.x, diver.y - session.blackBox.y) <= 3.8) {
+    session.wreckActionPrompt = {
+      kind: 'recover-blackbox',
+      label: `📟 RECOVER ${session.blackBox.isWreck ? 'BLACK BOX' : 'HYDRO-PROBE'} [E]`,
+      detail: `+${session.blackBox.points || BLACK_BOX_BONUS_PTS} pts · 18m Acoustic Scan`,
       progress: 0,
     };
   } else if (nearBeacon) {
@@ -3433,7 +3630,29 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       if (session.airShareBeams[i].timer <= 0) session.airShareBeams.splice(i, 1);
     }
   }
-  const rawSilt = stepSiltPhysics(level, siltClouds, diver, dt);
+  // Step periodic Acoustic Black-Box / Lost Hydro-Probe directional hydrophone ping (v159)
+  if (session.blackBox && !session.blackBox.recovered) {
+    const bb = session.blackBox;
+    if (bb.pingPulse > 0) {
+      bb.pingPulse = Math.max(0, bb.pingPulse - dt * 0.72);
+    }
+    bb.pingTimer = Math.max(0, (bb.pingTimer ?? 2.0) - dt);
+    if (bb.pingTimer <= 0) {
+      bb.pingTimer = bb.pingIntervalSec || 3.4;
+      const dxBb = bb.x - diver.x;
+      const dyBb = bb.y - diver.y;
+      const distBb = Math.hypot(dxBb, dyBb);
+      if (distBb <= 34 || session.sonar?.activePulse) {
+        bb.pingPulse = 1.0;
+        const pan = Math.max(-0.92, Math.min(0.92, dxBb / 22));
+        callbacks.onBlackBoxPing?.(bb, distBb, pan);
+      }
+    }
+  }
+
+  const rawSilt = stepSiltPhysics(level, siltClouds, diver, dt, {
+    currentVx: hazRes.tidalCurrent?.vx || 0,
+  });
   session.localSiltDensity = Math.min(1, rawSilt + (session.encounters?.fogDensity || 0) * 0.65);
 
   // Record Dive Computer Depth Profile (every 1.5s or immediately on gas switch) & PB Ghost track (every 0.6s)
@@ -3478,7 +3697,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore: session.hatchBonusScore || 0,
+      hatchBonusScore: (session.hatchBonusScore || 0) + (session.blackBoxBonusScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
