@@ -7796,6 +7796,11 @@ test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas
   const polarEco = createMarineEcosystem(polar);
   assert.ok(polarEco.megafauna.some((m) => m.kind === 'beluga'), 'Polar iceberg site should spawn an Arctic Beluga Whale');
 
+  // Freshwater inland cenote must stay saltwater-free (no oceanic manta rays or reef octopuses)
+  const cenoteEco = createMarineEcosystem(LEVEL_1);
+  assert.equal(cenoteEco.megafauna.filter((m) => m.kind === 'manta').length, 0, 'Freshwater cenote must not spawn saltwater rays');
+  assert.equal(cenoteEco.denizens.length, 0, 'Freshwater cenote must not spawn saltwater octopuses/morays');
+
   // Calm low-silt diver draws Manta from patrol -> curious -> escort & fires onWildlifeEscort
   const calmDiver = { x: manta.x - 4.0, y: manta.y, vx: 0.2, vy: 0, angle: 0, torchOn: true, dpvActive: false };
   let escorted = null;

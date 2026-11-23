@@ -1806,7 +1806,8 @@ export class CaveRenderer {
       bodyRecovered,
       localSiltDensity,
       powerRelays,
-      smb
+      smb,
+      ecosystem
     );
 
     // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint, Spectral Optics & Collect Bursts
@@ -10639,7 +10640,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0, powerRelays = null, smb = null) {
+  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0, powerRelays = null, smb = null, ecosystem = null) {
     const lctx = this.lightCtx;
     const lw = this.lightCanvas.width;
     const lh = this.lightCanvas.height;
@@ -10959,6 +10960,23 @@ export class CaveRenderer {
       lctx.fillStyle = sg;
       lctx.fill();
       lctx.restore();
+    }
+    // Soft bioluminescent/moonlit rim reveal on escorting Megafauna (Mantas, Belugas, Reef Sharks) so they shine beside your wing
+    if (Array.isArray(ecosystem?.megafauna)) {
+      for (let i = 0; i < ecosystem.megafauna.length; i++) {
+        const m = ecosystem.megafauna[i];
+        if (!m || m.behavior !== 'escort') continue;
+        const mx = toScreenX(m.x) * rx;
+        const my = toScreenY(m.y) * ry;
+        const mr = Math.max(4.6, (m.size || 1.4) * 3.1) * scale * rx;
+        if (mx + mr < 0 || mx - mr > lw || my + mr < 0 || my - mr > lh) continue;
+        const mg = lctx.createRadialGradient(mx, my, mr * 0.08, mx, my, mr);
+        mg.addColorStop(0, 'rgba(0,0,0,0.72)');
+        mg.addColorStop(0.55, 'rgba(0,0,0,0.34)');
+        mg.addColorStop(1, 'rgba(0,0,0,0)');
+        lctx.fillStyle = mg;
+        lctx.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
+      }
     }
 
     // Faint marker glows at visible checkpoints via pre-baked cutout stamp

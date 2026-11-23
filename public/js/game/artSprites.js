@@ -1155,7 +1155,7 @@ export function drawStyledDenizen(ctx, d, sx, sy, scale, timeSec) {
   const em = Math.max(0.12, Math.min(1, Number(d.emergence) || 0.4));
   const outAng = Math.atan2(d.ny || 0, d.nx || 1);
 
-  // 1. Swirling black defensive octopus ink puffs in world space
+  // 1. Swirling multi-lobe defensive octopus ink plumes in world space
   if (Array.isArray(d.inkPuffs) && d.inkPuffs.length > 0) {
     ctx.save();
     for (let i = 0; i < d.inkPuffs.length; i++) {
@@ -1163,10 +1163,22 @@ export function drawStyledDenizen(ctx, d, sx, sy, scale, timeSec) {
       const px = sx + (p.x - d.x) * scale;
       const py = sy + (p.y - d.y) * scale;
       const pr = (p.r || 0.5) * scale;
-      const alpha = Math.max(0, Math.min(0.75, (p.life / Math.max(0.1, p.maxLife || 4.8)) * 0.72));
-      ctx.fillStyle = `rgba(15, 23, 42, ${alpha.toFixed(3)})`;
+      const frac = Math.max(0, Math.min(1, p.life / Math.max(0.1, p.maxLife || 4.8)));
+      // Outer smoky indigo halo so ink reads sharply against both bright water and dark steel hulls
+      const og = ctx.createRadialGradient(px, py, pr * 0.15, px, py, pr * 1.28);
+      og.addColorStop(0, `rgba(2, 6, 18, ${(frac * 0.92).toFixed(3)})`);
+      og.addColorStop(0.55, `rgba(12, 18, 36, ${(frac * 0.72).toFixed(3)})`);
+      og.addColorStop(0.85, `rgba(71, 85, 105, ${(frac * 0.24).toFixed(3)})`);
+      og.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      ctx.fillStyle = og;
       ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.arc(px, py, pr * 1.28, 0, Math.PI * 2);
+      ctx.fill();
+      // Dense billowing ink core lobes
+      ctx.fillStyle = `rgba(3, 7, 18, ${(frac * 0.88).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(px - pr * 0.22, py - pr * 0.14, pr * 0.58, 0, Math.PI * 2);
+      ctx.arc(px + pr * 0.24, py + pr * 0.16, pr * 0.48, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

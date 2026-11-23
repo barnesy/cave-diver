@@ -4070,7 +4070,7 @@ select:focus-visible {
   left: 50%;
   bottom: calc(max(134px, 21vh) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  z-index: 36;
+  z-index: 26;
   pointer-events: auto;
   display: flex;
   flex-direction: column;

@@ -207,8 +207,8 @@ export function deploySurfaceMarkerBuoy(session, callbacks = {}) {
     callbacks.onToast?.('🎈 Already at the surface — no SMB needed!', 2.0);
     return { ok: false, reason: 'too-shallow' };
   }
-  // Authentic technical safety check: verify clear open water straight up to the surface!
-  for (let probeY = diver.y - 0.8; probeY >= 0.6; probeY -= 0.75) {
+  // Authentic technical safety check: fine 0.30m ray-march verifies clear open water straight up to the surface (catches thin steel wreck decks too!)
+  for (let probeY = diver.y - 0.6; probeY >= 0.45; probeY -= 0.3) {
     if (evaluateCaveSDF(level, diver.x, probeY) >= -0.25) {
       callbacks.onToast?.('⛔ Solid overhead ceiling above you — swim to open water / shot line before shooting SMB!', 3.2);
       return { ok: false, reason: 'overhead-blocked' };

@@ -567,9 +567,10 @@ export function createMarineEcosystem(level) {
   }
 
   // 6. Cave & Polar Megafauna + Interactive Crevice Denizens (v162)
+  // Keep saltwater rays, octopuses & morays strictly in marine/coastal caves & blue holes (never inland freshwater cenotes!)
   const idLower = `${level.id || ''} ${themeId}`.toLowerCase();
   const isPolar = /arctic|ice|scoresby|silfra|strytan|kverkfjoll|aurora|glacier/.test(idLower);
-  const isWarmCoastal = /cenote|yucatan|blue-hole|bahamas|abaco|bimini|bermuda|lanzarote|eagle|lagoa/.test(idLower);
+  const isWarmCoastal = /blue-hole|bahamas|abaco|bimini|bermuda|lanzarote|dahab|dean|atlantida/.test(idLower);
   if ((isPolar || isWarmCoastal) && Array.isArray(level.segments)) {
     for (let sIdx = 0; sIdx < level.segments.length && megafauna.length < 1; sIdx++) {
       const seg = level.segments[sIdx];
