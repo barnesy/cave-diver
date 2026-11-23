@@ -55,21 +55,23 @@ html, body {
   touch-action: none;
 }
 
-/* Toast Banner (sits cleanly above bottom dive console & wreck action pill) */
+/* Toast Banner (crisp low-radius alert card for multi-line readability) */
 .game-toast {
   position: fixed;
   bottom: max(206px, calc(env(safe-area-inset-bottom) + 200px));
   top: auto;
   left: 50%;
   transform: translate(-50%, 16px);
-  background: rgba(8, 17, 30, 0.92);
-  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(6, 15, 29, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.48);
   color: #e0f2fe;
-  padding: 7px 15px;
-  border-radius: 999px;
+  padding: 8px 14px;
+  border-radius: 10px;
   font-size: 0.82rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  line-height: 1.35;
+  letter-spacing: 0.015em;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 60;
   opacity: 0;
   pointer-events: none;
@@ -86,7 +88,10 @@ html, body {
     top: max(106px, calc(env(safe-area-inset-top) + 98px));
     bottom: auto;
     transform: translate(-50%, -10px);
+    padding: 8px 12px;
+    border-radius: 9px;
     font-size: 0.78rem;
+    line-height: 1.32;
   }
   .game-toast.visible {
     transform: translate(-50%, 0);
@@ -3957,8 +3962,8 @@ select:focus-visible {
   gap: 2px;
   min-width: 196px;
   max-width: min(86vw, 320px);
-  padding: 9px 18px;
-  border-radius: 999px;
+  padding: 9px 16px;
+  border-radius: 14px;
   border: 1.5px solid rgba(56, 189, 248, 0.72);
   background: rgba(6, 20, 36, 0.88);
   backdrop-filter: blur(10px);
