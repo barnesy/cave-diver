@@ -7,10 +7,7 @@
  */
 
 import { exploreGridKey } from './scoring.js';
-
-function clamp(v, lo, hi) {
-  return v < lo ? lo : v > hi ? hi : v;
-}
+import { clamp } from '../util/common.js';
 
 /**
  * Render the waterproof Yellow-and-Graphite Wetnotes Survey Slate onto a 2D canvas.

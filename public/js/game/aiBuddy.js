@@ -1227,7 +1227,7 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
       buddy.calloutCooldowns.lowGas = 26;
       triggerDiverSignal(buddy, 'low-gas', nowMs);
       callbacks.onBuddySignal?.(buddy, 'low-gas');
-    } else if (diveState.stopDepthM >= 3 && diveState.ascentRateMpm > 8 && buddy.calloutCooldowns.deco <= 0) {
+    } else if (diveState.stopDepthM >= 3 && (diveState.ascentRateMPerMin || 0) > 8 && buddy.calloutCooldowns.deco <= 0) {
       buddy.calloutCooldowns.deco = 24;
       triggerDiverSignal(buddy, 'hold', nowMs);
       callbacks.onBuddySignal?.(buddy, 'hold');

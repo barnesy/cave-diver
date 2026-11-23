@@ -158,8 +158,9 @@ export class AquaticRadio {
     if (!ctx) return;
     this._ensureBus(ctx);
     if (this._busGain && !this.isMutedFn()) {
+      const targetGain = Math.max(0.0001, 0.24 * this.volume);
       this._busGain.gain.cancelScheduledValues?.(ctx.currentTime);
-      this._busGain.gain.setTargetAtTime(0.16, ctx.currentTime, 0.08);
+      this._busGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.08);
     }
     this._step = 0;
     this._nextStepTime = Math.max(ctx.currentTime + 0.04, this._nextStepTime);

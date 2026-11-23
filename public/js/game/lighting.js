@@ -11,8 +11,9 @@ export function castLightRay(
   angle,
   maxRangeM,
   siltClouds = [],
-  { stopAtSurface = true, sdfFn = null } = {}
+  { stopAtSurface = true, sdfFn = null, out = null } = {}
 ) {
+  const res = out || { x: 0, y: 0, dist: 0, hitWall: false, hitSurface: false, nx: 0, ny: 0, incidence: 0 };
   const evalSdf = sdfFn || ((x, y) => evaluateCaveSDF(level, x, y));
   const dx = Math.cos(angle);
   const dy = Math.sin(angle);
@@ -50,16 +51,15 @@ export function castLightRay(
   for (let step = 0; step < 44; step++) {
     if (t >= effectiveMax) {
       const hitSurface = stopAtSurface && oy >= 0 && dy < -0.001 && Math.abs(oy + dy * effectiveMax) < 0.06;
-      return {
-        x: ox + dx * effectiveMax,
-        y: oy + dy * effectiveMax,
-        dist: effectiveMax,
-        hitWall: false,
-        hitSurface,
-        nx: 0,
-        ny: hitSurface ? 1 : 0,
-        incidence: hitSurface ? Math.max(0.15, -dy) : 0,
-      };
+      res.x = ox + dx * effectiveMax;
+      res.y = oy + dy * effectiveMax;
+      res.dist = effectiveMax;
+      res.hitWall = false;
+      res.hitSurface = hitSurface;
+      res.nx = 0;
+      res.ny = hitSurface ? 1 : 0;
+      res.incidence = hitSurface ? Math.max(0.15, -dy) : 0;
+      return res;
     }
 
     const px = ox + dx * t;
@@ -86,40 +86,42 @@ export function castLightRay(
       const nnx = gx / nLen;
       const nny = gy / nLen;
       const incidence = Math.max(0.15, dx * nnx + dy * nny);
-      return {
-        x: hx,
-        y: hy,
-        dist: hitDist,
-        hitWall: true,
-        hitSurface: false,
-        nx: -nnx,
-        ny: -nny,
-        incidence,
-      };
+      res.x = hx;
+      res.y = hy;
+      res.dist = hitDist;
+      res.hitWall = true;
+      res.hitSurface = false;
+      res.nx = -nnx;
+      res.ny = -nny;
+      res.incidence = incidence;
+      return res;
     }
 
     prevT = t;
     t += Math.max(0.14, -sdf * 0.85);
   }
 
-  return {
-    x: ox + dx * effectiveMax,
-    y: oy + dy * effectiveMax,
-    dist: effectiveMax,
-    hitWall: false,
-    hitSurface: false,
-    nx: 0,
-    ny: 0,
-    incidence: 0,
-  };
+  res.x = ox + dx * effectiveMax;
+  res.y = oy + dy * effectiveMax;
+  res.dist = effectiveMax;
+  res.hitWall = false;
+  res.hitSurface = false;
+  res.nx = 0;
+  res.ny = 0;
+  res.incidence = 0;
+  return res;
 }
+
+const _fanLocalSiltScratch = [];
 
 /**
  * Casts a fan of rays to build a physical cave-shadowed visibility polygon.
  * Prunes segments, basins, and silt clouds once to the torch bounding box.
+ * Accepts optional reusable `outRays` pool for zero-GC per-frame raycasting.
  */
-export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, rayCount = 40, siltClouds = []) {
-  const rays = new Array(rayCount);
+export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, rayCount = 40, siltClouds = [], outRays = null) {
+  const rays = Array.isArray(outRays) ? outRays : new Array(rayCount);
+  rays.length = rayCount;
   const start = centerAngle - halfSpread;
   const step = (halfSpread * 2) / Math.max(1, rayCount - 1);
 
@@ -134,7 +136,7 @@ export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, 
 
   let localSilt = siltClouds;
   if (siltClouds.length > 0) {
-    localSilt = [];
+    _fanLocalSiltScratch.length = 0;
     for (let i = 0; i < siltClouds.length; i++) {
       const s = siltClouds[i];
       if (s.alpha < 0.08) continue;
@@ -142,14 +144,17 @@ export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, 
       const dx = s.x - ox;
       const dy = s.y - oy;
       if (dx * dx + dy * dy <= reach * reach) {
-        localSilt.push(s);
+        _fanLocalSiltScratch.push(s);
       }
     }
+    localSilt = _fanLocalSiltScratch;
   }
 
-  const opts = { stopAtSurface: true, sdfFn: localSdf };
+  const opts = { stopAtSurface: true, sdfFn: localSdf, out: null };
   for (let i = 0; i < rayCount; i++) {
     const a = start + step * i;
+    const slot = rays[i] || { x: 0, y: 0, dist: 0, hitWall: false, hitSurface: false, nx: 0, ny: 0, incidence: 0 };
+    opts.out = slot;
     rays[i] = castLightRay(level, ox, oy, a, maxRangeM, localSilt, opts);
   }
   return rays;

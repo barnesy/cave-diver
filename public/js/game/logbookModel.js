@@ -391,7 +391,7 @@ export function normalizeGhostTrack(rawTrack, maxPoints = 360) {
 /**
  * Merge two maps of { [levelId]: ghostTrack }, keeping the faster completed PB ghost per site.
  */
-export function mergeGhostTracks(rawA, rawB, { maxSites = 30, maxPoints = 360 } = {}) {
+export function mergeGhostTracks(rawA, rawB, { maxSites = 40, maxPoints = 360 } = {}) {
   const out = {};
   const keys = new Set([
     ...(rawA && typeof rawA === 'object' ? Object.keys(rawA) : []),
@@ -1553,7 +1553,7 @@ export const ARTIFACT_COLLECTIONS = Object.freeze([
     targetCount: 4,
     curatorTitle: 'Cenote Archaeologist',
     accent: '#34d399',
-    matchRe: /maya|jade|obsidian|copal|cenote|amphora|ceramic|pottery|speleothem|offering|ritual|mask|idol|talisman/i,
+    matchRe: /maya|jade|obsidian|copal|cenote|amphora|ceramic|pottery|speleothem|offering|ritual|mask|idol|talisman|incense|carving|goblet|statue|chalice|urna/i,
   },
   {
     id: 'wwii-naval',
@@ -1562,7 +1562,7 @@ export const ARTIFACT_COLLECTIONS = Object.freeze([
     targetCount: 4,
     curatorTitle: 'Wreck Historian',
     accent: '#fb923c',
-    matchRe: /enigma|bedford|motorcycle|bsa|kriegsmarine|telegraph|bridge|wheel|helm|porthole|binocular|spyglass|hoist|bell|naval|carrier|flight|pri-fly|wardroom|radar|gauge|periscope/i,
+    matchRe: /enigma|bedford|motorcycle|bsa|kriegsmarine|telegraph|bridge|wheel|helm|porthole|binocular|spyglass|hoist|bell|naval|carrier|flight|pri-fly|wardroom|radar|gauge|periscope|torpedo|submarine|gun|locomotive|turret|lorry|telemotor|propeller|manifest|cargo|captain|safe|anchor|brass lantern|deck|hull/i,
   },
   {
     id: 'ocean-liner',
@@ -1571,7 +1571,7 @@ export const ARTIFACT_COLLECTIONS = Object.freeze([
     targetCount: 4,
     curatorTitle: 'Maritime Archivist',
     accent: '#facc15',
-    matchRe: /watch|porcelain|ginori|candelabra|silver|crystal|champagne|stateroom|violin|chime|locket|goblet|tea|plate|china|brooch|ring|pendant|jewelry/i,
+    matchRe: /watch|porcelain|ginori|candelabra|silver|champagne|stateroom|violin|chime|locket|plate|china|brooch|\bring\b|pendant|jewelry|\btea\b|decanter|chandelier|cutlery|goblet|crystal glass|tiara|cameo|mirror/i,
   },
   {
     id: 'abyssal-minerals',
@@ -1580,7 +1580,7 @@ export const ARTIFACT_COLLECTIONS = Object.freeze([
     targetCount: 4,
     curatorTitle: 'Speleo-Mineralogist',
     accent: '#c084fc',
-    matchRe: /megalodon|tooth|nautilus|trilobite|fossil|pearl|calcite|geode|amethyst|pyrite|quartz|gypsum|selenite|amber|ivory|tusk|coral|mineral|crystal|spire|heart/i,
+    matchRe: /megalodon|tooth|nautilus|trilobite|fossil|pearl|calcite|geode|amethyst|pyrite|quartz|gypsum|selenite|amber|ivory|tusk|coral|mineral|crystal|spire|heart|stalactite|garnet|obsidian|basalt|sulfur|onyx|agate|gem|shell/i,
   },
   {
     id: 'polar-expedition',
@@ -1589,17 +1589,23 @@ export const ARTIFACT_COLLECTIONS = Object.freeze([
     targetCount: 4,
     curatorTitle: 'Expedition Curator',
     accent: '#38bdf8',
-    matchRe: /sextant|compass|lamp|carbide|bathysphere|core|survey|altimeter|barometer|chronometer|logbook|reel|valve|helmet|regulator|arctic|glacial|nordic|volcanic|basalt|thermal/i,
+    matchRe: /sextant|compass|lamp|carbide|bathysphere|core|survey|altimeter|barometer|chronometer|logbook|reel|valve|helmet|regulator|arctic|glacial|nordic|volcanic|thermal|probe|sonar|sensor|beacon|meter|pick|piton|lantern/i,
   },
 ]);
 
 export function classifyArtifactCollection(item) {
-  const name = `${item?.name || ''} ${item?.siteName || ''} ${item?.kind || ''}`;
-  for (const col of ARTIFACT_COLLECTIONS) {
-    if (col.matchRe.test(name)) return col.id;
-  }
+  const nameOnly = String(item?.name || '');
+  // Prioritize explicit mineral/fossil kinds before broad name regexes so cave crystals never land in Ocean Liner
   if (item?.kind === 'fossil' || item?.kind === 'crystal' || item?.kind === 'pearl') return 'abyssal-minerals';
   if (item?.kind === 'compass' || item?.kind === 'gear') return 'polar-expedition';
+  for (const col of ARTIFACT_COLLECTIONS) {
+    if (col.matchRe.test(nameOnly)) return col.id;
+  }
+  const siteTxt = `${item?.siteName || ''} ${item?.siteId || ''}`;
+  if (/thistlegorm|zenobia|oriskany|u-?352|victoria|fitzgerald|wreck/i.test(siteTxt)) return 'wwii-naval';
+  if (/britannic|andrea doria/i.test(siteTxt)) return 'ocean-liner';
+  if (/arctic|strytan|kverk|grjota|silfra|katla|greenland|orda|boy-bulok|krubera|atlantida/i.test(siteTxt)) return 'polar-expedition';
+  if (/crystal|geode|amethyst|mine|emerald/i.test(siteTxt)) return 'abyssal-minerals';
   return 'mayan-cenote';
 }
 

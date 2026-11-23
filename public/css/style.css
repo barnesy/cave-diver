@@ -829,31 +829,6 @@ html, body {
   color: var(--danger);
 }
 
-.lan-controls {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 8px;
-}
-@media (max-width: 480px) {
-  .lan-controls {
-    grid-template-columns: 1fr;
-  }
-}
-.lan-create-group {
-  display: flex;
-  gap: 6px;
-}
-.lan-create-group select {
-  background: #0f172a;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  color: var(--text-main);
-  padding: 8px;
-  font-size: 0.82rem;
-}
-.lan-create-group .btn {
-  flex: 1;
-}
 .lan-join-row {
   display: flex;
   gap: 6px;
@@ -2829,12 +2804,6 @@ select:focus-visible {
   gap: 8px;
 }
 
-.btn.has-rooms {
-  border-color: var(--cyan);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
-  color: #e0f2fe;
-}
-
 /* Co-op Quick Hand Signals Bar */
 .coop-comms {
   position: fixed;
@@ -2846,6 +2815,9 @@ select:focus-visible {
   gap: 4px;
   pointer-events: auto;
   z-index: 32;
+}
+.coop-comms .comm-btn[data-signal] {
+  display: none;
 }
 .comm-btn {
   background: rgba(8, 15, 26, 0.92);
@@ -3052,8 +3024,7 @@ select:focus-visible {
   gap: 8px;
   margin-bottom: 6px;
 }
-.lb-tabs,
-.lb-scope-tabs {
+.lb-tabs {
   display: inline-flex;
   gap: 4px;
   background: rgba(2, 8, 18, 0.75);
@@ -3061,8 +3032,7 @@ select:focus-visible {
   border-radius: 9px;
   padding: 2px;
 }
-.lb-tab,
-.lb-scope {
+.lb-tab {
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -3072,8 +3042,7 @@ select:focus-visible {
   border-radius: 7px;
   cursor: pointer;
 }
-.lb-tab.active,
-.lb-scope.active {
+.lb-tab.active {
   background: rgba(14, 165, 233, 0.25);
   color: #e0f2fe;
 }
@@ -3247,12 +3216,6 @@ select:focus-visible {
   color: #f0f9ff;
 }
 
-.menu-header-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
 .pwa-version-btn {
   font-variant-numeric: tabular-nums;
   opacity: 0.86;
@@ -3588,6 +3551,9 @@ select:focus-visible {
   top: calc(100% + 8px);
   right: 0;
   width: 224px;
+  max-height: calc(100dvh - 76px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
   border-radius: 13px;
   background: linear-gradient(175deg, rgba(10, 22, 42, 0.98), rgba(5, 12, 24, 0.98));
@@ -4484,8 +4450,7 @@ button.mode-badge:hover {
 }
 
 /* Technical Certification Badges Strip (Debrief + Career Logbook) */
-.debrief-certs,
-.lb-cert-strip {
+.debrief-certs {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -4907,6 +4872,8 @@ button.mode-badge:hover {
   font-weight: 800;
   letter-spacing: 0.06em;
   color: #7dd3fc;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .hud-minimap-meta {
   display: inline-flex;
@@ -5129,10 +5096,10 @@ button.mode-badge:hover {
     gap: 3px;
   }
   .hud-util-btns .util-btn {
-    min-width: 30px;
-    height: 30px;
-    padding: 0 5px;
-    font-size: 0.78rem;
+    min-width: 38px;
+    height: 38px;
+    padding: 0 6px;
+    font-size: 0.84rem;
   }
 }
 @media (max-height: 500px) and (orientation: landscape) {
@@ -7140,6 +7107,9 @@ button.mode-badge:hover {
 .hud-gear-dock {
   position: relative;
   display: block;
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 100%;
   margin-bottom: 0;
   pointer-events: auto;
 }
@@ -8396,12 +8366,22 @@ summary,
   }
 }
 
-/* v169-v170 Wetnotes Survey Slate, Curator Collections & Interactive Museum Specimen Inspector */
+/* v169-v171 Wetnotes Survey Slate, Curator Collections, Desktop Auto-Hide & Museum Inspector */
+@media (pointer: fine), (pointer: none) {
+  #touch-stick,
+  #torch-stick {
+    display: none !important;
+  }
+}
+.dc-vitals-row.all-nominal {
+  display: none !important;
+}
 .hud-minimap-slate-btn {
   font-family: inherit;
   font-size: 0.52rem;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  min-height: 20px;
   padding: 1px 5px;
   border-radius: 4px;
   background: rgba(250, 204, 21, 0.22);
@@ -8409,21 +8389,12 @@ summary,
   color: #fef08a;
   cursor: pointer;
   line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .hud-minimap-slate-btn:hover,
 .hud-minimap-slate-btn.active {
   background: rgba(250, 204, 21, 0.42);
-  color: #ffffff;
-}
-.gear-hud-btn.survey-bar-btn {
-  border-color: rgba(250, 204, 21, 0.55);
-  background: rgba(250, 204, 21, 0.14);
-  color: #fef08a;
-}
-.gear-hud-btn.survey-bar-btn.active,
-.gear-hud-btn.survey-bar-btn:hover {
-  border-color: rgba(253, 224, 71, 0.88);
-  background: rgba(250, 204, 21, 0.28);
   color: #ffffff;
 }
 .survey-slate-panel {
@@ -8507,9 +8478,6 @@ summary,
   text-align: center;
 }
 @media (max-width: 640px) {
-  .gear-hud-btn.survey-bar-btn {
-    display: none !important;
-  }
   .survey-slate-panel {
     right: 8px;
     left: auto;
@@ -8532,6 +8500,19 @@ summary,
   border-radius: 10px;
   background: rgba(9, 21, 39, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.22);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.collection-chip:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  transform: translateY(-1px);
+}
+.collection-chip.active {
+  border-color: rgba(56, 189, 248, 0.92);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.55), 0 8px 18px rgba(0, 0, 0, 0.42);
+  background: linear-gradient(135deg, rgba(14, 38, 70, 0.94), rgba(8, 22, 42, 0.94));
 }
 .collection-chip.completed {
   border-color: rgba(250, 204, 21, 0.68);

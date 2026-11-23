@@ -179,22 +179,32 @@ export function stepSiltPhysics(level, siltClouds, diver, dt, opts = {}) {
       }
     }
 
-    // Buoyant turbulent swirl followed by slow diffuse drift & gradual settling
+    // Buoyant turbulent swirl followed by slow diffuse drift & gradual settling (v171 Lipschitz SDF skip)
     const nx = s.x + s.vx * dt;
     const ny = s.y + s.vy * dt;
-
-    if (evaluateCaveSDF(level, nx, ny) < -0.14) {
+    const stepDist = Math.hypot(nx - s.x, ny - s.y);
+    let clearBudget = (s._sdfClear ?? 0) - stepDist;
+    if (clearBudget > 0) {
+      s._sdfClear = clearBudget;
       s.x = nx;
       s.y = ny;
     } else {
-      const n = evaluateCaveNormal(level, nx, ny, _siltNormalTmp);
-      const vn = s.vx * n.nx + s.vy * n.ny;
-      if (vn > 0) {
-        s.vx -= n.nx * vn * 1.3;
-        s.vy -= n.ny * vn * 1.3;
+      const sdf = evaluateCaveSDF(level, nx, ny);
+      if (sdf < -0.14) {
+        s.x = nx;
+        s.y = ny;
+        s._sdfClear = Math.max(0, (-sdf - 0.14) * 0.55);
+      } else {
+        s._sdfClear = 0;
+        const n = evaluateCaveNormal(level, nx, ny, _siltNormalTmp);
+        const vn = s.vx * n.nx + s.vy * n.ny;
+        if (vn > 0) {
+          s.vx -= n.nx * vn * 1.3;
+          s.vy -= n.ny * vn * 1.3;
+        }
+        s.x -= n.nx * 0.06;
+        s.y -= n.ny * 0.06;
       }
-      s.x -= n.nx * 0.06;
-      s.y -= n.ny * 0.06;
     }
 
     // Cavern eddy curls, tidal drift & broad diffusion throughout the chamber (rust percolation gently rains downward)

@@ -80,18 +80,19 @@ export class InputController {
 
   _bindKeyboard() {
     window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = e.target?.tagName;
       if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && !e.target?.closest?.('[hidden]')) return;
       const code = e.code;
       this.keys.add(code);
-      if (code === 'Digit1') this.onGasSelect?.('EAN32');
-      if (code === 'Digit2') this.onGasSelect?.('TMX1455');
-      if (code === 'Digit3') this.onGasSelect?.('O2');
-      if (code === 'Space' || code === 'Tab') {
+      if (code === 'Digit1' && !e.repeat) this.onGasSelect?.('EAN32');
+      if (code === 'Digit2' && !e.repeat) this.onGasSelect?.('TMX1455');
+      if (code === 'Digit3' && !e.repeat) this.onGasSelect?.('O2');
+      if ((code === 'Space' || code === 'Tab') && !e.repeat) {
         if (this.onRecommendedGasSwitch?.()) e.preventDefault();
       }
-      if (code === 'KeyL') this.onTorchToggle?.();
-      if (code === 'KeyG') this.onReelToggle?.();
+      if (code === 'KeyL' && !e.repeat) this.onTorchToggle?.();
+      if (code === 'KeyG' && !e.repeat) this.onReelToggle?.();
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
       if ((code === 'KeyE' || code === 'KeyF') && !e.repeat) {
         if (this.onWreckAction?.()) e.preventDefault();

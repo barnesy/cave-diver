@@ -2747,6 +2747,8 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
         ? Math.sin(b.age * b.wobbleFreq + (b.wobblePhase || 0)) * (b.wobbleAmp || 0.2)
         : 0;
       b.x += (b.vx + wobbleVx) * dt;
+      const prevBx = b.x;
+      const prevBy = b.y;
       b.y += b.vy * dt;
 
       // Boyle's law expansion as ambient hydrostatic pressure drops during ascent
@@ -2755,48 +2757,77 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
         b.r = Math.min(b.maxR || b.baseR * 1.9, b.baseR * Math.cbrt(Math.max(0.5, pressureRatio)));
       }
 
-      // Ceiling rock trap: flatten & percolate sideways along overhead cave limestone instead of clipping through rock
-      if (level && b.y > 0.45 && evaluateCaveSDF(level, b.x, b.y) > -0.08) {
-        const norm = evaluateCaveNormal(level, b.x, b.y, _bubbleNormalScratch);
-        // Push gently back into open water below ceiling
-        b.x -= norm.nx * 0.08;
-        b.y -= norm.ny * 0.08;
-        b.trapped = true;
-        // Slide along ceiling slope toward shallower pocket
-        const tx = -norm.ny;
-        const ty = norm.nx;
-        const slopeDir = ty <= 0 ? 1 : -1;
-        b.vx = tx * slopeDir * (0.28 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.14;
-        b.vy = ty * slopeDir * 0.14;
-        b.life = Math.min(b.life, 0.9 + Math.random() * 0.85);
+      // Pop exhaust bubbles cleanly at the water-air meniscus inside trapped air domes (v171)
+      let poppedAtDome = false;
+      const storyList = session.stories?.setPieces;
+      if (storyList) {
+        for (let di = 0; di < storyList.length; di++) {
+          const sp = storyList[di];
+          if (sp?.kind !== 'air-dome') continue;
+          const lx = Number.isFinite(sp.leftX) ? sp.leftX : sp.x - (sp.halfWidth || 2.0);
+          const rx = Number.isFinite(sp.rightX) ? sp.rightX : sp.x + (sp.halfWidth || 2.0);
+          if (b.x >= lx && b.x <= rx && b.y <= sp.y && b.y >= (sp.topY ?? sp.y - 1.4)) {
+            poppedAtDome = true;
+            break;
+          }
+        }
+      }
+      if (poppedAtDome) {
+        b.life = 0;
+      } else if (level && b.y > 0.45) {
+        // Lipschitz SDF clearance budget skips redundant full-level SDF queries in open water (v171)
+        const moveD = Math.hypot(b.x - prevBx, b.y - prevBy);
+        const clearRem = (b._sdfClear ?? 0) - moveD;
+        let bubbleSdf = -1;
+        if (clearRem > 0) {
+          b._sdfClear = clearRem;
+        } else {
+          bubbleSdf = evaluateCaveSDF(level, b.x, b.y);
+          b._sdfClear = bubbleSdf < -0.08 ? Math.max(0, (-bubbleSdf - 0.08) * 0.55) : 0;
+        }
+        // Ceiling rock trap: flatten & percolate sideways along overhead cave limestone instead of clipping through rock
+        if (bubbleSdf > -0.08) {
+          const norm = evaluateCaveNormal(level, b.x, b.y, _bubbleNormalScratch);
+          // Push gently back into open water below ceiling
+          b.x -= norm.nx * 0.08;
+          b.y -= norm.ny * 0.08;
+          b.trapped = true;
+          // Slide along ceiling slope toward shallower pocket
+          const tx = -norm.ny;
+          const ty = norm.nx;
+          const slopeDir = ty <= 0 ? 1 : -1;
+          b.vx = tx * slopeDir * (0.28 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.14;
+          b.vy = ty * slopeDir * 0.14;
+          b.life = Math.min(b.life, 0.9 + Math.random() * 0.85);
 
-        // Shipwreck "Percolation": exhaust bubbles striking overhead rusted steel plates dislodge
-        // sinking orange-brown rust-snow plumes that cloud visibility behind panicked divers!
-        if (
-          level.isWreck &&
-          b.y > (level.wreckDeckY ?? 30) - 2.0 &&
-          session.siltClouds &&
-          session.siltClouds.length < 132 &&
-          (session.rustPercolateCooldown || 0) <= 0
-        ) {
-          const diffMult = session.difficulty === 'hardcore' ? 1.38 : session.difficulty === 'guided' ? 0.55 : 1.0;
-          const panicBoost = diveState?.panicLevel || 0;
-          const intensity = profile.intensity || 0.3;
-          // Calm breathing rarely dislodges rust; heavy/panicked exhaust drops steady curtains
-          if (Math.random() < (0.18 + panicBoost * 0.45 + intensity * 0.22) * diffMult) {
-            session.rustPercolateCooldown = Math.max(0.32, (1.55 - panicBoost * 0.95 - intensity * 0.35) / diffMult);
-            const rustCloud = spawnSiltPlume(session.siltClouds, {
-              x: b.x + (Math.random() - 0.5) * 0.35,
-              y: b.y + 0.18,
-              vx: (Math.random() - 0.5) * 0.22,
-              vy: 0.28 + Math.random() * 0.24,
-              radius: 0.55 + panicBoost * 0.35,
-              maxRadius: 2.3 + panicBoost * 1.4,
-              life: 16 + Math.random() * 8,
-              peakAlpha: 0.48 + panicBoost * 0.28,
-              isRust: true,
-            });
-            if (rustCloud) callbacks.onSiltSpawn?.(rustCloud);
+          // Shipwreck "Percolation": exhaust bubbles striking overhead rusted steel plates dislodge
+          // sinking orange-brown rust-snow plumes that cloud visibility behind panicked divers!
+          if (
+            level.isWreck &&
+            b.y > (level.wreckDeckY ?? 30) - 2.0 &&
+            session.siltClouds &&
+            session.siltClouds.length < 132 &&
+            (session.rustPercolateCooldown || 0) <= 0
+          ) {
+            const diffMult = session.difficulty === 'hardcore' ? 1.38 : session.difficulty === 'guided' ? 0.55 : 1.0;
+            const panicBoost = diveState?.panicLevel || 0;
+            const intensity = profile.intensity || 0.3;
+            // Calm breathing rarely dislodges rust; heavy/panicked exhaust drops steady curtains
+            if (Math.random() < (0.18 + panicBoost * 0.45 + intensity * 0.22) * diffMult) {
+              session.rustPercolateCooldown = Math.max(0.32, (1.55 - panicBoost * 0.95 - intensity * 0.35) / diffMult);
+              const rustCloud = spawnSiltPlume(session.siltClouds, {
+                x: b.x + (Math.random() - 0.5) * 0.35,
+                y: b.y + 0.18,
+                vx: (Math.random() - 0.5) * 0.22,
+                vy: 0.28 + Math.random() * 0.24,
+                radius: 0.55 + panicBoost * 0.35,
+                maxRadius: 2.3 + panicBoost * 1.4,
+                life: 16 + Math.random() * 8,
+                peakAlpha: 0.48 + panicBoost * 0.28,
+                isRust: true,
+              });
+              if (rustCloud) callbacks.onSiltSpawn?.(rustCloud);
+            }
           }
         }
       }
@@ -2812,7 +2843,11 @@ function stepBubbles(session, dt, callbacks = {}, exertion = 0) {
     }
 
     b.life -= dt;
-    if (b.life <= 0 || b.y <= 0.1) bubbles.splice(i, 1);
+    if (b.life <= 0 || b.y <= 0.1) {
+      const last = bubbles.length - 1;
+      if (i !== last) bubbles[i] = bubbles[last];
+      bubbles.pop();
+    }
   }
 }
 
@@ -3197,7 +3232,8 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
           }
         }
         session.squadAssistActive = hasSquadHelper;
-        const crankMult = hasSquadHelper ? 2.0 : 1.0;
+        const roleCrankMult = session.crewRole?.crankSpeedMult || 1.0;
+        const crankMult = (hasSquadHelper ? 2.0 : 1.0) * roleCrankMult;
         session.crankingHatchProgress = Math.min(1, (session.crankingHatchProgress || 0) + (dt / 1.35) * crankMult);
         session.crankTickAccum = (session.crankTickAccum || 0) + dt;
         if (session.crankTickAccum >= 0.28) {
@@ -3600,7 +3636,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       excludePeerId: session.rescueTargetId || '',
     });
   }
-  // v169 Frog-Kick vs. Flutter-Kick Trim Physics: level controlled swimming = frog-kick, boosted/steep/panicked = flutter-kick
+  // v169/v171 Frog-Kick vs. Flutter-Kick Trim Physics: level controlled swimming = frog-kick, boosted/steep/panicked = flutter-kick
   const pitchSin = Math.abs(Math.sin(diver.angle));
   const isBoosting = Boolean(thrust?.boost || dpvThrusting);
   if (thrustMag < 0.14) {
@@ -3610,9 +3646,14 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   } else {
     diver.finTechnique = 'flutter';
   }
+  const nearSiltyFloor = diver.y > 4.0 && evaluateCaveSDF(level, diver.x, diver.y + 2.1) >= 0;
+  diver.nearSiltyFloor = nearSiltyFloor;
   if (session.trimStats && diver.y > 4.0 && diveState.alive) {
     if (diver.finTechnique === 'frog') session.trimStats.frogSec += dt;
-    else if (diver.finTechnique === 'flutter') session.trimStats.flutterSec += dt;
+    else if (diver.finTechnique === 'flutter' && (nearSiltyFloor || (diveState.panicLevel || 0) >= 0.45)) {
+      // Only penalize flutter trim when washing a silty floor or panicking (vertical shaft climbs stay fair!)
+      session.trimStats.flutterSec += dt;
+    }
   }
   stepDiverBody(diver, dt, {
     thrustMag,
@@ -3779,7 +3820,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     }
   }
   if (session.stories) {
-    stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks, diveState);
+    stepSubmergedStories(session.stories, diver, session.simTimeSec, callbacks, diveState, dt);
     const ch = session.stories.chatterSent;
     if (ch) {
       if (!ch.plunge && session.simTimeSec > 2.6 && diver.y > 2.4) {
@@ -3797,12 +3838,18 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       }
     }
   }
-  // Apply Crew Specialty Role subtle perks & evaluate Dynamic Expedition Contracts (v156)
+  // Apply Crew Specialty Role subtle perks & evaluate Dynamic Expedition Contracts (v156 / v171 real compartment offgassing)
   const role = session.crewRole;
-  if (role && role.id === 'safety' && diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8) {
-    // Gas & Deco Safety role accelerates deco stop off-gassing slightly
-    if (diveState.decoRemainingSec > 0) {
-      diveState.decoRemainingSec = Math.max(0, diveState.decoRemainingSec - dt * 0.15);
+  if (role && role.id === 'safety' && diveState.stopDepthM > 0 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8 && Array.isArray(diveState.compartments)) {
+    // Gas & Deco Safety role accelerates inert-gas offgassing smoothly (~14% faster at stop depth)
+    const ambBar = 1 + Math.max(0, diver.y) / 10;
+    const activeMix = diveState.mixes?.[diveState.activeGasId];
+    const inspN2 = Math.max(0, (ambBar - 0.0627) * (activeMix?.fN2 ?? 0));
+    const inspHe = Math.max(0, (ambBar - 0.0627) * (activeMix?.fHe ?? 0));
+    for (let ci = 0; ci < diveState.compartments.length; ci++) {
+      const c = diveState.compartments[ci];
+      if (c.pN2 > inspN2) c.pN2 = Math.max(inspN2, c.pN2 - (c.pN2 - inspN2) * dt * 0.018);
+      if (c.pHe > inspHe) c.pHe = Math.max(inspHe, c.pHe - (c.pHe - inspHe) * dt * 0.025);
     }
   }
   session._contractEvalTimer = (session._contractEvalTimer || 0) + dt;
@@ -4059,9 +4106,17 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       if (thrustMag < 0.15) {
         diver.vx *= Math.exp(-2.8 * dt);
       }
-      // Subtle extra deco comfort when holding steady on SMB line
-      if ((diveState.stopDepthM || 0) >= 3 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8 && diveState.decoRemainingSec > 0) {
-        diveState.decoRemainingSec = Math.max(0, diveState.decoRemainingSec - dt * 0.12);
+      // Subtle extra deco offgassing comfort when holding steady on SMB line (v171)
+      if ((diveState.stopDepthM || 0) >= 3 && Math.abs(diver.y - diveState.stopDepthM) <= 1.8 && Array.isArray(diveState.compartments)) {
+        const ambBar = 1 + Math.max(0, diver.y) / 10;
+        const activeMix = diveState.mixes?.[diveState.activeGasId];
+        const inspN2 = Math.max(0, (ambBar - 0.0627) * (activeMix?.fN2 ?? 0));
+        const inspHe = Math.max(0, (ambBar - 0.0627) * (activeMix?.fHe ?? 0));
+        for (let ci = 0; ci < diveState.compartments.length; ci++) {
+          const c = diveState.compartments[ci];
+          if (c.pN2 > inspN2) c.pN2 = Math.max(inspN2, c.pN2 - (c.pN2 - inspN2) * dt * 0.012);
+          if (c.pHe > inspHe) c.pHe = Math.max(inspHe, c.pHe - (c.pHe - inspHe) * dt * 0.018);
+        }
       }
     }
   }
@@ -4175,15 +4230,18 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore:
-        (session.hatchBonusScore || 0) +
+      hatchBonusScore: session.hatchBonusScore || 0,
+      expeditionBonusScore:
         (session.blackBoxBonusScore || 0) +
         (session.relayBonusScore || 0) +
         (session.smbBonusScore || 0) +
-        (session.wildlifeHarmonyScore || 0),
+        (session.wildlifeHarmonyScore || 0) +
+        (session.contractBonusScore || 0) +
+        (session.aiLeadBonusScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
+      weatherBonusScore: session.weatherBonusScore || 0,
       trimBonusScore:
         session.trimStats && session.trimStats.blowouts === 0
           ? Math.round(((session.trimStats.disciplinePct || 0) / 100) * 250)

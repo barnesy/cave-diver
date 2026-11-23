@@ -47,27 +47,57 @@ export function computeShiftingHatchOpenness(hatch, timeSec) {
  * Compute deterministic living sump hydrology: tidal siphon inflow/slack/outflow cycle (v159).
  * Strongest on open-ocean wrecks, sea caves, Blue Hole, and karst spring siphons; gentle in cenotes.
  */
-export function computeTidalCurrent(level, simTimeSec = 0) {
-  if (!level) {
-    return { enabled: false, vx: 0, vy: 0, strength: 0, phase: 0, label: 'CALM', isStrong: false };
-  }
+const _levelHazardMetaCache = new WeakMap();
+
+function getLevelHazardMeta(level) {
+  let meta = _levelHazardMetaCache.get(level);
+  if (meta) return meta;
   const idStr = `${level.id || ''} ${level.theme?.surfaceStyle || ''} ${level.name || ''}`;
   const isWreck = Boolean(level.isWreck);
   const isStrongTide = isWreck || /blue-hole|wakulla|dahab|lanzarote|abaco|bimini|bermuda|red-sea|thistlegorm|zenobia|britannic|andrea-doria|u1206|oriskany/i.test(idStr);
   const isMildSiphon = /cenote|yucatan|sac-actun|dos-ojos|vaucluse|ressel|silfra|strytan|lagoa|eagle/i.test(idStr);
+  const seed = hashStr(level.id || level.name || 'tide');
+  let baseSurfaceC = 24.5;
+  let floorMinC = 14.0;
+  if (/arctic|ice|scoresby|kverkfjoll|silfra|strytan/i.test(idStr)) {
+    baseSurfaceC = 3.5;
+    floorMinC = 1.2;
+  } else if (/ojamo|fitzgerald|orda|krubera|plura|boy-bulok|hranicka/i.test(idStr)) {
+    baseSurfaceC = 9.5;
+    floorMinC = 4.2;
+  } else if (/vaucluse|ressel|zenobia|britannic|andrea-doria|victoria|u1206|merro|molnar/i.test(idStr)) {
+    baseSurfaceC = 18.0;
+    floorMinC = 11.5;
+  } else if (/yucatan|cenote|bahamas|abaco|bimini|bermuda|red-sea|thistlegorm|dahab|oriskany|lagoa|lanzarote/i.test(idStr)) {
+    baseSurfaceC = 26.0;
+    floorMinC = 18.5;
+  }
+  meta = {
+    isStrongTide,
+    isMildSiphon,
+    periodSec: isStrongTide ? 68 + (seed % 26) : 92 + (seed % 34),
+    phaseOffset: ((seed >>> 8) % 628) / 100,
+    peakSpeed: isStrongTide ? 0.62 : 0.34,
+    baseSurfaceC,
+    floorMinC,
+  };
+  _levelHazardMetaCache.set(level, meta);
+  return meta;
+}
 
-  if (!isStrongTide && !isMildSiphon) {
+export function computeTidalCurrent(level, simTimeSec = 0) {
+  if (!level) {
+    return { enabled: false, vx: 0, vy: 0, strength: 0, phase: 0, label: 'CALM', isStrong: false };
+  }
+  const meta = getLevelHazardMeta(level);
+  if (!meta.isStrongTide && !meta.isMildSiphon) {
     return { enabled: false, vx: 0, vy: 0, strength: 0, phase: 0, label: 'CALM', isStrong: false };
   }
 
-  const seed = hashStr(level.id || level.name || 'tide');
-  const periodSec = isStrongTide ? 68 + (seed % 26) : 92 + (seed % 34);
-  const phaseOffset = ((seed >>> 8) % 628) / 100;
-  const phase = ((simTimeSec || 0) / periodSec) * Math.PI * 2 + phaseOffset;
+  const phase = ((simTimeSec || 0) / meta.periodSec) * Math.PI * 2 + meta.phaseOffset;
   const wave = Math.sin(phase);
-  const peakSpeed = isStrongTide ? 0.62 : 0.34;
-  const vx = Math.round(wave * peakSpeed * 1000) / 1000;
-  const vy = Math.round(Math.cos(phase * 1.5) * peakSpeed * 0.14 * 1000) / 1000;
+  const vx = Math.round(wave * meta.peakSpeed * 1000) / 1000;
+  const vy = Math.round(Math.cos(phase * 1.5) * meta.peakSpeed * 0.14 * 1000) / 1000;
   const strength = Math.abs(vx);
   const label = strength < 0.14 ? 'SLACK TIDE' : vx > 0 ? 'INFLOW' : 'OUTFLOW';
   return {
@@ -110,22 +140,9 @@ export function computeHaloclineLayer(level) {
  * factoring in weather surface cooling, geothermal vents, and cold thermocline pockets (v142).
  */
 export function computeAmbientWaterTempC(level, depthM = 0, hazards = null, weather = null) {
-  const idStr = `${level?.id || ''} ${level?.theme?.surfaceStyle || ''} ${level?.name || ''}`;
-  let baseSurfaceC = 24.5;
-  let floorMinC = 14.0;
-  if (/arctic|ice|scoresby|kverkfjoll|silfra|strytan/i.test(idStr)) {
-    baseSurfaceC = 3.5;
-    floorMinC = 1.2;
-  } else if (/ojamo|fitzgerald|orda|krubera|plura|boy-bulok|hranicka/i.test(idStr)) {
-    baseSurfaceC = 9.5;
-    floorMinC = 4.2;
-  } else if (/vaucluse|ressel|zenobia|britannic|andrea-doria|victoria|u1206|merro|molnar/i.test(idStr)) {
-    baseSurfaceC = 18.0;
-    floorMinC = 11.5;
-  } else if (/yucatan|cenote|bahamas|abaco|bimini|bermuda|red-sea|thistlegorm|dahab|oriskany|lagoa|lanzarote/i.test(idStr)) {
-    baseSurfaceC = 26.0;
-    floorMinC = 18.5;
-  }
+  const meta = level ? getLevelHazardMeta(level) : null;
+  const baseSurfaceC = meta ? meta.baseSurfaceC : 24.5;
+  const floorMinC = meta ? meta.floorMinC : 14.0;
 
   const d = Math.max(0, Number(depthM) || 0);
   const weatherOffset =

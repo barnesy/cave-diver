@@ -1,7 +1,8 @@
 import { evaluateCaveSDF } from './collision.js';
+import { clamp as clampVal } from '../util/common.js';
 
 function clamp(min, max, v) {
-  return Math.max(min, Math.min(max, v));
+  return clampVal(v, min, max);
 }
 
 /**
@@ -114,6 +115,7 @@ export const MAX_ENCOUNTER_BONUS = 180;
 export const MAX_DRILL_BONUS = 600;
 export const MAX_WEATHER_BONUS = 250;
 export const MAX_TRIM_BONUS = 250;
+export const MAX_EXPEDITION_BONUS = 950;
 
 /**
  * Score a single diver's completed (or aborted) cave traverse across:
@@ -134,6 +136,7 @@ export function computeDiverScoreSummary({
   drillBonusScore = 0,
   weatherBonusScore = 0,
   trimBonusScore = 0,
+  expeditionBonusScore = 0,
   mutatorId = '',
 }) {
   const alive = diveState?.alive !== false;
@@ -178,6 +181,7 @@ export function computeDiverScoreSummary({
   const cleanDrillBonus = alive ? Math.min(MAX_DRILL_BONUS, Math.max(0, Math.round(Number(drillBonusScore) || 0))) : 0;
   const cleanWeatherBonus = alive ? Math.min(MAX_WEATHER_BONUS, Math.max(0, Math.round(Number(weatherBonusScore) || 0))) : 0;
   const cleanTrimBonus = alive ? Math.min(MAX_TRIM_BONUS, Math.max(0, Math.round(Number(trimBonusScore) || 0))) : 0;
+  const cleanExpeditionBonus = alive ? Math.min(MAX_EXPEDITION_BONUS, Math.max(0, Math.round(Number(expeditionBonusScore) || 0))) : 0;
   const totalScore =
     healthScore +
     speedScore +
@@ -189,9 +193,17 @@ export function computeDiverScoreSummary({
     cleanEncounterBonus +
     cleanDrillBonus +
     cleanWeatherBonus +
-    cleanTrimBonus;
+    cleanTrimBonus +
+    cleanExpeditionBonus;
   const baseMaxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
-  const maxPossible = baseMaxPossible + MAX_PHOTO_BONUS + MAX_ENCOUNTER_BONUS + MAX_DRILL_BONUS + MAX_WEATHER_BONUS + MAX_TRIM_BONUS;
+  const maxPossible =
+    baseMaxPossible +
+    MAX_PHOTO_BONUS +
+    MAX_ENCOUNTER_BONUS +
+    MAX_DRILL_BONUS +
+    MAX_WEATHER_BONUS +
+    MAX_TRIM_BONUS +
+    MAX_EXPEDITION_BONUS;
   const rank = assignScoreRank(totalScore, alive, baseMaxPossible);
 
   return {
@@ -219,6 +231,7 @@ export function computeDiverScoreSummary({
     drillBonusScore: cleanDrillBonus,
     weatherBonusScore: cleanWeatherBonus,
     trimBonusScore: cleanTrimBonus,
+    expeditionBonusScore: cleanExpeditionBonus,
     healthScore,
     speedScore,
     totalScore,
@@ -305,13 +318,25 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     (localSummary.photoBonusScore || 0) +
     (localSummary.encounterBonusScore || 0) +
     (localSummary.drillBonusScore || 0) +
+    (localSummary.weatherBonusScore || 0) +
+    (localSummary.trimBonusScore || 0) +
+    (localSummary.expeditionBonusScore || 0) +
     rescueBonus +
     teamSurvivalBonus;
   const teamScore = Math.min(teamMaxPossible, rawTeamScore);
   const teamRank = assignScoreRank(
     teamScore,
     survivorsCount > 0 && localExtracted,
-    Math.max(1, teamMaxPossible - MAX_PHOTO_BONUS - MAX_ENCOUNTER_BONUS - MAX_DRILL_BONUS)
+    Math.max(
+      1,
+      teamMaxPossible -
+        MAX_PHOTO_BONUS -
+        MAX_ENCOUNTER_BONUS -
+        MAX_DRILL_BONUS -
+        MAX_WEATHER_BONUS -
+        MAX_TRIM_BONUS -
+        MAX_EXPEDITION_BONUS
+    )
   );
 
   return {
@@ -339,6 +364,9 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     photoBonusScore: localSummary.photoBonusScore || 0,
     encounterBonusScore: localSummary.encounterBonusScore || 0,
     drillBonusScore: localSummary.drillBonusScore || 0,
+    weatherBonusScore: localSummary.weatherBonusScore || 0,
+    trimBonusScore: localSummary.trimBonusScore || 0,
+    expeditionBonusScore: localSummary.expeditionBonusScore || 0,
     rescueBonus,
     teamSurvivalBonus,
     teamScore,

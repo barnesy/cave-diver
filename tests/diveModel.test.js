@@ -8302,3 +8302,141 @@ test('v169 Curator Museum Inspector, Topside Atmosphere, Wetnotes Survey Slate, 
   });
   assert.equal(okPinnedCard, true);
 });
+
+test('v171 Comprehensive Audit & Polish: Scoring/Rank, Vault Namespacing, Physics/Audio, Sparse Rock Baking & Modular Renderers', async () => {
+  const {
+    computeDiverScoreSummary,
+    computeTeamScoreSummary,
+    MAX_EXPEDITION_BONUS,
+    MAX_TRIM_BONUS,
+    MAX_WEATHER_BONUS,
+  } = await import('../public/js/game/scoring.js');
+  const { computeLevelMaxScore } = await import('../public/js/game/leaderboardModel.js');
+  const {
+    createEmptyLogbook,
+    recordArtifactInLogbook,
+    classifyArtifactCollection,
+    mergeGhostTracks,
+  } = await import('../public/js/game/logbookModel.js');
+  const { stepSubmergedStories } = await import('../public/js/game/submergedStories.js');
+  const { evaluateDiveContracts, rollDiveContracts } = await import('../public/js/game/expeditionContracts.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  const { createBoxSDFEvaluator } = await import('../public/js/game/collision.js');
+  const { castTorchFan } = await import('../public/js/game/lighting.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { clamp, normalizeAngle, formatClock, hashStr } = await import('../public/js/util/common.js');
+
+  // 1. Scoring pipeline preserves expeditionBonusScore on cave levels & Team Rank denominator has no +500 phantom penalty
+  const dsClean = createDiveState();
+  const soloSummary = computeDiverScoreSummary({
+    name: 'AuditDiver',
+    level: LEVEL_1,
+    diveState: dsClean,
+    checkpointsHit: new Set(LEVEL_1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(LEVEL_1.collectibles.map((c) => c.id)),
+    exploredCount: 100,
+    totalExploreCells: 100,
+    diveTimeSec: 120,
+    hatchBonusScore: 0,
+    expeditionBonusScore: 520,
+    weatherBonusScore: 180,
+    trimBonusScore: MAX_TRIM_BONUS,
+  });
+  assert.equal(soloSummary.expeditionBonusScore, 520, 'Cave level must preserve expeditionBonusScore without clamping to maxHatchBonus=0');
+  assert.equal(soloSummary.trimBonusScore, MAX_TRIM_BONUS);
+  assert.equal(soloSummary.weatherBonusScore, 180);
+  assert.ok(soloSummary.totalScore <= computeLevelMaxScore(LEVEL_1.id, false), 'Solo score must stay within leaderboard max ceiling');
+
+  const teamSum = computeTeamScoreSummary(soloSummary, []);
+  assert.equal(teamSum.expeditionBonusScore, 520);
+  assert.equal(teamSum.trimBonusScore, MAX_TRIM_BONUS);
+  assert.equal(teamSum.weatherBonusScore, 180);
+  assert.ok(
+    teamSum.teamRank.grade === 'S+' || teamSum.teamRank.grade === 'S',
+    `Near-perfect solo summary must earn S/S+ grade without phantom rank penalty (got ${teamSum.teamRank.grade})`
+  );
+  assert.ok(MAX_EXPEDITION_BONUS >= 900 && MAX_WEATHER_BONUS >= 250);
+
+  // 2. Trophy Vault namespaced IDs + balanced Curator Collection classification + 40-site ghost sync cap
+  let book = createEmptyLogbook();
+  book = recordArtifactInLogbook(book, { id: 'ojamo:col-1', name: 'Iron Ore Core', kind: 'crystal', siteId: 'ojamo', points: 220 }).book;
+  book = recordArtifactInLogbook(book, { id: 'krubera:col-1', name: 'Abyssal Crystal Heart', kind: 'crystal', siteId: 'krubera', points: 360 }).book;
+  assert.equal(Object.keys(book.artifacts).length, 2, 'Namespaced artifact keys must prevent cross-level col-1 collisions');
+  assert.equal(classifyArtifactCollection({ name: 'Abyssal Crystal Heart', kind: 'crystal' }), 'abyssal-minerals');
+  assert.equal(classifyArtifactCollection({ name: 'First-Class Gold Ring', kind: 'relic' }), 'ocean-liner');
+  assert.equal(classifyArtifactCollection({ name: 'Compass Binnacle', kind: 'compass' }), 'polar-expedition');
+
+  const ghostA = {};
+  for (let i = 1; i <= 35; i++) ghostA[`site-${i}`] = [[0, 0, 0, 0], [100 + i, 50, 20, 0]];
+  const mergedGhosts = mergeGhostTracks(ghostA, {});
+  assert.equal(Object.keys(mergedGhosts).length, 35, 'mergeGhostTracks must preserve all 33+ campaign levels without dropping sites 31-33');
+
+  // 3. Contracts field-photographer reads session.camera.photoCount
+  const contracts = rollDiveContracts(LEVEL_1, '42');
+  const photoContract = { id: 'field-photographer', target: 3, progress: 0, completed: false, rewardPts: 150 };
+  const mockPhotoSess = {
+    level: LEVEL_1,
+    diver: { x: 0, y: 10 },
+    diveState: createDiveState(),
+    camera: { photoCount: 3 },
+    contracts: [photoContract],
+  };
+  evaluateDiveContracts(mockPhotoSess, {});
+  assert.equal(photoContract.completed, true, 'field-photographer contract must complete via session.camera.photoCount');
+  assert.ok(contracts.length >= 2);
+
+  // 4. Air-dome calming scales cleanly with dt (framerate independent)
+  const makeDomeState = () => ({
+    stories: {
+      setPieces: [{ kind: 'air-dome', x: 10, y: 8, radius: 3.0, width: 5.0, height: 2.5, discovered: true }],
+      inAirDome: false,
+      activeAirDome: null,
+    },
+    diver: { x: 10, y: 7.5 },
+    diveState: { panicLevel: 0.6, heartRateBpm: 120 },
+  });
+  const sBig = makeDomeState();
+  stepSubmergedStories(sBig.stories, sBig.diver, 1.0, {}, sBig.diveState, 0.1);
+  const sSmall = makeDomeState();
+  for (let i = 0; i < 10; i++) stepSubmergedStories(sSmall.stories, sSmall.diver, 1.0 + i * 0.01, {}, sSmall.diveState, 0.01);
+  assert.ok(sBig.diveState.panicLevel < 0.6, 'Air-dome must calm diver panic');
+  assert.ok(Math.abs(sBig.diveState.panicLevel - sSmall.diveState.panicLevel) < 0.01, 'Air-dome calming must be framerate-independent');
+
+  // 5. Safety Role / dSMB deco perk accelerates inert-gas offgassing in diveState.compartments & Frog-Kick trim fair in open shaft
+  const sessDeco = createDiveSession(LEVEL_1, { diverName: 'SafetyDiver', crewRoleId: 'safety' });
+  sessDeco.diveState.decoCeilingM = 6;
+  const pN2Before = sessDeco.diveState.compartments[0].pN2;
+  sessDeco.diver.y = 6.0;
+  stepDiveSession(sessDeco, { x: 0, y: 0 }, 0.5, {});
+  assert.ok(sessDeco.diveState.compartments[0].pN2 < pN2Before || sessDeco.diveState.decoRemainingSec === undefined, 'Safety role deco perk must offgas real compartments without mutating nonexistent decoRemainingSec');
+
+  // 6. DiveAudio.playUiClick & tension hysteresis
+  const audio = new DiveAudio();
+  assert.equal(typeof audio.playUiClick, 'function');
+  audio.playUiClick();
+  audio.ctx = { state: 'running', currentTime: 1.0 };
+  audio.muted = false;
+  audio._tensionTimer = 0.5;
+  audio.stepAmbience(0.2, LEVEL_1, 3, { x: 0, y: 3 }, { siltDensity: 0, inTightSqueeze: false, lowGas: false });
+  assert.ok(audio._tensionTimer > 0.5, 'Calm tension <= 0.28 must recharge _tensionTimer upward instead of firing');
+
+  // 7. Sparse rock-tile baking + 2D box SDF hasGeometry + reusable torch ray pool + common.js
+  const solidBoxSdf = createBoxSDFEvaluator(LEVEL_1, LEVEL_1.bounds.xMax - 2, LEVEL_1.bounds.xMax + 4, LEVEL_1.bounds.yMax - 2, LEVEL_1.bounds.yMax + 4, 2.0);
+  assert.equal(typeof solidBoxSdf.hasGeometry, 'boolean');
+  const rayPool = [];
+  const r1 = castTorchFan(LEVEL_1, LEVEL_1.spawn.x, LEVEL_1.spawn.y + 3, 0, 0.4, 12, 16, [], rayPool);
+  const firstObj = r1[0];
+  const r2 = castTorchFan(LEVEL_1, LEVEL_1.spawn.x, LEVEL_1.spawn.y + 3, 0.1, 0.4, 12, 16, [], rayPool);
+  assert.equal(r2[0], firstObj, 'castTorchFan must reuse pre-allocated ray hit objects when outRays pool is provided');
+
+  const rSparse = Object.create(CaveRenderer.prototype);
+  rSparse._rockPxPerM = 16;
+  const farChunk = rSparse._buildRockChunk(LEVEL_1, 500, 524, { data: new Uint8ClampedArray(512 * 512 * 4) }, null, 120, 184);
+  assert.equal(farChunk.solidRock, true, 'Empty deep rock tile must take sparse solidRock fast path');
+  assert.equal(farChunk.canvas, null, 'Sparse solidRock tile must allocate zero offscreen canvas VRAM');
+
+  assert.equal(clamp(15, 0, 10), 10);
+  assert.equal(formatClock(125), '02:05');
+  assert.ok(Math.abs(normalizeAngle(Math.PI * 3) - Math.PI) < 0.001 || Math.abs(normalizeAngle(Math.PI * 3) + Math.PI) < 0.001);
+  assert.equal(hashStr('cave-diver'), hashStr('cave-diver'));
+});

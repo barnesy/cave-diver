@@ -184,7 +184,7 @@ export function evaluateDiveContracts(session, callbacks = {}) {
     } else if (c.id === 'artifact-hunter') {
       cur = session.collectedIds?.size || 0;
     } else if (c.id === 'field-photographer') {
-      cur = session.camera?.photosTaken || 0;
+      cur = session.camera?.photoCount || session.camera?.photosTaken || 0;
     } else if (c.id === 'bulkhead-specialist') {
       cur = session.equalizedHatchIds?.size || 0;
     } else if (c.id === 'clean-trim') {

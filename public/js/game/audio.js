@@ -610,11 +610,25 @@ export class DiveAudio {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
       src.connect(filt);
       filt.connect(g);
-      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); } catch {}
+        try { filt.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
       src.start(t);
       src.stop(t + 0.16);
     }
     this.triggerHaptic('impact');
+  }
+
+  /** Crisp tactile Wetnotes pencil/slate click foley (v171). */
+  playUiClick() {
+    this.unlock();
+    this.playTone(980, 0.045, 'triangle', 0.045, 0);
+    this.playTone(1460, 0.035, 'sine', 0.028, 0.02);
+    this.triggerHaptic('action');
   }
 
   playAlarm(level) {
@@ -1118,36 +1132,50 @@ export class DiveAudio {
   stepAmbience(dt, level, depthM = 0, diver = null, tensionState = null) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level || depthM < 2.2) return;
 
-    // Adaptive underwater tension pulse when silt-out, tight squeeze, or reserve gas kicks in (v168)
+    // Adaptive underwater tension pulse when silt-out, tight squeeze, or reserve gas kicks in (v168 / v171 hysteresis)
     if (tensionState) {
       const siltT = Math.max(0, ((tensionState.siltDensity || 0) - 0.42) / 0.55);
       const sqT = tensionState.inTightSqueeze ? 0.55 : 0;
       const gasT = tensionState.lowGas ? 0.65 : 0;
       const calmMult = tensionState.inAirDome ? 0.15 : 1.0;
       const tension = Math.min(1, Math.max(siltT, sqT, gasT) * calmMult);
-      this._tensionTimer = (this._tensionTimer ?? 1.8) - dt;
-      if (tension > 0.28 && this._tensionTimer <= 0) {
-        this._tensionTimer = Math.max(1.8, 3.6 - tension * 1.5);
-        const t = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        osc.type = 'sine';
-        const f0 = 46 + tension * 8;
-        osc.frequency.setValueAtTime(f0, t);
-        osc.frequency.exponentialRampToValueAtTime(f0 * 0.78, t + 1.45);
-        const peak = 0.012 + tension * 0.022;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.linearRampToValueAtTime(peak, t + 0.32);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
-        osc.connect(g);
-        const panner = this._connectSpatial(g, { pan: 0, bus: 'ambience' });
-        osc.onended = () => {
-          try { osc.disconnect(); } catch {}
-          try { g.disconnect(); } catch {}
-          try { panner?.disconnect(); } catch {}
-        };
-        osc.start(t);
-        osc.stop(t + 1.55);
+      if (tension > 0.28) {
+        this._tensionTimer = (this._tensionTimer ?? 0.65) - dt;
+        if (this._tensionTimer <= 0) {
+          this._tensionTimer = Math.max(2.1, 3.8 - tension * 1.4);
+          const t = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const harm = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sine';
+          harm.type = 'triangle';
+          const f0 = 48 + tension * 7;
+          osc.frequency.setValueAtTime(f0, t);
+          osc.frequency.exponentialRampToValueAtTime(f0 * 0.78, t + 1.45);
+          // Warm audible 2nd harmonic (~96Hz) so tension pulse translates on laptop & phone speakers
+          harm.frequency.setValueAtTime(f0 * 2.0, t);
+          harm.frequency.exponentialRampToValueAtTime(f0 * 1.56, t + 1.45);
+          const peak = 0.012 + tension * 0.02;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(peak, t + 0.34);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+          osc.connect(g);
+          harm.connect(g);
+          const panner = this._connectSpatial(g, { pan: 0, bus: 'ambience' });
+          osc.onended = () => {
+            try { osc.disconnect(); } catch {}
+            try { harm.disconnect(); } catch {}
+            try { g.disconnect(); } catch {}
+            try { panner?.disconnect(); } catch {}
+          };
+          osc.start(t);
+          harm.start(t);
+          osc.stop(t + 1.55);
+          harm.stop(t + 1.55);
+        }
+      } else {
+        // Entry hysteresis: reset timer smoothly when calm so grazing a wall never fires on frame 1
+        this._tensionTimer = Math.min(0.85, (this._tensionTimer ?? 0.85) + dt * 0.6);
       }
     }
 

@@ -1,4 +1,6 @@
-import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator } from './collision.js';
+import { evaluateCaveSDF, evaluateCaveNormal, createChunkSDFEvaluator, createBoxSDFEvaluator } from './collision.js';
+import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
+import { drawTopsideAtmosphereExtras } from './renderers/topsideAtmosphereRenderer.js';
 import { createDiverBody } from './diverBody.js';
 import { castTorchFan, castSunCurtain, computeSpectralAbsorption } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
@@ -241,7 +243,6 @@ export class CaveRenderer {
 
     this.backChunks = [];
     this.rockChunks = [];
-    this.dustMotes = [];
     this._sunCurtainCache = new Map();
     this._basinEdgeCache = new Map();
     this._waterMeniscusCache = new Map();
@@ -307,7 +308,6 @@ export class CaveRenderer {
     if (!deferBuild) {
       this.backChunks = this._buildBackChunks(level);
       this.rockChunks = this._buildRockChunks(level);
-      this.dustMotes = [];
       this.ready = true;
       this._loadBitmapTextures();
     }
@@ -393,10 +393,13 @@ export class CaveRenderer {
     this.foliageTex = entry.foliageTex;
     this.foliagePattern = entry.foliagePattern;
     this._rockPattern = null;
+    this._solidRockPattern = null;
+    this._solidRockPatternKey = '';
+    this._auroraGradCache = null;
+    this._localTorchCache = null;
     this.skyBackdropImg = entry.skyBackdropImg;
     this.backChunks = entry.backChunks;
     this.rockChunks = entry.rockChunks;
-    this.dustMotes = entry.dustMotes || [];
     this._peerTorchCache?.clear();
     this._sunCurtainCache.clear();
     this._basinEdgeCache.clear();
@@ -436,28 +439,6 @@ export class CaveRenderer {
     }
 
     return this.initialize({ ...opts, targetLevel: nextLevel });
-  }
-
-  _buildDustMotes(level) {
-    const motes = [];
-    for (let i = 0; i < 160; i++) {
-      // Deterministic hash across level bounds inside open water
-      const s1 = Math.sin(i * 12.9898 + 4.14) * 43758.5453;
-      const s2 = Math.sin(i * 78.233 + 1.73) * 28461.1923;
-      const u = s1 - Math.floor(s1);
-      const v = s2 - Math.floor(s2);
-      const wx = level.bounds.xMin + 6 + u * (level.bounds.xMax - level.bounds.xMin - 12);
-      const wy = 1.0 + v * (level.bounds.yMax - 4);
-      if (evaluateCaveSDF(level, wx, wy) < -0.5) {
-        motes.push({
-          x: wx,
-          y: wy,
-          size: 0.025 + ((i * 7) % 10) * 0.004,
-          phase: i * 0.9,
-        });
-      }
-    }
-    return motes;
   }
 
   _makeFallbackTex(kind) {
@@ -711,6 +692,20 @@ export class CaveRenderer {
       nextBackChunks.push(this._buildBackChunk(targetLevel, spans[i][0], spans[i][1], backTex));
     }
 
+    // Proactively evict older baked levels BEFORE allocating new tiles on coarse mobile to cap peak VRAM (v171)
+    if (this._isCoarseMobile && this._bakedLevelCache.size > 0) {
+      for (const [oldId, oldEntry] of this._bakedLevelCache.entries()) {
+        if (oldId === targetLevel.id) continue;
+        this._bakedLevelCache.delete(oldId);
+        for (const ch of oldEntry.backChunks || []) {
+          if (ch?.canvas) { ch.canvas.width = 0; ch.canvas.height = 0; }
+        }
+        for (const ch of oldEntry.rockChunks || []) {
+          if (ch?.canvas) { ch.canvas.width = 0; ch.canvas.height = 0; }
+        }
+      }
+    }
+
     const nextRockChunks = [];
     const { yMin: lvlYMin, yMax: lvlYMax } = targetLevel.bounds;
     for (let i = 0; i < spans.length; i++) {
@@ -721,6 +716,11 @@ export class CaveRenderer {
       if (epoch !== this._loadEpoch) return { cancelled: true };
       report(50 + Math.round(((i + 1) / spans.length) * 42), `Sculpting high-res limestone walls (${i + 1}/${spans.length})...`);
       for (let cy0 = lvlYMin; cy0 < lvlYMax; cy0 += CHUNK_H_M) {
+        if (_nowMs() - frameStartMs >= BAKE_FRAME_BUDGET_MS) {
+          await nextFrame();
+          frameStartMs = _nowMs();
+          if (epoch !== this._loadEpoch) return { cancelled: true };
+        }
         const cy1 = Math.min(lvlYMax, cy0 + CHUNK_H_M);
         nextRockChunks.push(this._buildRockChunk(targetLevel, spans[i][0], spans[i][1], rockTex, foliageTex, cy0, cy1));
       }
@@ -737,7 +737,6 @@ export class CaveRenderer {
       skyBackdropImg,
       backChunks: nextBackChunks,
       rockChunks: nextRockChunks,
-      dustMotes: [],
     };
     this._saveBakedLevel(entry);
     this._applyBakedLevel(entry);
@@ -987,6 +986,22 @@ export class CaveRenderer {
     const fol = foliageTexOverride?.data;
     const w = Math.ceil((cx1 - cx0) * ppm);
 
+    // 2D-pruned box SDF evaluator (X and Y): skips distant upper/lower tiers & detects pure solid-rock tiles (v171)
+    const evalChunkSdf = createBoxSDFEvaluator(level, cx0, cx1, cy0, cy1, 8.0);
+    const invPpm = 1 / ppm;
+    const topGroundYByPx = new Float32Array(w);
+    let maxTopGroundY = -Infinity;
+    for (let px = 0; px < w; px++) {
+      const gy = this._getHorizonGroundY(level, cx0 + px * invPpm);
+      topGroundYByPx[px] = gy;
+      if (gy > maxTopGroundY) maxTopGroundY = gy;
+    }
+
+    // Sparse Rock-Tile Fast Path: tile has zero intersecting cave corridors/basins and lies below topsoil -> 0 VRAM canvas!
+    if (!evalChunkSdf.hasGeometry && cy0 > maxTopGroundY + 1.2) {
+      return { x0: cx0, x1: cx1, y0: cy0, y1: cy1, solidRock: true, canvas: null };
+    }
+
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
@@ -994,7 +1009,6 @@ export class CaveRenderer {
     const img = ctx.createImageData(w, h);
     const data = img.data;
 
-    const evalChunkSdf = createChunkSDFEvaluator(level, cx0, cx1);
     const basins = level.openBasins || [];
     const basinCenters = new Float32Array(basins.length);
     for (let b = 0; b < basins.length; b++) {
@@ -1011,18 +1025,8 @@ export class CaveRenderer {
     const [wR, wG, wB, lRm, lRa, lGm, lGa, lBm, lBa] = STAIN_MAP[mossKind] || [-26, 34, -8, 0.85, 0, 0.92, 0, 0.82, 0];
 
     const STEP = 8;
-    const invPpm = 1 / ppm;
     const gxBase = Math.floor((cx0 - xMin) * ppm);
     const gyBase = Math.floor((cy0 - yMin) * ppm);
-
-    // Precompute 1D horizon ground curve once per chunk (eliminates ~1M redundant sin/cos calls/chunk)
-    const topGroundYByPx = new Float32Array(w);
-    let maxTopGroundY = -Infinity;
-    for (let px = 0; px < w; px++) {
-      const gy = this._getHorizonGroundY(level, cx0 + px * invPpm);
-      topGroundYByPx[px] = gy;
-      if (gy > maxTopGroundY) maxTopGroundY = gy;
-    }
 
     for (let by = 0; by < h; by += STEP) {
       const pyEnd = Math.min(h, by + STEP);
@@ -1482,6 +1486,7 @@ export class CaveRenderer {
     hazards = null,
     blackBox = null,
     lineCookies = null,
+    surveyPins = null,
     powerRelays = null,
     smb = null,
     salvage = null,
@@ -1852,8 +1857,8 @@ export class CaveRenderer {
     if ((Array.isArray(squeezeDust) && squeezeDust.length > 0) || handOnLinePt) {
       this._drawTactileSqueezeAndLineFeel(ctx, diver, squeezeDust, handOnLinePt, localSiltDensity, toScreenX, toScreenY, scale, timeSec);
     }
-    if ((blackBox || (Array.isArray(lineCookies) && lineCookies.length > 0)) && typeof this._drawBlackBoxAndCookies === 'function') {
-      this._drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, Boolean(sonarPulse));
+    if ((blackBox || (Array.isArray(lineCookies) && lineCookies.length > 0) || (Array.isArray(surveyPins) && surveyPins.length > 0)) && typeof this._drawBlackBoxAndCookies === 'function') {
+      this._drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, Boolean(sonarPulse), surveyPins);
     }
     if (Array.isArray(powerRelays) && powerRelays.length > 0 && typeof this._drawPowerRelays === 'function') {
       this._drawPowerRelays(ctx, powerRelays, diver, toScreenX, toScreenY, scale, timeSec);
@@ -1931,6 +1936,46 @@ export class CaveRenderer {
     }
   }
 
+  _getSolidRockPattern(ctx) {
+    const rt = this.level?.theme?.rockTint;
+    const key = `${this.level?.id || ''}|${rt ? rt.join(',') : 'def'}`;
+    if (this._solidRockPattern && this._solidRockPatternKey === key) {
+      return this._solidRockPattern;
+    }
+    this._solidRockPatternKey = key;
+    if (!this.rockTex?.data || typeof document === 'undefined' || !ctx.createPattern) {
+      this._solidRockPattern = null;
+      return null;
+    }
+    const sz = 128;
+    const tc = document.createElement('canvas');
+    tc.width = sz;
+    tc.height = sz;
+    const tctx = tc.getContext('2d');
+    const img = tctx.createImageData(sz, sz);
+    const out = img.data;
+    const tex = this.rockTex.data;
+    const mulR = (rt ? rt[0] : 1) * 0.62 * 0.66;
+    const mulG = (rt ? rt[1] : 1) * 0.62 * 0.66;
+    const mulB = (rt ? rt[2] : 1) * 0.62 * 0.66;
+    const step = Math.max(1, Math.floor(TEX_SIZE / sz));
+    for (let y = 0; y < sz; y++) {
+      const ty = (y * step) & (TEX_SIZE - 1);
+      for (let x = 0; x < sz; x++) {
+        const tx = (x * step) & (TEX_SIZE - 1);
+        const ti = (ty * TEX_SIZE + tx) * 4;
+        const oi = (y * sz + x) * 4;
+        out[oi] = Math.max(10, Math.min(255, tex[ti] * mulR));
+        out[oi + 1] = Math.max(12, Math.min(255, tex[ti + 1] * mulG));
+        out[oi + 2] = Math.max(12, Math.min(255, tex[ti + 2] * mulB));
+        out[oi + 3] = 255;
+      }
+    }
+    tctx.putImageData(img, 0, 0);
+    this._solidRockPattern = ctx.createPattern(tc, 'repeat');
+    return this._solidRockPattern;
+  }
+
   _drawChunks(ctx, chunks, pxPerM, yMin, visX0, visY0, visX1, visY1, toScreenX, toScreenY, scale) {
     if (visX1 <= visX0 || visY1 <= visY0 || !chunks) return;
 
@@ -1946,21 +1991,38 @@ export class CaveRenderer {
       const cy1 = Math.min(visY1, tileY1);
       if (cy1 <= cy0) continue;
 
+      const dx = toScreenX(cx0);
+      const dy = toScreenY(cy0);
+      const dw = (cx1 - cx0) * scale;
+      const dh = (cy1 - cy0) * scale;
+
+      if (chnk.solidRock || !chnk.canvas) {
+        const pat = this._getSolidRockPattern(ctx);
+        ctx.save();
+        if (pat) {
+          ctx.translate(toScreenX(this.level.bounds.xMin), toScreenY(yMin));
+          const tileScale = (scale / pxPerM) * (TEX_SIZE / 128);
+          ctx.scale(tileScale, tileScale);
+          ctx.fillStyle = pat;
+          ctx.fillRect(
+            (cx0 - this.level.bounds.xMin) * pxPerM * (128 / TEX_SIZE),
+            (cy0 - yMin) * pxPerM * (128 / TEX_SIZE),
+            (cx1 - cx0) * pxPerM * (128 / TEX_SIZE) + 1,
+            (cy1 - cy0) * pxPerM * (128 / TEX_SIZE) + 1
+          );
+        } else {
+          ctx.fillStyle = '#181e27';
+          ctx.fillRect(dx, dy, dw + 1, dh + 1);
+        }
+        ctx.restore();
+        continue;
+      }
+
       const sx0 = (cx0 - chnk.x0) * pxPerM;
       const sw = (cx1 - cx0) * pxPerM;
       const sy0 = (cy0 - tileY0) * pxPerM;
       const sh = (cy1 - cy0) * pxPerM;
-      ctx.drawImage(
-        chnk.canvas,
-        sx0,
-        sy0,
-        sw,
-        sh,
-        toScreenX(cx0),
-        toScreenY(cy0),
-        (cx1 - cx0) * scale,
-        (cy1 - cy0) * scale
-      );
+      ctx.drawImage(chnk.canvas, sx0, sy0, sw, sh, dx, dy, dw, dh);
     }
   }
 
@@ -7291,895 +7353,9 @@ export class CaveRenderer {
    *   glacial sapphire inner shimmer, and survey-tag reflector glints.
    */
   _drawSubmergedStories(ctx, stories, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
-    // Overhead Pelagic Shadow Crossing: slow colossal Whale Shark or Giant Manta silhouette gliding across open-water light (v156)
-    const pelagic = stories?.pelagicShadow;
-    if (pass === 'world' && pelagic && (pelagic.enabled !== false)) {
-      const period = pelagic.periodSec || 46;
-      const crossDur = pelagic.crossingDurationSec || Math.min(22, period * 0.48);
-      const phaseTime = (((timeSec + (pelagic.phaseOffset || 0)) % period) + period) % period;
-      if (phaseTime < crossDur) {
-        const u = phaseTime / crossDur;
-        const span = Math.max(12, pelagic.xMax - pelagic.xMin);
-        const dir = (pelagic.direction ?? 1) >= 0 ? 1 : -1;
-        const wx = dir > 0 ? pelagic.xMin + u * span : pelagic.xMax - u * span;
-        const baseY = Number.isFinite(pelagic.y) ? pelagic.y : (pelagic.depthM || 6.0);
-        const wy = baseY + Math.sin(u * Math.PI * 2) * 0.65;
-        // Hard SDF rock-wall clearance guard: never draw pelagic shadow inside or clipping through solid rock!
-        const sizeM = pelagic.size || pelagic.sizeM || 6.2;
-        const halfM = sizeM * 0.42;
-        const sdfMax = this.level
-          ? Math.max(
-              evaluateCaveSDF(this.level, wx, wy),
-              evaluateCaveSDF(this.level, wx - halfM, wy),
-              evaluateCaveSDF(this.level, wx + halfM, wy)
-            )
-          : -5;
-        const rockClearFade = Math.max(0, Math.min(1, (-sdfMax - 0.35) / 1.45));
-        const psx = toScreenX(wx);
-        const psy = toScreenY(wy);
-        const len = sizeM * scale;
-        const fade = Math.sin(Math.min(1, Math.max(0, u)) * Math.PI) * rockClearFade;
-        const alpha = 0.24 * fade;
-        if (alpha > 0.01) {
-          ctx.save();
-          const sg = ctx.createLinearGradient?.(psx, psy, psx, psy + len * 1.45);
-          if (sg && typeof sg.addColorStop === 'function') {
-            sg.addColorStop(0, `rgba(2, 6, 23, ${(alpha * 0.85).toFixed(3)})`);
-            sg.addColorStop(0.55, `rgba(2, 6, 23, ${(alpha * 0.38).toFixed(3)})`);
-            sg.addColorStop(1, 'rgba(2, 6, 23, 0)');
-            ctx.fillStyle = sg;
-          } else {
-            ctx.fillStyle = `rgba(2, 6, 23, ${(alpha * 0.45).toFixed(3)})`;
-          }
-          ctx.beginPath();
-          ctx.moveTo(psx - len * 0.42, psy);
-          ctx.lineTo(psx + len * 0.42, psy);
-          ctx.lineTo(psx + len * 0.72, psy + len * 1.45);
-          ctx.lineTo(psx - len * 0.72, psy + len * 1.45);
-          ctx.closePath();
-          ctx.fill();
-
-          ctx.translate(psx, psy);
-          ctx.scale(dir, 1);
-          ctx.fillStyle = `rgba(3, 12, 26, ${(alpha * 1.65).toFixed(3)})`;
-          if (pelagic.kind === 'manta' || pelagic.species === 'giant-manta') {
-            const wingFlap = Math.sin(timeSec * 1.65) * len * 0.08;
-            ctx.beginPath();
-            ctx.moveTo(len * 0.36, 0);
-            ctx.quadraticCurveTo(len * 0.08, -len * 0.28 + wingFlap, -len * 0.12, -len * 0.32 + wingFlap);
-            ctx.quadraticCurveTo(-len * 0.2, -len * 0.06, -len * 0.48, 0);
-            ctx.quadraticCurveTo(-len * 0.2, len * 0.06, -len * 0.12, len * 0.28 - wingFlap * 0.7);
-            ctx.quadraticCurveTo(len * 0.08, len * 0.24 - wingFlap * 0.7, len * 0.36, 0);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = `rgba(3, 12, 26, ${(alpha * 1.5).toFixed(3)})`;
-            ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-            ctx.beginPath();
-            ctx.moveTo(-len * 0.42, 0);
-            ctx.quadraticCurveTo(-len * 0.64, Math.sin(timeSec * 2.2) * len * 0.05, -len * 0.84, 0);
-            ctx.stroke();
-          } else {
-            const tailWag = Math.sin(timeSec * 1.35) * len * 0.055;
-            ctx.beginPath();
-            ctx.moveTo(len * 0.46, -len * 0.03);
-            ctx.quadraticCurveTo(len * 0.12, -len * 0.16, -len * 0.34, -len * 0.04 + tailWag * 0.4);
-            ctx.lineTo(-len * 0.56, -len * 0.18 + tailWag);
-            ctx.lineTo(-len * 0.48, tailWag * 0.5);
-            ctx.lineTo(-len * 0.54, len * 0.13 + tailWag);
-            ctx.lineTo(-len * 0.34, len * 0.05 + tailWag * 0.4);
-            ctx.quadraticCurveTo(len * 0.1, len * 0.14, len * 0.46, len * 0.04);
-            ctx.closePath();
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(len * 0.04, -len * 0.12);
-            ctx.lineTo(-len * 0.06, -len * 0.23);
-            ctx.lineTo(-len * 0.12, -len * 0.1);
-            ctx.closePath();
-            ctx.fill();
-          }
-          ctx.restore();
-        }
-      }
-    }
-    const list = stories?.setPieces;
-    if (!Array.isArray(list) || list.length === 0) return;
-
-    ctx.save();
-    for (let i = 0; i < list.length; i++) {
-      const sp = list[i];
-      if (!sp || sp.x < xMin || sp.x > xMax || sp.y < yMin || sp.y > yMax) continue;
-
-      const sx = toScreenX(sp.x);
-      const sy = toScreenY(sp.y);
-      const sz = (sp.size || 1.0) * scale;
-
-      if (pass === 'emissive') {
-        if (sp.kind === 'emergency-lamp') {
-          // Erratic dying-battery red-amber emergency bulkhead lamp glow
-          const flick =
-            0.38 +
-            0.35 * Math.max(0, Math.sin(timeSec * 3.1 + sp.phase)) +
-            0.27 * (Math.sin(timeSec * 19.3 + sp.phase * 2.7) > 0.72 ? 0.15 : 1);
-          const rad = sz * 3.6;
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          const g = ctx.createRadialGradient?.(sx, sy + sz * 0.25, sz * 0.1, sx, sy + sz * 0.25, rad);
-          if (g && typeof g.addColorStop === 'function') {
-            g.addColorStop(0, `rgba(248, 113, 113, ${(0.55 * flick).toFixed(3)})`);
-            g.addColorStop(0.35, `rgba(220, 38, 38, ${(0.24 * flick).toFixed(3)})`);
-            g.addColorStop(1, 'rgba(185, 28, 28, 0)');
-            ctx.fillStyle = g;
-          } else {
-            ctx.fillStyle = `rgba(220, 38, 38, ${(0.28 * flick).toFixed(3)})`;
-          }
-          ctx.beginPath();
-          ctx.arc(sx, sy + sz * 0.25, rad, 0, Math.PI * 2);
-          ctx.fill();
-          // Glowing crimson bulb filament core
-          ctx.fillStyle = `rgba(254, 202, 202, ${(0.85 * flick).toFixed(3)})`;
-          ctx.beginPath();
-          ctx.arc(sx, sy + sz * 0.22, Math.max(2, sz * 0.14), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        } else if (sp.kind === 'porthole-shaft') {
-          // Volumetric tilted cobalt-cyan porthole light shaft with drifting dust motes
-          const len = (sp.shaftLen || 4.8) * scale;
-          const ang = sp.shaftAngle || 0.44;
-          const sway = Math.sin(timeSec * 1.1 + sp.phase) * 0.04;
-          ctx.save();
-          ctx.translate(sx, sy);
-          ctx.rotate(ang + sway);
-          ctx.globalCompositeOperation = 'screen';
-          const sg = ctx.createLinearGradient?.(0, 0, 0, len);
-          if (sg && typeof sg.addColorStop === 'function') {
-            sg.addColorStop(0, 'rgba(125, 211, 252, 0.32)');
-            sg.addColorStop(0.5, 'rgba(56, 189, 248, 0.12)');
-            sg.addColorStop(1, 'rgba(14, 165, 233, 0)');
-            ctx.fillStyle = sg;
-          } else {
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
-          }
-          ctx.beginPath();
-          ctx.moveTo(-sz * 0.34, 0);
-          ctx.lineTo(sz * 0.34, 0);
-          ctx.lineTo(sz * 1.28, len);
-          ctx.lineTo(-sz * 1.05, len);
-          ctx.closePath();
-          ctx.fill();
-          // Backlit dust motes suspended inside the porthole shaft
-          ctx.fillStyle = 'rgba(224, 242, 254, 0.42)';
-          for (let m = 0; m < 5; m++) {
-            const frac = ((timeSec * 0.12 + m * 0.21 + sp.phase) % 1);
-            const mx = Math.sin(timeSec * 1.4 + m * 2.1) * sz * (0.28 + frac * 0.52);
-            const my = frac * len * 0.92;
-            ctx.beginPath();
-            ctx.arc(mx, my, Math.max(1.1, 0.038 * scale), 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.restore();
-        } else if (sp.kind === 'halocline-lens') {
-          // Soft edge-faded freshwater-over-saltwater halocline density shimmer (no hard oval boundary — v167)
-          const hw = (sp.halfWidth || 3.2) * scale;
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          // 3 gentle liquid-glass refraction wave filaments fading cleanly to 0 at left & right ends
-          const ribbonGrad = ctx.createLinearGradient?.(sx - hw, sy, sx + hw, sy);
-          const strokeCol = (a) => {
-            if (!ribbonGrad || typeof ribbonGrad.addColorStop !== 'function') return `rgba(125, 211, 252, ${a})`;
-            const g = ctx.createLinearGradient(sx - hw, sy, sx + hw, sy);
-            g.addColorStop(0, 'rgba(56, 189, 248, 0)');
-            g.addColorStop(0.22, `rgba(103, 232, 249, ${(a * 0.65).toFixed(3)})`);
-            g.addColorStop(0.5, `rgba(224, 242, 254, ${a.toFixed(3)})`);
-            g.addColorStop(0.78, `rgba(103, 232, 249, ${(a * 0.65).toFixed(3)})`);
-            g.addColorStop(1, 'rgba(56, 189, 248, 0)');
-            return g;
-          };
-          for (let wIdx = 0; wIdx < 3; wIdx++) {
-            const yOff = (wIdx - 1) * 0.11 * scale;
-            ctx.strokeStyle = strokeCol(wIdx === 1 ? 0.36 : 0.20);
-            ctx.lineWidth = Math.max(1.1, (wIdx === 1 ? 0.06 : 0.038) * scale);
-            ctx.beginPath();
-            const steps = 16;
-            for (let k = 0; k <= steps; k++) {
-              const u = (k / steps) * 2 - 1;
-              const wx = sx + u * hw;
-              const env = Math.max(0, 1 - u * u);
-              const wy = sy + yOff + Math.sin(timeSec * (1.8 + wIdx * 0.55) + u * 5.4 + sp.phase + wIdx) * 0.11 * scale * env;
-              if (k === 0) ctx.moveTo(wx, wy);
-              else ctx.lineTo(wx, wy);
-            }
-            ctx.stroke();
-          }
-          ctx.restore();
-        } else if (sp.kind === 'ice-arch' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
-          // Subtle subglacial sapphire crystal refraction pulse along the ice arch
-          const cy0 = toScreenY(sp.ceilY);
-          const shimmer = 0.25 + 0.25 * Math.sin(timeSec * 1.9 + sp.phase);
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = `rgba(125, 211, 252, ${shimmer.toFixed(3)})`;
-          ctx.lineWidth = Math.max(1.5, 0.07 * scale);
-          ctx.beginPath();
-          ctx.moveTo(sx - sz * 0.55, cy0);
-          ctx.quadraticCurveTo(sx, cy0 + sz * 0.9, sx + sz * 0.55, cy0);
-          ctx.stroke();
-          ctx.restore();
-        } else if (sp.kind === 'air-dome') {
-          // Trapped Overhead Air Pocket: razor-flat horizontal water-air total-internal-reflection meniscus
-          // strictly clipped to [leftX, rightX] so it never floats into open water or bleeds onto rock (v167).
-          const lx = Number.isFinite(sp.leftX) ? toScreenX(sp.leftX) : sx - (sp.halfWidth || 1.8) * scale;
-          const rx = Number.isFinite(sp.rightX) ? toScreenX(sp.rightX) : sx + (sp.halfWidth || 1.8) * scale;
-          const spanPx = Math.max(8, rx - lx);
-          const midX = (lx + rx) * 0.5;
-          const isCalming = Boolean(stories.inAirDome && stories.activeAirDome === sp);
-          ctx.save();
-          // Subtle thin underside mirror sheen fading smoothly to 0 at left & right rock walls
-          ctx.globalCompositeOperation = 'screen';
-          const hg = ctx.createLinearGradient?.(lx, sy, rx, sy);
-          if (hg && typeof hg.addColorStop === 'function') {
-            hg.addColorStop(0, 'rgba(186, 230, 253, 0)');
-            hg.addColorStop(0.14, isCalming ? 'rgba(125, 211, 252, 0.34)' : 'rgba(186, 230, 253, 0.22)');
-            hg.addColorStop(0.5, isCalming ? 'rgba(224, 242, 254, 0.48)' : 'rgba(224, 242, 254, 0.30)');
-            hg.addColorStop(0.86, isCalming ? 'rgba(125, 211, 252, 0.34)' : 'rgba(186, 230, 253, 0.22)');
-            hg.addColorStop(1, 'rgba(186, 230, 253, 0)');
-            ctx.fillStyle = hg;
-          } else {
-            ctx.fillStyle = 'rgba(186, 230, 253, 0.22)';
-          }
-          ctx.beginPath();
-          ctx.rect(lx, sy - 0.04 * scale, spanPx, 0.16 * scale);
-          ctx.fill();
-
-          // Crisp horizontal liquid-mercury surface tension meniscus line with delicate ripples
-          const lineGrad = ctx.createLinearGradient?.(lx, sy, rx, sy);
-          if (lineGrad && typeof lineGrad.addColorStop === 'function') {
-            lineGrad.addColorStop(0, 'rgba(224, 242, 254, 0.05)');
-            lineGrad.addColorStop(0.12, 'rgba(224, 242, 254, 0.82)');
-            lineGrad.addColorStop(0.5, isCalming ? 'rgba(125, 211, 252, 0.98)' : 'rgba(248, 250, 252, 0.90)');
-            lineGrad.addColorStop(0.88, 'rgba(224, 242, 254, 0.82)');
-            lineGrad.addColorStop(1, 'rgba(224, 242, 254, 0.05)');
-            ctx.strokeStyle = lineGrad;
-          } else {
-            ctx.strokeStyle = 'rgba(240, 249, 255, 0.86)';
-          }
-          ctx.lineWidth = Math.max(1.4, (isCalming ? 0.068 : 0.052) * scale);
-          ctx.beginPath();
-          const steps = 16;
-          for (let k = 0; k <= steps; k++) {
-            const frac = k / steps;
-            const wx = lx + spanPx * frac;
-            const env = Math.sin(frac * Math.PI);
-            const wy = sy + Math.sin(timeSec * 3.0 + frac * 11.0 + sp.phase) * 0.038 * scale * env;
-            if (k === 0) ctx.moveTo(wx, wy);
-            else ctx.lineTo(wx, wy);
-          }
-          ctx.stroke();
-
-          // Delicate rising micro-bubbles flattening against the horizontal water-air boundary
-          ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
-          for (let b = 0; b < 4; b++) {
-            const bPhase = ((timeSec * 0.55 + b * 0.27 + sp.phase) % 1);
-            const bx = lx + spanPx * (0.18 + 0.64 * ((b * 0.31 + 0.12) % 1)) + Math.sin(timeSec * 2.2 + b * 2.1) * 0.06 * scale;
-            const by = sy + (1 - bPhase) * 0.42 * scale;
-            const br = Math.max(1.1, (0.032 + bPhase * 0.025) * scale);
-            ctx.globalAlpha = Math.min(0.85, (1 - Math.abs(bPhase - 0.75)) * 0.9);
-            ctx.beginPath();
-            ctx.ellipse(bx, by, br * (1 + bPhase * 0.65), br * (1 - bPhase * 0.42), 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // Clear, subtle diegetic callout so players immediately know what the Air Pocket is & when it's calming HR
-          if (isCalming || sp.discovered) {
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = isCalming ? 0.96 : 0.68;
-            const label = isCalming ? 'AIR POCKET · CALMING HR' : 'AIR POCKET';
-            const fontPx = Math.max(9, Math.min(12, Math.round(scale * 0.25)));
-            ctx.font = `700 ${fontPx}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-            const tw = ctx.measureText ? ctx.measureText(label).width : label.length * 6;
-            const padX = 7;
-            const pillH = fontPx + 6;
-            const topYSc = Number.isFinite(sp.topY) ? toScreenY(sp.topY) : sy - 0.55 * scale;
-            const pillY = Math.min(sy - pillH - 4, (topYSc + sy) * 0.5 - pillH * 0.5);
-            ctx.fillStyle = isCalming ? 'rgba(8, 47, 73, 0.84)' : 'rgba(6, 17, 31, 0.66)';
-            ctx.strokeStyle = isCalming ? 'rgba(125, 211, 252, 0.82)' : 'rgba(148, 163, 184, 0.38)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.roundRect(midX - tw * 0.5 - padX, pillY, tw + padX * 2, pillH, 999);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = isCalming ? '#e0f2fe' : '#bae6fd';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, midX, pillY + pillH * 0.5 + 0.5);
-          }
-          ctx.restore();
-        } else if (sp.kind === 'survey-station') {
-          // Retro-reflective tape glint on vintage explorer cave survey marker
-          const glint = 0.35 + 0.65 * Math.max(0, Math.sin(timeSec * 2.8 + sp.phase));
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.fillStyle = `rgba(254, 240, 138, ${(0.55 * glint).toFixed(3)})`;
-          ctx.beginPath();
-          ctx.arc(sx, sy - sz * 0.42, Math.max(1.8, 0.075 * scale), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-        continue;
-      }
-
-      // === PRE-LIGHTING WORLD GEOMETRY PASS ===
-      if (sp.kind === 'air-dome') {
-        // Dark dry-air pocket cavity carved snugly beneath the real SDF ceiling contour down to flat waterY (v167)
-        const lx = Number.isFinite(sp.leftX) ? toScreenX(sp.leftX) : sx - (sp.halfWidth || 1.8) * scale;
-        const rx = Number.isFinite(sp.rightX) ? toScreenX(sp.rightX) : sx + (sp.halfWidth || 1.8) * scale;
-        const topYSc = Number.isFinite(sp.topY) ? toScreenY(sp.topY) : sy - 0.55 * scale;
-        const prof = Array.isArray(sp.ceilingProfile) && sp.ceilingProfile.length >= 2 ? sp.ceilingProfile : null;
-        ctx.save();
-        const airGrad = ctx.createLinearGradient?.(sx, topYSc, sx, sy);
-        if (airGrad && typeof airGrad.addColorStop === 'function') {
-          airGrad.addColorStop(0, 'rgba(2, 6, 14, 0.92)');
-          airGrad.addColorStop(0.65, 'rgba(10, 24, 42, 0.78)');
-          airGrad.addColorStop(1, 'rgba(30, 64, 96, 0.42)');
-          ctx.fillStyle = airGrad;
-        } else {
-          ctx.fillStyle = 'rgba(4, 12, 24, 0.85)';
-        }
-        ctx.beginPath();
-        ctx.moveTo(lx, sy);
-        if (prof) {
-          for (let k = 0; k < prof.length; k++) {
-            ctx.lineTo(toScreenX(prof[k].x), toScreenY(prof[k].ceilY));
-          }
-        } else {
-          ctx.quadraticCurveTo(sx, topYSc, rx, sy);
-        }
-        ctx.lineTo(rx, sy);
-        ctx.closePath();
-        ctx.fill();
-
-        // For flat deck-beam bays / flat karst roofs, draw authentic structural coaming lips trapping the air
-        if (sp.bayCoaming) {
-          const lipW = Math.max(4, 0.16 * scale);
-          const lipTop = topYSc - 0.08 * scale;
-          const lipBot = sy + 0.12 * scale;
-          if (sp.isWreckBay) {
-            // Riveted corroded steel transverse hull I-beam coamings
-            ctx.fillStyle = '#3b2820';
-            ctx.strokeStyle = '#6b422d';
-            ctx.lineWidth = Math.max(1, 0.03 * scale);
-            ctx.fillRect(lx - lipW * 0.6, lipTop, lipW, lipBot - lipTop);
-            ctx.strokeRect(lx - lipW * 0.6, lipTop, lipW, lipBot - lipTop);
-            ctx.fillRect(rx - lipW * 0.4, lipTop, lipW, lipBot - lipTop);
-            ctx.strokeRect(rx - lipW * 0.4, lipTop, lipW, lipBot - lipTop);
-            // I-beam lower flange lip
-            ctx.fillStyle = '#523426';
-            ctx.fillRect(lx - lipW * 0.9, lipBot - lipW * 0.35, lipW * 1.6, lipW * 0.38);
-            ctx.fillRect(rx - lipW * 0.7, lipBot - lipW * 0.35, lipW * 1.6, lipW * 0.38);
-          } else {
-            // Natural downward-protruding dark limestone rock lips sealing left & right ends
-            ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.moveTo(lx - lipW * 1.2, lipTop);
-            ctx.lineTo(lx + lipW * 0.7, lipTop);
-            ctx.quadraticCurveTo(lx + lipW * 0.1, lipBot, lx - lipW * 0.5, lipBot + 0.06 * scale);
-            ctx.lineTo(lx - lipW * 1.4, lipTop);
-            ctx.closePath();
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(rx + lipW * 1.2, lipTop);
-            ctx.lineTo(rx - lipW * 0.7, lipTop);
-            ctx.quadraticCurveTo(rx - lipW * 0.1, lipBot, rx + lipW * 0.5, lipBot + 0.06 * scale);
-            ctx.lineTo(rx + lipW * 1.4, lipTop);
-            ctx.closePath();
-            ctx.fill();
-          }
-        }
-        ctx.restore();
-      } else if (sp.kind === 'speleothem-cathedral' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
-        // Monumental Ice-Age fluted calcite stalactite & stalagmite cathedral pillars
-        const cy0 = toScreenY(sp.ceilY);
-        const fy0 = toScreenY(sp.floorY);
-        const span = Math.max(scale * 1.5, fy0 - cy0);
-        const topLen = Math.min(span * 0.42, sz * 1.95);
-        const botLen = Math.min(span * 0.44, sz * 2.1);
-
-        // Delicate translucent calcite soda-straws flanking cathedral column (v168)
-        ctx.strokeStyle = 'rgba(226, 211, 186, 0.42)';
-        ctx.lineWidth = Math.max(1, 0.028 * scale);
-        for (const strawOff of [-0.62, -0.48, 0.50, 0.66]) {
-          const stX = sx + strawOff * sz;
-          const stL = topLen * (0.32 + Math.abs(strawOff) * 0.28);
-          ctx.beginPath();
-          ctx.moveTo(stX, cy0);
-          ctx.lineTo(stX, cy0 + stL);
-          ctx.stroke();
-        }
-        // Twin ceiling stalactite icicles
-        for (let k = -1; k <= 1; k++) {
-          const ox = sx + k * sz * 0.34;
-          const len = topLen * (k === 0 ? 1.0 : 0.68);
-          const halfW = sz * (k === 0 ? 0.22 : 0.14);
-          ctx.fillStyle = k === 0 ? '#786852' : '#615342';
-          ctx.beginPath();
-          ctx.moveTo(ox - halfW, cy0);
-          ctx.lineTo(ox + halfW, cy0);
-          ctx.lineTo(ox + halfW * 0.18, cy0 + len);
-          ctx.lineTo(ox - halfW * 0.18, cy0 + len);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(214, 198, 170, 0.45)';
-          ctx.lineWidth = Math.max(1, 0.03 * scale);
-          ctx.beginPath();
-          ctx.moveTo(ox - halfW * 0.2, cy0 + 2);
-          ctx.lineTo(ox - halfW * 0.06, cy0 + len * 0.88);
-          ctx.stroke();
-        }
-        // Twin floor stalagmite domes reaching upward
-        for (let k = -1; k <= 1; k++) {
-          const ox = sx + k * sz * 0.36;
-          const len = botLen * (k === 0 ? 1.0 : 0.62);
-          const halfW = sz * (k === 0 ? 0.28 : 0.18);
-          ctx.fillStyle = k === 0 ? '#85735a' : '#6b5c48';
-          ctx.beginPath();
-          ctx.moveTo(ox - halfW, fy0);
-          ctx.quadraticCurveTo(ox - halfW * 0.55, fy0 - len * 0.65, ox, fy0 - len);
-          ctx.quadraticCurveTo(ox + halfW * 0.55, fy0 - len * 0.65, ox + halfW, fy0);
-          ctx.closePath();
-          ctx.fill();
-          // Mineral drip rings
-          ctx.strokeStyle = 'rgba(226, 211, 186, 0.32)';
-          ctx.lineWidth = Math.max(1, 0.032 * scale);
-          ctx.beginPath();
-          ctx.moveTo(ox - halfW * 0.45, fy0 - len * 0.35);
-          ctx.lineTo(ox + halfW * 0.45, fy0 - len * 0.35);
-          ctx.stroke();
-        }
-      } else if (sp.kind === 'mine-timber' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
-        // Historic flooded wooden mine drift shoring timbers & rusted iron joiner plates
-        const cy0 = toScreenY(sp.ceilY);
-        const fy0 = toScreenY(sp.floorY);
-        const halfW = sz * 0.72;
-        const beamW = Math.max(3, 0.18 * scale);
-        ctx.fillStyle = '#452b17';
-        ctx.strokeStyle = '#29180b';
-        ctx.lineWidth = Math.max(1, 0.04 * scale);
-        // Left & right vertical shoring posts
-        ctx.fillRect(sx - halfW, cy0, beamW, fy0 - cy0);
-        ctx.strokeRect(sx - halfW, cy0, beamW, fy0 - cy0);
-        ctx.fillRect(sx + halfW - beamW, cy0, beamW, fy0 - cy0);
-        ctx.strokeRect(sx + halfW - beamW, cy0, beamW, fy0 - cy0);
-        // Overhead cross-lintel timber
-        ctx.fillStyle = '#5c3a1e';
-        ctx.fillRect(sx - halfW - beamW * 0.3, cy0, halfW * 2 + beamW * 0.6, beamW * 1.15);
-        ctx.strokeRect(sx - halfW - beamW * 0.3, cy0, halfW * 2 + beamW * 0.6, beamW * 1.15);
-        // Rusted iron corner gusset plates with bolts
-        ctx.fillStyle = '#7c2d12';
-        ctx.fillRect(sx - halfW, cy0 + beamW * 0.85, beamW * 1.25, beamW * 1.25);
-        ctx.fillRect(sx + halfW - beamW * 1.25, cy0 + beamW * 0.85, beamW * 1.25, beamW * 1.25);
-      } else if (sp.kind === 'ice-arch' && Number.isFinite(sp.ceilY) && Number.isFinite(sp.floorY)) {
-        // Sculpted translucent subglacial blue-ice ribs
-        const cy0 = toScreenY(sp.ceilY);
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
-        ctx.strokeStyle = 'rgba(186, 230, 253, 0.65)';
-        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-        ctx.beginPath();
-        ctx.moveTo(sx - sz * 0.7, cy0);
-        ctx.quadraticCurveTo(sx, cy0 + sz * 1.15, sx + sz * 0.7, cy0);
-        ctx.lineTo(sx + sz * 0.42, cy0);
-        ctx.quadraticCurveTo(sx, cy0 + sz * 0.65, sx - sz * 0.42, cy0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      } else if (sp.kind === 'emergency-lamp') {
-        // Cast-iron caged bulkhead sconce
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(sx - sz * 0.24, sy - sz * 0.08, sz * 0.48, sz * 0.14);
-        ctx.fillStyle = '#7f1d1d';
-        ctx.beginPath();
-        ctx.arc(sx, sy + sz * 0.2, sz * 0.18, 0, Math.PI * 2);
-        ctx.fill();
-        // Brass protective cage bars
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = Math.max(1, 0.04 * scale);
-        ctx.beginPath();
-        ctx.arc(sx, sy + sz * 0.2, sz * 0.22, 0, Math.PI);
-        ctx.moveTo(sx, sy + sz * 0.04);
-        ctx.lineTo(sx, sy + sz * 0.42);
-        ctx.stroke();
-      } else if (sp.kind === 'porthole-shaft') {
-        // Heavy bolted bronze ship porthole frame
-        ctx.fillStyle = '#0c4a6e';
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = Math.max(2.2, 0.1 * scale);
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 0.42, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // 6 brass perimeter clamping dogs
-        ctx.fillStyle = '#f59e0b';
-        for (let b = 0; b < 6; b++) {
-          const a = (b / 6) * Math.PI * 2;
-          ctx.beginPath();
-          ctx.arc(sx + Math.cos(a) * sz * 0.44, sy + Math.sin(a) * sz * 0.44, Math.max(1.4, 0.045 * scale), 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (sp.kind === 'cargo-vehicle') {
-        // Iconic submerged WWII Bedford QL Cargo Truck / Lorry resting inside flooded ship hold (v168)
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(sp.tilt || 0);
-        const w = sz * 1.65;
-        const h = sz * 0.92;
-        // Rusted steel chassis rail
-        ctx.fillStyle = '#3b2419';
-        ctx.strokeStyle = '#6b3e28';
-        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
-        ctx.fillRect(-w * 0.55, -h * 0.32, w * 1.12, h * 0.14);
-        // Rear cargo flatbed & corroded arched canvas canopy hoops
-        ctx.fillStyle = '#4a2e1f';
-        ctx.fillRect(-w * 0.54, -h * 0.58, w * 0.68, h * 0.28);
-        ctx.strokeRect(-w * 0.54, -h * 0.58, w * 0.68, h * 0.28);
-        ctx.strokeStyle = '#7c4a30';
-        ctx.lineWidth = Math.max(1.2, 0.042 * scale);
-        for (let hoop = 0; hoop < 4; hoop++) {
-          const hx = -w * 0.50 + hoop * (w * 0.20);
-          ctx.beginPath();
-          ctx.moveTo(hx, -h * 0.58);
-          ctx.quadraticCurveTo(hx + w * 0.02, -h * 1.02, hx + w * 0.08, -h * 0.98);
-          ctx.stroke();
-        }
-        // Forward armored cab & shattered windshield bay
-        ctx.fillStyle = '#442b1d';
-        ctx.beginPath();
-        ctx.moveTo(w * 0.16, -h * 0.30);
-        ctx.lineTo(w * 0.16, -h * 0.86);
-        ctx.lineTo(w * 0.44, -h * 0.86);
-        ctx.lineTo(w * 0.56, -h * 0.56);
-        ctx.lineTo(w * 0.58, -h * 0.30);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#0c1d30';
-        ctx.fillRect(w * 0.24, -h * 0.78, w * 0.18, h * 0.20);
-        // Twin heavy spoked military rubber tires resting on deck
-        for (const tx of [-w * 0.34, w * 0.36]) {
-          ctx.fillStyle = '#18181b';
-          ctx.strokeStyle = '#475569';
-          ctx.lineWidth = Math.max(1.2, 0.04 * scale);
-          ctx.beginPath();
-          ctx.arc(tx, -h * 0.18, h * 0.21, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#78350f';
-          ctx.beginPath();
-          ctx.arc(tx, -h * 0.18, h * 0.08, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // Soft coral & rusticle encrustation tufts on roof
-        ctx.fillStyle = 'rgba(244, 114, 182, 0.45)';
-        ctx.beginPath();
-        ctx.arc(-w * 0.30, -h * 0.62, h * 0.09, 0, Math.PI * 2);
-        ctx.arc(w * 0.30, -h * 0.88, h * 0.07, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (sp.kind === 'carrier-aircraft') {
-        // Submerged Naval Swept-Wing Carrier Airframe on Oriskany Hangar / Flight Deck (v168)
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(sp.tilt || 0);
-        const L = sz * 1.9;
-        const H = sz * 0.85;
-        // Swept tail stabilizer fin
-        ctx.fillStyle = '#334155';
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = Math.max(1.1, 0.036 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-L * 0.56, -H * 0.36);
-        ctx.lineTo(-L * 0.72, -H * 0.96);
-        ctx.lineTo(-L * 0.46, -H * 0.92);
-        ctx.lineTo(-L * 0.32, -H * 0.38);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Riveted aluminum naval fuselage & pointed nosecone
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.moveTo(-L * 0.58, -H * 0.24);
-        ctx.lineTo(L * 0.28, -H * 0.42);
-        ctx.quadraticCurveTo(L * 0.68, -H * 0.34, L * 0.64, -H * 0.20);
-        ctx.lineTo(-L * 0.56, -H * 0.14);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Flooded plexiglass cockpit canopy bubble
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
-        ctx.strokeStyle = '#94a3b8';
-        ctx.beginPath();
-        ctx.ellipse(L * 0.16, -H * 0.44, L * 0.18, H * 0.12, -0.08, Math.PI, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // Swept low delta wing & landing gear struts
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.moveTo(-L * 0.18, -H * 0.24);
-        ctx.lineTo(L * 0.18, -H * 0.22);
-        ctx.lineTo(-L * 0.08, -H * 0.06);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#64748b';
-        ctx.beginPath();
-        ctx.moveTo(-L * 0.06, -H * 0.18);
-        ctx.lineTo(-L * 0.06, 0);
-        ctx.moveTo(L * 0.34, -H * 0.22);
-        ctx.lineTo(L * 0.34, 0);
-        ctx.stroke();
-        ctx.restore();
-      } else if (sp.kind === 'grand-staircase') {
-        // Ornate Ocean-Liner First-Class Grand Staircase & Gilded Bronze Balustrade (v168)
-        ctx.save();
-        ctx.translate(sx, sy);
-        const w = sz * 1.45;
-        const h = sz * 1.15;
-        // Sweeping stepped oak/marble stair stringer
-        ctx.fillStyle = '#3f2a1d';
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = Math.max(1.1, 0.036 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-w * 0.55, 0);
-        const steps = 6;
-        for (let st = 0; st < steps; st++) {
-          const x0 = -w * 0.55 + (st / steps) * w * 0.95;
-          const y0 = -(st / steps) * h * 0.85;
-          const x1 = -w * 0.55 + ((st + 1) / steps) * w * 0.95;
-          const y1 = -((st + 1) / steps) * h * 0.85;
-          ctx.lineTo(x0, y1);
-          ctx.lineTo(x1, y1);
-        }
-        ctx.lineTo(w * 0.45, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Gilded bronze sweeping handrail & vertical wrought-iron balusters
-        ctx.strokeStyle = '#d97706';
-        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-w * 0.52, -h * 0.24);
-        ctx.quadraticCurveTo(-w * 0.05, -h * 0.62, w * 0.42, -h * 1.06);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(217, 119, 6, 0.65)';
-        ctx.lineWidth = Math.max(1.0, 0.03 * scale);
-        for (let b = 0; b <= 5; b++) {
-          const frac = b / 5;
-          const bx = -w * 0.48 + frac * w * 0.86;
-          const byBot = -frac * h * 0.78;
-          const byTop = byBot - h * 0.24;
-          ctx.beginPath();
-          ctx.moveTo(bx, byBot);
-          ctx.lineTo(bx, byTop);
-          ctx.stroke();
-        }
-        // Ornate gilded brass newel post orb at foot of stairs
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-w * 0.58, -h * 0.30, w * 0.11, h * 0.30);
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(-w * 0.525, -h * 0.34, Math.max(2.2, sz * 0.08), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (sp.kind === 'gorgonian-fan') {
-        // Swaying Deep-Water Crimson/Magenta Gorgonian Sea Fan Colony (v168)
-        ctx.save();
-        ctx.translate(sx, sy);
-        const sway = Math.sin(timeSec * 1.45 + (sp.phase || 0)) * 0.12;
-        ctx.rotate(sway);
-        ctx.strokeStyle = '#e11d48';
-        ctx.lineWidth = Math.max(1.5, 0.06 * scale);
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -sz * 0.78);
-        ctx.moveTo(0, -sz * 0.22);
-        ctx.quadraticCurveTo(-sz * 0.28, -sz * 0.42, -sz * 0.46, -sz * 0.74);
-        ctx.moveTo(0, -sz * 0.26);
-        ctx.quadraticCurveTo(sz * 0.28, -sz * 0.44, sz * 0.48, -sz * 0.76);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(251, 113, 133, 0.72)';
-        ctx.lineWidth = Math.max(1.0, 0.032 * scale);
-        for (const [x0, y0, x1, y1] of [
-          [-sz * 0.20, -sz * 0.42, -sz * 0.28, -sz * 0.88],
-          [-sz * 0.34, -sz * 0.56, -sz * 0.62, -sz * 0.62],
-          [sz * 0.20, -sz * 0.44, sz * 0.28, -sz * 0.90],
-          [sz * 0.34, -sz * 0.58, sz * 0.60, -sz * 0.64],
-          [0, -sz * 0.54, -sz * 0.14, -sz * 0.94],
-          [0, -sz * 0.58, sz * 0.16, -sz * 0.92],
-        ]) {
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
-        }
-        ctx.restore();
-      } else if (sp.kind === 'brass-telegraph') {
-        // Tilted Chadburn Engine-Room Brass Telegraph pedestal
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(sp.tilt || 0);
-        // Cast-bronze flared base & column
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.moveTo(-sz * 0.24, 0);
-        ctx.lineTo(sz * 0.24, 0);
-        ctx.lineTo(sz * 0.1, -sz * 0.78);
-        ctx.lineTo(-sz * 0.1, -sz * 0.78);
-        ctx.closePath();
-        ctx.fill();
-        // Brass circular engraved dial head
-        ctx.fillStyle = '#d97706';
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-        ctx.beginPath();
-        ctx.arc(0, -sz * 0.92, sz * 0.28, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // Cream enamel inner dial & order pointer
-        ctx.fillStyle = '#fef3c7';
-        ctx.beginPath();
-        ctx.arc(0, -sz * 0.92, sz * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = Math.max(1.2, 0.04 * scale);
-        ctx.beginPath();
-        ctx.moveTo(0, -sz * 0.92);
-        ctx.lineTo(sz * 0.15, -sz * 0.98);
-        ctx.stroke();
-        // Brass telegraph control lever sticking out top
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
-        ctx.beginPath();
-        ctx.moveTo(0, -sz * 0.92);
-        ctx.lineTo(sz * 0.34, -sz * 1.18);
-        ctx.stroke();
-        ctx.fillStyle = '#451a03';
-        ctx.beginPath();
-        ctx.arc(sz * 0.34, -sz * 1.18, Math.max(2, sz * 0.07), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (sp.kind === 'ship-wheel') {
-        // Corroded 8-spoke teak & brass ship's helm wheel
-        ctx.save();
-        ctx.translate(sx, sy - sz * 0.56);
-        ctx.rotate((sp.tilt || 0) * 1.5);
-        const r = sz * 0.44;
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = Math.max(2.2, 0.08 * scale);
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = Math.max(1.3, 0.048 * scale);
-        for (let k = 0; k < 8; k++) {
-          const a = (k / 8) * Math.PI * 2;
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(Math.cos(a) * r * 1.28, Math.sin(a) * r * 1.28);
-          ctx.stroke();
-        }
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (sp.kind === 'boiler-panel') {
-        // Riveted iron boiler gauge board + twin cracked dials + copper pipes
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate((sp.tilt || 0) * 0.5);
-        ctx.fillStyle = '#334155';
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-        ctx.fillRect(-sz * 0.48, -sz * 0.72, sz * 0.96, sz * 0.68);
-        ctx.strokeRect(-sz * 0.48, -sz * 0.72, sz * 0.96, sz * 0.68);
-        // Copper steam lines
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = Math.max(1.8, 0.06 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-sz * 0.22, -sz * 0.04);
-        ctx.lineTo(-sz * 0.22, -sz * 0.88);
-        ctx.moveTo(sz * 0.22, -sz * 0.04);
-        ctx.lineTo(sz * 0.22, -sz * 0.88);
-        ctx.stroke();
-        // Twin Bourdon dials
-        for (const ox of [-sz * 0.22, sz * 0.22]) {
-          ctx.fillStyle = '#e2e8f0';
-          ctx.strokeStyle = '#d97706';
-          ctx.lineWidth = Math.max(1.2, 0.045 * scale);
-          ctx.beginPath();
-          ctx.arc(ox, -sz * 0.42, sz * 0.16, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.strokeStyle = '#dc2626';
-          ctx.lineWidth = Math.max(1, 0.03 * scale);
-          ctx.beginPath();
-          ctx.moveTo(ox, -sz * 0.42);
-          ctx.lineTo(ox - sz * 0.09, -sz * 0.34);
-          ctx.stroke();
-        }
-        ctx.restore();
-      } else if (sp.kind === 'mayan-vessel') {
-        // Sculpted submerged Mayan ceramic offering vessel resting on cenote silt
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(sp.tilt || 0);
-        ctx.fillStyle = '#9a3412';
-        ctx.strokeStyle = '#431407';
-        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
-        ctx.beginPath();
-        ctx.ellipse(0, -sz * 0.28, sz * 0.32, sz * 0.26, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // Flared ceramic neck & rim
-        ctx.fillStyle = '#c2410c';
-        ctx.beginPath();
-        ctx.roundRect(-sz * 0.17, -sz * 0.62, sz * 0.34, sz * 0.16, sz * 0.05);
-        ctx.fill();
-        ctx.stroke();
-        // Ochre geometric rim band
-        ctx.strokeStyle = '#fdba74';
-        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-sz * 0.26, -sz * 0.3);
-        ctx.lineTo(sz * 0.26, -sz * 0.3);
-        ctx.stroke();
-        ctx.restore();
-      } else if (sp.kind === 'fossil-bed') {
-        // Embedded logarithmic spiral ammonite fossil in limestone slab
-        ctx.save();
-        ctx.translate(sx, sy - sz * 0.24);
-        ctx.fillStyle = '#57534e';
-        ctx.beginPath();
-        ctx.ellipse(0, sz * 0.08, sz * 0.44, sz * 0.22, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#d6d3d1';
-        ctx.lineWidth = Math.max(1.4, 0.05 * scale);
-        ctx.beginPath();
-        for (let t = 0; t <= 18; t++) {
-          const ang = t * 0.58;
-          const rad = (t / 18) * sz * 0.26;
-          const fx = Math.cos(ang) * rad;
-          const fy = Math.sin(ang) * rad;
-          if (t === 0) ctx.moveTo(fx, fy);
-          else ctx.lineTo(fx, fy);
-        }
-        ctx.stroke();
-        ctx.restore();
-      } else if (sp.kind === 'survey-station') {
-        // Hammered stainless cave survey piton & weathered brass station plate
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = Math.max(1.6, 0.055 * scale);
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx, sy - sz * 0.45);
-        ctx.stroke();
-        ctx.fillStyle = '#eab308';
-        ctx.strokeStyle = '#713f12';
-        ctx.lineWidth = Math.max(1, 0.035 * scale);
-        ctx.beginPath();
-        ctx.moveTo(sx - sz * 0.22, sy - sz * 0.42);
-        ctx.lineTo(sx + sz * 0.14, sy - sz * 0.54);
-        ctx.lineTo(sx + sz * 0.24, sy - sz * 0.42);
-        ctx.lineTo(sx + sz * 0.14, sy - sz * 0.3);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
+    return drawSubmergedStories(this, ctx, stories, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass);
   }
 
-  /**
-   * Ultra-Minimal "Diegetic Immersion Mode" wrist-computer depth tape & heading compass ribbon (v156).
-   * Drawn directly on the canvas edge when Compact HUD is enabled so players can fly near-zero-chrome.
-   */
   _drawDiegeticImmersionTape(ctx, cw, ch, diver, diveState, nextCheckpoint, timeSec = 0) {
     if (!diver || !diveState) return;
     const dpr = this._cachedDpr || 1;
@@ -8823,193 +7999,7 @@ export class CaveRenderer {
    * - Arctic/Glacial: Translucent bobbing sea-ice floes with turquoise submerged keels & polar aurora ribbons.
    */
   _drawTopsideAtmosphereExtras(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
-    const style = this.level.theme?.surfaceStyle || "";
-    const surfY = toScreenY(0);
-    ctx.save();
-
-    // 1. Shipwrecks: Weighted Descent Shot-Line + Diver-Down Surface Float Buoy
-    if (this.level.isWreck || style === "open-ocean-wreck") {
-      const spawnX = this.level.spawn?.x ?? 0;
-      const buoyX = spawnX + 4.4;
-      if (buoyX + 6 >= visX0 && buoyX - 10 <= visX1) {
-        const shotX = spawnX + 0.35;
-        const sxShot = toScreenX(shotX);
-        const shotBottomM = Math.min(18, Math.max(8, (this.level.spawn?.y ?? 2) + 11));
-        const syBot = toScreenY(shotBottomM);
-        const sway = Math.sin(timeSec * 1.45) * 0.16 * scale;
-
-        // Taut weighted descent shot-line hanging from charter boat into the wreck
-        ctx.strokeStyle = "rgba(254, 240, 138, 0.56)";
-        ctx.lineWidth = Math.max(1.3, 0.055 * scale);
-        ctx.beginPath();
-        ctx.moveTo(sxShot, surfY);
-        ctx.quadraticCurveTo(sxShot + sway, (surfY + syBot) * 0.5, sxShot + sway * 0.4, syBot);
-        ctx.stroke();
-
-        // 6m O2 Deco Stop ring & 12m depth knot tag along the shot-line
-        for (const dm of [6, 12]) {
-          if (dm >= shotBottomM - 1) continue;
-          const dy = toScreenY(dm);
-          const t = dm / shotBottomM;
-          const dx = sxShot + sway * (2 * t * (1 - t) + 0.4 * t * t);
-          ctx.fillStyle = dm === 6 ? "#4ade80" : "#facc15";
-          ctx.beginPath();
-          ctx.arc(dx, dy, Math.max(2.6, 0.11 * scale), 0, Math.PI * 2);
-          ctx.fill();
-          if (scale >= 16) {
-            ctx.font = "800 9px ui-monospace, SFMono-Regular, Menlo, monospace";
-            ctx.fillStyle = dm === 6 ? "rgba(134, 239, 172, 0.88)" : "rgba(253, 224, 71, 0.8)";
-            ctx.textAlign = "left";
-            ctx.fillText(dm === 6 ? "6m O₂ STOP" : "12m SHOT", dx + 6, dy + 3);
-          }
-        }
-
-        // Bobbing Red-and-White Diver-Down Surface Marker Float tethered near boat stern
-        const bx = toScreenX(buoyX);
-        const bob = Math.sin(timeSec * 2.3 + 0.8) * 0.12 * scale;
-        const by = surfY + bob;
-        ctx.strokeStyle = "rgba(226, 232, 240, 0.45)";
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(sxShot + 2.2 * scale, surfY + 0.08 * scale);
-        ctx.quadraticCurveTo((sxShot + bx) * 0.5, surfY + 0.45 * scale, bx, by + 0.1 * scale);
-        ctx.stroke();
-
-        // Orange-red float body + alpha/diver-down pennant flag
-        ctx.fillStyle = "#ef4444";
-        ctx.beginPath();
-        ctx.ellipse(bx, by, 0.48 * scale, 0.24 * scale, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.85)";
-        ctx.fillRect(bx - 0.12 * scale, by - 0.22 * scale, 0.24 * scale, 0.12 * scale);
-        // Flag mast + red/white diagonal diver-down flag
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-        ctx.beginPath();
-        ctx.moveTo(bx, by - 0.2 * scale);
-        ctx.lineTo(bx, by - 1.15 * scale);
-        ctx.stroke();
-        const fw = 0.72 * scale;
-        const fh = 0.46 * scale;
-        const wave = Math.sin(timeSec * 4.2) * 0.06 * scale;
-        ctx.fillStyle = "#dc2626";
-        ctx.beginPath();
-        ctx.moveTo(bx, by - 1.12 * scale);
-        ctx.lineTo(bx + fw, by - 1.12 * scale + wave);
-        ctx.lineTo(bx + fw, by - 1.12 * scale + fh + wave);
-        ctx.lineTo(bx, by - 1.12 * scale + fh);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = Math.max(1.6, 0.09 * scale);
-        ctx.beginPath();
-        ctx.moveTo(bx + 0.06 * scale, by - 1.06 * scale);
-        ctx.lineTo(bx + fw - 0.06 * scale, by - 1.12 * scale + fh - 0.05 * scale + wave);
-        ctx.stroke();
-      }
-      ctx.restore();
-      return;
-    }
-
-    // 2. Arctic / Glacial / Polar Sites: Bobbing Sea-Ice Floes with Cyan Submerged Keels + Aurora Ribbons
-    const isPolar = /nordic|fjord|glacier|iceberg|aurora|strytan|kverk|grjota/i.test(style) || /arctic|ice|glacier|orda|strytan|greenland/i.test(this.level.name || "");
-    if (isPolar) {
-      // Shimmering polar aurora curtains high above the waterline
-      if (surfY > 40) {
-        ctx.globalCompositeOperation = "screen";
-        for (let b = 0; b < 2; b++) {
-          const g = ctx.createLinearGradient(0, Math.max(0, surfY - 210), 0, surfY - 28);
-          g.addColorStop(0, "rgba(52, 211, 153, 0)");
-          g.addColorStop(0.45, b === 0 ? "rgba(52, 211, 153, 0.16)" : "rgba(56, 189, 248, 0.14)");
-          g.addColorStop(1, "rgba(167, 139, 250, 0)");
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          const xStart = toScreenX(visX0 - 4);
-          const xEnd = toScreenX(visX1 + 4);
-          ctx.moveTo(xStart, surfY - 28);
-          for (let px = xStart; px <= xEnd; px += 48) {
-            const wy = surfY - 125 - b * 36 + Math.sin(px * 0.012 + timeSec * (0.55 + b * 0.2) + b * 2) * 26;
-            ctx.lineTo(px, wy);
-          }
-          ctx.lineTo(xEnd, surfY - 28);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.globalCompositeOperation = "source-over";
-      }
-      // Translucent floating ice floes inside open basins
-      for (const basin of this.level.openBasins || []) {
-        if (basin.xMax + 4 < visX0 || basin.xMin - 4 > visX1) continue;
-        for (let f = 0; f < 3; f++) {
-          const fx = basin.xMin + 1.8 + ((basin.xMax - basin.xMin - 3.6) * (f + 0.35)) / 3;
-          if (evaluateCaveSDF(this.level, fx, 0.2) > -0.3) continue;
-          const sx = toScreenX(fx);
-          const bob = Math.sin(timeSec * 1.4 + f * 2.1) * 0.08 * scale;
-          const fw = (1.05 + (f % 2) * 0.55) * scale;
-          // Submerged turquoise keel
-          ctx.fillStyle = "rgba(56, 189, 248, 0.42)";
-          ctx.beginPath();
-          ctx.moveTo(sx - fw * 0.88, surfY + bob);
-          ctx.lineTo(sx - fw * 0.55, surfY + bob + 0.58 * scale);
-          ctx.lineTo(sx + fw * 0.45, surfY + bob + 0.66 * scale);
-          ctx.lineTo(sx + fw * 0.85, surfY + bob);
-          ctx.closePath();
-          ctx.fill();
-          // Snow-capped top shelf
-          ctx.fillStyle = "#e0f2fe";
-          ctx.beginPath();
-          ctx.moveTo(sx - fw, surfY + bob);
-          ctx.lineTo(sx - fw * 0.68, surfY + bob - 0.34 * scale);
-          ctx.lineTo(sx + fw * 0.52, surfY + bob - 0.38 * scale);
-          ctx.lineTo(sx + fw, surfY + bob);
-          ctx.closePath();
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-      return;
-    }
-
-    // 3. Cenotes & Karst Caves: Hanging Banyan Roots, Swaying Jungle Lianas & Drifting Leaves
-    for (const basin of this.level.openBasins || []) {
-      if (basin.xMax + 8 < visX0 || basin.xMin - 8 > visX1) continue;
-      const waterL = this._basinEdgeCache && typeof this._findBasinCliffEdgeX === "function" ? this._findBasinCliffEdgeX(basin, -0.35, -1) : basin.xMin + 0.5;
-      const waterR = this._basinEdgeCache && typeof this._findBasinCliffEdgeX === "function" ? this._findBasinCliffEdgeX(basin, -0.35, 1) : basin.xMax - 0.5;
-      for (let side = 0; side < 2; side++) {
-        const rimProbeX = side === 0 ? waterL - 1.2 : waterR + 1.2;
-        const rimY = typeof this._getHorizonGroundY === "function" ? this._getHorizonGroundY(this.level, rimProbeX) : -3.4;
-        const baseX = side === 0 ? waterL : waterR;
-        const dir = side === 0 ? 1 : -1;
-        for (let v = 0; v < 3; v++) {
-          const rx = baseX + dir * (0.12 + v * 0.34);
-          const sx = toScreenX(rx);
-          const startWorldY = Math.min(-0.6, rimY + 0.25 + v * 0.18);
-          const topY = toScreenY(startWorldY);
-          const lenM = Math.max(1.4, Math.abs(startWorldY) * (0.72 + (v % 2) * 0.35));
-          const botY = toScreenY(startWorldY + lenM);
-          const sway = Math.sin(timeSec * (1.1 + v * 0.25) + v * 1.7 + side) * 0.26 * scale;
-          ctx.strokeStyle = v === 0 ? "rgba(78, 56, 36, 0.82)" : "rgba(45, 92, 52, 0.72)";
-          ctx.lineWidth = Math.max(1.2, (v === 0 ? 0.08 : 0.045) * scale);
-          ctx.beginPath();
-          ctx.moveTo(sx, topY);
-          ctx.quadraticCurveTo(sx + sway, (topY + botY) * 0.5, sx + sway * 1.25, botY);
-          ctx.stroke();
-          // Tiny hanging vine leaves
-          if (v > 0 && scale >= 12) {
-            ctx.fillStyle = "rgba(74, 152, 82, 0.76)";
-            for (let k = 1; k <= 3; k++) {
-              const lt = k / 4;
-              const lx = sx + sway * (2 * lt * (1 - lt) + 1.25 * lt * lt);
-              const ly = topY + (botY - topY) * lt;
-              ctx.beginPath();
-              ctx.ellipse(lx + (k % 2 === 0 ? 3 : -3), ly, 3.2, 1.5, (k % 2 === 0 ? 0.5 : -0.5), 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-        }
-      }
-    }
-    ctx.restore();
+    return drawTopsideAtmosphereExtras(this, ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec);
   }
 
   /**
@@ -9025,53 +8015,8 @@ export class CaveRenderer {
     ctx.save();
     ctx.globalCompositeOperation = "screen";
 
-    // 1. Torch-Beam Volumetric Marine Snow / Rust Motes inside primary cone
-    if (diver.torchOn !== false && diver.y > 0.6) {
-      const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
-      const tfx = Math.cos(tang);
-      const tfy = Math.sin(tang);
-      const originX = diver.body?.hand?.x ?? (diver.x + tfx * 0.45);
-      const originY = diver.body?.hand?.y ?? (diver.y + tfy * 0.45);
-      const cellM = 1.65;
-      const gx0 = Math.floor((originX - 11) / cellM);
-      const gx1 = Math.ceil((originX + 11) / cellM);
-      const gy0 = Math.floor(Math.max(0.4, originY - 11) / cellM);
-      const gy1 = Math.ceil((originY + 11) / cellM);
-      const baseRgb = isWreck ? "251, 186, 116" : isPolar ? "186, 230, 253" : "248, 250, 224";
-
-      for (let gx = gx0; gx <= gx1; gx++) {
-        for (let gy = gy0; gy <= gy1; gy++) {
-          const h = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
-          const f1 = h - Math.floor(h);
-          const h2 = Math.sin(gx * 269.5 + gy * 183.3) * 19532.173;
-          const f2 = h2 - Math.floor(h2);
-          const wx = (gx + f1) * cellM + Math.sin(timeSec * 0.55 + f2 * 6.28) * 0.24;
-          const wy = (gy + f2) * cellM + Math.cos(timeSec * 0.42 + f1 * 6.28) * 0.18;
-          if (wy < 0.4) continue;
-          const dx = wx - originX;
-          const dy = wy - originY;
-          const distSq = dx * dx + dy * dy;
-          if (distSq < 0.35 || distSq > 132) continue;
-          const dist = Math.sqrt(distSq);
-          const dot = (dx * tfx + dy * tfy) / dist;
-          if (dot < 0.78) continue; // Strictly inside primary torch cone
-          const coneFade = (dot - 0.78) / 0.22;
-          const distFade = Math.max(0, 1 - dist / 11.5);
-          const twinkle = 0.65 + 0.35 * Math.sin(timeSec * 3.1 + f1 * 18);
-          const alpha = Math.min(0.68, coneFade * distFade * twinkle * 0.62);
-          if (alpha < 0.04) continue;
-          const sx = toScreenX(wx);
-          const sy = toScreenY(wy);
-          const r = Math.max(0.9, (0.028 + f2 * 0.042) * scale);
-          ctx.fillStyle = `rgba(${baseRgb}, ${alpha.toFixed(3)})`;
-          ctx.beginPath();
-          ctx.arc(sx, sy, r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-
-    // 2. Rippling Shallow Solar Caustic Web Filaments in sunlit entry water
+    // Note: Volumetric marine snow is rendered in the batched _drawVolumetricTorchBeam pass (no duplicate 225-cell loop).
+    // 1. Rippling Shallow Solar Caustic Web Filaments in sunlit entry water
     if (visY0 < 17 && weatherCaustics > 0.14) {
       const cAlpha = Math.min(0.26, weatherCaustics * 0.22);
       ctx.strokeStyle = isWreck ? `rgba(125, 211, 252, ${cAlpha.toFixed(3)})` : `rgba(165, 243, 252, ${cAlpha.toFixed(3)})`;
@@ -11198,22 +10143,52 @@ export class CaveRenderer {
 
     const localTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
     const localRayCount = Math.max(26, Math.round(52 * (this._perfBudget?.rayScale ?? 1)));
-    const localTorch = diver.torchOn !== false
-      ? {
-          ox: diver.body?.hand ? diver.body.hand.x : diver.x,
-          oy: diver.body?.hand ? diver.body.hand.y : diver.y,
-          rays: castTorchFan(
-            this.level,
-            diver.body?.hand ? diver.body.hand.x : diver.x,
-            diver.body?.hand ? diver.body.hand.y : diver.y,
-            localTorchAng,
-            0.44,
-            16.5 * (getTorchOptic(diver?.livery?.torchId).rangeMult || 1.0),
-            localRayCount,
-            siltClouds
-          ),
-        }
-      : null;
+    const nowLightMs = _nowMs();
+    const hasActiveSilt = siltClouds && siltClouds.length > 0;
+    let localTorch = null;
+    if (diver.torchOn !== false) {
+      const lox = diver.body?.hand ? diver.body.hand.x : diver.x;
+      const loy = diver.body?.hand ? diver.body.hand.y : diver.y;
+      const lRange = 16.5 * (getTorchOptic(diver?.livery?.torchId).rangeMult || 1.0);
+      const prev = this._localTorchCache;
+      const canReuse =
+        prev &&
+        !hasActiveSilt &&
+        prev.levelId === this.level?.id &&
+        prev.rayCount === localRayCount &&
+        prev.range === lRange &&
+        nowLightMs - prev.ts < 75 &&
+        Math.abs(lox - prev.ox) < 0.03 &&
+        Math.abs(loy - prev.oy) < 0.03 &&
+        Math.abs(localTorchAng - prev.ang) < 0.008;
+      if (canReuse) {
+        localTorch = prev.torch;
+      } else {
+        if (!this._localTorchRaysPool) this._localTorchRaysPool = [];
+        const rays = castTorchFan(
+          this.level,
+          lox,
+          loy,
+          localTorchAng,
+          0.44,
+          lRange,
+          localRayCount,
+          siltClouds,
+          this._localTorchRaysPool
+        );
+        localTorch = { ox: lox, oy: loy, rays };
+        this._localTorchCache = {
+          levelId: this.level?.id,
+          ox: lox,
+          oy: loy,
+          ang: localTorchAng,
+          rayCount: localRayCount,
+          range: lRange,
+          ts: nowLightMs,
+          torch: localTorch,
+        };
+      }
+    }
 
     const peerList = Array.isArray(peersInput) ? peersInput : (peersInput ? [peersInput] : []);
     const peerTorches = [];
@@ -11404,12 +10379,9 @@ export class CaveRenderer {
         const flick = 0.92 + 0.08 * Math.sin(timeSec * 14 + (rel.flickerPhase || 0)) * Math.sin(timeSec * 3.7);
         const floodR = (rel.radius || 17.5) * scale * rx * flick;
         if (rSx + floodR < 0 || rSx - floodR > lw || rSy + floodR < 0 || rSy - floodR > lh) continue;
-        const fg = lctx.createRadialGradient(rSx, rSy, floodR * 0.06, rSx, rSy, floodR);
-        fg.addColorStop(0, 'rgba(0,0,0,0.96)');
-        fg.addColorStop(0.55, 'rgba(0,0,0,0.78)');
-        fg.addColorStop(1, 'rgba(0,0,0,0)');
-        lctx.fillStyle = fg;
-        lctx.fillRect(rSx - floodR, rSy - floodR, floodR * 2, floodR * 2);
+        lctx.globalAlpha = 0.96;
+        lctx.drawImage(cutoutStamp, rSx - floodR, rSy - floodR, floodR * 2, floodR * 2);
+        lctx.globalAlpha = 1;
       }
     }
     // Topside Support Boat Spotlight cutting down onto a surfaced orange dSMB (v162)
@@ -11444,12 +10416,9 @@ export class CaveRenderer {
         const my = toScreenY(m.y) * ry;
         const mr = Math.max(5.2, (m.size || 1.8) * (isEsc ? 3.2 : 2.3)) * scale * rx;
         if (mx + mr < 0 || mx - mr > lw || my + mr < 0 || my - mr > lh) continue;
-        const mg = lctx.createRadialGradient(mx, my, mr * 0.08, mx, my, mr);
-        mg.addColorStop(0, isEsc ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.45)');
-        mg.addColorStop(0.55, isEsc ? 'rgba(0,0,0,0.38)' : 'rgba(0,0,0,0.18)');
-        mg.addColorStop(1, 'rgba(0,0,0,0)');
-        lctx.fillStyle = mg;
-        lctx.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
+        lctx.globalAlpha = isEsc ? 0.76 : 0.44;
+        lctx.drawImage(cutoutStamp, mx - mr, my - mr, mr * 2, mr * 2);
+        lctx.globalAlpha = 1;
       }
     }
 
@@ -12359,7 +11328,7 @@ export class CaveRenderer {
    * Render hidden Acoustic Black-Box / Lost Hydro-Probe (with sonar-piercing ping waves)
    * and player-clipped glowing directional Line Cookies (v159).
    */
-  _drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, sonarActive = false) {
+  _drawBlackBoxAndCookies(ctx, blackBox, lineCookies, diver, toScreenX, toScreenY, scale, timeSec, sonarActive = false, surveyPins = null) {
     ctx.save();
 
     if (blackBox && !blackBox.recovered) {
@@ -12444,6 +11413,47 @@ export class CaveRenderer {
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255, 237, 213, 0.92)';
         ctx.fillText(`#${ck.index} 🏠${ck.distToExitM}m`, cx, cy - rPx * 1.45);
+      }
+    }
+
+    // Custom Wetnotes Survey Pins rendered in-world as glowing golden piton flags (v171)
+    if (Array.isArray(surveyPins) && surveyPins.length > 0) {
+      for (let i = 0; i < surveyPins.length; i++) {
+        const pin = surveyPins[i];
+        if (!pin || !Number.isFinite(pin.x) || !Number.isFinite(pin.y)) continue;
+        const px = toScreenX(pin.x);
+        const py = toScreenY(pin.y);
+        const poleH = Math.max(12, 0.62 * scale);
+        const pulse = 0.72 + 0.28 * Math.sin(timeSec * 3.0 + i * 1.3);
+
+        ctx.fillStyle = `rgba(250, 204, 21, ${(0.2 * pulse).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px, py - poleH * 0.45, Math.max(7, 0.34 * scale), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+        ctx.beginPath();
+        ctx.moveTo(px, py + Math.max(3, 0.12 * scale));
+        ctx.lineTo(px, py - poleH);
+        ctx.stroke();
+
+        const fw = Math.max(11, 0.52 * scale);
+        const fh = Math.max(6, 0.28 * scale);
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.moveTo(px, py - poleH);
+        ctx.lineTo(px + fw, py - poleH + fh * 0.5);
+        ctx.lineTo(px, py - poleH + fh);
+        ctx.closePath();
+        ctx.fill();
+
+        if (scale >= 14) {
+          ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fef08a';
+          ctx.fillText(`📍 ${pin.tag || 'PIN'} ${pin.depthM ?? Math.round(pin.y)}m`, px, py - poleH - Math.max(3, 0.14 * scale));
+        }
       }
     }
 

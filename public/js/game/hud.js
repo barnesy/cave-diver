@@ -1,15 +1,9 @@
 import { GAS_MIXES, GAS_ORDER, computePPO2, computeTissueCompartmentStatus, getRecommendedGas, getAscentInstruction, getGasSwitchCoach } from '../physics/diveModel.js';
 import { getAscentConfig } from '../levels/index.js';
 import { EXPLORE_GRID_CELL_M } from './scoring.js';
+import { formatClock } from '../util/common.js';
 
 const GAS_HOTKEY_LABELS = { EAN32: '1', TMX1455: '2', O2: '3' };
-
-function formatClock(sec) {
-  const s = Math.max(0, Math.floor(sec));
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
-}
 
 /**
  * Sample normalized P-QRS-T cardiac EKG deflection (-0.4..+1.0) at beat phase [0..1).
@@ -339,6 +333,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     hazards = null,
     buddyPing = null,
     droppedStages = null,
+    surveyPins = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
@@ -661,6 +656,26 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
+  // Custom Wetnotes Survey Pins (v171 spatial markers synced with Survey Slate)
+  if (Array.isArray(surveyPins) && surveyPins.length > 0) {
+    for (let i = 0; i < surveyPins.length; i++) {
+      const p = surveyPins[i];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const px = toX(p.x);
+      const py = toY(p.y);
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(px, py - 5.2);
+      ctx.lineTo(px + 4.4, py + 2.8);
+      ctx.lineTo(px - 4.4, py + 2.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
   // 8. Active Cave Sonar Hydrophone Pulse Ring + Hazard Contact Echoes (v142)
   if (sonarPulse && sonarPulse.durationSec > 0) {
     const frac = Math.max(0, Math.min(1, sonarPulse.ageSec / sonarPulse.durationSec));
@@ -769,6 +784,12 @@ export class DiveComputerHUD {
     this._onReelRewindHold = onReelRewindHold;
     this._isTouchDevice =
       typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+    this._narrowPhone = typeof window !== 'undefined' && window.innerWidth <= 680;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => {
+        this._narrowPhone = window.innerWidth <= 680;
+      });
+    }
     this.elDepth = document.getElementById('dc-depth');
     this.elMaxDepth = document.getElementById('dc-max-depth');
     this.elTime = document.getElementById('dc-time');
@@ -782,6 +803,37 @@ export class DiveComputerHUD {
     this.elAscentVal = document.getElementById('dc-ascent-val');
     this.elAlerts = document.getElementById('dc-alerts');
     this.elObjective = document.getElementById('dc-objective');
+    this._objCountEl = null;
+    this._objExtraEl = null;
+    this._objGasEl = null;
+    this._objMainEl = null;
+    this._objHintEl = null;
+    if (this.elObjective && this.elObjective.nodeType === 1 && typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      const topRow = document.createElement('div');
+      topRow.className = 'obj-top-row';
+      const countEl = document.createElement('span');
+      countEl.className = 'obj-count';
+      const extraEl = document.createElement('span');
+      extraEl.className = 'obj-extra';
+      const gasEl = document.createElement('span');
+      gasEl.className = 'obj-gas ok';
+      topRow.appendChild(countEl);
+      topRow.appendChild(extraEl);
+      topRow.appendChild(gasEl);
+      const mainEl = document.createElement('div');
+      mainEl.className = 'obj-name';
+      const hintEl = document.createElement('span');
+      hintEl.className = 'obj-hint';
+      this.elObjective.textContent = '';
+      this.elObjective.appendChild(topRow);
+      this.elObjective.appendChild(mainEl);
+      this.elObjective.appendChild(hintEl);
+      this._objCountEl = countEl;
+      this._objExtraEl = extraEl;
+      this._objGasEl = gasEl;
+      this._objMainEl = mainEl;
+      this._objHintEl = hintEl;
+    }
     this.elBuddy = document.getElementById('dc-buddy');
     this.elSelfHealth = document.getElementById('hud-self-health');
     this.elSelfName = document.getElementById('dc-self-name');
@@ -1013,6 +1065,7 @@ export class DiveComputerHUD {
     hazards = null,
     buddyPing = null,
     droppedStages = null,
+    surveyPins = null,
     endedState = '',
     spectatingPeer = false,
     timeSec = 0,
@@ -1145,7 +1198,7 @@ export class DiveComputerHUD {
         setText(this.elReelMeters, `${remM}m / ${reelMaxMeters}m`);
         if (this.btnReelToggle) {
           setClass(this.btnReelToggle, reelingActive ? 'reel-btn active' : 'reel-btn');
-          const narrowPhone = typeof window !== 'undefined' && window.innerWidth <= 680;
+          const narrowPhone = this._narrowPhone;
           const prefix = this._isTouchDevice || narrowPhone ? '' : '[G] ';
           setText(
             this.btnReelToggle,
@@ -1159,7 +1212,7 @@ export class DiveComputerHUD {
           );
         }
         if (this.btnReelRewind) {
-          const narrowPhone = typeof window !== 'undefined' && window.innerWidth <= 680;
+          const narrowPhone = this._narrowPhone;
           setText(this.btnReelRewind, narrowPhone ? '↩' : this._isTouchDevice ? 'REWIND ↩' : '[R] REWIND ↩');
         }
       } else {
@@ -1286,14 +1339,11 @@ export class DiveComputerHUD {
 
     // Concise Objective Tracker
     const recName = (mixMap[recGasId] || GAS_MIXES[recGasId]).name;
-    const gasBadge = recGasId === diveState.activeGasId
-      ? `<span class="obj-gas ok">✓ ${recName}</span>`
-      : `<span class="obj-gas switch">→ ${recName}</span>`;
+    const gasBadgeCls = recGasId === diveState.activeGasId ? 'obj-gas ok' : 'obj-gas switch';
+    const gasBadgeTxt = recGasId === diveState.activeGasId ? `✓ ${recName}` : `→ ${recName}`;
 
-    const extraStat =
-      collectiblesTotal > 0
-        ? `<span class="obj-extra">💎${collectedCount}/${collectiblesTotal} · 🧭${exploredPct}%</span>`
-        : '';
+    const extraStatTxt =
+      collectiblesTotal > 0 ? `💎${collectedCount}/${collectiblesTotal} · 🧭${exploredPct}%` : '';
 
     const isProbe = level?.recoveryTarget?.kind === 'probe';
     const recoveryTag = level?.recoveryTarget
@@ -1303,47 +1353,44 @@ export class DiveComputerHUD {
           ? ' · ✓ REC'
           : isProbe ? ' · 🛰 PROBE' : ' · 🛟 BODY'
       : '';
-    let objectiveHtml = '';
+
+    let objCountTxt = '';
+    let objGasCls = gasBadgeCls;
+    let objGasTxt = gasBadgeTxt;
+    let objMainCls = 'obj-name';
+    let objMainTxt = '';
+    let objHintTxt = '';
+
     if (endedState === 'surfaced') {
-      objectiveHtml = `
-        <div class="obj-top-row">
-          <span class="obj-count">TEAM HOLD · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-          <span class="obj-gas ok">✓ SAFE</span>
-        </div>
-        <div class="obj-action move">✓ SURFACED SAFE · WAITING FOR CREW</div>
-        <span class="obj-hint">${spectatingPeer ? 'Spectating crew below · Tap Finish Now to debrief' : 'Tap Watch Buddy below to spectate or Finish Now to debrief'}</span>
-      `;
+      objCountTxt = `TEAM HOLD · CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+      objGasCls = 'obj-gas ok';
+      objGasTxt = '✓ SAFE';
+      objMainCls = 'obj-action move';
+      objMainTxt = '✓ SURFACED SAFE · WAITING FOR CREW';
+      objHintTxt = spectatingPeer
+        ? 'Spectating crew below · Tap Finish Now to debrief'
+        : 'Tap Watch Buddy below to spectate or Finish Now to debrief';
     } else if (endedState === 'down') {
-      objectiveHtml = `
-        <div class="obj-top-row">
-          <span class="obj-count">DIVER DOWN · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-          <span class="obj-gas switch">RESCUE</span>
-        </div>
-        <div class="obj-action danger">✕ DIVER DOWN · SPECTATING CREW</div>
-        <span class="obj-hint">A buddy can tow you to surface, or tap Finish Now below</span>
-      `;
+      objCountTxt = `DIVER DOWN · CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+      objGasCls = 'obj-gas switch';
+      objGasTxt = 'RESCUE';
+      objMainCls = 'obj-action danger';
+      objMainTxt = '✕ DIVER DOWN · SPECTATING CREW';
+      objHintTxt = 'A buddy can tow you to surface, or tap Finish Now below';
     } else if (gasCoach && (gasCoach.severity === 'danger' || !ascentStep)) {
       const cls = gasCoach.severity === 'danger' ? 'danger' : 'stop';
       const icon = gasCoach.severity === 'danger' ? '⛔' : '■';
-      objectiveHtml = `
-        <div class="obj-top-row">
-          <span class="obj-count">GAS SWITCH · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-          ${gasBadge}
-        </div>
-        <div class="obj-action ${cls}">${icon} ${gasCoach.title}</div>
-        <span class="obj-hint">${gasCoach.detail}</span>
-      `;
+      objCountTxt = `GAS SWITCH · CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+      objMainCls = `obj-action ${cls}`;
+      objMainTxt = `${icon} ${gasCoach.title}`;
+      objHintTxt = gasCoach.detail;
     } else if (ascentStep && (!level?.recoveryTarget || bodyRecovered)) {
       const cls = ascentStep.action === 'STOP' ? 'stop' : 'move';
       const icon = ascentStep.action === 'STOP' ? '■' : '▲';
-      objectiveHtml = `
-        <div class="obj-top-row">
-          <span class="obj-count">ASCENT · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-          ${gasBadge}
-        </div>
-        <div class="obj-action ${cls}">${icon} ${ascentStep.title}</div>
-        <span class="obj-hint">${ascentStep.detail}</span>
-      `;
+      objCountTxt = `ASCENT · CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+      objMainCls = `obj-action ${cls}`;
+      objMainTxt = `${icon} ${ascentStep.title}`;
+      objHintTxt = ascentStep.detail;
     } else if (nextCheckpoint) {
       const hideCompass =
         mutatorId === 'purist'
@@ -1362,26 +1409,19 @@ export class DiveComputerHUD {
               : cleanDiff === 'hardcore'
                 ? 'Hardcore · Navigate by guideline & landmarks'
                 : 'Follow landmarks & cave corridors';
-        objectiveHtml = `
-          <div class="obj-top-row">
-            <span class="obj-count">${mutatorId === 'purist' ? 'PURIST' : cleanDiff === 'hardcore' ? 'HARDCORE' : 'MAZE'} · CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-            ${gasBadge}
-          </div>
-          <span class="obj-name">${level.recoveryTarget && !bodyRecovered ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `Tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`}</span>
-          <span class="obj-hint">${navHint}</span>
-        `;
+        objCountTxt = `${mutatorId === 'purist' ? 'PURIST' : cleanDiff === 'hardcore' ? 'HARDCORE' : 'MAZE'} · CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+        objMainTxt =
+          level.recoveryTarget && !bodyRecovered
+            ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)`
+            : `Tag cave hubs (${checkpointsHit.size}/${totalCheckpoints})`;
+        objHintTxt = navHint;
       } else {
         const dist = Math.hypot(nextCheckpoint.x - diver.x, nextCheckpoint.y - diver.y);
         const dir = nextCheckpoint.x > diver.x + 1.5 ? '→' : nextCheckpoint.x < diver.x - 1.5 ? '←' : '';
         const vDir = nextCheckpoint.y > diver.y + 1.5 ? '↓' : nextCheckpoint.y < diver.y - 1.5 ? '↑' : '';
-        objectiveHtml = `
-          <div class="obj-top-row">
-            <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
-            ${gasBadge}
-          </div>
-          <span class="obj-name">${dir}${vDir} ${nextCheckpoint.name} (${Math.round(dist)}m)</span>
-          <span class="obj-hint">${nextCheckpoint.hint}</span>
-        `;
+        objCountTxt = `CP ${checkpointsHit.size}/${totalCheckpoints}`;
+        objMainTxt = `${dir}${vDir} ${nextCheckpoint.name} (${Math.round(dist)}m)`;
+        objHintTxt = nextCheckpoint.hint;
       }
     } else {
       const hideCompass =
@@ -1394,29 +1434,35 @@ export class DiveComputerHUD {
               : Boolean(level?.hideWaypointCompass);
       if (hideCompass) {
         const needsRecovery = Boolean(level?.recoveryTarget && !bodyRecovered);
-        objectiveHtml = `
-          <div class="obj-top-row">
-            <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}${recoveryTag}</span>
-            ${gasBadge}
-          </div>
-          <span class="obj-name">${needsRecovery ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)` : `↑ Locate ${exitZone?.name || 'Resurgence Exit'}`}</span>
-          <span class="obj-hint">${needsRecovery ? `Recovery required before surfacing at ${exitZone?.name || 'exit'}` : `Follow your deployed line or ascend to ${exitZone?.name || 'surface exit'}`}</span>
-        `;
+        objCountTxt = `CP ${checkpointsHit.size}/${totalCheckpoints}${recoveryTag}`;
+        objMainTxt = needsRecovery
+          ? `Recover ${level.recoveryTarget.name} (${Math.round(level.recoveryTarget.y)}m)`
+          : `↑ Locate ${exitZone?.name || 'Resurgence Exit'}`;
+        objHintTxt = needsRecovery
+          ? `Recovery required before surfacing at ${exitZone?.name || 'exit'}`
+          : `Follow your deployed line or ascend to ${exitZone?.name || 'surface exit'}`;
       } else {
         const dist = Math.hypot(exitZone.x - diver.x, exitZone.y - diver.y);
-        objectiveHtml = `
-          <div class="obj-top-row">
-            <span class="obj-count">CP ${checkpointsHit.size}/${totalCheckpoints}${extraStat}</span>
-            ${gasBadge}
-          </div>
-          <span class="obj-name">↑ ${exitZone.name} (${Math.round(dist)}m)</span>
-          <span class="obj-hint">Ascend smoothly to surface exit</span>
-        `;
+        objCountTxt = `CP ${checkpointsHit.size}/${totalCheckpoints}`;
+        objMainTxt = `↑ ${exitZone.name} (${Math.round(dist)}m)`;
+        objHintTxt = 'Ascend smoothly to surface exit';
       }
     }
-    if (objectiveHtml !== this._lastObjectiveHtml) {
-      this._lastObjectiveHtml = objectiveHtml;
-      this.elObjective.innerHTML = objectiveHtml;
+    if (this._objCountEl) {
+      setText(this._objCountEl, objCountTxt);
+      setHidden(this._objExtraEl, !extraStatTxt);
+      if (extraStatTxt) setText(this._objExtraEl, extraStatTxt);
+      setClass(this._objGasEl, objGasCls);
+      setText(this._objGasEl, objGasTxt);
+      setClass(this._objMainEl, objMainCls);
+      setText(this._objMainEl, objMainTxt);
+      setText(this._objHintEl, objHintTxt);
+    } else if (this.elObjective) {
+      const fallbackHtml = `<div class="obj-top-row"><span class="obj-count">${objCountTxt}</span>${extraStatTxt ? `<span class="obj-extra">${extraStatTxt}</span>` : ''}<span class="${objGasCls}">${objGasTxt}</span></div><div class="${objMainCls}">${objMainTxt}</div><span class="obj-hint">${objHintTxt}</span>`;
+      if (fallbackHtml !== this._lastObjectiveHtml) {
+        this._lastObjectiveHtml = fallbackHtml;
+        this.elObjective.innerHTML = fallbackHtml;
+      }
     }
 
     // Team Vitals & Live EKG Monitors (LAN Multiplayer, keyed DOM reuse so EKG traces sweep smoothly)
@@ -1598,6 +1644,7 @@ export class DiveComputerHUD {
               encounters,
               buddyPing,
               droppedStages,
+              surveyPins,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,

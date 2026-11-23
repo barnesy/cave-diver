@@ -677,10 +677,11 @@ export function getTopsideRadioChatter(phase, level) {
  * Check whether the diver has illuminated or approached any undiscovered storytelling landmark.
  * Triggers a concise expedition lore toast & gentle chime (throttled so it never spams).
  */
-export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {}, diveState = null) {
+export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {}, diveState = null, dt = 1 / 60) {
   if (!stories || !Array.isArray(stories.setPieces) || !diver) return null;
+  const safeDt = Math.max(0.001, Math.min(0.25, Number(dt) || 1 / 60));
 
-  // Check if diver is resting calmly beneath a Trapped Overhead Air Pocket (v156 / v167)
+  // Check if diver is resting calmly beneath a Trapped Overhead Air Pocket (v156 / v167 / v171 dt-scaled)
   let insideDome = false;
   let activeDome = null;
   for (let i = 0; i < stories.setPieces.length; i++) {
@@ -693,8 +694,8 @@ export function stepSubmergedStories(stories, diver, simTimeSec, callbacks = {},
       insideDome = true;
       activeDome = sp;
       if (diveState) {
-        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 0.028);
-        diveState.heartRateBpm = Math.max(64, (diveState.heartRateBpm || 76) - 0.38);
+        diveState.panicLevel = Math.max(0, (diveState.panicLevel || 0) - 1.55 * safeDt);
+        diveState.heartRateBpm = Math.max(64, (diveState.heartRateBpm || 76) - 21.0 * safeDt);
       }
       break;
     }

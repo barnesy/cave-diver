@@ -150,7 +150,9 @@ export function createChunkSDFEvaluator(level, cx0, cx1, marginM = 8.0) {
     const half = b.rimHalf + b.flareAdd + Math.abs(b.lipTilt) + 3.0;
     return b.cx + half >= loX && b.cx - half <= hiX;
   });
-  return (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  fn.hasGeometry = localSegs.length > 0 || localBasins.length > 0;
+  return fn;
 }
 
 /**
@@ -182,7 +184,9 @@ export function createBoxSDFEvaluator(level, xMin, xMax, yMin, yMax, marginM = 4
       localBasins.push(b);
     }
   }
-  return (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  fn.hasGeometry = localSegs.length > 0 || localBasins.length > 0;
+  return fn;
 }
 
 /**

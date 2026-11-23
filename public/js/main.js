@@ -279,7 +279,6 @@ const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
 const siteBrowserEl = document.getElementById('site-browser');
 const siteCatTabsEl = document.getElementById('site-cat-tabs');
-const siteViewTabsEl = document.getElementById('site-view-tabs');
 const siteWorldMapEl = document.getElementById('site-world-map');
 const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
 const siteMapCoordsEl = document.getElementById('site-map-coords');
@@ -474,8 +473,22 @@ const nextUiTick = () =>
     setTimeout(finish, 34);
   });
 
+const toastQueue = [];
 function showToast(text, duration = 2.6) {
-  if (!gameToastEl) return;
+  if (!gameToastEl || !text) return;
+  if (toastTimer > 0 && gameToastEl.classList.contains('visible')) {
+    if (gameToastEl.textContent === text) {
+      toastTimer = Math.max(toastTimer, duration);
+      return;
+    }
+    if (toastQueue.length > 0 && toastQueue[toastQueue.length - 1].text === text) {
+      toastQueue[toastQueue.length - 1].duration = Math.max(toastQueue[toastQueue.length - 1].duration, duration);
+      return;
+    }
+    if (toastQueue.length >= 3) toastQueue.shift();
+    toastQueue.push({ text, duration });
+    return;
+  }
   gameToastEl.textContent = text;
   gameToastEl.classList.add('visible');
   toastTimer = duration;
@@ -484,10 +497,6 @@ function showToast(text, duration = 2.6) {
 function getActiveGasName(gasId, diveState = session?.diveState) {
   const mixMap = diveState?.mixes || GAS_MIXES;
   return mixMap[gasId]?.name || GAS_MIXES[gasId]?.name || gasId || 'Gas';
-}
-
-function getLevelDepthLabel(level) {
-  return `${getLevelMaxDepthM(level)}m`;
 }
 
 function getLevelDifficultyLabel(idx, level) {
@@ -651,7 +660,7 @@ function ensureSiteWorldMapBase() {
   }
 
   // Baked 2646x1736 Miller-projected NASA Blue Marble + Natural Earth 1:10m bathymetric atlas texture
-  const mapRaster = `<image href="./assets/map-expedition.jpg?v=170" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
+  const mapRaster = `<image href="./assets/map-expedition.jpg?v=171" x="${GLOBAL_MAP_VIEWBOX.x}" y="${GLOBAL_MAP_VIEWBOX.y}" width="${GLOBAL_MAP_VIEWBOX.w}" height="${GLOBAL_MAP_VIEWBOX.h}" preserveAspectRatio="none" />`;
 
   // Mid-Atlantic tectonic rift ridge overlay
   const trenchPaths = MAP_CONTOUR_LINES.filter((c) => c.kind === 'trench')
@@ -1097,7 +1106,6 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
       if (!renderer.rockChunks.length) {
         renderer.backChunks = renderer._buildBackChunks(nextLevel);
         renderer.rockChunks = renderer._buildRockChunks(nextLevel);
-        renderer.dustMotes = renderer._buildDustMotes(nextLevel);
         renderer.ready = true;
       }
       ecosystem = createMarineEcosystem(nextLevel);
@@ -1417,6 +1425,12 @@ let lastShearwaterDrawMs = 0;
 function toggleShearwaterComputer(forceState) {
   if (mode !== 'diving' && forceState !== false) return false;
   shearwaterOpen = typeof forceState === 'boolean' ? forceState : !shearwaterOpen;
+  if (shearwaterOpen && surveySlateOpen) {
+    surveySlateOpen = false;
+    if (surveySlatePanelEl) surveySlatePanelEl.hidden = true;
+    btnHudSurveySlateEl?.classList.remove('active');
+    btnMinimapSlateEl?.classList.remove('active');
+  }
   if (shearwaterPanelEl) shearwaterPanelEl.hidden = !shearwaterOpen;
   if (btnHudComputerEl) btnHudComputerEl.classList.toggle('active', shearwaterOpen);
   if (shearwaterOpen && session?.diveState && shearwaterCanvasEl) {
@@ -1452,8 +1466,45 @@ const btnSurveySlateZoomEl = document.getElementById('btn-survey-slate-zoom');
 const btnSurveyDropPinEl = document.getElementById('btn-survey-drop-pin');
 const btnSurveyDropCookieEl = document.getElementById('btn-survey-drop-cookie');
 const btnSurveyClearPinsEl = document.getElementById('btn-survey-clear-pins');
+const SURVEY_PINS_STORAGE_KEY = 'caveDiverSurveyPins_v1';
+function loadSavedSurveyPins(levelId) {
+  if (!levelId) return [];
+  try {
+    const raw = localStorage.getItem(SURVEY_PINS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = parsed?.[levelId];
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
+      .slice(-12)
+      .map((p, idx) => ({
+        id: String(p.id || `pin-${idx}`),
+        x: Number(p.x),
+        y: Number(p.y),
+        depthM: Math.max(0, Math.round(Number(p.depthM ?? p.y) || 0)),
+        tag: String(p.tag || 'JUNCTION').slice(0, 12),
+      }));
+  } catch {
+    return [];
+  }
+}
+function saveSurveyPinsForLevel(levelId, pins) {
+  if (!levelId) return;
+  try {
+    const raw = localStorage.getItem(SURVEY_PINS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const store = parsed && typeof parsed === 'object' ? parsed : {};
+    if (Array.isArray(pins) && pins.length > 0) {
+      store[levelId] = pins.slice(-12);
+    } else {
+      delete store[levelId];
+    }
+    localStorage.setItem(SURVEY_PINS_STORAGE_KEY, JSON.stringify(store));
+  } catch {}
+}
+
 const btnHudSurveySlateEl = document.getElementById('btn-hud-survey-slate');
-const btnHudSlateBarEl = document.getElementById('btn-hud-slate-bar');
 const btnMinimapSlateEl = document.getElementById('btn-minimap-slate');
 const SURVEY_PIN_TAGS = ['JUNCTION', 'RELIC', 'SQUEEZE', 'AIR', 'TURN'];
 let surveySlateOpen = false;
@@ -1473,20 +1524,19 @@ function redrawSurveySlateNow() {
 function toggleSurveySlate(forceState) {
   if (mode !== 'diving' && forceState !== false) return false;
   surveySlateOpen = typeof forceState === 'boolean' ? forceState : !surveySlateOpen;
+  if (surveySlateOpen && shearwaterOpen) {
+    shearwaterOpen = false;
+    if (shearwaterPanelEl) shearwaterPanelEl.hidden = true;
+    btnHudComputerEl?.classList.remove('active');
+  }
   if (surveySlatePanelEl) surveySlatePanelEl.hidden = !surveySlateOpen;
   btnHudSurveySlateEl?.classList.toggle('active', surveySlateOpen);
-  btnHudSlateBarEl?.classList.toggle('active', surveySlateOpen);
   btnMinimapSlateEl?.classList.toggle('active', surveySlateOpen);
   if (btnSurveySlateZoomEl) btnSurveySlateZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
   if (surveySlateOpen) redrawSurveySlateNow();
   return true;
 }
 btnHudSurveySlateEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  toggleSurveySlate();
-});
-btnHudSlateBarEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
   toggleSurveySlate();
@@ -1512,17 +1562,20 @@ btnSurveyDropPinEl?.addEventListener('click', (e) => {
   if (!session?.diver) return;
   if (!Array.isArray(session.surveyPins)) session.surveyPins = [];
   if (session.surveyPins.length >= 12) session.surveyPins.shift();
-  const tag = SURVEY_PIN_TAGS[session.surveyPins.length % SURVEY_PIN_TAGS.length];
+  const seq = (session._surveyPinSeq || 0);
+  session._surveyPinSeq = seq + 1;
+  const tag = SURVEY_PIN_TAGS[seq % SURVEY_PIN_TAGS.length];
   const depthM = Math.max(0, Math.round(session.diver.y));
   session.surveyPins.push({
-    id: `pin-${Date.now()}`,
+    id: `pin-${Date.now()}-${seq}`,
     x: session.diver.x,
     y: session.diver.y,
     depthM,
     tag,
   });
+  saveSurveyPinsForLevel(session.level?.id, session.surveyPins);
   audio.playUiClick?.();
-  showToast(`📍 Wetnotes Pin #${session.surveyPins.length} (${tag} · ${depthM}m) marked!`, 2.4);
+  showToast(`📍 Wetnotes Pin #${session._surveyPinSeq} (${tag} · ${depthM}m) marked!`, 2.4);
   redrawSurveySlateNow();
 });
 btnSurveyDropCookieEl?.addEventListener('click', (e) => {
@@ -1534,6 +1587,8 @@ btnSurveyClearPinsEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!session) return;
   session.surveyPins = [];
+  saveSurveyPinsForLevel(session.level?.id, []);
+  audio.playUiClick?.();
   showToast('📋 Cleared custom Wetnotes pins.', 2.0);
   redrawSurveySlateNow();
 });
@@ -1560,10 +1615,10 @@ function syncMinimapButtonUi() {
   const diff = session?.difficulty || activeDifficulty;
   const mut = session?.mutatorId || '';
   const allowed = isMinimapAllowed(diff, mut);
-  btnMinimap.classList.toggle('active', allowed && minimapVisible);
-  btnMinimap.classList.toggle('disabled-mode', !allowed);
+  btnMinimap.classList.toggle('active', allowed ? minimapVisible : surveySlateOpen);
+  btnMinimap.classList.toggle('disabled-mode', false);
   btnMinimap.title = !allowed
-    ? 'Sonar Minimap disabled in Hardcore / Zero-Gear Purist mode'
+    ? 'Hardcore / Purist: Toggle Waterproof Wetnotes Survey Slate (M / N)'
     : minimapVisible
       ? 'Hide Sonar Minimap (M)'
       : 'Show Sonar Minimap (M)';
@@ -1573,7 +1628,8 @@ function handleMinimapToggle() {
   if (mode !== 'diving' || !session || divePaused) return false;
   const allowed = isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '');
   if (!allowed) {
-    showToast('🧭 Sonar Minimap disabled in Hardcore / Zero-Gear Purist mode.', 2.2);
+    toggleSurveySlate();
+    syncMinimapButtonUi();
     return true;
   }
   minimapVisible = !minimapVisible;
@@ -1782,6 +1838,7 @@ function savePhotoStudioSnapshot() {
       hazards: session.hazards || null,
       blackBox: session.blackBox || null,
       lineCookies: session.lineCookies || null,
+      surveyPins: session.surveyPins || null,
       powerRelays: session.powerRelays || null,
       smb: session.smb || null,
       salvage: session.salvage || null,
@@ -1904,7 +1961,7 @@ hudMinimapWrapEl?.addEventListener('click', (e) => {
   toggleMinimapZoom();
 });
 hudMinimapWrapEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
+  if (e.key === 'Enter') {
     e.preventDefault();
     toggleMinimapZoom();
   }
@@ -2285,7 +2342,7 @@ btnKitDpv?.addEventListener('click', (e) => {
 btnKitCamera?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  handleCameraCapture();
+  handleCameraSnap();
 });
 btnKitTorch?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2298,15 +2355,6 @@ btnKitTorch?.addEventListener('click', (e) => {
   session.diver.torchOn = !session.diver.torchOn;
   lastGearHudKey = '';
   syncTechGearHud(session);
-  if (btnHudCookie) {
-    const maxCk = session.maxLineCookies || 6;
-    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
-    btnHudCookie.disabled = false;
-  }
-  if (btnHudSmb) {
-    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 Shoot SMB</span><span class="kbd-hint kit-kbd">U</span>`;
-    btnHudSmb.disabled = false;
-  }
 });
 btnHudStage?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2417,7 +2465,9 @@ function syncTechGearHud(sess) {
   const trimLabel = sess.salvage?.label || '';
   const payloadKg = Math.round(sess.salvage?.payloadKg || 0);
   const torchOn = sess.diver?.torchOn !== false;
-  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}|t:${torchOn}`;
+  const nearSiltyFloor = Boolean(sess.diver?.nearSiltyFloor);
+  const kickStyle = sess.diver?.kickStyle || 'glide';
+  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}|t:${torchOn}|fk:${nearSiltyFloor ? kickStyle : ''}`;
   if (key === lastGearHudKey) return;
   lastGearHudKey = key;
   hudGearDockEl.hidden = false;
@@ -2457,12 +2507,21 @@ function syncTechGearHud(sess) {
     btnHudLiftBag.className = `kit-item liftbag${lbActive ? ' active' : ''}`;
   }
   if (hudTrimPill) {
-    const showTrim = Boolean(trimLabel);
-    hudTrimPill.hidden = !showTrim;
-    if (showTrim) {
+    if (trimLabel) {
+      hudTrimPill.hidden = false;
       hudTrimPill.textContent = trimLabel;
       const trimCls = lbActive && trimStatus === 'neutral' ? 'liftbag-ok' : trimStatus;
       hudTrimPill.className = `gear-hud-pill trim status-strip-pill ${trimCls}`;
+    } else if (nearSiltyFloor && kickStyle === 'flutter') {
+      hudTrimPill.hidden = false;
+      hudTrimPill.textContent = '⚠️ FLOOR WASH · HOLD SHIFT (FROG-KICK)';
+      hudTrimPill.className = 'gear-hud-pill trim status-strip-pill heavy';
+    } else if (nearSiltyFloor && kickStyle === 'frog') {
+      hudTrimPill.hidden = false;
+      hudTrimPill.textContent = '🐸 FROG-KICK TRIM · CLEAN';
+      hudTrimPill.className = 'gear-hud-pill trim status-strip-pill liftbag-ok';
+    } else {
+      hudTrimPill.hidden = true;
     }
   }
   if (btnHudSonar) {
@@ -2539,13 +2598,8 @@ let drillsEnabled = false;
 try {
   drillsEnabled = localStorage.getItem(DRILLS_PREF_KEY) === '1';
 } catch {}
-const btnDrillsToggle = document.getElementById('btn-drills-toggle');
 const menuDrillsPillEl = document.getElementById('menu-drills-pill');
 function syncDrillsUi() {
-  if (btnDrillsToggle) {
-    btnDrillsToggle.textContent = drillsEnabled ? '⚡ Failure Drills: On' : '⚡ Failure Drills: Off';
-    btnDrillsToggle.classList.toggle('active', drillsEnabled);
-  }
   if (menuDrillsPillEl) {
     menuDrillsPillEl.textContent = drillsEnabled ? '⚡ Drills: ON' : '⚡ Drills: Off';
     menuDrillsPillEl.classList.toggle('active', drillsEnabled);
@@ -2565,10 +2619,6 @@ function toggleDrillsPreference() {
     2.8
   );
 }
-btnDrillsToggle?.addEventListener('click', () => {
-  setHomeMenuOpen(false);
-  toggleDrillsPreference();
-});
 menuDrillsPillEl?.addEventListener('click', toggleDrillsPreference);
 syncDrillsUi();
 
@@ -3283,7 +3333,6 @@ try {
   if (savedTorchStick === '0') torchStickEnabled = false;
 } catch {}
 
-const btnDifficultyCycle = document.getElementById('btn-difficulty-cycle');
 const menuModeBadgeEl = document.getElementById('menu-mode-badge');
 const debriefModeBadgeEl = document.getElementById('debrief-mode-badge');
 const btnGhostToggle = document.getElementById('btn-ghost-toggle');
@@ -3298,7 +3347,6 @@ const btnDiveGuideStart = document.getElementById('btn-dive-guide-start');
 
 function syncPreferenceMenuButtons() {
   const diffMeta = DIFFICULTY_MODES.find((d) => d.id === activeDifficulty) || DIFFICULTY_MODES[1];
-  if (btnDifficultyCycle) btnDifficultyCycle.textContent = diffMeta.btnText;
   if (menuModeBadgeEl) {
     menuModeBadgeEl.textContent = diffMeta.pillBadge;
     menuModeBadgeEl.className = `mode-badge mode-${diffMeta.id}`;
@@ -3347,7 +3395,6 @@ function cycleDifficultyMode() {
     2.6
   );
 }
-btnDifficultyCycle?.addEventListener('click', cycleDifficultyMode);
 menuModeBadgeEl?.addEventListener('click', cycleDifficultyMode);
 
 function toggleGhostOption() {
@@ -3670,6 +3717,9 @@ btnArtifactPin?.addEventListener('click', () => {
   showToast(nextId ? `★ Pinned ${activeInspectorArtifact.name} to your Expedition Postcard!` : 'Unpinned showcase relic.', 2.6);
 });
 
+let activeVaultCollectionFilter = 'all';
+let vaultVisibleLimit = 48;
+
 function renderArtifactVaultSection(
   bookOverride = null,
   vaultHeading = document.getElementById('logbook-vault-heading'),
@@ -3687,36 +3737,60 @@ function renderArtifactVaultSection(
   if (collectionsBar && colProg?.collections) {
     collectionsBar.innerHTML = colProg.collections
       .map(
-        (c) => `<div class="collection-chip${c.completed ? ' completed' : ''}" title="${escapeHtml(c.title)} · Unlocks Curator Title: ${escapeHtml(c.curatorTitle)}">
+        (c) => `<button type="button" class="collection-chip${c.completed ? ' completed' : ''}${activeVaultCollectionFilter === c.id ? ' active' : ''}" data-collection-id="${c.id}" aria-pressed="${activeVaultCollectionFilter === c.id ? 'true' : 'false'}" title="Filter by ${escapeHtml(c.title)} · Unlocks Curator Title: ${escapeHtml(c.curatorTitle)}">
           <div class="collection-chip-top">
             <span>${c.icon} ${escapeHtml(c.title)}</span>
             <span>${c.recovered}/${c.targetCount}</span>
           </div>
           <div class="collection-chip-prog"><div class="collection-chip-fill" style="width:${c.pct}%;background:${c.accent}"></div></div>
           <div class="collection-chip-title">${c.completed ? `★ ${escapeHtml(c.curatorTitle)}` : `Goal: ${escapeHtml(c.curatorTitle)}`}</div>
-        </div>`
+        </button>`
       )
       .join('');
+    collectionsBar.querySelectorAll('button.collection-chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cid = btn.getAttribute('data-collection-id') || 'all';
+        activeVaultCollectionFilter = activeVaultCollectionFilter === cid ? 'all' : cid;
+        vaultVisibleLimit = 48;
+        renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
+      });
+    });
   }
   if (vault.items.length === 0) {
     vaultGrid.innerHTML = `<div class="vault-empty-note">Explore cave chambers and shipwreck holds to recover relics, fossils, watches &amp; instruments for your Trophy Vault.</div>`;
     return;
   }
-  vaultGrid.innerHTML = vault.items
-    .slice(0, 48)
-    .map(
-      (it, idx) => `<button type="button" class="vault-card${it.pinned ? ' pinned' : ''}" data-vault-idx="${idx}" title="Inspect ${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
-        ${it.pinned ? '<span class="vault-pin-badge" title="Pinned to Postcard">★</span>' : ''}
-        <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
-        <div class="vault-card-name">${escapeHtml(it.name)}</div>
-        <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
-        ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
-      </button>`
-    )
-    .join('');
+  const filteredItems =
+    activeVaultCollectionFilter === 'all'
+      ? vault.items
+      : vault.items.filter((it) => it.collectionId === activeVaultCollectionFilter);
+  if (filteredItems.length === 0) {
+    vaultGrid.innerHTML = `<div class="vault-empty-note">No relics recovered in this collection yet. Click the active collection badge above to show all ${vault.items.length} relics.</div>`;
+    return;
+  }
+  const visibleItems = filteredItems.slice(0, vaultVisibleLimit);
+  const remaining = filteredItems.length - visibleItems.length;
+  vaultGrid.innerHTML =
+    visibleItems
+      .map(
+        (it, idx) => `<button type="button" class="vault-card${it.pinned ? ' pinned' : ''}" data-vault-idx="${idx}" title="Inspect ${escapeHtml(it.name)}${it.siteName ? ` · ${escapeHtml(it.siteName)}` : ''}">
+          ${it.pinned ? '<span class="vault-pin-badge" title="Pinned to Postcard">★</span>' : ''}
+          <canvas class="vault-art-canvas" data-vault-idx="${idx}" width="104" height="104" aria-hidden="true"></canvas>
+          <div class="vault-card-name">${escapeHtml(it.name)}</div>
+          <div class="vault-card-meta">+${it.points} pts${it.count > 1 ? ` · ×${it.count}` : ''}</div>
+          ${it.siteName ? `<div class="vault-card-site">${escapeHtml(it.siteName)}</div>` : ''}
+        </button>`
+      )
+      .join('') +
+    (remaining > 0
+      ? `<button type="button" class="vault-card vault-more-btn" data-vault-more="1" title="Show more relics">
+          <div class="vault-card-name">+${remaining} More Relics</div>
+          <div class="vault-card-meta">Show next ${Math.min(48, remaining)}</div>
+        </button>`
+      : '');
   vaultGrid.querySelectorAll('canvas.vault-art-canvas').forEach((cv) => {
     const idx = Number(cv.getAttribute('data-vault-idx'));
-    const it = vault.items[idx];
+    const it = visibleItems[idx];
     const ctx = cv.getContext?.('2d');
     if (!ctx || !it) return;
     ctx.clearRect(0, 0, cv.width, cv.height);
@@ -3725,12 +3799,16 @@ function renderArtifactVaultSection(
       isGrand: (it.scale || 1) >= 1.35 || it.pinned,
     });
   });
-  vaultGrid.querySelectorAll('button.vault-card').forEach((btn) => {
+  vaultGrid.querySelectorAll('button.vault-card[data-vault-idx]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const idx = Number(btn.getAttribute('data-vault-idx'));
-      const it = vault.items[idx];
+      const it = visibleItems[idx];
       if (it) openArtifactInspector(it);
     });
+  });
+  vaultGrid.querySelector('button[data-vault-more]')?.addEventListener('click', () => {
+    vaultVisibleLimit += 48;
+    renderArtifactVaultSection(book, vaultHeading, collectionsBar, vaultGrid);
   });
 }
 
@@ -5788,6 +5866,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     livery: activeRigLivery,
     crewRoleId: activeCrewRoleId,
   });
+  session.surveyPins = loadSavedSurveyPins(activeLevel.id);
+  session._surveyPinSeq = session.surveyPins.length;
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
     ? `${session.dailyDateKey ? '📅' : '🎛️'} ${runMutMeta.icon} ${runMutMeta.shortName}`
@@ -5961,16 +6041,20 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       exploredCount: session.exploredCells?.size || 0,
       totalExploreCells: session.exploreCells?.length || 1,
       diveTimeSec: diveState.diveTimeSec,
-      hatchBonusScore:
-        (session.hatchBonusScore || 0) +
+      hatchBonusScore: session.hatchBonusScore || 0,
+      expeditionBonusScore:
         (session.blackBoxBonusScore || 0) +
         (session.relayBonusScore || 0) +
         (session.smbBonusScore || 0) +
-        (session.wildlifeHarmonyScore || 0),
+        (session.wildlifeHarmonyScore || 0) +
+        (session.contractBonusScore || 0) +
+        (session.aiLeadBonusScore || 0) +
+        (session.aiBuddiesRescued || 0) * 450,
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
       weatherBonusScore: session.weatherBonusScore || 0,
+      trimBonusScore: session.trimBonusScore || 0,
       mutatorId: session.mutatorId || '',
     });
 
@@ -6295,7 +6379,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
     const squadIds = session.aiSquad.map((b) => b.id).filter(Boolean);
     const rescuedIds = session.aiSquad
-      .filter((b) => b.rescued || (b.issuesResolvedByLeader || 0) > 0)
+      .filter((b) => b.rescued || (b.issuesResolvedCount || 0) > 0)
       .map((b) => b.id);
     updatedLogbook = recordCrewDiveInLogbook(updatedLogbook, squadIds, {
       cleared: Boolean(success),
@@ -6359,6 +6443,43 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       cls: 'purple',
     },
   ];
+  if ((teamSummary.hatchBonusScore || 0) > 0) {
+    rows.push({
+      label: '⚙️ Watertight Hatches',
+      pts: teamSummary.hatchBonusScore,
+      pct: Math.min(100, Math.round((teamSummary.hatchBonusScore / 260) * 100)),
+      cls: 'gold',
+    });
+  }
+  const expOtherPts =
+    (session.blackBoxBonusScore || 0) +
+    (session.relayBonusScore || 0) +
+    (session.smbBonusScore || 0) +
+    (session.wildlifeHarmonyScore || 0);
+  if (expOtherPts > 0) {
+    rows.push({
+      label: '🧭 Expedition Objectives (dSMB / Relays / Telemetry)',
+      pts: expOtherPts,
+      pct: Math.min(100, Math.round((expOtherPts / 500) * 100)),
+      cls: 'green',
+    });
+  }
+  if ((teamSummary.trimBonusScore || 0) > 0) {
+    rows.push({
+      label: `🐸 Frog-Kick Trim Discipline (${session.trimDisciplinePct || 100}%)`,
+      pts: teamSummary.trimBonusScore,
+      pct: Math.min(100, Math.round((teamSummary.trimBonusScore / 150) * 100)),
+      cls: 'green',
+    });
+  }
+  if ((teamSummary.weatherBonusScore || 0) > 0) {
+    rows.push({
+      label: '🌊 Rough Sea / Weather Mastery',
+      pts: teamSummary.weatherBonusScore,
+      pct: Math.min(100, Math.round((teamSummary.weatherBonusScore / 250) * 100)),
+      cls: 'purple',
+    });
+  }
   if ((teamSummary.photoBonusScore || 0) > 0) {
     const snapCount = session.camera?.photographedIds?.size || 1;
     rows.push({
@@ -7739,6 +7860,11 @@ btnHudCompactEl?.addEventListener('click', () => {
   setHudMenuOpen(false);
   showToast(compactHudEnabled ? '👁️ Compact Immersion HUD enabled' : '👁️ Full Technical HUD restored', 1.8);
 });
+const btnHudPhotoStudioEl = document.getElementById('btn-hud-photo-studio');
+btnHudPhotoStudioEl?.addEventListener('click', () => {
+  setHudMenuOpen(false);
+  setPhotoModeActive(true);
+});
 
 const btnHudGearMoreEl = document.getElementById('btn-hud-gear-more');
 const hudKitPopoverEl = document.getElementById('hud-kit-popover');
@@ -7827,13 +7953,6 @@ function applySiteViewMode(nextMode) {
   const cleanMode = nextMode === 'map' || nextMode === 'list' ? nextMode : 'split';
   if (cleanMode === siteViewMode && siteBrowserEl?.classList.contains(`view-${cleanMode}`)) return;
   siteViewMode = cleanMode;
-  const viewIdx = cleanMode === 'map' ? 1 : cleanMode === 'list' ? 2 : 0;
-  if (siteViewTabsEl) {
-    siteViewTabsEl.style.setProperty('--view-index', String(viewIdx));
-    for (const b of siteViewTabsEl.querySelectorAll('button[data-site-view]')) {
-      b.classList.toggle('active', b.dataset.siteView === cleanMode);
-    }
-  }
   if (btnCycleSiteView) {
     btnCycleSiteView.textContent = SITE_VIEW_LABELS[cleanMode] || '◫ Split';
   }
@@ -7846,13 +7965,6 @@ function applySiteViewMode(nextMode) {
   }
 }
 
-if (siteViewTabsEl && siteBrowserEl) {
-  siteViewTabsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-site-view]');
-    if (!btn) return;
-    applySiteViewMode(btn.dataset.siteView);
-  });
-}
 btnCycleSiteView?.addEventListener('click', () => {
   const idx = SITE_VIEW_ORDER.indexOf(siteViewMode);
   const next = SITE_VIEW_ORDER[(idx + 1) % SITE_VIEW_ORDER.length];
@@ -9461,11 +9573,13 @@ const sessionStepCallbacks = {
     const lore = getCollectibleLoreNote(item, session?.level);
     let isNew = false;
     try {
+      const siteId = session?.level?.id || '';
+      const artifactKey = siteId && !String(item.id || '').includes(':') ? `${siteId}:${item.id}` : item.id;
       const res = recordArtifactInLogbook(loadCareerLogbook(), {
-        id: item.id,
+        id: artifactKey,
         name: item.name,
         kind: item.kind,
-        siteId: session?.level?.id || '',
+        siteId,
         siteName: session?.level?.name || '',
         lore,
         points: item.points || 0,
@@ -9530,11 +9644,92 @@ const sessionStepCallbacks = {
   },
 };
 
+// Module-level hoisted callback objects for zero per-frame closure allocations (v171)
+const _marineStepOpts = {
+  localSiltDensity: 0,
+  onMegafaunaNear: () => {
+    if (!session) return;
+    audio.playWhaleSong?.();
+  },
+  onWildlifeEscort: (m) => {
+    if (!session) return;
+    session.wildlifeHarmonyScore = (session.wildlifeHarmonyScore || 0) + WILDLIFE_HARMONY_BONUS_PTS;
+    audio.playWildlifeHarmony?.();
+    recordDiveHighlight(session, {
+      kind: 'moment',
+      icon: m.kind === 'manta' ? '🌊' : m.kind === 'beluga' ? '🐋' : '🦈',
+      label: `${m.label || 'Megafauna'} Escort`,
+      depthM: session.diver?.y,
+    });
+    showToast(
+      `✨ ${m.label || 'Megafauna'} is calmly escorting your dive! Hold steady for a 3★ photo [C] (+${WILDLIFE_HARMONY_BONUS_PTS} pts)`,
+      4.2
+    );
+  },
+  onDenizenEmerge: (d) => {
+    showToast(`🐙 ${d.label || 'Denizen'} emerging curiously in dim light — snap a 3★ stealth photo [C]!`, 3.4);
+  },
+  onDenizenInk: (d) => {
+    showToast(`💨 Bright torch startled ${d.label || 'Octopus'} — defensive ink cloud deployed! Try dimming [L].`, 2.8);
+  },
+};
+
+const _aiSquadStepOpts = {
+  timestampMs: 0,
+  onBuddySignal: (buddy) => {
+    if (!session?.diver) return;
+    const mix = computeSpatialMix(session.diver.x, session.diver.y, buddy.x, buddy.y);
+    audio.playSignal?.(mix.pan);
+  },
+  onBuddyGasShare: ({ buddy, gasId, amountBar }) => {
+    audio.playGasShare?.();
+    showToast(`🤖 ${buddy.name} shared +${amountBar} bar ${getActiveGasName(gasId)} via long hose!`, 2.8);
+  },
+  onBuddyCutSnag: (buddy) => {
+    audio.playLineCut?.();
+    showToast(`🤖 ${buddy.name} cut your entanglement free!`, 2.6);
+  },
+  onBuddyCoach: (buddy, msg) => {
+    if (msg) showToast(msg, 3.6);
+  },
+  onBuddyIssueStarted: (buddy, issue) => {
+    if (!session?.diver) return;
+    const mix = computeSpatialMix(session.diver.x, session.diver.y, buddy.x, buddy.y);
+    audio.playSignal?.(mix.pan);
+    showToast(`🚨 ${buddy.name}: ${issue.icon} ${issue.title}! ${issue.hint}`, 4.6);
+  },
+  onBuddyIssueResolved: (buddy, issue, info) => {
+    audio.playDrillClear?.();
+    showToast(`🏅 Led ${buddy.name} through ${issue.title} (+${info.bonusPts} Leadership pts)!`, 3.8);
+  },
+  onBuddyDowned: (buddy, causeTitle) => {
+    audio.playDrillAlarm?.();
+    showToast(`🆘 ${buddy.name} DOWN (${causeTitle})! Swim back & tow them to the surface exit (+450 pts)!`, 5.0);
+  },
+  onBuddySeparated: (buddy, distM) => {
+    if (!session?.diver) return;
+    const mix = computeSpatialMix(session.diver.x, session.diver.y, buddy.x, buddy.y);
+    audio.playSignal?.(mix.pan);
+    showToast(`🧭 ${buddy.name} separated (${Math.round(distM)}m behind)! Swim back to lead them through!`, 3.8);
+  },
+  onBuddyRejoined: (buddy) => {
+    audio.playSignal?.();
+    showToast(`👌 ${buddy.name} locked back onto your lead!`, 2.4);
+  },
+};
+
 function stepSimulation(dt) {
   if (toastTimer > 0) {
     toastTimer -= dt;
     if (toastTimer <= 0 && gameToastEl) {
-      gameToastEl.classList.remove('visible');
+      if (toastQueue.length > 0) {
+        const nextToast = toastQueue.shift();
+        gameToastEl.textContent = nextToast.text;
+        gameToastEl.classList.add('visible');
+        toastTimer = nextToast.duration;
+      } else {
+        gameToastEl.classList.remove('visible');
+      }
     }
   }
 
@@ -9551,34 +9746,8 @@ function stepSimulation(dt) {
     return;
   }
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
-    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, {
-      localSiltDensity: session?.localSiltDensity || 0,
-      onMegafaunaNear: (m) => {
-        if (!session) return;
-        audio.playWhaleSong?.();
-      },
-      onWildlifeEscort: (m) => {
-        if (!session) return;
-        session.wildlifeHarmonyScore = (session.wildlifeHarmonyScore || 0) + WILDLIFE_HARMONY_BONUS_PTS;
-        audio.playWildlifeHarmony?.();
-        recordDiveHighlight(session, {
-          kind: 'moment',
-          icon: m.kind === 'manta' ? '🌊' : m.kind === 'beluga' ? '🐋' : '🦈',
-          label: `${m.label || 'Megafauna'} Escort`,
-          depthM: session.diver?.y,
-        });
-        showToast(
-          `✨ ${m.label || 'Megafauna'} is calmly escorting your dive! Hold steady for a 3★ photo [C] (+${WILDLIFE_HARMONY_BONUS_PTS} pts)`,
-          4.2
-        );
-      },
-      onDenizenEmerge: (d) => {
-        showToast(`🐙 ${d.label || 'Denizen'} emerging curiously in dim light — snap a 3★ stealth photo [C]!`, 3.4);
-      },
-      onDenizenInk: (d) => {
-        showToast(`💨 Bright torch startled ${d.label || 'Octopus'} — defensive ink cloud deployed! Try dimming [L].`, 2.8);
-      },
-    });
+    _marineStepOpts.localSiltDensity = session?.localSiltDensity || 0;
+    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, _marineStepOpts);
   }
 
   if (celebrationParticles.length > 0) {
@@ -9655,46 +9824,8 @@ function stepSimulation(dt) {
     showToast('🤖 AI Squad handed off wing to human crew!', 2.4);
   }
   if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0 && diveState.alive && !session.endedState) {
-    stepAiSquad(session.aiSquad, session, dt, {
-      timestampMs: performance.now(),
-      onBuddySignal: (buddy) => {
-        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
-        audio.playSignal?.(mix.pan);
-      },
-      onBuddyGasShare: ({ buddy, gasId, amountBar }) => {
-        audio.playGasShare?.();
-        showToast(`🤖 ${buddy.name} shared +${amountBar} bar ${getActiveGasName(gasId)} via long hose!`, 2.8);
-      },
-      onBuddyCutSnag: (buddy) => {
-        audio.playLineCut?.();
-        showToast(`🤖 ${buddy.name} cut your entanglement free!`, 2.6);
-      },
-      onBuddyCoach: (buddy, msg) => {
-        if (msg) showToast(msg, 3.6);
-      },
-      onBuddyIssueStarted: (buddy, issue) => {
-        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
-        audio.playSignal?.(mix.pan);
-        showToast(`🚨 ${buddy.name}: ${issue.icon} ${issue.title}! ${issue.hint}`, 4.6);
-      },
-      onBuddyIssueResolved: (buddy, issue, info) => {
-        audio.playDrillClear?.();
-        showToast(`🏅 Led ${buddy.name} through ${issue.title} (+${info.bonusPts} Leadership pts)!`, 3.8);
-      },
-      onBuddyDowned: (buddy, causeTitle) => {
-        audio.playDrillAlarm?.();
-        showToast(`🆘 ${buddy.name} DOWN (${causeTitle})! Swim back & tow them to the surface exit (+450 pts)!`, 5.0);
-      },
-      onBuddySeparated: (buddy, distM) => {
-        const mix = computeSpatialMix(diver.x, diver.y, buddy.x, buddy.y);
-        audio.playSignal?.(mix.pan);
-        showToast(`🧭 ${buddy.name} separated (${Math.round(distM)}m behind)! Swim back to lead them through!`, 3.8);
-      },
-      onBuddyRejoined: (buddy) => {
-        audio.playSignal?.();
-        showToast(`👌 ${buddy.name} locked back onto your lead!`, 2.4);
-      },
-    });
+    _aiSquadStepOpts.timestampMs = performance.now();
+    stepAiSquad(session.aiSquad, session, dt, _aiSquadStepOpts);
     // If towing a downed Hardcore AI buddy, glide them cleanly along our rescue umbilical
     if (session.rescueTargetId) {
       const towedAi = session.aiSquad.find((b) => b && b.id === session.rescueTargetId && b.alive === false);
@@ -9928,6 +10059,7 @@ function stepSimulation(dt) {
     hazards: session.hazards || null,
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
+    surveyPins: session.surveyPins || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,
@@ -10048,19 +10180,39 @@ const _frameWreckState = {
 };
 const _frameGhostPose = { x: 0, y: 0, angle: 0, finished: false, isPar: false };
 
+let lastIdleRenderMs = 0;
+
 function frame(nowMs) {
   const rawDeltaMs = lastFrameMs ? nowMs - lastFrameMs : 16.67;
   const dt = lastFrameMs ? Math.min(0.05, rawDeltaMs / 1000) : 0.016;
   lastFrameMs = nowMs;
   menuTimeSec = nowMs * 0.001;
 
-  stepSimulation(dt);
-
   if (typeof document !== 'undefined' && document.hidden) {
     perfMonitor.reset();
     requestAnimationFrame(frame);
     return;
   }
+
+  // Throttle idle menu/debrief background work (~15 FPS) & pause full-canvas render behind full-screen modals (v171)
+  const isIdleScreen = mode === 'menu' || mode === 'debrief';
+  const modalOccludingMenu = mode === 'menu' && modalManager.getOpenCount() > 0;
+  if (isIdleScreen) {
+    if (liveryModalEl && !liveryModalEl.hidden) {
+      renderLiveryPreviewFrame(menuTimeSec);
+    }
+    if (modalOccludingMenu) {
+      requestAnimationFrame(frame);
+      return;
+    }
+    if (nowMs - lastIdleRenderMs < 66) {
+      requestAnimationFrame(frame);
+      return;
+    }
+    lastIdleRenderMs = nowMs;
+  }
+
+  stepSimulation(dt);
 
   if (mode === 'diving' && !divePaused && perfMonitor.recordFrame(rawDeltaMs)) {
     renderer.setPerfBudget(perfMonitor.getBudget());
@@ -10199,6 +10351,7 @@ function frame(nowMs) {
       hazards: session.hazards || null,
       blackBox: session.blackBox || null,
       lineCookies: session.lineCookies || null,
+      surveyPins: session.surveyPins || null,
       powerRelays: session.powerRelays || null,
       smb: session.smb || null,
       salvage: session.salvage || null,
