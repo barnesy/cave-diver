@@ -517,7 +517,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=175',
+  mapRasterUrl: './assets/map-expedition.jpg?v=176',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2695,19 +2695,21 @@ campaignsGridEl?.addEventListener('click', (e) => {
   if (cid) startExpeditionCampaign(cid);
 });
 
-// === Technical Rescue Drills Mode (v174) ===
+// === Technical Rescue Drills Mode (v174 / v175) ===
 let activeRescueDrill = null;
 async function launchRescueDrill(drill) {
-  if (!drill) return;
+  if (!drill) return false;
   activeCampaignRun = null;
+  activeDailyChallenge = null;
   activeRescueDrill = drill;
-  await selectAndLoadLevel(drill.levelId, { focusMap: false });
-  if (drill.needsAiBuddy && aiSquadCount < 1) {
-    aiSquadCount = 1;
-    syncAiBuddyUi();
+  if (lan.room) {
+    lan.leaveRoom();
+    resetLobbyUiState();
   }
+  await selectAndLoadLevel(drill.levelId, { focusMap: false });
+  await ensureLevelLoaded(drill.levelId, { showOverlay: true });
   startDiveRun(false);
-  showToast(drill.briefing, 4.4);
+  return true;
 }
 const rescueDrillsCtrl = createRescueDrillsController({
   loadCareerLogbook,
@@ -3125,15 +3127,18 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       ? activeDailyChallenge
       : null;
   const effectiveMutatorId = dailyRun?.mutatorId || (!multiplayer ? sandboxCtrl.getActiveSandboxMutatorId() : '') || '';
+  const isDrillLaunch = Boolean(activeRescueDrill && !multiplayer && activeLevel.id === activeRescueDrill.levelId);
+  const runDifficulty = isDrillLaunch ? (activeRescueDrill.difficulty || activeDifficulty) : activeDifficulty;
+  const runDrillsEnabled = isDrillLaunch ? true : drillsEnabled;
   session = createDiveSession(activeLevel, {
     diverName,
     spawnOffsetX,
-    difficulty: activeDifficulty,
+    difficulty: runDifficulty,
     gear: activeGear,
     mutatorId: effectiveMutatorId,
     dailyDateKey: dailyRun?.dateKey || '',
     customMixOverrides: getActiveCustomMixOverrides(activeLevel),
-    drillsEnabled,
+    drillsEnabled: runDrillsEnabled,
     weatherId: weatherPrefId,
     livery: liveryWorkshop.getActiveRigLivery(),
     crewRoleId: activeCrewRoleId,
@@ -3144,9 +3149,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   session._dailyBadgeLabel = runMutMeta
     ? `${session.dailyDateKey ? '📅' : '🎛️'} ${runMutMeta.icon} ${runMutMeta.shortName}`
     : '';
+  const incomingChallenge = sandboxCtrl.getActiveIncomingChallenge();
   session._challenge =
-    !multiplayer && activeIncomingChallenge && activeIncomingChallenge.siteId === activeLevel.id
-      ? { ...activeIncomingChallenge }
+    !multiplayer && incomingChallenge && incomingChallenge.siteId === activeLevel.id
+      ? { ...incomingChallenge }
       : null;
   lastGearHudKey = '';
   syncTechGearHud(session);
@@ -3176,7 +3182,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
         })
       : [];
   session.aiBuddy = session.aiSquad[0] || null;
-  if (activeRescueDrill && !multiplayer && activeLevel.id === activeRescueDrill.levelId) {
+  if (isDrillLaunch) {
     if (activeRescueDrill.needsAiBuddy && session.aiSquad.length === 0) {
       session.aiSquad = createAiSquad(activeLevel, session.diver, 1, {
         initialGasId: session.diveState.activeGasId,
@@ -3186,6 +3192,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       session.aiBuddy = session.aiSquad[0] || null;
     }
     applyRescueDrillScenario(session, activeRescueDrill);
+    renderer.camX = session.diver.x;
+    renderer.camY = session.diver.y;
+    lastGearHudKey = '';
+    syncTechGearHud(session);
   }
 
   if (restoredState?.checkpoints) {
@@ -3248,8 +3258,10 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
   const bottomMixName = getActiveGasName('TMX1455');
-  const openMsg = runMutMeta
-    ? `${session.dailyDateKey ? '📅 DAILY' : '🎛️ SANDBOX'} · ${runMutMeta.icon} ${runMutMeta.name}: ${runMutMeta.shortDesc}`
+  const openMsg = isDrillLaunch
+    ? activeRescueDrill.briefing
+    : runMutMeta
+      ? `${session.dailyDateKey ? '📅 DAILY' : '🎛️ SANDBOX'} · ${runMutMeta.icon} ${runMutMeta.name}: ${runMutMeta.shortDesc}`
     : activeLevel.isWreck
       ? activeLevel.reelMetersPerDiver > 0
         ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
@@ -4937,6 +4949,7 @@ async function launchOpenCoopDive() {
   const diverName = requireCallsign();
   if (!diverName) return false;
   activeDailyChallenge = null;
+  activeRescueDrill = null;
   if (lan.room) {
     lan.leaveRoom();
     resetLobbyUiState();
@@ -4996,6 +5009,7 @@ btnPlaySolo.addEventListener('click', () => {
 async function launchDailyChallenge(dailyOverride = null) {
   const diverName = requireCallsign();
   if (!diverName) return false;
+  activeRescueDrill = null;
   const daily = dailyOverride || getDailyGeneratedExpedition();
   if (!daily?.levelId) return false;
   if (lan.room) {
@@ -5795,13 +5809,14 @@ btnNextLevel?.addEventListener('click', async () => {
 
 document.getElementById('btn-retry').addEventListener('click', () => {
   const retryDaily = Boolean(session?.dailyDateKey && activeDailyChallenge);
+  const retryDrill = Boolean(session?.activeRescueDrillId && activeRescueDrill);
   cancelDebriefAnimations();
   audio.resetEnvironmentFilter();
   if (isMultiplayer && lan.room && lan.getPeers().length > 0) {
     mode = 'menu';
     session = null;
     screenDebrief.hidden = true;
-  debriefReplay.stop();
+    debriefReplay.stop();
     screenMenu.hidden = false;
     setActiveMenuTab('solo');
     syncWakeLockFn?.();
@@ -5817,7 +5832,9 @@ document.getElementById('btn-retry').addEventListener('click', () => {
   }
   screenDebrief.hidden = true;
   debriefReplay.stop();
-  if (retryDaily) {
+  if (retryDrill) {
+    launchRescueDrill(activeRescueDrill);
+  } else if (retryDaily) {
     launchDailyChallenge(activeDailyChallenge);
   } else {
     launchOpenCoopDive();

@@ -8635,10 +8635,23 @@ test('v174 Campaign Mastery Rewards, Bidirectional Replay-Depth Sync & Technical
     applyRescueDrillScenario(sess, drill);
     assert.equal(sess.activeRescueDrillId, drill.id);
     if (drill.id === 'silt-line-recovery') assert.ok(sess.siltClouds.length >= 10, 'Silt-out drill must spawn silt bank');
-    if (drill.id === 'freeflow-bailout') assert.equal(sess.drills.active?.kind, 'free-flow');
-    if (drill.id === 'buddy-ooa-share') assert.ok(sess.aiSquad[0].activeBar <= 15 && sess.aiSquad[0].issue?.kind === 'low-gas');
-    if (drill.id === 'net-cut-deco') assert.ok(sess.diveState.stopDepthM >= 6);
+    if (drill.id === 'freeflow-bailout') {
+      assert.equal(sess.drills.active?.kind, 'free-flow');
+      assert.equal(sess.drills.active?.hissAccum, 0, 'Free-flow drill must initialize numeric hissAccum');
+      assert.equal(sess.drills.active?.severity, 1.0, 'Free-flow drill must initialize severity');
+    }
+    if (drill.id === 'buddy-ooa-share') {
+      assert.ok(sess.aiSquad[0].activeBar <= 15 && sess.aiSquad[0].issue?.kind === 'low-gas');
+      assert.ok(sess.aiSquad[0].issue?.countdownSec > 0 && sess.aiSquad[0].issue?.hudLabel, 'Buddy OOA issue must carry full Hardcore issue schema');
+    }
+    if (drill.id === 'net-cut-deco') {
+      assert.ok(sess.diveState.stopDepthM >= 6);
+      assert.equal(sess.activeSnagIndex, 0, 'Net-cut drill must immediately engage snag 0 on frame 1');
+    }
   }
+  const mainSrc = (await import('node:fs')).readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  assert.ok(!/\bactiveIncomingChallenge\b/.test(mainSrc), 'main.js must use sandboxCtrl.getActiveIncomingChallenge(), never bare activeIncomingChallenge');
+  assert.ok(mainSrc.includes('await ensureLevelLoaded(drill.levelId'), 'launchRescueDrill must bake & load the drill level before startDiveRun');
   const ffDrill = getRescueDrillById('freeflow-bailout');
   const ffSess = createDiveSession(getLevelById(ffDrill.levelId), { diverName: 'Ace', drillsEnabled: true });
   applyRescueDrillScenario(ffSess, ffDrill);

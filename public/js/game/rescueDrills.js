@@ -39,10 +39,10 @@ export const RESCUE_DRILLS = Object.freeze([
     difficulty: 'standard',
     parTimeSec: 75,
     accent: '#ef4444',
-    summary: 'Your primary regulator jams in violent 3× free-flow at 32m. Feather the valve ([E]/[Space]), manage gas, and exit.',
-    briefing: '💨 DRILL LIVE: Regulator FREE-FLOW at 32m! Isolate valve [E]/[Space], switch gas cleanly & exit!',
+    summary: 'Your primary regulator jams in violent 3× free-flow at 32m. Isolate the valve ([E]) or switch gas, and exit cleanly.',
+    briefing: '💨 DRILL LIVE: Regulator FREE-FLOW at 32m! Isolate valve [E], manage gas & exit!',
     objectives: Object.freeze([
-      'Resolve the active Regulator Free-Flow emergency drill',
+      'Resolve the active Regulator Free-Flow emergency drill ([E])',
       'Manage EAN32 / Trimix / O₂ gas switches cleanly',
       'Complete safe extraction under 75s par',
     ]),
@@ -75,8 +75,8 @@ export const RESCUE_DRILLS = Object.freeze([
     difficulty: 'standard',
     parTimeSec: 95,
     accent: '#a855f7',
-    summary: 'Snagged in a derelict trawl net at 30m with an active 6m O₂ decompression ceiling. Cut free ([E]), switch to O₂, clear deco.',
-    briefing: '✂️ DRILL LIVE: Snagged at 30m with 6m O₂ DECO! Cut free [E], ascend smoothly & clear your O₂ stop!',
+    summary: 'Snagged in hangar conduit cables at 51m with an active 6m O₂ decompression ceiling. Cut free ([E]), switch to O₂ at 6m, clear deco.',
+    briefing: '✂️ DRILL LIVE: Snagged at 51m with 6m O₂ DECO! Cut free [E], ascend smoothly & clear your O₂ stop!',
     objectives: Object.freeze([
       'Slice free from entanglement using shears [E]',
       'Switch to 100% O₂ [3] at 6m & clear decompression ceiling',
@@ -180,11 +180,13 @@ export function applyRescueDrillScenario(session, drill) {
       session.drills.enabled = true;
       session.drills.active = {
         kind: 'free-flow',
-        title: 'REGULATOR FREE-FLOW',
-        prompt: 'Feather valve & swap to backup regulator [E / Space]',
         elapsedSec: 0,
-        durationSec: 22,
+        severity: 1.0,
+        hissAccum: 0,
       };
+      if (Array.isArray(session.drills.history) && !session.drills.history.includes('free-flow')) {
+        session.drills.history.push('free-flow');
+      }
     }
   } else if (drill.id === 'buddy-ooa-share') {
     const pt = pickDrillSpawnPoint(level, 26);
@@ -192,28 +194,45 @@ export function applyRescueDrillScenario(session, drill) {
     diver.y = pt.y;
     diveState.depthM = pt.y;
     diveState.maxDepthM = Math.max(diveState.maxDepthM || 0, pt.y);
+    if (pt.y >= 24) switchGas(diveState, 'TMX1455');
     if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
       const maya = session.aiSquad[0];
-      maya.x = pt.x + 2.4;
-      maya.y = Math.max(8, pt.y - 0.6);
-      maya.activeBar = 12;
-      maya.gasRemainingPct = 6;
+      maya.x = pt.x + 2.0;
+      maya.y = Math.max(8, pt.y - 0.3);
+      maya.depthM = maya.y;
+      maya.activeBar = 14;
+      maya.maxBar = maya.maxBar || 205;
+      maya.gasId = diveState.activeGasId || 'EAN32';
+      maya.gasRemainingPct = 7;
       maya.condition = 'LOW GAS';
       maya.issue = {
         kind: 'low-gas',
-        title: 'OUT OF AIR',
-        detail: 'Share gas immediately!',
-        elapsedSec: 0,
+        icon: '⛽',
+        title: 'Regulator Free-Flow',
+        condition: 'LOW GAS',
+        hudLabel: '⛽ SHARE AIR [E]',
+        hint: 'Close in and share gas via [E] or the Share Gas button before they run dry!',
+        progress: 0,
+        startedAt: Date.now(),
+        startDepthM: maya.y,
+        anchorX: maya.x,
+        anchorY: maya.y,
+        snagIndex: -1,
+        snagKey: '',
+        countdownSec: 60,
+        maxCountdownSec: 60,
       };
     }
   } else if (drill.id === 'net-cut-deco') {
-    const snag = Array.isArray(level?.snagZones) && level.snagZones.length > 0
-      ? level.snagZones[0]
-      : pickDrillSpawnPoint(level, 30);
+    const hasSnag = Array.isArray(level?.snagZones) && level.snagZones.length > 0;
+    const snag = hasSnag ? level.snagZones[0] : pickDrillSpawnPoint(level, 30);
     diver.x = snag.x;
     diver.y = snag.y;
     diveState.depthM = snag.y;
     diveState.maxDepthM = Math.max(diveState.maxDepthM || 0, snag.y);
+    if (hasSnag) {
+      session.activeSnagIndex = 0;
+    }
     if (snag.y >= 24) switchGas(diveState, 'TMX1455');
     // Load fast/mid Bühlmann compartments so a realistic 6m O2 decompression stop is required
     if (Array.isArray(diveState.compartments)) {
