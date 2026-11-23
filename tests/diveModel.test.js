@@ -8692,3 +8692,48 @@ test('v175 Streamlined Home Interface: removes setup strip, gear dock & daily ca
   assert.ok(dailyModalHtml.includes('id="daily-challenge-card"') && dailyModalHtml.includes('id="btn-play-daily"'), 'Daily Dive panel must host today’s Daily Sump card & PLAY DAILY button');
   assert.ok(setupModalHtml.includes('id="menu-gear-dock"') && setupModalHtml.includes('id="gear-dock-grid"'), 'Dive Setup modal must host Tech Gear Loadout dock');
 });
+
+test('v178 Diegetic Immersion Tape binds real depthM, ceilingM, active tank bar/mix & diver.angle', () => {
+  const texts = [];
+  let redCeilingDrawn = false;
+  const fakeCtx = {
+    save() {},
+    restore() {},
+    beginPath() {},
+    roundRect() {},
+    rect() {},
+    moveTo() {},
+    lineTo() {},
+    fill() {},
+    stroke() {
+      if (String(this.strokeStyle).includes('248, 113, 113')) redCeilingDrawn = true;
+    },
+    fillText(t) { texts.push(String(t)); },
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: '',
+    textBaseline: '',
+  };
+  const state = createDiveState();
+  state.depthM = 28.4;
+  state.ceilingM = 6.0;
+  switchGas(state, 'TMX1455');
+  state.tanks.TMX1455.bar = 142;
+
+  CaveRenderer.prototype._drawDiegeticImmersionTape.call(
+    { _cachedDpr: 1 },
+    fakeCtx,
+    1200,
+    800,
+    { x: 10, y: 28.4, angle: Math.PI },
+    state,
+    { x: 25, y: 28.4 },
+    1.2
+  );
+  assert.ok(texts.includes('28.4m'), `Expected live depth 28.4m in tape, got: ${texts.join(', ')}`);
+  assert.ok(texts.some((t) => t.includes('TMX 14/55') && t.includes('142b')), `Expected active mix & bar in tape, got: ${texts.join(', ')}`);
+  assert.ok(texts.some((t) => t.includes('HDG 270° W') && t.includes('WP 15m')), `Expected live heading from diver.angle, got: ${texts.join(', ')}`);
+  assert.ok(redCeilingDrawn, 'Expected red deco ceiling marker line when ceilingM > 0.4');
+});

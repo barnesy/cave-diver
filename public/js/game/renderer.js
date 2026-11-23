@@ -1941,10 +1941,13 @@ export class CaveRenderer {
   _drawDiegeticImmersionTape(ctx, cw, ch, diver, diveState, nextCheckpoint, timeSec = 0) {
     if (!diver || !diveState) return;
     const dpr = this._cachedDpr || 1;
-    const depthM = Math.max(0, Number(diveState.depth) || 0);
-    const ceilingM = Math.max(0, Number(diveState.decoCeilingM) || 0);
-    const bar = Math.max(0, Math.round(Number(diveState.activeTankBar) || 0));
-    const mixName = diveState.activeMix?.shortName || diveState.activeMix?.name || 'GAS';
+    const depthM = Math.max(0, Number(diveState.depthM ?? diveState.depth ?? diver.y) || 0);
+    const ceilingM = Math.max(0, Number(diveState.ceilingM ?? diveState.decoCeilingM) || 0);
+    const activeGasId = diveState.activeGasId || 'EAN32';
+    const activeTank = diveState.tanks?.[activeGasId];
+    const bar = Math.max(0, Math.round(Number(activeTank?.bar ?? diveState.activeTankBar) || 0));
+    const activeMix = diveState.mixes?.[activeGasId] || diveState.activeMix;
+    const mixName = activeMix?.shortName || activeMix?.name || activeGasId || 'GAS';
     const fontScale = Math.max(10, Math.round(11 * dpr));
 
     ctx.save();
@@ -2014,12 +2017,13 @@ export class CaveRenderer {
 
     ctx.fillStyle = bar < 50 ? '#fca5a5' : '#93c5fd';
     ctx.font = `700 ${Math.round(fontScale * 0.78)}px "JetBrains Mono", monospace`;
-    ctx.fillText(`${mixName} ${bar}`, tapeX + tapeW * 0.5, tapeY + tapeH + 11 * dpr);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${mixName} ${bar}b`, tapeX + tapeW, tapeY + tapeH + 12 * dpr);
 
     const ribW = Math.min(cw * 0.38, 210 * dpr);
     const ribH = 22 * dpr;
     const ribX = Math.round((cw - ribW) * 0.5);
-    const ribY = 12 * dpr;
+    const ribY = Math.round(62 * dpr);
     ctx.fillStyle = 'rgba(2, 12, 24, 0.42)';
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
     ctx.lineWidth = Math.max(1, dpr);
@@ -2032,7 +2036,10 @@ export class CaveRenderer {
     ctx.fill();
     ctx.stroke();
 
-    const headingDeg = ((Math.round((Math.atan2(diver.facingY || 0, diver.facingX || 1) * 180) / Math.PI) + 90) % 360 + 360) % 360;
+    const angleRad = Number.isFinite(diver.angle)
+      ? diver.angle
+      : Math.atan2(diver.facingY || 0, diver.facingX || 1);
+    const headingDeg = ((Math.round((angleRad * 180) / Math.PI) + 90) % 360 + 360) % 360;
     const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     const card = cardinals[Math.round(headingDeg / 45) % 8];
     let navTxt = `HDG ${String(headingDeg).padStart(3, '0')}° ${card}`;
