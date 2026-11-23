@@ -7283,15 +7283,26 @@ export class CaveRenderer {
       const phaseTime = (((timeSec + (pelagic.phaseOffset || 0)) % period) + period) % period;
       if (phaseTime < crossDur) {
         const u = phaseTime / crossDur;
-        const span = Math.max(24, (pelagic.xMax - pelagic.xMin) + 28);
+        const span = Math.max(12, pelagic.xMax - pelagic.xMin);
         const dir = (pelagic.direction ?? 1) >= 0 ? 1 : -1;
-        const wx = dir > 0 ? pelagic.xMin - 14 + u * span : pelagic.xMax + 14 - u * span;
+        const wx = dir > 0 ? pelagic.xMin + u * span : pelagic.xMax - u * span;
         const baseY = Number.isFinite(pelagic.y) ? pelagic.y : (pelagic.depthM || 6.0);
-        const wy = baseY + Math.sin(u * Math.PI * 2) * 0.85;
+        const wy = baseY + Math.sin(u * Math.PI * 2) * 0.65;
+        // Hard SDF rock-wall clearance guard: never draw pelagic shadow inside or clipping through solid rock!
+        const sizeM = pelagic.size || pelagic.sizeM || 6.2;
+        const halfM = sizeM * 0.42;
+        const sdfMax = this.level
+          ? Math.max(
+              evaluateCaveSDF(this.level, wx, wy),
+              evaluateCaveSDF(this.level, wx - halfM, wy),
+              evaluateCaveSDF(this.level, wx + halfM, wy)
+            )
+          : -5;
+        const rockClearFade = Math.max(0, Math.min(1, (-sdfMax - 0.35) / 1.45));
         const psx = toScreenX(wx);
         const psy = toScreenY(wy);
-        const len = (pelagic.size || pelagic.sizeM || 6.2) * scale;
-        const fade = Math.sin(Math.min(1, Math.max(0, u)) * Math.PI);
+        const len = sizeM * scale;
+        const fade = Math.sin(Math.min(1, Math.max(0, u)) * Math.PI) * rockClearFade;
         const alpha = 0.24 * fade;
         if (alpha > 0.01) {
           ctx.save();

@@ -7796,10 +7796,16 @@ test('v162 Living Shipwrecks (Power Relays, dSMB) & Reactive Marine Life (Mantas
   const polarEco = createMarineEcosystem(polar);
   assert.ok(polarEco.megafauna.some((m) => m.kind === 'beluga'), 'Polar iceberg site should spawn an Arctic Beluga Whale');
 
-  // Freshwater inland cenote must stay saltwater-free (no oceanic manta rays or reef octopuses)
+  // Freshwater inland cenote must stay saltwater-free (no oceanic manta rays, reef octopuses, or rock-clipping pelagic shadows)
   const cenoteEco = createMarineEcosystem(LEVEL_1);
   assert.equal(cenoteEco.megafauna.filter((m) => m.kind === 'manta').length, 0, 'Freshwater cenote must not spawn saltwater rays');
   assert.equal(cenoteEco.denizens.length, 0, 'Freshwater cenote must not spawn saltwater octopuses/morays');
+  const { createSubmergedStories } = await import('../public/js/game/submergedStories.js');
+  assert.equal(createSubmergedStories(LEVEL_1).pelagicShadow, null, 'Freshwater cenote must not run an overhead pelagic manta shadow through rock');
+  const wreckStory = createSubmergedStories(wreck);
+  assert.ok(wreckStory.pelagicShadow, 'Open-water wreck should keep overhead pelagic shadow');
+  const shadowSpeed = (wreckStory.pelagicShadow.xMax - wreckStory.pelagicShadow.xMin) / wreckStory.pelagicShadow.crossingDurationSec;
+  assert.ok(shadowSpeed <= 3.0, `Pelagic shadow glide speed should be realistic (<=3 m/s), got ${shadowSpeed.toFixed(2)}`);
 
   // Calm low-silt diver draws Manta from patrol -> curious -> escort & fires onWildlifeEscort
   const calmDiver = { x: manta.x - 4.0, y: manta.y, vx: 0.2, vy: 0, angle: 0, torchOn: true, dpvActive: false };

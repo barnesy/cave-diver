@@ -1140,7 +1140,7 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
     }
   }
 
-  const speed = kind === 'whaleshark' ? 1.55 : kind === 'mantaray' ? 2.45 : 0.65;
+  const speed = kind === 'whaleshark' ? 1.45 : kind === 'mantaray' ? 1.85 : 0.65;
   const visitor = {
     id: `vis_${enc.visitorCount + 1}`,
     kind,
@@ -1195,12 +1195,28 @@ function stepDynamicEncounters(session, dt, callbacks = {}) {
     callbacks.onToast?.('🌫️ Drifting thermocline haze — watch trim & sonar map!', 2.6);
   }
 
-  // 2. Advance & spawn rare passing visitors (Whale Sharks, Manta Rays, Bioluminescent Swarms)
+  // 2. Advance & spawn rare passing visitors (Whale Sharks, Manta Rays, Bioluminescent Swarms) with SDF rock avoidance
+  const level = session.level;
   for (let i = enc.visitors.length - 1; i >= 0; i--) {
     const v = enc.visitors[i];
     v.ageSec += dt;
-    v.x += v.vx * dt;
-    v.y += Math.sin(simTimeSec * (v.kind === 'mantaray' ? 1.8 : 0.9) + v.phase) * 0.22 * dt;
+    const nextX = v.x + v.vx * dt;
+    const nextY = Math.max(2.5, v.y + Math.sin(simTimeSec * (v.kind === 'mantaray' ? 1.6 : 0.9) + v.phase) * 0.22 * dt);
+    const clearance = v.kind === 'biolum-swarm' ? -0.6 : -1.4;
+    const lookX = nextX + Math.sign(v.vx || v.dir || 1) * (v.kind === 'biolum-swarm' ? 1.0 : 2.2);
+    if (!level || (evaluateCaveSDF(level, nextX, nextY) < clearance && evaluateCaveSDF(level, lookX, nextY) < clearance * 0.6)) {
+      v.x = nextX;
+      v.y = nextY;
+    } else if (level && evaluateCaveSDF(level, nextX, Math.max(2.5, nextY - 1.5)) < clearance) {
+      // Gently rise over reef/superstructure obstacle
+      v.x = nextX;
+      v.y = Math.max(2.5, v.y - 1.2 * dt);
+    } else {
+      // Turn gracefully away from rock wall & fade out cleanly instead of ever clipping through rock!
+      v.vx = -v.vx;
+      v.dir = Math.sign(v.vx) || 1;
+      v.ageSec = Math.max(v.ageSec, v.durationSec - 2.2);
+    }
     if (v.ageSec >= v.durationSec) {
       enc.visitors.splice(i, 1);
     }

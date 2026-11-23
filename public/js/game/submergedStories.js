@@ -338,23 +338,41 @@ export function createSubmergedStories(level) {
     airDomePlaced = true;
   }
 
-  // Overhead Pelagic Shadow Crossing for open-water ocean wrecks & sunlit blue holes / tropical cenotes (v156)
+  // Overhead Pelagic Shadow Crossing ONLY for open-water ocean wrecks & wide marine blue holes (never inland freshwater cenotes!)
   const allowPelagicShadow =
     (isWreck && themeId !== 'superior-memorial-wreck') ||
     themeId === 'bahamas-bluehole' ||
-    themeId === 'yucatan-cenote' ||
     themeId === 'bermuda-sargasso';
   const b = level.bounds || { xMin: -20, xMax: 120, yMin: 0, yMax: 60 };
-  const pelagicShadow = allowPelagicShadow
-    ? {
+  const openBasin = Array.isArray(level.openBasins) && level.openBasins.length > 0 ? level.openBasins[0] : null;
+  let pelagicShadow = null;
+  if (allowPelagicShadow) {
+    const pXMin = isWreck
+      ? (b.xMin ?? -20) - 8
+      : openBasin
+        ? openBasin.xMin + 2.5
+        : (level.spawn?.x ?? 0) - 10;
+    const pXMax = isWreck
+      ? (b.xMax ?? 120) + 8
+      : openBasin
+        ? openBasin.xMax - 2.5
+        : (level.spawn?.x ?? 0) + 10;
+    const span = Math.max(12, pXMax - pXMin);
+    const glideSpeed = isWreck ? 2.1 : 1.45; // Graceful, realistic pelagic glide speed (m/s)
+    const crossingDurationSec = Math.max(14, Math.min(72, span / glideSpeed));
+    const periodSec = Math.round(crossingDurationSec + (isWreck ? 24 : 20));
+    if (span >= 14 || isWreck) {
+      pelagicShadow = {
         kind: isWreck ? 'whaleshark' : 'manta',
-        xMin: (b.xMin ?? -20) - 18,
-        xMax: (b.xMax ?? 120) + 18,
+        xMin: pXMin,
+        xMax: pXMax,
         y: isWreck ? Math.min(12, Math.max(5.5, deckY * 0.24)) : 4.2,
-        periodSec: isWreck ? 46 : 38,
-        size: isWreck ? 6.2 : 4.4,
-      }
-    : null;
+        crossingDurationSec,
+        periodSec,
+        size: isWreck ? 6.2 : 3.6,
+      };
+    }
+  }
 
   return {
     setPieces,
