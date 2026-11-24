@@ -1067,6 +1067,254 @@ export function drawArticulatedDiverLeg(
  * Shared articulated diver arm, glowing wrist dive computer, and Goodman-handle primary torch (v166).
  * Uses custom drysuit sleeve colors and equipped torch optic lens tint across gameplay & Workshop.
  */
+/**
+ * High-detail Pneumatic Titanium Speargun with Twin Power Bands, Pressure Gauge,
+ * Underslung Line Reel, Barbed Spear Shaft & Mounted Tactical Dive Flashlight (v181).
+ * Shared between diver hands (`drawDiverArmAndTorch`) and the Armory Rack pedestal.
+ */
+export function drawDetailedSpeargun(ctx, scale, {
+  torchOn = true,
+  lensColor = '#fef08a',
+  glowStamps = null,
+  recoil = 0,
+  muzzleFlash = 0,
+} = {}) {
+  const s = scale;
+  const recoilPx = Math.max(0, Number(recoil) || 0) * 0.24 * s;
+  ctx.save();
+  ctx.translate(-recoilPx, 0);
+
+  // 1. Contoured Chest-Loading Butt Pad & Receiver Stock
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = Math.max(1, 0.022 * s);
+  ctx.beginPath();
+  ctx.moveTo(-0.34 * s, -0.075 * s);
+  ctx.lineTo(-0.12 * s, -0.08 * s);
+  ctx.lineTo(-0.10 * s, 0.075 * s);
+  ctx.lineTo(-0.30 * s, 0.115 * s);
+  ctx.quadraticCurveTo(-0.37 * s, 0.02 * s, -0.34 * s, -0.075 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Ribbed rubber recoil pad strip on butt
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(-0.34 * s, -0.055 * s, 0.055 * s, 0.15 * s);
+
+  // 2. Ergonomic Molded Pistol Grip, Finger Grooves & Stainless Trigger Guard
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = Math.max(1, 0.02 * s);
+  ctx.beginPath();
+  ctx.moveTo(-0.11 * s, 0.04 * s);
+  ctx.lineTo(-0.22 * s, 0.27 * s);
+  ctx.lineTo(-0.06 * s, 0.29 * s);
+  ctx.lineTo(0.05 * s, 0.07 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Grip texture ridges
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = Math.max(0.8, 0.016 * s);
+  ctx.beginPath();
+  ctx.moveTo(-0.15 * s, 0.11 * s);
+  ctx.lineTo(-0.06 * s, 0.12 * s);
+  ctx.moveTo(-0.17 * s, 0.17 * s);
+  ctx.lineTo(-0.08 * s, 0.18 * s);
+  ctx.moveTo(-0.19 * s, 0.23 * s);
+  ctx.lineTo(-0.10 * s, 0.24 * s);
+  ctx.stroke();
+  // Trigger guard loop & stainless trigger blade
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = Math.max(1, 0.022 * s);
+  ctx.beginPath();
+  ctx.moveTo(0.03 * s, 0.06 * s);
+  ctx.quadraticCurveTo(0.14 * s, 0.17 * s, 0.02 * s, 0.18 * s);
+  ctx.stroke();
+  ctx.strokeStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.moveTo(0.05 * s, 0.07 * s);
+  ctx.lineTo(0.03 * s, 0.14 * s);
+  ctx.stroke();
+
+  // 3. Underslung Anodized Line Spool Reel (coiled golden Dyneema tether!)
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = Math.max(1, 0.02 * s);
+  ctx.beginPath();
+  ctx.arc(0.24 * s, 0.145 * s, 0.095 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#eab308';
+  ctx.beginPath();
+  ctx.arc(0.24 * s, 0.145 * s, 0.062 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.arc(0.24 * s, 0.145 * s, 0.024 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Sculpted Carbon-Core & Brushed-Titanium Pneumatic Barrel + Receiver Block
+  const barrelGrad = ctx.createLinearGradient(0, -0.10 * s, 0, 0.08 * s);
+  barrelGrad.addColorStop(0, '#f8fafc');
+  barrelGrad.addColorStop(0.32, '#cbd5e1');
+  barrelGrad.addColorStop(0.65, '#475569');
+  barrelGrad.addColorStop(1, '#0f172a');
+  ctx.fillStyle = barrelGrad;
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = Math.max(1, 0.022 * s);
+  ctx.beginPath();
+  ctx.roundRect(-0.14 * s, -0.092 * s, 1.06 * s, 0.155 * s, 0.042 * s);
+  ctx.fill();
+  ctx.stroke();
+
+  // Machined barrel cooling slots & glowing cyan pneumatic pressure rail
+  ctx.fillStyle = '#0284c7';
+  ctx.fillRect(0.08 * s, -0.052 * s, 0.72 * s, 0.036 * s);
+  ctx.fillStyle = '#7dd3fc';
+  ctx.fillRect(0.10 * s, -0.046 * s, 0.68 * s, 0.016 * s);
+  ctx.fillStyle = '#0f172a';
+  for (let k = 0; k < 5; k++) {
+    ctx.fillRect((0.20 + k * 0.115) * s, -0.082 * s, 0.048 * s, 0.022 * s);
+  }
+
+  // Miniature Side Pneumatic Pressure Gauge Dial on Receiver
+  ctx.fillStyle = '#020617';
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = Math.max(0.8, 0.018 * s);
+  ctx.beginPath();
+  ctx.arc(-0.02 * s, -0.015 * s, 0.052 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = Math.max(0.8, 0.016 * s);
+  ctx.beginPath();
+  ctx.moveTo(-0.02 * s, -0.015 * s);
+  ctx.lineTo(0.015 * s, -0.042 * s);
+  ctx.stroke();
+
+  // 5. Twin Tensioned Power Sling Bands stretching from Wishbone Notch to Muzzle Roller Pulleys
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = Math.max(1.2, 0.03 * s);
+  ctx.beginPath();
+  ctx.moveTo(0.16 * s, -0.068 * s);
+  ctx.lineTo(0.88 * s, -0.075 * s);
+  ctx.moveTo(0.22 * s, 0.048 * s);
+  ctx.lineTo(0.88 * s, 0.036 * s);
+  ctx.stroke();
+
+  // Machined Muzzle Head & Roller Pulley Wheel
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = Math.max(1, 0.02 * s);
+  ctx.beginPath();
+  ctx.roundRect(0.84 * s, -0.105 * s, 0.13 * s, 0.185 * s, 0.03 * s);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(0.905 * s, -0.068 * s, 0.028 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 6. Long Gleaming Stainless Barbed Spear Shaft & Dual Flopper Tri-Cut Tip
+  if (recoilPx < 0.09 * s) {
+    // Upper guide shaft
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = Math.max(1.6, 0.044 * s);
+    ctx.beginPath();
+    ctx.moveTo(0.14 * s, -0.025 * s);
+    ctx.lineTo(1.34 * s, -0.025 * s);
+    ctx.stroke();
+    // Dual hinged flopper barbs + razor broadhead tip
+    ctx.fillStyle = '#bae6fd';
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = Math.max(0.8, 0.016 * s);
+    ctx.beginPath();
+    ctx.moveTo(1.52 * s, -0.025 * s);
+    ctx.lineTo(1.24 * s, -0.105 * s);
+    ctx.lineTo(1.30 * s, -0.025 * s);
+    ctx.lineTo(1.24 * s, 0.055 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Secondary barb notch
+    ctx.strokeStyle = '#e0f2fe';
+    ctx.lineWidth = Math.max(1, 0.024 * s);
+    ctx.beginPath();
+    ctx.moveTo(1.16 * s, -0.025 * s);
+    ctx.lineTo(1.06 * s, -0.075 * s);
+    ctx.stroke();
+  }
+
+  // 7. Mounted Tactical Dive Flashlight strapped directly onto the front end of the barrel!
+  // Twin CNC-machined mount clamps
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0.55 * s, 0.045 * s, 0.075 * s, 0.055 * s);
+  ctx.fillRect(0.76 * s, 0.045 * s, 0.075 * s, 0.055 * s);
+  // Ribbed anodized flashlight canister body
+  const torchGrad = ctx.createLinearGradient(0, 0.07 * s, 0, 0.21 * s);
+  torchGrad.addColorStop(0, '#f1f5f9');
+  torchGrad.addColorStop(0.5, '#94a3b8');
+  torchGrad.addColorStop(1, '#334155');
+  ctx.fillStyle = torchGrad;
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = Math.max(0.9, 0.02 * s);
+  ctx.beginPath();
+  ctx.roundRect(0.49 * s, 0.078 * s, 0.36 * s, 0.115 * s, 0.032 * s);
+  ctx.fill();
+  ctx.stroke();
+  // Flared crenellated chrome bezel head on end of flashlight
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.roundRect(0.83 * s, 0.064 * s, 0.14 * s, 0.142 * s, 0.03 * s);
+  ctx.fill();
+  ctx.stroke();
+  // Heat-sink cooling grooves on bezel
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = Math.max(0.8, 0.015 * s);
+  ctx.beginPath();
+  ctx.moveTo(0.865 * s, 0.072 * s);
+  ctx.lineTo(0.865 * s, 0.198 * s);
+  ctx.moveTo(0.905 * s, 0.072 * s);
+  ctx.lineTo(0.905 * s, 0.198 * s);
+  ctx.stroke();
+
+  if (torchOn) {
+    // Glowing recessed optical lens & bright forward hotspot flare
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(0.975 * s, 0.135 * s, 0.032 * s, 0.056 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = lensColor;
+    ctx.beginPath();
+    ctx.arc(0.985 * s, 0.135 * s, 0.048 * s, 0, Math.PI * 2);
+    ctx.fill();
+    if (glowStamps?.warm) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.68;
+      const lR = 0.34 * s;
+      ctx.drawImage(glowStamps.warm, 0.99 * s - lR, 0.135 * s - lR, lR * 2, lR * 2);
+    }
+  }
+
+  // Pneumatic cavitation muzzle flash ring when firing
+  if ((muzzleFlash || 0) > 0) {
+    ctx.globalCompositeOperation = 'lighter';
+    const mf = Math.min(1, muzzleFlash * 11);
+    ctx.fillStyle = `rgba(125, 211, 252, ${(mf * 0.88).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.ellipse(1.12 * s, -0.025 * s, 0.36 * s * mf, 0.17 * s * mf, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(224, 242, 254, ${(mf * 0.9).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.2, 0.04 * s);
+    ctx.beginPath();
+    ctx.arc(1.02 * s, -0.025 * s, 0.22 * s * (1.2 - mf * 0.4), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 export function drawDiverArmAndTorch(
   ctx,
   shoulderX,
@@ -1113,91 +1361,19 @@ export function drawDiverArmAndTorch(
   }
   ctx.restore();
 
-  // Primary weapon/light gripped in hand: Pneumatic Titanium Speargun with Underslung Dive Torch, OR standard Goodman torch
+  // Primary weapon/light gripped in hand: High-Detail Pneumatic Titanium Speargun with Underslung Dive Torch, OR standard Goodman torch
   ctx.save();
   ctx.translate(hx, hy);
   ctx.rotate(torchAng);
   if (opts?.hasSpeargun) {
-    const recoilPx = Math.max(0, Number(opts.spearRecoil) || 0) * 0.22 * scale;
-    ctx.translate(-recoilPx, 0);
-
-    // Ergonomic rubberized pistol grip & trigger guard
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = Math.max(1, 0.02 * scale);
-    ctx.beginPath();
-    ctx.moveTo(-0.08 * scale, 0.02 * scale);
-    ctx.lineTo(-0.18 * scale, 0.22 * scale);
-    ctx.lineTo(-0.03 * scale, 0.23 * scale);
-    ctx.lineTo(0.06 * scale, 0.05 * scale);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Pneumatic titanium barrel & compressed-air pressure rail
-    const barrelGrad = ctx.createLinearGradient(0, -0.08 * scale, 0, 0.08 * scale);
-    barrelGrad.addColorStop(0, '#f1f5f9');
-    barrelGrad.addColorStop(0.45, '#94a3b8');
-    barrelGrad.addColorStop(1, '#334155');
-    ctx.fillStyle = barrelGrad;
-    ctx.beginPath();
-    ctx.roundRect(-0.12 * scale, -0.065 * scale, 0.84 * scale, 0.115 * scale, 0.035 * scale);
-    ctx.fill();
-    ctx.stroke();
-
-    // Glowing cyan pneumatic rail strip along upper barrel
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(0.02 * scale, -0.03 * scale, 0.62 * scale, 0.032 * scale);
-
-    // Loaded barbed titanium spear tip protruding past muzzle (briefly slides back during recoil)
-    if (recoilPx < 0.08 * scale) {
-      ctx.strokeStyle = '#e0f2fe';
-      ctx.lineWidth = Math.max(1.5, 0.042 * scale);
-      ctx.beginPath();
-      ctx.moveTo(0.70 * scale, -0.01 * scale);
-      ctx.lineTo(1.06 * scale, -0.01 * scale);
-      ctx.stroke();
-      ctx.fillStyle = '#7dd3fc';
-      ctx.beginPath();
-      ctx.moveTo(1.18 * scale, -0.01 * scale);
-      ctx.lineTo(0.96 * scale, -0.08 * scale);
-      ctx.lineTo(0.96 * scale, 0.06 * scale);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Mounted Tactical Dive Flashlight strapped beneath the barrel tip!
-    ctx.fillStyle = '#cbd5e1';
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = Math.max(0.9, 0.02 * scale);
-    ctx.beginPath();
-    ctx.roundRect(0.42 * scale, 0.045 * scale, 0.30 * scale, 0.09 * scale, 0.028 * scale);
-    ctx.fill();
-    ctx.stroke();
-    // Clamp bracket tying flashlight to speargun barrel
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0.50 * scale, 0.02 * scale, 0.07 * scale, 0.04 * scale);
-
-    if (torchOn) {
-      ctx.fillStyle = lensColor;
-      ctx.beginPath();
-      ctx.arc(0.73 * scale, 0.09 * scale, 0.046 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      if (glowStamps?.warm) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.62;
-        const lR = 0.28 * scale;
-        ctx.drawImage(glowStamps.warm, 0.73 * scale - lR, 0.09 * scale - lR, lR * 2, lR * 2);
-      }
-    }
-    if ((opts.muzzleFlash || 0) > 0) {
-      ctx.globalCompositeOperation = 'lighter';
-      const mf = Math.min(1, opts.muzzleFlash * 11);
-      ctx.fillStyle = `rgba(125, 211, 252, ${(mf * 0.85).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.ellipse(0.92 * scale, -0.01 * scale, 0.28 * scale * mf, 0.14 * scale * mf, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    if (Math.cos(torchAng) < 0) ctx.scale(1, -1);
+    drawDetailedSpeargun(ctx, scale * 1.18, {
+      torchOn,
+      lensColor,
+      glowStamps,
+      recoil: opts.spearRecoil || 0,
+      muzzleFlash: opts.muzzleFlash || 0,
+    });
   } else {
     ctx.fillStyle = '#e2e8f0';
     ctx.beginPath();

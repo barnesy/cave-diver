@@ -5,6 +5,7 @@
  */
 
 import { wreckAndInteractivesMethods } from './wreckAndInteractivesRenderer.js';
+import { drawDetailedSpeargun } from '../artSprites.js';
 import { SPEARGUN_MAX_CHARGE_SEC } from '../secretLairs.js';
 
 export const bossAndLairMethods = {
@@ -94,35 +95,39 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 3. Salvaged Expedition Armory Rack (Speargun pickup)
+    // 3. Salvaged Expedition Armory Cradle (High-Detail Mounted-Torch Titanium Speargun)
     const arm = spec.armory;
-    if (arm && arm.x + 4 >= visX0 && arm.x - 4 <= visX1 && arm.y + 4 >= visY0 && arm.y - 4 <= visY1) {
+    if (arm && arm.x + 5 >= visX0 && arm.x - 5 <= visX1 && arm.y + 5 >= visY0 && arm.y - 5 <= visY1) {
       const sx = toScreenX(arm.x);
       const sy = toScreenY(arm.y);
       ctx.save();
       ctx.translate(sx, sy);
-      ctx.fillStyle = '#1e293b';
-      ctx.strokeStyle = lair.weaponEquipped ? 'rgba(148, 163, 184, 0.4)' : '#38bdf8';
-      ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+      // Heavy titanium weapon pedestal case
+      const caseGrad = ctx.createLinearGradient(0, -0.75 * scale, 0, 0.75 * scale);
+      caseGrad.addColorStop(0, '#334155');
+      caseGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = caseGrad;
+      ctx.strokeStyle = lair.weaponEquipped ? 'rgba(148, 163, 184, 0.35)' : '#38bdf8';
+      ctx.lineWidth = Math.max(1.5, 0.065 * scale);
       ctx.beginPath();
-      ctx.roundRect(-1.05 * scale, -0.52 * scale, 2.1 * scale, 1.04 * scale, 0.18 * scale);
+      ctx.roundRect(-1.55 * scale, -0.68 * scale, 3.1 * scale, 1.36 * scale, 0.22 * scale);
       ctx.fill();
       ctx.stroke();
+      // Inner foam cradle recess
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
+      ctx.beginPath();
+      ctx.roundRect(-1.35 * scale, -0.48 * scale, 2.7 * scale, 0.96 * scale, 0.14 * scale);
+      ctx.fill();
       if (!lair.weaponEquipped) {
-        // Gleaming Pneumatic Titanium Speargun resting on rack
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = Math.max(2.2, 0.11 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-0.85 * scale, 0.05 * scale);
-        ctx.lineTo(0.92 * scale, -0.12 * scale);
-        ctx.stroke();
-        ctx.fillStyle = '#38bdf8';
-        ctx.beginPath();
-        ctx.moveTo(1.12 * scale, -0.14 * scale);
-        ctx.lineTo(0.75 * scale, -0.32 * scale);
-        ctx.lineTo(0.8 * scale, 0.06 * scale);
-        ctx.closePath();
-        ctx.fill();
+        ctx.save();
+        ctx.translate(-0.72 * scale, Math.sin(timeSec * 2.8) * 0.06 * scale);
+        ctx.rotate(-0.12);
+        drawDetailedSpeargun(ctx, scale * 1.45, {
+          torchOn: true,
+          lensColor: '#fef08a',
+          glowStamps: this.glowStamps,
+        });
+        ctx.restore();
       }
       ctx.restore();
     }

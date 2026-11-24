@@ -8933,4 +8933,10 @@ test('v180 Bottom-Level Silent Secret Tight-Squeeze, Mounted-Torch Speargun, Pur
   const netSnap = serializeSecretLairNetState(session.secretLair);
   applySecretLairNetState(peerSession.secretLair, netSnap);
   assert.equal(peerSession.secretLair.bossDefeated, true);
+
+  // 10. Regression guard (v181): main.js must never reference undefined `photoModeActive` or `toggleDivePause`
+  const fs = await import('node:fs');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  assert.ok(!/\bphotoModeActive\b/.test(mainSrc), 'main.js must use photoModeState.active, never undefined photoModeActive');
+  assert.ok(!/\btoggleDivePause\b/.test(mainSrc), 'main.js must use setDivePaused(!divePaused), never undefined toggleDivePause');
 });

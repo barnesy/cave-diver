@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=180',
+  mapRasterUrl: './assets/map-expedition.jpg?v=181',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1927,7 +1927,7 @@ const btnCombatPauseEl = document.getElementById('btn-combat-pause');
 
 btnCombatPauseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (typeof toggleDivePause === 'function') toggleDivePause();
+  setDivePaused(!divePaused);
 });
 
 let _lastCombatHudMode = false;
@@ -1971,7 +1971,7 @@ function syncCombatModeHud(sess) {
 }
 
 function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
-  if (mode !== 'diving' || !session || divePaused || photoModeActive || session.endedState) return false;
+  if (mode !== 'diving' || !session || divePaused || photoModeState.active || session.endedState) return false;
   const lair = session.secretLair;
   if (!lair?.weaponEquipped || !session.diveState?.alive) return false;
   audio.unlock();
@@ -2024,7 +2024,7 @@ canvas?.addEventListener('pointermove', (e) => {
 });
 canvas?.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.pointerType !== 'mouse') return;
-  if (mode !== 'diving' || !session?.secretLair?.weaponEquipped || divePaused || photoModeActive) return;
+  if (mode !== 'diving' || !session?.secretLair?.weaponEquipped || divePaused || photoModeState.active) return;
   const rect = canvas.getBoundingClientRect();
   const dx = (e.clientX - rect.left) - rect.width * 0.5;
   const dy = (e.clientY - rect.top) - (rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46);
@@ -6989,7 +6989,7 @@ function stepSimulation(dt) {
       sessionStepCallbacks.torchAim = rawTorchAim;
     }
     // Twin-stick hold-to-autofire (holding directional aim joystick, mouse button, or [F]/[Space])
-    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeActive && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld)) {
+    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeState.active && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld)) {
       fireSpeargunAction({ isTap: false });
     }
     sessionStepCallbacks.isBossAuthority = !isMultiplayer || !lan.room || lan.isHost();
