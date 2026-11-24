@@ -64,7 +64,6 @@ import {
   getFieldGuideStats,
 } from './game/logbookModel.js';
 import { drawStyledArtifact } from './game/artSprites.js';
-import { renderSurveySlate } from './game/surveySlate.js';
 import { formatReplayTime } from './game/diveCard.js';
 import {
   getCrewRole,
@@ -443,8 +442,10 @@ const nextUiTick = () =>
   });
 
 const toastQueue = [];
-function showToast(text, duration = 2.6) {
+function showToast(text, duration = 2.6, { critical = false } = {}) {
   if (!gameToastEl || !text) return;
+  // v186: Keep live underwater diving calm & uncluttered — suppress noisy top-middle update/artifact alerts!
+  if (mode === 'diving' && !critical) return;
   if (toastTimer > 0 && gameToastEl.classList.contains('visible')) {
     if (gameToastEl.textContent === text) {
       toastTimer = Math.max(toastTimer, duration);
@@ -523,7 +524,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=185',
+  mapRasterUrl: './assets/map-expedition.jpg?v=186',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -720,7 +721,7 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
   if (!tank || !mix) return false;
   if (ds.activeGasId === gasId) return true;
   if (tank.bar <= 0.1) {
-    showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8);
+    showToast(`${getActiveGasName(gasId)} cylinder empty!`, 1.8, { critical: true });
     return false;
   }
 
@@ -740,7 +741,8 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
         : `HYPOXIC PPO2 ${futurePPO2.toFixed(2)}`;
       showToast(
         `⚠️ ${getActiveGasName(gasId)} UNSAFE at ${Math.round(ds.depthM)}m (${reason})! Tap again to force`,
-        2.6
+        2.6,
+        { critical: true }
       );
       return false;
     }
@@ -819,7 +821,6 @@ const modalManager = createModalManager([
   { isOpen: () => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, close: () => closeLogbookModal() },
   { isOpen: () => Boolean(signalWheelOpen), close: () => toggleSignalWheel(false) },
   { isOpen: () => Boolean(shearwaterOpen), close: () => toggleShearwaterComputer(false) },
-  { isOpen: () => Boolean(surveySlateOpen), close: () => toggleSurveySlate(false) },
   { isOpen: () => typeof hudKitPopoverEl !== 'undefined' && hudKitPopoverEl && !hudKitPopoverEl.hidden, close: () => setKitPopoverOpen(false) },
   { isOpen: () => typeof hud !== 'undefined' && hud?.isGasDrawerOpen?.(), close: () => hud?.setGasDrawerOpen?.(false) },
   { isOpen: () => typeof hudMenuPopover !== 'undefined' && hudMenuPopover && !hudMenuPopover.hidden, close: () => setHudMenuOpen(false) },
@@ -884,7 +885,6 @@ const input = new InputController({
   onDropLineCookie: () => handleDropLineCookie(),
   onDeploySmb: () => handleDeploySmb(),
   onComputerToggle: () => toggleShearwaterComputer(),
-  onSurveySlateToggle: () => toggleSurveySlate(),
   onSignalWheelToggle: () => toggleSignalWheel(),
   onPhotoModeToggle: () => {
     if (mode !== 'diving' || !session || session.endedState) return false;
@@ -953,25 +953,17 @@ btnSignalWheelClose?.addEventListener('click', (e) => {
   toggleSignalWheel(false);
 });
 
-// Shearwater ZH-L16C OLED Dive Computer Overlay (v126/v129)
+// Shearwater ZH-L16C OLED Dive Computer Overlay (v126/v129 — keyboard [X] shortcut)
 const shearwaterPanelEl = document.getElementById('shearwater-panel');
 const shearwaterCanvasEl = document.getElementById('shearwater-canvas');
 const btnShearwaterCloseEl = document.getElementById('btn-shearwater-close');
-const btnHudComputerEl = document.getElementById('btn-hud-computer');
 let shearwaterOpen = false;
 let lastShearwaterDrawMs = 0;
 
 function toggleShearwaterComputer(forceState) {
   if (mode !== 'diving' && forceState !== false) return false;
   shearwaterOpen = typeof forceState === 'boolean' ? forceState : !shearwaterOpen;
-  if (shearwaterOpen && surveySlateOpen) {
-    surveySlateOpen = false;
-    if (surveySlatePanelEl) surveySlatePanelEl.hidden = true;
-    btnHudSurveySlateEl?.classList.remove('active');
-    btnMinimapSlateEl?.classList.remove('active');
-  }
   if (shearwaterPanelEl) shearwaterPanelEl.hidden = !shearwaterOpen;
-  if (btnHudComputerEl) btnHudComputerEl.classList.toggle('active', shearwaterOpen);
   if (shearwaterOpen && session?.diveState && shearwaterCanvasEl) {
     const sctx = shearwaterCanvasEl.getContext('2d');
     if (sctx) {
@@ -983,11 +975,6 @@ function toggleShearwaterComputer(forceState) {
   }
   return true;
 }
-btnHudComputerEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  toggleShearwaterComputer();
-});
 btnShearwaterCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleShearwaterComputer(false);
@@ -997,190 +984,39 @@ shearwaterCanvasEl?.addEventListener('click', (e) => {
   toggleShearwaterComputer(false);
 });
 
-// Unified Docked Tactical Map: Sonar Minimap | Wetnotes Survey Slate (v169-v173)
-const surveySlatePanelEl = document.getElementById('survey-slate-panel');
-const surveySlateCanvasEl = document.getElementById('survey-slate-canvas');
-const btnSurveySlateCloseEl = document.getElementById('btn-survey-slate-close');
-const btnTacmapSonarEl = document.getElementById('btn-tacmap-sonar');
+// High-Tech Tactical Sonar Overlay controls (v186 — Wetnotes removed)
+const btnSonarCloseEl = document.getElementById('btn-sonar-close');
+const btnSonarOverlayPingEl = document.getElementById('btn-sonar-overlay-ping');
+const hudSonarRangeEl = document.getElementById('hud-sonar-range');
 const btnMinimapZoomEl = document.getElementById('hud-minimap-zoom');
-const btnSurveyDropPinEl = document.getElementById('btn-survey-drop-pin');
-const btnSurveyDropCookieEl = document.getElementById('btn-survey-drop-cookie');
-const btnSurveyClearPinsEl = document.getElementById('btn-survey-clear-pins');
-const SURVEY_PINS_STORAGE_KEY = 'caveDiverSurveyPins_v1';
-function loadSavedSurveyPins(levelId) {
-  if (!levelId) return [];
-  try {
-    const raw = localStorage.getItem(SURVEY_PINS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    const list = parsed?.[levelId];
-    if (!Array.isArray(list)) return [];
-    return list
-      .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
-      .slice(-12)
-      .map((p, idx) => ({
-        id: String(p.id || `pin-${idx}`),
-        x: Number(p.x),
-        y: Number(p.y),
-        depthM: Math.max(0, Math.round(Number(p.depthM ?? p.y) || 0)),
-        tag: String(p.tag || 'JUNCTION').slice(0, 12),
-      }));
-  } catch {
-    return [];
-  }
-}
-function saveSurveyPinsForLevel(levelId, pins) {
-  if (!levelId) return;
-  try {
-    const raw = localStorage.getItem(SURVEY_PINS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const store = parsed && typeof parsed === 'object' ? parsed : {};
-    if (Array.isArray(pins) && pins.length > 0) {
-      store[levelId] = pins.slice(-12);
-    } else {
-      delete store[levelId];
-    }
-    localStorage.setItem(SURVEY_PINS_STORAGE_KEY, JSON.stringify(store));
-  } catch {}
-}
 
-const btnHudSurveySlateEl = document.getElementById('btn-hud-survey-slate');
-const btnMinimapSlateEl = document.getElementById('btn-minimap-slate');
-const SURVEY_PIN_TAGS = ['JUNCTION', 'RELIC', 'SQUEEZE', 'AIR', 'TURN'];
-let surveySlateOpen = false;
-let surveySlateFollowZoom = false;
-let lastSurveySlateDrawMs = 0;
-
-function redrawSurveySlateNow() {
-  if (!surveySlateOpen || !session || !surveySlateCanvasEl) return;
-  const sctx = surveySlateCanvasEl.getContext('2d');
-  if (sctx) {
-    renderSurveySlate(sctx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, performance.now() / 1000, {
-      followZoom: surveySlateFollowZoom,
-    });
-  }
-}
-
-function syncTacticalMapTabsUi() {
+function syncSonarOverlayUi() {
   const diff = session?.difficulty || activeDifficulty;
   const mut = session?.mutatorId || '';
   const sonarAllowed = isMinimapAllowed(diff, mut);
-  if (hudMinimapWrapEl) {
-    hudMinimapWrapEl.classList.toggle('mode-wetnotes', Boolean(surveySlateOpen));
-  }
   const sonarViewEl = document.getElementById('hud-minimap-sonar-view');
   if (sonarViewEl) {
-    sonarViewEl.hidden = Boolean(surveySlateOpen || !sonarAllowed || !minimapVisible);
+    sonarViewEl.hidden = Boolean(!sonarAllowed || !minimapVisible);
   }
-  if (btnTacmapSonarEl) {
-    btnTacmapSonarEl.classList.toggle('active', !surveySlateOpen && sonarAllowed);
-    btnTacmapSonarEl.classList.toggle('locked', !sonarAllowed);
-    btnTacmapSonarEl.disabled = !sonarAllowed;
-    btnTacmapSonarEl.setAttribute('aria-selected', String(!surveySlateOpen && sonarAllowed));
-    btnTacmapSonarEl.textContent = sonarAllowed ? '📡 SONAR' : '🔒 SONAR';
+  if (hudMinimapWrapEl) {
+    hudMinimapWrapEl.hidden = Boolean(!sonarAllowed || !minimapVisible);
   }
-  if (btnMinimapSlateEl) {
-    btnMinimapSlateEl.classList.toggle('active', Boolean(surveySlateOpen));
-    btnMinimapSlateEl.setAttribute('aria-selected', String(Boolean(surveySlateOpen)));
-  }
-  btnHudSurveySlateEl?.classList.toggle('active', Boolean(surveySlateOpen));
   syncMinimapButtonUi();
 }
 
-function toggleSurveySlate(forceState) {
-  if (mode !== 'diving' && forceState !== false) return false;
-  surveySlateOpen = typeof forceState === 'boolean' ? forceState : !surveySlateOpen;
-  if (surveySlateOpen && shearwaterOpen) {
-    shearwaterOpen = false;
-    if (shearwaterPanelEl) shearwaterPanelEl.hidden = true;
-    btnHudComputerEl?.classList.remove('active');
-  }
-  if (surveySlatePanelEl) surveySlatePanelEl.hidden = !surveySlateOpen;
-  syncTacticalMapTabsUi();
-  if (surveySlateOpen) redrawSurveySlateNow();
-  return true;
-}
-btnHudSurveySlateEl?.addEventListener('click', (e) => {
+btnSonarCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  toggleSurveySlate();
-});
-btnMinimapSlateEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleSurveySlate(true);
-});
-btnTacmapSonarEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const allowed = isMinimapAllowed(session?.difficulty || activeDifficulty, session?.mutatorId || '');
-  if (!allowed) {
-    showToast('🔒 Sonar Minimap disabled in Hardcore / Purist — use Wetnotes!', 2.2);
-    return;
-  }
-  minimapVisible = true;
-  try { localStorage.setItem(MINIMAP_PREF_KEY, '1'); } catch {}
-  toggleSurveySlate(false);
-});
-btnSurveySlateCloseEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (surveySlateOpen) {
-    toggleSurveySlate(false);
-    // If Sonar was hidden or locked, closing Wetnotes hides the whole dock
-    if (!isMinimapAllowed(session?.difficulty || activeDifficulty, session?.mutatorId || '')) return;
-  }
   minimapVisible = false;
   try { localStorage.setItem(MINIMAP_PREF_KEY, '0'); } catch {}
-  syncTacticalMapTabsUi();
-  showToast('🗺️ Tactical Map hidden — press [M] or [N] anytime.', 1.8);
+  syncSonarOverlayUi();
 });
-const flipSurveySlateZoom = (e) => {
+btnSonarOverlayPingEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  surveySlateFollowZoom = !surveySlateFollowZoom;
-  if (btnMinimapZoomEl) btnMinimapZoomEl.textContent = surveySlateFollowZoom ? 'FOLLOW' : 'FULL';
-  redrawSurveySlateNow();
-};
+  handleSonarPing();
+});
 btnMinimapZoomEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (surveySlateOpen) {
-    flipSurveySlateZoom(e);
-  } else {
-    toggleMinimapZoom();
-  }
-});
-surveySlateCanvasEl?.addEventListener('click', flipSurveySlateZoom);
-btnSurveyDropPinEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (!session?.diver) return;
-  if (!Array.isArray(session.surveyPins)) session.surveyPins = [];
-  if (session.surveyPins.length >= 12) session.surveyPins.shift();
-  const seq = (session._surveyPinSeq || 0);
-  session._surveyPinSeq = seq + 1;
-  const tag = SURVEY_PIN_TAGS[seq % SURVEY_PIN_TAGS.length];
-  const depthM = Math.max(0, Math.round(session.diver.y));
-  session.surveyPins.push({
-    id: `pin-${Date.now()}-${seq}`,
-    x: session.diver.x,
-    y: session.diver.y,
-    depthM,
-    tag,
-  });
-  saveSurveyPinsForLevel(session.level?.id, session.surveyPins);
-  audio.playUiClick?.();
-  showToast(`📍 Wetnotes Pin #${session._surveyPinSeq} (${tag} · ${depthM}m) marked!`, 2.4);
-  redrawSurveySlateNow();
-});
-btnSurveyDropCookieEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  document.getElementById('btn-hud-cookie')?.click();
-  redrawSurveySlateNow();
-});
-btnSurveyClearPinsEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (!session) return;
-  session.surveyPins = [];
-  saveSurveyPinsForLevel(session.level?.id, []);
-  audio.playUiClick?.();
-  showToast('📋 Cleared custom Wetnotes pins.', 2.0);
-  redrawSurveySlateNow();
+  toggleMinimapZoom();
 });
 
 const btnWreckAction = document.getElementById('btn-wreck-action');
@@ -1189,7 +1025,7 @@ const wreckActionDetailEl = document.getElementById('wreck-action-detail');
 const wreckActionProgressEl = document.getElementById('wreck-action-progress');
 let lastWreckActionKey = '';
 
-// Live Sonar Cave & Wreck Cartography Minimap state & controls (v109)
+// Live Sonar Cave & Wreck Cartography Overlay state & controls
 const MINIMAP_PREF_KEY = 'caveDiverMinimap_v1';
 const btnMinimap = document.getElementById('btn-minimap');
 const hudMinimapWrapEl = document.getElementById('hud-minimap-wrap');
@@ -1205,33 +1041,22 @@ function syncMinimapButtonUi() {
   const diff = session?.difficulty || activeDifficulty;
   const mut = session?.mutatorId || '';
   const allowed = isMinimapAllowed(diff, mut);
-  btnMinimap.classList.toggle('active', allowed ? minimapVisible : surveySlateOpen);
-  btnMinimap.classList.toggle('disabled-mode', false);
+  btnMinimap.classList.toggle('active', allowed && minimapVisible);
+  btnMinimap.classList.toggle('disabled-mode', !allowed);
   btnMinimap.title = !allowed
-    ? 'Hardcore / Purist: Toggle Waterproof Wetnotes Survey Slate (M / N)'
+    ? 'Sonar Overlay disabled in Hardcore / Purist'
     : minimapVisible
-      ? 'Hide Sonar Minimap (M)'
-      : 'Show Sonar Minimap (M)';
+      ? 'Hide Sonar Overlay (M)'
+      : 'Show Sonar Overlay (M)';
 }
 
 function handleMinimapToggle() {
   if (mode !== 'diving' || !session || divePaused) return false;
   const allowed = isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '');
-  if (!allowed) {
-    toggleSurveySlate();
-    return true;
-  }
-  if (surveySlateOpen) {
-    // Pressing [M] while Wetnotes is open switches cleanly back to Sonar tab
-    minimapVisible = true;
-    try { localStorage.setItem(MINIMAP_PREF_KEY, '1'); } catch {}
-    toggleSurveySlate(false);
-    return true;
-  }
+  if (!allowed) return true;
   minimapVisible = !minimapVisible;
   try { localStorage.setItem(MINIMAP_PREF_KEY, minimapVisible ? '1' : '0'); } catch {}
-  syncTacticalMapTabsUi();
-  showToast(minimapVisible ? '📡 Sonar Minimap: On (tap map for Full Survey)' : '📡 Sonar Minimap: Hidden [M]', 1.8);
+  syncSonarOverlayUi();
   return true;
 }
 
@@ -1239,7 +1064,6 @@ function toggleMinimapZoom() {
   if (mode !== 'diving' || !session || !minimapVisible) return;
   if (!isMinimapAllowed(session.difficulty || activeDifficulty, session.mutatorId || '')) return;
   minimapZoomMode = minimapZoomMode === 'follow' ? 'full' : 'follow';
-  showToast(minimapZoomMode === 'full' ? '🗺️ Sonar Map: Full Site Survey' : '🗺️ Sonar Map: Tactical Follow Zoom', 1.6);
 }
 
 btnMinimap?.addEventListener('click', (e) => {
@@ -1247,41 +1071,15 @@ btnMinimap?.addEventListener('click', (e) => {
   handleMinimapToggle();
 });
 
-// Underwater Strobe Camera & Marine Field Guide controls (v110)
+// Underwater Strobe Camera & Marine Field Guide controls (v110/v186 silent HUD)
 const btnCamera = document.getElementById('btn-camera');
-const hudPhotoCardEl = document.getElementById('hud-photo-card');
-const hudPhotoIconEl = document.getElementById('hud-photo-icon');
-const hudPhotoNameEl = document.getElementById('hud-photo-name');
-const hudPhotoBadgeEl = document.getElementById('hud-photo-badge');
-const hudPhotoSubEl = document.getElementById('hud-photo-sub');
-let hudPhotoCardTimer = 0;
 
 function hideHudPhotoCard() {
-  clearTimeout(hudPhotoCardTimer);
-  hudPhotoCardTimer = 0;
-  if (hudPhotoCardEl) hudPhotoCardEl.hidden = true;
+  // No-op: top-middle photo popup removed in v186 to keep HUD clean
 }
 
-function showHudPhotoCard(res, fgStats) {
-  if (!hudPhotoCardEl || !res?.subject) return;
-  hideArtifactSpotlight();
-  clearTimeout(hudPhotoCardTimer);
-  const starStr = '★'.repeat(Math.max(1, Math.min(3, res.stars || 1)));
-  if (hudPhotoIconEl) hudPhotoIconEl.textContent = res.subject.icon || '📷';
-  if (hudPhotoNameEl) hudPhotoNameEl.textContent = res.subject.name;
-  if (hudPhotoBadgeEl) {
-    hudPhotoBadgeEl.hidden = !res.isNewInGuide && !res.upgradedStars;
-    hudPhotoBadgeEl.textContent = res.isNewInGuide ? 'NEW GUIDE!' : 'UPGRADED!';
-  }
-  const ptsTxt = res.points > 0 ? ` · +${res.points} pts` : '';
-  const guideTxt = fgStats ? ` · Guide ${fgStats.discoveredCount}/${fgStats.totalCount}` : '';
-  if (hudPhotoSubEl) hudPhotoSubEl.textContent = `${starStr}${ptsTxt}${guideTxt}`;
-  hudPhotoCardEl.classList.toggle('is-new', Boolean(res.isNewInGuide));
-  hudPhotoCardEl.hidden = false;
-  hudPhotoCardTimer = setTimeout(() => {
-    hudPhotoCardTimer = 0;
-    if (hudPhotoCardEl) hudPhotoCardEl.hidden = true;
-  }, 3200);
+function showHudPhotoCard() {
+  // No-op: camera snaps still record into Field Guide with strobe flash & sound
 }
 
 function handleCameraSnap() {
@@ -1556,15 +1354,14 @@ canvas?.addEventListener('wheel', (e) => {
   syncPhotoStudioUi();
 }, { passive: false });
 hudMinimapWrapEl?.addEventListener('click', (e) => {
-  if (e.target?.closest?.('button') || surveySlateOpen) return;
+  if (e.target?.closest?.('button')) return;
   e.stopPropagation();
   toggleMinimapZoom();
 });
 hudMinimapWrapEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.target?.closest?.('button')) {
     e.preventDefault();
-    if (surveySlateOpen) flipSurveySlateZoom(e);
-    else toggleMinimapZoom();
+    toggleMinimapZoom();
   }
 });
 
@@ -1574,10 +1371,6 @@ const gearDockGridEl = document.getElementById('gear-dock-grid');
 const gearDockSubEl = document.getElementById('gear-dock-sub');
 const hudGearDockEl = document.getElementById('hud-gear-dock');
 const hudDrillPill = document.getElementById('hud-drill-pill');
-const btnHudStage = document.getElementById('btn-hud-stage');
-const btnHudLiftBag = document.getElementById('btn-hud-liftbag');
-const btnHudCookie = document.getElementById('btn-hud-cookie');
-const btnHudSmb = document.getElementById('btn-hud-smb');
 const btnHudSpear = document.getElementById('btn-hud-spear');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
@@ -1946,7 +1739,6 @@ function syncCombatModeHud(sess) {
     if (active) {
       if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
       toggleShearwaterComputer(false);
-      toggleSurveySlate(false);
       toggleSignalWheel(false);
     }
   }
@@ -2115,26 +1907,6 @@ btnKitTorch?.addEventListener('click', (e) => {
   lastGearHudKey = '';
   syncTechGearHud(session);
 });
-btnHudStage?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  handleStageDrop();
-});
-btnHudLiftBag?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  handleLiftBagToggle();
-});
-btnHudCookie?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  handleDropLineCookie();
-});
-btnHudSmb?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-  handleDeploySmb();
-});
 
 function handleDeploySmb() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
@@ -2143,10 +1915,6 @@ function handleDeploySmb() {
     onSmbDeploy: () => audio.playSmbDeploy?.(),
     onToast: (txt, sec) => showToast(txt, sec),
   });
-  if (btnHudSmb && res?.ok) {
-    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 SMB Flying</span><span class="kbd-hint kit-kbd">✓</span>`;
-    btnHudSmb.disabled = true;
-  }
   return Boolean(res?.ok);
 }
 
@@ -2157,11 +1925,6 @@ function handleDropLineCookie() {
     onLineCookiePlaced: () => audio.playCookieClip?.(),
     onToast: (txt, sec) => showToast(txt, sec),
   });
-  if (btnHudCookie && session) {
-    const left = Math.max(0, (session.maxLineCookies || 6) - (session.lineCookies?.length || 0));
-    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${left})</span><span class="kbd-hint kit-kbd">K</span>`;
-    btnHudCookie.disabled = left <= 0;
-  }
   return Boolean(res?.ok);
 }
 
@@ -2252,22 +2015,6 @@ function syncTechGearHud(sess) {
       }
     }
   }
-  if (btnHudStage) {
-    btnHudStage.hidden = false;
-    btnHudStage.innerHTML = staged
-      ? '<span class="kit-item-label">🛢 Stage Staged (+6%)</span><span class="kbd-hint kit-kbd">✓</span>'
-      : '<span class="kit-item-label">🛢 Stage Bailout</span><span class="kbd-hint kit-kbd">T</span>';
-    btnHudStage.className = `kit-item stage ${staged ? 'staged' : canStage ? '' : 'low'}`;
-  }
-  if (btnHudLiftBag) {
-    btnHudLiftBag.hidden = false;
-    btnHudLiftBag.innerHTML = lbActive
-      ? '<span class="kit-item-label">🎈 Vent Lift Bag</span><span class="kbd-hint kit-kbd">Y</span>'
-      : payloadKg >= 6
-        ? `<span class="kit-item-label">🎈 Lift Bag (-${payloadKg}kg)</span><span class="kbd-hint kit-kbd">Y</span>`
-        : '<span class="kit-item-label">🎈 Lift Bag</span><span class="kbd-hint kit-kbd">Y</span>';
-    btnHudLiftBag.className = `kit-item liftbag${lbActive ? ' active' : ''}`;
-  }
   if (hudTrimPill) {
     if (trimLabel) {
       hudTrimPill.hidden = false;
@@ -2299,34 +2046,38 @@ function syncTechGearHud(sess) {
     btnHudSonar.hidden = false;
     btnHudSonar.innerHTML = cdSec > 0
       ? `📡 ${cdSec}s`
-      : hasSonar
-        ? '📡 SONAR <span class="kbd-hint">[Q]</span>'
-        : '📡 PING <span class="kbd-hint">[Q]</span>';
+      : '📡 SONAR <span class="kbd-hint">[Q]</span>';
     btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
+  }
+  if (hudSonarRangeEl) {
+    hudSonarRangeEl.textContent = hasSonar ? '28M' : '16M';
+  }
+  if (btnSonarOverlayPingEl) {
+    btnSonarOverlayPingEl.textContent = cdSec > 0 ? `${cdSec}s` : 'PING';
+    btnSonarOverlayPingEl.classList.toggle('cooling', cdSec > 0);
   }
   if (btnKitSonar) {
     btnKitSonar.hidden = false;
-    const lbl = hasSonar ? 'Sonar' : 'Ping';
-    btnKitSonar.innerHTML = `<span class="kit-item-label">${cdSec > 0 ? `📡 ${lbl} (${cdSec}s)` : `📡 ${lbl}`}</span>`;
-    btnKitSonar.className = `kit-item sonar mobile-only-kit${cdSec > 0 ? ' low' : ''}`;
+    btnKitSonar.innerHTML = `<span class="kit-item-label">${cdSec > 0 ? `📡 Sonar (${cdSec}s)` : '📡 Sonar'}</span><span class="kbd-hint kit-kbd">Q</span>`;
+    btnKitSonar.className = `kit-item sonar${cdSec > 0 ? ' low' : ''}`;
   }
   if (btnHudDpv) {
     btnHudDpv.hidden = !hasDpv;
     if (hasDpv) {
-      btnHudDpv.textContent = dpvPct <= 0 ? '🔋 DPV 0%' : dpvOn ? `🛴 DPV ON · ${dpvPct}%` : `🛴 DPV ${dpvPct}%`;
+      btnHudDpv.textContent = dpvPct <= 0 ? '🔋 SCOOTER 0%' : dpvOn ? `🛴 SCOOTER ON · ${dpvPct}%` : `🛴 SCOOTER ${dpvPct}%`;
       btnHudDpv.className = `gear-hud-btn dpv ${dpvPct <= 0 ? 'empty' : dpvOn ? 'active' : ''}`;
     }
   }
   if (btnKitDpv) {
     btnKitDpv.hidden = !hasDpv;
     if (hasDpv) {
-      btnKitDpv.innerHTML = `<span class="kit-item-label">${dpvPct <= 0 ? '🔋 DPV 0%' : dpvOn ? `🛴 DPV ON ${dpvPct}%` : `🛴 DPV ${dpvPct}%`}</span>`;
-      btnKitDpv.className = `kit-item dpv mobile-only-kit${dpvPct <= 0 ? ' low' : dpvOn ? ' active' : ''}`;
+      btnKitDpv.innerHTML = `<span class="kit-item-label">${dpvPct <= 0 ? '🔋 Scooter 0%' : dpvOn ? `🛴 Scooter ON · ${dpvPct}%` : `🛴 Scooter ${dpvPct}%`}</span><span class="kbd-hint kit-kbd">V</span>`;
+      btnKitDpv.className = `kit-item dpv${dpvPct <= 0 ? ' low' : dpvOn ? ' active' : ''}`;
     }
   }
   if (btnKitTorch) {
-    btnKitTorch.innerHTML = `<span class="kit-item-label">${torchOn ? '🔦 Torch: On' : '🔦 Torch: Off'}</span>`;
-    btnKitTorch.className = `kit-item torch mobile-only-kit${torchOn ? ' active' : ''}`;
+    btnKitTorch.innerHTML = `<span class="kit-item-label">${torchOn ? '🔦 Torch: On' : '🔦 Torch: Off'}</span><span class="kbd-hint kit-kbd">L</span>`;
+    btnKitTorch.className = `kit-item torch${torchOn ? ' active' : ''}`;
   }
   if (hudCcrPill) {
     hudCcrPill.hidden = !hasCcr;
@@ -3258,7 +3009,6 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   input?.resetAll?.();
   closeLogbookModal();
   toggleShearwaterComputer(false);
-  toggleSurveySlate(false);
   toggleSignalWheel(false);
   setPhotoModeActive(false);
   closeDiveGuideModal(false);
@@ -3314,8 +3064,6 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     livery: liveryWorkshop.getActiveRigLivery(),
     crewRoleId: activeCrewRoleId,
   });
-  session.surveyPins = loadSavedSurveyPins(activeLevel.id);
-  session._surveyPinSeq = session.surveyPins.length;
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
     ? `${session.dailyDateKey ? '📅' : '🎛️'} ${runMutMeta.icon} ${runMutMeta.shortName}`
@@ -3327,16 +3075,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       : null;
   lastGearHudKey = '';
   syncTechGearHud(session);
-  if (btnHudCookie) {
-    const maxCk = session.maxLineCookies || 6;
-    btnHudCookie.innerHTML = `<span class="kit-item-label">🟠 Cookie (${maxCk})</span><span class="kbd-hint kit-kbd">K</span>`;
-    btnHudCookie.disabled = false;
-  }
-  if (btnHudSmb) {
-    btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 Shoot SMB</span><span class="kbd-hint kit-kbd">U</span>`;
-    btnHudSmb.disabled = false;
-  }
-  syncTacticalMapTabsUi();
+  syncSonarOverlayUi();
   refreshActiveGhostTrack(activeLevel);
   session._pbSplits = activeGhostTrack ? computeGhostCheckpointSplits(activeLevel, activeGhostTrack) : {};
   session._pbSplitsLabel = activeGhostIsPar ? 'Par' : 'PB';
@@ -3435,35 +3174,12 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     syncRoomInviteUi(null);
   }
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
-  const bottomMixName = getActiveGasName('TMX1455');
-  const openMsg = isDrillLaunch
-    ? activeRescueDrill.briefing
-    : runMutMeta
-      ? `${session.dailyDateKey ? '📅 DAILY' : '🎛️ SANDBOX'} · ${runMutMeta.icon} ${runMutMeta.name}: ${runMutMeta.shortDesc}`
-    : activeLevel.isWreck
-      ? activeLevel.reelMetersPerDiver > 0
-        ? `🚢 Descend the shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m & anchor your ${activeLevel.reelMetersPerDiver}m wreck reel [G].`
-        : `🚢 Descend the boat shot line! Switch to ${bottomMixName} [2] at ${Math.round(activeLevel.ascentSwitchDepthM || 22)}m before entering the hull.`
-      : activeLevel.reelMetersPerDiver > 0
-        ? `Unlined cave: [G] deploy ${activeLevel.reelMetersPerDiver}m reel. STOP at 22m & switch to ${bottomMixName} [2]!`
-        : `Start on ${getActiveGasName('EAN32')}. STOP at 22m & switch to ${bottomMixName} [2] before descending deeper!`;
-  const aiSquadTag =
-    session.aiSquad.length > 0
-      ? (() => {
-          const lead = session.aiSquad[0];
-          const bRec = loadCareerLogbook()?.crewBonds?.[lead.id];
-          const bondStr = bRec && bRec.dives > 0 ? ` · ${lead.callsign || lead.name} (${bRec.dives} dives)` : ` · ${session.aiSquad.map((b) => b.callsign || b.name).join(', ')}`;
-          return ` · AI: ${getAiDifficultyProfile(session.difficulty).badge}${bondStr}`;
-        })()
-      : '';
-  let campaignTag = '';
+  toastTimer = 0;
+  toastQueue.length = 0;
+  gameToastEl?.classList.remove('visible');
   if (activeCampaignRun && activeCampaignRun.residualTissues && activeCampaignRun.legIndex > 0) {
     applyResidualTissuesToDiveState(session.diveState, activeCampaignRun.residualTissues);
-    const camp = getExpeditionCampaignById(activeCampaignRun.campaignId);
-    const loadPct = activeCampaignRun.residualTissues.residualLoadPct ?? computeResidualTissueLoadPct(session.diveState.compartments);
-    campaignTag = ` · ${camp?.icon || '🗺️'} Leg ${activeCampaignRun.legIndex + 1}/3 (Residual N₂ ${loadPct}%)`;
   }
-  showToast(`${openMsg}${aiSquadTag}${campaignTag}`, 4.8);
 }
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {
@@ -3664,7 +3380,6 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     // ignore storage restriction
   }
   toggleShearwaterComputer(false);
-  toggleSurveySlate(false);
   toggleSignalWheel(false);
   // Append final profile point and render the Dive Computer Depth Profile Graph + Earned Certifications
   if (session?.diveProfile) {
@@ -5912,7 +5627,6 @@ function abortActiveDiveToMenu() {
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
   toggleShearwaterComputer(false);
-  toggleSurveySlate(false);
   toggleSignalWheel(false);
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
@@ -6640,56 +6354,12 @@ const EMPTY_ARR = [];
 const menuPreviewDiver = { x: 0, y: 0, vx: 0, vy: 0, angle: 0.2, torchOn: true };
 const _framePlayerLines = [];
 const _frameHandledPeerIds = new Set();
-const hudArtifactSpotlightEl = document.getElementById('hud-artifact-spotlight');
-const hudArtifactCanvasEl = document.getElementById('hud-artifact-canvas');
-const hudArtifactTagEl = document.getElementById('hud-artifact-tag');
-const hudArtifactPtsEl = document.getElementById('hud-artifact-pts');
-const hudArtifactNameEl = document.getElementById('hud-artifact-name');
-const hudArtifactLoreEl = document.getElementById('hud-artifact-lore');
-let _artifactSpotlightTimer = 0;
-
 function hideArtifactSpotlight() {
-  if (_artifactSpotlightTimer) {
-    clearTimeout(_artifactSpotlightTimer);
-    _artifactSpotlightTimer = 0;
-  }
-  if (hudArtifactSpotlightEl) {
-    hudArtifactSpotlightEl.hidden = true;
-  }
+  // No-op: top-middle artifact spotlight removed in v186 to keep HUD clean
 }
 
-function showArtifactSpotlight(item, lore = '', isNew = false) {
-  if (!hudArtifactSpotlightEl || !item) return;
-  hideHudPhotoCard();
-  if (_artifactSpotlightTimer) {
-    clearTimeout(_artifactSpotlightTimer);
-    _artifactSpotlightTimer = 0;
-  }
-  if (hudArtifactTagEl) {
-    hudArtifactTagEl.textContent = isNew ? '✨ NEW VAULT RELIC' : '🏛️ RELIC RECOVERED';
-  }
-  if (hudArtifactPtsEl) {
-    hudArtifactPtsEl.textContent = `+${Math.round(Number(item.points) || 0)} PTS`;
-  }
-  if (hudArtifactNameEl) {
-    hudArtifactNameEl.textContent = item.name || 'Recovered Artifact';
-  }
-  if (hudArtifactLoreEl) {
-    hudArtifactLoreEl.textContent = lore || 'Added to your Career Artifact Trophy Vault.';
-  }
-  const ctx = hudArtifactCanvasEl?.getContext?.('2d');
-  if (ctx && hudArtifactCanvasEl) {
-    ctx.clearRect(0, 0, hudArtifactCanvasEl.width, hudArtifactCanvasEl.height);
-    drawStyledArtifact(ctx, item, hudArtifactCanvasEl.width * 0.5, hudArtifactCanvasEl.height * 0.5, hudArtifactCanvasEl.width * 0.35, 2.2, {
-      index: 0,
-      isGrand: (item.scale || 1) >= 1.35,
-    });
-  }
-  hudArtifactSpotlightEl.hidden = false;
-  _artifactSpotlightTimer = setTimeout(() => {
-    hudArtifactSpotlightEl.hidden = true;
-    _artifactSpotlightTimer = 0;
-  }, 4200);
+function showArtifactSpotlight() {
+  // No-op: artifacts still record to Career Vault & play chime + world sparkle without noisy HUD card
 }
 
 const sessionStepCallbacks = {
@@ -6773,10 +6443,6 @@ const sessionStepCallbacks = {
   onPowerRelay: () => audio.playBreakerSwitch?.(),
   onSmbDeploy: () => {
     audio.playSmbDeploy?.();
-    if (btnHudSmb) {
-      btnHudSmb.innerHTML = `<span class="kit-item-label">🎈 SMB Flying</span><span class="kbd-hint kit-kbd">✓</span>`;
-      btnHudSmb.disabled = true;
-    }
   },
   onBuddyPing: () => audio.playEncounterChime('buddy-ping'),
   onMaskPurge: () => {
@@ -7266,19 +6932,6 @@ function stepSimulation(dt) {
       }
     }
   }
-  if (surveySlateOpen && surveySlateCanvasEl) {
-    const slateNowMs = performance.now();
-    if (slateNowMs - lastSurveySlateDrawMs >= 140) {
-      lastSurveySlateDrawMs = slateNowMs;
-      const slCtx = surveySlateCanvasEl.getContext('2d');
-      if (slCtx) {
-        renderSurveySlate(slCtx, surveySlateCanvasEl.width, surveySlateCanvasEl.height, session, slateNowMs / 1000, {
-          followZoom: surveySlateFollowZoom,
-        });
-      }
-    }
-  }
-
   hud.update({
     diveState,
     diver,
@@ -7303,8 +6956,6 @@ function stepSimulation(dt) {
     dailyMutatorLabel: session._dailyBadgeLabel || '',
     minimapVisible,
     minimapZoomMode,
-    surveySlateOpen,
-    surveySlateFollowZoom,
     exploreCells: session.exploreCells,
     exploredCells: session.exploredCells,
     exploredGrid: session.exploredGrid,
@@ -7318,7 +6969,6 @@ function stepSimulation(dt) {
     hazards: session.hazards || null,
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
-    surveyPins: session.surveyPins || null,
     secretLair: session.secretLair || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
@@ -7706,10 +7356,6 @@ function setupPwaSupport() {
       btnPwaUpdate.textContent = detectedRemoteVer ? `⬆ v${detectedRemoteVer}` : '⬆ Update';
       btnPwaUpdate.classList.add('has-update');
       btnPwaUpdate.title = `Update Techno Dive to ${verLabel}`;
-    }
-    if (mode === 'diving' && !announcedDiveToast) {
-      announcedDiveToast = true;
-      showToast(`⬆ Update (${verLabel}) ready — open Menu after surfacing to apply.`, 3.8);
     }
   };
 

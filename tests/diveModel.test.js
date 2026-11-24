@@ -3583,7 +3583,7 @@ test('v110 Underwater Strobe Camera & Marine Field Guide: catalog, subject captu
   const fs = await import('node:fs');
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="btn-camera"'), 'Missing HUD camera button');
-  assert.ok(html.includes('id="hud-photo-card"'), 'Missing HUD photo discovery card');
+  assert.ok(html.includes('id="btn-kit-camera"'), 'Missing Dive Kit camera button');
   assert.ok(html.includes('id="logbook-field-guide-grid"'), 'Missing Logbook Field Guide gallery');
 });
 
@@ -6381,7 +6381,6 @@ test('v147 Heavy Salvage, Lift-Bag Buoyancy Physics & Pressurized Bulkhead Valve
 
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="hud-trim-pill"'), 'Passive Salvage Trim pill must exist in HUD');
-  assert.ok(html.includes('id="btn-hud-liftbag"'), 'Lift Bag button must exist in Dive Kit popover');
   assert.ok(html.includes('salvagePhysics.js'), 'index.html importmap must register salvagePhysics.js');
 });
 
@@ -8526,13 +8525,12 @@ test('v173 Unified Docked Tactical Map, Lazy Level Enrichment, Compressed Icons 
   const html = fs.readFileSync(path.join(pubDir, 'index.html'), 'utf8');
   const mainSrc = fs.readFileSync(path.join(pubDir, 'js/main.js'), 'utf8');
 
-  // 1. Unified Docked Tactical Map sits outside .hud-top-stack and embeds both Sonar & Wetnotes tabs
-  const topStackMatch = html.match(/<div class="hud-top-stack">([\s\S]*?)<\/div>\s*\n\s*<!-- Unified Docked Tactical Map/);
-  assert.ok(topStackMatch, 'Expected Unified Docked Tactical Map comment directly after .hud-top-stack');
+  // 1. High-Tech Tactical Sonar Overlay sits outside .hud-top-stack (v186: Wetnotes removed)
+  const topStackMatch = html.match(/<div class="hud-top-stack">([\s\S]*?)<\/div>\s*\n\s*<!-- High-Tech Tactical Sonar Overlay/);
+  assert.ok(topStackMatch, 'Expected High-Tech Tactical Sonar Overlay comment directly after .hud-top-stack');
   assert.equal(topStackMatch[1].includes('id="hud-minimap-wrap"'), false, '#hud-minimap-wrap must live outside .hud-top-stack so alerts never shift it');
-  assert.ok(html.includes('id="btn-tacmap-sonar"'), 'Missing Sonar tab button in Unified Tactical Map');
-  assert.ok(html.includes('id="btn-minimap-slate"'), 'Missing Wetnotes tab button in Unified Tactical Map');
-  assert.ok(html.includes('id="hud-minimap-sonar-view"'), 'Missing Sonar view wrapper inside Unified Tactical Map');
+  assert.ok(html.includes('id="btn-sonar-overlay-ping"'), 'Missing active PING button in High-Tech Sonar Overlay');
+  assert.ok(html.includes('id="hud-minimap-sonar-view"'), 'Missing Sonar view wrapper inside High-Tech Sonar Overlay');
 
   // 2. Lazy cave interactive enrichment helper works cleanly and idempotently
   const cave = LEVELS.find((l) => !l.isWreck);
@@ -9136,4 +9134,66 @@ test('v184 Speargun Mode Exclusivity, Immediate Loss on Boss Kill & Cute Anime B
     cssSrc.includes('#screen-hud.combat-mode .hud-minimap-wrap'),
     'Combat mode must hide the docked tactical minimap (#hud-minimap-wrap)'
   );
+});
+
+test('v186 Streamlined 5-Tool Dive Kit, Quiet Top-Middle HUD, Wetnotes Removal & High-Tech Sonar Overlay', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Dive Kit popover contains ONLY Scooter, Sonar, Camera, Signals, and Torch
+  const kitMatch = html.match(/<div id="hud-kit-popover"[\s\S]*?<div class="gear-bar-row">/);
+  assert.ok(kitMatch, 'Expected #hud-kit-popover in index.html');
+  const kitIds = [...kitMatch[0].matchAll(/<button[^>]+id="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(
+    kitIds,
+    ['btn-kit-dpv', 'btn-kit-sonar', 'btn-kit-camera', 'btn-hud-signals', 'btn-kit-torch'],
+    'Dive Kit must contain strictly Scooter, Sonar, Camera, Signals, and Torch'
+  );
+
+  // 2. Wetnotes completely removed from HUD
+  assert.equal(html.includes('survey-slate-panel'), false, 'Wetnotes panel must be removed from index.html');
+  assert.equal(html.includes('btn-minimap-slate'), false, 'Wetnotes tab must be removed from index.html');
+  assert.equal(/Wetnotes/i.test(html), false, 'Wetnotes labels must be removed from index.html');
+
+  // 3. Noisy top-middle artifact/photo cards removed & diving toasts silenced unless critical
+  assert.equal(html.includes('id="hud-artifact-spotlight"'), false, 'Top-middle artifact spotlight card must be removed');
+  assert.equal(html.includes('id="hud-photo-card"'), false, 'Top-middle photo card must be removed');
+  assert.match(mainSrc, /if\s*\(mode\s*===\s*'diving'\s*&&\s*!critical\)\s*return;/, 'showToast must suppress routine update alerts while diving');
+
+  // 4. High-tech Sonar Overlay positioned top-right directly beneath .hud-top-bar with live PING button, range tag & renders cleanly
+  assert.ok(html.includes('class="hud-subtop-row"'), 'Sonar Overlay must sit inside .hud-subtop-row beneath .hud-top-bar');
+  assert.match(css, /\.hud-minimap-wrap\s*\{[^}]*margin-left:\s*auto;/s, 'Sonar Overlay must be right-aligned cleanly');
+  assert.ok(html.includes('id="btn-sonar-overlay-ping"'), 'Sonar Overlay must include quick PING button');
+  assert.ok(html.includes('id="hud-sonar-range"'), 'Sonar Overlay must include range readout');
+  const s = createDiveSession(LEVEL_1, { diverName: 'SonarTester', gear: { sonar: true, dpv: true } });
+  triggerSonarPing(s);
+  const calls = [];
+  const fakeCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+    },
+    {
+      get(t, p) {
+        if (p in t) return t[p];
+        return (...args) => calls.push(String(p));
+      },
+    }
+  );
+  drawSonarMinimap(fakeCtx, 384, 216, {
+    level: LEVEL_1,
+    diver: s.diver,
+    exploreCells: s.exploreCells,
+    exploredCells: s.exploredCells,
+    exploredGrid: s.exploredGrid,
+    checkpointsHit: s.checkpointsHit,
+    nextCheckpoint: LEVEL_1.checkpoints[0],
+    sonarPulse: s.sonar.activePulse,
+    difficulty: 'standard',
+    zoomMode: 'follow',
+    timeSec: 2.5,
+  });
+  assert.ok(calls.includes('arc') && calls.includes('fillText'), 'High-tech Sonar Overlay must draw polar rings, sweep & telemetry cleanly');
 });

@@ -3893,21 +3893,34 @@ export class CaveRenderer {
     const cy = toScreenY(pulse.y);
 
     ctx.save();
-    // Expanding translucent hydrophone wavefront + trailing echo ring
+    // Expanding translucent high-tech hydrophone wavefront + radial acoustic wash + trailing echo ring
     if (sweepProgress < 1) {
-      const waveAlpha = (1 - sweepProgress) * 0.72;
-      ctx.strokeStyle = `rgba(56, 189, 248, ${waveAlpha.toFixed(3)})`;
-      ctx.lineWidth = Math.max(2, 0.14 * scale);
+      const waveAlpha = (1 - sweepProgress) * 0.78;
+      const radPx = Math.max(2, waveRadiusM * scale);
+      const innerPx = Math.max(0, radPx * 0.78);
+      const wash = ctx.createRadialGradient(cx, cy, innerPx, cx, cy, radPx);
+      wash.addColorStop(0, 'rgba(34, 211, 238, 0)');
+      wash.addColorStop(0.82, `rgba(34, 211, 238, ${(waveAlpha * 0.14).toFixed(3)})`);
+      wash.addColorStop(1, `rgba(103, 232, 249, ${(waveAlpha * 0.28).toFixed(3)})`);
+      ctx.fillStyle = wash;
       ctx.beginPath();
-      ctx.arc(cx, cy, waveRadiusM * scale, 0, Math.PI * 2);
+      ctx.arc(cx, cy, radPx, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(103, 232, 249, ${waveAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(2.2, 0.14 * scale);
+      ctx.beginPath();
+      ctx.arc(cx, cy, radPx, 0, Math.PI * 2);
       ctx.stroke();
 
       if (waveRadiusM > 2.2) {
-        ctx.strokeStyle = `rgba(103, 232, 249, ${(waveAlpha * 0.42).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.strokeStyle = `rgba(45, 212, 191, ${(waveAlpha * 0.48).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.2, 0.065 * scale);
+        ctx.setLineDash([Math.max(6, scale * 0.35), Math.max(4, scale * 0.22)]);
         ctx.beginPath();
         ctx.arc(cx, cy, (waveRadiusM - 1.8) * scale, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
 
@@ -4017,26 +4030,28 @@ export class CaveRenderer {
         continue;
       }
 
-      const col = c.kind === 'recovery' ? '251, 191, 36' : c.kind === 'hatch' ? '249, 115, 22' : c.kind === 'stage' ? '74, 222, 128' : '56, 189, 248';
-      const r = (0.65 + Math.sin(timeSec * 9 + i) * 0.12) * scale;
-      ctx.strokeStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
+      const col = c.kind === 'recovery' ? '251, 191, 36' : c.kind === 'hatch' ? '249, 115, 22' : c.kind === 'stage' ? '74, 222, 128' : c.kind === 'collectible' ? '253, 224, 71' : '56, 189, 248';
+      const r = (0.72 + Math.sin(timeSec * 9 + i) * 0.1) * scale;
+      const bk = r * 1.18;
+      const arm = Math.max(4, bk * 0.36);
+      // High-tech tactical corner target-lock brackets
+      ctx.strokeStyle = `rgba(${col}, ${(a * 0.92).toFixed(3)})`;
       ctx.lineWidth = Math.max(1.8, 0.08 * scale);
       ctx.beginPath();
-      ctx.moveTo(px, py - r);
-      ctx.lineTo(px + r, py);
-      ctx.lineTo(px, py + r);
-      ctx.lineTo(px - r, py);
-      ctx.closePath();
+      ctx.moveTo(px - bk, py - bk + arm); ctx.lineTo(px - bk, py - bk); ctx.lineTo(px - bk + arm, py - bk);
+      ctx.moveTo(px + bk - arm, py - bk); ctx.lineTo(px + bk, py - bk); ctx.lineTo(px + bk, py - bk + arm);
+      ctx.moveTo(px - bk, py + bk - arm); ctx.lineTo(px - bk, py + bk); ctx.lineTo(px - bk + arm, py + bk);
+      ctx.moveTo(px + bk - arm, py + bk); ctx.lineTo(px + bk, py + bk); ctx.lineTo(px + bk, py + bk - arm);
       ctx.stroke();
-      ctx.font = `700 ${Math.max(10, Math.round(scale * 0.46))}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.font = `700 ${Math.max(10, Math.round(scale * 0.44))}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = `rgba(248, 250, 252, ${a.toFixed(3)})`;
       ctx.fillText(c.icon || '◆', px, py);
-      if (c.kind === 'collectible' || c.kind === 'recovery') {
+      if (c.kind === 'collectible' || c.kind === 'recovery' || c.kind === 'stage') {
         ctx.font = `800 ${Math.max(8, Math.round(scale * 0.28))}px ui-monospace, monospace`;
         ctx.fillStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
-        ctx.fillText(`${Math.round(c.dist)}m`, px, py + r + Math.max(6, scale * 0.22));
+        ctx.fillText(`${Math.round(c.dist)}m`, px, py + bk + Math.max(6, scale * 0.22));
       }
     }
     ctx.restore();

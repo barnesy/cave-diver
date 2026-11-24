@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="185" />
+  <meta name="app-version" content="186" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=185" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=185" />
-  <link rel="stylesheet" href="./css/style.css?v=185" />
+  <link rel="icon" href="./icons/icon-192.png?v=186" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=186" />
+  <link rel="stylesheet" href="./css/style.css?v=186" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=185" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=186" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=185" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=186" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -167,7 +167,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v185</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v186</button>
               </div>
             </div>
           </div>
@@ -400,78 +400,55 @@
           <button id="btn-abort" class="util-btn danger" type="button" title="Abort Dive">✕</button>
         </div>
       </header>
-      <div class="hud-self-row">
-        <span id="dc-self-name" class="self-tag" title="Your Callsign">YOU</span>
-        <span id="dc-mode-badge" class="mode-badge hud-mode-badge mode-standard" title="Active Dive Realism Mode">🤿 TECH</span>
-        <span id="dc-daily-badge" class="daily-hud-badge" hidden title="Active Daily Expedition Mutator"></span>
-        <span id="hud-ccr-pill" class="gear-hud-pill ccr status-strip-pill" hidden title="Closed-Circuit Rebreather CO₂ Scrubber">🫁 CCR 100%</span>
-        <span id="hud-trim-pill" class="gear-hud-pill trim status-strip-pill" hidden title="Salvage Payload Trim &amp; Lift-Bag Buoyancy">⚓ -12kg HEAVY</span>
-        <span id="hud-drill-pill" class="gear-hud-pill drill status-strip-pill" hidden title="Emergency Failure Drills Active">⚡ DRILLS</span>
-      </div>
-      <div id="coop-wait-banner" class="coop-wait-banner" hidden role="status" aria-live="polite">
-        <div class="coop-wait-info">
-          <strong id="coop-wait-title">SURFACED SAFE</strong>
-          <span id="coop-wait-detail">Waiting for buddy to clear cave...</span>
-        </div>
-        <div class="coop-wait-actions">
-          <button id="btn-coop-spectate" class="btn tiny secondary" type="button">Watch Buddy</button>
-          <button id="btn-coop-finish-now" class="btn tiny primary" type="button">Finish Now</button>
-        </div>
-      </div>
-      <button id="hud-gas-callout" class="hud-gas-callout" type="button" hidden aria-live="assertive">
-        <div class="gas-callout-copy">
-          <strong id="hud-gas-callout-title">STOP · SWITCH TO TMX 14/55</strong>
-          <span id="hud-gas-callout-detail">Pause at 22m &amp; switch before descending deeper</span>
-        </div>
-        <span id="hud-gas-callout-cta" class="gas-callout-cta">SWITCH [2]</span>
-      </button>
-      <div id="hud-artifact-spotlight" class="hud-artifact-spotlight" hidden aria-live="polite">
-        <canvas id="hud-artifact-canvas" width="96" height="96" aria-hidden="true"></canvas>
-        <div class="hud-artifact-copy">
-          <div class="hud-artifact-kicker">
-            <span id="hud-artifact-tag">RELIC RECOVERED</span>
-            <span id="hud-artifact-pts" class="hud-artifact-pts">+300</span>
+      <div class="hud-subtop-row">
+        <div class="hud-subtop-left">
+          <div class="hud-self-row">
+            <span id="dc-self-name" class="self-tag" title="Your Callsign">YOU</span>
+            <span id="dc-mode-badge" class="mode-badge hud-mode-badge mode-standard" title="Active Dive Realism Mode">🤿 TECH</span>
+            <span id="dc-daily-badge" class="daily-hud-badge" hidden title="Active Daily Expedition Mutator"></span>
+            <span id="hud-ccr-pill" class="gear-hud-pill ccr status-strip-pill" hidden title="Closed-Circuit Rebreather CO₂ Scrubber">🫁 CCR 100%</span>
+            <span id="hud-trim-pill" class="gear-hud-pill trim status-strip-pill" hidden title="Salvage Payload Trim &amp; Lift-Bag Buoyancy">⚓ -12kg HEAVY</span>
+            <span id="hud-drill-pill" class="gear-hud-pill drill status-strip-pill" hidden title="Emergency Failure Drills Active">⚡ DRILLS</span>
           </div>
-          <strong id="hud-artifact-name" class="hud-artifact-name">Maya Jade Pendant</strong>
-          <span id="hud-artifact-lore" class="hud-artifact-lore">Ancient offering preserved in oxygen-poor cenote water.</span>
-        </div>
-      </div>
-      <div id="hud-photo-card" class="hud-photo-card" hidden aria-live="polite">
-        <span id="hud-photo-icon" class="hud-photo-icon" aria-hidden="true">🦈</span>
-        <div class="hud-photo-copy">
-          <div class="hud-photo-top">
-            <strong id="hud-photo-name">Pelagic Reef Shark</strong>
-            <span id="hud-photo-badge" class="hud-photo-badge">NEW!</span>
+          <div id="coop-wait-banner" class="coop-wait-banner" hidden role="status" aria-live="polite">
+            <div class="coop-wait-info">
+              <strong id="coop-wait-title">SURFACED SAFE</strong>
+              <span id="coop-wait-detail">Waiting for buddy to clear cave...</span>
+            </div>
+            <div class="coop-wait-actions">
+              <button id="btn-coop-spectate" class="btn tiny secondary" type="button">Watch Buddy</button>
+              <button id="btn-coop-finish-now" class="btn tiny primary" type="button">Finish Now</button>
+            </div>
           </div>
-          <span id="hud-photo-sub" class="hud-photo-sub">★★★ · +130 pts · Field Guide</span>
+          <button id="hud-gas-callout" class="hud-gas-callout" type="button" hidden aria-live="assertive">
+            <div class="gas-callout-copy">
+              <strong id="hud-gas-callout-title">STOP · SWITCH TO TMX 14/55</strong>
+              <span id="hud-gas-callout-detail">Pause at 22m &amp; switch before descending deeper</span>
+            </div>
+            <span id="hud-gas-callout-cta" class="gas-callout-cta">SWITCH [2]</span>
+          </button>
         </div>
-      </div>
-    </div>
 
-    <!-- Unified Docked Tactical Map (Sonar Minimap | Wetnotes Survey Slate — anchored top-left outside .hud-top-stack) -->
-    <div id="hud-minimap-wrap" class="hud-minimap-wrap" role="region" tabindex="0" title="Tap map to toggle Follow Zoom / Full Site Survey · Press [M] to hide · [N] for Wetnotes" aria-label="Unified Tactical Map: Sonar and Wetnotes">
-      <div class="hud-minimap-head">
-        <div class="tacmap-tabs" role="tablist" aria-label="Tactical Map Mode">
-          <button id="btn-tacmap-sonar" class="tacmap-tab active" type="button" role="tab" aria-selected="true" title="Live Sonar Cartography (M)">📡 SONAR</button>
-          <button id="btn-minimap-slate" class="tacmap-tab" type="button" role="tab" aria-selected="false" title="Waterproof Wetnotes Survey Slate (N)">📋 NOTES</button>
+        <!-- High-Tech Tactical Sonar Overlay (anchored top-right directly beneath .hud-top-bar) -->
+        <div id="hud-minimap-wrap" class="hud-minimap-wrap sonar-overlay" role="region" tabindex="0" title="Tap scope to toggle Follow / Full Survey · [Q] Active Ping · [M] Hide" aria-label="High-Tech Tactical Sonar Overlay">
+          <div class="hud-minimap-head">
+            <span class="sonar-hud-title">
+              <span class="sonar-live-dot" aria-hidden="true"></span>
+              <span>SONAR</span>
+              <span id="hud-sonar-range" class="sonar-range-tag">16M</span>
+            </span>
+            <span class="hud-minimap-meta">
+              <span id="hud-minimap-pct" class="hud-minimap-pct">0%</span>
+              <button id="btn-sonar-overlay-ping" class="hud-sonar-ping-btn" type="button" title="Pulse Active Acoustic Sonar (Q)">PING</button>
+              <button id="hud-minimap-zoom" class="hud-minimap-zoom" type="button" title="Toggle Follow Zoom / Full Site View">ZOOM</button>
+              <button id="btn-sonar-close" class="tacmap-close-btn" type="button" aria-label="Hide sonar overlay" title="Hide Sonar Overlay (M)">✕</button>
+            </span>
+          </div>
+          <div id="hud-minimap-sonar-view" class="hud-minimap-sonar-view">
+            <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" width="384" height="216"></canvas>
+            <span class="sonar-scan-fx" aria-hidden="true"></span>
+          </div>
         </div>
-        <span class="hud-minimap-meta">
-          <span id="hud-minimap-pct" class="hud-minimap-pct">0%</span>
-          <button id="hud-minimap-zoom" class="hud-minimap-zoom" type="button" title="Toggle Follow Zoom / Full Site View">ZOOM</button>
-          <button id="btn-survey-slate-close" class="tacmap-close-btn" type="button" aria-label="Hide tactical map" title="Hide Tactical Map (M)">✕</button>
-        </span>
-      </div>
-      <div id="hud-minimap-sonar-view" class="hud-minimap-sonar-view">
-        <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" width="352" height="224"></canvas>
-      </div>
-      <div id="survey-slate-panel" class="survey-slate-panel" hidden aria-label="Waterproof Wetnotes Survey Slate">
-        <canvas id="survey-slate-canvas" width="320" height="216" title="Tap canvas to toggle Full / Follow Zoom"></canvas>
-        <div class="survey-slate-tools">
-          <button id="btn-survey-drop-pin" class="survey-tool-btn primary" type="button" title="Mark your current location &amp; depth on the Wetnotes map">📍 Pin Note</button>
-          <button id="btn-survey-drop-cookie" class="survey-tool-btn" type="button" title="Clip exit-pointing line cookie (K)">🟠 Cookie</button>
-          <button id="btn-survey-clear-pins" class="survey-tool-btn ghost" type="button" title="Clear custom survey pins">🗑 Clear</button>
-        </div>
-        <div class="survey-slate-tip">Sketches passages as your torch sweeps · Drop 📍 pins to mark junctions · [N]</div>
       </div>
     </div>
 
@@ -496,11 +473,10 @@
           <span><strong>1 / 2 / 3</strong> Switch Gas</span>
           <span><strong>Space / Tab</strong> Recommended Gas</span>
           <span><strong>G / Hold R</strong> Reel Deploy / Rewind</span>
-          <span><strong>E / F</strong> Stage Gas / Line Marker / Cut / Hatch</span>
-          <span><strong>Q / V / C / O</strong> Sonar / DPV / Camera / Photo Studio</span>
-          <span><strong>T / Y / K / U</strong> Stage / Lift Bag / Cookie / dSMB</span>
-          <span><strong>M / N / X / H</strong> Sonar Map / Wetnotes / Tissues / Signals</span>
-          <span><strong>L / B / P / Esc</strong> Torch / Buddy Ping / Pause</span>
+          <span><strong>E / F</strong> Interact / Cut / Hatch</span>
+          <span><strong>Q / V / C / O</strong> Sonar / Scooter / Camera / Photo Studio</span>
+          <span><strong>M / H / L</strong> Sonar Overlay / Signals / Torch</span>
+          <span><strong>B / P / Esc</strong> Buddy Ping / Pause</span>
         </div>
         <div class="menu-actions">
           <button id="btn-pause-resume" class="btn primary" type="button">RESUME DIVE</button>
@@ -604,52 +580,32 @@
         <div id="hud-gear-dock" class="hud-gear-dock" hidden aria-label="Active Dive Gear &amp; Kit">
           <div id="hud-kit-popover" class="hud-kit-popover" role="menu" aria-label="Dive Kit Tools" hidden>
             <div class="kit-pop-hdr">DIVE KIT</div>
-            <button id="btn-kit-sonar" class="kit-item sonar mobile-only-kit" type="button" role="menuitem" hidden title="Pulse Cave Sonar (Q)">
+            <button id="btn-kit-dpv" class="kit-item dpv" type="button" role="menuitem" hidden title="Toggle DPV Scooter (V)">
+              <span class="kit-item-label">🛴 Scooter 100%</span>
+              <span class="kbd-hint kit-kbd">V</span>
+            </button>
+            <button id="btn-kit-sonar" class="kit-item sonar" type="button" role="menuitem" title="Pulse Active Sonar (Q)">
               <span class="kit-item-label">📡 Sonar</span>
+              <span class="kbd-hint kit-kbd">Q</span>
             </button>
-            <button id="btn-kit-dpv" class="kit-item dpv mobile-only-kit" type="button" role="menuitem" hidden title="Toggle DPV Scooter (V)">
-              <span class="kit-item-label">🛴 DPV 100%</span>
-            </button>
-            <button id="btn-hud-stage" class="kit-item stage" type="button" role="menuitem" title="Clip AL80 Stage Bottle for Exit Bailout (T)">
-              <span class="kit-item-label">🛢 Stage Bailout</span>
-              <span class="kbd-hint kit-kbd">T</span>
-            </button>
-            <button id="btn-hud-liftbag" class="kit-item liftbag" type="button" role="menuitem" title="Inflate or Vent Commercial Lift Bag to Neutralize Heavy Salvage Trim (Y)">
-              <span class="kit-item-label">🎈 Lift Bag</span>
-              <span class="kbd-hint kit-kbd">Y</span>
-            </button>
-            <button id="btn-hud-cookie" class="kit-item cookie" type="button" role="menuitem" title="Clip Glowing Exit-Pointing Line Cookie Marker (K)">
-              <span class="kit-item-label">🟠 Cookie (6)</span>
-              <span class="kbd-hint kit-kbd">K</span>
-            </button>
-            <button id="btn-hud-smb" class="kit-item smb" type="button" role="menuitem" title="Shoot Orange Delayed Surface Marker Buoy (dSMB) in Open Water (U)">
-              <span class="kit-item-label">🎈 Shoot SMB</span>
-              <span class="kbd-hint kit-kbd">U</span>
-            </button>
-            <button id="btn-hud-computer" class="kit-item computer" type="button" role="menuitem" title="Toggle Shearwater ZH-L16C Tissue Dive Computer (X)">
-              <span class="kit-item-label">🖥 Tissues</span>
-              <span class="kbd-hint kit-kbd">X</span>
-            </button>
-            <button id="btn-hud-survey-slate" class="kit-item survey" type="button" role="menuitem" title="Toggle Waterproof Wetnotes Survey Slate (N)">
-              <span class="kit-item-label">📋 Wetnotes</span>
-              <span class="kbd-hint kit-kbd">N</span>
+            <button id="btn-kit-camera" class="kit-item camera" type="button" role="menuitem" title="Underwater Strobe Camera (C)">
+              <span class="kit-item-label">📷 Camera</span>
+              <span class="kbd-hint kit-kbd">C</span>
             </button>
             <button id="btn-hud-signals" class="kit-item signals" type="button" role="menuitem" title="Scuba Hand-Signals &amp; Torch Light-Signaling Wheel (H)">
               <span class="kit-item-label">🤙 Signals</span>
               <span class="kbd-hint kit-kbd">H</span>
             </button>
-            <button id="btn-kit-camera" class="kit-item camera mobile-only-kit" type="button" role="menuitem" title="Underwater Strobe Camera (C)">
-              <span class="kit-item-label">📷 Camera</span>
-            </button>
-            <button id="btn-kit-torch" class="kit-item torch mobile-only-kit" type="button" role="menuitem" title="Toggle Primary Torch (L)">
+            <button id="btn-kit-torch" class="kit-item torch" type="button" role="menuitem" title="Toggle Primary Torch (L)">
               <span class="kit-item-label">🔦 Torch: On</span>
+              <span class="kbd-hint kit-kbd">L</span>
             </button>
           </div>
           <div class="gear-bar-row">
             <button id="btn-hud-spear" class="gear-hud-btn spear" type="button" hidden title="Fire Pneumatic Speargun — Hold to autofire, tap faster! Every 5th shot is a golden Hyper-Tip ([F] / Space / Left-Click)">🔱 FIRE <span class="kbd-hint">[F]</span></button>
-            <button id="btn-hud-sonar" class="gear-hud-btn sonar" type="button" hidden title="Pulse Acoustic Sonar (Q)">📡 PING <span class="kbd-hint">[Q]</span></button>
-            <button id="btn-hud-dpv" class="gear-hud-btn dpv" type="button" hidden title="Toggle DPV Scooter (V)">🛴 DPV 100%</button>
-            <button id="btn-hud-gear-more" class="gear-hud-btn kit-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="hud-kit-popover" title="Open Dive Kit (Stage Bailout, Lift Bag, Tissue Computer, Hand Signals, Wetnotes)">🧰 KIT <span class="kit-caret" aria-hidden="true">▴</span></button>
+            <button id="btn-hud-sonar" class="gear-hud-btn sonar" type="button" hidden title="Pulse Acoustic Sonar (Q)">📡 SONAR <span class="kbd-hint">[Q]</span></button>
+            <button id="btn-hud-dpv" class="gear-hud-btn dpv" type="button" hidden title="Toggle DPV Scooter (V)">🛴 SCOOTER 100%</button>
+            <button id="btn-hud-gear-more" class="gear-hud-btn kit-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="hud-kit-popover" title="Open Dive Kit (Scooter, Sonar, Camera, Signals, Torch)">🧰 KIT <span class="kit-caret" aria-hidden="true">▴</span></button>
           </div>
         </div>
         <div id="hud-reel-dock" class="hud-reel-dock" hidden aria-label="Guideline Spool Controls">
@@ -1524,105 +1480,105 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/util/common.js": "./js/util/common.js?v=185",
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=185",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=185",
-        "./js/game/audio.js": "./js/game/audio.js?v=185",
-        "./js/game/collision.js": "./js/game/collision.js?v=185",
-        "./js/game/input.js": "./js/game/input.js?v=185",
-        "./js/game/hud.js": "./js/game/hud.js?v=185",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=185",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=185",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=185",
-        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=185",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=185",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=185",
-        "./js/game/weather.js": "./js/game/weather.js?v=185",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=185",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=185",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=185",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=185",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=185",
-        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=185",
-        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=185",
-        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=185",
-        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=185",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=185",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=185",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=185",
-        "./js/ui/replayController.js": "./js/ui/replayController.js?v=185",
-        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=185",
-        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=185",
-        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=185",
-        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=185",
-        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=185",
-        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=185",
-        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=185",
-        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=185",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=185",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=185",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=185",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=185",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=185",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=185",
-        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=185",
-        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=185",
-        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=185",
-        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=185",
-        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=185",
-        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=185",
-        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=185",
-        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=185",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=185",
-        "./js/game/silt.js": "./js/game/silt.js?v=185",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=185",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=185",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=185",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=185",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=185",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=185",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=185",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=185",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=185",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=185",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=185",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=185",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=185",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=185",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=185",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=185",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=185",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=185",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=185",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=185",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=185",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=185",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=185",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=185",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=185",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=185",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=185",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=185",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=185",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=185",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=185",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=185",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=185",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=185",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=185",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=185",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=185",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=185",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=185",
-        "./js/levels/index.js": "./js/levels/index.js?v=185",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=185",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=185",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=185",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=185",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=185"
+        "./js/util/common.js": "./js/util/common.js?v=186",
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=186",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=186",
+        "./js/game/audio.js": "./js/game/audio.js?v=186",
+        "./js/game/collision.js": "./js/game/collision.js?v=186",
+        "./js/game/input.js": "./js/game/input.js?v=186",
+        "./js/game/hud.js": "./js/game/hud.js?v=186",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=186",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=186",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=186",
+        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=186",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=186",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=186",
+        "./js/game/weather.js": "./js/game/weather.js?v=186",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=186",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=186",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=186",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=186",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=186",
+        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=186",
+        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=186",
+        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=186",
+        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=186",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=186",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=186",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=186",
+        "./js/ui/replayController.js": "./js/ui/replayController.js?v=186",
+        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=186",
+        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=186",
+        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=186",
+        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=186",
+        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=186",
+        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=186",
+        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=186",
+        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=186",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=186",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=186",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=186",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=186",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=186",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=186",
+        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=186",
+        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=186",
+        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=186",
+        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=186",
+        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=186",
+        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=186",
+        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=186",
+        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=186",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=186",
+        "./js/game/silt.js": "./js/game/silt.js?v=186",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=186",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=186",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=186",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=186",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=186",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=186",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=186",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=186",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=186",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=186",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=186",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=186",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=186",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=186",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=186",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=186",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=186",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=186",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=186",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=186",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=186",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=186",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=186",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=186",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=186",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=186",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=186",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=186",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=186",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=186",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=186",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=186",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=186",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=186",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=186",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=186",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=186",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=186",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=186",
+        "./js/levels/index.js": "./js/levels/index.js?v=186",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=186",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=186",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=186",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=186",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=186"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=185"></script>
+  <script type="module" src="./js/main.js?v=186"></script>
 </body>
 </html>

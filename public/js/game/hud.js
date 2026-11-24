@@ -368,36 +368,117 @@ export function drawSonarMinimap(ctx, width, height, state) {
   const isWreck = Boolean(level.isWreck);
 
   ctx.save();
-  // 1. Deep Sonar Scope Backdrop & Subtle Bathymetric Depth Grid
-  ctx.fillStyle = '#030d19';
+  // 1. Translucent High-Tech Holographic Scope Backdrop & Bathymetric Tactical Grid
+  if (typeof ctx.clearRect === 'function') ctx.clearRect(0, 0, width, height);
+  const bgGrad =
+    typeof ctx.createRadialGradient === 'function'
+      ? ctx.createRadialGradient(
+          width * 0.5,
+          height * 0.5,
+          Math.min(width, height) * 0.08,
+          width * 0.5,
+          height * 0.5,
+          Math.max(width, height) * 0.72
+        )
+      : null;
+  if (bgGrad && typeof bgGrad.addColorStop === 'function') {
+    bgGrad.addColorStop(0, 'rgba(3, 24, 38, 0.74)');
+    bgGrad.addColorStop(0.7, 'rgba(2, 13, 24, 0.84)');
+    bgGrad.addColorStop(1, 'rgba(1, 8, 17, 0.92)');
+    ctx.fillStyle = bgGrad;
+  } else {
+    ctx.fillStyle = 'rgba(2, 14, 26, 0.84)';
+  }
   ctx.fillRect(0, 0, width, height);
+
+  // Subtle vertical tactical range grid lines
+  const horizStep = zoomMode === 'full' ? (viewMaxX - viewMinX > 140 ? 40 : 20) : 10;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(34, 211, 238, 0.07)';
+  const firstX = Math.ceil(viewMinX / horizStep) * horizStep;
+  for (let wx = firstX; wx <= viewMaxX; wx += horizStep) {
+    const sx = toX(wx);
+    if (sx < 8 || sx > width - 8) continue;
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+  }
 
   const depthStep = zoomMode === 'full' ? (viewMaxY - viewMinY > 110 ? 40 : 20) : 10;
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(56, 189, 248, 0.10)';
-  ctx.fillStyle = 'rgba(125, 211, 252, 0.42)';
-  ctx.font = 'bold 14px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.strokeStyle = 'rgba(34, 211, 238, 0.11)';
+  ctx.fillStyle = 'rgba(103, 232, 249, 0.52)';
+  ctx.font = '700 11px ui-monospace, SFMono-Regular, Menlo, monospace';
   ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'left';
   const firstDepth = Math.max(depthStep, Math.ceil(Math.max(0, viewMinY) / depthStep) * depthStep);
   for (let d = firstDepth; d <= viewMaxY; d += depthStep) {
     const sy = toY(d);
-    if (sy < 12 || sy > height - 6) continue;
+    if (sy < 14 || sy > height - 14) continue;
     ctx.beginPath();
     ctx.moveTo(0, sy);
     ctx.lineTo(width, sy);
     ctx.stroke();
-    ctx.fillText(`${d}m`, 6, sy - 2);
+    if (sy <= height - 24) {
+      ctx.fillText(`${d}m`, 6, sy - 2);
+    }
   }
 
   // Water surface horizon line (y = 0)
   const surfY = toY(0);
   if (surfY >= -4 && surfY <= height + 4) {
-    ctx.strokeStyle = 'rgba(103, 232, 249, 0.55)';
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.68)';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(0, surfY);
     ctx.lineTo(width, surfY);
     ctx.stroke();
+  }
+
+  // 1b. Concentric Polar Range Rings & Live Rotating Phosphor Radar Sweep centered on Diver!
+  if (diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+    const dcx = toX(diver.x);
+    const dcy = toY(diver.y);
+    const ringMeters = zoomMode === 'full' ? [20, 40] : [10, 20, 30];
+    ctx.save();
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.17)';
+    ctx.lineWidth = 1;
+    for (let rIdx = 0; rIdx < ringMeters.length; rIdx++) {
+      const rm = ringMeters[rIdx];
+      const rp = rm * scale;
+      if (rp < 14 || rp > Math.max(width, height) * 1.1) continue;
+      ctx.beginPath();
+      ctx.arc(dcx, dcy, rp, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Rotating phosphor sweep wedge with soft trailing glow
+    const sweepR = Math.max(48, (zoomMode === 'full' ? 32 : 28) * scale);
+    const sweepAng = (timeSec * 1.45) % (Math.PI * 2);
+    const trailArc = 0.72;
+    const steps = 6;
+    for (let s = 0; s < steps; s++) {
+      const f0 = s / steps;
+      const f1 = (s + 1) / steps;
+      const a0 = sweepAng - trailArc * (1 - f0);
+      const a1 = sweepAng - trailArc * (1 - f1);
+      ctx.fillStyle = `rgba(34, 211, 238, ${(0.018 + f1 * 0.085).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(dcx, dcy);
+      ctx.arc(dcx, dcy, sweepR, a0, a1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.58)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(dcx, dcy);
+    ctx.lineTo(dcx + Math.cos(sweepAng) * sweepR, dcy + Math.sin(sweepAng) * sweepR);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // 2. Passage Cartography: Guided Blueprint Ghost + Live Fog-of-War Explored Passages
@@ -419,9 +500,9 @@ export function drawSonarMinimap(ctx, width, height, state) {
   }
 
   if (exploredCells && exploredCells.size > 0 && Array.isArray(exploreCells)) {
-    // Soft sonar halo + crisp carved passage core
-    ctx.fillStyle = isWreck ? 'rgba(251, 146, 60, 0.24)' : 'rgba(14, 165, 233, 0.24)';
-    const outerR = cellR * 1.24;
+    // High-tech bathymetric neon rim + translucent acoustic passage core
+    ctx.fillStyle = isWreck ? 'rgba(251, 146, 60, 0.26)' : 'rgba(34, 211, 238, 0.24)';
+    const outerR = cellR * 1.28;
     ctx.beginPath();
     for (const idx of exploredCells) {
       const c = exploreCells[idx];
@@ -434,7 +515,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
     ctx.fill();
 
-    ctx.fillStyle = isWreck ? 'rgba(253, 186, 116, 0.34)' : 'rgba(125, 211, 252, 0.36)';
+    ctx.fillStyle = isWreck ? 'rgba(253, 186, 116, 0.36)' : 'rgba(103, 232, 249, 0.36)';
     ctx.beginPath();
     for (const idx of exploredCells) {
       const c = exploreCells[idx];
@@ -442,8 +523,8 @@ export function drawSonarMinimap(ctx, width, height, state) {
       if (c.x < viewMinX - padWorld || c.x > viewMaxX + padWorld || c.y < viewMinY - padWorld || c.y > viewMaxY + padWorld) continue;
       const sx = toX(c.x);
       const sy = toY(c.y);
-      ctx.moveTo(sx + cellR * 0.82, sy);
-      ctx.arc(sx, sy, cellR * 0.82, 0, Math.PI * 2);
+      ctx.moveTo(sx + cellR * 0.84, sy);
+      ctx.arc(sx, sy, cellR * 0.84, 0, Math.PI * 2);
     }
     ctx.fill();
   }
@@ -572,6 +653,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
       ctx.strokeRect(sx - 4, sy - 4, 8, 8);
     }
   }
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
   if (Array.isArray(level.collectibles)) {
     for (let i = 0; i < level.collectibles.length; i++) {
       const item = level.collectibles[i];
@@ -579,20 +661,26 @@ export function drawSonarMinimap(ctx, width, height, state) {
       if (!_isPointRevealed(item.x, item.y, diver, exploreCells, exploredCells, exploredGrid, sonarPulse, 6.0)) continue;
       const sx = toX(item.x);
       const sy = toY(item.y);
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 6.2 + pulse * 1.8, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = '#fde047';
       ctx.beginPath();
-      ctx.moveTo(sx, sy - 4.2);
-      ctx.lineTo(sx + 3.6, sy);
-      ctx.lineTo(sx, sy + 4.2);
-      ctx.lineTo(sx - 3.6, sy);
+      ctx.moveTo(sx, sy - 4.4);
+      ctx.lineTo(sx + 3.8, sy);
+      ctx.lineTo(sx, sy + 4.4);
+      ctx.lineTo(sx - 3.8, sy);
       ctx.closePath();
       ctx.fill();
     }
   }
 
-  // 7. Checkpoints, Surface Exit & Recovery Target
+  // 7. Checkpoints (with Tactical Bearing Vector + Target-Lock Brackets), Surface Exit & Recovery Target
   const allowCompassHints = isGuided || !level.hideWaypointCompass;
-  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
+  let activeTargetDistM = null;
+  let activeTargetTag = '';
   if (Array.isArray(level.checkpoints)) {
     for (let i = 0; i < level.checkpoints.length; i++) {
       const cp = level.checkpoints[i];
@@ -604,10 +692,29 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const sx = toX(cp.x);
       const sy = toY(cp.y);
       if (isNext) {
-        ctx.strokeStyle = `rgba(56, 189, 248, ${(0.45 + 0.45 * pulse).toFixed(2)})`;
-        ctx.lineWidth = 2;
+        if (diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+          activeTargetDistM = Math.round(Math.hypot(cp.x - diver.x, cp.y - diver.y));
+          activeTargetTag = 'WP';
+          // Dashed tactical bearing vector from diver to active waypoint
+          ctx.save();
+          ctx.setLineDash([4, 5]);
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.34)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(toX(diver.x), toY(diver.y));
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // Corner target-lock reticle around next waypoint
+        const br = 7.5 + pulse * 2.2;
+        ctx.strokeStyle = `rgba(103, 232, 249, ${(0.62 + 0.35 * pulse).toFixed(2)})`;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.arc(sx, sy, 5.5 + pulse * 3.5, 0, Math.PI * 2);
+        ctx.moveTo(sx - br, sy - br + 3.5); ctx.lineTo(sx - br, sy - br); ctx.lineTo(sx - br + 3.5, sy - br);
+        ctx.moveTo(sx + br - 3.5, sy - br); ctx.lineTo(sx + br, sy - br); ctx.lineTo(sx + br, sy - br + 3.5);
+        ctx.moveTo(sx - br, sy + br - 3.5); ctx.lineTo(sx - br, sy + br); ctx.lineTo(sx - br + 3.5, sy + br);
+        ctx.moveTo(sx + br - 3.5, sy + br); ctx.lineTo(sx + br, sy + br); ctx.lineTo(sx + br, sy + br - 3.5);
         ctx.stroke();
         ctx.fillStyle = '#e0f2fe';
         ctx.beginPath();
@@ -630,6 +737,10 @@ export function drawSonarMinimap(ctx, width, height, state) {
   if (level.exitZone) {
     const ex = toX(level.exitZone.x);
     const ey = toY(Math.max(1.0, level.exitZone.y));
+    if (activeTargetDistM === null && diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+      activeTargetDistM = Math.round(Math.hypot(level.exitZone.x - diver.x, level.exitZone.y - diver.y));
+      activeTargetTag = 'EXIT';
+    }
     ctx.fillStyle = '#4ade80';
     ctx.beginPath();
     ctx.moveTo(ex, ey - 5.5);
@@ -699,19 +810,49 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
-  // 8. Active Cave Sonar Hydrophone Pulse Ring + Hazard Contact Echoes (v142)
+  // 8. Active Cave Sonar Hydrophone Pulse Ring + Wall Echo Cloud + Hazard Contact Echoes
   if (sonarPulse && sonarPulse.durationSec > 0) {
     const frac = Math.max(0, Math.min(1, sonarPulse.ageSec / sonarPulse.durationSec));
-    const rPx = frac * (sonarPulse.maxRadiusM || 28) * scale;
+    const sweepFrac = Math.min(1, sonarPulse.ageSec / 1.45);
+    const rPx = sweepFrac * (sonarPulse.maxRadiusM || 28) * scale;
     const px = toX(sonarPulse.x);
     const py = toY(sonarPulse.y);
-    ctx.strokeStyle = `rgba(34, 211, 238, ${((1 - frac) * 0.9).toFixed(2)})`;
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.arc(px, py, rPx, 0, Math.PI * 2);
-    ctx.stroke();
-
     const fade = Math.max(0, 1 - frac);
+
+    if (sweepFrac < 1) {
+      // Soft radial energy glow + dual wavefront rings
+      const waveG =
+        typeof ctx.createRadialGradient === 'function'
+          ? ctx.createRadialGradient(px, py, Math.max(1, rPx * 0.72), px, py, Math.max(2, rPx))
+          : null;
+      if (waveG && typeof waveG.addColorStop === 'function') {
+        waveG.addColorStop(0, 'rgba(34, 211, 238, 0)');
+        waveG.addColorStop(1, `rgba(34, 211, 238, ${((1 - sweepFrac) * 0.24).toFixed(2)})`);
+        ctx.fillStyle = waveG;
+        ctx.beginPath();
+        ctx.arc(px, py, rPx, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = `rgba(103, 232, 249, ${((1 - sweepFrac) * 0.95).toFixed(2)})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(px, py, rPx, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Crisp wall-hit bathymetric dots swept by the active sonar wave
+    const wallHits = sonarPulse.wallHits || [];
+    if (wallHits.length > 0) {
+      ctx.fillStyle = `rgba(103, 232, 249, ${(fade * 0.78).toFixed(2)})`;
+      const maxWaveM = sweepFrac * (sonarPulse.maxRadiusM || 28);
+      for (let i = 0; i < wallHits.length; i++) {
+        const wh = wallHits[i];
+        if (!wh || wh.dist > maxWaveM) continue;
+        ctx.fillRect(toX(wh.x) - 1.2, toY(wh.y) - 1.2, 2.4, 2.4);
+      }
+    }
+
     const contacts = sonarPulse.contacts || [];
     for (let i = 0; i < contacts.length; i++) {
       const c = contacts[i];
@@ -720,7 +861,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const cy = toY(c.y);
       ctx.fillStyle =
         c.kind === 'secret-veil'
-          ? `rgba(103, 232, 249, ${(fade * 0.55).toFixed(2)})`
+          ? `rgba(103, 232, 249, ${(fade * 0.72).toFixed(2)})`
           : c.kind === 'shifting-hatch'
             ? (c.hatchRef?.openness ?? 1) < 0.35
               ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
@@ -853,10 +994,24 @@ export function drawSonarMinimap(ctx, width, height, state) {
     ctx.restore();
   }
 
-  // Subtle radar scanline sheen
-  const sweepY = ((timeSec * 28) % (height + 40)) - 20;
-  ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
-  ctx.fillRect(0, sweepY, width, 10);
+  // High-Tech Corner Telemetry Strip & Subtle Radar Scanline Sheen
+  const sweepY = ((timeSec * 32) % (height + 40)) - 20;
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.055)';
+  ctx.fillRect(0, sweepY, width, 8);
+
+  // Bottom tactical telemetry badges (Depth + Waypoint Range)
+  ctx.font = '700 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textBaseline = 'bottom';
+  if (diver && Number.isFinite(diver.y)) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.84)';
+    ctx.fillText(`D ${Math.max(0, diver.y).toFixed(1)}m`, 8, height - 6);
+  }
+  if (activeTargetDistM !== null && activeTargetTag) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = activeTargetTag === 'EXIT' ? 'rgba(74, 222, 128, 0.9)' : 'rgba(103, 232, 249, 0.9)';
+    ctx.fillText(`${activeTargetTag} ${activeTargetDistM}m`, width - 8, height - 6);
+  }
 
   ctx.restore();
 }
@@ -1687,27 +1842,21 @@ export class DiveComputerHUD {
       }
     }
 
-    // Unified Docked Tactical Map: Sonar Minimap | Wetnotes Survey Slate (v173)
-    // Only draws the active tab's canvas (zero duplicate rendering).
+    // High-Tech Tactical Sonar Overlay (v186 — Wetnotes removed)
     if (this.elMinimapWrap) {
       const allowed = isMinimapAllowed(cleanDiff, mutatorId);
-      const showWetnotes = Boolean(surveySlateOpen && level);
-      const showSonar = Boolean(!showWetnotes && allowed && minimapVisible && level);
-      const showDock = showWetnotes || showSonar;
-      setHidden(this.elMinimapWrap, !showDock);
+      const showSonar = Boolean(allowed && minimapVisible && level);
+      setHidden(this.elMinimapWrap, !showSonar);
       if (this.elMinimapSonarView) setHidden(this.elMinimapSonarView, !showSonar);
-      if (showDock) {
+      if (showSonar) {
         setText(this.elMinimapPct, `${Math.round(exploredPct || 0)}%`);
-        setText(
-          this.elMinimapZoom,
-          showWetnotes ? (surveySlateFollowZoom ? 'FOLLOW' : 'FULL') : minimapZoomMode === 'full' ? 'FULL' : 'ZOOM'
-        );
+        setText(this.elMinimapZoom, minimapZoomMode === 'full' ? 'FULL' : 'ZOOM');
       }
       if (showSonar && this.elMinimapCanvas) {
         this._minimapRedrawAccum += dt;
         const expSize = exploredCells ? exploredCells.size : 0;
         const needsRedraw =
-          this._minimapRedrawAccum >= 0.055 ||
+          this._minimapRedrawAccum >= 0.045 ||
           expSize !== this._minimapLastExplored ||
           minimapZoomMode !== this._minimapLastZoom ||
           Boolean(sonarPulse) ||
@@ -1741,7 +1890,6 @@ export class DiveComputerHUD {
               encounters,
               buddyPing,
               droppedStages,
-              surveyPins,
               secretLair,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
