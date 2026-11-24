@@ -373,6 +373,7 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     veilRevealed: false,
     veilBreached: false,
     veilRevealPulse: 0,
+    weaponClaimed: false,
     weaponEquipped: false,
     combatMode: false, // Pure combat HUD & frozen diving vitals once Speargun is picked up!
     playerHp: COMBAT_MAX_HP,
@@ -462,6 +463,24 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
       phase2Summoned: false,
       phase3Roared: false,
       tentacles,
+      anim: {
+        prevX: spec.boss.x,
+        prevY: spec.boss.y,
+        facing: -1,
+        pitch: 0,
+        scaleX: 1,
+        scaleY: 1,
+        jiggleAmp: 0,
+        jigglePhase: 0,
+        swimCycle: 0,
+        earFlap: 0,
+        cheekPuff: 0,
+        mouthOpen: 0,
+        dizzyAngle: 0,
+        hurtSec: 0,
+        crownBob: 0,
+        speed: 0,
+      },
     },
     minionsKilled: 0,
     bossDefeated: false,
@@ -560,7 +579,8 @@ export function breachSecretLairVeil(session, callbacks = {}, { fromRemote = fal
  */
 export function claimSecretLairWeapon(session, callbacks = {}) {
   const lair = session?.secretLair;
-  if (!lair || lair.weaponEquipped) return { ok: false };
+  if (!lair || lair.weaponEquipped || lair.bossDefeated) return { ok: false };
+  lair.weaponClaimed = true;
   lair.weaponEquipped = true;
   lair.combatMode = true;
   lair.playerHp = COMBAT_MAX_HP;
@@ -646,7 +666,7 @@ export function fireSpeargun(
   const lair = session?.secretLair;
   if (!lair || !session?.diveState?.alive || session.surfaced) return { ok: false, reason: 'inactive' };
   if (isLocal) {
-    if (!lair.weaponEquipped) return { ok: false, reason: 'no-weapon' };
+    if (!lair.weaponEquipped || !lair.combatMode || lair.bossDefeated) return { ok: false, reason: 'no-weapon' };
     const activeCd = isTap ? lair.tapCooldownSec : lair.reloadSec;
     if (activeCd > 0.015) return { ok: false, reason: 'reloading' };
     lair.reloadSec = SPEARGUN_AUTOFIRE_SEC;
@@ -909,6 +929,10 @@ export function applyBossDamage(
   const finalDmg = Math.max(1, Math.round(damage * stunMult));
   boss.hp = Math.max(0, boss.hp - finalDmg);
   boss.hitFlash = 0.14;
+  if (boss.anim) {
+    boss.anim.jiggleAmp = Math.min(0.24, (boss.anim.jiggleAmp || 0) + (crit ? 0.14 : 0.08));
+    boss.anim.hurtSec = Math.max(boss.anim.hurtSec || 0, crit ? 0.24 : 0.14);
+  }
   const sx = Number.isFinite(hitX) ? hitX : boss.x;
   const sy = Number.isFinite(hitY) ? hitY : boss.y;
   addSparkBurst(
@@ -984,7 +1008,7 @@ export function applyBossDamage(
     callbacks.onBossRoar?.(3);
   }
 
-  // Victory — Multi-Stage Slow-Mo Killing Blow!
+  // Victory — Multi-Stage Slow-Mo Killing Blow! (Lose Speargun immediately on Boss Kill!)
   if (boss.hp <= 0 && !boss.defeated) {
     boss.defeated = true;
     boss.active = false;
@@ -995,6 +1019,13 @@ export function applyBossDamage(
     boss._defeatBurstStep = 0;
     lair.bossDefeated = true;
     lair.trophyClaimed = true;
+    // Only have the Speargun in this mode — killing the boss immediately removes it!
+    lair.weaponEquipped = false;
+    lair.charging = false;
+    lair.chargeSec = 0;
+    lair.recoilSec = 0;
+    lair.muzzleFlashSec = 0;
+    lair.spears.length = 0;
     lair.bonusScore = (lair.bonusScore || 0) + (lair.spec.boss.bonusPoints || 2500);
     for (const m of lair.minions) {
       if (m.alive && isPointInArena(lair.spec.arena, m.x, m.y, 12)) {
@@ -1200,8 +1231,28 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     callbacks.onForeshadow?.();
   }
 
-  // 1b. Frictionless Auto-Equip Speargun when swimming onto the Armory Rack in the quiet anteroom!
-  if (!lair.weaponEquipped && lair.spec.armory && diveState?.alive) {
+  // 1b. Speargun Mode Exclusivity: only equipped inside the Secret Lair while boss is undefeated!
+  const sealX = lair.spec.veil?.sealWallX ?? 134.8;
+  if (lair.bossDefeated) {
+    if (lair.weaponEquipped) {
+      lair.weaponEquipped = false;
+      lair.spears.length = 0;
+    }
+  } else if (diver.x < sealX - 1.8) {
+    // Exited secret passage back into main cave -> stow speargun & restore normal diving HUD
+    if (lair.weaponEquipped || lair.combatMode) {
+      lair.weaponEquipped = false;
+      lair.combatMode = false;
+      lair.spears.length = 0;
+    }
+  } else if (lair.weaponClaimed && !lair.weaponEquipped && diver.x >= sealX + 1.0 && diveState?.alive) {
+    // Re-entered secret lair before defeating boss -> seamlessly re-equip speargun
+    lair.weaponEquipped = true;
+    lair.combatMode = true;
+  }
+
+  // Frictionless Auto-Equip Speargun when swimming onto the Armory Rack in the quiet anteroom!
+  if (!lair.weaponClaimed && !lair.bossDefeated && lair.spec.armory && diveState?.alive) {
     const a = lair.spec.armory;
     if (Math.hypot(diver.x - a.x, diver.y - a.y) <= a.radius) {
       claimSecretLairWeapon(session, callbacks);
@@ -1344,6 +1395,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
   // 5. Step Speargun Bolts & Swept Segment-Circle Collisions (walls, Resonance Crystals, minions, boss!)
   for (let i = lair.spears.length - 1; i >= 0; i--) {
     const sp = lair.spears[i];
+    if (!sp) continue;
     sp.prevX = sp.x;
     sp.prevY = sp.y;
     sp.x += sp.vx * dt;
@@ -1433,8 +1485,8 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       const distBoss = distPointToSegment(boss.x, boss.y, sp.prevX, sp.prevY, sp.x, sp.y);
       if (distBoss <= boss.radius + 0.65) {
         sp.hitIds.add(boss.id);
-        const coreX = boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.56);
-        const coreY = boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.56);
+        const coreX = boss.x + Math.cos(boss.weakAngle) * (boss.radius * 1.08);
+        const coreY = boss.y + Math.sin(boss.weakAngle) * (boss.radius * 1.08);
         const hitCore = distPointToSegment(coreX, coreY, sp.prevX, sp.prevY, sp.x, sp.y) <= 1.85 || boss.aiState === 'stunned';
         const crit = hitCore || sp.piercing;
         const weakMult = boss.aiState === 'stunned' ? 1.65 : (hitCore ? SPEARGUN_WEAKPOINT_MULT : 1.0);
@@ -1445,7 +1497,8 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
         if (sp.isLocal) {
           callbacks.onLocalBossHit?.({ damage: dmg, crit, x: sp.x, y: sp.y });
         }
-        lair.spears.splice(i, 1);
+        if (lair.spears[i] === sp) lair.spears.splice(i, 1);
+        if (lair.spears.length === 0) break;
       }
     }
   }
@@ -1565,10 +1618,17 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     }
   }
 
-  // 7. Step Dynamic 3-Phase Cave Kraken Boss (*XIBALBA'S MAW*)
+  // 7. Step Dynamic 3-Phase Cave Kraken Boss (*XIBALBA'S MAW*) + Anime Body-Language Animation State
   lair.vortexShelteredPillarId = null;
   if (boss.hitFlash > 0) boss.hitFlash = Math.max(0, boss.hitFlash - dt);
   if (boss.blackoutAlpha > 0) boss.blackoutAlpha = Math.max(0, boss.blackoutAlpha - dt * 0.35);
+  const anim = boss.anim || (boss.anim = {
+    prevX: boss.x, prevY: boss.y, facing: -1, pitch: 0, scaleX: 1, scaleY: 1,
+    jiggleAmp: 0, jigglePhase: 0, swimCycle: 0, earFlap: 0, cheekPuff: 0,
+    mouthOpen: 0, dizzyAngle: 0, hurtSec: 0, crownBob: 0, speed: 0,
+  });
+  anim.prevX = boss.x;
+  anim.prevY = boss.y;
 
   if (boss.defeated) {
     if (boss.defeatAnimSec > 0) {
@@ -1937,9 +1997,128 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     }
   }
 
+  // 7g. Update Cute Anime Boss Body Language (velocity-coupled squash/stretch, ear flaps, jelly jiggle & limb swim cycle!)
+  {
+    const safeDt = Math.max(0.001, dt);
+    const vx = (boss.x - anim.prevX) / safeDt;
+    const vy = (boss.y - anim.prevY) / safeDt;
+    const spd = Math.hypot(vx, vy);
+    boss.vx = vx;
+    boss.vy = vy;
+    anim.speed = anim.speed + (spd - anim.speed) * Math.min(1, dt * 8);
+
+    // Smooth right-side-up anime facing with hysteresis (never flips upside down!)
+    const lookCos = Math.cos(boss.angle || Math.PI);
+    if (lookCos > 0.22) anim.facing = 1;
+    else if (lookCos < -0.22) anim.facing = -1;
+
+    // Gentle anime tilt toward target / motion vector (±0.30 rad max)
+    const rawPitch = Math.sin(boss.angle || 0) * 0.24 + Math.max(-0.22, Math.min(0.22, vy * 0.03));
+    const targetPitch = boss.aiState === 'stunned'
+      ? Math.sin(anim.dizzyAngle * 1.4) * 0.24
+      : boss.aiState === 'lunge_dash'
+        ? Math.atan2(vy, Math.abs(vx) + 1.5) * 0.48
+        : rawPitch;
+    anim.pitch += (targetPitch - anim.pitch) * Math.min(1, dt * 7.5);
+
+    // State-driven anticipation / follow-through squash & stretch targets
+    let tgtSX = 1.0 + Math.sin(anim.swimCycle * 0.9) * 0.045;
+    let tgtSY = 1.0 - Math.sin(anim.swimCycle * 0.9) * 0.045;
+    let tgtCheek = 0;
+    let tgtMouth = 0;
+
+    if (boss.defeated) {
+      tgtSX = 1.08 + Math.sin(anim.swimCycle * 4) * 0.08;
+      tgtSY = 0.88 - Math.sin(anim.swimCycle * 4) * 0.06;
+      tgtMouth = 0.5;
+    } else if (boss.aiState === 'dormant') {
+      const snore = Math.sin((session.simTimeSec || 0) * 1.6);
+      tgtSX = 1.06 + snore * 0.05;
+      tgtSY = 0.94 - snore * 0.04;
+    } else if (boss.aiState === 'awakening') {
+      const aw = boss.awakeningTimer || 0;
+      if (aw < 0.55) {
+        tgtSX = 0.86; tgtSY = 1.18; // Cute startled hop!
+      } else if (aw > 1.55) {
+        tgtSX = 1.16; tgtSY = 1.12; tgtMouth = 1.0; // Puffed-up roar!
+      }
+    } else if (boss.aiState === 'lunge_windup') {
+      // Cat-pounce coil-back squash!
+      tgtSX = 0.78;
+      tgtSY = 1.24;
+    } else if (boss.aiState === 'lunge_dash') {
+      // Plump torpedo stretch!
+      tgtSX = 1.28;
+      tgtSY = 0.78;
+    } else if (boss.aiState === 'slam_windup') {
+      tgtSX = 0.88;
+      tgtSY = 1.15;
+    } else if (boss.aiState === 'slam_strike') {
+      tgtSX = 1.22;
+      tgtSY = 0.84;
+      tgtMouth = 0.7;
+    } else if (boss.aiState === 'ink_barrage') {
+      // Chubby puffed-up rosy cheeks before spitting ink!
+      tgtSX = 1.18;
+      tgtSY = 1.10;
+      tgtCheek = 1.0;
+      tgtMouth = 0.35;
+    } else if (boss.aiState === 'vortex') {
+      // Kirby inhale stretch!
+      tgtSX = 1.14 + Math.sin(anim.swimCycle * 3.5) * 0.05;
+      tgtSY = 0.96;
+      tgtMouth = 1.0;
+    } else if (boss.aiState === 'beam_windup') {
+      tgtSX = 0.90 + Math.sin((session.simTimeSec || 0) * 28) * 0.03;
+      tgtSY = 1.12;
+      tgtMouth = 0.85;
+    } else if (boss.aiState === 'beam_sweep') {
+      tgtSX = 1.10;
+      tgtSY = 0.94;
+      tgtMouth = 1.0;
+    } else if (boss.aiState === 'stunned') {
+      tgtSX = 1.12 + Math.sin(anim.dizzyAngle * 2.2) * 0.05;
+      tgtSY = 0.88 - Math.sin(anim.dizzyAngle * 2.2) * 0.05;
+      tgtMouth = 0.25;
+    } else {
+      // Velocity-coupled swim squish
+      const vStretch = Math.min(0.14, anim.speed * 0.015);
+      tgtSX += vStretch;
+      tgtSY -= vStretch * 0.8;
+    }
+
+    // Spring-damped mochi-jelly jiggle when hit or stunned!
+    if (anim.jiggleAmp > 0.002) {
+      anim.jigglePhase += dt * 24;
+      anim.jiggleAmp = Math.max(0, anim.jiggleAmp - dt * 0.65);
+    }
+    const jig = Math.sin(anim.jigglePhase) * anim.jiggleAmp;
+    anim.scaleX += (tgtSX + jig - anim.scaleX) * Math.min(1, dt * 11);
+    anim.scaleY += (tgtSY - jig - anim.scaleY) * Math.min(1, dt * 11);
+    anim.cheekPuff += (tgtCheek - anim.cheekPuff) * Math.min(1, dt * 10);
+    anim.mouthOpen += (tgtMouth - anim.mouthOpen) * Math.min(1, dt * 12);
+    if (anim.hurtSec > 0) anim.hurtSec = Math.max(0, anim.hurtSec - dt);
+
+    // Limb paddle swim cycle & Dumbo ear flap speed respond smoothly to boss velocity & mood!
+    const swimRate = boss.aiState === 'dormant'
+      ? 1.1
+      : boss.aiState === 'stunned'
+        ? 1.8
+        : boss.aiState === 'lunge_dash'
+          ? 12.5
+          : 3.0 + Math.min(5.5, anim.speed * 0.55) + (boss.phase === 3 ? 1.5 : 0);
+    anim.swimCycle += dt * swimRate;
+    anim.earFlap += dt * (boss.aiState === 'lunge_windup' ? 14 : boss.aiState === 'vortex' ? 11 : swimRate * 1.15);
+    anim.dizzyAngle += dt * 4.8;
+    // Delayed springy crown bob!
+    const targetCrownBob = Math.max(-0.35, Math.min(0.35, -vy * 0.04)) + Math.sin(anim.swimCycle * 1.1 - 0.6) * 0.09;
+    anim.crownBob += (targetCrownBob - anim.crownBob) * Math.min(1, dt * 8);
+  }
+
   // 8. Step Enemy Projectiles (blocked by walls & Arena Limestone Cover Pillars!)
   for (let i = lair.enemyProjectiles.length - 1; i >= 0; i--) {
     const pr = lair.enemyProjectiles[i];
+    if (!pr) continue;
     pr.x += pr.vx * dt;
     pr.y += pr.vy * dt;
     pr.life -= dt;
@@ -1962,7 +2141,8 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     if (diveState?.alive && Math.hypot(pr.x - diver.x, pr.y - diver.y) <= pr.radius + 0.62) {
       applyDamageToLocalDiver(session, pr.damage, pr.kind === 'brine' ? 'Brine Spitter' : boss.name, callbacks);
       addSparkBurst(lair, pr.x, pr.y, pr.color, 6);
-      lair.enemyProjectiles.splice(i, 1);
+      if (lair.enemyProjectiles[i] === pr) lair.enemyProjectiles.splice(i, 1);
+      if (lair.enemyProjectiles.length === 0) break;
     }
   }
 
@@ -2047,6 +2227,8 @@ export function applySecretLairNetState(lairOrSession, snap) {
     if (snap.b.df && !b.defeated) {
       b.defeated = true;
       lair.bossDefeated = true;
+      lair.weaponEquipped = false;
+      lair.spears.length = 0;
     }
     b.aiState = snap.b.st || b.aiState;
     b.weakAngle = Number.isFinite(snap.b.wa) ? snap.b.wa : b.weakAngle;

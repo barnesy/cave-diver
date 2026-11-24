@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=183',
+  mapRasterUrl: './assets/map-expedition.jpg?v=184',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1973,7 +1973,7 @@ function syncCombatModeHud(sess) {
 function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
   if (mode !== 'diving' || !session || divePaused || photoModeState.active || session.endedState) return false;
   const lair = session.secretLair;
-  if (!lair?.weaponEquipped || !session.diveState?.alive) return false;
+  if (!lair?.combatMode || !lair?.weaponEquipped || lair?.bossDefeated || !session.diveState?.alive) return false;
   audio.unlock();
   const torchAim = input.getTorchAim();
   const resolvedAngle = Number.isFinite(aimAngle)
@@ -2023,7 +2023,8 @@ function computeMouseWorldAimAngle(clientX, clientY) {
 }
 
 canvas?.addEventListener('pointermove', (e) => {
-  if (mode !== 'diving' || !session?.diver || !session.secretLair?.weaponEquipped || e.pointerType !== 'mouse') return;
+  const lair = session?.secretLair;
+  if (mode !== 'diving' || !session?.diver || !lair?.combatMode || !lair?.weaponEquipped || lair?.bossDefeated || e.pointerType !== 'mouse') return;
   const ang = computeMouseWorldAimAngle(e.clientX, e.clientY);
   if (Number.isFinite(ang)) {
     _lastPointerWorldAngle = ang;
@@ -2032,7 +2033,8 @@ canvas?.addEventListener('pointermove', (e) => {
 });
 canvas?.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.pointerType !== 'mouse') return;
-  if (mode !== 'diving' || !session?.secretLair?.weaponEquipped || divePaused || photoModeState.active) return;
+  const lair = session?.secretLair;
+  if (mode !== 'diving' || !lair?.combatMode || !lair?.weaponEquipped || lair?.bossDefeated || divePaused || photoModeState.active) return;
   const ang = computeMouseWorldAimAngle(e.clientX, e.clientY);
   if (Number.isFinite(ang)) _lastPointerWorldAngle = ang;
   _mouseFireHeld = true;
@@ -2218,7 +2220,7 @@ function syncTechGearHud(sess) {
   const torchOn = sess.diver?.torchOn !== false;
   const nearSiltyFloor = Boolean(sess.diver?.nearSiltyFloor);
   const kickStyle = sess.diver?.kickStyle || 'glide';
-  const hasSpear = Boolean(sess.secretLair?.weaponEquipped);
+  const hasSpear = Boolean(sess.secretLair?.combatMode && sess.secretLair?.weaponEquipped && !sess.secretLair?.bossDefeated);
   const spearCharging = Boolean(sess.secretLair?.charging);
   const spearCool = (sess.secretLair?.reloadSec || 0) > 0.05;
   const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}|t:${torchOn}|fk:${nearSiltyFloor ? kickStyle : ''}|sp:${hasSpear}:${spearCharging}:${spearCool}`;
@@ -7010,7 +7012,7 @@ function stepSimulation(dt) {
     }
     sessionStepCallbacks.peers = getActivePeers();
     const rawTorchAim = input.getTorchAim();
-    if (!rawTorchAim.active && session.secretLair?.weaponEquipped && Number.isFinite(_lastPointerWorldAngle)) {
+    if (!rawTorchAim.active && session.secretLair?.combatMode && session.secretLair?.weaponEquipped && !session.secretLair?.bossDefeated && Number.isFinite(_lastPointerWorldAngle)) {
       sessionStepCallbacks.torchAim = {
         active: true,
         angle: _lastPointerWorldAngle,
@@ -7021,7 +7023,7 @@ function stepSimulation(dt) {
       sessionStepCallbacks.torchAim = rawTorchAim;
     }
     // Twin-stick hold-to-autofire (holding directional aim joystick, mouse button, gamepad RT/R-stick, or [F]/[Space])
-    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeState.active && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld || input.gpSpearHeld)) {
+    if (session.secretLair?.combatMode && session.secretLair?.weaponEquipped && !session.secretLair?.bossDefeated && !divePaused && !photoModeState.active && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld || input.gpSpearHeld)) {
       fireSpeargunAction({ isTap: false });
     }
     sessionStepCallbacks.isBossAuthority = !isMultiplayer || !lan.room || lan.isHost();

@@ -9043,3 +9043,84 @@ test('v182 Secret Lair Overhaul: Anti-Bypass Veil, CP4 Sonar, Resonance Crystals
   const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
   assert.ok(!/\bspawnCelebrationBurst\b/.test(mainSrc), 'main.js must call spawnCelebrationConfetti(), never undefined spawnCelebrationBurst');
 });
+
+test('v184 Speargun Mode Exclusivity, Immediate Loss on Boss Kill & Cute Anime Boss Animation State', async () => {
+  const {
+    SECRET_LAIRS,
+    claimSecretLairWeapon,
+    fireSpeargun,
+    applyBossDamage,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+  } = await import('../public/js/game/secretLairs.js');
+  const spec = SECRET_LAIRS['cenote-el-abismo'];
+
+  const s = createDiveSession(LEVEL_1, { diverName: 'AnimeTester', gear: { sonar: true } });
+  switchGas(s.diveState, 'TMX1455');
+
+  // 1. Outside Secret Lair Combat Mode: no speargun, cannot fire
+  assert.equal(s.secretLair.weaponEquipped, false);
+  assert.equal(s.secretLair.combatMode, false);
+  assert.equal(fireSpeargun(s, { aimAngle: 0, isTap: true }).ok, false);
+
+  // 2. Breach veil and claim speargun inside Armory -> equipped in combat mode
+  s.secretLair.veilBreached = true;
+  s.diver.x = spec.armory.x;
+  s.diver.y = spec.armory.y;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.weaponClaimed, true);
+  assert.equal(s.secretLair.weaponEquipped, true);
+  assert.equal(s.secretLair.combatMode, true);
+  assert.equal(fireSpeargun(s, { aimAngle: 0, isTap: true }).ok, true);
+
+  // 3. Exiting back into the main cave stows the speargun; re-entering before boss kill re-equips it
+  s.diver.x = spec.veil.sealWallX - 4.0;
+  s.diver.y = spec.veil.y;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.weaponEquipped, false, 'Speargun must be stowed when leaving Secret Lair');
+  assert.equal(s.secretLair.combatMode, false, 'Combat mode must turn off outside Secret Lair');
+  assert.equal(fireSpeargun(s, { aimAngle: 0, isTap: true }).ok, false, 'Cannot fire speargun outside Secret Lair');
+
+  s.diver.x = spec.armory.x;
+  s.diver.y = spec.armory.y;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.weaponEquipped, true, 'Speargun must re-equip upon re-entering Secret Lair before boss kill');
+  assert.equal(s.secretLair.combatMode, true);
+
+  // 4. Enter boss arena -> anime animation state ticks & reacts to hits with jelly jiggle
+  s.diver.x = spec.arena.cx - 12;
+  s.diver.y = spec.arena.cy;
+  for (let i = 0; i < 70; i++) stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.ok(s.secretLair.boss.anim, 'Boss must maintain cute anime animation state');
+  assert.ok(s.secretLair.boss.anim.swimCycle > 1.0, 'Boss swimCycle must advance every frame');
+  applyBossDamage(s, 40, { crit: true });
+  assert.ok(s.secretLair.boss.anim.jiggleAmp >= 0.12, 'Boss hit must trigger cute mochi jelly jiggle');
+  assert.ok(s.secretLair.boss.anim.hurtSec > 0, 'Boss hit must trigger brief > < hit-flinch expression');
+
+  // 5. Killing the boss IMMEDIATELY removes the speargun & prevents re-equipping or firing
+  s.secretLair.tapCooldownSec = 0;
+  fireSpeargun(s, { aimAngle: 0, isTap: true });
+  assert.ok(s.secretLair.spears.length >= 1);
+  applyBossDamage(s, s.secretLair.boss.hp + 999, { crit: true });
+  assert.equal(s.secretLair.bossDefeated, true);
+  assert.equal(s.secretLair.weaponEquipped, false, 'Killing the boss must immediately remove the speargun');
+  assert.equal(s.secretLair.spears.length, 0, 'In-flight spears must clear on boss defeat');
+  assert.equal(fireSpeargun(s, { aimAngle: 0, isTap: true }).ok, false, 'Cannot fire speargun after boss kill');
+  assert.equal(claimSecretLairWeapon(s).ok, false, 'Cannot re-claim speargun after boss kill');
+
+  // Re-visiting the armory after boss kill must NEVER re-equip the speargun
+  s.diver.x = spec.armory.x;
+  s.diver.y = spec.armory.y;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.weaponEquipped, false, 'Armory must not re-equip speargun after boss is defeated');
+
+  // 6. Peer co-op sync: receiving remote bossDefeated also immediately removes peer speargun
+  const peer = createDiveSession(LEVEL_1, { diverName: 'CoopPeer' });
+  peer.secretLair.veilBreached = true;
+  peer.secretLair.weaponClaimed = true;
+  peer.secretLair.weaponEquipped = true;
+  peer.secretLair.combatMode = true;
+  applySecretLairNetState(peer.secretLair, serializeSecretLairNetState(s.secretLair));
+  assert.equal(peer.secretLair.bossDefeated, true);
+  assert.equal(peer.secretLair.weaponEquipped, false, 'Co-op peer must also lose speargun immediately on boss defeat');
+});

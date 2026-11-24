@@ -1167,7 +1167,7 @@ export class CaveRenderer {
 
     // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
-    const lairArmed = Boolean(secretLair?.weaponEquipped);
+    const lairArmed = Boolean(secretLair?.combatMode && secretLair?.weaponEquipped && !secretLair?.bossDefeated);
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true, lairArmed ? { hasSpeargun: true } : null);
     }

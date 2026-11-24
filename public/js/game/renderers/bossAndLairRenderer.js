@@ -10,31 +10,52 @@ import { drawDetailedSpeargun } from '../artSprites.js';
 function getPhasePalette(phase) {
   if (phase >= 3) {
     return {
-      accent: '#f43f5e',
+      accent: '#fb7185',
       accentSoft: 'rgba(244, 63, 94, 0.28)',
-      glow: '#fda4af',
+      glow: '#fecdd3',
       sconce: '#fb7185',
-      bodyBase: '#4c0519',
-      bodyMid: '#881337',
+      bodyTop: '#f43f5e',
+      bodyMid: '#be123c',
+      bodyBase: '#881337',
+      belly: '#ffe4e6',
+      outline: '#3b071e',
+      cheek: 'rgba(255, 182, 193, 0.85)',
+      irisTop: '#fef08a',
+      irisBot: '#fb7185',
+      sucker: '#fda4af',
     };
   }
   if (phase === 2) {
     return {
       accent: '#c084fc',
       accentSoft: 'rgba(192, 132, 252, 0.26)',
-      glow: '#e9d5ff',
+      glow: '#f3e8ff',
       sconce: '#c084fc',
-      bodyBase: '#2e1065',
-      bodyMid: '#4c1d95',
+      bodyTop: '#a855f7',
+      bodyMid: '#7e22ce',
+      bodyBase: '#4c1d95',
+      belly: '#f3e8ff',
+      outline: '#22084d',
+      cheek: 'rgba(244, 114, 182, 0.78)',
+      irisTop: '#fef08a',
+      irisBot: '#c084fc',
+      sucker: '#e9d5ff',
     };
   }
   return {
-    accent: '#22d3ee',
+    accent: '#38bdf8',
     accentSoft: 'rgba(34, 211, 238, 0.24)',
-    glow: '#a5f3fc',
+    glow: '#cffafe',
     sconce: '#38bdf8',
-    bodyBase: '#172554',
-    bodyMid: '#1e1b4b',
+    bodyTop: '#6366f1',
+    bodyMid: '#4338ca',
+    bodyBase: '#312e81',
+    belly: '#cffafe',
+    outline: '#14123b',
+    cheek: 'rgba(251, 113, 133, 0.76)',
+    irisTop: '#fef08a',
+    irisBot: '#22d3ee',
+    sucker: '#a5f3fc',
   };
 }
 
@@ -523,6 +544,248 @@ export const bossAndLairMethods = {
     }
   },
 
+  /**
+   * Draw one plump, cel-shaded anime tentacle limb with smooth tapered ribbon silhouette,
+   * curly spiral tip, pastel underside highlight & glowing jelly suction-cup pads! (v184)
+   */
+  _drawChubbyAnimeLimb(ctx, pts, widths, pal, scale, { isBack = false, angry = false } = {}) {
+    if (!pts || pts.length < 2) return;
+    const n = pts.length;
+    const leftX = new Array(n);
+    const leftY = new Array(n);
+    const rightX = new Array(n);
+    const rightY = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const pPrev = pts[Math.max(0, i - 1)];
+      const pNext = pts[Math.min(n - 1, i + 1)];
+      const tx = pNext.x - pPrev.x;
+      const ty = pNext.y - pPrev.y;
+      const len = Math.hypot(tx, ty) || 1;
+      const nx = -ty / len;
+      const ny = tx / len;
+      const hw = widths[i];
+      leftX[i] = pts[i].x + nx * hw;
+      leftY[i] = pts[i].y + ny * hw;
+      rightX[i] = pts[i].x - nx * hw;
+      rightY[i] = pts[i].y - ny * hw;
+    }
+
+    ctx.save();
+    // Main chubby silhouette ribbon + rounded tip bulb
+    ctx.beginPath();
+    ctx.moveTo(leftX[0], leftY[0]);
+    for (let i = 1; i < n; i++) ctx.lineTo(leftX[i], leftY[i]);
+    const tip = pts[n - 1];
+    const tipPrev = pts[n - 2];
+    const tipAng = Math.atan2(tip.y - tipPrev.y, tip.x - tipPrev.x);
+    const tipR = Math.max(2, widths[n - 1] * 1.12);
+    const baseAng = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+    const baseR = Math.max(2, widths[0]);
+    ctx.arc(tip.x, tip.y, tipR, tipAng + Math.PI * 0.5, tipAng - Math.PI * 0.5, true);
+    for (let i = n - 1; i >= 0; i--) ctx.lineTo(rightX[i], rightY[i]);
+    ctx.arc(pts[0].x, pts[0].y, baseR, baseAng - Math.PI * 0.5, baseAng + Math.PI * 0.5, true);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(pts[0].x, pts[0].y, tip.x, tip.y);
+    if (angry) {
+      grad.addColorStop(0, '#be123c');
+      grad.addColorStop(1, '#fb7185');
+    } else if (isBack) {
+      grad.addColorStop(0, pal.bodyBase);
+      grad.addColorStop(1, pal.bodyMid);
+    } else {
+      grad.addColorStop(0, pal.bodyMid);
+      grad.addColorStop(0.65, pal.bodyTop);
+      grad.addColorStop(1, pal.accent);
+    }
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Soft creamy pastel belly stripe along underside edge
+    ctx.strokeStyle = isBack ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.34)';
+    ctx.lineWidth = Math.max(1.5, widths[0] * 0.32);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 1; i < n - 1; i++) {
+      const mx = pts[i].x * 0.6 + rightX[i] * 0.4;
+      const my = pts[i].y * 0.6 + rightY[i] * 0.4;
+      if (i === 1) ctx.moveTo(mx, my);
+      else ctx.lineTo(mx, my);
+    }
+    ctx.stroke();
+
+    // Crisp anime ink outline ONLY along outer sides & rounded tip (NO harsh straight cut line across the chubby belly!)
+    ctx.beginPath();
+    ctx.moveTo(leftX[0], leftY[0]);
+    for (let i = 1; i < n; i++) ctx.lineTo(leftX[i], leftY[i]);
+    ctx.arc(tip.x, tip.y, tipR, tipAng + Math.PI * 0.5, tipAng - Math.PI * 0.5, true);
+    for (let i = n - 1; i >= 0; i--) ctx.lineTo(rightX[i], rightY[i]);
+    ctx.strokeStyle = pal.outline;
+    ctx.lineWidth = Math.max(1.8, 0.085 * scale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Cute glowing jelly suction-cup dots along the underside!
+    ctx.fillStyle = pal.sucker;
+    for (let i = 2; i <= n - 2; i += 2) {
+      const sx = pts[i].x * 0.45 + rightX[i] * 0.55;
+      const sy = pts[i].y * 0.45 + rightY[i] * 0.55;
+      const sr = Math.max(1.8, widths[i] * 0.38);
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Build animated anime limb spline points in boss-local (right-side-up, +X = facing) space!
+   */
+  _computeAnimeLimbPose(limbDef, boss, anim, r, scale, timeSec) {
+    const st = boss.aiState || 'idle';
+    const cyc = anim.swimCycle || timeSec * 3.2;
+    const phase = limbDef.phase;
+    const segs = 9;
+    const pts = [];
+    const widths = [];
+
+    // Limb base attachment tucked around the chubby lower belly
+    const baseX = limbDef.attachX * r;
+    const baseY = limbDef.attachY * r;
+    let dirAngle = limbDef.restAngle;
+    let lengthR = limbDef.length * r;
+    let waveAmp = 0.28;
+    let curl = limbDef.curl; // positive curls into cute cinnamon-roll tips!
+
+    if (st === 'dormant') {
+      // Snug curled plushie sleep!
+      dirAngle = Math.PI * 0.52 + (limbDef.slot - 2.5) * 0.32;
+      lengthR *= 0.74;
+      waveAmp = 0.06;
+      curl = limbDef.curl * 1.65;
+    } else if (st === 'awakening') {
+      // Cute startled starfish pop!
+      const pop = Math.min(1, (boss.awakeningTimer || 0) * 1.4);
+      dirAngle = limbDef.restAngle - 0.35 * Math.sin(pop * Math.PI);
+      lengthR *= 0.92 + 0.18 * Math.sin(pop * Math.PI);
+      waveAmp = 0.35;
+      curl = limbDef.curl * 0.8;
+    } else if (st === 'lunge_windup') {
+      // Cat-pounce tuck behind chubby bottom, wiggling excitedly!
+      dirAngle = Math.PI + (limbDef.slot - 2.5) * 0.22;
+      lengthR *= 0.78;
+      waveAmp = 0.42;
+      curl = limbDef.curl * 1.25;
+    } else if (st === 'lunge_dash') {
+      // Joyful streaming ribbon-tails behind the torpedo chonk!
+      dirAngle = Math.PI + (limbDef.slot - 2.5) * 0.14;
+      lengthR *= 1.26;
+      waveAmp = 0.22;
+      curl = limbDef.curl * 0.25;
+    } else if (st === 'slam_windup') {
+      // Coil arms high & wide flanking the adorable angry face (never blocking the eyes/brows!)
+      if (limbDef.slot === 0 || limbDef.slot === 1) {
+        dirAngle = -0.78 - (limbDef.slot === 1 ? 0.35 : 0);
+        lengthR *= 1.12;
+        waveAmp = 0.32;
+        curl = -1.65;
+      } else if (limbDef.slot === 2 || limbDef.slot === 3) {
+        dirAngle = 0.65 + (limbDef.slot === 3 ? 0.42 : 0);
+        lengthR *= 1.12;
+        waveAmp = 0.32;
+        curl = 1.65;
+      } else {
+        dirAngle = Math.PI * 0.85 + (limbDef.slot - 4.5) * 0.34;
+        lengthR *= 0.96;
+      }
+    } else if (st === 'slam_strike') {
+      // Front 4 limbs whip straight forward/outward in slam!
+      if (limbDef.slot < 4) {
+        dirAngle = (limbDef.slot - 1.5) * 0.36;
+        lengthR *= 1.42;
+        waveAmp = 0.12;
+        curl = 0.15;
+      } else {
+        dirAngle = Math.PI * 0.9 + (limbDef.slot - 4.5) * 0.28;
+      }
+    } else if (st === 'ink_barrage') {
+      // Front limbs wave happily up beside puffed-up rosy cheeks!
+      if (limbDef.slot < 2) {
+        dirAngle = -0.35 + (limbDef.slot === 0 ? -0.45 : 0.55) + Math.sin(cyc * 2.4 + phase) * 0.32;
+        lengthR *= 0.92;
+        curl = limbDef.curl * 1.35;
+      } else {
+        dirAngle = limbDef.restAngle + Math.sin(cyc * 1.8 + phase) * 0.32;
+      }
+    } else if (st === 'vortex') {
+      // Playful spinning pinwheel swirl!
+      dirAngle = (limbDef.slot / 6) * Math.PI * 2 + timeSec * 2.4;
+      lengthR *= 1.08;
+      waveAmp = 0.42;
+      curl = 1.35;
+    } else if (st === 'beam_windup') {
+      // Cute Kamehameha pose: front limbs cradle the glowing energy orb in front of `:O` mouth!
+      if (limbDef.slot < 2) {
+        dirAngle = limbDef.slot === 0 ? -0.45 : 0.45;
+        lengthR *= 0.86;
+        waveAmp = 0.12;
+        curl = limbDef.slot === 0 ? 1.15 : -1.15;
+      } else {
+        dirAngle = Math.PI * 0.72 + (limbDef.slot - 3.5) * 0.38;
+        lengthR *= 0.98;
+      }
+    } else if (st === 'beam_sweep') {
+      // Brace back joyfully against plasma beam recoil!
+      dirAngle = Math.PI + (limbDef.slot - 2.5) * 0.28;
+      lengthR *= 1.14;
+      waveAmp = 0.34;
+      curl = limbDef.curl * 0.65;
+    } else if (st === 'grab_windup' || st === 'grab_hold') {
+      if (limbDef.slot === 0) {
+        // Extra-long cheeky grabby tentacle reaching forward!
+        dirAngle = Math.sin(timeSec * 6) * 0.18;
+        lengthR *= 1.48;
+        waveAmp = 0.28;
+        curl = 0.95;
+      } else {
+        dirAngle = limbDef.restAngle + Math.sin(cyc * 1.4 + phase) * 0.28;
+      }
+    } else if (st === 'stunned' || boss.defeated) {
+      // Cooked udon noodles flopping limply downward!
+      dirAngle = Math.PI * 0.5 + (limbDef.slot - 2.5) * 0.28;
+      lengthR *= 0.96;
+      waveAmp = 0.24;
+      curl = limbDef.curl * 0.55;
+    } else {
+      // Signature Cute Swimming / Hovering Breaststroke & Flutter Paddle!
+      const paddle = Math.sin(cyc + phase);
+      const scoop = Math.cos(cyc + phase);
+      dirAngle = limbDef.restAngle + paddle * 0.42 + (limbDef.isFront ? scoop * 0.18 : 0);
+      lengthR *= 0.94 + Math.max(0, scoop) * 0.14;
+      waveAmp = 0.30 + Math.min(0.18, (anim.speed || 0) * 0.02);
+    }
+
+    // Build smooth articulated spline with expressive curly tip
+    let curX = baseX;
+    let curY = baseY;
+    let curA = dirAngle;
+    const stepLen = lengthR / segs;
+    for (let s = 0; s <= segs; s++) {
+      const u = s / segs;
+      pts.push({ x: curX, y: curY });
+      // Chubby plump profile: thick base -> gentle taper -> cute rounded tip!
+      const w = Math.max(2.4, (0.27 - u * 0.165) * r + (u > 0.85 ? 0.02 * r : 0));
+      widths.push(w);
+      const wave = Math.sin(cyc * 1.35 + phase - u * 3.1) * waveAmp * (0.25 + u * 0.85);
+      const tipCurl = u > 0.48 ? curl * Math.pow((u - 0.48) / 0.52, 1.35) * 0.78 : 0;
+      curA = dirAngle + wave + tipCurl;
+      curX += Math.cos(curA) * stepLen;
+      curY += Math.sin(curA) * stepLen;
+    }
+    return { pts, widths };
+  },
+
   _drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
     const sx = toScreenX(boss.x);
     const sy = toScreenY(boss.y);
@@ -530,192 +793,422 @@ export const bossAndLairMethods = {
     const alpha = boss.defeated ? Math.max(0, boss.defeatAnimSec / 3.4) : 1;
     const flash = boss.hitFlash > 0;
     const pal = getPhasePalette(boss.phase);
-    const breathe = 1 + Math.sin(timeSec * 2.2) * 0.035;
+    const anim = boss.anim || {
+      facing: Math.cos(boss.angle || Math.PI) < 0 ? -1 : 1,
+      pitch: 0, scaleX: 1, scaleY: 1, swimCycle: timeSec * 3.2,
+      earFlap: timeSec * 3.8, cheekPuff: 0, mouthOpen: 0, dizzyAngle: timeSec * 4.8,
+      hurtSec: 0, crownBob: 0, speed: 0,
+    };
+    const st = boss.aiState || 'idle';
+    const isStunned = st === 'stunned';
+    const isAngry = st === 'slam_windup' || st === 'slam_strike' || st === 'lunge_windup' || st === 'lunge_dash' || boss.phase >= 3;
+
+    // Six cute paired limbs rooted seamlessly along the lower chubby rim (never crossing the face!)
+    const limbDefs = [
+      { slot: 1, back: true, isFront: true, attachX: 0.54, attachY: 0.52, restAngle: 0.52, length: 1.50, phase: 0.4, curl: 1.15 },
+      { slot: 3, back: true, isFront: false, attachX: -0.22, attachY: 0.64, restAngle: 1.88, length: 1.62, phase: 2.2, curl: -1.2 },
+      { slot: 5, back: true, isFront: false, attachX: -0.74, attachY: 0.34, restAngle: 2.72, length: 1.56, phase: 4.0, curl: 1.25 },
+      { slot: 0, back: false, isFront: true, attachX: 0.44, attachY: 0.66, restAngle: 0.88, length: 1.56, phase: 1.3, curl: -1.15 },
+      { slot: 2, back: false, isFront: false, attachX: -0.04, attachY: 0.74, restAngle: 1.46, length: 1.66, phase: 3.1, curl: 1.25 },
+      { slot: 4, back: false, isFront: false, attachX: -0.54, attachY: 0.62, restAngle: 2.38, length: 1.58, phase: 5.0, curl: -1.2 },
+    ];
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(sx, sy);
 
-    // 1. Six Smooth Articulated Tentacles with State-Specific Poses!
-    const isSlam = boss.aiState === 'slam_windup' || boss.aiState === 'slam_strike';
-    const isLunge = boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash';
-    const isVortex = boss.aiState === 'vortex';
-    const isStunned = boss.aiState === 'stunned';
-    for (const t of boss.tentacles || []) {
-      let baseA;
-      if (isSlam) {
-        baseA = boss.slamTargetAngle + (t.index - 2.5) * (boss.aiState === 'slam_windup' ? 0.42 : 0.24);
-      } else if (isLunge) {
-        // Stream torpedo-like behind the Kraken during lunge!
-        baseA = boss.angle + Math.PI + (t.index - 2.5) * 0.16;
-      } else if (isVortex) {
-        baseA = t.baseAngle + timeSec * 1.9;
-      } else if (isStunned) {
-        baseA = Math.PI * 0.5 + (t.index - 2.5) * 0.34;
-      } else {
-        baseA = t.baseAngle + Math.sin(t.waveOffset * 0.55) * 0.26;
-      }
-      const reachMult = boss.aiState === 'slam_strike' ? 1.44 : boss.aiState === 'slam_windup' ? 0.85 : isLunge ? 1.25 : 1.05;
-      const reachPx = t.reach * scale * reachMult;
-      const segs = 7;
-      const pts = [];
-      for (let s = 0; s <= segs; s++) {
-        const u = s / segs;
-        const bendAmp = isStunned ? 0.12 : isVortex ? 0.55 : 0.34;
-        const bend = Math.sin(t.waveOffset + u * 2.4) * bendAmp * u + Math.cos(t.waveOffset * 0.7 - u * 1.9) * 0.15 * u * u;
-        const dist = r * 0.52 + u * (reachPx - r * 0.42);
-        pts.push({
-          x: Math.cos(baseA + bend) * dist,
-          y: Math.sin(baseA + bend) * dist,
-          w: Math.max(2.2, (0.64 - u * 0.52) * scale),
-        });
-      }
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (let s = 0; s < segs; s++) {
-        const a = pts[s];
-        const b = pts[s + 1];
-        ctx.strokeStyle = isSlam ? '#7f1d1d' : pal.bodyBase;
-        ctx.lineWidth = a.w;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
+    // Subtle floating idle bob
+    const floatBobY = st === 'dormant' ? Math.sin(timeSec * 1.6) * 0.08 * r : Math.sin(anim.swimCycle * 0.9) * 0.11 * r;
+    ctx.translate(0, floatBobY);
 
-        ctx.strokeStyle = isSlam ? 'rgba(251, 113, 133, 0.58)' : 'rgba(129, 140, 248, 0.38)';
-        ctx.lineWidth = Math.max(1.2, a.w * 0.28);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
+    // Apply gentle right-side-up anime tilt + squash & stretch!
+    const facing = anim.facing >= 0 ? 1 : -1;
+    ctx.rotate((anim.pitch || 0) * facing);
+    ctx.scale(facing * (anim.scaleX || 1), anim.scaleY || 1);
 
-        if (s >= 1 && s <= segs - 1) {
-          ctx.fillStyle = isSlam ? '#fda4af' : pal.accent;
-          ctx.beginPath();
-          ctx.arc(a.x, a.y, Math.max(1.8, a.w * 0.24), 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+    // 1. Back-Layer Chubby Animated Limbs (depth behind body)
+    for (let i = 0; i < limbDefs.length; i++) {
+      if (!limbDefs[i].back) continue;
+      const pose = this._computeAnimeLimbPose(limbDefs[i], boss, anim, r, scale, timeSec);
+      this._drawChubbyAnimeLimb(ctx, pose.pts, pose.widths, pal, scale, {
+        isBack: true,
+        angry: st === 'slam_strike',
+      });
     }
 
-    // 2. Sculpted Abyssal Cephalopod Mantle Hood + Lateral Fins
-    ctx.save();
-    ctx.rotate(boss.angle + Math.PI);
-    const finWave = Math.sin(timeSec * 3.1) * 0.16 * r;
-    ctx.fillStyle = pal.bodyBase;
-    ctx.strokeStyle = pal.accent;
-    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
-    for (const sgn of [-1, 1]) {
+    // 2. Floppy Dumbo-Octopus Anime Ear-Fins (back-side ear behind head, front-side ear on side!)
+    const earFlapAng =
+      st === 'lunge_windup' || st === 'lunge_dash'
+        ? -0.68 + Math.sin(anim.earFlap) * 0.12
+        : isStunned || boss.defeated
+          ? 0.52 + Math.sin(timeSec * 2) * 0.08
+          : Math.sin(anim.earFlap) * 0.34 - (st === 'awakening' ? 0.25 : 0);
+    const drawDumboEar = (ex, ey, rotOffset, sizeScale) => {
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.rotate(rotOffset + earFlapAng);
+      const eg = ctx.createRadialGradient(-0.1 * r, -0.05 * r, 0.05 * r, 0, 0, 0.58 * r * sizeScale);
+      eg.addColorStop(0, pal.bodyTop);
+      eg.addColorStop(0.75, pal.bodyMid);
+      eg.addColorStop(1, pal.bodyBase);
+      ctx.fillStyle = eg;
+      ctx.strokeStyle = pal.outline;
+      ctx.lineWidth = Math.max(1.8, 0.085 * scale);
       ctx.beginPath();
-      ctx.moveTo(r * 0.35, sgn * r * 0.52);
-      ctx.quadraticCurveTo(r * 1.05, sgn * (r * 1.18 + finWave * sgn), r * 1.38, sgn * r * 0.36);
-      ctx.quadraticCurveTo(r * 1.02, sgn * r * 0.18, r * 0.35, sgn * r * 0.52);
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-0.34 * r * sizeScale, -0.44 * r * sizeScale, -0.68 * r * sizeScale, -0.18 * r * sizeScale, -0.56 * r * sizeScale, 0.22 * r * sizeScale);
+      ctx.bezierCurveTo(-0.42 * r * sizeScale, 0.44 * r * sizeScale, -0.12 * r * sizeScale, 0.24 * r * sizeScale, 0, 0.12 * r * sizeScale);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    }
+      // Soft glowing inner ear blush
+      ctx.fillStyle = pal.accentSoft;
+      ctx.beginPath();
+      ctx.ellipse(-0.28 * r * sizeScale, 0.05 * r * sizeScale, 0.18 * r * sizeScale, 0.11 * r * sizeScale, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+    // Far-side ear peeking from behind forehead
+    drawDumboEar(0.32 * r, -0.66 * r, 2.35, 0.78);
 
-    const mg = ctx.createRadialGradient(-r * 0.2, -r * 0.22, r * 0.12, r * 0.15, 0, r * 1.35);
-    mg.addColorStop(0, pal.bodyMid);
-    mg.addColorStop(0.58, pal.bodyBase);
-    mg.addColorStop(1, '#050816');
-    ctx.fillStyle = mg;
-    ctx.strokeStyle = flash ? '#ffffff' : pal.accent;
-    ctx.lineWidth = Math.max(2.2, (flash ? 0.18 : 0.09) * scale);
+    // 3. Plump Squishy Mochi-Pear Chubby Anime Body!
+    const puff = 1 + (anim.cheekPuff || 0) * 0.12;
+    const bg = ctx.createRadialGradient(-0.18 * r, -0.34 * r, 0.1 * r, 0.06 * r, 0.08 * r, 1.25 * r);
+    bg.addColorStop(0, pal.bodyTop);
+    bg.addColorStop(0.55, pal.bodyMid);
+    bg.addColorStop(1, pal.bodyBase);
+    ctx.fillStyle = bg;
+    ctx.strokeStyle = flash ? '#ffffff' : pal.outline;
+    ctx.lineWidth = Math.max(2.4, (flash ? 0.16 : 0.1) * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.92 * breathe, 0);
-    ctx.bezierCurveTo(-r * 0.92, -r * 0.96, r * 0.45, -r * 1.08 * breathe, r * 1.32 * breathe, 0);
-    ctx.bezierCurveTo(r * 0.45, r * 1.08 * breathe, -r * 0.92, r * 0.96, -r * 0.92 * breathe, 0);
+    // Classic kawaii chubby mochi-bell dome: round bouncy crown + plump cheeks + soft rounded tummy!
+    ctx.moveTo(0, -0.96 * r);
+    ctx.bezierCurveTo(0.76 * r, -0.96 * r, 1.08 * r * puff, -0.34 * r, 1.04 * r * puff, 0.24 * r);
+    ctx.bezierCurveTo(0.98 * r * puff, 0.78 * r, 0.48 * r, 0.94 * r, 0, 0.90 * r);
+    ctx.bezierCurveTo(-0.56 * r, 0.94 * r, -1.04 * r, 0.74 * r, -1.06 * r, 0.20 * r);
+    ctx.bezierCurveTo(-1.08 * r, -0.42 * r, -0.74 * r, -0.96 * r, 0, -0.96 * r);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Pulsing bioluminescent chromatophore ridge veins across the hood
-    const veinAlpha = (0.45 + 0.35 * Math.sin(timeSec * 4.2)).toFixed(2);
-    ctx.strokeStyle = boss.phase === 3 ? `rgba(251, 113, 133, ${veinAlpha})` : boss.phase === 2 ? `rgba(192, 132, 252, ${veinAlpha})` : `rgba(34, 211, 238, ${veinAlpha})`;
-    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
-    for (const sgn of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.45, sgn * r * 0.22);
-      ctx.quadraticCurveTo(r * 0.25, sgn * r * 0.62, r * 1.02, sgn * r * 0.16);
-      ctx.stroke();
-    }
-    if (flash) {
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.28)';
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // 2b. Sculpted Chitinous Beak / Abyssal Maw (opens wide during beam, vortex, ink barrage & awakening roar!)
-    const mawOpen =
-      boss.aiState === 'beam_windup' || boss.aiState === 'beam_sweep'
-        ? 0.95
-        : boss.aiState === 'vortex' || boss.aiState === 'ink_barrage' || boss.aiState === 'awakening'
-          ? 0.72
-          : 0.24;
-    ctx.save();
-    ctx.rotate(boss.angle);
-    ctx.translate(r * 0.74, 0);
-    // Glowing inner throat
-    const throatR = r * (0.16 + mawOpen * 0.22);
-    const tg = ctx.createRadialGradient(0, 0, throatR * 0.1, 0, 0, throatR);
-    tg.addColorStop(0, '#ffffff');
-    tg.addColorStop(0.45, pal.accent);
-    tg.addColorStop(1, '#020617');
-    ctx.fillStyle = tg;
+    // Soft pastel creamy belly patch on lower front chonk
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.beginPath();
-    ctx.arc(0, 0, throatR, 0, Math.PI * 2);
+    ctx.ellipse(0.18 * r, 0.42 * r, 0.56 * r, 0.36 * r, -0.08, 0, Math.PI * 2);
     ctx.fill();
-    // Upper & lower curved obsidian beak mandibles
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-    for (const sgn of [-1, 1]) {
+
+    // Cute glowing pastel polka-dot chromatophores along the back of the head
+    ctx.fillStyle = pal.glow;
+    ctx.globalAlpha = alpha * (0.48 + 0.22 * Math.sin(timeSec * 3.8));
+    for (const [dx, dy, dr] of [
+      [-0.58, -0.36, 0.11],
+      [-0.74, -0.08, 0.08],
+      [-0.44, -0.62, 0.075],
+      [-0.64, 0.18, 0.065],
+    ]) {
       ctx.beginPath();
-      ctx.moveTo(-r * 0.12, sgn * r * 0.08);
-      ctx.quadraticCurveTo(r * 0.18, sgn * r * (0.12 + mawOpen * 0.24), r * 0.34, sgn * r * (0.04 + mawOpen * 0.14));
-      ctx.quadraticCurveTo(r * 0.12, sgn * r * (0.04 + mawOpen * 0.08), -r * 0.12, sgn * r * 0.08);
+      ctx.arc(dx * r, dy * r, Math.max(1.6, dr * r), 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.globalAlpha = alpha;
+
+    // Glossy anime jelly-bean specular highlight on upper dome!
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse(-0.22 * r, -0.58 * r, 0.30 * r, 0.14 * r, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.beginPath();
+    ctx.arc(0.14 * r, -0.68 * r, Math.max(1.8, 0.055 * r), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (flash) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+      ctx.beginPath();
+      ctx.arc(0, 0, 0.96 * r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Near-side Dumbo Ear-Fin mounted jauntily on cheek-side of dome
+    drawDumboEar(-0.56 * r, -0.36 * r, -0.25, 1.0);
+
+    // 4. Cute Bouncy Golden Abyssal Crown perched jauntily on top of its chubby head!
+    ctx.save();
+    ctx.translate(0.06 * r, (-0.96 + (anim.crownBob || 0)) * r);
+    ctx.rotate(0.14 + Math.sin(anim.swimCycle * 1.1) * 0.07);
+    const cwCrown = 0.42 * r;
+    const chCrown = 0.28 * r;
+    const cg = ctx.createLinearGradient(0, -chCrown, 0, chCrown * 0.4);
+    cg.addColorStop(0, '#fef08a');
+    cg.addColorStop(0.55, '#f59e0b');
+    cg.addColorStop(1, '#b45309');
+    ctx.fillStyle = cg;
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-cwCrown, chCrown * 0.35);
+    ctx.lineTo(-cwCrown * 0.88, -chCrown * 0.72);
+    ctx.lineTo(-cwCrown * 0.32, -chCrown * 0.12);
+    ctx.lineTo(0, -chCrown);
+    ctx.lineTo(cwCrown * 0.32, -chCrown * 0.12);
+    ctx.lineTo(cwCrown * 0.88, -chCrown * 0.72);
+    ctx.lineTo(cwCrown, chCrown * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Glowing pearl-gem tips on the crown!
+    ctx.fillStyle = pal.accent;
+    for (const [gx, gy] of [[-cwCrown * 0.88, -chCrown * 0.78], [0, -chCrown * 1.06], [cwCrown * 0.88, -chCrown * 0.78]]) {
+      ctx.beginPath();
+      ctx.arc(gx, gy, Math.max(2, 0.065 * r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 5. Front-Layer Chubby Animated Limbs (in front of lower belly!)
+    for (let i = 0; i < limbDefs.length; i++) {
+      if (limbDefs[i].back) continue;
+      const pose = this._computeAnimeLimbPose(limbDefs[i], boss, anim, r, scale, timeSec);
+      this._drawChubbyAnimeLimb(ctx, pose.pts, pose.widths, pal, scale, {
+        isBack: false,
+        angry: st === 'slam_strike',
+      });
+    }
+
+    // 6. Rosy Glowing Anime Blush Cheeks (swell huge when puffing up for Ink Barrage!)
+    const blushScale = 1 + (anim.cheekPuff || 0) * 0.42;
+    for (const [bxC, byC, rxC] of [[0.20 * r, 0.25 * r, 0.16 * r], [0.80 * r, 0.22 * r, 0.13 * r]]) {
+      ctx.save();
+      ctx.fillStyle = pal.cheek;
+      ctx.beginPath();
+      ctx.ellipse(bxC, byC, rxC * blushScale, 0.085 * r * blushScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Cute anime diagonal blush hatch lines!
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = Math.max(1.1, 0.035 * scale);
+      for (let h = -1; h <= 1; h++) {
+        ctx.beginPath();
+        ctx.moveTo(bxC + h * 0.055 * r - 0.02 * r, byC + 0.035 * r);
+        ctx.lineTo(bxC + h * 0.055 * r + 0.025 * r, byC - 0.035 * r);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 7. Expressive Cute Anime Mouth (:3 smile, puffy o, glowing :O beam/vortex, wobbly ~ stunned!)
+    const mouthX = 0.56 * r;
+    const mouthY = 0.24 * r;
+    const mOpen = Math.max(0, Math.min(1, anim.mouthOpen || 0));
+    ctx.save();
+    if (mOpen > 0.22) {
+      // Big adorable glowing Kirby/anime `:O` mouth!
+      const mrX = Math.max(2, (0.09 + mOpen * 0.13) * r);
+      const mrY = Math.max(2, (0.08 + mOpen * 0.15) * r);
+      const mg = ctx.createRadialGradient(mouthX, mouthY, mrX * 0.1, mouthX, mouthY, mrY * 1.1);
+      mg.addColorStop(0, st === 'beam_windup' || st === 'beam_sweep' ? '#ffffff' : '#fda4af');
+      mg.addColorStop(0.55, st === 'beam_windup' || st === 'beam_sweep' ? pal.accent : '#9f1239');
+      mg.addColorStop(1, '#3b071e');
+      ctx.fillStyle = mg;
+      ctx.strokeStyle = pal.outline;
+      ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+      ctx.beginPath();
+      ctx.ellipse(mouthX, mouthY, mrX, mrY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Cute tiny pink tongue curve at bottom of open mouth (when not firing plasma beam)
+      if (st !== 'beam_windup' && st !== 'beam_sweep') {
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.ellipse(mouthX, mouthY + mrY * 0.45, mrX * 0.55, mrY * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (isStunned || boss.defeated) {
+      // Wobbly dazed `~` anime mouth
+      ctx.strokeStyle = pal.outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(mouthX - 0.12 * r, mouthY);
+      ctx.quadraticCurveTo(mouthX - 0.04 * r, mouthY - 0.06 * r, mouthX, mouthY);
+      ctx.quadraticCurveTo(mouthX + 0.05 * r, mouthY + 0.06 * r, mouthX + 0.12 * r, mouthY);
+      ctx.stroke();
+    } else {
+      // Iconic cute `:3` / `ω` anime smile!
+      ctx.strokeStyle = pal.outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(mouthX - 0.065 * r, mouthY - 0.01 * r, Math.max(1.5, 0.065 * r), 0.15, Math.PI - 0.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(mouthX + 0.065 * r, mouthY - 0.01 * r, Math.max(1.5, 0.065 * r), 0.1, Math.PI - 0.15);
       ctx.stroke();
     }
     ctx.restore();
 
-    // 3. Twin Fierce Armored-Brow Bioluminescent Eyes facing aggro angle (snap open during Awakening!)
-    const eyeOpen = Math.max(
-      0.08,
-      Math.min(1, boss.aiState === 'dormant' ? 0.15 : boss.aiState === 'awakening' ? Math.max(0.1, (boss.awakeningTimer || 0) * 2.2) : 1.0)
-    );
-    const ex = Math.cos(boss.angle) * r * 0.45;
-    const ey = Math.sin(boss.angle) * r * 0.45;
-    const px = -Math.sin(boss.angle) * r * 0.34;
-    const py = Math.cos(boss.angle) * r * 0.34;
-    for (const sgn of [-1, 1]) {
-      const cx = ex + px * sgn;
-      const cy = ey + py * sgn;
-      ctx.fillStyle = '#020617';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r * 0.22, r * 0.15 * eyeOpen, boss.angle, 0, Math.PI * 2);
-      ctx.fill();
-      if (eyeOpen > 0.2) {
-        const eg = ctx.createRadialGradient(cx, cy, r * 0.02, cx, cy, r * 0.18);
-        eg.addColorStop(0, '#fef08a');
-        eg.addColorStop(0.55, boss.phase === 3 ? '#f43f5e' : '#f59e0b');
-        eg.addColorStop(1, '#7c2d12');
-        ctx.fillStyle = eg;
+    // 8. GIANT Expressive Glossy Anime Eyes (placed in classic cute 3/4 view so BOTH eyes shine!)
+    const eyeSpecs = [
+      { cx: 0.34 * r, cy: 0.03 * r, rx: 0.185 * r, ry: 0.225 * r },
+      { cx: 0.76 * r, cy: 0.01 * r, rx: 0.155 * r, ry: 0.205 * r },
+    ];
+    const isHurtFlinch = (anim.hurtSec || 0) > 0.02 && !isStunned && !boss.defeated;
+    for (let ei = 0; ei < eyeSpecs.length; ei++) {
+      const e = eyeSpecs[ei];
+      ctx.save();
+      ctx.translate(e.cx, e.cy);
+      if (st === 'dormant') {
+        // Peaceful sleeping closed curves `u u`
+        ctx.strokeStyle = pal.outline;
+        ctx.lineWidth = Math.max(2, 0.085 * scale);
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.ellipse(cx, cy, r * 0.17, r * 0.11 * eyeOpen, boss.angle, 0, Math.PI * 2);
+        ctx.arc(0, 0, Math.max(2, e.rx * 0.82), 0.2, Math.PI - 0.2);
+        ctx.stroke();
+      } else if (isHurtFlinch || boss.defeated) {
+        // Cute squeezed `> <` flinch or KO eyes!
+        ctx.strokeStyle = pal.outline;
+        ctx.lineWidth = Math.max(2.2, 0.095 * scale);
+        ctx.lineCap = 'round';
+        const sgn = ei === 0 ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(-sgn * e.rx * 0.65, -e.ry * 0.45);
+        ctx.lineTo(sgn * e.rx * 0.55, 0);
+        ctx.lineTo(-sgn * e.rx * 0.65, e.ry * 0.45);
+        ctx.stroke();
+      } else if (isStunned) {
+        // Adorable spinning dizzy `@_@` anime spiral eyes!
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = pal.outline;
+        ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, Math.max(2, e.rx), Math.max(2, e.ry * 0.92), 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
+        ctx.rotate((ei === 0 ? 1 : -1) * (anim.dizzyAngle || timeSec * 5));
+        ctx.strokeStyle = pal.outline;
+        ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+        ctx.beginPath();
+        for (let k = 0; k <= 24; k++) {
+          const ang = k * 0.52;
+          const rad = (k / 24) * e.rx * 0.78;
+          const px = Math.cos(ang) * rad;
+          const py = Math.sin(ang) * rad;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      } else {
+        // Giant Glossy Sparkling Kawaii Anime Eyes!
+        const wideMult = st === 'awakening' || st === 'beam_windup' ? 1.12 : 1.0;
+        const rxE = Math.max(2, e.rx * wideMult);
+        const ryE = Math.max(2, e.ry * wideMult);
+        // Deep dark glossy iris base
+        ctx.fillStyle = '#09071a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rxE, ryE, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Rich glowing lower anime iris crescent!
+        const ig = ctx.createRadialGradient(0, ryE * 0.35, rxE * 0.08, 0, ryE * 0.25, ryE * 0.88);
+        ig.addColorStop(0, pal.irisTop);
+        ig.addColorStop(0.55, pal.irisBot);
+        ig.addColorStop(1, 'rgba(15, 23, 42, 0)');
+        ctx.fillStyle = ig;
+        ctx.beginPath();
+        ctx.ellipse(0, ryE * 0.22, rxE * 0.82, ryE * 0.62, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Big glossy upper-left anime catchlight + secondary lower-right sparkle!
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(-rxE * 0.28, -ryE * 0.32, Math.max(1.5, rxE * 0.34), Math.max(1.5, ryE * 0.28), -0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(rxE * 0.30, ryE * 0.34, Math.max(1.2, rxE * 0.16), 0, Math.PI * 2);
+        ctx.fill();
+        // Cute anime eyelashes / upper eyelid curve
+        ctx.strokeStyle = pal.outline;
+        ctx.lineWidth = Math.max(2, 0.08 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, 0, rxE * 1.02, Math.PI * 1.08, Math.PI * 1.92);
+        ctx.stroke();
+        // Cute determined angled anime eyebrows when winding up an attack or in Phase 3!
+        if (isAngry) {
+          const browTilt = ei === 0 ? 0.34 : -0.28;
+          ctx.strokeStyle = pal.outline;
+          ctx.lineWidth = Math.max(2.2, 0.095 * scale);
+          ctx.beginPath();
+          ctx.moveTo(-rxE * 0.85, -ryE * 1.08 - browTilt * ryE * 0.5);
+          ctx.lineTo(rxE * 0.85, -ryE * 1.08 + browTilt * ryE * 0.5);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // 9. Cute Anime Status Emotes (Phase 3 Anger Vein `💢`, Stunned Orbiting Gold Stars `★`, Sleeping `Z z z`!)
+    if (boss.phase >= 3 && !isStunned && !boss.defeated) {
+      // Classic anime popped anger vein mark near upper forehead!
+      const vx = -0.18 * r;
+      const vy = -0.52 * r;
+      const pulse = 1 + Math.sin(timeSec * 14) * 0.14;
+      const vr = 0.12 * r * pulse;
+      ctx.save();
+      ctx.translate(vx, vy);
+      ctx.strokeStyle = '#fecdd3';
+      ctx.lineWidth = Math.max(2, 0.07 * scale);
+      ctx.lineCap = 'round';
+      for (let q = 0; q < 4; q++) {
+        ctx.rotate(Math.PI * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(vr * 0.25, vr * 0.95);
+        ctx.quadraticCurveTo(vr * 0.32, vr * 0.32, vr * 0.95, vr * 0.25);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // World-upright cute orbiting dizzy stars when stunned, or floating `Z z z` bubbles when sleeping!
+    if (isStunned && !boss.defeated) {
+      ctx.save();
+      ctx.translate(sx, sy - 1.25 * r + floatBobY);
+      for (let s = 0; s < 3; s++) {
+        const sa = (anim.dizzyAngle || timeSec * 4.5) + (s * Math.PI * 2) / 3;
+        const stx = Math.cos(sa) * 0.72 * r;
+        const sty = Math.sin(sa) * 0.22 * r;
+        const starR = Math.max(4, 0.16 * r);
         ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(boss.angle);
-        ctx.fillStyle = '#020617';
+        ctx.translate(stx, sty);
+        ctx.rotate(sa * 1.5);
+        ctx.fillStyle = '#fde047';
+        ctx.strokeStyle = '#854d0e';
+        ctx.lineWidth = Math.max(1.2, 0.045 * scale);
         ctx.beginPath();
-        ctx.ellipse(0, 0, r * 0.032, r * 0.095 * eyeOpen, 0, 0, Math.PI * 2);
+        for (let p = 0; p < 10; p++) {
+          const pr = p % 2 === 0 ? starR : starR * 0.45;
+          const pa = (p * Math.PI) / 5 - Math.PI * 0.5;
+          if (p === 0) ctx.moveTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+          else ctx.lineTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+        }
+        ctx.closePath();
         ctx.fill();
+        ctx.stroke();
         ctx.restore();
       }
+      ctx.restore();
+    } else if (st === 'dormant' && !boss.defeated) {
+      ctx.save();
+      ctx.font = `900 ${Math.max(12, Math.round(0.32 * r))}px ui-monospace, monospace`;
+      ctx.fillStyle = '#bae6fd';
+      ctx.textAlign = 'center';
+      for (let z = 0; z < 3; z++) {
+        const zp = (timeSec * 0.55 + z * 0.33) % 1;
+        ctx.globalAlpha = Math.sin(zp * Math.PI) * 0.85;
+        ctx.fillText('Z', sx + (0.55 + zp * 0.45) * r, sy - (0.8 + zp * 0.95) * r);
+      }
+      ctx.restore();
     }
-
-    ctx.restore();
   },
 
   /**
@@ -918,10 +1411,11 @@ export const bossAndLairMethods = {
         ctx.restore();
       }
 
-      // 3a. Pillar-Occluded Sweeping Bioluminescent Abyssal Beam (blasts straight from the sculpted beak/maw!)
+      // 3a. Pillar-Occluded Sweeping Bioluminescent Abyssal Beam (blasts straight from the wide-open `:O` mouth!)
       if (boss.aiState === 'beam_windup' || boss.aiState === 'beam_sweep') {
-        const mx = bx + Math.cos(boss.beamAngle) * boss.radius * 0.78 * scale;
-        const my = by + Math.sin(boss.beamAngle) * boss.radius * 0.78 * scale;
+        const bFacing = (boss.anim?.facing ?? (Math.cos(boss.angle || Math.PI) < 0 ? -1 : 1)) >= 0 ? 1 : -1;
+        const mx = bx + bFacing * boss.radius * 0.56 * scale;
+        const my = by + boss.radius * 0.24 * scale;
         const ex = toScreenX(boss.beamEndX);
         const ey = toScreenY(boss.beamEndY);
         const isFiring = boss.aiState === 'beam_sweep';
@@ -1150,20 +1644,20 @@ export const bossAndLairMethods = {
         ctx.restore();
       }
 
-      // 3i. Glowing Exposed Mantle Weak-Point Core + Orbiting Armor Petals
+      // 3i. Glowing Orbiting Star-Pearl Weak-Point Core (orbits cleanly outside the silhouette so the cute face shines!)
       if (boss.aiState !== 'dormant') {
-        const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.56));
-        const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.56));
-        const stunnedBoost = boss.aiState === 'stunned' ? 1.4 : 1.0;
-        const coreR = (1.05 + 0.18 * Math.sin(timeSec * 8)) * scale * stunnedBoost;
+        const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 1.08));
+        const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 1.08));
+        const stunnedBoost = boss.aiState === 'stunned' ? 1.35 : 1.0;
+        const coreR = (0.78 + 0.14 * Math.sin(timeSec * 8)) * scale * stunnedBoost;
         ctx.save();
-        const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.9);
+        const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.65);
         cg.addColorStop(0, '#ffffff');
-        cg.addColorStop(0.35, boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8');
+        cg.addColorStop(0.38, boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8');
         cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
         ctx.fillStyle = cg;
         ctx.beginPath();
-        ctx.arc(coreX, coreY, coreR * 1.9, 0, Math.PI * 2);
+        ctx.arc(coreX, coreY, coreR * 1.65, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#fde047';
         ctx.lineWidth = Math.max(1.6, 0.07 * scale);
@@ -1254,7 +1748,7 @@ export const bossAndLairMethods = {
     }
 
     // 6. 5th-Shot Hyper-Tip Ready Golden Glow on Diver's Speargun Tip!
-    if (lair.weaponEquipped && diver && (lair.shotCounter || 0) % 5 === 4) {
+    if (lair.combatMode && lair.weaponEquipped && !lair.bossDefeated && diver && (lair.shotCounter || 0) % 5 === 4) {
       const aim = diver.torchAngle ?? diver.angle ?? 0;
       const hx = toScreenX((diver.body?.hand?.x ?? diver.x) + Math.cos(aim) * 1.05);
       const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.05);
