@@ -1654,6 +1654,7 @@ export const bossAndLairMethods = {
       onyx: { lit: '#a855f7', mid: '#3b0764', dark: '#0f172a', rim: '#fde047', ink: '#020617' },
       coral: { lit: '#fda4af', mid: '#e11d48', dark: '#881337', rim: '#fde047', ink: '#1f0510' },
       basalt: { lit: '#78716c', mid: '#292524', dark: '#0c0a09', rim: '#fb923c', ink: '#09090b' },
+      gypsum: { lit: '#f5d0fe', mid: '#c084fc', dark: '#4c1d95', rim: '#bae6fd', ink: '#1e1b4b' },
     };
     for (const st of stalactites) {
       if (st.state === 'broken') continue;
@@ -1738,7 +1739,7 @@ export const bossAndLairMethods = {
   },
 
   /**
-   * Dispatch boss rendering across all 6 unique biome Secret Lair Guardians (v189 / v193).
+   * Dispatch boss rendering across all 8 unique biome Secret Lair Guardians (v189–v194).
    */
   _drawSecretLairBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
     const t = Number.isFinite(timeSec) ? timeSec : 0;
@@ -1752,6 +1753,10 @@ export const bossAndLairMethods = {
       this._drawSolarLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'thermal-nautilus') {
       this._drawThermalNautilusBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'crystal-basilisk') {
+      this._drawCrystalBasiliskBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'phantom-uboat') {
+      this._drawPhantomUBoatBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -2728,6 +2733,353 @@ export const bossAndLairMethods = {
     ctx.moveTo(ex - er * 1.1, ey - er * 0.68);
     ctx.lineTo(ex + er * 1.15, ey - er * 0.36);
     ctx.stroke();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * CRYSTAL BASILISK — Iridescent Faceted Gypsum-Selenite Mirror Wyrm (Orda Crystal Maze) (v194).
+   */
+  _drawCrystalBasiliskBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = (boss.radius || 4.5) * scale;
+    const facing = boss.facing || -1;
+    const hitF = boss.hitFlash || 0;
+    const isStunned = boss.aiState === 'stunned';
+    const anim = boss.anim || {};
+    const breath = 1 + Math.sin(timeSec * 3.0) * 0.028;
+    const floatBobY = Math.sin(timeSec * 2.1) * 0.09 * r;
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    if (boss.defeated) {
+      ctx.globalAlpha = Math.max(0.2, 1 - (boss.defeatTimer || 0) * 0.28);
+    }
+    ctx.scale(facing * (anim.squashX || 1) * breath, (anim.squashY || 1) / breath);
+
+    const crystalLit = hitF > 0 ? '#ffffff' : boss.phase >= 3 ? '#f472b6' : '#f5d0fe';
+    const crystalMid = hitF > 0 ? '#f0abfc' : boss.phase >= 3 ? '#a21caf' : '#a855f7';
+    const crystalCyan = boss.phase >= 3 ? '#fde047' : '#38bdf8';
+
+    // 1. Faceted Diamond Selenite Tail Segments + Jagged Crystal Spires
+    ctx.strokeStyle = '#1e1b4b';
+    ctx.lineWidth = Math.max(2, 0.085 * scale);
+    for (let i = 5; i >= 1; i--) {
+      const segX = -r * (0.48 + i * 0.34);
+      const segY = Math.sin(timeSec * 4.0 - i * 0.88) * r * (0.26 + i * 0.04);
+      const segR = r * (0.62 - i * 0.075);
+
+      // Tall faceted gypsum dorsal crystal spire
+      ctx.fillStyle = i % 2 === 0 ? crystalCyan : crystalLit;
+      ctx.beginPath();
+      ctx.moveTo(segX - segR * 0.35, segY - segR * 0.52);
+      ctx.lineTo(segX - segR * 0.55, segY - segR * 1.65);
+      ctx.lineTo(segX + segR * 0.25, segY - segR * 0.65);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Hexagonal faceted crystal coil body
+      ctx.fillStyle = i % 2 === 0 ? crystalMid : '#7e22ce';
+      ctx.beginPath();
+      ctx.moveTo(segX + segR, segY);
+      ctx.lineTo(segX + segR * 0.45, segY - segR * 0.85);
+      ctx.lineTo(segX - segR * 0.55, segY - segR * 0.8);
+      ctx.lineTo(segX - segR, segY);
+      ctx.lineTo(segX - segR * 0.55, segY + segR * 0.8);
+      ctx.lineTo(segX + segR * 0.45, segY + segR * 0.85);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Glossy specular prism facet highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+      ctx.beginPath();
+      ctx.moveTo(segX + segR * 0.42, segY - segR * 0.78);
+      ctx.lineTo(segX - segR * 0.42, segY - segR * 0.72);
+      ctx.lineTo(segX, segY - segR * 0.05);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 2. Sweeping Selenite Crystal Crown Horns behind the head
+    for (let h = 0; h < 3; h++) {
+      const a = -2.35 + h * 0.36;
+      const len = r * (h === 1 ? 1.62 : 1.32);
+      ctx.fillStyle = h === 1 ? crystalCyan : crystalLit;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.22, -r * 0.28);
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+      ctx.lineTo(r * 0.14, -r * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 3. Faceted Angular Crystal Basilisk Head + Luminous Fangs
+    const headG = ctx.createLinearGradient(-r * 0.5, -r * 0.75, r * 0.9, r * 0.55);
+    headG.addColorStop(0, crystalLit);
+    headG.addColorStop(0.5, crystalMid);
+    headG.addColorStop(1, '#3b0764');
+    ctx.fillStyle = headG;
+    ctx.lineWidth = Math.max(2.6, 0.11 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, -r * 0.32);
+    ctx.lineTo(-r * 0.1, -r * 0.78);
+    ctx.lineTo(r * 0.64, -r * 0.54);
+    ctx.lineTo(r * 1.05, -r * 0.04);
+    ctx.lineTo(r * 0.68, r * 0.44);
+    ctx.lineTo(-r * 0.12, r * 0.58);
+    ctx.lineTo(-r * 0.62, r * 0.32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner iridescent prism plane highlight
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.34)';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.08, -r * 0.72);
+    ctx.lineTo(r * 0.58, -r * 0.5);
+    ctx.lineTo(r * 0.2, -r * 0.08);
+    ctx.lineTo(-r * 0.42, -r * 0.2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Translucent crystal fangs
+    ctx.fillStyle = '#e0f2fe';
+    ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+    for (let f = 0; f < 3; f++) {
+      const fx = r * (0.44 + f * 0.16);
+      const fy = r * (0.36 - f * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(fx - r * 0.05, fy);
+      ctx.lineTo(fx + r * 0.02, fy + r * 0.18);
+      ctx.lineTo(fx + r * 0.08, fy - r * 0.03);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 4. Orbiting Selenite Heart Weakpoint
+    const wx = Math.cos(boss.weakAngle || 0) * r * 0.84 * facing;
+    const wy = Math.sin(boss.weakAngle || 0) * r * 0.84;
+    const pulse = 0.8 + 0.2 * Math.sin(timeSec * 8);
+    const crR = r * 0.3 * pulse;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.moveTo(wx, wy - crR * 1.3);
+    ctx.lineTo(wx + crR * 0.9, wy);
+    ctx.lineTo(wx, wy + crR * 1.3);
+    ctx.lineTo(wx - crR * 0.9, wy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 5. Single Fierce Faceted Amethyst-Cyan Anime Eye
+    const ex = r * 0.34;
+    const ey = -r * 0.14;
+    const er = r * 0.26;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#1e1b4b';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, er * 1.12, er * 0.86, -0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (isStunned) {
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.48, ey - er * 0.45);
+      ctx.lineTo(ex + er * 0.48, ey + er * 0.45);
+      ctx.moveTo(ex + er * 0.48, ey - er * 0.45);
+      ctx.lineTo(ex - er * 0.48, ey + er * 0.45);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = crystalCyan;
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.08, ey, er * 0.65, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1e1b4b';
+      ctx.beginPath();
+      ctx.ellipse(ex + er * 0.12, ey, er * 0.18, er * 0.46, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - er * 0.16, ey - er * 0.22, er * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#1e1b4b';
+    ctx.lineWidth = Math.max(2.5, 0.1 * scale);
+    ctx.beginPath();
+    ctx.moveTo(ex - er * 1.2, ey - er * 0.58);
+    ctx.lineTo(ex + er * 1.15, ey - er * 0.34);
+    ctx.stroke();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * PHANTOM TORPEDO SENTINEL — Haunted North Sea Type-VIIC U-Boat Leviathan (U-1206 Wreck) (v194).
+   */
+  _drawPhantomUBoatBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = (boss.radius || 4.6) * scale;
+    const facing = boss.facing || -1;
+    const hitF = boss.hitFlash || 0;
+    const isStunned = boss.aiState === 'stunned';
+    const anim = boss.anim || {};
+    const breath = 1 + Math.sin(timeSec * 2.5) * 0.025;
+    const floatBobY = Math.sin(timeSec * 1.8) * 0.08 * r;
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    if (boss.defeated) {
+      ctx.globalAlpha = Math.max(0.2, 1 - (boss.defeatTimer || 0) * 0.28);
+    }
+    ctx.scale(facing * (anim.squashX || 1) * breath, (anim.squashY || 1) / breath);
+
+    const ghostGlow = boss.phase >= 3 ? '#fb7185' : boss.phase === 2 ? '#fde047' : '#2dd4bf';
+    const hullTop = hitF > 0 ? '#ffffff' : '#475569';
+    const hullMid = hitF > 0 ? '#ccfbf1' : '#1e293b';
+    const hullDark = '#020617';
+
+    // 1. Twin Spinning Spectral Stern Propellers + Rudder Fin
+    const propSpin = Math.sin(timeSec * 18) * r * 0.36;
+    ctx.fillStyle = ghostGlow;
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.12, 0);
+    ctx.lineTo(-r * 1.56, -r * 0.52);
+    ctx.lineTo(-r * 1.46, r * 0.52);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.ellipse(-r * 1.42, 0, r * 0.1, Math.max(r * 0.14, Math.abs(propSpin) + r * 0.12), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 2. Armored Conning Tower Sail + Glowing Periscope Crown
+    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#334155';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.4, 0.1 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.42, -r * 0.56);
+    ctx.lineTo(-r * 0.28, -r * 1.18);
+    ctx.lineTo(r * 0.28, -r * 1.14);
+    ctx.lineTo(r * 0.42, -r * 0.54);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Glowing periscope mast
+    ctx.strokeStyle = ghostGlow;
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.04, -r * 1.15);
+    ctx.lineTo(r * 0.04, -r * 1.56);
+    ctx.lineTo(r * 0.26, -r * 1.56);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(r * 0.26, -r * 1.56, r * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Sleek Armored Type-VIIC U-Boat Pressure Hull Body
+    const hullG = ctx.createLinearGradient(0, -r * 0.72, 0, r * 0.72);
+    hullG.addColorStop(0, hullTop);
+    hullG.addColorStop(0.52, hullMid);
+    hullG.addColorStop(1, hullDark);
+    ctx.fillStyle = hullG;
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.8, 0.12 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.24, -r * 0.24);
+    ctx.quadraticCurveTo(-r * 0.35, -r * 0.72, r * 0.68, -r * 0.52);
+    ctx.quadraticCurveTo(r * 1.26, -r * 0.22, r * 1.18, r * 0.14);
+    ctx.quadraticCurveTo(r * 0.88, r * 0.62, -r * 0.3, r * 0.66);
+    ctx.quadraticCurveTo(-r * 0.95, r * 0.56, -r * 1.24, r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Spectral glowing flood-vent ribs along the side of the submarine hull
+    const pulse = 0.6 + 0.4 * Math.sin(timeSec * 5.8);
+    ctx.fillStyle = ghostGlow;
+    ctx.globalAlpha = 0.72 + pulse * 0.24;
+    for (let v = 0; v < 5; v++) {
+      const vx = -r * (0.72 - v * 0.26);
+      ctx.fillRect(vx - r * 0.05, -r * 0.22, r * 0.1, r * 0.34);
+    }
+    ctx.globalAlpha = 1;
+
+    // Armored Torpedo-Tube Bow Jaws + Glowing Muzzle Bays
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = ghostGlow;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    for (let t = 0; t < 2; t++) {
+      ctx.beginPath();
+      ctx.arc(r * (0.96 - t * 0.12), r * (0.18 + t * 0.18), r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 4. Spectral Reactor Core Weakpoint
+    const wx = Math.cos(boss.weakAngle || 0) * r * 0.82 * facing;
+    const wy = Math.sin(boss.weakAngle || 0) * r * 0.82;
+    ctx.fillStyle = '#ccfbf1';
+    ctx.strokeStyle = ghostGlow;
+    ctx.lineWidth = Math.max(2, 0.085 * scale);
+    ctx.beginPath();
+    ctx.arc(wx, wy, r * 0.24 * (0.85 + pulse * 0.2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 5. Glowing Spectral Emerald Sonar Porthole Anime Eye
+    const ex = r * 0.48;
+    const ey = -r * 0.12;
+    const er = r * 0.27;
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er * 1.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (isStunned) {
+      ctx.strokeStyle = ghostGlow;
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex + er * 0.5, ey + er * 0.45);
+      ctx.moveTo(ex + er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex - er * 0.5, ey + er * 0.45);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = ghostGlow;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er * 0.78, 0, Math.PI * 2);
+      ctx.fill();
+      // Rotating sonar sweep line inside eye
+      const sweep = timeSec * 4.5;
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex + Math.cos(sweep) * er * 0.74, ey + Math.sin(sweep) * er * 0.74);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - er * 0.22, ey - er * 0.22, er * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -3807,6 +4159,80 @@ export const bossAndLairMethods = {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        ctx.restore();
+      } else if (hz.kind === 'crystal-prism') {
+        // Faceted Iridescent Selenite Mirror Shard (Crystal Basilisk, v194)
+        const pr = (hz.radius || 1.25) * scale;
+        ctx.save();
+        ctx.translate(hx, hy);
+        if (healStamp) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.65;
+          ctx.drawImage(healStamp, -pr * 2.0, -pr * 2.0, pr * 4.0, pr * 4.0);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
+        ctx.rotate(Math.sin(timeSec * 2.1 + (hz.phase || 0)) * 0.22);
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#e879f9';
+        ctx.strokeStyle = '#bae6fd';
+        ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -pr * 1.15);
+        ctx.lineTo(pr * 0.72, -pr * 0.25);
+        ctx.lineTo(pr * 0.45, pr * 1.05);
+        ctx.lineTo(-pr * 0.45, pr * 1.05);
+        ctx.lineTo(-pr * 0.72, -pr * 0.25);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.beginPath();
+        ctx.moveTo(0, -pr * 0.85);
+        ctx.lineTo(pr * 0.36, -pr * 0.15);
+        ctx.lineTo(0, pr * 0.55);
+        ctx.lineTo(-pr * 0.36, -pr * 0.15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else if (hz.kind === 'homing-torpedo') {
+        // Spectral Acoustic Homing Torpedo (flips cyan-gold when Hydro-Dash reversed! v194)
+        const tr = (hz.radius || 1.12) * scale;
+        const ang = hz.angle || 0;
+        const col = hz.reversed ? '#fde047' : '#2dd4bf';
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 16);
+        ctx.save();
+        ctx.translate(hx, hy);
+        // Pulsing acoustic sonar ping ring
+        ctx.strokeStyle = hz.reversed ? `rgba(253, 224, 71, ${(0.35 + pulse * 0.45).toFixed(2)})` : `rgba(45, 212, 191, ${(0.32 + pulse * 0.42).toFixed(2)})`;
+        ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, tr * (1.25 + pulse * 0.45), 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.rotate(ang);
+        // Bubbling wake trail behind prop
+        ctx.fillStyle = hz.reversed ? 'rgba(254, 240, 138, 0.55)' : 'rgba(94, 234, 212, 0.48)';
+        for (let b = 1; b <= 3; b++) {
+          ctx.beginPath();
+          ctx.arc(-tr * (1.15 + b * 0.48), Math.sin(timeSec * 18 + b) * tr * 0.18, tr * (0.28 - b * 0.05), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Torpedo steel fuselage + warhead nose
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#334155';
+        ctx.strokeStyle = '#041021';
+        ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, tr * 1.18, tr * 0.44, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Glowing acoustic warhead cap
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(tr * 0.85, 0, tr * 0.34, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.fill();
+        // Stabilizer fins
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-tr * 1.15, -tr * 0.55, tr * 0.32, tr * 1.1);
         ctx.restore();
       }
     }

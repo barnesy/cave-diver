@@ -1213,14 +1213,38 @@ export class DiveAudio {
     }
 
     const style = level.theme?.surfaceStyle || '';
+    const lid = String(level.id || '').toLowerCase();
     const isGlacier =
       style === 'kverkfjoll-glacier' ||
       style === 'aurora-basalt' ||
       style === 'scoresby-iceberg' ||
-      String(level.id || '').includes('scoresby');
+      lid.includes('scoresby');
+    const isReef =
+      lid.includes('blue-hole') ||
+      lid.includes('dahab') ||
+      lid.includes('bimini') ||
+      lid.includes('bermuda') ||
+      lid.includes('lanzarote');
+    const isCrystalCave = lid.includes('orda') || lid.includes('crystal');
     const hasVents = Array.isArray(level.geothermalVents) && level.geothermalVents.length > 0;
 
-    if (level.isWreck) {
+    // Gentle fin-kick water displacement whoosh when swimming briskly without DPV (v194)
+    if (diver && !tensionState?.dpvActive && depthM > 1.2) {
+      const spd = Math.hypot(diver.vx || 0, diver.vy || 0);
+      if (spd > 1.45) {
+        this._finKickTimer = (this._finKickTimer ?? 0.35) - dt;
+        if (this._finKickTimer <= 0) {
+          this._finKickTimer = Math.max(0.58, 0.92 - Math.min(0.32, spd * 0.08));
+          this.playFinKickWhoosh(Math.min(1, spd / 4.2));
+        }
+      }
+    }
+
+    if (tensionState?.inAirDome) {
+      // Resonant dry-dome cavern ceiling water-plops (v194)
+      this._ambienceTimer = 2.4 + Math.random() * 2.6;
+      this.playAirPocketDrip(ambPan);
+    } else if (level.isWreck) {
       const nowMs = performance.now();
       const roll = Math.random();
       if (depthM > 8 && nowMs - this._lastWhaleAt > 28000 && roll < 0.28) {
@@ -1303,8 +1327,8 @@ export class DiveAudio {
       };
       osc.start(t);
       osc.stop(t + 1.5);
-    } else if (hasVents && Math.random() < 0.55) {
-      // Delicate hydrothermal mineral hiss burst (spatialized onto ambienceBus)
+    } else if (hasVents && Math.random() < 0.62) {
+      // Hydrothermal mineral hiss burst + warm low-frequency geothermal sub-rumble (v194)
       this._ambienceTimer = 4.2 + Math.random() * 4.0;
       const noise = this._getNoiseBuffer();
       if (noise) {
@@ -1331,6 +1355,28 @@ export class DiveAudio {
         src.start(t, Math.random() * 0.5);
         src.stop(t + 1.3);
       }
+      // Deep tectonic magma-boiler sub-thrum
+      this.playTone(46 + Math.random() * 10, 1.35, 'sine', 0.018, 0.04, { pan: ambPan * 0.5, bus: 'ambience' });
+    } else if (isReef && Math.random() < 0.65) {
+      // Open-reef snapping-shrimp acoustic sparkle & occasional deep pelagic whale song (v194)
+      const nowMs = performance.now();
+      if (depthM > 16 && nowMs - this._lastWhaleAt > 30000 && Math.random() < 0.36) {
+        this._lastWhaleAt = nowMs;
+        this._ambienceTimer = 9.5 + Math.random() * 6.5;
+        this.playWhaleSong(ambPan);
+      } else {
+        this._ambienceTimer = 3.8 + Math.random() * 3.8;
+        for (let k = 0; k < 3; k++) {
+          const cf = 1850 + Math.random() * 1400;
+          this.playTone(cf, 0.022, 'triangle', 0.007, k * (0.09 + Math.random() * 0.14), { pan: ambPan * (0.6 - k * 0.3), bus: 'ambience' });
+        }
+      }
+    } else if (isCrystalCave && Math.random() < 0.62) {
+      // Translucent gypsum crystal cavern harmonic shimmer (v194)
+      this._ambienceTimer = 5.0 + Math.random() * 4.8;
+      const base = 740 + Math.random() * 320;
+      this.playTone(base, 0.42, 'sine', 0.013, 0, { pan: ambPan, bus: 'ambience' });
+      this.playTone(base * 1.5, 0.56, 'sine', 0.009, 0.12, { pan: -ambPan * 0.6, bus: 'ambience' });
     } else {
       // Resonant 3-tap karst cave water-drip echo (spatialized onto ambienceBus)
       this._ambienceTimer = 5.2 + Math.random() * 6.5;
@@ -1402,20 +1448,21 @@ export class DiveAudio {
   }
 
   /**
-   * Subtle electric DPV underwater scooter propeller thrumming pulse.
+   * Subtle electric DPV underwater scooter propeller thrumming pulse (speed-pitched v194).
    */
-  playDpvHum(intensity = 0.7) {
+  playDpvHum(intensity = 0.7, speedNorm = null) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     osc.type = 'triangle';
-    const baseHz = 96 + Math.min(1, Math.max(0, intensity)) * 42;
+    const spdFactor = Number.isFinite(speedNorm) ? Math.min(1, Math.max(0, speedNorm)) : Math.min(1, Math.max(0, intensity));
+    const baseHz = 88 + spdFactor * 58;
     osc.frequency.setValueAtTime(baseHz, t);
-    osc.frequency.exponentialRampToValueAtTime(baseHz * 1.08, t + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(baseHz * 1.09, t + 0.14);
     osc.frequency.exponentialRampToValueAtTime(baseHz * 0.96, t + 0.26);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.024, t + 0.05);
+    g.gain.linearRampToValueAtTime(0.022 + spdFactor * 0.008, t + 0.05);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
     osc.connect(g);
     this._connectSpatial(g, { pan: 0, bus: 'sfx' });
@@ -1425,6 +1472,65 @@ export class DiveAudio {
     };
     osc.start(t);
     osc.stop(t + 0.28);
+  }
+
+  /**
+   * Soft low-passed underwater fin-kick water displacement whoosh (v194).
+   */
+  playFinKickWhoosh(speedNorm = 0.6) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const noise = this._getNoiseBuffer?.();
+    if (!noise) return;
+    const t = this.ctx.currentTime;
+    const s = Math.min(1, Math.max(0.15, Number(speedNorm) || 0.5));
+    const src = this.ctx.createBufferSource();
+    src.buffer = noise;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(160 + s * 130, t);
+    filt.frequency.exponentialRampToValueAtTime(95, t + 0.26);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.012 + s * 0.01, t + 0.07);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    src.connect(filt);
+    filt.connect(g);
+    const panner = this._connectSpatial(g, { pan: 0, bus: 'ambience' });
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
+    };
+    src.start(t, Math.random() * 0.4);
+    src.stop(t + 0.3);
+  }
+
+  /**
+   * Resonant cavern ceiling water-plop echo inside sealed dry air pockets (v194).
+   */
+  playAirPocketDrip(pan = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    const f0 = 780 + Math.random() * 340;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 1.55, t + 0.085);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.022, t + 0.014);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    osc.connect(g);
+    const panner = this._connectSpatial(g, { pan, bus: 'ambience' });
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+      try { panner?.disconnect(); } catch {}
+    };
+    osc.start(t);
+    osc.stop(t + 0.16);
+    this.playTone(f0 * 1.32, 0.14, 'sine', 0.009, 0.14, { pan: pan * 0.5, bus: 'ambience' });
   }
 
   /**
@@ -1977,6 +2083,20 @@ export class DiveAudio {
         arp: [293.66, 369.99, 440.0, 554.37, 587.33, 554.37, 440.0, 369.99],
         lead: [587.33, 659.25, 739.99, 880.0, 739.99, 659.25, 587.33, 880.0],
         wave: 'sine',
+      },
+      crystal: {
+        // C# Dorian luminous gypsum crystal chimes (Orda Crystal Basilisk)
+        bass: [69.30, 69.30, 82.41, 61.74, 69.30, 92.5, 82.41, 61.74],
+        arp: [277.18, 329.63, 415.30, 493.88, 554.37, 493.88, 415.30, 329.63],
+        lead: [554.37, 659.25, 739.99, 659.25, 554.37, 493.88, 554.37, 830.61],
+        wave: 'sine',
+      },
+      uboat: {
+        // B minor North Sea submarine sonar & diesel tension (U-1206 Phantom Sentinel)
+        bass: [61.74, 61.74, 73.42, 55.0, 61.74, 82.41, 69.30, 55.0],
+        arp: [246.94, 293.66, 369.99, 293.66, 329.63, 369.99, 440.0, 369.99],
+        lead: [493.88, 587.33, 554.37, 493.88, 440.0, 493.88, 659.25, 587.33],
+        wave: 'sawtooth',
       },
     };
     const cfg = themes[theme] || themes.kraken;

@@ -2923,6 +2923,68 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('orda-selenite-prism') || nameLower.includes('crown of selenite')) {
+    // Faceted Lavender-Cyan Gypsum Selenite Crystal Cluster Relic (Crystal Basilisk Trophy, v194)
+    const cg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#ffffff'], [0.45, '#e879f9'], [1, '#38bdf8']], '#c084fc');
+    ctx.fillStyle = cg;
+    ctx.strokeStyle = '#3b0764';
+    ctx.lineWidth = lw;
+    for (let k = -1; k <= 1; k++) {
+      ctx.save();
+      ctx.rotate(k * 0.36 + Math.sin(timeSec * 0.9 + k) * 0.04);
+      const h = k === 0 ? r * 0.96 : r * 0.72;
+      const w = k === 0 ? r * 0.34 : r * 0.25;
+      ctx.beginPath();
+      ctx.moveTo(0, -h);
+      ctx.lineTo(w, -h * 0.22);
+      ctx.lineTo(w * 0.7, h * 0.52);
+      ctx.lineTo(-w * 0.7, h * 0.52);
+      ctx.lineTo(-w, -h * 0.22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.15, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('u1206-phantom-compass') || nameLower.includes('phantom u-boat gyrocompass')) {
+    // Haunted Gunmetal-and-Emerald WWII Submarine Gyrocompass Relic (Phantom Torpedo Sentinel Trophy, v194)
+    const ug = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#64748b'], [0.5, '#1e293b'], [1, '#020617']], '#1e293b');
+    ctx.fillStyle = ug;
+    ctx.strokeStyle = '#5eead4';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Glowing spectral sonar dial + spinning compass needle
+    ctx.fillStyle = 'rgba(20, 184, 166, 0.28)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.rotate(timeSec * 1.1);
+    ctx.fillStyle = '#5eead4';
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.64);
+    ctx.lineTo(r * 0.16, 0);
+    ctx.lineTo(0, r * 0.28);
+    ctx.lineTo(-r * 0.16, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   const brassGrad = _safeLinGrad(ctx, -r, -r, r, r, [
     [0, '#fef08a'],

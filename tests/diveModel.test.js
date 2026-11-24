@@ -932,7 +932,7 @@ test('Level 6 (Orda Crystal Maze) is a shorter multi-level unlined labyrinth wit
   assert.equal(lvl6.guideline.length, 0, 'Level 6 must have zero fixed guideline');
   assert.equal(lvl6.hideWaypointCompass, true, 'Level 6 must hide directional waypoint compass');
   assert.ok(lvl6.reelMetersPerDiver >= 120 && lvl6.reelMetersPerDiver <= 180);
-  assert.ok(lvl6.bounds.xMax < 280 && lvl6.parTimeSec <= 220, 'Level 6 should be a shorter run');
+  assert.ok(lvl6.exitZone.x < 220 && lvl6.parTimeSec <= 220, 'Level 6 should be a shorter run');
   assert.ok(lvl6.segments.length >= 28, 'Level 6 should contain dense multi-tier passages & dead ends');
 
   // Spawn, exit, all segment midpoints, checkpoints, and collectibles must sit in open water
@@ -1080,7 +1080,9 @@ test('All 33 campaign levels (25 caves/environments + 8 shipwrecks) validate cle
   assert.equal(lvl7.hideWaypointCompass, true, 'Level 7 must hide directional waypoint compass');
   assert.equal(lvl7.reelMetersPerDiver, 170);
   assert.ok(meta7.maxDepthM >= 69 && meta7.maxDepthM > getLevelMeta(lvl6).maxDepthM, 'Level 7 must go deeper than Level 6');
-  assert.ok(lvl7.segments.length > lvl6.segments.length, 'Level 7 must contain denser labyrinth segments than Level 6');
+  const lvl6MainSegs = lvl6.segments.filter((s) => !s.secretLair).length;
+  const lvl7MainSegs = lvl7.segments.filter((s) => !s.secretLair).length;
+  assert.ok(lvl7MainSegs > lvl6MainSegs, 'Level 7 must contain denser labyrinth segments than Level 6');
   assert.ok(lvl7.checkpoints.length >= 6 && lvl7.collectibles.length >= 12);
 
   // Chunk-local SDF evaluator must match global evaluateCaveSDF near geometry
@@ -9732,8 +9734,8 @@ test('v193 Quiet Gas Callouts, Living Atmosphere & Halocline, Secret Zero-Spoile
   const { CaveRenderer } = await import('../public/js/game/renderer.js');
   const { DiveAudio } = await import('../public/js/game/audio.js');
 
-  // 1. All 6 hidden Secret Lairs exist with unique boss kinds, themes, trophies & valid open-water SDF geometry
-  assert.equal(Object.keys(SECRET_LAIRS).length, 6, 'Must have 6 hidden Secret Lairs across the campaign');
+  // 1. All 6+ hidden Secret Lairs exist with unique boss kinds, themes, trophies & valid open-water SDF geometry
+  assert.ok(Object.keys(SECRET_LAIRS).length >= 6, 'Must have at least 6 hidden Secret Lairs across the campaign');
   const newIds = ['blue-hole-dahab-arch', 'strytan-hydrothermal-chimneys'];
   for (const id of newIds) {
     const lvl = LEVELS.find((l) => l.id === id);
@@ -9863,4 +9865,144 @@ test('v193 Quiet Gas Callouts, Living Atmosphere & Halocline, Secret Zero-Spoile
   sHalo.diver.y = bhLvl.haloclineY + 1.5;
   stepDiveSession(sHalo, { x: 0, y: 0 }, 0.05, { onHaloclineCross: () => { haloclineCrossed++; } });
   assert.equal(haloclineCrossed, 1, 'Crossing haloclineY must emit onHaloclineCross callback');
+});
+
+test('v194 Deduplicated Quiet Gas Coach, Living Biome Foley Audio & 2 New Hidden Bosses (Orda Crystal Basilisk & U-1206 Phantom Torpedo Sentinel)', async () => {
+  const fs = await import('node:fs');
+  const {
+    SECRET_LAIRS,
+    getSecretLairForLevel,
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    fireSpeargun,
+    triggerCombatScooterDash,
+    spawnBossSignatureHazard,
+    stepSecretLairEncounter,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+  } = await import('../public/js/game/secretLairs.js');
+  const { computeUnlockedLiveries, getSecretCosmeticsForTrophy } = await import('../public/js/game/rigLivery.js');
+  const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
+  const { drawStyledArtifact } = await import('../public/js/game/artSprites.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Total 8 100%-hidden Secret Lairs across the campaign, including Orda Crystal Maze & U-1206 Submarine Wreck
+  assert.equal(Object.keys(SECRET_LAIRS).length, 8, 'Must have 8 hidden Secret Lairs across the campaign');
+  for (const id of ['orda-crystal-maze', 'u1206-north-sea-sub']) {
+    const lvl = LEVELS.find((l) => l.id === id);
+    assert.ok(lvl, `Campaign level ${id} must exist`);
+    assert.equal(validateLevel(lvl).valid, true, `${id} must validate cleanly`);
+    const spec = getSecretLairForLevel(id);
+    assert.ok(spec && spec.veil.silent === true, `${id} veil must remain 100% silent Sonar-only`);
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -1.0, `${id} armory open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -4.0, `${id} arena center open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -3.0, `${id} boss spawn open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -1.0, `${id} updraft dest open water`);
+    for (const pad of spec.arena.pickupPads) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -1.0, `${id} pickup pad ${pad.id} open water`);
+    }
+  }
+
+  // 2. Orda Crystal Basilisk: Crystal Prism Mirror Shard refract-shatter + Net Sync code 6
+  const ordaLvl = LEVELS.find((l) => l.id === 'orda-crystal-maze');
+  const sOrd = createDiveSession(ordaLvl, { diverName: 'PrismHunter' });
+  breachSecretLairVeil(sOrd);
+  claimSecretLairWeapon(sOrd);
+  sOrd.secretLair.boss.active = true;
+  sOrd.secretLair.boss.aiState = 'idle';
+  const prism = spawnBossSignatureHazard(sOrd, sOrd.secretLair, sOrd.secretLair.boss);
+  assert.equal(prism.kind, 'crystal-prism');
+  const ordSnap = serializeSecretLairNetState(sOrd.secretLair);
+  assert.equal(ordSnap.hz[0][0], 6, 'Net sync must encode crystal-prism as code 6');
+  const sOrdPeer = createDiveSession(ordaLvl, { diverName: 'PeerOrd' });
+  applySecretLairNetState(sOrdPeer.secretLair, ordSnap);
+  assert.equal(sOrdPeer.secretLair.bossHazards[0].kind, 'crystal-prism');
+
+  const ordHpBefore = sOrd.secretLair.boss.hp;
+  prism.x = 322;
+  prism.y = 44;
+  sOrd.diver.x = 317;
+  sOrd.diver.y = 44;
+  sOrd.secretLair.shotCounter = 4; // Next shot is piercing Hyper-Tip -> shatters prism!
+  fireSpeargun(sOrd, { aimAngle: 0, isTap: true, originX: sOrd.diver.x, originY: sOrd.diver.y });
+  for (let i = 0; i < 14; i++) stepSecretLairEncounter(sOrd, 0.02, {}, {});
+  assert.ok(sOrd.secretLair.boss.hp < ordHpBefore, 'Shattering Crystal Prism must refract damage onto Crystal Basilisk');
+
+  // 3. U-1206 Phantom Torpedo Sentinel: Homing Torpedo Hydro-Dash Reversal CRIT + Net Sync code 7
+  const u12Lvl = LEVELS.find((l) => l.id === 'u1206-north-sea-sub');
+  const sU12 = createDiveSession(u12Lvl, { diverName: 'SubHunter' });
+  breachSecretLairVeil(sU12);
+  claimSecretLairWeapon(sU12);
+  sU12.secretLair.boss.active = true;
+  sU12.secretLair.boss.aiState = 'idle';
+  sU12.dpv = { equipped: true, active: true, batteryPct: 65 };
+  const torp = spawnBossSignatureHazard(sU12, sU12.secretLair, sU12.secretLair.boss);
+  assert.equal(torp.kind, 'homing-torpedo');
+  const u12Snap = serializeSecretLairNetState(sU12.secretLair);
+  assert.equal(u12Snap.hz[0][0], 7, 'Net sync must encode homing-torpedo as code 7');
+  const sU12Peer = createDiveSession(u12Lvl, { diverName: 'PeerU12' });
+  applySecretLairNetState(sU12Peer.secretLair, u12Snap);
+  assert.equal(sU12Peer.secretLair.bossHazards[0].kind, 'homing-torpedo');
+
+  // Place diver right beside torpedo and Hydro-Dash to reverse its acoustic lock onto the Phantom U-Boat!
+  torp.x = sU12.secretLair.boss.x - 8;
+  torp.y = sU12.secretLair.boss.y;
+  sU12.diver.x = torp.x - 0.8;
+  sU12.diver.y = torp.y;
+  const u12HpBefore = sU12.secretLair.boss.hp;
+  triggerCombatScooterDash(sU12, { dirX: 1, dirY: 0 }, {});
+  for (let i = 0; i < 30; i++) stepSecretLairEncounter(sU12, 0.03, {}, {});
+  assert.ok(sU12.secretLair.boss.hp < u12HpBefore, 'Hydro-Dash reversing Homing Torpedo must slam Phantom Sentinel for CRIT');
+
+  // 4. Secret zero-spoiler Gear Workshop cosmetics unlock for Orda & U-1206 trophies
+  const freshUnlocks = computeUnlockedLiveries(createEmptyLogbook());
+  assert.equal(freshUnlocks.trims.has('secret-selenite-trim'), false);
+  assert.equal(freshUnlocks.suits.has('secret-phantom-suit'), false);
+  let book = recordArtifactInLogbook(createEmptyLogbook(), { id: 'orda-crystal-maze:orda-selenite-prism', name: 'Crown of Selenite', points: 2900 }).book;
+  book = recordArtifactInLogbook(book, { id: 'u1206-north-sea-sub:u1206-phantom-compass', name: 'Phantom U-Boat Gyrocompass', points: 3400 }).book;
+  const trophyUnlocks = computeUnlockedLiveries(book);
+  assert.equal(trophyUnlocks.trims.has('secret-selenite-trim'), true);
+  assert.equal(trophyUnlocks.suits.has('secret-phantom-suit'), true);
+  assert.ok(getSecretCosmeticsForTrophy('orda-selenite-prism').includes('Selenite Prism Trim'));
+  assert.ok(getSecretCosmeticsForTrophy('u1206-phantom-compass').includes('North Sea Phantom Suit'));
+
+  // 5. Renderers, Living Biome Audio Foley & Deduplicated Gas Coach verified cleanly
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    { createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }), measureText: () => ({ width: 92 }) },
+    { get(t, p) { return p in t ? t[p] : () => drawCalls.push(String(p)); } }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock.level = LEVEL_1;
+  rMock._cachedDpr = 1;
+  rMock.glowStamps = {};
+  rMock._drawSecretLairBoss(mockCtx, sOrd.secretLair.boss, (x) => x, (y) => y, 22, 3.0);
+  rMock._drawSecretLairBoss(mockCtx, sU12.secretLair.boss, (x) => x, (y) => y, 22, 3.0);
+  drawStyledArtifact(mockCtx, { id: 'orda-selenite-prism', name: 'Crown of Selenite' }, 50, 50, 32, 2.5, { isGrand: true });
+  drawStyledArtifact(mockCtx, { id: 'u1206-phantom-compass', name: 'Phantom U-Boat Gyrocompass' }, 50, 50, 32, 2.5, { isGrand: true });
+  assert.ok(drawCalls.length > 90, 'Crystal Basilisk, Phantom U-Boat & bespoke trophy relics must render cleanly');
+
+  // Verify gas coach deduplication right at 22m depth line (no duplicate fillText above diver!)
+  const coachTexts = [];
+  const coachCtx = new Proxy(
+    {
+      measureText: () => ({ width: 80 }),
+      fillText: (txt) => coachTexts.push(String(txt)),
+    },
+    { get(t, p) { return p in t ? t[p] : () => {}; } }
+  );
+  const sCoach = createDiveSession(LEVEL_1, { diverName: 'CoachCheck' });
+  sCoach.diver.y = 22.0;
+  sCoach.diveState.depthM = 22.0;
+  sCoach.diveState.activeGasId = 'EAN32';
+  rMock._drawAscentCoach(coachCtx, sCoach.diver, sCoach.diveState, new Set(), (x) => x * 10, (y) => y * 10, 22, null, 2.0);
+  assert.equal(coachTexts.length, 0, 'Non-danger 22m gas switch must deduplicate floating diver pill when next to 22m line');
+
+  // Living Biome Soundscapes & Foley methods exist on DiveAudio
+  const audio = new DiveAudio();
+  assert.equal(typeof audio.playFinKickWhoosh, 'function');
+  assert.equal(typeof audio.playAirPocketDrip, 'function');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('@keyframes gasHintRim'), 'Gas compact pill must feature calm rim highlight animation');
 });

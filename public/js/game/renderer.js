@@ -2453,39 +2453,49 @@ export class CaveRenderer {
     const isStop = step.action === 'STOP';
     const pulse = 0.65 + 0.35 * Math.sin(timeSec * (isDanger ? 10 : 5.5));
 
-    // Soft indicator ring around diver when breathing an unsafe/wrong gas (refined v193)
+    // Soft indicator ring around diver when breathing an unsafe/wrong gas (refined v193–v194)
     if (gasCoach && step === gasCoach) {
-      ctx.strokeStyle = isDanger ? `rgba(248, 113, 113, ${(0.28 + pulse * 0.28).toFixed(2)})` : `rgba(251, 191, 36, ${(0.2 + pulse * 0.22).toFixed(2)})`;
-      ctx.lineWidth = isDanger ? 1.8 : 1.3;
+      ctx.strokeStyle = isDanger ? `rgba(248, 113, 113, ${(0.28 + pulse * 0.28).toFixed(2)})` : `rgba(251, 191, 36, ${(0.18 + pulse * 0.18).toFixed(2)})`;
+      ctx.lineWidth = isDanger ? 1.8 : 1.25;
       ctx.beginPath();
-      ctx.arc(sx, sy, (1.1 + (isDanger ? 0.08 * pulse : 0.04 * pulse)) * scale, 0, Math.PI * 2);
+      ctx.arc(sx, sy, (1.08 + (isDanger ? 0.08 * pulse : 0.04 * pulse)) * scale, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Compact quiet floating micro-badge above diver (v193)
-    const label = step.shortLabel || (isStop ? `■ ${step.title}` : `▲ ${step.title}`);
-    ctx.font = `700 ${Math.max(9.5, Math.round((isDanger ? 0.3 : 0.27) * scale))}px ui-monospace, monospace`;
-    const padX = 8;
-    const textW = ctx.measureText(label).width;
-    const boxW = textW + padX * 2;
-    const boxH = Math.max(18, 0.54 * scale);
+    // Deduplicate floating diver pill when diver is already next to a visible depth gas-switch line (v194)
+    const nearSwitchLine =
+      Math.abs((diver.y || 0) - 22.0) <= 3.8 ||
+      (Array.isArray(this.level?.zoneLines) && this.level.zoneLines.some((z) => Math.abs((diver.y || 0) - (z.y || 0)) <= 3.0));
+    const suppressRedundantPill = Boolean(gasCoach && step === gasCoach && !isDanger && nearSwitchLine);
 
-    ctx.fillStyle = isDanger
-      ? 'rgba(69, 10, 10, 0.82)'
-      : isStop
-        ? 'rgba(30, 27, 22, 0.8)'
-        : 'rgba(8, 28, 48, 0.78)';
-    ctx.strokeStyle = isDanger ? 'rgba(248, 113, 113, 0.78)' : isStop ? 'rgba(251, 191, 36, 0.65)' : 'rgba(56, 189, 248, 0.58)';
-    ctx.lineWidth = isDanger ? 1.4 : 1.1;
-    ctx.beginPath();
-    ctx.roundRect(sx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
-    ctx.fill();
-    ctx.stroke();
+    if (!suppressRedundantPill) {
+      // Compact quiet floating micro-badge above diver (v193–v194)
+      const label = (gasCoach && step === gasCoach && !isDanger && step.gasName)
+        ? `Switch ${step.gasName}${step.hotkey ? ` [${step.hotkey}]` : ''}`
+        : (step.shortLabel || (isStop ? `■ ${step.title}` : `▲ ${step.title}`));
+      ctx.font = `700 ${Math.max(9.5, Math.round((isDanger ? 0.29 : 0.26) * scale))}px ui-monospace, monospace`;
+      const padX = 8;
+      const textW = ctx.measureText(label).width;
+      const boxW = textW + padX * 2;
+      const boxH = Math.max(18, 0.52 * scale);
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = isDanger ? '#fef2f2' : isStop ? '#fde68a' : '#e0f2fe';
-    ctx.fillText(label, sx, pillY + 0.5);
+      ctx.fillStyle = isDanger
+        ? 'rgba(69, 10, 10, 0.84)'
+        : isStop
+          ? 'rgba(15, 23, 42, 0.78)'
+          : 'rgba(8, 28, 48, 0.76)';
+      ctx.strokeStyle = isDanger ? 'rgba(248, 113, 113, 0.78)' : isStop ? 'rgba(251, 191, 36, 0.55)' : 'rgba(56, 189, 248, 0.52)';
+      ctx.lineWidth = isDanger ? 1.4 : 1.05;
+      ctx.beginPath();
+      ctx.roundRect(sx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDanger ? '#fef2f2' : isStop ? '#fde68a' : '#e0f2fe';
+      ctx.fillText(label, sx, pillY + 0.5);
+    }
 
     // Inline vertical Target Pace Bar right beside diver during MOVE steps
     if (!isStop && diveState.depthM > 1.2) {

@@ -26,7 +26,7 @@ export const WRECK_U1206 = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp5',
   ascentSwitchDepthM: 22.0,
-  bounds: { xMin: -50, xMax: 120, yMin: -6, yMax: 96 },
+  bounds: { xMin: -50, xMax: 288, yMin: -6, yMax: 96 },
   spawn: { x: 34.0, y: 2.0 },
   exitZone: { x: 34.0, y: 1.8, radius: 6.8, name: 'Aberdeen Technical Dive Vessel' },
   haloclineY: 38.0,
@@ -123,6 +123,18 @@ export const WRECK_U1206 = {
 
     // Aft Escape Hatch Ascent back up to open water (73m -> 58m)
     { ax: 66, ay: 73.0, bx: 66, by: 58.0, ra: 3.3, rb: 4.2 },
+
+    // === Secret Sonar-Only Torpedo Bulkhead Breach -> Sunken Torpedo Crypt (v194) ===
+    { ax: 84.0, ay: 73.5, bx: 94.0, by: 73.8, ra: 1.5, rb: 1.9, secretLair: true },
+    { ax: 94.0, ay: 73.8, bx: 108.0, by: 74.2, ra: 2.5, rb: 3.6, secretLair: true },
+    { ax: 108.0, ay: 74.2, bx: 130.0, by: 74.8, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 130.0, ay: 74.8, bx: 152.0, by: 75.2, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 152.0, ay: 75.2, bx: 174.0, by: 75.6, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 174.0, ay: 75.6, bx: 198.0, by: 76.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // SUNKEN TORPEDO CRYPT - 58m x 26m Boss Arena centered at (226, 76)
+    { ax: 198.0, ay: 76.0, bx: 216.0, by: 76.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 216.0, ay: 76.0, bx: 236.0, by: 76.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 236.0, ay: 76.0, bx: 250.5, by: 76.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
 
   guideline: [

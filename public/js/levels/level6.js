@@ -13,7 +13,7 @@ export const LEVEL_6 = {
     "Explore Russia's flooded gypsum labyrinth with NO fixed guideline. Use your 155m line reel [G] and rewind [R] to mark junctions across multi-level routes, avoid 6 blind dead ends, and surface via the karst resurgence.",
   bounds: {
     xMin: -44,
-    xMax: 256,
+    xMax: 388,
     yMin: -6,
     yMax: 68,
   },
@@ -119,6 +119,18 @@ export const LEVEL_6 = {
     // Dead End 6: East Selenite Pocket
     { ax: 164, ay: 36.0, bx: 180, by: 32.0, ra: 2.1, rb: 2.0 },
     { ax: 180, ay: 32.0, bx: 192, by: 26.0, ra: 2.0, rb: 2.7 },
+
+    // === Secret Sonar-Only Gypsum Seam -> Selenite Mirror Vault (v194) ===
+    { ax: 184.0, ay: 51.5, bx: 194.0, by: 50.8, ra: 1.5, rb: 1.9, secretLair: true },
+    { ax: 194.0, ay: 50.8, bx: 208.0, by: 49.5, ra: 2.5, rb: 3.6, secretLair: true },
+    { ax: 208.0, ay: 49.5, bx: 230.0, by: 48.0, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 230.0, ay: 48.0, bx: 252.0, by: 46.5, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 252.0, ay: 46.5, bx: 274.0, by: 45.2, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 274.0, ay: 45.2, bx: 298.0, by: 44.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // SELENITE MIRROR VAULT - 58m x 26m Boss Arena centered at (326, 44)
+    { ax: 298.0, ay: 44.0, bx: 316.0, by: 44.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 316.0, ay: 44.0, bx: 336.0, by: 44.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 336.0, ay: 44.0, bx: 350.5, by: 44.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
   // NO fixed guideline! Divers deploy their own guideline reels with [G] and rewind with [R].
   guideline: [],

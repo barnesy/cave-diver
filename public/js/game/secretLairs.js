@@ -826,6 +826,242 @@ export const SECRET_LAIRS = Object.freeze({
       bonusPoints: 3500,
     }),
   }),
+
+  // === BOSS 7 (Gypsum Crystal Maze Secret Lair): Orda Crystal Maze -> CRYSTAL BASILISK (v194) ===
+  'orda-crystal-maze': Object.freeze({
+    id: 'orda-selenite-vault',
+    levelId: 'orda-crystal-maze',
+    name: 'The Selenite Mirror Vault',
+    veil: Object.freeze({
+      id: 'ord-vault-veil',
+      x: 186.2,
+      y: 51.3,
+      radius: 2.2,
+      sealWallX: 185.0,
+      sealMinY: 47.0,
+      sealMaxY: 56.0,
+      failsafeX: 191.5,
+      label: 'Translucent Selenite Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'ord-speargun-rack',
+      x: 202.0,
+      y: 50.0,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 199.0, y: 51.6 }),
+      Object.freeze({ kind: 'dive-strobe', x: 205.0, y: 48.0 }),
+      Object.freeze({ kind: 'bio-coral', x: 222.0, y: 48.5 }),
+      Object.freeze({ kind: 'temple-column', x: 246.0, y: 46.8 }),
+      Object.freeze({ kind: 'mayan-glyphs', x: 268.0, y: 45.4 }),
+      Object.freeze({ kind: 'monolith', x: 295.5, y: 39.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 295.5, y: 48.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 246.0,
+    arena: Object.freeze({
+      cx: 326.0,
+      cy: 44.0,
+      triggerX: 300.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 293.5,
+      respawnY: 44.2,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'ord-p-west', x: 310.5, y: 47.5, radius: 2.1 }),
+        Object.freeze({ id: 'ord-p-north', x: 325.5, y: 36.4, radius: 2.0 }),
+        Object.freeze({ id: 'ord-p-east', x: 340.5, y: 47.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 305.0, y: 37.5, color: '#e879f9', radius: 14.5 }),
+        Object.freeze({ x: 315.0, y: 53.5, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 320.0, y: 33.2, color: '#c084fc', radius: 15.5 }),
+        Object.freeze({ x: 336.5, y: 33.5, color: '#e879f9', radius: 15.5 }),
+        Object.freeze({ x: 337.5, y: 53.2, color: '#67e8f9', radius: 14.5 }),
+        Object.freeze({ x: 348.0, y: 41.0, color: '#c084fc', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 334.0, y: 44.0 }),
+        Object.freeze({ x: 319.5, y: 42.8 }),
+        Object.freeze({ x: 338.5, y: 41.0 }),
+        Object.freeze({ x: 326.0, y: 48.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'ord-stage-1', x: 305.5, y: 41.5, label: 'Selenite Rim Stage (West)' }),
+        Object.freeze({ id: 'ord-stage-2', x: 325.0, y: 53.0, label: 'Selenite Rim Stage (South)' }),
+        Object.freeze({ id: 'ord-stage-3', x: 346.0, y: 44.5, label: 'Selenite Rim Stage (East)' }),
+        Object.freeze({ id: 'ord-stage-4', x: 329.0, y: 34.2, label: 'Selenite Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'ord-corridor-stage', x: 246.0, y: 46.8, label: 'Gypsum Vault Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'ord-pad-w', x: 306.0, y: 41.6 }),
+        Object.freeze({ id: 'ord-pad-nw', x: 316.5, y: 37.4 }),
+        Object.freeze({ id: 'ord-pad-s', x: 325.5, y: 52.4 }),
+        Object.freeze({ id: 'ord-pad-ne', x: 336.0, y: 37.2 }),
+        Object.freeze({ id: 'ord-pad-e', x: 345.5, y: 44.2 }),
+        Object.freeze({ id: 'ord-pad-se', x: 338.0, y: 52.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 244.0, y: 47.0 }),
+      corridorUpgrade: Object.freeze({ x: 262.0, y: 45.8, kind: 'homing' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-ord-w', x: 316.0, y: 32.8, floorY: 54.8, style: 'gypsum' }),
+        Object.freeze({ id: 'stal-ord-c', x: 327.5, y: 32.2, floorY: 55.0, style: 'gypsum' }),
+        Object.freeze({ id: 'stal-ord-e', x: 338.5, y: 32.8, floorY: 54.6, style: 'gypsum' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 326.0,
+        y: 36.0,
+        radius: 3.6,
+        destX: 192.0,
+        destY: 6.2,
+        label: 'Selenite Thermal Updraft → Orda 6m Deco Grotto',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'ord-m1', kind: 'moray', name: 'Gypsum Quartz Eel', x: 218.0, y: 48.8, hp: 102, radius: 1.2, dropOrb: true }),
+      Object.freeze({ id: 'ord-m2', kind: 'swarmer', name: 'Selenite Shard Jelly', x: 233.0, y: 47.6, hp: 80, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'ord-m3', kind: 'swarmer', name: 'Selenite Shard Jelly', x: 243.0, y: 47.0, hp: 84, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'ord-m4', kind: 'moray', name: 'Gypsum Quartz Eel', x: 258.0, y: 46.0, hp: 110, radius: 1.22, dropOrb: false }),
+      Object.freeze({ id: 'ord-m5', kind: 'stalker', name: 'Crystal-Carapace Stalker', x: 274.0, y: 45.2, hp: 205, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'ord-m6', kind: 'stalker', name: 'Crystal-Carapace Stalker', x: 286.0, y: 44.6, hp: 215, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-crystal-basilisk',
+      kind: 'crystal-basilisk',
+      musicTheme: 'crystal',
+      icon: '💎',
+      name: 'CRYSTAL BASILISK',
+      title: 'Iridescent Ural Selenite Mirror Wyrm',
+      x: 333.0,
+      y: 44.0,
+      radius: 4.5,
+      baseHp: 4100,
+      trophyRelicId: 'orda-selenite-prism',
+      trophyName: 'Crown of Selenite',
+      bonusPoints: 2900,
+    }),
+  }),
+
+  // === BOSS 8 (North Sea Submarine Wreck Secret Lair): U-1206 -> PHANTOM TORPEDO SENTINEL (v194) ===
+  'u1206-north-sea-sub': Object.freeze({
+    id: 'u1206-torpedo-crypt',
+    levelId: 'u1206-north-sea-sub',
+    name: 'The Sunken Torpedo Crypt',
+    veil: Object.freeze({
+      id: 'u12-vault-veil',
+      x: 86.2,
+      y: 73.6,
+      radius: 2.2,
+      sealWallX: 85.0,
+      sealMinY: 69.5,
+      sealMaxY: 78.0,
+      failsafeX: 91.5,
+      label: 'Torn Torpedo Bulkhead Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'u12-speargun-rack',
+      x: 102.0,
+      y: 74.0,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 99.0, y: 75.6 }),
+      Object.freeze({ kind: 'dive-strobe', x: 105.0, y: 72.2 }),
+      Object.freeze({ kind: 'thermal-vent', x: 122.0, y: 76.2 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 146.0, y: 76.0 }),
+      Object.freeze({ kind: 'temple-column', x: 168.0, y: 75.6 }),
+      Object.freeze({ kind: 'monolith', x: 195.5, y: 71.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 195.5, y: 80.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 146.0,
+    arena: Object.freeze({
+      cx: 226.0,
+      cy: 76.0,
+      triggerX: 200.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 193.5,
+      respawnY: 76.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'u12-p-west', x: 210.5, y: 79.5, radius: 2.1 }),
+        Object.freeze({ id: 'u12-p-north', x: 225.5, y: 68.4, radius: 2.0 }),
+        Object.freeze({ id: 'u12-p-east', x: 240.5, y: 79.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 205.0, y: 69.5, color: '#2dd4bf', radius: 14.5 }),
+        Object.freeze({ x: 215.0, y: 85.5, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 220.0, y: 65.2, color: '#5eead4', radius: 15.5 }),
+        Object.freeze({ x: 236.5, y: 65.5, color: '#2dd4bf', radius: 15.5 }),
+        Object.freeze({ x: 237.5, y: 85.2, color: '#fbbf24', radius: 14.5 }),
+        Object.freeze({ x: 248.0, y: 73.0, color: '#5eead4', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 234.0, y: 76.0 }),
+        Object.freeze({ x: 219.5, y: 74.8 }),
+        Object.freeze({ x: 238.5, y: 73.0 }),
+        Object.freeze({ x: 226.0, y: 80.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'u12-stage-1', x: 205.5, y: 73.5, label: 'Torpedo Crypt Stage (West)' }),
+        Object.freeze({ id: 'u12-stage-2', x: 225.0, y: 85.0, label: 'Torpedo Crypt Stage (South)' }),
+        Object.freeze({ id: 'u12-stage-3', x: 246.0, y: 76.5, label: 'Torpedo Crypt Stage (East)' }),
+        Object.freeze({ id: 'u12-stage-4', x: 229.0, y: 66.2, label: 'Torpedo Crypt Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'u12-corridor-stage', x: 146.0, y: 75.2, label: 'U-Boat Bilge Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'u12-pad-w', x: 206.0, y: 73.6 }),
+        Object.freeze({ id: 'u12-pad-nw', x: 216.5, y: 69.4 }),
+        Object.freeze({ id: 'u12-pad-s', x: 225.5, y: 84.4 }),
+        Object.freeze({ id: 'u12-pad-ne', x: 236.0, y: 69.2 }),
+        Object.freeze({ id: 'u12-pad-e', x: 245.5, y: 76.2 }),
+        Object.freeze({ id: 'u12-pad-se', x: 238.0, y: 84.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 144.0, y: 75.4 }),
+      corridorUpgrade: Object.freeze({ x: 162.0, y: 75.6, kind: 'rapid' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-u12-w', x: 216.0, y: 64.8, floorY: 86.8, style: 'steel' }),
+        Object.freeze({ id: 'stal-u12-c', x: 227.5, y: 64.2, floorY: 87.0, style: 'steel' }),
+        Object.freeze({ id: 'stal-u12-e', x: 238.5, y: 64.8, floorY: 86.6, style: 'steel' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 226.0,
+        y: 68.0,
+        radius: 3.6,
+        destX: 34.0,
+        destY: 6.2,
+        label: 'Ballast Blow Updraft → U-1206 6m O2 Trapeze Bar',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'u12-m1', kind: 'moray', name: 'North Sea Hull Eel', x: 118.0, y: 74.6, hp: 112, radius: 1.22, dropOrb: true }),
+      Object.freeze({ id: 'u12-m2', kind: 'swarmer', name: 'Sonar Jelly Drone', x: 133.0, y: 75.0, hp: 88, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'u12-m3', kind: 'swarmer', name: 'Sonar Jelly Drone', x: 143.0, y: 75.2, hp: 90, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'u12-m4', kind: 'moray', name: 'North Sea Hull Eel', x: 158.0, y: 75.4, hp: 118, radius: 1.24, dropOrb: false }),
+      Object.freeze({ id: 'u12-m5', kind: 'stalker', name: 'Torpedo-Tube Stalker', x: 174.0, y: 75.6, hp: 225, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'u12-m6', kind: 'stalker', name: 'Torpedo-Tube Stalker', x: 186.0, y: 75.8, hp: 235, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-phantom-uboat',
+      kind: 'phantom-uboat',
+      musicTheme: 'uboat',
+      icon: '⚓',
+      name: 'PHANTOM TORPEDO SENTINEL',
+      title: 'Haunted North Sea Type-VIIC U-Boat Leviathan',
+      x: 233.0,
+      y: 76.0,
+      radius: 4.6,
+      baseHp: 4650,
+      trophyRelicId: 'u1206-phantom-compass',
+      trophyName: 'Phantom U-Boat Gyrocompass',
+      bonusPoints: 3400,
+    }),
+  }),
 });
 
 export function getSecretLairForLevel(levelId) {
@@ -2736,7 +2972,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     let hitHazard = false;
     for (let hi = (lair.bossHazards || []).length - 1; hi >= 0; hi--) {
       const hz = lair.bossHazards[hi];
-      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb' && hz.kind !== 'vent-geyser' && hz.kind !== 'sun-lance')) continue;
+      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb' && hz.kind !== 'vent-geyser' && hz.kind !== 'sun-lance' && hz.kind !== 'crystal-prism' && hz.kind !== 'homing-torpedo')) continue;
       if (distPointToSegment(hz.x, hz.y, sp.prevX, sp.prevY, sp.x, sp.y) <= (hz.radius || 1.2) + 0.55) {
         hz.hp = Math.max(0, (hz.hp || 2) - (sp.piercing ? 2 : 1));
         hz.hitFlash = 0.2;
@@ -2775,9 +3011,33 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
             }
             callbacks.onCrystalChime?.(3);
+          } else if (hz.kind === 'crystal-prism') {
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 6.4, '#e879f9', 0.48);
+            if (boss.active && !boss.defeated) {
+              const dmg = Math.round(185 * (lair.scaling?.damageMult || 1));
+              boss.hp = Math.max(0, boss.hp - dmg);
+              boss.hitFlash = 0.36;
+              lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+              addSparkBurst(lair, boss.x, boss.y, '#e879f9', 18, `💎 PRISM REFRACT! -${dmg}`, true);
+            } else {
+              addSparkBurst(lair, hz.x, hz.y, '#e879f9', 12, '💎 SHARD SHATTERED! +18% ⚡', true);
+            }
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
+            }
+            callbacks.onCrystalChime?.(3);
+          } else if (hz.kind === 'homing-torpedo') {
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 5.6, '#5eead4', 0.44);
+            addSparkBurst(lair, hz.x, hz.y, '#5eead4', 14, '⚓ TORPEDO INTERCEPTED! +15% ⚡', true);
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 15);
+            }
+            callbacks.onMineBlast?.();
           }
         } else {
-          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' || hz.kind === 'vent-geyser' ? '#fb923c' : '#fde047', 6, 'PING!', false);
+          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' || hz.kind === 'vent-geyser' ? '#fb923c' : hz.kind === 'crystal-prism' ? '#e879f9' : '#5eead4', 6, 'PING!', false);
           callbacks.onCrystalChime?.(1);
         }
         if (!sp.piercing) {
@@ -3046,6 +3306,88 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           }
         }
       }
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'crystal-prism') {
+      // Floating Refracting Selenite Mirror Shard (v194): fires 3-way split crystal sparks until shattered!
+      hz.life = (hz.life ?? 11.0) - dt;
+      hz.y += Math.sin((hz.age || 0) * 2.4 + (hz.phase || 0)) * 0.42 * dt;
+      hz.fireCd = (hz.fireCd ?? 1.8) - dt;
+      if (isAuthority && hz.fireCd <= 0 && diveState?.alive && !boss.defeated) {
+        hz.fireCd = boss.phase >= 3 ? 1.85 : 2.35;
+        const baseAim = Math.atan2(diver.y - hz.y, diver.x - hz.x);
+        for (let k = -1; k <= 1; k++) {
+          const a = baseAim + k * 0.28;
+          lair.enemyProjectiles.push({
+            x: hz.x + Math.cos(a) * 1.0,
+            y: hz.y + Math.sin(a) * 1.0,
+            vx: Math.cos(a) * 9.8,
+            vy: Math.sin(a) * 9.8,
+            radius: 0.48,
+            damage: 13 * lair.scaling.damageMult,
+            life: 2.8,
+            color: '#e879f9',
+            kind: 'prism',
+          });
+        }
+        callbacks.onCrystalChime?.(1);
+      }
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'homing-torpedo') {
+      // Acoustic Homing Torpedo (v194): Hydro-Dash past to invert guidance lock back into the Phantom U-Boat!
+      hz.life = (hz.life ?? 9.0) - dt;
+      const spd = hz.reversed ? 13.5 : (hz.speed || 7.2);
+      const targetX = hz.reversed ? boss.x : diver.x;
+      const targetY = hz.reversed ? boss.y : diver.y;
+      const desired = Math.atan2(targetY - hz.y, targetX - hz.x);
+      let ang = Number.isFinite(hz.angle) ? hz.angle : desired;
+      let diff = Math.atan2(Math.sin(desired - ang), Math.cos(desired - ang));
+      const maxTurn = (hz.reversed ? 5.2 : 1.85) * dt;
+      ang += Math.max(-maxTurn, Math.min(maxTurn, diff));
+      hz.angle = ang;
+      hz.x += Math.cos(ang) * spd * dt;
+      hz.y += Math.sin(ang) * spd * dt;
+
+      // Hydro-Dash near torpedo reverses its acoustic homing lock onto the boss!
+      if (!hz.reversed && diveState?.alive && (lair.dashTimerSec || 0) > 0 && Math.hypot(diver.x - hz.x, diver.y - hz.y) <= (hz.radius || 1.15) + 1.85) {
+        hz.reversed = true;
+        hz.life = Math.max(hz.life, 4.5);
+        hz.angle = Math.atan2(boss.y - hz.y, boss.x - hz.x);
+        addShockwave(lair, hz.x, hz.y, 4.4, '#5eead4', 0.38);
+        addSparkBurst(lair, hz.x, hz.y, '#5eead4', 12, '⚓ TORPEDO REVERSED!', true);
+        if (session.dpv?.equipped) {
+          session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 15);
+        }
+        callbacks.onCrystalChime?.(3);
+      }
+
+      // Check impact on Boss (either reversed OR matador-baited after 0.9s arming)
+      if (boss.active && !boss.defeated && (hz.reversed || hz.age >= 0.9) && Math.hypot(boss.x - hz.x, boss.y - hz.y) <= (boss.radius || 4.6) + (hz.radius || 1.1)) {
+        lair.bossHazards.splice(hi, 1);
+        const dmg = Math.round(240 * (lair.scaling?.damageMult || 1));
+        boss.hp = Math.max(0, boss.hp - dmg);
+        boss.hitFlash = 0.42;
+        lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+        addShockwave(lair, boss.x, boss.y, 8.2, '#5eead4', 0.56);
+        addSparkBurst(lair, boss.x, boss.y, '#fde047', 22, `⚓ TORPEDO CRIT! -${dmg}`, true);
+        callbacks.onMineBlast?.();
+        continue;
+      }
+
+      // Check impact on local diver (if not reversed and not in dash i-frames)
+      if (!hz.reversed && diveState?.alive && Math.hypot(diver.x - hz.x, diver.y - hz.y) <= (hz.radius || 1.1) + 0.85) {
+        lair.bossHazards.splice(hi, 1);
+        if ((lair.dashIframesSec || 0) <= 0) {
+          applyDamageToLocalDiver(session, 18 * lair.scaling.damageMult, `${boss.name}'s Acoustic Torpedo`, callbacks);
+          addShockwave(lair, diver.x, diver.y, 5.2, '#fb923c', 0.42);
+          callbacks.onMineBlast?.();
+        }
+        continue;
+      }
+
       if (hz.life <= 0) {
         lair.bossHazards.splice(hi, 1);
       }
@@ -3501,17 +3843,17 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           const spread = boss.phase === 3 ? 0.23 : 0.27;
           const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus')
             ? 'slag'
-            : boss.kind === 'frost-wyrm'
+            : (boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
             ? (boss.kind === 'thermal-nautilus' ? '#f97316' : '#fb923c')
             : projKind === 'frost'
-              ? '#67e8f9'
+              ? (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9')
               : projKind === 'prism'
-                ? (boss.kind === 'solar-leviathan' ? '#fde047' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
+                ? (boss.kind === 'solar-leviathan' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3778,13 +4120,19 @@ export function serializeSecretLairNetState(lair) {
     wu: (lair.weaponUpgrades || []).slice(0, 3).map((u) => [u.id, u.kind, Math.round(u.x * 10) / 10, Math.round(u.y * 10) / 10, u.inArena ? 1 : 0]),
     st: (lair.stalactites || []).map((s) => [s.state === 'falling' ? 1 : s.state === 'broken' ? 2 : 0, Math.round(s.y * 10) / 10, s.hp]),
     hz: (lair.bossHazards || []).slice(0, 6).map((h) => [
-      h.kind === 'naval-mine' ? 1 : h.kind === 'frost-ring' ? 2 : h.kind === 'star-orb' ? 3 : h.kind === 'vent-geyser' ? 4 : 5,
+      h.kind === 'naval-mine' ? 1
+        : h.kind === 'frost-ring' ? 2
+        : h.kind === 'star-orb' ? 3
+        : h.kind === 'vent-geyser' ? 4
+        : h.kind === 'sun-lance' ? 5
+        : h.kind === 'crystal-prism' ? 6
+        : 7,
       Math.round(h.x * 10) / 10,
       Math.round(h.y * 10) / 10,
       Math.round((h.radius || 1.2) * 10) / 10,
       h.hp || 0,
       Math.round(((h.angle || 0) * 100)) / 100,
-      h.erupting || h.firing ? 1 : 0,
+      (h.erupting || h.firing || h.reversed) ? 1 : 0,
     ]),
   };
 }
@@ -3897,7 +4245,13 @@ export function applySecretLairNetState(lairOrSession, snap) {
   if (Array.isArray(snap.hz)) {
     lair.bossHazards = snap.hz.map(([code, hx, hy, hr, hp, ang, activeFlag], idx) => ({
       id: `net-hz-${idx}`,
-      kind: code === 1 ? 'naval-mine' : code === 2 ? 'frost-ring' : code === 3 ? 'star-orb' : code === 4 ? 'vent-geyser' : 'sun-lance',
+      kind: code === 1 ? 'naval-mine'
+        : code === 2 ? 'frost-ring'
+        : code === 3 ? 'star-orb'
+        : code === 4 ? 'vent-geyser'
+        : code === 5 ? 'sun-lance'
+        : code === 6 ? 'crystal-prism'
+        : 'homing-torpedo',
       x: hx,
       y: hy,
       radius: hr,
@@ -3906,6 +4260,7 @@ export function applySecretLairNetState(lairOrSession, snap) {
       angle: ang || 0,
       erupting: code === 4 && Boolean(activeFlag),
       firing: code === 5 && Boolean(activeFlag),
+      reversed: code === 7 && Boolean(activeFlag),
       halfWidth: 1.65,
       height: 18.0,
       length: 25.0,
@@ -4106,6 +4461,66 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     callbacks.onCrystalChime?.(2);
     return lastLance;
   }
+
+  if (boss.kind === 'crystal-basilisk') {
+    const existingPrisms = lair.bossHazards.filter((h) => h.kind === 'crystal-prism').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingPrisms);
+    let lastPrism = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const px = ar.cx + (k === 0 ? -9.5 : 9.5) + (Math.random() - 0.5) * 5;
+      const py = ar.cy + (Math.random() - 0.5) * 9.0;
+      const prism = {
+        id: `prism_${++lair._hazardSeq}`,
+        kind: 'crystal-prism',
+        x: px,
+        y: py,
+        radius: 1.25,
+        hp: 2,
+        fireCd: 1.4 + k * 0.5,
+        life: 11.5,
+        age: 0,
+        phase: Math.random() * Math.PI * 2,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(prism);
+      addShockwave(lair, px, py, 3.4, '#e879f9', 0.36);
+      lastPrism = prism;
+    }
+    callbacks.onCrystalChime?.(2);
+    return lastPrism;
+  }
+
+  if (boss.kind === 'phantom-uboat') {
+    const existingTorps = lair.bossHazards.filter((h) => h.kind === 'homing-torpedo').length;
+    const toSpawn = Math.min(boss.phase >= 3 ? 2 : 1, 2 - existingTorps);
+    let lastTorp = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const aimX = session?.diver?.x ?? (ar.cx - 10);
+      const aimY = session?.diver?.y ?? ar.cy;
+      const spawnX = boss.x + (boss.facing || -1) * (boss.radius * 0.85);
+      const spawnY = boss.y + (k === 0 ? -1.4 : 1.4);
+      const ang = Math.atan2(aimY - spawnY, aimX - spawnX);
+      const torp = {
+        id: `torp_${++lair._hazardSeq}`,
+        kind: 'homing-torpedo',
+        x: spawnX,
+        y: spawnY,
+        radius: 1.12,
+        hp: 2,
+        angle: ang,
+        speed: boss.phase >= 3 ? 8.0 : 7.0,
+        reversed: false,
+        life: 9.0,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(torp);
+      addShockwave(lair, spawnX, spawnY, 3.0, '#5eead4', 0.34);
+      lastTorp = torp;
+    }
+    callbacks.onCrystalChime?.(1);
+    return lastTorp;
+  }
   return null;
 }
 
@@ -4128,7 +4543,7 @@ export function computeTouchAimMagnetAngle(session, rawAngle, maxConeRad = 0.15)
     if (m.alive) candidates.push({ x: m.x, y: m.y, prio: 0.85 });
   }
   for (const hz of lair.bossHazards || []) {
-    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb' || hz.kind === 'vent-geyser' || hz.kind === 'sun-lance') {
+    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb' || hz.kind === 'vent-geyser' || hz.kind === 'sun-lance' || hz.kind === 'crystal-prism' || hz.kind === 'homing-torpedo') {
       candidates.push({ x: hz.x, y: hz.y, prio: 0.95 });
     }
   }

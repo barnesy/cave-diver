@@ -168,6 +168,22 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'strytan-magma-pearl'),
   },
+  {
+    id: 'secret-phantom-suit',
+    name: 'North Sea Phantom Suit',
+    secret: true,
+    trophyRelicId: 'u1206-phantom-compass',
+    suitTop: '#1e293b',
+    suitMid: '#0f172a',
+    suitBot: '#020617',
+    accent: '#2dd4bf',
+    trim: '#5eead4',
+    finColor: '#134e4a',
+    finTip: '#99f6e4',
+    stageBand: '#14b8a6',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'u1206-phantom-compass'),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -409,6 +425,20 @@ export const ACCENT_TRIMS = Object.freeze([
     swatchB: '#f0abfc',
     unlockHint: '4+ Field Guide species or 8+ sites',
     isUnlocked: (s) => s.speciesLogged >= 4 || s.sitesCleared >= 8,
+  },
+  {
+    id: 'secret-selenite-trim',
+    name: 'Selenite Prism Trim',
+    secret: true,
+    trophyRelicId: 'orda-selenite-prism',
+    accent: '#e879f9',
+    trim: '#bae6fd',
+    finTip: '#f0abfc',
+    stageBand: '#c084fc',
+    swatchA: '#e879f9',
+    swatchB: '#bae6fd',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'orda-selenite-prism'),
   },
 ]);
 

@@ -1293,25 +1293,26 @@ html, body {
   color: #bae6fd;
 }
 
-/* One-Tap Floating Gas-Switch Coaching Banner */
+/* One-Tap Floating Gas-Switch Coaching Banner (calm frosted-glass pill v194; urgent pulse only on .danger) */
 .hud-gas-callout {
   align-self: center;
-  width: min(94vw, 490px);
+  width: min(88vw, 390px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 11px;
+  gap: 8px;
+  padding: 6px 11px;
   border-radius: 12px;
-  border: 1.8px solid rgba(251, 191, 36, 0.88);
-  background: linear-gradient(135deg, rgba(120, 53, 15, 0.94), rgba(69, 26, 3, 0.96));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 22px rgba(251, 191, 36, 0.28);
+  border: 1px solid rgba(251, 191, 36, 0.56);
+  background: rgba(8, 18, 34, 0.84);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.44);
   color: #fef3c7;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-align: left;
   cursor: pointer;
   pointer-events: auto;
-  animation: gasPulse 1.15s ease-in-out infinite;
 }
 .hud-gas-callout[hidden] {
   display: none !important;
@@ -1348,12 +1349,13 @@ html, body {
 }
 .gas-callout-cta {
   flex-shrink: 0;
-  padding: 5px 9px;
-  border-radius: 8px;
-  background: #fbbf24;
-  color: #1c1917;
-  font-size: 0.68rem;
-  font-weight: 900;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  color: #fde68a;
+  font-size: 0.66rem;
+  font-weight: 800;
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
@@ -7414,9 +7416,14 @@ button.mode-badge:hover {
 .gas-compact-btn.open {
   background: rgba(14, 116, 144, 0.34);
 }
+@keyframes gasHintRim {
+  0%, 100% { box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, 0.72), 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: inset 0 0 0 1.8px rgba(253, 224, 71, 0.96), 0 0 12px rgba(251, 191, 36, 0.34); }
+}
 .gas-compact-btn.needs-switch {
-  background: rgba(245, 158, 11, 0.22);
-  box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, 0.85);
+  background: rgba(245, 158, 11, 0.18);
+  box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, 0.78);
+  animation: gasHintRim 2.1s ease-in-out infinite;
 }
 .gas-compact-btn.needs-switch .tank-name {
   color: #fde047;

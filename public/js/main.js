@@ -531,7 +531,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=193',
+  mapRasterUrl: './assets/map-expedition.jpg?v=194',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -6514,7 +6514,7 @@ const sessionStepCallbacks = {
   onAlarm: (lvl) => audio.playAlarm(lvl),
   onInhale: (ev) => audio.playRegulatorInhale(ev),
   onExhale: (ev) => (ev?.isCcr ? audio.playCcrSolenoid() : audio.playRegulatorExhale(ev)),
-  onDpvHum: (mag) => audio.playDpvHum(mag),
+  onDpvHum: (mag) => audio.playDpvHum(mag, Math.min(1, Math.hypot(session?.diver?.vx || 0, session?.diver?.vy || 0) / 7.5)),
   onHullGroan: (depthRatio) => audio.playHullGroan(depthRatio),
   onHatchCrank: (progress) => audio.playHatchCrank(progress),
   onHatchOpen: () => audio.playHatchOpen(),
@@ -6887,6 +6887,7 @@ function stepSimulation(dt) {
         inTightSqueeze: Boolean(session.inTightSqueeze),
         lowGas: Boolean(curTank && curTank.bar <= 52),
         inAirDome: Boolean(session.stories?.inAirDome),
+        dpvActive: Boolean(session.dpv?.active),
         bossPhase: (session.secretLair?.boss?.active && !session.secretLair?.boss?.defeated) ? session.secretLair.boss.phase : 0,
         bossTheme: session.secretLair?.spec?.boss?.musicTheme || 'kraken',
       });
