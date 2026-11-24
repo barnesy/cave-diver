@@ -2978,6 +2978,7 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const thrustMag = Math.min(1, Math.hypot(ctrlX, ctrlY));
 
   // DPV Underwater Scooter motorized propulsion (1.82x thrust, lower physical exertion, battery drain & propwash!)
+  const inCombat = Boolean(session.secretLair?.combatMode);
   const dpv = session.dpv;
   let dpvThrusting = false;
   if (dpv?.equipped && dpv.active && !session.clippedToShotLine && diveState.alive) {
@@ -2987,7 +2988,9 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
       callbacks.onToast?.('🔋 DPV scooter battery depleted — switching to fins!', 2.6);
     } else if (thrustMag > 0.08) {
       dpvThrusting = true;
-      dpv.batteryPct = Math.max(0, dpv.batteryPct - dt * (1.45 * thrustMag));
+      // In Boss Combat Mode, scooter draws higher combat thrust power (~3.15%/s) so grabbing arena Battery Cells matters!
+      const drainRate = inCombat ? 3.15 : 1.45;
+      dpv.batteryPct = Math.max(0, dpv.batteryPct - dt * (drainRate * thrustMag));
       dpv.humAccum = (dpv.humAccum || 0) + dt;
       if (dpv.humAccum >= 0.28) {
         dpv.humAccum = 0;
@@ -3064,9 +3067,8 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
   const mutVertMult = mutatorId === 'turbo-par' ? 1.16 : 1.0;
-  const inCombat = Boolean(session.secretLair?.combatMode);
-  const combatHorizMult = inCombat ? 1.28 : 1.0;
-  const combatVertMult = inCombat ? 1.38 : 1.0;
+  const combatHorizMult = inCombat ? (dpvThrusting ? 1.04 : 1.28) : 1.0;
+  const combatVertMult = inCombat ? (dpvThrusting ? 1.10 : 1.38) : 1.0;
   const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult * mutHorizMult * combatHorizMult;
   const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult * mutVertMult * combatVertMult;
   diver.vx += ctrlX * horizAccel * dt;

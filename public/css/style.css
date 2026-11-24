@@ -8770,6 +8770,13 @@ summary,
 .hud-combat-bar[hidden] {
   display: none !important;
 }
+.combat-top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
 .combat-hp-row {
   display: inline-flex;
   align-items: center;
@@ -8781,6 +8788,102 @@ summary,
   box-shadow: 0 6px 20px rgba(2, 6, 23, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+.combat-scooter-btn {
+  appearance: none;
+  pointer-events: auto;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(4, 16, 30, 0.84);
+  border: 1.5px solid rgba(148, 163, 184, 0.36);
+  color: #cbd5e1;
+  box-shadow: 0 6px 20px rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, transform 0.12s ease;
+}
+.combat-scooter-btn:active {
+  transform: scale(0.95);
+}
+.combat-scooter-btn.active {
+  border-color: rgba(34, 211, 238, 0.72);
+  background: rgba(6, 28, 46, 0.88);
+  color: #ecfeff;
+  box-shadow: 0 6px 20px rgba(2, 6, 23, 0.55), 0 0 14px rgba(34, 211, 238, 0.28);
+}
+.combat-scooter-btn.low {
+  border-color: rgba(250, 204, 21, 0.78);
+  box-shadow: 0 6px 20px rgba(2, 6, 23, 0.55), 0 0 12px rgba(250, 204, 21, 0.3);
+}
+.combat-scooter-btn.empty {
+  border-color: rgba(244, 63, 94, 0.65);
+  color: #fda4af;
+}
+.combat-scooter-ico {
+  font-size: 0.82rem;
+  line-height: 1;
+}
+.combat-batt-track {
+  width: 46px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  overflow: hidden;
+  display: inline-block;
+}
+.combat-batt-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #22d3ee, #facc15);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+  transition: width 0.12s linear;
+}
+.combat-scooter-btn.low .combat-batt-fill {
+  background: linear-gradient(90deg, #f59e0b, #fde047);
+}
+.combat-scooter-btn.empty .combat-batt-fill {
+  background: #f43f5e;
+}
+.combat-scooter-pct {
+  font-size: 0.7rem;
+  font-weight: 900;
+  min-width: 30px;
+  text-align: right;
+}
+.combat-upgrades-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.combat-upgrades-row[hidden] {
+  display: none !important;
+}
+.combat-upg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: rgba(4, 14, 28, 0.86);
+  border: 1.5px solid var(--upg-col, #38bdf8);
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.48), 0 0 10px color-mix(in srgb, var(--upg-col, #38bdf8) 32%, transparent);
+}
+.combat-upg-badge.lv2 {
+  background: color-mix(in srgb, var(--upg-col, #38bdf8) 22%, rgba(4, 14, 28, 0.92));
 }
 .combat-hp-icon {
   font-size: 0.92rem;

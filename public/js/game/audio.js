@@ -1795,6 +1795,25 @@ export class DiveAudio {
     this.playTone(783.99, 0.18, 'triangle', 0.048, 0.06, { bus: 'sfx' });
   }
 
+  /** Crisp electric rising power-cell recharge chime on collecting a DPV Battery Cell (v187). */
+  playBatteryPickup() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(440.0, 0.11, 'triangle', 0.052, 0, { bus: 'sfx' });
+    this.playTone(659.25, 0.13, 'sine', 0.055, 0.05, { bus: 'sfx' });
+    this.playTone(987.77, 0.19, 'triangle', 0.05, 0.1, { bus: 'sfx' });
+    this.vibrate?.([14, 14, 22]);
+  }
+
+  /** Heroic harmonic power-up fanfare on collecting a Boss Speargun Weapon Upgrade (v187). */
+  playWeaponUpgrade() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(523.25, 0.14, 'triangle', 0.055, 0, { bus: 'sfx' });
+    this.playTone(659.25, 0.14, 'triangle', 0.055, 0.06, { bus: 'sfx' });
+    this.playTone(783.99, 0.18, 'sine', 0.06, 0.12, { bus: 'sfx' });
+    this.playTone(1046.5, 0.28, 'triangle', 0.065, 0.18, { bus: 'sfx' });
+    this.vibrate?.([20, 16, 32]);
+  }
+
   /** Harmonic cathedral sconce ignition ping during Boss Awakening (v182). */
   playSconceIgnite(idx = 0) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;

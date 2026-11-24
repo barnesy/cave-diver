@@ -6,6 +6,7 @@
 
 import { wreckAndInteractivesMethods } from './wreckAndInteractivesRenderer.js';
 import { drawDetailedSpeargun } from '../artSprites.js';
+import { BOSS_WEAPON_UPGRADES } from '../secretLairs.js';
 
 function getPhasePalette(phase) {
   if (phase >= 3) {
@@ -218,13 +219,40 @@ export const bossAndLairMethods = {
       ctx.fill();
       if (!lair.weaponEquipped) {
         ctx.save();
-        ctx.translate(-0.72 * scale, Math.sin(timeSec * 2.8) * 0.06 * scale);
-        ctx.rotate(-0.12);
-        drawDetailedSpeargun(ctx, scale * 1.45, {
+        ctx.translate(-0.72 * scale, -0.14 * scale + Math.sin(timeSec * 2.8) * 0.05 * scale);
+        ctx.rotate(-0.1);
+        drawDetailedSpeargun(ctx, scale * 1.38, {
           torchOn: true,
           lensColor: '#fef08a',
           glowStamps: this.glowStamps,
         });
+        ctx.restore();
+        // Compact docked Combat DPV Scooter nestled below the Speargun in the armory cradle
+        ctx.save();
+        ctx.translate(0.18 * scale, 0.28 * scale + Math.sin(timeSec * 2.8 + 1.0) * 0.04 * scale);
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(-0.52 * scale, -0.18 * scale, 0.28 * scale, 0.36 * scale, 0.06 * scale);
+        } else {
+          ctx.rect(-0.52 * scale, -0.18 * scale, 0.28 * scale, 0.36 * scale);
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.moveTo(-0.24 * scale, -0.15 * scale);
+        ctx.lineTo(0.28 * scale, -0.15 * scale);
+        ctx.quadraticCurveTo(0.56 * scale, 0, 0.28 * scale, 0.15 * scale);
+        ctx.lineTo(-0.24 * scale, 0.15 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#67e8f9';
+        ctx.beginPath();
+        ctx.arc(0.24 * scale, 0, Math.max(1.5, 0.05 * scale), 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
       ctx.restore();
@@ -1399,6 +1427,142 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
+    // 2c. Glowing DPV Battery Power Cells (Electric Cyan-Gold Canisters)
+    for (const cell of lair.batteryCells || []) {
+      const cx = toScreenX(cell.x);
+      const cy = toScreenY(cell.y);
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * 6.5 + (cell.phase || 0));
+      const r = 0.54 * scale;
+      ctx.save();
+      const bg = ctx.createRadialGradient(cx, cy, r * 0.12, cx, cy, r * 2.6);
+      bg.addColorStop(0, 'rgba(254, 240, 138, 0.92)');
+      bg.addColorStop(0.45, 'rgba(34, 211, 238, 0.45)');
+      bg.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotating dashed energy ring
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(timeSec * 1.9 + (cell.phase || 0));
+      ctx.strokeStyle = `rgba(103, 232, 249, ${(0.55 + pulse * 0.4).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+      ctx.setLineDash([Math.max(4, r * 0.6), Math.max(3, r * 0.4)]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.28, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Cylindrical battery housing + terminal cap
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(cx - r * 0.54, cy - r * 0.72, r * 1.08, r * 1.44, r * 0.24);
+      } else {
+        ctx.rect(cx - r * 0.54, cy - r * 0.72, r * 1.08, r * 1.44);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(cx - r * 0.24, cy - r * 0.9, r * 0.48, r * 0.2);
+
+      // Glowing lightning bolt inside canister
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.moveTo(cx + r * 0.08, cy - r * 0.48);
+      ctx.lineTo(cx - r * 0.26, cy + r * 0.04);
+      ctx.lineTo(cx + r * 0.02, cy + r * 0.04);
+      ctx.lineTo(cx - r * 0.1, cy + r * 0.48);
+      ctx.lineTo(cx + r * 0.28, cy - r * 0.04);
+      ctx.lineTo(cx + r * 0.0, cy - r * 0.04);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crisp floating micro-tag
+      ctx.font = `900 ${Math.max(9, Math.round(9.5 * dpr))}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.9)';
+      ctx.lineWidth = 2.6 * dpr;
+      ctx.strokeText('⚡ BATT', cx, cy + r * 1.18);
+      ctx.fillStyle = '#fde047';
+      ctx.fillText('⚡ BATT', cx, cy + r * 1.18);
+      ctx.restore();
+    }
+
+    // 2d. Glowing Speargun Weapon Upgrade Holo-Pods (SPLIT / RAPID / PLASMA / SEEKER)
+    for (const pod of lair.weaponUpgrades || []) {
+      const meta = BOSS_WEAPON_UPGRADES[pod.kind] || BOSS_WEAPON_UPGRADES.twin;
+      const ux = toScreenX(pod.x);
+      const uy = toScreenY(pod.y);
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.8 + (pod.phase || 0));
+      const r = 0.64 * scale;
+      ctx.save();
+      const ug = ctx.createRadialGradient(ux, uy, r * 0.12, ux, uy, r * 2.8);
+      ug.addColorStop(0, '#ffffff');
+      ug.addColorStop(0.35, meta.color);
+      ug.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      ctx.globalAlpha = 0.55 + pulse * 0.25;
+      ctx.fillStyle = ug;
+      ctx.beginPath();
+      ctx.arc(ux, uy, r * 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Rotating hexagonal tactical housing
+      ctx.save();
+      ctx.translate(ux, uy);
+      ctx.rotate(Math.sin(timeSec * 2.2 + (pod.phase || 0)) * 0.16);
+      ctx.fillStyle = 'rgba(6, 16, 34, 0.9)';
+      ctx.strokeStyle = meta.color;
+      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+      ctx.beginPath();
+      for (let s = 0; s < 6; s++) {
+        const a = (s / 6) * Math.PI * 2 - Math.PI / 6;
+        const hx = Math.cos(a) * r;
+        const hy = Math.sin(a) * r;
+        if (s === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner pulsing ring
+      ctx.strokeStyle = '#ffffff';
+      ctx.globalAlpha = 0.55 + pulse * 0.35;
+      ctx.lineWidth = Math.max(1, 0.035 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Center upgrade icon
+      ctx.font = `${Math.max(12, Math.round(r * 0.95))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(meta.icon, 0, 1);
+      ctx.restore();
+
+      // Crisp floating upgrade badge
+      const curLv = lair.weaponMods?.[pod.kind] || 0;
+      const tag = curLv >= 1 && curLv < meta.maxLevel ? `${meta.shortLabel} +` : meta.shortLabel;
+      ctx.font = `900 ${Math.max(9.5, Math.round(10 * dpr))}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.94)';
+      ctx.lineWidth = 2.8 * dpr;
+      ctx.strokeText(tag, ux, uy + r * 1.15);
+      ctx.fillStyle = meta.color;
+      ctx.fillText(tag, ux, uy + r * 1.15);
+      ctx.restore();
+    }
+
     // 3. Boss Emissive Attacks, Weak-Point Mantle Core & Complete Telegraphs
     if (boss && boss.active && !boss.defeated) {
       const bx = toScreenX(boss.x);
@@ -1765,15 +1929,40 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 6b. Tethered Titanium Speargun Bolts
+    // 6b. Tethered Titanium Speargun Bolts (upgraded plasma / seeker / rapid visuals!)
     for (const sp of lair.spears || []) {
       const sx = toScreenX(sp.x);
       const sy = toScreenY(sp.y);
       const ox = toScreenX(sp.originX);
       const oy = toScreenY(sp.originY);
+      const isSeeker = (sp.homingTurnRate || 0) > 0;
+      const isOver = Boolean(sp.overcharged);
+      const tetherCol = sp.piercing
+        ? 'rgba(253, 224, 71, 0.56)'
+        : isSeeker
+          ? 'rgba(192, 132, 252, 0.48)'
+          : isOver
+            ? 'rgba(251, 113, 133, 0.48)'
+            : 'rgba(186, 230, 253, 0.34)';
+      const shaftCol = sp.piercing
+        ? '#fde047'
+        : isSeeker
+          ? '#e9d5ff'
+          : isOver
+            ? '#fecdd3'
+            : '#e0f2fe';
+      const tipCol = sp.piercing
+        ? '#fef08a'
+        : isSeeker
+          ? '#c084fc'
+          : isOver
+            ? '#fb7185'
+            : sp.rapid
+              ? '#67e8f9'
+              : '#38bdf8';
       ctx.save();
-      ctx.strokeStyle = sp.piercing ? 'rgba(253, 224, 71, 0.5)' : 'rgba(186, 230, 253, 0.34)';
-      ctx.lineWidth = Math.max(1, 0.04 * scale);
+      ctx.strokeStyle = tetherCol;
+      ctx.lineWidth = Math.max(1, (sp.piercing || isOver ? 0.055 : 0.04) * scale);
       ctx.beginPath();
       ctx.moveTo(ox, oy);
       ctx.lineTo(sx, sy);
@@ -1781,17 +1970,17 @@ export const bossAndLairMethods = {
 
       ctx.translate(sx, sy);
       ctx.rotate(sp.angle || 0);
-      ctx.strokeStyle = sp.piercing ? '#fde047' : '#e0f2fe';
-      ctx.lineWidth = Math.max(2.4, (sp.charged ? 0.13 : 0.09) * scale);
+      ctx.strokeStyle = shaftCol;
+      ctx.lineWidth = Math.max(2.4, (sp.charged ? 0.14 : 0.095) * scale);
       ctx.beginPath();
-      ctx.moveTo(-0.85 * scale, 0);
-      ctx.lineTo(0.45 * scale, 0);
+      ctx.moveTo(-0.88 * scale, 0);
+      ctx.lineTo(0.48 * scale, 0);
       ctx.stroke();
-      ctx.fillStyle = sp.piercing ? '#fef08a' : '#38bdf8';
+      ctx.fillStyle = tipCol;
       ctx.beginPath();
-      ctx.moveTo(0.75 * scale, 0);
-      ctx.lineTo(0.25 * scale, -0.22 * scale);
-      ctx.lineTo(0.25 * scale, 0.22 * scale);
+      ctx.moveTo(0.8 * scale, 0);
+      ctx.lineTo(0.24 * scale, -0.24 * scale);
+      ctx.lineTo(0.24 * scale, 0.24 * scale);
       ctx.closePath();
       ctx.fill();
       ctx.restore();

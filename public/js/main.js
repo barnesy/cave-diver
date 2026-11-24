@@ -36,6 +36,8 @@ import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/resc
 import {
   fireSpeargun,
   SPEARGUN_MAX_CHARGE_SEC,
+  BOSS_WEAPON_UPGRADES,
+  BOSS_WEAPON_UPGRADE_ORDER,
   serializeSecretLairNetState,
   applyRemoteBossEvent,
 } from './game/secretLairs.js';
@@ -524,7 +526,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=186',
+  mapRasterUrl: './assets/map-expedition.jpg?v=187',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1714,6 +1716,10 @@ let _mouseFireHeld = false;
 const hudCombatBarEl = document.getElementById('hud-combat-bar');
 const combatHpSegsEl = document.getElementById('combat-hp-segs');
 const combatHpValEl = document.getElementById('combat-hp-val');
+const btnCombatScooterEl = document.getElementById('btn-combat-scooter');
+const combatBattFillEl = document.getElementById('combat-batt-fill');
+const combatScooterPctEl = document.getElementById('combat-scooter-pct');
+const combatUpgradesRowEl = document.getElementById('combat-upgrades-row');
 const combatHintPillEl = document.getElementById('combat-hint-pill');
 const btnCombatPauseEl = document.getElementById('btn-combat-pause');
 
@@ -1721,10 +1727,16 @@ btnCombatPauseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   setDivePaused(!divePaused);
 });
+btnCombatScooterEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleDpvToggle();
+});
 
 let _lastCombatHudMode = false;
 let _lastCombatArmed = false;
 let _lastCombatHp = -1;
+let _lastCombatScooterKey = '';
+let _lastCombatUpgradesKey = '';
 let _lastCombatHintFaded = false;
 function syncCombatModeHud(sess) {
   const lair = sess?.secretLair;
@@ -1759,6 +1771,44 @@ function syncCombatModeHud(sess) {
         segs[i].classList.toggle('filled', i < litCount);
         segs[i].classList.toggle('low', isLow);
       }
+    }
+  }
+  // Live Combat DPV Scooter toggle & battery meter
+  const dpvEquipped = Boolean(sess?.dpv?.equipped);
+  const dpvOn = Boolean(sess?.dpv?.active);
+  const dpvPct = Math.max(0, Math.min(100, Math.round(sess?.dpv?.batteryPct ?? 0)));
+  const scooterKey = `${dpvEquipped}:${dpvOn}:${dpvPct}`;
+  if (scooterKey !== _lastCombatScooterKey) {
+    _lastCombatScooterKey = scooterKey;
+    if (btnCombatScooterEl) {
+      btnCombatScooterEl.hidden = !dpvEquipped;
+      btnCombatScooterEl.classList.toggle('active', dpvOn && dpvPct > 0);
+      btnCombatScooterEl.classList.toggle('low', dpvPct > 0 && dpvPct <= 25);
+      btnCombatScooterEl.classList.toggle('empty', dpvPct <= 0);
+      btnCombatScooterEl.setAttribute('aria-pressed', dpvOn ? 'true' : 'false');
+    }
+    if (combatBattFillEl) combatBattFillEl.style.width = `${dpvPct}%`;
+    if (combatScooterPctEl) combatScooterPctEl.textContent = dpvPct <= 0 ? '0%' : dpvOn ? `${dpvPct}%` : 'OFF';
+  }
+  // Live Speargun Weapon Upgrade Badges
+  const mods = lair.weaponMods || {};
+  const upgKey = BOSS_WEAPON_UPGRADE_ORDER.map((k) => mods[k] || 0).join(',');
+  if (upgKey !== _lastCombatUpgradesKey) {
+    _lastCombatUpgradesKey = upgKey;
+    if (combatUpgradesRowEl) {
+      const pills = [];
+      for (const k of BOSS_WEAPON_UPGRADE_ORDER) {
+        const lv = mods[k] || 0;
+        if (lv <= 0) continue;
+        const meta = BOSS_WEAPON_UPGRADES[k];
+        if (!meta) continue;
+        const lbl = lv >= 2 ? meta.lv2Label : meta.shortLabel;
+        pills.push(
+          `<span class="combat-upg-badge${lv >= 2 ? ' lv2' : ''}" style="--upg-col:${meta.color}">${meta.icon} ${lbl}${lv >= 2 ? ' ★' : ''}</span>`
+        );
+      }
+      combatUpgradesRowEl.innerHTML = pills.join('');
+      combatUpgradesRowEl.hidden = pills.length === 0;
     }
   }
   const hintFaded = (lair.combatHintTimer || 0) <= 0;
@@ -3162,6 +3212,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   _lastCombatHudMode = false;
   _lastCombatArmed = false;
   _lastCombatHp = -1;
+  _lastCombatScooterKey = '';
+  _lastCombatUpgradesKey = '';
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
@@ -6397,6 +6449,8 @@ const sessionStepCallbacks = {
   onCrystalChime: (level) => audio.playCrystalChime?.(level),
   onResonanceBreak: () => audio.playResonanceBreak?.(),
   onHealOrb: () => audio.playHealOrb?.(),
+  onBatteryPickup: () => audio.playBatteryPickup?.(),
+  onWeaponUpgrade: () => audio.playWeaponUpgrade?.(),
   onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
   onForeshadow: () => audio.playForeshadowGroan?.(),
   onBossDefeat: () => {

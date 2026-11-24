@@ -34,6 +34,53 @@ export const SPEARGUN_WEAKPOINT_MULT = 1.55;
 export const COMBAT_MAX_HP = 100;
 export const RESONANCE_MAX_CHARGE = 3;
 export const RESONANCE_COOLDOWN_SEC = 16.5;
+export const BOSS_BATTERY_RECHARGE_PCT = 45;
+export const WEAPON_UPGRADE_MAX_LEVEL = 2;
+
+export const BOSS_WEAPON_UPGRADE_ORDER = Object.freeze(['twin', 'rapid', 'overcharge', 'homing']);
+
+export const BOSS_WEAPON_UPGRADES = Object.freeze({
+  twin: Object.freeze({
+    id: 'twin',
+    name: 'Split Barrel',
+    shortLabel: 'SPLIT',
+    lv1Label: 'TWIN SPLIT',
+    lv2Label: 'TRI-FAN',
+    icon: '🔱',
+    color: '#38bdf8',
+    maxLevel: WEAPON_UPGRADE_MAX_LEVEL,
+  }),
+  rapid: Object.freeze({
+    id: 'rapid',
+    name: 'Turbo Pneumatic',
+    shortLabel: 'RAPID',
+    lv1Label: 'RAPID FIRE',
+    lv2Label: 'HYPER CYCLER',
+    icon: '⚡',
+    color: '#fbbf24',
+    maxLevel: WEAPON_UPGRADE_MAX_LEVEL,
+  }),
+  overcharge: Object.freeze({
+    id: 'overcharge',
+    name: 'Plasma Core',
+    shortLabel: 'PLASMA',
+    lv1Label: 'OVERCHARGE',
+    lv2Label: 'PLASMA MAX',
+    icon: '🔥',
+    color: '#fb7185',
+    maxLevel: WEAPON_UPGRADE_MAX_LEVEL,
+  }),
+  homing: Object.freeze({
+    id: 'homing',
+    name: 'Seeker Sonar',
+    shortLabel: 'SEEKER',
+    lv1Label: 'SEEKER LOCK',
+    lv2Label: 'OMNI SEEKER',
+    icon: '🎯',
+    color: '#c084fc',
+    maxLevel: WEAPON_UPGRADE_MAX_LEVEL,
+  }),
+});
 
 export const SECRET_LAIRS = Object.freeze({
   'cenote-el-abismo': Object.freeze({
@@ -123,6 +170,16 @@ export const SECRET_LAIRS = Object.freeze({
         y: 43.2,
         label: 'Salvaged Expedition Bailout Stage',
       }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'pad-west', x: 257.5, y: 38.2 }),
+        Object.freeze({ id: 'pad-north-west', x: 268.0, y: 34.0 }),
+        Object.freeze({ id: 'pad-south', x: 277.0, y: 49.4 }),
+        Object.freeze({ id: 'pad-north-east', x: 288.0, y: 33.8 }),
+        Object.freeze({ id: 'pad-east', x: 298.0, y: 41.0 }),
+        Object.freeze({ id: 'pad-south-east', x: 290.5, y: 49.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 196.0, y: 43.2 }),
+      corridorUpgrade: Object.freeze({ x: 213.5, y: 44.6, kind: 'twin' }),
       exitUpdraft: Object.freeze({
         x: 278.0,
         y: 32.0,
@@ -376,6 +433,9 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     weaponClaimed: false,
     weaponEquipped: false,
     combatMode: false, // Pure combat HUD & frozen diving vitals once Speargun is picked up!
+    combatScooterGranted: false,
+    _savedDpvState: null,
+    weaponMods: { twin: 0, rapid: 0, overcharge: 0, homing: 0 },
     playerHp: COMBAT_MAX_HP,
     playerMaxHp: COMBAT_MAX_HP,
     playerIframesSec: 0,
@@ -392,6 +452,35 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     spears: [],
     enemyProjectiles: [],
     healOrbs: [],
+    batteryCells: spec.arena.corridorBattery
+      ? [{
+          id: 'batt_init_1',
+          x: spec.arena.corridorBattery.x,
+          y: spec.arena.corridorBattery.y,
+          vx: 0,
+          vy: 0,
+          chargePct: BOSS_BATTERY_RECHARGE_PCT,
+          life: 999,
+          phase: 0.4,
+          inArena: false,
+        }]
+      : [],
+    weaponUpgrades: spec.arena.corridorUpgrade
+      ? [{
+          id: 'upg_init_1',
+          kind: spec.arena.corridorUpgrade.kind || 'twin',
+          x: spec.arena.corridorUpgrade.x,
+          y: spec.arena.corridorUpgrade.y,
+          vx: 0,
+          vy: 0,
+          life: 999,
+          phase: 1.1,
+          inArena: false,
+        }]
+      : [],
+    _batterySpawnTimer: 8.5,
+    _upgradeSpawnTimer: 12.0,
+    _pickupSeq: 0,
     hitSparks: [],
     shockwaves: [], // { x, y, radius, maxRadius, life, maxLife, color }
     pillarCrystals: makePillarCrystals(spec.arena.pillars || []),
@@ -575,7 +664,60 @@ export function breachSecretLairVeil(session, callbacks = {}, { fromRemote = fal
 }
 
 /**
- * Equip the Pneumatic Titanium Speargun (mounts flashlight on barrel) and enter Pure Combat Mode!
+ * Grant a loaner Combat DPV Scooter when entering the Secret Lair boss fight so every diver can jet-strafe!
+ * Saves the pre-combat DPV loadout so it restores cleanly after leaving the lair or defeating the boss.
+ */
+export function grantBossCombatScooter(session) {
+  const lair = session?.secretLair;
+  if (!lair || !session?.dpv) return false;
+  if (!lair._savedDpvState) {
+    lair._savedDpvState = {
+      equipped: Boolean(session.dpv.equipped),
+      active: Boolean(session.dpv.active),
+      batteryPct: Number.isFinite(session.dpv.batteryPct) ? session.dpv.batteryPct : 100,
+    };
+  }
+  lair.combatScooterGranted = true;
+  session.dpv.equipped = true;
+  session.dpv.active = true;
+  session.dpv.batteryPct = Math.max(Number.isFinite(session.dpv.batteryPct) ? session.dpv.batteryPct : 0, 100);
+  if (session.diver) {
+    session.diver.hasDpv = true;
+    session.diver.dpvActive = true;
+  }
+  return true;
+}
+
+/**
+ * Restore the diver's original pre-combat DPV loadout upon leaving the Secret Lair or vanquishing the boss.
+ */
+export function restorePreCombatScooter(session) {
+  const lair = session?.secretLair;
+  if (!lair || !session?.dpv || !lair.combatScooterGranted) return false;
+  const saved = lair._savedDpvState;
+  lair.combatScooterGranted = false;
+  lair._savedDpvState = null;
+  if (saved) {
+    session.dpv.equipped = Boolean(saved.equipped);
+    session.dpv.active = saved.equipped ? Boolean(saved.active) : false;
+    session.dpv.thrusting = false;
+    session.dpv.batteryPct = saved.equipped
+      ? Math.max(0, Math.min(100, Number.isFinite(saved.batteryPct) ? saved.batteryPct : 100))
+      : 100;
+  } else {
+    session.dpv.active = false;
+    session.dpv.thrusting = false;
+  }
+  if (session.diver) {
+    session.diver.hasDpv = Boolean(session.dpv.equipped);
+    session.diver.dpvActive = Boolean(session.dpv.active);
+    session.diver.dpvThrusting = false;
+  }
+  return true;
+}
+
+/**
+ * Equip the Pneumatic Titanium Speargun (mounts flashlight on barrel) + Combat DPV Scooter and enter Pure Combat Mode!
  */
 export function claimSecretLairWeapon(session, callbacks = {}) {
   const lair = session?.secretLair;
@@ -591,7 +733,8 @@ export function claimSecretLairWeapon(session, callbacks = {}) {
   lair.tapCooldownSec = 0;
   lair.shotCounter = 0;
   if (session.diver) session.diver.torchOn = true;
-  addSparkBurst(lair, lair.spec.armory.x, lair.spec.armory.y, '#38bdf8', 16, '🔱 SPEARGUN EQUIPPED', true);
+  grantBossCombatScooter(session);
+  addSparkBurst(lair, lair.spec.armory.x, lair.spec.armory.y, '#38bdf8', 18, '🔱 SPEARGUN + ⚡ SCOOTER', true);
   lair.shockwaves.push({
     x: lair.spec.armory.x,
     y: lair.spec.armory.y,
@@ -602,7 +745,7 @@ export function claimSecretLairWeapon(session, callbacks = {}) {
     color: '#38bdf8',
   });
   callbacks.onWeaponEquip?.(lair.spec.armory);
-  return { ok: true, weaponName: lair.spec.armory.weaponName };
+  return { ok: true, weaponName: lair.spec.armory.weaponName, scooterGranted: true };
 }
 
 function spawnHealOrb(lair, x, y, heal = 24) {
@@ -619,6 +762,138 @@ function spawnHealOrb(lair, x, y, heal = 24) {
     life: 26,
     phase: Math.random() * Math.PI * 2,
   });
+}
+
+function _pickOpenArenaPad(lair, avoidX = null, avoidY = null) {
+  const pads = lair?.spec?.arena?.pickupPads || [];
+  if (!pads.length) return { x: lair?.spec?.arena?.cx || 278, y: lair?.spec?.arena?.cy || 40.5 };
+  const occupied = [
+    ...(lair.batteryCells || []),
+    ...(lair.weaponUpgrades || []),
+  ];
+  const free = pads.filter((pad) => !occupied.some((it) => Math.hypot(it.x - pad.x, it.y - pad.y) < 3.6));
+  const pool = free.length > 0 ? free : pads;
+  if (Number.isFinite(avoidX) && Number.isFinite(avoidY) && pool.length > 1) {
+    // Prefer pads farther from the boss so grabbing power-ups rewards smart positioning
+    const sorted = [...pool].sort(
+      (a, b) => Math.hypot(b.x - avoidX, b.y - avoidY) - Math.hypot(a.x - avoidX, a.y - avoidY)
+    );
+    const topHalf = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.6)));
+    return topHalf[Math.floor(Math.random() * topHalf.length)];
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+export function spawnBatteryCell(lair, x, y, chargePct = BOSS_BATTERY_RECHARGE_PCT, { inArena = true } = {}) {
+  if (!lair || !Array.isArray(lair.batteryCells)) return null;
+  if (lair.batteryCells.length >= 4) lair.batteryCells.shift();
+  const ang = Math.random() * Math.PI * 2;
+  const cell = {
+    id: `batt_${++lair._pickupSeq}`,
+    x,
+    y,
+    vx: Math.cos(ang) * 0.7,
+    vy: Math.sin(ang) * 0.7 - 0.25,
+    chargePct,
+    life: 36,
+    phase: Math.random() * Math.PI * 2,
+    inArena,
+  };
+  lair.batteryCells.push(cell);
+  return cell;
+}
+
+function _chooseNextWeaponUpgradeKind(lair) {
+  const mods = lair?.weaponMods || {};
+  const activeKinds = new Set((lair?.weaponUpgrades || []).map((u) => u.kind));
+  const unowned = BOSS_WEAPON_UPGRADE_ORDER.filter((k) => (mods[k] || 0) === 0 && !activeKinds.has(k));
+  if (unowned.length > 0) return unowned[Math.floor(Math.random() * unowned.length)];
+  const unmaxed = BOSS_WEAPON_UPGRADE_ORDER.filter((k) => (mods[k] || 0) < WEAPON_UPGRADE_MAX_LEVEL && !activeKinds.has(k));
+  if (unmaxed.length > 0) return unmaxed[Math.floor(Math.random() * unmaxed.length)];
+  const anyUnmaxed = BOSS_WEAPON_UPGRADE_ORDER.filter((k) => (mods[k] || 0) < WEAPON_UPGRADE_MAX_LEVEL);
+  if (anyUnmaxed.length > 0) return anyUnmaxed[Math.floor(Math.random() * anyUnmaxed.length)];
+  return BOSS_WEAPON_UPGRADE_ORDER[Math.floor(Math.random() * BOSS_WEAPON_UPGRADE_ORDER.length)];
+}
+
+export function spawnWeaponUpgrade(lair, x, y, kind = null, { inArena = true } = {}) {
+  if (!lair || !Array.isArray(lair.weaponUpgrades)) return null;
+  if (lair.weaponUpgrades.length >= 3) lair.weaponUpgrades.shift();
+  const resolvedKind = kind && BOSS_WEAPON_UPGRADES[kind] ? kind : _chooseNextWeaponUpgradeKind(lair);
+  const ang = Math.random() * Math.PI * 2;
+  const pod = {
+    id: `upg_${++lair._pickupSeq}`,
+    kind: resolvedKind,
+    x,
+    y,
+    vx: Math.cos(ang) * 0.55,
+    vy: Math.sin(ang) * 0.55 - 0.2,
+    life: 40,
+    phase: Math.random() * Math.PI * 2,
+    inArena,
+  };
+  lair.weaponUpgrades.push(pod);
+  return pod;
+}
+
+export function collectBatteryCell(session, cell, callbacks = {}) {
+  const lair = session?.secretLair;
+  const dpv = session?.dpv;
+  if (!lair || !cell) return { ok: false };
+  const charge = Number.isFinite(cell.chargePct) ? cell.chargePct : BOSS_BATTERY_RECHARGE_PCT;
+  let added = 0;
+  if (dpv) {
+    if (!dpv.equipped && lair.combatMode) grantBossCombatScooter(session);
+    const before = Number.isFinite(dpv.batteryPct) ? dpv.batteryPct : 0;
+    dpv.batteryPct = Math.min(100, before + charge);
+    added = Math.round(dpv.batteryPct - before);
+    if (dpv.equipped && !dpv.active && dpv.batteryPct > 5) {
+      dpv.active = true;
+      if (session.diver) session.diver.dpvActive = true;
+    }
+  }
+  const px = session.diver?.x ?? cell.x;
+  const py = session.diver?.y ?? cell.y;
+  addSparkBurst(
+    lair,
+    px,
+    py,
+    '#fde047',
+    12,
+    added > 0 ? `⚡ +${added}% BATT` : '⚡ BATTERY FULL',
+    true
+  );
+  addShockwave(lair, px, py, 3.8, '#22d3ee', 0.42);
+  callbacks.onBatteryPickup?.({ added, batteryPct: dpv?.batteryPct ?? 100 });
+  return { ok: true, added, batteryPct: dpv?.batteryPct ?? 100 };
+}
+
+export function applyWeaponUpgrade(session, kind, callbacks = {}) {
+  const lair = session?.secretLair;
+  const meta = BOSS_WEAPON_UPGRADES[kind];
+  if (!lair || !meta) return { ok: false };
+  if (!lair.weaponMods) lair.weaponMods = { twin: 0, rapid: 0, overcharge: 0, homing: 0 };
+  const cur = lair.weaponMods[kind] || 0;
+  const px = session.diver?.x ?? lair.spec?.arena?.cx ?? 278;
+  const py = session.diver?.y ?? lair.spec?.arena?.cy ?? 40.5;
+  if (cur < meta.maxLevel) {
+    const nextLv = cur + 1;
+    lair.weaponMods[kind] = nextLv;
+    const label = nextLv >= 2 ? meta.lv2Label : meta.lv1Label;
+    addSparkBurst(lair, px, py, meta.color, 16, `${meta.icon} ${label}!`, true);
+    addShockwave(lair, px, py, 5.2, meta.color, 0.52);
+    callbacks.onWeaponUpgrade?.({ kind, level: nextLv, label, color: meta.color, hyperSurge: false });
+    return { ok: true, kind, level: nextLv, label, hyperSurge: false };
+  }
+  // All levels of this mod maxed -> Hyper Surge bonus (+25 HP & 100% DPV Battery!)
+  lair.playerHp = Math.min(lair.playerMaxHp || COMBAT_MAX_HP, (lair.playerHp || 0) + 25);
+  if (session.dpv) {
+    session.dpv.batteryPct = 100;
+    if (session.dpv.equipped) session.dpv.active = true;
+  }
+  addSparkBurst(lair, px, py, '#fde047', 18, '⚡ HYPER SURGE · +25 HP & FULL BATT', true);
+  addShockwave(lair, px, py, 6.0, '#fde047', 0.55);
+  callbacks.onWeaponUpgrade?.({ kind, level: cur, label: 'HYPER SURGE', color: '#fde047', hyperSurge: true });
+  return { ok: true, kind, level: cur, label: 'HYPER SURGE', hyperSurge: true };
 }
 
 function addShockwave(lair, x, y, maxRadius, color = '#38bdf8', duration = 0.65) {
@@ -644,10 +919,12 @@ function showTitleBanner(lair, text, sub, color = '#38bdf8', sec = 3.0) {
 }
 
 /**
- * Fire a tethered titanium speargun bolt straight along the flashlight barrel!
- * - Hold joystick / button: steady autofire (`SPEARGUN_AUTOFIRE_SEC = 0.25s`)
- * - Tap joystick / button: faster rapid-fire (`SPEARGUN_TAP_COOLDOWN_SEC = 0.16s`)
- * - Every 5th shot fires a glowing golden Hyper-Tip Piercing Spear!
+ * Fire tethered titanium speargun bolt(s) straight along the flashlight barrel!
+ * Supports Boss Battle Weapon Upgrades:
+ *  - `twin` (Lv 1: Twin Split 2-shot, Lv 2: Tri-Fan 3-shot)
+ *  - `rapid` (Lv 1: 0.78× cooldown + 1.15× speed, Lv 2: 0.64× cooldown + 1.25× speed)
+ *  - `overcharge` (Lv 1: 1.35× dmg + Hyper-Tip every 3rd shot, Lv 2: 1.70× dmg + Hyper-Tip every 2nd shot)
+ *  - `homing` (Lv 1: acoustic seeker tracking 14m, Lv 2: omni-seeker 20m)
  */
 export function fireSpeargun(
   session,
@@ -665,12 +942,19 @@ export function fireSpeargun(
 ) {
   const lair = session?.secretLair;
   if (!lair || !session?.diveState?.alive || session.surfaced) return { ok: false, reason: 'inactive' };
+  const mods = isLocal ? (lair.weaponMods || {}) : {};
+  const rapidLv = mods.rapid || 0;
+  const twinLv = mods.twin || 0;
+  const overLv = mods.overcharge || 0;
+  const homingLv = mods.homing || 0;
+
   if (isLocal) {
     if (!lair.weaponEquipped || !lair.combatMode || lair.bossDefeated) return { ok: false, reason: 'no-weapon' };
     const activeCd = isTap ? lair.tapCooldownSec : lair.reloadSec;
     if (activeCd > 0.015) return { ok: false, reason: 'reloading' };
-    lair.reloadSec = SPEARGUN_AUTOFIRE_SEC;
-    lair.tapCooldownSec = SPEARGUN_TAP_COOLDOWN_SEC;
+    const cdMult = rapidLv >= 2 ? 0.64 : rapidLv === 1 ? 0.78 : 1.0;
+    lair.reloadSec = SPEARGUN_AUTOFIRE_SEC * cdMult;
+    lair.tapCooldownSec = SPEARGUN_TAP_COOLDOWN_SEC * cdMult;
     lair.recoilSec = 0.11;
     lair.muzzleFlashSec = 0.09;
     lair.charging = false;
@@ -692,39 +976,60 @@ export function fireSpeargun(
   const sy = Number.isFinite(originY) ? originY : (diver.body?.hand ? diver.body.hand.y : diver.y);
   const ang = Number.isFinite(aimAngle) ? aimAngle : (diver.torchAngle ?? diver.angle ?? 0);
   const cFrac = Math.max(0, Math.min(1, Number(chargeFrac) || 0));
-  const isHyper = (isLocal && lair.shotCounter % 5 === 0) || cFrac >= 0.72;
-  const charged = isHyper || cFrac >= 0.45;
-  const speed = isHyper ? 32 : 27 + cFrac * 7;
-  const baseDmg = cFrac >= 0.45
-    ? Math.round(SPEARGUN_BASE_DAMAGE * (1 + cFrac * (SPEARGUN_MAX_CHARGE_MULT - 1)))
-    : Math.round(SPEARGUN_BASE_DAMAGE * (isHyper ? SPEARGUN_HYPER_MULT : 1.0));
+  const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;
+  const isHyper = (isLocal && lair.shotCounter % hyperEvery === 0) || cFrac >= 0.72;
+  const charged = isHyper || cFrac >= 0.45 || overLv >= 1;
+  const speedMult = rapidLv >= 2 ? 1.25 : rapidLv === 1 ? 1.15 : 1.0;
+  const speed = (isHyper ? 32 : 27 + cFrac * 7) * speedMult;
+  const overDmgMult = overLv >= 2 ? 1.70 : overLv === 1 ? 1.35 : 1.0;
+  const rawBaseDmg = cFrac >= 0.45
+    ? SPEARGUN_BASE_DAMAGE * (1 + cFrac * (SPEARGUN_MAX_CHARGE_MULT - 1))
+    : SPEARGUN_BASE_DAMAGE * (isHyper ? SPEARGUN_HYPER_MULT : 1.0);
+  // Multi-shot barrels deal slightly per-bolt balanced damage so Twin = ~1.56× and Tri-Fan = ~2.04× total DPS!
+  const spreadScale = twinLv >= 2 ? 0.68 : twinLv === 1 ? 0.78 : 1.0;
+  const baseDmg = Math.max(10, Math.round(rawBaseDmg * overDmgMult * spreadScale));
 
-  const bolt = {
-    id: `sp_${++lair._spearSeq}`,
-    x: sx + Math.cos(ang) * 0.95,
-    y: sy + Math.sin(ang) * 0.95,
-    prevX: sx + Math.cos(ang) * 0.5,
-    prevY: sy + Math.sin(ang) * 0.5,
-    vx: Math.cos(ang) * speed,
-    vy: Math.sin(ang) * speed,
-    angle: ang,
-    originX: sx,
-    originY: sy,
-    ownerId,
-    isLocal,
-    isRemoteVisual: Boolean(isRemoteVisual),
-    damage: baseDmg,
-    charged,
-    piercing: isHyper,
-    life: isHyper ? 0.96 : 0.74,
-    maxLife: isHyper ? 0.96 : 0.74,
-    hitIds: new Set(),
-  };
-  lair.spears.push(bolt);
+  const angleOffsets = twinLv >= 2 ? [-0.14, 0, 0.14] : twinLv === 1 ? [-0.082, 0.082] : [0];
+  const homingTurnRate = homingLv >= 2 ? 4.4 : homingLv === 1 ? 2.6 : 0;
+  const homingRange = homingLv >= 2 ? 26 : homingLv === 1 ? 18 : 0;
+  const bolts = [];
+
+  for (let bIdx = 0; bIdx < angleOffsets.length; bIdx++) {
+    const bAng = ang + angleOffsets[bIdx];
+    const bolt = {
+      id: `sp_${++lair._spearSeq}`,
+      x: sx + Math.cos(bAng) * 0.95,
+      y: sy + Math.sin(bAng) * 0.95,
+      prevX: sx + Math.cos(bAng) * 0.5,
+      prevY: sy + Math.sin(bAng) * 0.5,
+      vx: Math.cos(bAng) * speed,
+      vy: Math.sin(bAng) * speed,
+      speed,
+      angle: bAng,
+      originX: sx,
+      originY: sy,
+      ownerId,
+      isLocal,
+      isRemoteVisual: Boolean(isRemoteVisual),
+      damage: baseDmg,
+      charged,
+      piercing: isHyper,
+      overcharged: overLv >= 1,
+      rapid: rapidLv >= 1,
+      homingTurnRate,
+      homingRange,
+      life: isHyper ? 0.96 : 0.78,
+      maxLife: isHyper ? 0.96 : 0.78,
+      hitIds: new Set(),
+    };
+    lair.spears.push(bolt);
+    bolts.push(bolt);
+  }
+  const bolt = bolts[0];
 
   // Crisp subtle underwater pneumatic kick
   if (isLocal && diver) {
-    const recoil = isHyper ? 0.38 : 0.19;
+    const recoil = isHyper ? 0.36 : 0.18;
     diver.vx = (diver.vx || 0) - Math.cos(ang) * recoil;
     diver.vy = (diver.vy || 0) - Math.sin(ang) * recoil;
   }
@@ -742,8 +1047,8 @@ export function fireSpeargun(
     }
   }
 
-  callbacks.onSpeargunFire?.({ bolt, charged: isHyper, isLocal });
-  return { ok: true, bolt, charged: isHyper, aimAngle: ang, chargeFrac: cFrac };
+  callbacks.onSpeargunFire?.({ bolt, bolts, charged: isHyper, isLocal });
+  return { ok: true, bolt, bolts, charged: isHyper, aimAngle: ang, chargeFrac: cFrac };
 }
 
 function _stunBoss(session, lair, durationSec, label, color, callbacks) {
@@ -798,6 +1103,13 @@ function _chargePillarCrystal(session, lair, pc, addCharge, hitX, hitY, callback
         lair.enemyProjectiles.length = 0;
         _stunBoss(session, lair, 2.9, '⚡ RESONANCE BREAK! 2× DMG', '#22d3ee', callbacks);
         applyBossDamage(session, 220, { crit: true, hitX: boss.x, hitY: boss.y, bypassStunMult: true }, callbacks);
+        // Tactical reward: Resonance Break pops a Weapon Upgrade Pod (or Battery Cell) near the pillar!
+        const dropPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+        if ((lair.weaponUpgrades || []).filter((u) => u.inArena).length < 2) {
+          spawnWeaponUpgrade(lair, dropPad.x, dropPad.y);
+        } else {
+          spawnBatteryCell(lair, dropPad.x, dropPad.y);
+        }
       } else {
         addSparkBurst(lair, pc.x, pc.y, '#67e8f9', 14, '⚡ ACOUSTIC PULSE!', true);
       }
@@ -855,6 +1167,11 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
       lair.playerIframesSec = 2.2;
       lair.playerHitFlash = 0.45;
       lair.enemyProjectiles.length = 0;
+      if (session.dpv?.equipped) {
+        session.dpv.batteryPct = 100;
+        session.dpv.active = true;
+        if (session.diver) session.diver.dpvActive = true;
+      }
       if (lair.boss && !lair.boss.defeated && lair.scaling.humans <= 1) {
         // Full clean solo rematch reset!
         const b = lair.boss;
@@ -877,6 +1194,10 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
         b.x = b.homeX;
         b.y = b.homeY;
         lair.minions = lair.minions.filter((m) => !m.isBossAdd);
+        lair.batteryCells = (lair.batteryCells || []).filter((c) => !c.inArena);
+        lair.weaponUpgrades = (lair.weaponUpgrades || []).filter((u) => !u.inArena);
+        lair._batterySpawnTimer = 8.5;
+        lair._upgradeSpawnTimer = 12.0;
         for (const pc of lair.pillarCrystals || []) {
           pc.charge = 0;
           pc.cooldownSec = 0;
@@ -963,6 +1284,12 @@ export function applyBossDamage(
     callbacks.onBossRoar?.(2);
     spawnHealOrb(lair, boss.x - 9.0, boss.y - 4.0, 28);
     spawnHealOrb(lair, boss.x - 9.0, boss.y + 4.0, 28);
+    if (!fromRemote) {
+      const bPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+      spawnBatteryCell(lair, bPad.x, bPad.y);
+      const uPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+      spawnWeaponUpgrade(lair, uPad.x, uPad.y);
+    }
     if (!boss.phase2Summoned && !fromRemote) {
       boss.phase2Summoned = true;
       for (let i = 0; i < lair.scaling.phase2Adds; i++) {
@@ -1005,6 +1332,12 @@ export function applyBossDamage(
     if (session.hitstopSec !== undefined) session.hitstopSec = Math.max(session.hitstopSec || 0, 0.12);
     spawnHealOrb(lair, lair.spec.arena.cx - 4, lair.spec.arena.cy - 6.0, 32);
     spawnHealOrb(lair, lair.spec.arena.cx - 4, lair.spec.arena.cy + 6.0, 32);
+    if (!fromRemote) {
+      const bPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+      spawnBatteryCell(lair, bPad.x, bPad.y);
+      const uPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+      spawnWeaponUpgrade(lair, uPad.x, uPad.y);
+    }
     callbacks.onBossRoar?.(3);
   }
 
@@ -1019,13 +1352,16 @@ export function applyBossDamage(
     boss._defeatBurstStep = 0;
     lair.bossDefeated = true;
     lair.trophyClaimed = true;
-    // Only have the Speargun in this mode — killing the boss immediately removes it!
+    // Only have the Speargun in this mode — killing the boss immediately removes it & restores pre-combat DPV loadout!
     lair.weaponEquipped = false;
     lair.charging = false;
     lair.chargeSec = 0;
     lair.recoilSec = 0;
     lair.muzzleFlashSec = 0;
     lair.spears.length = 0;
+    if (Array.isArray(lair.batteryCells)) lair.batteryCells.length = 0;
+    if (Array.isArray(lair.weaponUpgrades)) lair.weaponUpgrades.length = 0;
+    restorePreCombatScooter(session);
     lair.bonusScore = (lair.bonusScore || 0) + (lair.spec.boss.bonusPoints || 2500);
     for (const m of lair.minions) {
       if (m.alive && isPointInArena(lair.spec.arena, m.x, m.y, 12)) {
@@ -1097,6 +1433,7 @@ export function handleSecretLairInteract(session, callbacks = {}) {
 function _triggerVictoryUpdraft(session, up, callbacks) {
   const { diver, diveState, secretLair: lair } = session;
   lair.combatMode = false;
+  restorePreCombatScooter(session);
   diver.x = up.destX;
   diver.y = up.destY;
   diver.vx = 0;
@@ -1231,24 +1568,27 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     callbacks.onForeshadow?.();
   }
 
-  // 1b. Speargun Mode Exclusivity: only equipped inside the Secret Lair while boss is undefeated!
+  // 1b. Speargun & Combat Scooter Mode Exclusivity: only equipped inside the Secret Lair while boss is undefeated!
   const sealX = lair.spec.veil?.sealWallX ?? 134.8;
   if (lair.bossDefeated) {
     if (lair.weaponEquipped) {
       lair.weaponEquipped = false;
       lair.spears.length = 0;
     }
+    if (lair.combatScooterGranted) restorePreCombatScooter(session);
   } else if (diver.x < sealX - 1.8) {
-    // Exited secret passage back into main cave -> stow speargun & restore normal diving HUD
-    if (lair.weaponEquipped || lair.combatMode) {
+    // Exited secret passage back into main cave -> stow speargun, restore DPV loadout & normal diving HUD
+    if (lair.weaponEquipped || lair.combatMode || lair.combatScooterGranted) {
       lair.weaponEquipped = false;
       lair.combatMode = false;
       lair.spears.length = 0;
+      restorePreCombatScooter(session);
     }
   } else if (lair.weaponClaimed && !lair.weaponEquipped && diver.x >= sealX + 1.0 && diveState?.alive) {
-    // Re-entered secret lair before defeating boss -> seamlessly re-equip speargun
+    // Re-entered secret lair before defeating boss -> seamlessly re-equip speargun & Combat Scooter
     lair.weaponEquipped = true;
     lair.combatMode = true;
+    grantBossCombatScooter(session);
   }
 
   // Frictionless Auto-Equip Speargun when swimming onto the Armory Rack in the quiet anteroom!
@@ -1317,6 +1657,55 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     if (orb.life <= 0) lair.healOrbs.splice(i, 1);
   }
 
+  // 2c. Step DPV Battery Power Cells (glowing hover + magnetic pull + +45% scooter battery recharge!)
+  for (let i = (lair.batteryCells || []).length - 1; i >= 0; i--) {
+    const cell = lair.batteryCells[i];
+    if (cell.inArena) cell.life -= dt;
+    cell.phase = (cell.phase || 0) + dt * 4.2;
+    cell.vx = (cell.vx || 0) * Math.max(0, 1 - dt * 2.5);
+    cell.vy = (cell.vy || 0) * Math.max(0, 1 - dt * 2.5);
+    const dx = diver.x - cell.x;
+    const dy = diver.y - cell.y;
+    const d = Math.hypot(dx, dy);
+    const needBatt = !session.dpv || (session.dpv.batteryPct ?? 100) < 98;
+    if (d < 4.6 && d > 0.01 && needBatt) {
+      cell.vx += (dx / d) * 14 * dt;
+      cell.vy += (dy / d) * 14 * dt;
+    }
+    cell.x += cell.vx * dt;
+    cell.y += cell.vy * dt + Math.sin(cell.phase) * 0.2 * dt;
+    if (d <= 1.7 && diveState?.alive) {
+      collectBatteryCell(session, cell, callbacks);
+      lair.batteryCells.splice(i, 1);
+      continue;
+    }
+    if (cell.inArena && cell.life <= 0) lair.batteryCells.splice(i, 1);
+  }
+
+  // 2d. Step Speargun Weapon Upgrade Pods (magnetic swim-over upgrade!)
+  for (let i = (lair.weaponUpgrades || []).length - 1; i >= 0; i--) {
+    const pod = lair.weaponUpgrades[i];
+    if (pod.inArena) pod.life -= dt;
+    pod.phase = (pod.phase || 0) + dt * 3.8;
+    pod.vx = (pod.vx || 0) * Math.max(0, 1 - dt * 2.6);
+    pod.vy = (pod.vy || 0) * Math.max(0, 1 - dt * 2.6);
+    const dx = diver.x - pod.x;
+    const dy = diver.y - pod.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 4.4 && d > 0.01 && lair.weaponEquipped) {
+      pod.vx += (dx / d) * 13.5 * dt;
+      pod.vy += (dy / d) * 13.5 * dt;
+    }
+    pod.x += pod.vx * dt;
+    pod.y += pod.vy * dt + Math.sin(pod.phase) * 0.22 * dt;
+    if (d <= 1.75 && diveState?.alive && lair.weaponEquipped) {
+      applyWeaponUpgrade(session, pod.kind, callbacks);
+      lair.weaponUpgrades.splice(i, 1);
+      continue;
+    }
+    if (pod.inArena && pod.life <= 0) lair.weaponUpgrades.splice(i, 1);
+  }
+
   // Build active target list (local diver + live human peers + live AI wingmen)
   const targets = [];
   if (diveState?.alive && !session.surfaced) {
@@ -1350,7 +1739,43 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       boss.stateMaxTimer = 2.6;
       lair.sconceLitCount = 0;
       lair.sconceLitFrac = 0.08;
-      showTitleBanner(lair, boss.name, 'ANCIENT ABYSSAL GUARDIAN · SHOOT PILLAR CRYSTALS TO STUN', '#38bdf8', 3.4);
+      showTitleBanner(lair, boss.name, 'ANCIENT ABYSSAL GUARDIAN · GRAB BATTERIES & UPGRADES', '#38bdf8', 3.4);
+      // Seed the arena with 2 Battery Cells & 1 Weapon Upgrade Pod right as the boss awakens!
+      if (isAuthority) {
+        const p1 = _pickOpenArenaPad(lair, boss.x, boss.y);
+        spawnBatteryCell(lair, p1.x, p1.y);
+        const p2 = _pickOpenArenaPad(lair, p1.x, p1.y);
+        spawnBatteryCell(lair, p2.x, p2.y);
+        const p3 = _pickOpenArenaPad(lair, boss.x, boss.y);
+        spawnWeaponUpgrade(lair, p3.x, p3.y);
+        lair._batterySpawnTimer = 10.5;
+        lair._upgradeSpawnTimer = 14.5;
+      }
+    }
+  }
+
+  // 3b. Periodic Boss Arena Supply Drops (DPV Battery Cells & Speargun Weapon Upgrades!)
+  if (isAuthority && boss.active && !boss.defeated && boss.aiState !== 'awakening') {
+    lair._batterySpawnTimer = (lair._batterySpawnTimer ?? 10.5) - dt;
+    if (lair._batterySpawnTimer <= 0) {
+      lair._batterySpawnTimer = 10.5;
+      const arenaCells = (lair.batteryCells || []).filter((c) => c.inArena).length;
+      if (arenaCells < 3) {
+        const pad = _pickOpenArenaPad(lair, boss.x, boss.y);
+        spawnBatteryCell(lair, pad.x, pad.y);
+        addShockwave(lair, pad.x, pad.y, 2.8, '#22d3ee', 0.4);
+      }
+    }
+    lair._upgradeSpawnTimer = (lair._upgradeSpawnTimer ?? 14.5) - dt;
+    if (lair._upgradeSpawnTimer <= 0) {
+      lair._upgradeSpawnTimer = 14.5;
+      const arenaPods = (lair.weaponUpgrades || []).filter((u) => u.inArena).length;
+      if (arenaPods < 2) {
+        const pad = _pickOpenArenaPad(lair, boss.x, boss.y);
+        const pod = spawnWeaponUpgrade(lair, pad.x, pad.y);
+        const meta = pod && BOSS_WEAPON_UPGRADES[pod.kind];
+        addShockwave(lair, pad.x, pad.y, 3.2, meta?.color || '#38bdf8', 0.45);
+      }
     }
   }
 
@@ -1398,6 +1823,35 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     if (!sp) continue;
     sp.prevX = sp.x;
     sp.prevY = sp.y;
+    // Seeker Sonar Upgrade: smoothly curves spears toward nearest live enemy or active boss!
+    if ((sp.homingTurnRate || 0) > 0 && !sp.isRemoteVisual) {
+      let bestTarget = null;
+      let bestDist = sp.homingRange || 15;
+      if (boss.active && !boss.defeated && boss.aiState !== 'awakening' && !sp.hitIds.has(boss.id)) {
+        const db = Math.hypot(boss.x - sp.x, boss.y - sp.y);
+        if (db < bestDist) {
+          bestDist = db;
+          bestTarget = boss;
+        }
+      }
+      for (const m of lair.minions) {
+        if (!m.alive || sp.hitIds.has(m.id)) continue;
+        const dm = Math.hypot(m.x - sp.x, m.y - sp.y);
+        if (dm < bestDist) {
+          bestDist = dm;
+          bestTarget = m;
+        }
+      }
+      if (bestTarget) {
+        const desiredAng = Math.atan2(bestTarget.y - sp.y, bestTarget.x - sp.x);
+        const diff = Math.atan2(Math.sin(desiredAng - sp.angle), Math.cos(desiredAng - sp.angle));
+        const maxTurn = sp.homingTurnRate * dt;
+        sp.angle += Math.max(-maxTurn, Math.min(maxTurn, diff));
+        const spd = sp.speed || Math.hypot(sp.vx, sp.vy) || 28;
+        sp.vx = Math.cos(sp.angle) * spd;
+        sp.vy = Math.sin(sp.angle) * spd;
+      }
+    }
     sp.x += sp.vx * dt;
     sp.y += sp.vy * dt;
     sp.life -= dt;
@@ -1465,7 +1919,9 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           lair.minionsKilled += 1;
           lair.bonusScore += m.kind === 'stalker' ? 300 : 150;
           addSparkBurst(lair, m.x, m.y, '#34d399', 12, `+${m.kind === 'stalker' ? 300 : 150}`, true);
-          if (m.dropOrb) {
+          if (m.isBossAdd) {
+            spawnBatteryCell(lair, m.x, m.y);
+          } else if (m.dropOrb) {
             spawnHealOrb(lair, m.x, m.y, m.kind === 'stalker' ? 24 : 16);
           }
         }
@@ -1719,6 +2175,12 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           lair.pillarCrashes = (lair.pillarCrashes || 0) + 1;
           _stunBoss(session, lair, 3.5, '💥 PILLAR CRASH! 2× DMG', '#fde047', callbacks);
           applyBossDamage(session, 200, { crit: true, hitX: crashedPillar.x, hitY: crashedPillar.y, bypassStunMult: true }, callbacks);
+          const pad = _pickOpenArenaPad(lair, boss.x, boss.y);
+          if ((lair.weaponUpgrades || []).filter((u) => u.inArena).length < 2) {
+            spawnWeaponUpgrade(lair, pad.x, pad.y);
+          } else {
+            spawnBatteryCell(lair, pad.x, pad.y);
+          }
         }
       } else if (boss.aiState !== 'stunned' && boss.aiState !== 'beam_sweep') {
         const anchors = lair.spec.arena.bossAnchors || [{ x: boss.homeX, y: boss.homeY }];
@@ -2202,6 +2664,8 @@ export function serializeSecretLairNetState(lair) {
     m: lair.minions
       .filter((mm) => mm.alive)
       .map((mm) => [mm.id, Math.round(mm.x * 10) / 10, Math.round(mm.y * 10) / 10, mm.hp]),
+    bc: (lair.batteryCells || []).slice(0, 4).map((c) => [c.id, Math.round(c.x * 10) / 10, Math.round(c.y * 10) / 10, c.inArena ? 1 : 0]),
+    wu: (lair.weaponUpgrades || []).slice(0, 3).map((u) => [u.id, u.kind, Math.round(u.x * 10) / 10, Math.round(u.y * 10) / 10, u.inArena ? 1 : 0]),
   };
 }
 
@@ -2275,6 +2739,32 @@ export function applySecretLairNetState(lairOrSession, snap) {
         mm.hp = 0;
       }
     }
+  }
+  if (Array.isArray(snap.bc)) {
+    lair.batteryCells = snap.bc.map(([id, x, y, inArena]) => ({
+      id,
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      chargePct: BOSS_BATTERY_RECHARGE_PCT,
+      life: 25,
+      phase: 0,
+      inArena: Boolean(inArena),
+    }));
+  }
+  if (Array.isArray(snap.wu)) {
+    lair.weaponUpgrades = snap.wu.map(([id, kind, x, y, inArena]) => ({
+      id,
+      kind: BOSS_WEAPON_UPGRADES[kind] ? kind : 'twin',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life: 25,
+      phase: 0,
+      inArena: Boolean(inArena),
+    }));
   }
 }
 

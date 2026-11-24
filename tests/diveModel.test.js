@@ -9197,3 +9197,127 @@ test('v186 Streamlined 5-Tool Dive Kit, Quiet Top-Middle HUD, Wetnotes Removal &
   });
   assert.ok(calls.includes('arc') && calls.includes('fillText'), 'High-tech Sonar Overlay must draw polar rings, sweep & telemetry cleanly');
 });
+
+test('v187 Boss Battle Combat Scooter, Battery Cell Pickups & Speargun Weapon Upgrades', async () => {
+  const {
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    fireSpeargun,
+    stepSecretLairEncounter,
+    applyBossDamage,
+    spawnBatteryCell,
+    spawnWeaponUpgrade,
+    applyWeaponUpgrade,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+    BOSS_WEAPON_UPGRADES,
+    BOSS_BATTERY_RECHARGE_PCT,
+    SPEARGUN_AUTOFIRE_SEC,
+  } = await import('../public/js/game/secretLairs.js');
+
+  // 1. Even with gear.dpv = false, claiming the Secret Lair Armory grants a Combat Scooter (100% batt, active)
+  const s = createDiveSession(LEVEL_1, { diverName: 'BossScooter', gear: { dpv: false } });
+  assert.equal(s.dpv.equipped, false);
+  breachSecretLairVeil(s, {});
+  s.diver.x = s.secretLair.spec.armory.x;
+  s.diver.y = s.secretLair.spec.armory.y;
+  const claimRes = claimSecretLairWeapon(s, {});
+  assert.equal(claimRes.ok, true);
+  assert.equal(claimRes.scooterGranted, true);
+  assert.equal(s.dpv.equipped, true, 'Combat Mode must auto-equip the loaner Boss Scooter');
+  assert.equal(s.dpv.active, true, 'Boss Scooter should start engaged');
+  assert.equal(s.dpv.batteryPct, 100);
+  assert.equal(s.diver.hasDpv, true);
+
+  // 2. Combat scooter drains battery when thrusting & collecting a Battery Cell recharges +45% and auto-re-engages from 0%
+  s.dpv.batteryPct = 0;
+  s.dpv.active = false;
+  let battCb = null;
+  spawnBatteryCell(s.secretLair, s.diver.x + 0.5, s.diver.y);
+  stepSecretLairEncounter(s, 0.05, {}, { onBatteryPickup: (ev) => { battCb = ev; } });
+  assert.ok(battCb, 'Swimming over a Battery Cell must trigger onBatteryPickup');
+  assert.equal(s.dpv.batteryPct, BOSS_BATTERY_RECHARGE_PCT, 'Battery Cell must recharge +45% battery');
+  assert.equal(s.dpv.active, true, 'Battery Cell must auto-re-engage depleted scooter');
+
+  // 3. Weapon Upgrades: Twin (Lv1=2, Lv2=3 bolts), Rapid (faster cooldown & speed), Overcharge (higher dmg & faster Hyper-Tip), Homing (curves toward target)
+  const upgEvents = [];
+  const cb = { onWeaponUpgrade: (ev) => upgEvents.push(ev) };
+  spawnWeaponUpgrade(s.secretLair, s.diver.x + 0.4, s.diver.y, 'twin');
+  stepSecretLairEncounter(s, 0.05, {}, cb);
+  assert.equal(s.secretLair.weaponMods.twin, 1);
+  assert.equal(upgEvents.length, 1);
+  const twinShot = fireSpeargun(s, { aimAngle: 0, isLocal: true }, {});
+  assert.equal(twinShot.ok, true);
+  assert.equal(twinShot.bolts.length, 2, 'Twin Lv1 must fire 2 spears');
+
+  applyWeaponUpgrade(s, 'twin', cb);
+  assert.equal(s.secretLair.weaponMods.twin, 2);
+  s.secretLair.reloadSec = 0;
+  const triShot = fireSpeargun(s, { aimAngle: 0, isLocal: true }, {});
+  assert.equal(triShot.bolts.length, 3, 'Twin Lv2 (Tri-Fan) must fire 3 spears');
+
+  applyWeaponUpgrade(s, 'rapid', cb);
+  s.secretLair.reloadSec = 0;
+  fireSpeargun(s, { aimAngle: 0, isLocal: true }, {});
+  assert.ok(s.secretLair.reloadSec < SPEARGUN_AUTOFIRE_SEC * 0.85, 'Rapid upgrade must reduce fire cooldown');
+
+  const baseDmgBeforeOver = triShot.bolts[0].damage;
+  applyWeaponUpgrade(s, 'overcharge', cb);
+  applyWeaponUpgrade(s, 'overcharge', cb);
+  s.secretLair.reloadSec = 0;
+  s.secretLair.shotCounter = 1; // Next shot is 2nd -> Overcharge Lv2 triggers Hyper-Tip every 2nd shot!
+  const overShot = fireSpeargun(s, { aimAngle: 0, isLocal: true }, {});
+  assert.equal(overShot.charged, true, 'Overcharge Lv2 must trigger Hyper-Tip every 2nd shot');
+  assert.ok(overShot.bolts[0].damage > baseDmgBeforeOver, 'Overcharge must increase bolt damage');
+
+  // Homing Seeker upgrade curves bolt toward active boss
+  applyWeaponUpgrade(s, 'homing', cb);
+  s.secretLair.spears.length = 0;
+  s.diver.x = 264;
+  s.diver.y = 40.5;
+  stepSecretLairEncounter(s, 0.05, {}, {}); // Enters arena -> awakens boss + spawns 2 Battery Cells & 1 Upgrade Pod!
+  assert.equal(s.secretLair.boss.active, true);
+  assert.ok(s.secretLair.batteryCells.filter((c) => c.inArena).length >= 2, 'Boss awakening must spawn at least 2 arena Battery Cells');
+  assert.ok(s.secretLair.weaponUpgrades.filter((u) => u.inArena).length >= 1, 'Boss awakening must spawn at least 1 arena Weapon Upgrade Pod');
+
+  s.secretLair.boss.aiState = 'idle';
+  s.secretLair.boss.x = 278;
+  s.secretLair.boss.y = 46; // Below diver's horizontal aim (angle 0)
+  s.secretLair.reloadSec = 0;
+  const homingShot = fireSpeargun(s, { aimAngle: 0, isLocal: true, originX: s.diver.x, originY: s.diver.y }, {});
+  const initAngle = homingShot.bolts[1].angle; // Center bolt aimed straight right (0 rad)
+  stepSecretLairEncounter(s, 0.12, {}, {});
+  assert.ok(homingShot.bolts[1].angle > initAngle + 0.05, 'Homing Seeker spear must curve toward boss');
+
+  // 4. Maxed upgrade pickup triggers Hyper Surge (+25 HP & 100% battery)
+  s.secretLair.playerHp = 60;
+  s.dpv.batteryPct = 20;
+  const surge = applyWeaponUpgrade(s, 'twin', cb);
+  assert.equal(surge.hyperSurge, true);
+  assert.equal(s.secretLair.playerHp, 85);
+  assert.equal(s.dpv.batteryPct, 100);
+
+  // 5. Net sync serializes & applies batteryCells (bc) and weaponUpgrades (wu)
+  const snap = serializeSecretLairNetState(s.secretLair);
+  assert.ok(Array.isArray(snap.bc) && snap.bc.length >= 2);
+  assert.ok(Array.isArray(snap.wu) && snap.wu.length >= 1);
+  const peerS = createDiveSession(LEVEL_1, { diverName: 'CoopBuddy' });
+  applySecretLairNetState(peerS.secretLair, snap);
+  assert.equal(peerS.secretLair.batteryCells.length, snap.bc.length);
+  assert.equal(peerS.secretLair.weaponUpgrades.length, snap.wu.length);
+
+  // 6. Killing boss restores pre-combat DPV loadout (non-DPV diver returns to dpv.equipped = false)
+  applyBossDamage(s, s.secretLair.boss.hp + 500, { crit: true }, {});
+  assert.equal(s.secretLair.bossDefeated, true);
+  assert.equal(s.dpv.equipped, false, 'Loaner Boss Scooter must be stowed once boss is defeated');
+  assert.equal(s.diver.hasDpv, false);
+
+  // 7. Combat HUD HTML & CSS include Scooter toggle/battery gauge and Upgrade Badges
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-combat-scooter"'), 'Combat HUD must include interactive Scooter battery toggle');
+  assert.ok(html.includes('id="combat-upgrades-row"'), 'Combat HUD must include Weapon Upgrade badges container');
+  assert.ok(css.includes('.combat-scooter-btn') && css.includes('.combat-upg-badge'), 'CSS must style Combat Scooter & Upgrade badges');
+  assert.equal(Object.keys(BOSS_WEAPON_UPGRADES).length, 4);
+});
