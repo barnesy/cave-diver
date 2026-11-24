@@ -34,6 +34,12 @@ import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
 import {
+  fireSpeargun,
+  SPEARGUN_MAX_CHARGE_SEC,
+  serializeSecretLairNetState,
+  applyRemoteBossEvent,
+} from './game/secretLairs.js';
+import {
   createEmptyLogbook,
   recordDiveInLogbook,
   seedLogbookFromEntries,
@@ -517,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=178',
+  mapRasterUrl: './assets/map-expedition.jpg?v=179',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -854,6 +860,8 @@ const input = new InputController({
     setDivePaused(!divePaused);
     return true;
   },
+  onSpearPressStart: () => startSpeargunCharge(),
+  onSpearRelease: () => releaseSpeargunFire(),
   onTorchToggle: () => {
     if (!session?.diver || divePaused) return;
     if (session.drills?.active?.kind === 'torch-fail') {
@@ -1432,6 +1440,7 @@ function savePhotoStudioSnapshot() {
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,
+      secretLair: session.secretLair || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
@@ -1567,6 +1576,7 @@ const btnHudStage = document.getElementById('btn-hud-stage');
 const btnHudLiftBag = document.getElementById('btn-hud-liftbag');
 const btnHudCookie = document.getElementById('btn-hud-cookie');
 const btnHudSmb = document.getElementById('btn-hud-smb');
+const btnHudSpear = document.getElementById('btn-hud-spear');
 const btnHudSonar = document.getElementById('btn-hud-sonar');
 const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
@@ -1871,26 +1881,32 @@ gearDockGridEl?.addEventListener('click', (e) => {
 
 function handleSonarPing() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
-  if (!session.sonar?.equipped) return false;
+  if (!session.sonar) return false;
   const res = triggerSonarPing(session, {
     onSonarPing: () => audio.playSonarPing(),
+    onToast: (txt, sec) => showToast(txt, sec),
   });
   if (res.ok) {
     const sum = res.pulse?.summary;
     const count = res.pulse?.contacts?.length || 0;
     const parts = [];
+    if (sum?.secretVeil) parts.push('📡 HOLLOW VEIL!');
     if (sum?.collectibles) parts.push(`💎 ${sum.collectibles} relic${sum.collectibles === 1 ? '' : 's'}`);
     if (sum?.hatches) parts.push(`🚪 ${sum.hatches} hatch${sum.hatches === 1 ? '' : 'es'}`);
     if (sum?.percolation) parts.push(`🌫️ ${sum.percolation} ceil silt`);
     if (sum?.thermoclines) parts.push(`❄️ ${sum.thermoclines} thermo`);
-    showToast(
-      parts.length > 0
-        ? `📡 Sonar lock: ${parts.join(' · ')}`
-        : count > 0
-          ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!`
-          : '📡 Sonar contour sweep!',
-      2.3
-    );
+    if (!sum?.secretVeil) {
+      showToast(
+        parts.length > 0
+          ? `📡 Sonar lock: ${parts.join(' · ')}`
+          : count > 0
+            ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!`
+            : session.sonar.equipped
+              ? '📡 Sonar contour sweep!'
+              : '📡 Short-range acoustic ping (16m)!',
+        2.3
+      );
+    }
     return true;
   }
   if (res.reason === 'cooldown') {
@@ -1899,6 +1915,89 @@ function handleSonarPing() {
   }
   return false;
 }
+
+let _lastPointerWorldAngle = null;
+function startSpeargunCharge() {
+  if (mode !== 'diving' || !session || divePaused || photoModeActive || session.endedState) return false;
+  const lair = session.secretLair;
+  if (!lair?.weaponEquipped || !session.diveState?.alive) return false;
+  if (lair.reloadSec > 0.02) return true;
+  audio.unlock();
+  lair.charging = true;
+  lair.chargeSec = 0;
+  syncTechGearHud(session);
+  return true;
+}
+
+function releaseSpeargunFire(overrideAngle = null) {
+  if (mode !== 'diving' || !session || !session.secretLair?.weaponEquipped) return false;
+  const lair = session.secretLair;
+  if (!lair.charging) return false;
+  const chargeFrac = Math.min(1, (lair.chargeSec || 0) / SPEARGUN_MAX_CHARGE_SEC);
+  const aimAngle = Number.isFinite(overrideAngle)
+    ? overrideAngle
+    : Number.isFinite(_lastPointerWorldAngle)
+      ? _lastPointerWorldAngle
+      : (session.diver?.torchAngle ?? session.diver?.angle ?? 0);
+  const res = fireSpeargun(session, { aimAngle, chargeFrac, ownerId: lan.clientId || 'local', isLocal: true }, sessionStepCallbacks);
+  if (res.ok && isMultiplayer && lan.room) {
+    lan.sendBossEvent({
+      kind: 'spear_shot',
+      x: Math.round(session.diver.x * 100) / 100,
+      y: Math.round(session.diver.y * 100) / 100,
+      aimAngle: Math.round(res.aimAngle * 1000) / 1000,
+      chargeFrac: Math.round(res.chargeFrac * 100) / 100,
+    });
+  }
+  syncTechGearHud(session);
+  return res.ok;
+}
+
+btnHudSpear?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  startSpeargunCharge();
+});
+btnHudSpear?.addEventListener('pointerup', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  releaseSpeargunFire();
+});
+btnHudSpear?.addEventListener('pointercancel', () => {
+  if (session?.secretLair) {
+    session.secretLair.charging = false;
+    session.secretLair.chargeSec = 0;
+  }
+});
+
+canvas?.addEventListener('pointermove', (e) => {
+  if (mode !== 'diving' || !session?.diver || !session.secretLair?.weaponEquipped || e.pointerType !== 'mouse') return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  const viewCenterX = rect.width * 0.5;
+  const viewCenterY = rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46;
+  const dx = sx - viewCenterX;
+  const dy = sy - viewCenterY;
+  if (Math.hypot(dx, dy) > 8) {
+    _lastPointerWorldAngle = Math.atan2(dy, dx);
+    session.diver.torchAngle = _lastPointerWorldAngle;
+  }
+});
+canvas?.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.pointerType !== 'mouse') return;
+  if (mode !== 'diving' || !session?.secretLair?.weaponEquipped || divePaused || photoModeActive) return;
+  const rect = canvas.getBoundingClientRect();
+  const dx = (e.clientX - rect.left) - rect.width * 0.5;
+  const dy = (e.clientY - rect.top) - (rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46);
+  if (Math.hypot(dx, dy) > 8) _lastPointerWorldAngle = Math.atan2(dy, dx);
+  startSpeargunCharge();
+});
+window.addEventListener('pointerup', (e) => {
+  if (e.button !== 0 || e.pointerType !== 'mouse') return;
+  if (session?.secretLair?.charging) releaseSpeargunFire();
+});
 
 function handleDpvToggle() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
@@ -2072,7 +2171,10 @@ function syncTechGearHud(sess) {
   const torchOn = sess.diver?.torchOn !== false;
   const nearSiltyFloor = Boolean(sess.diver?.nearSiltyFloor);
   const kickStyle = sess.diver?.kickStyle || 'glide';
-  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}|t:${torchOn}|fk:${nearSiltyFloor ? kickStyle : ''}`;
+  const hasSpear = Boolean(sess.secretLair?.weaponEquipped);
+  const spearCharging = Boolean(sess.secretLair?.charging);
+  const spearCool = (sess.secretLair?.reloadSec || 0) > 0.05;
+  const key = `drl:${drillsOn}:${activeDrillKind}:${drillsDone}|stg:${staged}:${canStage}|lb:${lbActive}:${trimStatus}:${payloadKg}|${hasSonar}:${cdSec}|${hasDpv}:${dpvOn}:${dpvPct}|${hasCcr}:${ccrPct}|t:${torchOn}|fk:${nearSiltyFloor ? kickStyle : ''}|sp:${hasSpear}:${spearCharging}:${spearCool}`;
   if (key === lastGearHudKey) return;
   lastGearHudKey = key;
   hudGearDockEl.hidden = false;
@@ -2129,19 +2231,29 @@ function syncTechGearHud(sess) {
       hudTrimPill.hidden = true;
     }
   }
-  if (btnHudSonar) {
-    btnHudSonar.hidden = !hasSonar;
-    if (hasSonar) {
-      btnHudSonar.innerHTML = cdSec > 0 ? `📡 ${cdSec}s` : '📡 SONAR <span class="kbd-hint">[Q]</span>';
-      btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
+  if (btnHudSpear) {
+    btnHudSpear.hidden = !hasSpear;
+    if (hasSpear) {
+      btnHudSpear.innerHTML = spearCharging
+        ? '🔱 CHARGING...'
+        : '🔱 FIRE <span class="kbd-hint">[F]</span>';
+      btnHudSpear.className = `gear-hud-btn spear${spearCharging ? ' charging' : spearCool ? ' cooling' : ''}`;
     }
   }
+  if (btnHudSonar) {
+    btnHudSonar.hidden = false;
+    btnHudSonar.innerHTML = cdSec > 0
+      ? `📡 ${cdSec}s`
+      : hasSonar
+        ? '📡 SONAR <span class="kbd-hint">[Q]</span>'
+        : '📡 PING <span class="kbd-hint">[Q]</span>';
+    btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
+  }
   if (btnKitSonar) {
-    btnKitSonar.hidden = !hasSonar;
-    if (hasSonar) {
-      btnKitSonar.innerHTML = `<span class="kit-item-label">${cdSec > 0 ? `📡 Sonar (${cdSec}s)` : '📡 Sonar'}</span>`;
-      btnKitSonar.className = `kit-item sonar mobile-only-kit${cdSec > 0 ? ' low' : ''}`;
-    }
+    btnKitSonar.hidden = false;
+    const lbl = hasSonar ? 'Sonar' : 'Ping';
+    btnKitSonar.innerHTML = `<span class="kit-item-label">${cdSec > 0 ? `📡 ${lbl} (${cdSec}s)` : `📡 ${lbl}`}</span>`;
+    btnKitSonar.className = `kit-item sonar mobile-only-kit${cdSec > 0 ? ' low' : ''}`;
   }
   if (btnHudDpv) {
     btnHudDpv.hidden = !hasDpv;
@@ -2997,8 +3109,12 @@ function renderDebriefCertifications(logbook) {
 function handleWreckAction() {
   if (mode !== 'diving' || !session || divePaused || session.endedState) return false;
   const res = triggerWreckAction(session, sessionStepCallbacks);
-  if (res?.kind === 'inflate-liftbag') {
+  if (res?.kind === 'inflate-liftbag' || res?.kind === 'lair-weapon') {
+    lastGearHudKey = '';
     syncTechGearHud(session);
+  }
+  if (res?.kind === 'lair-veil' && isMultiplayer && lan.room) {
+    lan.sendBossEvent({ kind: 'veil_breach' });
   }
   return Boolean(res?.handled);
 }
@@ -6280,6 +6396,11 @@ lan.on('peer_wreck_action', (msg) => {
   applyPeerWreckAction(session, msg, sessionStepCallbacks);
 });
 
+lan.on('peer_boss_event', (msg) => {
+  if (!session) return;
+  applyRemoteBossEvent(session, msg, sessionStepCallbacks);
+});
+
 lan.on('peer_collectible', (msg) => {
   if (!session || !msg?.collectibleId || session.collectedIds.has(msg.collectibleId)) return;
   session.collectedIds.add(msg.collectibleId);
@@ -6517,6 +6638,34 @@ const sessionStepCallbacks = {
   onClipLine: (clipped) => audio.playClipLine(clipped),
   onStageRefill: () => audio.playGasShare(),
   onMarkerPlaced: () => audio.playClipLine(true),
+  onVeilShatter: () => audio.playVeilShatter?.(),
+  onWeaponEquip: () => audio.playClipLine?.(true),
+  onSpeargunFire: ({ charged }) => audio.playSpeargunFire?.(charged),
+  onSpearHit: ({ crit }) => audio.playSpearHit?.(crit),
+  onBossRoar: (phase) => audio.playBossRoar?.(phase),
+  onBossDefeat: () => {
+    audio.playBossDefeat?.();
+    if (session?.secretLair?.spec?.boss) {
+      const b = session.secretLair.spec.boss;
+      spawnCelebrationBurst(canvas.width * 0.5, canvas.height * 0.35, 36);
+      const art = { id: b.trophyRelicId, name: b.trophyName, kind: 'relic', points: b.bonusPoints };
+      const lbRes = recordArtifactInLogbook(loadCareerLogbook(), art, session.level?.id || 'cenote-el-abismo');
+      if (lbRes?.book) saveCareerLogbook(lbRes.book);
+    }
+  },
+  onUpdraftTeleport: () => {
+    audio.playSmbDeploy?.();
+    if (session?.diver) {
+      renderer.camX = session.diver.x;
+      renderer.camY = session.diver.y;
+    }
+  },
+  onLocalBossHit: ({ damage, crit, x, y }) => {
+    if (isMultiplayer && lan.room && !lan.isHost()) {
+      lan.sendBossEvent({ kind: 'boss_hit', damage, crit, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+    }
+  },
+  getPeers: () => getActivePeers(),
   onEncounterSpawn: (visitor) => audio.playEncounterChime(visitor?.kind || 'whaleshark'),
   onBeaconClaimed: () => audio.playEncounterChime('beacon'),
   onBlackBoxPing: (_bb, distM, pan) => audio.playBlackBoxPing?.(distM, pan),
@@ -6772,8 +6921,17 @@ function stepSimulation(dt) {
     }
     sessionStepCallbacks.peers = getActivePeers();
     sessionStepCallbacks.torchAim = input.getTorchAim();
+    sessionStepCallbacks.isBossAuthority = !isMultiplayer || !lan.room || lan.isHost();
     const wasSubmerged = session._wasSubmerged ?? diver.y > 0.75;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
+    if (isMultiplayer && lan.room && lan.isHost() && session.secretLair && (session.secretLair.veilBreached || session.secretLair.veilRevealed)) {
+      session.secretLair._netSyncAccum = (session.secretLair._netSyncAccum || 0) + dt;
+      if (session.secretLair._netSyncAccum >= 0.16) {
+        session.secretLair._netSyncAccum = 0;
+        const snap = serializeSecretLairNetState(session.secretLair);
+        if (snap) lan.sendBossEvent({ kind: 'boss_sync', snap });
+      }
+    }
     // Hysteresis band (0.55m / 0.95m) prevents breathing buoyancy bob from re-triggering splash
     const nowSubmerged = wasSubmerged ? diver.y > 0.55 : diver.y > 0.95;
     if (nowSubmerged !== wasSubmerged && session.simTimeSec > 0.35) {
@@ -7045,6 +7203,7 @@ function stepSimulation(dt) {
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
     surveyPins: session.surveyPins || null,
+    secretLair: session.secretLair || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,
@@ -7342,6 +7501,7 @@ function frame(nowMs) {
       salvage: session.salvage || null,
       mechFx: session.mechFx || null,
       stories: session.stories || null,
+      secretLair: session.secretLair || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,

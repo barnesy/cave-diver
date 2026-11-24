@@ -13,6 +13,7 @@ import {
 import { surfaceRendererMethods } from './renderers/surfaceRenderer.js';
 import { wreckAndInteractivesMethods } from './renderers/wreckAndInteractivesRenderer.js';
 import { lightingAndFxMethods } from './renderers/lightingAndFxRenderer.js';
+import { bossAndLairMethods } from './renderers/bossAndLairRenderer.js';
 import { createDiverBody } from './diverBody.js';
 import { castSunCurtain } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
@@ -811,6 +812,7 @@ export class CaveRenderer {
     salvage = null,
     mechFx = null,
     stories = null,
+    secretLair = null,
     reelingActive = false,
     bioWake = null,
     surfaceRipples = null,
@@ -1109,6 +1111,9 @@ export class CaveRenderer {
     if (hazards && typeof this._drawDynamicHazards === 'function') {
       this._drawDynamicHazards(ctx, hazards, visX0 - 8, visX1 + 8, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, diver);
     }
+    if (secretLair && typeof this._drawSecretLairWorld === 'function') {
+      this._drawSecretLairWorld(ctx, visX0 - 6, visX1 + 6, visY0 - 6, visY1 + 6, toScreenX, toScreenY, scale, timeSec, secretLair);
+    }
     if (stories && typeof this._drawSubmergedStories === 'function') {
       this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'world');
     }
@@ -1207,6 +1212,9 @@ export class CaveRenderer {
     // 11a. Active Acoustic Cave Sonar Overlay (drawn POST-silt so echoes pierce zero-vis silt-outs! v142)
     if (sonarPulse) {
       this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (secretLair && typeof this._drawSecretLairEmissive === 'function') {
+      this._drawSecretLairEmissive(ctx, cw, ch, diver, toScreenX, toScreenY, scale, timeSec, secretLair);
     }
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
@@ -3935,6 +3943,28 @@ export class CaveRenderer {
         continue;
       }
 
+      if (c.kind === 'secret-veil') {
+        const pulseR = (1.1 + Math.sin(timeSec * 10) * 0.18) * scale;
+        ctx.strokeStyle = `rgba(250, 204, 21, ${(a * 0.96).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2.4, 0.12 * scale);
+        ctx.beginPath();
+        ctx.arc(px, py, pulseR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(34, 211, 238, ${(a * 0.85).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.6, 0.08 * scale);
+        ctx.setLineDash([Math.max(4, scale * 0.22), Math.max(3, scale * 0.16)]);
+        ctx.beginPath();
+        ctx.arc(px, py, pulseR * 1.48, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(254, 240, 138, ${a.toFixed(3)})`;
+        ctx.fillText(`📡 HOLLOW VEIL · ${Math.round(c.dist)}m`, px, py - pulseR * 1.6 - Math.max(6, scale * 0.22));
+        continue;
+      }
+
       const col = c.kind === 'recovery' ? '251, 191, 36' : c.kind === 'hatch' ? '249, 115, 22' : c.kind === 'stage' ? '74, 222, 128' : '56, 189, 248';
       const r = (0.65 + Math.sin(timeSec * 9 + i) * 0.12) * scale;
       ctx.strokeStyle = `rgba(${col}, ${(a * 0.95).toFixed(3)})`;
@@ -4490,5 +4520,6 @@ Object.assign(
   chunkBakerMethods,
   surfaceRendererMethods,
   wreckAndInteractivesMethods,
-  lightingAndFxMethods
+  lightingAndFxMethods,
+  bossAndLairMethods
 );

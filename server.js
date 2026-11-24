@@ -1094,6 +1094,23 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'boss_event': {
+        const room = rooms.get(client.roomCode);
+        const ev = msg.event && typeof msg.event === 'object' ? msg.event : null;
+        if (!room || !ev || typeof ev.kind !== 'string') break;
+        broadcastRoom(
+          room,
+          {
+            type: 'peer_boss_event',
+            playerId: client.id,
+            by: client.name,
+            ...ev,
+          },
+          client.id
+        );
+        break;
+      }
+
       case 'body_recovered': {
         const room = rooms.get(client.roomCode);
         if (!room) return;

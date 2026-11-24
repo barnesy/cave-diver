@@ -190,6 +190,7 @@ export function createDynamicHazards(level) {
   const candidates = [];
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
+    if (s.secretLair) continue; // Keep secret boss lair free of procedural corridor hazards
     const mx = (s.ax + s.bx) * 0.5;
     const my = (s.ay + s.by) * 0.5;
     if (my < 9.5) continue;

@@ -28,6 +28,8 @@ export class InputController {
     onSignalWheelToggle,
     onPhotoModeToggle,
     onPauseToggle,
+    onSpearPressStart,
+    onSpearRelease,
   }) {
     this.keys = new Set();
     this.stickVec = { x: 0, y: 0 };
@@ -69,6 +71,8 @@ export class InputController {
     this.onSignalWheelToggle = onSignalWheelToggle;
     this.onPhotoModeToggle = onPhotoModeToggle;
     this.onPauseToggle = onPauseToggle;
+    this.onSpearPressStart = onSpearPressStart;
+    this.onSpearRelease = onSpearRelease;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
     this._touchRewindHeld = false;
@@ -94,8 +98,12 @@ export class InputController {
       if (code === 'KeyL' && !e.repeat) this.onTorchToggle?.();
       if (code === 'KeyG' && !e.repeat) this.onReelToggle?.();
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
-      if ((code === 'KeyE' || code === 'KeyF') && !e.repeat) {
+      if (code === 'KeyE' && !e.repeat) {
         if (this.onWreckAction?.()) e.preventDefault();
+      }
+      if (code === 'KeyF' && !e.repeat) {
+        if (this.onSpearPressStart?.()) e.preventDefault();
+        else if (this.onWreckAction?.()) e.preventDefault();
       }
       if (code === 'KeyQ' && !e.repeat) {
         if (this.onSonarPing?.()) e.preventDefault();
@@ -143,6 +151,7 @@ export class InputController {
 
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
+      if (e.code === 'KeyF') this.onSpearRelease?.();
     });
 
     window.addEventListener('blur', () => {

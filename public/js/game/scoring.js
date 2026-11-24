@@ -14,6 +14,7 @@ export function buildExploreCells(level, stepM = 2.6) {
   const cells = [];
 
   for (const seg of level.segments || []) {
+    if (seg.secretLair) continue; // Secret sonar-only lairs never spoil minimap or penalize standard cave %
     const segLen = Math.hypot(seg.bx - seg.ax, seg.by - seg.ay);
     const stepsAlong = Math.max(1, Math.ceil(segLen / (stepM * 0.75)));
     const maxR = Math.max(seg.ra, seg.rb) + 0.5;

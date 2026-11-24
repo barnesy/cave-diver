@@ -899,6 +899,17 @@ export class P2pRoomCoordinator {
         break;
       }
 
+      case 'boss_event': {
+        const ev = msg.event && typeof msg.event === 'object' ? msg.event : null;
+        if (ev && typeof ev.kind === 'string') {
+          this._broadcast(
+            { type: 'peer_boss_event', playerId: p.id, by: p.name, ...ev },
+            p.id
+          );
+        }
+        break;
+      }
+
       case 'body_recovered': {
         if (!this.room.bodyRecoveredBy) this.room.bodyRecoveredBy = p.id;
         this._broadcast(

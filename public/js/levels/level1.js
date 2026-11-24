@@ -9,10 +9,10 @@ export const LEVEL_1 = {
   name: 'Cenote El Abismo',
   subtitle: 'Max Depth 50m · 3-Gas Trimix Traverse',
   bounds: {
-    xMin: -44,
+    xMin: -12,
     xMax: 204,
     yMin: -6,
-    yMax: 60,
+    yMax: 64,
   },
   roughness: 0.36,
   spawn: { x: 10, y: 2.2 },
@@ -51,6 +51,20 @@ export const LEVEL_1 = {
     { ax: 126, ay: 6.8, bx: 144, by: 6.6, ra: 3.9, rb: 5.2 },
     // Exit Cenote Beta Jug-Shaped Skylight Cavern
     { ax: 144, ay: 6.6, bx: 145, by: 0.6, ra: 5.8, rb: 5.2 },
+
+    // === Hidden Sonar-Only Passage -> Sunken Sanctum Boss Arena (v179) ===
+    // Sealed behind a false limestone veil on the northeast wall of Halocline Drop (55.4, 24.4)
+    { ax: 55.2, ay: 24.4, bx: 64.5, by: 20.5, ra: 2.5, rb: 3.3, secretLair: true },
+    // Gauntlet Corridor 1 (Moray Ambush Bend)
+    { ax: 64.5, ay: 20.5, bx: 75.5, by: 19.5, ra: 3.3, rb: 3.1, secretLair: true },
+    // Gauntlet Corridor 2 (Swarmer Fissure & Stalker Gate)
+    { ax: 75.5, ay: 19.5, bx: 86.5, by: 22.8, ra: 3.1, rb: 3.7, secretLair: true },
+    // Arena Threshold Archway opening into the limestone mountain heart
+    { ax: 86.5, ay: 22.8, bx: 94.5, by: 23.8, ra: 3.8, rb: 6.2, secretLair: true },
+    // Sunken Sanctum Grand Boss Arena (~34m wide x 18m tall vaulted underwater cathedral)
+    { ax: 94.5, ay: 23.8, bx: 103.0, by: 23.8, ra: 6.8, rb: 9.0, secretLair: true },
+    { ax: 103.0, ay: 23.8, bx: 115.0, by: 23.8, ra: 9.0, rb: 8.8, secretLair: true },
+    { ax: 115.0, ay: 23.8, bx: 122.0, by: 23.5, ra: 8.0, rb: 5.5, secretLair: true },
   ],
   // Taut main guideline (gold/white line with line arrows)
   guideline: [

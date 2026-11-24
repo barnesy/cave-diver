@@ -7074,6 +7074,24 @@ button.mode-badge:hover {
 .hud-gear-dock[hidden] {
   display: none !important;
 }
+.gear-hud-btn.spear {
+  border-color: rgba(56, 189, 248, 0.72);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.45), rgba(15, 23, 42, 0.92));
+  color: #e0f2fe;
+  font-weight: 800;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.gear-hud-btn.spear.charging {
+  border-color: rgba(250, 204, 21, 0.95);
+  background: linear-gradient(135deg, rgba(202, 138, 4, 0.52), rgba(15, 23, 42, 0.94));
+  color: #fef08a;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.35);
+}
+.gear-hud-btn.spear.cooling {
+  opacity: 0.62;
+}
 .gear-bar-row {
   display: flex;
   flex-wrap: nowrap;

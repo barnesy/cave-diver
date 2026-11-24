@@ -206,8 +206,25 @@ export function isMinimapAllowed(difficulty = 'standard', mutatorId = '') {
   return difficulty !== 'hardcore' && mutatorId !== 'purist';
 }
 
-export function computeMinimapViewport(level, diver, { zoomMode = 'follow', width = 352, height = 224 } = {}) {
-  const b = level?.bounds || { xMin: -20, xMax: 160, yMin: -4, yMax: 70 };
+export function computeMinimapViewport(level, diver, { zoomMode = 'follow', width = 352, height = 224, revealSecretLair = true } = {}) {
+  let b = level?.bounds || { xMin: -20, xMax: 160, yMin: -4, yMax: 70 };
+  if (!revealSecretLair && Array.isArray(level?.segments) && level.segments.some((s) => s.secretLair)) {
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = b.yMin;
+    let yMax = -Infinity;
+    for (let i = 0; i < level.segments.length; i++) {
+      const s = level.segments[i];
+      if (s.secretLair) continue;
+      const r = Math.max(s.ra || 2, s.rb || 2) + 4;
+      xMin = Math.min(xMin, s.ax - r, s.bx - r);
+      xMax = Math.max(xMax, s.ax + r, s.bx + r);
+      yMax = Math.max(yMax, s.ay + r, s.by + r);
+    }
+    if (Number.isFinite(xMin) && Number.isFinite(xMax)) {
+      b = { xMin: Math.max(b.xMin, xMin), xMax: Math.min(b.xMax, xMax), yMin, yMax: Math.min(b.yMax, yMax) };
+    }
+  }
   const padPx = 10;
   const innerW = Math.max(20, width - padPx * 2);
   const innerH = Math.max(20, height - padPx * 2);
@@ -334,12 +351,18 @@ export function drawSonarMinimap(ctx, width, height, state) {
     buddyPing = null,
     droppedStages = null,
     surveyPins = null,
+    secretLair = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
   } = state;
 
-  const vp = computeMinimapViewport(level, diver, { zoomMode, width, height });
+  const vp = computeMinimapViewport(level, diver, {
+    zoomMode,
+    width,
+    height,
+    revealSecretLair: secretLair ? Boolean(secretLair.veilBreached) : true,
+  });
   const { scale, toX, toY, viewMinX, viewMaxX, viewMinY, viewMaxY } = vp;
   const isGuided = difficulty === 'guided';
   const isWreck = Boolean(level.isWreck);
@@ -692,20 +715,88 @@ export function drawSonarMinimap(ctx, width, height, state) {
     const contacts = sonarPulse.contacts || [];
     for (let i = 0; i < contacts.length; i++) {
       const c = contacts[i];
-      if (c.kind !== 'shifting-hatch' && c.kind !== 'percolation' && c.kind !== 'thermocline') continue;
+      if (c.kind !== 'shifting-hatch' && c.kind !== 'percolation' && c.kind !== 'thermocline' && c.kind !== 'secret-veil') continue;
       const cx = toX(c.x);
       const cy = toY(c.y);
       ctx.fillStyle =
-        c.kind === 'shifting-hatch'
-          ? (c.hatchRef?.openness ?? 1) < 0.35
-            ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
-            : `rgba(74, 222, 128, ${(fade * 0.95).toFixed(2)})`
-          : c.kind === 'percolation'
-            ? `rgba(251, 191, 36, ${(fade * 0.9).toFixed(2)})`
-            : `rgba(125, 211, 252, ${(fade * 0.9).toFixed(2)})`;
+        c.kind === 'secret-veil'
+          ? `rgba(250, 204, 21, ${(fade * 0.98).toFixed(2)})`
+          : c.kind === 'shifting-hatch'
+            ? (c.hatchRef?.openness ?? 1) < 0.35
+              ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
+              : `rgba(74, 222, 128, ${(fade * 0.95).toFixed(2)})`
+            : c.kind === 'percolation'
+              ? `rgba(251, 191, 36, ${(fade * 0.9).toFixed(2)})`
+              : `rgba(125, 211, 252, ${(fade * 0.9).toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, c.kind === 'thermocline' ? 4.2 : 3.2, 0, Math.PI * 2);
+      ctx.arc(cx, cy, c.kind === 'secret-veil' ? 4.8 : c.kind === 'thermocline' ? 4.2 : 3.2, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  // 8b. Secret Sonar-Only Lair Cartography (strictly hidden until sonar-revealed or breached!)
+  if (secretLair?.spec) {
+    const spec = secretLair.spec;
+    if (secretLair.veilRevealed && !secretLair.veilBreached && spec.veil) {
+      const vx = toX(spec.veil.x);
+      const vy = toY(spec.veil.y);
+      ctx.strokeStyle = `rgba(250, 204, 21, ${(0.55 + 0.45 * pulse).toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 5.2 + pulse * 3.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(vx, vy - 4.2);
+      ctx.lineTo(vx + 4.2, vy);
+      ctx.lineTo(vx, vy + 4.2);
+      ctx.lineTo(vx - 4.2, vy);
+      ctx.closePath();
+      ctx.fill();
+    } else if (secretLair.veilBreached) {
+      // Draw discovered secret corridor & abyssal arena passages in distinct bioluminescent violet
+      const segs = level.segments || [];
+      ctx.save();
+      ctx.lineCap = 'round';
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        if (!s.secretLair) continue;
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.30)';
+        ctx.lineWidth = Math.max(4, ((s.ra + s.rb) * 0.5) * 1.65 * scale);
+        ctx.beginPath();
+        ctx.moveTo(toX(s.ax), toY(s.ay));
+        ctx.lineTo(toX(s.bx), toY(s.by));
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (!secretLair.weaponClaimed && spec.armory) {
+        const ax = toX(spec.armory.x);
+        const ay = toY(spec.armory.y);
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (secretLair.boss && !secretLair.bossDefeated) {
+        const bx = toX(secretLair.boss.x);
+        const by = toY(secretLair.boss.y);
+        ctx.strokeStyle = `rgba(244, 63, 94, ${(0.55 + 0.45 * pulse).toFixed(2)})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(bx, by, 6 + pulse * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.arc(bx, by, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (secretLair.bossDefeated && spec.arena?.exitUpdraft) {
+        const ux = toX(spec.arena.exitUpdraft.x);
+        const uy = toY(spec.arena.exitUpdraft.y);
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(ux, uy, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
@@ -1069,6 +1160,7 @@ export class DiveComputerHUD {
     buddyPing = null,
     droppedStages = null,
     surveyPins = null,
+    secretLair = null,
     endedState = '',
     spectatingPeer = false,
     timeSec = 0,
@@ -1657,6 +1749,7 @@ export class DiveComputerHUD {
               buddyPing,
               droppedStages,
               surveyPins,
+              secretLair,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,

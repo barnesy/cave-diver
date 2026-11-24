@@ -8737,3 +8737,166 @@ test('v178 Diegetic Immersion Tape binds real depthM, ceilingM, active tank bar/
   assert.ok(texts.some((t) => t.includes('HDG 270° W') && t.includes('WP 15m')), `Expected live heading from diver.angle, got: ${texts.join(', ')}`);
   assert.ok(redCeilingDrawn, 'Expected red deco ceiling marker line when ceilingM > 0.4');
 });
+
+test('v179 Sonar-Only Secret Lair, Pneumatic Speargun Combat & 1-4 Diver Cave Kraken Boss Arena (Level 1)', async () => {
+  const { getLevelMaxDepthM } = await import('../public/js/levels/index.js');
+  const {
+    SECRET_LAIRS,
+    computeBossDifficultyScale,
+    fireSpeargun,
+    applyBossDamage,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+    applyRemoteBossEvent,
+  } = await import('../public/js/game/secretLairs.js');
+
+  const spec = SECRET_LAIRS['cenote-el-abismo'];
+  assert.ok(spec, 'Level 1 must register a Secret Lair spec');
+  assert.equal(getLevelMaxDepthM(LEVEL_1), 50, 'Level 1 max depth must remain 50m for campaign monotonicity');
+
+  // 1. Every Secret Lair landmark is inside navigable open water (SDF < -0.9)
+  const checkOpen = (label, x, y) => {
+    const sdf = evaluateCaveSDF(LEVEL_1, x, y);
+    assert.ok(sdf < -0.9, `${label} (${x}, ${y}) should be open water, got SDF=${sdf.toFixed(2)}`);
+  };
+  checkOpen('Veil', spec.veil.x, spec.veil.y);
+  checkOpen('Armory', spec.armory.x, spec.armory.y);
+  checkOpen('Corridor Stage', spec.arena.midStage.x, spec.arena.midStage.y);
+  for (const m of spec.minions) checkOpen(`Minion ${m.id}`, m.x, m.y);
+  for (const st of spec.arena.gasCaches) checkOpen(`Arena Stage ${st.id}`, st.x, st.y);
+  for (const p of spec.arena.pillars) checkOpen(`Pillar ${p.id}`, p.x, p.y);
+  checkOpen('Boss Home', spec.boss.x, spec.boss.y);
+  checkOpen('Exit Updraft', spec.arena.exitUpdraft.x, spec.arena.exitUpdraft.y);
+
+  // Explore cells must exclude secretLair passages so normal Level 1 runs can still reach 100%
+  const expCells = buildExploreCells(LEVEL_1);
+  assert.ok(
+    expCells.every((c) => Math.hypot(c.x - spec.arena.cx, c.y - spec.arena.cy) > 10),
+    'buildExploreCells must exclude secretLair arena cells from standard exploration %'
+  );
+
+  // 2. Built-in short-range acoustic ping (16m, no Cave Sonar unlocked) discovers the Hidden Veil
+  const session = createDiveSession(LEVEL_1, { diverName: 'KrakenHunter', gear: { sonar: false } });
+  assert.ok(session.secretLair, 'Level 1 dive session should initialize secretLair state');
+  assert.equal(session.secretLair.veilRevealed, false);
+  const farPing = triggerSonarPing(session);
+  assert.equal(farPing.ok, true, 'Built-in short-range acoustic ping must work even without Cave Sonar gear');
+  assert.equal(farPing.pulse.maxRadiusM, 16, 'Built-in acoustic ping should have 16m range');
+  assert.equal(session.secretLair.veilRevealed, false, 'Veil must NOT be revealed from spawn far away');
+
+  // Swim to Halocline Drop near veil & ping again
+  session.sonar.cooldownSec = 0;
+  session.diver.x = 52.0;
+  session.diver.y = 25.8;
+  const nearPing = triggerSonarPing(session);
+  assert.equal(nearPing.ok, true);
+  assert.equal(session.secretLair.veilRevealed, true, 'Sonar ping near Halocline Drop must reveal Hollow Veil');
+  assert.ok(
+    nearPing.pulse.contacts.some((c) => c.kind === 'secret-veil'),
+    'Sonar pulse contacts must tag secret-veil echo'
+  );
+
+  // 3. Sealed Veil blocks passage until breached via [E]
+  session.diver.x = spec.veil.x - 1.0;
+  session.diver.y = spec.veil.y;
+  session.diver.vx = 2.0;
+  stepDiveSession(session, { x: 1, y: 0 }, 0.05);
+  assert.ok(
+    Math.hypot(session.diver.x - spec.veil.x, session.diver.y - spec.veil.y) >= spec.veil.radius + 0.5,
+    'Sealed veil must physically push diver out before breach'
+  );
+
+  session.diver.x = spec.veil.x - 3.6;
+  session.diver.y = spec.veil.y;
+  const breachRes = triggerWreckAction(session);
+  assert.equal(breachRes.ok, true);
+  assert.equal(session.secretLair.veilBreached, true, 'Triggering [E] at revealed veil must breach it');
+
+  // 4. Claim Pneumatic Titanium Speargun at Armory Rack
+  session.diver.x = spec.armory.x;
+  session.diver.y = spec.armory.y;
+  const claimRes = triggerWreckAction(session);
+  assert.equal(claimRes.ok, true);
+  assert.equal(session.secretLair.weaponEquipped, true, 'Armory rack must equip Pneumatic Speargun');
+
+  // 5. Squad Difficulty Scaling across 1-4 divers (human co-op & AI wingmen)
+  const s1 = computeBossDifficultyScale(1, 0);
+  const s2 = computeBossDifficultyScale(2, 0);
+  const s4 = computeBossDifficultyScale(4, 0);
+  const sAi = computeBossDifficultyScale(1, 3);
+  assert.equal(s1.hpMult, 1.0);
+  assert.ok(s2.hpMult > s1.hpMult && s4.hpMult > s2.hpMult, 'Boss HP must scale cleanly with 1 -> 2 -> 4 divers');
+  assert.ok(sAi.hpMult > s1.hpMult && sAi.hpMult < s4.hpMult, 'AI wingmen scale moderately (0.55 weight)');
+  assert.ok(s4.phase2Adds >= 3 && s4.activeStageCount === 4, '4-diver squad gets 3 Phase 2 adds & 4 rim bailout stages');
+  assert.ok(s1.phase2Adds === 1 && s1.activeStageCount === 2, 'Solo diver gets 1 Phase 2 add & 2 rim bailout stages');
+
+  // 6. Tap vs Charged Armor-Piercing Speargun Combat on Corridor Minions
+  const moray = session.secretLair.minions.find((m) => m.kind === 'moray');
+  const stalker = session.secretLair.minions.find((m) => m.kind === 'stalker');
+  session.diver.x = moray.x - 3.5;
+  session.diver.y = moray.y;
+  const tapShot = fireSpeargun(session, { aimAngle: 0, chargeFrac: 0 });
+  assert.equal(tapShot.ok, true);
+  assert.ok(session.secretLair.reloadSec > 0.4, 'Speargun firing must trigger reload cooldown');
+  for (let i = 0; i < 20; i++) stepDiveSession(session, { x: 0, y: 0 }, 0.04);
+  assert.ok(moray.hp < moray.maxHp, 'Tethered bolt must impact and damage corridor moray');
+
+  // Charged armor-piercing shot penetrates Armored Stalker carapace cleanly
+  session.secretLair.reloadSec = 0;
+  session.diver.x = stalker.x - 4.0;
+  session.diver.y = stalker.y;
+  const stalkerHpBefore = stalker.hp;
+  const chargedShot = fireSpeargun(session, { aimAngle: 0, chargeFrac: 1.0 });
+  assert.equal(chargedShot.ok, true);
+  assert.equal(chargedShot.bolt.piercing, true, 'Charged shot must be armor-piercing');
+  for (let i = 0; i < 25; i++) stepDiveSession(session, { x: 0, y: 0 }, 0.04);
+  assert.ok(
+    stalkerHpBefore - stalker.hp >= 50,
+    `Charged piercing bolt should deal >=50 dmg to Armored Stalker (dealt ${stalkerHpBefore - stalker.hp})`
+  );
+
+  // 7. 3-Phase Boss Battle (XIBALBA'S MAW) + Victory + Bioluminescent Exit Updraft
+  session.diver.x = spec.arena.cx - 8;
+  session.diver.y = spec.arena.cy;
+  stepDiveSession(session, { x: 0, y: 0 }, 0.05);
+  assert.equal(session.secretLair.boss.active, true, 'Entering Sunken Sanctum must awaken XIBALBA’S MAW');
+  assert.equal(session.secretLair.boss.phase, 1);
+
+  // Push into Phase 2 (<= 65% HP)
+  applyBossDamage(session, Math.ceil(session.secretLair.boss.maxHp * 0.40), { crit: true });
+  assert.equal(session.secretLair.boss.phase, 2, 'Crossing 65% HP must trigger Phase 2 Abyssal Vortex');
+  assert.equal(session.secretLair.boss.phase2Summoned, true, 'Phase 2 must summon cavern swarmers');
+
+  // Push into Phase 3 (<= 30% HP) & test Tentacle Grab solo [E] escape
+  applyBossDamage(session, Math.ceil(session.secretLair.boss.maxHp * 0.35), { crit: true });
+  assert.equal(session.secretLair.boss.phase, 3, 'Crossing 30% HP must trigger Phase 3 Enraged Frenzy');
+  assert.ok(session.secretLair.boss.blackoutAlpha > 0.5, 'Phase 3 transition should trigger Abyssal Blackout flash');
+  session.secretLair.boss.pinnedTargetId = 'local';
+  session.secretLair.boss.pinHitsNeeded = 2;
+  triggerWreckAction(session);
+  assert.equal(session.secretLair.boss.pinHitsNeeded, 1, 'Pressing [E] while pinned slashes tentacle');
+  triggerWreckAction(session);
+  assert.equal(session.secretLair.boss.pinnedTargetId, null, 'Completing [E] slashes frees diver from tentacle grab');
+
+  // Defeat boss -> trophy, bonus score, exit updraft teleport to 6m Deco Shelf
+  applyBossDamage(session, session.secretLair.boss.hp + 50, { crit: true });
+  assert.equal(session.secretLair.bossDefeated, true, 'Reaching 0 HP must defeat boss');
+  assert.equal(session.secretLair.bonusScore, spec.boss.bonusPoints);
+
+  session.diver.x = spec.arena.exitUpdraft.x;
+  session.diver.y = spec.arena.exitUpdraft.y;
+  const updraftRes = triggerWreckAction(session);
+  assert.equal(updraftRes.ok, true);
+  assert.ok(
+    Math.hypot(session.diver.x - spec.arena.exitUpdraft.destX, session.diver.y - spec.arena.exitUpdraft.destY) < 1.5,
+    'Riding Bioluminescent Exit Updraft must carry diver cleanly to the 6m Deco Shelf'
+  );
+
+  // 8. Co-op Boss Sync Snapshot & Remote Event Relay
+  const peerSession = createDiveSession(LEVEL_1, { diverName: 'Buddy2' });
+  applyRemoteBossEvent(peerSession, { kind: 'veil_breach' });
+  assert.equal(peerSession.secretLair.veilBreached, true);
+  const netSnap = serializeSecretLairNetState(session.secretLair);
+  applySecretLairNetState(peerSession.secretLair, netSnap);
+  assert.equal(peerSession.secretLair.bossDefeated, true, 'Co-op sync snapshot must mirror boss defeat state');
+});

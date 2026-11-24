@@ -31,6 +31,13 @@ import {
   rollDiveContracts,
   evaluateDiveContracts,
 } from './expeditionContracts.js';
+import {
+  createSecretLairState,
+  revealSecretLairVeil,
+  handleSecretLairInteract,
+  getSecretLairActionPrompt,
+  stepSecretLairEncounter,
+} from './secretLairs.js';
 
 export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
@@ -309,6 +316,7 @@ export function createBlackBoxTarget(level) {
   let bestScore = -1;
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
+    if (s.secretLair) continue; // Keep secret boss lair separate from procedural fog/beacon spawns
     const mx = (s.ax + s.bx) * 0.5;
     const my = (s.ay + s.by) * 0.5;
     if (my < minTargetDepth) continue;
@@ -614,6 +622,7 @@ export function createDiveSession(
     salvage: createSalvageState(),
     mechFx: createMechanicalFxState(),
     stories: createSubmergedStories(level),
+    secretLair: createSecretLairState(level),
     crewRole: getCrewRole(crewRoleId || 'balanced'),
     contracts: rollDiveContracts(level, `${diverName || 'diver'}:${cleanDailyKey || level.id}`),
     contractBonusScore: 0,
@@ -704,7 +713,7 @@ export function toggleDpvScooter(session) {
  * Maps rock-wall echo contours & highlights nearby relics, hatches, stage caches, markers & targets through darkness/silt.
  */
 export function triggerSonarPing(session, callbacks = {}) {
-  if (!session?.sonar?.equipped || !session.diveState?.alive || session.surfaced) {
+  if (!session?.sonar || !session.diveState?.alive || session.surfaced) {
     return { ok: false, reason: 'unavailable' };
   }
   if ((session.sonar.cooldownSec || 0) > 0.05) {
@@ -712,8 +721,10 @@ export function triggerSonarPing(session, callbacks = {}) {
   }
 
   const { level, diver } = session;
-  const maxRadiusM = 28.0 * (session.crewRole?.sonarRangeMult || 1.0);
-  const rayCount = 48;
+  const isUpgradedSonar = Boolean(session.sonar.equipped);
+  const baseRadiusM = isUpgradedSonar ? 28.0 : 16.0;
+  const maxRadiusM = baseRadiusM * (session.crewRole?.sonarRangeMult || 1.0);
+  const rayCount = isUpgradedSonar ? 48 : 32;
   const wallHits = [];
   for (let i = 0; i < rayCount; i++) {
     const ang = (i / rayCount) * Math.PI * 2;
@@ -730,47 +741,61 @@ export function triggerSonarPing(session, callbacks = {}) {
       contacts.push(extra ? { x, y, dist, kind, icon, label, ...extra } : { x, y, dist, kind, icon, label });
     }
   };
-  for (const c of level.collectibles || []) {
-    if (!session.collectedIds?.has(c.id)) addContact(c.x, c.y, 'collectible', '💎', c.name);
+  // Built-in short-range ping & upgraded Cave Sonar both detect Sonar-Hidden Secret Lair Veils!
+  if (revealSecretLairVeil(session, diver.x, diver.y, maxRadiusM, callbacks)) {
+    const v = session.secretLair.spec.veil;
+    addContact(v.x, v.y, 'secret-veil', '📡', v.label);
   }
-  for (const h of level.watertightHatches || []) {
-    if (!session.openedHatchIds?.has(h.id)) addContact(h.x, h.y, 'hatch', '⚙️', h.label);
-  }
-  for (const st of level.stageCaches || []) {
-    if (!session.claimedStageIds?.has(st.id)) addContact(st.x, st.y, 'stage', '⛽', st.label);
-  }
-  for (const a of level.lineAnchors || []) {
-    if (!session.placedMarkerIds?.has(a.id)) addContact(a.x, a.y, 'marker', '📍', a.label);
-  }
-  if (level.recoveryTarget && !session.bodyRecovered) {
-    addContact(level.recoveryTarget.x, level.recoveryTarget.y, 'recovery', '🎯', level.recoveryTarget.name);
-  }
-  if (session.encounters?.beacon && !session.encounters.beacon.claimed) {
-    const bc = session.encounters.beacon;
-    addContact(bc.x, bc.y, 'beacon', '📡', bc.label);
-  }
-  // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
-  if (session.hazards) {
-    for (const sh of session.hazards.shiftingHatches || []) {
-      addContact(sh.x, sh.y, 'shifting-hatch', '🚪', sh.label, { hatchRef: sh, radius: sh.radius });
+  if (isUpgradedSonar) {
+    for (const c of level.collectibles || []) {
+      if (!session.collectedIds?.has(c.id)) addContact(c.x, c.y, 'collectible', '💎', c.name);
     }
-    for (const pz of session.hazards.percolationZones || []) {
-      addContact(pz.x, pz.ceilY + 0.4, 'percolation', '🌫️', 'Fragile Ceiling', {
-        ceilY: pz.ceilY,
-        halfWidth: pz.halfWidth,
-      });
+    for (const h of level.watertightHatches || []) {
+      if (!session.openedHatchIds?.has(h.id)) addContact(h.x, h.y, 'hatch', '⚙️', h.label);
     }
-    for (const th of session.hazards.thermoclines || []) {
-      addContact(th.x, th.y, 'thermocline', '❄️', `-${th.tempDropC}°C Thermocline`, {
-        tempDropC: th.tempDropC,
-        rx: th.rx,
-        ry: th.ry,
-      });
+    for (const st of level.stageCaches || []) {
+      if (!session.claimedStageIds?.has(st.id)) addContact(st.x, st.y, 'stage', '⛽', st.label);
+    }
+    for (const a of level.lineAnchors || []) {
+      if (!session.placedMarkerIds?.has(a.id)) addContact(a.x, a.y, 'marker', '📍', a.label);
+    }
+    if (level.recoveryTarget && !session.bodyRecovered) {
+      addContact(level.recoveryTarget.x, level.recoveryTarget.y, 'recovery', '🎯', level.recoveryTarget.name);
+    }
+    if (session.encounters?.beacon && !session.encounters.beacon.claimed) {
+      const bc = session.encounters.beacon;
+      addContact(bc.x, bc.y, 'beacon', '📡', bc.label);
+    }
+    // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
+    if (session.hazards) {
+      for (const sh of session.hazards.shiftingHatches || []) {
+        addContact(sh.x, sh.y, 'shifting-hatch', '🚪', sh.label, { hatchRef: sh, radius: sh.radius });
+      }
+      for (const pz of session.hazards.percolationZones || []) {
+        addContact(pz.x, pz.ceilY + 0.4, 'percolation', '🌫️', 'Fragile Ceiling', {
+          ceilY: pz.ceilY,
+          halfWidth: pz.halfWidth,
+        });
+      }
+      for (const th of session.hazards.thermoclines || []) {
+        addContact(th.x, th.y, 'thermocline', '❄️', `-${th.tempDropC}°C Thermocline`, {
+          tempDropC: th.tempDropC,
+          rx: th.rx,
+          ry: th.ry,
+        });
+      }
     }
   }
 
   // Wide sonar sweep also charts nearby unexplored cells cleanly
-  const newlyMapped = markExploredAround(session.exploreCells, session.exploredCells, diver.x, diver.y, 12.0, session.exploredGrid);
+  const newlyMapped = markExploredAround(
+    session.exploreCells,
+    session.exploredCells,
+    diver.x,
+    diver.y,
+    isUpgradedSonar ? 12.0 : 6.0,
+    session.exploredGrid
+  );
   if (newlyMapped > 0 && session.exploreCells?.length > 0) {
     session.exploredPct = Math.round((session.exploredCells.size / session.exploreCells.length) * 100);
   }
@@ -779,8 +804,9 @@ export function triggerSonarPing(session, callbacks = {}) {
     x: diver.x,
     y: diver.y,
     ageSec: 0,
-    durationSec: 3.8,
+    durationSec: isUpgradedSonar ? 3.8 : 2.6,
     maxRadiusM,
+    upgraded: isUpgradedSonar,
     wallHits,
     contacts,
     summary: {
@@ -788,10 +814,11 @@ export function triggerSonarPing(session, callbacks = {}) {
       hatches: contacts.filter((c) => c.kind === 'shifting-hatch' || c.kind === 'hatch').length,
       percolation: contacts.filter((c) => c.kind === 'percolation').length,
       thermoclines: contacts.filter((c) => c.kind === 'thermocline').length,
+      secretVeil: contacts.some((c) => c.kind === 'secret-veil'),
     },
   };
   session.sonar.activePulse = pulse;
-  session.sonar.cooldownSec = session.sonar.maxCooldownSec || 9.0;
+  session.sonar.cooldownSec = isUpgradedSonar ? (session.sonar.maxCooldownSec || 9.0) : 5.5;
   callbacks.onSonarPing?.(pulse);
   return { ok: true, pulse };
 }
@@ -1005,6 +1032,7 @@ export function createDynamicEncounters(level) {
   const candidates = [];
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
+    if (s.secretLair) continue; // Keep secret boss lair separate from procedural fog/beacon spawns
     const mx = (s.ax + s.bx) * 0.5;
     const my = (s.ay + s.by) * 0.5;
     const minR = Math.min(s.ra || 2, s.rb || 2);
@@ -2093,6 +2121,12 @@ export function triggerWreckAction(session, callbacks = {}) {
       );
       return { handled: true, kind: 'cut-net', targetId: snagKey, buddyRescue: isBuddyRescue };
     }
+  }
+
+  // 1a. Priority 1a: Hidden Sonar Secret Lair interactions (Tentacle Grab Slash, Veil Breach, Speargun Pickup, Stage Refill, Escape Updraft)
+  if (session.secretLair) {
+    const lairAct = handleSecretLairInteract(session, callbacks);
+    if (lairAct.handled) return { ...lairAct, ok: true };
   }
 
   // 1b. Priority 1b: Resolve active technical emergency drill (Mask Flood / Primary Torch Fail / Regulator Free-Flow)
@@ -3406,7 +3440,10 @@ function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
   }
 
   // Publish contextual cave / shipwreck action prompt for HUD button
-  if (session.activeSnagIndex >= 0) {
+  const lairPrompt = session.secretLair ? getSecretLairActionPrompt(session) : null;
+  if (lairPrompt && lairPrompt.kind === 'lair-unpin') {
+    session.wreckActionPrompt = lairPrompt;
+  } else if (session.activeSnagIndex >= 0) {
     const sn = level.snagZones?.[session.activeSnagIndex];
     session.wreckActionPrompt = {
       kind: 'cut-net',
@@ -3448,6 +3485,8 @@ function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
     }
   } else if (aiHelpPrompt) {
     session.wreckActionPrompt = aiHelpPrompt;
+  } else if (lairPrompt) {
+    session.wreckActionPrompt = lairPrompt;
   } else if (nearbyHatch) {
     const needsValve = isHatchPressurized(level, nearbyHatch) && !session.equalizedHatchIds?.has(nearbyHatch.id);
     const isCranking = session.crankingHatchId === nearbyHatch.id;
@@ -4289,7 +4328,8 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
         (session.smbBonusScore || 0) +
         (session.wildlifeHarmonyScore || 0) +
         (session.contractBonusScore || 0) +
-        (session.aiLeadBonusScore || 0),
+        (session.aiLeadBonusScore || 0) +
+        (session.secretLair?.bonusScore || 0),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
@@ -4392,6 +4432,17 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   const ctx = session._stepCtx || (session._stepCtx = {});
   stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx);
+  if (session.secretLair) {
+    stepSecretLairEncounter(
+      session,
+      dt,
+      {
+        peers: callbacks.getPeers ? callbacks.getPeers() : [],
+        isAuthority: callbacks.isBossAuthority !== undefined ? callbacks.isBossAuthority : true,
+      },
+      callbacks
+    );
+  }
   stepWreckAndCaveInteractives(session, dt, callbacks, ctx);
   stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx);
   stepPhysiologyAndObjectives(session, dt, callbacks, ctx);

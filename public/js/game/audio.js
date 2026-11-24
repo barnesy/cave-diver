@@ -1622,4 +1622,68 @@ export class DiveAudio {
     this.playTone(554.37, 0.36, 'sine', 0.032, 0.09, { bus: 'ambience' });
     this.playTone(659.25, 0.44, 'triangle', 0.034, 0.18, { bus: 'ambience' });
   }
+
+  /**
+   * Pneumatic Speargun underwater thump + cavitation zip (v179).
+   */
+  playSpeargunFire(charged = false) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(charged ? 185 : 230, 0.09, 'sawtooth', charged ? 0.075 : 0.052, 0, { bus: 'sfx' });
+    this.playTone(charged ? 640 : 480, 0.11, 'triangle', charged ? 0.055 : 0.036, 0.03, { bus: 'sfx' });
+    if (charged) {
+      this.playTone(960, 0.14, 'sine', 0.04, 0.06, { bus: 'sfx' });
+    }
+    this.vibrate?.(charged ? [22, 16, 14] : 12);
+  }
+
+  /**
+   * Speargun impact thwack + weak-point crit ring (v179).
+   */
+  playSpearHit(crit = false) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(crit ? 150 : 125, 0.08, 'triangle', crit ? 0.07 : 0.05, 0, { bus: 'sfx' });
+    if (crit) {
+      this.playTone(880, 0.14, 'sine', 0.05, 0.02, { bus: 'sfx' });
+      this.playTone(1320, 0.16, 'triangle', 0.042, 0.06, { bus: 'sfx' });
+    }
+  }
+
+  /**
+   * Deep limestone fracture & crumbling rock rumble when breaching a Sonar-Hidden Veil (v179).
+   */
+  playVeilShatter() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(72, 0.45, 'sawtooth', 0.08, 0, { bus: 'sfx' });
+    this.playTone(118, 0.34, 'triangle', 0.06, 0.08, { bus: 'sfx' });
+    this.playTone(54, 0.55, 'sine', 0.075, 0.16, { bus: 'sfx' });
+    this.vibrate?.([30, 20, 40]);
+  }
+
+  /**
+   * Haunting sub-bass Cave Kraken abyssal roar across Phases 1–3 (v179).
+   */
+  playBossRoar(phase = 1) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const base = phase >= 3 ? 62 : phase === 2 ? 54 : 46;
+    this.playTone(base, 0.72, 'sawtooth', 0.075, 0, { bus: 'sfx' });
+    this.playTone(base * 1.48, 0.62, 'triangle', 0.055, 0.12, { bus: 'sfx' });
+    this.playTone(base * 0.8, 0.85, 'sine', 0.07, 0.24, { bus: 'sfx' });
+    this.vibrate?.([35, 30, 50]);
+  }
+
+  /**
+   * Triumphant harmonic swell upon defeating an underwater Boss (v179).
+   */
+  playBossDefeat() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const notes = [261.63, 329.63, 392.0, 523.25, 659.25];
+    notes.forEach((f, idx) => {
+      this.playTone(f, 0.48, idx % 2 === 0 ? 'triangle' : 'sine', 0.052, idx * 0.09, { bus: 'sfx' });
+    });
+    this.vibrate?.([25, 20, 25, 20, 55]);
+  }
 }

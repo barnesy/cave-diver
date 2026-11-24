@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=178');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=179');
   }
   return trysteroModulePromise;
 }
@@ -1603,6 +1603,9 @@ export class LanClient {
           }
           this.emit('peer_wreck_action', msg);
           break;
+        case 'peer_boss_event':
+          this.emit('peer_boss_event', msg);
+          break;
         case 'peer_body_recovered':
           if (this._lastRoomSnapshot) {
             this._lastRoomSnapshot.bodyRecoveredBy = msg.by || msg.playerId || 'Recovered';
@@ -2085,6 +2088,11 @@ export class LanClient {
       }
     }
     this.send({ type: 'wreck_action', actionKind, targetId });
+  }
+
+  sendBossEvent(event) {
+    if (!this.room || !this.connected || !event?.kind) return;
+    this.send({ type: 'boss_event', event });
   }
 
   sendBodyRecovered() {
