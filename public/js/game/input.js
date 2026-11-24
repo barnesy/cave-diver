@@ -30,6 +30,7 @@ export class InputController {
     onPauseToggle,
     onSpearPressStart,
     onSpearRelease,
+    onTorchStickTap,
   }) {
     this.keys = new Set();
     this.stickVec = { x: 0, y: 0 };
@@ -73,6 +74,9 @@ export class InputController {
     this.onPauseToggle = onPauseToggle;
     this.onSpearPressStart = onSpearPressStart;
     this.onSpearRelease = onSpearRelease;
+    this.onTorchStickTap = onTorchStickTap;
+    this.torchStickHeld = false;
+    this.spearKeyHeld = false;
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
     this._touchRewindHeld = false;
@@ -101,9 +105,13 @@ export class InputController {
       if (code === 'KeyE' && !e.repeat) {
         if (this.onWreckAction?.()) e.preventDefault();
       }
-      if (code === 'KeyF' && !e.repeat) {
-        if (this.onSpearPressStart?.()) e.preventDefault();
-        else if (this.onWreckAction?.()) e.preventDefault();
+      if ((code === 'KeyF' || code === 'Space') && !e.repeat) {
+        if (this.onSpearPressStart?.()) {
+          this.spearKeyHeld = true;
+          e.preventDefault();
+        } else if (code === 'KeyF' && this.onWreckAction?.()) {
+          e.preventDefault();
+        }
       }
       if (code === 'KeyQ' && !e.repeat) {
         if (this.onSonarPing?.()) e.preventDefault();
@@ -151,7 +159,10 @@ export class InputController {
 
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
-      if (e.code === 'KeyF') this.onSpearRelease?.();
+      if (e.code === 'KeyF' || e.code === 'Space') {
+        this.spearKeyHeld = false;
+        this.onSpearRelease?.();
+      }
     });
 
     window.addEventListener('blur', () => {
@@ -312,7 +323,10 @@ export class InputController {
       if (this.torchStickRingEl) {
         this.torchStickRingEl.style.transform = `translate(${sx}px, ${sy}px)`;
       }
+      this.torchStickHeld = true;
       updateTorch(e.clientX, e.clientY);
+      const tapAng = offD > 4 ? Math.atan2(offY, offX) : (this.torchVec.active ? Math.atan2(this.torchVec.y, this.torchVec.x) : null);
+      this.onTorchStickTap?.(tapAng);
     });
 
     this.torchStickBaseEl.addEventListener('pointermove', (e) => {
@@ -333,6 +347,7 @@ export class InputController {
 
   resetTorchStick() {
     this.torchPointerId = null;
+    this.torchStickHeld = false;
     this.torchVec.x = 0;
     this.torchVec.y = 0;
     this.torchVec.active = false;
@@ -373,6 +388,8 @@ export class InputController {
   resetAll() {
     this.keys.clear();
     this._touchRewindHeld = false;
+    this.spearKeyHeld = false;
+    this.torchStickHeld = false;
     this._gpRewindHeld = false;
     this.resetStick();
     this.resetTorchStick();

@@ -2939,7 +2939,9 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const { level, ascentConfig, diver, diveState, checkpointsHit, siltClouds, siltStirTimer } = session;
   session.simTimeSec += dt;
   const mutatorId = session.mutatorId || '';
-  stepEmergencyDrills(session, dt, callbacks);
+  if (!session.secretLair?.combatMode) {
+    stepEmergencyDrills(session, dt, callbacks);
+  }
   let torchMod = 1.0;
   if (mutatorId === 'strobe') {
     const phase = session.simTimeSec % 1.7;
@@ -3058,8 +3060,11 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
   const mutVertMult = mutatorId === 'turbo-par' ? 1.16 : 1.0;
-  const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult * mutHorizMult;
-  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult * mutVertMult;
+  const inCombat = Boolean(session.secretLair?.combatMode);
+  const combatHorizMult = inCombat ? 1.28 : 1.0;
+  const combatVertMult = inCombat ? 1.38 : 1.0;
+  const horizAccel = 6.2 * kickPulse * swimMult * dpvHorizMult * mutHorizMult * combatHorizMult;
+  const vertAccel = (ctrlY < 0 ? 4.1 : 5.3) * kickPulse * swimMult * dpvVertMult * mutVertMult * combatVertMult;
   diver.vx += ctrlX * horizAccel * dt;
   diver.vy += ctrlY * vertAccel * dt;
 
@@ -3941,33 +3946,42 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
     evaluateDiveContracts(session, callbacks);
   }
 
-  // Step physiology & dive computer (including HR & gas-burn coupling; DPV lowers physical fin exertion)
-  stepDivePhysiology(diveState, {
-    depthM: Math.max(0, diver.y),
-    prevDepthM,
-    dt,
-    exertion: effectiveExertion,
-    headBumpImpulse,
-    isStuck,
-    thrustMag,
-    gasBurnMultiplier:
-      (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
-      (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
-      (hazRes.gasRateMult || 1.0) *
-      (role?.gasBurnMult || 1.0),
-  });
+  // Step physiology & dive computer — FROZEN cleanly during Secret Lair Combat Mode so the fight is pure swim + dodge + shoot!
+  if (session.secretLair?.combatMode) {
+    diveState.depthM = Math.max(0, diver.y);
+    diveState.diveTimeSec = (diveState.diveTimeSec || 0) + dt;
+    diveState.narcosisLevel = 0;
+    diveState.panicLevel = 0;
+  } else {
+    stepDivePhysiology(diveState, {
+      depthM: Math.max(0, diver.y),
+      prevDepthM,
+      dt,
+      exertion: effectiveExertion,
+      headBumpImpulse,
+      isStuck,
+      thrustMag,
+      gasBurnMultiplier:
+        (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
+        (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
+        (hazRes.gasRateMult || 1.0) *
+        (role?.gasBurnMult || 1.0),
+    });
 
-  if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;
-  if (diveState.heartRateBpm >= 145 && session.hrWarnCooldown <= 0) {
-    session.hrWarnCooldown = 6.5;
-    callbacks.onToast?.('Heart rate spiking! Stop swimming & calm down to conserve gas.', 3.0);
+    if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;
+    if (diveState.heartRateBpm >= 145 && session.hrWarnCooldown <= 0) {
+      session.hrWarnCooldown = 6.5;
+      callbacks.onToast?.('Heart rate spiking! Stop swimming & calm down to conserve gas.', 3.0);
+    }
   }
 
   const curDepthM = Math.max(0, diver.y);
   const ascendingPhase = checkpointsHit.has(ascentConfig.turnaroundId);
 
-  // Early descent gas-switch coaching (well before 33.7m EAN32 MOD / 40m acute O2 toxicity)
-  if (curDepthM < 16.0) {
+  // Early descent gas-switch coaching (suppressed in Pure Combat Mode!)
+  if (session.secretLair?.combatMode) {
+    // No gas-switch warnings during Secret Lair combat
+  } else if (curDepthM < 16.0) {
     session.tmxSwitchWarned = false;
     session.tmxDangerWarned = false;
   } else if (!ascendingPhase && diveState.activeGasId === 'EAN32' && diveState.tanks?.TMX1455?.bar > 1) {

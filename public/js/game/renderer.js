@@ -850,7 +850,19 @@ export class CaveRenderer {
     this._restrictionZoom = Number.isFinite(this._restrictionZoom)
       ? this._restrictionZoom + (targetRestrictZoom - this._restrictionZoom) * Math.min(1, (dt || 0.016) * 2.6)
       : 1.0;
-    const scale = this.pxPerM * dpr * photoZoom * this._restrictionZoom;
+    // Dynamic Arena Camera Zoom-Out (v180): smoothly frames the massive Sunken Sanctum cathedral & Kraken!
+    const inBossArena = Boolean(
+      secretLair?.veilBreached &&
+      secretLair.spec?.arena &&
+      Math.hypot((diver?.x || 0) - secretLair.spec.arena.cx, (diver?.y || 0) - secretLair.spec.arena.cy) <=
+        (secretLair.spec.arena.rx || 26) + 5
+    );
+    const targetArenaZoom = !isPhotoMode && inBossArena ? (cw < ch ? 0.64 : 0.72) : 1.0;
+    this._arenaZoom = Number.isFinite(this._arenaZoom)
+      ? this._arenaZoom + (targetArenaZoom - this._arenaZoom) * Math.min(1, (dt || 0.016) * 2.2)
+      : targetArenaZoom;
+
+    const scale = this.pxPerM * dpr * photoZoom * this._restrictionZoom * this._arenaZoom;
 
     // Smooth camera follow + Torch-Coupled Peek Look-Ahead (or direct pan/zoom in Photo Mode Studio)
     const camAnchor = cameraTarget || diver;
@@ -1120,15 +1132,24 @@ export class CaveRenderer {
 
     // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
+    const lairArmed = Boolean(secretLair?.weaponEquipped);
     for (let i = 0; i < peerList.length; i++) {
-      this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true);
+      this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true, lairArmed ? { hasSpeargun: true } : null);
     }
-    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, { wreckState, mechFx, reelingActive, drills });
+    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, {
+      wreckState,
+      mechFx,
+      reelingActive,
+      drills,
+      hasSpeargun: lairArmed,
+      spearRecoil: secretLair?.recoilSec ? secretLair.recoilSec / 0.12 : 0,
+      muzzleFlash: secretLair?.muzzleFlashSec || 0,
+    });
     if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
       this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx);
     }
 
-    // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering
+    // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering + Dynamic Boss Arena Lighting
     this._drawLighting(
       ctx,
       cw,
@@ -1146,7 +1167,8 @@ export class CaveRenderer {
       localSiltDensity,
       powerRelays,
       smb,
-      ecosystem
+      ecosystem,
+      secretLair
     );
 
     // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint, Spectral Optics & Collect Bursts
@@ -1218,24 +1240,28 @@ export class CaveRenderer {
     }
 
     // 11b. Diegetic Depth Bands, Gas-Switch / Deco Hover Zones, Waypoint, Offscreen Buddy Pings & Ascent Pacer
+    // In Secret Lair Pure Combat Mode, strip ALL diving lines/coach/telemetry overlays for crisp arcade clarity!
+    const inCombatMode = Boolean(secretLair?.combatMode);
     if (!isPhotoMode) {
-      this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
-      const showCompass =
-        mutatorId === 'purist'
-          ? false
-          : difficulty === 'guided'
-            ? true
-            : difficulty === 'hardcore'
-              ? false
-              : !this.level.hideWaypointCompass;
-      if (showCompass && !endedState) {
-        this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
+      if (!inCombatMode) {
+        this._drawZonesAndMarkers(ctx, cw, ch, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, timeSec);
+        const showCompass =
+          mutatorId === 'purist'
+            ? false
+            : difficulty === 'guided'
+              ? true
+              : difficulty === 'hardcore'
+                ? false
+                : !this.level.hideWaypointCompass;
+        if (showCompass && !endedState) {
+          this._drawWaypointCompass(ctx, cw, ch, diver, nextCheckpoint, toScreenX, toScreenY, scale, timeSec);
+        }
       }
       this._drawPeerEdgeIndicators(ctx, cw, ch, diver, peerList, toScreenX, toScreenY, timeSec);
       if (celebrationParticles && celebrationParticles.length > 0) {
         this._drawCelebrationParticles(ctx, celebrationParticles, cw, ch);
       }
-      if (!endedState) {
+      if (!endedState && !inCombatMode) {
         this._drawAscentCoach(ctx, diver, diveState, checkpointsHit, toScreenX, toScreenY, scale, nextCheckpoint, timeSec);
         if (compactHud) {
           this._drawDiegeticImmersionTape(ctx, cw, ch, diver, diveState, nextCheckpoint, timeSec);
@@ -1243,8 +1269,8 @@ export class CaveRenderer {
       }
     }
 
-    // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating or in Photo Mode)
-    if (!isSpectating && !isPhotoMode) {
+    // 12. Physiology Screen Vignettes & Emergency Drill Visor FX (skipped while spectating, Photo Mode, or Combat Mode)
+    if (!isSpectating && !isPhotoMode && !inCombatMode) {
       this._drawPhysiologyOverlay(ctx, cw, ch, diveState, timeSec);
       if (hazards?.thermoclineColdFactor > 0.06) {
         this._drawThermoclineFrostRim(ctx, cw, ch, hazards, timeSec);
@@ -3944,24 +3970,15 @@ export class CaveRenderer {
       }
 
       if (c.kind === 'secret-veil') {
-        const pulseR = (1.1 + Math.sin(timeSec * 10) * 0.18) * scale;
-        ctx.strokeStyle = `rgba(250, 204, 21, ${(a * 0.96).toFixed(3)})`;
-        ctx.lineWidth = Math.max(2.4, 0.12 * scale);
+        // Subtle, mysterious acoustic hollow echo (ZERO text callout — observant divers spot the faint fissure!)
+        const pulseR = (0.72 + Math.sin(timeSec * 6.5) * 0.1) * scale;
+        ctx.strokeStyle = `rgba(103, 232, 249, ${(a * 0.58).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, 0.07 * scale);
+        ctx.setLineDash([Math.max(3, scale * 0.16), Math.max(4, scale * 0.2)]);
         ctx.beginPath();
         ctx.arc(px, py, pulseR, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.strokeStyle = `rgba(34, 211, 238, ${(a * 0.85).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1.6, 0.08 * scale);
-        ctx.setLineDash([Math.max(4, scale * 0.22), Math.max(3, scale * 0.16)]);
-        ctx.beginPath();
-        ctx.arc(px, py, pulseR * 1.48, 0, Math.PI * 2);
-        ctx.stroke();
         ctx.setLineDash([]);
-        ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = `rgba(254, 240, 138, ${a.toFixed(3)})`;
-        ctx.fillText(`📡 HOLLOW VEIL · ${Math.round(c.dist)}m`, px, py - pulseR * 1.6 - Math.max(6, scale * 0.22));
         continue;
       }
 
@@ -4061,7 +4078,13 @@ export class CaveRenderer {
       scale,
       isPeer,
       liveryPalette,
-      { torchOn: diver.torchOn !== false, glowStamps: this.glowStamps }
+      {
+        torchOn: diver.torchOn !== false,
+        glowStamps: this.glowStamps,
+        hasSpeargun: Boolean(mechCtx?.hasSpeargun),
+        spearRecoil: mechCtx?.spearRecoil || 0,
+        muzzleFlash: mechCtx?.muzzleFlash || 0,
+      }
     );
 
     // 5b. Articulated Working Arm & Mechanical Hardware Rig (v148: Wheel Crank, Valve Bleed, Shears, Delrin Reel, Shot-Line Lanyard)

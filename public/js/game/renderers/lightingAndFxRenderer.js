@@ -170,7 +170,7 @@ export const lightingAndFxMethods = {
     ctx.restore();
   },
 
-  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0, powerRelays = null, smb = null, ecosystem = null) {
+  _drawLighting(ctx, cw, ch, diver, peersInput, checkpointsHit, siltClouds, sunCurtains, toScreenX, toScreenY, scale, timeSec, bodyRecovered = false, localSiltDensity = 0, powerRelays = null, smb = null, ecosystem = null, secretLair = null) {
     const lctx = this.lightCtx;
     const lw = this.lightCanvas.width;
     const lh = this.lightCanvas.height;
@@ -585,6 +585,70 @@ export const lightingAndFxMethods = {
         lctx.drawImage(cutoutStamp, sx - rad, sy - rad, rad * 2, rad * 2);
         lctx.globalAlpha = 1;
       }
+    }
+
+    // Dynamic Bioluminescent Cathedral Lighting for Secret Lair Arena, Armory, Boss Aura & Projectiles (v180)
+    if (cutoutStamp && secretLair?.veilBreached && secretLair.spec) {
+      const ar = secretLair.spec.arena;
+      // 1. Broad ambient cathedral illumination so the massive boss arena is vivid & readable!
+      if (ar) {
+        const ax = toScreenX(ar.cx) * rx;
+        const ay = toScreenY(ar.cy) * ry;
+        const aRx = (ar.rx * 1.28) * scale * rx;
+        const aRy = (ar.ry * 1.38) * scale * ry;
+        if (ax + aRx >= 0 && ax - aRx <= lw && ay + aRy >= 0 && ay - aRy <= lh) {
+          lctx.globalAlpha = 0.84;
+          lctx.drawImage(cutoutStamp, ax - aRx, ay - aRy, aRx * 2, aRy * 2);
+        }
+        // 2. Pulsing wall crystal sconces around the cathedral perimeter
+        for (let i = 0; i < (ar.lightSconces || []).length; i++) {
+          const sc = ar.lightSconces[i];
+          const sx = toScreenX(sc.x) * rx;
+          const sy = toScreenY(sc.y) * ry;
+          const sr = (sc.radius || 13) * scale * rx;
+          if (sx + sr < 0 || sx - sr > lw || sy + sr < 0 || sy - sr > lh) continue;
+          lctx.globalAlpha = 0.72 + 0.16 * Math.sin(timeSec * 2.6 + i * 1.3);
+          lctx.drawImage(cutoutStamp, sx - sr, sy - sr, sr * 2, sr * 2);
+        }
+      }
+      // 3. Soft armory glow in the quiet anteroom
+      if (!secretLair.weaponEquipped && secretLair.spec.armory) {
+        const arm = secretLair.spec.armory;
+        const gx = toScreenX(arm.x) * rx;
+        const gy = toScreenY(arm.y) * ry;
+        const gr = 7.5 * scale * rx;
+        if (gx + gr >= 0 && gx - gr <= lw && gy + gr >= 0 && gy - gr <= lh) {
+          lctx.globalAlpha = 0.76 + 0.12 * Math.sin(timeSec * 3.8);
+          lctx.drawImage(cutoutStamp, gx - gr, gy - gr, gr * 2, gr * 2);
+        }
+      }
+      // 4. Dynamic bioluminescent Kraken boss aura (keeps boss silhouette & tentacles vivid at all times!)
+      if (secretLair.boss && (!secretLair.boss.defeated || secretLair.boss.defeatAnimSec > 0)) {
+        const b = secretLair.boss;
+        const bx = toScreenX(b.x) * rx;
+        const by = toScreenY(b.y) * ry;
+        const br = (b.radius * (b.phase === 3 ? 4.4 : 3.8)) * scale * rx;
+        if (bx + br >= 0 && bx - br <= lw && by + br >= 0 && by - br <= lh) {
+          lctx.globalAlpha = 0.92;
+          lctx.drawImage(cutoutStamp, bx - br, by - br, br * 2, br * 2);
+        }
+      }
+      // 5. Flying speargun bolts, emerald Bio-Heal Orbs & enemy ink orbs cast dynamic local light!
+      for (const sp of secretLair.spears || []) {
+        const sx = toScreenX(sp.x) * rx;
+        const sy = toScreenY(sp.y) * ry;
+        const sr = (sp.piercing ? 5.2 : 3.4) * scale * rx;
+        lctx.globalAlpha = sp.piercing ? 0.78 : 0.56;
+        lctx.drawImage(cutoutStamp, sx - sr, sy - sr, sr * 2, sr * 2);
+      }
+      for (const orb of secretLair.healOrbs || []) {
+        const ox = toScreenX(orb.x) * rx;
+        const oy = toScreenY(orb.y) * ry;
+        const or = 4.2 * scale * rx;
+        lctx.globalAlpha = 0.68;
+        lctx.drawImage(cutoutStamp, ox - or, oy - or, or * 2, or * 2);
+      }
+      lctx.globalAlpha = 1;
     }
 
     ctx.drawImage(this.lightCanvas, 0, 0, cw, ch);

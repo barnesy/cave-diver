@@ -10,7 +10,7 @@ export const LEVEL_1 = {
   subtitle: 'Max Depth 50m · 3-Gas Trimix Traverse',
   bounds: {
     xMin: -12,
-    xMax: 204,
+    xMax: 322,
     yMin: -6,
     yMax: 64,
   },
@@ -52,19 +52,25 @@ export const LEVEL_1 = {
     // Exit Cenote Beta Jug-Shaped Skylight Cavern
     { ax: 144, ay: 6.6, bx: 145, by: 0.6, ra: 5.8, rb: 5.2 },
 
-    // === Hidden Sonar-Only Passage -> Sunken Sanctum Boss Arena (v179) ===
-    // Sealed behind a false limestone veil on the northeast wall of Halocline Drop (55.4, 24.4)
-    { ax: 55.2, ay: 24.4, bx: 64.5, by: 20.5, ra: 2.5, rb: 3.3, secretLair: true },
-    // Gauntlet Corridor 1 (Moray Ambush Bend)
-    { ax: 64.5, ay: 20.5, bx: 75.5, by: 19.5, ra: 3.3, rb: 3.1, secretLair: true },
-    // Gauntlet Corridor 2 (Swarmer Fissure & Stalker Gate)
-    { ax: 75.5, ay: 19.5, bx: 86.5, by: 22.8, ra: 3.1, rb: 3.7, secretLair: true },
-    // Arena Threshold Archway opening into the limestone mountain heart
-    { ax: 86.5, ay: 22.8, bx: 94.5, by: 23.8, ra: 3.8, rb: 6.2, secretLair: true },
-    // Sunken Sanctum Grand Boss Arena (~34m wide x 18m tall vaulted underwater cathedral)
-    { ax: 94.5, ay: 23.8, bx: 103.0, by: 23.8, ra: 6.8, rb: 9.0, secretLair: true },
-    { ax: 103.0, ay: 23.8, bx: 115.0, by: 23.8, ra: 9.0, rb: 8.8, secretLair: true },
-    { ax: 115.0, ay: 23.8, bx: 122.0, by: 23.5, ra: 8.0, rb: 5.5, secretLair: true },
+    // === Secret Bottom-Level Tight-Squeeze Offshoot -> Long Gauntlet -> Sunken Sanctum Arena (v180) ===
+    // Hidden behind a narrow false rock squeeze off the very bottom of the 50m Deep Sump (132.5, 49.6)
+    { ax: 132.5, ay: 49.6, bx: 143.0, by: 49.8, ra: 1.55, rb: 1.85, secretLair: true },
+    // Quiet Armory Anteroom (weapon waiting BEFORE any enemies)
+    { ax: 143.0, ay: 49.8, bx: 156.5, by: 48.6, ra: 2.35, rb: 3.6, secretLair: true },
+    // Chamber 1: Moray Trench
+    { ax: 156.5, ay: 48.6, bx: 176.0, by: 47.0, ra: 3.5, rb: 3.3, secretLair: true },
+    // Chamber 2: Bioluminescent Brine Grotto
+    { ax: 176.0, ay: 47.0, bx: 196.5, by: 43.2, ra: 3.5, rb: 4.5, secretLair: true },
+    // Chamber 3: Sunken Ossuary Bend
+    { ax: 196.5, ay: 43.2, bx: 217.5, by: 46.8, ra: 4.2, rb: 3.9, secretLair: true },
+    // Chamber 4: The Guardian Gate (Armored Stalkers)
+    { ax: 217.5, ay: 46.8, bx: 238.5, by: 43.5, ra: 4.0, rb: 4.8, secretLair: true },
+    // Grand Sanctum Archway
+    { ax: 238.5, ay: 43.5, bx: 252.0, by: 40.5, ra: 4.8, rb: 8.4, secretLair: true },
+    // THE SUNKEN SANCTUM — Massive ~58m wide x 26m tall dynamically lit underwater boss cathedral
+    { ax: 252.0, ay: 40.5, bx: 268.0, by: 40.5, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 268.0, ay: 40.5, bx: 288.0, by: 40.5, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 288.0, ay: 40.5, bx: 302.5, by: 40.2, ra: 11.8, rb: 8.6, secretLair: true },
   ],
   // Taut main guideline (gold/white line with line arrows)
   guideline: [

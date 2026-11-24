@@ -8683,3 +8683,155 @@ summary,
   color: #94a3b8;
 }
 
+/* ============================================================================
+   v180 Secret Lair Pure Combat Mode — Hide ALL Diving Telemetry & Dive Controls
+   ============================================================================ */
+.hud-combat-bar {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+}
+.hud-combat-bar[hidden] {
+  display: none !important;
+}
+.combat-hp-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  background: rgba(4, 12, 26, 0.82);
+  border: 1.5px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 6px 20px rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.combat-hp-icon {
+  font-size: 0.92rem;
+  line-height: 1;
+}
+.combat-hp-segs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.combat-hp-seg {
+  width: 20px;
+  height: 9px;
+  border-radius: 3px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+.combat-hp-seg.filled {
+  background: linear-gradient(90deg, #22d3ee, #34d399);
+  border-color: rgba(167, 243, 208, 0.72);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.48);
+}
+.combat-hp-seg.low.filled {
+  background: linear-gradient(90deg, #f43f5e, #fb923c);
+  border-color: rgba(254, 202, 202, 0.8);
+  box-shadow: 0 0 9px rgba(244, 63, 94, 0.55);
+}
+.combat-hp-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #e0f2fe;
+  min-width: 24px;
+  text-align: right;
+}
+.combat-hint-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: rgba(186, 230, 253, 0.86);
+  background: rgba(4, 12, 26, 0.68);
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  border-radius: 7px;
+  padding: 3px 8px;
+  width: fit-content;
+  transition: opacity 0.5s ease;
+}
+.combat-hint-pill.faded {
+  opacity: 0;
+}
+.combat-pause-btn {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  z-index: 32;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(148, 163, 184, 0.38);
+  background: rgba(4, 12, 26, 0.78);
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.combat-pause-btn[hidden] {
+  display: none !important;
+}
+
+/* When in Pure Combat Mode, strip ALL diving telemetry, gas racks, minimap, comms & dive controls! */
+#screen-hud.combat-mode .hud-top-stack,
+#screen-hud.combat-mode .hud-left-wing,
+#screen-hud.combat-mode .hud-right-wing,
+#screen-hud.combat-mode #hud-reel-status,
+#screen-hud.combat-mode .hud-minimap-dock,
+#screen-hud.combat-mode .coop-comms,
+#screen-hud.combat-mode .hud-status-strip,
+#screen-hud.combat-mode .hud-survey-slate,
+#screen-hud.combat-mode .hud-shearwater-card,
+#screen-hud.combat-mode #hud-signal-wheel {
+  display: none !important;
+}
+
+#screen-hud.combat-mode .hud-bottom-dock {
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 calc(20px + env(safe-area-inset-left, 0px)) calc(18px + env(safe-area-inset-bottom, 0px));
+}
+#screen-hud.combat-mode .hud-stick-center {
+  order: 1;
+}
+#screen-hud.combat-mode .hud-left-col {
+  order: 2;
+  width: auto;
+}
+#screen-hud.combat-mode #torch-stick {
+  display: flex !important;
+  width: 82px;
+  height: 82px;
+}
+#screen-hud.combat-mode #torch-stick .touch-ring {
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.34), inset 0 0 12px rgba(56, 189, 248, 0.16);
+}
+#screen-hud.combat-mode #torch-stick .touch-knob {
+  width: 36px;
+  height: 36px;
+  background: radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7);
+  border-color: #e0f2fe;
+  color: #020617;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* On mouse + keyboard desktop, keep screen ultra-clean (aim & click/hold with mouse or WASD + F/Space!) */
+  #screen-hud.combat-mode #touch-stick,
+  #screen-hud.combat-mode #torch-stick {
+    display: none !important;
+  }
+}
+

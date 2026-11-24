@@ -720,7 +720,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
       const cy = toY(c.y);
       ctx.fillStyle =
         c.kind === 'secret-veil'
-          ? `rgba(250, 204, 21, ${(fade * 0.98).toFixed(2)})`
+          ? `rgba(103, 232, 249, ${(fade * 0.55).toFixed(2)})`
           : c.kind === 'shifting-hatch'
             ? (c.hatchRef?.openness ?? 1) < 0.35
               ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
@@ -737,22 +737,15 @@ export function drawSonarMinimap(ctx, width, height, state) {
   // 8b. Secret Sonar-Only Lair Cartography (strictly hidden until sonar-revealed or breached!)
   if (secretLair?.spec) {
     const spec = secretLair.spec;
-    if (secretLair.veilRevealed && !secretLair.veilBreached && spec.veil) {
+    if (secretLair.veilRevealed && !secretLair.veilBreached && (secretLair.veilRevealPulse || 0) > 0 && spec.veil) {
       const vx = toX(spec.veil.x);
       const vy = toY(spec.veil.y);
-      ctx.strokeStyle = `rgba(250, 204, 21, ${(0.55 + 0.45 * pulse).toFixed(2)})`;
-      ctx.lineWidth = 2;
+      const fade = Math.min(1, secretLair.veilRevealPulse / 2.5);
+      ctx.strokeStyle = `rgba(103, 232, 249, ${(fade * (0.28 + 0.25 * pulse)).toFixed(2)})`;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.arc(vx, vy, 5.2 + pulse * 3.8, 0, Math.PI * 2);
+      ctx.arc(vx, vy, 3.6 + pulse * 1.8, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.moveTo(vx, vy - 4.2);
-      ctx.lineTo(vx + 4.2, vy);
-      ctx.lineTo(vx, vy + 4.2);
-      ctx.lineTo(vx - 4.2, vy);
-      ctx.closePath();
-      ctx.fill();
     } else if (secretLair.veilBreached) {
       // Draw discovered secret corridor & abyssal arena passages in distinct bioluminescent violet
       const segs = level.segments || [];

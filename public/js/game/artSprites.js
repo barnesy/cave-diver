@@ -1113,27 +1113,110 @@ export function drawDiverArmAndTorch(
   }
   ctx.restore();
 
-  // Goodman-handle primary torch canister & lens gripped in hand
+  // Primary weapon/light gripped in hand: Pneumatic Titanium Speargun with Underslung Dive Torch, OR standard Goodman torch
   ctx.save();
   ctx.translate(hx, hy);
   ctx.rotate(torchAng);
-  ctx.fillStyle = '#e2e8f0';
-  ctx.beginPath();
-  ctx.roundRect(-0.1 * scale, -0.055 * scale, 0.28 * scale, 0.11 * scale, 0.03 * scale);
-  ctx.fill();
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = Math.max(0.8, 0.018 * scale);
-  ctx.stroke();
-  if (torchOn) {
-    ctx.fillStyle = lensColor;
+  if (opts?.hasSpeargun) {
+    const recoilPx = Math.max(0, Number(opts.spearRecoil) || 0) * 0.22 * scale;
+    ctx.translate(-recoilPx, 0);
+
+    // Ergonomic rubberized pistol grip & trigger guard
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = Math.max(1, 0.02 * scale);
     ctx.beginPath();
-    ctx.arc(0.18 * scale, 0, 0.052 * scale, 0, Math.PI * 2);
+    ctx.moveTo(-0.08 * scale, 0.02 * scale);
+    ctx.lineTo(-0.18 * scale, 0.22 * scale);
+    ctx.lineTo(-0.03 * scale, 0.23 * scale);
+    ctx.lineTo(0.06 * scale, 0.05 * scale);
+    ctx.closePath();
     ctx.fill();
-    if (glowStamps?.warm) {
+    ctx.stroke();
+
+    // Pneumatic titanium barrel & compressed-air pressure rail
+    const barrelGrad = ctx.createLinearGradient(0, -0.08 * scale, 0, 0.08 * scale);
+    barrelGrad.addColorStop(0, '#f1f5f9');
+    barrelGrad.addColorStop(0.45, '#94a3b8');
+    barrelGrad.addColorStop(1, '#334155');
+    ctx.fillStyle = barrelGrad;
+    ctx.beginPath();
+    ctx.roundRect(-0.12 * scale, -0.065 * scale, 0.84 * scale, 0.115 * scale, 0.035 * scale);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing cyan pneumatic rail strip along upper barrel
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(0.02 * scale, -0.03 * scale, 0.62 * scale, 0.032 * scale);
+
+    // Loaded barbed titanium spear tip protruding past muzzle (briefly slides back during recoil)
+    if (recoilPx < 0.08 * scale) {
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = Math.max(1.5, 0.042 * scale);
+      ctx.beginPath();
+      ctx.moveTo(0.70 * scale, -0.01 * scale);
+      ctx.lineTo(1.06 * scale, -0.01 * scale);
+      ctx.stroke();
+      ctx.fillStyle = '#7dd3fc';
+      ctx.beginPath();
+      ctx.moveTo(1.18 * scale, -0.01 * scale);
+      ctx.lineTo(0.96 * scale, -0.08 * scale);
+      ctx.lineTo(0.96 * scale, 0.06 * scale);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Mounted Tactical Dive Flashlight strapped beneath the barrel tip!
+    ctx.fillStyle = '#cbd5e1';
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = Math.max(0.9, 0.02 * scale);
+    ctx.beginPath();
+    ctx.roundRect(0.42 * scale, 0.045 * scale, 0.30 * scale, 0.09 * scale, 0.028 * scale);
+    ctx.fill();
+    ctx.stroke();
+    // Clamp bracket tying flashlight to speargun barrel
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0.50 * scale, 0.02 * scale, 0.07 * scale, 0.04 * scale);
+
+    if (torchOn) {
+      ctx.fillStyle = lensColor;
+      ctx.beginPath();
+      ctx.arc(0.73 * scale, 0.09 * scale, 0.046 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      if (glowStamps?.warm) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.62;
+        const lR = 0.28 * scale;
+        ctx.drawImage(glowStamps.warm, 0.73 * scale - lR, 0.09 * scale - lR, lR * 2, lR * 2);
+      }
+    }
+    if ((opts.muzzleFlash || 0) > 0) {
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.55;
-      const lR = 0.26 * scale;
-      ctx.drawImage(glowStamps.warm, 0.18 * scale - lR, -lR, lR * 2, lR * 2);
+      const mf = Math.min(1, opts.muzzleFlash * 11);
+      ctx.fillStyle = `rgba(125, 211, 252, ${(mf * 0.85).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(0.92 * scale, -0.01 * scale, 0.28 * scale * mf, 0.14 * scale * mf, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.roundRect(-0.1 * scale, -0.055 * scale, 0.28 * scale, 0.11 * scale, 0.03 * scale);
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = Math.max(0.8, 0.018 * scale);
+    ctx.stroke();
+    if (torchOn) {
+      ctx.fillStyle = lensColor;
+      ctx.beginPath();
+      ctx.arc(0.18 * scale, 0, 0.052 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      if (glowStamps?.warm) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55;
+        const lR = 0.26 * scale;
+        ctx.drawImage(glowStamps.warm, 0.18 * scale - lR, -lR, lR * 2, lR * 2);
+      }
     }
   }
   ctx.restore();

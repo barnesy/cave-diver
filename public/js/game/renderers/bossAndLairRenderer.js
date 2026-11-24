@@ -127,21 +127,23 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 4. Arena & Corridor Emergency Bailout Stages
-    for (const st of lair.stages || []) {
-      if (st.x + 3 < visX0 || st.x - 3 > visX1 || st.y + 3 < visY0 || st.y - 3 > visY1) continue;
-      const sx = toScreenX(st.x);
-      const sy = toScreenY(st.y);
-      ctx.save();
-      ctx.translate(sx, sy);
-      wreckAndInteractivesMethods._drawDetailedStageCylinder(ctx, scale, {
-        bodyCol: st.cooldownSec > 0 ? '#475569' : '#0284c7',
-        trimCol: st.cooldownSec > 0 ? '#94a3b8' : '#38bdf8',
-        claimed: st.cooldownSec > 0,
-        tiltRad: -0.25,
-        timeSec,
-      });
-      ctx.restore();
+    // 4. Arena & Corridor Emergency Bailout Stages (hidden in Pure Combat Mode where gas is frozen!)
+    if (!lair.combatMode) {
+      for (const st of lair.stages || []) {
+        if (st.x + 3 < visX0 || st.x - 3 > visX1 || st.y + 3 < visY0 || st.y - 3 > visY1) continue;
+        const sx = toScreenX(st.x);
+        const sy = toScreenY(st.y);
+        ctx.save();
+        ctx.translate(sx, sy);
+        wreckAndInteractivesMethods._drawDetailedStageCylinder(ctx, scale, {
+          bodyCol: st.cooldownSec > 0 ? '#475569' : '#0284c7',
+          trimCol: st.cooldownSec > 0 ? '#94a3b8' : '#38bdf8',
+          claimed: st.cooldownSec > 0,
+          tiltRad: -0.25,
+          timeSec,
+        });
+        ctx.restore();
+      }
     }
 
     // 5. Lesser Enemies (Abyssal Morays, Brine Swarmers, Armored Stalkers)
@@ -484,85 +486,164 @@ export const bossAndLairMethods = {
     const dpr = this._cachedDpr || 1;
     const { spec, boss } = lair;
 
-    // 1. Sonar-Revealed False Limestone Veil glow & acoustic fracture lines
+    // 1. Subtle Sonar-Revealed Tight-Squeeze Hairline Fissure (ZERO text callout!)
     if (lair.veilRevealed && !lair.veilBreached) {
       const v = spec.veil;
       const sx = toScreenX(v.x);
       const sy = toScreenY(v.y);
       const sr = v.radius * scale;
-      const pulse = 0.58 + 0.42 * Math.sin(timeSec * 5.2);
+      const fade = Math.min(1, (lair.veilRevealPulse || 0) / 1.5 + 0.35);
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.8);
       ctx.save();
-      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.55 + pulse * 0.4).toFixed(2)})`;
-      ctx.lineWidth = Math.max(2, 0.09 * scale);
-      ctx.setLineDash([7, 5]);
+      ctx.strokeStyle = `rgba(103, 232, 249, ${(fade * (0.28 + pulse * 0.34)).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.4, 0.06 * scale);
       ctx.beginPath();
-      ctx.arc(sx, sy, sr * (0.94 + pulse * 0.06), 0, Math.PI * 2);
+      ctx.moveTo(sx - sr * 0.38, sy - sr * 0.45);
+      ctx.lineTo(sx - sr * 0.04, sy - sr * 0.05);
+      ctx.lineTo(sx + sr * 0.34, sy + sr * 0.38);
+      ctx.moveTo(sx - sr * 0.04, sy - sr * 0.05);
+      ctx.lineTo(sx + sr * 0.35, sy - sr * 0.25);
       ctx.stroke();
-      ctx.setLineDash([]);
-      // Glowing hairline acoustic cracks
-      ctx.strokeStyle = `rgba(250, 204, 21, ${(0.6 + pulse * 0.35).toFixed(2)})`;
-      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
-      ctx.beginPath();
-      ctx.moveTo(sx - sr * 0.45, sy - sr * 0.5);
-      ctx.lineTo(sx - sr * 0.05, sy - sr * 0.08);
-      ctx.lineTo(sx + sr * 0.38, sy + sr * 0.42);
-      ctx.moveTo(sx - sr * 0.05, sy - sr * 0.08);
-      ctx.lineTo(sx + sr * 0.42, sy - sr * 0.32);
-      ctx.stroke();
-
-      ctx.font = `800 ${Math.max(10, Math.round(11 * dpr))}px ui-monospace, monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fde047';
-      ctx.fillText('📡 HOLLOW VEIL [E]', sx, sy - sr - 8 * dpr);
       ctx.restore();
     }
 
     if (!lair.veilBreached) return;
 
-    // 2. Glowing Speargun Armory Beacon (until equipped)
+    // 1b. Glowing Bioluminescent Cathedral Crystal Sconces (dynamic rim illumination!)
+    for (let i = 0; i < (spec.arena?.lightSconces || []).length; i++) {
+      const sc = spec.arena.lightSconces[i];
+      const sx = toScreenX(sc.x);
+      const sy = toScreenY(sc.y);
+      const sr = (sc.radius || 13) * scale * 0.52;
+      if (sx + sr < 0 || sx - sr > cw || sy + sr < 0 || sy - sr > ch) continue;
+      const pulse = 0.72 + 0.28 * Math.sin(timeSec * 2.4 + i * 1.4);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const sg = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, sr);
+      sg.addColorStop(0, sc.color || '#38bdf8');
+      sg.addColorStop(0.32, 'rgba(56, 189, 248, 0.24)');
+      sg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.globalAlpha = 0.44 * pulse;
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+      // Crystal cluster core
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 0.55 * scale);
+      ctx.lineTo(sx + 0.3 * scale, sy);
+      ctx.lineTo(sx, sy + 0.45 * scale);
+      ctx.lineTo(sx - 0.3 * scale, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 2. Glowing Speargun Armory Beacon in Quiet Anteroom (auto-equips on swim-over!)
     if (!lair.weaponEquipped && spec.armory) {
       const sx = toScreenX(spec.armory.x);
       const sy = toScreenY(spec.armory.y);
       const pulse = 0.6 + 0.4 * Math.sin(timeSec * 4.5);
       ctx.save();
-      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.45 + pulse * 0.45).toFixed(2)})`;
+      const ag = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, 2.4 * scale);
+      ag.addColorStop(0, 'rgba(56, 189, 248, 0.42)');
+      ag.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.4 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(125, 211, 252, ${(0.5 + pulse * 0.45).toFixed(2)})`;
       ctx.lineWidth = Math.max(1.6, 0.07 * scale);
       ctx.beginPath();
-      ctx.arc(sx, sy, (1.45 + pulse * 0.25) * scale, 0, Math.PI * 2);
+      ctx.arc(sx, sy, (1.45 + pulse * 0.22) * scale, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.font = `800 ${Math.max(10, Math.round(11 * dpr))}px ui-monospace, monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#7dd3fc';
-      ctx.fillText('🔱 SPEARGUN [E]', sx, sy - 1.55 * scale);
       ctx.restore();
     }
 
-    // 3. Boss Emissive Attacks, Weak-Point Mantle Core & Phase 3 Blackout Veil
+    // 2b. Emerald Bio-Heal Orbs (dropped by slain enemies & phase transitions!)
+    for (const orb of lair.healOrbs || []) {
+      const ox = toScreenX(orb.x);
+      const oy = toScreenY(orb.y);
+      const r = (0.42 + 0.08 * Math.sin(timeSec * 7 + orb.phase)) * scale;
+      ctx.save();
+      const og = ctx.createRadialGradient(ox, oy, r * 0.15, ox, oy, r * 2.4);
+      og.addColorStop(0, '#ecfdf5');
+      og.addColorStop(0.4, '#34d399');
+      og.addColorStop(1, 'rgba(16, 185, 129, 0)');
+      ctx.fillStyle = og;
+      ctx.beginPath();
+      ctx.arc(ox, oy, r * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#a7f3d0';
+      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ox - r * 0.55, oy);
+      ctx.lineTo(ox + r * 0.55, oy);
+      ctx.moveTo(ox, oy - r * 0.55);
+      ctx.lineTo(ox, oy + r * 0.55);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 3. Boss Emissive Attacks, Weak-Point Mantle Core & Stun/Lunge Indicators
     if (boss && boss.active && !boss.defeated) {
       const bx = toScreenX(boss.x);
       const by = toScreenY(boss.y);
 
       if (boss.blackoutAlpha > 0.02) {
         ctx.save();
-        ctx.fillStyle = `rgba(2, 6, 23, ${(boss.blackoutAlpha * 0.72).toFixed(3)})`;
+        ctx.fillStyle = `rgba(10, 4, 24, ${(boss.blackoutAlpha * 0.48).toFixed(3)})`;
         ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
       }
 
-      // Telegraphed Tentacle Slam Cone
+      // Kraken Lunge Dash Lane Telegraph (crystal-clear glowing rush path!)
+      if (boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash') {
+        const dx = toScreenX(boss.lungeDestX);
+        const dy = toScreenY(boss.lungeDestY);
+        const isDash = boss.aiState === 'lunge_dash';
+        ctx.save();
+        ctx.strokeStyle = isDash ? 'rgba(244, 63, 94, 0.72)' : 'rgba(56, 189, 248, 0.45)';
+        ctx.lineWidth = boss.radius * 1.45 * scale;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(dx, dy);
+        ctx.stroke();
+        ctx.strokeStyle = isDash ? '#fda4af' : '#bae6fd';
+        ctx.lineWidth = Math.max(2, 0.1 * scale);
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(dx, dy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Telegraphed Tentacle Slam Cone (Single in P1/P2, Twin Crossing Lanes in P3!)
       if (boss.aiState === 'slam_windup' || boss.aiState === 'slam_strike') {
         const isStrike = boss.aiState === 'slam_strike';
         const rad = boss.slamRadius * scale;
+        const slamAngles = boss.twinSlam
+          ? [boss.slamTargetAngle - 0.58, boss.slamTargetAngle + 0.58]
+          : [boss.slamTargetAngle];
+        const halfArc = boss.twinSlam ? 0.36 : boss.slamArcHalf;
         ctx.save();
-        ctx.fillStyle = isStrike ? 'rgba(244, 63, 94, 0.34)' : 'rgba(251, 146, 60, 0.18)';
-        ctx.strokeStyle = isStrike ? 'rgba(254, 202, 202, 0.92)' : 'rgba(251, 191, 36, 0.85)';
+        ctx.fillStyle = isStrike ? 'rgba(244, 63, 94, 0.36)' : 'rgba(251, 146, 60, 0.18)';
+        ctx.strokeStyle = isStrike ? 'rgba(254, 202, 202, 0.94)' : 'rgba(251, 191, 36, 0.88)';
         ctx.lineWidth = Math.max(2, 0.09 * scale);
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.arc(bx, by, rad, boss.slamTargetAngle - boss.slamArcHalf, boss.slamTargetAngle + boss.slamArcHalf);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        for (const sa of slamAngles) {
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.arc(bx, by, rad, sa - halfArc, sa + halfArc);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
@@ -571,13 +652,26 @@ export const bossAndLairMethods = {
         ctx.save();
         for (let k = 0; k < 4; k++) {
           const frac = ((timeSec * 0.95 + k * 0.25) % 1);
-          const vr = (1 - frac) * 18 * scale + boss.radius * scale;
+          const vr = (1 - frac) * 24 * scale + boss.radius * scale;
           ctx.strokeStyle = `rgba(192, 132, 252, ${(frac * 0.58).toFixed(2)})`;
-          ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+          ctx.lineWidth = Math.max(2, 0.09 * scale);
           ctx.beginPath();
           ctx.arc(bx, by, vr, timeSec * 2 + k, timeSec * 2 + k + Math.PI * 1.4);
           ctx.stroke();
         }
+        ctx.restore();
+      }
+
+      // Stunned Kraken Ring (huge open 2x damage window!)
+      if (boss.aiState === 'stunned') {
+        ctx.save();
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = Math.max(2.6, 0.12 * scale);
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.arc(bx, by, (boss.radius + 1.1) * scale, timeSec * 3, timeSec * 3 + Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
         ctx.restore();
       }
 
@@ -590,24 +684,29 @@ export const bossAndLairMethods = {
         ctx.moveTo(bx, by);
         ctx.lineTo(toScreenX(diver.x), toScreenY(diver.y));
         ctx.stroke();
+        ctx.font = `800 ${Math.max(11, Math.round(12 * dpr))}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fde047';
+        ctx.fillText(`TAP FIRE TO BREAK (${boss.pinHitsNeeded || 1})`, toScreenX(diver.x), toScreenY(diver.y) - 24 * dpr);
         ctx.restore();
       }
 
-      // Glowing Exposed Mantle Weak-Point Core (blazes through darkness!)
-      const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.58));
-      const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.58));
-      const coreR = (0.95 + 0.18 * Math.sin(timeSec * 8)) * scale;
+      // Glowing Exposed Mantle Weak-Point Core (blazes brightly!)
+      const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.56));
+      const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.56));
+      const stunnedBoost = boss.aiState === 'stunned' ? 1.35 : 1.0;
+      const coreR = (1.1 + 0.2 * Math.sin(timeSec * 8)) * scale * stunnedBoost;
       ctx.save();
-      const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.8);
+      const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.9);
       cg.addColorStop(0, '#ffffff');
-      cg.addColorStop(0.35, boss.phase === 3 ? '#f472b6' : '#38bdf8');
+      cg.addColorStop(0.35, boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8');
       cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = cg;
       ctx.beginPath();
-      ctx.arc(coreX, coreY, coreR * 1.8, 0, Math.PI * 2);
+      ctx.arc(coreX, coreY, coreR * 1.9, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+      ctx.lineWidth = Math.max(1.6, 0.07 * scale);
       ctx.beginPath();
       ctx.arc(coreX, coreY, coreR * 0.92, 0, Math.PI * 2);
       ctx.stroke();
@@ -738,39 +837,46 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 8. Top-Center Epic Boss Health Bar (visible ONLY during active boss combat!)
+    // 8. Combat Hit Vignette & Top-Center Epic Boss Health Bar (positioned cleanly at top in Combat Mode!)
+    if (lair.playerHitFlash > 0.02) {
+      ctx.save();
+      const hitA = Math.min(0.45, lair.playerHitFlash * 1.2);
+      ctx.strokeStyle = `rgba(244, 63, 94, ${hitA.toFixed(2)})`;
+      ctx.lineWidth = Math.max(16, 22 * dpr);
+      ctx.strokeRect(0, 0, cw, ch);
+      ctx.restore();
+    }
+
     if (boss && boss.active && !boss.defeated) {
-      const barW = Math.min(cw - 32 * dpr, 440 * dpr);
-      const barH = 12 * dpr;
+      const barW = Math.min(cw - 48 * dpr, 480 * dpr);
+      const barH = 13 * dpr;
       const bx = Math.round((cw - barW) * 0.5);
-      const by = Math.round((cw < ch ? 114 : 78) * dpr);
+      const by = Math.round((lair.combatMode ? 38 : (cw < ch ? 114 : 78)) * dpr);
       const hpRatio = Math.max(0, Math.min(1, boss.hp / Math.max(1, boss.maxHp)));
 
       ctx.save();
-      // Backing card
-      ctx.fillStyle = 'rgba(4, 12, 26, 0.88)';
-      ctx.strokeStyle = boss.phase === 3 ? 'rgba(244, 63, 94, 0.75)' : 'rgba(56, 189, 248, 0.58)';
-      ctx.lineWidth = Math.max(1.2, 1.3 * dpr);
+      ctx.fillStyle = 'rgba(4, 12, 26, 0.86)';
+      ctx.strokeStyle = boss.aiState === 'stunned' ? 'rgba(250, 204, 21, 0.85)' : boss.phase === 3 ? 'rgba(244, 63, 94, 0.82)' : 'rgba(56, 189, 248, 0.62)';
+      ctx.lineWidth = Math.max(1.2, 1.4 * dpr);
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(bx - 12 * dpr, by - 22 * dpr, barW + 24 * dpr, barH + 34 * dpr, 10 * dpr);
+        ctx.roundRect(bx - 14 * dpr, by - 24 * dpr, barW + 28 * dpr, barH + 36 * dpr, 10 * dpr);
       } else {
-        ctx.rect(bx - 12 * dpr, by - 22 * dpr, barW + 24 * dpr, barH + 34 * dpr);
+        ctx.rect(bx - 14 * dpr, by - 24 * dpr, barW + 28 * dpr, barH + 36 * dpr);
       }
       ctx.fill();
       ctx.stroke();
 
-      // Boss Title + Scaling Pill
-      ctx.font = `800 ${Math.round(11 * dpr)}px ui-monospace, monospace`;
+      ctx.font = `800 ${Math.round(11.5 * dpr)}px ui-monospace, monospace`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#f8fafc';
-      ctx.fillText(`🐙 ${boss.name} · PHASE ${boss.phase}/3`, bx, by - 10 * dpr);
+      const statusTag = boss.aiState === 'stunned' ? ' · ⚡ STUNNED!' : ` · PHASE ${boss.phase}/3`;
+      ctx.fillText(`🐙 ${boss.name}${statusTag}`, bx, by - 11 * dpr);
       ctx.textAlign = 'right';
       ctx.fillStyle = '#fde68a';
-      ctx.fillText(lair.scaling.label, bx + barW, by - 10 * dpr);
+      ctx.fillText(lair.scaling.label, bx + barW, by - 11 * dpr);
 
-      // HP Track + Gradient Fill
       ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
       ctx.fillRect(bx, by, barW, barH);
       const hg = ctx.createLinearGradient(bx, by, bx + barW, by);
@@ -780,10 +886,9 @@ export const bossAndLairMethods = {
       ctx.fillStyle = hg;
       ctx.fillRect(bx, by, barW * hpRatio, barH);
 
-      // Phase Threshold Ticks (30% & 65%)
-      ctx.strokeStyle = 'rgba(248, 250, 252, 0.75)';
-      ctx.lineWidth = Math.max(1, 1.2 * dpr);
-      for (const mark of [0.3, 0.65]) {
+      ctx.strokeStyle = 'rgba(248, 250, 252, 0.78)';
+      ctx.lineWidth = Math.max(1, 1.3 * dpr);
+      for (const mark of [0.33, 0.66]) {
         const mx = bx + barW * mark;
         ctx.beginPath();
         ctx.moveTo(mx, by);

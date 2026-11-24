@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=179',
+  mapRasterUrl: './assets/map-expedition.jpg?v=180',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -860,8 +860,9 @@ const input = new InputController({
     setDivePaused(!divePaused);
     return true;
   },
-  onSpearPressStart: () => startSpeargunCharge(),
-  onSpearRelease: () => releaseSpeargunFire(),
+  onSpearPressStart: () => fireSpeargunAction({ isTap: true }),
+  onSpearRelease: () => { _mouseFireHeld = false; },
+  onTorchStickTap: (ang) => fireSpeargunAction({ aimAngle: ang, isTap: true }),
   onTorchToggle: () => {
     if (!session?.diver || divePaused) return;
     if (session.drills?.active?.kind === 'torch-fail') {
@@ -1917,57 +1918,93 @@ function handleSonarPing() {
 }
 
 let _lastPointerWorldAngle = null;
-function startSpeargunCharge() {
+let _mouseFireHeld = false;
+const hudCombatBarEl = document.getElementById('hud-combat-bar');
+const combatHpSegsEl = document.getElementById('combat-hp-segs');
+const combatHpValEl = document.getElementById('combat-hp-val');
+const combatHintPillEl = document.getElementById('combat-hint-pill');
+const btnCombatPauseEl = document.getElementById('btn-combat-pause');
+
+btnCombatPauseEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof toggleDivePause === 'function') toggleDivePause();
+});
+
+let _lastCombatHudMode = false;
+let _lastCombatHp = -1;
+let _lastCombatHintFaded = false;
+function syncCombatModeHud(sess) {
+  const lair = sess?.secretLair;
+  const active = Boolean(mode === 'diving' && lair?.combatMode && !sess?.endedState);
+  if (active !== _lastCombatHudMode) {
+    _lastCombatHudMode = active;
+    screenHud?.classList.toggle('combat-mode', active);
+    if (hudCombatBarEl) hudCombatBarEl.hidden = !active;
+    if (btnCombatPauseEl) btnCombatPauseEl.hidden = !active;
+    if (active) {
+      if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+      toggleShearwaterComputer(false);
+      toggleSurveySlate(false);
+      toggleSignalWheel(false);
+    }
+  }
+  if (!active) return;
+  const hp = Math.max(0, Math.min(100, Math.round(lair.playerHp ?? 100)));
+  if (hp !== _lastCombatHp) {
+    _lastCombatHp = hp;
+    if (combatHpValEl) combatHpValEl.textContent = String(hp);
+    if (combatHpSegsEl) {
+      const segs = combatHpSegsEl.children;
+      const litCount = Math.ceil((hp / 100) * segs.length);
+      const isLow = hp <= 35;
+      for (let i = 0; i < segs.length; i++) {
+        segs[i].classList.toggle('filled', i < litCount);
+        segs[i].classList.toggle('low', isLow);
+      }
+    }
+  }
+  const hintFaded = (lair.combatHintTimer || 0) <= 0;
+  if (hintFaded !== _lastCombatHintFaded) {
+    _lastCombatHintFaded = hintFaded;
+    combatHintPillEl?.classList.toggle('faded', hintFaded);
+  }
+}
+
+function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
   if (mode !== 'diving' || !session || divePaused || photoModeActive || session.endedState) return false;
   const lair = session.secretLair;
   if (!lair?.weaponEquipped || !session.diveState?.alive) return false;
-  if (lair.reloadSec > 0.02) return true;
   audio.unlock();
-  lair.charging = true;
-  lair.chargeSec = 0;
-  syncTechGearHud(session);
-  return true;
-}
-
-function releaseSpeargunFire(overrideAngle = null) {
-  if (mode !== 'diving' || !session || !session.secretLair?.weaponEquipped) return false;
-  const lair = session.secretLair;
-  if (!lair.charging) return false;
-  const chargeFrac = Math.min(1, (lair.chargeSec || 0) / SPEARGUN_MAX_CHARGE_SEC);
-  const aimAngle = Number.isFinite(overrideAngle)
-    ? overrideAngle
-    : Number.isFinite(_lastPointerWorldAngle)
-      ? _lastPointerWorldAngle
-      : (session.diver?.torchAngle ?? session.diver?.angle ?? 0);
-  const res = fireSpeargun(session, { aimAngle, chargeFrac, ownerId: lan.clientId || 'local', isLocal: true }, sessionStepCallbacks);
+  const torchAim = input.getTorchAim();
+  const resolvedAngle = Number.isFinite(aimAngle)
+    ? aimAngle
+    : torchAim.active && Number.isFinite(torchAim.angle)
+      ? torchAim.angle
+      : Number.isFinite(_lastPointerWorldAngle)
+        ? _lastPointerWorldAngle
+        : (session.diver?.torchAngle ?? session.diver?.angle ?? 0);
+  session.diver.torchAngle = resolvedAngle;
+  const res = fireSpeargun(
+    session,
+    { aimAngle: resolvedAngle, isTap, ownerId: lan.clientId || 'local', isLocal: true },
+    sessionStepCallbacks
+  );
   if (res.ok && isMultiplayer && lan.room) {
     lan.sendBossEvent({
       kind: 'spear_shot',
       x: Math.round(session.diver.x * 100) / 100,
       y: Math.round(session.diver.y * 100) / 100,
       aimAngle: Math.round(res.aimAngle * 1000) / 1000,
-      chargeFrac: Math.round(res.chargeFrac * 100) / 100,
+      chargeFrac: res.charged ? 0.8 : 0,
     });
   }
-  syncTechGearHud(session);
-  return res.ok;
+  return true;
 }
 
 btnHudSpear?.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  startSpeargunCharge();
-});
-btnHudSpear?.addEventListener('pointerup', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  releaseSpeargunFire();
-});
-btnHudSpear?.addEventListener('pointercancel', () => {
-  if (session?.secretLair) {
-    session.secretLair.charging = false;
-    session.secretLair.chargeSec = 0;
-  }
+  fireSpeargunAction({ isTap: true });
 });
 
 canvas?.addEventListener('pointermove', (e) => {
@@ -1992,11 +2029,15 @@ canvas?.addEventListener('pointerdown', (e) => {
   const dx = (e.clientX - rect.left) - rect.width * 0.5;
   const dy = (e.clientY - rect.top) - (rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46);
   if (Math.hypot(dx, dy) > 8) _lastPointerWorldAngle = Math.atan2(dy, dx);
-  startSpeargunCharge();
+  _mouseFireHeld = true;
+  fireSpeargunAction({ aimAngle: _lastPointerWorldAngle, isTap: true });
 });
 window.addEventListener('pointerup', (e) => {
   if (e.button !== 0 || e.pointerType !== 'mouse') return;
-  if (session?.secretLair?.charging) releaseSpeargunFire();
+  _mouseFireHeld = false;
+});
+window.addEventListener('blur', () => {
+  _mouseFireHeld = false;
 });
 
 function handleDpvToggle() {
@@ -3364,6 +3405,12 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenDebrief.hidden = true;
   debriefReplay.stop();
   screenHud.classList.remove('hud-team-hold');
+  screenHud.classList.remove('combat-mode');
+  _lastCombatHudMode = false;
+  _lastCombatHp = -1;
+  _mouseFireHeld = false;
+  if (hudCombatBarEl) hudCombatBarEl.hidden = true;
+  if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
   screenHud.hidden = false;
   syncWakeLockFn?.();
   if (coopCommsEl) coopCommsEl.hidden = !(getActivePeers().length > 0);
@@ -3418,6 +3465,11 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   hideHudPhotoCard();
   hideArtifactSpotlight();
   screenHud.classList.remove('hud-team-hold');
+  screenHud.classList.remove('combat-mode');
+  _lastCombatHudMode = false;
+  _mouseFireHeld = false;
+  if (hudCombatBarEl) hudCombatBarEl.hidden = true;
+  if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
@@ -5837,6 +5889,11 @@ function abortActiveDiveToMenu() {
   syncWreckActionHud(null);
   hideHudPhotoCard();
   screenHud.classList.remove('hud-team-hold');
+  screenHud.classList.remove('combat-mode');
+  _lastCombatHudMode = false;
+  _mouseFireHeld = false;
+  if (hudCombatBarEl) hudCombatBarEl.hidden = true;
+  if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
   toggleShearwaterComputer(false);
   toggleSurveySlate(false);
   toggleSignalWheel(false);
@@ -6920,10 +6977,25 @@ function stepSimulation(dt) {
       rewindHoldTimer = 0;
     }
     sessionStepCallbacks.peers = getActivePeers();
-    sessionStepCallbacks.torchAim = input.getTorchAim();
+    const rawTorchAim = input.getTorchAim();
+    if (!rawTorchAim.active && session.secretLair?.weaponEquipped && Number.isFinite(_lastPointerWorldAngle)) {
+      sessionStepCallbacks.torchAim = {
+        active: true,
+        angle: _lastPointerWorldAngle,
+        x: Math.cos(_lastPointerWorldAngle),
+        y: Math.sin(_lastPointerWorldAngle),
+      };
+    } else {
+      sessionStepCallbacks.torchAim = rawTorchAim;
+    }
+    // Twin-stick hold-to-autofire (holding directional aim joystick, mouse button, or [F]/[Space])
+    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeActive && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld)) {
+      fireSpeargunAction({ isTap: false });
+    }
     sessionStepCallbacks.isBossAuthority = !isMultiplayer || !lan.room || lan.isHost();
     const wasSubmerged = session._wasSubmerged ?? diver.y > 0.75;
     result = stepDiveSession(session, input.getThrust(), dt, sessionStepCallbacks);
+    syncCombatModeHud(session);
     if (isMultiplayer && lan.room && lan.isHost() && session.secretLair && (session.secretLair.veilBreached || session.secretLair.veilRevealed)) {
       session.secretLair._netSyncAccum = (session.secretLair._netSyncAccum || 0) + dt;
       if (session.secretLair._netSyncAccum >= 0.16) {
