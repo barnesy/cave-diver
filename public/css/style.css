@@ -8997,7 +8997,11 @@ summary,
   order: 2;
   grid-column: auto;
   justify-self: auto;
+  display: flex;
+  flex-direction: row;
   align-items: flex-end;
+  justify-content: flex-end;
+  gap: 14px;
   width: auto !important;
   flex: 0 0 auto;
   margin: 0;
@@ -9064,38 +9068,68 @@ summary,
   }
 }
 
-/* v189: Combat Scooter Hydro-Dash Button */
+/* v189 / v191: Combat Scooter Hydro-Dash Button (sits right beside the right aim joystick!) */
 .combat-dash-btn {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(34, 211, 238, 0.72);
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.85), rgba(8, 47, 73, 0.92));
-  color: #e0f2fe;
+  justify-content: center;
+  gap: 2px;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 211, 238, 0.84);
+  background: radial-gradient(circle at 32% 28%, rgba(34, 211, 238, 0.42), rgba(14, 116, 144, 0.88) 55%, rgba(8, 47, 73, 0.96));
+  color: #f0f9ff;
   font-family: ui-monospace, monospace;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  line-height: 1;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.28);
-  transition: transform 0.12s ease, opacity 0.14s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.36), inset 0 1px 0 rgba(224, 242, 254, 0.45);
+  transition: transform 0.1s ease, opacity 0.14s ease, border-color 0.15s ease;
+}
+.combat-dash-btn .combat-dash-ico {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.combat-dash-btn[hidden] {
+  display: none !important;
 }
 .combat-dash-btn:hover {
   transform: translateY(-1px);
-  border-color: #67e8f9;
+  border-color: #a5f3fc;
 }
 .combat-dash-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
 }
 .combat-dash-btn.cooling,
 .combat-dash-btn.low-batt {
   opacity: 0.56;
-  border-color: rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.86);
   box-shadow: none;
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  #screen-hud.combat-mode .hud-left-col {
+    gap: 10px;
+  }
+  .combat-dash-btn {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 8px;
+    font-size: 0.6rem;
+  }
+  .combat-dash-btn .combat-dash-ico {
+    font-size: 1rem;
+  }
 }
 
 /* v189: Debrief Secret Boss Victory & Trophy Showcase Banner (zero spoilers — only appears after defeating a boss!) */

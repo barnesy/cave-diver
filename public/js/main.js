@@ -528,7 +528,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=190',
+  mapRasterUrl: './assets/map-expedition.jpg?v=191',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1737,7 +1737,8 @@ btnCombatScooterEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   handleDpvToggle();
 });
-btnCombatDashEl?.addEventListener('click', (e) => {
+btnCombatDashEl?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   e.stopPropagation();
   handleCombatDash();
 });
@@ -1770,10 +1771,12 @@ function syncCombatModeHud(sess) {
   const armed = Boolean(active && lair?.weaponEquipped && !lair?.bossDefeated);
   if (active !== _lastCombatHudMode) {
     _lastCombatHudMode = active;
+    _lastCombatDashKey = '';
     if (input) input.combatModeActive = active;
     screenHud?.classList.toggle('combat-mode', active);
     if (hudCombatBarEl) hudCombatBarEl.hidden = !active;
     if (btnCombatPauseEl) btnCombatPauseEl.hidden = !active;
+    if (btnCombatDashEl && !active) btnCombatDashEl.hidden = true;
     if (active) {
       if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
       toggleShearwaterComputer(false);
