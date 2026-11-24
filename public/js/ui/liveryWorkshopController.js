@@ -60,7 +60,7 @@ export function createLiveryWorkshopController({
   } catch {}
 
   const menuLiveryPillEl = document.getElementById('menu-livery-pill');
-  const btnHomeAvatarBadgeEl = document.getElementById('btn-home-avatar-badge');
+  const btnHomeOpenLiveryEl = document.getElementById('btn-home-open-livery');
   const homeAvatarCanvasEl = document.getElementById('home-avatar-canvas');
   const homeAvatarCtx = homeAvatarCanvasEl?.getContext?.('2d') || null;
   const liveryModalEl = document.getElementById('livery-modal');
@@ -147,9 +147,9 @@ export function createLiveryWorkshopController({
       menuLiveryPillEl.textContent = `🎨 ${pal.suit.name}${pal.headgear.id !== 'zissou-cap' ? ` · ${pal.headgear.icon}` : ''}`;
       menuLiveryPillEl.classList.toggle('active', custom);
     }
-    if (btnHomeAvatarBadgeEl) {
-      btnHomeAvatarBadgeEl.classList.toggle('custom', custom);
-      btnHomeAvatarBadgeEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name} (tap to customize)`;
+    if (btnHomeOpenLiveryEl) {
+      btnHomeOpenLiveryEl.classList.toggle('custom', custom);
+      btnHomeOpenLiveryEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name} (tap to customize)`;
     }
     renderHomeAvatarBadge();
     const session = getSession();
@@ -615,7 +615,6 @@ export function createLiveryWorkshopController({
       2.4
     );
   });
-  btnHomeAvatarBadgeEl?.addEventListener('click', openLiveryModal);
   menuLiveryPillEl?.addEventListener('click', openLiveryModal);
   btnLiveryCloseEl?.addEventListener('click', closeLiveryModal);
   btnLiveryDoneEl?.addEventListener('click', closeLiveryModal);

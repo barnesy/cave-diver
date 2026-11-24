@@ -7802,36 +7802,32 @@ summary,
 }
 
 /* ============================================================================
-   v153 Modular Expedition Outfitter, Live Test-Tank Preview & Home Avatar Badge
+   v153 / v188 Modular Expedition Outfitter, Live Test-Tank Preview & Menu Avatar Thumb
    ============================================================================ */
-.home-avatar-badge {
-  flex: 0 0 auto;
+.home-menu-livery-item {
+  align-items: center;
+  gap: 6px;
+}
+.home-menu-livery-label {
+  white-space: nowrap;
+}
+.home-menu-livery-right {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 10px;
-  background: rgba(7, 26, 48, 0.92);
-  border: 1px solid rgba(56, 189, 248, 0.36);
-  cursor: pointer;
-  transition: border-color 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  gap: 5px;
+  flex-shrink: 0;
 }
-.home-avatar-badge:hover {
-  border-color: rgba(56, 189, 248, 0.8);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
-}
-.home-avatar-badge:active {
-  transform: scale(0.95);
-}
-.home-avatar-badge.custom {
-  border-color: rgba(250, 204, 21, 0.55);
-}
-.home-avatar-badge canvas {
+.home-menu-avatar-thumb {
   display: block;
-  width: 58px;
-  height: 34px;
-  border-radius: 7px;
+  width: 38px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(7, 26, 48, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.home-menu-livery-item.custom .home-menu-avatar-thumb {
+  border-color: rgba(250, 204, 21, 0.62);
 }
 
 .livery-preview-wrap {

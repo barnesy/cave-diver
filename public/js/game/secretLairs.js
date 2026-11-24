@@ -1118,19 +1118,36 @@ function _chargePillarCrystal(session, lair, pc, addCharge, hitX, hitY, callback
 }
 
 function addSparkBurst(lair, x, y, color, count = 8, text = '', crit = false) {
+  let textY = y;
+  if (text && Array.isArray(lair.hitSparks)) {
+    // Stagger stacked floating callouts vertically so simultaneous pickups/crits NEVER overlap!
+    for (let step = 0; step < 6; step++) {
+      let overlaps = false;
+      for (let j = 0; j < lair.hitSparks.length; j++) {
+        const ex = lair.hitSparks[j];
+        if (ex.text && Math.abs(ex.x - x) < 3.4 && Math.abs(ex.y - textY) < 0.88) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) break;
+      textY -= 0.95;
+    }
+  }
   for (let i = 0; i < count; i++) {
+    const isLabel = i === 0 && Boolean(text);
     const a = Math.random() * Math.PI * 2;
     const spd = 1.6 + Math.random() * 3.8;
     lair.hitSparks.push({
       x,
-      y,
-      vx: Math.cos(a) * spd,
-      vy: Math.sin(a) * spd - 0.5,
-      life: 0.5 + Math.random() * 0.25,
-      maxLife: 0.75,
+      y: isLabel ? textY : y,
+      vx: isLabel ? 0 : Math.cos(a) * spd,
+      vy: isLabel ? -0.9 : Math.sin(a) * spd - 0.5,
+      life: isLabel ? 0.95 : 0.5 + Math.random() * 0.25,
+      maxLife: isLabel ? 0.95 : 0.75,
       color,
-      text: i === 0 ? text : '',
-      crit: i === 0 && crit,
+      text: isLabel ? text : '',
+      crit: isLabel && crit,
     });
   }
 }

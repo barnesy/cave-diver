@@ -9321,3 +9321,62 @@ test('v187 Boss Battle Combat Scooter, Battery Cell Pickups & Speargun Weapon Up
   assert.ok(css.includes('.combat-scooter-btn') && css.includes('.combat-upg-badge'), 'CSS must style Combat Scooter & Upgrade badges');
   assert.equal(Object.keys(BOSS_WEAPON_UPGRADES).length, 4);
 });
+
+test('v188 Home Screen Gear Workshop Move (Callsign-Only Row) & Boss/Lesser Enemy Visual Polish', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  // 1. #menu-identity-row contains ONLY Callsign label & input (no avatar/workshop button on home card)
+  const idRowMatch = html.match(/<div id="menu-identity-row"[\s\S]*?<\/div>/);
+  assert.ok(idRowMatch, 'Expected #menu-identity-row in index.html');
+  assert.equal(idRowMatch[0].includes('btn-home-avatar-badge'), false, 'Avatar badge button must be removed from #menu-identity-row');
+  assert.equal(idRowMatch[0].includes('<button'), false, '#menu-identity-row must contain only Callsign label and input');
+  assert.ok(idRowMatch[0].includes('id="input-player-name"'), 'Diver Callsign input must remain in #menu-identity-row');
+
+  // 2. Gear Workshop (#btn-home-open-livery) with live mini diver thumbnail lives inside #home-menu-popover
+  const menuPopStart = html.indexOf('id="home-menu-popover"');
+  const menuPopEnd = html.indexOf('id="pwa-update-banner"');
+  const menuPopSlice = html.slice(menuPopStart, menuPopEnd);
+  assert.ok(menuPopSlice.includes('id="btn-home-open-livery"'), 'Gear Workshop must live inside #home-menu-popover');
+  assert.ok(menuPopSlice.includes('id="home-avatar-canvas"'), 'Mini diver preview canvas should live inside Gear Workshop menu item');
+
+  // 3. Simultaneous floating upgrade/hit callouts stagger vertically so they never overlap
+  const { applyWeaponUpgrade } = await import('../public/js/game/secretLairs.js');
+  const s = createDiveSession(LEVEL_1, { diverName: 'PolishDiver' });
+  applyWeaponUpgrade(s, 'twin');
+  applyWeaponUpgrade(s, 'rapid');
+  applyWeaponUpgrade(s, 'overcharge');
+  const textSparks = s.secretLair.hitSparks.filter((sk) => Boolean(sk.text));
+  assert.equal(textSparks.length, 3);
+  assert.ok(textSparks[1].y < textSparks[0].y - 0.5, 'Second simultaneous callout must stagger upward cleanly');
+  assert.ok(textSparks[2].y < textSparks[1].y - 0.5, 'Third simultaneous callout must stagger upward cleanly');
+
+  // 4. Redesigned lesser enemies (moray, swarmer, stalker), sculpted pillars, sconces & comet projectiles draw cleanly
+  const { bossAndLairMethods } = await import('../public/js/game/renderers/bossAndLairRenderer.js');
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+    },
+    {
+      get(t, p) {
+        if (p in t) return t[p];
+        return () => drawCalls.push(String(p));
+      },
+    }
+  );
+  const toScreenX = (x) => x * 20;
+  const toScreenY = (y) => y * 20;
+  for (const kind of ['moray', 'swarmer', 'stalker']) {
+    bossAndLairMethods._drawSecretLairMinion(
+      mockCtx,
+      { kind, x: 10, y: 10, radius: 1.2, angle: Math.PI, hp: 50, maxHp: 100, aggro: true, state: 'telegraph', wigglePhase: 1.2, hitFlash: 0, cooldown: 0.2 },
+      toScreenX,
+      toScreenY,
+      20,
+      3.2
+    );
+  }
+  assert.ok(drawCalls.includes('ellipse') && drawCalls.includes('quadraticCurveTo') && drawCalls.includes('roundRect'), 'Redesigned lesser enemies must draw cleanly');
+});

@@ -127,7 +127,7 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 2. Sculpted Arena Natural Limestone Cover Pillars + Resonance Crystal Pedestals
+    // 2. Sculpted Arena Natural Limestone Cover Pillars + Faceted Resonance Crystal Pedestals (v188)
     const crystals = lair.pillarCrystals || [];
     for (let pi = 0; pi < (spec.arena.pillars || []).length; pi++) {
       const p = spec.arena.pillars[pi];
@@ -136,19 +136,31 @@ export const bossAndLairMethods = {
       const sy = toScreenY(p.y);
       const sr = p.radius * scale;
       const pc = crystals[pi] || null;
+      const isCooling = pc && pc.cooldownSec > 0;
+      const chargeLevel = pc?.charge || 0;
       ctx.save();
       ctx.translate(sx, sy);
-      // Outer limestone mass
-      const pg = ctx.createRadialGradient(-sr * 0.3, -sr * 0.32, sr * 0.1, 0, 0, sr * 1.08);
-      pg.addColorStop(0, '#64748b');
-      pg.addColorStop(0.42, '#334155');
-      pg.addColorStop(0.78, '#1e293b');
-      pg.addColorStop(1, '#09111f');
+
+      // Ambient underwater grounding halo beneath pillar
+      const underG = ctx.createRadialGradient(0, 0, sr * 0.65, 0, 0, sr * 1.38);
+      underG.addColorStop(0, 'rgba(2, 6, 23, 0.52)');
+      underG.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = underG;
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 1.38, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Outer carved limestone mass with multi-stop rock gradient
+      const pg = ctx.createRadialGradient(-sr * 0.34, -sr * 0.36, sr * 0.08, 0, 0, sr * 1.1);
+      pg.addColorStop(0, '#788ca5');
+      pg.addColorStop(0.38, '#3b4c63');
+      pg.addColorStop(0.75, '#1e293b');
+      pg.addColorStop(1, '#070f1d');
       ctx.fillStyle = pg;
       ctx.beginPath();
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * Math.PI * 2;
-        const j = 0.90 + 0.14 * Math.cos(i * 3.1 + p.x) + 0.05 * Math.sin(i * 5.3);
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const j = 0.91 + 0.12 * Math.cos(i * 3.1 + p.x) + 0.045 * Math.sin(i * 5.3 + pi);
         const rx = Math.cos(a) * sr * j;
         const ry = Math.sin(a) * sr * j;
         if (i === 0) ctx.moveTo(rx, ry);
@@ -156,33 +168,90 @@ export const bossAndLairMethods = {
       }
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = pc && pc.charge > 0 ? 'rgba(103, 232, 249, 0.72)' : 'rgba(148, 163, 184, 0.32)';
-      ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+      ctx.strokeStyle = chargeLevel > 0 ? 'rgba(103, 232, 249, 0.82)' : 'rgba(148, 163, 184, 0.38)';
+      ctx.lineWidth = Math.max(1.5, 0.068 * scale);
       ctx.stroke();
-      // Carved stone socket for the Resonance Crystal
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.62)';
-      ctx.beginPath();
-      ctx.arc(0, 0, sr * 0.48, 0, Math.PI * 2);
-      ctx.fill();
-      // Crystalline quartz cluster inside the pillar crown
-      const isCooling = pc && pc.cooldownSec > 0;
-      const crysCol = isCooling ? '#334155' : pc?.charge >= 2 ? '#67e8f9' : pc?.charge === 1 ? '#38bdf8' : '#0284c7';
-      ctx.fillStyle = crysCol;
-      ctx.strokeStyle = isCooling ? '#475569' : '#e0f2fe';
+
+      // Inner sculpted rock ledge & carved strata grooves
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.58)';
       ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.74, -0.4, 2.3);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.16)';
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.74, 2.7, 5.4);
+      ctx.stroke();
+
+      // Bioluminescent teal cave moss tufts clinging to crevices
+      ctx.fillStyle = 'rgba(45, 212, 191, 0.36)';
+      for (let m = 0; m < 3; m++) {
+        const ma = pi * 1.9 + m * 2.15;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(ma) * sr * 0.78, Math.sin(ma) * sr * 0.78, sr * 0.16, sr * 0.08, ma + 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Recessed carved Mayan stone socket with glowing etched rune ring
+      ctx.fillStyle = '#071122';
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.52, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isCooling
+        ? 'rgba(71, 85, 105, 0.5)'
+        : chargeLevel >= 2
+          ? 'rgba(253, 224, 71, 0.75)'
+          : 'rgba(56, 189, 248, 0.55)';
+      ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+      ctx.setLineDash([Math.max(3, sr * 0.18), Math.max(2, sr * 0.12)]);
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.52, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Multi-faceted quartz Resonance Crystal cluster with inner specular ridge
+      const crysDark = isCooling ? '#1e293b' : chargeLevel >= 2 ? '#0284c7' : chargeLevel === 1 ? '#0369a1' : '#0c4a6e';
+      const crysBright = isCooling ? '#475569' : chargeLevel >= 2 ? '#a5f3fc' : chargeLevel === 1 ? '#67e8f9' : '#38bdf8';
+      const crysRim = isCooling ? '#64748b' : '#f0f9ff';
       for (let k = -1; k <= 1; k++) {
         ctx.save();
-        ctx.rotate(k * 0.42);
-        const h = (k === 0 ? 0.56 : 0.4) * sr;
-        const w = 0.16 * sr;
+        ctx.rotate(k * 0.44);
+        const h = (k === 0 ? 0.62 : 0.44) * sr;
+        const w = (k === 0 ? 0.2 : 0.15) * sr;
+        // Left lit facet
+        ctx.fillStyle = crysBright;
         ctx.beginPath();
         ctx.moveTo(0, -h);
-        ctx.lineTo(w, 0);
-        ctx.lineTo(0, h * 0.48);
+        ctx.lineTo(0, h * 0.46);
         ctx.lineTo(-w, 0);
         ctx.closePath();
         ctx.fill();
+        // Right shaded facet
+        ctx.fillStyle = crysDark;
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.lineTo(w, 0);
+        ctx.lineTo(0, h * 0.46);
+        ctx.closePath();
+        ctx.fill();
+        // Specular outline & center crystal spine
+        ctx.strokeStyle = crysRim;
+        ctx.lineWidth = Math.max(1.1, 0.042 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.lineTo(w, 0);
+        ctx.lineTo(0, h * 0.46);
+        ctx.lineTo(-w, 0);
+        ctx.closePath();
         ctx.stroke();
+        if (!isCooling) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+          ctx.lineWidth = Math.max(0.9, 0.03 * scale);
+          ctx.beginPath();
+          ctx.moveTo(0, -h * 0.85);
+          ctx.lineTo(0, h * 0.28);
+          ctx.stroke();
+        }
         ctx.restore();
       }
       ctx.restore();
@@ -424,151 +493,479 @@ export const bossAndLairMethods = {
     const sy = toScreenY(m.y);
     const r = m.radius * scale;
     const flash = m.hitFlash > 0;
+    const ang = m.angle || 0;
+    const flipY = Math.cos(ang) < 0 ? -1 : 1;
+    const isTelegraph = m.state === 'telegraph';
+    const isLunge = m.state === 'lunge';
+    const sqX = flash ? 0.88 : isLunge ? 1.14 : isTelegraph ? 0.9 : 1.0;
+    const sqY = flash ? 1.12 : isLunge ? 0.88 : isTelegraph ? 1.1 : 1.0;
+
     ctx.save();
     ctx.translate(sx, sy);
-    ctx.rotate(m.angle || 0);
+    ctx.rotate(ang);
+    ctx.scale(sqX, flipY * sqY);
 
     if (m.kind === 'moray') {
+      // === ABYSSAL CAVE MORAY (Sinuous Cel-Shaded Bioluminescent Eel + Flared Jaw Telegraph) ===
+      const segCount = 9;
       const pts = [];
-      for (let seg = 0; seg <= 6; seg++) {
+      for (let seg = 0; seg <= segCount; seg++) {
+        const u = seg / segCount;
         pts.push({
-          x: -seg * r * 0.42,
-          y: Math.sin(m.wigglePhase - seg * 0.85) * r * (0.14 + seg * 0.055),
-          w: r * (0.46 - seg * 0.055),
+          x: r * 0.22 - u * r * 2.75,
+          y: Math.sin((m.wigglePhase || 0) - seg * 0.65) * r * (0.08 + u * 0.34),
+          w: r * (0.48 * (1 - u * 0.72) + 0.06),
         });
       }
-      ctx.strokeStyle = m.state === 'telegraph' ? 'rgba(248, 113, 113, 0.82)' : 'rgba(56, 189, 248, 0.68)';
-      ctx.lineWidth = Math.max(2, 0.12 * scale);
+
+      // Soft bioluminescent aura behind head & crest
+      const auraG = ctx.createRadialGradient(r * 0.2, 0, r * 0.1, r * 0.1, 0, r * 1.45);
+      auraG.addColorStop(0, isTelegraph ? 'rgba(251, 113, 133, 0.38)' : 'rgba(34, 211, 238, 0.22)');
+      auraG.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = auraG;
       ctx.beginPath();
-      for (let i = 0; i < pts.length; i++) {
-        const px = pts[i].x;
-        const py = pts[i].y - pts[i].w * 0.95;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      ctx.arc(r * 0.1, 0, r * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Translucent ruffled dorsal fin crest running along entire spine
+      ctx.save();
+      const finGrad = ctx.createLinearGradient(pts[0].x, -r * 0.9, pts[segCount].x, r * 0.2);
+      if (isTelegraph || isLunge) {
+        finGrad.addColorStop(0, 'rgba(251, 113, 133, 0.88)');
+        finGrad.addColorStop(1, 'rgba(244, 63, 94, 0.28)');
+      } else {
+        finGrad.addColorStop(0, 'rgba(56, 189, 248, 0.72)');
+        finGrad.addColorStop(1, 'rgba(45, 212, 191, 0.26)');
       }
+      ctx.fillStyle = finGrad;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x - r * 0.05, pts[0].y - pts[0].w * 0.72);
+      for (let i = 1; i <= segCount; i++) {
+        const wave = Math.sin(timeSec * 11 + i * 1.3) * r * 0.06;
+        const crestH = pts[i].w * (1.28 + (i === 1 ? 0.24 : 0));
+        ctx.lineTo(pts[i].x, pts[i].y - crestH + wave);
+      }
+      for (let i = segCount; i >= 0; i--) {
+        ctx.lineTo(pts[i].x, pts[i].y - pts[i].w * 0.35);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = isTelegraph ? '#fda4af' : 'rgba(125, 211, 252, 0.75)';
+      ctx.lineWidth = Math.max(1.1, 0.042 * scale);
       ctx.stroke();
-      for (let seg = pts.length - 1; seg >= 0; seg--) {
-        const pt = pts[seg];
-        const bg = ctx.createRadialGradient(pt.x, pt.y - pt.w * 0.3, pt.w * 0.1, pt.x, pt.y, pt.w);
-        bg.addColorStop(0, seg === 0 ? '#2b5876' : '#1e3a5f');
-        bg.addColorStop(1, '#091628');
-        ctx.fillStyle = bg;
-        ctx.beginPath();
-        ctx.ellipse(pt.x, pt.y, pt.w * 1.15, pt.w * 0.86, 0, 0, Math.PI * 2);
-        ctx.fill();
-        if (flash) {
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-          ctx.lineWidth = 1.4;
-          ctx.stroke();
-        }
+      ctx.restore();
+
+      // Smooth tapered eel body ribbon (top edge -> rounded tail tip -> belly edge)
+      const topPts = [];
+      const botPts = [];
+      for (let i = 0; i <= segCount; i++) {
+        const pPrev = pts[Math.max(0, i - 1)];
+        const pNext = pts[Math.min(segCount, i + 1)];
+        const tx = pNext.x - pPrev.x;
+        const ty = pNext.y - pPrev.y;
+        const len = Math.hypot(tx, ty) || 1;
+        const nx = ty / len;
+        const ny = -tx / len;
+        topPts.push({ x: pts[i].x + nx * pts[i].w, y: pts[i].y + ny * pts[i].w });
+        botPts.push({ x: pts[i].x - nx * pts[i].w, y: pts[i].y - ny * pts[i].w });
       }
-      const jawOpen = m.state === 'telegraph' || m.state === 'lunge' ? 0.36 : 0.14;
-      ctx.fillStyle = '#0f172a';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+      const bodyGrad = ctx.createLinearGradient(0, -r * 0.65, 0, r * 0.65);
+      bodyGrad.addColorStop(0, flash ? '#e0f2fe' : '#2dd4bf');
+      bodyGrad.addColorStop(0.35, flash ? '#bae6fd' : '#0f526e');
+      bodyGrad.addColorStop(0.8, '#0c2340');
+      bodyGrad.addColorStop(1, '#38bdf8');
+      ctx.fillStyle = bodyGrad;
       ctx.beginPath();
-      ctx.moveTo(r * 0.18, -r * 0.18);
-      ctx.lineTo(r * 0.92, -r * jawOpen);
-      ctx.lineTo(r * 0.35, 0.04 * r);
-      ctx.lineTo(r * 0.88, r * (jawOpen + 0.12));
-      ctx.lineTo(r * 0.16, r * 0.28);
+      ctx.moveTo(topPts[0].x, topPts[0].y);
+      for (let i = 1; i <= segCount; i++) ctx.lineTo(topPts[i].x, topPts[i].y);
+      ctx.lineTo(pts[segCount].x - r * 0.25, pts[segCount].y);
+      for (let i = segCount; i >= 0; i--) ctx.lineTo(botPts[i].x, botPts[i].y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = flash ? '#ffffff' : '#041021';
+      ctx.lineWidth = Math.max(1.6, 0.072 * scale);
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Bioluminescent cyan leopard flank spots + subtle pastel belly stripe
+      ctx.fillStyle = isTelegraph ? 'rgba(254, 205, 211, 0.72)' : 'rgba(103, 232, 249, 0.52)';
+      for (let i = 1; i < segCount - 1; i++) {
+        const pt = pts[i];
+        ctx.beginPath();
+        ctx.ellipse(pt.x, pt.y - pt.w * 0.22, pt.w * 0.32, pt.w * 0.2, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Subtle curved gill slits behind head
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
+      ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+      for (let g = 0; g < 2; g++) {
+        ctx.beginPath();
+        ctx.arc(-r * (0.04 + g * 0.14), r * 0.05, r * 0.16, -0.7, 0.8);
+        ctx.stroke();
+      }
+
+      // Sculpted Moray Head + Hinged Jaws + Ivory Fang Rows + Telegraph Throat Glow
+      const jawOpen = isTelegraph || isLunge ? 0.44 : 0.15;
+      // Inner crimson maw
+      ctx.fillStyle = isTelegraph ? '#e11d48' : '#4c0519';
+      ctx.beginPath();
+      ctx.moveTo(r * 0.22, -r * 0.08);
+      ctx.lineTo(r * 0.94, -r * (jawOpen * 0.72));
+      ctx.lineTo(r * 0.88, r * (jawOpen * 0.85));
+      ctx.lineTo(r * 0.18, r * 0.16);
+      ctx.closePath();
+      ctx.fill();
+
+      // Upper snout
+      ctx.fillStyle = flash ? '#f0f9ff' : '#155e75';
+      ctx.strokeStyle = flash ? '#ffffff' : '#041021';
+      ctx.lineWidth = Math.max(1.6, 0.068 * scale);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.05, -r * 0.46);
+      ctx.quadraticCurveTo(r * 0.62, -r * 0.54, r * 1.04, -r * (jawOpen * 0.78 + 0.06));
+      ctx.lineTo(r * 0.92, -r * (jawOpen * 0.38));
+      ctx.lineTo(r * 0.26, -r * 0.04);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#f8fafc';
-      for (let k = 0; k < 3; k++) {
-        const tx = r * (0.42 + k * 0.16);
-        ctx.beginPath();
-        ctx.moveTo(tx, -r * jawOpen * 0.6);
-        ctx.lineTo(tx + r * 0.05, r * 0.04);
-        ctx.lineTo(tx - r * 0.04, -r * jawOpen * 0.6);
-        ctx.fill();
-      }
-      ctx.fillStyle = m.state === 'telegraph' ? '#f87171' : '#facc15';
+
+      // Lower jaw
+      ctx.fillStyle = flash ? '#e0f2fe' : '#0e3c56';
       ctx.beginPath();
-      ctx.arc(r * 0.34, -r * 0.24, r * 0.14, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (m.kind === 'swarmer') {
-      for (let k = -2; k <= 2; k++) {
-        const swing = Math.sin(m.wigglePhase * 1.3 + k * 1.1) * 0.28 * r;
-        ctx.strokeStyle = 'rgba(132, 204, 22, 0.65)';
-        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.4, k * r * 0.22);
-        ctx.quadraticCurveTo(-r * 0.95, k * r * 0.34 + swing, -r * 1.45, k * r * 0.24 - swing * 0.6);
-        ctx.stroke();
-      }
-      const sg = ctx.createRadialGradient(r * 0.12, -r * 0.15, r * 0.1, 0, 0, r * 0.98);
-      sg.addColorStop(0, '#3f6212');
-      sg.addColorStop(0.65, '#14532d');
-      sg.addColorStop(1, '#052e16');
-      ctx.fillStyle = sg;
-      ctx.strokeStyle = flash ? '#ffffff' : '#84cc16';
-      ctx.lineWidth = Math.max(1.4, 0.06 * scale);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.92, r * 0.66, 0, 0, Math.PI * 2);
+      ctx.moveTo(r * 0.14, r * 0.08);
+      ctx.lineTo(r * 0.9, r * (jawOpen * 0.76));
+      ctx.quadraticCurveTo(r * 0.62, r * (jawOpen + 0.22), r * 0.08, r * 0.36);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      const glowR = r * (0.34 + 0.06 * Math.sin(timeSec * 8 + m.wigglePhase));
-      const vg = ctx.createRadialGradient(-r * 0.18, 0, 0, -r * 0.18, 0, glowR * 1.4);
-      vg.addColorStop(0, '#ecfccb');
-      vg.addColorStop(0.5, '#a3e635');
+
+      // Curved glossy ivory fangs (upper + lower)
+      ctx.fillStyle = '#f8fafc';
+      for (let k = 0; k < 3; k++) {
+        const tx = r * (0.46 + k * 0.16);
+        const topY = -r * (jawOpen * 0.52 + 0.02);
+        ctx.beginPath();
+        ctx.moveTo(tx - r * 0.045, topY);
+        ctx.lineTo(tx + r * 0.03, topY + r * 0.18);
+        ctx.lineTo(tx + r * 0.06, topY);
+        ctx.closePath();
+        ctx.fill();
+        if (k < 2) {
+          const botY = r * (jawOpen * 0.62 + 0.02);
+          ctx.beginPath();
+          ctx.moveTo(tx + r * 0.05, botY);
+          ctx.lineTo(tx + r * 0.09, botY - r * 0.14);
+          ctx.lineTo(tx + r * 0.13, botY);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      // Expressive Anime Reptile Eye (golden amber iris, slit pupil, specular sparkle, angry brow!)
+      const ex = r * 0.42;
+      const ey = -r * 0.24;
+      const er = r * 0.165;
+      ctx.fillStyle = isTelegraph ? '#fb7185' : '#facc15';
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+      ctx.beginPath();
+      ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Vertical slit pupil
+      ctx.fillStyle = '#090d16';
+      ctx.beginPath();
+      ctx.ellipse(ex + er * 0.16, ey, er * 0.28, er * 0.72, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Crisp white anime catchlight
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - er * 0.25, ey - er * 0.28, er * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      // Fierce slanted brow ridge
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(1.6, 0.068 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 1.1, ey - er * 1.05);
+      ctx.lineTo(ex + er * 1.15, ey - er * 0.45);
+      ctx.stroke();
+
+    } else if (m.kind === 'swarmer') {
+      // === BRINE SPITTER SWARMER (Expressive Translucent Bio-Jelly Spitter) ===
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 7.5 + (m.wigglePhase || 0));
+      const spitCharge = m.cooldown < 0.45 ? 1 - m.cooldown / 0.45 : 0;
+
+      // Soft emerald-lime ambient glow
+      const glowG = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.55);
+      glowG.addColorStop(0, spitCharge > 0.3 ? 'rgba(250, 204, 21, 0.36)' : 'rgba(163, 230, 53, 0.26)');
+      glowG.addColorStop(1, 'rgba(132, 204, 22, 0)');
+      ctx.fillStyle = glowG;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.55, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 5 gracefully tapering undulating tentacles with glowing tip beads
+      for (let k = -2; k <= 2; k++) {
+        const swing = Math.sin((m.wigglePhase || 0) * 1.35 + k * 1.05) * 0.3 * r;
+        const tipX = -r * (1.42 + (k % 2 === 0 ? 0.16 : 0));
+        const tipY = k * r * 0.26 - swing * 0.65;
+        ctx.strokeStyle = k % 2 === 0 ? 'rgba(163, 230, 53, 0.84)' : 'rgba(52, 211, 153, 0.72)';
+        ctx.lineWidth = Math.max(1.5, (0.078 - Math.abs(k) * 0.008) * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.36, k * r * 0.2);
+        ctx.quadraticCurveTo(-r * 0.94, k * r * 0.32 + swing, tipX, tipY);
+        ctx.stroke();
+        // Glowing bead tip
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, Math.max(1.6, 0.065 * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Flared translucent side propulsion fins
+      const finFlap = Math.sin((m.wigglePhase || 0) * 1.8) * 0.22;
+      for (const sgn of [-1, 1]) {
+        ctx.save();
+        ctx.translate(-r * 0.08, sgn * r * 0.56);
+        ctx.rotate(sgn * (0.35 + finFlap));
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.55)';
+        ctx.strokeStyle = '#052e16';
+        ctx.lineWidth = Math.max(1.2, 0.048 * scale);
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.12, sgn * r * 0.14, r * 0.34, r * 0.14, sgn * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Plump cel-shaded translucent emerald dome mantle
+      const sg = ctx.createRadialGradient(r * 0.16, -r * 0.22, r * 0.08, 0, 0, r * 1.04);
+      sg.addColorStop(0, flash ? '#ffffff' : '#bef264');
+      sg.addColorStop(0.36, flash ? '#ecfccb' : '#4d7c0f');
+      sg.addColorStop(0.78, '#14532d');
+      sg.addColorStop(1, '#052e16');
+      ctx.fillStyle = sg;
+      ctx.strokeStyle = flash ? '#ffffff' : '#052e16';
+      ctx.lineWidth = Math.max(1.7, 0.074 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.66, -r * 0.52);
+      ctx.quadraticCurveTo(r * 0.12, -r * 0.88, r * 0.92, -r * 0.24);
+      ctx.quadraticCurveTo(r * 1.04, 0, r * 0.92, r * 0.24);
+      ctx.quadraticCurveTo(r * 0.12, r * 0.88, -r * 0.66, r * 0.52);
+      ctx.quadraticCurveTo(-r * 0.42, 0, -r * 0.66, -r * 0.52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Pressurized Glowing Bio-Acid Sac inside translucent bell (flares brightly before spitting!)
+      const sacR = r * (0.34 + 0.06 * pulse + spitCharge * 0.16);
+      const vg = ctx.createRadialGradient(-r * 0.14, 0, 0, -r * 0.14, 0, sacR * 1.45);
+      vg.addColorStop(0, '#ffffff');
+      vg.addColorStop(0.42, spitCharge > 0.35 ? '#fde047' : '#bef264');
+      vg.addColorStop(0.8, 'rgba(132, 204, 22, 0.45)');
       vg.addColorStop(1, 'rgba(132, 204, 22, 0)');
       ctx.fillStyle = vg;
       ctx.beginPath();
-      ctx.arc(-r * 0.18, 0, glowR * 1.4, 0, Math.PI * 2);
+      ctx.arc(-r * 0.14, 0, sacR * 1.45, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#fef08a';
+
+      // Glossy glass specular crescent on upper dome
+      ctx.fillStyle = 'rgba(236, 252, 203, 0.42)';
       ctx.beginPath();
-      ctx.arc(r * 0.52, -r * 0.22, r * 0.11, 0, Math.PI * 2);
-      ctx.arc(r * 0.52, r * 0.22, r * 0.11, 0, Math.PI * 2);
+      ctx.ellipse(r * 0.12, -r * 0.42, r * 0.36, r * 0.12, -0.18, 0, Math.PI * 2);
       ctx.fill();
+
+      // Cute/mischievous siphon nozzle + big expressive twin anime eyes!
+      ctx.fillStyle = '#052e16';
+      ctx.beginPath();
+      ctx.ellipse(r * 0.88, 0, r * 0.12, r * (0.1 + spitCharge * 0.08), 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (spitCharge > 0.25) {
+        ctx.fillStyle = '#d9f99d';
+        ctx.beginPath();
+        ctx.arc(r * 0.92, 0, r * 0.09 * spitCharge, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const sgn of [-1, 1]) {
+        const ex = r * 0.48;
+        const ey = sgn * r * 0.25;
+        const er = r * 0.165;
+        ctx.fillStyle = '#fef08a';
+        ctx.strokeStyle = '#052e16';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+        ctx.beginPath();
+        ctx.arc(ex, ey, er, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#090d16';
+        ctx.beginPath();
+        ctx.arc(ex + er * 0.22, ey, er * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ex - er * 0.18, ey - er * 0.24, er * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
     } else {
-      const cg = ctx.createRadialGradient(r * 0.25, -r * 0.2, r * 0.1, 0, 0, r * 1.1);
-      cg.addColorStop(0, '#64748b');
-      cg.addColorStop(0.55, '#1e293b');
-      cg.addColorStop(1, '#090f1c');
-      ctx.fillStyle = cg;
-      ctx.strokeStyle = flash ? '#ffffff' : '#94a3b8';
-      ctx.lineWidth = Math.max(2, 0.09 * scale);
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 1.0, -Math.PI * 0.64, Math.PI * 0.64);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
-      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.66, -Math.PI * 0.55, Math.PI * 0.55);
-      ctx.stroke();
-      const ag = ctx.createRadialGradient(-r * 0.42, 0, r * 0.06, -r * 0.42, 0, r * 0.58);
-      ag.addColorStop(0, '#fef08a');
-      ag.addColorStop(0.55, '#f59e0b');
+      // === ARMORED CENOTE STALKER (Heavy Titanium-Carapace Trilobite + Golden Crystal Rear Weakpoint) ===
+      const legStride = Math.sin((m.wigglePhase || 0) * 1.4);
+
+      // 6 articulated scurrying armored legs beneath carapace
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = Math.max(1.8, 0.085 * scale);
+      ctx.lineCap = 'round';
+      for (let leg = 0; leg < 3; leg++) {
+        const lx = r * (0.28 - leg * 0.34);
+        const swing = (leg % 2 === 0 ? legStride : -legStride) * r * 0.16;
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(lx, sgn * r * 0.55);
+          ctx.lineTo(lx - r * 0.1 + swing, sgn * r * 1.02);
+          ctx.lineTo(lx - r * 0.32 + swing, sgn * r * 1.18);
+          ctx.stroke();
+        }
+      }
+
+      // Exposed Glowing Golden-Amber Crystal Weakpoint Core at the rear! (Invites flanking or Hyper-Tip pierce!)
+      const wkPulse = 0.6 + 0.4 * Math.sin(timeSec * 6.5 + (m.wigglePhase || 0));
+      const ag = ctx.createRadialGradient(-r * 0.58, 0, r * 0.08, -r * 0.58, 0, r * 0.85);
+      ag.addColorStop(0, '#fef9c3');
+      ag.addColorStop(0.42, '#f59e0b');
+      ag.addColorStop(0.75, 'rgba(245, 158, 11, 0.32)');
       ag.addColorStop(1, 'rgba(245, 158, 11, 0)');
       ctx.fillStyle = ag;
       ctx.beginPath();
-      ctx.arc(-r * 0.42, 0, r * 0.58, 0, Math.PI * 2);
+      ctx.arc(-r * 0.58, 0, r * 0.85, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = m.state === 'telegraph' ? '#f87171' : '#e2e8f0';
-      ctx.lineWidth = Math.max(2.2, 0.1 * scale);
+      // Faceted amber weakpoint crystal protruding from rear shell gap
+      ctx.fillStyle = '#fbbf24';
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
       ctx.beginPath();
-      ctx.moveTo(r * 0.72, -r * 0.38);
-      ctx.quadraticCurveTo(r * 1.18, -r * 0.45, r * 1.38, -r * 0.12);
-      ctx.moveTo(r * 0.72, r * 0.38);
-      ctx.quadraticCurveTo(r * 1.18, r * 0.45, r * 1.38, r * 0.12);
+      ctx.moveTo(-r * 1.12, 0);
+      ctx.lineTo(-r * 0.62, -r * (0.34 + wkPulse * 0.04));
+      ctx.lineTo(-r * 0.25, 0);
+      ctx.lineTo(-r * 0.62, r * (0.34 + wkPulse * 0.04));
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.96, 0);
+      ctx.lineTo(-r * 0.62, -r * 0.16);
+      ctx.lineTo(-r * 0.42, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Articulated serrated front pincer mandibles (flare wide + glow crimson on telegraph!)
+      const pincerOpen = isTelegraph || isLunge ? 0.26 : 0.0;
+      for (const sgn of [-1, 1]) {
+        ctx.save();
+        ctx.translate(r * 0.62, sgn * r * 0.34);
+        ctx.rotate(sgn * pincerOpen);
+        ctx.fillStyle = isTelegraph ? '#fb7185' : '#94a3b8';
+        ctx.strokeStyle = '#050a14';
+        ctx.lineWidth = Math.max(1.6, 0.068 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -sgn * r * 0.1);
+        ctx.quadraticCurveTo(r * 0.54, sgn * r * 0.26, r * 0.82, -sgn * r * 0.14);
+        ctx.quadraticCurveTo(r * 0.42, sgn * r * 0.06, 0, sgn * r * 0.12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Layered Overlapping Titanium-Slate Armored Carapace Plates (3 terraced shields)
+      const cg = ctx.createRadialGradient(r * 0.25, -r * 0.25, r * 0.1, 0, 0, r * 1.12);
+      cg.addColorStop(0, flash ? '#ffffff' : '#94a3b8');
+      cg.addColorStop(0.45, flash ? '#cbd5e1' : '#334155');
+      cg.addColorStop(0.82, '#1e293b');
+      cg.addColorStop(1, '#070d19');
+      ctx.fillStyle = cg;
+      ctx.strokeStyle = flash ? '#ffffff' : '#050a14';
+      ctx.lineWidth = Math.max(2.1, 0.088 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.02, -Math.PI * 0.66, Math.PI * 0.66);
+      ctx.quadraticCurveTo(-r * 0.22, 0, Math.cos(-Math.PI * 0.66) * r * 1.02, Math.sin(-Math.PI * 0.66) * r * 1.02);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Terraced armor ridge lines + specular metallic highlight bevels
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.42)';
+      ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.72, -Math.PI * 0.56, Math.PI * 0.56);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.72)';
+      ctx.lineWidth = Math.max(1.4, 0.058 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.44, -Math.PI * 0.48, Math.PI * 0.48);
+      ctx.stroke();
+      // Metallic top reflection crescent
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.22)';
+      ctx.beginPath();
+      ctx.ellipse(r * 0.28, -r * 0.38, r * 0.34, r * 0.14, 0.32, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Twin Glowing Visor Optic Slits peering beneath the front brow shield!
+      for (const sgn of [-1, 1]) {
+        const vx = r * 0.56;
+        const vy = sgn * r * 0.24;
+        ctx.fillStyle = isTelegraph ? '#ff2d55' : '#fb923c';
+        ctx.beginPath();
+        ctx.ellipse(vx, vy, r * 0.14, r * 0.075, sgn * -0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff7ed';
+        ctx.beginPath();
+        ctx.arc(vx + r * 0.03, vy, r * 0.038, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
 
+    // Sleek Rounded Pill Health Bar (shown cleanly when damaged or aggro)
     if (m.hp < m.maxHp || m.aggro) {
-      const bw = Math.max(28, r * 1.8);
-      const bh = 4;
+      const bw = Math.max(32, r * 1.9);
+      const bh = 5;
       const bx = sx - bw * 0.5;
-      const by = sy - r - 11;
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.8)';
-      ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-      ctx.fillStyle = m.kind === 'stalker' ? '#f59e0b' : '#f43f5e';
-      ctx.fillRect(bx, by, bw * Math.max(0, m.hp / m.maxHp), bh);
+      const by = sy - r - 12;
+      const ratio = Math.max(0, Math.min(1, m.hp / Math.max(1, m.maxHp)));
+      ctx.save();
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.86)';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bx - 1.5, by - 1.5, bw + 3, bh + 3, 4);
+      } else {
+        ctx.rect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
+      }
+      ctx.fill();
+      ctx.stroke();
+      const hg = ctx.createLinearGradient(bx, by, bx + bw, by);
+      if (m.kind === 'stalker') {
+        hg.addColorStop(0, '#f59e0b');
+        hg.addColorStop(1, '#fde047');
+      } else if (m.kind === 'swarmer') {
+        hg.addColorStop(0, '#65a30d');
+        hg.addColorStop(1, '#bef264');
+      } else {
+        hg.addColorStop(0, '#e11d48');
+        hg.addColorStop(1, '#fb7185');
+      }
+      ctx.fillStyle = hg;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bx, by, Math.max(2, bw * ratio), bh, 3);
+      } else {
+        ctx.rect(bx, by, Math.max(2, bw * ratio), bh);
+      }
+      ctx.fill();
+      ctx.restore();
     }
   },
 
@@ -1299,15 +1696,52 @@ export const bossAndLairMethods = {
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 0.92;
-      ctx.fillStyle = '#e0f2fe';
+      // Sculpted obsidian brazier pedestal cradling a faceted glowing crystal flame + rising motes (v188)
+      ctx.globalAlpha = 0.96;
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+      ctx.lineWidth = Math.max(1.1, 0.045 * scale);
       ctx.beginPath();
-      ctx.moveTo(sx, sy - 0.55 * scale);
-      ctx.lineTo(sx + 0.3 * scale, sy);
-      ctx.lineTo(sx, sy + 0.45 * scale);
-      ctx.lineTo(sx - 0.3 * scale, sy);
+      ctx.moveTo(sx - 0.46 * scale, sy + 0.16 * scale);
+      ctx.lineTo(sx + 0.46 * scale, sy + 0.16 * scale);
+      ctx.lineTo(sx + 0.28 * scale, sy + 0.56 * scale);
+      ctx.lineTo(sx - 0.28 * scale, sy + 0.56 * scale);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
+
+      // Faceted outer bioluminescent crystal flame
+      const flH = (0.72 + 0.12 * pulse) * scale;
+      ctx.fillStyle = sconceCol;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - flH);
+      ctx.lineTo(sx + 0.34 * scale, sy + 0.12 * scale);
+      ctx.lineTo(sx, sy + 0.34 * scale);
+      ctx.lineTo(sx - 0.34 * scale, sy + 0.12 * scale);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner white-hot crystal core
+      ctx.fillStyle = '#f0f9ff';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - flH * 0.65);
+      ctx.lineTo(sx + 0.15 * scale, sy + 0.06 * scale);
+      ctx.lineTo(sx, sy + 0.2 * scale);
+      ctx.lineTo(sx - 0.15 * scale, sy + 0.06 * scale);
+      ctx.closePath();
+      ctx.fill();
+
+      // Rising luminescent spark motes
+      for (let m = 0; m < 2; m++) {
+        const phase = (timeSec * 0.9 + i * 0.37 + m * 0.5) % 1;
+        const mx = sx + Math.sin(timeSec * 3.2 + m * 4 + i) * 0.24 * scale;
+        const my = sy - (0.35 + phase * 1.15) * scale;
+        ctx.globalAlpha = (1 - phase) * 0.85;
+        ctx.fillStyle = '#fef9c3';
+        ctx.beginPath();
+        ctx.arc(mx, my, Math.max(1.2, 0.05 * scale * (1 - phase * 0.5)), 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -1894,25 +2328,59 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 5. Enemy Ink / Brine Projectiles
+    // 5. Enemy Plasma-Ink Orbs & Bubbling Bio-Brine Globules (velocity-stretched comet visuals, v188)
     for (const pr of lair.enemyProjectiles || []) {
       const px = toScreenX(pr.x);
       const py = toScreenY(pr.y);
       const prR = pr.radius * scale;
+      const pAng = Math.atan2(pr.vy || 0, pr.vx || 1);
+      const col = pr.color || '#c084fc';
       ctx.save();
-      const pg = ctx.createRadialGradient(px, py, prR * 0.1, px, py, prR * 1.9);
+      ctx.translate(px, py);
+      ctx.rotate(pAng);
+
+      // Soft radial outer aura
+      const pg = ctx.createRadialGradient(0, 0, prR * 0.1, 0, 0, prR * 2.1);
       pg.addColorStop(0, '#ffffff');
-      pg.addColorStop(0.4, pr.color || '#c084fc');
+      pg.addColorStop(0.35, col);
       pg.addColorStop(1, 'rgba(192, 132, 252, 0)');
       ctx.fillStyle = pg;
       ctx.beginPath();
-      ctx.arc(px, py, prR * 1.9, 0, Math.PI * 2);
+      ctx.arc(0, 0, prR * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Velocity-aligned comet tail wisp
+      const tailG = ctx.createLinearGradient(-prR * 2.6, 0, prR * 0.6, 0);
+      tailG.addColorStop(0, 'rgba(15, 23, 42, 0)');
+      tailG.addColorStop(1, col);
+      ctx.fillStyle = tailG;
+      ctx.beginPath();
+      ctx.moveTo(-prR * 2.5, 0);
+      ctx.quadraticCurveTo(-prR * 0.6, -prR * 0.85, prR * 0.6, -prR * 0.45);
+      ctx.arc(0, 0, prR * 0.82, -0.7, 0.7);
+      ctx.quadraticCurveTo(-prR * 0.6, prR * 0.85, -prR * 2.5, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Solid stylized orb core with dark contour & glossy specular dot
+      ctx.fillStyle = pr.kind === 'brine' ? '#bef264' : col;
+      ctx.strokeStyle = pr.kind === 'brine' ? '#052e16' : '#1e1b4b';
+      ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, prR * 0.92, prR * 0.76, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(prR * 0.24, -prR * 0.22, prR * 0.28, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    // 6. 5th-Shot Hyper-Tip Ready Golden Glow on Diver's Speargun Tip!
-    if (lair.combatMode && lair.weaponEquipped && !lair.bossDefeated && diver && (lair.shotCounter || 0) % 5 === 4) {
+    // 6. Hyper-Tip Ready Golden Glow on Diver's Speargun Tip (respects Overcharge upgrade cadence!)
+    const overLv = lair.weaponMods?.overcharge || 0;
+    const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;
+    if (lair.combatMode && lair.weaponEquipped && !lair.bossDefeated && diver && (lair.shotCounter || 0) % hyperEvery === hyperEvery - 1) {
       const aim = diver.torchAngle ?? diver.angle ?? 0;
       const hx = toScreenX((diver.body?.hand?.x ?? diver.x) + Math.cos(aim) * 1.05);
       const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.05);
@@ -2084,23 +2552,54 @@ export const bossAndLairMethods = {
       ctx.fillStyle = '#fde68a';
       ctx.fillText(lair.scaling.label, bx + barW, by - 11 * dpr);
 
+      // Rounded pill HP track with glossy bevel sheen & diamond phase pips (v188)
+      const trackR = barH * 0.45;
       ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-      ctx.fillRect(bx, by, barW, barH);
-      const hg = ctx.createLinearGradient(bx, by, bx + barW, by);
-      hg.addColorStop(0, '#ef4444');
-      hg.addColorStop(0.5, '#c084fc');
-      hg.addColorStop(1, '#38bdf8');
-      ctx.fillStyle = hg;
-      ctx.fillRect(bx, by, barW * hpRatio, barH);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bx, by, barW, barH, trackR);
+      } else {
+        ctx.rect(bx, by, barW, barH);
+      }
+      ctx.fill();
 
-      ctx.strokeStyle = 'rgba(248, 250, 252, 0.78)';
-      ctx.lineWidth = Math.max(1, 1.3 * dpr);
+      const fillW = Math.max(0, barW * hpRatio);
+      if (fillW > 1) {
+        const hg = ctx.createLinearGradient(bx, by, bx + barW, by);
+        hg.addColorStop(0, '#ef4444');
+        hg.addColorStop(0.5, '#c084fc');
+        hg.addColorStop(1, '#38bdf8');
+        ctx.fillStyle = hg;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bx, by, fillW, barH, trackR);
+        } else {
+          ctx.rect(bx, by, fillW, barH);
+        }
+        ctx.fill();
+        // Upper glossy bevel highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.fillRect(bx + trackR * 0.5, by + 1.5 * dpr, Math.max(0, fillW - trackR), barH * 0.32);
+      }
+
+      // Phase threshold diamond markers at 33% & 66%
       for (const mark of [0.33, 0.66]) {
         const mx = bx + barW * mark;
+        const my = by + barH * 0.5;
+        ctx.strokeStyle = 'rgba(248, 250, 252, 0.72)';
+        ctx.lineWidth = Math.max(1, 1.2 * dpr);
         ctx.beginPath();
         ctx.moveTo(mx, by);
         ctx.lineTo(mx, by + barH);
         ctx.stroke();
+        ctx.fillStyle = hpRatio > mark ? '#fef9c3' : '#475569';
+        ctx.beginPath();
+        ctx.moveTo(mx, my - 3.2 * dpr);
+        ctx.lineTo(mx + 3.2 * dpr, my);
+        ctx.lineTo(mx, my + 3.2 * dpr);
+        ctx.lineTo(mx - 3.2 * dpr, my);
+        ctx.closePath();
+        ctx.fill();
       }
       ctx.restore();
     }
