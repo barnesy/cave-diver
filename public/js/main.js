@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=184',
+  mapRasterUrl: './assets/map-expedition.jpg?v=185',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1930,11 +1930,13 @@ btnCombatPauseEl?.addEventListener('click', (e) => {
 });
 
 let _lastCombatHudMode = false;
+let _lastCombatArmed = false;
 let _lastCombatHp = -1;
 let _lastCombatHintFaded = false;
 function syncCombatModeHud(sess) {
   const lair = sess?.secretLair;
   const active = Boolean(mode === 'diving' && lair?.combatMode && !sess?.endedState);
+  const armed = Boolean(active && lair?.weaponEquipped && !lair?.bossDefeated);
   if (active !== _lastCombatHudMode) {
     _lastCombatHudMode = active;
     if (input) input.combatModeActive = active;
@@ -1947,6 +1949,10 @@ function syncCombatModeHud(sess) {
       toggleSurveySlate(false);
       toggleSignalWheel(false);
     }
+  }
+  if (armed !== _lastCombatArmed) {
+    _lastCombatArmed = armed;
+    screenHud?.classList.toggle('combat-armed', armed);
   }
   if (!active) return;
   const hp = Math.max(0, Math.min(100, Math.round(lair.playerHp ?? 100)));
@@ -3413,8 +3419,9 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   screenDebrief.hidden = true;
   debriefReplay.stop();
   screenHud.classList.remove('hud-team-hold');
-  screenHud.classList.remove('combat-mode');
+  screenHud.classList.remove('combat-mode', 'combat-armed');
   _lastCombatHudMode = false;
+  _lastCombatArmed = false;
   _lastCombatHp = -1;
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
@@ -3473,8 +3480,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   hideHudPhotoCard();
   hideArtifactSpotlight();
   screenHud.classList.remove('hud-team-hold');
-  screenHud.classList.remove('combat-mode');
+  screenHud.classList.remove('combat-mode', 'combat-armed');
   _lastCombatHudMode = false;
+  _lastCombatArmed = false;
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
@@ -5897,8 +5905,9 @@ function abortActiveDiveToMenu() {
   syncWreckActionHud(null);
   hideHudPhotoCard();
   screenHud.classList.remove('hud-team-hold');
-  screenHud.classList.remove('combat-mode');
+  screenHud.classList.remove('combat-mode', 'combat-armed');
   _lastCombatHudMode = false;
+  _lastCombatArmed = false;
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;

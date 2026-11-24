@@ -8791,6 +8791,8 @@ summary,
 #screen-hud.combat-mode .hud-right-wing,
 #screen-hud.combat-mode #hud-reel-status,
 #screen-hud.combat-mode .hud-minimap-dock,
+#screen-hud.combat-mode .hud-minimap-wrap,
+#screen-hud.combat-mode #hud-minimap-wrap,
 #screen-hud.combat-mode .coop-comms,
 #screen-hud.combat-mode .hud-status-strip,
 #screen-hud.combat-mode .hud-survey-slate,
@@ -8800,34 +8802,91 @@ summary,
 }
 
 #screen-hud.combat-mode .hud-bottom-dock {
+  display: flex !important;
+  flex-direction: row;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 0 calc(20px + env(safe-area-inset-left, 0px)) calc(18px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  gap: 0;
+  padding: 0 calc(20px + env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
 }
 #screen-hud.combat-mode .hud-stick-center {
   order: 1;
+  grid-column: auto;
+  justify-self: auto;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  margin: 0;
 }
 #screen-hud.combat-mode .hud-left-col {
   order: 2;
-  width: auto;
+  grid-column: auto;
+  justify-self: auto;
+  align-items: flex-end;
+  width: auto !important;
+  flex: 0 0 auto;
+  margin: 0;
 }
+#screen-hud.combat-mode #touch-stick,
 #screen-hud.combat-mode #torch-stick {
   display: flex !important;
-  width: 82px;
-  height: 82px;
+  width: 96px;
+  height: 96px;
 }
-#screen-hud.combat-mode #torch-stick .touch-ring {
-  border-color: rgba(56, 189, 248, 0.75);
-  box-shadow: 0 0 18px rgba(56, 189, 248, 0.34), inset 0 0 12px rgba(56, 189, 248, 0.16);
-}
+#screen-hud.combat-mode #touch-stick .touch-knob,
 #screen-hud.combat-mode #torch-stick .touch-knob {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+}
+#screen-hud.combat-mode.combat-armed #torch-stick .touch-ring {
+  border-color: rgba(56, 189, 248, 0.78);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.36), inset 0 0 12px rgba(56, 189, 248, 0.18);
+}
+#screen-hud.combat-mode.combat-armed #torch-stick .touch-knob {
   background: radial-gradient(circle at 35% 35%, #7dd3fc, #0284c7);
   border-color: #e0f2fe;
   color: #020617;
 }
-@media (hover: hover) and (pointer: fine) {
+#screen-hud.combat-mode #torch-stick .torch-knob-svg {
+  width: 21px;
+  height: 21px;
+}
+@media (max-width: 600px) and (min-height: 461px) {
+  #screen-hud.combat-mode .hud-bottom-dock {
+    padding: 0 calc(18px + env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
+  }
+  #screen-hud.combat-mode #touch-stick,
+  #screen-hud.combat-mode #torch-stick {
+    width: 90px;
+    height: 90px;
+  }
+  #screen-hud.combat-mode #touch-stick .touch-knob,
+  #screen-hud.combat-mode #torch-stick .touch-knob {
+    width: 38px;
+    height: 38px;
+  }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  #screen-hud.combat-mode .hud-bottom-dock {
+    padding: 0 calc(16px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  }
+  #screen-hud.combat-mode #touch-stick,
+  #screen-hud.combat-mode #torch-stick {
+    width: 84px;
+    height: 84px;
+  }
+  #screen-hud.combat-mode #touch-stick .touch-knob,
+  #screen-hud.combat-mode #torch-stick .touch-knob {
+    width: 36px;
+    height: 36px;
+  }
+}
+@media (hover: hover) and (pointer: fine), (pointer: none) {
   /* On mouse + keyboard desktop, keep screen ultra-clean (aim & click/hold with mouse or WASD + F/Space!) */
   #screen-hud.combat-mode #touch-stick,
   #screen-hud.combat-mode #torch-stick {

@@ -9123,4 +9123,17 @@ test('v184 Speargun Mode Exclusivity, Immediate Loss on Boss Kill & Cute Anime B
   applySecretLairNetState(peer.secretLair, serializeSecretLairNetState(s.secretLair));
   assert.equal(peer.secretLair.bossDefeated, true);
   assert.equal(peer.secretLair.weaponEquipped, false, 'Co-op peer must also lose speargun immediately on boss defeat');
+
+  // 7. v185 Regression guard: Combat Mode moves twin joysticks to bottom-left & bottom-right via flex layout and hides tactical minimap
+  const fs = await import('node:fs');
+  const cssSrc = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.match(
+    cssSrc,
+    /#screen-hud\.combat-mode\s+\.hud-bottom-dock\s*\{[^}]*display:\s*flex\s*!important;[^}]*justify-content:\s*space-between;/s,
+    'Combat mode .hud-bottom-dock must switch from grid to flex space-between so joysticks anchor bottom-left & bottom-right'
+  );
+  assert.ok(
+    cssSrc.includes('#screen-hud.combat-mode .hud-minimap-wrap'),
+    'Combat mode must hide the docked tactical minimap (#hud-minimap-wrap)'
+  );
 });
