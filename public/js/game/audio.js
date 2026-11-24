@@ -1678,7 +1678,20 @@ export class DiveAudio {
     if (crit) {
       this.playTone(880, 0.14, 'sine', 0.052, 0.02, { bus: 'sfx' });
       this.playTone(1320, 0.16, 'triangle', 0.044, 0.055, { bus: 'sfx' });
+      this.vibrate?.([14, 10, 18]);
     }
+  }
+
+  /**
+   * Underwater Naval Depth-Charge Mine detonation boom & metallic shock ring (v192).
+   */
+  playMineBlast() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(52, 0.52, 'sawtooth', 0.095, 0, { bus: 'sfx' });
+    this.playTone(86, 0.36, 'triangle', 0.075, 0.04, { bus: 'sfx' });
+    this.playTone(420, 0.18, 'sine', 0.05, 0.05, { bus: 'sfx' });
+    this.vibrate?.([38, 18, 48]);
   }
 
   /**

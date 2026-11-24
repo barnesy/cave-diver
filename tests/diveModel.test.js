@@ -9595,3 +9595,111 @@ test('v190 Victory Updraft purges Bühlmann deco tissues, zeroes teleport ascent
     assert.ok(finalOutcome && finalOutcome.success, `${levelId} diver must surface cleanly to Boss Victory debrief!`);
   }
 });
+
+test('v192 Signature Boss Hazards (Mines, Frost Rings, Star Orbs), Bespoke Boss Trophy Relics, Co-op Dash Sync & Touch Aim Magnetism', async () => {
+  const fs = await import('node:fs');
+  const {
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    spawnBossSignatureHazard,
+    fireSpeargun,
+    triggerCombatScooterDash,
+    stepSecretLairEncounter,
+    computeTouchAimMagnetAngle,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+    applyRemoteBossEvent,
+  } = await import('../public/js/game/secretLairs.js');
+  const { drawStyledArtifact, drawStyledJellyfish, drawStyledDenizen } = await import('../public/js/game/artSprites.js');
+  const { recordArtifactInLogbook, createEmptyLogbook } = await import('../public/js/game/logbookModel.js');
+
+  // 1. Iron Leviathan: Naval Depth-Charge Mine shoots & chain-blasts boss for +185 crit dmg!
+  const thiLvl = LEVELS.find((l) => l.id === 'ss-thistlegorm-wreck');
+  const sThi = createDiveSession(thiLvl, { diverName: 'MineHunter' });
+  breachSecretLairVeil(sThi);
+  claimSecretLairWeapon(sThi);
+  sThi.secretLair.boss.active = true;
+  sThi.secretLair.boss.aiState = 'idle';
+  const mine = spawnBossSignatureHazard(sThi, sThi.secretLair, sThi.secretLair.boss);
+  assert.equal(mine.kind, 'naval-mine');
+  // Place mine right near boss and shoot it twice with the Speargun
+  mine.x = sThi.secretLair.boss.x - 4.0;
+  mine.y = sThi.secretLair.boss.y;
+  sThi.diver.x = mine.x - 5.0;
+  sThi.diver.y = mine.y;
+  const hpBefore = sThi.secretLair.boss.hp;
+  let mineBlastSfx = 0;
+  fireSpeargun(sThi, { aimAngle: 0, isTap: true, originX: sThi.diver.x, originY: sThi.diver.y });
+  stepSecretLairEncounter(sThi, 0.25, {}, { onMineBlast: () => { mineBlastSfx++; } });
+  sThi.secretLair.tapCooldownSec = 0;
+  fireSpeargun(sThi, { aimAngle: 0, isTap: true, originX: sThi.diver.x, originY: sThi.diver.y });
+  stepSecretLairEncounter(sThi, 0.25, {}, { onMineBlast: () => { mineBlastSfx++; } });
+  assert.equal(mineBlastSfx, 1, 'Shooting naval mine twice must detonate and invoke onMineBlast');
+  assert.equal(sThi.secretLair.mineBlasts, 1);
+  assert.ok(hpBefore - sThi.secretLair.boss.hp >= 185, 'Naval mine blast must deal >=185 damage to Iron Leviathan');
+
+  // 2. Borealis Wyrm: Expanding Glacial Frost Ring shatters cleanly when Hydro-Dashing through (+15% battery!)
+  const scoLvl = LEVELS.find((l) => l.id === 'scoresby-sund-iceberg');
+  const sSco = createDiveSession(scoLvl, { diverName: 'FrostDasher' });
+  breachSecretLairVeil(sSco);
+  claimSecretLairWeapon(sSco);
+  sSco.secretLair.boss.active = true;
+  sSco.secretLair.boss.aiState = 'idle';
+  const ring = spawnBossSignatureHazard(sSco, sSco.secretLair, sSco.secretLair.boss);
+  assert.equal(ring.kind, 'frost-ring');
+  sSco.diver.x = ring.x - 4.2;
+  sSco.diver.y = ring.y;
+  sSco.dpv.batteryPct = 70;
+  triggerCombatScooterDash(sSco, { dirX: 1, dirY: 0 }); // Drops to 58%
+  ring.radius = 4.1; // Right on diver while dashTimerSec > 0!
+  stepSecretLairEncounter(sSco, 0.04, {}, {});
+  assert.equal(ring.shatteredByLocal, true, 'Hydro-Dashing across Frost Ring must shatter it cleanly');
+  assert.ok(sSco.dpv.batteryPct >= 70, `Frost Shatter must refund +15% battery (got ${sSco.dpv.batteryPct})`);
+
+  // 3. Abyssal Empress: Orbiting Constellation Star Orbs + Co-op Net Sync (`hz` + `scooter_dash`)
+  const kruLvl = LEVELS.find((l) => l.id === 'krubera-voronya-sump');
+  const sKru = createDiveSession(kruLvl, { diverName: 'StarSlayer' });
+  breachSecretLairVeil(sKru);
+  claimSecretLairWeapon(sKru);
+  sKru.secretLair.boss.active = true;
+  sKru.secretLair.boss.aiState = 'idle';
+  const orb = spawnBossSignatureHazard(sKru, sKru.secretLair, sKru.secretLair.boss);
+  assert.equal(orb.kind, 'star-orb');
+  const snap = serializeSecretLairNetState(sKru.secretLair);
+  assert.ok(Array.isArray(snap.hz) && snap.hz.length === 1 && snap.hz[0][0] === 3, 'Net snapshot must sync star-orb hazard');
+  const sPeer = createDiveSession(kruLvl, { diverName: 'CoopPeer' });
+  applySecretLairNetState(sPeer.secretLair, snap);
+  assert.equal(sPeer.secretLair.bossHazards.length, 1);
+  assert.equal(sPeer.secretLair.bossHazards[0].kind, 'star-orb');
+  applyRemoteBossEvent(sPeer, { kind: 'scooter_dash', x: 350, y: 184, angle: 0.4 });
+  assert.ok(sPeer.secretLair.dashTrail.length > 0, 'Remote peer scooter_dash event must spawn visible dash trail');
+
+  // 4. Touch Aim Magnetism locks gently onto boss within ±8.5° cone
+  sKru.diver.x = sKru.secretLair.boss.x - 10;
+  sKru.diver.y = sKru.secretLair.boss.y;
+  const slightlyOff = 0.08; // ~4.5° off horizontal toward boss
+  const magAng = computeTouchAimMagnetAngle(sKru, slightlyOff, 0.15);
+  assert.ok(Math.abs(magAng) < 0.05 || Math.abs(magAng - slightlyOff) > 0.01, 'Aim magnetism should gently snap toward nearby boss/weakpoint');
+
+  // 5. Bespoke Secret Boss Trophy Relics render cleanly & record bestClearSec (keeping fastest clear!)
+  let book = createEmptyLogbook();
+  book = recordArtifactInLogbook(book, { id: 'ss-thistlegorm-wreck:thistlegorm-engine-core', name: 'Sunken Engine Core', points: 2800, bestClearSec: 118, bossName: 'IRON LEVIATHAN MK-IV' }).book;
+  book = recordArtifactInLogbook(book, { id: 'ss-thistlegorm-wreck:thistlegorm-engine-core', name: 'Sunken Engine Core', points: 2800, bestClearSec: 94, bossName: 'IRON LEVIATHAN MK-IV' }).book;
+  assert.equal(book.artifacts['ss-thistlegorm-wreck:thistlegorm-engine-core'].bestClearSec, 94, 'Trophy Vault must keep fastest Boss Clear Time');
+
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    { createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) },
+    { get(t, p) { return p in t ? t[p] : () => drawCalls.push(String(p)); } }
+  );
+  for (const id of ['xibalba-kraken-heart', 'thistlegorm-engine-core', 'scoresby-borealis-heart', 'krubera-empress-diadem']) {
+    drawStyledArtifact(mockCtx, { id, name: id }, 52, 52, 34, 2.5, { isGrand: true });
+  }
+  drawStyledJellyfish(mockCtx, { size: 0.5, hue: '#38bdf8', phase: 1 }, 100, 100, 20, 2.5);
+  drawStyledDenizen(mockCtx, { kind: 'octopus', size: 1.1, emergence: 0.8, nx: 1, ny: 0, phase: 0.4, state: 'curious' }, 120, 120, 20, 2.5);
+  assert.ok(drawCalls.length > 80, 'All 4 bespoke Boss Trophy Relics & polished marine life must render cleanly');
+
+  // 6. Radial SVG Cooldown Ring exists inside #btn-combat-dash
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="combat-dash-ring"'), 'Circular #btn-combat-dash must include radial SVG cooldown ring');
+});

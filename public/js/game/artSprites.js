@@ -1480,25 +1480,32 @@ export function drawStyledJellyfish(ctx, j, sx, sy, scale, timeSec) {
     ctx.stroke();
   }
 
-  // Translucent bioluminescent bell
-  ctx.fillStyle = j.hue || '#38bdf8';
-  ctx.globalAlpha = 0.26;
+  // Translucent bioluminescent bell with cel-shaded crown glow & delicate ink rim (v192)
+  const bellG = ctx.createRadialGradient(-rx * 0.2, -ry * 0.45, r * 0.08, 0, -ry * 0.1, rx * 1.1);
+  bellG.addColorStop(0, 'rgba(240, 249, 255, 0.72)');
+  bellG.addColorStop(0.5, j.hue || '#38bdf8');
+  bellG.addColorStop(1, 'rgba(14, 116, 144, 0.28)');
+  ctx.fillStyle = bellG;
+  ctx.globalAlpha = 0.52;
   ctx.beginPath();
   ctx.ellipse(0, 0, rx, ry, 0, Math.PI, Math.PI * 2);
   ctx.quadraticCurveTo(0, ry * 0.45, -rx, 0);
   ctx.closePath();
   ctx.fill();
 
-  ctx.globalAlpha = 0.58;
-  ctx.strokeStyle = '#e0f2fe';
-  ctx.lineWidth = Math.max(1.1, r * 0.06);
+  ctx.globalAlpha = 0.78;
+  ctx.strokeStyle = '#bae6fd';
+  ctx.lineWidth = Math.max(1.2, r * 0.065);
   ctx.stroke();
 
-  // Inner four-leaf gonad ring
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.36)';
-  ctx.beginPath();
-  ctx.arc(0, -ry * 0.28, rx * 0.26, 0, Math.PI * 2);
-  ctx.fill();
+  // Four-leaf moon jellyfish horseshoe gonad clover + specular dome gleam
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
+  for (let g = 0; g < 4; g++) {
+    const ga = (g / 4) * Math.PI * 2 + 0.4;
+    ctx.beginPath();
+    ctx.arc(Math.cos(ga) * rx * 0.2, -ry * 0.28 + Math.sin(ga) * ry * 0.14, rx * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
@@ -2146,6 +2153,9 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.bezierCurveTo(sz * 0.64, sz * 0.32, sz * 1.06, sz * 0.24, sz * 1.32, sz * 0.06);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.58)';
+    ctx.lineWidth = Math.max(1.2, sz * 0.024);
+    ctx.stroke();
 
     // Soft sunlit dorsal rim specular sheen
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.68)';
@@ -2405,6 +2415,9 @@ export function drawStyledDenizen(ctx, d, sx, sy, scale, timeSec) {
     ctx.bezierCurveTo(mCx - sz * 0.18, sz * 0.34, mCx + sz * 0.24, sz * 0.3, mCx + sz * 0.34, 0);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = 'rgba(4, 16, 33, 0.72)';
+    ctx.lineWidth = Math.max(1.2, sz * 0.036);
+    ctx.stroke();
 
     // Rippling chromatophore bands & organic dermal mottling spots
     const chromaWave = 0.5 + 0.5 * Math.sin(timeSec * (d.state === 'startled' ? 10 : 3.5) + d.phase);
@@ -2693,6 +2706,134 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
 
   // Gentle suspended underwater buoyancy sway
   ctx.rotate(Math.sin(timeSec * 1.55 + index * 1.3) * 0.14);
+
+  // Bespoke Secret Boss Trophy Relics (only rendered once earned & stored in Career Trophy Vault!) (v192)
+  const itemIdLower = String(item?.id || '').toLowerCase();
+  if (itemIdLower.includes('xibalba-kraken-heart') || nameLower.includes('heart of the cenote')) {
+    const pulse = 1 + Math.sin(timeSec * 3.4) * 0.05;
+    ctx.scale(pulse, pulse);
+    // Twin golden Kraken filigree tentacles cradling the abyssal crystal heart
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = Math.max(2, r * 0.16);
+    ctx.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.2, r * 0.85);
+      ctx.bezierCurveTo(s * r * 1.05, r * 0.55, s * r * 1.15, -r * 0.4, s * r * 0.62, -r * 0.65);
+      ctx.stroke();
+    }
+    const hg = _safeLinGrad(ctx, 0, -r * 0.9, 0, r * 0.9, [[0, '#a5f3fc'], [0.45, '#38bdf8'], [1, '#6d28d9']], '#38bdf8');
+    ctx.fillStyle = hg;
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.92);
+    ctx.lineTo(r * 0.66, -r * 0.18);
+    ctx.lineTo(0, r * 0.94);
+    ctx.lineTo(-r * 0.66, -r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.72);
+    ctx.lineTo(r * 0.24, -r * 0.18);
+    ctx.lineTo(0, r * 0.28);
+    ctx.lineTo(-r * 0.24, -r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('thistlegorm-engine-core') || nameLower.includes('sunken engine core')) {
+    // Riveted brass-and-steel naval engine reactor housing a spinning glowing amber turbine
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.94, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = Math.max(2, r * 0.14);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.74, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.save();
+    ctx.rotate(timeSec * 1.8);
+    ctx.fillStyle = '#fbbf24';
+    for (let b = 0; b < 6; b++) {
+      ctx.rotate(Math.PI / 3);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(r * 0.18, -r * 0.56);
+      ctx.lineTo(-r * 0.18, -r * 0.56);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#fef9c3';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('scoresby-borealis-heart') || nameLower.includes('heart of borealis')) {
+    // Six-pointed Arctic Aurora Crystal Star Gem
+    ctx.save();
+    ctx.rotate(timeSec * 0.35);
+    const ag = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#34d399'], [0.5, '#38bdf8'], [1, '#c084fc']], '#38bdf8');
+    ctx.fillStyle = ag;
+    ctx.strokeStyle = '#082f49';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let p = 0; p < 12; p++) {
+      const pr = p % 2 === 0 ? r * 0.96 : r * 0.42;
+      const pa = (p * Math.PI) / 6;
+      if (p === 0) ctx.moveTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+      else ctx.lineTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('krubera-empress-diadem') || nameLower.includes('empress diadem')) {
+    // Sculpted Royal Gold Abyssal Empress Crown with radiant pearl & twin cyan sapphires
+    const dg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.5, '#f59e0b'], [1, '#b45309']], '#f59e0b');
+    ctx.fillStyle = dg;
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.86, r * 0.42);
+    ctx.lineTo(-r * 0.92, -r * 0.32);
+    ctx.lineTo(-r * 0.48, r * 0.04);
+    ctx.lineTo(0, -r * 0.84);
+    ctx.lineTo(r * 0.48, r * 0.04);
+    ctx.lineTo(r * 0.92, -r * 0.32);
+    ctx.lineTo(r * 0.86, r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.16, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(-r * 0.5, r * 0.18, r * 0.12, 0, Math.PI * 2);
+    ctx.arc(r * 0.5, r * 0.18, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   const brassGrad = _safeLinGrad(ctx, -r, -r, r, r, [
     [0, '#fef08a'],

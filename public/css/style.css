@@ -9068,8 +9068,9 @@ summary,
   }
 }
 
-/* v189 / v191: Combat Scooter Hydro-Dash Button (sits right beside the right aim joystick!) */
+/* v189 / v191 / v192: Combat Scooter Hydro-Dash Button with Radial Cooldown Ring */
 .combat-dash-btn {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -9080,7 +9081,7 @@ summary,
   padding: 0;
   margin-bottom: 10px;
   border-radius: 50%;
-  border: 2px solid rgba(34, 211, 238, 0.84);
+  border: 2px solid rgba(34, 211, 238, 0.35);
   background: radial-gradient(circle at 32% 28%, rgba(34, 211, 238, 0.42), rgba(14, 116, 144, 0.88) 55%, rgba(8, 47, 73, 0.96));
   color: #f0f9ff;
   font-family: ui-monospace, monospace;
@@ -9095,6 +9096,29 @@ summary,
   -webkit-user-select: none;
   box-shadow: 0 0 18px rgba(34, 211, 238, 0.36), inset 0 1px 0 rgba(224, 242, 254, 0.45);
   transition: transform 0.1s ease, opacity 0.14s ease, border-color 0.15s ease;
+}
+.combat-dash-ring-svg {
+  position: absolute;
+  inset: -2px;
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.combat-dash-ring-track {
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.55);
+  stroke-width: 3.5;
+}
+.combat-dash-ring-fill {
+  fill: none;
+  stroke: #67e8f9;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.06s linear;
+}
+.combat-dash-btn.low-batt .combat-dash-ring-fill {
+  stroke: #f87171;
 }
 .combat-dash-btn .combat-dash-ico {
   font-size: 1.15rem;

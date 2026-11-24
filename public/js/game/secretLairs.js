@@ -873,6 +873,10 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     shockwaves: [], // { x, y, radius, maxRadius, life, maxLife, color }
     pillarCrystals: makePillarCrystals(spec.arena.pillars || []),
     stalactites: makeStalactites(spec.arena.stalactites || []),
+    bossHazards: [], // Biome-unique boss hazards: 'naval-mine' | 'frost-ring' | 'star-orb' (v192)
+    cryoSlowSec: 0,
+    mineBlasts: 0,
+    _hazardSeq: 0,
     vortexShelteredPillarId: null,
     dashTimerSec: 0,
     dashCooldownSec: 0,
@@ -1684,6 +1688,8 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
         lair.dashTimerSec = 0;
         lair.dashCooldownSec = 0;
         lair.dashTrail.length = 0;
+        if (Array.isArray(lair.bossHazards)) lair.bossHazards.length = 0;
+        lair.cryoSlowSec = 0;
         for (const pc of lair.pillarCrystals || []) {
           pc.charge = 0;
           pc.cooldownSec = 0;
@@ -1855,6 +1861,8 @@ export function applyBossDamage(
     lair.spears.length = 0;
     if (Array.isArray(lair.batteryCells)) lair.batteryCells.length = 0;
     if (Array.isArray(lair.weaponUpgrades)) lair.weaponUpgrades.length = 0;
+    if (Array.isArray(lair.bossHazards)) lair.bossHazards.length = 0;
+    lair.cryoSlowSec = 0;
     restorePreCombatScooter(session);
     lair.bonusScore = (lair.bonusScore || 0) + (lair.spec.boss.bonusPoints || 2500);
     for (const m of lair.minions) {
@@ -2042,6 +2050,16 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
   if (lair.titleBannerSec > 0) lair.titleBannerSec = Math.max(0, lair.titleBannerSec - dt);
   if (lair.foreshadowTimer > 0) lair.foreshadowTimer = Math.max(0, lair.foreshadowTimer - dt);
   if (lair.dashCooldownSec > 0) lair.dashCooldownSec = Math.max(0, lair.dashCooldownSec - dt);
+  if (lair.cryoSlowSec > 0) {
+    lair.cryoSlowSec = Math.max(0, lair.cryoSlowSec - dt);
+    if (lair.dashTimerSec > 0) {
+      lair.cryoSlowSec = 0; // Hydro-Dash instantly shatters frost chill!
+    } else if (diver && diveState?.alive && lair.combatMode) {
+      const drag = Math.max(0.55, 1 - dt * 2.4);
+      diver.vx *= drag;
+      diver.vy *= drag;
+    }
+  }
   if (lair.dashTimerSec > 0) {
     lair.dashTimerSec = Math.max(0, lair.dashTimerSec - dt);
     if (diver && diveState?.alive && lair.combatMode) {
@@ -2478,6 +2496,41 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       continue;
     }
 
+    // Biome-unique Shootable Boss Hazards: Naval Depth-Charge Mines & Constellation Star Orbs (v192)
+    let hitHazard = false;
+    for (let hi = (lair.bossHazards || []).length - 1; hi >= 0; hi--) {
+      const hz = lair.bossHazards[hi];
+      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb')) continue;
+      if (distPointToSegment(hz.x, hz.y, sp.prevX, sp.prevY, sp.x, sp.y) <= (hz.radius || 1.2) + 0.55) {
+        hz.hp = Math.max(0, (hz.hp || 2) - (sp.piercing ? 2 : 1));
+        hz.hitFlash = 0.2;
+        if (hz.hp <= 0) {
+          if (hz.kind === 'naval-mine') {
+            _detonateNavalMine(session, lair, hi, { triggeredByPlayer: true }, callbacks);
+          } else if (hz.kind === 'star-orb') {
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 4.8, '#fde047', 0.42);
+            addSparkBurst(lair, hz.x, hz.y, '#fde047', 12, '✦ ORB SHATTERED! +18% ⚡', true);
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
+            }
+            callbacks.onCrystalChime?.(3);
+          }
+        } else {
+          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' ? '#fb923c' : '#fde047', 6, 'PING!', false);
+          callbacks.onCrystalChime?.(1);
+        }
+        if (!sp.piercing) {
+          hitHazard = true;
+          break;
+        }
+      }
+    }
+    if (hitHazard) {
+      lair.spears.splice(i, 1);
+      continue;
+    }
+
     // Minion swept hits
     let consumed = false;
     for (const m of lair.minions) {
@@ -2608,6 +2661,73 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
         st.y = st.homeY;
         st.vy = 0;
         st.hp = st.maxHp;
+      }
+    }
+  }
+
+  // 5c. Step Biome-Unique Boss Signature Hazards (Naval Mines, Glacial Frost Rings, Constellation Star Orbs) (v192)
+  for (let hi = (lair.bossHazards || []).length - 1; hi >= 0; hi--) {
+    const hz = lair.bossHazards[hi];
+    if (!hz) continue;
+    hz.age = (hz.age || 0) + dt;
+    if (hz.hitFlash > 0) hz.hitFlash = Math.max(0, hz.hitFlash - dt);
+
+    if (hz.kind === 'naval-mine') {
+      hz.fuseSec = (hz.fuseSec ?? 8.5) - dt;
+      hz.y += Math.sin((hz.age || 0) * 2.8 + (hz.phase || 0)) * 0.35 * dt;
+      const distDiver = diveState?.alive ? Math.hypot(diver.x - hz.x, diver.y - hz.y) : 99;
+      if (hz.fuseSec <= 0 || distDiver <= (hz.radius || 1.35) + 0.95) {
+        _detonateNavalMine(session, lair, hi, { triggeredByPlayer: false }, callbacks);
+      }
+    } else if (hz.kind === 'frost-ring') {
+      hz.radius = (hz.radius || 2.4) + (hz.expandSpeed || 7.2) * dt;
+      if (diveState?.alive && !hz.hitLocal && !hz.shatteredByLocal) {
+        const dDiver = Math.hypot(diver.x - hz.x, diver.y - hz.y);
+        if (Math.abs(dDiver - hz.radius) <= 1.05) {
+          if ((lair.dashTimerSec || 0) > 0) {
+            hz.shatteredByLocal = true;
+            lair.cryoSlowSec = 0;
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 15);
+            }
+            addSparkBurst(lair, diver.x, diver.y, '#67e8f9', 14, '❄️ FROST SHATTER! +15% ⚡', true);
+            callbacks.onCrystalChime?.(3);
+          } else {
+            hz.hitLocal = true;
+            lair.cryoSlowSec = 1.4;
+            applyDamageToLocalDiver(session, 15 * lair.scaling.damageMult, `${boss.name}'s Frost Ring`, callbacks);
+            addSparkBurst(lair, diver.x, diver.y, '#38bdf8', 10, '❄️ CHILLED! DASH FREE', false);
+          }
+        }
+      }
+      if (hz.radius >= (hz.maxRadius || 17.5)) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'star-orb') {
+      hz.life = (hz.life ?? 11.5) - dt;
+      hz.orbitAngle = (hz.orbitAngle || 0) + (hz.orbitSpeed || 0.72) * dt;
+      const cx = lair.spec.arena.cx;
+      const cy = lair.spec.arena.cy;
+      hz.x = cx + Math.cos(hz.orbitAngle) * (hz.orbitRx || 12.0);
+      hz.y = cy + Math.sin(hz.orbitAngle) * (hz.orbitRy || 6.4);
+      hz.fireCd = (hz.fireCd ?? 1.45) - dt;
+      if (isAuthority && hz.fireCd <= 0 && diveState?.alive && !boss.defeated) {
+        hz.fireCd = boss.phase >= 3 ? 1.55 : 1.95;
+        const aim = Math.atan2(diver.y - hz.y, diver.x - hz.x);
+        lair.enemyProjectiles.push({
+          x: hz.x + Math.cos(aim) * 1.1,
+          y: hz.y + Math.sin(aim) * 1.1,
+          vx: Math.cos(aim) * 11.2,
+          vy: Math.sin(aim) * 11.2,
+          radius: 0.54,
+          damage: 14 * lair.scaling.damageMult,
+          life: 3.1,
+          color: '#fde047',
+          kind: 'prism',
+        });
+      }
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
       }
     }
   }
@@ -2954,6 +3074,9 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             boss.inkAimAngle = Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
             boss.stateTimer = 0.85;
             boss.stateMaxTimer = 0.85;
+            if (boss.kind !== 'cave-kraken' && (lair.bossHazards || []).length < 3) {
+              spawnBossSignatureHazard(session, lair, boss, primaryTarget, callbacks);
+            }
           } else if (roll === 2 && boss.phase >= 2) {
             // Signature Pillar-Occluded Sweeping Abyssal Beam!
             const toP = Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
@@ -3056,6 +3179,20 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             ? boss.inkAimAngle
             : Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
           const spread = boss.phase === 3 ? 0.23 : 0.27;
+          const projKind = boss.kind === 'iron-leviathan'
+            ? 'slag'
+            : boss.kind === 'frost-wyrm'
+              ? 'frost'
+              : boss.kind === 'abyssal-empress'
+                ? 'prism'
+                : 'ink';
+          const projCol = projKind === 'slag'
+            ? '#fb923c'
+            : projKind === 'frost'
+              ? '#67e8f9'
+              : projKind === 'prism'
+                ? (boss.phase >= 3 ? '#fde047' : '#f472b6')
+                : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
             lair.enemyProjectiles.push({
@@ -3066,8 +3203,8 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               radius: 0.62,
               damage: 16 * lair.scaling.damageMult,
               life: 3.4,
-              color: boss.phase === 3 ? '#fb7185' : '#c084fc',
-              kind: 'ink',
+              color: projCol,
+              kind: projKind,
             });
           }
           boss.aiState = 'idle';
@@ -3320,6 +3457,13 @@ export function serializeSecretLairNetState(lair) {
     bc: (lair.batteryCells || []).slice(0, 4).map((c) => [c.id, Math.round(c.x * 10) / 10, Math.round(c.y * 10) / 10, c.inArena ? 1 : 0]),
     wu: (lair.weaponUpgrades || []).slice(0, 3).map((u) => [u.id, u.kind, Math.round(u.x * 10) / 10, Math.round(u.y * 10) / 10, u.inArena ? 1 : 0]),
     st: (lair.stalactites || []).map((s) => [s.state === 'falling' ? 1 : s.state === 'broken' ? 2 : 0, Math.round(s.y * 10) / 10, s.hp]),
+    hz: (lair.bossHazards || []).slice(0, 6).map((h) => [
+      h.kind === 'naval-mine' ? 1 : h.kind === 'frost-ring' ? 2 : 3,
+      Math.round(h.x * 10) / 10,
+      Math.round(h.y * 10) / 10,
+      Math.round((h.radius || 1.2) * 10) / 10,
+      h.hp || 0,
+    ]),
   };
 }
 
@@ -3428,6 +3572,190 @@ export function applySecretLairNetState(lairOrSession, snap) {
       lair.stalactites[i].hp = Number.isFinite(hp) ? hp : lair.stalactites[i].maxHp;
     }
   }
+  if (Array.isArray(snap.hz)) {
+    lair.bossHazards = snap.hz.map(([code, hx, hy, hr, hp], idx) => ({
+      id: `net-hz-${idx}`,
+      kind: code === 1 ? 'naval-mine' : code === 2 ? 'frost-ring' : 'star-orb',
+      x: hx,
+      y: hy,
+      radius: hr,
+      maxRadius: 17.5,
+      hp,
+      fuseSec: 6,
+      age: 0.5,
+      phase: idx * 1.4,
+    }));
+  }
+}
+
+function _detonateNavalMine(session, lair, idx, { triggeredByPlayer = false } = {}, callbacks = {}) {
+  const mine = lair.bossHazards?.[idx];
+  if (!mine) return;
+  lair.bossHazards.splice(idx, 1);
+  const blastR = 7.6;
+  addShockwave(lair, mine.x, mine.y, blastR, '#fb923c', 0.58);
+  addSparkBurst(lair, mine.x, mine.y, '#fde047', 16, triggeredByPlayer ? '💥 MINE BLAST!' : '💥 DETONATION!', triggeredByPlayer);
+  if (session.cameraShake !== undefined) {
+    session.cameraShake = Math.max(session.cameraShake || 0, 0.52);
+  }
+  callbacks.onMineBlast?.(mine);
+
+  // Clear enemy projectiles inside blast zone
+  for (let i = (lair.enemyProjectiles || []).length - 1; i >= 0; i--) {
+    const pr = lair.enemyProjectiles[i];
+    if (Math.hypot(pr.x - mine.x, pr.y - mine.y) <= blastR) {
+      lair.enemyProjectiles.splice(i, 1);
+    }
+  }
+
+  // Damage boss heavily if caught in the mine blast!
+  const boss = lair.boss;
+  if (boss && boss.active && !boss.defeated && Math.hypot(boss.x - mine.x, boss.y - mine.y) <= blastR + boss.radius) {
+    lair.mineBlasts = (lair.mineBlasts || 0) + 1;
+    applyBossDamage(session, 185, { crit: true, hitX: mine.x, hitY: mine.y }, callbacks);
+    addSparkBurst(lair, boss.x, boss.y - 2.2, '#fde047', 10, '💥 CHAIN BLAST -185!', true);
+  }
+
+  // Damage diver if too close & not triggered safely from afar
+  const diver = session.diver;
+  if (!triggeredByPlayer && diver && session.diveState?.alive && Math.hypot(diver.x - mine.x, diver.y - mine.y) <= 4.4) {
+    applyDamageToLocalDiver(session, 18 * (lair.scaling?.damageMult || 1), 'Naval Depth-Charge Mine', callbacks);
+  }
+
+  // Chain-detonate any adjacent naval mine!
+  for (let j = (lair.bossHazards || []).length - 1; j >= 0; j--) {
+    const other = lair.bossHazards[j];
+    if (other?.kind === 'naval-mine' && Math.hypot(other.x - mine.x, other.y - mine.y) <= blastR) {
+      _detonateNavalMine(session, lair, j, { triggeredByPlayer }, callbacks);
+      break;
+    }
+  }
+}
+
+/**
+ * Spawn biome-unique signature Boss Hazards for Iron Leviathan, Borealis Wyrm, and Abyssal Empress (v192).
+ */
+export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = null, callbacks = {}) {
+  if (!lair || !boss || boss.defeated) return null;
+  if (!Array.isArray(lair.bossHazards)) lair.bossHazards = [];
+  const ar = lair.spec.arena;
+
+  if (boss.kind === 'iron-leviathan') {
+    const count = boss.phase >= 2 ? 2 : 1;
+    const spawned = [];
+    for (let k = 0; k < count; k++) {
+      if (lair.bossHazards.filter((h) => h.kind === 'naval-mine').length >= 3) break;
+      const ang = (Math.PI * 0.65) + k * 1.15 + (Math.random() - 0.5) * 0.5;
+      const mx = Math.max(ar.cx - ar.rx + 6, Math.min(ar.cx + ar.rx - 6, boss.x + Math.cos(ang) * 7.2));
+      const my = Math.max(ar.cy - ar.ry + 4, Math.min(ar.cy + ar.ry - 4, boss.y + Math.sin(ang) * 5.2));
+      const mine = {
+        id: `mine_${++lair._hazardSeq}`,
+        kind: 'naval-mine',
+        x: mx,
+        y: my,
+        radius: 1.35,
+        hp: 2,
+        fuseSec: 8.5,
+        age: 0,
+        phase: Math.random() * Math.PI * 2,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(mine);
+      addShockwave(lair, mx, my, 3.2, '#fb923c', 0.35);
+      spawned.push(mine);
+    }
+    return spawned[0] || null;
+  }
+
+  if (boss.kind === 'frost-wyrm') {
+    const ring = {
+      id: `frost_${++lair._hazardSeq}`,
+      kind: 'frost-ring',
+      x: boss.x,
+      y: boss.y,
+      radius: 2.6,
+      maxRadius: 17.5,
+      expandSpeed: boss.phase >= 3 ? 8.2 : 6.8,
+      age: 0,
+      hitLocal: false,
+      shatteredByLocal: false,
+    };
+    lair.bossHazards.push(ring);
+    callbacks.onCrystalChime?.(2);
+    return ring;
+  }
+
+  if (boss.kind === 'abyssal-empress') {
+    const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
+    const toSpawn = Math.min(boss.phase >= 3 ? 2 : 1, 3 - existingOrbs);
+    let lastOrb = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const startAng = Math.random() * Math.PI * 2 + k * Math.PI;
+      const orb = {
+        id: `orb_turret_${++lair._hazardSeq}`,
+        kind: 'star-orb',
+        x: ar.cx + Math.cos(startAng) * 12.0,
+        y: ar.cy + Math.sin(startAng) * 6.4,
+        radius: 1.05,
+        hp: 2,
+        orbitAngle: startAng,
+        orbitSpeed: (k % 2 === 0 ? 1 : -1) * (boss.phase >= 3 ? 0.92 : 0.68),
+        orbitRx: 12.0,
+        orbitRy: 6.4,
+        fireCd: 1.35 + k * 0.45,
+        life: 12.5,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(orb);
+      addShockwave(lair, orb.x, orb.y, 3.6, '#fde047', 0.38);
+      lastOrb = orb;
+    }
+    return lastOrb;
+  }
+  return null;
+}
+
+/**
+ * Gentle Touch Right-Stick Aim Magnetism (~8.5° soft lock cone onto nearest boss, minion, mine, orb, or stalactite) (v192).
+ */
+export function computeTouchAimMagnetAngle(session, rawAngle, maxConeRad = 0.15) {
+  const lair = session?.secretLair;
+  const diver = session?.diver;
+  if (!lair?.combatMode || !diver || !Number.isFinite(rawAngle)) return rawAngle;
+  const ox = diver.x;
+  const oy = diver.y;
+  const candidates = [];
+  if (lair.boss?.active && !lair.boss.defeated) {
+    const b = lair.boss;
+    candidates.push({ x: b.x + Math.cos(b.weakAngle) * (b.radius * 1.05), y: b.y + Math.sin(b.weakAngle) * (b.radius * 1.05), prio: 1.0 });
+    candidates.push({ x: b.x, y: b.y, prio: 0.9 });
+  }
+  for (const m of lair.minions || []) {
+    if (m.alive) candidates.push({ x: m.x, y: m.y, prio: 0.85 });
+  }
+  for (const hz of lair.bossHazards || []) {
+    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb') candidates.push({ x: hz.x, y: hz.y, prio: 0.95 });
+  }
+  for (const st of lair.stalactites || []) {
+    if (st.state === 'hanging') candidates.push({ x: st.x, y: st.y + 1.1, prio: 0.8 });
+  }
+  let bestAng = rawAngle;
+  let bestScore = Infinity;
+  for (const c of candidates) {
+    const d = Math.hypot(c.x - ox, c.y - oy);
+    if (d < 1.2 || d > 28) continue;
+    const ang = Math.atan2(c.y - oy, c.x - ox);
+    const diff = Math.abs(Math.atan2(Math.sin(ang - rawAngle), Math.cos(ang - rawAngle)));
+    if (diff <= maxConeRad) {
+      const score = diff / (c.prio || 1);
+      if (score < bestScore) {
+        bestScore = score;
+        bestAng = ang;
+      }
+    }
+  }
+  return bestAng;
 }
 
 export function applyRemoteBossEvent(session, msg, callbacks = {}) {
@@ -3460,6 +3788,12 @@ export function applyRemoteBossEvent(session, msg, callbacks = {}) {
   }
   if (msg.kind === 'boss_sync' && msg.snap) {
     applySecretLairNetState(lair, msg.snap);
+    return true;
+  }
+  if (msg.kind === 'scooter_dash' && Number.isFinite(msg.x) && Number.isFinite(msg.y)) {
+    addShockwave(lair, msg.x, msg.y, 3.8, '#22d3ee', 0.34);
+    if (!Array.isArray(lair.dashTrail)) lair.dashTrail = [];
+    lair.dashTrail.push({ x: msg.x, y: msg.y, angle: Number(msg.angle) || 0, life: 0.3, maxLife: 0.3 });
     return true;
   }
   return false;

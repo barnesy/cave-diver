@@ -3189,6 +3189,114 @@ export const bossAndLairMethods = {
       }
     }
 
+    // 5e. Biome-Unique Signature Boss Hazards: Naval Depth-Charge Mines, Glacial Frost Rings & Starlight Orb Turrets (v192)
+    for (const hz of lair.bossHazards || []) {
+      const hx = toScreenX(hz.x);
+      const hy = toScreenY(hz.y);
+      if (hz.kind === 'naval-mine') {
+        const mr = (hz.radius || 1.35) * scale;
+        const blink = Math.sin(timeSec * (hz.fuseSec < 2.4 ? 18 : 6.5) + (hz.phase || 0)) > 0;
+        ctx.save();
+        ctx.translate(hx, hy);
+        if ((hz.hp || 2) < 2 || (hz.fuseSec ?? 9) < 2.5) {
+          ctx.strokeStyle = 'rgba(251, 146, 60, 0.34)';
+          ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+          ctx.setLineDash([5 * dpr, 5 * dpr]);
+          ctx.beginPath();
+          ctx.arc(0, 0, mr * 2.1, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.strokeStyle = '#041021';
+        ctx.lineWidth = Math.max(2.2, 0.1 * scale);
+        ctx.lineCap = 'round';
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2 + timeSec * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * mr * 0.72, Math.sin(a) * mr * 0.72);
+          ctx.lineTo(Math.cos(a) * mr * 1.24, Math.sin(a) * mr * 1.24);
+          ctx.stroke();
+          ctx.fillStyle = k % 2 === 0 && blink ? '#fb923c' : '#94a3b8';
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * mr * 1.24, Math.sin(a) * mr * 1.24, Math.max(2, mr * 0.16), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const mg = ctx.createRadialGradient(-mr * 0.25, -mr * 0.25, mr * 0.1, 0, 0, mr);
+        mg.addColorStop(0, hz.hitFlash > 0 ? '#ffffff' : '#64748b');
+        mg.addColorStop(0.55, '#334155');
+        mg.addColorStop(1, '#0f172a');
+        ctx.fillStyle = mg;
+        ctx.strokeStyle = '#041021';
+        ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, mr * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = blink ? '#f97316' : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, 0, mr * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (hz.kind === 'frost-ring') {
+        const rr = (hz.radius || 2.6) * scale;
+        const fade = Math.max(0.12, 1 - (hz.radius || 2.6) / (hz.maxRadius || 17.5));
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.82 * fade;
+        ctx.strokeStyle = hz.shatteredByLocal ? '#34d399' : '#67e8f9';
+        ctx.lineWidth = Math.max(3, 0.18 * scale);
+        ctx.beginPath();
+        ctx.arc(hx, hy, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#e0f2fe';
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2 + timeSec * 1.4;
+          const sx = hx + Math.cos(a) * rr;
+          const sy = hy + Math.sin(a) * rr;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(a);
+          ctx.beginPath();
+          ctx.moveTo(0.42 * scale, 0);
+          ctx.lineTo(0, -0.18 * scale);
+          ctx.lineTo(-0.32 * scale, 0);
+          ctx.lineTo(0, 0.18 * scale);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      } else if (hz.kind === 'star-orb') {
+        const or = (hz.radius || 1.05) * scale;
+        ctx.save();
+        ctx.translate(hx, hy);
+        const og = ctx.createRadialGradient(0, 0, or * 0.1, 0, 0, or * 1.7);
+        og.addColorStop(0, '#ffffff');
+        og.addColorStop(0.4, hz.hitFlash > 0 ? '#ffffff' : '#fde047');
+        og.addColorStop(0.75, 'rgba(244, 114, 182, 0.45)');
+        og.addColorStop(1, 'rgba(244, 114, 182, 0)');
+        ctx.fillStyle = og;
+        ctx.beginPath();
+        ctx.arc(0, 0, or * 1.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.rotate(timeSec * 2.4);
+        ctx.fillStyle = '#fef9c3';
+        ctx.strokeStyle = '#713f12';
+        ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+        ctx.beginPath();
+        for (let p = 0; p < 8; p++) {
+          const pr = p % 2 === 0 ? or * 0.96 : or * 0.36;
+          const pa = (p * Math.PI) / 4;
+          if (p === 0) ctx.moveTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+          else ctx.lineTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // 6. Hyper-Tip Ready Golden Glow on Diver's Speargun Tip (respects Overcharge upgrade cadence!)
     const overLv = lair.weaponMods?.overcharge || 0;
     const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;

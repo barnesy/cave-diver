@@ -36,7 +36,9 @@ import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/resc
 import {
   fireSpeargun,
   triggerCombatScooterDash,
+  computeTouchAimMagnetAngle,
   SCOOTER_DASH_COST_PCT,
+  SCOOTER_DASH_COOLDOWN_SEC,
   SPEARGUN_MAX_CHARGE_SEC,
   BOSS_WEAPON_UPGRADES,
   BOSS_WEAPON_UPGRADE_ORDER,
@@ -528,7 +530,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=191',
+  mapRasterUrl: './assets/map-expedition.jpg?v=192',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1724,6 +1726,7 @@ const combatBattFillEl = document.getElementById('combat-batt-fill');
 const combatScooterPctEl = document.getElementById('combat-scooter-pct');
 const btnCombatDashEl = document.getElementById('btn-combat-dash');
 const combatDashLabelEl = document.getElementById('combat-dash-label');
+const combatDashRingEl = document.getElementById('combat-dash-ring');
 const combatUpgradesRowEl = document.getElementById('combat-upgrades-row');
 const combatHintPillEl = document.getElementById('combat-hint-pill');
 const btnCombatPauseEl = document.getElementById('btn-combat-pause');
@@ -1752,7 +1755,14 @@ function handleCombatDash() {
   const dirX = Math.hypot(move.x, move.y) > 0.12 ? move.x : null;
   const dirY = Math.hypot(move.x, move.y) > 0.12 ? move.y : null;
   const res = triggerCombatScooterDash(session, { dirX, dirY }, sessionStepCallbacks);
-  if (!res.ok && res.reason === 'low_battery') {
+  if (res.ok && isMultiplayer && lan.room && session.diver) {
+    lan.sendBossEvent({
+      kind: 'scooter_dash',
+      x: Math.round(session.diver.x * 10) / 10,
+      y: Math.round(session.diver.y * 10) / 10,
+      angle: Math.round(Math.atan2(lair.dashDirY || 0, lair.dashDirX || 1) * 100) / 100,
+    });
+  } else if (!res.ok && res.reason === 'low_battery') {
     showToast('⚡ Need 12% Scooter Battery to Hydro-Dash — grab a Battery Cell!', 1.8);
   }
   return true;
@@ -1819,11 +1829,12 @@ function syncCombatModeHud(sess) {
     if (combatBattFillEl) combatBattFillEl.style.width = `${dpvPct}%`;
     if (combatScooterPctEl) combatScooterPctEl.textContent = dpvPct <= 0 ? '0%' : dpvOn ? `${dpvPct}%` : 'OFF';
   }
-  // Live Combat Hydro-Dash Button Status (v189)
+  // Live Combat Hydro-Dash Button Status + Radial SVG Cooldown Ring (v189 / v192)
   const dashCd = Math.max(0, lair.dashCooldownSec || 0);
   const dashLow = !dpvEquipped || dpvPct < SCOOTER_DASH_COST_PCT;
   const dashReady = dashCd <= 0.02 && !dashLow;
-  const dashKey = `${dashReady}:${dashLow}:${Math.ceil(dashCd * 10)}`;
+  const ringFrac = dashLow ? 0 : Math.max(0, Math.min(1, 1 - dashCd / Math.max(0.1, SCOOTER_DASH_COOLDOWN_SEC)));
+  const dashKey = `${dashReady}:${dashLow}:${Math.round(ringFrac * 40)}`;
   if (dashKey !== _lastCombatDashKey) {
     _lastCombatDashKey = dashKey;
     if (btnCombatDashEl) {
@@ -1831,6 +1842,10 @@ function syncCombatModeHud(sess) {
       btnCombatDashEl.classList.toggle('ready', dashReady);
       btnCombatDashEl.classList.toggle('cooling', !dashReady && !dashLow);
       btnCombatDashEl.classList.toggle('low-batt', dashLow);
+    }
+    if (combatDashRingEl) {
+      const circ = 169.65;
+      combatDashRingEl.setAttribute('stroke-dashoffset', (circ * (1 - ringFrac)).toFixed(2));
     }
     if (combatDashLabelEl) {
       combatDashLabelEl.textContent = dashLow ? 'LOW' : dashCd > 0.05 ? `${dashCd.toFixed(1)}s` : 'DASH';
@@ -1870,13 +1885,16 @@ function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
   if (!lair?.combatMode || !lair?.weaponEquipped || lair?.bossDefeated || !session.diveState?.alive) return false;
   audio.unlock();
   const torchAim = input.getTorchAim();
-  const resolvedAngle = Number.isFinite(aimAngle)
+  const rawAngle = Number.isFinite(aimAngle)
     ? aimAngle
     : torchAim.active && Number.isFinite(torchAim.angle)
       ? torchAim.angle
       : Number.isFinite(_lastPointerWorldAngle)
         ? _lastPointerWorldAngle
         : (session.diver?.torchAngle ?? session.diver?.angle ?? 0);
+  // Apply gentle ±8.5° aim magnetism when aiming with the touch right-stick for buttery mobile boss fights! (v192)
+  const usingTouchAim = Number.isFinite(aimAngle) || Boolean(torchAim.active);
+  const resolvedAngle = usingTouchAim ? computeTouchAimMagnetAngle(session, rawAngle) : rawAngle;
   session.diver.torchAngle = resolvedAngle;
   const res = fireSpeargun(
     session,
@@ -6528,6 +6546,7 @@ const sessionStepCallbacks = {
   onWeaponUpgrade: () => audio.playWeaponUpgrade?.(),
   onScooterDash: () => audio.playScooterDash?.(),
   onStalactiteCrush: () => audio.playStalactiteCrush?.(),
+  onMineBlast: () => audio.playMineBlast?.(),
   onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
   onForeshadow: () => audio.playForeshadowGroan?.(),
   onBossDefeat: () => {
@@ -6546,9 +6565,11 @@ const sessionStepCallbacks = {
           kind: 'relic',
           siteId,
           siteName: session.level?.name || 'Cenote El Abismo',
-          lore: `Trophy claimed by vanquishing ${b.name} inside the Sunken Sanctum.`,
+          lore: `Trophy claimed by vanquishing ${b.name} inside ${session.secretLair.spec.name || 'the Sunken Sanctum'}.`,
           points: b.bonusPoints || 2500,
           scale: 1.5,
+          bestClearSec: Math.max(1, Math.round(session.secretLair.bossFightElapsedSec || 0)),
+          bossName: b.name,
         });
         if (lbRes?.book) saveCareerLogbook(lbRes.book);
       } catch {}

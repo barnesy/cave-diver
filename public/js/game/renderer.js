@@ -1507,17 +1507,19 @@ export class CaveRenderer {
       const sx = toScreenX(a.x);
       const sy = toScreenY(a.y);
       let sway = Math.sin(timeSec * 1.8 + a.phase) * 0.09 * scale;
-      // Fin-wash hydrodynamic deflection when diver swims past flexible flora (v151)
-      if (hasDiver && divSpd > 0.25 && (a.kind === 'vine' || a.kind === 'chara' || a.kind === 'biofilm' || a.kind === 'seafan')) {
+      // Fin-wash & DPV scooter prop-wash hydrodynamic deflection when diver swims past flexible flora (v151 / v192)
+      if (hasDiver && (divSpd > 0.25 || diver.dpvThrusting) && (a.kind === 'vine' || a.kind === 'chara' || a.kind === 'biofilm' || a.kind === 'seafan')) {
         const dx = a.x - divX;
         const dy = a.y - divY;
         const dSq = dx * dx + dy * dy;
-        if (dSq < 27.0) {
+        const reach = diver.dpvThrusting ? 8.2 : 5.2;
+        if (dSq < reach * reach) {
           const dist = Math.sqrt(dSq);
-          const falloff = (1 - dist / 5.2);
+          const falloff = (1 - dist / reach);
           const pushDir = Math.abs(divVx) > 0.2 ? Math.sign(divVx) : Math.sign(dx || 1);
-          const flutter = 0.72 + 0.28 * Math.sin(timeSec * 8.5 + a.phase);
-          sway += pushDir * Math.min(0.42, falloff * falloff * (0.14 + divSpd * 0.14)) * flutter * scale;
+          const flutter = 0.72 + 0.28 * Math.sin(timeSec * (diver.dpvThrusting ? 14.5 : 8.5) + a.phase);
+          const propBoost = diver.dpvThrusting ? 0.28 : 0;
+          sway += pushDir * Math.min(0.68, falloff * falloff * (0.14 + divSpd * 0.15 + propBoost)) * flutter * scale;
         }
       }
 

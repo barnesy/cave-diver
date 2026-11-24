@@ -186,6 +186,11 @@ export function createLogbookModalController({
     if (artifactInspectorMetaEl) {
       const parts = [`+${item.points || 0} PTS`];
       if (item.siteName) parts.push(item.siteName);
+      if (item.bestClearSec > 0) {
+        const mm = Math.floor(item.bestClearSec / 60);
+        const ss = String(item.bestClearSec % 60).padStart(2, '0');
+        parts.push(`⏱ Best Clear ${mm}:${ss}`);
+      }
       if ((item.count || 1) > 1) parts.push(`Recovered ×${item.count}`);
       artifactInspectorMetaEl.textContent = parts.join(' · ');
     }

@@ -1668,12 +1668,15 @@ export function classifyArtifactCollection(item) {
 /**
  * Record a recovered collectible artifact into the persistent Career Trophy Vault (v168-v169).
  */
-export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', siteId = '', siteName = '', lore = '', points = 0, scale = 1.0 } = {}) {
+export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', siteId = '', siteName = '', lore = '', points = 0, scale = 1.0, bestClearSec = 0, bossName = '' } = {}) {
   const book = normalizeBook(rawBook);
   const key = String(id || name || '').trim().slice(0, 64);
   if (!key) return { book, isNew: false };
   const prev = book.artifacts[key];
   const isNew = !prev;
+  const cleanClear = Math.max(0, Math.round(Number(bestClearSec) || 0));
+  const prevClear = Math.max(0, Math.round(Number(prev?.bestClearSec) || 0));
+  const mergedClear = cleanClear > 0 ? (prevClear > 0 ? Math.min(prevClear, cleanClear) : cleanClear) : prevClear;
   book.artifacts[key] = {
     name: String(name || prev?.name || key).slice(0, 72),
     kind: String(kind || prev?.kind || 'relic').slice(0, 24),
@@ -1683,6 +1686,8 @@ export function recordArtifactInLogbook(rawBook, { id, name, kind = 'relic', sit
     points: Math.max(prev?.points || 0, Math.round(Number(points) || 0)),
     count: (prev?.count || 0) + 1,
     scale: Math.max(prev?.scale || 1, Number(scale) || 1),
+    ...(mergedClear > 0 ? { bestClearSec: mergedClear } : {}),
+    ...(bossName || prev?.bossName ? { bossName: String(bossName || prev?.bossName).slice(0, 48) } : {}),
   };
   return { book, isNew };
 }
