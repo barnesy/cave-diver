@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=181',
+  mapRasterUrl: './assets/map-expedition.jpg?v=182',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -837,7 +837,7 @@ const input = new InputController({
   torchStickKnobEl: document.getElementById('torch-knob'),
   onGasSelect: (gasId) => trySwitchGas(gasId),
   onRecommendedGasSwitch: () => {
-    if (mode !== 'diving' || !session || divePaused) return false;
+    if (mode !== 'diving' || !session || divePaused || session.secretLair?.combatMode) return false;
     const ds = session.diveState;
     const ascending =
       session.checkpointsHit.size >= (session.level.checkpoints?.length || 1) ||
@@ -1442,6 +1442,7 @@ function savePhotoStudioSnapshot() {
       mechFx: session.mechFx || null,
       stories: session.stories || null,
       secretLair: session.secretLair || null,
+      cameraShake: session.cameraShake || 0,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
@@ -1891,23 +1892,21 @@ function handleSonarPing() {
     const sum = res.pulse?.summary;
     const count = res.pulse?.contacts?.length || 0;
     const parts = [];
-    if (sum?.secretVeil) parts.push('📡 HOLLOW VEIL!');
     if (sum?.collectibles) parts.push(`💎 ${sum.collectibles} relic${sum.collectibles === 1 ? '' : 's'}`);
     if (sum?.hatches) parts.push(`🚪 ${sum.hatches} hatch${sum.hatches === 1 ? '' : 'es'}`);
     if (sum?.percolation) parts.push(`🌫️ ${sum.percolation} ceil silt`);
     if (sum?.thermoclines) parts.push(`❄️ ${sum.thermoclines} thermo`);
-    if (!sum?.secretVeil) {
-      showToast(
-        parts.length > 0
-          ? `📡 Sonar lock: ${parts.join(' · ')}`
-          : count > 0
-            ? `📡 Sonar sweep: ${count} target${count === 1 ? '' : 's'} pinged!`
-            : session.sonar.equipped
-              ? '📡 Sonar contour sweep!'
-              : '📡 Short-range acoustic ping (16m)!',
-        2.3
-      );
-    }
+    const nonVeilCount = (res.pulse?.contacts || []).filter((c) => c.kind !== 'secret-veil').length;
+    showToast(
+      parts.length > 0
+        ? `📡 Sonar lock: ${parts.join(' · ')}`
+        : nonVeilCount > 0
+          ? `📡 Sonar sweep: ${nonVeilCount} target${nonVeilCount === 1 ? '' : 's'} pinged!`
+          : session.sonar.equipped
+            ? '📡 Sonar contour sweep!'
+            : '📡 Short-range acoustic ping (16m)!',
+      2.3
+    );
     return true;
   }
   if (res.reason === 'cooldown') {
@@ -1938,6 +1937,7 @@ function syncCombatModeHud(sess) {
   const active = Boolean(mode === 'diving' && lair?.combatMode && !sess?.endedState);
   if (active !== _lastCombatHudMode) {
     _lastCombatHudMode = active;
+    if (input) input.combatModeActive = active;
     screenHud?.classList.toggle('combat-mode', active);
     if (hudCombatBarEl) hudCombatBarEl.hidden = !active;
     if (btnCombatPauseEl) btnCombatPauseEl.hidden = !active;
@@ -2007,28 +2007,34 @@ btnHudSpear?.addEventListener('pointerdown', (e) => {
   fireSpeargunAction({ isTap: true });
 });
 
+function computeMouseWorldAimAngle(clientX, clientY) {
+  if (!session?.diver) return null;
+  const wpt = renderer?.screenToWorld?.(clientX, clientY);
+  if (wpt) {
+    const dx = wpt.x - session.diver.x;
+    const dy = wpt.y - session.diver.y;
+    if (Math.hypot(dx, dy) > 0.35) return Math.atan2(dy, dx);
+  }
+  const rect = canvas?.getBoundingClientRect?.();
+  if (!rect || !rect.width || !rect.height) return null;
+  const dx = (clientX - rect.left) - rect.width * 0.5;
+  const dy = (clientY - rect.top) - (rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46);
+  return Math.hypot(dx, dy) > 8 ? Math.atan2(dy, dx) : null;
+}
+
 canvas?.addEventListener('pointermove', (e) => {
   if (mode !== 'diving' || !session?.diver || !session.secretLair?.weaponEquipped || e.pointerType !== 'mouse') return;
-  const rect = canvas.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const sx = e.clientX - rect.left;
-  const sy = e.clientY - rect.top;
-  const viewCenterX = rect.width * 0.5;
-  const viewCenterY = rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46;
-  const dx = sx - viewCenterX;
-  const dy = sy - viewCenterY;
-  if (Math.hypot(dx, dy) > 8) {
-    _lastPointerWorldAngle = Math.atan2(dy, dx);
-    session.diver.torchAngle = _lastPointerWorldAngle;
+  const ang = computeMouseWorldAimAngle(e.clientX, e.clientY);
+  if (Number.isFinite(ang)) {
+    _lastPointerWorldAngle = ang;
+    session.diver.torchAngle = ang;
   }
 });
 canvas?.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.pointerType !== 'mouse') return;
   if (mode !== 'diving' || !session?.secretLair?.weaponEquipped || divePaused || photoModeState.active) return;
-  const rect = canvas.getBoundingClientRect();
-  const dx = (e.clientX - rect.left) - rect.width * 0.5;
-  const dy = (e.clientY - rect.top) - (rect.width < rect.height ? rect.height * 0.39 : rect.height * 0.46);
-  if (Math.hypot(dx, dy) > 8) _lastPointerWorldAngle = Math.atan2(dy, dx);
+  const ang = computeMouseWorldAimAngle(e.clientX, e.clientY);
+  if (Number.isFinite(ang)) _lastPointerWorldAngle = ang;
   _mouseFireHeld = true;
   fireSpeargunAction({ aimAngle: _lastPointerWorldAngle, isTap: true });
 });
@@ -6695,11 +6701,23 @@ const sessionStepCallbacks = {
   onClipLine: (clipped) => audio.playClipLine(clipped),
   onStageRefill: () => audio.playGasShare(),
   onMarkerPlaced: () => audio.playClipLine(true),
-  onVeilShatter: () => audio.playVeilShatter?.(),
+  onVeilShatter: (_veil, opts) => {
+    audio.playVeilShatter?.();
+    if (!opts?.fromRemote && isMultiplayer && lan.room) {
+      lan.sendBossEvent({ kind: 'veil_breach' });
+    }
+  },
   onWeaponEquip: () => audio.playClipLine?.(true),
   onSpeargunFire: ({ charged }) => audio.playSpeargunFire?.(charged),
   onSpearHit: ({ crit }) => audio.playSpearHit?.(crit),
   onBossRoar: (phase) => audio.playBossRoar?.(phase),
+  onBossSlam: () => audio.playBossSlam?.(),
+  onBossBeam: (stage) => audio.playBossBeam?.(stage),
+  onCrystalChime: (level) => audio.playCrystalChime?.(level),
+  onResonanceBreak: () => audio.playResonanceBreak?.(),
+  onHealOrb: () => audio.playHealOrb?.(),
+  onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
+  onForeshadow: () => audio.playForeshadowGroan?.(),
   onBossDefeat: () => {
     audio.playBossDefeat?.();
     if (session?.secretLair?.spec?.boss) {
@@ -6988,8 +7006,8 @@ function stepSimulation(dt) {
     } else {
       sessionStepCallbacks.torchAim = rawTorchAim;
     }
-    // Twin-stick hold-to-autofire (holding directional aim joystick, mouse button, or [F]/[Space])
-    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeState.active && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld)) {
+    // Twin-stick hold-to-autofire (holding directional aim joystick, mouse button, gamepad RT/R-stick, or [F]/[Space])
+    if (session.secretLair?.weaponEquipped && !divePaused && !photoModeState.active && (input.torchStickHeld || _mouseFireHeld || input.spearKeyHeld || input.gpSpearHeld)) {
       fireSpeargunAction({ isTap: false });
     }
     sessionStepCallbacks.isBossAuthority = !isMultiplayer || !lan.room || lan.isHost();
@@ -7018,6 +7036,7 @@ function stepSimulation(dt) {
         inTightSqueeze: Boolean(session.inTightSqueeze),
         lowGas: Boolean(curTank && curTank.bar <= 52),
         inAirDome: Boolean(session.stories?.inAirDome),
+        bossPhase: (session.secretLair?.boss?.active && !session.secretLair?.boss?.defeated) ? session.secretLair.boss.phase : 0,
       });
     }
     syncWreckActionHud(session.wreckActionPrompt);
@@ -7574,6 +7593,7 @@ function frame(nowMs) {
       mechFx: session.mechFx || null,
       stories: session.stories || null,
       secretLair: session.secretLair || null,
+      cameraShake: session.cameraShake || 0,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,

@@ -1,17 +1,48 @@
 /**
- * Secret Lair, Pneumatic Speargun & Colossal Cave Kraken Boss Renderer (v179).
+ * Secret Lair, Pneumatic Speargun & Colossal Cave Kraken Boss Renderer (v182).
  * Mixed onto CaveRenderer.prototype alongside chunkBaker, surfaceRenderer,
  * wreckAndInteractivesRenderer, and lightingAndFxRenderer.
  */
 
 import { wreckAndInteractivesMethods } from './wreckAndInteractivesRenderer.js';
 import { drawDetailedSpeargun } from '../artSprites.js';
-import { SPEARGUN_MAX_CHARGE_SEC } from '../secretLairs.js';
+
+function getPhasePalette(phase) {
+  if (phase >= 3) {
+    return {
+      accent: '#f43f5e',
+      accentSoft: 'rgba(244, 63, 94, 0.28)',
+      glow: '#fda4af',
+      sconce: '#fb7185',
+      bodyBase: '#4c0519',
+      bodyMid: '#881337',
+    };
+  }
+  if (phase === 2) {
+    return {
+      accent: '#c084fc',
+      accentSoft: 'rgba(192, 132, 252, 0.26)',
+      glow: '#e9d5ff',
+      sconce: '#c084fc',
+      bodyBase: '#2e1065',
+      bodyMid: '#4c1d95',
+    };
+  }
+  return {
+    accent: '#22d3ee',
+    accentSoft: 'rgba(34, 211, 238, 0.24)',
+    glow: '#a5f3fc',
+    sconce: '#38bdf8',
+    bodyBase: '#172554',
+    bodyMid: '#1e1b4b',
+  };
+}
 
 export const bossAndLairMethods = {
   /**
-   * World-space (pre-lighting) pass: solid false limestone veil, sculpted cover pillars,
-   * armory rack, bailout stages, lesser enemies & the Kraken's body/tentacles.
+   * World-space (pre-lighting) pass: solid false limestone veil, corridor environmental storytelling,
+   * sculpted cover pillars with Resonance Crystals, armory rack, bailout stages, lesser enemies,
+   * Ossuary foreshadowing silhouette & the sculpted Cave Kraken (*XIBALBA'S MAW*).
    */
   _drawSecretLairWorld(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, lair) {
     if (!lair?.spec) return;
@@ -20,10 +51,10 @@ export const bossAndLairMethods = {
     // 1. Sealed False Limestone Veil (blends seamlessly into cave rock before breached!)
     if (!lair.veilBreached) {
       const v = spec.veil;
-      if (v.x + v.radius + 2 >= visX0 && v.x - v.radius - 2 <= visX1 && v.y + v.radius + 2 >= visY0 && v.y - v.radius - 2 <= visY1) {
+      if (v.x + v.radius + 3 >= visX0 && v.x - v.radius - 3 <= visX1 && v.y + v.radius + 3 >= visY0 && v.y - v.radius - 3 <= visY1) {
         const sx = toScreenX(v.x);
         const sy = toScreenY(v.y);
-        const sr = (v.radius + 0.9) * scale;
+        const sr = (v.radius + 1.05) * scale;
         ctx.save();
         ctx.translate(sx, sy);
         const rockGrad = ctx.createRadialGradient(-sr * 0.25, -sr * 0.2, sr * 0.1, 0, 0, sr);
@@ -47,16 +78,42 @@ export const bossAndLairMethods = {
         ctx.stroke();
         ctx.restore();
       }
+      return;
     }
 
-    if (!lair.veilBreached) return;
+    // 1b. Corridor Environmental Storytelling Landmarks (v182)
+    this._drawSecretLairLandmarks(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, lair);
 
-    // 2. Sculpted Arena Natural Limestone Cover Pillars (layered karst strata + mineral seams)
-    for (const p of spec.arena.pillars || []) {
-      if (p.x + p.radius + 2 < visX0 || p.x - p.radius - 2 > visX1 || p.y + p.radius + 2 < visY0 || p.y - p.radius - 2 > visY1) continue;
+    // 1c. Ossuary Kraken Shadow Foreshadowing (colossal darkened tentacle sweeps past background!)
+    if ((lair.foreshadowTimer || 0) > 0) {
+      const frac = 1 - lair.foreshadowTimer / 3.2;
+      const fx = toScreenX(198 + frac * 22);
+      const fy = toScreenY(45.5 + Math.sin(frac * Math.PI) * 2.5);
+      const alpha = Math.sin(frac * Math.PI) * 0.42;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.strokeStyle = '#020617';
+      ctx.lineCap = 'round';
+      for (let s = 0; s < 5; s++) {
+        const u = s / 5;
+        ctx.lineWidth = Math.max(8, (2.6 - u * 1.9) * scale);
+        ctx.beginPath();
+        ctx.moveTo(fx - u * 11 * scale, fy + Math.sin(timeSec * 2 + s) * 1.4 * scale);
+        ctx.lineTo(fx - (u + 0.24) * 11 * scale, fy + Math.sin(timeSec * 2 + s + 1) * 1.6 * scale);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Sculpted Arena Natural Limestone Cover Pillars + Resonance Crystal Pedestals
+    const crystals = lair.pillarCrystals || [];
+    for (let pi = 0; pi < (spec.arena.pillars || []).length; pi++) {
+      const p = spec.arena.pillars[pi];
+      if (p.x + p.radius + 3 < visX0 || p.x - p.radius - 3 > visX1 || p.y + p.radius + 3 < visY0 || p.y - p.radius - 3 > visY1) continue;
       const sx = toScreenX(p.x);
       const sy = toScreenY(p.y);
       const sr = p.radius * scale;
+      const pc = crystals[pi] || null;
       ctx.save();
       ctx.translate(sx, sy);
       // Outer limestone mass
@@ -77,21 +134,35 @@ export const bossAndLairMethods = {
       }
       ctx.closePath();
       ctx.fill();
-      // Inner carved karst terrace & mineral calcite veins
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+      ctx.strokeStyle = pc && pc.charge > 0 ? 'rgba(103, 232, 249, 0.72)' : 'rgba(148, 163, 184, 0.32)';
       ctx.lineWidth = Math.max(1.2, 0.06 * scale);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
+      // Carved stone socket for the Resonance Crystal
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.62)';
       ctx.beginPath();
-      ctx.ellipse(sr * 0.14, sr * 0.16, sr * 0.56, sr * 0.44, 0.4, 0, Math.PI * 2);
+      ctx.arc(0, 0, sr * 0.48, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+      // Crystalline quartz cluster inside the pillar crown
+      const isCooling = pc && pc.cooldownSec > 0;
+      const crysCol = isCooling ? '#334155' : pc?.charge >= 2 ? '#67e8f9' : pc?.charge === 1 ? '#38bdf8' : '#0284c7';
+      ctx.fillStyle = crysCol;
+      ctx.strokeStyle = isCooling ? '#475569' : '#e0f2fe';
       ctx.lineWidth = Math.max(1.1, 0.045 * scale);
-      ctx.beginPath();
-      ctx.moveTo(-sr * 0.55, -sr * 0.25);
-      ctx.lineTo(-sr * 0.1, sr * 0.08);
-      ctx.lineTo(sr * 0.45, -sr * 0.15);
-      ctx.stroke();
+      for (let k = -1; k <= 1; k++) {
+        ctx.save();
+        ctx.rotate(k * 0.42);
+        const h = (k === 0 ? 0.56 : 0.4) * sr;
+        const w = 0.16 * sr;
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.lineTo(w, 0);
+        ctx.lineTo(0, h * 0.48);
+        ctx.lineTo(-w, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.restore();
     }
 
@@ -102,7 +173,6 @@ export const bossAndLairMethods = {
       const sy = toScreenY(arm.y);
       ctx.save();
       ctx.translate(sx, sy);
-      // Heavy titanium weapon pedestal case
       const caseGrad = ctx.createLinearGradient(0, -0.75 * scale, 0, 0.75 * scale);
       caseGrad.addColorStop(0, '#334155');
       caseGrad.addColorStop(1, '#0f172a');
@@ -113,7 +183,6 @@ export const bossAndLairMethods = {
       ctx.roundRect(-1.55 * scale, -0.68 * scale, 3.1 * scale, 1.36 * scale, 0.22 * scale);
       ctx.fill();
       ctx.stroke();
-      // Inner foam cradle recess
       ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
       ctx.beginPath();
       ctx.roundRect(-1.35 * scale, -0.48 * scale, 2.7 * scale, 0.96 * scale, 0.14 * scale);
@@ -160,9 +229,136 @@ export const bossAndLairMethods = {
 
     // 6. Colossal Bioluminescent Cave Kraken (*XIBALBA'S MAW*)
     if (boss && (!boss.defeated || boss.defeatAnimSec > 0)) {
-      if (boss.x + 15 >= visX0 && boss.x - 15 <= visX1 && boss.y + 15 >= visY0 && boss.y - 15 <= visY1) {
+      if (boss.x + 18 >= visX0 && boss.x - 18 <= visX1 && boss.y + 18 >= visY0 && boss.y - 18 <= visY1) {
         this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec);
       }
+    }
+  },
+
+  _drawSecretLairLandmarks(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, lair) {
+    const landmarks = lair.spec?.landmarks;
+    if (!Array.isArray(landmarks)) return;
+    for (let i = 0; i < landmarks.length; i++) {
+      const lm = landmarks[i];
+      if (lm.x + 6 < visX0 || lm.x - 6 > visX1 || lm.y + 6 < visY0 || lm.y - 6 > visY1) continue;
+      const sx = toScreenX(lm.x);
+      const sy = toScreenY(lm.y);
+      ctx.save();
+      ctx.translate(sx, sy);
+      if (lm.kind === 'expedition-crate') {
+        ctx.fillStyle = '#3f3f46';
+        ctx.strokeStyle = '#71717a';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.fillRect(-1.1 * scale, -0.55 * scale, 2.2 * scale, 1.1 * scale);
+        ctx.strokeRect(-1.1 * scale, -0.55 * scale, 2.2 * scale, 1.1 * scale);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(-0.85 * scale, -0.1 * scale, 1.7 * scale, 0.2 * scale);
+      } else if (lm.kind === 'dive-strobe') {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-0.18 * scale, -0.4 * scale, 0.36 * scale, 0.8 * scale);
+        const blink = Math.sin(timeSec * 6.5) > 0.55 ? 0.95 : 0.2;
+        ctx.fillStyle = `rgba(250, 204, 21, ${blink.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(0, -0.4 * scale, 0.24 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (lm.kind === 'thermal-vent') {
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(-1.1 * scale, 0.7 * scale);
+        ctx.lineTo(-0.45 * scale, -0.9 * scale);
+        ctx.lineTo(0.45 * scale, -0.9 * scale);
+        ctx.lineTo(1.1 * scale, 0.7 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.26)';
+        ctx.beginPath();
+        ctx.ellipse(0, -1.2 * scale, 0.55 * scale, 0.9 * scale, Math.sin(timeSec * 2) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (lm.kind === 'sea-whips' || lm.kind === 'bio-coral') {
+        const col = lm.kind === 'bio-coral' ? '#2dd4bf' : '#38bdf8';
+        ctx.strokeStyle = col;
+        ctx.lineWidth = Math.max(1.4, 0.07 * scale);
+        for (let k = -2; k <= 2; k++) {
+          const sway = Math.sin(timeSec * 2.1 + k + i) * 0.35 * scale;
+          ctx.beginPath();
+          ctx.moveTo(k * 0.32 * scale, 0.5 * scale);
+          ctx.quadraticCurveTo(k * 0.45 * scale + sway, -0.5 * scale, k * 0.52 * scale - sway * 0.5, -1.45 * scale);
+          ctx.stroke();
+        }
+      } else if (lm.kind === 'brine-pool') {
+        const w = (lm.width || 6) * scale * 0.5;
+        const bg = ctx.createLinearGradient(0, -0.5 * scale, 0, 0.9 * scale);
+        bg.addColorStop(0, 'rgba(52, 211, 153, 0.42)');
+        bg.addColorStop(1, 'rgba(6, 78, 59, 0.12)');
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.ellipse(0, 0.15 * scale, w, 0.65 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (lm.kind === 'rib-arch') {
+        const sc = (lm.scale || 1) * scale;
+        ctx.strokeStyle = 'rgba(203, 213, 225, 0.42)';
+        ctx.lineWidth = Math.max(2.5, 0.24 * sc);
+        ctx.lineCap = 'round';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(sgn * 0.4 * sc, 2.8 * sc);
+          ctx.quadraticCurveTo(sgn * 2.6 * sc, 0.2 * sc, sgn * 0.6 * sc, -2.5 * sc);
+          ctx.stroke();
+        }
+      } else if (lm.kind === 'vintage-helmet') {
+        ctx.fillStyle = '#92400e';
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.55 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0.12 * scale, -0.04 * scale, 0.24 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (lm.kind === 'mayan-glyphs') {
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.36)';
+        ctx.lineWidth = Math.max(1.2, 0.055 * scale);
+        ctx.strokeRect(-1.4 * scale, -0.9 * scale, 2.8 * scale, 1.8 * scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.5 * scale, 0, Math.PI * 2);
+        ctx.moveTo(-1.1 * scale, 0);
+        ctx.lineTo(1.1 * scale, 0);
+        ctx.stroke();
+      } else if (lm.kind === 'claw-scars') {
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.45)';
+        ctx.lineWidth = Math.max(1.6, 0.08 * scale);
+        for (let k = -1; k <= 1; k++) {
+          ctx.beginPath();
+          ctx.moveTo(-1.6 * scale, (k * 0.45 - 0.5) * scale);
+          ctx.quadraticCurveTo(0, k * 0.35 * scale, 1.7 * scale, (k * 0.45 + 0.65) * scale);
+          ctx.stroke();
+        }
+      } else if (lm.kind === 'temple-column') {
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
+        ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+        ctx.fillRect(-0.55 * scale, -2.8 * scale, 1.1 * scale, 5.6 * scale);
+        ctx.strokeRect(-0.55 * scale, -2.8 * scale, 1.1 * scale, 5.6 * scale);
+      } else if (lm.kind === 'monolith') {
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+        ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-0.9 * scale, -2.2 * scale);
+        ctx.lineTo(0.9 * scale, -1.7 * scale);
+        ctx.lineTo(1.1 * scale, 2.1 * scale);
+        ctx.lineTo(-1.1 * scale, 2.1 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(0, -0.2 * scale, 0.22 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
   },
 
@@ -176,7 +372,6 @@ export const bossAndLairMethods = {
     ctx.rotate(m.angle || 0);
 
     if (m.kind === 'moray') {
-      // Sculpted serpentine Abyssal Cave Moray with undulating dorsal fin & fanged jaw
       const pts = [];
       for (let seg = 0; seg <= 6; seg++) {
         pts.push({
@@ -185,8 +380,7 @@ export const bossAndLairMethods = {
           w: r * (0.46 - seg * 0.055),
         });
       }
-      // Translucent bioluminescent dorsal ribbon
-      ctx.strokeStyle = m.state === 'telegraph' ? 'rgba(248, 113, 113, 0.78)' : 'rgba(56, 189, 248, 0.68)';
+      ctx.strokeStyle = m.state === 'telegraph' ? 'rgba(248, 113, 113, 0.82)' : 'rgba(56, 189, 248, 0.68)';
       ctx.lineWidth = Math.max(2, 0.12 * scale);
       ctx.beginPath();
       for (let i = 0; i < pts.length; i++) {
@@ -196,7 +390,6 @@ export const bossAndLairMethods = {
         else ctx.lineTo(px, py);
       }
       ctx.stroke();
-      // Tapered serpentine body
       for (let seg = pts.length - 1; seg >= 0; seg--) {
         const pt = pts[seg];
         const bg = ctx.createRadialGradient(pt.x, pt.y - pt.w * 0.3, pt.w * 0.1, pt.x, pt.y, pt.w);
@@ -212,8 +405,7 @@ export const bossAndLairMethods = {
           ctx.stroke();
         }
       }
-      // Snapped fanged jaws & menacing eye
-      const jawOpen = m.state === 'telegraph' || m.state === 'lunge' ? 0.34 : 0.14;
+      const jawOpen = m.state === 'telegraph' || m.state === 'lunge' ? 0.36 : 0.14;
       ctx.fillStyle = '#0f172a';
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = Math.max(1.2, 0.05 * scale);
@@ -226,7 +418,6 @@ export const bossAndLairMethods = {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      // Needle teeth
       ctx.fillStyle = '#f8fafc';
       for (let k = 0; k < 3; k++) {
         const tx = r * (0.42 + k * 0.16);
@@ -241,7 +432,6 @@ export const bossAndLairMethods = {
       ctx.arc(r * 0.34, -r * 0.24, r * 0.14, 0, Math.PI * 2);
       ctx.fill();
     } else if (m.kind === 'swarmer') {
-      // Bioluminescent Abyssal Brine-Spitter (translucent ribbed mantle + trailing venom tendrils)
       for (let k = -2; k <= 2; k++) {
         const swing = Math.sin(m.wigglePhase * 1.3 + k * 1.1) * 0.28 * r;
         ctx.strokeStyle = 'rgba(132, 204, 22, 0.65)';
@@ -262,7 +452,6 @@ export const bossAndLairMethods = {
       ctx.ellipse(0, 0, r * 0.92, r * 0.66, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      // Pulsing glowing brine venom core
       const glowR = r * (0.34 + 0.06 * Math.sin(timeSec * 8 + m.wigglePhase));
       const vg = ctx.createRadialGradient(-r * 0.18, 0, 0, -r * 0.18, 0, glowR * 1.4);
       vg.addColorStop(0, '#ecfccb');
@@ -272,14 +461,12 @@ export const bossAndLairMethods = {
       ctx.beginPath();
       ctx.arc(-r * 0.18, 0, glowR * 1.4, 0, Math.PI * 2);
       ctx.fill();
-      // Twin acid-green eyes
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
       ctx.arc(r * 0.52, -r * 0.22, r * 0.11, 0, Math.PI * 2);
       ctx.arc(r * 0.52, r * 0.22, r * 0.11, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Armored Cenote Stalker (layered obsidian-slate chitin plates + glowing amber rear core!)
       const cg = ctx.createRadialGradient(r * 0.25, -r * 0.2, r * 0.1, 0, 0, r * 1.1);
       cg.addColorStop(0, '#64748b');
       cg.addColorStop(0.55, '#1e293b');
@@ -292,22 +479,19 @@ export const bossAndLairMethods = {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      // Armored ridge plate lines
       ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
       ctx.lineWidth = Math.max(1.2, 0.05 * scale);
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.66, -Math.PI * 0.55, Math.PI * 0.55);
       ctx.stroke();
-      // Exposed glowing amber rear flank core
-      const ag = ctx.createRadialGradient(-r * 0.42, 0, r * 0.06, -r * 0.42, 0, r * 0.56);
+      const ag = ctx.createRadialGradient(-r * 0.42, 0, r * 0.06, -r * 0.42, 0, r * 0.58);
       ag.addColorStop(0, '#fef08a');
       ag.addColorStop(0.55, '#f59e0b');
       ag.addColorStop(1, 'rgba(245, 158, 11, 0)');
       ctx.fillStyle = ag;
       ctx.beginPath();
-      ctx.arc(-r * 0.42, 0, r * 0.56, 0, Math.PI * 2);
+      ctx.arc(-r * 0.42, 0, r * 0.58, 0, Math.PI * 2);
       ctx.fill();
-      // Serrated twin pincer mandibles
       ctx.strokeStyle = m.state === 'telegraph' ? '#f87171' : '#e2e8f0';
       ctx.lineWidth = Math.max(2.2, 0.1 * scale);
       ctx.beginPath();
@@ -319,7 +503,6 @@ export const bossAndLairMethods = {
     }
     ctx.restore();
 
-    // Compact HP bar above damaged/aggro minion
     if (m.hp < m.maxHp || m.aggro) {
       const bw = Math.max(28, r * 1.8);
       const bh = 4;
@@ -336,58 +519,70 @@ export const bossAndLairMethods = {
     const sx = toScreenX(boss.x);
     const sy = toScreenY(boss.y);
     const r = boss.radius * scale;
-    const alpha = boss.defeated ? Math.max(0, boss.defeatAnimSec / 3.2) : 1;
+    const alpha = boss.defeated ? Math.max(0, boss.defeatAnimSec / 3.4) : 1;
     const flash = boss.hitFlash > 0;
-    const rageCol = boss.phase === 3 ? '#f43f5e' : boss.phase === 2 ? '#c084fc' : '#22d3ee';
-    const bodyBase = boss.phase === 3 ? '#4c0519' : boss.phase === 2 ? '#2e1065' : '#172554';
-    const bodyMid = boss.phase === 3 ? '#881337' : boss.phase === 2 ? '#4c1d95' : '#1e1b4b';
+    const pal = getPhasePalette(boss.phase);
     const breathe = 1 + Math.sin(timeSec * 2.2) * 0.035;
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(sx, sy);
 
-    // 1. Six Tapered Multi-Segment Articulated Muscular Tentacles + Bioluminescent Sucker Orbs
+    // 1. Six Smooth Articulated Tentacles with State-Specific Poses!
+    const isSlam = boss.aiState === 'slam_windup' || boss.aiState === 'slam_strike';
+    const isLunge = boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash';
+    const isVortex = boss.aiState === 'vortex';
+    const isStunned = boss.aiState === 'stunned';
     for (const t of boss.tentacles || []) {
-      const isSlam = boss.aiState === 'slam_windup' || boss.aiState === 'slam_strike';
-      const baseA = isSlam
-        ? boss.slamTargetAngle + (t.index - 2.5) * 0.28
-        : t.baseAngle + Math.sin(t.waveOffset * 0.55) * 0.26;
-      const reachPx = t.reach * scale * (boss.aiState === 'slam_strike' ? 1.42 : 1.05);
+      let baseA;
+      if (isSlam) {
+        baseA = boss.slamTargetAngle + (t.index - 2.5) * (boss.aiState === 'slam_windup' ? 0.42 : 0.24);
+      } else if (isLunge) {
+        // Stream torpedo-like behind the Kraken during lunge!
+        baseA = boss.angle + Math.PI + (t.index - 2.5) * 0.16;
+      } else if (isVortex) {
+        baseA = t.baseAngle + timeSec * 1.9;
+      } else if (isStunned) {
+        baseA = Math.PI * 0.5 + (t.index - 2.5) * 0.34;
+      } else {
+        baseA = t.baseAngle + Math.sin(t.waveOffset * 0.55) * 0.26;
+      }
+      const reachMult = boss.aiState === 'slam_strike' ? 1.44 : boss.aiState === 'slam_windup' ? 0.85 : isLunge ? 1.25 : 1.05;
+      const reachPx = t.reach * scale * reachMult;
       const segs = 7;
       const pts = [];
       for (let s = 0; s <= segs; s++) {
         const u = s / segs;
-        const bend = Math.sin(t.waveOffset + u * 2.4) * 0.34 * u + Math.cos(t.waveOffset * 0.7 - u * 1.9) * 0.16 * u * u;
-        const dist = r * 0.55 + u * (reachPx - r * 0.45);
+        const bendAmp = isStunned ? 0.12 : isVortex ? 0.55 : 0.34;
+        const bend = Math.sin(t.waveOffset + u * 2.4) * bendAmp * u + Math.cos(t.waveOffset * 0.7 - u * 1.9) * 0.15 * u * u;
+        const dist = r * 0.52 + u * (reachPx - r * 0.42);
         pts.push({
           x: Math.cos(baseA + bend) * dist,
           y: Math.sin(baseA + bend) * dist,
-          w: Math.max(2.2, (0.62 - u * 0.50) * scale),
+          w: Math.max(2.2, (0.64 - u * 0.52) * scale),
         });
       }
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       for (let s = 0; s < segs; s++) {
         const a = pts[s];
         const b = pts[s + 1];
-        ctx.strokeStyle = isSlam ? '#7f1d1d' : bodyBase;
+        ctx.strokeStyle = isSlam ? '#7f1d1d' : pal.bodyBase;
         ctx.lineWidth = a.w;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
 
-        // Highlight dorsal edge
-        ctx.strokeStyle = isSlam ? 'rgba(251, 113, 133, 0.55)' : 'rgba(129, 140, 248, 0.38)';
+        ctx.strokeStyle = isSlam ? 'rgba(251, 113, 133, 0.58)' : 'rgba(129, 140, 248, 0.38)';
         ctx.lineWidth = Math.max(1.2, a.w * 0.28);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
 
-        // Glowing bioluminescent sucker orbs along the underside
         if (s >= 1 && s <= segs - 1) {
-          ctx.fillStyle = isSlam ? '#fda4af' : rageCol;
+          ctx.fillStyle = isSlam ? '#fda4af' : pal.accent;
           ctx.beginPath();
           ctx.arc(a.x, a.y, Math.max(1.8, a.w * 0.24), 0, Math.PI * 2);
           ctx.fill();
@@ -395,13 +590,12 @@ export const bossAndLairMethods = {
       }
     }
 
-    // 2. Sculpted Abyssal Cephalopod Mantle Hood + Undulating Lateral Fins (aligned opposite aggro)
+    // 2. Sculpted Abyssal Cephalopod Mantle Hood + Lateral Fins
     ctx.save();
-    ctx.rotate(boss.angle + Math.PI); // Hood points away from eyes, crown faces target
+    ctx.rotate(boss.angle + Math.PI);
     const finWave = Math.sin(timeSec * 3.1) * 0.16 * r;
-    // Lateral undulating mantle fins
-    ctx.fillStyle = bodyBase;
-    ctx.strokeStyle = rageCol;
+    ctx.fillStyle = pal.bodyBase;
+    ctx.strokeStyle = pal.accent;
     ctx.lineWidth = Math.max(1.5, 0.06 * scale);
     for (const sgn of [-1, 1]) {
       ctx.beginPath();
@@ -412,13 +606,12 @@ export const bossAndLairMethods = {
       ctx.stroke();
     }
 
-    // Main sculpted pear-shaped Kraken mantle dome
     const mg = ctx.createRadialGradient(-r * 0.2, -r * 0.22, r * 0.12, r * 0.15, 0, r * 1.35);
-    mg.addColorStop(0, bodyMid);
-    mg.addColorStop(0.58, bodyBase);
+    mg.addColorStop(0, pal.bodyMid);
+    mg.addColorStop(0.58, pal.bodyBase);
     mg.addColorStop(1, '#050816');
     ctx.fillStyle = mg;
-    ctx.strokeStyle = flash ? '#ffffff' : rageCol;
+    ctx.strokeStyle = flash ? '#ffffff' : pal.accent;
     ctx.lineWidth = Math.max(2.2, (flash ? 0.18 : 0.09) * scale);
     ctx.beginPath();
     ctx.moveTo(-r * 0.92 * breathe, 0);
@@ -439,52 +632,85 @@ export const bossAndLairMethods = {
       ctx.stroke();
     }
     if (flash) {
-      // Crisp translucent rim flash on damage without obscuring boss silhouette!
       ctx.fillStyle = 'rgba(224, 242, 254, 0.28)';
       ctx.fill();
     }
     ctx.restore();
 
-    // 3. Twin Fierce Armored-Brow Bioluminescent Eyes facing aggro angle
-    const ex = Math.cos(boss.angle) * r * 0.48;
-    const ey = Math.sin(boss.angle) * r * 0.48;
+    // 2b. Sculpted Chitinous Beak / Abyssal Maw (opens wide during beam, vortex, ink barrage & awakening roar!)
+    const mawOpen =
+      boss.aiState === 'beam_windup' || boss.aiState === 'beam_sweep'
+        ? 0.95
+        : boss.aiState === 'vortex' || boss.aiState === 'ink_barrage' || boss.aiState === 'awakening'
+          ? 0.72
+          : 0.24;
+    ctx.save();
+    ctx.rotate(boss.angle);
+    ctx.translate(r * 0.74, 0);
+    // Glowing inner throat
+    const throatR = r * (0.16 + mawOpen * 0.22);
+    const tg = ctx.createRadialGradient(0, 0, throatR * 0.1, 0, 0, throatR);
+    tg.addColorStop(0, '#ffffff');
+    tg.addColorStop(0.45, pal.accent);
+    tg.addColorStop(1, '#020617');
+    ctx.fillStyle = tg;
+    ctx.beginPath();
+    ctx.arc(0, 0, throatR, 0, Math.PI * 2);
+    ctx.fill();
+    // Upper & lower curved obsidian beak mandibles
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+    for (const sgn of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.12, sgn * r * 0.08);
+      ctx.quadraticCurveTo(r * 0.18, sgn * r * (0.12 + mawOpen * 0.24), r * 0.34, sgn * r * (0.04 + mawOpen * 0.14));
+      ctx.quadraticCurveTo(r * 0.12, sgn * r * (0.04 + mawOpen * 0.08), -r * 0.12, sgn * r * 0.08);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. Twin Fierce Armored-Brow Bioluminescent Eyes facing aggro angle (snap open during Awakening!)
+    const eyeOpen = boss.aiState === 'dormant' ? 0.15 : boss.aiState === 'awakening' ? Math.min(1, (boss.awakeningTimer || 0) * 2.2) : 1.0;
+    const ex = Math.cos(boss.angle) * r * 0.45;
+    const ey = Math.sin(boss.angle) * r * 0.45;
     const px = -Math.sin(boss.angle) * r * 0.34;
     const py = Math.cos(boss.angle) * r * 0.34;
     for (const sgn of [-1, 1]) {
       const cx = ex + px * sgn;
       const cy = ey + py * sgn;
-      // Dark orbital socket
       ctx.fillStyle = '#020617';
       ctx.beginPath();
-      ctx.ellipse(cx, cy, r * 0.22, r * 0.15, boss.angle, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, r * 0.22, r * 0.15 * eyeOpen, boss.angle, 0, Math.PI * 2);
       ctx.fill();
-      // Glowing molten amber-crimson iris
-      const eg = ctx.createRadialGradient(cx, cy, r * 0.02, cx, cy, r * 0.18);
-      eg.addColorStop(0, '#fef08a');
-      eg.addColorStop(0.55, boss.phase === 3 ? '#f43f5e' : '#f59e0b');
-      eg.addColorStop(1, '#7c2d12');
-      ctx.fillStyle = eg;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r * 0.17, r * 0.11, boss.angle, 0, Math.PI * 2);
-      ctx.fill();
-      // Vertical razor slit pupil
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(boss.angle);
-      ctx.fillStyle = '#020617';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.032, r * 0.095, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (eyeOpen > 0.2) {
+        const eg = ctx.createRadialGradient(cx, cy, r * 0.02, cx, cy, r * 0.18);
+        eg.addColorStop(0, '#fef08a');
+        eg.addColorStop(0.55, boss.phase === 3 ? '#f43f5e' : '#f59e0b');
+        eg.addColorStop(1, '#7c2d12');
+        ctx.fillStyle = eg;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r * 0.17, r * 0.11 * eyeOpen, boss.angle, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(boss.angle);
+        ctx.fillStyle = '#020617';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.032, r * 0.095 * eyeOpen, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     ctx.restore();
   },
 
   /**
-   * Emissive (post-lighting) pass: glowing sonar veil fracture lines, Kraken mantle weak-point core,
-   * telegraphed slam cones, vortex rings, ink projectiles, tethered speargun bolts, charge sightline,
-   * floating crit sparks, post-victory updraft & the Top-Center Boss Health Bar!
+   * Emissive (post-lighting) pass: sonar veil fracture, dynamic phase-shifted sconces, Resonance Crystal arcs,
+   * Vortex cover wake, Sweeping Abyssal Beam, all attack telegraphs, outlined damage numbers, Hyper-Tip
+   * spear indicator, cinematic Awakening / Phase title banners & Top-Center Boss Health Bar!
    */
   _drawSecretLairEmissive(ctx, cw, ch, diver, toScreenX, toScreenY, scale, timeSec, lair) {
     if (!lair?.spec) return;
@@ -497,11 +723,11 @@ export const bossAndLairMethods = {
       const sx = toScreenX(v.x);
       const sy = toScreenY(v.y);
       const sr = v.radius * scale;
-      const fade = Math.min(1, (lair.veilRevealPulse || 0) / 1.5 + 0.35);
+      const fade = Math.min(1, (lair.veilRevealPulse || 0) / 1.5 + 0.42);
       const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.8);
       ctx.save();
-      ctx.strokeStyle = `rgba(103, 232, 249, ${(fade * (0.28 + pulse * 0.34)).toFixed(2)})`;
-      ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+      ctx.strokeStyle = `rgba(103, 232, 249, ${(fade * (0.36 + pulse * 0.4)).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.6, 0.07 * scale);
       ctx.beginPath();
       ctx.moveTo(sx - sr * 0.38, sy - sr * 0.45);
       ctx.lineTo(sx - sr * 0.04, sy - sr * 0.05);
@@ -514,28 +740,34 @@ export const bossAndLairMethods = {
 
     if (!lair.veilBreached) return;
 
-    // 1b. Glowing Bioluminescent Cathedral Crystal Sconces (dynamic rim illumination!)
+    const phasePal = getPhasePalette(boss?.phase || 1);
+
+    // 1b. Glowing Bioluminescent Cathedral Crystal Sconces (sequentially lit + phase-color shifted!)
+    const litCount = lair.arenaEntered
+      ? (Number.isFinite(lair.sconceLitCount) ? lair.sconceLitCount : (spec.arena?.lightSconces?.length || 6))
+      : 0;
     for (let i = 0; i < (spec.arena?.lightSconces || []).length; i++) {
+      if (i >= litCount) continue;
       const sc = spec.arena.lightSconces[i];
       const sx = toScreenX(sc.x);
       const sy = toScreenY(sc.y);
       const sr = (sc.radius || 13) * scale * 0.52;
       if (sx + sr < 0 || sx - sr > cw || sy + sr < 0 || sy - sr > ch) continue;
       const pulse = 0.72 + 0.28 * Math.sin(timeSec * 2.4 + i * 1.4);
+      const sconceCol = boss?.phase >= 2 ? phasePal.sconce : (sc.color || '#38bdf8');
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       const sg = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, sr);
-      sg.addColorStop(0, sc.color || '#38bdf8');
-      sg.addColorStop(0.32, 'rgba(56, 189, 248, 0.24)');
+      sg.addColorStop(0, sconceCol);
+      sg.addColorStop(0.34, phasePal.accentSoft);
       sg.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.globalAlpha = 0.44 * pulse;
+      ctx.globalAlpha = 0.48 * pulse;
       ctx.fillStyle = sg;
       ctx.beginPath();
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
       ctx.fill();
-      // Crystal cluster core
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 0.9;
+      ctx.globalAlpha = 0.92;
       ctx.fillStyle = '#e0f2fe';
       ctx.beginPath();
       ctx.moveTo(sx, sy - 0.55 * scale);
@@ -547,18 +779,88 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
+    // 1c. Pillar Resonance Crystal Charge Rings, Acoustic Arc Discharge & Vortex Hydrodynamic Shelter Wake!
+    for (const pc of lair.pillarCrystals || []) {
+      const px = toScreenX(pc.x);
+      const py = toScreenY(pc.y);
+      const pr = pc.radius * scale;
+      if (px + pr * 3 < 0 || px - pr * 3 > cw || py + pr * 3 < 0 || py - pr * 3 > ch) continue;
+      ctx.save();
+      // Subtle ready crystal halo / charge segments (0..3)
+      if (pc.cooldownSec <= 0) {
+        const pulse = 0.55 + 0.45 * Math.sin(timeSec * 4.2 + pc.x);
+        ctx.strokeStyle = pc.charge > 0 ? '#67e8f9' : `rgba(56, 189, 248, ${(0.35 + pulse * 0.25).toFixed(2)})`;
+        ctx.lineWidth = Math.max(1.8, (pc.charge > 0 ? 0.11 : 0.065) * scale);
+        for (let seg = 0; seg < pc.maxCharge; seg++) {
+          const a0 = -Math.PI * 0.5 + (seg / pc.maxCharge) * Math.PI * 2 + 0.14;
+          const a1 = -Math.PI * 0.5 + ((seg + 1) / pc.maxCharge) * Math.PI * 2 - 0.14;
+          ctx.strokeStyle = seg < pc.charge ? '#fde047' : 'rgba(56, 189, 248, 0.36)';
+          ctx.beginPath();
+          ctx.arc(px, py, pr * 0.72, a0, a1);
+          ctx.stroke();
+        }
+      }
+      // Crackling electric Acoustic Arc from crystal -> Kraken!
+      if (pc.dischargeAnimSec > 0 && pc.arcTargetX && pc.arcTargetY) {
+        const tx = toScreenX(pc.arcTargetX);
+        const ty = toScreenY(pc.arcTargetY);
+        const a = Math.min(1, pc.dischargeAnimSec / 0.5);
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = Math.max(4, 0.24 * scale);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        for (let k = 1; k < 6; k++) {
+          const f = k / 6;
+          const jx = (Math.sin(timeSec * 45 + k * 7) * 0.75) * scale;
+          const jy = (Math.cos(timeSec * 52 + k * 9) * 0.75) * scale;
+          ctx.lineTo(px + (tx - px) * f + jx, py + (ty - py) * f + jy);
+        }
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.8, 0.09 * scale);
+        ctx.stroke();
+      }
+      // Glowing cyan Hydrodynamic Cover Shield Arc behind sheltering pillar during Vortex!
+      if (boss?.aiState === 'vortex' && lair.vortexShelteredPillarId === pc.id) {
+        const awayAng = Math.atan2(pc.y - boss.y, pc.x - boss.x);
+        ctx.strokeStyle = 'rgba(103, 232, 249, 0.88)';
+        ctx.lineWidth = Math.max(3, 0.16 * scale);
+        ctx.beginPath();
+        ctx.arc(px, py, pr * 1.28, awayAng - 0.9, awayAng + 0.9);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 1d. Expanding Radial Shockwaves (Awakening, Phase Shifts, Resonance Break, Victory Bursts!)
+    for (const sw of lair.shockwaves || []) {
+      const sx = toScreenX(sw.x);
+      const sy = toScreenY(sw.y);
+      const a = Math.max(0, Math.min(1, sw.life / Math.max(0.05, sw.maxLife)));
+      ctx.save();
+      ctx.globalAlpha = a * 0.82;
+      ctx.strokeStyle = sw.color || '#38bdf8';
+      ctx.lineWidth = Math.max(2.5, (0.28 * a + 0.06) * scale);
+      ctx.beginPath();
+      ctx.arc(sx, sy, sw.radius * scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // 2. Glowing Speargun Armory Beacon in Quiet Anteroom (auto-equips on swim-over!)
     if (!lair.weaponEquipped && spec.armory) {
       const sx = toScreenX(spec.armory.x);
       const sy = toScreenY(spec.armory.y);
       const pulse = 0.6 + 0.4 * Math.sin(timeSec * 4.5);
       ctx.save();
-      const ag = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, 2.4 * scale);
-      ag.addColorStop(0, 'rgba(56, 189, 248, 0.42)');
+      const ag = ctx.createRadialGradient(sx, sy, 0.2 * scale, sx, sy, 2.5 * scale);
+      ag.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
       ag.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = ag;
       ctx.beginPath();
-      ctx.arc(sx, sy, 2.4 * scale, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 2.5 * scale, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = `rgba(125, 211, 252, ${(0.5 + pulse * 0.45).toFixed(2)})`;
       ctx.lineWidth = Math.max(1.6, 0.07 * scale);
@@ -568,7 +870,7 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 2b. Emerald Bio-Heal Orbs (dropped by slain enemies & phase transitions!)
+    // 2b. Emerald Bio-Heal Orbs
     for (const orb of lair.healOrbs || []) {
       const ox = toScreenX(orb.x);
       const oy = toScreenY(orb.y);
@@ -593,26 +895,106 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 3. Boss Emissive Attacks, Weak-Point Mantle Core & Stun/Lunge Indicators
+    // 3. Boss Emissive Attacks, Weak-Point Mantle Core & Complete Telegraphs
     if (boss && boss.active && !boss.defeated) {
       const bx = toScreenX(boss.x);
       const by = toScreenY(boss.y);
 
       if (boss.blackoutAlpha > 0.02) {
         ctx.save();
-        ctx.fillStyle = `rgba(10, 4, 24, ${(boss.blackoutAlpha * 0.48).toFixed(3)})`;
+        ctx.fillStyle = `rgba(10, 4, 24, ${(boss.blackoutAlpha * 0.45).toFixed(3)})`;
         ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
       }
 
-      // Kraken Lunge Dash Lane Telegraph (crystal-clear glowing rush path!)
+      // 3a. Pillar-Occluded Sweeping Bioluminescent Abyssal Beam (blasts straight from the sculpted beak/maw!)
+      if (boss.aiState === 'beam_windup' || boss.aiState === 'beam_sweep') {
+        const mx = bx + Math.cos(boss.beamAngle) * boss.radius * 0.78 * scale;
+        const my = by + Math.sin(boss.beamAngle) * boss.radius * 0.78 * scale;
+        const ex = toScreenX(boss.beamEndX);
+        const ey = toScreenY(boss.beamEndY);
+        const isFiring = boss.aiState === 'beam_sweep';
+        ctx.save();
+        if (!isFiring) {
+          // Pulsing sighting laser + inward energy particles at beak
+          const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.25));
+          ctx.strokeStyle = boss.phase === 3 ? 'rgba(251, 113, 133, 0.85)' : 'rgba(103, 232, 249, 0.85)';
+          ctx.lineWidth = Math.max(1.8, (0.06 + prog * 0.14) * scale);
+          ctx.setLineDash([10, 7]);
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = Math.max(2, 0.09 * scale);
+          ctx.beginPath();
+          ctx.arc(mx, my, (2.2 - prog * 1.6) * scale, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // 3-Layer Roaring Bioluminescent Plasma Beam occluded cleanly at cover pillars!
+          const beamCol = boss.phase === 3 ? '#f43f5e' : '#a855f7';
+          const midCol = boss.phase === 3 ? '#fda4af' : '#67e8f9';
+          const wobble = 1 + Math.sin(timeSec * 42) * 0.14;
+          ctx.lineCap = 'round';
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = beamCol;
+          ctx.globalAlpha = 0.45;
+          ctx.lineWidth = 2.6 * scale * wobble;
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+
+          ctx.strokeStyle = midCol;
+          ctx.globalAlpha = 0.85;
+          ctx.lineWidth = 1.25 * scale * wobble;
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.globalAlpha = 0.98;
+          ctx.lineWidth = 0.48 * scale;
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+
+          // Muzzle bloom right at the Kraken's open throat!
+          const mg = ctx.createRadialGradient(mx, my, 0.15 * scale, mx, my, 2.0 * scale);
+          mg.addColorStop(0, '#ffffff');
+          mg.addColorStop(0.5, midCol);
+          mg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+          ctx.fillStyle = mg;
+          ctx.beginPath();
+          ctx.arc(mx, my, 2.0 * scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Glowing splash impact bloom where beam hits a cover pillar!
+          if (boss.beamHitPillar) {
+            const bg = ctx.createRadialGradient(ex, ey, 0.2 * scale, ex, ey, 2.8 * scale);
+            bg.addColorStop(0, '#ffffff');
+            bg.addColorStop(0.45, midCol);
+            bg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            ctx.arc(ex, ey, 2.8 * scale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
+      // 3b. Kraken Lunge Dash Lane Telegraph (exact WYSIWYG collision width = (radius + 0.45) * 2!)
       if (boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash') {
         const dx = toScreenX(boss.lungeDestX);
         const dy = toScreenY(boss.lungeDestY);
         const isDash = boss.aiState === 'lunge_dash';
         ctx.save();
-        ctx.strokeStyle = isDash ? 'rgba(244, 63, 94, 0.72)' : 'rgba(56, 189, 248, 0.45)';
-        ctx.lineWidth = boss.radius * 1.45 * scale;
+        ctx.strokeStyle = isDash ? 'rgba(244, 63, 94, 0.58)' : 'rgba(56, 189, 248, 0.34)';
+        ctx.lineWidth = (boss.radius + 0.45) * 2 * scale;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(bx, by);
@@ -629,30 +1011,87 @@ export const bossAndLairMethods = {
         ctx.restore();
       }
 
-      // Telegraphed Tentacle Slam Cone (Single in P1/P2, Twin Crossing Lanes in P3!)
+      // 3c. Telegraphed Tentacle Slam Cone with Growing Inner Progress-Fill Wedge (Single P1/P2, Tri-Fan P3!)
       if (boss.aiState === 'slam_windup' || boss.aiState === 'slam_strike') {
         const isStrike = boss.aiState === 'slam_strike';
         const rad = boss.slamRadius * scale;
         const slamAngles = boss.twinSlam
-          ? [boss.slamTargetAngle - 0.58, boss.slamTargetAngle + 0.58]
+          ? [boss.slamTargetAngle, boss.slamTargetAngle - 0.82, boss.slamTargetAngle + 0.82]
           : [boss.slamTargetAngle];
-        const halfArc = boss.twinSlam ? 0.36 : boss.slamArcHalf;
+        const halfArc = boss.twinSlam ? 0.28 : boss.slamArcHalf;
+        const prog = isStrike ? 1 : Math.max(0.05, 1 - boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.15));
         ctx.save();
-        ctx.fillStyle = isStrike ? 'rgba(244, 63, 94, 0.36)' : 'rgba(251, 146, 60, 0.18)';
-        ctx.strokeStyle = isStrike ? 'rgba(254, 202, 202, 0.94)' : 'rgba(251, 191, 36, 0.88)';
-        ctx.lineWidth = Math.max(2, 0.09 * scale);
         for (const sa of slamAngles) {
+          ctx.fillStyle = isStrike ? 'rgba(244, 63, 94, 0.38)' : 'rgba(251, 146, 60, 0.14)';
+          ctx.strokeStyle = isStrike ? 'rgba(254, 202, 202, 0.94)' : 'rgba(251, 191, 36, 0.88)';
+          ctx.lineWidth = Math.max(2, 0.09 * scale);
           ctx.beginPath();
           ctx.moveTo(bx, by);
           ctx.arc(bx, by, rad, sa - halfArc, sa + halfArc);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+
+          // Growing inner charge wedge shows EXACT moment of slam impact!
+          if (!isStrike) {
+            ctx.fillStyle = 'rgba(244, 63, 94, 0.28)';
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.arc(bx, by, rad * prog, sa - halfArc, sa + halfArc);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
         ctx.restore();
       }
 
-      // Phase 2/3 Abyssal Suction Vortex Rings
+      // 3d. Ink Barrage Swelling Beak Glow & Spread Preview Ticks
+      if (boss.aiState === 'ink_barrage') {
+        const count = boss.phase === 1 ? 3 : boss.phase === 2 ? 5 : 7;
+        const baseAng = Number.isFinite(boss.inkAimAngle) ? boss.inkAimAngle : boss.angle;
+        const spread = boss.phase === 3 ? 0.23 : 0.27;
+        const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 0.85));
+        ctx.save();
+        ctx.strokeStyle = boss.phase === 3 ? 'rgba(251, 113, 133, 0.72)' : 'rgba(192, 132, 252, 0.72)';
+        ctx.lineWidth = Math.max(1.6, 0.07 * scale);
+        for (let k = 0; k < count; k++) {
+          const a = baseAng + (k - (count - 1) * 0.5) * spread;
+          const r0 = (boss.radius * 0.85) * scale;
+          const r1 = (boss.radius * 0.85 + 2.4 + prog * 3.8) * scale;
+          ctx.beginPath();
+          ctx.moveTo(bx + Math.cos(a) * r0, by + Math.sin(a) * r0);
+          ctx.lineTo(bx + Math.cos(a) * r1, by + Math.sin(a) * r1);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // 3e. Phase 3 Directional Tentacle Grab Windup Cone!
+      if (boss.aiState === 'grab_windup') {
+        const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.1));
+        const rad = 15.5 * scale;
+        ctx.save();
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.16)';
+        ctx.strokeStyle = 'rgba(251, 113, 133, 0.92)';
+        ctx.lineWidth = Math.max(2, 0.08 * scale);
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.arc(bx, by, rad, boss.slamTargetAngle - 0.44, boss.slamTargetAngle + 0.44);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.28)';
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.arc(bx, by, rad * prog, boss.slamTargetAngle - 0.44, boss.slamTargetAngle + 0.44);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 3f. Phase 2/3 Abyssal Suction Vortex Rings
       if (boss.aiState === 'vortex' && boss.vortexStrength > 0) {
         ctx.save();
         for (let k = 0; k < 4; k++) {
@@ -667,7 +1106,7 @@ export const bossAndLairMethods = {
         ctx.restore();
       }
 
-      // Stunned Kraken Ring (huge open 2x damage window!)
+      // 3g. Stunned Kraken Ring (huge open 2x damage window!)
       if (boss.aiState === 'stunned') {
         ctx.save();
         ctx.strokeStyle = '#fde047';
@@ -680,7 +1119,7 @@ export const bossAndLairMethods = {
         ctx.restore();
       }
 
-      // Glowing Tentacle Grab Tether
+      // 3h. Glowing Tentacle Grab Tether
       if (boss.pinnedTargetId === 'local' && diver) {
         ctx.save();
         ctx.strokeStyle = '#fb7185';
@@ -691,44 +1130,81 @@ export const bossAndLairMethods = {
         ctx.stroke();
         ctx.font = `800 ${Math.max(11, Math.round(12 * dpr))}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
+        ctx.strokeStyle = 'rgba(2, 6, 23, 0.92)';
+        ctx.lineWidth = 3.5 * dpr;
+        const txt = `TAP FIRE TO BREAK (${boss.pinHitsNeeded || 1})`;
+        ctx.strokeText(txt, toScreenX(diver.x), toScreenY(diver.y) - 24 * dpr);
         ctx.fillStyle = '#fde047';
-        ctx.fillText(`TAP FIRE TO BREAK (${boss.pinHitsNeeded || 1})`, toScreenX(diver.x), toScreenY(diver.y) - 24 * dpr);
+        ctx.fillText(txt, toScreenX(diver.x), toScreenY(diver.y) - 24 * dpr);
         ctx.restore();
       }
 
-      // Glowing Exposed Mantle Weak-Point Core (blazes brightly!)
-      const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.56));
-      const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.56));
-      const stunnedBoost = boss.aiState === 'stunned' ? 1.35 : 1.0;
-      const coreR = (1.1 + 0.2 * Math.sin(timeSec * 8)) * scale * stunnedBoost;
-      ctx.save();
-      const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.9);
-      cg.addColorStop(0, '#ffffff');
-      cg.addColorStop(0.35, boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8');
-      cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.fillStyle = cg;
-      ctx.beginPath();
-      ctx.arc(coreX, coreY, coreR * 1.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = Math.max(1.6, 0.07 * scale);
-      ctx.beginPath();
-      ctx.arc(coreX, coreY, coreR * 0.92, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
+      // 3i. Glowing Exposed Mantle Weak-Point Core + Orbiting Armor Petals
+      if (boss.aiState !== 'dormant') {
+        const coreX = toScreenX(boss.x + Math.cos(boss.weakAngle) * (boss.radius * 0.56));
+        const coreY = toScreenY(boss.y + Math.sin(boss.weakAngle) * (boss.radius * 0.56));
+        const stunnedBoost = boss.aiState === 'stunned' ? 1.4 : 1.0;
+        const coreR = (1.05 + 0.18 * Math.sin(timeSec * 8)) * scale * stunnedBoost;
+        ctx.save();
+        const cg = ctx.createRadialGradient(coreX, coreY, coreR * 0.1, coreX, coreY, coreR * 1.9);
+        cg.addColorStop(0, '#ffffff');
+        cg.addColorStop(0.35, boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8');
+        cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(coreX, coreY, coreR * 1.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = Math.max(1.6, 0.07 * scale);
+        ctx.beginPath();
+        ctx.arc(coreX, coreY, coreR * 0.92, 0, Math.PI * 2);
+        ctx.stroke();
+        // 3 orbiting diamond reticle petals around core
+        for (let p = 0; p < 3; p++) {
+          const pa = timeSec * 2.2 + (p * Math.PI * 2) / 3;
+          const ptx = coreX + Math.cos(pa) * coreR * 1.18;
+          const pty = coreY + Math.sin(pa) * coreR * 1.18;
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(ptx, pty, Math.max(2.2, 0.1 * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
 
-    // 4. Post-Victory Bioluminescent Escape Updraft
+    // 4. Post-Victory Full-Height Soaring Bioluminescent Thermal Updraft Column!
     if (lair.bossDefeated && spec.arena.exitUpdraft) {
       const up = spec.arena.exitUpdraft;
       const ux = toScreenX(up.x);
       const uy = toScreenY(up.y);
+      const floorY = toScreenY((spec.arena.cy || 40.5) + (spec.arena.ry || 14));
+      const ceilY = toScreenY((spec.arena.cy || 40.5) - (spec.arena.ry || 14));
       const ur = up.radius * scale;
       const pulse = 0.65 + 0.35 * Math.sin(timeSec * 4.5);
       ctx.save();
+      // Rising luminous thermal column from cathedral floor to skylight
+      const colGrad = ctx.createLinearGradient(ux - ur, 0, ux + ur, 0);
+      colGrad.addColorStop(0, 'rgba(52, 211, 153, 0)');
+      colGrad.addColorStop(0.5, 'rgba(103, 232, 249, 0.34)');
+      colGrad.addColorStop(1, 'rgba(52, 211, 153, 0)');
+      ctx.fillStyle = colGrad;
+      ctx.fillRect(ux - ur, ceilY, ur * 2, Math.max(20, floorY - ceilY));
+      // Rising thermal ribbons
+      ctx.strokeStyle = 'rgba(167, 243, 208, 0.55)';
+      ctx.lineWidth = Math.max(1.6, 0.07 * scale);
+      for (let k = 0; k < 4; k++) {
+        const phase = (timeSec * 1.1 + k * 0.25) % 1;
+        const ry = floorY - phase * Math.max(20, floorY - ceilY);
+        ctx.globalAlpha = Math.sin(phase * Math.PI) * 0.75;
+        ctx.beginPath();
+        ctx.ellipse(ux, ry, ur * 0.72, ur * 0.22, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
       const ug = ctx.createRadialGradient(ux, uy, ur * 0.15, ux, uy, ur * 1.35);
-      ug.addColorStop(0, 'rgba(103, 232, 249, 0.85)');
-      ug.addColorStop(0.55, 'rgba(52, 211, 153, 0.4)');
+      ug.addColorStop(0, 'rgba(103, 232, 249, 0.88)');
+      ug.addColorStop(0.55, 'rgba(52, 211, 153, 0.42)');
       ug.addColorStop(1, 'rgba(52, 211, 153, 0)');
       ctx.fillStyle = ug;
       ctx.beginPath();
@@ -741,8 +1217,11 @@ export const bossAndLairMethods = {
       ctx.stroke();
       ctx.font = `800 ${Math.max(10, Math.round(11 * dpr))}px ui-monospace, monospace`;
       ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.9)';
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeText('✨ UPDRAFT → SURFACE [E]', ux, uy - ur - 8 * dpr);
       ctx.fillStyle = '#a7f3d0';
-      ctx.fillText('✨ UPDRAFT → 6m DECO [E]', ux, uy - ur - 8 * dpr);
+      ctx.fillText('✨ UPDRAFT → SURFACE [E]', ux, uy - ur - 8 * dpr);
       ctx.restore();
     }
 
@@ -763,46 +1242,38 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 6. Diver Speargun Charge Sightline & Tethered Titanium Bolts
-    if (lair.weaponEquipped && lair.charging && diver) {
-      const cFrac = Math.min(1, lair.chargeSec / SPEARGUN_MAX_CHARGE_SEC);
-      const dx = toScreenX(diver.x);
-      const dy = toScreenY(diver.y);
+    // 6. 5th-Shot Hyper-Tip Ready Golden Glow on Diver's Speargun Tip!
+    if (lair.weaponEquipped && diver && (lair.shotCounter || 0) % 5 === 4) {
       const aim = diver.torchAngle ?? diver.angle ?? 0;
-      const len = (5 + cFrac * 11) * scale;
+      const hx = toScreenX((diver.body?.hand?.x ?? diver.x) + Math.cos(aim) * 1.05);
+      const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.05);
+      const hr = (0.38 + 0.08 * Math.sin(timeSec * 14)) * scale;
       ctx.save();
-      ctx.strokeStyle = cFrac >= 0.72 ? 'rgba(250, 204, 21, 0.85)' : 'rgba(56, 189, 248, 0.65)';
-      ctx.lineWidth = Math.max(1.6, (0.06 + cFrac * 0.08) * scale);
-      ctx.setLineDash([6, 5]);
+      const hg = ctx.createRadialGradient(hx, hy, hr * 0.1, hx, hy, hr * 2.2);
+      hg.addColorStop(0, '#ffffff');
+      hg.addColorStop(0.45, '#fde047');
+      hg.addColorStop(1, 'rgba(250, 204, 21, 0)');
+      ctx.fillStyle = hg;
       ctx.beginPath();
-      ctx.moveTo(dx + Math.cos(aim) * scale * 0.9, dy + Math.sin(aim) * scale * 0.9);
-      ctx.lineTo(dx + Math.cos(aim) * len, dy + Math.sin(aim) * len);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // Charge ring around diver
-      ctx.strokeStyle = cFrac >= 0.72 ? '#fde047' : '#38bdf8';
-      ctx.lineWidth = Math.max(2.2, 0.1 * scale);
-      ctx.beginPath();
-      ctx.arc(dx, dy, 1.25 * scale, -Math.PI * 0.5, -Math.PI * 0.5 + cFrac * Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(hx, hy, hr * 2.2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
+    // 6b. Tethered Titanium Speargun Bolts
     for (const sp of lair.spears || []) {
       const sx = toScreenX(sp.x);
       const sy = toScreenY(sp.y);
       const ox = toScreenX(sp.originX);
       const oy = toScreenY(sp.originY);
       ctx.save();
-      // Braided tether cord trailing back
-      ctx.strokeStyle = sp.piercing ? 'rgba(253, 224, 71, 0.45)' : 'rgba(186, 230, 253, 0.32)';
+      ctx.strokeStyle = sp.piercing ? 'rgba(253, 224, 71, 0.5)' : 'rgba(186, 230, 253, 0.34)';
       ctx.lineWidth = Math.max(1, 0.04 * scale);
       ctx.beginPath();
       ctx.moveTo(ox, oy);
       ctx.lineTo(sx, sy);
       ctx.stroke();
 
-      // Gleaming titanium spear shaft + barbed tip
       ctx.translate(sx, sy);
       ctx.rotate(sp.angle || 0);
       ctx.strokeStyle = sp.piercing ? '#fde047' : '#e0f2fe';
@@ -821,18 +1292,22 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 7. Hit Sparks & Floating Damage / Crit Callouts
+    // 7. Hit Sparks & High-Contrast Outlined Floating Damage / Crit Callouts
     for (const sk of lair.hitSparks || []) {
       const sx = toScreenX(sk.x);
       const sy = toScreenY(sk.y);
-      const a = Math.max(0, Math.min(1, sk.life / (sk.maxLife || 0.7)));
+      const a = Math.max(0, Math.min(1, sk.life / (sk.maxLife || 0.75)));
       ctx.save();
       ctx.globalAlpha = a;
       if (sk.text) {
-        ctx.font = `800 ${Math.max(11, Math.round((sk.crit ? 14 : 11) * dpr))}px ui-monospace, monospace`;
+        ctx.font = `900 ${Math.max(11, Math.round((sk.crit ? 15 : 12) * dpr))}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
+        const ty = sy - (1 - a) * 22 * dpr;
+        ctx.strokeStyle = 'rgba(2, 6, 23, 0.92)';
+        ctx.lineWidth = 3.2 * dpr;
+        ctx.strokeText(sk.text, sx, ty);
         ctx.fillStyle = sk.color || '#38bdf8';
-        ctx.fillText(sk.text, sx, sy - (1 - a) * 18 * dpr);
+        ctx.fillText(sk.text, sx, ty);
       } else {
         ctx.fillStyle = sk.color || '#38bdf8';
         ctx.beginPath();
@@ -842,7 +1317,7 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 8. Combat Hit Vignette & Top-Center Epic Boss Health Bar (positioned cleanly at top in Combat Mode!)
+    // 8. Combat Hit Vignette
     if (lair.playerHitFlash > 0.02) {
       ctx.save();
       const hitA = Math.min(0.45, lair.playerHitFlash * 1.2);
@@ -852,6 +1327,35 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
+    // 8b. Cinematic Awakening / Phase-Shift Title Banner (fades gracefully above center!)
+    if ((lair.titleBannerSec || 0) > 0 && lair.titleBannerText) {
+      const maxS = Math.max(0.5, lair.titleBannerMaxSec || 3.0);
+      const rem = lair.titleBannerSec;
+      const inA = Math.min(1, (maxS - rem) / 0.35);
+      const outA = Math.min(1, rem / 0.6);
+      const bannerA = Math.min(inA, outA);
+      const cy = Math.round(ch * 0.23);
+      ctx.save();
+      ctx.globalAlpha = bannerA;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `900 ${Math.round(24 * dpr)}px ui-monospace, monospace`;
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.95)';
+      ctx.lineWidth = 5 * dpr;
+      ctx.strokeText(lair.titleBannerText, cw * 0.5, cy);
+      ctx.fillStyle = lair.titleBannerColor || '#38bdf8';
+      ctx.fillText(lair.titleBannerText, cw * 0.5, cy);
+      if (lair.titleBannerSub) {
+        ctx.font = `700 ${Math.round(11 * dpr)}px ui-monospace, monospace`;
+        ctx.lineWidth = 3.2 * dpr;
+        ctx.strokeText(lair.titleBannerSub, cw * 0.5, cy + 20 * dpr);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(lair.titleBannerSub, cw * 0.5, cy + 20 * dpr);
+      }
+      ctx.restore();
+    }
+
+    // 9. Top-Center Epic Boss Health Bar (positioned cleanly at top in Combat Mode!)
     if (boss && boss.active && !boss.defeated) {
       const barW = Math.min(cw - 48 * dpr, 480 * dpr);
       const barH = 13 * dpr;
@@ -861,7 +1365,7 @@ export const bossAndLairMethods = {
 
       ctx.save();
       ctx.fillStyle = 'rgba(4, 12, 26, 0.86)';
-      ctx.strokeStyle = boss.aiState === 'stunned' ? 'rgba(250, 204, 21, 0.85)' : boss.phase === 3 ? 'rgba(244, 63, 94, 0.82)' : 'rgba(56, 189, 248, 0.62)';
+      ctx.strokeStyle = boss.aiState === 'stunned' ? 'rgba(250, 204, 21, 0.9)' : boss.phase === 3 ? 'rgba(244, 63, 94, 0.85)' : 'rgba(56, 189, 248, 0.65)';
       ctx.lineWidth = Math.max(1.2, 1.4 * dpr);
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
@@ -876,7 +1380,11 @@ export const bossAndLairMethods = {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#f8fafc';
-      const statusTag = boss.aiState === 'stunned' ? ' · ⚡ STUNNED!' : ` · PHASE ${boss.phase}/3`;
+      const statusTag = boss.aiState === 'stunned'
+        ? ' · ⚡ STUNNED (2× DMG)!'
+        : boss.aiState === 'awakening'
+          ? ' · AWAKENING...'
+          : ` · PHASE ${boss.phase}/3`;
       ctx.fillText(`🐙 ${boss.name}${statusTag}`, bx, by - 11 * dpr);
       ctx.textAlign = 'right';
       ctx.fillStyle = '#fde68a';

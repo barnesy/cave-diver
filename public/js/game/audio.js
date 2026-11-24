@@ -1139,7 +1139,28 @@ export class DiveAudio {
       const gasT = tensionState.lowGas ? 0.65 : 0;
       const calmMult = tensionState.inAirDome ? 0.15 : 1.0;
       const tension = Math.min(1, Math.max(siltT, sqT, gasT) * calmMult);
-      if (tension > 0.28) {
+
+      // Procedural Phase 1/2/3 Boss Heartbeat & Abyssal Percussion Pulse (88 / 108 / 132 BPM) (v182)
+      const bossPhase = Number(tensionState.bossPhase) || 0;
+      if (bossPhase > 0) {
+        const bpm = bossPhase >= 3 ? 132 : bossPhase === 2 ? 108 : 88;
+        const beatSec = 60 / bpm;
+        this._bossBeatTimer = (this._bossBeatTimer ?? 0.2) - dt;
+        if (this._bossBeatTimer <= 0) {
+          this._bossBeatTimer = beatSec;
+          this._bossBeatIdx = ((this._bossBeatIdx || 0) + 1) % 4;
+          const isAccent = this._bossBeatIdx === 0;
+          const root = bossPhase >= 3 ? 58 : bossPhase === 2 ? 52 : 46;
+          this.playTone(isAccent ? root : root * 1.18, isAccent ? 0.24 : 0.15, 'sine', isAccent ? 0.048 : 0.028, 0, { bus: 'ambience' });
+          if (isAccent) {
+            this.playTone(root * 2.0, 0.16, 'triangle', 0.022, 0.02, { bus: 'ambience' });
+          }
+          if (bossPhase >= 2 && this._bossBeatIdx === 2) {
+            this.playTone(root * (bossPhase >= 3 ? 1.5 : 1.33), 0.18, 'triangle', 0.024, 0, { bus: 'ambience' });
+          }
+        }
+      }
+      if (tension > 0.28 && bossPhase <= 0) {
         this._tensionTimer = (this._tensionTimer ?? 0.65) - dt;
         if (this._tensionTimer <= 0) {
           this._tensionTimer = Math.max(2.1, 3.8 - tension * 1.4);
@@ -1624,17 +1645,46 @@ export class DiveAudio {
   }
 
   /**
-   * Pneumatic Speargun underwater thump + cavitation zip (v179).
+   * Pneumatic Speargun underwater cavitation snap + hydro-zip (v182).
    */
   playSpeargunFire(charged = false) {
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
-    this.playTone(charged ? 185 : 230, 0.09, 'sawtooth', charged ? 0.075 : 0.052, 0, { bus: 'sfx' });
-    this.playTone(charged ? 640 : 480, 0.11, 'triangle', charged ? 0.055 : 0.036, 0.03, { bus: 'sfx' });
+    const t = this.ctx.currentTime;
+    // Short filtered noise burst for pneumatic cavitation snap
+    try {
+      const dur = charged ? 0.13 : 0.085;
+      const len = Math.max(64, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(charged ? 1450 : 1100, t);
+      filt.frequency.exponentialRampToValueAtTime(340, t + dur);
+      filt.Q.value = 1.4;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(charged ? 0.085 : 0.055, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(filt);
+      filt.connect(g);
+      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); filt.disconnect(); g.disconnect(); } catch {}
+      };
+      src.start(t);
+      src.stop(t + dur + 0.02);
+    } catch {}
+    this.playTone(charged ? 185 : 230, 0.09, 'sawtooth', charged ? 0.075 : 0.05, 0, { bus: 'sfx' });
+    this.playTone(charged ? 640 : 480, 0.11, 'triangle', charged ? 0.055 : 0.036, 0.025, { bus: 'sfx' });
     if (charged) {
-      this.playTone(960, 0.14, 'sine', 0.04, 0.06, { bus: 'sfx' });
+      this.playTone(980, 0.16, 'sine', 0.048, 0.05, { bus: 'sfx' });
     }
-    this.vibrate?.(charged ? [22, 16, 14] : 12);
+    this.vibrate?.(charged ? [22, 16, 14] : 10);
   }
 
   /**
@@ -1644,8 +1694,8 @@ export class DiveAudio {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     this.playTone(crit ? 150 : 125, 0.08, 'triangle', crit ? 0.07 : 0.05, 0, { bus: 'sfx' });
     if (crit) {
-      this.playTone(880, 0.14, 'sine', 0.05, 0.02, { bus: 'sfx' });
-      this.playTone(1320, 0.16, 'triangle', 0.042, 0.06, { bus: 'sfx' });
+      this.playTone(880, 0.14, 'sine', 0.052, 0.02, { bus: 'sfx' });
+      this.playTone(1320, 0.16, 'triangle', 0.044, 0.055, { bus: 'sfx' });
     }
   }
 
@@ -1662,16 +1712,113 @@ export class DiveAudio {
   }
 
   /**
-   * Haunting sub-bass Cave Kraken abyssal roar across Phases 1–3 (v179).
+   * Haunting sub-bass Cave Kraken abyssal roar with bandpass growl & cavern echo (v182).
    */
   playBossRoar(phase = 1) {
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
-    const base = phase >= 3 ? 62 : phase === 2 ? 54 : 46;
-    this.playTone(base, 0.72, 'sawtooth', 0.075, 0, { bus: 'sfx' });
-    this.playTone(base * 1.48, 0.62, 'triangle', 0.055, 0.12, { bus: 'sfx' });
-    this.playTone(base * 0.8, 0.85, 'sine', 0.07, 0.24, { bus: 'sfx' });
+    const t = this.ctx.currentTime;
+    const base = phase >= 3 ? 64 : phase === 2 ? 54 : 46;
+    // Layered filtered noise roar for genuine leviathan weight
+    try {
+      const dur = 0.85;
+      const len = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const env = Math.sin((i / len) * Math.PI);
+        data[i] = (Math.random() * 2 - 1) * env * 0.7;
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(240 + phase * 55, t);
+      filt.frequency.exponentialRampToValueAtTime(95, t + dur);
+      filt.Q.value = 2.1;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.075, t + 0.12);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(filt);
+      filt.connect(g);
+      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+      src.onended = () => {
+        try { src.disconnect(); filt.disconnect(); g.disconnect(); } catch {}
+      };
+      src.start(t);
+      src.stop(t + dur + 0.04);
+    } catch {}
+    this.playTone(base, 0.78, 'sawtooth', 0.075, 0, { bus: 'sfx' });
+    this.playTone(base * 1.48, 0.65, 'triangle', 0.055, 0.11, { bus: 'sfx' });
+    this.playTone(base * 0.78, 0.92, 'sine', 0.072, 0.24, { bus: 'sfx' });
+    // Subtle cavern echo repeat
+    this.playTone(base * 0.92, 0.55, 'sine', 0.032, 0.52, { bus: 'ambience' });
     this.vibrate?.([35, 30, 50]);
+  }
+
+  /** Heavy underwater tentacle slam shock boom (v182). */
+  playBossSlam() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(62, 0.34, 'sine', 0.095, 0, { bus: 'sfx' });
+    this.playTone(110, 0.18, 'triangle', 0.06, 0.02, { bus: 'sfx' });
+    this.vibrate?.([28, 14, 18]);
+  }
+
+  /** Bioluminescent Abyssal Beam charge whine & plasma sweep (v182). */
+  playBossBeam(stage = 'windup') {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (stage === 'windup') {
+      this.playTone(280, 0.32, 'sine', 0.045, 0, { bus: 'sfx' });
+      this.playTone(440, 0.36, 'triangle', 0.04, 0.24, { bus: 'sfx' });
+      this.playTone(680, 0.38, 'sine', 0.042, 0.5, { bus: 'sfx' });
+    } else {
+      this.playTone(145, 0.65, 'sawtooth', 0.065, 0, { bus: 'sfx' });
+      this.playTone(290, 0.55, 'triangle', 0.05, 0.08, { bus: 'sfx' });
+      this.vibrate?.([24, 16, 24]);
+    }
+  }
+
+  /** Rising crystalline glass chime when charging a pillar Resonance Crystal (v182). */
+  playCrystalChime(level = 1) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const freqs = [587.33, 783.99, 1046.5];
+    const f = freqs[Math.max(0, Math.min(2, (level || 1) - 1))];
+    this.playTone(f, 0.28, 'sine', 0.06, 0, { bus: 'sfx' });
+    this.playTone(f * 1.5, 0.22, 'triangle', 0.036, 0.04, { bus: 'sfx' });
+  }
+
+  /** Crackling acoustic arc discharge when a Pillar Resonance Crystal stuns the Kraken (v182). */
+  playResonanceBreak() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(1174.66, 0.24, 'sine', 0.075, 0, { bus: 'sfx' });
+    this.playTone(587.33, 0.38, 'triangle', 0.065, 0.05, { bus: 'sfx' });
+    this.playTone(148, 0.45, 'sawtooth', 0.07, 0.07, { bus: 'sfx' });
+    this.vibrate?.([25, 18, 45]);
+  }
+
+  /** Bright emerald droplet chime on collecting a Bio-Heal Orb (v182). */
+  playHealOrb() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(523.25, 0.12, 'sine', 0.05, 0, { bus: 'sfx' });
+    this.playTone(783.99, 0.18, 'triangle', 0.048, 0.06, { bus: 'sfx' });
+  }
+
+  /** Harmonic cathedral sconce ignition ping during Boss Awakening (v182). */
+  playSconceIgnite(idx = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const scaleNotes = [293.66, 329.63, 392.0, 440.0, 523.25, 587.33];
+    const f = scaleNotes[idx % scaleNotes.length];
+    this.playTone(f, 0.36, 'sine', 0.042, 0, { bus: 'sfx' });
+    this.playTone(f * 2, 0.24, 'triangle', 0.022, 0.04, { bus: 'sfx' });
+  }
+
+  /** Distant muffled abyssal groan when the shadowed Kraken tentacle passes the Ossuary (v182). */
+  playForeshadowGroan() {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(42, 1.15, 'sine', 0.06, 0, { bus: 'ambience' });
+    this.playTone(63, 0.95, 'triangle', 0.032, 0.18, { bus: 'ambience' });
+    this.vibrate?.([18, 40, 22]);
   }
 
   /**

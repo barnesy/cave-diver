@@ -52,9 +52,9 @@ export const LEVEL_1 = {
     // Exit Cenote Beta Jug-Shaped Skylight Cavern
     { ax: 144, ay: 6.6, bx: 145, by: 0.6, ra: 5.8, rb: 5.2 },
 
-    // === Secret Bottom-Level Tight-Squeeze Offshoot -> Long Gauntlet -> Sunken Sanctum Arena (v180) ===
-    // Hidden behind a narrow false rock squeeze off the very bottom of the 50m Deep Sump (132.5, 49.6)
-    { ax: 132.5, ay: 49.6, bx: 143.0, by: 49.8, ra: 1.55, rb: 1.85, secretLair: true },
+    // === Secret Bottom-Level Tight-Squeeze Offshoot -> Long Gauntlet -> Sunken Sanctum Arena (v182) ===
+    // Hidden behind a narrow false rock squeeze off the very bottom of the 50m Deep Sump (133.5, 50.4)
+    { ax: 133.5, ay: 50.4, bx: 143.0, by: 49.8, ra: 1.45, rb: 1.85, secretLair: true },
     // Quiet Armory Anteroom (weapon waiting BEFORE any enemies)
     { ax: 143.0, ay: 49.8, bx: 156.5, by: 48.6, ra: 2.35, rb: 3.6, secretLair: true },
     // Chamber 1: Moray Trench
@@ -180,7 +180,7 @@ export const LEVEL_1 = {
     { id: 'l1-geode', name: 'Blue Calcite Geode', kind: 'crystal', points: 225, x: 59.5, y: 29.5 },
     { id: 'l1-obsidian', name: 'Obsidian Offering Mask', kind: 'relic', points: 350, x: 96.0, y: 47.2 },
     { id: 'l1-ammonite', name: 'Fossil Nautilus', kind: 'fossil', points: 250, x: 114.5, y: 46.2 },
-    { id: 'l1-gypsum', name: 'Gypsum Crystal Spear', kind: 'crystal', points: 225, x: 135.5, y: 47.0 },
+    { id: 'l1-gypsum', name: 'Gypsum Crystal Spear', kind: 'crystal', points: 225, x: 131.5, y: 46.2 },
     { id: 'l1-amber', name: 'Submerged Copal Amber', kind: 'relic', points: 275, x: 134.5, y: 12.2 },
     { id: 'l1-lantern', name: 'Expedition Brass Tag', kind: 'survey', points: 175, x: 129.0, y: 5.2 },
   ],

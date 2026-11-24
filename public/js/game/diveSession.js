@@ -623,6 +623,9 @@ export function createDiveSession(
     mechFx: createMechanicalFxState(),
     stories: createSubmergedStories(level),
     secretLair: createSecretLairState(level),
+    cameraShake: 0,
+    hitstopSec: 0,
+    timeScale: 1.0,
     crewRole: getCrewRole(crewRoleId || 'balanced'),
     contracts: rollDiveContracts(level, `${diverName || 'diver'}:${cleanDailyKey || level.id}`),
     contractBonusScore: 0,
@@ -744,7 +747,8 @@ export function triggerSonarPing(session, callbacks = {}) {
   // Built-in short-range ping & upgraded Cave Sonar both detect Sonar-Hidden Secret Lair Veils!
   if (revealSecretLairVeil(session, diver.x, diver.y, maxRadiusM, callbacks)) {
     const v = session.secretLair.spec.veil;
-    addContact(v.x, v.y, 'secret-veil', '📡', v.label);
+    const vDist = Math.hypot(v.x - diver.x, v.y - diver.y);
+    contacts.push({ x: v.x, y: v.y, dist: vDist, kind: 'secret-veil', icon: '📡', label: v.label });
   }
   if (isUpgradedSonar) {
     for (const c of level.collectibles || []) {
@@ -3665,15 +3669,16 @@ function stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx) {
   diver.angVel = (diver.angVel + diff * turnStiffness * dt) * Math.exp(-6.5 * dt);
   diver.angle += diver.angVel * dt;
 
-  // Flashlight direction: follows diver heading by default, smoothly & deliberately overridden while left torch stick is aimed
+  // Flashlight / Mounted-Speargun aim direction: snappy & crisp in Combat Mode, deliberate underwater sweep outside
   const torchAim = callbacks.torchAim;
+  const inCombat = Boolean(session.secretLair?.combatMode);
   const curTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
   if (torchAim?.active && Number.isFinite(torchAim.angle)) {
     let tDiff = torchAim.angle - curTorchAng;
     while (tDiff > Math.PI) tDiff -= Math.PI * 2;
     while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-    const step = tDiff * (1 - Math.exp(-6.2 * dt));
-    const maxStep = 4.8 * dt;
+    const step = tDiff * (1 - Math.exp(-(inCombat ? 18.0 : 6.2) * dt));
+    const maxStep = (inCombat ? 18.0 : 4.8) * dt;
     diver.torchAngle = curTorchAng + Math.max(-maxStep, Math.min(maxStep, step));
     diver.torchManualAim = true;
   } else {
@@ -4444,12 +4449,32 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
 }
 
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+  // Exponentially decay camera shake, hitstop freeze-frame, and dramatic killing-blow slow-mo (v182)
+  if ((session.cameraShake || 0) > 0) {
+    session.cameraShake = Math.max(0, session.cameraShake - dt * 2.4);
+  }
+  if ((session.hitstopSec || 0) > 0) {
+    session.hitstopSec = Math.max(0, session.hitstopSec - dt);
+    return { nextCheckpoint: null, outcome: null, blockedExitDecoDepthM: 0 };
+  }
+  let simDt = dt;
+  if ((session._slowMoTimer || 0) > 0) {
+    session._slowMoTimer = Math.max(0, session._slowMoTimer - dt);
+    const ts = Number.isFinite(session.timeScale) ? Math.max(0.15, Math.min(1, session.timeScale)) : 1.0;
+    simDt = dt * ts;
+    if (session._slowMoTimer <= 0) session.timeScale = 1.0;
+  } else if (session.timeScale !== undefined && session.timeScale !== 1.0) {
+    session.timeScale = 1.0;
+  }
+
   const ctx = session._stepCtx || (session._stepCtx = {});
-  stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx);
+  stepPropulsionAndCurrents(session, thrust, simDt, callbacks, ctx);
+  stepWreckAndCaveInteractives(session, simDt, callbacks, ctx);
+  stepHydrodynamicsAndSilt(session, thrust, simDt, callbacks, ctx);
   if (session.secretLair) {
     stepSecretLairEncounter(
       session,
-      dt,
+      simDt,
       {
         peers: callbacks.getPeers ? callbacks.getPeers() : [],
         isAuthority: callbacks.isBossAuthority !== undefined ? callbacks.isBossAuthority : true,
@@ -4457,8 +4482,6 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
       callbacks
     );
   }
-  stepWreckAndCaveInteractives(session, dt, callbacks, ctx);
-  stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx);
-  stepPhysiologyAndObjectives(session, dt, callbacks, ctx);
-  return stepTelemetryAndExitOutcome(session, dt, callbacks);
+  stepPhysiologyAndObjectives(session, simDt, callbacks, ctx);
+  return stepTelemetryAndExitOutcome(session, simDt, callbacks);
 }

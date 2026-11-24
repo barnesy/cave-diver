@@ -96,7 +96,7 @@ export class InputController {
       if (code === 'Digit1' && !e.repeat) this.onGasSelect?.('EAN32');
       if (code === 'Digit2' && !e.repeat) this.onGasSelect?.('TMX1455');
       if (code === 'Digit3' && !e.repeat) this.onGasSelect?.('O2');
-      if ((code === 'Space' || code === 'Tab') && !e.repeat) {
+      if (code === 'Tab' && !e.repeat) {
         if (this.onRecommendedGasSwitch?.()) e.preventDefault();
       }
       if (code === 'KeyL' && !e.repeat) this.onTorchToggle?.();
@@ -108,6 +108,8 @@ export class InputController {
       if ((code === 'KeyF' || code === 'Space') && !e.repeat) {
         if (this.onSpearPressStart?.()) {
           this.spearKeyHeld = true;
+          e.preventDefault();
+        } else if (code === 'Space' && this.onRecommendedGasSwitch?.()) {
           e.preventDefault();
         } else if (code === 'KeyF' && this.onWreckAction?.()) {
           e.preventDefault();
@@ -311,8 +313,9 @@ export class InputController {
       const offX = e.clientX - boxCx;
       const offY = e.clientY - boxCy;
       const offD = Math.hypot(offX, offY);
-      const maxShift = this.torchMaxRadius * 0.36;
-      const shiftRatio = offD > maxShift && offD > 0 ? maxShift / offD : 1;
+      // In Combat Mode, keep stick center anchored to ring center so tapping/holding immediately registers direction!
+      const maxShift = this.combatModeActive ? 0 : this.torchMaxRadius * 0.36;
+      const shiftRatio = maxShift > 0 && offD > 0 ? (offD > maxShift ? maxShift / offD : 1) : 0;
       const sx = offX * shiftRatio;
       const sy = offY * shiftRatio;
       this._torchAnchorShift = { x: sx, y: sy };
@@ -438,7 +441,11 @@ export class InputController {
     if (justPressed(2)) this.onRecommendedGasSwitch?.(); // X / Square
     if (justPressed(3)) this.onTorchToggle?.(); // Y / Triangle
     if (justPressed(5)) this.onWreckAction?.(); // RB / R1
-    if (justPressed(7)) this.onDpvToggle?.(); // RT / R2 -> DPV Scooter Toggle
+    if (justPressed(7)) {
+      // RT / R2 -> Fire Speargun in Combat Mode, else DPV Scooter Toggle
+      if (!this.combatModeActive || !this.onSpearPressStart?.()) this.onDpvToggle?.();
+    }
+    this.gpSpearHeld = Boolean(this.combatModeActive && (pressed(7) || this._gpTorchVec.active));
     if (justPressed(8) || justPressed(11)) this.onSonarPing?.(); // Select/View or R3 -> Sonar Ping
     if (justPressed(10)) this.onMinimapToggle?.(); // L3 -> Toggle Sonar Minimap
     if (justPressed(9)) this.onPauseToggle?.(); // Start / Options

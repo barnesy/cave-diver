@@ -587,50 +587,77 @@ export const lightingAndFxMethods = {
       }
     }
 
-    // Dynamic Bioluminescent Cathedral Lighting for Secret Lair Arena, Armory, Boss Aura & Projectiles (v180)
+    // Dynamic Bioluminescent Cathedral Lighting for Secret Lair Arena, Armory, Boss Aura & Projectiles (v182)
     if (cutoutStamp && secretLair?.veilBreached && secretLair.spec) {
       const ar = secretLair.spec.arena;
-      // 1. Broad ambient cathedral illumination so the massive boss arena is vivid & readable!
+      const litFrac = secretLair.arenaEntered
+        ? Math.max(0.22, Number.isFinite(secretLair.sconceLitFrac) ? secretLair.sconceLitFrac : 1)
+        : 0.20;
+      const litCount = secretLair.arenaEntered
+        ? (Number.isFinite(secretLair.sconceLitCount) ? secretLair.sconceLitCount : (ar?.lightSconces?.length || 6))
+        : 0;
+      // 1. Broad ambient cathedral illumination — starts mysteriously dim, surges bright as sconces ignite!
       if (ar) {
         const ax = toScreenX(ar.cx) * rx;
         const ay = toScreenY(ar.cy) * ry;
         const aRx = (ar.rx * 1.28) * scale * rx;
         const aRy = (ar.ry * 1.38) * scale * ry;
         if (ax + aRx >= 0 && ax - aRx <= lw && ay + aRy >= 0 && ay - aRy <= lh) {
-          lctx.globalAlpha = 0.84;
+          lctx.globalAlpha = 0.86 * litFrac;
           lctx.drawImage(cutoutStamp, ax - aRx, ay - aRy, aRx * 2, aRy * 2);
         }
-        // 2. Pulsing wall crystal sconces around the cathedral perimeter
+        // 2. Pulsing wall crystal sconces around the cathedral perimeter (sequentially lit during Awakening!)
         for (let i = 0; i < (ar.lightSconces || []).length; i++) {
+          if (i >= litCount) continue;
           const sc = ar.lightSconces[i];
           const sx = toScreenX(sc.x) * rx;
           const sy = toScreenY(sc.y) * ry;
           const sr = (sc.radius || 13) * scale * rx;
           if (sx + sr < 0 || sx - sr > lw || sy + sr < 0 || sy - sr > lh) continue;
-          lctx.globalAlpha = 0.72 + 0.16 * Math.sin(timeSec * 2.6 + i * 1.3);
+          lctx.globalAlpha = 0.74 + 0.16 * Math.sin(timeSec * 2.6 + i * 1.3);
           lctx.drawImage(cutoutStamp, sx - sr, sy - sr, sr * 2, sr * 2);
         }
+      }
+      // 2b. Chargeable Pillar Resonance Crystals cast dynamic pools of cyan light!
+      for (const pc of secretLair.pillarCrystals || []) {
+        if (pc.cooldownSec > 0 && pc.dischargeAnimSec <= 0) continue;
+        const px = toScreenX(pc.x) * rx;
+        const py = toScreenY(pc.y) * ry;
+        const pr = (pc.dischargeAnimSec > 0 ? 15.0 : 5.5 + pc.charge * 2.4) * scale * rx;
+        if (px + pr < 0 || px - pr > lw || py + pr < 0 || py - pr > lh) continue;
+        lctx.globalAlpha = pc.dischargeAnimSec > 0 ? 0.95 : 0.45 + pc.charge * 0.16;
+        lctx.drawImage(cutoutStamp, px - pr, py - pr, pr * 2, pr * 2);
       }
       // 3. Soft armory glow in the quiet anteroom
       if (!secretLair.weaponEquipped && secretLair.spec.armory) {
         const arm = secretLair.spec.armory;
         const gx = toScreenX(arm.x) * rx;
         const gy = toScreenY(arm.y) * ry;
-        const gr = 7.5 * scale * rx;
+        const gr = 7.8 * scale * rx;
         if (gx + gr >= 0 && gx - gr <= lw && gy + gr >= 0 && gy - gr <= lh) {
-          lctx.globalAlpha = 0.76 + 0.12 * Math.sin(timeSec * 3.8);
+          lctx.globalAlpha = 0.78 + 0.12 * Math.sin(timeSec * 3.8);
           lctx.drawImage(cutoutStamp, gx - gr, gy - gr, gr * 2, gr * 2);
         }
       }
-      // 4. Dynamic bioluminescent Kraken boss aura (keeps boss silhouette & tentacles vivid at all times!)
+      // 4. Dynamic bioluminescent Kraken boss aura & sweeping Abyssal Beam illumination!
       if (secretLair.boss && (!secretLair.boss.defeated || secretLair.boss.defeatAnimSec > 0)) {
         const b = secretLair.boss;
         const bx = toScreenX(b.x) * rx;
         const by = toScreenY(b.y) * ry;
-        const br = (b.radius * (b.phase === 3 ? 4.4 : 3.8)) * scale * rx;
+        const br = (b.radius * (b.phase === 3 ? 4.5 : 3.9)) * scale * rx;
         if (bx + br >= 0 && bx - br <= lw && by + br >= 0 && by - br <= lh) {
-          lctx.globalAlpha = 0.92;
+          lctx.globalAlpha = b.aiState === 'dormant' ? 0.35 : 0.92;
           lctx.drawImage(cutoutStamp, bx - br, by - br, br * 2, br * 2);
+        }
+        if (b.aiState === 'beam_sweep') {
+          for (let s = 1; s <= 4; s++) {
+            const frac = s / 4;
+            const lx = toScreenX(b.x + (b.beamEndX - b.x) * frac) * rx;
+            const ly = toScreenY(b.y + (b.beamEndY - b.y) * frac) * ry;
+            const lr = 7.5 * scale * rx;
+            lctx.globalAlpha = 0.78;
+            lctx.drawImage(cutoutStamp, lx - lr, ly - lr, lr * 2, lr * 2);
+          }
         }
       }
       // 5. Flying speargun bolts, emerald Bio-Heal Orbs & enemy ink orbs cast dynamic local light!

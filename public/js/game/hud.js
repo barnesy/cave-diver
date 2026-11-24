@@ -762,7 +762,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
         ctx.stroke();
       }
       ctx.restore();
-      if (!secretLair.weaponClaimed && spec.armory) {
+      if (!secretLair.weaponEquipped && spec.armory) {
         const ax = toX(spec.armory.x);
         const ay = toY(spec.armory.y);
         ctx.fillStyle = '#38bdf8';

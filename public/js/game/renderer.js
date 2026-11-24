@@ -780,6 +780,23 @@ export class CaveRenderer {
     }
   }
 
+  /**
+   * Project CSS viewport client coordinates (e.g. desktop mouse cursor) into exact world meters,
+   * eliminating camera-peek & arena-zoom parallax error during twin-stick speargun aiming (v182).
+   */
+  screenToWorld(clientX, clientY) {
+    const vt = this._lastViewTransform;
+    if (!vt || !this.canvas || !vt.scale) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    const cx = (clientX - rect.left) * (this.canvas.width / rect.width);
+    const cy = (clientY - rect.top) * (this.canvas.height / rect.height);
+    return {
+      x: vt.camX + (cx - vt.viewCenterX) / vt.scale,
+      y: vt.camY + (cy - vt.viewCenterY) / vt.scale,
+    };
+  }
+
   render({
     diver,
     diveState,
@@ -830,6 +847,7 @@ export class CaveRenderer {
     breathState = 'hold',
     squeezeDust = null,
     handOnLinePt = null,
+    cameraShake = 0,
     timeSec,
     dt,
   }) {
@@ -871,20 +889,28 @@ export class CaveRenderer {
       this.camY = camAnchor.y + (Number(photoMode.panY) || 0);
     } else {
       const isManualPeek = Boolean(camAnchor.torchManualAim && Number.isFinite(camAnchor.torchAngle));
-      const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * 3.4 : 0;
-      const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * 2.5 : 0;
-      const lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 1.0 : 2.2) + peekX;
+      const inCombatMode = Boolean(secretLair?.combatMode);
+      const peekScale = inCombatMode ? 1.45 : 3.4;
+      const peekScaleY = inCombatMode ? 1.1 : 2.5;
+      const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * peekScale : 0;
+      const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * peekScaleY : 0;
+      let lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 0.85 : 2.2) + peekX;
       // Subtle plunge-entry camera settle during the first 1.5s of submerging (v161)
       const plungeDrop = !this._reducedMotion && timeSec >= 0 && timeSec < 1.5 && (camAnchor.y || 0) < 4.5
         ? Math.sin((1 - timeSec / 1.5) * Math.PI) * 0.42
         : 0;
-      const lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.7 : 1.4) + peekY + plungeDrop;
-      const camAlpha = Math.min(1, dt * (isManualPeek ? 3.2 : 6.0));
+      let lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.6 : 1.4) + peekY + plungeDrop;
+      // Dramatic Awakening pan: smoothly frame both diver and *XIBALBA'S MAW* as sconces ignite! (v182)
+      if (secretLair?.boss?.aiState === 'awakening' && !this._reducedMotion) {
+        lookX = lookX * 0.66 + secretLair.boss.x * 0.34;
+        lookY = lookY * 0.66 + secretLair.boss.y * 0.34;
+      }
+      const camAlpha = Math.min(1, dt * (inCombatMode ? 5.2 : isManualPeek ? 3.2 : 6.0));
       this.camX += (lookX - this.camX) * camAlpha;
       this.camY += (lookY - this.camY) * camAlpha;
     }
 
-    // Narcosis gentle camera drift (suppressed under prefers-reduced-motion, spectating, or Photo Mode)
+    // Narcosis gentle camera drift + damped Combat Camera Shake (suppressed under prefers-reduced-motion)
     let narcX = 0;
     let narcY = 0;
     const isSpectating = Boolean(cameraTarget && cameraTarget !== diver);
@@ -892,13 +918,22 @@ export class CaveRenderer {
       narcX = Math.sin(timeSec * 1.7) * diveState.narcosisLevel * 0.45;
       narcY = Math.cos(timeSec * 1.3) * diveState.narcosisLevel * 0.35;
     }
+    if (!isPhotoMode && !this._reducedMotion && cameraShake > 0.01) {
+      const sh = Math.min(1.0, cameraShake) * 0.62;
+      narcX += (Math.sin(timeSec * 57.3) * 0.65 + Math.cos(timeSec * 93.1) * 0.35) * sh;
+      narcY += (Math.cos(timeSec * 61.7) * 0.65 + Math.sin(timeSec * 89.4) * 0.35) * sh;
+    }
 
     const viewCenterX = cw * 0.5;
     // On narrow portrait phones, shift framing slightly higher so the diver sits centered above the bottom dock
     const viewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? ch * 0.39 : ch * 0.46);
 
-    const toScreenX = (wx) => viewCenterX + (wx - (this.camX + narcX)) * scale;
-    const toScreenY = (wy) => viewCenterY + (wy - (this.camY + narcY)) * scale;
+    const effCamX = this.camX + narcX;
+    const effCamY = this.camY + narcY;
+    this._lastViewTransform = { viewCenterX, viewCenterY, camX: effCamX, camY: effCamY, scale, dpr };
+
+    const toScreenX = (wx) => viewCenterX + (wx - effCamX) * scale;
+    const toScreenY = (wy) => viewCenterY + (wy - effCamY) * scale;
 
     const { xMin, xMax, yMin, yMax } = this.level.bounds;
     const viewWorldLeft = (this.camX + narcX) - viewCenterX / scale;

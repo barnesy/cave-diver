@@ -952,12 +952,16 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
   const ata = 1 + Math.max(0, buddy.depthM) / 10;
   const profile = getAiDifficultyProfile(session.difficulty);
-  const isHardcore = profile.triggersHardcoreIssues;
-  const baseGasRate = isHardcore
-    ? buddy.issue?.kind === 'low-gas'
-      ? 0.42
-      : buddy.issue?.kind === 'snagged' || buddy.issue?.kind === 'panic'
-        ? 0.16
+  // Freeze AI buddy gas burn & Hardcore incidents during Pure Combat Mode (v182)
+  const inLairCombat = Boolean(session.secretLair?.combatMode);
+  const isHardcore = profile.triggersHardcoreIssues && !inLairCombat;
+  const baseGasRate = inLairCombat
+    ? 0
+    : isHardcore
+      ? buddy.issue?.kind === 'low-gas'
+        ? 0.42
+        : buddy.issue?.kind === 'snagged' || buddy.issue?.kind === 'panic'
+          ? 0.16
         : profile.gasBurnRate
     : profile.gasBurnRate;
   const minGasFloor = profile.minGasFloor;
@@ -1304,6 +1308,21 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     const push = (1.25 - wallClear) * 2.4;
     desVx -= _normScratch.nx * push;
     desVy -= _normScratch.ny * push;
+  }
+
+  // Arena cover-pillar avoidance during Secret Lair boss fight (v182)
+  if (session.secretLair?.veilBreached && Array.isArray(session.secretLair.spec?.arena?.pillars)) {
+    for (const p of session.secretLair.spec.arena.pillars) {
+      const px = buddy.x - p.x;
+      const py = buddy.y - p.y;
+      const pd = Math.hypot(px, py);
+      const minP = (p.radius || 2.0) + 1.1;
+      if (pd > 0.01 && pd < minP) {
+        const rep = ((minP - pd) / minP) * 4.5;
+        desVx += (px / pd) * rep;
+        desVy += (py / pd) * rep;
+      }
+    }
   }
 
   // Friendly inter-squadmate spacing repulsion so 2–3 AI wingmen hold staggered single-file trim

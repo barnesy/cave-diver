@@ -8940,3 +8940,101 @@ test('v180 Bottom-Level Silent Secret Tight-Squeeze, Mounted-Torch Speargun, Pur
   assert.ok(!/\bphotoModeActive\b/.test(mainSrc), 'main.js must use photoModeState.active, never undefined photoModeActive');
   assert.ok(!/\btoggleDivePause\b/.test(mainSrc), 'main.js must use setDivePaused(!divePaused), never undefined toggleDivePause');
 });
+
+test('v182 Secret Lair Overhaul: Anti-Bypass Veil, CP4 Sonar, Resonance Crystals, Pillar-Occluded Beam, Matador Crash & Fair Continuous Damage', async () => {
+  const {
+    SECRET_LAIRS,
+    fireSpeargun,
+    computeBeamEndPoint,
+    isShelteredByPillar,
+  } = await import('../public/js/game/secretLairs.js');
+  const spec = SECRET_LAIRS['cenote-el-abismo'];
+
+  // 1. Veil Anti-Bypass: swimming directly toward Armory from all vertical offsets without Sonar MUST be blocked!
+  for (const offsetY of [-2.0, -1.0, 0, 1.0, 2.0]) {
+    const s = createDiveSession(LEVEL_1, { diverName: 'BypassCheck', gear: { sonar: false } });
+    switchGas(s.diveState, 'TMX1455');
+    s.diver.x = 128.0;
+    s.diver.y = 49.5 + offsetY;
+    for (let i = 0; i < 80; i++) {
+      const dx = 151.5 - s.diver.x;
+      const dy = 48.8 - s.diver.y;
+      const m = Math.hypot(dx, dy) || 1;
+      stepDiveSession(s, { x: dx / m, y: dy / m }, 0.05);
+    }
+    assert.equal(s.secretLair.veilBreached, false, `Veil must stay sealed without sonar at offsetY=${offsetY}`);
+    assert.ok(s.diver.x <= 135.5, `Diver must not bypass sealed veil at offsetY=${offsetY} (got x=${s.diver.x})`);
+  }
+
+  // 2. Ultimate Failsafe: if a diver ever lands deep inside the corridor unbreached, auto-breach prevents empty cathedral!
+  const fsSession = createDiveSession(LEVEL_1, { diverName: 'FailsafeCheck', gear: { sonar: false } });
+  switchGas(fsSession.diveState, 'TMX1455');
+  fsSession.diver.x = 143.5;
+  fsSession.diver.y = 49.5;
+  stepDiveSession(fsSession, { x: 0, y: 0 }, 0.05);
+  assert.equal(fsSession.secretLair.veilBreached, true, 'Failsafe must auto-breach veil if diver is ever past the neck');
+
+  // 3. Built-in 16m Sonar from CP4 Deep Sump (114, 49.0 -> 22.2m away) reliably reveals the hidden seam!
+  const s = createDiveSession(LEVEL_1, { diverName: 'Hunter', gear: { sonar: false } });
+  switchGas(s.diveState, 'TMX1455');
+  s.diver.x = 115.0;
+  s.diver.y = 49.0;
+  const ping = triggerSonarPing(s);
+  assert.equal(ping.ok, true);
+  assert.equal(s.secretLair.veilRevealed, true, 'CP4 Deep Sump acoustic ping must reveal the hidden abyssal seam');
+
+  // 4. True Ray-Blocked Vortex Pillar Shelter (sheltered behind pillar, exposed beside pillar!)
+  const pWest = spec.arena.pillars[0];
+  const bossPos = { x: 285.0, y: 40.5 };
+  const awayAng = Math.atan2(pWest.y - bossPos.y, pWest.x - bossPos.x);
+  const behindX = pWest.x + Math.cos(awayAng) * (pWest.radius + 1.5);
+  const behindY = pWest.y + Math.sin(awayAng) * (pWest.radius + 1.5);
+  const sideX = pWest.x - Math.sin(awayAng) * (pWest.radius + 1.8);
+  const sideY = pWest.y + Math.cos(awayAng) * (pWest.radius + 1.8);
+  assert.ok(isShelteredByPillar(behindX, behindY, bossPos.x, bossPos.y, spec.arena.pillars), 'Directly behind pillar must shelter');
+  assert.equal(isShelteredByPillar(sideX, sideY, bossPos.x, bossPos.y, spec.arena.pillars), null, 'Standing exposed beside pillar must NOT shelter');
+
+  // 5. Pillar-Occluded Sweeping Bioluminescent Abyssal Beam stops cleanly on cover pillars
+  const toPillar = Math.atan2(pWest.y - bossPos.y, pWest.x - bossPos.x);
+  const beamHit = computeBeamEndPoint(bossPos.x, bossPos.y, toPillar, 30, spec.arena.pillars, 0.25);
+  assert.ok(beamHit.hitPillar && beamHit.hitPillar.id === pWest.id, 'Abyssal Beam must be occluded by cover pillar');
+  assert.ok(beamHit.dist < Math.hypot(pWest.x - bossPos.x, pWest.y - bossPos.y), 'Occluded beam must terminate on pillar front face');
+
+  // 6. Awakening -> Sequential Sconces + Chargeable Pillar Resonance Crystal -> Stuns Boss!
+  s.secretLair.veilBreached = true;
+  s.diver.x = spec.armory.x;
+  s.diver.y = spec.armory.y;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.combatMode, true);
+
+  s.diver.x = spec.arena.cx - 12;
+  s.diver.y = spec.arena.cy;
+  stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.boss.aiState, 'awakening', 'Entering cathedral triggers Boss Awakening sequence');
+  for (let i = 0; i < 65; i++) stepDiveSession(s, { x: 0, y: 0 }, 0.05);
+  assert.equal(s.secretLair.sconceLitCount, spec.arena.lightSconces.length, 'All 6 sconces ignite during Awakening');
+  assert.notEqual(s.secretLair.boss.aiState, 'awakening', 'Boss transitions out of awakening into live combat');
+
+  // Fire 5th-shot golden Hyper-Tip directly at p-north Resonance Crystal -> instant 3/3 Resonance Break Stun!
+  const pNorth = spec.arena.pillars[1];
+  s.secretLair.boss.x = pNorth.x + 8;
+  s.secretLair.boss.y = pNorth.y + 4;
+  s.diver.x = pNorth.x - 4.5;
+  s.diver.y = pNorth.y;
+  s.secretLair.shotCounter = 4;
+  s.secretLair.tapCooldownSec = 0;
+  fireSpeargun(s, { aimAngle: 0, isTap: true, originX: s.diver.x, originY: s.diver.y });
+  for (let i = 0; i < 12; i++) stepDiveSession(s, { x: 0, y: 0 }, 0.025);
+  assert.equal(s.secretLair.resonanceBreaks, 1, 'Hyper-Tip into Pillar Crystal must trigger Resonance Break!');
+  assert.equal(s.secretLair.boss.aiState, 'stunned', 'Resonance Break must stun XIBALBA’S MAW');
+
+  // 7. Continuous Damage Frame-Rate Fix: 60 ticks of 1/60s Tentacle Snare (~9 DPS) deals ~9 HP, NEVER 60 HP!
+  s.secretLair.playerHp = 100;
+  s.secretLair.boss.aiState = 'grab_hold';
+  s.secretLair.boss.pinnedTargetId = 'local';
+  s.secretLair.boss.pinTimerSec = 2.0;
+  s.secretLair.boss.stateTimer = 2.0;
+  for (let i = 0; i < 60; i++) stepDiveSession(s, { x: 0, y: 0 }, 1 / 60);
+  const snareLoss = 100 - s.secretLair.playerHp;
+  assert.ok(snareLoss >= 6 && snareLoss <= 14, `1s of 60Hz snare must deal ~9 HP, not frame-clamped 60 HP (got ${snareLoss.toFixed(1)})`);
+});
