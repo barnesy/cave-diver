@@ -1655,6 +1655,8 @@ export const bossAndLairMethods = {
       coral: { lit: '#fda4af', mid: '#e11d48', dark: '#881337', rim: '#fde047', ink: '#1f0510' },
       basalt: { lit: '#78716c', mid: '#292524', dark: '#0c0a09', rim: '#fb923c', ink: '#09090b' },
       gypsum: { lit: '#f5d0fe', mid: '#c084fc', dark: '#4c1d95', rim: '#bae6fd', ink: '#1e1b4b' },
+      orichalcum: { lit: '#fef08a', mid: '#d97706', dark: '#451a03', rim: '#38bdf8', ink: '#1c1917' },
+      iron: { lit: '#cbd5e1', mid: '#475569', dark: '#0f172a', rim: '#f97316', ink: '#020617' },
     };
     for (const st of stalactites) {
       if (st.state === 'broken') continue;
@@ -1739,7 +1741,7 @@ export const bossAndLairMethods = {
   },
 
   /**
-   * Dispatch boss rendering across all 8 unique biome Secret Lair Guardians (v189–v194).
+   * Dispatch boss rendering across all 10 unique biome Secret Lair Guardians (v189–v195).
    */
   _drawSecretLairBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
     const t = Number.isFinite(timeSec) ? timeSec : 0;
@@ -1757,6 +1759,10 @@ export const bossAndLairMethods = {
       this._drawCrystalBasiliskBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'phantom-uboat') {
       this._drawPhantomUBoatBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'orichalcum-colossus') {
+      this._drawOrichalcumColossusBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'drill-wyrm') {
+      this._drawDrillWyrmBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -3086,6 +3092,270 @@ export const bossAndLairMethods = {
   },
 
   /**
+   * ORICHALCUM COLOSSUS — Sunken Atlantean Bronze & Gold Astrolabe Guardian (Bimini Road, v195).
+   */
+  _drawOrichalcumColossusBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const alpha = boss.defeated ? Math.max(0, boss.defeatAnimSec / 3.4) : 1;
+    const flash = boss.hitFlash > 0;
+    const anim = boss.anim || {};
+    const st = boss.aiState || 'idle';
+    const isStunned = st === 'stunned';
+    const facing = (anim.facing ?? -1) >= 0 ? 1 : -1;
+    const floatBobY = Math.sin(timeSec * 2.2) * 0.1 * r;
+    const runeGlow = boss.phase >= 3 ? '#fb7185' : boss.phase === 2 ? '#38bdf8' : '#fde047';
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(sx, sy + floatBobY);
+    ctx.rotate((anim.pitch || 0) * facing);
+    ctx.scale(facing * (anim.scaleX || 1), anim.scaleY || 1);
+
+    // 1. Rotating Back Golden Astrolabe Halo Rings
+    ctx.save();
+    ctx.rotate(timeSec * (boss.phase >= 3 ? 1.5 : 0.85));
+    ctx.strokeStyle = flash ? '#ffffff' : '#fbbf24';
+    ctx.lineWidth = Math.max(2.4, 0.11 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.42, r * 0.52, 0.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = runeGlow;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.56, r * 1.38, -0.25, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // 2. Floating Carved Megalithic Shoulder Pauldrons
+    const armLift = (st === 'slam_windup' || st === 'lunge_windup') ? -0.28 * r : Math.sin(timeSec * 3.0) * 0.08 * r;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(side * r * 0.88, -r * 0.12 + armLift * (side > 0 ? 1 : 0.6));
+      ctx.rotate(side * 0.22);
+      ctx.fillStyle = flash ? '#ffffff' : '#0f4c5c';
+      ctx.strokeStyle = '#1c1917';
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.32, -r * 0.34);
+      ctx.lineTo(r * 0.32, -r * 0.26);
+      ctx.lineTo(r * 0.24, r * 0.36);
+      ctx.lineTo(-r * 0.28, r * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+      ctx.strokeRect(-r * 0.2, -r * 0.18, r * 0.4, r * 0.36);
+      ctx.fillStyle = runeGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 3. Monolithic Octagonal Orichalcum Torso & Sun-Crest Crown
+    ctx.fillStyle = flash ? '#fef9c3' : '#b45309';
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.68, -r * 0.56);
+    ctx.lineTo(0, -r * 0.96);
+    ctx.lineTo(r * 0.68, -r * 0.56);
+    ctx.lineTo(r * 0.78, r * 0.24);
+    ctx.lineTo(r * 0.36, r * 0.86);
+    ctx.lineTo(-r * 0.36, r * 0.86);
+    ctx.lineTo(-r * 0.78, r * 0.24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner verdigris turquoise inlaid chest plate
+    ctx.fillStyle = flash ? '#ffffff' : '#0e7490';
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.46, -r * 0.36);
+    ctx.lineTo(0, -r * 0.68);
+    ctx.lineTo(r * 0.46, -r * 0.36);
+    ctx.lineTo(r * 0.42, r * 0.48);
+    ctx.lineTo(-r * 0.42, r * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Crown sun-crest spires
+    ctx.fillStyle = '#fde047';
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(k * r * 0.28 - r * 0.1, -r * 0.74);
+      ctx.lineTo(k * r * 0.34, -r * (k === 0 ? 1.24 : 1.06));
+      ctx.lineTo(k * r * 0.28 + r * 0.1, -r * 0.74);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 4. Radiant Solar-Core Cyclops Eye
+    const ex = r * 0.14;
+    const ey = -r * 0.06;
+    const er = r * 0.32;
+    ctx.fillStyle = '#1c1917';
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (isStunned || boss.defeated) {
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.48, ey - er * 0.48);
+      ctx.lineTo(ex + er * 0.48, ey + er * 0.48);
+      ctx.moveTo(ex + er * 0.48, ey - er * 0.48);
+      ctx.lineTo(ex - er * 0.48, ey + er * 0.48);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = runeGlow;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.16, ey - er * 0.14, er * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * ABYSSAL DRILL-WYRM — Armored Tungsten Tunneling Leviathan (Ojamo Iron Mine, v195).
+   */
+  _drawDrillWyrmBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const alpha = boss.defeated ? Math.max(0, boss.defeatAnimSec / 3.4) : 1;
+    const flash = boss.hitFlash > 0;
+    const anim = boss.anim || {};
+    const st = boss.aiState || 'idle';
+    const isStunned = st === 'stunned';
+    const facing = (anim.facing ?? -1) >= 0 ? 1 : -1;
+    const floatBobY = Math.sin(timeSec * 2.6) * 0.09 * r;
+    const furnaceCol = boss.phase >= 3 ? '#ef4444' : boss.phase === 2 ? '#fb923c' : '#fbbf24';
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(sx, sy + floatBobY);
+    ctx.rotate((anim.pitch || 0) * facing);
+    ctx.scale(facing * (anim.scaleX || 1), anim.scaleY || 1);
+
+    // 1. Articulated Armored Steel Ore-Car Body Segments
+    for (let s = 3; s >= 1; s--) {
+      const segX = -s * r * 0.58;
+      const segY = Math.sin(timeSec * 3.8 - s * 0.9) * r * 0.22;
+      const segR = r * (0.76 - s * 0.12);
+      ctx.fillStyle = flash ? '#ffffff' : (s % 2 === 0 ? '#334155' : '#1e293b');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.ellipse(segX, segY, segR * 0.78, segR * 0.68, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = furnaceCol;
+      ctx.fillRect(segX - segR * 0.25, segY - segR * 0.16, segR * 0.5, segR * 0.32);
+    }
+
+    // 2. Heavy Riveted Iron Head Chassis
+    ctx.fillStyle = flash ? '#fef08a' : '#475569';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(-r * 0.65, -r * 0.72, r * 1.24, r * 1.44, r * 0.28);
+    } else {
+      ctx.rect(-r * 0.65, -r * 0.72, r * 1.24, r * 1.44);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // Hazard-stripe mining collar band
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(r * 0.28, -r * 0.64, r * 0.24, r * 1.28);
+    ctx.fillStyle = '#0f172a';
+    for (let k = -2; k <= 2; k++) {
+      ctx.fillRect(r * 0.28, k * r * 0.25 - r * 0.06, r * 0.24, r * 0.1);
+    }
+
+    // 3. Spinning Helical Tungsten Carbide Bore-Head Nose Cone
+    const drillSpin = (timeSec * (st === 'lunge_dash' ? 24 : 11)) % 1;
+    ctx.fillStyle = flash ? '#ffffff' : '#94a3b8';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = Math.max(2.2, 0.085 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.54, -r * 0.58);
+    ctx.lineTo(r * 1.56, 0);
+    ctx.lineTo(r * 0.54, r * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#fb923c';
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    for (let f = 0; f < 4; f++) {
+      const u = ((f / 4) + drillSpin) % 1;
+      const fx = r * (0.58 + u * 0.88);
+      const halfH = r * 0.52 * (1 - u);
+      ctx.beginPath();
+      ctx.moveTo(fx - r * 0.08, -halfH);
+      ctx.lineTo(fx + r * 0.08, halfH);
+      ctx.stroke();
+    }
+
+    // 4. Industrial Miner's Headlamp Optical Sensor Eye
+    const ex = -r * 0.06;
+    const ey = -r * 0.14;
+    const er = r * 0.3;
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#fb923c';
+    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (isStunned || boss.defeated) {
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.45, ey - er * 0.45);
+      ctx.lineTo(ex + er * 0.45, ey + er * 0.45);
+      ctx.moveTo(ex + er * 0.45, ey - er * 0.45);
+      ctx.lineTo(ex - er * 0.45, ey + er * 0.45);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = furnaceCol;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fffbeb';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.16, ey - er * 0.16, er * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
    * Emissive (post-lighting) pass: sonar veil fracture, dynamic phase-shifted sconces, Resonance Crystal arcs,
    * Vortex cover wake, Sweeping Abyssal Beam, all attack telegraphs, outlined damage numbers, Hyper-Tip
    * spear indicator, cinematic Awakening / Phase title banners & Top-Center Boss Health Bar!
@@ -4234,6 +4504,83 @@ export const bossAndLairMethods = {
         ctx.fillStyle = '#64748b';
         ctx.fillRect(-tr * 1.15, -tr * 0.55, tr * 0.32, tr * 1.1);
         ctx.restore();
+      } else if (hz.kind === 'sun-obelisk') {
+        const obR = (hz.radius || 1.35) * scale;
+        ctx.save();
+        ctx.translate(hx, hy);
+        if (warmStamp) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.65;
+          ctx.drawImage(warmStamp, -obR * 2.2, -obR * 2.2, obR * 4.4, obR * 4.4);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
+        ctx.rotate(hz.angle || timeSec);
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#d97706';
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -obR * 1.25);
+        ctx.lineTo(obR * 0.72, 0);
+        ctx.lineTo(0, obR * 1.25);
+        ctx.lineTo(-obR * 0.72, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, 0, obR * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+        ctx.stroke();
+        ctx.restore();
+      } else if (hz.kind === 'ore-gate') {
+        const gr = (hz.radius || 1.55) * scale;
+        ctx.save();
+        ctx.translate(hx, hy);
+        if (!hz.dropping) {
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(-gr * 0.62, -gr * 0.72);
+          ctx.lineTo(-gr * 0.62, -gr * 3.2);
+          ctx.moveTo(gr * 0.62, -gr * 0.72);
+          ctx.lineTo(gr * 0.62, -gr * 3.2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (warmStamp) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.75;
+          ctx.drawImage(warmStamp, -gr * 2.0, -gr * 2.0, gr * 4.0, gr * 4.0);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#334155';
+        ctx.strokeStyle = '#020617';
+        ctx.lineWidth = Math.max(2.2, 0.085 * scale);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44, gr * 0.16);
+        } else {
+          ctx.rect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44);
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(-gr * 0.78, gr * 0.25, gr * 1.56, gr * 0.28);
+        if (!hz.dropping) {
+          const pulse = 0.6 + 0.4 * Math.sin(timeSec * 10);
+          ctx.fillStyle = `rgba(249, 115, 22, ${pulse.toFixed(2)})`;
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+          ctx.beginPath();
+          ctx.arc(0, -gr * 0.15, gr * 0.34, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
       }
     }
 
@@ -4268,29 +4615,36 @@ export const bossAndLairMethods = {
       const oy = toScreenY(sp.originY);
       const isSeeker = (sp.homingTurnRate || 0) > 0;
       const isOver = Boolean(sp.overcharged);
+      const isWing = Boolean(sp.isWingman);
       const tetherCol = sp.piercing
         ? 'rgba(253, 224, 71, 0.56)'
-        : isSeeker
-          ? 'rgba(192, 132, 252, 0.48)'
-          : isOver
-            ? 'rgba(251, 113, 133, 0.48)'
-            : 'rgba(186, 230, 253, 0.34)';
+        : isWing
+          ? 'rgba(52, 211, 153, 0.46)'
+          : isSeeker
+            ? 'rgba(192, 132, 252, 0.48)'
+            : isOver
+              ? 'rgba(251, 113, 133, 0.48)'
+              : 'rgba(186, 230, 253, 0.34)';
       const shaftCol = sp.piercing
         ? '#fde047'
-        : isSeeker
-          ? '#e9d5ff'
-          : isOver
-            ? '#fecdd3'
-            : '#e0f2fe';
+        : isWing
+          ? '#a7f3d0'
+          : isSeeker
+            ? '#e9d5ff'
+            : isOver
+              ? '#fecdd3'
+              : '#e0f2fe';
       const tipCol = sp.piercing
         ? '#fef08a'
-        : isSeeker
-          ? '#c084fc'
-          : isOver
-            ? '#fb7185'
-            : sp.rapid
-              ? '#67e8f9'
-              : '#38bdf8';
+        : isWing
+          ? '#34d399'
+          : isSeeker
+            ? '#c084fc'
+            : isOver
+              ? '#fb7185'
+              : sp.rapid
+                ? '#67e8f9'
+                : '#38bdf8';
       ctx.save();
       ctx.strokeStyle = tetherCol;
       ctx.lineWidth = Math.max(1, (sp.piercing || isOver ? 0.055 : 0.04) * scale);
@@ -4428,11 +4782,15 @@ export const bossAndLairMethods = {
 
       const fillW = Math.max(0, barW * hpRatio);
       if (fillW > 1) {
-        const hg = ctx.createLinearGradient(bx, by, bx + barW, by);
-        hg.addColorStop(0, '#ef4444');
-        hg.addColorStop(0.5, '#c084fc');
-        hg.addColorStop(1, '#38bdf8');
-        ctx.fillStyle = hg;
+        const gradKey = `${bx}:${barW}`;
+        if (!this._bossBarGradCache || this._bossBarGradCache.key !== gradKey) {
+          const hg = ctx.createLinearGradient(bx, by, bx + barW, by);
+          hg.addColorStop(0, '#ef4444');
+          hg.addColorStop(0.5, '#c084fc');
+          hg.addColorStop(1, '#38bdf8');
+          this._bossBarGradCache = { key: gradKey, grad: hg };
+        }
+        ctx.fillStyle = this._bossBarGradCache.grad;
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
           ctx.roundRect(bx, by, fillW, barH, trackR);

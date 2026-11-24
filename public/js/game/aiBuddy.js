@@ -13,6 +13,7 @@ import { createDiverBody, stepDiverBody } from './diverBody.js';
 import { getScubaSignalById, triggerDiverSignal } from './diveSignals.js';
 import { GAS_MIXES, getRecommendedGas, receiveGasIntoState } from '../physics/diveModel.js';
 import { pushAirShareBeam } from './diveSession.js';
+import { fireSpeargun } from './secretLairs.js';
 
 export const AI_BUDDY_ID = 'ai-wingman-01';
 export const AI_BUDDY_DEFAULT_NAME = '🔦 Maya';
@@ -720,12 +721,114 @@ function findNearestUndiscoveredStory(stories, x, y, maxRangeM) {
   return best ? { item: best, dist: bestD } : null;
 }
 
+const SHOOTABLE_WINGMAN_HAZARDS = new Set([
+  'crystal-prism',
+  'sun-obelisk',
+  'ore-gate',
+  'naval-mine',
+  'star-orb',
+  'vent-geyser',
+  'sun-lance',
+]);
+
+/**
+ * Select the highest-value tactical target for an AI Wingman in a Secret Lair (v195):
+ * prioritizes shootable biome hazards (spotlighting mechanics for the player),
+ * then nearby corridor minions, then the active boss's weak eye.
+ */
+export function selectWingmanCombatTarget(buddy, lair) {
+  if (!buddy || !lair || !lair.combatMode || lair.bossDefeated) return null;
+  let bestHz = null;
+  let bestHzDist = 22.5;
+  for (const hz of lair.bossHazards || []) {
+    if (!hz || !SHOOTABLE_WINGMAN_HAZARDS.has(hz.kind)) continue;
+    if (hz.kind === 'ore-gate' && hz.dropping) continue;
+    const d = Math.hypot(hz.x - buddy.x, hz.y - buddy.y);
+    if (d < bestHzDist) {
+      bestHzDist = d;
+      bestHz = hz;
+    }
+  }
+  if (bestHz) {
+    return { kind: 'hazard', x: bestHz.x, y: bestHz.y, dist: bestHzDist, ref: bestHz };
+  }
+
+  let bestMinion = null;
+  let bestMinionDist = 17.5;
+  for (const m of lair.minions || []) {
+    if (!m || !m.alive) continue;
+    const d = Math.hypot(m.x - buddy.x, m.y - buddy.y);
+    if (d < bestMinionDist) {
+      bestMinionDist = d;
+      bestMinion = m;
+    }
+  }
+  if (bestMinion) {
+    return { kind: 'minion', x: bestMinion.x, y: bestMinion.y, dist: bestMinionDist, ref: bestMinion };
+  }
+
+  const boss = lair.boss;
+  if (boss && boss.active && !boss.defeated) {
+    const wx = boss.x + Math.cos(boss.weakAngle || 0) * ((boss.radius || 4.5) * 0.92);
+    const wy = boss.y + Math.sin(boss.weakAngle || 0) * ((boss.radius || 4.5) * 0.92);
+    const d = Math.hypot(wx - buddy.x, wy - buddy.y);
+    if (d <= 28) {
+      return { kind: 'boss', x: wx, y: wy, dist: d, ref: boss };
+    }
+  }
+  return null;
+}
+
 function chooseFormationTarget(level, diver, buddy, session = null, profile = AI_DIFFICULTY_PROFILES.standard) {
   const hardcore = profile.id === 'hardcore';
   const backX = -Math.cos(diver.angle || 0);
   const backY = -Math.sin(diver.angle || 0);
   const perpX = -backY;
   const perpY = backX;
+
+  // Secret Lair Tactical Wingman Flank & Telegraph Evasion (v195)
+  const lair = session?.secretLair;
+  if (lair?.combatMode && !lair.bossDefeated && lair.boss?.active && lair.spec?.arena) {
+    const boss = lair.boss;
+    const ar = lair.spec.arena;
+    const slot = Math.max(0, Number(buddy?.slotIndex) || 0);
+    const baseAngle = Math.atan2(diver.y - boss.y, diver.x - boss.x);
+    const flankSign = slot % 2 === 0 ? 1 : -1;
+    const flankArc = 0.42 + slot * 0.16;
+    const isBossTelegraph =
+      boss.aiState === 'lunge_windup' ||
+      boss.aiState === 'lunge_dash' ||
+      boss.aiState === 'slam_windup' ||
+      boss.aiState === 'beam_windup' ||
+      boss.aiState === 'beam_sweep';
+    const standOff = isBossTelegraph ? 13.0 : 9.8;
+    let fx = boss.x + Math.cos(baseAngle + flankSign * flankArc) * standOff;
+    let fy = boss.y + Math.sin(baseAngle + flankSign * flankArc) * (standOff * 0.62);
+    // Keep within slipstream draft range (~6.5m) of the player when safe
+    const dToPlayer = Math.hypot(fx - diver.x, fy - diver.y);
+    if (dToPlayer > 7.0) {
+      const pull = (dToPlayer - 6.2) / dToPlayer;
+      fx += (diver.x - fx) * pull * 0.65;
+      fy += (diver.y - fy) * pull * 0.65;
+    }
+    // Sidestep nearby dangerous arena hazards (homing torpedoes, erupting vents)
+    for (const hz of lair.bossHazards || []) {
+      if (!hz || (hz.kind !== 'homing-torpedo' && hz.kind !== 'vent-geyser')) continue;
+      if (hz.kind === 'homing-torpedo' && hz.reversed) continue;
+      const hx = fx - hz.x;
+      const hy = fy - hz.y;
+      const hd = Math.hypot(hx, hy);
+      if (hd > 0.05 && hd < 5.0) {
+        fx += (hx / hd) * (5.0 - hd);
+        fy += (hy / hd) * (5.0 - hd);
+      }
+    }
+    fx = Math.max(ar.cx - ar.rx + 4.5, Math.min(ar.cx + ar.rx - 4.5, fx));
+    fy = Math.max(ar.cy - ar.ry + 3.5, Math.min(ar.cy + ar.ry - 3.5, fy));
+    if (openWaterClearance(level, fx, fy) >= 0.7) {
+      return { x: fx, y: fy };
+    }
+  }
 
   if (buddy.mode === 'assist-gas' || buddy.mode === 'assist-snag' || buddy.condition === 'SAFETY GUARD') {
     // Pull right alongside diver (1.35m) for hose transfer, line-shears assist, or Guardian stabilization
@@ -847,6 +950,12 @@ function chooseFormationTarget(level, diver, buddy, session = null, profile = AI
 function chooseTorchAimAngle(buddy, session, dt, profile = AI_DIFFICULTY_PROFILES.standard) {
   const { level, diver, collectedIds, checkpointsHit, drills } = session;
   buddy.sweepPhase = (buddy.sweepPhase || 0) + dt * (profile.id === 'hardcore' ? 1.65 : 1.15);
+
+  // 0. Secret Lair Tactical Spotlight (v195): illuminate shootable hazards, minions, or boss weak eye!
+  const combatTarget = selectWingmanCombatTarget(buddy, session?.secretLair);
+  if (combatTarget) {
+    return Math.atan2(combatTarget.y - buddy.y, combatTarget.x - buddy.x);
+  }
 
   // Hardcore rookies do NOT spotlight artifacts, checkpoints, or bail out your light failures!
   if (!profile.spotlightCollectibles) {
@@ -1398,6 +1507,45 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
     thrustMag: Math.min(1, speed / 3.0),
     level,
   });
+
+  // --- Secret Lair Tactical Wingman Cover-Fire & Battle Callouts (v195) ---
+  const lair = session.secretLair;
+  if (inLairCombat && lair?.weaponEquipped && !lair.bossDefeated && buddy.alive !== false) {
+    buddy.combatFireCd = Math.max(0, (buddy.combatFireCd || 0) - clampedDt);
+    buddy.combatCalloutCd = Math.max(0, (buddy.combatCalloutCd || 0) - clampedDt);
+    const target = selectWingmanCombatTarget(buddy, lair);
+    if (target && buddy.combatFireCd <= 0 && target.dist <= 23.5) {
+      const fireInterval = profile.id === 'guided' ? 1.15 : profile.id === 'hardcore' ? 2.35 : 1.55;
+      const wingmanDmg = profile.id === 'guided' ? 16 : profile.id === 'hardcore' ? 9 : 13;
+      const aimAng = Math.atan2(target.y - buddy.y, target.x - buddy.x);
+      buddy.combatFireCd = fireInterval + (buddy.slotIndex || 0) * 0.22;
+      fireSpeargun(
+        session,
+        {
+          aimAngle: aimAng,
+          ownerId: buddy.id,
+          isLocal: false,
+          isWingman: true,
+          damageOverride: wingmanDmg,
+          originX: buddy.x,
+          originY: buddy.y,
+        },
+        callbacks
+      );
+    }
+    if (buddy.combatCalloutCd <= 0 && profile.id !== 'hardcore') {
+      if (lair.boss?.active && lair.boss.aiState === 'stunned') {
+        buddy.combatCalloutCd = 11.0;
+        triggerDiverSignal(buddy, 'attention', nowMs);
+        callbacks.onBuddySignal?.(buddy, 'attention');
+        callbacks.onBuddyCoach?.(buddy, `🎯 ${buddy.name}: Guardian stunned — pour on the spears!`);
+      } else if (target?.kind === 'hazard' && (target.ref?.kind === 'crystal-prism' || target.ref?.kind === 'sun-obelisk' || target.ref?.kind === 'ore-gate' || target.ref?.kind === 'naval-mine')) {
+        buddy.combatCalloutCd = 14.0;
+        triggerDiverSignal(buddy, 'attention', nowMs);
+        callbacks.onBuddySignal?.(buddy, 'attention');
+      }
+    }
+  }
 
   return {
     mode: buddy.mode,

@@ -14,6 +14,10 @@ import { surfaceRendererMethods } from './renderers/surfaceRenderer.js';
 import { wreckAndInteractivesMethods } from './renderers/wreckAndInteractivesRenderer.js';
 import { lightingAndFxMethods } from './renderers/lightingAndFxRenderer.js';
 import { bossAndLairMethods } from './renderers/bossAndLairRenderer.js';
+import {
+  underwaterJuiceRendererMethods,
+  computeCavernFramingZoom,
+} from './renderers/underwaterJuiceRenderer.js';
 import { createDiverBody } from './diverBody.js';
 import { castSunCurtain } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
@@ -848,6 +852,10 @@ export class CaveRenderer {
     squeezeDust = null,
     handOnLinePt = null,
     cameraShake = 0,
+    cameraKickX = 0,
+    cameraKickY = 0,
+    biolumWake = null,
+    dashSlipstreams = null,
     timeSec,
     dt,
   }) {
@@ -879,8 +887,13 @@ export class CaveRenderer {
     this._arenaZoom = Number.isFinite(this._arenaZoom)
       ? this._arenaZoom + (targetArenaZoom - this._arenaZoom) * Math.min(1, (dt || 0.016) * 2.2)
       : targetArenaZoom;
+    // Dynamic Cavern Vista Zoom (v195): gently breathes out up to 9% in wide cathedrals
+    const targetCavernZoom = computeCavernFramingZoom(spaceClearanceM, diver?.y, inBossArena, isPhotoMode, this._reducedMotion);
+    this._cavernZoom = Number.isFinite(this._cavernZoom)
+      ? this._cavernZoom + (targetCavernZoom - this._cavernZoom) * Math.min(1, (dt || 0.016) * 1.8)
+      : 1.0;
 
-    const scale = this.pxPerM * dpr * photoZoom * this._restrictionZoom * this._arenaZoom;
+    const scale = this.pxPerM * dpr * photoZoom * this._restrictionZoom * this._arenaZoom * this._cavernZoom;
 
     // Smooth camera follow + Torch-Coupled Peek Look-Ahead (or direct pan/zoom in Photo Mode Studio)
     const camAnchor = cameraTarget || diver;
@@ -922,6 +935,10 @@ export class CaveRenderer {
       const sh = Math.min(1.0, cameraShake) * 0.62;
       narcX += (Math.sin(timeSec * 57.3) * 0.65 + Math.cos(timeSec * 93.1) * 0.35) * sh;
       narcY += (Math.cos(timeSec * 61.7) * 0.65 + Math.sin(timeSec * 89.4) * 0.35) * sh;
+    }
+    if (!isPhotoMode && !this._reducedMotion && (Math.abs(cameraKickX) > 0.004 || Math.abs(cameraKickY) > 0.004)) {
+      narcX += cameraKickX;
+      narcY += cameraKickY;
     }
 
     const viewCenterX = cw * 0.5;
@@ -1216,6 +1233,12 @@ export class CaveRenderer {
     }
     if (bioWake && bioWake.length > 0 && typeof this._drawBioWake === 'function') {
       this._drawBioWake(ctx, bioWake, visX0 - 2, visX1 + 2, visY0 - 2, visY1 + 2, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (biolumWake && biolumWake.length > 0 && typeof this._drawBiolumPlanktonWake === 'function') {
+      this._drawBiolumPlanktonWake(ctx, biolumWake, visX0 - 2, visX1 + 2, visY0 - 2, visY1 + 2, toScreenX, toScreenY, scale);
+    }
+    if (dashSlipstreams && dashSlipstreams.length > 0 && typeof this._drawDashSlipstreamArcs === 'function') {
+      this._drawDashSlipstreamArcs(ctx, dashSlipstreams, toScreenX, toScreenY, scale, timeSec);
     }
     if (ecosystem) {
       this._drawCrystalSparkle(ctx, ecosystem, visX0 - 3, visX1 + 3, visY0 - 3, visY1 + 3, toScreenX, toScreenY, scale, timeSec);
@@ -4743,5 +4766,6 @@ Object.assign(
   surfaceRendererMethods,
   wreckAndInteractivesMethods,
   lightingAndFxMethods,
-  bossAndLairMethods
+  bossAndLairMethods,
+  underwaterJuiceRendererMethods
 );

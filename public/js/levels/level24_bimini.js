@@ -16,9 +16,9 @@ export const LEVEL_24 = {
     'Glide over the sunlit stepped sandstone megaliths of Bimini Road bathed in dancing caustics, ride warm Gulf Stream cross-currents through twin sea-arches, and plunge into the 38m Bahamas Bank fault cavern to map ancient carved keystones before clearing a serene 6m turquoise deco stop.',
   bounds: {
     xMin: -32,
-    xMax: 224,
+    xMax: 352,
     yMin: -6,
-    yMax: 48,
+    yMax: 56,
   },
   roughness: 0.24,
   spawn: { x: 12, y: 2.0 },
@@ -74,6 +74,15 @@ export const LEVEL_24 = {
     { ax: 148, ay: 13.0, bx: 158, by: 6.6, ra: 3.8, rb: 4.2 },
     { ax: 158, ay: 6.6, bx: 172, by: 6.4, ra: 4.2, rb: 5.4 },
     { ax: 172, ay: 6.4, bx: 172, by: 0.6, ra: 5.8, rb: 5.4 },
+
+    // === UNCHARTED ORICHALCUM SANCTUM (100% Hidden Secret Lair branching east from Fault Sanctuary) ===
+    { ax: 146, ay: 35.5, bx: 162, by: 36.5, ra: 2.5, rb: 3.2, secretLair: true },
+    { ax: 162, ay: 36.5, bx: 204, by: 36.5, ra: 3.2, rb: 3.0, secretLair: true },
+    { ax: 204, ay: 36.5, bx: 248, by: 36.5, ra: 3.0, rb: 3.4, secretLair: true },
+    { ax: 248, ay: 36.5, bx: 264, by: 36.0, ra: 3.4, rb: 5.5, secretLair: true },
+    { ax: 266, ay: 36.0, bx: 306, by: 36.0, ra: 11.2, rb: 11.2, secretLair: true },
+    { ax: 274, ay: 29.5, bx: 298, by: 29.5, ra: 6.4, rb: 6.4, secretLair: true },
+    { ax: 274, ay: 42.5, bx: 298, by: 42.5, ra: 6.4, rb: 6.4, secretLair: true },
   ],
 
   guideline: [

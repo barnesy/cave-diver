@@ -184,6 +184,22 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'u1206-phantom-compass'),
   },
+  {
+    id: 'secret-orichalcum-suit',
+    name: 'Atlantean Orichalcum Suit',
+    secret: true,
+    trophyRelicId: 'bimini-orichalcum-astrolabe',
+    suitTop: '#164e63',
+    suitMid: '#0e3a52',
+    suitBot: '#061d2e',
+    accent: '#fbbf24',
+    trim: '#fde047',
+    finColor: '#0c4a6e',
+    finTip: '#fde047',
+    stageBand: '#f59e0b',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'bimini-orichalcum-astrolabe'),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -439,6 +455,20 @@ export const ACCENT_TRIMS = Object.freeze([
     swatchB: '#bae6fd',
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (s) => _hasTrophyRelic(s, 'orda-selenite-prism'),
+  },
+  {
+    id: 'secret-foundry-trim',
+    name: 'Foundry Tungsten Trim',
+    secret: true,
+    trophyRelicId: 'ojamo-tungsten-core',
+    accent: '#f97316',
+    trim: '#fbbf24',
+    finTip: '#fb923c',
+    stageBand: '#ea580c',
+    swatchA: '#f97316',
+    swatchB: '#fbbf24',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'ojamo-tungsten-core'),
   },
 ]);
 

@@ -38,6 +38,7 @@ import {
   getSecretLairActionPrompt,
   stepSecretLairEncounter,
 } from './secretLairs.js';
+import { decayCameraKick, stepUnderwaterJuice } from './renderers/underwaterJuiceRenderer.js';
 
 export { toggleLiftBag, isHatchPressurized, computeSalvageBuoyancy };
 
@@ -120,6 +121,7 @@ export function createPowerRelays(level) {
   const relays = [];
   for (let i = 0; i < segs.length && relays.length < 2; i++) {
     const s = segs[i];
+    if (s.secretLair) continue;
     const mx = (s.ax + s.bx) * 0.5;
     const my = (s.ay + s.by) * 0.5;
     if (my < deckY + 2) continue;
@@ -624,6 +626,10 @@ export function createDiveSession(
     stories: createSubmergedStories(level),
     secretLair: createSecretLairState(level),
     cameraShake: 0,
+    cameraKickX: 0,
+    cameraKickY: 0,
+    biolumWake: [],
+    dashSlipstreams: [],
     hitstopSec: 0,
     timeScale: 1.0,
     crewRole: getCrewRole(crewRoleId || 'balanced'),
@@ -4466,10 +4472,11 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
 }
 
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
-  // Exponentially decay camera shake, hitstop freeze-frame, and dramatic killing-blow slow-mo (v182)
+  // Exponentially decay camera shake, directional kick, hitstop freeze-frame, and dramatic killing-blow slow-mo (v182 / v195)
   if ((session.cameraShake || 0) > 0) {
     session.cameraShake = Math.max(0, session.cameraShake - dt * 2.4);
   }
+  decayCameraKick(session, dt);
   if ((session.hitstopSec || 0) > 0) {
     session.hitstopSec = Math.max(0, session.hitstopSec - dt);
     return { nextCheckpoint: null, outcome: null, blockedExitDecoDepthM: 0 };
@@ -4488,6 +4495,7 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
   stepPropulsionAndCurrents(session, thrust, simDt, callbacks, ctx);
   stepWreckAndCaveInteractives(session, simDt, callbacks, ctx);
   stepHydrodynamicsAndSilt(session, thrust, simDt, callbacks, ctx);
+  stepUnderwaterJuice(session, simDt);
   if (session.secretLair) {
     stepSecretLairEncounter(
       session,

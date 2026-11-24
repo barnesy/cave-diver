@@ -2985,6 +2985,68 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('bimini-orichalcum-astrolabe') || nameLower.includes('orichalcum astrolabe')) {
+    // Ancient Gilded Atlantean Orichalcum Astrolabe Relic (Orichalcum Colossus Trophy, v195)
+    const og = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.5, '#f59e0b'], [1, '#92400e']], '#f59e0b');
+    ctx.strokeStyle = og;
+    ctx.lineWidth = Math.max(2.2, lw * 1.4);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.save();
+    ctx.rotate(timeSec * 0.75);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.78, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#fde047';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.34, r * 0.78, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#fef9c3';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = lw * 0.8;
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('ojamo-tungsten-core') || nameLower.includes('heart of the iron shaft')) {
+    // Spinning Armored Tungsten Drill-Core & Furnace Ember Relic (Abyssal Drill-Wyrm Trophy, v195)
+    ctx.save();
+    ctx.rotate(timeSec * 1.2);
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#fb923c';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const rad = i % 2 === 0 ? r * 0.94 : r * 0.66;
+      const px = Math.cos(a) * rad;
+      const py = Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    const fg = _safeLinGrad(ctx, -r * 0.45, -r * 0.45, r * 0.45, r * 0.45, [[0, '#fef08a'], [0.55, '#f97316'], [1, '#b91c1c']], '#f97316');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fffbeb';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   const brassGrad = _safeLinGrad(ctx, -r, -r, r, r, [
     [0, '#fef08a'],

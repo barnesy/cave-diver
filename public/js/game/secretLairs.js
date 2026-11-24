@@ -22,6 +22,7 @@
 
 import { evaluateCaveSDF } from './collision.js';
 import { spawnSiltPlume } from './silt.js';
+import { triggerCameraKick, pushDashSlipstreamArc } from './renderers/underwaterJuiceRenderer.js';
 
 export const SPEARGUN_AUTOFIRE_SEC = 0.25;
 export const SPEARGUN_TAP_COOLDOWN_SEC = 0.16;
@@ -1062,6 +1063,242 @@ export const SECRET_LAIRS = Object.freeze({
       bonusPoints: 3400,
     }),
   }),
+
+  // === BOSS 9 (Bimini Megalith Secret Lair): Bimini Road -> ORICHALCUM COLOSSUS (v195) ===
+  'bimini-road-megalith': Object.freeze({
+    id: 'bimini-orichalcum-sanctum',
+    levelId: 'bimini-road-megalith',
+    name: 'The Orichalcum Sanctum',
+    veil: Object.freeze({
+      id: 'bim-sanctum-veil',
+      x: 149.8,
+      y: 36.2,
+      radius: 2.2,
+      sealWallX: 148.6,
+      sealMinY: 32.0,
+      sealMaxY: 41.0,
+      failsafeX: 155.0,
+      label: 'Gilded Megalithic Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'bim-speargun-rack',
+      x: 162.0,
+      y: 36.5,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'temple-column', x: 159.0, y: 38.2 }),
+      Object.freeze({ kind: 'dive-strobe', x: 165.0, y: 34.8 }),
+      Object.freeze({ kind: 'expedition-crate', x: 184.0, y: 38.4 }),
+      Object.freeze({ kind: 'temple-column', x: 208.0, y: 38.2 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 230.0, y: 38.0 }),
+      Object.freeze({ kind: 'monolith', x: 255.5, y: 31.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 255.5, y: 40.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 206.0,
+    arena: Object.freeze({
+      cx: 286.0,
+      cy: 36.0,
+      triggerX: 260.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 253.5,
+      respawnY: 36.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'bim-p-west', x: 270.5, y: 39.5, radius: 2.1 }),
+        Object.freeze({ id: 'bim-p-north', x: 285.5, y: 28.4, radius: 2.0 }),
+        Object.freeze({ id: 'bim-p-east', x: 300.5, y: 39.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 265.0, y: 29.5, color: '#fbbf24', radius: 14.5 }),
+        Object.freeze({ x: 275.0, y: 45.5, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 280.0, y: 25.2, color: '#fde047', radius: 15.5 }),
+        Object.freeze({ x: 296.5, y: 25.5, color: '#f59e0b', radius: 15.5 }),
+        Object.freeze({ x: 297.5, y: 45.2, color: '#22d3ee', radius: 14.5 }),
+        Object.freeze({ x: 308.0, y: 33.0, color: '#fde047', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 294.0, y: 36.0 }),
+        Object.freeze({ x: 279.5, y: 34.8 }),
+        Object.freeze({ x: 298.5, y: 33.0 }),
+        Object.freeze({ x: 286.0, y: 40.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'bim-stage-1', x: 265.5, y: 33.5, label: 'Orichalcum Sanctum Stage (West)' }),
+        Object.freeze({ id: 'bim-stage-2', x: 285.0, y: 45.0, label: 'Orichalcum Sanctum Stage (South)' }),
+        Object.freeze({ id: 'bim-stage-3', x: 306.0, y: 36.5, label: 'Orichalcum Sanctum Stage (East)' }),
+        Object.freeze({ id: 'bim-stage-4', x: 289.0, y: 26.2, label: 'Orichalcum Sanctum Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'bim-corridor-stage', x: 206.0, y: 36.2, label: 'Megalith Vault Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'bim-pad-w', x: 266.0, y: 33.6 }),
+        Object.freeze({ id: 'bim-pad-nw', x: 276.5, y: 29.4 }),
+        Object.freeze({ id: 'bim-pad-s', x: 285.5, y: 44.4 }),
+        Object.freeze({ id: 'bim-pad-ne', x: 296.0, y: 29.2 }),
+        Object.freeze({ id: 'bim-pad-e', x: 305.5, y: 36.2 }),
+        Object.freeze({ id: 'bim-pad-se', x: 298.0, y: 44.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 204.0, y: 36.4 }),
+      corridorUpgrade: Object.freeze({ x: 222.0, y: 36.6, kind: 'overcharge' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-bim-w', x: 276.0, y: 24.8, floorY: 46.8, style: 'orichalcum' }),
+        Object.freeze({ id: 'stal-bim-c', x: 287.5, y: 24.2, floorY: 47.0, style: 'orichalcum' }),
+        Object.freeze({ id: 'stal-bim-e', x: 298.5, y: 24.8, floorY: 46.6, style: 'orichalcum' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 286.0,
+        y: 28.0,
+        radius: 3.6,
+        destX: 165.0,
+        destY: 6.5,
+        label: 'Solar Current Updraft → Bimini 6m Turquoise Deco Shelf',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'bim-m1', kind: 'moray', name: 'Gilded Reef Sentinel', x: 178.0, y: 36.2, hp: 100, radius: 1.2, dropOrb: true }),
+      Object.freeze({ id: 'bim-m2', kind: 'swarmer', name: 'Orichalcum Scarab Drone', x: 193.0, y: 36.0, hp: 80, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'bim-m3', kind: 'swarmer', name: 'Orichalcum Scarab Drone', x: 203.0, y: 36.6, hp: 82, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'bim-m4', kind: 'moray', name: 'Gilded Reef Sentinel', x: 218.0, y: 36.4, hp: 108, radius: 1.22, dropOrb: false }),
+      Object.freeze({ id: 'bim-m5', kind: 'stalker', name: 'Atlantean Ward Stalker', x: 234.0, y: 36.4, hp: 205, radius: 1.52, dropOrb: true }),
+      Object.freeze({ id: 'bim-m6', kind: 'stalker', name: 'Atlantean Ward Stalker', x: 246.0, y: 36.2, hp: 215, radius: 1.52, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-orichalcum-colossus',
+      kind: 'orichalcum-colossus',
+      musicTheme: 'atlantis',
+      icon: '🏛️',
+      name: 'ORICHALCUM COLOSSUS',
+      title: 'Ancient Atlantean Astrolabe Guardian',
+      x: 293.0,
+      y: 36.0,
+      radius: 4.6,
+      baseHp: 4350,
+      trophyRelicId: 'bimini-orichalcum-astrolabe',
+      trophyName: 'Orichalcum Astrolabe',
+      bonusPoints: 3100,
+    }),
+  }),
+
+  // === BOSS 10 (Flooded Mine Secret Lair): Ojamo Iron Mine -> ABYSSAL DRILL-WYRM (v195) ===
+  'ojamo-iron-mine': Object.freeze({
+    id: 'ojamo-foundry-shaft',
+    levelId: 'ojamo-iron-mine',
+    name: 'The Flooded Foundry Shaft',
+    veil: Object.freeze({
+      id: 'oja-foundry-veil',
+      x: 216.2,
+      y: 68.0,
+      radius: 2.2,
+      sealWallX: 215.0,
+      sealMinY: 64.0,
+      sealMaxY: 72.5,
+      failsafeX: 221.5,
+      label: 'Collapsed Iron Ore Bulkhead',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'oja-speargun-rack',
+      x: 232.0,
+      y: 68.0,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 229.0, y: 69.8 }),
+      Object.freeze({ kind: 'dive-strobe', x: 235.0, y: 66.2 }),
+      Object.freeze({ kind: 'thermal-vent', x: 254.0, y: 70.0 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 278.0, y: 69.6 }),
+      Object.freeze({ kind: 'expedition-crate', x: 300.0, y: 69.8 }),
+      Object.freeze({ kind: 'monolith', x: 325.5, y: 63.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 325.5, y: 72.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 276.0,
+    arena: Object.freeze({
+      cx: 356.0,
+      cy: 68.0,
+      triggerX: 330.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 323.5,
+      respawnY: 68.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'oja-p-west', x: 340.5, y: 71.5, radius: 2.1 }),
+        Object.freeze({ id: 'oja-p-north', x: 355.5, y: 60.4, radius: 2.0 }),
+        Object.freeze({ id: 'oja-p-east', x: 370.5, y: 71.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 335.0, y: 61.5, color: '#f97316', radius: 14.5 }),
+        Object.freeze({ x: 345.0, y: 77.5, color: '#fbbf24', radius: 14.5 }),
+        Object.freeze({ x: 350.0, y: 57.2, color: '#fb923c', radius: 15.5 }),
+        Object.freeze({ x: 366.5, y: 57.5, color: '#f97316', radius: 15.5 }),
+        Object.freeze({ x: 367.5, y: 77.2, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 378.0, y: 65.0, color: '#fbbf24', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 364.0, y: 68.0 }),
+        Object.freeze({ x: 349.5, y: 66.8 }),
+        Object.freeze({ x: 368.5, y: 65.0 }),
+        Object.freeze({ x: 356.0, y: 72.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'oja-stage-1', x: 335.5, y: 65.5, label: 'Foundry Shaft Stage (West)' }),
+        Object.freeze({ id: 'oja-stage-2', x: 355.0, y: 77.0, label: 'Foundry Shaft Stage (South)' }),
+        Object.freeze({ id: 'oja-stage-3', x: 376.0, y: 68.5, label: 'Foundry Shaft Stage (East)' }),
+        Object.freeze({ id: 'oja-stage-4', x: 359.0, y: 58.2, label: 'Foundry Shaft Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'oja-corridor-stage', x: 276.0, y: 68.2, label: 'Iron Drift Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'oja-pad-w', x: 336.0, y: 65.6 }),
+        Object.freeze({ id: 'oja-pad-nw', x: 346.5, y: 61.4 }),
+        Object.freeze({ id: 'oja-pad-s', x: 355.5, y: 76.4 }),
+        Object.freeze({ id: 'oja-pad-ne', x: 366.0, y: 61.2 }),
+        Object.freeze({ id: 'oja-pad-e', x: 375.5, y: 68.2 }),
+        Object.freeze({ id: 'oja-pad-se', x: 368.0, y: 76.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 274.0, y: 68.4 }),
+      corridorUpgrade: Object.freeze({ x: 292.0, y: 68.6, kind: 'twin' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-oja-w', x: 346.0, y: 56.8, floorY: 78.8, style: 'iron' }),
+        Object.freeze({ id: 'stal-oja-c', x: 357.5, y: 56.2, floorY: 79.0, style: 'iron' }),
+        Object.freeze({ id: 'stal-oja-e', x: 368.5, y: 56.8, floorY: 78.6, style: 'iron' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 356.0,
+        y: 60.0,
+        radius: 3.6,
+        destX: 233.0,
+        destY: 6.2,
+        label: 'Hoist-Shaft Updraft → Ojamo 6m O2 Deco Shelf',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'oja-m1', kind: 'moray', name: 'Magnetite Bore Eel', x: 248.0, y: 68.0, hp: 112, radius: 1.22, dropOrb: true }),
+      Object.freeze({ id: 'oja-m2', kind: 'swarmer', name: 'Slag Spark Drone', x: 263.0, y: 67.8, hp: 86, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'oja-m3', kind: 'swarmer', name: 'Slag Spark Drone', x: 273.0, y: 68.4, hp: 88, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'oja-m4', kind: 'moray', name: 'Magnetite Bore Eel', x: 288.0, y: 68.2, hp: 116, radius: 1.24, dropOrb: false }),
+      Object.freeze({ id: 'oja-m5', kind: 'stalker', name: 'Iron-Clad Shaft Stalker', x: 304.0, y: 68.2, hp: 225, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'oja-m6', kind: 'stalker', name: 'Iron-Clad Shaft Stalker', x: 316.0, y: 68.0, hp: 235, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-drill-wyrm',
+      kind: 'drill-wyrm',
+      musicTheme: 'foundry',
+      icon: '⚙️',
+      name: 'ABYSSAL DRILL-WYRM',
+      title: 'Armored Tungsten Tunneling Leviathan',
+      x: 363.0,
+      y: 68.0,
+      radius: 4.6,
+      baseHp: 4550,
+      trophyRelicId: 'ojamo-tungsten-core',
+      trophyName: 'Heart of the Iron Shaft',
+      bonusPoints: 3300,
+    }),
+  }),
 });
 
 export function getSecretLairForLevel(levelId) {
@@ -1777,7 +2014,7 @@ export function applyWeaponUpgrade(session, kind, callbacks = {}) {
  * Grants crisp directional torpedo surge + brief invulnerability i-frames (`0.34s`) for weaving
  * through Phase 3 Abyssal Beams, Tentacle Slams, and Frost/Arc barrages.
  */
-export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0 } = {}, callbacks = {}) {
+export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0, buddies = null } = {}, callbacks = {}) {
   const lair = session?.secretLair;
   const dpv = session?.dpv;
   const diver = session?.diver;
@@ -1812,6 +2049,26 @@ export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0 } = {}, c
     uy /= mag;
   }
 
+  // Hydro-Dash Buddy Slipstream Synergy (v195): dashing within 7.5m of an AI wingman or human peer
+  // drafts off their wake for +18% speed burst & 22% faster dash recharge!
+  let slipstreamBuddy = null;
+  const buddyPool = Array.isArray(buddies)
+    ? buddies
+    : (typeof callbacks.getBuddies === 'function' ? callbacks.getBuddies() : []);
+  if (diver && Array.isArray(buddyPool) && buddyPool.length > 0) {
+    let bestD = 7.5;
+    for (let i = 0; i < buddyPool.length; i++) {
+      const b = buddyPool[i];
+      if (!b || b.alive === false || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
+      const d = Math.hypot(b.x - diver.x, b.y - diver.y);
+      if (d <= bestD) {
+        bestD = d;
+        slipstreamBuddy = b;
+      }
+    }
+  }
+  const slipBoost = slipstreamBuddy ? 1.18 : 1.0;
+
   dpv.batteryPct = Math.max(0, (dpv.batteryPct ?? 0) - SCOOTER_DASH_COST_PCT);
   if (dpv.batteryPct <= 0.05) {
     dpv.batteryPct = 0;
@@ -1821,20 +2078,31 @@ export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0 } = {}, c
   }
   lair.dashDirX = ux;
   lair.dashDirY = uy;
-  lair.dashTimerSec = SCOOTER_DASH_DURATION_SEC;
-  lair.dashCooldownSec = SCOOTER_DASH_COOLDOWN_SEC;
+  lair.dashTimerSec = SCOOTER_DASH_DURATION_SEC * (slipstreamBuddy ? 1.12 : 1.0);
+  lair.dashCooldownSec = SCOOTER_DASH_COOLDOWN_SEC * (slipstreamBuddy ? 0.78 : 1.0);
   lair.playerIframesSec = Math.max(lair.playerIframesSec || 0, SCOOTER_DASH_IFRAMES_SEC);
   lair.dashesUsed = (lair.dashesUsed || 0) + 1;
   if (diver) {
-    diver.vx = ux * SCOOTER_DASH_SPEED;
-    diver.vy = uy * SCOOTER_DASH_SPEED;
+    diver.vx = ux * SCOOTER_DASH_SPEED * slipBoost;
+    diver.vy = uy * SCOOTER_DASH_SPEED * slipBoost;
     diver.dpvActive = Boolean(dpv.active);
     diver.dpvThrusting = true;
-    addShockwave(lair, diver.x, diver.y, 3.6, '#22d3ee', 0.34);
-    addSparkBurst(lair, diver.x, diver.y, '#67e8f9', 9, '', false);
+    addShockwave(lair, diver.x, diver.y, slipstreamBuddy ? 4.4 : 3.6, slipstreamBuddy ? '#38bdf8' : '#22d3ee', 0.34);
+    addSparkBurst(
+      lair,
+      diver.x,
+      diver.y,
+      slipstreamBuddy ? '#7dd3fc' : '#67e8f9',
+      slipstreamBuddy ? 14 : 9,
+      slipstreamBuddy ? '⚡ SLIPSTREAM!' : '',
+      Boolean(slipstreamBuddy)
+    );
+    if (slipstreamBuddy) {
+      pushDashSlipstreamArc(session, diver.x, diver.y, slipstreamBuddy.x, slipstreamBuddy.y, slipstreamBuddy.name || 'Buddy');
+    }
   }
-  callbacks.onScooterDash?.({ ux, uy, batteryPct: dpv.batteryPct });
-  return { ok: true, ux, uy, batteryPct: dpv.batteryPct };
+  callbacks.onScooterDash?.({ ux, uy, batteryPct: dpv.batteryPct, slipstream: Boolean(slipstreamBuddy) });
+  return { ok: true, ux, uy, batteryPct: dpv.batteryPct, slipstream: Boolean(slipstreamBuddy) };
 }
 
 function addShockwave(lair, x, y, maxRadius, color = '#38bdf8', duration = 0.65) {
@@ -1875,6 +2143,8 @@ export function fireSpeargun(
     chargeFrac = 0,
     ownerId = 'local',
     isLocal = true,
+    isWingman = false,
+    damageOverride = null,
     isRemoteVisual = false,
     originX = null,
     originY = null,
@@ -1928,7 +2198,9 @@ export function fireSpeargun(
     : SPEARGUN_BASE_DAMAGE * (isHyper ? SPEARGUN_HYPER_MULT : 1.0);
   // Multi-shot barrels deal slightly per-bolt balanced damage so Twin = ~1.56× and Tri-Fan = ~2.04× total DPS!
   const spreadScale = twinLv >= 2 ? 0.68 : twinLv === 1 ? 0.78 : 1.0;
-  const baseDmg = Math.max(10, Math.round(rawBaseDmg * overDmgMult * spreadScale));
+  const baseDmg = Number.isFinite(damageOverride)
+    ? Math.max(6, Math.round(damageOverride))
+    : Math.max(10, Math.round(rawBaseDmg * overDmgMult * spreadScale));
 
   const angleOffsets = twinLv >= 2 ? [-0.14, 0, 0.14] : twinLv === 1 ? [-0.082, 0.082] : [0];
   const homingTurnRate = homingLv >= 2 ? 4.4 : homingLv === 1 ? 2.6 : 0;
@@ -1951,6 +2223,7 @@ export function fireSpeargun(
       originY: sy,
       ownerId,
       isLocal,
+      isWingman: Boolean(isWingman),
       isRemoteVisual: Boolean(isRemoteVisual),
       damage: baseDmg,
       charged,
@@ -2237,6 +2510,9 @@ export function applyBossDamage(
     `${crit ? 'CRIT ' : ''}-${finalDmg}`,
     crit
   );
+  if (crit && !fromRemote && session?.diver) {
+    triggerCameraKick(session, sx - session.diver.x, sy - session.diver.y, 0.34, 0.028);
+  }
   callbacks.onSpearHit?.({ target: 'boss', damage: finalDmg, crit, x: sx, y: sy });
 
   // Phase transitions — Chromatic Surge + Hitstop + Projectile-Clearing Shockwave!
@@ -2968,11 +3244,12 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       continue;
     }
 
-    // Biome-unique Shootable Boss Hazards: Naval Depth-Charge Mines & Constellation Star Orbs (v192)
+    // Biome-unique Shootable Boss Hazards: Mines, Orbs, Vents, Lances, Prisms, Torpedoes, Sun Obelisks & Ore Gates (v195)
     let hitHazard = false;
     for (let hi = (lair.bossHazards || []).length - 1; hi >= 0; hi--) {
       const hz = lair.bossHazards[hi];
-      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb' && hz.kind !== 'vent-geyser' && hz.kind !== 'sun-lance' && hz.kind !== 'crystal-prism' && hz.kind !== 'homing-torpedo')) continue;
+      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb' && hz.kind !== 'vent-geyser' && hz.kind !== 'sun-lance' && hz.kind !== 'crystal-prism' && hz.kind !== 'homing-torpedo' && hz.kind !== 'sun-obelisk' && hz.kind !== 'ore-gate')) continue;
+      if (hz.kind === 'ore-gate' && hz.dropping) continue;
       if (distPointToSegment(hz.x, hz.y, sp.prevX, sp.prevY, sp.x, sp.y) <= (hz.radius || 1.2) + 0.55) {
         hz.hp = Math.max(0, (hz.hp || 2) - (sp.piercing ? 2 : 1));
         hz.hitFlash = 0.2;
@@ -2996,6 +3273,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               boss.hitFlash = 0.35;
               lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
               addSparkBurst(lair, boss.x, boss.y, '#fb923c', 18, `🌋 VENT BLAST! -${dmg}`, true);
+              triggerCameraKick(session, boss.x - hz.x, boss.y - hz.y, 0.46, 0.036);
             } else {
               addSparkBurst(lair, hz.x, hz.y, '#fb923c', 12, '🌋 VENT CAPPED! +15% ⚡', true);
             }
@@ -3020,6 +3298,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               boss.hitFlash = 0.36;
               lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
               addSparkBurst(lair, boss.x, boss.y, '#e879f9', 18, `💎 PRISM REFRACT! -${dmg}`, true);
+              triggerCameraKick(session, boss.x - hz.x, boss.y - hz.y, 0.48, 0.038);
             } else {
               addSparkBurst(lair, hz.x, hz.y, '#e879f9', 12, '💎 SHARD SHATTERED! +18% ⚡', true);
             }
@@ -3035,9 +3314,53 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 15);
             }
             callbacks.onMineBlast?.();
+          } else if (hz.kind === 'sun-obelisk') {
+            // Bimini Orichalcum Mirror Obelisk: firing into it redirects a blazing solar beam straight into the Colossus!
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 7.0, '#fde047', 0.5);
+            if (boss.active && !boss.defeated) {
+              const dmg = Math.round(205 * (lair.scaling?.damageMult || 1));
+              boss.hp = Math.max(0, boss.hp - dmg);
+              boss.hitFlash = 0.4;
+              lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+              addShockwave(lair, boss.x, boss.y, 8.0, '#fbbf24', 0.52);
+              addSparkBurst(lair, boss.x, boss.y, '#fde047', 20, `🏛️ SOLAR REFLECT! -${dmg}`, true);
+              triggerCameraKick(session, boss.x - hz.x, boss.y - hz.y, 0.55, 0.042);
+            } else {
+              addSparkBurst(lair, hz.x, hz.y, '#fde047', 12, '🏛️ OBELISK CHARGED! +18% ⚡', true);
+            }
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
+            }
+            callbacks.onCrystalChime?.(3);
+          } else if (hz.kind === 'ore-gate') {
+            // Ojamo Suspended Ore-Gate Counterweight: shooting the release latch drops the massive iron block!
+            hz.dropping = true;
+            hz.vy = 14.5;
+            hz.life = 2.2;
+            addShockwave(lair, hz.x, hz.y, 4.6, '#f97316', 0.36);
+            addSparkBurst(lair, hz.x, hz.y, '#fbbf24', 12, '⚙️ LATCH RELEASED!', true);
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
+            }
+            callbacks.onMineBlast?.();
           }
         } else {
-          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' || hz.kind === 'vent-geyser' ? '#fb923c' : hz.kind === 'crystal-prism' ? '#e879f9' : '#5eead4', 6, 'PING!', false);
+          addSparkBurst(
+            lair,
+            hz.x,
+            hz.y,
+            hz.kind === 'naval-mine' || hz.kind === 'vent-geyser' || hz.kind === 'ore-gate'
+              ? '#fb923c'
+              : hz.kind === 'crystal-prism'
+                ? '#e879f9'
+                : hz.kind === 'sun-obelisk'
+                  ? '#fde047'
+                  : '#5eead4',
+            6,
+            'PING!',
+            false
+          );
           callbacks.onCrystalChime?.(1);
         }
         if (!sp.piercing) {
@@ -3373,6 +3696,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
         lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
         addShockwave(lair, boss.x, boss.y, 8.2, '#5eead4', 0.56);
         addSparkBurst(lair, boss.x, boss.y, '#fde047', 22, `⚓ TORPEDO CRIT! -${dmg}`, true);
+        triggerCameraKick(session, Math.cos(hz.angle || 0), Math.sin(hz.angle || 0), 0.62, 0.045);
         callbacks.onMineBlast?.();
         continue;
       }
@@ -3390,6 +3714,75 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
 
       if (hz.life <= 0) {
         lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'sun-obelisk') {
+      // Bimini Orichalcum Mirror Obelisk (v195): slowly rotates & fires sweeping golden sun-bolts unless shot to deflect into the Colossus!
+      hz.life = (hz.life ?? 12.0) - dt;
+      hz.angle = (hz.angle || 0) + dt * 0.85;
+      hz.fireCd = (hz.fireCd ?? 1.9) - dt;
+      if (isAuthority && hz.fireCd <= 0 && diveState?.alive && !boss.defeated) {
+        hz.fireCd = boss.phase >= 3 ? 1.9 : 2.4;
+        const aim = Math.atan2(diver.y - hz.y, diver.x - hz.x);
+        for (let k = -1; k <= 1; k += 2) {
+          const a = aim + k * 0.19;
+          lair.enemyProjectiles.push({
+            x: hz.x + Math.cos(a) * 1.1,
+            y: hz.y + Math.sin(a) * 1.1,
+            vx: Math.cos(a) * 10.2,
+            vy: Math.sin(a) * 10.2,
+            radius: 0.5,
+            damage: 13 * lair.scaling.damageMult,
+            life: 2.8,
+            color: '#fde047',
+            kind: 'prism',
+          });
+        }
+        callbacks.onCrystalChime?.(1);
+      }
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'ore-gate') {
+      // Ojamo Suspended Ore-Gate Counterweight (v195): hovers with glowing latch; once shot, plummets to crush & stun the Drill-Wyrm!
+      hz.life = (hz.life ?? 14.0) - dt;
+      if (hz.dropping) {
+        hz.vy = Math.min(26, (hz.vy || 14) + 22 * dt);
+        hz.y += hz.vy * dt;
+        // Check massive iron crush on Boss!
+        if (boss.active && !boss.defeated && Math.hypot(boss.x - hz.x, boss.y - hz.y) <= (boss.radius || 4.6) + (hz.radius || 1.55) + 0.6) {
+          lair.bossHazards.splice(hi, 1);
+          const dmg = Math.round(235 * (lair.scaling?.damageMult || 1));
+          boss.hp = Math.max(0, boss.hp - dmg);
+          boss.hitFlash = 0.45;
+          lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+          _stunBoss(session, lair, 3.2, `⚙️ ORE-GATE CRUSH! -${dmg}`, '#fb923c', callbacks);
+          triggerCameraKick(session, 0, 1, 0.68, 0.048);
+          callbacks.onMineBlast?.();
+          continue;
+        }
+        const floorY = (lair.spec.arena.cy || 68) + (lair.spec.arena.ry || 13.5) - 2.0;
+        if (hz.y >= floorY) {
+          lair.bossHazards.splice(hi, 1);
+          addShockwave(lair, hz.x, floorY, 7.6, '#f97316', 0.48);
+          // Splash blast if boss is close to impact floor
+          if (boss.active && !boss.defeated && Math.hypot(boss.x - hz.x, boss.y - floorY) <= 10.5) {
+            const dmg = Math.round(145 * (lair.scaling?.damageMult || 1));
+            boss.hp = Math.max(0, boss.hp - dmg);
+            boss.hitFlash = 0.35;
+            lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+            addSparkBurst(lair, boss.x, boss.y, '#fb923c', 16, `⚙️ TREMOR HIT! -${dmg}`, true);
+            triggerCameraKick(session, 0, 1, 0.45, 0.032);
+          } else {
+            addSparkBurst(lair, hz.x, floorY, '#fb923c', 12, '⚙️ SLAM!', false);
+          }
+          callbacks.onMineBlast?.();
+          continue;
+        }
+      } else {
+        hz.y += Math.sin((hz.age || 0) * 2.2 + (hz.phase || 0)) * 0.22 * dt;
+        if (hz.life <= 0) {
+          lair.bossHazards.splice(hi, 1);
+        }
       }
     }
   }
@@ -3841,19 +4234,19 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             ? boss.inkAimAngle
             : Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
           const spread = boss.phase === 3 ? 0.23 : 0.27;
-          const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus')
+          const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm')
             ? 'slag'
             : (boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
-            ? (boss.kind === 'thermal-nautilus' ? '#f97316' : '#fb923c')
+            ? (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c')
             : projKind === 'frost'
               ? (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9')
               : projKind === 'prism'
-                ? (boss.kind === 'solar-leviathan' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
+                ? (boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -4126,13 +4519,15 @@ export function serializeSecretLairNetState(lair) {
         : h.kind === 'vent-geyser' ? 4
         : h.kind === 'sun-lance' ? 5
         : h.kind === 'crystal-prism' ? 6
-        : 7,
+        : h.kind === 'homing-torpedo' ? 7
+        : h.kind === 'sun-obelisk' ? 8
+        : 9,
       Math.round(h.x * 10) / 10,
       Math.round(h.y * 10) / 10,
       Math.round((h.radius || 1.2) * 10) / 10,
       h.hp || 0,
       Math.round(((h.angle || 0) * 100)) / 100,
-      (h.erupting || h.firing || h.reversed) ? 1 : 0,
+      (h.erupting || h.firing || h.reversed || h.dropping) ? 1 : 0,
     ]),
   };
 }
@@ -4251,7 +4646,9 @@ export function applySecretLairNetState(lairOrSession, snap) {
         : code === 4 ? 'vent-geyser'
         : code === 5 ? 'sun-lance'
         : code === 6 ? 'crystal-prism'
-        : 'homing-torpedo',
+        : code === 7 ? 'homing-torpedo'
+        : code === 8 ? 'sun-obelisk'
+        : 'ore-gate',
       x: hx,
       y: hy,
       radius: hr,
@@ -4261,6 +4658,7 @@ export function applySecretLairNetState(lairOrSession, snap) {
       erupting: code === 4 && Boolean(activeFlag),
       firing: code === 5 && Boolean(activeFlag),
       reversed: code === 7 && Boolean(activeFlag),
+      dropping: code === 9 && Boolean(activeFlag),
       halfWidth: 1.65,
       height: 18.0,
       length: 25.0,
@@ -4521,6 +4919,65 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     callbacks.onCrystalChime?.(1);
     return lastTorp;
   }
+
+  if (boss.kind === 'orichalcum-colossus') {
+    const existingObelisks = lair.bossHazards.filter((h) => h.kind === 'sun-obelisk').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingObelisks);
+    let lastObelisk = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const ox = ar.cx + (k === 0 ? -10.5 : 10.5) + (Math.random() - 0.5) * 4.5;
+      const oy = ar.cy + (Math.random() - 0.5) * 8.0;
+      const obelisk = {
+        id: `obelisk_${++lair._hazardSeq}`,
+        kind: 'sun-obelisk',
+        x: ox,
+        y: oy,
+        radius: 1.35,
+        hp: 2,
+        angle: Math.random() * Math.PI * 2,
+        fireCd: 1.5 + k * 0.5,
+        life: 12.0,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(obelisk);
+      addShockwave(lair, ox, oy, 3.6, '#fde047', 0.38);
+      lastObelisk = obelisk;
+    }
+    callbacks.onCrystalChime?.(2);
+    return lastObelisk;
+  }
+
+  if (boss.kind === 'drill-wyrm') {
+    const existingGates = lair.bossHazards.filter((h) => h.kind === 'ore-gate').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 2 - existingGates);
+    let lastGate = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const gx = k === 0
+        ? Math.max(ar.cx - ar.rx + 9, Math.min(ar.cx + ar.rx - 9, boss.x + (Math.random() - 0.5) * 3.5))
+        : ar.cx + (Math.random() - 0.5) * 16.0;
+      const gy = ar.cy - ar.ry + 4.2;
+      const gate = {
+        id: `oregate_${++lair._hazardSeq}`,
+        kind: 'ore-gate',
+        x: gx,
+        y: gy,
+        radius: 1.55,
+        hp: 2,
+        dropping: false,
+        vy: 0,
+        life: 14.0,
+        age: 0,
+        phase: Math.random() * Math.PI * 2,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(gate);
+      addShockwave(lair, gx, gy, 3.5, '#f97316', 0.36);
+      lastGate = gate;
+    }
+    callbacks.onCrystalChime?.(1);
+    return lastGate;
+  }
   return null;
 }
 
@@ -4543,7 +5000,7 @@ export function computeTouchAimMagnetAngle(session, rawAngle, maxConeRad = 0.15)
     if (m.alive) candidates.push({ x: m.x, y: m.y, prio: 0.85 });
   }
   for (const hz of lair.bossHazards || []) {
-    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb' || hz.kind === 'vent-geyser' || hz.kind === 'sun-lance' || hz.kind === 'crystal-prism' || hz.kind === 'homing-torpedo') {
+    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb' || hz.kind === 'vent-geyser' || hz.kind === 'sun-lance' || hz.kind === 'crystal-prism' || hz.kind === 'homing-torpedo' || hz.kind === 'sun-obelisk' || (hz.kind === 'ore-gate' && !hz.dropping)) {
       candidates.push({ x: hz.x, y: hz.y, prio: 0.95 });
     }
   }

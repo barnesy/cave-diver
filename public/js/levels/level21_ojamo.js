@@ -20,9 +20,9 @@ export const LEVEL_21 = {
     'Descend the flooded vertical hoist shaft of Finland\'s legendary Ojamo Iron Mine. Navigate crisp, blasted three-story horizontal drifts at 26m, 46m, and 68m, crank open sealed steel mine blast doors for bonus ore-vault relics, and ascend the east ventilation shaft.',
   bounds: {
     xMin: -32,
-    xMax: 274,
+    xMax: 420,
     yMin: -6,
-    yMax: 78,
+    yMax: 88,
   },
   roughness: 0.16,
   spawn: { x: 12, y: 2.0 },
@@ -84,6 +84,15 @@ export const LEVEL_21 = {
     { ax: 233, ay: 6.0, bx: 233, by: 1.0, ra: 4.5, rb: 4.8 },
     // Upper East Timber Tool Drift off 22m shelf
     { ax: 233, ay: 22.0, bx: 196, by: 22.0, ra: 2.3, rb: 2.8 },
+
+    // === UNCHARTED FLOODED FOUNDRY SHAFT (100% Hidden Secret Lair branching east from Level-68 Magazine Vault) ===
+    { ax: 214, ay: 68.0, bx: 232, by: 68.0, ra: 2.5, rb: 3.2, secretLair: true },
+    { ax: 232, ay: 68.0, bx: 274, by: 68.0, ra: 3.2, rb: 3.0, secretLair: true },
+    { ax: 274, ay: 68.0, bx: 318, by: 68.0, ra: 3.0, rb: 3.4, secretLair: true },
+    { ax: 318, ay: 68.0, bx: 334, by: 68.0, ra: 3.4, rb: 5.5, secretLair: true },
+    { ax: 336, ay: 68.0, bx: 376, by: 68.0, ra: 11.2, rb: 11.2, secretLair: true },
+    { ax: 344, ay: 61.5, bx: 368, by: 61.5, ra: 6.4, rb: 6.4, secretLair: true },
+    { ax: 344, ay: 74.5, bx: 368, by: 74.5, ra: 6.4, rb: 6.4, secretLair: true },
   ],
 
   guideline: [

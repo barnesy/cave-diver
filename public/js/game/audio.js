@@ -2098,6 +2098,20 @@ export class DiveAudio {
         lead: [493.88, 587.33, 554.37, 493.88, 440.0, 493.88, 659.25, 587.33],
         wave: 'sawtooth',
       },
+      atlantis: {
+        // F Lydian sunken golden temple brass & harp resonance (Bimini Orichalcum Colossus)
+        bass: [87.31, 87.31, 98.0, 110.0, 87.31, 130.81, 110.0, 98.0],
+        arp: [349.23, 440.0, 523.25, 622.25, 698.46, 622.25, 523.25, 440.0],
+        lead: [698.46, 783.99, 880.0, 987.77, 880.0, 783.99, 698.46, 1046.5],
+        wave: 'triangle',
+      },
+      foundry: {
+        // C# minor heavy industrial iron-mine hammer & tungsten bass (Ojamo Abyssal Drill-Wyrm)
+        bass: [69.30, 69.30, 65.41, 55.0, 69.30, 82.41, 73.42, 55.0],
+        arp: [277.18, 329.63, 369.99, 415.30, 369.99, 329.63, 277.18, 246.94],
+        lead: [554.37, 622.25, 659.25, 554.37, 493.88, 554.37, 739.99, 659.25],
+        wave: 'sawtooth',
+      },
     };
     const cfg = themes[theme] || themes.kraken;
     const bpm = p >= 3 ? 136 : p === 2 ? 116 : 96;

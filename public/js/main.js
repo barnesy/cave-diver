@@ -71,6 +71,7 @@ import {
 } from './game/logbookModel.js';
 import { drawStyledArtifact } from './game/artSprites.js';
 import { formatReplayTime } from './game/diveCard.js';
+import { createCombatHudController } from './ui/combatHudController.js';
 import {
   getCrewRole,
   cycleCrewRoleId,
@@ -531,7 +532,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=194',
+  mapRasterUrl: './assets/map-expedition.jpg?v=195',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1249,6 +1250,10 @@ function savePhotoStudioSnapshot() {
       stories: session.stories || null,
       secretLair: session.secretLair || null,
       cameraShake: session.cameraShake || 0,
+      cameraKickX: session.cameraKickX || 0,
+      cameraKickY: session.cameraKickY || 0,
+      biolumWake: session.biolumWake || null,
+      dashSlipstreams: session.dashSlipstreams || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
@@ -1755,7 +1760,7 @@ function handleCombatDash() {
   const move = input.getThrust();
   const dirX = Math.hypot(move.x, move.y) > 0.12 ? move.x : null;
   const dirY = Math.hypot(move.x, move.y) > 0.12 ? move.y : null;
-  const res = triggerCombatScooterDash(session, { dirX, dirY }, sessionStepCallbacks);
+  const res = triggerCombatScooterDash(session, { dirX, dirY, buddies: getActivePeers() }, sessionStepCallbacks);
   if (res.ok && isMultiplayer && lan.room && session.diver) {
     lan.sendBossEvent({
       kind: 'scooter_dash',
@@ -1769,115 +1774,33 @@ function handleCombatDash() {
   return true;
 }
 
-let _lastCombatHudMode = false;
-let _lastCombatArmed = false;
-let _lastCombatHp = -1;
-let _lastCombatScooterKey = '';
-let _lastCombatDashKey = '';
-let _lastCombatUpgradesKey = '';
-let _lastCombatHintFaded = false;
+const combatHudController = createCombatHudController({
+  elements: {
+    screenHud,
+    hudCombatBarEl,
+    btnCombatPauseEl,
+    btnCombatDashEl,
+    combatHpValEl,
+    combatHpSegsEl,
+    btnCombatScooterEl,
+    combatBattFillEl,
+    combatScooterPctEl,
+    combatDashRingEl,
+    combatDashLabelEl,
+    combatUpgradesRowEl,
+    combatHintPillEl,
+  },
+  getMode: () => mode,
+  getInput: () => input,
+  onEnterCombatMode: () => {
+    if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
+    toggleShearwaterComputer(false);
+    toggleSignalWheel(false);
+  },
+});
+
 function syncCombatModeHud(sess) {
-  const lair = sess?.secretLair;
-  const active = Boolean(mode === 'diving' && lair?.combatMode && !sess?.endedState);
-  const armed = Boolean(active && lair?.weaponEquipped && !lair?.bossDefeated);
-  if (active !== _lastCombatHudMode) {
-    _lastCombatHudMode = active;
-    _lastCombatDashKey = '';
-    if (input) input.combatModeActive = active;
-    screenHud?.classList.toggle('combat-mode', active);
-    if (hudCombatBarEl) hudCombatBarEl.hidden = !active;
-    if (btnCombatPauseEl) btnCombatPauseEl.hidden = !active;
-    if (btnCombatDashEl && !active) btnCombatDashEl.hidden = true;
-    if (active) {
-      if (typeof setKitPopoverOpen === 'function') setKitPopoverOpen(false);
-      toggleShearwaterComputer(false);
-      toggleSignalWheel(false);
-    }
-  }
-  if (armed !== _lastCombatArmed) {
-    _lastCombatArmed = armed;
-    screenHud?.classList.toggle('combat-armed', armed);
-  }
-  if (!active) return;
-  const hp = Math.max(0, Math.min(100, Math.round(lair.playerHp ?? 100)));
-  if (hp !== _lastCombatHp) {
-    _lastCombatHp = hp;
-    if (combatHpValEl) combatHpValEl.textContent = String(hp);
-    if (combatHpSegsEl) {
-      const segs = combatHpSegsEl.children;
-      const litCount = Math.ceil((hp / 100) * segs.length);
-      const isLow = hp <= 35;
-      for (let i = 0; i < segs.length; i++) {
-        segs[i].classList.toggle('filled', i < litCount);
-        segs[i].classList.toggle('low', isLow);
-      }
-    }
-  }
-  // Live Combat DPV Scooter toggle & battery meter
-  const dpvEquipped = Boolean(sess?.dpv?.equipped);
-  const dpvOn = Boolean(sess?.dpv?.active);
-  const dpvPct = Math.max(0, Math.min(100, Math.round(sess?.dpv?.batteryPct ?? 0)));
-  const scooterKey = `${dpvEquipped}:${dpvOn}:${dpvPct}`;
-  if (scooterKey !== _lastCombatScooterKey) {
-    _lastCombatScooterKey = scooterKey;
-    if (btnCombatScooterEl) {
-      btnCombatScooterEl.hidden = !dpvEquipped;
-      btnCombatScooterEl.classList.toggle('active', dpvOn && dpvPct > 0);
-      btnCombatScooterEl.classList.toggle('low', dpvPct > 0 && dpvPct <= 25);
-      btnCombatScooterEl.classList.toggle('empty', dpvPct <= 0);
-      btnCombatScooterEl.setAttribute('aria-pressed', dpvOn ? 'true' : 'false');
-    }
-    if (combatBattFillEl) combatBattFillEl.style.width = `${dpvPct}%`;
-    if (combatScooterPctEl) combatScooterPctEl.textContent = dpvPct <= 0 ? '0%' : dpvOn ? `${dpvPct}%` : 'OFF';
-  }
-  // Live Combat Hydro-Dash Button Status + Radial SVG Cooldown Ring (v189 / v192)
-  const dashCd = Math.max(0, lair.dashCooldownSec || 0);
-  const dashLow = !dpvEquipped || dpvPct < SCOOTER_DASH_COST_PCT;
-  const dashReady = dashCd <= 0.02 && !dashLow;
-  const ringFrac = dashLow ? 0 : Math.max(0, Math.min(1, 1 - dashCd / Math.max(0.1, SCOOTER_DASH_COOLDOWN_SEC)));
-  const dashKey = `${dashReady}:${dashLow}:${Math.round(ringFrac * 40)}`;
-  if (dashKey !== _lastCombatDashKey) {
-    _lastCombatDashKey = dashKey;
-    if (btnCombatDashEl) {
-      btnCombatDashEl.hidden = !dpvEquipped;
-      btnCombatDashEl.classList.toggle('ready', dashReady);
-      btnCombatDashEl.classList.toggle('cooling', !dashReady && !dashLow);
-      btnCombatDashEl.classList.toggle('low-batt', dashLow);
-    }
-    if (combatDashRingEl) {
-      const circ = 169.65;
-      combatDashRingEl.setAttribute('stroke-dashoffset', (circ * (1 - ringFrac)).toFixed(2));
-    }
-    if (combatDashLabelEl) {
-      combatDashLabelEl.textContent = dashLow ? 'LOW' : dashCd > 0.05 ? `${dashCd.toFixed(1)}s` : 'DASH';
-    }
-  }
-  // Live Speargun Weapon Upgrade Badges
-  const mods = lair.weaponMods || {};
-  const upgKey = BOSS_WEAPON_UPGRADE_ORDER.map((k) => mods[k] || 0).join(',');
-  if (upgKey !== _lastCombatUpgradesKey) {
-    _lastCombatUpgradesKey = upgKey;
-    if (combatUpgradesRowEl) {
-      const pills = [];
-      for (const k of BOSS_WEAPON_UPGRADE_ORDER) {
-        const lv = mods[k] || 0;
-        if (lv <= 0) continue;
-        const meta = BOSS_WEAPON_UPGRADES[k];
-        if (!meta) continue;
-        const lbl = lv >= 2 ? meta.lv2Label : meta.shortLabel;
-        pills.push(
-          `<span class="combat-upg-badge${lv >= 2 ? ' lv2' : ''}" style="--upg-col:${meta.color}">${meta.icon} ${lbl}${lv >= 2 ? ' ★' : ''}</span>`
-        );
-      }
-      combatUpgradesRowEl.innerHTML = pills.join('');
-      combatUpgradesRowEl.hidden = pills.length === 0;
-    }
-  }
-  const hintFaded = (lair.combatHintTimer || 0) <= 0;
-  if (hintFaded !== _lastCombatHintFaded) {
-    _lastCombatHintFaded = hintFaded;
-    combatHintPillEl?.classList.toggle('faded', hintFaded);
-  }
+  combatHudController.sync(sess);
 }
 
 function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
@@ -3274,11 +3197,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   debriefReplay.stop();
   screenHud.classList.remove('hud-team-hold');
   screenHud.classList.remove('combat-mode', 'combat-armed');
-  _lastCombatHudMode = false;
-  _lastCombatArmed = false;
-  _lastCombatHp = -1;
-  _lastCombatScooterKey = '';
-  _lastCombatUpgradesKey = '';
+  combatHudController.reset();
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
@@ -3314,8 +3233,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   hideArtifactSpotlight();
   screenHud.classList.remove('hud-team-hold');
   screenHud.classList.remove('combat-mode', 'combat-armed');
-  _lastCombatHudMode = false;
-  _lastCombatArmed = false;
+  combatHudController.reset();
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
@@ -5767,8 +5685,7 @@ function abortActiveDiveToMenu() {
   hideHudPhotoCard();
   screenHud.classList.remove('hud-team-hold');
   screenHud.classList.remove('combat-mode', 'combat-armed');
-  _lastCombatHudMode = false;
-  _lastCombatArmed = false;
+  combatHudController.reset();
   _mouseFireHeld = false;
   if (hudCombatBarEl) hudCombatBarEl.hidden = true;
   if (btnCombatPauseEl) btnCombatPauseEl.hidden = true;
@@ -7431,6 +7348,10 @@ function frame(nowMs) {
       stories: session.stories || null,
       secretLair: session.secretLair || null,
       cameraShake: session.cameraShake || 0,
+      cameraKickX: session.cameraKickX || 0,
+      cameraKickY: session.cameraKickY || 0,
+      biolumWake: session.biolumWake || null,
+      dashSlipstreams: session.dashSlipstreams || null,
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,

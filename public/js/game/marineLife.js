@@ -716,12 +716,25 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
       const dx = f.x - divX;
       const dy = f.y - divY;
       const distSq = dx * dx + dy * dy;
-      if (distSq > 0.0025 && distSq < 9.0) {
+      const wakeActive = Boolean(diver.dpvThrusting) || diverSpeed > 2.6;
+      const partRadius = wakeActive ? 5.8 : 3.0;
+      if (distSq > 0.0025 && distSq < partRadius * partRadius) {
         const dist = Math.sqrt(distSq);
         const siltScatter = siltDens > 0.35 ? 1.85 : 1.0;
-        const push = ((3.0 - dist) / 3.0) * 4.2 * siltScatter;
-        f.vx += (dx / dist) * push * dt;
-        f.vy += (dy / dist) * push * dt;
+        const wakeMult = wakeActive ? 1.75 : 1.0;
+        const push = ((partRadius - dist) / partRadius) * 4.4 * siltScatter * wakeMult;
+        // Graceful lateral bow-wave parting when DPV/dash cuts through a baitball school (v195)
+        if (wakeActive) {
+          const swimAng = diverSpeed > 0.3 ? Math.atan2(diver.vy || 0, diver.vx || 0) : (diver.angle || 0);
+          const fwdX = Math.cos(swimAng);
+          const fwdY = Math.sin(swimAng);
+          const sideSign = (dx * (-fwdY) + dy * fwdX) >= 0 ? 1 : -1;
+          f.vx += ((dx / dist) * 0.45 + (-fwdY) * sideSign * 0.95) * push * dt;
+          f.vy += ((dy / dist) * 0.45 + fwdX * sideSign * 0.95) * push * dt;
+        } else {
+          f.vx += (dx / dist) * push * dt;
+          f.vy += (dy / dist) * push * dt;
+        }
       }
       // Torch-reactive schooling: sighted fish gently dart/bank out of bright close beams (blind cavefish unaffected)
       const lit = computeTorchBeamExposure(diver, f.x, f.y, 13.5);
@@ -768,27 +781,46 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
     }
   }
 
-  // Freshwater Cenote Slider Turtles patrolling sunlit surface pools
+  // Freshwater Cenote Slider Turtles patrolling sunlit surface pools (curious near calm divers, wake-reactive to DPV! v195)
   for (let i = 0; i < eco.turtles.length; i++) {
     const t = eco.turtles[i];
     if (hasDiver) {
       const cdx = t.homeX - divX;
       const cdy = t.homeY - divY;
       if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+      const lit = computeTorchBeamExposure(diver, t.x, t.y, 12.0);
+      t.litIntensity = (t.litIntensity || 0) + (lit - (t.litIntensity || 0)) * lightLerp;
     }
     t.phase += dt * 0.44;
-    const tx = t.homeX + Math.cos(t.phase) * 3.1;
-    const ty = t.homeY + Math.sin(t.phase * 2) * 0.7;
-    if (evaluateCaveSDF(level, tx, ty) < -0.4) {
-      t.vx = (tx - t.x) / Math.max(0.01, dt);
-      t.vy = (ty - t.y) / Math.max(0.01, dt);
-      t.angle = Math.atan2(ty - t.y, tx - t.x);
-      t.x = tx;
-      t.y = ty;
+    let tx = t.homeX + Math.cos(t.phase) * 3.1;
+    let ty = t.homeY + Math.sin(t.phase * 2) * 0.7;
+    if (hasDiver) {
+      const dx = t.x - divX;
+      const dy = t.y - divY;
+      const d = Math.hypot(dx, dy);
+      if (d < 4.5 && isLoudDiver && d > 0.05) {
+        tx = t.x + (dx / d) * 2.2;
+        ty = Math.max(0.8, t.y + (dy / d) * 1.1);
+      } else if (d < 7.8 && d > 2.2 && isCalmDiver) {
+        // Gentle curious turn toward a calm gliding diver
+        tx = tx * 0.65 + (divX + (dx / d) * 2.6) * 0.35;
+        ty = ty * 0.65 + Math.max(0.9, divY - 0.5) * 0.35;
+      }
+    }
+    const nx = t.x + (tx - t.x) * Math.min(1, dt * 1.9);
+    const ny = Math.max(0.7, t.y + (ty - t.y) * Math.min(1, dt * 1.9));
+    if (evaluateCaveSDF(level, nx, ny) < -0.4) {
+      t.vx = (nx - t.x) / Math.max(0.01, dt);
+      t.vy = (ny - t.y) / Math.max(0.01, dt);
+      if (Math.hypot(t.vx, t.vy) > 0.04) {
+        t.angle = Math.atan2(t.vy, t.vx);
+      }
+      t.x = nx;
+      t.y = ny;
     }
   }
 
-  // Pelagic Drifting Jellyfish (gentle pulsing climb & drift along shipwreck shot lines)
+  // Pelagic Drifting Jellyfish (gentle pulsing climb & wake sway along shipwreck shot lines)
   if (Array.isArray(eco.jellies)) {
     for (let i = 0; i < eco.jellies.length; i++) {
       const j = eco.jellies[i];
@@ -796,9 +828,17 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
         const cdx = j.homeX - divX;
         const cdy = j.homeY - divY;
         if (cdx * cdx + cdy * cdy > cullDistSq) continue;
+        const d = Math.hypot(j.x - divX, j.y - divY);
+        if (d < 4.5 && (Boolean(diver.dpvThrusting) || diverSpeed > 2.2) && d > 0.05) {
+          j._wakeOffX = Math.max(-2.5, Math.min(2.5, (j._wakeOffX || 0) + ((j.x - divX) / d) * 2.6 * dt));
+          j._wakeOffY = Math.max(-1.6, Math.min(1.6, (j._wakeOffY || 0) + ((j.y - divY) / d) * 1.8 * dt));
+        } else {
+          j._wakeOffX = (j._wakeOffX || 0) * Math.max(0, 1 - dt * 1.1);
+          j._wakeOffY = (j._wakeOffY || 0) * Math.max(0, 1 - dt * 1.1);
+        }
       }
-      j.x = j.homeX + Math.sin(timeSec * 0.28 + j.phase) * 2.2;
-      j.y = j.homeY + Math.cos(timeSec * 0.65 + j.phase) * 1.1;
+      j.x = j.homeX + Math.sin(timeSec * 0.28 + j.phase) * 2.2 + (j._wakeOffX || 0);
+      j.y = j.homeY + Math.cos(timeSec * 0.65 + j.phase) * 1.1 + (j._wakeOffY || 0);
     }
   }
 

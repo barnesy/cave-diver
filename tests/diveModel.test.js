@@ -9887,8 +9887,8 @@ test('v194 Deduplicated Quiet Gas Coach, Living Biome Foley Audio & 2 New Hidden
   const { CaveRenderer } = await import('../public/js/game/renderer.js');
   const { DiveAudio } = await import('../public/js/game/audio.js');
 
-  // 1. Total 8 100%-hidden Secret Lairs across the campaign, including Orda Crystal Maze & U-1206 Submarine Wreck
-  assert.equal(Object.keys(SECRET_LAIRS).length, 8, 'Must have 8 hidden Secret Lairs across the campaign');
+  // 1. At least 8 100%-hidden Secret Lairs across the campaign, including Orda Crystal Maze & U-1206 Submarine Wreck
+  assert.ok(Object.keys(SECRET_LAIRS).length >= 8, 'Must have at least 8 hidden Secret Lairs across the campaign');
   for (const id of ['orda-crystal-maze', 'u1206-north-sea-sub']) {
     const lvl = LEVELS.find((l) => l.id === id);
     assert.ok(lvl, `Campaign level ${id} must exist`);
@@ -10005,4 +10005,226 @@ test('v194 Deduplicated Quiet Gas Coach, Living Biome Foley Audio & 2 New Hidden
   assert.equal(typeof audio.playAirPocketDrip, 'function');
   const css = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
   assert.ok(css.includes('@keyframes gasHintRim'), 'Gas compact pill must feature calm rim highlight animation');
+});
+
+test('v195 Tactical AI Wingman Combat, Hydro-Dash Slipstream, Reactive Marine Life & Juice, 10-Guardian Pantheon (Bimini & Ojamo), Combat HUD Controller & 60 FPS Budget', async () => {
+  const {
+    SECRET_LAIRS,
+    getSecretLairForLevel,
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    spawnBossSignatureHazard,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+    fireSpeargun,
+    triggerCombatScooterDash,
+    stepSecretLairEncounter,
+  } = await import('../public/js/game/secretLairs.js');
+  const { createAiBuddyState, stepAiBuddy, selectWingmanCombatTarget } = await import('../public/js/game/aiBuddy.js');
+  const {
+    triggerCameraKick,
+    decayCameraKick,
+    stepUnderwaterJuice,
+    computeCavernFramingZoom,
+  } = await import('../public/js/game/renderers/underwaterJuiceRenderer.js');
+  const { createCombatHudController } = await import('../public/js/ui/combatHudController.js');
+  const { createMarineEcosystem, stepMarineEcosystem } = await import('../public/js/game/marineLife.js');
+  const { computeUnlockedLiveries, getSecretCosmeticsForTrophy } = await import('../public/js/game/rigLivery.js');
+  const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
+  const { drawStyledArtifact } = await import('../public/js/game/artSprites.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Complete 10-Guardian Hidden Pantheon (Bimini Road Orichalcum Colossus & Ojamo Abyssal Drill-Wyrm)
+  assert.equal(Object.keys(SECRET_LAIRS).length, 10, 'Must have 10 100%-hidden Secret Lairs across the campaign');
+  for (const id of ['bimini-road-megalith', 'ojamo-iron-mine']) {
+    const lvl = LEVELS.find((l) => l.id === id);
+    assert.ok(lvl, `Campaign level ${id} must exist`);
+    assert.equal(validateLevel(lvl).valid, true, `${id} must validate cleanly`);
+    const spec = getSecretLairForLevel(id);
+    assert.ok(spec && spec.veil.silent === true, `${id} veil must remain 100% silent Sonar-only`);
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -1.0, `${id} armory open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -4.0, `${id} arena center open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -3.0, `${id} boss spawn open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -1.0, `${id} updraft dest open water`);
+    for (const pad of spec.arena.pickupPads) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -1.0, `${id} pickup pad ${pad.id} open water`);
+    }
+  }
+
+  // 2. Bimini Orichalcum Colossus: Sun-Obelisk Solar Deflect CRIT + Camera Kick + Net Sync code 8
+  const bimLvl = LEVELS.find((l) => l.id === 'bimini-road-megalith');
+  const sBim = createDiveSession(bimLvl, { diverName: 'Atlantean' });
+  breachSecretLairVeil(sBim);
+  claimSecretLairWeapon(sBim);
+  sBim.secretLair.boss.active = true;
+  sBim.secretLair.boss.aiState = 'idle';
+  const obelisk = spawnBossSignatureHazard(sBim, sBim.secretLair, sBim.secretLair.boss);
+  assert.equal(obelisk.kind, 'sun-obelisk');
+  const bimSnap = serializeSecretLairNetState(sBim.secretLair);
+  assert.equal(bimSnap.hz[0][0], 8, 'Net sync must encode sun-obelisk as code 8');
+  const sBimPeer = createDiveSession(bimLvl, { diverName: 'PeerBim' });
+  applySecretLairNetState(sBimPeer.secretLair, bimSnap);
+  assert.equal(sBimPeer.secretLair.bossHazards[0].kind, 'sun-obelisk');
+
+  const bimHpBefore = sBim.secretLair.boss.hp;
+  obelisk.x = 282;
+  obelisk.y = 36;
+  sBim.diver.x = 277;
+  sBim.diver.y = 36;
+  sBim.secretLair.shotCounter = 4; // Hyper-Tip triggers Sun-Obelisk solar reflect!
+  fireSpeargun(sBim, { aimAngle: 0, isTap: true, originX: sBim.diver.x, originY: sBim.diver.y });
+  for (let i = 0; i < 14; i++) stepSecretLairEncounter(sBim, 0.02, {}, {});
+  assert.ok(sBim.secretLair.boss.hp < bimHpBefore, 'Shooting Sun-Obelisk must reflect solar beam CRIT onto Orichalcum Colossus');
+  assert.ok(Math.hypot(sBim.cameraKickX, sBim.cameraKickY) > 0.1, 'Sun-Obelisk CRIT must apply directional camera kick');
+
+  // 3. Ojamo Abyssal Drill-Wyrm: Ore-Gate Drop-Crush Stun CRIT + Net Sync code 9
+  const ojaLvl = LEVELS.find((l) => l.id === 'ojamo-iron-mine');
+  const sOja = createDiveSession(ojaLvl, { diverName: 'MineTech' });
+  breachSecretLairVeil(sOja);
+  claimSecretLairWeapon(sOja);
+  sOja.secretLair.boss.active = true;
+  sOja.secretLair.boss.aiState = 'idle';
+  const gate = spawnBossSignatureHazard(sOja, sOja.secretLair, sOja.secretLair.boss);
+  assert.equal(gate.kind, 'ore-gate');
+  const ojaSnap = serializeSecretLairNetState(sOja.secretLair);
+  assert.equal(ojaSnap.hz[0][0], 9, 'Net sync must encode ore-gate as code 9');
+  const sOjaPeer = createDiveSession(ojaLvl, { diverName: 'PeerOja' });
+  applySecretLairNetState(sOjaPeer.secretLair, ojaSnap);
+  assert.equal(sOjaPeer.secretLair.bossHazards[0].kind, 'ore-gate');
+
+  gate.x = sOja.secretLair.boss.x;
+  gate.y = sOja.secretLair.boss.y - 6.5;
+  sOja.diver.x = gate.x - 5.0;
+  sOja.diver.y = gate.y;
+  const ojaHpBefore = sOja.secretLair.boss.hp;
+  sOja.secretLair.shotCounter = 4; // Hyper-Tip snaps release latch
+  fireSpeargun(sOja, { aimAngle: 0, isTap: true, originX: sOja.diver.x, originY: sOja.diver.y });
+  for (let i = 0; i < 35; i++) stepSecretLairEncounter(sOja, 0.025, {}, {});
+  assert.ok(sOja.secretLair.boss.hp < ojaHpBefore, 'Dropping Ore-Gate must crush Abyssal Drill-Wyrm for massive damage');
+  assert.equal(sOja.secretLair.boss.aiState, 'stunned', 'Ore-Gate direct crush must stun Abyssal Drill-Wyrm');
+
+  // 4. Pillar 1: Tactical AI Wingman targeting, cover-fire bolts & Hydro-Dash Buddy Slipstream synergy
+  const buddy = createAiBuddyState(bimLvl, { x: 279, y: 36 });
+  buddy.x = 279;
+  buddy.y = 36;
+  const ob2 = spawnBossSignatureHazard(sBim, sBim.secretLair, sBim.secretLair.boss);
+  ob2.x = 286;
+  ob2.y = 35;
+  const wingTarget = selectWingmanCombatTarget(buddy, sBim.secretLair);
+  assert.equal(wingTarget?.kind, 'hazard', 'AI Wingman must prioritize spotlighting & shooting active biome hazards');
+  buddy.combatFireCd = 0;
+  const spearsBefore = sBim.secretLair.spears.length;
+  stepAiBuddy(buddy, sBim, 0.05, {});
+  assert.ok(
+    sBim.secretLair.spears.length > spearsBefore && sBim.secretLair.spears.some((sp) => sp.isWingman),
+    'AI Wingman must fire distinct cover-fire harpoon bolts during Secret Lair combat'
+  );
+
+  // Hydro-Dash near AI Buddy triggers Slipstream boost + arc + faster cooldown!
+  sBim.dpv = { equipped: true, active: true, batteryPct: 80 };
+  sBim.secretLair.dashCooldownSec = 0;
+  sBim.secretLair.dashTimerSec = 0;
+  sBim.diver.x = buddy.x + 2.5;
+  sBim.diver.y = buddy.y;
+  const dashRes = triggerCombatScooterDash(sBim, { dirX: 1, dirY: 0, buddies: [buddy] }, {});
+  assert.equal(dashRes.ok, true);
+  assert.equal(dashRes.slipstream, true, 'Dashing within 7.5m of AI buddy must trigger Hydro-Dash Slipstream');
+  assert.ok(sBim.dashSlipstreams.length >= 1, 'Slipstream must emit visual tether arc');
+
+  // 5. Pillar 3: Reactive Marine Life (DPV bow-wave parting), Bioluminescent Wake, Camera Kick & Cavern Framing
+  const eco = createMarineEcosystem(bimLvl);
+  assert.ok(eco.fish.length > 0, 'Bimini ecosystem must contain reef fish');
+  const testFish = eco.fish[0];
+  const fakeDiver = { x: testFish.x - 1.5, y: testFish.y, vx: 3.6, vy: 0, angle: 0, dpvThrusting: true, torchOn: true, torchAngle: 0 };
+  const prevVy = testFish.vy;
+  stepMarineEcosystem(eco, fakeDiver, 0.12, 5.0, bimLvl);
+  assert.notEqual(testFish.vy, prevVy, 'DPV wake must laterally part nearby fish schools');
+
+  sBim.diver.y = 26;
+  sBim.diver.vx = 3.2;
+  sBim.dpv.active = true;
+  sBim.dpv.thrusting = true;
+  for (let i = 0; i < 20; i++) stepUnderwaterJuice(sBim, 0.05);
+  assert.ok(sBim.biolumWake.length > 0 && sBim.biolumWake.length <= 64, 'Bioluminescent wake pool must emit and stay capped');
+  triggerCameraKick(sBim, 1, 0, 0.6, 0.03);
+  const kickMag = Math.abs(sBim.cameraKickX);
+  decayCameraKick(sBim, 0.15);
+  assert.ok(Math.abs(sBim.cameraKickX) < kickMag, 'Directional camera kick must smoothly decay');
+  assert.ok(computeCavernFramingZoom(12, 24, false, false, false) < 0.96, 'Wide caverns must gently breathe camera zoom out');
+
+  // 6. Zero-spoiler Gear Workshop cosmetics & Boss Music themes for Bimini & Ojamo
+  const fresh = computeUnlockedLiveries(createEmptyLogbook());
+  assert.equal(fresh.suits.has('secret-orichalcum-suit'), false);
+  assert.equal(fresh.trims.has('secret-foundry-trim'), false);
+  let book = recordArtifactInLogbook(createEmptyLogbook(), { id: 'bimini-road-megalith:bimini-orichalcum-astrolabe', name: 'Orichalcum Astrolabe', points: 3100 }).book;
+  book = recordArtifactInLogbook(book, { id: 'ojamo-iron-mine:ojamo-tungsten-core', name: 'Heart of the Iron Shaft', points: 3300 }).book;
+  const unlocked = computeUnlockedLiveries(book);
+  assert.equal(unlocked.suits.has('secret-orichalcum-suit'), true);
+  assert.equal(unlocked.trims.has('secret-foundry-trim'), true);
+  assert.ok(getSecretCosmeticsForTrophy('bimini-orichalcum-astrolabe').includes('Atlantean Orichalcum Suit'));
+  assert.ok(getSecretCosmeticsForTrophy('ojamo-tungsten-core').includes('Foundry Tungsten Trim'));
+
+  // 7. Pillar 5: Extracted Combat HUD Controller & 120-Frame Combat Simulation Budget (< 4ms/frame)
+  const fakeEl = () => ({
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    style: {},
+    children: [],
+    classes: new Set(),
+    classList: { toggle(k, v) { if (v) this._s.add(k); else this._s.delete(k); }, _s: new Set() },
+    setAttribute() {},
+  });
+  const hudCtrl = createCombatHudController({
+    elements: {
+      screenHud: fakeEl(),
+      hudCombatBarEl: fakeEl(),
+      btnCombatPauseEl: fakeEl(),
+      btnCombatDashEl: fakeEl(),
+      combatHpValEl: fakeEl(),
+      btnCombatScooterEl: fakeEl(),
+      combatBattFillEl: fakeEl(),
+      combatScooterPctEl: fakeEl(),
+      combatDashRingEl: fakeEl(),
+      combatDashLabelEl: fakeEl(),
+      combatUpgradesRowEl: fakeEl(),
+      combatHintPillEl: fakeEl(),
+    },
+    getMode: () => 'diving',
+  });
+  const hudState = hudCtrl.sync(sBim);
+  assert.equal(hudState.active, true);
+  assert.equal(hudState.armed, true);
+  hudCtrl.reset();
+  assert.equal(hudCtrl.isActive(), false);
+
+  // Renderers & Trophy Relics render cleanly
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    { createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }), measureText: () => ({ width: 88 }) },
+    { get(t, p) { return p in t ? t[p] : () => drawCalls.push(String(p)); } }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock.level = bimLvl;
+  rMock._cachedDpr = 1;
+  rMock.glowStamps = {};
+  rMock._drawSecretLairBoss(mockCtx, sBim.secretLair.boss, (x) => x, (y) => y, 22, 3.0);
+  rMock._drawSecretLairBoss(mockCtx, sOja.secretLair.boss, (x) => x, (y) => y, 22, 3.0);
+  rMock._drawBiolumPlanktonWake(mockCtx, sBim.biolumWake, 0, 500, 0, 200, (x) => x, (y) => y, 22);
+  rMock._drawDashSlipstreamArcs(mockCtx, sBim.dashSlipstreams, (x) => x, (y) => y, 22, 2.0);
+  drawStyledArtifact(mockCtx, { id: 'bimini-orichalcum-astrolabe', name: 'Orichalcum Astrolabe' }, 50, 50, 32, 2.5, { isGrand: true });
+  drawStyledArtifact(mockCtx, { id: 'ojamo-tungsten-core', name: 'Heart of the Iron Shaft' }, 50, 50, 32, 2.5, { isGrand: true });
+  assert.ok(drawCalls.length > 100, 'Orichalcum Colossus, Drill-Wyrm, Juice FX & Trophies must render cleanly');
+
+  // Automated 120-frame Simulation Budget Check (active boss + AI wingman + bioluminescent wake)
+  const audio = new DiveAudio();
+  assert.equal(typeof audio._stepBossMusic, 'function');
+  const t0 = performance.now();
+  for (let i = 0; i < 120; i++) {
+    stepSecretLairEncounter(sBim, 1 / 60, {}, {});
+    stepAiBuddy(buddy, sBim, 1 / 60, {});
+    stepUnderwaterJuice(sBim, 1 / 60);
+  }
+  const avgMs = (performance.now() - t0) / 120;
+  assert.ok(avgMs < 4.0, `120-frame combat + wingman + juice sim must stay well under 4ms/frame (got ${avgMs.toFixed(3)}ms)`);
 });
