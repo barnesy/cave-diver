@@ -1932,16 +1932,61 @@ function _triggerVictoryUpdraft(session, up, callbacks) {
   diver.y = up.destY;
   diver.vx = 0;
   diver.vy = -0.5;
+  if (diver.body) {
+    // Snap articulated joints to exit basin so limbs never stretch across the map for 1 frame
+    for (const k of ['head', 'shoulder', 'hip', 'knee', 'ankle', 'hand', 'elbow']) {
+      if (diver.body[k] && typeof diver.body[k].x === 'number') {
+        diver.body[k].x = up.destX;
+        diver.body[k].y = up.destY;
+      }
+    }
+  }
+  // Hyperbaric Thermal Updraft cleanly purges Bühlmann tissue inert gases & prevents teleport ascent-rate DCS! (v190)
+  session._updraftSafeDepthM = up.destY;
   diveState.depthM = up.destY;
   diveState.ceilingM = 0;
+  diveState.stopDepthM = 0;
+  diveState.stopRemainingSec = 0;
   diveState.decoStopSec = 0;
+  diveState.ttsSec = Math.round(Math.max(0, up.destY) / 0.15);
+  diveState.ndlMin = 99;
+  diveState.ascentRateMPerMin = 0;
+  diveState.dcsStress = 0;
+  diveState.hypoxiaStress = 0;
+  diveState.cardiacStress = 0;
+  diveState.narcosisLevel = 0;
+  diveState.panicLevel = 0;
+  diveState.surfaceViolationsSec = 0;
+  diveState.heartRateBpm = Math.min(diveState.heartRateBpm || 78, 82);
+  diveState.warnings = [];
+  diveState.criticalAlarm = null;
+  if (Array.isArray(diveState.compartments)) {
+    for (let i = 0; i < diveState.compartments.length; i++) {
+      diveState.compartments[i].pN2 = 0.7408;
+      diveState.compartments[i].pHe = 0;
+    }
+  }
+  // Switch off hypoxic deep trimix onto shallow-safe EAN32 (with reserve guarantee) so surfacing at 6.5m -> 0m never causes hypoxia!
+  if (diveState.tanks?.EAN32) {
+    const eanTank = diveState.tanks.EAN32;
+    const eanMix = diveState.mixes?.EAN32;
+    const startBar = eanMix?.startBar || 200;
+    if ((eanTank.bar || 0) < 40 && eanTank.maxLiters > 0) {
+      eanTank.bar = 40;
+      eanTank.litersRemaining = (40 / startBar) * eanTank.maxLiters;
+    }
+    diveState.activeGasId = 'EAN32';
+  }
   if (session.checkpointsHit && Array.isArray(session.level?.checkpoints)) {
     for (let i = 0; i < session.level.checkpoints.length; i++) {
       session.checkpointsHit.add(session.level.checkpoints[i].id);
     }
   }
+  if (session.level?.recoveryTarget) {
+    session.bodyRecovered = true;
+  }
   callbacks.onUpdraftTeleport?.(up);
-  callbacks.onToast?.('✨ Carried to the Exit Basin — ascend to the surface to claim your Boss Victory!', 4.2);
+  callbacks.onToast?.('✨ Thermal Updraft purged deco & carried you to the Exit Basin — ascend safely to claim your Boss Victory!', 4.5);
   return { handled: true, kind: 'lair-updraft', targetId: 'updraft' };
 }
 
@@ -2097,6 +2142,10 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       lair.spears.length = 0;
     }
     if (lair.combatScooterGranted) restorePreCombatScooter(session);
+    if (diver.x < sealX - 1.8 && lair.combatMode) {
+      lair.combatMode = false;
+      session._updraftSafeDepthM = diver.y;
+    }
   } else if (diver.x < sealX - 1.8) {
     // Exited secret passage back into main cave -> stow speargun, restore DPV loadout & normal diving HUD
     if (lair.weaponEquipped || lair.combatMode || lair.combatScooterGranted) {

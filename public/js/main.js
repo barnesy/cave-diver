@@ -528,7 +528,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=189',
+  mapRasterUrl: './assets/map-expedition.jpg?v=190',
   els: {
     siteWorldMapEl,
     btnMapZoom,

@@ -9542,3 +9542,56 @@ test('v189 4 Hidden Secret Boss Lairs, Scooter Hydro-Dash, Ceiling Stalactites, 
   assert.ok(html.includes('id="debrief-boss-banner" class="debrief-boss-banner" hidden'), 'Debrief must include hidden #debrief-boss-banner');
   assert.equal(html.toLowerCase().includes('boss rush'), false, 'Bosses must remain genuinely secret (no Boss Rush UI)');
 });
+
+test('v190 Victory Updraft purges Bühlmann deco tissues, zeroes teleport ascent spike & switches off hypoxic Trimix on deep bosses (Thistlegorm & Krubera)', async () => {
+  const { breachSecretLairVeil, claimSecretLairWeapon, applyBossDamage } = await import('../public/js/game/secretLairs.js');
+  const { switchGas } = await import('../public/js/physics/diveModel.js');
+
+  for (const levelId of ['ss-thistlegorm-wreck', 'krubera-voronya-sump']) {
+    const lvl = LEVELS.find((l) => l.id === levelId);
+    assert.ok(lvl, `Level ${levelId} must exist`);
+    const s = createDiveSession(lvl, { diverName: 'IronSlayer' });
+    const spec = s.secretLair.spec;
+
+    // 1. Simulate deep dive on hypoxic Trimix building real Bühlmann deco ceiling (>10m) before entering the boss arena
+    switchGas(s.diveState, 'TMX1455');
+    s.diver.x = spec.veil.x - 4;
+    s.diver.y = spec.arena.cy;
+    for (let i = 0; i < 400; i++) {
+      stepDiveSession(s, { x: 0, y: 0 }, 0.25);
+    }
+    assert.ok(s.diveState.ceilingM > 5, `${levelId} deep bottom time must build real deco ceiling (got ${s.diveState.ceilingM})`);
+
+    // 2. Breach veil, claim Speargun, defeat boss & swim directly into Victory Updraft
+    breachSecretLairVeil(s);
+    claimSecretLairWeapon(s);
+    s.secretLair.boss.active = true;
+    applyBossDamage(s, 99999);
+    assert.equal(s.secretLair.bossDefeated, true);
+
+    const up = spec.arena.exitUpdraft;
+    s.diver.x = up.x;
+    s.diver.y = up.y;
+    // Step the exact teleport frame + 40 subsequent frames ascending gently to the surface!
+    let finalOutcome = null;
+    for (let f = 0; f < 160; f++) {
+      const res = stepDiveSession(s, { x: 0, y: -0.65 }, 0.05);
+      if (f === 0) {
+        assert.equal(s.secretLair.combatMode, false, `${levelId} updraft must exit combatMode`);
+        assert.equal(s.diveState.alive, true, `${levelId} diver must survive updraft teleport frame`);
+        assert.equal(s.diveState.dcsStress, 0, `${levelId} updraft must zero dcsStress (no teleport ascent-rate spike!)`);
+        assert.ok(s.diveState.ceilingM < 0.2, `${levelId} updraft must purge Bühlmann deco ceiling (got ${s.diveState.ceilingM})`);
+        assert.ok(Math.abs(s.diveState.ascentRateMPerMin) < 1, `${levelId} teleport frame must not spike ascentRateMPerMin (got ${s.diveState.ascentRateMPerMin})`);
+        assert.equal(s.diveState.activeGasId, 'EAN32', `${levelId} updraft must switch off hypoxic deep Trimix onto EAN32`);
+      }
+      if (res.outcome) {
+        finalOutcome = res.outcome;
+        break;
+      }
+    }
+    assert.equal(s.diveState.alive, true, `${levelId} diver must remain alive ascending from Victory Updraft`);
+    assert.equal(s.diveState.dcsStress, 0, `${levelId} diver must have 0 DCS stress after updraft ascent`);
+    assert.equal(s.diveState.hypoxiaStress, 0, `${levelId} diver must have 0 hypoxia stress surfacing after updraft`);
+    assert.ok(finalOutcome && finalOutcome.success, `${levelId} diver must surface cleanly to Boss Victory debrief!`);
+  }
+});

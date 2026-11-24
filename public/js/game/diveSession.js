@@ -3960,9 +3960,11 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
     diveState.narcosisLevel = 0;
     diveState.panicLevel = 0;
   } else {
+    const safePrevDepthM = Number.isFinite(session._updraftSafeDepthM) ? session._updraftSafeDepthM : prevDepthM;
+    session._updraftSafeDepthM = undefined;
     stepDivePhysiology(diveState, {
       depthM: Math.max(0, diver.y),
-      prevDepthM,
+      prevDepthM: safePrevDepthM,
       dt,
       exertion: effectiveExertion,
       headBumpImpulse,
