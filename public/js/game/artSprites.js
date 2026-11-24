@@ -279,19 +279,30 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
   ctx.closePath();
   ctx.fill();
 
-  // Sculpted two-tone body (zero per-frame gradient allocation)
+  // Sculpted two-tone body with crisp dark ink contour & sunlit dorsal rim (v189)
   ctx.fillStyle = f.color;
+  ctx.strokeStyle = 'rgba(4, 16, 33, 0.76)';
+  ctx.lineWidth = Math.max(1.0, sz * 0.065);
   ctx.beginPath();
   ctx.moveTo(sz * 0.96, 0.04 * sz);
   ctx.bezierCurveTo(sz * 0.55, -sz * 0.58, -sz * 0.45, -sz * 0.5, -sz * 0.84, 0);
   ctx.bezierCurveTo(-sz * 0.45, sz * 0.5, sz * 0.55, sz * 0.55, sz * 0.96, 0.04 * sz);
   ctx.fill();
-  ctx.fillStyle = f.kind === 'cichlid' ? 'rgba(251, 113, 133, 0.42)' : 'rgba(236, 254, 255, 0.45)';
+  ctx.stroke();
+  ctx.fillStyle = f.kind === 'cichlid' ? 'rgba(251, 113, 133, 0.48)' : 'rgba(236, 254, 255, 0.52)';
   ctx.beginPath();
   ctx.moveTo(sz * 0.84, 0.08 * sz);
   ctx.quadraticCurveTo(sz * 0.1, sz * 0.46, -sz * 0.72, 0.04 * sz);
   ctx.quadraticCurveTo(sz * 0.1, sz * 0.18, sz * 0.84, 0.08 * sz);
   ctx.fill();
+  // Specular sunlit dorsal highlight ribbon
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+  ctx.lineWidth = Math.max(0.8, sz * 0.055);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(sz * 0.58, -sz * 0.24);
+  ctx.quadraticCurveTo(sz * 0.05, -sz * 0.36, -sz * 0.44, -sz * 0.22);
+  ctx.stroke();
 
   if (f.kind === 'cichlid') {
     // Mayan cichlid dark vertical bars + dark tail ocellus spot
@@ -357,77 +368,123 @@ export function drawStyledTurtle(ctx, t, sx, sy, scale, timeSec) {
   const sz = 0.58 * scale;
   const facingLeft = Math.cos(t.angle) < 0;
   const paddle = Math.sin(timeSec * 3.4 + t.phase) * 0.42;
+  const ink = '#061a14';
+  const inkW = Math.max(1.2, sz * 0.055);
 
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(t.angle);
   if (facingLeft) ctx.scale(1, -1);
 
-  // Far front webbed foot
-  ctx.fillStyle = '#3f6212';
+  // Far front webbed flipper
+  ctx.fillStyle = '#365314';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = inkW;
   ctx.save();
   ctx.translate(sz * 0.32, sz * 0.14);
   ctx.rotate(-paddle * 0.65);
   ctx.beginPath();
   ctx.ellipse(-sz * 0.04, sz * 0.28, sz * 0.15, sz * 0.3, -0.25, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
   ctx.restore();
 
-  // Hind webbed foot
+  // Hind webbed flipper
   ctx.fillStyle = '#4d7c0f';
   ctx.beginPath();
   ctx.ellipse(-sz * 0.68, sz * 0.22, sz * 0.16, sz * 0.22, 0.55, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
 
-  // Head & neck with orange/crimson cenote slider ear stripe
-  ctx.fillStyle = '#4d7c0f';
+  // Head & neck with cel-shading + crimson cenote slider ear stripe
+  const headG = ctx.createLinearGradient(sz * 0.6, -sz * 0.16, sz * 0.9, sz * 0.2);
+  headG.addColorStop(0, '#84cc16');
+  headG.addColorStop(0.55, '#4d7c0f');
+  headG.addColorStop(1, '#365314');
+  ctx.fillStyle = headG;
   ctx.beginPath();
-  ctx.ellipse(sz * 0.82, 0.02 * sz, sz * 0.26, sz * 0.17, -0.06, 0, Math.PI * 2);
+  ctx.ellipse(sz * 0.82, 0.02 * sz, sz * 0.27, sz * 0.175, -0.06, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
 
   // Slider crimson-orange ear stripe
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = Math.max(1.5, sz * 0.075);
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth = Math.max(1.6, sz * 0.075);
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(sz * 0.66, 0.02 * sz);
+  ctx.moveTo(sz * 0.65, 0.02 * sz);
   ctx.lineTo(sz * 0.84, -0.01 * sz);
   ctx.stroke();
 
+  // Expressive eye with dark ring + bright white catchlight
   ctx.fillStyle = '#fef9c3';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = Math.max(0.9, sz * 0.035);
   ctx.beginPath();
-  ctx.arc(sz * 0.92, -0.045 * sz, Math.max(2, sz * 0.072), 0, Math.PI * 2);
+  ctx.arc(sz * 0.92, -0.048 * sz, Math.max(2.1, sz * 0.076), 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.arc(sz * 0.94, -0.045 * sz, Math.max(1.2, sz * 0.045), 0, Math.PI * 2);
+  ctx.arc(sz * 0.94, -0.048 * sz, Math.max(1.2, sz * 0.044), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(sz * 0.955, -0.066 * sz, Math.max(0.7, sz * 0.022), 0, Math.PI * 2);
   ctx.fill();
 
-  // Sculpted Domed Carapace Shell
-  ctx.fillStyle = '#3f6212';
+  // Warm cream plastron belly rim
+  ctx.fillStyle = '#fef08a';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = inkW;
+  ctx.beginPath();
+  ctx.ellipse(-sz * 0.08, sz * 0.13, sz * 0.64, sz * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Sculpted Domed Cel-Shaded Carapace Shell
+  const shellG = ctx.createRadialGradient(sz * 0.06, -sz * 0.26, sz * 0.08, -sz * 0.08, -sz * 0.05, sz * 0.85);
+  shellG.addColorStop(0, '#84cc16');
+  shellG.addColorStop(0.45, '#4d7c0f');
+  shellG.addColorStop(1, '#1a2e05');
+  ctx.fillStyle = shellG;
   ctx.beginPath();
   ctx.moveTo(sz * 0.65, 0.08 * sz);
-  ctx.bezierCurveTo(sz * 0.45, -sz * 0.5, -sz * 0.48, -sz * 0.46, -sz * 0.82, 0.1 * sz);
-  ctx.quadraticCurveTo(-sz * 0.1, sz * 0.28, sz * 0.65, 0.08 * sz);
+  ctx.bezierCurveTo(sz * 0.45, -sz * 0.52, -sz * 0.48, -sz * 0.48, -sz * 0.82, 0.1 * sz);
+  ctx.quadraticCurveTo(-sz * 0.1, sz * 0.25, sz * 0.65, 0.08 * sz);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Sunlit glossy dorsal carapace highlight
+  ctx.fillStyle = 'rgba(236, 252, 203, 0.34)';
+  ctx.beginPath();
+  ctx.ellipse(sz * 0.02, -sz * 0.26, sz * 0.34, sz * 0.09, -0.08, 0, Math.PI * 2);
   ctx.fill();
 
   // Warm yellow slider scute ocelli rings
-  ctx.strokeStyle = 'rgba(253, 224, 71, 0.65)';
-  ctx.lineWidth = Math.max(1, sz * 0.035);
+  ctx.strokeStyle = 'rgba(253, 224, 71, 0.78)';
+  ctx.lineWidth = Math.max(1.1, sz * 0.038);
   for (let s = -1; s <= 1; s++) {
     ctx.beginPath();
-    ctx.ellipse(s * sz * 0.24 - sz * 0.08, -sz * 0.14, sz * 0.13, sz * 0.085, 0, 0, Math.PI * 2);
+    ctx.ellipse(s * sz * 0.24 - sz * 0.08, -sz * 0.12, sz * 0.13, sz * 0.085, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  // Near paddling front webbed foot
-  ctx.fillStyle = '#65a30d';
+  // Near paddling front webbed flipper with crisp outline
+  const flipG = ctx.createLinearGradient(0, 0, 0, sz * 0.55);
+  flipG.addColorStop(0, '#84cc16');
+  flipG.addColorStop(1, '#3f6212');
+  ctx.fillStyle = flipG;
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = inkW;
   ctx.save();
   ctx.translate(sz * 0.34, sz * 0.18);
   ctx.rotate(paddle);
   ctx.beginPath();
   ctx.ellipse(-sz * 0.06, sz * 0.28, sz * 0.17, sz * 0.34, -0.32, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
   ctx.restore();
 
   ctx.restore();
@@ -1819,14 +1876,16 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.closePath();
     ctx.fill();
 
-    // Streamlined countershaded fusiform body
+    // Streamlined countershaded fusiform body with crisp dark ink contour (v189)
     const bodyGrad = ctx.createLinearGradient(0, -sz * 0.34, 0, sz * 0.28);
-    bodyGrad.addColorStop(0, '#273c52');
+    bodyGrad.addColorStop(0, '#1e3a5f');
     bodyGrad.addColorStop(0.52, '#4f6b85');
     bodyGrad.addColorStop(0.7, '#94adc4');
     bodyGrad.addColorStop(0.84, '#e2e8f0');
     bodyGrad.addColorStop(1, '#f1f5f9');
     ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = 'rgba(4, 16, 33, 0.72)';
+    ctx.lineWidth = Math.max(1.2, sz * 0.026);
     ctx.beginPath();
     ctx.moveTo(sz * 1.48, sz * 0.02);
     ctx.bezierCurveTo(sz * 0.92, -sz * 0.34, -sz * 0.24, -sz * 0.29 + midW, -sz * 1.12, -sz * 0.03 + pedW);
@@ -1835,6 +1894,7 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.quadraticCurveTo(sz * 1.42, sz * 0.1, sz * 1.48, sz * 0.02);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
 
     // Near sweeping pectoral fin with pale underside edge
     const pecGrad = ctx.createLinearGradient(sz * 0.3, sz * 0.12, -sz * 0.1, sz * 0.72);
@@ -1927,7 +1987,7 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     ctx.closePath();
     ctx.fill();
 
-    // 3. Sculpted central hydrofoil body (velvety midnight dorsal -> pale pearl ventral belly)
+    // 3. Sculpted central hydrofoil body with crisp ink rim (v189)
     const torsoGrad = ctx.createLinearGradient(0, -sz * 0.24, 0, sz * 0.26);
     torsoGrad.addColorStop(0, '#0f253d');
     torsoGrad.addColorStop(0.45, '#1d3c5c');
@@ -1935,12 +1995,15 @@ export function drawStyledMegafauna(ctx, m, sx, sy, scale, timeSec) {
     torsoGrad.addColorStop(0.82, '#e2eef8');
     torsoGrad.addColorStop(1, '#f8fafc');
     ctx.fillStyle = torsoGrad;
+    ctx.strokeStyle = 'rgba(4, 16, 33, 0.68)';
+    ctx.lineWidth = Math.max(1.2, sz * 0.024);
     ctx.beginPath();
     ctx.moveTo(sz * 0.78, -sz * 0.02);
     ctx.bezierCurveTo(sz * 0.45, -sz * 0.24, -sz * 0.18, -sz * 0.2, -sz * 0.62, -sz * 0.01);
     ctx.bezierCurveTo(-sz * 0.22, sz * 0.2, sz * 0.36, sz * 0.25, sz * 0.76, sz * 0.07);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
 
     // Iconic pale white dorsal shoulder chevron blaze (Mobula birostris hallmark!)
     ctx.fillStyle = 'rgba(219, 234, 254, 0.48)';

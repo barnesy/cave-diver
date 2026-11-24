@@ -36,6 +36,14 @@ export const RESONANCE_MAX_CHARGE = 3;
 export const RESONANCE_COOLDOWN_SEC = 16.5;
 export const BOSS_BATTERY_RECHARGE_PCT = 45;
 export const WEAPON_UPGRADE_MAX_LEVEL = 2;
+export const SCOOTER_DASH_COST_PCT = 12;
+export const SCOOTER_DASH_COOLDOWN_SEC = 0.85;
+export const SCOOTER_DASH_DURATION_SEC = 0.26;
+export const SCOOTER_DASH_IFRAMES_SEC = 0.34;
+export const SCOOTER_DASH_SPEED = 16.5;
+export const STALACTITE_MAX_HP = 2;
+export const STALACTITE_CRUSH_DAMAGE = 260;
+export const STALACTITE_RESPAWN_SEC = 24.0;
 
 export const BOSS_WEAPON_UPGRADE_ORDER = Object.freeze(['twin', 'rapid', 'overcharge', 'homing']);
 
@@ -180,6 +188,11 @@ export const SECRET_LAIRS = Object.freeze({
       ]),
       corridorBattery: Object.freeze({ x: 196.0, y: 43.2 }),
       corridorUpgrade: Object.freeze({ x: 213.5, y: 44.6, kind: 'twin' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-l1-w', x: 267.5, y: 29.0, floorY: 51.5, style: 'limestone' }),
+        Object.freeze({ id: 'stal-l1-c', x: 279.5, y: 28.4, floorY: 52.0, style: 'limestone' }),
+        Object.freeze({ id: 'stal-l1-e', x: 290.5, y: 29.2, floorY: 51.5, style: 'limestone' }),
+      ]),
       exitUpdraft: Object.freeze({
         x: 278.0,
         y: 32.0,
@@ -208,6 +221,8 @@ export const SECRET_LAIRS = Object.freeze({
     boss: Object.freeze({
       id: 'boss-xibalba-kraken',
       kind: 'cave-kraken',
+      musicTheme: 'kraken',
+      icon: '🐙',
       name: "XIBALBA'S MAW",
       title: 'Ancient Bioluminescent Cave Kraken',
       x: 285.0,
@@ -217,6 +232,362 @@ export const SECRET_LAIRS = Object.freeze({
       trophyRelicId: 'l1-kraken-crown',
       trophyName: 'Abyssal Kraken Crown',
       bonusPoints: 2500,
+    }),
+  }),
+
+  // === BOSS 2 (Shipwreck Secret Lair): SS Thistlegorm WWII Wreck -> IRON LEVIATHAN MK-IV ===
+  'ss-thistlegorm-wreck': Object.freeze({
+    id: 'thistlegorm-engine-vault',
+    levelId: 'ss-thistlegorm-wreck',
+    name: 'The Sunken Engine Vault',
+    veil: Object.freeze({
+      id: 'thi-vault-veil',
+      x: 92.2,
+      y: 41.1,
+      radius: 2.2,
+      sealWallX: 91.0,
+      sealMinY: 37.5,
+      sealMaxY: 45.5,
+      failsafeX: 97.5,
+      label: 'Buckled Boiler Bulkhead Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'thi-speargun-rack',
+      x: 108.5,
+      y: 41.8,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 105.5, y: 43.5 }),
+      Object.freeze({ kind: 'dive-strobe', x: 111.5, y: 39.8 }),
+      Object.freeze({ kind: 'thermal-vent', x: 126.0, y: 44.5 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 150.0, y: 43.0 }),
+      Object.freeze({ kind: 'temple-column', x: 172.0, y: 42.0 }),
+      Object.freeze({ kind: 'claw-scars', x: 186.0, y: 41.0 }),
+      Object.freeze({ kind: 'monolith', x: 201.5, y: 36.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 201.5, y: 45.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 152.0,
+    arena: Object.freeze({
+      cx: 232.0,
+      cy: 41.0,
+      triggerX: 206.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 199.5,
+      respawnY: 41.5,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'thi-p-west', x: 216.5, y: 44.5, radius: 2.1 }),
+        Object.freeze({ id: 'thi-p-north', x: 231.5, y: 33.4, radius: 2.0 }),
+        Object.freeze({ id: 'thi-p-east', x: 246.5, y: 44.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 211.0, y: 34.5, color: '#f59e0b', radius: 13.5 }),
+        Object.freeze({ x: 221.0, y: 50.5, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 226.0, y: 30.2, color: '#fbbf24', radius: 15.0 }),
+        Object.freeze({ x: 242.5, y: 30.5, color: '#38bdf8', radius: 15.0 }),
+        Object.freeze({ x: 243.5, y: 50.2, color: '#f59e0b', radius: 14.5 }),
+        Object.freeze({ x: 254.0, y: 38.0, color: '#fbbf24', radius: 13.5 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 240.0, y: 41.0 }),
+        Object.freeze({ x: 225.5, y: 39.8 }),
+        Object.freeze({ x: 244.5, y: 38.0 }),
+        Object.freeze({ x: 232.0, y: 45.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'thi-stage-1', x: 211.5, y: 38.5, label: 'Engine Vault Rim Stage (West)' }),
+        Object.freeze({ id: 'thi-stage-2', x: 231.0, y: 50.0, label: 'Engine Vault Rim Stage (South)' }),
+        Object.freeze({ id: 'thi-stage-3', x: 252.0, y: 41.5, label: 'Engine Vault Rim Stage (East)' }),
+        Object.freeze({ id: 'thi-stage-4', x: 235.0, y: 31.2, label: 'Engine Vault Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'thi-corridor-stage', x: 152.0, y: 41.0, label: 'Boiler Room Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'thi-pad-w', x: 212.0, y: 38.6 }),
+        Object.freeze({ id: 'thi-pad-nw', x: 222.5, y: 34.4 }),
+        Object.freeze({ id: 'thi-pad-s', x: 231.5, y: 49.4 }),
+        Object.freeze({ id: 'thi-pad-ne', x: 242.0, y: 34.2 }),
+        Object.freeze({ id: 'thi-pad-e', x: 251.5, y: 41.2 }),
+        Object.freeze({ id: 'thi-pad-se', x: 244.0, y: 49.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 150.0, y: 41.2 }),
+      corridorUpgrade: Object.freeze({ x: 168.0, y: 41.2, kind: 'rapid' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-thi-w', x: 222.0, y: 29.8, floorY: 51.8, style: 'steel' }),
+        Object.freeze({ id: 'stal-thi-c', x: 233.5, y: 29.2, floorY: 52.0, style: 'steel' }),
+        Object.freeze({ id: 'stal-thi-e', x: 244.5, y: 29.8, floorY: 51.6, style: 'steel' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 232.0,
+        y: 33.0,
+        radius: 3.6,
+        destX: 10.0,
+        destY: 6.5,
+        label: 'Pressurized Steam Updraft → 6m O2 Trapeze Bar',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'thi-m1', kind: 'moray', name: 'Hull-Breach Moray', x: 124.0, y: 42.2, hp: 105, radius: 1.2, dropOrb: true }),
+      Object.freeze({ id: 'thi-m2', kind: 'swarmer', name: 'Bilge Spitter', x: 138.0, y: 41.8, hp: 82, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'thi-m3', kind: 'swarmer', name: 'Bilge Spitter', x: 147.0, y: 40.8, hp: 84, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'thi-m4', kind: 'moray', name: 'Turbine Moray', x: 162.0, y: 41.2, hp: 112, radius: 1.22, dropOrb: false }),
+      Object.freeze({ id: 'thi-m5', kind: 'stalker', name: 'Riveted Hull Stalker', x: 178.0, y: 41.8, hp: 205, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'thi-m6', kind: 'stalker', name: 'Riveted Hull Stalker', x: 190.0, y: 41.5, hp: 215, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-iron-leviathan',
+      kind: 'iron-leviathan',
+      musicTheme: 'iron',
+      icon: '⚙️',
+      name: 'IRON LEVIATHAN MK-IV',
+      title: 'Submerged WWII Angler-Mech Engine Sentinel',
+      x: 239.0,
+      y: 41.0,
+      radius: 4.5,
+      baseHp: 4200,
+      trophyRelicId: 'thistlegorm-engine-core',
+      trophyName: 'Sunken Engine Core',
+      bonusPoints: 2800,
+    }),
+  }),
+
+  // === BOSS 3 (Arctic Iceberg Secret Lair): Scoresby Sund -> BOREALIS WYRM ===
+  'scoresby-sund-iceberg': Object.freeze({
+    id: 'scoresby-frost-cathedral',
+    levelId: 'scoresby-sund-iceberg',
+    name: 'The Borealis Frost Vault',
+    veil: Object.freeze({
+      id: 'sco-vault-veil',
+      x: 252.2,
+      y: 83.8,
+      radius: 2.2,
+      sealWallX: 251.0,
+      sealMinY: 79.5,
+      sealMaxY: 88.0,
+      failsafeX: 257.5,
+      label: 'Glacial Sapphire Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'sco-speargun-rack',
+      x: 268.0,
+      y: 82.2,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 265.0, y: 83.8 }),
+      Object.freeze({ kind: 'dive-strobe', x: 271.0, y: 80.2 }),
+      Object.freeze({ kind: 'bio-coral', x: 288.0, y: 80.5 }),
+      Object.freeze({ kind: 'rib-arch', x: 312.0, y: 76.5, scale: 1.1 }),
+      Object.freeze({ kind: 'mayan-glyphs', x: 334.0, y: 74.2 }),
+      Object.freeze({ kind: 'monolith', x: 361.5, y: 67.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 361.5, y: 76.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 312.0,
+    arena: Object.freeze({
+      cx: 392.0,
+      cy: 72.0,
+      triggerX: 366.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 359.5,
+      respawnY: 72.5,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'sco-p-west', x: 376.5, y: 75.5, radius: 2.1 }),
+        Object.freeze({ id: 'sco-p-north', x: 391.5, y: 64.4, radius: 2.0 }),
+        Object.freeze({ id: 'sco-p-east', x: 406.5, y: 75.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 371.0, y: 65.5, color: '#67e8f9', radius: 14.0 }),
+        Object.freeze({ x: 381.0, y: 81.5, color: '#a5f3fc', radius: 14.5 }),
+        Object.freeze({ x: 386.0, y: 61.2, color: '#38bdf8', radius: 15.0 }),
+        Object.freeze({ x: 402.5, y: 61.5, color: '#67e8f9', radius: 15.0 }),
+        Object.freeze({ x: 403.5, y: 81.2, color: '#a5f3fc', radius: 14.5 }),
+        Object.freeze({ x: 414.0, y: 69.0, color: '#38bdf8', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 400.0, y: 72.0 }),
+        Object.freeze({ x: 385.5, y: 70.8 }),
+        Object.freeze({ x: 404.5, y: 69.0 }),
+        Object.freeze({ x: 392.0, y: 76.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'sco-stage-1', x: 371.5, y: 69.5, label: 'Glacial Rim Stage (West)' }),
+        Object.freeze({ id: 'sco-stage-2', x: 391.0, y: 81.0, label: 'Glacial Rim Stage (South)' }),
+        Object.freeze({ id: 'sco-stage-3', x: 412.0, y: 72.5, label: 'Glacial Rim Stage (East)' }),
+        Object.freeze({ id: 'sco-stage-4', x: 395.0, y: 62.2, label: 'Glacial Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'sco-corridor-stage', x: 312.0, y: 76.0, label: 'Ice-Vault Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'sco-pad-w', x: 372.0, y: 69.6 }),
+        Object.freeze({ id: 'sco-pad-nw', x: 382.5, y: 65.4 }),
+        Object.freeze({ id: 'sco-pad-s', x: 391.5, y: 80.4 }),
+        Object.freeze({ id: 'sco-pad-ne', x: 402.0, y: 65.2 }),
+        Object.freeze({ id: 'sco-pad-e', x: 411.5, y: 72.2 }),
+        Object.freeze({ id: 'sco-pad-se', x: 404.0, y: 80.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 310.0, y: 76.5 }),
+      corridorUpgrade: Object.freeze({ x: 328.0, y: 74.5, kind: 'homing' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-sco-w', x: 382.0, y: 60.8, floorY: 82.8, style: 'icicle' }),
+        Object.freeze({ id: 'stal-sco-c', x: 393.5, y: 60.2, floorY: 83.0, style: 'icicle' }),
+        Object.freeze({ id: 'stal-sco-e', x: 404.5, y: 60.8, floorY: 82.6, style: 'icicle' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 392.0,
+        y: 64.0,
+        radius: 3.6,
+        destX: 290.0,
+        destY: 6.5,
+        label: 'Aurora Meltwater Updraft → 6m Glacial Deco Shelf',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'sco-m1', kind: 'moray', name: 'Glacial Ice Eel', x: 284.0, y: 80.2, hp: 112, radius: 1.2, dropOrb: true }),
+      Object.freeze({ id: 'sco-m2', kind: 'swarmer', name: 'Cryo Spitter Jelly', x: 299.0, y: 78.2, hp: 88, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'sco-m3', kind: 'swarmer', name: 'Cryo Spitter Jelly', x: 309.0, y: 76.8, hp: 90, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'sco-m4', kind: 'moray', name: 'Glacial Ice Eel', x: 324.0, y: 74.8, hp: 118, radius: 1.22, dropOrb: false }),
+      Object.freeze({ id: 'sco-m5', kind: 'stalker', name: 'Frost-Carapace Stalker', x: 340.0, y: 73.5, hp: 220, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'sco-m6', kind: 'stalker', name: 'Frost-Carapace Stalker', x: 352.0, y: 72.8, hp: 230, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-borealis-wyrm',
+      kind: 'frost-wyrm',
+      musicTheme: 'frost',
+      icon: '❄️',
+      name: 'BOREALIS WYRM',
+      title: 'Crystalline Glacial Fjord Leviathan',
+      x: 399.0,
+      y: 72.0,
+      radius: 4.5,
+      baseHp: 4600,
+      trophyRelicId: 'scoresby-frost-heart',
+      trophyName: 'Heart of Borealis',
+      bonusPoints: 3200,
+    }),
+  }),
+
+  // === BOSS 4 (Deep Abyssal Finale Secret Lair): Krubera-Voronya -> ABYSSAL EMPRESS ===
+  'krubera-voronya-sump': Object.freeze({
+    id: 'krubera-empress-throne',
+    levelId: 'krubera-voronya-sump',
+    name: 'Throne of the Abyssal Empress',
+    veil: Object.freeze({
+      id: 'kru-vault-veil',
+      x: 217.2,
+      y: 197.6,
+      radius: 2.3,
+      sealWallX: 216.0,
+      sealMinY: 193.5,
+      sealMaxY: 202.0,
+      failsafeX: 222.5,
+      label: 'Everest Abyssal Rift Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'kru-speargun-rack',
+      x: 233.0,
+      y: 196.4,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 230.0, y: 198.0 }),
+      Object.freeze({ kind: 'dive-strobe', x: 236.0, y: 194.2 }),
+      Object.freeze({ kind: 'thermal-vent', x: 254.0, y: 195.8 }),
+      Object.freeze({ kind: 'rib-arch', x: 278.0, y: 190.5, scale: 1.15 }),
+      Object.freeze({ kind: 'mayan-glyphs', x: 300.0, y: 187.0 }),
+      Object.freeze({ kind: 'claw-scars', x: 314.0, y: 185.5 }),
+      Object.freeze({ kind: 'monolith', x: 327.5, y: 179.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 327.5, y: 188.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 278.0,
+    arena: Object.freeze({
+      cx: 358.0,
+      cy: 184.0,
+      triggerX: 332.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 325.5,
+      respawnY: 184.5,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'kru-p-west', x: 342.5, y: 187.5, radius: 2.1 }),
+        Object.freeze({ id: 'kru-p-north', x: 357.5, y: 176.4, radius: 2.0 }),
+        Object.freeze({ id: 'kru-p-east', x: 372.5, y: 187.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 337.0, y: 177.5, color: '#c084fc', radius: 14.0 }),
+        Object.freeze({ x: 347.0, y: 193.5, color: '#fbbf24', radius: 14.5 }),
+        Object.freeze({ x: 352.0, y: 173.2, color: '#a855f7', radius: 15.0 }),
+        Object.freeze({ x: 368.5, y: 173.5, color: '#fbbf24', radius: 15.0 }),
+        Object.freeze({ x: 369.5, y: 193.2, color: '#c084fc', radius: 14.5 }),
+        Object.freeze({ x: 380.0, y: 181.0, color: '#a855f7', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 366.0, y: 184.0 }),
+        Object.freeze({ x: 351.5, y: 182.8 }),
+        Object.freeze({ x: 370.5, y: 181.0 }),
+        Object.freeze({ x: 358.0, y: 188.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'kru-stage-1', x: 337.5, y: 181.5, label: 'Abyssal Rim Stage (West)' }),
+        Object.freeze({ id: 'kru-stage-2', x: 357.0, y: 193.0, label: 'Abyssal Rim Stage (South)' }),
+        Object.freeze({ id: 'kru-stage-3', x: 378.0, y: 184.5, label: 'Abyssal Rim Stage (East)' }),
+        Object.freeze({ id: 'kru-stage-4', x: 361.0, y: 174.2, label: 'Abyssal Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'kru-corridor-stage', x: 278.0, y: 190.5, label: 'Abyssal Rift Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'kru-pad-w', x: 338.0, y: 181.6 }),
+        Object.freeze({ id: 'kru-pad-nw', x: 348.5, y: 177.4 }),
+        Object.freeze({ id: 'kru-pad-s', x: 357.5, y: 192.4 }),
+        Object.freeze({ id: 'kru-pad-ne', x: 368.0, y: 177.2 }),
+        Object.freeze({ id: 'kru-pad-e', x: 377.5, y: 184.2 }),
+        Object.freeze({ id: 'kru-pad-se', x: 370.0, y: 192.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 276.0, y: 190.8 }),
+      corridorUpgrade: Object.freeze({ x: 294.0, y: 188.0, kind: 'overcharge' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-kru-w', x: 348.0, y: 172.8, floorY: 194.8, style: 'onyx' }),
+        Object.freeze({ id: 'stal-kru-c', x: 359.5, y: 172.2, floorY: 195.0, style: 'onyx' }),
+        Object.freeze({ id: 'stal-kru-e', x: 370.5, y: 172.8, floorY: 194.6, style: 'onyx' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 358.0,
+        y: 176.0,
+        radius: 3.6,
+        destX: 320.0,
+        destY: 6.8,
+        label: 'Abyssal Sovereign Updraft → 6m Alpine Deco Shelf',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'kru-m1', kind: 'moray', name: 'Onyx Rift Moray', x: 249.0, y: 194.8, hp: 122, radius: 1.24, dropOrb: true }),
+      Object.freeze({ id: 'kru-m2', kind: 'swarmer', name: 'Royal Void Spitter', x: 264.0, y: 192.8, hp: 96, radius: 1.02, dropOrb: false }),
+      Object.freeze({ id: 'kru-m3', kind: 'swarmer', name: 'Royal Void Spitter', x: 274.0, y: 191.2, hp: 98, radius: 1.02, dropOrb: true }),
+      Object.freeze({ id: 'kru-m4', kind: 'moray', name: 'Onyx Rift Moray', x: 290.0, y: 188.5, hp: 128, radius: 1.24, dropOrb: false }),
+      Object.freeze({ id: 'kru-m5', kind: 'stalker', name: 'Empress Royal Guard', x: 306.0, y: 186.2, hp: 245, radius: 1.56, dropOrb: true }),
+      Object.freeze({ id: 'kru-m6', kind: 'stalker', name: 'Empress Royal Guard', x: 318.0, y: 185.0, hp: 255, radius: 1.56, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-abyssal-empress',
+      kind: 'abyssal-empress',
+      musicTheme: 'empress',
+      icon: '👑',
+      name: 'ABYSSAL EMPRESS',
+      title: 'Sovereign Bioluminescent Manta-Hydra Queen',
+      x: 365.0,
+      y: 184.0,
+      radius: 4.8,
+      baseHp: 5200,
+      trophyRelicId: 'krubera-empress-diadem',
+      trophyName: 'Abyssal Empress Diadem',
+      bonusPoints: 4000,
     }),
   }),
 });
@@ -403,6 +774,23 @@ function makePillarCrystals(pillars = []) {
   }));
 }
 
+function makeStalactites(specs = []) {
+  return specs.map((st) => ({
+    id: st.id,
+    x: st.x,
+    homeY: st.y,
+    y: st.y,
+    floorY: st.floorY || st.y + 22,
+    vy: 0,
+    style: st.style || 'limestone',
+    hp: STALACTITE_MAX_HP,
+    maxHp: STALACTITE_MAX_HP,
+    state: 'hanging', // 'hanging' | 'falling' | 'broken'
+    respawnSec: 0,
+    flashSec: 0,
+  }));
+}
+
 export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } = {}) {
   const spec = getSecretLairForLevel(level?.id);
   if (!spec) return null;
@@ -484,7 +872,16 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     hitSparks: [],
     shockwaves: [], // { x, y, radius, maxRadius, life, maxLife, color }
     pillarCrystals: makePillarCrystals(spec.arena.pillars || []),
+    stalactites: makeStalactites(spec.arena.stalactites || []),
     vortexShelteredPillarId: null,
+    dashTimerSec: 0,
+    dashCooldownSec: 0,
+    dashDirX: 1,
+    dashDirY: 0,
+    dashTrail: [],
+    dashesUsed: 0,
+    upgradesCollected: 0,
+    bossFightElapsedSec: 0,
     foreshadowTriggered: false,
     foreshadowTimer: 0,
     sconceLitCount: 0,
@@ -496,6 +893,7 @@ export function createSecretLairState(level, { humanDivers = 1, aiWingmen = 0 } 
     titleBannerColor: '#38bdf8',
     resonanceBreaks: 0,
     pillarCrashes: 0,
+    stalactiteCrushes: 0,
     minions: spec.minions.map((m) => makeMinionInstance(m, scaling.hpMult)),
     stages,
     arenaEntered: false,
@@ -878,6 +1276,7 @@ export function applyWeaponUpgrade(session, kind, callbacks = {}) {
   if (cur < meta.maxLevel) {
     const nextLv = cur + 1;
     lair.weaponMods[kind] = nextLv;
+    lair.upgradesCollected = (lair.upgradesCollected || 0) + 1;
     const label = nextLv >= 2 ? meta.lv2Label : meta.lv1Label;
     addSparkBurst(lair, px, py, meta.color, 16, `${meta.icon} ${label}!`, true);
     addShockwave(lair, px, py, 5.2, meta.color, 0.52);
@@ -885,6 +1284,7 @@ export function applyWeaponUpgrade(session, kind, callbacks = {}) {
     return { ok: true, kind, level: nextLv, label, hyperSurge: false };
   }
   // All levels of this mod maxed -> Hyper Surge bonus (+25 HP & 100% DPV Battery!)
+  lair.upgradesCollected = (lair.upgradesCollected || 0) + 1;
   lair.playerHp = Math.min(lair.playerMaxHp || COMBAT_MAX_HP, (lair.playerHp || 0) + 25);
   if (session.dpv) {
     session.dpv.batteryPct = 100;
@@ -894,6 +1294,71 @@ export function applyWeaponUpgrade(session, kind, callbacks = {}) {
   addShockwave(lair, px, py, 6.0, '#fde047', 0.55);
   callbacks.onWeaponUpgrade?.({ kind, level: cur, label: 'HYPER SURGE', color: '#fde047', hyperSurge: true });
   return { ok: true, kind, level: cur, label: 'HYPER SURGE', hyperSurge: true };
+}
+
+/**
+ * Trigger a Combat Mode Scooter Hydro-Dash dodge burst! (v189)
+ * Grants crisp directional torpedo surge + brief invulnerability i-frames (`0.34s`) for weaving
+ * through Phase 3 Abyssal Beams, Tentacle Slams, and Frost/Arc barrages.
+ */
+export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0 } = {}, callbacks = {}) {
+  const lair = session?.secretLair;
+  const dpv = session?.dpv;
+  const diver = session?.diver;
+  if (!lair || !lair.combatMode || !session?.diveState?.alive || session.surfaced) {
+    return { ok: false, reason: 'inactive' };
+  }
+  if (!dpv?.equipped || (dpv.batteryPct ?? 0) < 8) {
+    return { ok: false, reason: 'low-battery' };
+  }
+  if ((lair.dashCooldownSec || 0) > 0.02 || (lair.dashTimerSec || 0) > 0.02) {
+    return { ok: false, reason: 'cooldown' };
+  }
+  if (lair.boss?.pinnedTargetId === 'local') {
+    return { ok: false, reason: 'pinned' };
+  }
+
+  let ux = Number(dirX) || 0;
+  let uy = Number(dirY) || 0;
+  let mag = Math.hypot(ux, uy);
+  if (mag < 0.15) {
+    const vMag = Math.hypot(diver?.vx || 0, diver?.vy || 0);
+    if (vMag > 0.4) {
+      ux = diver.vx / vMag;
+      uy = diver.vy / vMag;
+    } else {
+      const fallbackAng = diver?.angle ?? diver?.torchAngle ?? 0;
+      ux = Math.cos(fallbackAng);
+      uy = Math.sin(fallbackAng);
+    }
+  } else {
+    ux /= mag;
+    uy /= mag;
+  }
+
+  dpv.batteryPct = Math.max(0, (dpv.batteryPct ?? 0) - SCOOTER_DASH_COST_PCT);
+  if (dpv.batteryPct <= 0.05) {
+    dpv.batteryPct = 0;
+    dpv.active = false;
+  } else {
+    dpv.active = true;
+  }
+  lair.dashDirX = ux;
+  lair.dashDirY = uy;
+  lair.dashTimerSec = SCOOTER_DASH_DURATION_SEC;
+  lair.dashCooldownSec = SCOOTER_DASH_COOLDOWN_SEC;
+  lair.playerIframesSec = Math.max(lair.playerIframesSec || 0, SCOOTER_DASH_IFRAMES_SEC);
+  lair.dashesUsed = (lair.dashesUsed || 0) + 1;
+  if (diver) {
+    diver.vx = ux * SCOOTER_DASH_SPEED;
+    diver.vy = uy * SCOOTER_DASH_SPEED;
+    diver.dpvActive = Boolean(dpv.active);
+    diver.dpvThrusting = true;
+    addShockwave(lair, diver.x, diver.y, 3.6, '#22d3ee', 0.34);
+    addSparkBurst(lair, diver.x, diver.y, '#67e8f9', 9, '', false);
+  }
+  callbacks.onScooterDash?.({ ux, uy, batteryPct: dpv.batteryPct });
+  return { ok: true, ux, uy, batteryPct: dpv.batteryPct };
 }
 
 function addShockwave(lair, x, y, maxRadius, color = '#38bdf8', duration = 0.65) {
@@ -1215,10 +1680,22 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
         lair.weaponUpgrades = (lair.weaponUpgrades || []).filter((u) => !u.inArena);
         lair._batterySpawnTimer = 8.5;
         lair._upgradeSpawnTimer = 12.0;
+        lair.bossFightElapsedSec = 0;
+        lair.dashTimerSec = 0;
+        lair.dashCooldownSec = 0;
+        lair.dashTrail.length = 0;
         for (const pc of lair.pillarCrystals || []) {
           pc.charge = 0;
           pc.cooldownSec = 0;
           pc.dischargeAnimSec = 0;
+        }
+        for (const st of lair.stalactites || []) {
+          st.state = 'hanging';
+          st.y = st.homeY;
+          st.vy = 0;
+          st.hp = st.maxHp;
+          st.respawnSec = 0;
+          st.flashSec = 0;
         }
       }
       addSparkBurst(lair, rx, ry, '#38bdf8', 14, 'REFORMED · FULL HP', true);
@@ -1344,7 +1821,7 @@ export function applyBossDamage(
     boss.blackoutAlpha = 0.42;
     lair.enemyProjectiles.length = 0;
     addShockwave(lair, boss.x, boss.y, 29, '#f43f5e', 0.9);
-    showTitleBanner(lair, 'PHASE III · RAGE OF XIBALBA', 'PILLAR COVER BLOCKS THE ABYSSAL BEAM', '#fb7185', 2.8);
+    showTitleBanner(lair, `PHASE III · ${boss.name} UNLEASHED`, 'PILLAR COVER BLOCKS THE BEAM · DROP STALACTITES', '#fb7185', 2.8);
     if (session.cameraShake !== undefined) session.cameraShake = Math.max(session.cameraShake || 0, 0.82);
     if (session.hitstopSec !== undefined) session.hitstopSec = Math.max(session.hitstopSec || 0, 0.12);
     spawnHealOrb(lair, lair.spec.arena.cx - 4, lair.spec.arena.cy - 6.0, 32);
@@ -1394,7 +1871,7 @@ export function applyBossDamage(
     }
     addShockwave(lair, boss.x, boss.y, 32, '#67e8f9', 1.15);
     addSparkBurst(lair, boss.x, boss.y, '#67e8f9', 32, `🏆 ${lair.spec.boss.trophyName}!`, true);
-    showTitleBanner(lair, "XIBALBA'S MAW VANQUISHED", 'SWIM INTO THE THERMAL UPDRAFT TO SURFACE', '#34d399', 4.2);
+    showTitleBanner(lair, `${boss.name} VANQUISHED`, 'SWIM INTO THE THERMAL UPDRAFT TO SURFACE', '#34d399', 4.2);
     callbacks.onBossDefeat?.(boss, lair);
     callbacks.onToast?.(
       `🏆 VICTORY! ${boss.name} defeated (+${lair.spec.boss.bonusPoints} pts)! Swim into the glowing Updraft to surface!`,
@@ -1519,7 +1996,34 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
   if (lair.combatHintTimer > 0) lair.combatHintTimer = Math.max(0, lair.combatHintTimer - dt);
   if (lair.titleBannerSec > 0) lair.titleBannerSec = Math.max(0, lair.titleBannerSec - dt);
   if (lair.foreshadowTimer > 0) lair.foreshadowTimer = Math.max(0, lair.foreshadowTimer - dt);
+  if (lair.dashCooldownSec > 0) lair.dashCooldownSec = Math.max(0, lair.dashCooldownSec - dt);
+  if (lair.dashTimerSec > 0) {
+    lair.dashTimerSec = Math.max(0, lair.dashTimerSec - dt);
+    if (diver && diveState?.alive && lair.combatMode) {
+      const dashBlend = 0.55 + 0.45 * (lair.dashTimerSec / Math.max(0.05, SCOOTER_DASH_DURATION_SEC));
+      diver.vx = lair.dashDirX * SCOOTER_DASH_SPEED * dashBlend;
+      diver.vy = lair.dashDirY * SCOOTER_DASH_SPEED * dashBlend;
+      if (!Array.isArray(lair.dashTrail)) lair.dashTrail = [];
+      lair.dashTrail.push({
+        x: diver.x,
+        y: diver.y,
+        angle: Math.atan2(lair.dashDirY, lair.dashDirX),
+        life: 0.28,
+        maxLife: 0.28,
+      });
+      if (lair.dashTrail.length > 14) lair.dashTrail.shift();
+    }
+  }
+  if (Array.isArray(lair.dashTrail)) {
+    for (let i = lair.dashTrail.length - 1; i >= 0; i--) {
+      lair.dashTrail[i].life -= dt;
+      if (lair.dashTrail[i].life <= 0) lair.dashTrail.splice(i, 1);
+    }
+  }
   if (lair.boss?.phaseShiftSec > 0) lair.boss.phaseShiftSec = Math.max(0, lair.boss.phaseShiftSec - dt);
+  if (lair.boss?.active && !lair.boss.defeated && lair.boss.aiState !== 'awakening') {
+    lair.bossFightElapsedSec = (lair.bossFightElapsedSec || 0) + dt;
+  }
 
   for (const st of lair.stages) {
     if (st.cooldownSec > 0) st.cooldownSec = Math.max(0, st.cooldownSec - dt);
@@ -1756,7 +2260,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       boss.stateMaxTimer = 2.6;
       lair.sconceLitCount = 0;
       lair.sconceLitFrac = 0.08;
-      showTitleBanner(lair, boss.name, 'ANCIENT ABYSSAL GUARDIAN · GRAB BATTERIES & UPGRADES', '#38bdf8', 3.4);
+      showTitleBanner(lair, boss.name, `${(boss.title || 'ANCIENT GUARDIAN').toUpperCase()} · BATTERIES, UPGRADES & STALACTITES`, '#38bdf8', 3.4);
       // Seed the arena with 2 Battery Cells & 1 Weapon Upgrade Pod right as the boss awakens!
       if (isAuthority) {
         const p1 = _pickOpenArenaPad(lair, boss.x, boss.y);
@@ -1898,6 +2402,33 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
 
     if (sp.isRemoteVisual) continue;
 
+    // Hanging Ceiling Stalactite swept hits (shoot twice, or 1 Hyper-Tip shot, to drop onto the boss!)
+    let hitStalactite = false;
+    for (const st of lair.stalactites || []) {
+      if (st.state !== 'hanging') continue;
+      if (distPointToSegment(st.x, st.y + 1.1, sp.prevX, sp.prevY, sp.x, sp.y) <= 1.35) {
+        st.hp = Math.max(0, st.hp - (sp.piercing ? STALACTITE_MAX_HP : 1));
+        st.flashSec = 0.22;
+        if (st.hp <= 0) {
+          st.state = 'falling';
+          st.vy = 2.6;
+          addSparkBurst(lair, st.x, st.y + 1.2, '#fde047', 10, '💥 STALACTITE LOOSE!', true);
+          callbacks.onCrystalChime?.(2);
+        } else {
+          addSparkBurst(lair, st.x, st.y + 1.2, '#e2e8f0', 6, 'CRACK!', false);
+          callbacks.onCrystalChime?.(1);
+        }
+        if (!sp.piercing) {
+          hitStalactite = true;
+          break;
+        }
+      }
+    }
+    if (hitStalactite) {
+      lair.spears.splice(i, 1);
+      continue;
+    }
+
     // Minion swept hits
     let consumed = false;
     for (const m of lair.minions) {
@@ -1972,6 +2503,62 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
         }
         if (lair.spears[i] === sp) lair.spears.splice(i, 1);
         if (lair.spears.length === 0) break;
+      }
+    }
+  }
+
+  // 5b. Step Destructible Ceiling Stalactites (gravity drop -> Boss Crush +260 dmg & 2.4s stun -> 24s regrowth!)
+  for (const st of lair.stalactites || []) {
+    if (st.flashSec > 0) st.flashSec = Math.max(0, st.flashSec - dt);
+    if (st.state === 'falling') {
+      st.vy = Math.min(28, (st.vy || 2.6) + 26.0 * dt);
+      st.y += st.vy * dt;
+      if (
+        boss.active &&
+        !boss.defeated &&
+        boss.aiState !== 'awakening' &&
+        Math.hypot(st.x - boss.x, st.y - boss.y) <= boss.radius + 1.75
+      ) {
+        st.state = 'broken';
+        st.respawnSec = STALACTITE_RESPAWN_SEC;
+        lair.stalactiteCrushes = (lair.stalactiteCrushes || 0) + 1;
+        lair.enemyProjectiles.length = 0;
+        _stunBoss(session, lair, 2.4, '💥 STALACTITE CRUSH! 2× DMG', '#fde047', callbacks);
+        applyBossDamage(
+          session,
+          STALACTITE_CRUSH_DAMAGE,
+          { crit: true, hitX: st.x, hitY: st.y, bypassStunMult: true },
+          callbacks
+        );
+        addShockwave(lair, st.x, st.y, 15.0, '#fde047', 0.58);
+        if (session.cameraShake !== undefined) {
+          session.cameraShake = Math.max(session.cameraShake || 0, 0.72);
+        }
+        if (isAuthority) {
+          const dropPad = _pickOpenArenaPad(lair, boss.x, boss.y);
+          if ((lair.weaponUpgrades || []).filter((u) => u.inArena).length < 2) {
+            spawnWeaponUpgrade(lair, dropPad.x, dropPad.y);
+          } else {
+            spawnBatteryCell(lair, dropPad.x, dropPad.y);
+          }
+        }
+        callbacks.onStalactiteCrush?.(st);
+      } else if (st.y >= st.floorY) {
+        st.state = 'broken';
+        st.respawnSec = STALACTITE_RESPAWN_SEC;
+        addSparkBurst(lair, st.x, st.floorY, '#cbd5e1', 12, '', false);
+        addShockwave(lair, st.x, st.floorY, 5.0, '#94a3b8', 0.32);
+        if (session.cameraShake !== undefined) {
+          session.cameraShake = Math.max(session.cameraShake || 0, 0.22);
+        }
+      }
+    } else if (st.state === 'broken') {
+      st.respawnSec = Math.max(0, (st.respawnSec || 0) - dt);
+      if (st.respawnSec <= 0) {
+        st.state = 'hanging';
+        st.y = st.homeY;
+        st.vy = 0;
+        st.hp = st.maxHp;
       }
     }
   }
@@ -2683,6 +3270,7 @@ export function serializeSecretLairNetState(lair) {
       .map((mm) => [mm.id, Math.round(mm.x * 10) / 10, Math.round(mm.y * 10) / 10, mm.hp]),
     bc: (lair.batteryCells || []).slice(0, 4).map((c) => [c.id, Math.round(c.x * 10) / 10, Math.round(c.y * 10) / 10, c.inArena ? 1 : 0]),
     wu: (lair.weaponUpgrades || []).slice(0, 3).map((u) => [u.id, u.kind, Math.round(u.x * 10) / 10, Math.round(u.y * 10) / 10, u.inArena ? 1 : 0]),
+    st: (lair.stalactites || []).map((s) => [s.state === 'falling' ? 1 : s.state === 'broken' ? 2 : 0, Math.round(s.y * 10) / 10, s.hp]),
   };
 }
 
@@ -2782,6 +3370,14 @@ export function applySecretLairNetState(lairOrSession, snap) {
       phase: 0,
       inArena: Boolean(inArena),
     }));
+  }
+  if (Array.isArray(snap.st) && Array.isArray(lair.stalactites)) {
+    for (let i = 0; i < Math.min(snap.st.length, lair.stalactites.length); i++) {
+      const [code, sy, hp] = snap.st[i];
+      lair.stalactites[i].state = code === 1 ? 'falling' : code === 2 ? 'broken' : 'hanging';
+      lair.stalactites[i].y = Number.isFinite(sy) ? sy : lair.stalactites[i].homeY;
+      lair.stalactites[i].hp = Number.isFinite(hp) ? hp : lair.stalactites[i].maxHp;
+    }
   }
 }
 

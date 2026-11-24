@@ -9380,3 +9380,165 @@ test('v188 Home Screen Gear Workshop Move (Callsign-Only Row) & Boss/Lesser Enem
   }
   assert.ok(drawCalls.includes('ellipse') && drawCalls.includes('quadraticCurveTo') && drawCalls.includes('roundRect'), 'Redesigned lesser enemies must draw cleanly');
 });
+
+test('v189 4 Hidden Secret Boss Lairs, Scooter Hydro-Dash, Ceiling Stalactites, Adaptive Boss Music, Marine Life & Debrief Showcase', async () => {
+  const fs = await import('node:fs');
+  const {
+    SECRET_LAIRS,
+    getSecretLairForLevel,
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    triggerCombatScooterDash,
+    fireSpeargun,
+    stepSecretLairEncounter,
+    SCOOTER_DASH_COST_PCT,
+    SCOOTER_DASH_IFRAMES_SEC,
+    STALACTITE_CRUSH_DAMAGE,
+    STALACTITE_RESPAWN_SEC,
+  } = await import('../public/js/game/secretLairs.js');
+  const { bossAndLairMethods } = await import('../public/js/game/renderers/bossAndLairRenderer.js');
+  const { drawStyledTurtle, drawStyledFish } = await import('../public/js/game/artSprites.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. All 4 Secret Lairs exist with unique boss kinds, themes, trophies & valid open-water SDF geometry
+  const expectedIds = [
+    'cenote-el-abismo',
+    'ss-thistlegorm-wreck',
+    'scoresby-sund-iceberg',
+    'krubera-voronya-sump',
+  ];
+  assert.equal(Object.keys(SECRET_LAIRS).length, 4, 'Must have 4 hidden Secret Lairs across the campaign');
+  const seenKinds = new Set();
+  const seenThemes = new Set();
+  const seenRelics = new Set();
+  for (const id of expectedIds) {
+    const lvl = LEVELS.find((l) => l.id === id);
+    assert.ok(lvl, `Campaign level ${id} must exist`);
+    const spec = getSecretLairForLevel(id);
+    assert.ok(spec, `Secret Lair spec for ${id} must exist`);
+    seenKinds.add(spec.boss.kind);
+    seenThemes.add(spec.boss.musicTheme);
+    seenRelics.add(spec.boss.trophyRelicId);
+    assert.equal(spec.arena.stalactites.length, 3, `${id} arena must have 3 hanging ceiling stalactites`);
+
+    // Check armory, arena center, boss home, pickup pads & exit updraft are navigable open water
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -1.0, `${id} armory must be open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -3.0, `${id} arena center must be wide open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -3.0, `${id} boss spawn must be wide open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.x, spec.arena.exitUpdraft.y) < -1.0, `${id} exit updraft must be open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -0.5, `${id} updraft destination must be open water`);
+    for (const pad of spec.arena.pickupPads) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -1.0, `${id} pickup pad (${pad.x},${pad.y}) must be open water`);
+    }
+  }
+  assert.equal(seenKinds.size, 4, 'All 4 bosses must have distinct visual kinds');
+  assert.equal(seenThemes.size, 4, 'All 4 bosses must have distinct adaptive music themes');
+  assert.equal(seenRelics.size, 4, 'All 4 bosses must award distinct Trophy Relics');
+
+  // 2. Scooter Hydro-Dash consumes 12% battery, grants i-frames, enforces cooldown & emits cavitation trail
+  const wreckLvl = LEVELS.find((l) => l.id === 'ss-thistlegorm-wreck');
+  const s = createDiveSession(wreckLvl, { diverName: 'DashTester' });
+  breachSecretLairVeil(s);
+  claimSecretLairWeapon(s);
+  assert.equal(s.secretLair.combatMode, true);
+  assert.equal(s.dpv.batteryPct, 100);
+  let dashSfx = 0;
+  const dashRes = triggerCombatScooterDash(s, { dirX: 1, dirY: 0 }, { onScooterDash: () => { dashSfx++; } });
+  assert.equal(dashRes.ok, true);
+  assert.equal(dashSfx, 1);
+  assert.equal(s.dpv.batteryPct, 100 - SCOOTER_DASH_COST_PCT);
+  assert.ok(s.secretLair.playerIframesSec >= SCOOTER_DASH_IFRAMES_SEC - 0.01);
+  assert.equal(s.secretLair.dashesUsed, 1);
+  assert.equal(triggerCombatScooterDash(s, { dirX: 1, dirY: 0 }).reason, 'cooldown');
+  // Stepping while dashing populates dashTrail
+  s.diver.x = s.secretLair.spec.arena.cx - 8;
+  s.diver.y = s.secretLair.spec.arena.cy;
+  stepSecretLairEncounter(s, 0.05, {}, {});
+  assert.ok(s.secretLair.dashTrail.length > 0, 'Active Hydro-Dash should populate cavitation afterimage trail');
+
+  // 3. Destructible Ceiling Stalactites: 2 hits snap loose -> falling onto boss deals 260 dmg + stuns -> regrows!
+  const boss = s.secretLair.boss;
+  boss.active = true;
+  boss.aiState = 'idle';
+  const st = s.secretLair.stalactites[1];
+  boss.anchorIdx = 3; // Center arena anchor directly under the center stalactite
+  boss.x = st.x;
+  boss.y = st.y + 8.0;
+  boss.targetX = st.x;
+  boss.targetY = st.y + 8.0;
+  boss.stateTimer = 5.0;
+  s.diver.x = st.x;
+  s.diver.y = st.y + 3.2;
+  const hpBefore = boss.hp;
+  let crushSfx = 0;
+  // Fire 2 rapid spears upward at the hanging stalactite
+  fireSpeargun(s, { aimAngle: -Math.PI * 0.5, isTap: true, originX: st.x, originY: st.y + 2.4 });
+  stepSecretLairEncounter(s, 0.08, {}, {});
+  assert.equal(st.hp, 1, 'First spear hit should crack stalactite to 1 HP');
+  s.secretLair.tapCooldownSec = 0;
+  fireSpeargun(s, { aimAngle: -Math.PI * 0.5, isTap: true, originX: st.x, originY: st.y + 2.4 });
+  stepSecretLairEncounter(s, 0.08, {}, {});
+  assert.equal(st.state, 'falling', 'Second spear hit should snap stalactite loose into falling state');
+  for (let i = 0; i < 30 && st.state === 'falling'; i++) {
+    stepSecretLairEncounter(s, 0.05, {}, { onStalactiteCrush: () => { crushSfx++; } });
+  }
+  assert.equal(st.state, 'broken', 'Falling stalactite should break upon crushing the boss');
+  assert.equal(crushSfx, 1, 'Boss crush must invoke onStalactiteCrush callback');
+  assert.equal(s.secretLair.stalactiteCrushes, 1);
+  assert.equal(boss.aiState, 'stunned', 'Stalactite crush must stun the boss');
+  assert.ok(hpBefore - boss.hp >= STALACTITE_CRUSH_DAMAGE, 'Stalactite crush must deal >= 260 boss damage');
+  // Regrowth after respawn window
+  st.respawnSec = 0.02;
+  stepSecretLairEncounter(s, 0.05, {}, {});
+  assert.equal(st.state, 'hanging', 'Broken stalactite should regrow cleanly after respawn timer');
+  assert.equal(STALACTITE_RESPAWN_SEC > 0, true);
+
+  // 4. Adaptive Boss Music & SFX methods exist and run safely headless
+  const audio = new DiveAudio();
+  audio.startBossMusic('frost', 2);
+  assert.equal(audio._bossMusicActive, true);
+  assert.equal(audio._bossMusicTheme, 'frost');
+  audio.setBossMusicPhase(3);
+  assert.equal(audio._bossMusicPhase, 3);
+  audio.playScooterDash();
+  audio.playStalactiteCrush();
+  audio.stopBossMusic();
+  assert.equal(audio._bossMusicActive, false);
+
+  // 5. All 4 Boss Renderers + Stalactites + Polished Marine Life render cleanly without throwing
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+    },
+    {
+      get(t, p) {
+        if (p in t) return t[p];
+        return () => drawCalls.push(String(p));
+      },
+    }
+  );
+  const toScreenX = (x) => x * 20;
+  const toScreenY = (y) => y * 20;
+  for (const kind of ['cave-kraken', 'iron-leviathan', 'frost-wyrm', 'abyssal-empress']) {
+    bossAndLairMethods._drawSecretLairBoss(
+      mockCtx,
+      { ...boss, kind, tentacles: boss.tentacles || [] },
+      toScreenX,
+      toScreenY,
+      20,
+      4.5
+    );
+  }
+  bossAndLairMethods._drawSecretLairStalactites(mockCtx, -100, 500, -100, 300, toScreenX, toScreenY, 20, 4.5, s.secretLair);
+  drawStyledTurtle(mockCtx, { angle: 0.2, phase: 1.0 }, 200, 200, 20, 3.0);
+  drawStyledFish(mockCtx, { kind: 'molly', size: 0.35, color: '#38bdf8', stripe: '#0284c7', angle: 0, phase: 0.5 }, 220, 210, 20, 3.0);
+  assert.ok(drawCalls.length > 100, 'All 4 boss renderers, stalactites, and marine life must render cleanly');
+
+  // 6. HTML includes Combat Hydro-Dash button & Debrief Boss Showcase Banner (hidden by default, zero boss-rush spoilers)
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-combat-dash"'), 'Combat HUD must include #btn-combat-dash');
+  assert.ok(html.includes('id="debrief-boss-banner" class="debrief-boss-banner" hidden'), 'Debrief must include hidden #debrief-boss-banner');
+  assert.equal(html.toLowerCase().includes('boss rush'), false, 'Bosses must remain genuinely secret (no Boss Rush UI)');
+});

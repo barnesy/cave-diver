@@ -26,7 +26,7 @@ export const WRECK_THISTLEGORM = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp5',
   ascentSwitchDepthM: 20.0,
-  bounds: { xMin: -46, xMax: 122, yMin: -6, yMax: 54 },
+  bounds: { xMin: -46, xMax: 274, yMin: -6, yMax: 60 },
   spawn: { x: 10.0, y: 2.0 },
   exitZone: { x: 10.0, y: 1.8, radius: 6.8, name: 'Red Sea Liveaboard Stern Platform' },
   haloclineY: 22.0,
@@ -109,6 +109,21 @@ export const WRECK_THISTLEGORM = {
 
     // Aft Return Hatchway back up to Stern Deck (42.5m -> 24m)
     { ax: 78, ay: 42.5, bx: 78, by: 24.0, ra: 3.4, rb: 4.2 },
+
+    // === Secret Sonar-Only Submerged Engine-Room Vault -> Iron Leviathan Arena (v189) ===
+    // Sealed behind the far stern bulkhead at (90, 41.0) — completely underground beneath reef/hull!
+    { ax: 90.0, ay: 41.0, bx: 100.0, by: 41.5, ra: 1.5, rb: 1.9, secretLair: true },
+    // Quiet Armory Anteroom (Munitions Hold)
+    { ax: 100.0, ay: 41.5, bx: 114.0, by: 42.0, ra: 2.5, rb: 3.6, secretLair: true },
+    // Corridor Chambers 1-4 (Flooded Boiler Passage -> Turbine Tunnel -> Bulkhead Gate)
+    { ax: 114.0, ay: 42.0, bx: 136.0, by: 42.5, ra: 3.5, rb: 3.6, secretLair: true },
+    { ax: 136.0, ay: 42.5, bx: 158.0, by: 40.5, ra: 3.8, rb: 4.2, secretLair: true },
+    { ax: 158.0, ay: 40.5, bx: 180.0, by: 42.0, ra: 4.1, rb: 4.4, secretLair: true },
+    { ax: 180.0, ay: 42.0, bx: 204.0, by: 41.0, ra: 4.5, rb: 8.2, secretLair: true },
+    // SUNKEN ENGINE VAULT — 58m × 26m Boss Arena centered at (232, 41)
+    { ax: 204.0, ay: 41.0, bx: 222.0, by: 41.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 222.0, ay: 41.0, bx: 242.0, by: 41.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 242.0, ay: 41.0, bx: 256.5, by: 41.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
 
   guideline: [

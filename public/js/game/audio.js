@@ -1140,25 +1140,11 @@ export class DiveAudio {
       const calmMult = tensionState.inAirDome ? 0.15 : 1.0;
       const tension = Math.min(1, Math.max(siltT, sqT, gasT) * calmMult);
 
-      // Procedural Phase 1/2/3 Boss Heartbeat & Abyssal Percussion Pulse (88 / 108 / 132 BPM) (v182)
-      const bossPhase = Number(tensionState.bossPhase) || 0;
+      // Adaptive Multi-Phase Boss Music Engine (4 distinct boss themes × 3 escalating phases!) (v189)
+      const bossPhase = Number(tensionState.bossPhase) || (this._bossMusicActive ? this._bossMusicPhase : 0) || 0;
+      const bossTheme = tensionState.bossTheme || this._bossMusicTheme || 'kraken';
       if (bossPhase > 0) {
-        const bpm = bossPhase >= 3 ? 132 : bossPhase === 2 ? 108 : 88;
-        const beatSec = 60 / bpm;
-        this._bossBeatTimer = (this._bossBeatTimer ?? 0.2) - dt;
-        if (this._bossBeatTimer <= 0) {
-          this._bossBeatTimer = beatSec;
-          this._bossBeatIdx = ((this._bossBeatIdx || 0) + 1) % 4;
-          const isAccent = this._bossBeatIdx === 0;
-          const root = bossPhase >= 3 ? 58 : bossPhase === 2 ? 52 : 46;
-          this.playTone(isAccent ? root : root * 1.18, isAccent ? 0.24 : 0.15, 'sine', isAccent ? 0.048 : 0.028, 0, { bus: 'ambience' });
-          if (isAccent) {
-            this.playTone(root * 2.0, 0.16, 'triangle', 0.022, 0.02, { bus: 'ambience' });
-          }
-          if (bossPhase >= 2 && this._bossBeatIdx === 2) {
-            this.playTone(root * (bossPhase >= 3 ? 1.5 : 1.33), 0.18, 'triangle', 0.024, 0, { bus: 'ambience' });
-          }
-        }
+        this._stepBossMusic(dt, bossPhase, bossTheme);
       }
       if (tension > 0.28 && bossPhase <= 0) {
         this._tensionTimer = (this._tensionTimer ?? 0.65) - dt;
@@ -1832,9 +1818,152 @@ export class DiveAudio {
   }
 
   /**
+   * Hydro-cavitation turbine burst when triggering a Combat DPV Scooter Hydro-Dash (v189).
+   */
+  playScooterDash() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    const noise = this._getNoiseBuffer?.();
+    if (noise) {
+      try {
+        const dur = 0.24;
+        const src = this.ctx.createBufferSource();
+        src.buffer = noise;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(1900, t);
+        filt.frequency.exponentialRampToValueAtTime(360, t + dur);
+        filt.Q.value = 1.6;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(0.095, t + 0.025);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(filt);
+        filt.connect(g);
+        const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+        src.onended = () => {
+          try { src.disconnect(); filt.disconnect(); g.disconnect(); panner?.disconnect(); } catch {}
+        };
+        src.start(t);
+        src.stop(t + dur + 0.02);
+      } catch {}
+    }
+    this.playTone(260, 0.14, 'sawtooth', 0.052, 0, { bus: 'sfx' });
+    this.playTone(580, 0.18, 'triangle', 0.048, 0.02, { bus: 'sfx' });
+    this.playTone(920, 0.16, 'sine', 0.036, 0.05, { bus: 'sfx' });
+    this.vibrate?.([16, 10, 22]);
+  }
+
+  /**
+   * Seismic ceiling stalactite crush boom + crystalline stun chime on boss impact (v189).
+   */
+  playStalactiteCrush() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(54, 0.52, 'sawtooth', 0.095, 0, { bus: 'sfx' });
+    this.playTone(96, 0.38, 'triangle', 0.075, 0.04, { bus: 'sfx' });
+    this.playTone(784, 0.24, 'sine', 0.055, 0.07, { bus: 'sfx' });
+    this.playTone(1174.66, 0.3, 'triangle', 0.048, 0.12, { bus: 'sfx' });
+    this.vibrate?.([40, 20, 50]);
+  }
+
+  /**
+   * Start or switch the Adaptive Multi-Phase Boss Music state (v189).
+   */
+  startBossMusic(themeKind = 'kraken', phase = 1) {
+    this._bossMusicActive = true;
+    this._bossMusicTheme = themeKind || 'kraken';
+    this._bossMusicPhase = Math.max(1, Math.min(3, Number(phase) || 1));
+    if (!Number.isFinite(this._bossBeatTimer) || this._bossBeatTimer > 0.25) {
+      this._bossBeatTimer = 0.08;
+    }
+  }
+
+  setBossMusicPhase(phase = 1) {
+    const p = Math.max(0, Math.min(3, Number(phase) || 0));
+    if (p <= 0) {
+      this.stopBossMusic();
+      return;
+    }
+    this._bossMusicActive = true;
+    this._bossMusicPhase = p;
+  }
+
+  stopBossMusic() {
+    this._bossMusicActive = false;
+    this._bossMusicPhase = 0;
+    this._bossBeatIdx = 0;
+    this._bossBeatTimer = 0.15;
+  }
+
+  _stepBossMusic(dt, phase = 1, theme = 'kraken') {
+    const p = Math.max(1, Math.min(3, Number(phase) || 1));
+    const themes = {
+      kraken: {
+        // D Phrygian abyssal tension
+        bass: [73.42, 73.42, 77.78, 65.41, 73.42, 87.31, 77.78, 65.41],
+        arp: [293.66, 311.13, 349.23, 440.0, 466.16, 440.0, 349.23, 311.13],
+        lead: [587.33, 622.25, 587.33, 523.25, 440.0, 466.16, 587.33, 698.46],
+        wave: 'triangle',
+      },
+      iron: {
+        // C minor industrial sunken warship
+        bass: [65.41, 65.41, 77.78, 61.74, 65.41, 87.31, 73.42, 58.27],
+        arp: [261.63, 311.13, 392.0, 311.13, 349.23, 392.0, 466.16, 392.0],
+        lead: [523.25, 466.16, 392.0, 466.16, 523.25, 622.25, 587.33, 523.25],
+        wave: 'sawtooth',
+      },
+      frost: {
+        // F# minor crystalline aurora bells
+        bass: [92.5, 92.5, 110.0, 82.41, 92.5, 123.47, 110.0, 82.41],
+        arp: [369.99, 440.0, 554.37, 659.25, 739.99, 659.25, 554.37, 440.0],
+        lead: [739.99, 880.0, 739.99, 659.25, 554.37, 659.25, 739.99, 987.77],
+        wave: 'sine',
+      },
+      empress: {
+        // E harmonic minor regal abyssal cathedral
+        bass: [82.41, 82.41, 98.0, 77.78, 82.41, 110.0, 98.0, 77.78],
+        arp: [329.63, 392.0, 493.88, 622.25, 659.25, 622.25, 493.88, 392.0],
+        lead: [659.25, 783.99, 739.99, 659.25, 622.25, 659.25, 783.99, 987.77],
+        wave: 'triangle',
+      },
+    };
+    const cfg = themes[theme] || themes.kraken;
+    const bpm = p >= 3 ? 136 : p === 2 ? 116 : 96;
+    const eighthSec = 60 / bpm / 2;
+    this._bossBeatTimer = (this._bossBeatTimer ?? 0.08) - dt;
+    if (this._bossBeatTimer > 0) return;
+    this._bossBeatTimer = eighthSec;
+    const step = (this._bossBeatIdx = ((this._bossBeatIdx ?? -1) + 1) % 16);
+    const barIdx = step >> 1;
+
+    // Layer 1 (All phases): Deep sub-bass pulse on quarter notes (and driving eighth notes in Phase 3)
+    if (step % 2 === 0 || p >= 3) {
+      const bassF = cfg.bass[barIdx % cfg.bass.length];
+      const accent = step % 4 === 0;
+      this.playTone(bassF, accent ? 0.24 : 0.14, 'sine', accent ? 0.048 : 0.026, 0, { bus: 'ambience' });
+      if (accent) {
+        this.playTone(bassF * 2.0, 0.14, cfg.wave, 0.018, 0.01, { bus: 'ambience' });
+      }
+    }
+    // Layer 2 (Phase 2+): Rhythmic underwater arpeggio shimmer
+    if (p >= 2 && (step % 2 === 1 || p >= 3)) {
+      const arpF = cfg.arp[step % cfg.arp.length];
+      this.playTone(arpF, 0.13, cfg.wave === 'sawtooth' ? 'triangle' : cfg.wave, 0.017, 0, { bus: 'ambience' });
+    }
+    // Layer 3 (Phase 3): Dramatic high melodic motif on strong beats
+    if (p >= 3 && step % 2 === 0) {
+      const leadF = cfg.lead[barIdx % cfg.lead.length];
+      this.playTone(leadF, 0.22, 'sine', 0.02, 0.015, { bus: 'ambience' });
+    }
+  }
+
+  /**
    * Triumphant harmonic swell upon defeating an underwater Boss (v179).
    */
   playBossDefeat() {
+    this.stopBossMusic();
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const notes = [261.63, 329.63, 392.0, 523.25, 659.25];

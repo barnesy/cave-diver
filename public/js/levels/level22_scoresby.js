@@ -19,9 +19,9 @@ export const LEVEL_22 = {
     'Slip beneath the pack ice of East Greenland into a colossal grounded tabular iceberg. Thread three glowing sapphire ice-arch skylights, battle pulsing Arctic fjord swells, and plunge beneath the 82m glacial keel before ascending the eastern ice chimney.',
   bounds: {
     xMin: -36,
-    xMax: 336,
+    xMax: 434,
     yMin: -6,
-    yMax: 92,
+    yMax: 96,
   },
   roughness: 0.32,
   spawn: { x: 14, y: 2.0 },
@@ -84,6 +84,21 @@ export const LEVEL_22 = {
     { ax: 218, ay: 82.0, bx: 250, by: 84.0, ra: 2.6, rb: 3.0 },
     // Dead End 5: Upper Ice-Shelf Dome near East Exit
     { ax: 266, ay: 42.0, bx: 296, by: 36.0, ra: 2.3, rb: 2.8 },
+
+    // === Secret Sonar-Only Glacial Fissure -> Borealis Wyrm Cathedral (v189) ===
+    // Sealed behind the deepest 84m Fjord Moraine Crypt at (250, 84.0)
+    { ax: 250.0, ay: 84.0, bx: 260.0, by: 83.2, ra: 1.5, rb: 1.9, secretLair: true },
+    // Quiet Armory Ice-Alcove
+    { ax: 260.0, ay: 83.2, bx: 274.0, by: 81.5, ra: 2.5, rb: 3.6, secretLair: true },
+    // Glacial Corridor Gauntlet
+    { ax: 274.0, ay: 81.5, bx: 296.0, by: 79.0, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 296.0, ay: 79.0, bx: 318.0, by: 75.5, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 318.0, ay: 75.5, bx: 340.0, by: 73.5, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 340.0, ay: 73.5, bx: 364.0, by: 72.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // BOREALIS FROST CATHEDRAL — 58m × 26m Boss Arena centered at (392, 72)
+    { ax: 364.0, ay: 72.0, bx: 382.0, by: 72.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 382.0, ay: 72.0, bx: 402.0, by: 72.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 402.0, ay: 72.0, bx: 416.5, by: 72.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
 
   guideline: [

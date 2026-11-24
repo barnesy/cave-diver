@@ -17,9 +17,9 @@ export const LEVEL_25 = {
     'The ultimate technical cave summit beneath the Western Caucasus — the flooded terminal sump of Krubera-Voronya. Lay your 405m reel [G] with zero compass aid, plunge to an awe-inspiring 198m on ultra-hypoxic TMX 8/76, ride buoyant deep mineral vents, recover the Krubera Abyssal Telemetry Probe at 195m, and execute a disciplined staged decompression ascent.',
   bounds: {
     xMin: -44,
-    xMax: 376,
+    xMax: 402,
     yMin: -6,
-    yMax: 212,
+    yMax: 214,
   },
   roughness: 0.42,
   spawn: { x: 14, y: 2.0 },
@@ -102,6 +102,21 @@ export const LEVEL_25 = {
     { ax: 308, ay: 12.0, bx: 314, by: 6.5, ra: 4.0, rb: 4.4 },
     { ax: 314, ay: 6.5, bx: 326, by: 6.4, ra: 4.4, rb: 5.4 },
     { ax: 326, ay: 6.4, bx: 326, by: 0.6, ra: 5.8, rb: 5.4 },
+
+    // === Secret Sonar-Only Abyssal Rift -> Throne of the Abyssal Empress (v189) ===
+    // Sealed behind the 198m Terminal Sump floor at (214, 198.0), running deep beneath the ascent chimney!
+    { ax: 214.0, ay: 198.0, bx: 224.0, by: 197.2, ra: 1.5, rb: 1.9, secretLair: true },
+    // Quiet Armory Sanctum
+    { ax: 224.0, ay: 197.2, bx: 238.0, by: 196.0, ra: 2.5, rb: 3.6, secretLair: true },
+    // Abyssal Rift Corridor Gauntlet
+    { ax: 238.0, ay: 196.0, bx: 260.0, by: 194.0, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 260.0, ay: 194.0, bx: 282.0, by: 190.0, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 282.0, ay: 190.0, bx: 304.0, by: 186.5, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 304.0, ay: 186.5, bx: 330.0, by: 184.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // ABYSSAL EMPRESS THRONE — 58m × 26m Boss Arena centered at (358, 184)
+    { ax: 330.0, ay: 184.0, bx: 348.0, by: 184.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 348.0, ay: 184.0, bx: 368.0, by: 184.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 368.0, ay: 184.0, bx: 382.5, by: 184.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
 
   guideline: [],

@@ -35,6 +35,8 @@ import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
 import {
   fireSpeargun,
+  triggerCombatScooterDash,
+  SCOOTER_DASH_COST_PCT,
   SPEARGUN_MAX_CHARGE_SEC,
   BOSS_WEAPON_UPGRADES,
   BOSS_WEAPON_UPGRADE_ORDER,
@@ -526,7 +528,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=188',
+  mapRasterUrl: './assets/map-expedition.jpg?v=189',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -866,6 +868,7 @@ const input = new InputController({
   onSpearPressStart: () => fireSpeargunAction({ isTap: true }),
   onSpearRelease: () => { _mouseFireHeld = false; },
   onTorchStickTap: (ang) => fireSpeargunAction({ aimAngle: ang, isTap: true }),
+  onCombatDash: () => handleCombatDash(),
   onTorchToggle: () => {
     if (!session?.diver || divePaused) return;
     if (session.drills?.active?.kind === 'torch-fail') {
@@ -1719,9 +1722,12 @@ const combatHpValEl = document.getElementById('combat-hp-val');
 const btnCombatScooterEl = document.getElementById('btn-combat-scooter');
 const combatBattFillEl = document.getElementById('combat-batt-fill');
 const combatScooterPctEl = document.getElementById('combat-scooter-pct');
+const btnCombatDashEl = document.getElementById('btn-combat-dash');
+const combatDashLabelEl = document.getElementById('combat-dash-label');
 const combatUpgradesRowEl = document.getElementById('combat-upgrades-row');
 const combatHintPillEl = document.getElementById('combat-hint-pill');
 const btnCombatPauseEl = document.getElementById('btn-combat-pause');
+const debriefBossBannerEl = document.getElementById('debrief-boss-banner');
 
 btnCombatPauseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1731,11 +1737,31 @@ btnCombatScooterEl?.addEventListener('click', (e) => {
   e.stopPropagation();
   handleDpvToggle();
 });
+btnCombatDashEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  handleCombatDash();
+});
+
+function handleCombatDash() {
+  if (mode !== 'diving' || !session || divePaused || photoModeState.active || session.endedState) return false;
+  const lair = session.secretLair;
+  if (!lair?.combatMode || !session.diveState?.alive) return false;
+  audio.unlock();
+  const move = input.getThrust();
+  const dirX = Math.hypot(move.x, move.y) > 0.12 ? move.x : null;
+  const dirY = Math.hypot(move.x, move.y) > 0.12 ? move.y : null;
+  const res = triggerCombatScooterDash(session, { dirX, dirY }, sessionStepCallbacks);
+  if (!res.ok && res.reason === 'low_battery') {
+    showToast('⚡ Need 12% Scooter Battery to Hydro-Dash — grab a Battery Cell!', 1.8);
+  }
+  return true;
+}
 
 let _lastCombatHudMode = false;
 let _lastCombatArmed = false;
 let _lastCombatHp = -1;
 let _lastCombatScooterKey = '';
+let _lastCombatDashKey = '';
 let _lastCombatUpgradesKey = '';
 let _lastCombatHintFaded = false;
 function syncCombatModeHud(sess) {
@@ -1789,6 +1815,23 @@ function syncCombatModeHud(sess) {
     }
     if (combatBattFillEl) combatBattFillEl.style.width = `${dpvPct}%`;
     if (combatScooterPctEl) combatScooterPctEl.textContent = dpvPct <= 0 ? '0%' : dpvOn ? `${dpvPct}%` : 'OFF';
+  }
+  // Live Combat Hydro-Dash Button Status (v189)
+  const dashCd = Math.max(0, lair.dashCooldownSec || 0);
+  const dashLow = !dpvEquipped || dpvPct < SCOOTER_DASH_COST_PCT;
+  const dashReady = dashCd <= 0.02 && !dashLow;
+  const dashKey = `${dashReady}:${dashLow}:${Math.ceil(dashCd * 10)}`;
+  if (dashKey !== _lastCombatDashKey) {
+    _lastCombatDashKey = dashKey;
+    if (btnCombatDashEl) {
+      btnCombatDashEl.hidden = !dpvEquipped;
+      btnCombatDashEl.classList.toggle('ready', dashReady);
+      btnCombatDashEl.classList.toggle('cooling', !dashReady && !dashLow);
+      btnCombatDashEl.classList.toggle('low-batt', dashLow);
+    }
+    if (combatDashLabelEl) {
+      combatDashLabelEl.textContent = dashLow ? 'LOW' : dashCd > 0.05 ? `${dashCd.toFixed(1)}s` : 'DASH';
+    }
   }
   // Live Speargun Weapon Upgrade Badges
   const mods = lair.weaponMods || {};
@@ -3379,6 +3422,35 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       debriefChallengeBannerEl.hidden = true;
     }
   }
+  if (debriefBossBannerEl) {
+    const lair = session.secretLair;
+    if (lair?.bossDefeated && lair?.spec?.boss) {
+      const b = lair.spec.boss;
+      const elapsed = Math.max(1, Math.round(lair.bossFightElapsedSec || 0));
+      const mm = Math.floor(elapsed / 60);
+      const ss = String(elapsed % 60).padStart(2, '0');
+      const chips = [
+        `⏱ ${mm}:${ss}`,
+        `⚡ ${lair.resonanceBreaks || 0} Resonance`,
+        `🪨 ${lair.stalactiteCrushes || 0} Stalactite Crush`,
+        `💥 ${lair.pillarCrashes || 0} Pillar Crash`,
+        `🔱 ${lair.upgradesCollected || 0} Upgrades`,
+        `💨 ${lair.dashesUsed || 0} Dashes`,
+      ];
+      debriefBossBannerEl.innerHTML =
+        `<div class="debrief-boss-head">` +
+          `<div class="debrief-boss-title"><span>${b.icon || '🐙'}</span><span>${b.name} VANQUISHED</span></div>` +
+          `<span class="debrief-boss-pts">+${b.bonusPoints || 2500} PTS</span>` +
+        `</div>` +
+        `<div class="debrief-boss-relic">🏆 Trophy Relic Claimed: ${b.trophyName}</div>` +
+        `<div class="debrief-boss-stats">${chips.map((c) => `<span class="debrief-boss-chip">${c}</span>`).join('')}</div>`;
+      debriefBossBannerEl.hidden = false;
+    } else {
+      debriefBossBannerEl.hidden = true;
+      debriefBossBannerEl.innerHTML = '';
+    }
+  }
+  audio.stopBossMusic?.();
   const runChallengeCfg = {
     siteId: level.id,
     difficulty: runDiff,
@@ -6451,6 +6523,8 @@ const sessionStepCallbacks = {
   onHealOrb: () => audio.playHealOrb?.(),
   onBatteryPickup: () => audio.playBatteryPickup?.(),
   onWeaponUpgrade: () => audio.playWeaponUpgrade?.(),
+  onScooterDash: () => audio.playScooterDash?.(),
+  onStalactiteCrush: () => audio.playStalactiteCrush?.(),
   onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
   onForeshadow: () => audio.playForeshadowGroan?.(),
   onBossDefeat: () => {
@@ -6782,6 +6856,7 @@ function stepSimulation(dt) {
         lowGas: Boolean(curTank && curTank.bar <= 52),
         inAirDome: Boolean(session.stories?.inAirDome),
         bossPhase: (session.secretLair?.boss?.active && !session.secretLair?.boss?.defeated) ? session.secretLair.boss.phase : 0,
+        bossTheme: session.secretLair?.spec?.boss?.musicTheme || 'kraken',
       });
     }
     syncWreckActionHud(session.wreckActionPrompt);

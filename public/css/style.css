@@ -9064,3 +9064,99 @@ summary,
   }
 }
 
+/* v189: Combat Scooter Hydro-Dash Button */
+.combat-dash-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.72);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.85), rgba(8, 47, 73, 0.92));
+  color: #e0f2fe;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.28);
+  transition: transform 0.12s ease, opacity 0.14s ease, border-color 0.15s ease;
+}
+.combat-dash-btn:hover {
+  transform: translateY(-1px);
+  border-color: #67e8f9;
+}
+.combat-dash-btn:active {
+  transform: scale(0.95);
+}
+.combat-dash-btn.cooling,
+.combat-dash-btn.low-batt {
+  opacity: 0.56;
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: none;
+}
+
+/* v189: Debrief Secret Boss Victory & Trophy Showcase Banner (zero spoilers — only appears after defeating a boss!) */
+.debrief-boss-banner {
+  margin: 10px 0 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(250, 204, 21, 0.52);
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.88), rgba(12, 74, 110, 0.78));
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(254, 240, 138, 0.22);
+}
+.debrief-boss-banner[hidden] {
+  display: none !important;
+}
+.debrief-boss-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.debrief-boss-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.94rem;
+  font-weight: 900;
+  color: #fef08a;
+  letter-spacing: 0.03em;
+}
+.debrief-boss-pts {
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #34d399;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(6, 78, 59, 0.55);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+}
+.debrief-boss-relic {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #bae6fd;
+  font-weight: 600;
+}
+.debrief-boss-stats {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.debrief-boss-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(2, 6, 23, 0.52);
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+

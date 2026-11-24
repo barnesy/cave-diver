@@ -31,6 +31,7 @@ export class InputController {
     onSpearPressStart,
     onSpearRelease,
     onTorchStickTap,
+    onCombatDash,
   }) {
     this.keys = new Set();
     this.stickVec = { x: 0, y: 0 };
@@ -75,6 +76,7 @@ export class InputController {
     this.onSpearPressStart = onSpearPressStart;
     this.onSpearRelease = onSpearRelease;
     this.onTorchStickTap = onTorchStickTap;
+    this.onCombatDash = onCombatDash;
     this.torchStickHeld = false;
     this.spearKeyHeld = false;
     this._prevGpButtons = [];
@@ -117,6 +119,9 @@ export class InputController {
       }
       if (code === 'KeyQ' && !e.repeat) {
         if (this.onSonarPing?.()) e.preventDefault();
+      }
+      if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat) {
+        if (this.onCombatDash?.()) e.preventDefault();
       }
       if (code === 'KeyV' && !e.repeat) {
         if (this.onDpvToggle?.()) e.preventDefault();
