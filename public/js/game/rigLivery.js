@@ -10,6 +10,17 @@ import {
   drawDiverArmAndTorch,
 } from './artSprites.js';
 
+function _hasTrophyRelic(stats, relicId) {
+  const ids = stats?.artifactIds;
+  if (!(ids instanceof Set) || !relicId) return false;
+  if (ids.has(relicId)) return true;
+  const suffix = `:${relicId}`;
+  for (const key of ids) {
+    if (typeof key === 'string' && key.endsWith(suffix)) return true;
+  }
+  return false;
+}
+
 export const SUIT_LIVERIES = Object.freeze([
   {
     id: 'zissou-classic',
@@ -109,6 +120,54 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: 'Complete Yucatán & Karst Circuit Campaign',
     isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('cenote-circuit')),
   },
+  {
+    id: 'secret-kraken-biolume',
+    name: 'Kraken Biolume',
+    secret: true,
+    trophyRelicId: 'l1-kraken-crown',
+    suitTop: '#0c1c36',
+    suitMid: '#071226',
+    suitBot: '#020712',
+    accent: '#22d3ee',
+    trim: '#c084fc',
+    finColor: '#0e2948',
+    finTip: '#67e8f9',
+    stageBand: '#38bdf8',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'l1-kraken-crown'),
+  },
+  {
+    id: 'secret-empress-sovereign',
+    name: 'Abyssal Sovereign Gold',
+    secret: true,
+    trophyRelicId: 'krubera-empress-diadem',
+    suitTop: '#1e1b4b',
+    suitMid: '#110e2e',
+    suitBot: '#070516',
+    accent: '#facc15',
+    trim: '#67e8f9',
+    finColor: '#1e1b4b',
+    finTip: '#fde047',
+    stageBand: '#facc15',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'krubera-empress-diadem'),
+  },
+  {
+    id: 'secret-volcanic-nautilus',
+    name: 'Volcanic Basalt Suit',
+    secret: true,
+    trophyRelicId: 'strytan-magma-pearl',
+    suitTop: '#292524',
+    suitMid: '#1c1917',
+    suitBot: '#0c0a09',
+    accent: '#f97316',
+    trim: '#fde047',
+    finColor: '#44403c',
+    finTip: '#fb923c',
+    stageBand: '#f97316',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'strytan-magma-pearl'),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -182,6 +241,22 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: 'Complete Iceland Geothermal Survey Campaign',
     isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('iceland-survey')),
   },
+  {
+    id: 'secret-solar-prism',
+    name: 'Solar Reef Prism',
+    shortLabel: 'Solar Prism',
+    secret: true,
+    trophyRelicId: 'bluehole-solar-prism',
+    swatch: '#fde047',
+    coreRgb: '254, 249, 195',
+    shaftRgb: '250, 204, 21',
+    warmRgb: '253, 224, 71',
+    rangeMult: 1.14,
+    siltPierce: 0.24,
+    specText: 'Radiant caustic reef beam · +14% reach & +24% silt pierce',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'bluehole-solar-prism'),
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -237,6 +312,16 @@ export const HEADGEAR_STYLES = Object.freeze([
     specText: 'Riveted bronze deep-salvage dome + heavy collar',
     unlockHint: 'Complete Maritime Wreck Salvage Campaign',
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')),
+  },
+  {
+    id: 'secret-dreadnought-helm',
+    name: 'WWII Brass Hardhat Mk-IV',
+    icon: '⚙️',
+    secret: true,
+    trophyRelicId: 'thistlegorm-engine-core',
+    specText: 'Riveted armored brass dreadnought dome + amber porthole',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
   },
 ]);
 
@@ -394,6 +479,19 @@ export const TANK_FINISHES = Object.freeze([
     unlockHint: 'Complete Abyssal World Record Campaign',
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')),
   },
+  {
+    id: 'secret-dreadnought-brass',
+    name: 'Mk-IV Riveted Reactor',
+    secret: true,
+    trophyRelicId: 'thistlegorm-engine-core',
+    top: '#fef08a',
+    mid: '#b45309',
+    bot: '#451a03',
+    stroke: '#f59e0b',
+    ccrShell: '#d97706',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
+  },
 ]);
 
 export const VISOR_TINTS = Object.freeze([
@@ -440,6 +538,19 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#34d399',
     unlockHint: 'Emergency Troubleshooter or 6+ sites',
     isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 6,
+  },
+  {
+    id: 'secret-aurora-frost',
+    name: 'Aurora Frost Visor',
+    secret: true,
+    trophyRelicId: 'scoresby-frost-heart',
+    top: '#ecfeff',
+    mid: '#22d3ee',
+    bot: '#0d9488',
+    frame: '#083344',
+    hudGlow: '#5eead4',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'scoresby-frost-heart'),
   },
 ]);
 
@@ -532,6 +643,24 @@ export function getVisorTint(visorId) {
 }
 
 /**
+ * Return any secret Gear Workshop cosmetic names unlocked by a specific trophy relic ID.
+ * Used only when a player actively earns that trophy (zero spoilers beforehand).
+ */
+export function getSecretCosmeticsForTrophy(trophyRelicId) {
+  if (!trophyRelicId) return [];
+  const all = [
+    ...SUIT_LIVERIES,
+    ...HEADGEAR_STYLES,
+    ...VISOR_TINTS,
+    ...TANK_FINISHES,
+    ...TORCH_OPTICS,
+    ...ACCENT_TRIMS,
+    ...MILESTONE_PATCHES,
+  ];
+  return all.filter((item) => item.secret && item.trophyRelicId === trophyRelicId).map((item) => item.name);
+}
+
+/**
  * Resolve any modular livery object into a complete drawing palette used consistently
  * by CaveRenderer, artSprites, Workshop Test-Tank Preview, and Home Mini-Avatar Badge (v153).
  */
@@ -594,11 +723,15 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     : 0;
   const ms = logbook?.milestones && typeof logbook.milestones === 'object' ? logbook.milestones : {};
   const completedCampaigns = new Set(Array.isArray(logbook?.completedCampaigns) ? logbook.completedCampaigns : []);
+  const artifactIds = new Set(
+    logbook?.artifacts && typeof logbook.artifacts === 'object' ? Object.keys(logbook.artifacts) : []
+  );
   const stats = {
     sitesCleared,
     wreckClears,
     speciesLogged,
     completedCampaigns,
+    artifactIds,
     pressurizedEqualizations: Math.max(0, Number(ms.pressurizedEqualizations) || 0),
     cleanSalvageLifts: Math.max(0, Number(ms.cleanSalvageLifts) || 0),
     drillsCompleted: Math.max(0, Number(ms.drillsCompleted) || 0),

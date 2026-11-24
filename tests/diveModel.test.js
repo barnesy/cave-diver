@@ -9407,7 +9407,7 @@ test('v189 4 Hidden Secret Boss Lairs, Scooter Hydro-Dash, Ceiling Stalactites, 
     'scoresby-sund-iceberg',
     'krubera-voronya-sump',
   ];
-  assert.equal(Object.keys(SECRET_LAIRS).length, 4, 'Must have 4 hidden Secret Lairs across the campaign');
+  assert.ok(Object.keys(SECRET_LAIRS).length >= 4, 'Must have at least 4 hidden Secret Lairs across the campaign');
   const seenKinds = new Set();
   const seenThemes = new Set();
   const seenRelics = new Set();
@@ -9702,4 +9702,165 @@ test('v192 Signature Boss Hazards (Mines, Frost Rings, Star Orbs), Bespoke Boss 
   // 6. Radial SVG Cooldown Ring exists inside #btn-combat-dash
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="combat-dash-ring"'), 'Circular #btn-combat-dash must include radial SVG cooldown ring');
+});
+
+test('v193 Quiet Gas Callouts, Living Atmosphere & Halocline, Secret Zero-Spoiler Cosmetics, 2 New Hidden Biome Bosses (Blue Hole & Strýtan) & Mobile Perf', async () => {
+  const fs = await import('node:fs');
+  const {
+    SECRET_LAIRS,
+    getSecretLairForLevel,
+    breachSecretLairVeil,
+    claimSecretLairWeapon,
+    fireSpeargun,
+    triggerCombatScooterDash,
+    spawnBossSignatureHazard,
+    stepSecretLairEncounter,
+    serializeSecretLairNetState,
+    applySecretLairNetState,
+  } = await import('../public/js/game/secretLairs.js');
+  const {
+    SUIT_LIVERIES,
+    HEADGEAR_STYLES,
+    VISOR_TINTS,
+    TANK_FINISHES,
+    TORCH_OPTICS,
+    computeUnlockedLiveries,
+    getSecretCosmeticsForTrophy,
+  } = await import('../public/js/game/rigLivery.js');
+  const { drawStyledArtifact, drawStyledDiverRig } = await import('../public/js/game/artSprites.js');
+  const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. All 6 hidden Secret Lairs exist with unique boss kinds, themes, trophies & valid open-water SDF geometry
+  assert.equal(Object.keys(SECRET_LAIRS).length, 6, 'Must have 6 hidden Secret Lairs across the campaign');
+  const newIds = ['blue-hole-dahab-arch', 'strytan-hydrothermal-chimneys'];
+  for (const id of newIds) {
+    const lvl = LEVELS.find((l) => l.id === id);
+    assert.ok(lvl, `Campaign level ${id} must exist`);
+    assert.equal(validateLevel(lvl).valid, true, `${id} must remain valid after adding secret lair`);
+    const spec = getSecretLairForLevel(id);
+    assert.ok(spec && spec.veil.silent === true, `${id} secret veil must be 100% silent Sonar-only`);
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -1.0, `${id} armory open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -4.0, `${id} arena center open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -3.0, `${id} boss spawn open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -1.0, `${id} exit updraft dest open water`);
+    for (const pad of spec.arena.pickupPads) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -1.0, `${id} pickup pad ${pad.id} open water`);
+    }
+  }
+
+  // 2. Solar Leviathan (Blue Hole): Sun-Lance Prism Shatter via Hydro-Dash reflects CRIT + Net Sync code 5
+  const bhLvl = LEVELS.find((l) => l.id === 'blue-hole-dahab-arch');
+  const sBh = createDiveSession(bhLvl, { diverName: 'HeliosSlayer' });
+  breachSecretLairVeil(sBh);
+  claimSecretLairWeapon(sBh);
+  sBh.secretLair.boss.active = true;
+  sBh.secretLair.boss.aiState = 'idle';
+  sBh.dpv = { equipped: true, active: true, batteryPct: 60 };
+  const lance = spawnBossSignatureHazard(sBh, sBh.secretLair, sBh.secretLair.boss);
+  assert.equal(lance.kind, 'sun-lance', 'Solar Leviathan must spawn sun-lance prism hazard');
+  const bhSnap = serializeSecretLairNetState(sBh.secretLair);
+  assert.equal(bhSnap.hz[0][0], 5, 'Net sync must encode sun-lance as code 5');
+  const sBhPeer = createDiveSession(bhLvl, { diverName: 'PeerBH' });
+  applySecretLairNetState(sBhPeer.secretLair, bhSnap);
+  assert.equal(sBhPeer.secretLair.bossHazards[0].kind, 'sun-lance');
+
+  const bhHpBefore = sBh.secretLair.boss.hp;
+  sBh.diver.x = lance.x - 0.5;
+  sBh.diver.y = lance.y;
+  triggerCombatScooterDash(sBh, { dirX: 1, dirY: 0 }, {});
+  stepSecretLairEncounter(sBh, 0.04, {}, {});
+  assert.ok(sBh.secretLair.boss.hp < bhHpBefore, 'Hydro-Dashing through charging Sun-Prism must reflect CRIT onto Solar Leviathan');
+
+  // 3. Hydrothermal Nautilus (Strýtan): Vent-Geyser Cap Blast via Speargun + Net Sync code 4
+  const strLvl = LEVELS.find((l) => l.id === 'strytan-hydrothermal-chimneys');
+  const sStr = createDiveSession(strLvl, { diverName: 'VentSlayer' });
+  breachSecretLairVeil(sStr);
+  claimSecretLairWeapon(sStr);
+  sStr.secretLair.boss.active = true;
+  sStr.secretLair.boss.aiState = 'idle';
+  const vent = spawnBossSignatureHazard(sStr, sStr.secretLair, sStr.secretLair.boss);
+  assert.equal(vent.kind, 'vent-geyser', 'Hydrothermal Nautilus must spawn vent-geyser hazard');
+  const strSnap = serializeSecretLairNetState(sStr.secretLair);
+  assert.equal(strSnap.hz[0][0], 4, 'Net sync must encode vent-geyser as code 4');
+  // Place boss nearby and shoot vent cap with piercing Hyper-Tip
+  sStr.secretLair.boss.x = vent.x + 4;
+  sStr.secretLair.boss.y = vent.y - 3;
+  const strHpBefore = sStr.secretLair.boss.hp;
+  sStr.diver.x = vent.x - 4;
+  sStr.diver.y = vent.y;
+  sStr.secretLair.shotCounter = 4; // Next shot is piercing Hyper-Tip (2 damage -> caps vent!)
+  fireSpeargun(sStr, { aimAngle: 0, isTap: true, originX: sStr.diver.x, originY: sStr.diver.y });
+  for (let i = 0; i < 15; i++) stepSecretLairEncounter(sStr, 0.02, {}, {});
+  assert.ok(sStr.secretLair.boss.hp < strHpBefore, 'Capping Thermal Vent Geyser near Nautilus must blast boss');
+
+  // 4. Secret Zero-Spoiler Gear Workshop Cosmetics: hidden until boss trophy relic claimed
+  const freshBook = createEmptyLogbook();
+  const freshUnlocks = computeUnlockedLiveries(freshBook);
+  assert.equal(freshUnlocks.suits.has('secret-kraken-biolume'), false);
+  assert.equal(freshUnlocks.headgears.has('secret-dreadnought-helm'), false);
+  assert.equal(freshUnlocks.visors.has('secret-aurora-frost'), false);
+  assert.equal(freshUnlocks.torches.has('secret-solar-prism'), false);
+  assert.equal(freshUnlocks.suits.has('secret-volcanic-nautilus'), false);
+  assert.equal(freshUnlocks.suits.has('secret-empress-sovereign'), false);
+  assert.ok(SUIT_LIVERIES.some((s) => s.id === 'secret-kraken-biolume' && s.secret === true));
+  assert.ok(HEADGEAR_STYLES.some((h) => h.id === 'secret-dreadnought-helm' && h.secret === true));
+  assert.ok(VISOR_TINTS.some((v) => v.id === 'secret-aurora-frost' && v.secret === true));
+  assert.ok(TANK_FINISHES.some((t) => t.id === 'secret-dreadnought-brass' && t.secret === true));
+  assert.ok(TORCH_OPTICS.some((t) => t.id === 'secret-solar-prism' && t.secret === true));
+
+  let trophyBook = freshBook;
+  for (const rid of [
+    'cenote-el-abismo:l1-kraken-crown',
+    'ss-thistlegorm-wreck:thistlegorm-engine-core',
+    'scoresby-sund-iceberg:scoresby-frost-heart',
+    'krubera-voronya-sump:krubera-empress-diadem',
+    'blue-hole-dahab-arch:bluehole-solar-prism',
+    'strytan-hydrothermal-chimneys:strytan-magma-pearl',
+  ]) {
+    trophyBook = recordArtifactInLogbook(trophyBook, { id: rid, name: rid, points: 2500 }).book;
+  }
+  const trophyUnlocks = computeUnlockedLiveries(trophyBook);
+  assert.equal(trophyUnlocks.suits.has('secret-kraken-biolume'), true);
+  assert.equal(trophyUnlocks.headgears.has('secret-dreadnought-helm'), true);
+  assert.equal(trophyUnlocks.tanks.has('secret-dreadnought-brass'), true);
+  assert.equal(trophyUnlocks.visors.has('secret-aurora-frost'), true);
+  assert.equal(trophyUnlocks.torches.has('secret-solar-prism'), true);
+  assert.equal(trophyUnlocks.suits.has('secret-volcanic-nautilus'), true);
+  assert.equal(trophyUnlocks.suits.has('secret-empress-sovereign'), true);
+  assert.ok(getSecretCosmeticsForTrophy('bluehole-solar-prism').includes('Solar Reef Prism'));
+
+  const workshopSrc = fs.readFileSync(new URL('../public/js/ui/liveryWorkshopController.js', import.meta.url), 'utf8');
+  assert.ok(workshopSrc.includes('!s.secret || unlocks.suits.has(s.id)'), 'Workshop must completely hide locked secret cosmetics (zero spoilers!)');
+
+  // 5. Renderers, Halocline Crossing Audio & Quiet Gas-Switch Lines execute cleanly
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    { createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }), measureText: () => ({ width: 96 }) },
+    { get(t, p) { return p in t ? t[p] : () => drawCalls.push(String(p)); } }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock.level = bhLvl;
+  rMock._cachedDpr = 1;
+  rMock.glowStamps = {};
+  rMock._drawSecretLairBoss(mockCtx, sBh.secretLair.boss, (x) => x, (y) => y, 22, 3.2);
+  rMock._drawSecretLairBoss(mockCtx, sStr.secretLair.boss, (x) => x, (y) => y, 22, 3.2);
+  rMock._drawTorchMarineSnowAndCaustics(mockCtx, { x: 20, y: 34.0, angle: 0, torchOn: true }, 0, 40, 24, 44, (x) => x * 10, (y) => y * 10, 22, 2.5, 1, null, 1280);
+  drawStyledArtifact(mockCtx, { id: 'bluehole-solar-prism', name: 'Solar Reef Prism' }, 50, 50, 32, 2.5, { isGrand: true });
+  drawStyledArtifact(mockCtx, { id: 'strytan-magma-pearl', name: 'Heart of the Thermal Spire' }, 50, 50, 32, 2.5, { isGrand: true });
+  drawStyledDiverRig(mockCtx, 28, { pal: { headgearId: 'secret-dreadnought-helm', suitTop: '#1e293b', suitMid: '#0f172a', suitBot: '#020617', accent: '#f59e0b', trim: '#fde047' } });
+  assert.ok(drawCalls.length > 100, 'Both new bosses, trophy relics, Mk-IV helm & halocline atmosphere must render cleanly');
+
+  const audio = new DiveAudio();
+  assert.equal(typeof audio.playHaloclineShimmer, 'function', 'DiveAudio must expose playHaloclineShimmer');
+  let haloclineCrossed = 0;
+  const sHalo = createDiveSession(bhLvl, { diverName: 'HaloTester' });
+  sHalo.diver.x = 22;
+  sHalo.diver.y = bhLvl.haloclineY - 1.5;
+  stepDiveSession(sHalo, { x: 0, y: 0 }, 0.05, { onHaloclineCross: () => { haloclineCrossed++; } });
+  sHalo.diver.x = 22;
+  sHalo.diver.y = bhLvl.haloclineY + 1.5;
+  stepDiveSession(sHalo, { x: 0, y: 0 }, 0.05, { onHaloclineCross: () => { haloclineCrossed++; } });
+  assert.equal(haloclineCrossed, 1, 'Crossing haloclineY must emit onHaloclineCross callback');
 });

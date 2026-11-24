@@ -146,6 +146,7 @@ import {
   getSuitLivery,
   getTorchOptic,
   getMilestonePatch,
+  getSecretCosmeticsForTrophy,
   isDefaultRigLivery,
 } from './game/rigLivery.js';
 import { getCollectibleLoreNote } from './game/submergedStories.js';
@@ -530,7 +531,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=192',
+  mapRasterUrl: './assets/map-expedition.jpg?v=193',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -6545,6 +6546,7 @@ const sessionStepCallbacks = {
   onBatteryPickup: () => audio.playBatteryPickup?.(),
   onWeaponUpgrade: () => audio.playWeaponUpgrade?.(),
   onScooterDash: () => audio.playScooterDash?.(),
+  onHaloclineCross: (goingDeeper) => audio.playHaloclineShimmer?.(goingDeeper),
   onStalactiteCrush: () => audio.playStalactiteCrush?.(),
   onMineBlast: () => audio.playMineBlast?.(),
   onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
@@ -6572,6 +6574,12 @@ const sessionStepCallbacks = {
           bossName: b.name,
         });
         if (lbRes?.book) saveCareerLogbook(lbRes.book);
+        if (lbRes?.isNew) {
+          const secretCosmetics = getSecretCosmeticsForTrophy(b.trophyRelicId);
+          if (secretCosmetics.length > 0) {
+            showToast(`✦ Gear Workshop unlocked: ${secretCosmetics.join(' & ')}`, 4.8);
+          }
+        }
       } catch {}
     }
   },

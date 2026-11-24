@@ -1652,6 +1652,8 @@ export const bossAndLairMethods = {
       steel: { lit: '#d97706', mid: '#52525b', dark: '#1f2937', rim: '#fbbf24', ink: '#09090b' },
       icicle: { lit: '#e0f2fe', mid: '#38bdf8', dark: '#0369a1', rim: '#ffffff', ink: '#082f49' },
       onyx: { lit: '#a855f7', mid: '#3b0764', dark: '#0f172a', rim: '#fde047', ink: '#020617' },
+      coral: { lit: '#fda4af', mid: '#e11d48', dark: '#881337', rim: '#fde047', ink: '#1f0510' },
+      basalt: { lit: '#78716c', mid: '#292524', dark: '#0c0a09', rim: '#fb923c', ink: '#09090b' },
     };
     for (const st of stalactites) {
       if (st.state === 'broken') continue;
@@ -1736,7 +1738,7 @@ export const bossAndLairMethods = {
   },
 
   /**
-   * Dispatch boss rendering across all 4 unique biome Secret Lair Guardians (v189).
+   * Dispatch boss rendering across all 6 unique biome Secret Lair Guardians (v189 / v193).
    */
   _drawSecretLairBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
     const t = Number.isFinite(timeSec) ? timeSec : 0;
@@ -1746,6 +1748,10 @@ export const bossAndLairMethods = {
       this._drawFrostWyrmBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'abyssal-empress') {
       this._drawAbyssalEmpressBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'solar-leviathan') {
+      this._drawSolarLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'thermal-nautilus') {
+      this._drawThermalNautilusBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -2018,6 +2024,8 @@ export const bossAndLairMethods = {
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
   },
 
+
+
   /**
    * BOREALIS WYRM — Luminous Crystalline Arctic Ice Serpent (Scoresby Sund) (v189).
    */
@@ -2192,6 +2200,8 @@ export const bossAndLairMethods = {
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
   },
 
+
+
   /**
    * ABYSSAL EMPRESS — Regal Bioluminescent Winged Manta-Hydra Queen (Krubera-Voronya Sump) (v189).
    */
@@ -2363,6 +2373,361 @@ export const bossAndLairMethods = {
       ctx.arc(r * (0.28 - j * 0.18), r * (0.16 + j * 0.04), Math.max(1.8, r * (0.065 - j * 0.012)), 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * SOLAR LEVIATHAN — Radiant Red Sea Reef Dragon-Serpent Guardian (Dahab Blue Hole) (v193).
+   */
+  _drawSolarLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = (boss.radius || 4.5) * scale;
+    const facing = boss.facing || -1;
+    const hitF = boss.hitFlash || 0;
+    const isStunned = boss.aiState === 'stunned';
+    const anim = boss.anim || {};
+    const breath = 1 + Math.sin(timeSec * 3.1) * 0.03;
+    const floatBobY = Math.sin(timeSec * 2.2) * 0.1 * r;
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    if (boss.defeated) {
+      ctx.globalAlpha = Math.max(0.2, 1 - (boss.defeatTimer || 0) * 0.28);
+    }
+    ctx.scale(facing * (anim.squashX || 1) * breath, (anim.squashY || 1) / breath);
+
+    const sunGold = boss.phase >= 3 ? '#fb7185' : boss.phase === 2 ? '#fbbf24' : '#fde047';
+    const reefTeal = boss.phase >= 3 ? '#f472b6' : '#2dd4bf';
+    const scaleMid = hitF > 0 ? '#ffffff' : boss.phase >= 3 ? '#be123c' : '#d97706';
+    const scaleDark = hitF > 0 ? '#fef3c7' : '#78350f';
+
+    // 1. Undulating Serpent Body Coils trailing behind the head
+    for (let i = 5; i >= 1; i--) {
+      const segX = -r * (0.46 + i * 0.34);
+      const segY = Math.sin(timeSec * 4.2 - i * 0.92) * r * (0.28 + i * 0.045);
+      const segR = r * (0.64 - i * 0.082);
+      // Radiant turquoise-gold dorsal sun-ray fin per coil
+      ctx.fillStyle = i % 2 === 0 ? reefTeal : sunGold;
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.moveTo(segX - segR * 0.25, segY - segR * 0.65);
+      ctx.lineTo(segX - segR * 0.6, segY - segR * 1.55);
+      ctx.lineTo(segX + segR * 0.38, segY - segR * 0.72);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Golden armored coil segment
+      const sg = ctx.createRadialGradient(segX - segR * 0.2, segY - segR * 0.25, segR * 0.1, segX, segY, segR);
+      sg.addColorStop(0, hitF > 0 ? '#ffffff' : '#fef08a');
+      sg.addColorStop(0.52, scaleMid);
+      sg.addColorStop(1, scaleDark);
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(segX, segY, segR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 2. Fanned Lionfish-Helios Solar Halo Rays behind the head
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    for (let ray = 0; ray < 7; ray++) {
+      const a = -Math.PI * 0.85 + ray * 0.29 + Math.sin(timeSec * 3.8 + ray) * 0.04;
+      const innerR = r * 0.65;
+      const outerR = r * (ray % 2 === 0 ? 1.55 : 1.32);
+      ctx.fillStyle = ray % 2 === 0 ? sunGold : reefTeal;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.09) * innerR, Math.sin(a - 0.09) * innerR);
+      ctx.lineTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+      ctx.lineTo(Math.cos(a + 0.09) * innerR, Math.sin(a + 0.09) * innerR);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 3. Sculpted Reef-Serpent Head Silhouette + Swept Cheek Fin & Fangs
+    const headG = ctx.createRadialGradient(r * 0.2, -r * 0.26, r * 0.1, r * 0.08, 0, r * 1.04);
+    headG.addColorStop(0, hitF > 0 ? '#ffffff' : '#fef9c3');
+    headG.addColorStop(0.45, scaleMid);
+    headG.addColorStop(1, scaleDark);
+    ctx.fillStyle = headG;
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.6, 0.11 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.56, -r * 0.44);
+    ctx.quadraticCurveTo(r * 0.18, -r * 0.94, r * 0.98, -r * 0.12);
+    ctx.quadraticCurveTo(r * 1.12, r * 0.2, r * 0.72, r * 0.46);
+    ctx.quadraticCurveTo(r * 0.1, r * 0.66, -r * 0.52, r * 0.44);
+    ctx.quadraticCurveTo(-r * 0.92, r * 0.02, -r * 0.56, -r * 0.44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Gleaming upper reef fangs
+    ctx.fillStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+    for (let f = 0; f < 3; f++) {
+      const fx = r * (0.48 + f * 0.15);
+      const fy = r * (0.38 - f * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(fx - r * 0.05, fy);
+      ctx.lineTo(fx + r * 0.02, fy + r * 0.17);
+      ctx.lineTo(fx + r * 0.08, fy - r * 0.02);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 4. Radiant Solar Prism Crown Jewel Weakpoint
+    const wx = Math.cos(boss.weakAngle || 0) * r * 0.85 * facing;
+    const wy = Math.sin(boss.weakAngle || 0) * r * 0.85;
+    const pulse = 0.78 + 0.22 * Math.sin(timeSec * 8.5);
+    const crR = r * 0.32 * pulse;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.moveTo(wx, wy - crR * 1.35);
+    ctx.lineTo(wx + crR * 0.95, wy);
+    ctx.lineTo(wx, wy + crR * 1.35);
+    ctx.lineTo(wx - crR * 0.95, wy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 5. Single Regal Side-Profile Anime Eye (turquoise-gold caustic iris + fierce brow)
+    const ex = r * 0.34;
+    const ey = -r * 0.14;
+    const er = r * 0.27;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, er * 1.15, er * 0.88, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (isStunned) {
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex + er * 0.5, ey + er * 0.45);
+      ctx.moveTo(ex + er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex - er * 0.5, ey + er * 0.45);
+      ctx.stroke();
+    } else {
+      const irisG = ctx.createLinearGradient(ex, ey - er, ex, ey + er);
+      irisG.addColorStop(0, '#0f766e');
+      irisG.addColorStop(0.55, reefTeal);
+      irisG.addColorStop(1, '#fef08a');
+      ctx.fillStyle = irisG;
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.08, ey, er * 0.66, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#041021';
+      ctx.beginPath();
+      ctx.ellipse(ex + er * 0.12, ey, er * 0.2, er * 0.48, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - er * 0.18, ey - er * 0.24, er * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.5, 0.1 * scale);
+    ctx.beginPath();
+    ctx.moveTo(ex - er * 1.25, ey - er * 0.62);
+    ctx.quadraticCurveTo(ex + er * 0.1, ey - er * 1.05, ex + er * 1.18, ey - er * 0.34);
+    ctx.stroke();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * HYDROTHERMAL NAUTILUS — Armored Volcanic Basalt Chambered Nautilus Guardian (Iceland Strýtan) (v193).
+   */
+  _drawThermalNautilusBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = (boss.radius || 4.6) * scale;
+    const facing = boss.facing || -1;
+    const hitF = boss.hitFlash || 0;
+    const isStunned = boss.aiState === 'stunned';
+    const anim = boss.anim || {};
+    const breath = 1 + Math.sin(timeSec * 2.6) * 0.032;
+    const floatBobY = Math.sin(timeSec * 1.9) * 0.09 * r;
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    if (boss.defeated) {
+      ctx.globalAlpha = Math.max(0.2, 1 - (boss.defeatTimer || 0) * 0.28);
+    }
+    ctx.scale(facing * (anim.squashX || 1) * breath, (anim.squashY || 1) / breath);
+
+    const magmaCol = boss.phase >= 3 ? '#fef08a' : boss.phase === 2 ? '#fb923c' : '#f97316';
+    const shellTop = hitF > 0 ? '#ffffff' : '#78716c';
+    const shellMid = hitF > 0 ? '#fed7aa' : '#44403c';
+    const shellDark = '#1c1917';
+
+    // 1. Six Writhing Steam-Charged Hydrothermal Tentacles extending forward from shell aperture
+    ctx.lineCap = 'round';
+    for (let tIdx = 0; tIdx < 6; tIdx++) {
+      const yOff = (-0.34 + tIdx * 0.15) * r;
+      const sway = Math.sin(timeSec * 4.5 + tIdx * 1.1) * 0.18 * r;
+      const tipX = r * (1.28 + (tIdx % 2) * 0.22);
+      const tipY = yOff + sway;
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(4.4, 0.22 * r);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.42, yOff * 0.7);
+      ctx.quadraticCurveTo(r * 0.88, yOff - sway * 0.45, tipX, tipY);
+      ctx.stroke();
+
+      ctx.strokeStyle = tIdx % 2 === 0 ? '#c2410c' : '#ea580c';
+      ctx.lineWidth = Math.max(2.6, 0.13 * r);
+      ctx.stroke();
+
+      ctx.fillStyle = magmaCol;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, Math.max(2.2, 0.075 * r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2. Massive Chambered Obsidian-and-Copper Spiral Nautilus Shell
+    const shellCx = -r * 0.22;
+    const shellCy = -r * 0.06;
+    const shellR = r * 1.06;
+    const shellG = ctx.createRadialGradient(shellCx - shellR * 0.2, shellCy - shellR * 0.28, shellR * 0.1, shellCx, shellCy, shellR);
+    shellG.addColorStop(0, shellTop);
+    shellG.addColorStop(0.55, shellMid);
+    shellG.addColorStop(1, shellDark);
+    ctx.fillStyle = shellG;
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.8, 0.12 * scale);
+    ctx.beginPath();
+    ctx.arc(shellCx, shellCy, shellR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Subtle molten copper outer rim highlight so shell pops crisply against dark basalt walls
+    ctx.strokeStyle = 'rgba(251, 146, 60, 0.48)';
+    ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+    ctx.beginPath();
+    ctx.arc(shellCx, shellCy, shellR * 0.96, -Math.PI * 0.85, Math.PI * 0.55);
+    ctx.stroke();
+
+    // Glowing magma chamber septa ribs radiating around spiral
+    const pulse = 0.65 + 0.35 * Math.sin(timeSec * 5.2);
+    ctx.strokeStyle = magmaCol;
+    ctx.lineWidth = Math.max(2, 0.075 * scale);
+    ctx.globalAlpha = 0.72 + pulse * 0.26;
+    for (let rib = 0; rib < 9; rib++) {
+      const a = -Math.PI * 0.85 + rib * 0.56;
+      const innerX = shellCx + Math.cos(a) * shellR * 0.24;
+      const innerY = shellCy + Math.sin(a) * shellR * 0.24;
+      const outerX = shellCx + Math.cos(a + 0.18) * shellR * 0.94;
+      const outerY = shellCy + Math.sin(a + 0.18) * shellR * 0.94;
+      ctx.beginPath();
+      ctx.moveTo(innerX, innerY);
+      ctx.quadraticCurveTo(
+        shellCx + Math.cos(a + 0.32) * shellR * 0.62,
+        shellCy + Math.sin(a + 0.32) * shellR * 0.62,
+        outerX,
+        outerY
+      );
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Inner logarithmic copper spiral eye
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    for (let s = 0; s <= 24; s++) {
+      const ang = s * 0.34;
+      const sr = (s / 24) * shellR * 0.42;
+      const px = shellCx + Math.cos(ang) * sr;
+      const py = shellCy + Math.sin(ang) * sr;
+      if (s === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // 3. Armored Basalt Hood Plate & Soft Cephalopod Aperture Body
+    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#7c2d12';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.4, 0.1 * scale);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.46, r * 0.08, r * 0.5, r * 0.58, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Heavy Volcanic Basalt Hood Crest
+    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#44403c';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.02, -r * 0.66);
+    ctx.quadraticCurveTo(r * 0.72, -r * 0.78, r * 1.05, -r * 0.24);
+    ctx.quadraticCurveTo(r * 0.64, -r * 0.14, r * 0.08, -r * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Glowing Superheated Magma Valve Weakpoint
+    const wx = Math.cos(boss.weakAngle || 0) * r * 0.82 * facing;
+    const wy = Math.sin(boss.weakAngle || 0) * r * 0.82;
+    ctx.fillStyle = '#fef08a';
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = Math.max(2, 0.085 * scale);
+    ctx.beginPath();
+    ctx.arc(wx, wy, r * 0.24 * (0.85 + pulse * 0.2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 5. Single Fierce Molten-Amber Side-Profile Anime Eye beneath Basalt Hood
+    const ex = r * 0.56;
+    const ey = -r * 0.06;
+    const er = r * 0.26;
+    ctx.fillStyle = '#fef9c3';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, er * 1.1, er * 0.9, 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (isStunned) {
+      ctx.strokeStyle = '#041021';
+      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex + er * 0.5, ey + er * 0.45);
+      ctx.moveTo(ex + er * 0.5, ey - er * 0.45);
+      ctx.lineTo(ex - er * 0.5, ey + er * 0.45);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.08, ey, er * 0.65, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#041021';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.14, ey, er * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - er * 0.15, ey - er * 0.22, er * 0.23, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(2.6, 0.105 * scale);
+    ctx.beginPath();
+    ctx.moveTo(ex - er * 1.1, ey - er * 0.68);
+    ctx.lineTo(ex + er * 1.15, ey - er * 0.36);
+    ctx.stroke();
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -2568,46 +2933,53 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 2b. Emerald Bio-Heal Orbs
+    // 2b. Emerald Bio-Heal Orbs (v193 mobile-fast glowStamps, zero per-orb radial gradient allocs!)
+    const healStamp = this.glowStamps?.cyan;
+    const warmStamp = this.glowStamps?.warm;
     for (const orb of lair.healOrbs || []) {
       const ox = toScreenX(orb.x);
       const oy = toScreenY(orb.y);
+      if (ox < -60 || ox > cw + 60 || oy < -60 || oy > ch + 60) continue;
       const r = (0.42 + 0.08 * Math.sin(timeSec * 7 + orb.phase)) * scale;
       ctx.save();
-      const og = ctx.createRadialGradient(ox, oy, r * 0.15, ox, oy, r * 2.4);
-      og.addColorStop(0, '#ecfdf5');
-      og.addColorStop(0.4, '#34d399');
-      og.addColorStop(1, 'rgba(16, 185, 129, 0)');
-      ctx.fillStyle = og;
-      ctx.beginPath();
-      ctx.arc(ox, oy, r * 2.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#a7f3d0';
+      if (healStamp) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.65;
+        ctx.drawImage(healStamp, ox - r * 2.4, oy - r * 2.4, r * 4.8, r * 4.8);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = '#34d399';
+      ctx.strokeStyle = '#ecfdf5';
       ctx.lineWidth = Math.max(1.2, 0.05 * scale);
       ctx.beginPath();
-      ctx.moveTo(ox - r * 0.55, oy);
-      ctx.lineTo(ox + r * 0.55, oy);
-      ctx.moveTo(ox, oy - r * 0.55);
-      ctx.lineTo(ox, oy + r * 0.55);
+      ctx.arc(ox, oy, r * 0.92, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ox - r * 0.5, oy);
+      ctx.lineTo(ox + r * 0.5, oy);
+      ctx.moveTo(ox, oy - r * 0.5);
+      ctx.lineTo(ox, oy + r * 0.5);
       ctx.stroke();
       ctx.restore();
     }
 
-    // 2c. Glowing DPV Battery Power Cells (Electric Cyan-Gold Canisters)
+    // 2c. Glowing DPV Battery Power Cells (Electric Cyan-Gold Canisters — zero gradient alloc!)
     for (const cell of lair.batteryCells || []) {
       const cx = toScreenX(cell.x);
       const cy = toScreenY(cell.y);
+      if (cx < -70 || cx > cw + 70 || cy < -70 || cy > ch + 70) continue;
       const pulse = 0.55 + 0.45 * Math.sin(timeSec * 6.5 + (cell.phase || 0));
       const r = 0.54 * scale;
       ctx.save();
-      const bg = ctx.createRadialGradient(cx, cy, r * 0.12, cx, cy, r * 2.6);
-      bg.addColorStop(0, 'rgba(254, 240, 138, 0.92)');
-      bg.addColorStop(0.45, 'rgba(34, 211, 238, 0.45)');
-      bg.addColorStop(1, 'rgba(34, 211, 238, 0)');
-      ctx.fillStyle = bg;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 2.6, 0, Math.PI * 2);
-      ctx.fill();
+      if (warmStamp) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 + pulse * 0.25;
+        ctx.drawImage(warmStamp, cx - r * 2.5, cy - r * 2.5, r * 5.0, r * 5.0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
 
       // Rotating dashed energy ring
       ctx.save();
@@ -2661,24 +3033,23 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 2d. Glowing Speargun Weapon Upgrade Holo-Pods (SPLIT / RAPID / PLASMA / SEEKER)
+    // 2d. Glowing Speargun Weapon Upgrade Holo-Pods (SPLIT / RAPID / PLASMA / SEEKER — zero gradient alloc!)
     for (const pod of lair.weaponUpgrades || []) {
       const meta = BOSS_WEAPON_UPGRADES[pod.kind] || BOSS_WEAPON_UPGRADES.twin;
       const ux = toScreenX(pod.x);
       const uy = toScreenY(pod.y);
+      if (ux < -70 || ux > cw + 70 || uy < -70 || uy > ch + 70) continue;
       const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.8 + (pod.phase || 0));
       const r = 0.64 * scale;
       ctx.save();
-      const ug = ctx.createRadialGradient(ux, uy, r * 0.12, ux, uy, r * 2.8);
-      ug.addColorStop(0, '#ffffff');
-      ug.addColorStop(0.35, meta.color);
-      ug.addColorStop(1, 'rgba(15, 23, 42, 0)');
-      ctx.globalAlpha = 0.55 + pulse * 0.25;
-      ctx.fillStyle = ug;
-      ctx.beginPath();
-      ctx.arc(ux, uy, r * 2.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      const podStamp = (pod.kind === 'rapid' || pod.kind === 'overcharge') ? (warmStamp || healStamp) : healStamp;
+      if (podStamp) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 + pulse * 0.25;
+        ctx.drawImage(podStamp, ux - r * 2.7, uy - r * 2.7, r * 5.4, r * 5.4);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
 
       // Rotating hexagonal tactical housing
       ctx.save();
@@ -3060,10 +3431,13 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 5. Enemy Plasma-Ink Orbs & Bubbling Bio-Brine Globules (velocity-stretched comet visuals, v188)
+    // 5. Enemy Plasma-Ink Orbs & Bubbling Bio-Brine Globules (v193 zero-gradient-alloc mobile 60 FPS fast path!)
+    const projGlowCyan = this.glowStamps?.cyan;
+    const projGlowWarm = this.glowStamps?.warm;
     for (const pr of lair.enemyProjectiles || []) {
       const px = toScreenX(pr.x);
       const py = toScreenY(pr.y);
+      if (px < -70 || px > cw + 70 || py < -70 || py > ch + 70) continue;
       const prR = pr.radius * scale;
       const pAng = Math.atan2(pr.vy || 0, pr.vx || 1);
       const col = pr.color || '#c084fc';
@@ -3071,21 +3445,19 @@ export const bossAndLairMethods = {
       ctx.translate(px, py);
       ctx.rotate(pAng);
 
-      // Soft radial outer aura
-      const pg = ctx.createRadialGradient(0, 0, prR * 0.1, 0, 0, prR * 2.1);
-      pg.addColorStop(0, '#ffffff');
-      pg.addColorStop(0.35, col);
-      pg.addColorStop(1, 'rgba(192, 132, 252, 0)');
-      ctx.fillStyle = pg;
-      ctx.beginPath();
-      ctx.arc(0, 0, prR * 2.1, 0, Math.PI * 2);
-      ctx.fill();
+      // Soft outer halo via pre-baked glowStamp (0 per-projectile gradient allocations!)
+      const gStamp = (pr.kind === 'slag' || pr.kind === 'prism') ? (projGlowWarm || projGlowCyan) : projGlowCyan;
+      if (gStamp) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.58;
+        ctx.drawImage(gStamp, -prR * 2.1, -prR * 2.1, prR * 4.2, prR * 4.2);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
 
-      // Velocity-aligned comet tail wisp
-      const tailG = ctx.createLinearGradient(-prR * 2.6, 0, prR * 0.6, 0);
-      tailG.addColorStop(0, 'rgba(15, 23, 42, 0)');
-      tailG.addColorStop(1, col);
-      ctx.fillStyle = tailG;
+      // Velocity-aligned comet tail wisp (flat translucent fill = zero gradient alloc!)
+      ctx.globalAlpha = 0.44;
+      ctx.fillStyle = col;
       ctx.beginPath();
       ctx.moveTo(-prR * 2.5, 0);
       ctx.quadraticCurveTo(-prR * 0.6, -prR * 0.85, prR * 0.6, -prR * 0.45);
@@ -3093,6 +3465,7 @@ export const bossAndLairMethods = {
       ctx.quadraticCurveTo(-prR * 0.6, prR * 0.85, -prR * 2.5, 0);
       ctx.closePath();
       ctx.fill();
+      ctx.globalAlpha = 1;
 
       // Solid stylized orb core with dark contour & glossy specular dot
       ctx.fillStyle = pr.kind === 'brine' ? '#bef264' : col;
@@ -3189,10 +3562,13 @@ export const bossAndLairMethods = {
       }
     }
 
-    // 5e. Biome-Unique Signature Boss Hazards: Naval Depth-Charge Mines, Glacial Frost Rings & Starlight Orb Turrets (v192)
+    // 5e. Biome-Unique Signature Boss Hazards: Mines, Frost Rings, Star Orbs, Thermal Vent Geysers & Solar Caustic Lances (v192-v193)
     for (const hz of lair.bossHazards || []) {
       const hx = toScreenX(hz.x);
       const hy = toScreenY(hz.y);
+      if (hz.kind !== 'frost-ring' && hz.kind !== 'sun-lance' && hz.kind !== 'vent-geyser') {
+        if (hx < -90 || hx > cw + 90 || hy < -90 || hy > ch + 90) continue;
+      }
       if (hz.kind === 'naval-mine') {
         const mr = (hz.radius || 1.35) * scale;
         const blink = Math.sin(timeSec * (hz.fuseSec < 2.4 ? 18 : 6.5) + (hz.phase || 0)) > 0;
@@ -3221,17 +3597,17 @@ export const bossAndLairMethods = {
           ctx.arc(Math.cos(a) * mr * 1.24, Math.sin(a) * mr * 1.24, Math.max(2, mr * 0.16), 0, Math.PI * 2);
           ctx.fill();
         }
-        const mg = ctx.createRadialGradient(-mr * 0.25, -mr * 0.25, mr * 0.1, 0, 0, mr);
-        mg.addColorStop(0, hz.hitFlash > 0 ? '#ffffff' : '#64748b');
-        mg.addColorStop(0.55, '#334155');
-        mg.addColorStop(1, '#0f172a');
-        ctx.fillStyle = mg;
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#334155';
         ctx.strokeStyle = '#041021';
         ctx.lineWidth = Math.max(1.8, 0.075 * scale);
         ctx.beginPath();
         ctx.arc(0, 0, mr * 0.85, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.arc(-mr * 0.24, -mr * 0.24, mr * 0.28, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = blink ? '#f97316' : '#fef08a';
         ctx.beginPath();
         ctx.arc(0, 0, mr * 0.28, 0, Math.PI * 2);
@@ -3270,17 +3646,15 @@ export const bossAndLairMethods = {
         const or = (hz.radius || 1.05) * scale;
         ctx.save();
         ctx.translate(hx, hy);
-        const og = ctx.createRadialGradient(0, 0, or * 0.1, 0, 0, or * 1.7);
-        og.addColorStop(0, '#ffffff');
-        og.addColorStop(0.4, hz.hitFlash > 0 ? '#ffffff' : '#fde047');
-        og.addColorStop(0.75, 'rgba(244, 114, 182, 0.45)');
-        og.addColorStop(1, 'rgba(244, 114, 182, 0)');
-        ctx.fillStyle = og;
-        ctx.beginPath();
-        ctx.arc(0, 0, or * 1.7, 0, Math.PI * 2);
-        ctx.fill();
+        if (warmStamp) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.72;
+          ctx.drawImage(warmStamp, -or * 1.8, -or * 1.8, or * 3.6, or * 3.6);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
         ctx.rotate(timeSec * 2.4);
-        ctx.fillStyle = '#fef9c3';
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#fef9c3';
         ctx.strokeStyle = '#713f12';
         ctx.lineWidth = Math.max(1.5, 0.06 * scale);
         ctx.beginPath();
@@ -3294,10 +3668,150 @@ export const bossAndLairMethods = {
         ctx.fill();
         ctx.stroke();
         ctx.restore();
+      } else if (hz.kind === 'vent-geyser') {
+        // Boiling Hydrothermal Vent Geyser Column + shootable glowing basalt vent cap (v193)
+        const halfW = (hz.halfWidth || 1.65) * scale;
+        const colH = (hz.height || 18.0) * scale;
+        const pulse = 0.55 + 0.45 * Math.sin(timeSec * 14);
+        ctx.save();
+        if (hz.erupting) {
+          // Superheated towering undulating magma-steam eruption plume (feathered organic silhouette!)
+          ctx.globalCompositeOperation = 'lighter';
+          const segs = 10;
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.28)';
+          ctx.beginPath();
+          ctx.moveTo(hx - halfW * 0.72, hy);
+          for (let s = 1; s <= segs; s++) {
+            const f = s / segs;
+            const w = halfW * (0.72 + f * 0.48) + Math.sin(timeSec * 9 - f * 7) * halfW * 0.14;
+            ctx.lineTo(hx - w, hy - f * colH);
+          }
+          for (let s = segs; s >= 0; s--) {
+            const f = s / segs;
+            const w = halfW * (0.72 + f * 0.48) + Math.cos(timeSec * 8.4 - f * 6.5) * halfW * 0.14;
+            ctx.lineTo(hx + w, hy - f * colH);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = 'rgba(254, 240, 138, 0.44)';
+          ctx.beginPath();
+          ctx.moveTo(hx - halfW * 0.34, hy);
+          for (let s = 1; s <= segs; s++) {
+            const f = s / segs;
+            const sway = Math.sin(timeSec * 11 - f * 8) * halfW * 0.12;
+            ctx.lineTo(hx - halfW * (0.34 + f * 0.14) + sway, hy - f * colH);
+          }
+          for (let s = segs; s >= 0; s--) {
+            const f = s / segs;
+            const sway = Math.sin(timeSec * 11 - f * 8) * halfW * 0.12;
+            ctx.lineTo(hx + halfW * (0.34 + f * 0.14) + sway, hy - f * colH);
+          }
+          ctx.closePath();
+          ctx.fill();
+          // Rising boiling steam-ember pockets
+          ctx.fillStyle = 'rgba(255, 247, 237, 0.72)';
+          for (let b = 0; b < 6; b++) {
+            const frac = ((timeSec * 2.6 + b * 0.18) % 1);
+            const by = hy - frac * colH;
+            const bx = hx + Math.sin(timeSec * 7 + b * 2.1) * halfW * 0.45;
+            ctx.beginPath();
+            ctx.arc(bx, by, Math.max(2.5, (0.28 + (1 - frac) * 0.28) * scale), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'source-over';
+        } else {
+          // Floor fissure warning telegraph shimmer
+          ctx.strokeStyle = `rgba(251, 146, 60, ${(0.45 + pulse * 0.48).toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+          ctx.setLineDash([6 * dpr, 5 * dpr]);
+          ctx.beginPath();
+          ctx.moveTo(hx - halfW * 0.75, hy);
+          ctx.lineTo(hx - halfW * 0.75, hy - colH * 0.85);
+          ctx.moveTo(hx + halfW * 0.75, hy);
+          ctx.lineTo(hx + halfW * 0.75, hy - colH * 0.85);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // Shootable volcanic basalt vent cap node at base
+        const capR = (hz.radius || 1.35) * scale;
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#292524';
+        ctx.strokeStyle = '#fb923c';
+        ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+        ctx.beginPath();
+        ctx.moveTo(hx - capR, hy + capR * 0.35);
+        ctx.lineTo(hx - capR * 0.62, hy - capR * 0.72);
+        ctx.lineTo(hx + capR * 0.62, hy - capR * 0.72);
+        ctx.lineTo(hx + capR, hy + capR * 0.35);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(hx, hy - capR * 0.28, capR * 0.28 * (0.8 + pulse * 0.25), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (hz.kind === 'sun-lance') {
+        // Refracting Solar Caustic Lance + Hydro-Dash shatterable Sun-Prism Node (v193)
+        const ang = hz.angle || 0;
+        const lenPx = (hz.length || 25.0) * scale;
+        const ex = hx + Math.cos(ang) * lenPx;
+        const ey = hy + Math.sin(ang) * lenPx;
+        const pr = (hz.radius || 1.25) * scale;
+        const pulse = 0.55 + 0.45 * Math.sin(timeSec * 15);
+        ctx.save();
+        if (hz.firing) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.42)';
+          ctx.lineWidth = Math.max(12, 1.35 * scale);
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(254, 249, 195, 0.94)';
+          ctx.lineWidth = Math.max(4, 0.46 * scale);
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.globalCompositeOperation = 'source-over';
+        } else {
+          // Crisp golden refracting aim telegraph line
+          ctx.strokeStyle = `rgba(253, 224, 71, ${(0.4 + pulse * 0.45).toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+          ctx.setLineDash([7 * dpr, 5 * dpr]);
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // Rotating Sun-Prism Crystal Node
+        ctx.translate(hx, hy);
+        ctx.rotate(timeSec * 2.8);
+        if (warmStamp) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.68;
+          ctx.drawImage(warmStamp, -pr * 1.9, -pr * 1.9, pr * 3.8, pr * 3.8);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#fde047';
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+        ctx.beginPath();
+        ctx.moveTo(0, -pr * 0.95);
+        ctx.lineTo(pr * 0.72, 0);
+        ctx.lineTo(0, pr * 0.95);
+        ctx.lineTo(-pr * 0.72, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
       }
     }
 
-    // 6. Hyper-Tip Ready Golden Glow on Diver's Speargun Tip (respects Overcharge upgrade cadence!)
+    // 6. Hyper-Tip Ready Golden Glow on Diver's Speargun Tip (zero gradient alloc!)
     const overLv = lair.weaponMods?.overcharge || 0;
     const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;
     if (lair.combatMode && lair.weaponEquipped && !lair.bossDefeated && diver && (lair.shotCounter || 0) % hyperEvery === hyperEvery - 1) {
@@ -3306,13 +3820,16 @@ export const bossAndLairMethods = {
       const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.05);
       const hr = (0.38 + 0.08 * Math.sin(timeSec * 14)) * scale;
       ctx.save();
-      const hg = ctx.createRadialGradient(hx, hy, hr * 0.1, hx, hy, hr * 2.2);
-      hg.addColorStop(0, '#ffffff');
-      hg.addColorStop(0.45, '#fde047');
-      hg.addColorStop(1, 'rgba(250, 204, 21, 0)');
-      ctx.fillStyle = hg;
+      if (warmStamp) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(warmStamp, hx - hr * 2.2, hy - hr * 2.2, hr * 4.4, hr * 4.4);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = '#fef9c3';
       ctx.beginPath();
-      ctx.arc(hx, hy, hr * 2.2, 0, Math.PI * 2);
+      ctx.arc(hx, hy, hr * 0.65, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

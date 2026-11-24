@@ -797,32 +797,46 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.arc(u * 0.43, headY, u * 0.32, Math.PI * 0.9, Math.PI * 1.9);
     ctx.stroke();
-  } else if (headgearId === 'brass-hardhat') {
-    // Riveted Mark V antique bronze/brass deep-salvage dome with heavy breastplate collar
-    ctx.fillStyle = '#92400e';
+  } else if (headgearId === 'brass-hardhat' || headgearId === 'secret-dreadnought-helm') {
+    const isMk4 = headgearId === 'secret-dreadnought-helm';
+    // Riveted Mark V antique bronze/brass deep-salvage dome (or WWII Mk-IV Dreadnought armored helm!)
+    ctx.fillStyle = isMk4 ? '#78350f' : '#92400e';
     ctx.beginPath();
-    ctx.arc(u * 0.44, headY, u * 0.37, 0, Math.PI * 2);
+    ctx.arc(u * 0.44, headY, u * (isMk4 ? 0.39 : 0.37), 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#d97706';
+    ctx.fillStyle = isMk4 ? '#b45309' : '#d97706';
     ctx.beginPath();
-    ctx.arc(u * 0.42, headY - u * 0.04, u * 0.31, Math.PI * 0.95, Math.PI * 2.05);
+    ctx.arc(u * 0.42, headY - u * 0.04, u * (isMk4 ? 0.33 : 0.31), Math.PI * 0.95, Math.PI * 2.05);
     ctx.fill();
-    ctx.strokeStyle = '#fde68a';
+    ctx.strokeStyle = isMk4 ? '#f59e0b' : '#fde68a';
     ctx.lineWidth = Math.max(1.4, u * 0.048);
     ctx.beginPath();
-    ctx.arc(u * 0.44, headY, u * 0.36, 0, Math.PI * 2);
+    ctx.arc(u * 0.44, headY, u * (isMk4 ? 0.38 : 0.36), 0, Math.PI * 2);
     ctx.stroke();
     // Brass neck breastplate collar ring + top vent knob
-    ctx.strokeStyle = '#fef08a';
+    ctx.strokeStyle = isMk4 ? '#fbbf24' : '#fef08a';
     ctx.lineWidth = Math.max(1.8, u * 0.07);
     ctx.beginPath();
     ctx.moveTo(u * 0.16, headY - u * 0.24);
     ctx.lineTo(u * 0.16, headY + u * 0.24);
     ctx.stroke();
-    ctx.fillStyle = '#fef08a';
+    ctx.fillStyle = isMk4 ? '#fde047' : '#fef08a';
     ctx.beginPath();
-    ctx.arc(u * 0.42, headY - u * 0.37, Math.max(1.6, u * 0.06), 0, Math.PI * 2);
+    ctx.arc(u * 0.42, headY - u * (isMk4 ? 0.39 : 0.37), Math.max(1.6, u * 0.06), 0, Math.PI * 2);
     ctx.fill();
+    if (isMk4) {
+      // Twin armored bronze brow rivets + glowing amber dreadnought crown lamp
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(u * 0.60, headY - u * 0.27, Math.max(1.4, u * 0.052), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = Math.max(1.1, u * 0.036);
+      ctx.beginPath();
+      ctx.moveTo(u * 0.32, headY - u * 0.35);
+      ctx.lineTo(u * 0.32, headY + u * 0.34);
+      ctx.stroke();
+    }
   } else {
     // Classic Zissou Beanie with subtle stripe accent & top rim catchlight
     ctx.fillStyle = '#0f172a';
@@ -887,6 +901,24 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.roundRect(u * 0.55, u * 0.08, u * 0.22, u * 0.14, u * 0.05);
     ctx.fill();
+    ctx.stroke();
+  } else if (headgearId === 'secret-dreadnought-helm') {
+    // WWII Mk-IV Circular Riveted Brass Porthole Visor + protective cross-grille
+    ctx.fillStyle = '#451a03';
+    ctx.beginPath();
+    ctx.arc(u * 0.62, -u * 0.04, u * 0.17, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(u * 0.63, -u * 0.04, u * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = Math.max(1.2, u * 0.038);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.63, -u * 0.17);
+    ctx.lineTo(u * 0.63, u * 0.09);
+    ctx.moveTo(u * 0.50, -u * 0.04);
+    ctx.lineTo(u * 0.76, -u * 0.04);
     ctx.stroke();
   } else {
     // Frameless Dive Mask with Custom Visor Tint & Curved Specular Glint
@@ -2779,7 +2811,7 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
-  if (itemIdLower.includes('scoresby-borealis-heart') || nameLower.includes('heart of borealis')) {
+  if (itemIdLower.includes('scoresby-borealis-heart') || itemIdLower.includes('scoresby-frost-heart') || nameLower.includes('heart of borealis')) {
     // Six-pointed Arctic Aurora Crystal Star Gem
     ctx.save();
     ctx.rotate(timeSec * 0.35);
@@ -2830,6 +2862,63 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.beginPath();
     ctx.arc(-r * 0.5, r * 0.18, r * 0.12, 0, Math.PI * 2);
     ctx.arc(r * 0.5, r * 0.18, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('bluehole-solar-prism') || nameLower.includes('solar reef prism')) {
+    // Refracting Golden-Turquoise Sunburst Reef Prism Relic (Solar Leviathan Trophy, v193)
+    ctx.save();
+    ctx.rotate(timeSec * 0.45);
+    const sg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef9c3'], [0.5, '#facc15'], [1, '#14b8a6']], '#facc15');
+    ctx.fillStyle = sg;
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let p = 0; p < 16; p++) {
+      const pr = p % 2 === 0 ? r * 0.96 : r * 0.52;
+      const pa = (p * Math.PI) / 8;
+      if (p === 0) ctx.moveTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+      else ctx.lineTo(Math.cos(pa) * pr, Math.sin(pa) * pr);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.48);
+    ctx.lineTo(r * 0.34, 0);
+    ctx.lineTo(0, r * 0.48);
+    ctx.lineTo(-r * 0.34, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('strytan-magma-pearl') || nameLower.includes('heart of the thermal spire')) {
+    // Spiral Basalt-and-Molten-Magma Nautilus Pearl Relic (Hydrothermal Nautilus Trophy, v193)
+    const mg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#f97316'], [1, '#292524']], '#f97316');
+    ctx.fillStyle = mg;
+    ctx.strokeStyle = '#0c0a09';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = Math.max(1.2, lw * 0.85);
+    ctx.beginPath();
+    for (let s = 0; s <= 18; s++) {
+      const a = s * 0.38 + timeSec * 0.5;
+      const sr = (s / 18) * r * 0.68;
+      if (s === 0) ctx.moveTo(Math.cos(a) * sr, Math.sin(a) * sr);
+      else ctx.lineTo(Math.cos(a) * sr, Math.sin(a) * sr);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-r * 0.2, -r * 0.22, r * 0.16, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;

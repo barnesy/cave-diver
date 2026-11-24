@@ -590,6 +590,242 @@ export const SECRET_LAIRS = Object.freeze({
       bonusPoints: 4000,
     }),
   }),
+
+  // === BOSS 5 (Red Sea Reef Secret Lair): Blue Hole & The Arch -> SOLAR LEVIATHAN (v193) ===
+  'blue-hole-dahab-arch': Object.freeze({
+    id: 'bluehole-helios-grotto',
+    levelId: 'blue-hole-dahab-arch',
+    name: 'The Sunken Helios Grotto',
+    veil: Object.freeze({
+      id: 'bh-vault-veil',
+      x: 292.2,
+      y: 52.2,
+      radius: 2.2,
+      sealWallX: 291.0,
+      sealMinY: 48.0,
+      sealMaxY: 56.5,
+      failsafeX: 297.5,
+      label: 'Sunlit Coral Reef Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'bh-speargun-rack',
+      x: 308.0,
+      y: 53.8,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 305.0, y: 55.4 }),
+      Object.freeze({ kind: 'dive-strobe', x: 311.0, y: 51.8 }),
+      Object.freeze({ kind: 'bio-coral', x: 328.0, y: 55.5 }),
+      Object.freeze({ kind: 'temple-column', x: 352.0, y: 58.5 }),
+      Object.freeze({ kind: 'mayan-glyphs', x: 374.0, y: 60.2 }),
+      Object.freeze({ kind: 'monolith', x: 401.5, y: 57.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 401.5, y: 66.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 352.0,
+    arena: Object.freeze({
+      cx: 432.0,
+      cy: 62.0,
+      triggerX: 406.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 399.5,
+      respawnY: 62.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'bh-p-west', x: 416.5, y: 65.5, radius: 2.1 }),
+        Object.freeze({ id: 'bh-p-north', x: 431.5, y: 54.4, radius: 2.0 }),
+        Object.freeze({ id: 'bh-p-east', x: 446.5, y: 65.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 411.0, y: 55.5, color: '#fde047', radius: 14.5 }),
+        Object.freeze({ x: 421.0, y: 71.5, color: '#38bdf8', radius: 14.5 }),
+        Object.freeze({ x: 426.0, y: 51.2, color: '#facc15', radius: 15.5 }),
+        Object.freeze({ x: 442.5, y: 51.5, color: '#fde047', radius: 15.5 }),
+        Object.freeze({ x: 443.5, y: 71.2, color: '#2dd4bf', radius: 14.5 }),
+        Object.freeze({ x: 454.0, y: 59.0, color: '#facc15', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 440.0, y: 62.0 }),
+        Object.freeze({ x: 425.5, y: 60.8 }),
+        Object.freeze({ x: 444.5, y: 59.0 }),
+        Object.freeze({ x: 432.0, y: 66.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'bh-stage-1', x: 411.5, y: 59.5, label: 'Helios Rim Stage (West)' }),
+        Object.freeze({ id: 'bh-stage-2', x: 431.0, y: 71.0, label: 'Helios Rim Stage (South)' }),
+        Object.freeze({ id: 'bh-stage-3', x: 452.0, y: 62.5, label: 'Helios Rim Stage (East)' }),
+        Object.freeze({ id: 'bh-stage-4', x: 435.0, y: 52.2, label: 'Helios Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'bh-corridor-stage', x: 352.0, y: 58.2, label: 'Reef Grotto Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'bh-pad-w', x: 412.0, y: 59.6 }),
+        Object.freeze({ id: 'bh-pad-nw', x: 422.5, y: 55.4 }),
+        Object.freeze({ id: 'bh-pad-s', x: 431.5, y: 70.4 }),
+        Object.freeze({ id: 'bh-pad-ne', x: 442.0, y: 55.2 }),
+        Object.freeze({ id: 'bh-pad-e', x: 451.5, y: 62.2 }),
+        Object.freeze({ id: 'bh-pad-se', x: 444.0, y: 70.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 350.0, y: 58.5 }),
+      corridorUpgrade: Object.freeze({ x: 368.0, y: 60.0, kind: 'twin' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-bh-w', x: 422.0, y: 50.8, floorY: 72.8, style: 'coral' }),
+        Object.freeze({ id: 'stal-bh-c', x: 433.5, y: 50.2, floorY: 73.0, style: 'coral' }),
+        Object.freeze({ id: 'stal-bh-e', x: 444.5, y: 50.8, floorY: 72.6, style: 'coral' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 432.0,
+        y: 54.0,
+        radius: 3.6,
+        destX: 304.5,
+        destY: 6.0,
+        label: 'Solar Caustic Updraft → Bells 6m Deco Chasm',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'bh-m1', kind: 'moray', name: 'Red Sea Sun Moray', x: 324.0, y: 55.5, hp: 108, radius: 1.2, dropOrb: true }),
+      Object.freeze({ id: 'bh-m2', kind: 'swarmer', name: 'Caustic Reef Jelly', x: 339.0, y: 57.2, hp: 85, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'bh-m3', kind: 'swarmer', name: 'Caustic Reef Jelly', x: 349.0, y: 58.2, hp: 88, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'bh-m4', kind: 'moray', name: 'Red Sea Sun Moray', x: 364.0, y: 59.5, hp: 115, radius: 1.22, dropOrb: false }),
+      Object.freeze({ id: 'bh-m5', kind: 'stalker', name: 'Coral-Shell Stalker', x: 380.0, y: 60.8, hp: 215, radius: 1.54, dropOrb: true }),
+      Object.freeze({ id: 'bh-m6', kind: 'stalker', name: 'Coral-Shell Stalker', x: 392.0, y: 61.5, hp: 225, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-solar-leviathan',
+      kind: 'solar-leviathan',
+      musicTheme: 'solar',
+      icon: '☀️',
+      name: 'SOLAR LEVIATHAN',
+      title: 'Radiant Red Sea Caustic Reef Serpent',
+      x: 439.0,
+      y: 62.0,
+      radius: 4.5,
+      baseHp: 4400,
+      trophyRelicId: 'bluehole-solar-prism',
+      trophyName: 'Solar Reef Prism',
+      bonusPoints: 3000,
+    }),
+  }),
+
+  // === BOSS 6 (Iceland Geothermal Secret Lair): Strýtan -> HYDROTHERMAL NAUTILUS (v193) ===
+  'strytan-hydrothermal-chimneys': Object.freeze({
+    id: 'strytan-caldron-vault',
+    levelId: 'strytan-hydrothermal-chimneys',
+    name: 'The Caldron Spire Vault',
+    veil: Object.freeze({
+      id: 'str-vault-veil',
+      x: 276.2,
+      y: 88.2,
+      radius: 2.2,
+      sealWallX: 275.0,
+      sealMinY: 84.0,
+      sealMaxY: 92.5,
+      failsafeX: 281.5,
+      label: 'Geothermal Basalt Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'str-speargun-rack',
+      x: 292.0,
+      y: 89.8,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 289.0, y: 91.4 }),
+      Object.freeze({ kind: 'dive-strobe', x: 295.0, y: 87.8 }),
+      Object.freeze({ kind: 'thermal-vent', x: 312.0, y: 92.2 }),
+      Object.freeze({ kind: 'thermal-vent', x: 336.0, y: 95.0 }),
+      Object.freeze({ kind: 'temple-column', x: 358.0, y: 96.2 }),
+      Object.freeze({ kind: 'monolith', x: 385.5, y: 93.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 385.5, y: 102.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 336.0,
+    arena: Object.freeze({
+      cx: 416.0,
+      cy: 98.0,
+      triggerX: 390.0,
+      rx: 28.0,
+      ry: 13.5,
+      respawnX: 383.5,
+      respawnY: 98.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'str-p-west', x: 400.5, y: 101.5, radius: 2.1 }),
+        Object.freeze({ id: 'str-p-north', x: 415.5, y: 90.4, radius: 2.0 }),
+        Object.freeze({ id: 'str-p-east', x: 430.5, y: 101.8, radius: 2.1 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 395.0, y: 91.5, color: '#fb923c', radius: 14.0 }),
+        Object.freeze({ x: 405.0, y: 107.5, color: '#f97316', radius: 14.5 }),
+        Object.freeze({ x: 410.0, y: 87.2, color: '#fbbf24', radius: 15.0 }),
+        Object.freeze({ x: 426.5, y: 87.5, color: '#fb923c', radius: 15.0 }),
+        Object.freeze({ x: 427.5, y: 107.2, color: '#ef4444', radius: 14.5 }),
+        Object.freeze({ x: 438.0, y: 95.0, color: '#fbbf24', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 424.0, y: 98.0 }),
+        Object.freeze({ x: 409.5, y: 96.8 }),
+        Object.freeze({ x: 428.5, y: 95.0 }),
+        Object.freeze({ x: 416.0, y: 102.2 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'str-stage-1', x: 395.5, y: 95.5, label: 'Caldron Rim Stage (West)' }),
+        Object.freeze({ id: 'str-stage-2', x: 415.0, y: 107.0, label: 'Caldron Rim Stage (South)' }),
+        Object.freeze({ id: 'str-stage-3', x: 436.0, y: 98.5, label: 'Caldron Rim Stage (East)' }),
+        Object.freeze({ id: 'str-stage-4', x: 419.0, y: 88.2, label: 'Caldron Rim Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'str-corridor-stage', x: 336.0, y: 94.2, label: 'Smectite Rift Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'str-pad-w', x: 396.0, y: 95.6 }),
+        Object.freeze({ id: 'str-pad-nw', x: 406.5, y: 91.4 }),
+        Object.freeze({ id: 'str-pad-s', x: 415.5, y: 106.4 }),
+        Object.freeze({ id: 'str-pad-ne', x: 426.0, y: 91.2 }),
+        Object.freeze({ id: 'str-pad-e', x: 435.5, y: 98.2 }),
+        Object.freeze({ id: 'str-pad-se', x: 428.0, y: 106.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 334.0, y: 94.5 }),
+      corridorUpgrade: Object.freeze({ x: 352.0, y: 96.0, kind: 'overcharge' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-str-w', x: 406.0, y: 86.8, floorY: 108.8, style: 'basalt' }),
+        Object.freeze({ id: 'stal-str-c', x: 417.5, y: 86.2, floorY: 109.0, style: 'basalt' }),
+        Object.freeze({ id: 'stal-str-e', x: 428.5, y: 86.8, floorY: 108.6, style: 'basalt' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 416.0,
+        y: 90.0,
+        radius: 3.6,
+        destX: 306.0,
+        destY: 6.0,
+        label: 'Geothermal Vent Updraft → Fjord 6m O2 Deco Crest',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'str-m1', kind: 'moray', name: 'Magma-Vein Moray', x: 308.0, y: 91.5, hp: 118, radius: 1.22, dropOrb: true }),
+      Object.freeze({ id: 'str-m2', kind: 'swarmer', name: 'Thermal Vent Jelly', x: 323.0, y: 93.2, hp: 92, radius: 1.02, dropOrb: false }),
+      Object.freeze({ id: 'str-m3', kind: 'swarmer', name: 'Thermal Vent Jelly', x: 333.0, y: 94.2, hp: 94, radius: 1.02, dropOrb: true }),
+      Object.freeze({ id: 'str-m4', kind: 'moray', name: 'Magma-Vein Moray', x: 348.0, y: 95.5, hp: 124, radius: 1.24, dropOrb: false }),
+      Object.freeze({ id: 'str-m5', kind: 'stalker', name: 'Basalt-Armor Stalker', x: 364.0, y: 96.8, hp: 235, radius: 1.56, dropOrb: true }),
+      Object.freeze({ id: 'str-m6', kind: 'stalker', name: 'Basalt-Armor Stalker', x: 376.0, y: 97.5, hp: 245, radius: 1.56, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-thermal-nautilus',
+      kind: 'thermal-nautilus',
+      musicTheme: 'volcanic',
+      icon: '🌋',
+      name: 'HYDROTHERMAL NAUTILUS',
+      title: 'Armored Volcanic Smectite Spire Titan',
+      x: 423.0,
+      y: 98.0,
+      radius: 4.6,
+      baseHp: 4850,
+      trophyRelicId: 'strytan-magma-pearl',
+      trophyName: 'Heart of the Thermal Spire',
+      bonusPoints: 3500,
+    }),
+  }),
 });
 
 export function getSecretLairForLevel(levelId) {
@@ -2500,7 +2736,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
     let hitHazard = false;
     for (let hi = (lair.bossHazards || []).length - 1; hi >= 0; hi--) {
       const hz = lair.bossHazards[hi];
-      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb')) continue;
+      if (!hz || (hz.kind !== 'naval-mine' && hz.kind !== 'star-orb' && hz.kind !== 'vent-geyser' && hz.kind !== 'sun-lance')) continue;
       if (distPointToSegment(hz.x, hz.y, sp.prevX, sp.prevY, sp.x, sp.y) <= (hz.radius || 1.2) + 0.55) {
         hz.hp = Math.max(0, (hz.hp || 2) - (sp.piercing ? 2 : 1));
         hz.hitFlash = 0.2;
@@ -2515,9 +2751,33 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
               session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
             }
             callbacks.onCrystalChime?.(3);
+          } else if (hz.kind === 'vent-geyser') {
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 7.2, '#fb923c', 0.52);
+            if (boss.active && !boss.defeated && Math.hypot(boss.x - hz.x, boss.y - hz.y) <= 13.5) {
+              const dmg = Math.round(175 * (lair.scaling?.damageMult || 1));
+              boss.hp = Math.max(0, boss.hp - dmg);
+              boss.hitFlash = 0.35;
+              lair.totalDamageDealt = (lair.totalDamageDealt || 0) + dmg;
+              addSparkBurst(lair, boss.x, boss.y, '#fb923c', 18, `🌋 VENT BLAST! -${dmg}`, true);
+            } else {
+              addSparkBurst(lair, hz.x, hz.y, '#fb923c', 12, '🌋 VENT CAPPED! +15% ⚡', true);
+            }
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 15);
+            }
+            callbacks.onMineBlast?.();
+          } else if (hz.kind === 'sun-lance') {
+            lair.bossHazards.splice(hi, 1);
+            addShockwave(lair, hz.x, hz.y, 5.4, '#fde047', 0.44);
+            addSparkBurst(lair, hz.x, hz.y, '#fde047', 14, '☀️ PRISM SHATTERED! +18% ⚡', true);
+            if (session.dpv?.equipped) {
+              session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 18);
+            }
+            callbacks.onCrystalChime?.(3);
           }
         } else {
-          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' ? '#fb923c' : '#fde047', 6, 'PING!', false);
+          addSparkBurst(lair, hz.x, hz.y, hz.kind === 'naval-mine' || hz.kind === 'vent-geyser' ? '#fb923c' : '#fde047', 6, 'PING!', false);
           callbacks.onCrystalChime?.(1);
         }
         if (!sp.piercing) {
@@ -2725,6 +2985,66 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           color: '#fde047',
           kind: 'prism',
         });
+      }
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'vent-geyser') {
+      hz.life = (hz.life ?? 4.2) - dt;
+      const warnSec = hz.warnSec ?? 1.45;
+      hz.erupting = hz.age >= warnSec;
+      if (hz.erupting && diveState?.alive && !boss.defeated) {
+        const halfW = hz.halfWidth || 1.65;
+        const colTop = hz.y - (hz.height || 18.0);
+        if (Math.abs(diver.x - hz.x) <= halfW && diver.y >= colTop && diver.y <= hz.y + 1.2) {
+          // Strong thermal updraft push + scald damage unless Hydro-Dashing through i-frames
+          diver.vy = Math.min(diver.vy || 0, -5.8);
+          if ((lair.dashIframesSec || 0) <= 0 && (hz.hitCd || 0) <= 0) {
+            hz.hitCd = 0.72;
+            applyDamageToLocalDiver(session, 14 * lair.scaling.damageMult, `${boss.name}'s Thermal Vent`, callbacks);
+            addSparkBurst(lair, diver.x, diver.y, '#fb923c', 10, '🌋 SCALDING PLUME!', false);
+          }
+        }
+      }
+      if ((hz.hitCd || 0) > 0) hz.hitCd = Math.max(0, hz.hitCd - dt);
+      if (hz.life <= 0) {
+        lair.bossHazards.splice(hi, 1);
+      }
+    } else if (hz.kind === 'sun-lance') {
+      hz.life = (hz.life ?? 2.35) - dt;
+      const warnSec = hz.warnSec ?? 1.35;
+      hz.firing = hz.age >= warnSec;
+      // Hydro-Dash straight through the charging Sun Prism node to shatter it for a massive counter-CRIT!
+      if (!hz.firing && diveState?.alive && (lair.dashTimerSec || 0) > 0 && Math.hypot(diver.x - hz.x, diver.y - hz.y) <= (hz.radius || 1.35) + 1.4) {
+        lair.bossHazards.splice(hi, 1);
+        addShockwave(lair, hz.x, hz.y, 6.2, '#fde047', 0.45);
+        if (session.dpv?.equipped) {
+          session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + 20);
+        }
+        if (boss.active && !boss.defeated) {
+          const critDmg = Math.round(190 * (lair.scaling?.damageMult || 1));
+          boss.hp = Math.max(0, boss.hp - critDmg);
+          boss.hitFlash = 0.38;
+          lair.totalDamageDealt = (lair.totalDamageDealt || 0) + critDmg;
+          addSparkBurst(lair, boss.x, boss.y, '#fde047', 18, `☀️ PRISM REFLECT! -${critDmg}`, true);
+        } else {
+          addSparkBurst(lair, hz.x, hz.y, '#fde047', 14, '☀️ PRISM SHATTER! +20% ⚡', true);
+        }
+        callbacks.onCrystalChime?.(3);
+        continue;
+      }
+      if (hz.firing && diveState?.alive && !hz.hitLocal && !boss.defeated) {
+        const ang = hz.angle || 0;
+        const len = hz.length || 24.0;
+        const ex = hz.x + Math.cos(ang) * len;
+        const ey = hz.y + Math.sin(ang) * len;
+        if (distPointToSegment(diver.x, diver.y, hz.x, hz.y, ex, ey) <= 1.05) {
+          if ((lair.dashIframesSec || 0) <= 0) {
+            hz.hitLocal = true;
+            applyDamageToLocalDiver(session, 16 * lair.scaling.damageMult, `${boss.name}'s Solar Lance`, callbacks);
+            addSparkBurst(lair, diver.x, diver.y, '#fde047', 12, '☀️ SOLAR SCORCH!', false);
+          }
+        }
       }
       if (hz.life <= 0) {
         lair.bossHazards.splice(hi, 1);
@@ -3179,19 +3499,19 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             ? boss.inkAimAngle
             : Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
           const spread = boss.phase === 3 ? 0.23 : 0.27;
-          const projKind = boss.kind === 'iron-leviathan'
+          const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus')
             ? 'slag'
             : boss.kind === 'frost-wyrm'
               ? 'frost'
-              : boss.kind === 'abyssal-empress'
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
-            ? '#fb923c'
+            ? (boss.kind === 'thermal-nautilus' ? '#f97316' : '#fb923c')
             : projKind === 'frost'
               ? '#67e8f9'
               : projKind === 'prism'
-                ? (boss.phase >= 3 ? '#fde047' : '#f472b6')
+                ? (boss.kind === 'solar-leviathan' ? '#fde047' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3458,11 +3778,13 @@ export function serializeSecretLairNetState(lair) {
     wu: (lair.weaponUpgrades || []).slice(0, 3).map((u) => [u.id, u.kind, Math.round(u.x * 10) / 10, Math.round(u.y * 10) / 10, u.inArena ? 1 : 0]),
     st: (lair.stalactites || []).map((s) => [s.state === 'falling' ? 1 : s.state === 'broken' ? 2 : 0, Math.round(s.y * 10) / 10, s.hp]),
     hz: (lair.bossHazards || []).slice(0, 6).map((h) => [
-      h.kind === 'naval-mine' ? 1 : h.kind === 'frost-ring' ? 2 : 3,
+      h.kind === 'naval-mine' ? 1 : h.kind === 'frost-ring' ? 2 : h.kind === 'star-orb' ? 3 : h.kind === 'vent-geyser' ? 4 : 5,
       Math.round(h.x * 10) / 10,
       Math.round(h.y * 10) / 10,
       Math.round((h.radius || 1.2) * 10) / 10,
       h.hp || 0,
+      Math.round(((h.angle || 0) * 100)) / 100,
+      h.erupting || h.firing ? 1 : 0,
     ]),
   };
 }
@@ -3573,14 +3895,20 @@ export function applySecretLairNetState(lairOrSession, snap) {
     }
   }
   if (Array.isArray(snap.hz)) {
-    lair.bossHazards = snap.hz.map(([code, hx, hy, hr, hp], idx) => ({
+    lair.bossHazards = snap.hz.map(([code, hx, hy, hr, hp, ang, activeFlag], idx) => ({
       id: `net-hz-${idx}`,
-      kind: code === 1 ? 'naval-mine' : code === 2 ? 'frost-ring' : 'star-orb',
+      kind: code === 1 ? 'naval-mine' : code === 2 ? 'frost-ring' : code === 3 ? 'star-orb' : code === 4 ? 'vent-geyser' : 'sun-lance',
       x: hx,
       y: hy,
       radius: hr,
       maxRadius: 17.5,
       hp,
+      angle: ang || 0,
+      erupting: code === 4 && Boolean(activeFlag),
+      firing: code === 5 && Boolean(activeFlag),
+      halfWidth: 1.65,
+      height: 18.0,
+      length: 25.0,
       fuseSec: 6,
       age: 0.5,
       phase: idx * 1.4,
@@ -3713,6 +4041,71 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     }
     return lastOrb;
   }
+
+  if (boss.kind === 'thermal-nautilus') {
+    const existingVents = lair.bossHazards.filter((h) => h.kind === 'vent-geyser').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingVents);
+    let lastVent = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const targetX = k === 0 && session?.diver
+        ? Math.max(ar.cx - ar.rx + 9, Math.min(ar.cx + ar.rx - 9, session.diver.x + (Math.random() - 0.5) * 4))
+        : ar.cx + (Math.random() - 0.5) * (ar.rx * 0.9);
+      const vent = {
+        id: `vent_${++lair._hazardSeq}`,
+        kind: 'vent-geyser',
+        x: targetX,
+        y: ar.cy + ar.ry - 3.8,
+        radius: 1.35,
+        halfWidth: 1.65,
+        height: ar.ry * 1.48,
+        hp: 2,
+        warnSec: boss.phase >= 3 ? 1.15 : 1.45,
+        life: 4.3,
+        erupting: false,
+        hitCd: 0,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(vent);
+      addShockwave(lair, vent.x, vent.y, 3.4, '#fb923c', 0.36);
+      lastVent = vent;
+    }
+    return lastVent;
+  }
+
+  if (boss.kind === 'solar-leviathan') {
+    const existingLances = lair.bossHazards.filter((h) => h.kind === 'sun-lance').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingLances);
+    let lastLance = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const px = ar.cx + (k === 0 ? -10 : 10) + (Math.random() - 0.5) * 6;
+      const py = ar.cy - ar.ry + 4.4 + (Math.random() * 2.5);
+      const aimX = session?.diver?.x ?? ar.cx;
+      const aimY = session?.diver?.y ?? ar.cy;
+      const angle = Math.atan2(aimY - py, aimX - px);
+      const lance = {
+        id: `lance_${++lair._hazardSeq}`,
+        kind: 'sun-lance',
+        x: px,
+        y: py,
+        radius: 1.25,
+        hp: 2,
+        angle,
+        length: 25.0,
+        warnSec: boss.phase >= 3 ? 1.1 : 1.35,
+        life: 2.3,
+        firing: false,
+        hitLocal: false,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(lance);
+      addShockwave(lair, px, py, 3.4, '#fde047', 0.36);
+      lastLance = lance;
+    }
+    callbacks.onCrystalChime?.(2);
+    return lastLance;
+  }
   return null;
 }
 
@@ -3735,7 +4128,9 @@ export function computeTouchAimMagnetAngle(session, rawAngle, maxConeRad = 0.15)
     if (m.alive) candidates.push({ x: m.x, y: m.y, prio: 0.85 });
   }
   for (const hz of lair.bossHazards || []) {
-    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb') candidates.push({ x: hz.x, y: hz.y, prio: 0.95 });
+    if (hz.kind === 'naval-mine' || hz.kind === 'star-orb' || hz.kind === 'vent-geyser' || hz.kind === 'sun-lance') {
+      candidates.push({ x: hz.x, y: hz.y, prio: 0.95 });
+    }
   }
   for (const st of lair.stalactites || []) {
     if (st.state === 'hanging') candidates.push({ x: st.x, y: st.y + 1.1, prio: 0.8 });

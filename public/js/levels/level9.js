@@ -20,7 +20,7 @@ export const LEVEL_9 = {
     "Drop into Sinai's legendary cobalt submarine Blue Hole in the Red Sea. Navigate with NO fixed line using a 205m reel [G], pass beneath the glowing 56m Cathedral Arch, touch the 84m outer reef drop-off, and ascend through The Bells canyon.",
   bounds: {
     xMin: -48,
-    xMax: 386,
+    xMax: 492,
     yMin: -6,
     yMax: 94,
   },
@@ -109,6 +109,18 @@ export const LEVEL_9 = {
     // Dead End 8: High Coastal Coral Pocket near Bells Exit
     { ax: 286, ay: 14.0, bx: 276, by: 6.2, ra: 1.85, rb: 1.6 },
     { ax: 276, ay: 6.2, bx: 266, by: 7.4, ra: 1.6, rb: 2.5 },
+
+    // === Secret Sonar-Only Sunlit Coral Seam -> Sunken Helios Grotto (v193) ===
+    { ax: 290.0, ay: 52.0, bx: 300.0, by: 52.8, ra: 1.5, rb: 1.9, secretLair: true },
+    { ax: 300.0, ay: 52.8, bx: 314.0, by: 54.5, ra: 2.5, rb: 3.6, secretLair: true },
+    { ax: 314.0, ay: 54.5, bx: 336.0, by: 56.5, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 336.0, ay: 56.5, bx: 358.0, by: 59.0, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 358.0, ay: 59.0, bx: 380.0, by: 60.8, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 380.0, ay: 60.8, bx: 404.0, by: 62.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // SUNKEN HELIOS GROTTO - 58m x 26m Boss Arena centered at (432, 62)
+    { ax: 404.0, ay: 62.0, bx: 422.0, by: 62.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 422.0, ay: 62.0, bx: 442.0, by: 62.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 442.0, ay: 62.0, bx: 456.5, by: 62.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
   guideline: [],
   checkpoints: [

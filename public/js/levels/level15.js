@@ -23,7 +23,7 @@ export const LEVEL_15 = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp6',
   ascentSwitchDepthM: 24.0,
-  bounds: { xMin: -44, xMax: 356, yMin: -6, yMax: 146 },
+  bounds: { xMin: -44, xMax: 478, yMin: -6, yMax: 146 },
   spawn: { x: 14.0, y: 2.0 },
   exitZone: { x: 306.0, y: 1.8, radius: 6.2, name: 'Arnarnesstrýtur Buoy Exit' },
   haloclineY: 38.0,
@@ -101,6 +101,18 @@ export const LEVEL_15 = {
     { ax: 176, ay: 136.0, bx: 196, by: 140.0, ra: 2.8, rb: 2.3 },
     { ax: 244, ay: 82.0, bx: 274, by: 88.0, ra: 2.4, rb: 2.0 },
     { ax: 288, ay: 24.0, bx: 268, by: 12.0, ra: 2.1, rb: 1.8 },
+
+    // === Secret Sonar-Only Basalt Rift Seam -> Caldron Spire Vault (v193) ===
+    { ax: 274.0, ay: 88.0, bx: 284.0, by: 88.8, ra: 1.5, rb: 1.9, secretLair: true },
+    { ax: 284.0, ay: 88.8, bx: 298.0, by: 90.5, ra: 2.5, rb: 3.6, secretLair: true },
+    { ax: 298.0, ay: 90.5, bx: 320.0, by: 92.5, ra: 3.6, rb: 3.8, secretLair: true },
+    { ax: 320.0, ay: 92.5, bx: 342.0, by: 95.0, ra: 3.9, rb: 4.3, secretLair: true },
+    { ax: 342.0, ay: 95.0, bx: 364.0, by: 96.8, ra: 4.1, rb: 4.5, secretLair: true },
+    { ax: 364.0, ay: 96.8, bx: 388.0, by: 98.0, ra: 4.6, rb: 8.2, secretLair: true },
+    // CALDRON SPIRE VAULT - 58m x 26m Boss Arena centered at (416, 98)
+    { ax: 388.0, ay: 98.0, bx: 406.0, by: 98.0, ra: 9.6, rb: 13.0, secretLair: true },
+    { ax: 406.0, ay: 98.0, bx: 426.0, by: 98.0, ra: 13.0, rb: 13.0, secretLair: true },
+    { ax: 426.0, ay: 98.0, bx: 440.5, by: 98.0, ra: 11.8, rb: 8.6, secretLair: true },
   ],
   guideline: [],
 

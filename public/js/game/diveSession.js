@@ -3995,14 +3995,13 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
     session.tmxDangerWarned = false;
   } else if (!ascendingPhase && diveState.activeGasId === 'EAN32' && diveState.tanks?.TMX1455?.bar > 1) {
     const deepMixName = diveState.mixes?.TMX1455?.name || 'TMX 14/55';
-    if (!session.tmxSwitchWarned && curDepthM >= 21.0) {
+    if (!session.tmxSwitchWarned && curDepthM >= 22.0) {
       session.tmxSwitchWarned = true;
-      callbacks.onAlarm?.('warn');
-      callbacks.onToast?.(`⛔ STOP at 22m! Switch to ${deepMixName} [2] before descending deeper!`, 4.2);
-    } else if (!session.tmxDangerWarned && curDepthM >= 27.5) {
+      callbacks.onToast?.(`22m · Switch to ${deepMixName} [2] for deeper descent.`, 2.8);
+    } else if (!session.tmxDangerWarned && curDepthM >= 28.0) {
       session.tmxDangerWarned = true;
-      callbacks.onAlarm?.('critical');
-      callbacks.onToast?.(`⚠️ DANGER at ${Math.round(curDepthM)}m on EAN32! Tap ${deepMixName} [2] NOW!`, 4.2);
+      callbacks.onAlarm?.('warn');
+      callbacks.onToast?.(`${Math.round(curDepthM)}m on EAN32 · Switch to ${deepMixName} [2] now.`, 3.2);
     }
   }
 
@@ -4018,6 +4017,20 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
     callbacks.onAlarm?.('critical');
   } else if (diveState.warnings.length > 0) {
     callbacks.onAlarm?.('warn');
+  }
+
+  // Subtle refractive halocline crossing cue (v193)
+  const haloY = Number.isFinite(level?.haloclineY)
+    ? level.haloclineY
+    : session.hazards?.halocline?.enabled
+      ? session.hazards.halocline.depthM
+      : NaN;
+  if (Number.isFinite(haloY)) {
+    const side = curDepthM >= haloY ? 1 : -1;
+    if (session._lastHaloclineSide && session._lastHaloclineSide !== side) {
+      callbacks.onHaloclineCross?.(side > 0);
+    }
+    session._lastHaloclineSide = side;
   }
 
   // Auto-bookmark Deepest Depth & Closest Brush with Death for the Debrief Black-Box Highlight Reel (v160)

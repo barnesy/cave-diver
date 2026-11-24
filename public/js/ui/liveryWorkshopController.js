@@ -211,14 +211,22 @@ export function createLiveryWorkshopController({
     activeRigLivery = sanitizeRigLivery(activeRigLivery, unlocks);
     const pal = resolveDiverLiveryPalette(activeRigLivery);
 
+    const visibleSuits = SUIT_LIVERIES.filter((s) => !s.secret || unlocks.suits.has(s.id));
+    const visibleTrims = ACCENT_TRIMS.filter((tr) => !tr.secret || unlocks.trims.has(tr.id));
+    const visibleHeadgears = HEADGEAR_STYLES.filter((h) => !h.secret || unlocks.headgears.has(h.id));
+    const visibleVisors = VISOR_TINTS.filter((v) => !v.secret || unlocks.visors.has(v.id));
+    const visibleTanks = TANK_FINISHES.filter((tk) => !tk.secret || unlocks.tanks.has(tk.id));
+    const visibleTorches = TORCH_OPTICS.filter((t) => !t.secret || unlocks.torches.has(t.id));
+    const visiblePatches = MILESTONE_PATCHES.filter((p) => !p.secret || unlocks.patches.has(p.id));
+
     const totalItems =
-      SUIT_LIVERIES.length +
-      ACCENT_TRIMS.length +
-      HEADGEAR_STYLES.length +
-      VISOR_TINTS.length +
-      TANK_FINISHES.length +
-      TORCH_OPTICS.length +
-      MILESTONE_PATCHES.length;
+      visibleSuits.length +
+      visibleTrims.length +
+      visibleHeadgears.length +
+      visibleVisors.length +
+      visibleTanks.length +
+      visibleTorches.length +
+      visiblePatches.length;
     const totalUnlocked =
       unlocks.suits.size +
       unlocks.trims.size +
@@ -355,7 +363,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liverySuitGridEl) {
-      liverySuitGridEl.innerHTML = SUIT_LIVERIES.map((s) => {
+      liverySuitGridEl.innerHTML = visibleSuits.map((s) => {
         const unlocked = unlocks.suits.has(s.id);
         const selected = activeRigLivery.suitId === s.id;
         const chipStyle = `background: linear-gradient(135deg, ${s.suitTop} 0%, ${s.suitMid} 52%, ${s.accent} 53%, ${s.trim} 100%);`;
@@ -377,7 +385,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryTrimGridEl) {
-      liveryTrimGridEl.innerHTML = ACCENT_TRIMS.map((tr) => {
+      liveryTrimGridEl.innerHTML = visibleTrims.map((tr) => {
         const unlocked = unlocks.trims.has(tr.id);
         const selected = pal.trimSpec.id === tr.id;
         const chipStyle =
@@ -402,7 +410,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryHeadgearGridEl) {
-      liveryHeadgearGridEl.innerHTML = HEADGEAR_STYLES.map((h) => {
+      liveryHeadgearGridEl.innerHTML = visibleHeadgears.map((h) => {
         const unlocked = unlocks.headgears.has(h.id);
         const selected = pal.headgear.id === h.id;
         return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-headgear-id="${h.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">
@@ -423,7 +431,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryVisorGridEl) {
-      liveryVisorGridEl.innerHTML = VISOR_TINTS.map((v) => {
+      liveryVisorGridEl.innerHTML = visibleVisors.map((v) => {
         const unlocked = unlocks.visors.has(v.id);
         const selected = pal.visor.id === v.id;
         const chipStyle = `background: linear-gradient(135deg, ${v.top} 0%, ${v.mid} 50%, ${v.bot} 100%);`;
@@ -445,7 +453,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryTankGridEl) {
-      liveryTankGridEl.innerHTML = TANK_FINISHES.map((tk) => {
+      liveryTankGridEl.innerHTML = visibleTanks.map((tk) => {
         const unlocked = unlocks.tanks.has(tk.id);
         const selected = pal.tank.id === tk.id;
         const chipStyle = `background: linear-gradient(180deg, ${tk.top} 0%, ${tk.mid} 50%, ${tk.bot} 100%);`;
@@ -467,7 +475,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryTorchGridEl) {
-      liveryTorchGridEl.innerHTML = TORCH_OPTICS.map((t) => {
+      liveryTorchGridEl.innerHTML = visibleTorches.map((t) => {
         const unlocked = unlocks.torches.has(t.id);
         const selected = activeRigLivery.torchId === t.id;
         const chipStyle = `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${t.swatch} 55%, #0f172a 100%);`;
@@ -489,7 +497,7 @@ export function createLiveryWorkshopController({
     }
 
     if (liveryPatchGridEl) {
-      liveryPatchGridEl.innerHTML = MILESTONE_PATCHES.map((p) => {
+      liveryPatchGridEl.innerHTML = visiblePatches.map((p) => {
         const unlocked = unlocks.patches.has(p.id);
         const selected = activeRigLivery.patchId === p.id;
         return `<button type="button" class="livery-swatch-btn${selected ? ' active' : ''}${unlocked ? '' : ' locked'}" data-patch-id="${p.id}" ${unlocked ? '' : 'disabled'} role="radio" aria-checked="${selected}">

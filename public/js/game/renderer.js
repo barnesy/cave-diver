@@ -1250,7 +1250,7 @@ export class CaveRenderer {
     if (bubbles && bubbles.length > 0 && diver.torchOn !== false) {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
     }
-    this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics);
+    this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics, hazards, cw);
     if (!this.level.isWreck) {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }
@@ -1402,24 +1402,26 @@ export class CaveRenderer {
         sy1 - sy0
       );
 
-      // Distinct angled crepuscular god-ray shafts + sunlit motes inside open-water cavern/wreck shafts (v119)
-      const shaftCount = Math.max(3, Math.min(6, Math.round(spanW / 3.4)));
+      // Distinct angled crepuscular god-ray shafts + sunlit motes inside open-water cavern/wreck shafts (v119 / v193 zero-loop-grad)
+      const shaftCount = Math.max(3, Math.min(7, Math.round(spanW / 3.1)));
       const tiltPx = (this.level.isWreck ? 4.8 : 3.2) * scale;
       ctx.globalCompositeOperation = 'screen';
+      const sharedShaftGrad = ctx.createLinearGradient(midX, sy0, midX + tiltPx * 0.65, sy1);
+      sharedShaftGrad.addColorStop(0, 'rgba(224, 242, 254, 0.24)');
+      sharedShaftGrad.addColorStop(0.45, 'rgba(103, 232, 249, 0.11)');
+      sharedShaftGrad.addColorStop(0.82, 'rgba(56, 189, 248, 0.03)');
+      sharedShaftGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = sharedShaftGrad;
       for (let sIdx = 0; sIdx < shaftCount; sIdx++) {
         const frac = (sIdx + 0.5) / shaftCount;
-        const wave = Math.sin(timeSec * 0.85 + sIdx * 1.45) * 0.65;
-        const shimmer = 0.55 + 0.45 * Math.sin(timeSec * 1.35 + sIdx * 2.1);
+        const wave = Math.sin(timeSec * 0.85 + sIdx * 1.45) * 0.68;
+        const shimmer = 0.45 + 0.55 * Math.sin(timeSec * 1.4 + sIdx * 2.1);
         const topWorldX = leftX + spanW * frac + wave * 0.45;
-        const halfTop = Math.max(0.42, (spanW / shaftCount) * 0.24) * scale;
-        const halfBot = halfTop * 2.25;
+        const halfTop = Math.max(0.38, (spanW / shaftCount) * 0.22) * scale;
+        const halfBot = halfTop * 2.35;
         const tx = toScreenX(topWorldX);
-        const bx = tx + tiltPx + wave * 0.7 * scale;
-        const shaftGrad = ctx.createLinearGradient(tx, sy0, bx, sy1);
-        shaftGrad.addColorStop(0, `rgba(224, 242, 254, ${(0.11 + shimmer * 0.12).toFixed(3)})`);
-        shaftGrad.addColorStop(0.5, `rgba(103, 232, 249, ${(0.045 + shimmer * 0.055).toFixed(3)})`);
-        shaftGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-        ctx.fillStyle = shaftGrad;
+        const bx = tx + tiltPx + wave * 0.72 * scale;
+        ctx.globalAlpha = 0.48 + shimmer * 0.52;
         ctx.beginPath();
         ctx.moveTo(tx - halfTop, sy0);
         ctx.lineTo(tx + halfTop, sy0);
@@ -1428,6 +1430,7 @@ export class CaveRenderer {
         ctx.closePath();
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
 
       // Drifting sunlit water motes suspended inside the bright upper beam
       ctx.fillStyle = 'rgba(224, 242, 254, 0.36)';
@@ -2270,23 +2273,24 @@ export class CaveRenderer {
       ctx.restore();
     }
 
-    // 1b. Universal Descent 22m TMX Gas-Switch Line (makes stopping & switching to Trimix unmistakable)
+    // 1b. Subtle, Refined 22m Trimix Gas-Switch Depth Line (quiet frosted-glass micro-tag, v193)
     const ascentCfg = getAscentConfig(this.level);
     const ascending = Boolean(checkpointsHit && checkpointsHit.has(ascentCfg.turnaroundId));
-    if (!ascending && diveState && (this.level.bounds?.yMax || 0) > 28 && diver.y > 4 && diver.y < 38) {
+    if (!ascending && diveState && (this.level.bounds?.yMax || 0) > 28 && diver.y > 11 && diver.y < 35) {
       const switchY = toScreenY(22.0);
       if (switchY > -36 && switchY < ch + 36) {
         const needsTmx = diveState.activeGasId === 'EAN32' && diveState.tanks?.TMX1455?.bar > 1;
-        const overdue = needsTmx && diver.y >= 24.5;
+        const overdue = needsTmx && diver.y >= 26.0;
         const deepName = diveState.mixes?.TMX1455?.name || 'TMX 14/55';
-        const pulse = 0.65 + 0.35 * Math.sin(timeSec * (overdue ? 9.0 : 5.0));
-        const lineCol = overdue ? '#f87171' : needsTmx ? '#fbbf24' : '#4ade80';
+        const distFade = Math.max(0.22, Math.min(1, 1 - Math.abs(diver.y - 22.0) / 13.5));
+        const pulse = 0.78 + 0.22 * Math.sin(timeSec * (overdue ? 4.5 : 2.6));
+        const lineCol = overdue ? '#fca5a5' : needsTmx ? '#fcd34d' : '#86efac';
 
         ctx.save();
         ctx.strokeStyle = lineCol;
-        ctx.globalAlpha = needsTmx ? 0.62 + pulse * 0.34 : 0.42;
-        ctx.lineWidth = needsTmx ? 2.6 : 1.5;
-        ctx.setLineDash([12, 7]);
+        ctx.globalAlpha = (needsTmx ? (overdue ? 0.56 : 0.42) : 0.24) * distFade * pulse;
+        ctx.lineWidth = overdue ? 1.45 : 1.05;
+        ctx.setLineDash([8, 8]);
         ctx.beginPath();
         ctx.moveTo(0, switchY);
         ctx.lineTo(cw, switchY);
@@ -2294,25 +2298,25 @@ export class CaveRenderer {
         ctx.setLineDash([]);
 
         const label = overdue
-          ? `⛔ PASSED 22m LINE · STOP & SWITCH TO ${deepName} [2]`
+          ? `22m · Switch to ${deepName} [2]`
           : needsTmx
-            ? `▼ 22m GAS SWITCH LINE · STOP & SWITCH TO ${deepName} [2]`
-            : `✓ 22m SWITCH COMPLETE · ON ${deepName}`;
-        ctx.font = `800 ${Math.max(10, Math.round(0.35 * scale))}px ui-monospace, monospace`;
+            ? `22m · ${deepName} [2]`
+            : `22m · ${deepName} ✓`;
+        ctx.font = `700 ${Math.max(9.5, Math.round(0.27 * scale))}px ui-monospace, monospace`;
         const textW = ctx.measureText(label).width;
-        const boxW = textW + 18;
-        const boxH = Math.max(20, 0.64 * scale);
-        const cx = Math.max(boxW * 0.5 + 10, Math.min(cw - boxW * 0.5 - 10, toScreenX(diver.x)));
-        const pillY = switchY - boxH * 0.5 - 5;
+        const boxW = textW + 14;
+        const boxH = Math.max(17, 0.5 * scale);
+        const cx = Math.max(boxW * 0.5 + 12, Math.min(cw - boxW * 0.5 - 12, toScreenX(diver.x)));
+        const pillY = switchY - boxH * 0.5 - 4;
 
-        ctx.globalAlpha = needsTmx ? 0.96 : 0.72;
+        ctx.globalAlpha = (needsTmx ? 0.78 : 0.48) * distFade;
         ctx.fillStyle = overdue
-          ? 'rgba(127, 29, 29, 0.92)'
+          ? 'rgba(69, 10, 10, 0.78)'
           : needsTmx
-            ? 'rgba(120, 53, 15, 0.92)'
-            : 'rgba(6, 78, 59, 0.85)';
+            ? 'rgba(15, 23, 42, 0.76)'
+            : 'rgba(6, 46, 36, 0.66)';
         ctx.strokeStyle = lineCol;
-        ctx.lineWidth = needsTmx ? 1.8 : 1.2;
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.roundRect(cx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
         ctx.fill();
@@ -2320,13 +2324,13 @@ export class CaveRenderer {
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = overdue ? '#fecaca' : needsTmx ? '#fef08a' : '#bbf7d0';
+        ctx.fillStyle = overdue ? '#fecaca' : needsTmx ? '#fde68a' : '#bbf7d0';
         ctx.fillText(label, cx, pillY + 0.5);
         ctx.restore();
       }
     }
 
-    // 2. Horizontal Gas Switch & 6m Deco Stop Zone Lines (not boxes)
+    // 2. Horizontal Gas Switch & 6m Deco Stop Zone Lines (quiet, refined diegetic style, v193)
     if (!this.level.zoneLines) return;
     ctx.save();
     for (const z of this.level.zoneLines) {
@@ -2336,31 +2340,30 @@ export class CaveRenderer {
       const sy = toScreenY(z.y);
       if (x1 < -40 || x0 > cw + 40 || sy < -50 || sy > ch + 50) continue;
 
-      const nearDepth = Math.abs(diver.y - z.y) <= 1.6 && diver.x >= z.xMin && diver.x <= z.xMax;
-      const pulse = 0.7 + 0.3 * Math.sin(timeSec * 4.5);
+      const nearDepth = Math.abs(diver.y - z.y) <= 1.8 && diver.x >= z.xMin && diver.x <= z.xMax;
+      const pulse = 0.84 + 0.16 * Math.sin(timeSec * 2.8);
 
-      // Soft horizontal depth-band glow around the line via pre-baked 1x64 strip
-      const bandH = 0.7 * scale;
+      // Subtle translucent depth-band glow around the line
+      const bandH = 0.45 * scale;
       if (this.glowStamps.bandGlow) {
-        ctx.globalAlpha = nearDepth ? 1.0 : 0.55;
+        ctx.globalAlpha = nearDepth ? 0.42 : 0.16;
         ctx.drawImage(this.glowStamps.bandGlow, x0, sy - bandH, x1 - x0, bandH * 2);
         ctx.globalAlpha = 1;
       }
 
-      // Crisp horizontal zone line with depth tick endcaps
+      // Slim crisp horizontal zone line with clean end-cap ticks
       ctx.strokeStyle = z.color;
-      ctx.globalAlpha = nearDepth ? 0.98 : 0.7 * pulse;
-      ctx.lineWidth = nearDepth ? 2.6 : 1.8;
-      ctx.setLineDash([10, 6]);
+      ctx.globalAlpha = (nearDepth ? 0.72 : 0.36) * pulse;
+      ctx.lineWidth = nearDepth ? 1.5 : 1.0;
+      ctx.setLineDash([7, 7]);
       ctx.beginPath();
       ctx.moveTo(x0, sy);
       ctx.lineTo(x1, sy);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // End-cap vertical depth ticks
-      const tick = 0.35 * scale;
-      ctx.lineWidth = 2;
+      const tick = 0.24 * scale;
+      ctx.lineWidth = 1.25;
       ctx.beginPath();
       ctx.moveTo(x0, sy - tick);
       ctx.lineTo(x0, sy + tick);
@@ -2368,25 +2371,28 @@ export class CaveRenderer {
       ctx.lineTo(x1, sy + tick);
       ctx.stroke();
 
-      // Label directly above horizontal line
-      ctx.globalAlpha = 0.95;
+      // Quiet micro-label directly above horizontal line
+      ctx.globalAlpha = nearDepth ? 0.84 : 0.56;
       ctx.textAlign = 'center';
       const cx = (x0 + x1) * 0.5;
-      ctx.font = `800 ${Math.max(10, Math.round(0.35 * scale))}px ui-monospace, monospace`;
-      ctx.fillStyle = z.color;
+      ctx.font = `700 ${Math.max(9.5, Math.round(0.27 * scale))}px ui-monospace, monospace`;
 
       let label = z.title;
       if (z.id === 'zone-deco' && diveState) {
         if (diveState.stopDepthM > 0) {
           const s = Math.max(0, Math.ceil(diveState.stopRemainingSec));
           label = diveState.activeGasId === 'O2'
-            ? `6m DECO LINE · HOLD 0:${String(s).padStart(2, '0')} ON O2 100%`
-            : `6m DECO LINE · TAP O2 100% (0:${String(s).padStart(2, '0')})`;
+            ? `6m Deco · O2 0:${String(s).padStart(2, '0')}`
+            : `6m Deco · Switch O2 [3] (0:${String(s).padStart(2, '0')})`;
         } else if (diveState.maxDepthM > 20) {
-          label = '6m DECO LINE · CEILING CLEAR ✓ ASCEND TO EXIT';
+          label = '6m Deco · Clear ✓';
         }
       }
-      ctx.fillText(label, cx, sy - 7);
+      ctx.lineWidth = 2.6;
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.72)';
+      ctx.strokeText(label, cx, sy - 6);
+      ctx.fillStyle = z.color;
+      ctx.fillText(label, cx, sy - 6);
     }
     ctx.restore();
   }
@@ -2447,30 +2453,30 @@ export class CaveRenderer {
     const isStop = step.action === 'STOP';
     const pulse = 0.65 + 0.35 * Math.sin(timeSec * (isDanger ? 10 : 5.5));
 
-    // Urgent pulsing ring around the diver when breathing an unsafe/wrong gas
+    // Soft indicator ring around diver when breathing an unsafe/wrong gas (refined v193)
     if (gasCoach && step === gasCoach) {
-      ctx.strokeStyle = isDanger ? `rgba(248, 113, 113, ${0.45 + pulse * 0.5})` : `rgba(251, 191, 36, ${0.35 + pulse * 0.45})`;
-      ctx.lineWidth = isDanger ? 3.0 : 2.0;
+      ctx.strokeStyle = isDanger ? `rgba(248, 113, 113, ${(0.28 + pulse * 0.28).toFixed(2)})` : `rgba(251, 191, 36, ${(0.2 + pulse * 0.22).toFixed(2)})`;
+      ctx.lineWidth = isDanger ? 1.8 : 1.3;
       ctx.beginPath();
-      ctx.arc(sx, sy, (1.15 + (isDanger ? 0.14 * pulse : 0.06 * pulse)) * scale, 0, Math.PI * 2);
+      ctx.arc(sx, sy, (1.1 + (isDanger ? 0.08 * pulse : 0.04 * pulse)) * scale, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Compact floating action badge above diver: STOP · SWITCH TO TMX ... or NOW MOVE TO ...
+    // Compact quiet floating micro-badge above diver (v193)
     const label = step.shortLabel || (isStop ? `■ ${step.title}` : `▲ ${step.title}`);
-    ctx.font = `800 ${Math.max(10, Math.round((isDanger ? 0.37 : 0.34) * scale))}px ui-monospace, monospace`;
-    const padX = 9;
+    ctx.font = `700 ${Math.max(9.5, Math.round((isDanger ? 0.3 : 0.27) * scale))}px ui-monospace, monospace`;
+    const padX = 8;
     const textW = ctx.measureText(label).width;
     const boxW = textW + padX * 2;
-    const boxH = Math.max(22, 0.66 * scale);
+    const boxH = Math.max(18, 0.54 * scale);
 
     ctx.fillStyle = isDanger
-      ? `rgba(153, 27, 27, ${0.88 + pulse * 0.1})`
+      ? 'rgba(69, 10, 10, 0.82)'
       : isStop
-        ? 'rgba(120, 53, 15, 0.92)'
-        : 'rgba(8, 47, 73, 0.88)';
-    ctx.strokeStyle = isDanger ? '#f87171' : isStop ? '#fbbf24' : '#38bdf8';
-    ctx.lineWidth = isDanger ? 2.2 : 1.6;
+        ? 'rgba(30, 27, 22, 0.8)'
+        : 'rgba(8, 28, 48, 0.78)';
+    ctx.strokeStyle = isDanger ? 'rgba(248, 113, 113, 0.78)' : isStop ? 'rgba(251, 191, 36, 0.65)' : 'rgba(56, 189, 248, 0.58)';
+    ctx.lineWidth = isDanger ? 1.4 : 1.1;
     ctx.beginPath();
     ctx.roundRect(sx - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 999);
     ctx.fill();
@@ -2668,14 +2674,15 @@ export class CaveRenderer {
    * 2. Sunlit Shallow Caustic Shimmer Filaments
    * 3. Bioluminescent Fin-Wake Plankton Sparks in Night-Dive / Bioluminescent biomes
    */
-  _drawTorchMarineSnowAndCaustics(ctx, diver, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, weatherCaustics = 1) {
+  _drawTorchMarineSnowAndCaustics(ctx, diver, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec, weatherCaustics = 1, hazards = null, cw = 1280) {
     if (!diver) return;
     const isWreck = Boolean(this.level.isWreck);
     const isPolar = /arctic|ice|glacier|orda|strytan|greenland/i.test(this.level.name || "");
+    const isThermal = /strytan|katla|thermal|volcan|kverk|grjotagja/i.test(this.level.id || this.level.name || "");
+    const isRedSea = /dahab|blue-hole|red sea|thistlegorm/i.test(this.level.id || this.level.name || "");
     ctx.save();
     ctx.globalCompositeOperation = "screen";
 
-    // Note: Volumetric marine snow is rendered in the batched _drawVolumetricTorchBeam pass (no duplicate 225-cell loop).
     // 1. Rippling Shallow Solar Caustic Web Filaments in sunlit entry water
     if (visY0 < 17 && weatherCaustics > 0.14) {
       const cAlpha = Math.min(0.26, weatherCaustics * 0.22);
@@ -2705,6 +2712,101 @@ export class CaveRenderer {
       ctx.globalAlpha = 1;
     }
 
+    // 2. Ambient Drifting Torch-Reactive Plankton & Cave Dust Motes (v193 zero-GC spatial hash)
+    if (!this._reducedMotion) {
+      const cell = this._isCoarseMobile ? 5.6 : 4.4;
+      const gx0 = Math.floor(visX0 / cell);
+      const gx1 = Math.ceil(visX1 / cell);
+      const gy0 = Math.max(0, Math.floor(Math.max(0.4, visY0) / cell));
+      const gy1 = Math.ceil(visY1 / cell);
+      const torchOn = diver.torchOn !== false;
+      const tox = diver.body?.hand ? diver.body.hand.x : diver.x;
+      const toy = diver.body?.hand ? diver.body.hand.y : diver.y;
+      const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+      const tfx = Math.cos(tang);
+      const tfy = Math.sin(tang);
+      const bokehStamp = isThermal || isRedSea ? (this.glowStamps?.warm || this.glowStamps?.cyan) : this.glowStamps?.cyan;
+      const ambientFill = isThermal
+        ? 'rgba(253, 186, 116, 0.24)'
+        : isPolar
+          ? 'rgba(186, 230, 253, 0.24)'
+          : isRedSea
+            ? 'rgba(254, 240, 138, 0.22)'
+            : 'rgba(125, 211, 252, 0.21)';
+      const litFill = isThermal
+        ? 'rgba(254, 215, 170, 0.68)'
+        : isRedSea
+          ? 'rgba(254, 249, 195, 0.68)'
+          : 'rgba(224, 242, 254, 0.66)';
+      const litScratch = this._ambientLitMotesScratch || (this._ambientLitMotesScratch = []);
+      litScratch.length = 0;
+
+      ctx.fillStyle = ambientFill;
+      ctx.beginPath();
+      for (let gx = gx0; gx <= gx1; gx++) {
+        for (let gy = gy0; gy <= gy1; gy++) {
+          for (let k = 0; k < 2; k++) {
+            const h1 = Math.sin(gx * 157.3 + gy * 289.1 + k * 61.7) * 43758.5453;
+            const r1 = h1 - Math.floor(h1);
+            const h2 = Math.sin(gx * 241.9 + gy * 131.7 + k * 93.1) * 43758.5453;
+            const r2 = h2 - Math.floor(h2);
+            const phase = r1 * 6.28318;
+            const wx = (gx + r1) * cell + Math.sin(timeSec * (0.42 + r2 * 0.28) + phase) * 0.34;
+            const wy = (gy + r2) * cell + Math.cos(timeSec * (0.36 + r1 * 0.24) + phase) * 0.24;
+            if (wy < 0.45) continue;
+            const sx = toScreenX(wx);
+            const sy = toScreenY(wy);
+            const baseR = Math.max(0.95, (0.024 + r2 * 0.026) * scale);
+            let torchBoost = 0;
+            if (torchOn) {
+              const dx = wx - tox;
+              const dy = wy - toy;
+              const dSq = dx * dx + dy * dy;
+              if (dSq > 0.36 && dSq < 196) {
+                const dist = Math.sqrt(dSq);
+                const dot = (dx * tfx + dy * tfy) / dist;
+                if (dot > 0.72) {
+                  torchBoost = ((dot - 0.72) / 0.28) * Math.max(0, 1 - dist / 14);
+                }
+              }
+            }
+            if (torchBoost > 0.14) {
+              litScratch.push(sx, sy, baseR * (1.25 + torchBoost * 0.55), torchBoost);
+            } else {
+              ctx.moveTo(sx + baseR, sy);
+              ctx.arc(sx, sy, baseR, 0, Math.PI * 2);
+            }
+          }
+        }
+      }
+      ctx.fill();
+
+      if (litScratch.length > 0) {
+        if (bokehStamp) {
+          for (let i = 0; i < litScratch.length; i += 4) {
+            const sx = litScratch[i];
+            const sy = litScratch[i + 1];
+            const mr = litScratch[i + 2];
+            const boost = litScratch[i + 3];
+            const br = Math.max(3.2, mr * 3.4);
+            ctx.globalAlpha = Math.min(0.38, boost * 0.34);
+            ctx.drawImage(bokehStamp, sx - br, sy - br, br * 2, br * 2);
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = litFill;
+        ctx.beginPath();
+        for (let i = 0; i < litScratch.length; i += 4) {
+          const sx = litScratch[i];
+          const sy = litScratch[i + 1];
+          const mr = litScratch[i + 2];
+          ctx.moveTo(sx + mr, sy);
+          ctx.arc(sx, sy, mr, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+    }
+
     // 3. Bioluminescent Fin-Wake Sparks directly behind articulated fin tips in Night/Biolum mode
     const bioActive = Boolean(this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum);
     if (bioActive && diver.body?.legs && diver.y > 1.0) {
@@ -2727,6 +2829,41 @@ export class CaveRenderer {
             ctx.fill();
           }
         }
+      }
+    }
+
+    // 4. Foreground Halocline Refractive Crossing Shimmer (v193 — luminous optical shear when passing freshwater/saltwater boundary)
+    const effectiveHaloY = Number.isFinite(this.level.haloclineY)
+      ? this.level.haloclineY
+      : hazards?.halocline?.enabled
+        ? hazards.halocline.depthM
+        : NaN;
+    if (Number.isFinite(effectiveHaloY)) {
+      const haloDist = Math.abs((diver.y || 0) - effectiveHaloY);
+      if (haloDist < 2.6) {
+        const proximity = 1 - haloDist / 2.6;
+        const haloSy = toScreenY(effectiveHaloY);
+        const bandPx = Math.max(14, 1.5 * scale);
+        if (this.glowStamps?.bandGlow) {
+          ctx.globalAlpha = proximity * 0.34;
+          ctx.drawImage(this.glowStamps.bandGlow, 0, haloSy - bandPx, cw, bandPx * 2);
+        }
+        const stepPx = Math.max(20, Math.round(cw / 24));
+        ctx.lineWidth = Math.max(1, 0.045 * scale);
+        for (let r = 0; r < 2; r++) {
+          ctx.strokeStyle = r === 0
+            ? `rgba(186, 230, 253, ${(proximity * 0.32).toFixed(3)})`
+            : `rgba(94, 234, 212, ${(proximity * 0.24).toFixed(3)})`;
+          ctx.beginPath();
+          const yOff = (r === 0 ? -0.22 : 0.26) * scale;
+          for (let sx = 0; sx <= cw + stepPx; sx += stepPx) {
+            const wy = haloSy + yOff + Math.sin(sx * 0.018 + timeSec * (r === 0 ? 2.4 : -1.9) + r * 2.1) * (0.14 * scale);
+            if (sx === 0) ctx.moveTo(sx, wy);
+            else ctx.lineTo(sx, wy);
+          }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
     }
 

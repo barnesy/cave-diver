@@ -1884,6 +1884,29 @@ export class DiveAudio {
   /**
    * Start or switch the Adaptive Multi-Phase Boss Music state (v189).
    */
+  playHaloclineShimmer(goingDeeper = true) {
+    if (!this.ctx || !this.enabled || this.muted) return;
+    const now = this.ctx.currentTime;
+    if (now - (this._lastHaloclineCueAt || 0) < 2.8) return;
+    this._lastHaloclineCueAt = now;
+    // Soft translucent crystalline density-shear glide when passing freshwater/saltwater interface
+    const fStart = goingDeeper ? 520 : 340;
+    const fEnd = goingDeeper ? 310 : 560;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(fStart, now);
+    osc.frequency.exponentialRampToValueAtTime(fEnd, now + 0.42);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.024, now + 0.09);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
+    osc.connect(g);
+    g.connect(this.ambienceBus || this.master);
+    osc.start(now);
+    osc.stop(now + 0.48);
+    this.playTone(goingDeeper ? 780 : 920, 0.28, 'triangle', 0.012, 0.05, { bus: 'ambience' });
+  }
+
   startBossMusic(themeKind = 'kraken', phase = 1) {
     this._bossMusicActive = true;
     this._bossMusicTheme = themeKind || 'kraken';
@@ -1940,6 +1963,20 @@ export class DiveAudio {
         arp: [329.63, 392.0, 493.88, 622.25, 659.25, 622.25, 493.88, 392.0],
         lead: [659.25, 783.99, 739.99, 659.25, 622.25, 659.25, 783.99, 987.77],
         wave: 'triangle',
+      },
+      volcanic: {
+        // C Phrygian dominant geothermal cauldron rumble
+        bass: [65.41, 65.41, 69.30, 58.27, 65.41, 82.41, 69.30, 55.0],
+        arp: [261.63, 277.18, 329.63, 392.0, 415.30, 392.0, 329.63, 277.18],
+        lead: [523.25, 554.37, 659.25, 554.37, 523.25, 415.30, 523.25, 659.25],
+        wave: 'sawtooth',
+      },
+      solar: {
+        // D Lydian radiant Red Sea coral amphitheater
+        bass: [73.42, 73.42, 82.41, 92.5, 73.42, 110.0, 92.5, 82.41],
+        arp: [293.66, 369.99, 440.0, 554.37, 587.33, 554.37, 440.0, 369.99],
+        lead: [587.33, 659.25, 739.99, 880.0, 739.99, 659.25, 587.33, 880.0],
+        wave: 'sine',
       },
     };
     const cfg = themes[theme] || themes.kraken;
