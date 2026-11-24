@@ -1651,34 +1651,30 @@ export class DiveAudio {
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
-    // Short filtered noise burst for pneumatic cavitation snap
-    try {
-      const dur = charged ? 0.13 : 0.085;
-      const len = Math.max(64, Math.floor(this.ctx.sampleRate * dur));
-      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
-      }
-      const src = this.ctx.createBufferSource();
-      src.buffer = buf;
-      const filt = this.ctx.createBiquadFilter();
-      filt.type = 'bandpass';
-      filt.frequency.setValueAtTime(charged ? 1450 : 1100, t);
-      filt.frequency.exponentialRampToValueAtTime(340, t + dur);
-      filt.Q.value = 1.4;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(charged ? 0.085 : 0.055, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(filt);
-      filt.connect(g);
-      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
-      src.onended = () => {
-        try { src.disconnect(); filt.disconnect(); g.disconnect(); } catch {}
-      };
-      src.start(t);
-      src.stop(t + dur + 0.02);
-    } catch {}
+    const noise = this._getNoiseBuffer?.();
+    if (noise) {
+      try {
+        const dur = charged ? 0.13 : 0.085;
+        const src = this.ctx.createBufferSource();
+        src.buffer = noise;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(charged ? 1450 : 1100, t);
+        filt.frequency.exponentialRampToValueAtTime(340, t + dur);
+        filt.Q.value = 1.4;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(charged ? 0.085 : 0.055, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(filt);
+        filt.connect(g);
+        const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+        src.onended = () => {
+          try { src.disconnect(); filt.disconnect(); g.disconnect(); panner?.disconnect(); } catch {}
+        };
+        src.start(t);
+        src.stop(t + dur + 0.02);
+      } catch {}
+    }
     this.playTone(charged ? 185 : 230, 0.09, 'sawtooth', charged ? 0.075 : 0.05, 0, { bus: 'sfx' });
     this.playTone(charged ? 640 : 480, 0.11, 'triangle', charged ? 0.055 : 0.036, 0.025, { bus: 'sfx' });
     if (charged) {
@@ -1719,36 +1715,31 @@ export class DiveAudio {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
     const base = phase >= 3 ? 64 : phase === 2 ? 54 : 46;
-    // Layered filtered noise roar for genuine leviathan weight
-    try {
-      const dur = 0.85;
-      const len = Math.floor(this.ctx.sampleRate * dur);
-      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) {
-        const env = Math.sin((i / len) * Math.PI);
-        data[i] = (Math.random() * 2 - 1) * env * 0.7;
-      }
-      const src = this.ctx.createBufferSource();
-      src.buffer = buf;
-      const filt = this.ctx.createBiquadFilter();
-      filt.type = 'bandpass';
-      filt.frequency.setValueAtTime(240 + phase * 55, t);
-      filt.frequency.exponentialRampToValueAtTime(95, t + dur);
-      filt.Q.value = 2.1;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.001, t);
-      g.gain.linearRampToValueAtTime(0.075, t + 0.12);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(filt);
-      filt.connect(g);
-      this._connectSpatial(g, { pan: 0, bus: 'sfx' });
-      src.onended = () => {
-        try { src.disconnect(); filt.disconnect(); g.disconnect(); } catch {}
-      };
-      src.start(t);
-      src.stop(t + dur + 0.04);
-    } catch {}
+    const noise = this._getNoiseBuffer?.();
+    if (noise) {
+      try {
+        const dur = 0.85;
+        const src = this.ctx.createBufferSource();
+        src.buffer = noise;
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(240 + phase * 55, t);
+        filt.frequency.exponentialRampToValueAtTime(95, t + dur);
+        filt.Q.value = 2.1;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(0.075, t + 0.12);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(filt);
+        filt.connect(g);
+        const panner = this._connectSpatial(g, { pan: 0, bus: 'sfx' });
+        src.onended = () => {
+          try { src.disconnect(); filt.disconnect(); g.disconnect(); panner?.disconnect(); } catch {}
+        };
+        src.start(t);
+        src.stop(t + dur + 0.04);
+      } catch {}
+    }
     this.playTone(base, 0.78, 'sawtooth', 0.075, 0, { bus: 'sfx' });
     this.playTone(base * 1.48, 0.65, 'triangle', 0.055, 0.11, { bus: 'sfx' });
     this.playTone(base * 0.78, 0.92, 'sine', 0.072, 0.24, { bus: 'sfx' });

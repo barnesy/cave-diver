@@ -9037,4 +9037,9 @@ test('v182 Secret Lair Overhaul: Anti-Bypass Veil, CP4 Sonar, Resonance Crystals
   for (let i = 0; i < 60; i++) stepDiveSession(s, { x: 0, y: 0 }, 1 / 60);
   const snareLoss = 100 - s.secretLair.playerHp;
   assert.ok(snareLoss >= 6 && snareLoss <= 14, `1s of 60Hz snare must deal ~9 HP, not frame-clamped 60 HP (got ${snareLoss.toFixed(1)})`);
+
+  // 8. Regression guard (v183): main.js must never call undefined `spawnCelebrationBurst` on boss defeat!
+  const fs = await import('node:fs');
+  const mainSrc = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  assert.ok(!/\bspawnCelebrationBurst\b/.test(mainSrc), 'main.js must call spawnCelebrationConfetti(), never undefined spawnCelebrationBurst');
 });

@@ -180,12 +180,20 @@ export const bossAndLairMethods = {
       ctx.strokeStyle = lair.weaponEquipped ? 'rgba(148, 163, 184, 0.35)' : '#38bdf8';
       ctx.lineWidth = Math.max(1.5, 0.065 * scale);
       ctx.beginPath();
-      ctx.roundRect(-1.55 * scale, -0.68 * scale, 3.1 * scale, 1.36 * scale, 0.22 * scale);
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-1.55 * scale, -0.68 * scale, 3.1 * scale, 1.36 * scale, 0.22 * scale);
+      } else {
+        ctx.rect(-1.55 * scale, -0.68 * scale, 3.1 * scale, 1.36 * scale);
+      }
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
       ctx.beginPath();
-      ctx.roundRect(-1.35 * scale, -0.48 * scale, 2.7 * scale, 0.96 * scale, 0.14 * scale);
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-1.35 * scale, -0.48 * scale, 2.7 * scale, 0.96 * scale, 0.14 * scale);
+      } else {
+        ctx.rect(-1.35 * scale, -0.48 * scale, 2.7 * scale, 0.96 * scale);
+      }
       ctx.fill();
       if (!lair.weaponEquipped) {
         ctx.save();
@@ -672,7 +680,10 @@ export const bossAndLairMethods = {
     ctx.restore();
 
     // 3. Twin Fierce Armored-Brow Bioluminescent Eyes facing aggro angle (snap open during Awakening!)
-    const eyeOpen = boss.aiState === 'dormant' ? 0.15 : boss.aiState === 'awakening' ? Math.min(1, (boss.awakeningTimer || 0) * 2.2) : 1.0;
+    const eyeOpen = Math.max(
+      0.08,
+      Math.min(1, boss.aiState === 'dormant' ? 0.15 : boss.aiState === 'awakening' ? Math.max(0.1, (boss.awakeningTimer || 0) * 2.2) : 1.0)
+    );
     const ex = Math.cos(boss.angle) * r * 0.45;
     const ey = Math.sin(boss.angle) * r * 0.45;
     const px = -Math.sin(boss.angle) * r * 0.34;
@@ -844,7 +855,7 @@ export const bossAndLairMethods = {
       ctx.strokeStyle = sw.color || '#38bdf8';
       ctx.lineWidth = Math.max(2.5, (0.28 * a + 0.06) * scale);
       ctx.beginPath();
-      ctx.arc(sx, sy, sw.radius * scale, 0, Math.PI * 2);
+      ctx.arc(sx, sy, Math.max(1, (sw.radius || 0.5) * scale), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -917,7 +928,7 @@ export const bossAndLairMethods = {
         ctx.save();
         if (!isFiring) {
           // Pulsing sighting laser + inward energy particles at beak
-          const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.25));
+          const prog = Math.max(0, Math.min(1, 1 - Math.max(0, boss.stateTimer) / Math.max(0.1, boss.stateMaxTimer || 1.25)));
           ctx.strokeStyle = boss.phase === 3 ? 'rgba(251, 113, 133, 0.85)' : 'rgba(103, 232, 249, 0.85)';
           ctx.lineWidth = Math.max(1.8, (0.06 + prog * 0.14) * scale);
           ctx.setLineDash([10, 7]);
@@ -929,7 +940,7 @@ export const bossAndLairMethods = {
           ctx.strokeStyle = '#fef08a';
           ctx.lineWidth = Math.max(2, 0.09 * scale);
           ctx.beginPath();
-          ctx.arc(mx, my, (2.2 - prog * 1.6) * scale, 0, Math.PI * 2);
+          ctx.arc(mx, my, Math.max(1, (2.2 - prog * 1.6) * scale), 0, Math.PI * 2);
           ctx.stroke();
         } else {
           // 3-Layer Roaring Bioluminescent Plasma Beam occluded cleanly at cover pillars!
@@ -1019,7 +1030,7 @@ export const bossAndLairMethods = {
           ? [boss.slamTargetAngle, boss.slamTargetAngle - 0.82, boss.slamTargetAngle + 0.82]
           : [boss.slamTargetAngle];
         const halfArc = boss.twinSlam ? 0.28 : boss.slamArcHalf;
-        const prog = isStrike ? 1 : Math.max(0.05, 1 - boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.15));
+        const prog = isStrike ? 1 : Math.max(0.05, Math.min(1, 1 - Math.max(0, boss.stateTimer) / Math.max(0.1, boss.stateMaxTimer || 1.15)));
         ctx.save();
         for (const sa of slamAngles) {
           ctx.fillStyle = isStrike ? 'rgba(244, 63, 94, 0.38)' : 'rgba(251, 146, 60, 0.14)';
@@ -1027,7 +1038,7 @@ export const bossAndLairMethods = {
           ctx.lineWidth = Math.max(2, 0.09 * scale);
           ctx.beginPath();
           ctx.moveTo(bx, by);
-          ctx.arc(bx, by, rad, sa - halfArc, sa + halfArc);
+          ctx.arc(bx, by, Math.max(1, rad), sa - halfArc, sa + halfArc);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
@@ -1037,7 +1048,7 @@ export const bossAndLairMethods = {
             ctx.fillStyle = 'rgba(244, 63, 94, 0.28)';
             ctx.beginPath();
             ctx.moveTo(bx, by);
-            ctx.arc(bx, by, rad * prog, sa - halfArc, sa + halfArc);
+            ctx.arc(bx, by, Math.max(1, rad * prog), sa - halfArc, sa + halfArc);
             ctx.closePath();
             ctx.fill();
           }
@@ -1050,7 +1061,7 @@ export const bossAndLairMethods = {
         const count = boss.phase === 1 ? 3 : boss.phase === 2 ? 5 : 7;
         const baseAng = Number.isFinite(boss.inkAimAngle) ? boss.inkAimAngle : boss.angle;
         const spread = boss.phase === 3 ? 0.23 : 0.27;
-        const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 0.85));
+        const prog = Math.max(0, Math.min(1, 1 - Math.max(0, boss.stateTimer) / Math.max(0.1, boss.stateMaxTimer || 0.85)));
         ctx.save();
         ctx.strokeStyle = boss.phase === 3 ? 'rgba(251, 113, 133, 0.72)' : 'rgba(192, 132, 252, 0.72)';
         ctx.lineWidth = Math.max(1.6, 0.07 * scale);
@@ -1068,8 +1079,8 @@ export const bossAndLairMethods = {
 
       // 3e. Phase 3 Directional Tentacle Grab Windup Cone!
       if (boss.aiState === 'grab_windup') {
-        const prog = 1 - Math.max(0, boss.stateTimer / Math.max(0.1, boss.stateMaxTimer || 1.1));
-        const rad = 15.5 * scale;
+        const prog = Math.max(0.04, Math.min(1, 1 - Math.max(0, boss.stateTimer) / Math.max(0.1, boss.stateMaxTimer || 1.1)));
+        const rad = Math.max(1, 15.5 * scale);
         ctx.save();
         ctx.fillStyle = 'rgba(244, 63, 94, 0.16)';
         ctx.strokeStyle = 'rgba(251, 113, 133, 0.92)';
@@ -1085,7 +1096,7 @@ export const bossAndLairMethods = {
         ctx.fillStyle = 'rgba(244, 63, 94, 0.28)';
         ctx.beginPath();
         ctx.moveTo(bx, by);
-        ctx.arc(bx, by, rad * prog, boss.slamTargetAngle - 0.44, boss.slamTargetAngle + 0.44);
+        ctx.arc(bx, by, Math.max(1, rad * prog), boss.slamTargetAngle - 0.44, boss.slamTargetAngle + 0.44);
         ctx.closePath();
         ctx.fill();
         ctx.restore();

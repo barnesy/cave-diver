@@ -523,7 +523,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=182',
+  mapRasterUrl: './assets/map-expedition.jpg?v=183',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -6722,10 +6722,24 @@ const sessionStepCallbacks = {
     audio.playBossDefeat?.();
     if (session?.secretLair?.spec?.boss) {
       const b = session.secretLair.spec.boss;
-      spawnCelebrationBurst(canvas.width * 0.5, canvas.height * 0.35, 36);
-      const art = { id: b.trophyRelicId, name: b.trophyName, kind: 'relic', points: b.bonusPoints };
-      const lbRes = recordArtifactInLogbook(loadCareerLogbook(), art, session.level?.id || 'cenote-el-abismo');
-      if (lbRes?.book) saveCareerLogbook(lbRes.book);
+      spawnCelebrationConfetti();
+      try {
+        const siteId = session.level?.id || 'cenote-el-abismo';
+        const artifactKey = siteId && !String(b.trophyRelicId || '').includes(':')
+          ? `${siteId}:${b.trophyRelicId}`
+          : b.trophyRelicId;
+        const lbRes = recordArtifactInLogbook(loadCareerLogbook(), {
+          id: artifactKey,
+          name: b.trophyName,
+          kind: 'relic',
+          siteId,
+          siteName: session.level?.name || 'Cenote El Abismo',
+          lore: `Trophy claimed by vanquishing ${b.name} inside the Sunken Sanctum.`,
+          points: b.bonusPoints || 2500,
+          scale: 1.5,
+        });
+        if (lbRes?.book) saveCareerLogbook(lbRes.book);
+      } catch {}
     }
   },
   onUpdraftTeleport: () => {
