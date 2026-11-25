@@ -607,17 +607,142 @@ function _getRigGradients(ctx, u) {
  * Draws the Life Aquatic / technical cave diver rig details (drysuit seam, Zissou accent,
  * brushed twinset or CCR rebreather shell, glass mask glint, optional torpedo DPV scooter).
  */
+function _equipEaseOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const x = Math.max(0, Math.min(1, t));
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+/**
+ * Draw animated special drysuit properties (Mythic/Epic FX) directly onto the torso shell (v211).
+ */
+function _drawAnimatedSuitFx(ctx, u, pal, timeSec) {
+  const fx = pal?.suitFx;
+  if (!fx) return;
+  ctx.save();
+  if (fx === 'biolume-pulse') {
+    const p = 0.5 + 0.5 * Math.sin(timeSec * 3.4);
+    ctx.strokeStyle = `rgba(34, 211, 238, ${(0.38 + p * 0.52).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.2, u * 0.048);
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.22, u * 0.02, u * 0.64, u * 0.24, 0, Math.PI * 0.12, Math.PI * 0.88);
+    ctx.stroke();
+    // Drifting bioluminescent spores along torso
+    for (let i = 0; i < 4; i++) {
+      const ph = ((timeSec * 0.9 + i * 0.25) % 1);
+      const bx = -u * 0.72 + i * u * 0.34 - ph * u * 0.22;
+      const by = u * 0.14 - ph * u * 0.52 + Math.sin(timeSec * 4 + i * 2) * u * 0.06;
+      ctx.fillStyle = i % 2 === 0 ? `rgba(103, 232, 249, ${(1 - ph).toFixed(2)})` : `rgba(192, 132, 252, ${(1 - ph).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(bx, by, Math.max(1.2, u * 0.045 * (1 - ph * 0.4)), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'sovereign-aura') {
+    const sweep = ((timeSec * 0.65) % 1) * 1.4 - 0.92;
+    ctx.strokeStyle = `rgba(250, 204, 21, ${(0.5 + 0.35 * Math.sin(timeSec * 4.2)).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.4, u * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(u * sweep, -u * 0.26);
+    ctx.lineTo(u * (sweep + 0.16), u * 0.26);
+    ctx.stroke();
+    // Orbiting gilded prestige motes
+    for (let i = 0; i < 3; i++) {
+      const a = timeSec * 2.2 + (i * Math.PI * 2) / 3;
+      const mx = -u * 0.22 + Math.cos(a) * u * 0.76;
+      const my = u * 0.02 + Math.sin(a) * u * 0.34;
+      ctx.fillStyle = i === 0 ? '#fef08a' : (pal.trim || '#fde047');
+      ctx.beginPath();
+      ctx.arc(mx, my, Math.max(1.2, u * 0.048), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'magma-embers') {
+    const p = 0.5 + 0.5 * Math.sin(timeSec * 4.4);
+    ctx.strokeStyle = `rgba(251, 146, 60, ${(0.45 + p * 0.5).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.2, u * 0.046);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.75, u * 0.05);
+    ctx.lineTo(-u * 0.42, -u * 0.09);
+    ctx.lineTo(-u * 0.12, u * 0.1);
+    ctx.lineTo(u * 0.18, -u * 0.06);
+    ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      const ph = ((timeSec * 1.1 + i * 0.26) % 1);
+      const ex = -u * 0.62 + i * u * 0.28 + Math.sin(timeSec * 5 + i) * u * 0.05;
+      const ey = u * 0.12 - ph * u * 0.58;
+      ctx.fillStyle = `rgba(253, 224, 71, ${((1 - ph) * 0.92).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(ex, ey, Math.max(1.1, u * 0.042 * (1 - ph * 0.5)), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'phantom-phase') {
+    const p = 0.5 + 0.5 * Math.sin(timeSec * 3.8);
+    ctx.strokeStyle = `rgba(94, 234, 212, ${(0.28 + p * 0.48).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.4, u * 0.05);
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.22, u * 0.02, u * (0.74 + p * 0.06), u * (0.33 + p * 0.04), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (fx === 'orichalcum-runes') {
+    const p = 0.45 + 0.55 * Math.sin(timeSec * 3.2);
+    ctx.strokeStyle = `rgba(253, 224, 71, ${(0.4 + p * 0.55).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.1, u * 0.04);
+    for (let r = 0; r < 2; r++) {
+      const cx = -u * (0.52 - r * 0.36);
+      ctx.beginPath();
+      ctx.arc(cx, u * 0.04, u * (0.09 + r * 0.02), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  } else if (fx === 'dragon-jade') {
+    const p = 0.5 + 0.5 * Math.sin(timeSec * 3.6);
+    ctx.strokeStyle = `rgba(45, 212, 191, ${(0.36 + p * 0.44).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.1, u * 0.04);
+    for (let s = 0; s < 3; s++) {
+      ctx.beginPath();
+      ctx.arc(-u * (0.62 - s * 0.24), u * 0.04, u * 0.13, -0.7, 0.7);
+      ctx.stroke();
+    }
+    const ph = ((timeSec * 0.95) % 1);
+    ctx.fillStyle = `rgba(251, 113, 133, ${(1 - ph).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(-u * 0.45 + ph * u * 0.55, -u * 0.16 - ph * u * 0.24, Math.max(1.3, u * 0.048), 0, Math.PI * 2);
+    ctx.fill();
+  } else if (fx === 'karst-caustics') {
+    const wave = Math.sin(timeSec * 2.8) * u * 0.14;
+    ctx.strokeStyle = 'rgba(153, 246, 228, 0.42)';
+    ctx.lineWidth = Math.max(1.1, u * 0.042);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.68, -u * 0.08 + wave * 0.4);
+    ctx.quadraticCurveTo(-u * 0.24, -u * 0.22 - wave * 0.5, u * 0.24, -u * 0.04 + wave * 0.3);
+    ctx.stroke();
+  } else if (fx === 'abyssal-shimmer') {
+    const p = 0.4 + 0.6 * Math.sin(timeSec * 2.9);
+    ctx.strokeStyle = `rgba(232, 121, 249, ${(0.28 + p * 0.42).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.1, u * 0.044);
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.22, u * 0.02, u * 0.66, u * 0.25, 0, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = null) {
   const pal = gearOpts?.liveryPalette || null;
   const accent = pal?.accent || (isPeer ? '#fb923c' : '#ef4444'); // Classic Zissou red cap/accent vs custom livery
-  const trim = pal?.trim || (isPeer ? '#fdba74' : '#38bdf8');
+  const timeSec = gearOpts?.timeSec || 0;
+  let trim = pal?.trim || (isPeer ? '#fdba74' : '#38bdf8');
+  if (pal?.trimFx === 'selenite-prism') {
+    trim = `hsl(${Math.round((timeSec * 90) % 360)}, 92%, 78%)`;
+  } else if (pal?.trimFx === 'foundry-sparks') {
+    trim = `hsl(32, 98%, ${58 + Math.round(Math.sin(timeSec * 6.5) * 14)}%)`;
+  }
   const stageBandColor = pal?.stageBand || (isPeer ? '#fb923c' : '#22c55e');
   const { suitGrad, tankGrad, stageGrad, glassGrad } = _getRigGradients(ctx, u);
   const hasCcr = Boolean(gearOpts?.hasCcr);
   const hasDpv = Boolean(gearOpts?.hasDpv);
   const dpvActive = Boolean(gearOpts?.dpvActive);
   const dpvThrusting = Boolean(gearOpts?.dpvThrusting);
-  const timeSec = gearOpts?.timeSec || 0;
+  const equipFx = gearOpts?.equipFx || null;
+  const equipT = equipFx && equipFx.progress >= 0 && equipFx.progress < 1 ? equipFx.progress : 1;
 
   // Sculpted drysuit torso shell with shading (supports custom livery drysuit colorway)
   if (pal?.suitTop && pal?.suitMid && pal?.suitBot) {
@@ -637,29 +762,65 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.ellipse(-u * 0.22, u * 0.02, u * 0.72, u * 0.31, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Harness webbing & chest D-ring highlight
+  // Animated Special Drysuit FX (Mythic / Epic living effects)
+  _drawAnimatedSuitFx(ctx, u, pal, timeSec);
+
+  // Harness webbing & chest D-ring highlight (with animated plasma/foundry trim FX)
   ctx.strokeStyle = trim;
   ctx.lineWidth = Math.max(1.3, u * 0.055);
   ctx.beginPath();
   ctx.moveTo(-u * 0.65, -u * 0.18);
   ctx.lineTo(u * 0.18, u * 0.18);
   ctx.stroke();
+  if (pal?.trimFx === 'plasma-wave') {
+    const pt = ((timeSec * 1.45) % 1 + 1) % 1;
+    const pxW = -u * 0.65 + (u * 0.83) * pt;
+    const pyW = -u * 0.18 + (u * 0.36) * pt;
+    ctx.fillStyle = '#e0f2fe';
+    ctx.beginPath();
+    ctx.arc(pxW, pyW, Math.max(1.6, u * 0.068), 0, Math.PI * 2);
+    ctx.fill();
+  } else if (pal?.trimFx === 'foundry-sparks') {
+    const ph = ((timeSec * 1.5) % 1);
+    ctx.fillStyle = `rgba(253, 224, 71, ${(1 - ph).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(-u * 0.22 - ph * u * 0.25, -u * 0.05 - ph * u * 0.35, Math.max(1.2, u * 0.048), 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  // Optional Milestone Shoulder Patch emblem (v138)
+  // Optional Milestone Shoulder Patch emblem (v138 / animated prestige crest ring v211)
   if (pal?.patchIcon) {
     ctx.save();
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
-    ctx.strokeStyle = trim;
+    const patchAnimScale =
+      equipFx && equipFx.slot === 'patch' && equipT < 0.7
+        ? 0.55 + _equipEaseOutBack(Math.min(1, equipT / 0.55)) * 0.45
+        : 1;
+    ctx.translate(-u * 0.18, -u * 0.02);
+    ctx.scale(patchAnimScale, patchAnimScale);
+    const pr = Math.max(3.5, u * 0.135);
+    if (pal.patchFx === 'crest-halo') {
+      const haloColor = pal.patchTier === 'mythic' ? '#facc15' : '#c084fc';
+      const hp = 0.5 + 0.5 * Math.sin(timeSec * 4.2);
+      ctx.strokeStyle = haloColor;
+      ctx.globalAlpha = 0.55 + hp * 0.4;
+      ctx.lineWidth = Math.max(1.1, u * 0.036);
+      ctx.beginPath();
+      ctx.arc(0, 0, pr * (1.28 + hp * 0.12), timeSec * 1.8, timeSec * 1.8 + Math.PI * 1.35);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.86)';
+    ctx.strokeStyle = pal.patchTier === 'mythic' ? '#facc15' : trim;
     ctx.lineWidth = Math.max(1, u * 0.032);
     ctx.beginPath();
-    ctx.arc(-u * 0.18, -u * 0.02, Math.max(3.5, u * 0.135), 0, Math.PI * 2);
+    ctx.arc(0, 0, pr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.font = `700 ${Math.max(7, Math.round(u * 0.16))}px ui-sans-serif, system-ui, sans-serif`;
     ctx.fillStyle = '#f8fafc';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(pal.patchIcon, -u * 0.18, -u * 0.01);
+    ctx.fillText(pal.patchIcon, 0, u * 0.01);
     ctx.restore();
   }
 
@@ -667,6 +828,13 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   const visorTint = pal?.visorTint || null;
   const headgearId = pal?.headgearId || 'zissou-cap';
 
+  // Tank / CCR kinetic backplate clamp-down equip animation
+  const tankDropY =
+    equipFx && (equipFx.slot === 'tank' || equipFx.slot === 'ccr') && equipT < 0.72
+      ? (1 - _equipEaseOutBack(Math.min(1, equipT / 0.58))) * (-u * 0.52)
+      : 0;
+  ctx.save();
+  if (tankDropY) ctx.translate(0, tankDropY);
   if (hasCcr) {
     // Closed-Circuit Rebreather (CCR) back-mount canister (supports custom tank/shell finish!) & corrugated breathing loop
     ctx.fillStyle = tankFinish?.ccrShell || '#eab308';
@@ -726,6 +894,30 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.fillRect(-u * 0.66, -u * 0.58, u * 0.1, u * 0.35);
   }
 
+  // Animated Special Tank FX (Reactor Core cells, Cryo-Plasma Rings, Chemocline Shimmer)
+  if (pal?.tankFx === 'reactor-core') {
+    const rp = 0.55 + 0.45 * Math.sin(timeSec * 5.2);
+    for (let c = 0; c < 3; c++) {
+      ctx.fillStyle = `rgba(254, 240, 138, ${(0.55 + rp * 0.45).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(-u * (0.56 - c * 0.24), -u * 0.41, Math.max(1.4, u * 0.058), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (pal?.tankFx === 'carbon-plasma') {
+    const sxRing = -u * 0.82 + ((timeSec * 0.65) % 1) * (u * 0.92);
+    ctx.strokeStyle = 'rgba(192, 132, 252, 0.85)';
+    ctx.lineWidth = Math.max(1.4, u * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(sxRing, -u * 0.57);
+    ctx.lineTo(sxRing, -u * 0.24);
+    ctx.stroke();
+  } else if (pal?.tankFx === 'halocline-glow') {
+    const sxWave = -u * 0.82 + ((timeSec * 0.55) % 1) * (u * 0.92);
+    ctx.fillStyle = 'rgba(217, 249, 157, 0.58)';
+    ctx.fillRect(sxWave, -u * 0.56, u * 0.16, u * 0.31);
+  }
+  ctx.restore();
+
   // Slung Stage Cylinder (Deco / Travel bottle) with color band
   ctx.fillStyle = stageGrad;
   ctx.beginPath();
@@ -734,9 +926,51 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.fillStyle = stageBandColor;
   ctx.fillRect(-u * 0.2, u * 0.26, u * 0.14, u * 0.24);
 
-  // Modular Headgear Silhouette (v153): Zissou Beanie | Neoprene Cave Hood | Carbon Cave Helmet | Full-Face Exo Mask
+  // Modular Headgear Silhouette + kinetic drop-in equip animation (v153 / v211)
   const headY = -u * 0.02 * Math.sign(rollScale || 1);
-  if (headgearId === 'cave-helmet') {
+  const headDropY =
+    equipFx && (equipFx.slot === 'headgear' || equipFx.slot === 'visor') && equipT < 0.72
+      ? (1 - _equipEaseOutBack(Math.min(1, equipT / 0.56))) * (-u * 0.45)
+      : 0;
+  ctx.save();
+  if (headDropY) ctx.translate(0, headDropY);
+  if (headgearId === 'abyss-halo-helm') {
+    // Armored deep-sump titanium dome + animated rotating cyan orbital telemetry halo
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.36, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = Math.max(1.4, u * 0.05);
+    ctx.stroke();
+    // Titanium brow armor crest
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.arc(u * 0.42, headY - u * 0.04, u * 0.32, Math.PI * 0.94, Math.PI * 2.02);
+    ctx.fill();
+    // Rotating holographic telemetry halo ring around crown
+    const haloSpin = timeSec * 2.6;
+    ctx.save();
+    ctx.strokeStyle = `rgba(103, 232, 249, ${(0.58 + 0.35 * Math.sin(timeSec * 4.5)).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.5, u * 0.052);
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.44, haloSpin, haloSpin + Math.PI * 1.15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.44, haloSpin + Math.PI * 1.4, haloSpin + Math.PI * 1.82);
+    ctx.stroke();
+    // Alternating twin telemetry beacon pods
+    const blink = Math.sin(timeSec * 6.0) > 0;
+    ctx.fillStyle = blink ? '#67e8f9' : '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(u * 0.34, headY - u * 0.36, Math.max(1.4, u * 0.052), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = blink ? '#38bdf8' : '#e0f2fe';
+    ctx.beginPath();
+    ctx.arc(u * 0.52, headY - u * 0.35, Math.max(1.4, u * 0.052), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (headgearId === 'cave-helmet') {
     // Hard-shell technical cave/wreck helmet with crown ridge, chinstrap & side-mounted backup LED pod
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
@@ -824,11 +1058,19 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.arc(u * 0.42, headY - u * (isMk4 ? 0.39 : 0.37), Math.max(1.6, u * 0.06), 0, Math.PI * 2);
     ctx.fill();
+    // Animated bronze sheen glint sweep
+    const glintAng = Math.PI * (1.1 + ((timeSec * 0.55) % 0.72));
+    ctx.strokeStyle = 'rgba(254, 249, 195, 0.78)';
+    ctx.lineWidth = Math.max(1.3, u * 0.045);
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.31, glintAng, glintAng + 0.32);
+    ctx.stroke();
     if (isMk4) {
-      // Twin armored bronze brow rivets + glowing amber dreadnought crown lamp
-      ctx.fillStyle = '#fef08a';
+      // Twin armored bronze brow rivets + pulsing amber dreadnought crown lamp + vent sparks
+      const lampPulse = 0.65 + 0.35 * Math.sin(timeSec * 5.4);
+      ctx.fillStyle = `rgba(254, 240, 138, ${lampPulse.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(u * 0.60, headY - u * 0.27, Math.max(1.4, u * 0.052), 0, Math.PI * 2);
+      ctx.arc(u * 0.60, headY - u * 0.27, Math.max(1.5, u * (0.052 + lampPulse * 0.02)), 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#451a03';
       ctx.lineWidth = Math.max(1.1, u * 0.036);
@@ -836,6 +1078,11 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
       ctx.moveTo(u * 0.32, headY - u * 0.35);
       ctx.lineTo(u * 0.32, headY + u * 0.34);
       ctx.stroke();
+      const sp = ((timeSec * 1.4) % 1);
+      ctx.fillStyle = `rgba(253, 224, 71, ${((1 - sp) * 0.85).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(u * 0.42 - sp * u * 0.14, headY - u * 0.42 - sp * u * 0.24, Math.max(1.1, u * 0.04), 0, Math.PI * 2);
+      ctx.fill();
     }
   } else {
     // Classic Zissou Beanie with subtle stripe accent & top rim catchlight
@@ -854,7 +1101,7 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.stroke();
   }
 
-  // Custom Visor Glass Gradient (Crystal Cyan, High-Contrast Amber, Iridescent Mirror, Night-Ops Emerald)
+  // Custom Visor Glass Gradient (Crystal Cyan, High-Contrast Amber, Iridescent Mirror, Night-Ops Emerald, etc.)
   let maskGlassFill = glassGrad;
   if (visorTint && visorTint.id !== 'clear-cyan' && typeof ctx.createLinearGradient === 'function') {
     const vg = ctx.createLinearGradient(u * 0.52, -u * 0.2, u * 0.76, u * 0.14);
@@ -869,7 +1116,7 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   }
 
   if (headgearId === 'exo-mask') {
-    // Panoramic Full-Face Exo Visor + glowing inner HUD rim + integrated chin comms pod
+    // Panoramic Full-Face Exo Visor + animated scanning HUD bar + integrated chin comms pod
     ctx.fillStyle = visorTint?.frame || '#083344';
     ctx.beginPath();
     ctx.roundRect(u * 0.48, -u * 0.24, u * 0.30, u * 0.38, u * 0.10);
@@ -878,13 +1125,16 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.roundRect(u * 0.51, -u * 0.21, u * 0.24, u * 0.30, u * 0.07);
     ctx.fill();
-    // Subtle glowing interior comms HUD bar
+    // Live animated interior comms HUD bar
+    const hudPulse = 0.55 + 0.45 * Math.sin(timeSec * 4.8);
     ctx.strokeStyle = visorTint?.hudGlow || '#38bdf8';
-    ctx.lineWidth = Math.max(1.2, u * 0.04);
+    ctx.globalAlpha = hudPulse;
+    ctx.lineWidth = Math.max(1.2, u * 0.044);
     ctx.beginPath();
-    ctx.moveTo(u * 0.55, -u * 0.16);
-    ctx.lineTo(u * 0.70, -u * 0.16);
+    ctx.moveTo(u * 0.54, -u * 0.16);
+    ctx.lineTo(u * (0.63 + hudPulse * 0.08), -u * 0.16);
     ctx.stroke();
+    ctx.globalAlpha = 1;
     // Diagonal curved visor specular highlight
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
     ctx.beginPath();
@@ -903,12 +1153,13 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.fill();
     ctx.stroke();
   } else if (headgearId === 'secret-dreadnought-helm') {
-    // WWII Mk-IV Circular Riveted Brass Porthole Visor + protective cross-grille
+    // WWII Mk-IV Circular Riveted Brass Porthole Visor + pulsing furnace glow + protective cross-grille
     ctx.fillStyle = '#451a03';
     ctx.beginPath();
     ctx.arc(u * 0.62, -u * 0.04, u * 0.17, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#fef08a';
+    const glowP = 0.75 + 0.25 * Math.sin(timeSec * 4.5);
+    ctx.fillStyle = `rgba(254, 240, 138, ${glowP.toFixed(2)})`;
     ctx.beginPath();
     ctx.arc(u * 0.63, -u * 0.04, u * 0.13, 0, Math.PI * 2);
     ctx.fill();
@@ -941,6 +1192,50 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.fill();
   }
 
+  // Animated Special Visor FX overlaid crisply across the glass lens (v211)
+  if (pal?.visorFx && headgearId !== 'secret-dreadnought-helm') {
+    const vfx = pal.visorFx;
+    ctx.save();
+    if (vfx === 'spectral-scan') {
+      const syLine = -u * 0.16 + ((Math.sin(timeSec * 4.4) * 0.5 + 0.5) * u * 0.17);
+      ctx.strokeStyle = '#6ee7b7';
+      ctx.lineWidth = Math.max(1.2, u * 0.042);
+      ctx.beginPath();
+      ctx.moveTo(u * 0.53, syLine);
+      ctx.lineTo(u * 0.73, syLine);
+      ctx.stroke();
+    } else if (vfx === 'aurora-frost') {
+      const wave = Math.sin(timeSec * 3.8);
+      ctx.strokeStyle = wave > 0 ? '#5eead4' : '#a5f3fc';
+      ctx.lineWidth = Math.max(1.2, u * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(u * 0.54, -u * 0.06 + wave * u * 0.04);
+      ctx.quadraticCurveTo(u * 0.63, -u * 0.12 - wave * u * 0.04, u * 0.72, -u * 0.05);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(u * (0.62 + wave * 0.05), -u * 0.13, Math.max(1.1, u * 0.036), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (vfx === 'stalker-lock') {
+      const p = 0.45 + 0.55 * Math.sin(timeSec * 5.2);
+      ctx.strokeStyle = `rgba(254, 240, 138, ${p.toFixed(2)})`;
+      ctx.lineWidth = Math.max(1, u * 0.035);
+      ctx.beginPath();
+      ctx.arc(u * 0.63, -u * 0.075, u * 0.06, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (vfx === 'thermocline-wave' || vfx === 'coral-shimmer') {
+      const shift = ((timeSec * 0.9) % 1) * u * 0.16;
+      ctx.strokeStyle = vfx === 'coral-shimmer' ? 'rgba(255, 228, 230, 0.85)' : 'rgba(224, 242, 254, 0.85)';
+      ctx.lineWidth = Math.max(1.1, u * 0.038);
+      ctx.beginPath();
+      ctx.moveTo(u * 0.54 + shift, -u * 0.17);
+      ctx.lineTo(u * 0.52 + shift, u * 0.02);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
   // Regulator 2nd Stage & Curved Long Hose
   ctx.fillStyle = '#facc15';
   ctx.beginPath();
@@ -953,10 +1248,14 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.quadraticCurveTo(u * 0.62, u * 0.42, u * 0.68, u * 0.14);
   ctx.stroke();
 
-  // Torpedo DPV Underwater Scooter gripped ahead of diver when equipped
+  // Torpedo DPV Underwater Scooter gripped ahead of diver when equipped (with glide-in equip animation!)
   if (hasDpv) {
+    const dpvSlideX =
+      equipFx && equipFx.slot === 'dpv' && equipT < 0.72
+        ? (1 - _equipEaseOutBack(Math.min(1, equipT / 0.58))) * (u * 0.85)
+        : 0;
     ctx.save();
-    ctx.translate(u * 1.18, u * 0.26);
+    ctx.translate(u * 1.18 + dpvSlideX, u * 0.26);
     // Tow cord linking scooter shroud to chest harness D-ring
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.72)';
     ctx.lineWidth = Math.max(1, u * 0.035);
@@ -1038,7 +1337,8 @@ export function drawArticulatedDiverLeg(
   scale,
   isPeer,
   isBackLeg,
-  liveryPalette = null
+  liveryPalette = null,
+  timeSec = 0
 ) {
   const suitColor = liveryPalette
     ? (isBackLeg ? liveryPalette.suitBot : liveryPalette.suitMid)
@@ -1048,11 +1348,19 @@ export function drawArticulatedDiverLeg(
     : isPeer
       ? (isBackLeg ? '#7c2d12' : '#9a3412')
       : (isBackLeg ? '#0c4a6e' : '#0369a1');
-  const finAccentColor = liveryPalette
+  let finAccentColor = liveryPalette
     ? liveryPalette.finTip
     : isPeer
       ? '#fb923c'
       : '#38bdf8';
+  if (liveryPalette?.trimFx === 'selenite-prism') {
+    finAccentColor = `hsl(${Math.round((timeSec * 90 + (isBackLeg ? 50 : 0)) % 360)}, 92%, 78%)`;
+  } else if (liveryPalette?.trimFx === 'foundry-sparks') {
+    finAccentColor = `hsl(30, 98%, ${56 + Math.round(Math.sin(timeSec * 6.5) * 14)}%)`;
+  } else if (liveryPalette?.trimFx === 'plasma-wave') {
+    const p = 0.5 + 0.5 * Math.sin(timeSec * 5.2 - (isBackLeg ? 0.8 : 0));
+    finAccentColor = p > 0.65 ? '#e0f2fe' : '#38bdf8';
+  }
 
   ctx.save();
   if (isBackLeg) ctx.globalAlpha *= 0.86;
@@ -1472,10 +1780,22 @@ export function drawDiverArmAndTorch(
     ctx.lineWidth = Math.max(0.8, 0.018 * scale);
     ctx.stroke();
     if (torchOn) {
+      const tSec = opts?.timeSec || 0;
+      const torchFx = liveryPalette?.torchFx || '';
       ctx.fillStyle = lensColor;
       ctx.beginPath();
       ctx.arc(0.18 * scale, 0, 0.052 * scale, 0, Math.PI * 2);
       ctx.fill();
+      if (torchFx) {
+        const pulse = 0.55 + 0.45 * Math.sin(tSec * 5.5);
+        ctx.strokeStyle = lensColor;
+        ctx.globalAlpha = 0.45 + pulse * 0.45;
+        ctx.lineWidth = Math.max(1.1, 0.024 * scale);
+        ctx.beginPath();
+        ctx.arc(0.18 * scale, 0, (0.075 + pulse * 0.032) * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (glowStamps?.warm) {
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.55;

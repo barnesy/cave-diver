@@ -10490,6 +10490,494 @@ summary,
   }
 }
 
+/* ─── v211 Major Gear Workshop Upgrade: 5-Tier Difficulty Ladder, Animated FX Cards, Try-On Progress & Unlock Showcase Card ─── */
+.home-avatar-btn.has-new-gear {
+  border-color: rgba(250, 204, 21, 0.88);
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25), 0 0 18px rgba(250, 204, 21, 0.35);
+  animation: newGearPulse 2.1s ease-in-out infinite;
+}
+@keyframes newGearPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.3), 0 0 12px rgba(250, 204, 21, 0.28); }
+  50% { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.45), 0 0 22px rgba(250, 204, 21, 0.52); }
+}
+
+.livery-ladder-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 10px;
+}
+.livery-tryon-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.34), rgba(15, 23, 42, 0.86));
+  color: #fef08a;
+  font-size: 0.72rem;
+}
+.livery-unseen-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(250, 204, 21, 0.72);
+  background: linear-gradient(125deg, rgba(234, 179, 8, 0.26), rgba(168, 85, 247, 0.22), rgba(15, 23, 42, 0.92));
+  color: #fef9c3;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.livery-unseen-banner:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(250, 204, 21, 0.28);
+}
+.livery-unseen-cta {
+  font-weight: 800;
+  color: #fde047;
+  white-space: nowrap;
+}
+.livery-next-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(7, 18, 34, 0.76);
+}
+.livery-next-row.complete {
+  display: block;
+  font-size: 0.7rem;
+  color: #fde047;
+  text-align: center;
+}
+.livery-next-kicker {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+  white-space: nowrap;
+}
+.livery-next-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.14s ease, transform 0.12s ease;
+}
+.livery-next-chip:hover {
+  border-color: rgba(56, 189, 248, 0.6);
+  transform: translateY(-1px);
+}
+.livery-next-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.67rem;
+  min-width: 0;
+}
+.livery-next-top strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.livery-next-pct {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.6rem;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* Enhanced Difficulty-Tiered Gear Swatch Cards */
+.livery-swatch-btn {
+  position: relative;
+  overflow: hidden;
+  align-items: flex-start;
+  padding: 8px 9px;
+}
+.livery-swatch-btn.locked {
+  opacity: 0.78;
+  cursor: pointer;
+  border-style: dashed;
+}
+.livery-swatch-btn.locked:hover {
+  opacity: 0.96;
+  border-color: rgba(250, 204, 21, 0.68);
+  background: rgba(113, 63, 18, 0.22);
+  transform: translateY(-1px);
+}
+.livery-swatch-btn.trying {
+  opacity: 1;
+  border-style: solid;
+  border-color: rgba(250, 204, 21, 0.92);
+  background: linear-gradient(145deg, rgba(113, 63, 18, 0.34), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35) inset, 0 0 14px rgba(250, 204, 21, 0.24);
+}
+.livery-swatch-btn.tier-uncommon:not(.locked) { border-color: rgba(52, 211, 153, 0.36); }
+.livery-swatch-btn.tier-rare:not(.locked) { border-color: rgba(56, 189, 248, 0.44); }
+.livery-swatch-btn.tier-epic:not(.locked) {
+  border-color: rgba(192, 132, 252, 0.56);
+  background: linear-gradient(145deg, rgba(88, 28, 135, 0.24), rgba(15, 23, 42, 0.86));
+}
+.livery-swatch-btn.tier-mythic:not(.locked) {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: linear-gradient(145deg, rgba(133, 77, 14, 0.3), rgba(15, 23, 42, 0.9));
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.14);
+}
+.livery-swatch-btn.tier-mythic:not(.locked)::after,
+.livery-swatch-btn.tier-epic:not(.locked).has-fx::after {
+  content: '';
+  position: absolute;
+  inset: -40% -80%;
+  background: linear-gradient(110deg, transparent 42%, rgba(255, 255, 255, 0.12) 50%, transparent 58%);
+  transform: translateX(-60%);
+  animation: gearCardSheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes gearCardSheen {
+  0%, 62% { transform: translateX(-60%); }
+  100% { transform: translateX(65%); }
+}
+.livery-swatch-btn.equip-pop {
+  animation: gearEquipPop 0.44s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+@keyframes gearEquipPop {
+  0% { transform: scale(0.95); }
+  50% { transform: scale(1.03); box-shadow: 0 0 22px rgba(56, 189, 248, 0.55); }
+  100% { transform: scale(1); }
+}
+
+.livery-swatch-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.livery-tier-pill {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.72);
+  white-space: nowrap;
+}
+.livery-tier-pill.tier-uncommon { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.55); background: rgba(6, 78, 59, 0.55); }
+.livery-tier-pill.tier-rare { color: #7dd3fc; border-color: rgba(56, 189, 248, 0.6); background: rgba(12, 74, 110, 0.55); }
+.livery-tier-pill.tier-epic { color: #e9d5ff; border-color: rgba(192, 132, 252, 0.65); background: rgba(88, 28, 135, 0.58); }
+.livery-tier-pill.tier-mythic { color: #fef08a; border-color: rgba(250, 204, 21, 0.78); background: rgba(113, 63, 18, 0.68); }
+
+.livery-new-badge {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #facc15;
+  color: #1c1917;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+}
+.livery-fx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #e9d5ff;
+  margin-top: 1px;
+}
+.livery-swatch-btn.tier-mythic .livery-fx-badge { color: #fde047; }
+.livery-swatch-btn.tier-rare .livery-fx-badge { color: #7dd3fc; }
+
+.livery-prog-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+  width: 100%;
+}
+.livery-prog-track {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+.livery-prog-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #38bdf8;
+  transition: width 0.25s ease;
+}
+.livery-prog-fill.tier-uncommon { background: linear-gradient(90deg, #10b981, #6ee7b7); }
+.livery-prog-fill.tier-rare { background: linear-gradient(90deg, #0284c7, #7dd3fc); }
+.livery-prog-fill.tier-epic { background: linear-gradient(90deg, #9333ea, #e879f9); }
+.livery-prog-fill.tier-mythic { background: linear-gradient(90deg, #eab308, #fef08a); }
+.livery-prog-label {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.56rem;
+  color: #94a3b8;
+}
+
+/* Celebratory Gear Unlock Showcase Card Modal */
+.gear-unlock-modal {
+  z-index: 95;
+  background: radial-gradient(circle at 50% 42%, rgba(7, 24, 46, 0.86), rgba(2, 6, 16, 0.94));
+  backdrop-filter: blur(10px);
+}
+.gear-unlock-card {
+  position: relative;
+  width: min(510px, calc(100vw - 24px));
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(165deg, rgba(10, 24, 46, 0.98), rgba(4, 10, 22, 0.98));
+  border: 1.5px solid rgba(56, 189, 248, 0.62);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.78), 0 0 42px rgba(56, 189, 248, 0.24);
+  overflow: hidden;
+}
+.gear-unlock-card[data-tier="uncommon"] {
+  border-color: rgba(52, 211, 153, 0.76);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.78), 0 0 44px rgba(16, 185, 129, 0.28);
+}
+.gear-unlock-card[data-tier="rare"] {
+  border-color: rgba(56, 189, 248, 0.84);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.78), 0 0 48px rgba(14, 165, 233, 0.34);
+}
+.gear-unlock-card[data-tier="epic"] {
+  border-color: rgba(192, 132, 252, 0.88);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.78), 0 0 56px rgba(168, 85, 247, 0.42);
+}
+.gear-unlock-card[data-tier="mythic"] {
+  border-color: rgba(250, 204, 21, 0.95);
+  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.82), 0 0 68px rgba(250, 204, 21, 0.45);
+}
+.gear-unlock-card.reveal-pop {
+  animation: gearCardRevealPop 0.42s cubic-bezier(0.2, 1.28, 0.34, 1);
+}
+@keyframes gearCardRevealPop {
+  0% { opacity: 0; transform: scale(0.84) translateY(16px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.gear-unlock-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.gear-unlock-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gear-unlock-tier {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+}
+.gear-unlock-count {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+.gear-unlock-stage {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #020814;
+  margin-bottom: 12px;
+}
+#gear-unlock-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 560 / 260;
+}
+.gear-unlock-body {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.gear-unlock-slot {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.gear-unlock-name {
+  margin: 0;
+  font-size: 1.32rem;
+  font-weight: 900;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+.gear-unlock-reason {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+.gear-unlock-fx-box {
+  margin-top: 4px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(192, 132, 252, 0.45);
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.34), rgba(15, 23, 42, 0.85));
+  color: #f1f5f9;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  width: 100%;
+}
+.gear-unlock-card[data-tier="mythic"] .gear-unlock-fx-box {
+  border-color: rgba(250, 204, 21, 0.58);
+  background: linear-gradient(135deg, rgba(133, 77, 14, 0.38), rgba(15, 23, 42, 0.88));
+}
+.gear-unlock-fx-tag {
+  display: inline-block;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #fde047;
+  margin-right: 4px;
+}
+.gear-unlock-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+}
+.gear-unlock-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--dot-color, #38bdf8);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+.gear-unlock-dot.active {
+  background: var(--dot-color, #38bdf8);
+  transform: scale(1.25);
+  box-shadow: 0 0 10px var(--dot-color, #38bdf8);
+}
+.gear-unlock-actions {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+.gear-unlock-equip-btn.equipped {
+  background: linear-gradient(135deg, #059669, #10b981);
+  border-color: #6ee7b7;
+  color: #ffffff;
+}
+
+/* Post-Dive Debrief New Gear Unlocked Tray */
+.debrief-gear-unlocks {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(250, 204, 21, 0.48);
+  background: linear-gradient(145deg, rgba(113, 63, 18, 0.24), rgba(8, 20, 38, 0.88));
+}
+.debrief-unlock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fde047;
+  margin-bottom: 8px;
+}
+.debrief-unlock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.debrief-unlock-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.82);
+}
+.debrief-unlock-chip.tier-mythic { border-color: rgba(250, 204, 21, 0.65); }
+.debrief-unlock-chip.tier-epic { border-color: rgba(192, 132, 252, 0.6); }
+.debrief-unlock-chip.tier-rare { border-color: rgba(56, 189, 248, 0.5); }
+.debrief-unlock-chip.tier-uncommon { border-color: rgba(52, 211, 153, 0.45); }
+.debrief-unlock-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: #f8fafc;
+}
+.debrief-unlock-slot {
+  font-size: 0.66rem;
+  color: #94a3b8;
+}
+.debrief-unlock-btns {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 560px) {
+  .livery-next-row {
+    grid-template-columns: 1fr;
+  }
+  .gear-unlock-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .gear-unlock-equip-btn {
+    grid-column: 1 / -1;
+  }
+}
+
+
 
 
 

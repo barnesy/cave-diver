@@ -44,10 +44,92 @@ function _countClaimedBounties(stats) {
   return n;
 }
 
+function _mkProg(current, target, unit) {
+  const c = Math.max(0, Math.min(target, Math.floor(current || 0)));
+  const t = Math.max(1, target);
+  return {
+    current: c,
+    target: t,
+    pct: Math.min(1, c / t),
+    label: `${c}/${t} ${unit}`,
+  };
+}
+
+function _bestProg(...candidates) {
+  let best = candidates[0];
+  for (let i = 1; i < candidates.length; i++) {
+    if (candidates[i].pct > best.pct) best = candidates[i];
+  }
+  return best;
+}
+
+/**
+ * 5-Tier Expedition Gear Prestige & Difficulty Ladder (v211).
+ * Visual rarity styling, unlock celebration scale, and sorting order match attainment difficulty.
+ */
+export const GEAR_TIERS = Object.freeze({
+  common: Object.freeze({
+    id: 'common',
+    rank: 1,
+    badge: 'STANDARD',
+    title: 'Tier I · Standard Issue',
+    icon: '◇',
+    color: '#94a3b8',
+    glow: 'rgba(148, 163, 184, 0.35)',
+    bg: 'rgba(51, 65, 85, 0.42)',
+  }),
+  uncommon: Object.freeze({
+    id: 'uncommon',
+    rank: 2,
+    badge: 'FIELD TECH',
+    title: 'Tier II · Field Tech',
+    icon: '●',
+    color: '#34d399',
+    glow: 'rgba(52, 211, 153, 0.45)',
+    bg: 'rgba(6, 78, 59, 0.42)',
+  }),
+  rare: Object.freeze({
+    id: 'rare',
+    rank: 3,
+    badge: 'VETERAN',
+    title: 'Tier III · Veteran Specialist',
+    icon: '▲',
+    color: '#38bdf8',
+    glow: 'rgba(56, 189, 248, 0.5)',
+    bg: 'rgba(12, 74, 110, 0.46)',
+  }),
+  epic: Object.freeze({
+    id: 'epic',
+    rank: 4,
+    badge: 'MASTER',
+    title: 'Tier IV · Campaign Master',
+    icon: '◆',
+    color: '#c084fc',
+    glow: 'rgba(192, 132, 252, 0.56)',
+    bg: 'rgba(88, 28, 135, 0.46)',
+  }),
+  mythic: Object.freeze({
+    id: 'mythic',
+    rank: 5,
+    badge: 'MYTHIC RELIC',
+    title: 'Tier V · Abyssal Relic',
+    icon: '✦',
+    color: '#facc15',
+    glow: 'rgba(250, 204, 21, 0.65)',
+    bg: 'rgba(113, 63, 18, 0.48)',
+  }),
+});
+
+export function getGearTierMeta(tierId) {
+  return (tierId && GEAR_TIERS[tierId]) || GEAR_TIERS.common;
+}
+
 export const SUIT_LIVERIES = Object.freeze([
   {
     id: 'zissou-classic',
     name: 'Zissou Tech',
+    tier: 'common',
+    ladderRank: 0,
     suitTop: '#1e293b',
     suitMid: '#0f172a',
     suitBot: '#020617',
@@ -62,6 +144,8 @@ export const SUIT_LIVERIES = Object.freeze([
   {
     id: 'arctic-cobalt',
     name: 'Arctic Cobalt',
+    tier: 'common',
+    ladderRank: 1,
     suitTop: '#1e3a5f',
     suitMid: '#0c2444',
     suitBot: '#041226',
@@ -76,6 +160,8 @@ export const SUIT_LIVERIES = Object.freeze([
   {
     id: 'expedition-amber',
     name: 'Rescue Amber',
+    tier: 'common',
+    ladderRank: 2,
     suitTop: '#292524',
     suitMid: '#1c1917',
     suitBot: '#0c0a09',
@@ -88,8 +174,27 @@ export const SUIT_LIVERIES = Object.freeze([
     isUnlocked: () => true,
   },
   {
+    id: 'cenote-azure',
+    name: 'Cenote Azure',
+    tier: 'uncommon',
+    ladderRank: 12,
+    suitTop: '#0e7490',
+    suitMid: '#155e75',
+    suitBot: '#083344',
+    accent: '#38bdf8',
+    trim: '#a5f3fc',
+    finColor: '#0c4a6e',
+    finTip: '#67e8f9',
+    stageBand: '#22d3ee',
+    unlockHint: 'Clear your 1st expedition site',
+    getProgress: (s) => _mkProg(s.sitesCleared, 1, 'site'),
+    isUnlocked: (stats) => stats.sitesCleared >= 1,
+  },
+  {
     id: 'abyss-emerald',
     name: 'Cenote Emerald',
+    tier: 'uncommon',
+    ladderRank: 24,
     suitTop: '#064e3b',
     suitMid: '#052e23',
     suitBot: '#021a14',
@@ -99,11 +204,14 @@ export const SUIT_LIVERIES = Object.freeze([
     finTip: '#6ee7b7',
     stageBand: '#34d399',
     unlockHint: 'Clear 3+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 3, 'sites'),
     isUnlocked: (stats) => stats.sitesCleared >= 3,
   },
   {
     id: 'wreck-titanium',
     name: 'Wreck Titanium',
+    tier: 'rare',
+    ladderRank: 42,
     suitTop: '#334155',
     suitMid: '#1e293b',
     suitBot: '#0f172a',
@@ -113,25 +221,15 @@ export const SUIT_LIVERIES = Object.freeze([
     finTip: '#facc15',
     stageBand: '#eab308',
     unlockHint: 'Clear any shipwreck or 6+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 6, 'sites')),
     isUnlocked: (stats) => stats.wreckClears >= 1 || stats.sitesCleared >= 6,
-  },
-  {
-    id: 'krubera-obsidian',
-    name: 'Abyssal Sovereign',
-    suitTop: '#27272a',
-    suitMid: '#18181b',
-    suitBot: '#09090b',
-    accent: '#a855f7',
-    trim: '#e879f9',
-    finColor: '#1e1b4b',
-    finTip: '#c084fc',
-    stageBand: '#a855f7',
-    unlockHint: 'Clear 12+ sites or log 8+ species',
-    isUnlocked: (stats) => stats.sitesCleared >= 12 || stats.speciesLogged >= 8,
   },
   {
     id: 'karst-jade',
     name: 'Karst Jade Explorer',
+    tier: 'epic',
+    ladderRank: 70,
+    fx: { id: 'karst-caustics', name: 'Cenote Caustics', desc: 'Sunlit turquoise caustic light ribbons ripple across the drysuit.' },
     suitTop: '#0f766e',
     suitMid: '#115e59',
     suitBot: '#042f2e',
@@ -141,11 +239,33 @@ export const SUIT_LIVERIES = Object.freeze([
     finTip: '#2dd4bf',
     stageBand: '#fbbf24',
     unlockHint: 'Complete Yucatán & Karst Circuit Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('cenote-circuit') ? 1 : 0, 1, 'campaign'),
     isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('cenote-circuit')),
+  },
+  {
+    id: 'krubera-obsidian',
+    name: 'Abyssal Sovereign',
+    tier: 'epic',
+    ladderRank: 76,
+    fx: { id: 'abyssal-shimmer', name: 'Biolum Sheen', desc: 'Deep-violet abyssal luminescence breathes along armor seams.' },
+    suitTop: '#27272a',
+    suitMid: '#18181b',
+    suitBot: '#09090b',
+    accent: '#a855f7',
+    trim: '#e879f9',
+    finColor: '#1e1b4b',
+    finTip: '#c084fc',
+    stageBand: '#a855f7',
+    unlockHint: 'Clear 12+ sites or log 8+ species',
+    getProgress: (s) => _bestProg(_mkProg(s.sitesCleared, 12, 'sites'), _mkProg(s.speciesLogged, 8, 'species')),
+    isUnlocked: (stats) => stats.sitesCleared >= 12 || stats.speciesLogged >= 8,
   },
   {
     id: 'secret-kraken-biolume',
     name: 'Kraken Biolume',
+    tier: 'mythic',
+    ladderRank: 90,
+    fx: { id: 'biolume-pulse', name: 'Bioluminescent Pulse', desc: 'Living cyan-violet circuit veins ripple down torso & drift glowing bio-spores.' },
     secret: true,
     trophyRelicId: 'l1-kraken-crown',
     suitTop: '#0c1c36',
@@ -156,28 +276,15 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#0e2948',
     finTip: '#67e8f9',
     stageBand: '#38bdf8',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Kraken Sanctum',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'l1-kraken-crown'),
-  },
-  {
-    id: 'secret-empress-sovereign',
-    name: 'Abyssal Sovereign Gold',
-    secret: true,
-    trophyRelicId: 'krubera-empress-diadem',
-    suitTop: '#1e1b4b',
-    suitMid: '#110e2e',
-    suitBot: '#070516',
-    accent: '#facc15',
-    trim: '#67e8f9',
-    finColor: '#1e1b4b',
-    finTip: '#fde047',
-    stageBand: '#facc15',
-    unlockHint: '✦ Relic Unlock',
-    isUnlocked: (stats) => _hasTrophyRelic(stats, 'krubera-empress-diadem'),
   },
   {
     id: 'secret-volcanic-nautilus',
     name: 'Volcanic Basalt Suit',
+    tier: 'mythic',
+    ladderRank: 92,
+    fx: { id: 'magma-embers', name: 'Molten Magma Veins', desc: 'Incandescent basalt fissures pulse across armor while embers rise.' },
     secret: true,
     trophyRelicId: 'strytan-magma-pearl',
     suitTop: '#292524',
@@ -188,12 +295,15 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#44403c',
     finTip: '#fb923c',
     stageBand: '#f97316',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Strýtan Spire',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'strytan-magma-pearl'),
   },
   {
     id: 'secret-phantom-suit',
     name: 'North Sea Phantom Suit',
+    tier: 'mythic',
+    ladderRank: 93,
+    fx: { id: 'phantom-phase', name: 'Spectral Phase Shimmer', desc: 'Ghostly teal sonar contours phase across the stealth hull.' },
     secret: true,
     trophyRelicId: 'u1206-phantom-compass',
     suitTop: '#1e293b',
@@ -204,12 +314,15 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#134e4a',
     finTip: '#99f6e4',
     stageBand: '#14b8a6',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · U-1206 Phantom',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'u1206-phantom-compass'),
   },
   {
     id: 'secret-orichalcum-suit',
     name: 'Atlantean Orichalcum Suit',
+    tier: 'mythic',
+    ladderRank: 94,
+    fx: { id: 'orichalcum-runes', name: 'Orichalcum Rune Glow', desc: 'Ancient golden-cyan glyphs pulse with harmonic energy along the rig.' },
     secret: true,
     trophyRelicId: 'bimini-orichalcum-astrolabe',
     suitTop: '#164e63',
@@ -220,12 +333,15 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#0c4a6e',
     finTip: '#fde047',
     stageBand: '#f59e0b',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Bimini Astrolabe',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'bimini-orichalcum-astrolabe'),
   },
   {
     id: 'secret-ryujin-suit',
     name: 'Ryūjin Jade Dragon Suit',
+    tier: 'mythic',
+    ladderRank: 95,
+    fx: { id: 'dragon-jade', name: 'Dragon Scale Radiance', desc: 'Jade-crimson dragon scales shimmer with drifting golden lantern sparks.' },
     secret: true,
     trophyRelicId: 'yonaguni-dragon-pearl',
     suitTop: '#0f766e',
@@ -236,12 +352,34 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#134e4a',
     finTip: '#fb7185',
     stageBand: '#2dd4bf',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Yonaguni Dragon',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'yonaguni-dragon-pearl'),
+  },
+  {
+    id: 'secret-empress-sovereign',
+    name: 'Abyssal Sovereign Gold',
+    tier: 'mythic',
+    ladderRank: 97,
+    fx: { id: 'sovereign-aura', name: 'Sovereign Gilded Aura', desc: 'Golden specular crown-wave sweeps armor with orbiting starlight motes.' },
+    secret: true,
+    trophyRelicId: 'krubera-empress-diadem',
+    suitTop: '#1e1b4b',
+    suitMid: '#110e2e',
+    suitBot: '#070516',
+    accent: '#facc15',
+    trim: '#67e8f9',
+    finColor: '#1e1b4b',
+    finTip: '#fde047',
+    stageBand: '#facc15',
+    unlockHint: '✦ Guardian Relic · Krubera Empress',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'krubera-empress-diadem'),
   },
   {
     id: 'bounty-hunter-suit',
     name: 'Master Bounty Hunter Gilded',
+    tier: 'mythic',
+    ladderRank: 100,
+    fx: { id: 'sovereign-aura', name: 'Apex Bounty Aura', desc: 'Radiant gilded-emerald sweep & orbiting apex prestige motes.' },
     suitTop: '#422006',
     suitMid: '#1c1917',
     suitBot: '#09090b',
@@ -251,6 +389,7 @@ export const SUIT_LIVERIES = Object.freeze([
     finTip: '#fde047',
     stageBand: '#eab308',
     unlockHint: 'Claim all 12 Abyssal Bounties',
+    getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'),
     isUnlocked: (stats) => _countClaimedBounties(stats) >= 12,
   },
 ]);
@@ -260,6 +399,8 @@ export const TORCH_OPTICS = Object.freeze([
     id: 'tech-led',
     name: '6500K Tech LED',
     shortLabel: '6500K LED',
+    tier: 'common',
+    ladderRank: 0,
     swatch: '#bae6fd',
     coreRgb: '224, 242, 254',
     shaftRgb: '186, 230, 253',
@@ -274,6 +415,8 @@ export const TORCH_OPTICS = Object.freeze([
     id: 'warm-halogen',
     name: '3200K Halogen',
     shortLabel: 'Halogen',
+    tier: 'common',
+    ladderRank: 1,
     swatch: '#fde047',
     coreRgb: '254, 240, 138',
     shaftRgb: '253, 224, 71',
@@ -288,6 +431,8 @@ export const TORCH_OPTICS = Object.freeze([
     id: 'amber-silt',
     name: 'Amber Silt-Piercer',
     shortLabel: 'Amber Piercer',
+    tier: 'uncommon',
+    ladderRank: 20,
     swatch: '#fb923c',
     coreRgb: '253, 186, 116',
     shaftRgb: '251, 146, 60',
@@ -296,12 +441,15 @@ export const TORCH_OPTICS = Object.freeze([
     siltPierce: 0.28,
     specText: 'Low-backscatter amber · +28% silt penetration',
     unlockHint: 'Clear 2+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 2, 'sites'),
     isUnlocked: (stats) => stats.sitesCleared >= 2,
   },
   {
     id: 'emerald-spot',
     name: '5000K Emerald Spot',
     shortLabel: 'Emerald Spot',
+    tier: 'rare',
+    ladderRank: 44,
     swatch: '#5eead4',
     coreRgb: '167, 243, 208',
     shaftRgb: '94, 234, 212',
@@ -310,12 +458,34 @@ export const TORCH_OPTICS = Object.freeze([
     siltPierce: 0.12,
     specText: 'Long-throw pelagic focus · +8% beam reach',
     unlockHint: 'Clear 5+ sites or log 4+ species',
+    getProgress: (s) => _bestProg(_mkProg(s.sitesCleared, 5, 'sites'), _mkProg(s.speciesLogged, 4, 'species')),
     isUnlocked: (stats) => stats.sitesCleared >= 5 || stats.speciesLogged >= 4,
+  },
+  {
+    id: 'halocline-uv',
+    name: 'UV Biolume Spotter',
+    shortLabel: 'UV Biolume',
+    tier: 'rare',
+    ladderRank: 54,
+    fx: { id: 'uv-fluorescence', name: 'UV Fluorescence', desc: 'Dancing violet-cyan excitation flecks shimmer through the torch cone.' },
+    swatch: '#c084fc',
+    coreRgb: '233, 213, 255',
+    shaftRgb: '192, 132, 252',
+    warmRgb: '165, 243, 252',
+    rangeMult: 1.10,
+    siltPierce: 0.18,
+    specText: 'Actinic UV-cyan spotter · +10% reach & +18% silt pierce',
+    unlockHint: 'Clear 1+ Daily Dive, 6+ species, or 7+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.dailyClears, 1, 'daily'), _mkProg(s.speciesLogged, 6, 'species'), _mkProg(s.sitesCleared, 7, 'sites')),
+    isUnlocked: (stats) => (stats.dailyClears || 0) >= 1 || stats.speciesLogged >= 6 || stats.sitesCleared >= 7,
   },
   {
     id: 'aurora-plasma',
     name: '9000K Aurora Plasma',
     shortLabel: 'Aurora 9000K',
+    tier: 'epic',
+    ladderRank: 74,
+    fx: { id: 'aurora-arc', name: 'Aurora Plasma Arc', desc: 'Shimmering polar-cyan plasma ribbons pulse inside the volumetric beam.' },
     swatch: '#38bdf8',
     coreRgb: '207, 250, 254',
     shaftRgb: '56, 189, 248',
@@ -324,12 +494,34 @@ export const TORCH_OPTICS = Object.freeze([
     siltPierce: 0.22,
     specText: 'Subglacial aurora arc · +12% reach & +22% silt pierce',
     unlockHint: 'Complete Iceland Geothermal Survey Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('iceland-survey') ? 1 : 0, 1, 'campaign'),
     isUnlocked: (stats) => Boolean(stats.completedCampaigns?.has('iceland-survey')),
+  },
+  {
+    id: 'bounty-hunter-torch',
+    name: 'Leviathan Hunter Plasma',
+    shortLabel: 'Hunter Plasma',
+    tier: 'epic',
+    ladderRank: 84,
+    fx: { id: 'hunter-plasma', name: 'Crimson Core Surge', desc: 'Pulsing crimson-gold plasma corona & harmonic power surge in the beam.' },
+    swatch: '#f43f5e',
+    coreRgb: '255, 228, 230',
+    shaftRgb: '244, 63, 94',
+    warmRgb: '253, 186, 116',
+    rangeMult: 1.15,
+    siltPierce: 0.26,
+    specText: 'Deep-stalker crimson-gold plasma · +15% reach & +26% silt pierce',
+    unlockHint: 'Claim 6 Abyssal Bounties',
+    getProgress: (s) => _mkProg(_countClaimedBounties(s), 6, 'bounties'),
+    isUnlocked: (stats) => _countClaimedBounties(stats) >= 6,
   },
   {
     id: 'secret-solar-prism',
     name: 'Solar Reef Prism',
     shortLabel: 'Solar Prism',
+    tier: 'mythic',
+    ladderRank: 95,
+    fx: { id: 'solar-caustic', name: 'Solar Caustic Starburst', desc: 'Radiant golden caustic ripple bands & starburst corona emit from the lens.' },
     secret: true,
     trophyRelicId: 'bluehole-solar-prism',
     swatch: '#fde047',
@@ -339,39 +531,26 @@ export const TORCH_OPTICS = Object.freeze([
     rangeMult: 1.14,
     siltPierce: 0.24,
     specText: 'Radiant caustic reef beam · +14% reach & +24% silt pierce',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Blue Hole Arch',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'bluehole-solar-prism'),
-  },
-  {
-    id: 'bounty-hunter-torch',
-    name: 'Leviathan Hunter Plasma',
-    shortLabel: 'Hunter Plasma',
-    swatch: '#f43f5e',
-    coreRgb: '255, 228, 230',
-    shaftRgb: '244, 63, 94',
-    warmRgb: '253, 186, 116',
-    rangeMult: 1.15,
-    siltPierce: 0.26,
-    specText: 'Deep-stalker crimson-gold plasma · +15% reach & +26% silt pierce',
-    unlockHint: 'Claim 6 Abyssal Bounties',
-    isUnlocked: (stats) => _countClaimedBounties(stats) >= 6,
   },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
-  { id: 'none', icon: '—', name: 'Clean Harness', unlockHint: 'Standard', isUnlocked: () => true },
-  { id: 'cave-arrow', icon: '▷', name: 'Line Arrow', unlockHint: 'Standard', isUnlocked: () => true },
-  { id: 'cenote-explorer', icon: '🌴', name: 'Cenote Diver', unlockHint: '3+ clears', isUnlocked: (s) => s.sitesCleared >= 3 },
-  { id: 'wreck-penetrator', icon: '⚓', name: 'Wreck Tech', unlockHint: '1+ wreck or 5+ clears', isUnlocked: (s) => s.wreckClears >= 1 || s.sitesCleared >= 5 },
-  { id: 'wildlife-biologist', icon: '📷', name: 'Marine Bio', unlockHint: '5+ Field Guide species', isUnlocked: (s) => s.speciesLogged >= 5 },
-  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', unlockHint: '10+ clears', isUnlocked: (s) => s.sitesCleared >= 10 },
-  { id: 'camp-karst', icon: '🧭', name: 'Karst Pioneer', unlockHint: 'Yucatán & Karst Circuit Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('cenote-circuit')) },
-  { id: 'camp-salvage', icon: '🎖️', name: 'Master Salvager', unlockHint: 'Maritime Wreck Salvage Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')) },
-  { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', unlockHint: 'Iceland Geothermal Survey Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
-  { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', unlockHint: 'Abyssal World Record Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
-  { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', unlockHint: 'Coral & Iron Wrecks Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
-  { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', unlockHint: 'Halocline Wonders Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
-  { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', unlockHint: 'Claim all 12 Abyssal Bounties', isUnlocked: (s) => _countClaimedBounties(s) >= 12 },
+  { id: 'none', icon: '—', name: 'Clean Harness', tier: 'common', ladderRank: 0, unlockHint: 'Standard', isUnlocked: () => true },
+  { id: 'cave-arrow', icon: '▷', name: 'Line Arrow', tier: 'common', ladderRank: 1, unlockHint: 'Standard', isUnlocked: () => true },
+  { id: 'first-descent', icon: '💧', name: 'First Sump', tier: 'uncommon', ladderRank: 10, unlockHint: 'Clear 1st site', getProgress: (s) => _mkProg(s.sitesCleared, 1, 'site'), isUnlocked: (s) => s.sitesCleared >= 1 },
+  { id: 'cenote-explorer', icon: '🌴', name: 'Cenote Diver', tier: 'uncommon', ladderRank: 24, unlockHint: '3+ clears', getProgress: (s) => _mkProg(s.sitesCleared, 3, 'sites'), isUnlocked: (s) => s.sitesCleared >= 3 },
+  { id: 'wreck-penetrator', icon: '⚓', name: 'Wreck Tech', tier: 'rare', ladderRank: 40, unlockHint: '1+ wreck or 5+ clears', getProgress: (s) => _bestProg(_mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 5, 'sites')), isUnlocked: (s) => s.wreckClears >= 1 || s.sitesCleared >= 5 },
+  { id: 'wildlife-biologist', icon: '📷', name: 'Marine Bio', tier: 'rare', ladderRank: 46, unlockHint: '5+ Field Guide species', getProgress: (s) => _mkProg(s.speciesLogged, 5, 'species'), isUnlocked: (s) => s.speciesLogged >= 5 },
+  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', tier: 'rare', ladderRank: 60, unlockHint: '10+ clears', getProgress: (s) => _mkProg(s.sitesCleared, 10, 'sites'), isUnlocked: (s) => s.sitesCleared >= 10 },
+  { id: 'camp-karst', icon: '🧭', name: 'Karst Pioneer', tier: 'epic', ladderRank: 70, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Yucatán & Karst Circuit Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('cenote-circuit') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('cenote-circuit')) },
+  { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', tier: 'epic', ladderRank: 72, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Coral & Iron Wrecks Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('coral-iron-wrecks') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
+  { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', tier: 'epic', ladderRank: 74, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Halocline Wonders Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('halocline-wonders') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
+  { id: 'camp-salvage', icon: '🎖️', name: 'Master Salvager', tier: 'epic', ladderRank: 76, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Maritime Wreck Salvage Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('wreck-salvage') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')) },
+  { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', tier: 'epic', ladderRank: 78, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Iceland Geothermal Survey Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('iceland-survey') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
+  { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', tier: 'epic', ladderRank: 84, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Abyssal World Record Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
+  { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim all 12 Abyssal Bounties', getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'), isUnlocked: (s) => _countClaimedBounties(s) >= 12 },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -379,6 +558,8 @@ export const HEADGEAR_STYLES = Object.freeze([
     id: 'zissou-cap',
     name: 'Zissou Beanie',
     icon: '🧶',
+    tier: 'common',
+    ladderRank: 0,
     specText: 'Classic expedition knit cap',
     unlockHint: 'Standard Issue',
     isUnlocked: () => true,
@@ -387,6 +568,8 @@ export const HEADGEAR_STYLES = Object.freeze([
     id: 'cave-hood',
     name: 'Neoprene Hood',
     icon: '🤿',
+    tier: 'common',
+    ladderRank: 1,
     specText: '7mm contoured cave hood + trim stripe',
     unlockHint: 'Standard Issue',
     isUnlocked: () => true,
@@ -395,34 +578,60 @@ export const HEADGEAR_STYLES = Object.freeze([
     id: 'cave-helmet',
     name: 'Carbon Cave Helmet',
     icon: '⛑️',
+    tier: 'uncommon',
+    ladderRank: 28,
     specText: 'Hard-shell impact helmet + twin backup pods',
-    unlockHint: 'Bulkhead Engineer cert or 1+ wreck',
+    unlockHint: 'Bulkhead Engineer cert, 1+ wreck, or 4+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.pressurizedEqualizations, 1, 'bulkhead'), _mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 4, 'sites')),
     isUnlocked: (s) => (s.pressurizedEqualizations || 0) >= 1 || s.wreckClears >= 1 || s.sitesCleared >= 4,
   },
   {
     id: 'exo-mask',
     name: 'Full-Face Exo Mask',
     icon: '🧑‍🚀',
-    specText: 'Comms full-face visor + interior HUD glow',
-    unlockHint: 'Emergency Troubleshooter or 5+ sites',
+    tier: 'rare',
+    ladderRank: 48,
+    fx: { id: 'exo-hud', name: 'Live Comms HUD', desc: 'Scanning telemetry lightbar pulses smoothly across the panoramic visor.' },
+    specText: 'Comms full-face visor + live interior HUD glow',
+    unlockHint: '3+ Emergency Drills or 5+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 3, 'drills'), _mkProg(s.sitesCleared, 5, 'sites')),
     isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 5,
   },
   {
     id: 'brass-hardhat',
     name: 'Brass Salvage Helmet',
     icon: '🪖',
+    tier: 'epic',
+    ladderRank: 76,
+    fx: { id: 'brass-glint', name: 'Burnished Bronze Sheen', desc: 'Warm specular sheen sweeps across the riveted bronze dome.' },
     specText: 'Riveted bronze deep-salvage dome + heavy collar',
     unlockHint: 'Complete Maritime Wreck Salvage Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('wreck-salvage') ? 1 : 0, 1, 'campaign'),
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')),
+  },
+  {
+    id: 'abyss-halo-helm',
+    name: 'Abyssal Halo Helmet',
+    icon: '🛸',
+    tier: 'epic',
+    ladderRank: 84,
+    fx: { id: 'halo-telemetry', name: 'Orbital Telemetry Halo', desc: 'Animated holographic cyan ring & twin synchronized strobe beacons.' },
+    specText: 'Armored titanium sump dome + animated telemetry halo',
+    unlockHint: 'Hardcore clear, 100m+ depth, or 15+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 100, 'm depth'), _mkProg(s.sitesCleared, 15, 'sites')),
+    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 100 || s.sitesCleared >= 15,
   },
   {
     id: 'secret-dreadnought-helm',
     name: 'WWII Brass Hardhat Mk-IV',
     icon: '⚙️',
+    tier: 'mythic',
+    ladderRank: 95,
+    fx: { id: 'dreadnought-steam', name: 'Furnace Core & Steam Glint', desc: 'Pulsing amber porthole glow & venting crown spark glints.' },
     secret: true,
     trophyRelicId: 'thistlegorm-engine-core',
     specText: 'Riveted armored brass dreadnought dome + amber porthole',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · SS Thistlegorm',
     isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
   },
 ]);
@@ -431,6 +640,8 @@ export const ACCENT_TRIMS = Object.freeze([
   {
     id: 'suit-default',
     name: 'Match Drysuit',
+    tier: 'common',
+    ladderRank: 0,
     accent: null,
     trim: null,
     finTip: null,
@@ -443,6 +654,8 @@ export const ACCENT_TRIMS = Object.freeze([
   {
     id: 'safety-orange',
     name: 'Rescue Orange',
+    tier: 'common',
+    ladderRank: 1,
     accent: '#f97316',
     trim: '#fdba74',
     finTip: '#fb923c',
@@ -455,6 +668,8 @@ export const ACCENT_TRIMS = Object.freeze([
   {
     id: 'cavern-yellow',
     name: 'Cave-Line Yellow',
+    tier: 'common',
+    ladderRank: 2,
     accent: '#eab308',
     trim: '#fde047',
     finTip: '#facc15',
@@ -467,6 +682,8 @@ export const ACCENT_TRIMS = Object.freeze([
   {
     id: 'tech-cyan',
     name: 'Ice Cyan',
+    tier: 'common',
+    ladderRank: 3,
     accent: '#06b6d4',
     trim: '#67e8f9',
     finTip: '#22d3ee',
@@ -479,6 +696,8 @@ export const ACCENT_TRIMS = Object.freeze([
   {
     id: 'signal-crimson',
     name: 'Crimson Flare',
+    tier: 'uncommon',
+    ladderRank: 18,
     accent: '#ef4444',
     trim: '#fca5a5',
     finTip: '#f87171',
@@ -486,23 +705,30 @@ export const ACCENT_TRIMS = Object.freeze([
     swatchA: '#ef4444',
     swatchB: '#fca5a5',
     unlockHint: 'Clear 2+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 2, 'sites'),
     isUnlocked: (s) => s.sitesCleared >= 2,
   },
   {
     id: 'salvage-gold',
     name: 'Salvage Gold',
+    tier: 'rare',
+    ladderRank: 40,
     accent: '#f59e0b',
     trim: '#fef08a',
     finTip: '#fde047',
     stageBand: '#f59e0b',
     swatchA: '#d97706',
     swatchB: '#fef08a',
-    unlockHint: 'Salvage Master cert or 1+ wreck',
+    unlockHint: 'Salvage Master cert, 1+ wreck, or 5+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.cleanSalvageLifts, 1, 'salvage'), _mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 5, 'sites')),
     isUnlocked: (s) => (s.cleanSalvageLifts || 0) >= 1 || s.wreckClears >= 1 || s.sitesCleared >= 5,
   },
   {
     id: 'biolum-violet',
     name: 'Biolum Orchid',
+    tier: 'rare',
+    ladderRank: 56,
+    fx: { id: 'abyssal-shimmer', name: 'Orchid Pulse', desc: 'Soft bioluminescent violet glow breathes along webbing & fin tips.' },
     accent: '#a855f7',
     trim: '#f0abfc',
     finTip: '#c084fc',
@@ -510,11 +736,31 @@ export const ACCENT_TRIMS = Object.freeze([
     swatchA: '#a855f7',
     swatchB: '#f0abfc',
     unlockHint: '4+ Field Guide species or 8+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.speciesLogged, 4, 'species'), _mkProg(s.sitesCleared, 8, 'sites')),
     isUnlocked: (s) => s.speciesLogged >= 4 || s.sitesCleared >= 8,
+  },
+  {
+    id: 'plasma-circuit-trim',
+    name: 'Plasma Circuit Trim',
+    tier: 'epic',
+    ladderRank: 80,
+    fx: { id: 'plasma-wave', name: 'Plasma Energy Conduit', desc: 'Bright cyan telemetry pulse travels continuously from harness to fin tips.' },
+    accent: '#06b6d4',
+    trim: '#67e8f9',
+    finTip: '#38bdf8',
+    stageBand: '#22d3ee',
+    swatchA: '#0ea5e9',
+    swatchB: '#a5f3fc',
+    unlockHint: 'Hardcore clear, 90m+ depth, or 14+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 90, 'm depth'), _mkProg(s.sitesCleared, 14, 'sites')),
+    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 90 || s.sitesCleared >= 14,
   },
   {
     id: 'secret-selenite-trim',
     name: 'Selenite Prism Trim',
+    tier: 'mythic',
+    ladderRank: 94,
+    fx: { id: 'selenite-prism', name: 'Prismatic Refraction', desc: 'Iridescent crystal spectrum flows smoothly through webbing & fins.' },
     secret: true,
     trophyRelicId: 'orda-selenite-prism',
     accent: '#e879f9',
@@ -523,12 +769,15 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#c084fc',
     swatchA: '#e879f9',
     swatchB: '#bae6fd',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Orda Crystal Maze',
     isUnlocked: (s) => _hasTrophyRelic(s, 'orda-selenite-prism'),
   },
   {
     id: 'secret-foundry-trim',
     name: 'Foundry Tungsten Trim',
+    tier: 'mythic',
+    ladderRank: 95,
+    fx: { id: 'foundry-sparks', name: 'Superheated Tungsten Sparks', desc: 'Molten tungsten glow pulses along the harness with drifting ember sparks.' },
     secret: true,
     trophyRelicId: 'ojamo-tungsten-core',
     accent: '#f97316',
@@ -537,7 +786,7 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#ea580c',
     swatchA: '#f97316',
     swatchB: '#fbbf24',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Ojamo Mine',
     isUnlocked: (s) => _hasTrophyRelic(s, 'ojamo-tungsten-core'),
   },
 ]);
@@ -546,6 +795,8 @@ export const TANK_FINISHES = Object.freeze([
   {
     id: 'al80-silver',
     name: 'Brushed AL80',
+    tier: 'common',
+    ladderRank: 0,
     top: '#f8fafc',
     mid: '#cbd5e1',
     bot: '#64748b',
@@ -557,6 +808,8 @@ export const TANK_FINISHES = Object.freeze([
   {
     id: 'hivis-yellow',
     name: 'Hi-Vis Steel Yellow',
+    tier: 'common',
+    ladderRank: 1,
     top: '#fef08a',
     mid: '#eab308',
     bot: '#a16207',
@@ -568,61 +821,81 @@ export const TANK_FINISHES = Object.freeze([
   {
     id: 'anodized-cobalt',
     name: 'Anodized Cobalt',
+    tier: 'uncommon',
+    ladderRank: 18,
     top: '#7dd3fc',
     mid: '#0284c7',
     bot: '#0c4a6e',
     stroke: '#082f49',
     ccrShell: '#0ea5e9',
     unlockHint: 'Clear 2+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 2, 'sites'),
     isUnlocked: (s) => s.sitesCleared >= 2,
   },
   {
     id: 'carbon-stealth',
     name: 'Carbon Stealth',
+    tier: 'uncommon',
+    ladderRank: 30,
     top: '#475569',
     mid: '#1e293b',
     bot: '#020617',
     stroke: '#334155',
     ccrShell: '#334155',
     unlockHint: 'Zero-Silt Trim cert or 4+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.zeroSiltClears, 1, 'zero-silt'), _mkProg(s.sitesCleared, 4, 'sites')),
     isUnlocked: (s) => (s.zeroSiltClears || 0) >= 1 || s.sitesCleared >= 4,
   },
   {
     id: 'salvage-brass',
     name: 'Patina Salvage Brass',
+    tier: 'rare',
+    ladderRank: 46,
     top: '#fde68a',
     mid: '#d97706',
     bot: '#78350f',
     stroke: '#451a03',
     ccrShell: '#d97706',
     unlockHint: 'Bulkhead Engineer cert or 2+ wrecks',
+    getProgress: (s) => _bestProg(_mkProg(s.pressurizedEqualizations, 1, 'bulkhead'), _mkProg(s.wreckClears, 2, 'wrecks')),
     isUnlocked: (s) => (s.pressurizedEqualizations || 0) >= 1 || s.wreckClears >= 2,
-  },
-  {
-    id: 'abyssal-titanium',
-    name: 'Abyssal Carbon-Ti',
-    top: '#e0e7ff',
-    mid: '#6366f1',
-    bot: '#1e1b4b',
-    stroke: '#c084fc',
-    ccrShell: '#818cf8',
-    unlockHint: 'Complete Abyssal World Record Campaign',
-    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')),
   },
   {
     id: 'sulfur-emerald-tank',
     name: 'Sulfur Emerald Twinset',
+    tier: 'epic',
+    ladderRank: 74,
+    fx: { id: 'halocline-glow', name: 'Chemocline Shimmer', desc: 'Luminous lime-emerald halocline sheen glides along the twin cylinders.' },
     top: '#ecfccb',
     mid: '#84cc16',
     bot: '#1a2e05',
     stroke: '#bef264',
     ccrShell: '#65a30d',
     unlockHint: 'Complete Halocline Wonders Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('halocline-wonders') ? 1 : 0, 1, 'campaign'),
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')),
+  },
+  {
+    id: 'abyssal-titanium',
+    name: 'Abyssal Carbon-Ti',
+    tier: 'epic',
+    ladderRank: 84,
+    fx: { id: 'carbon-plasma', name: 'Cryo-Plasma Rings', desc: 'Traveling indigo-violet pressure rings sweep along the carbon-titanium tanks.' },
+    top: '#e0e7ff',
+    mid: '#6366f1',
+    bot: '#1e1b4b',
+    stroke: '#c084fc',
+    ccrShell: '#818cf8',
+    unlockHint: 'Complete Abyssal World Record Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'),
+    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')),
   },
   {
     id: 'secret-dreadnought-brass',
     name: 'Mk-IV Riveted Reactor',
+    tier: 'mythic',
+    ladderRank: 96,
+    fx: { id: 'reactor-core', name: 'Live Reactor Cells', desc: 'Pulsing amber reactor viewports glow warmly along the armored brass cylinder.' },
     secret: true,
     trophyRelicId: 'thistlegorm-engine-core',
     top: '#fef08a',
@@ -630,7 +903,7 @@ export const TANK_FINISHES = Object.freeze([
     bot: '#451a03',
     stroke: '#f59e0b',
     ccrShell: '#d97706',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · SS Thistlegorm',
     isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
   },
 ]);
@@ -639,6 +912,8 @@ export const VISOR_TINTS = Object.freeze([
   {
     id: 'clear-cyan',
     name: 'Crystal Cyan',
+    tier: 'common',
+    ladderRank: 0,
     top: '#e0f2fe',
     mid: '#38bdf8',
     bot: '#0369a1',
@@ -650,6 +925,8 @@ export const VISOR_TINTS = Object.freeze([
   {
     id: 'amber-contrast',
     name: 'High-Contrast Amber',
+    tier: 'common',
+    ladderRank: 1,
     top: '#fef9c3',
     mid: '#f59e0b',
     bot: '#92400e',
@@ -661,39 +938,82 @@ export const VISOR_TINTS = Object.freeze([
   {
     id: 'reef-mirror',
     name: 'Iridescent Mirror',
+    tier: 'uncommon',
+    ladderRank: 24,
     top: '#f0abfc',
     mid: '#38bdf8',
     bot: '#4f46e5',
     frame: '#1e1b4b',
     hudGlow: '#e879f9',
     unlockHint: '3+ Field Guide species or 3+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.speciesLogged, 3, 'species'), _mkProg(s.sitesCleared, 3, 'sites')),
     isUnlocked: (s) => s.speciesLogged >= 3 || s.sitesCleared >= 3,
+  },
+  {
+    id: 'thermocline-prism',
+    name: 'Thermocline Prism',
+    tier: 'rare',
+    ladderRank: 38,
+    fx: { id: 'thermocline-wave', name: 'Halocline Refraction', desc: 'Shifting ice-blue refraction ribbon glides smoothly across the mask glass.' },
+    top: '#ecfeff',
+    mid: '#06b6d4',
+    bot: '#1d4ed8',
+    frame: '#0c4a6e',
+    hudGlow: '#67e8f9',
+    unlockHint: 'Reach 45m+ depth or clear 4+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.deepestM, 45, 'm depth'), _mkProg(s.sitesCleared, 4, 'sites')),
+    isUnlocked: (s) => (s.deepestM || 0) >= 45 || s.sitesCleared >= 4,
   },
   {
     id: 'night-emerald',
     name: 'Night-Ops Emerald',
+    tier: 'rare',
+    ladderRank: 50,
     top: '#d1fae5',
     mid: '#10b981',
     bot: '#064e3b',
     frame: '#022c22',
     hudGlow: '#34d399',
-    unlockHint: 'Emergency Troubleshooter or 6+ sites',
+    unlockHint: '3+ Emergency Drills or 6+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 3, 'drills'), _mkProg(s.sitesCleared, 6, 'sites')),
     isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 6,
+  },
+  {
+    id: 'bounty-hunter-visor',
+    name: 'Deep Stalker Visor',
+    tier: 'rare',
+    ladderRank: 58,
+    fx: { id: 'stalker-lock', name: 'Predator Reticle Pulse', desc: 'Amber optical lock-on pulse glows inside the tactical mask lens.' },
+    top: '#fef08a',
+    mid: '#f59e0b',
+    bot: '#78350f',
+    frame: '#1c1917',
+    hudGlow: '#fde047',
+    unlockHint: 'Claim 3 Abyssal Bounties',
+    getProgress: (s) => _mkProg(_countClaimedBounties(s), 3, 'bounties'),
+    isUnlocked: (s) => _countClaimedBounties(s) >= 3,
   },
   {
     id: 'pacific-coral-visor',
     name: 'Pacific Coral Visor',
+    tier: 'epic',
+    ladderRank: 72,
+    fx: { id: 'coral-shimmer', name: 'Rose-Gold Glint', desc: 'Iridescent sunset coral sheen sweeps across the lens.' },
     top: '#ffe4e6',
     mid: '#fb7185',
     bot: '#9f1239',
     frame: '#4c0519',
     hudGlow: '#fda4af',
     unlockHint: 'Complete Coral & Iron Wrecks Campaign',
+    getProgress: (s) => _mkProg(s.completedCampaigns?.has('coral-iron-wrecks') ? 1 : 0, 1, 'campaign'),
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')),
   },
   {
     id: 'secret-aurora-frost',
     name: 'Aurora Frost Visor',
+    tier: 'mythic',
+    ladderRank: 94,
+    fx: { id: 'aurora-frost', name: 'Polar Aurora Wave', desc: 'Living northern-lights curtain shimmers with crystalline frost sparkles.' },
     secret: true,
     trophyRelicId: 'scoresby-frost-heart',
     top: '#ecfeff',
@@ -701,12 +1021,15 @@ export const VISOR_TINTS = Object.freeze([
     bot: '#0d9488',
     frame: '#083344',
     hudGlow: '#5eead4',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · Scoresby Sund',
     isUnlocked: (s) => _hasTrophyRelic(s, 'scoresby-frost-heart'),
   },
   {
     id: 'secret-markgraf-visor',
     name: 'Scapa Spectral Visor',
+    tier: 'mythic',
+    ladderRank: 96,
+    fx: { id: 'spectral-scan', name: 'Spectral Sonar Sweep', desc: 'Oscillating emerald sonar scanline sweeps across the phantom glass.' },
     secret: true,
     trophyRelicId: 'markgraf-fleet-heart',
     top: '#ecfdf5',
@@ -714,19 +1037,8 @@ export const VISOR_TINTS = Object.freeze([
     bot: '#064e3b',
     frame: '#022c22',
     hudGlow: '#6ee7b7',
-    unlockHint: '✦ Relic Unlock',
+    unlockHint: '✦ Guardian Relic · SMS Markgraf',
     isUnlocked: (s) => _hasTrophyRelic(s, 'markgraf-fleet-heart'),
-  },
-  {
-    id: 'bounty-hunter-visor',
-    name: 'Deep Stalker Visor',
-    top: '#fef08a',
-    mid: '#f59e0b',
-    bot: '#78350f',
-    frame: '#1c1917',
-    hudGlow: '#fde047',
-    unlockHint: 'Claim 3 Abyssal Bounties',
-    isUnlocked: (s) => _countClaimedBounties(s) >= 3,
   },
 ]);
 
@@ -836,9 +1148,141 @@ export function getSecretCosmeticsForTrophy(trophyRelicId) {
   return all.filter((item) => item.secret && item.trophyRelicId === trophyRelicId).map((item) => item.name);
 }
 
+export const GEAR_CATEGORIES = Object.freeze([
+  Object.freeze({ slot: 'suit', field: 'suitId', setKey: 'suits', tabId: 'suit', label: 'Drysuit', list: SUIT_LIVERIES }),
+  Object.freeze({ slot: 'trim', field: 'trimId', setKey: 'trims', tabId: 'suit', label: 'Harness Trim', list: ACCENT_TRIMS }),
+  Object.freeze({ slot: 'headgear', field: 'headgearId', setKey: 'headgears', tabId: 'head', label: 'Headgear', list: HEADGEAR_STYLES }),
+  Object.freeze({ slot: 'visor', field: 'visorId', setKey: 'visors', tabId: 'head', label: 'Visor Tint', list: VISOR_TINTS }),
+  Object.freeze({ slot: 'tank', field: 'tankId', setKey: 'tanks', tabId: 'gear', label: 'Tank Finish', list: TANK_FINISHES }),
+  Object.freeze({ slot: 'torch', field: 'torchId', setKey: 'torches', tabId: 'gear', label: 'Torch Optic', list: TORCH_OPTICS }),
+  Object.freeze({ slot: 'patch', field: 'patchId', setKey: 'patches', tabId: 'patch', label: 'Milestone Patch', list: MILESTONE_PATCHES }),
+]);
+
+export function getAllGearCatalogEntries() {
+  const out = [];
+  for (const cat of GEAR_CATEGORIES) {
+    for (const item of cat.list) {
+      out.push({
+        key: `${cat.slot}:${item.id}`,
+        slot: cat.slot,
+        field: cat.field,
+        setKey: cat.setKey,
+        tabId: cat.tabId,
+        categoryLabel: cat.label,
+        item,
+        tier: getGearTierMeta(item.tier),
+      });
+    }
+  }
+  return out;
+}
+
+export function getGearItemBySlot(slot, id) {
+  const cat = GEAR_CATEGORIES.find((c) => c.slot === slot);
+  if (!cat) return null;
+  const item = cat.list.find((x) => x.id === id);
+  if (!item) return null;
+  return {
+    key: `${cat.slot}:${item.id}`,
+    slot: cat.slot,
+    field: cat.field,
+    setKey: cat.setKey,
+    tabId: cat.tabId,
+    categoryLabel: cat.label,
+    item,
+    tier: getGearTierMeta(item.tier),
+  };
+}
+
+/**
+ * Evaluate attainment progress (0..1) for any unlockable gear item given computed career stats.
+ */
+export function getGearItemProgress(item, stats = null) {
+  if (!item) return { current: 0, target: 1, pct: 0, label: '' };
+  if (typeof item.getProgress === 'function' && stats) {
+    return item.getProgress(stats);
+  }
+  const unlocked = stats && typeof item.isUnlocked === 'function' ? Boolean(item.isUnlocked(stats)) : false;
+  return {
+    current: unlocked ? 1 : 0,
+    target: 1,
+    pct: unlocked ? 1 : 0,
+    label: unlocked ? 'Unlocked' : item.unlockHint || 'Locked',
+  };
+}
+
+/**
+ * Diff two computeUnlockedLiveries snapshots and return all newly unlocked gear entries,
+ * sorted highest prestige tier first so Mythic & Epic unlocks headline the celebration card.
+ */
+export function diffUnlockedLiveries(beforeUnlocks, afterUnlocks) {
+  if (!afterUnlocks) return [];
+  const newlyUnlocked = [];
+  for (const cat of GEAR_CATEGORIES) {
+    const prevSet = beforeUnlocks?.[cat.setKey];
+    const nextSet = afterUnlocks?.[cat.setKey];
+    if (!(nextSet instanceof Set)) continue;
+    for (const item of cat.list) {
+      if (nextSet.has(item.id) && !(prevSet instanceof Set && prevSet.has(item.id))) {
+        newlyUnlocked.push({
+          key: `${cat.slot}:${item.id}`,
+          slot: cat.slot,
+          field: cat.field,
+          setKey: cat.setKey,
+          tabId: cat.tabId,
+          categoryLabel: cat.label,
+          item,
+          tier: getGearTierMeta(item.tier),
+        });
+      }
+    }
+  }
+  newlyUnlocked.sort((a, b) => {
+    const tierDiff = (b.tier?.rank || 0) - (a.tier?.rank || 0);
+    if (tierDiff !== 0) return tierDiff;
+    return (b.item.ladderRank || 0) - (a.item.ladderRank || 0);
+  });
+  return newlyUnlocked;
+}
+
+/**
+ * Find the closest non-secret locked gear pieces on the difficulty ladder so the Gear Workshop
+ * can highlight clear next milestones with live progress bars (v211).
+ */
+export function getNextGearMilestones(unlocks, limit = 3) {
+  if (!unlocks?.stats) return [];
+  const locked = [];
+  for (const cat of GEAR_CATEGORIES) {
+    const set = unlocks[cat.setKey];
+    for (const item of cat.list) {
+      if (item.secret) continue;
+      if (set instanceof Set && set.has(item.id)) continue;
+      const prog = getGearItemProgress(item, unlocks.stats);
+      locked.push({
+        key: `${cat.slot}:${item.id}`,
+        slot: cat.slot,
+        field: cat.field,
+        setKey: cat.setKey,
+        tabId: cat.tabId,
+        categoryLabel: cat.label,
+        item,
+        tier: getGearTierMeta(item.tier),
+        progress: prog,
+      });
+    }
+  }
+  locked.sort((a, b) => {
+    // Prioritize items closest to completion, breaking ties by easiest ladder rank
+    const pctDiff = (b.progress?.pct || 0) - (a.progress?.pct || 0);
+    if (Math.abs(pctDiff) > 0.08) return pctDiff;
+    return (a.item.ladderRank || 0) - (b.item.ladderRank || 0);
+  });
+  return locked.slice(0, Math.max(1, limit));
+}
+
 /**
  * Resolve any modular livery object into a complete drawing palette used consistently
- * by CaveRenderer, artSprites, Workshop Test-Tank Preview, and Home Mini-Avatar Badge (v153).
+ * by CaveRenderer, artSprites, Workshop Test-Tank Preview, and Home Mini-Avatar Badge (v153 / v211).
  */
 export function resolveDiverLiveryPalette(livery = null) {
   const suit = getSuitLivery(livery?.suitId);
@@ -848,6 +1292,10 @@ export function resolveDiverLiveryPalette(livery = null) {
   const trimSpec = getAccentTrim(livery?.trimId);
   const tank = getTankFinish(livery?.tankId);
   const visor = getVisorTint(livery?.visorId);
+
+  const tierRanks = [suit, torch, patch, headgear, trimSpec, tank, visor].map((x) => getGearTierMeta(x?.tier).rank);
+  const maxRank = Math.max(...tierRanks);
+  const maxTier = Object.values(GEAR_TIERS).find((t) => t.rank === maxRank) || GEAR_TIERS.common;
 
   return {
     suit,
@@ -869,6 +1317,15 @@ export function resolveDiverLiveryPalette(livery = null) {
     headgearId: headgear.id,
     tankFinish: tank,
     visorTint: visor,
+    suitFx: suit.fx?.id || '',
+    headgearFx: headgear.fx?.id || '',
+    visorFx: visor.fx?.id || '',
+    tankFx: tank.fx?.id || '',
+    trimFx: trimSpec.fx?.id || '',
+    torchFx: torch.fx?.id || '',
+    patchFx: patch.fx?.id || '',
+    patchTier: patch.tier || 'common',
+    maxTier,
   };
 }
 
@@ -885,11 +1342,13 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
         : {};
   let sitesCleared = 0;
   let wreckClears = 0;
+  let hardcoreClears = 0;
   const wreckSet = wreckLevelIds instanceof Set ? wreckLevelIds : new Set(Array.isArray(wreckLevelIds) ? wreckLevelIds : []);
   for (const [siteId, rec] of Object.entries(sites)) {
     if (rec && (rec.clears > 0 || rec.score > 0 || rec.bestScore > 0)) {
       sitesCleared++;
-      if (wreckSet.has(siteId) || siteId.includes('wreck') || siteId.includes('oriskany') || siteId.includes('britannic') || siteId.includes('fitzgerald') || siteId.includes('thistlegorm') || siteId.includes('u1206') || siteId.includes('zenobia') || siteId.includes('andrea-doria') || siteId.includes('victoria')) {
+      if (rec.bestDifficulty === 'hardcore' || rec.difficulty === 'hardcore') hardcoreClears++;
+      if (wreckSet.has(siteId) || siteId.includes('wreck') || siteId.includes('oriskany') || siteId.includes('britannic') || siteId.includes('fitzgerald') || siteId.includes('thistlegorm') || siteId.includes('u1206') || siteId.includes('zenobia') || siteId.includes('andrea-doria') || siteId.includes('victoria') || siteId.includes('fujikawa') || siteId.includes('markgraf')) {
         wreckClears++;
       }
     }
@@ -902,17 +1361,24 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   const artifactIds = new Set(
     logbook?.artifacts && typeof logbook.artifacts === 'object' ? Object.keys(logbook.artifacts) : []
   );
+  const deepestM = Math.max(0, Number(logbook?.deepestM) || 0);
+  const dailyClears = Math.max(0, Number(logbook?.daily?.totalClears) || 0);
   const stats = {
     sitesCleared,
     wreckClears,
+    hardcoreClears,
+    deepestM,
+    dailyClears,
     speciesLogged,
     completedCampaigns,
     artifactIds,
+    bountiesClaimed: 0,
     pressurizedEqualizations: Math.max(0, Number(ms.pressurizedEqualizations) || 0),
     cleanSalvageLifts: Math.max(0, Number(ms.cleanSalvageLifts) || 0),
     drillsCompleted: Math.max(0, Number(ms.drillsCompleted) || 0),
     zeroSiltClears: Math.max(0, Number(ms.zeroSiltClears) || 0),
   };
+  stats.bountiesClaimed = _countClaimedBounties(stats);
 
   const suits = new Set();
   for (const s of SUIT_LIVERIES) if (s.isUnlocked(stats)) suits.add(s.id);
@@ -1004,9 +1470,108 @@ function _smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
+function _easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const x = Math.max(0, Math.min(1, t));
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
 /**
- * Shared articulated diver renderer for both the Gear Workshop Test-Tank Preview
- * and the Home Screen Mini-Avatar Badge — mirrors CaveRenderer._drawDiver 1:1 (v166).
+ * Draw kinetic slot-targeted gear equip overlay FX on the preview avatar (v211):
+ * holographic scan arcs, hydro-seal energy sweep, metallic backplate clamp rings,
+ * optical torch ignition flare, and floating micro-sparks.
+ */
+function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx) {
+  if (!equipFx || !(equipFx.progress >= 0 && equipFx.progress < 1)) return;
+  const t = Math.max(0, Math.min(1, equipFx.progress));
+  const fade = Math.pow(1 - t, 1.35);
+  const slot = equipFx.slot || 'all';
+  const color = equipFx.color || '#38bdf8';
+  const u = scale * 0.55;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+
+  // Target anchor in diver preview coordinates
+  let ax = sx;
+  let ay = sy;
+  let baseR = scale * 0.55;
+  if (slot === 'headgear' || slot === 'visor') {
+    ax = sx + u * 0.52;
+    ay = sy - u * 0.04;
+    baseR = u * 0.62;
+  } else if (slot === 'tank' || slot === 'ccr') {
+    ax = sx - u * 0.34;
+    ay = sy - u * 0.42;
+    baseR = u * 0.72;
+  } else if (slot === 'torch') {
+    ax = sx + 0.64 * scale;
+    ay = sy + 0.21 * scale;
+    baseR = u * 0.58;
+  } else if (slot === 'patch') {
+    ax = sx - u * 0.18;
+    ay = sy - u * 0.02;
+    baseR = u * 0.42;
+  } else if (slot === 'dpv') {
+    ax = sx + u * 1.18;
+    ay = sy + u * 0.26;
+    baseR = u * 0.66;
+  }
+
+  // 1. Expanding holographic lock-on ring + counter-rotating calibration brackets
+  const ringR = baseR * (0.42 + _easeOutBack(Math.min(1, t * 1.45)) * 0.72);
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = fade * 0.85;
+  ctx.lineWidth = Math.max(1.5, scale * 0.032 * (1 - t * 0.45));
+  ctx.beginPath();
+  ctx.arc(ax, ay, ringR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Segmented precision calibration arcs
+  const arcSpin = t * Math.PI * 1.6;
+  ctx.lineWidth = Math.max(1.2, scale * 0.022);
+  ctx.globalAlpha = fade * 0.75;
+  for (let a = 0; a < 3; a++) {
+    const start = arcSpin + (a * Math.PI * 2) / 3;
+    ctx.beginPath();
+    ctx.arc(ax, ay, ringR * 1.24, start, start + 0.68);
+    ctx.stroke();
+  }
+
+  // 2. Full-body hydro-seal sweep wave for Drysuit, Trim, or Full Kit equip
+  if (slot === 'suit' || slot === 'trim' || slot === 'all') {
+    const sweepX = sx + 0.75 * scale - t * (2.35 * scale);
+    const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.28, sy, sweepX + scale * 0.28, sy);
+    waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    waveGrad.addColorStop(0.5, color);
+    waveGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = waveGrad;
+    ctx.globalAlpha = fade * 0.48;
+    ctx.fillRect(sweepX - scale * 0.28, sy - scale * 0.56, scale * 0.56, scale * 1.05);
+  }
+
+  // 3. Radial sparkle & pressure-bubble burst radiating from the newly locked slot
+  const sparkCount = equipFx.tier === 'mythic' ? 14 : equipFx.tier === 'epic' ? 11 : 8;
+  for (let i = 0; i < sparkCount; i++) {
+    const ang = (i / sparkCount) * Math.PI * 2 + (slot === 'torch' ? -0.35 : 0.25);
+    const dist = baseR * (0.28 + t * (1.15 + (i % 3) * 0.22));
+    const px = ax + Math.cos(ang) * dist;
+    const py = ay + Math.sin(ang) * dist - t * 9;
+    const pr = Math.max(1.1, (1 - t * 0.65) * (2.1 + (i % 2) * 1.2));
+    ctx.fillStyle = i % 2 === 0 ? '#ffffff' : color;
+    ctx.globalAlpha = fade * 0.9;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Shared articulated diver renderer for both the Gear Workshop Test-Tank Preview,
+ * the Gear Unlock Showcase Card, and the Home Screen Mini-Avatar Badge (v166 / v211).
  */
 function _drawArticulatedPreviewDiver(
   ctx,
@@ -1014,10 +1579,11 @@ function _drawArticulatedPreviewDiver(
   sy,
   scale,
   pal,
-  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true } = {}
+  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true, equipFx = null } = {}
 ) {
   const u = scale * 0.55;
-  const kickPower = !animateKick ? 0.12 : hasDpv ? 0.14 : 0.72;
+  const equipKickBoost = equipFx && equipFx.progress < 0.7 ? Math.sin(equipFx.progress * Math.PI) * 0.35 : 0;
+  const kickPower = !animateKick ? 0.12 : (hasDpv ? 0.14 : 0.72) + equipKickBoost;
   const kickPhase = animateKick ? ((timeSec * (hasDpv ? 0.35 : 0.72)) % 1 + 1) % 1 : 0.18;
   const recoveryAmt = _smoothstep(0.35, 0.62, kickPhase) * (1 - _smoothstep(0.68, 0.86, kickPhase)) * kickPower;
   const sweepSpread = _smoothstep(0.56, 0.74, kickPhase) * (1 - _smoothstep(0.84, 0.97, kickPhase)) * kickPower;
@@ -1053,18 +1619,36 @@ function _drawArticulatedPreviewDiver(
   // 1. Far articulated leg (behind torso)
   drawArticulatedDiverLeg(
     ctx, px, py, farLeg.kx, farLeg.ky, farLeg.ax, farLeg.ay, farLeg.fx, farLeg.fy,
-    farLeg.finOpen, scale, false, true, pal
+    farLeg.finOpen, scale, false, true, pal, timeSec
   );
 
-  // 2. Flexible drysuit spine core + trim stripe (identical to CaveRenderer._drawDiver)
+  // 2. Flexible drysuit spine core + animated trim stripe (identical to CaveRenderer._drawDiver)
   drawDiverLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, pal.suitMid);
-  ctx.strokeStyle = pal.trim;
+  let spineTrimColor = pal.trim;
+  if (pal.trimFx === 'selenite-prism') {
+    spineTrimColor = `hsl(${Math.round((timeSec * 90) % 360)}, 92%, 78%)`;
+  } else if (pal.trimFx === 'foundry-sparks') {
+    const glow = 58 + Math.round(Math.sin(timeSec * 6.5) * 14);
+    spineTrimColor = `hsl(32, 98%, ${glow}%)`;
+  }
+  ctx.strokeStyle = spineTrimColor;
   ctx.lineWidth = Math.max(1.4, 0.04 * scale);
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(px, py);
   ctx.lineTo(sx, sy);
   ctx.stroke();
+  if (pal.trimFx === 'plasma-wave') {
+    const pt = ((timeSec * 1.45) % 1 + 1) % 1;
+    const wx = sx + (px - sx) * pt;
+    const wy = sy + (py - sy) * pt;
+    ctx.save();
+    ctx.fillStyle = '#e0f2fe';
+    ctx.beginPath();
+    ctx.arc(wx, wy, Math.max(2.1, 0.048 * scale), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   // 3. Sculpted rig, cylinders/CCR, headgear silhouette, visor & optional DPV scooter
   ctx.save();
@@ -1077,13 +1661,14 @@ function _drawArticulatedPreviewDiver(
     dpvThrusting: hasDpv,
     timeSec,
     liveryPalette: pal,
+    equipFx,
   });
   ctx.restore();
 
   // 4. Near articulated leg (in front of pelvis)
   drawArticulatedDiverLeg(
     ctx, px, py, nearLeg.kx, nearLeg.ky, nearLeg.ax, nearLeg.ay, nearLeg.fx, nearLeg.fy,
-    nearLeg.finOpen, scale, false, false, pal
+    nearLeg.finOpen, scale, false, false, pal, timeSec
   );
 
   // 5. Articulated arm, glowing wrist dive computer & Goodman-handle primary torch in hand
@@ -1106,8 +1691,13 @@ function _drawArticulatedPreviewDiver(
     scale,
     false,
     pal,
-    { torchOn: true }
+    { torchOn: true, timeSec }
   );
+
+  // 6. Kinetic slot-targeted equip overlay animation
+  if (equipFx) {
+    _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx);
+  }
 
   // Return exact world-space torch lens tip & regulator mouthpiece coords for beam & bubbles
   return {
@@ -1119,15 +1709,67 @@ function _drawArticulatedPreviewDiver(
 }
 
 /**
+ * Draw animated special torch cone shimmer / caustic ribbons / plasma arcs inside the preview beam.
+ */
+function _drawAnimatedTorchBeamFx(ctx, torchX, torchY, coneLen, sweepAng, torch, timeSec) {
+  const fxId = torch?.fx?.id;
+  if (!fxId) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  if (fxId === 'solar-caustic') {
+    for (let r = 0; r < 3; r++) {
+      const wave = ((timeSec * 0.8 + r / 3) % 1);
+      const rad = coneLen * (0.18 + wave * 0.74);
+      ctx.strokeStyle = `rgba(254, 240, 138, ${((1 - wave) * 0.34).toFixed(2)})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(torchX, torchY, rad, sweepAng - 0.22, sweepAng + 0.22);
+      ctx.stroke();
+    }
+  } else if (fxId === 'aurora-arc') {
+    ctx.strokeStyle = `rgba(125, 211, 252, ${(0.28 + Math.sin(timeSec * 4.2) * 0.12).toFixed(2)})`;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(torchX, torchY);
+    ctx.quadraticCurveTo(
+      torchX + Math.cos(sweepAng - 0.08) * coneLen * 0.5,
+      torchY + Math.sin(sweepAng - 0.08) * coneLen * 0.5 + Math.sin(timeSec * 3.6) * 8,
+      torchX + Math.cos(sweepAng) * coneLen * 0.88,
+      torchY + Math.sin(sweepAng) * coneLen * 0.88
+    );
+    ctx.stroke();
+  } else if (fxId === 'hunter-plasma') {
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6.0);
+    ctx.strokeStyle = `rgba(251, 113, 133, ${(0.24 + pulse * 0.26).toFixed(2)})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(torchX, torchY, 10 + pulse * 14, sweepAng - 0.55, sweepAng + 0.55);
+    ctx.stroke();
+  } else if (fxId === 'uv-fluorescence') {
+    for (let i = 0; i < 8; i++) {
+      const d = ((i * 0.14 + timeSec * 0.28) % 0.82) + 0.14;
+      const spread = Math.sin(i * 2.7 + timeSec * 2.2) * 0.19;
+      const fx = torchX + Math.cos(sweepAng + spread) * coneLen * d;
+      const fy = torchY + Math.sin(sweepAng + spread) * coneLen * d;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(216, 180, 254, 0.72)' : 'rgba(103, 232, 249, 0.72)';
+      ctx.beginPath();
+      ctx.arc(fx, fy, 1.8 + (i % 2) * 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/**
  * Render a live animated "Test Tank" diorama preview of the customized diver rig + torch beam
- * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153 / v166).
+ * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153 / v166 / v211).
  */
 export function drawLiveryPreview(
   ctx,
   w,
   h,
   livery,
-  { hasCcr = false, hasDpv = false, envMode = 'clear', timeSec = 0 } = {}
+  { hasCcr = false, hasDpv = false, envMode = 'clear', timeSec = 0, equipFx = null, previewLockedLabel = '' } = {}
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
@@ -1188,10 +1830,13 @@ export function drawLiveryPreview(
     }
   }
 
+  // Subtle spring buoyancy recoil when new gear locks onto the avatar
+  const recoilY = equipFx && equipFx.progress < 1 ? Math.sin(equipFx.progress * Math.PI * 2.2) * (1 - equipFx.progress) * 4.5 : 0;
+
   // Frame the full articulated in-game diver (fin tips to outstretched torch hand) cleanly inside tank
   const scale = Math.min(w * 0.215, h * 0.56);
   const sx = w * 0.445;
-  const sy = h * 0.54 + Math.sin(timeSec * 1.8) * 3.4;
+  const sy = h * 0.54 + Math.sin(timeSec * 1.8) * 3.4 + recoilY;
   const sweepAng = Math.sin(timeSec * 1.15) * 0.08;
   const breath = Math.sin(timeSec * 1.7) * 0.02;
   const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
@@ -1199,12 +1844,16 @@ export function drawLiveryPreview(
   const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
   const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
 
-  // Volumetric torch cone preview emanating from the actual Goodman-handle torch lens in hand
+  // Volumetric torch cone preview (with optical ignition flare when torch is freshly equipped!)
+  const torchIgniteScale =
+    equipFx && (equipFx.slot === 'torch' || equipFx.slot === 'all')
+      ? Math.max(0.15, _easeOutBack(Math.min(1, equipFx.progress * 1.55)))
+      : 1;
   const siltPenalty = isSilt ? Math.max(0.45, 0.68 + (torch.siltPierce || 0) * 1.05) : 1.0;
-  const coneLen = w * 0.46 * torch.rangeMult * siltPenalty;
-  const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, coneLen * 0.68);
+  const coneLen = w * 0.46 * torch.rangeMult * siltPenalty * torchIgniteScale;
+  const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, Math.max(8, coneLen * 0.68));
   const coreAlpha = isNight ? 0.78 : isSilt ? 0.56 + (torch.siltPierce || 0) * 0.55 : 0.62;
-  coneGrad.addColorStop(0, `rgba(${torch.coreRgb}, ${Math.min(0.92, coreAlpha).toFixed(2)})`);
+  coneGrad.addColorStop(0, `rgba(${torch.coreRgb}, ${Math.min(0.94, coreAlpha).toFixed(2)})`);
   coneGrad.addColorStop(0.38, `rgba(${torch.shaftRgb}, ${(isNight ? 0.36 : 0.26).toFixed(2)})`);
   coneGrad.addColorStop(1, `rgba(${torch.shaftRgb}, 0)`);
   ctx.save();
@@ -1216,7 +1865,6 @@ export function drawLiveryPreview(
   ctx.closePath();
   ctx.fill();
   if (isSilt) {
-    // Near-field backscatter glare (noticeably softer for Amber Silt-Piercer!)
     const glareAlpha = Math.max(0.06, 0.28 - (torch.siltPierce || 0) * 0.72);
     ctx.fillStyle = `rgba(214, 198, 170, ${glareAlpha.toFixed(2)})`;
     ctx.beginPath();
@@ -1224,6 +1872,7 @@ export function drawLiveryPreview(
     ctx.fill();
   }
   ctx.restore();
+  _drawAnimatedTorchBeamFx(ctx, torchX, torchY, coneLen, sweepAng, torch, timeSec);
 
   // Rising regulator exhaust bubbles (or whisper-fine CCR loop bubbles)
   const u = scale * 0.55;
@@ -1239,14 +1888,54 @@ export function drawLiveryPreview(
     ctx.fill();
   }
 
-  // Draw the exact 1:1 in-game articulated diver (both legs, scalloped Jet Fins, torso, rig, arm, wrist computer, torch)
+  // Draw the exact 1:1 in-game articulated diver with live animated properties + equip animation
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
     timeSec,
     sweepAng,
     animateKick: true,
+    equipFx,
   });
+
+  // Top-left live equip or locked-try-on status pill inside the tank
+  if (previewLockedLabel) {
+    ctx.save();
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const txt = `🔒 TRY-ON PREVIEW · ${previewLockedLabel}`;
+    const tw = ctx.measureText(txt).width + 18;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.86)';
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fde047';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, 19, 21);
+    ctx.restore();
+  } else if (equipFx && equipFx.itemName && equipFx.progress < 0.98) {
+    const pillAlpha = Math.min(1, (1 - equipFx.progress) * 2.4);
+    ctx.save();
+    ctx.globalAlpha = pillAlpha;
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const txt = `⚡ EQUIPPED · ${equipFx.itemName.toUpperCase()}`;
+    const tw = ctx.measureText(txt).width + 18;
+    ctx.fillStyle = 'rgba(7, 22, 42, 0.88)';
+    ctx.strokeStyle = equipFx.color || '#38bdf8';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f8fafc';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, 19, 21);
+    ctx.restore();
+  }
 
   // Corner optical & gear telemetry tag
   ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
@@ -1254,6 +1943,106 @@ export function drawLiveryPreview(
   ctx.textAlign = 'right';
   const specSummary = `${suit.name} · ${headgear.name} · ${tank.name} · ${torch.shortLabel}${patch.id !== 'none' ? ` ${patch.icon}` : ''}`;
   ctx.fillText(specSummary, w - 12, h - 10);
+  ctx.restore();
+}
+
+/**
+ * Hero collector-card renderer for newly unlocked gear reveals (v211):
+ * renders rarity-tuned rotating god-rays, floating shimmer particles, zoomed diver avatar
+ * wearing the unlocked piece, and full kinetic equip-snap animation.
+ */
+export function drawGearShowcasePreview(
+  ctx,
+  w,
+  h,
+  livery,
+  { tier = 'rare', hasCcr = false, hasDpv = false, timeSec = 0, equipFx = null } = {}
+) {
+  if (!ctx || !w || !h) return;
+  const tierMeta = getGearTierMeta(tier);
+  const pal = resolveDiverLiveryPalette(livery);
+  const { torch } = pal;
+
+  ctx.save();
+  // Deep theatrical vault backdrop
+  const bg = ctx.createRadialGradient(w * 0.48, h * 0.5, 12, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+  bg.addColorStop(0, tierMeta.bg);
+  bg.addColorStop(0.55, '#071426');
+  bg.addColorStop(1, '#020612');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // Rotating rarity light rays behind the diver
+  ctx.save();
+  ctx.translate(w * 0.48, h * 0.52);
+  ctx.rotate(timeSec * (tierMeta.rank >= 4 ? 0.34 : 0.2));
+  ctx.globalCompositeOperation = 'screen';
+  const rayCount = tierMeta.rank >= 5 ? 12 : tierMeta.rank >= 4 ? 10 : 8;
+  for (let i = 0; i < rayCount; i++) {
+    const a0 = (i / rayCount) * Math.PI * 2;
+    const rg = ctx.createRadialGradient(0, 0, 8, 0, 0, Math.max(w, h) * 0.65);
+    rg.addColorStop(0, tierMeta.glow);
+    rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = rg;
+    ctx.globalAlpha = tierMeta.rank >= 4 ? 0.24 : 0.16;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, Math.max(w, h) * 0.65, a0, a0 + 0.18);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Floating rarity shimmer motes
+  const moteCount = tierMeta.rank >= 4 ? 26 : 16;
+  for (let i = 0; i < moteCount; i++) {
+    const mx = (((i * 73 + timeSec * (12 + (i % 3) * 6)) % w) + w) % w;
+    const my = (((i * 47 - timeSec * (16 + (i % 4) * 5)) % h) + h) % h;
+    const pulse = 0.35 + 0.65 * Math.max(0, Math.sin(timeSec * 3.6 + i * 1.7));
+    ctx.fillStyle = i % 3 === 0 ? '#ffffff' : tierMeta.color;
+    ctx.globalAlpha = pulse * 0.72;
+    ctx.beginPath();
+    ctx.arc(mx, my, 1.2 + (i % 3) * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Diver hero scale + kinetic recoil
+  const recoilY = equipFx && equipFx.progress < 1 ? Math.sin(equipFx.progress * Math.PI * 2.2) * (1 - equipFx.progress) * 5.2 : 0;
+  const scale = Math.min(w * 0.24, h * 0.60);
+  const sx = w * 0.47;
+  const sy = h * 0.54 + Math.sin(timeSec * 2.0) * 3.8 + recoilY;
+  const sweepAng = Math.sin(timeSec * 1.25) * 0.08;
+  const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
+  const hyPre = sy + (hasDpv ? 0.16 : 0.21) * scale;
+  const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
+  const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+
+  const coneLen = w * 0.44 * torch.rangeMult;
+  const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, coneLen * 0.68);
+  coneGrad.addColorStop(0, `rgba(${torch.coreRgb}, 0.8)`);
+  coneGrad.addColorStop(0.4, `rgba(${torch.shaftRgb}, 0.28)`);
+  coneGrad.addColorStop(1, `rgba(${torch.shaftRgb}, 0)`);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = coneGrad;
+  ctx.beginPath();
+  ctx.moveTo(torchX, torchY);
+  ctx.arc(torchX, torchY, coneLen, sweepAng - 0.25, sweepAng + 0.25);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  _drawAnimatedTorchBeamFx(ctx, torchX, torchY, coneLen, sweepAng, torch, timeSec);
+
+  _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
+    hasCcr,
+    hasDpv,
+    timeSec,
+    sweepAng,
+    animateKick: true,
+    equipFx,
+  });
+
   ctx.restore();
 }
 

@@ -2250,4 +2250,57 @@ export class DiveAudio {
     });
     this.vibrate?.([25, 20, 25, 20, 55]);
   }
+
+  /**
+   * Tactile slot-specific mechanical/hydro-latch sound when equipping gear in the Workshop or Unlock Card (v211).
+   */
+  playGearEquip(slot = 'suit', tier = 'common') {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const isHeavy = slot === 'tank' || slot === 'ccr' || slot === 'headgear';
+    const isOptic = slot === 'torch' || slot === 'visor';
+    // Crisp mechanical latch click + resonant lock tone
+    this.playTone(isHeavy ? 185 : isOptic ? 720 : 340, 0.055, 'triangle', 0.06, 0, { bus: 'sfx' });
+    this.playTone(isHeavy ? 420 : isOptic ? 1120 : 640, 0.11, 'sine', 0.055, 0.04, { bus: 'sfx' });
+    if (tier === 'rare' || tier === 'epic' || tier === 'mythic') {
+      this.playTone(987.77, 0.18, 'sine', 0.042, 0.085, { bus: 'sfx' });
+    }
+    if (tier === 'epic' || tier === 'mythic') {
+      this.playTone(1318.51, 0.24, 'triangle', 0.04, 0.125, { bus: 'sfx' });
+    }
+    if (tier === 'mythic') {
+      this.playTone(1567.98, 0.34, 'sine', 0.045, 0.17, { bus: 'sfx' });
+    }
+    this.vibrate?.(tier === 'mythic' ? [14, 18, 28] : [12]);
+  }
+
+  /**
+   * Celebratory rarity-scaled treasure reveal fanfare when unlocking a new piece of gear (v211).
+   */
+  playGearUnlock(tier = 'uncommon') {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (tier === 'mythic') {
+      this.playTone(130.81, 0.55, 'sine', 0.065, 0, { bus: 'sfx' });
+      [392.0, 523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((f, idx) => {
+        this.playTone(f, 0.44, idx % 2 === 0 ? 'triangle' : 'sine', 0.052, idx * 0.075, { bus: 'sfx' });
+      });
+      this.vibrate?.([18, 18, 22, 18, 45]);
+    } else if (tier === 'epic') {
+      [329.63, 440.0, 587.33, 880.0, 1174.66].forEach((f, idx) => {
+        this.playTone(f, 0.36, 'triangle', 0.048, idx * 0.075, { bus: 'sfx' });
+      });
+      this.vibrate?.([16, 16, 32]);
+    } else if (tier === 'rare') {
+      [440.0, 554.37, 659.25, 880.0].forEach((f, idx) => {
+        this.playTone(f, 0.28, 'sine', 0.048, idx * 0.07, { bus: 'sfx' });
+      });
+      this.vibrate?.([14, 14, 24]);
+    } else {
+      [440.0, 587.33, 783.99].forEach((f, idx) => {
+        this.playTone(f, 0.24, 'sine', 0.045, idx * 0.07, { bus: 'sfx' });
+      });
+      this.vibrate?.([12, 14, 18]);
+    }
+  }
 }

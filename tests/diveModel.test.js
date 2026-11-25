@@ -11054,3 +11054,127 @@ test('v207 Synced Tactical Sonar Waypoint Pings: sanitization, cap/decay, invers
   assert.ok(worldTexts.some((t) => t.includes('💎 Maya · 12m')), 'World renderer must render on-screen sonar hologram badge');
   assert.ok(worldTexts.some((t) => t.includes('⚠️') && t.includes('m')), 'World renderer must render clamped off-screen distance pill');
 });
+
+test('v211 Major Gear Workshop Upgrade: 5-Tier Difficulty Ladder, Unlock Diffing, Kinetic Equip FX & Animated Special Gear', async () => {
+  const {
+    GEAR_TIERS,
+    GEAR_CATEGORIES,
+    computeUnlockedLiveries,
+    diffUnlockedLiveries,
+    getNextGearMilestones,
+    getGearItemProgress,
+    resolveDiverLiveryPalette,
+    drawLiveryPreview,
+    drawGearShowcasePreview,
+  } = await import('../public/js/game/rigLivery.js');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Every gear piece across all 7 categories has a valid tier & difficulty-aligned ladderRank
+  const validTiers = new Set(Object.keys(GEAR_TIERS));
+  assert.equal(validTiers.size, 5);
+  for (const cat of GEAR_CATEGORIES) {
+    for (const item of cat.list) {
+      assert.ok(validTiers.has(item.tier), `${cat.slot}:${item.id} missing valid tier`);
+      assert.equal(typeof item.ladderRank, 'number', `${cat.slot}:${item.id} missing ladderRank`);
+    }
+  }
+
+  // 2. Progressive difficulty ladder unlocks smoothly from 1st clear -> 45m -> Daily -> Hardcore 100m
+  const emptyBook = createEmptyLogbook();
+  const u0 = computeUnlockedLiveries(emptyBook);
+  assert.equal(u0.suits.has('cenote-azure'), false);
+  assert.equal(u0.patches.has('first-descent'), false);
+
+  const after1 = recordDiveInLogbook(emptyBook, {
+    levelId: 'cenote-el-abismo',
+    success: true,
+    score: 2100,
+    grade: 'A',
+    maxDepthM: 24,
+    diveTimeSec: 150,
+  });
+  const u1 = computeUnlockedLiveries(after1);
+  const diff1 = diffUnlockedLiveries(u0, u1);
+  assert.ok(diff1.some((e) => e.slot === 'suit' && e.item.id === 'cenote-azure'), '1st clear must unlock Cenote Azure suit');
+  assert.ok(diff1.some((e) => e.slot === 'patch' && e.item.id === 'first-descent'), '1st clear must unlock First Sump patch');
+
+  const afterHardcore = recordDiveInLogbook(after1, {
+    levelId: 'krubera-voronya-sump',
+    success: true,
+    score: 3600,
+    grade: 'S',
+    maxDepthM: 112,
+    diveTimeSec: 260,
+    difficulty: 'hardcore',
+  });
+  afterHardcore.daily.totalClears = 1;
+  const uHard = computeUnlockedLiveries(afterHardcore);
+  const diffHard = diffUnlockedLiveries(u1, uHard);
+  assert.ok(uHard.visors.has('thermocline-prism'), '45m+ depth must unlock Thermocline Prism visor');
+  assert.ok(uHard.torches.has('halocline-uv'), 'Daily clear must unlock UV Biolume Spotter torch');
+  assert.ok(uHard.trims.has('plasma-circuit-trim'), 'Hardcore/90m+ must unlock Plasma Circuit Trim');
+  assert.ok(uHard.headgears.has('abyss-halo-helm'), 'Hardcore/100m+ must unlock Abyssal Halo Helmet');
+  assert.ok(diffHard[0].tier.rank >= diffHard[diffHard.length - 1].tier.rank, 'diffUnlockedLiveries must sort highest prestige tier first');
+
+  // 3. Progress bars & Next Ladder Goals return valid clamped fractions
+  const nextGoals = getNextGearMilestones(u1, 3);
+  assert.equal(nextGoals.length, 3);
+  for (const g of nextGoals) {
+    assert.ok(g.progress.pct >= 0 && g.progress.pct <= 1, 'Progress pct must be clamped 0..1');
+    assert.ok(!g.item.secret, 'Next Ladder Goals must never spoil secret boss relics');
+  }
+  const emeraldProg = getGearItemProgress(GEAR_CATEGORIES[0].list.find((s) => s.id === 'abyss-emerald'), u1.stats);
+  assert.equal(emeraldProg.current, 1);
+  assert.equal(emeraldProg.target, 3);
+
+  // 4. Special items expose animated FX properties & render cleanly with kinetic equip animations
+  const mythicRig = {
+    suitId: 'secret-kraken-biolume',
+    headgearId: 'abyss-halo-helm',
+    visorId: 'secret-aurora-frost',
+    tankId: 'secret-dreadnought-brass',
+    trimId: 'secret-selenite-trim',
+    torchId: 'secret-solar-prism',
+    patchId: 'bounty-hunter-master',
+  };
+  const pal = resolveDiverLiveryPalette(mythicRig);
+  assert.equal(pal.suitFx, 'biolume-pulse');
+  assert.equal(pal.headgearFx, 'halo-telemetry');
+  assert.equal(pal.visorFx, 'aurora-frost');
+  assert.equal(pal.tankFx, 'reactor-core');
+  assert.equal(pal.trimFx, 'selenite-prism');
+  assert.equal(pal.torchFx, 'solar-caustic');
+  assert.equal(pal.patchFx, 'crest-halo');
+
+  let drawOps = 0;
+  const noopCtx = new Proxy(
+    {
+      canvas: { width: 640, height: 248 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 80 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => { drawOps++; }), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  for (const slot of ['suit', 'trim', 'headgear', 'visor', 'tank', 'torch', 'patch', 'dpv', 'ccr', 'all']) {
+    drawLiveryPreview(noopCtx, 640, 248, mythicRig, {
+      hasCcr: slot === 'ccr',
+      hasDpv: slot === 'dpv',
+      envMode: 'night',
+      timeSec: 1.8,
+      equipFx: { slot, progress: 0.35, color: '#facc15', tier: 'mythic', itemName: 'Kraken Biolume' },
+      previewLockedLabel: slot === 'suit' ? 'Clear 3+ sites' : '',
+    });
+  }
+  drawGearShowcasePreview(noopCtx, 560, 260, mythicRig, {
+    tier: 'mythic',
+    hasDpv: true,
+    timeSec: 2.2,
+    equipFx: { slot: 'suit', progress: 0.4, color: '#facc15', tier: 'mythic', itemName: 'Kraken Biolume' },
+  });
+  assert.ok(drawOps > 400, 'Animated gear FX, kinetic equip animations & unlock showcase card must draw cleanly');
+
+  // 5. Audio hooks exist on DiveAudio.prototype
+  assert.equal(typeof DiveAudio.prototype.playGearEquip, 'function');
+  assert.equal(typeof DiveAudio.prototype.playGearUnlock, 'function');
+});

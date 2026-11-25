@@ -4006,7 +4006,7 @@ export class CaveRenderer {
     ctx.stroke();
   }
 
-  _drawArticulatedLeg(ctx, pelvis, leg, toScreenX, toScreenY, scale, isPeer, isBackLeg, liverySuit = null) {
+  _drawArticulatedLeg(ctx, pelvis, leg, toScreenX, toScreenY, scale, isPeer, isBackLeg, liverySuit = null, timeSec = 0) {
     drawArticulatedDiverLeg(
       ctx,
       toScreenX(pelvis.x),
@@ -4021,7 +4021,8 @@ export class CaveRenderer {
       scale,
       isPeer,
       isBackLeg,
-      liverySuit
+      liverySuit,
+      timeSec
     );
   }
 
@@ -4454,17 +4455,22 @@ export class CaveRenderer {
     const liveryPalette = diver.livery ? resolveDiverLiveryPalette(diver.livery) : null;
 
     // 1. Far leg (behind torso)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liveryPalette);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liveryPalette, timeSec);
 
     // 2. Articulated Torso connecting shoulders (sx, sy) to pelvis (px, py)
-    const accent = liveryPalette ? liveryPalette.trim : (isPeer ? '#fb923c' : '#22d3ee');
+    let accent = liveryPalette ? liveryPalette.trim : (isPeer ? '#fb923c' : '#22d3ee');
+    if (liveryPalette?.trimFx === 'selenite-prism') {
+      accent = `hsl(${Math.round((timeSec * 90) % 360)}, 92%, 78%)`;
+    } else if (liveryPalette?.trimFx === 'foundry-sparks') {
+      accent = `hsl(32, 98%, ${58 + Math.round(Math.sin(timeSec * 6.5) * 14)}%)`;
+    }
     const torsoAngle = Math.atan2(sy - py, sx - px);
     const rollScale = Math.abs(body.rollVisual) < 0.15 ? 0.15 : body.rollVisual;
     const facingLeft = body.facingSign < 0;
 
     // Flexible drysuit spine core
     this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, liveryPalette ? liveryPalette.suitMid : '#0f172a');
-    // Subtle shoulder / hip trim stripe
+    // Subtle shoulder / hip trim stripe (with live plasma-wave conduit pulse)
     ctx.strokeStyle = accent;
     ctx.lineWidth = Math.max(1.5, 0.04 * scale);
     ctx.lineCap = 'round';
@@ -4472,6 +4478,13 @@ export class CaveRenderer {
     ctx.moveTo(px, py);
     ctx.lineTo(sx, sy);
     ctx.stroke();
+    if (liveryPalette?.trimFx === 'plasma-wave') {
+      const pt = ((timeSec * 1.45) % 1 + 1) % 1;
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.arc(sx + (px - sx) * pt, sy + (py - sy) * pt, Math.max(2, 0.048 * scale), 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // 3. Rigid Rig & Head oriented to torsoAngle + smooth roll (artSprites)
     ctx.save();
@@ -4491,7 +4504,7 @@ export class CaveRenderer {
     ctx.restore();
 
     // 4. Near leg (in front of pelvis)
-    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liveryPalette);
+    this._drawArticulatedLeg(ctx, body.pelvis, body.legs[0], toScreenX, toScreenY, scale, isPeer, false, liveryPalette, timeSec);
 
     // 5. Articulated Arm, Wrist Dive Computer & Goodman-handle Primary Torch (shared with Workshop Preview)
     const shoulderX = sx + Math.cos(torsoAngle) * (0.08 * scale);
@@ -4517,6 +4530,7 @@ export class CaveRenderer {
         hasSpeargun: Boolean(mechCtx?.hasSpeargun),
         spearRecoil: mechCtx?.spearRecoil || 0,
         muzzleFlash: mechCtx?.muzzleFlash || 0,
+        timeSec,
       }
     );
 

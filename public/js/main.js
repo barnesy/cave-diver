@@ -557,7 +557,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=210',
+  mapRasterUrl: './assets/map-expedition.jpg?v=211',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -883,25 +883,26 @@ const hud = new DiveComputerHUD({
 
 // Centralized stack-ordered overlay/modal manager & focus restoration (v144 module)
 const modalManager = createModalManager([
+  { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearUnlockModalEl?.hidden, close: () => liveryWorkshop.closeGearUnlockShowcase() },
   { isOpen: () => photoModeState.active, close: () => setPhotoModeActive(false) },
   { isOpen: () => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, close: () => closeFieldGuideCardModal() },
-  { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && artifactInspectorModalEl && !artifactInspectorModalEl.hidden, close: () => closeArtifactInspector() },
-  { isOpen: () => typeof replayModal !== 'undefined' && replayModal && !replayModal.hidden, close: () => closeReplayModal() },
-  { isOpen: () => typeof lbStatsModalEl !== 'undefined' && lbStatsModalEl && !lbStatsModalEl.hidden, close: () => closeLeaderboardStatsModal() },
-  { isOpen: () => typeof liveryModalEl !== 'undefined' && liveryModalEl && !liveryModalEl.hidden, close: () => closeLiveryModal() },
-  { isOpen: () => typeof gasPlannerModal !== 'undefined' && gasPlannerModal && !gasPlannerModal.hidden, close: () => closeGasPlannerModal() },
-  { isOpen: () => typeof challengeModal !== 'undefined' && challengeModal && !challengeModal.hidden, close: () => closeChallengeModal() },
-  { isOpen: () => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, close: () => closeProceduralModal() },
-  { isOpen: () => typeof campaignsModal !== 'undefined' && campaignsModal && !campaignsModal.hidden, close: () => closeCampaignsModal() },
-  { isOpen: () => typeof drillsModal !== 'undefined' && drillsModal && !drillsModal.hidden, close: () => closeDrillsModal() },
-  { isOpen: () => typeof bountiesModal !== 'undefined' && bountiesModal && !bountiesModal.hidden, close: () => closeBountiesModal() },
-  { isOpen: () => typeof trenchModalEl !== 'undefined' && trenchModalEl && !trenchModalEl.hidden, close: () => trenchCtrl?.closeTrenchModal?.() },
-  { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
-  { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
-  { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
-  { isOpen: () => typeof modalDiveGuide !== 'undefined' && modalDiveGuide && !modalDiveGuide.hidden, close: () => closeDiveGuideModal(false) },
-  { isOpen: () => typeof diveSetupModalEl !== 'undefined' && diveSetupModalEl && !diveSetupModalEl.hidden, close: () => closeDiveSetupModal() },
-  { isOpen: () => typeof modalLogbook !== 'undefined' && modalLogbook && !modalLogbook.hidden, close: () => closeLogbookModal() },
+  { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && !artifactInspectorModalEl?.hidden, close: () => closeArtifactInspector() },
+  { isOpen: () => typeof replayModal !== 'undefined' && !replayModal?.hidden, close: () => closeReplayModal() },
+  { isOpen: () => typeof lbStatsModalEl !== 'undefined' && !lbStatsModalEl?.hidden, close: () => closeLeaderboardStatsModal() },
+  { isOpen: () => typeof liveryModalEl !== 'undefined' && !liveryModalEl?.hidden, close: () => closeLiveryModal() },
+  { isOpen: () => typeof gasPlannerModal !== 'undefined' && !gasPlannerModal?.hidden, close: () => closeGasPlannerModal() },
+  { isOpen: () => typeof challengeModal !== 'undefined' && !challengeModal?.hidden, close: () => closeChallengeModal() },
+  { isOpen: () => typeof proceduralModal !== 'undefined' && !proceduralModal?.hidden, close: () => closeProceduralModal() },
+  { isOpen: () => typeof campaignsModal !== 'undefined' && !campaignsModal?.hidden, close: () => closeCampaignsModal() },
+  { isOpen: () => typeof drillsModal !== 'undefined' && !drillsModal?.hidden, close: () => closeDrillsModal() },
+  { isOpen: () => typeof bountiesModal !== 'undefined' && !bountiesModal?.hidden, close: () => closeBountiesModal() },
+  { isOpen: () => typeof trenchModalEl !== 'undefined' && !trenchModalEl?.hidden, close: () => trenchCtrl?.closeTrenchModal?.() },
+  { isOpen: () => typeof dailyCalModalEl !== 'undefined' && !dailyCalModalEl?.hidden, close: () => closeDailyCalendarModal() },
+  { isOpen: () => typeof audioMixerModalEl !== 'undefined' && !audioMixerModalEl?.hidden, close: () => closeAudioMixerModal() },
+  { isOpen: () => typeof modalIssue !== 'undefined' && !modalIssue?.hidden, close: () => closeIssueModal() },
+  { isOpen: () => typeof modalDiveGuide !== 'undefined' && !modalDiveGuide?.hidden, close: () => closeDiveGuideModal(false) },
+  { isOpen: () => typeof diveSetupModalEl !== 'undefined' && !diveSetupModalEl?.hidden, close: () => closeDiveSetupModal() },
+  { isOpen: () => typeof modalLogbook !== 'undefined' && !modalLogbook?.hidden, close: () => closeLogbookModal() },
   { isOpen: () => Boolean(signalWheelOpen), close: () => toggleSignalWheel(false) },
   { isOpen: () => Boolean(shearwaterOpen), close: () => toggleShearwaterComputer(false) },
   { isOpen: () => typeof hudKitPopoverEl !== 'undefined' && hudKitPopoverEl && !hudKitPopoverEl.hidden, close: () => setKitPopoverOpen(false) },
@@ -2449,18 +2450,13 @@ syncWeatherUi();
 
 // ── Diver Gear Workshop, Custom Rig Liveries & Test-Tank Controller (modularized v172) ──
 const liveryWorkshop = createLiveryWorkshopController({
-  liveryPrefKey: LIVERY_PREF_KEY,
-  loadCareerLogbook,
-  getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
-  getSavedGearLoadout: () => savedGearLoadout,
-  saveGearLoadout: (...a) => saveGearLoadout(...a),
-  renderTechGearDock: () => renderTechGearDock(),
-  getSession: () => session,
-  syncSetupDrawerSummary: () => syncSetupDrawerSummary(),
-  closeDiveSetupModal: () => closeDiveSetupModal(),
-  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
-  scheduleGitHubStatsSync: () => scheduleGitHubStatsSync(),
-  showToast,
+  liveryPrefKey: LIVERY_PREF_KEY, loadCareerLogbook, getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
+  getSavedGearLoadout: () => savedGearLoadout, saveGearLoadout: (...a) => saveGearLoadout(...a),
+  renderTechGearDock: () => renderTechGearDock(), getSession: () => session,
+  syncSetupDrawerSummary: () => syncSetupDrawerSummary(), closeDiveSetupModal: () => closeDiveSetupModal(),
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v), scheduleGitHubStatsSync: () => scheduleGitHubStatsSync(), showToast,
+  playGearEquip: (s, t) => audio.playGearEquip?.(s, t), playGearUnlock: (t) => audio.playGearUnlock?.(t),
+  spawnConfetti: () => spawnCelebrationConfetti(),
 });
 const {
   liveryModalEl,
@@ -3328,6 +3324,8 @@ function startDiveRun(multiplayer = false, restoredState = null) {
   session._pbSplitsLabel = activeGhostIsPar ? 'Par' : 'PB';
   session.endedState = null;
   session.localOutcome = null;
+  session._preDiveUnlocks = liveryWorkshop.captureUnlockSnapshot();
+  liveryWorkshop.clearRecentDiveUnlocks();
   session._awaitingHostStart = Boolean(restoredState?.awaitingHostStart);
   session.restoredPeerLines = new Map();
   session.aiSquad =
@@ -3934,6 +3932,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   renderDailyChallengeCard();
   renderCareerSummary();
   renderDebriefCertifications(updatedLogbook);
+  liveryWorkshop.celebrateNewUnlocks(session?._preDiveUnlocks);
   if (debriefDailyBadgeEl) {
     if (session.dailyDateKey) {
       const dStatus = getDailyStatus(updatedLogbook, session.dailyDateKey);
