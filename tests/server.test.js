@@ -1530,3 +1530,87 @@ test('v207 Synced Tactical Sonar Pings: LAN WebSocket & P2P Host sanitize and br
     proc.kill();
   }
 });
+
+test('v213 Co-op Lobby Rig Livery Sync: P2P Host & LAN Server sanitize and broadcast player livery', async () => {
+  // 1. P2pRoomCoordinator syncs sanitized player livery in room_update
+  const { P2pRoomCoordinator } = await import('../public/js/net/p2pRoomHost.js');
+  const sent = [];
+  const host = new P2pRoomCoordinator({
+    code: 'STAG',
+    hostId: 'p_host',
+    hostName: 'Chris',
+    maxPlayers: 4,
+  });
+  host.bindPlayerSender('p_host', (msg) => sent.push(msg));
+  host.handleMessage('p_host', {
+    type: 'set_player_status',
+    livery: { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink', torchId: 'halocline-uv', badKey: 'ignored' },
+  });
+  const lastRoomUpdate = [...sent].reverse().find((m) => m.type === 'room_update');
+  assert.ok(lastRoomUpdate?.room?.players?.[0]?.livery, 'P2P room_update must carry sanitized player livery');
+  assert.equal(lastRoomUpdate.room.players[0].livery.suitId, 'secret-kraken-biolume');
+  assert.equal(lastRoomUpdate.room.players[0].livery.badKey, undefined);
+
+  // 2. LAN WebSocket server broadcasts sanitized livery on set_player_status
+  const port = 3481;
+  const proc = spawn(process.execPath, ['server.js'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Server start timeout')), 5000);
+      proc.stdout.on('data', (chunk) => {
+        if (chunk.toString().includes('LAN Server Ready')) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      proc.stderr.on('data', (chunk) => {
+        clearTimeout(timeout);
+        reject(new Error(chunk.toString()));
+      });
+    });
+
+    const ws1 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const ws2 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const nextMsg = (ws, pred) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ws.off('message', handler);
+          reject(new Error('Timed out waiting for WS message'));
+        }, 4000);
+        const handler = (raw) => {
+          const msg = JSON.parse(raw.toString());
+          if (pred(msg)) {
+            clearTimeout(timer);
+            ws.off('message', handler);
+            resolve(msg);
+          }
+        };
+        ws.on('message', handler);
+      });
+
+    await Promise.all([nextMsg(ws1, (m) => m.type === 'welcome'), nextMsg(ws2, (m) => m.type === 'welcome')]);
+    ws1.send(JSON.stringify({ type: 'create_room', name: 'Chris', maxPlayers: 2 }));
+    const created = await nextMsg(ws1, (m) => m.type === 'room_joined');
+    ws2.send(JSON.stringify({ type: 'join_room', code: created.room.code, name: 'Maya' }));
+    await nextMsg(ws2, (m) => m.type === 'room_joined');
+
+    const updateP = nextMsg(
+      ws2,
+      (m) => m.type === 'room_update' && m.room?.players?.some((p) => p.name === 'Chris' && p.livery?.suitId === 'gold-master')
+    );
+    ws1.send(JSON.stringify({ type: 'set_player_status', livery: { suitId: 'gold-master', torchId: 'secret-solar-prism' } }));
+    const updated = await updateP;
+    const chris = updated.room.players.find((p) => p.name === 'Chris');
+    assert.equal(chris.livery.suitId, 'gold-master');
+    assert.equal(chris.livery.torchId, 'secret-solar-prism');
+
+    ws1.close();
+    ws2.close();
+  } finally {
+    proc.kill();
+  }
+});

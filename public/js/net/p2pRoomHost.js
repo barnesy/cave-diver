@@ -281,6 +281,7 @@ export class P2pRoomCoordinator {
         loadStatus: p.loadStatus || 'ready',
         loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
         loadedLevelId: p.loadedLevelId || this.room.levelId,
+        livery: p.livery || null,
       })),
     };
   }
@@ -740,8 +741,24 @@ export class P2pRoomCoordinator {
         if (typeof msg.loadStatus === 'string') p.loadStatus = sanitizeLoadStatus(msg.loadStatus);
         if (Number.isFinite(msg.loadPct)) p.loadPct = Math.max(0, Math.min(100, Math.round(msg.loadPct)));
         if (typeof msg.loadedLevelId === 'string') p.loadedLevelId = sanitizeLevelId(msg.loadedLevelId);
+        let liveryChanged = false;
+        if (msg.livery && typeof msg.livery === 'object') {
+          const cleanId = (v) => (typeof v === 'string' ? v.replace(/[^a-z0-9_-]/gi, '').slice(0, 36) : '');
+          const liv = {
+            suitId: cleanId(msg.livery.suitId) || 'zissou-classic',
+            torchId: cleanId(msg.livery.torchId) || 'tech-led',
+            patchId: cleanId(msg.livery.patchId) || 'cave-arrow',
+          };
+          if (cleanId(msg.livery.headgearId)) liv.headgearId = cleanId(msg.livery.headgearId);
+          if (cleanId(msg.livery.trimId)) liv.trimId = cleanId(msg.livery.trimId);
+          if (cleanId(msg.livery.tankId)) liv.tankId = cleanId(msg.livery.tankId);
+          if (cleanId(msg.livery.visorId)) liv.visorId = cleanId(msg.livery.visorId);
+          p.livery = liv;
+          liveryChanged = true;
+        }
         if (
           !prevTracked ||
+          liveryChanged ||
           prevStatus !== p.loadStatus ||
           prevPct !== p.loadPct ||
           prevLvl !== p.loadedLevelId

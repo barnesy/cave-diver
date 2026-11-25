@@ -14,6 +14,7 @@ import {
   parseImportedLogbookJson,
 } from '../game/logbookModel.js';
 import { drawStyledArtifact } from '../game/artSprites.js';
+import { drawTrophyGalleryDiorama } from './trophyGalleryRenderer.js';
 import { getCollectibleLoreNote } from '../game/submergedStories.js';
 import { renderFieldGuideCollectorCard, filterAndSortFieldGuide } from '../game/photoStudio.js';
 import { RESCUE_DRILLS } from '../game/rescueDrills.js';
@@ -78,6 +79,8 @@ export function createLogbookModalController({
   renderDailyChallengeCard,
   populateLevelSelect,
   renderLevelCards,
+  getActiveRigLivery = null,
+  getEffectiveGearLoadout = null,
   showToast,
   els,
 }) {
@@ -98,6 +101,7 @@ export function createLogbookModalController({
   const artifactInspectorMetaEl = document.getElementById('artifact-inspector-meta');
   const artifactInspectorLoreEl = document.getElementById('artifact-inspector-lore');
   const artifactInspectorCanvasEl = document.getElementById('artifact-inspector-canvas');
+  const trophyDioramaCanvasEl = document.getElementById('logbook-trophy-diorama-canvas');
   const btnArtifactInspectorClose = document.getElementById('btn-artifact-inspector-close');
   const btnArtifactInspectorDone = document.getElementById('btn-artifact-inspector-done');
   const btnArtifactPin = document.getElementById('btn-artifact-pin');
@@ -106,6 +110,47 @@ export function createLogbookModalController({
   let inspectorAnimRaf = 0;
   let inspectorLightAngle = 0.65;
   let inspectorDragging = false;
+  let dioramaAnimRaf = 0;
+  let dioramaFeaturedItems = [];
+  let dioramaPinnedId = '';
+  let dioramaHitboxes = [];
+
+  function drawTrophyDioramaFrame(nowMs = 0) {
+    if (!trophyDioramaCanvasEl || !modalLogbook || modalLogbook.hidden) {
+      dioramaAnimRaf = 0;
+      return;
+    }
+    const ctx = trophyDioramaCanvasEl.getContext?.('2d');
+    if (ctx) {
+      let hasCcr = false;
+      try { hasCcr = Boolean(getEffectiveGearLoadout?.()?.ccr); } catch {}
+      dioramaHitboxes = drawTrophyGalleryDiorama(
+        ctx,
+        trophyDioramaCanvasEl.width,
+        trophyDioramaCanvasEl.height,
+        dioramaFeaturedItems,
+        {
+          livery: getActiveRigLivery?.() || null,
+          hasCcr,
+          pinnedId: dioramaPinnedId,
+          timeSec: nowMs * 0.001,
+        }
+      );
+    }
+    dioramaAnimRaf = requestAnimationFrame(drawTrophyDioramaFrame);
+  }
+
+  function startTrophyDioramaLoop() {
+    if (!trophyDioramaCanvasEl) return;
+    if (!dioramaAnimRaf) dioramaAnimRaf = requestAnimationFrame(drawTrophyDioramaFrame);
+  }
+
+  function stopTrophyDioramaLoop() {
+    if (dioramaAnimRaf) {
+      cancelAnimationFrame(dioramaAnimRaf);
+      dioramaAnimRaf = 0;
+    }
+  }
   let activeVaultCollectionFilter = 'all';
   let vaultVisibleLimit = 48;
 
@@ -224,6 +269,16 @@ export function createLogbookModalController({
     if (!vaultGrid) return;
     const book = bookOverride || loadCareerLogbook();
     const vault = getArtifactVaultStats(book, LEVELS);
+    // Keep the Living Trophy Diorama synced with top 5 relics (pinned first, then highest value Boss Trophies / Grand Relics)
+    dioramaPinnedId = book.pinnedArtifactId || '';
+    dioramaFeaturedItems = (vault.items || [])
+      .slice()
+      .sort((a, b) => {
+        if (a.id === dioramaPinnedId) return -1;
+        if (b.id === dioramaPinnedId) return 1;
+        return (b.points || 0) - (a.points || 0);
+      })
+      .slice(0, 5);
     const colProg = vault.collections;
     if (vaultHeading) {
       const rankTxt = colProg?.highestCuratorTitle ? ` · ${colProg.highestCuratorTitle.toUpperCase()}` : '';
@@ -525,13 +580,30 @@ export function createLogbookModalController({
     if (modalLogbook) {
       renderGitHubAccountUi();
       modalLogbook.hidden = false;
+      startTrophyDioramaLoop();
     }
   }
 
   function closeLogbookModal() {
+    stopTrophyDioramaLoop();
     closeArtifactInspector();
     if (modalLogbook) modalLogbook.hidden = true;
   }
+
+  // Interactive Living Trophy Diorama pedestal click -> opens 3D Curator Artifact Inspector (v213)
+  trophyDioramaCanvasEl?.addEventListener('click', (ev) => {
+    if (!dioramaHitboxes.length) return;
+    const rect = trophyDioramaCanvasEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const sx = ((ev.clientX - rect.left) / rect.width) * trophyDioramaCanvasEl.width;
+    const sy = ((ev.clientY - rect.top) / rect.height) * trophyDioramaCanvasEl.height;
+    for (const hb of dioramaHitboxes) {
+      if (Math.hypot(sx - hb.x, sy - hb.y) <= hb.r * 1.15 && hb.item) {
+        openArtifactInspector(hb.item);
+        return;
+      }
+    }
+  });
 
   // Wire Artifact Inspector events
   if (artifactInspectorCanvasEl) {

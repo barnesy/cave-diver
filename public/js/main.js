@@ -162,6 +162,8 @@ import {
   getMilestonePatch,
   getSecretCosmeticsForTrophy,
   isDefaultRigLivery,
+  drawMiniDiverAvatar,
+  drawSquadStagingLineup,
 } from './game/rigLivery.js';
 import { getCollectibleLoreNote } from './game/submergedStories.js';
 import {
@@ -297,6 +299,8 @@ const lanSetupControls = document.getElementById('lan-setup-controls');
 const lanRoomsSection = document.getElementById('lan-rooms-section');
 const lanRoomsList = document.getElementById('lan-rooms-list');
 const lanRoomBox = document.getElementById('lan-room-box');
+const lanStagingCanvas = document.getElementById('lan-staging-canvas');
+let lastBroadcastLiveryJson = '';
 const lanInviteUrlInput = document.getElementById('lan-invite-url');
 const btnCopyInvite = document.getElementById('btn-copy-invite');
 const btnShareInvite = document.getElementById('btn-share-invite');
@@ -558,7 +562,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=212',
+  mapRasterUrl: './assets/map-expedition.jpg?v=213',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2610,6 +2614,8 @@ const logbookCtrl = createLogbookModalController({
   loadGhostTrack: (id) => loadGhostTrack(id),
   getEnteredCallsign,
   getDiverName: () => playerNameInput?.value.trim() || 'Diver',
+  getActiveRigLivery: () => liveryWorkshop.getActiveRigLivery(),
+  getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
   setHomeMenuOpen: (v) => setHomeMenuOpen(v),
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
@@ -4012,8 +4018,17 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     )
     .join('');
 
-  // Team Stats, Averages & Roster Comparison
+  // Team Stats, Averages & Roster Comparison (v213: live custom mini-avatars beside each diver!)
   const teamEl = document.getElementById('debrief-team');
+  const activePeersSnap = getActivePeers();
+  const findRosterLivery = (r) => {
+    if (!r) return liveryWorkshop.getActiveRigLivery();
+    if (r.isSelf || r.id === (lan.clientId || 'self') || r.name === (diver.name || playerNameInput?.value.trim())) {
+      return diver.livery || liveryWorkshop.getActiveRigLivery();
+    }
+    const peerMatch = activePeersSnap.find((p) => p && (p.id === r.id || p.name === r.name));
+    return peerMatch?.livery || null;
+  };
   teamEl.hidden = false;
   teamEl.innerHTML = `
     <div class="debrief-section-title">${teamSummary.isTeam ? 'TEAM STATS & AVERAGES' : 'DIVER PERFORMANCE SUMMARY'}</div>
@@ -4027,9 +4042,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       teamSummary.isTeam
         ? teamSummary.roster
             .map(
-              (r) => `
+              (r, idx) => `
           <div class="team-roster-row">
-            <strong>${escapeHtml(r.name)}</strong>
+            <span class="team-roster-diver"><canvas class="debrief-mini-avatar" data-roster-idx="${idx}" width="44" height="28" aria-hidden="true"></canvas><strong>${escapeHtml(r.name)}</strong></span>
             <span>${r.alive ? `${r.healthPct}% HP · ${formatRunClock(r.diveTimeSec)} · ${r.gasRemainingPct}% Gas` : r.rescued ? '🛟 RESCUED' : 'DOWN'}</span>
             <strong>${r.totalScore.toLocaleString()} pts</strong>
           </div>
@@ -4039,6 +4054,14 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         : ''
     }
   `;
+  if (teamSummary.isTeam) {
+    teamEl.querySelectorAll('canvas.debrief-mini-avatar').forEach((cv) => {
+      const idx = Number(cv.getAttribute('data-roster-idx'));
+      const row = teamSummary.roster[idx];
+      const c2d = cv.getContext?.('2d');
+      if (c2d && row) drawMiniDiverAvatar(c2d, cv.width, cv.height, findRosterLivery(row), { hasCcr: Boolean(session.gear?.ccr) });
+    });
+  }
 
   // Collectibles Trophy Shelf — renders actual bespoke artifact close-ups for every recovered relic (v168)
   const artifactsEl = document.getElementById('debrief-artifacts');
@@ -6161,6 +6184,13 @@ lan.on('room_update', async (room) => {
   lanRoomBox.hidden = false;
   if (lanSetupControls) lanSetupControls.hidden = true;
   if (lanRoomsSection) lanRoomsSection.hidden = true;
+  // Sync custom rig livery into Co-op Lobby immediately so teammates see our real rig in the Staging Lineup (v213)
+  const myLiv = liveryWorkshop.getActiveRigLivery();
+  const myLivJson = JSON.stringify(myLiv || {});
+  if (justEnteredRoom || myLivJson !== lastBroadcastLiveryJson) {
+    lastBroadcastLiveryJson = myLivJson;
+    lan.setPlayerStatus({ livery: myLiv });
+  }
 
   syncRoomInviteUi(room);
   syncBrowserRoomUrl(room.code);
@@ -6907,6 +6937,13 @@ const _aiSquadStepOpts = {
     audio.playSignal?.(mix.pan);
   },
   onBuddyGasShare: ({ buddy, gasId, amountBar }) => {
+    pushAirShareBeam(session, {
+      peerId: buddy?.id || '',
+      peerName: buddy?.name || 'Buddy',
+      fromSelf: false,
+      gasId: gasId || 'EAN32',
+      amountBar: amountBar || 25,
+    });
     audio.playGasShare?.();
     showToast(`🤖 ${buddy.name} shared +${amountBar} bar ${getActiveGasName(gasId)} via long hose!`, 2.8);
   },
@@ -7685,6 +7722,30 @@ function frame(nowMs) {
 
   if (liveryModalEl && !liveryModalEl.hidden) {
     renderLiveryPreviewFrame(menuTimeSec);
+  }
+  if (lanStagingCanvas && lanRoomBox && !lanRoomBox.hidden && lan.room?.players) {
+    const sCtx = lanStagingCanvas.getContext?.('2d');
+    if (sCtx) {
+      const myLiv = liveryWorkshop.getActiveRigLivery();
+      const myLivJson = JSON.stringify(myLiv || {});
+      if (myLivJson !== lastBroadcastLiveryJson) {
+        lastBroadcastLiveryJson = myLivJson;
+        lan.setPlayerStatus({ livery: myLiv });
+      }
+      const loadout = getEffectiveGearLoadout();
+      const members = lan.room.players.map((p) => ({
+        name: p.name || 'Diver',
+        isHost: Boolean(p.isHost),
+        ready: p.ready !== false,
+        livery: p.id === lan.clientId ? myLiv : (p.livery || null),
+        hasCcr: p.id === lan.clientId ? Boolean(loadout?.ccr) : false,
+        hasDpv: p.id === lan.clientId ? Boolean(loadout?.dpv) : false,
+      }));
+      drawSquadStagingLineup(sCtx, lanStagingCanvas.width, lanStagingCanvas.height, members, {
+        timeSec: menuTimeSec,
+        title: `ROOM ${lan.room.code || 'CO-OP'} STAGING`,
+      });
+    }
   }
 
   requestAnimationFrame(frame);

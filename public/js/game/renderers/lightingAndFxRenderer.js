@@ -2268,4 +2268,143 @@ export const lightingAndFxMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * Co-op Crossed-Beam Triangulation (v213):
+   * When the player's torch crosses a co-op peer's or AI wingman's torch beam, renders a
+   * silt-piercing luminous focal bloom ("✦ BEAM FOCUS") and pulses golden discovery glints
+   * on uncollected relics within 10m of the triangulated intersection.
+   */
+  _drawCoopBeamTriangulation(ctx, diver, peerList, collectibles, collectedIds, toScreenX, toScreenY, scale, timeSec) {
+    if (!diver || diver.torchOn === false || !Array.isArray(peerList) || peerList.length === 0) return;
+    const hits = [];
+    for (let i = 0; i < peerList.length; i++) {
+      const hit = computeBeamTriangulation(diver, peerList[i], 14);
+      if (hit) hits.push(hit);
+    }
+    if (hits.length === 0) return;
+
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * 4.4);
+    ctx.save();
+    for (let h = 0; h < hits.length; h++) {
+      const hit = hits[h];
+      const fx = toScreenX(hit.x);
+      const fy = toScreenY(hit.y);
+      const str = hit.strength;
+      const bloomR = (2.4 + pulse * 0.45) * scale;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const grad = ctx.createRadialGradient(fx, fy, 0.08 * scale, fx, fy, bloomR);
+      grad.addColorStop(0, `rgba(254, 249, 195, ${(0.58 * str).toFixed(3)})`);
+      grad.addColorStop(0.32, `rgba(125, 211, 252, ${(0.34 * str).toFixed(3)})`);
+      grad.addColorStop(0.7, `rgba(56, 189, 248, ${(0.12 * str).toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(fx, fy, bloomR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Focusing aperture ring & 4-point cross-flare
+      const ringR = (0.58 + pulse * 0.14) * scale;
+      ctx.strokeStyle = `rgba(254, 240, 138, ${(0.55 * str).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+      ctx.beginPath();
+      ctx.arc(fx, fy, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const flare = (0.95 + pulse * 0.22) * scale;
+      ctx.strokeStyle = `rgba(255, 251, 235, ${(0.62 * str).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, 0.036 * scale);
+      ctx.beginPath();
+      ctx.moveTo(fx - flare, fy);
+      ctx.lineTo(fx + flare, fy);
+      ctx.moveTo(fx, fy - flare);
+      ctx.lineTo(fx, fy + flare);
+      ctx.stroke();
+      ctx.restore();
+
+      // Subtle callout badge
+      ctx.font = `800 ${Math.max(9, Math.round(0.28 * scale))}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(254, 249, 195, ${(0.82 * str).toFixed(3)})`;
+      ctx.fillText('✦ BEAM FOCUS', fx, fy - ringR - Math.max(5, 0.18 * scale));
+
+      // Golden discovery glint pulse on uncollected relics within 10m of the focal bloom
+      if (Array.isArray(collectibles) && collectibles.length > 0) {
+        const hasSet = collectedIds && typeof collectedIds.has === 'function';
+        for (let c = 0; c < collectibles.length; c++) {
+          const item = collectibles[c];
+          if (!item || (hasSet && collectedIds.has(item.id))) continue;
+          const dist = Math.hypot(item.x - hit.x, item.y - hit.y);
+          if (dist > 10) continue;
+          const prox = Math.max(0.25, 1 - dist / 10);
+          const cx = toScreenX(item.x);
+          const cy = toScreenY(item.y);
+          const glintPulse = 0.5 + 0.5 * Math.sin(timeSec * 6.2 + c * 1.4);
+          const gr = (0.48 + glintPulse * 0.34) * scale;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = `rgba(250, 204, 21, ${(0.78 * prox * str).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+          ctx.beginPath();
+          ctx.arc(cx, cy, gr, 0, Math.PI * 2);
+          ctx.stroke();
+          const sp = gr * 1.25;
+          ctx.strokeStyle = `rgba(254, 249, 195, ${(0.86 * prox * glintPulse * str).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+          ctx.beginPath();
+          ctx.moveTo(cx - sp, cy);
+          ctx.lineTo(cx + sp, cy);
+          ctx.moveTo(cx, cy - sp);
+          ctx.lineTo(cx, cy + sp);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+    ctx.restore();
+  },
 };
+
+/**
+ * Pure geometric ray-segment intersection for Co-op Crossed-Beam Triangulation (v213).
+ * Returns `{ x, y, distA, distB, strength }` when two active diver torches cross within `maxRangeM`.
+ */
+export function computeBeamTriangulation(diverA, diverB, maxRangeM = 14) {
+  if (!diverA || !diverB) return null;
+  if (diverA.alive === false || diverB.alive === false) return null;
+  if (diverA.torchOn === false || diverB.torchOn === false) return null;
+  const ax = diverA.body?.hand?.x ?? diverA.x;
+  const ay = diverA.body?.hand?.y ?? diverA.y;
+  const bx = diverB.body?.hand?.x ?? diverB.x;
+  const by = diverB.body?.hand?.y ?? diverB.y;
+  if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) return null;
+  const sep = Math.hypot(bx - ax, by - ay);
+  if (sep < 0.55 || sep > maxRangeM * 1.9) return null;
+
+  const angA = Number.isFinite(diverA.torchAngle) ? diverA.torchAngle : (diverA.angle || 0);
+  const angB = Number.isFinite(diverB.torchAngle) ? diverB.torchAngle : (diverB.angle || 0);
+  const dAx = Math.cos(angA);
+  const dAy = Math.sin(angA);
+  const dBx = Math.cos(angB);
+  const dBy = Math.sin(angB);
+
+  const det = dAx * dBy - dAy * dBx;
+  if (Math.abs(det) < 0.16) return null;
+
+  const dx = bx - ax;
+  const dy = by - ay;
+  const tA = (dx * dBy - dy * dBx) / det;
+  const tB = (dx * dAy - dy * dAx) / det;
+  if (tA < 0.75 || tA > maxRangeM || tB < 0.75 || tB > maxRangeM) return null;
+
+  const strength = Math.max(0.25, Math.min(1, 1 - Math.max(tA, tB) / (maxRangeM * 1.18)));
+  return {
+    x: ax + tA * dAx,
+    y: ay + tA * dAy,
+    distA: tA,
+    distB: tB,
+    strength,
+  };
+}

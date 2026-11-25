@@ -456,32 +456,36 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
   ctx.font = '600 19px system-ui, -apple-system, sans-serif';
   ctx.fillText(level?.location || 'Submerged Overhead System', padX, 118);
 
-  // 2b. Custom Diver Rig Emblem framed beside the Grade Seal (v155)
+  // 2b. Custom Diver Rig Emblem + Active Set Synergy Aura framed beside the Grade Seal (v155 / v213)
   if (livery) {
-    const embW = 148;
-    const embH = 88;
-    const embX = width - 356;
-    const embY = 66;
+    const embW = 158;
+    const embH = 92;
+    const embX = width - 364;
+    const embY = 64;
     const pal = resolveDiverLiveryPalette(livery);
+    const setSyn = pal.setSynergy || null;
     ctx.save();
-    ctx.fillStyle = 'rgba(4, 18, 36, 0.92)';
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
-    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(4, 18, 36, 0.94)';
+    ctx.strokeStyle = setSyn ? setSyn.color : (pal.maxTier?.rank >= 4 ? pal.maxTier.color : 'rgba(56, 189, 248, 0.45)');
+    ctx.lineWidth = setSyn ? 2.6 : 2;
     fillRoundedRect(ctx, embX, embY, embW, embH, 14);
     strokeRoundedRect(ctx, embX, embY, embW, embH, 14);
     ctx.save();
     ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') ctx.roundRect(embX + 2, embY + 2, embW - 4, embH - 22, 12);
-    else ctx.rect(embX + 2, embY + 2, embW - 4, embH - 22);
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(embX + 2, embY + 2, embW - 4, embH - 24, 12);
+    else ctx.rect(embX + 2, embY + 2, embW - 4, embH - 24);
     ctx.clip?.();
     ctx.translate(embX + 2, embY + 2);
-    drawMiniDiverAvatar(ctx, embW - 4, embH - 22, livery, { hasCcr });
+    drawMiniDiverAvatar(ctx, embW - 4, embH - 24, livery, { hasCcr });
     ctx.restore();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#bae6fd';
-    ctx.font = '700 11px system-ui, -apple-system, sans-serif';
-    ctx.fillText(`${pal.suit.name} · ${pal.headgear.icon}`, embX + embW * 0.5, embY + embH - 11);
+    ctx.fillStyle = setSyn ? setSyn.color : '#bae6fd';
+    ctx.font = '700 10.5px system-ui, -apple-system, sans-serif';
+    const embLabel = setSyn
+      ? `${setSyn.icon} ${setSyn.auraName}`
+      : `${pal.suit.name} · ${pal.headgear.icon}`;
+    ctx.fillText(embLabel.slice(0, 24), embX + embW * 0.5, embY + embH - 12);
     ctx.restore();
   }
 

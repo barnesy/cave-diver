@@ -37,6 +37,8 @@ import {
   drawStyledJellyfish,
   drawStyledMegafauna,
   drawStyledWhaleShark,
+  drawStyledOarfish,
+  drawStyledCoelacanth,
   drawStyledDenizen,
   classifyArtifactVisual,
   drawStyledArtifact,
@@ -1323,6 +1325,8 @@ export class CaveRenderer {
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
+    // 11a-pre. Co-op Crossed-Beam Triangulation (drawn post-silt so triangulated focal bloom & relic glints pierce haze! v213)
+    this._drawCoopBeamTriangulation?.(ctx, diver, peerList, this.level.collectibles, collectedIds, toScreenX, toScreenY, scale, timeSec);
 
     // 11a. Active Acoustic Cave Sonar Overlay (drawn POST-silt so echoes pierce zero-vis silt-outs! v142)
     if (sonarPulse) {
@@ -4082,6 +4086,10 @@ export class CaveRenderer {
         ctx.globalAlpha = 0.92 * fade;
         if (v.kind === 'whaleshark') {
           drawStyledWhaleShark(ctx, v, sx, sy, scale, timeSec);
+        } else if (v.kind === 'oarfish') {
+          drawStyledOarfish(ctx, v, sx, sy, scale, timeSec);
+        } else if (v.kind === 'coelacanth') {
+          drawStyledCoelacanth(ctx, v, sx, sy, scale, timeSec);
         } else if (v.kind === 'mantaray') {
           drawStyledMegafauna(
             ctx,

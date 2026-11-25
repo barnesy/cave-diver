@@ -3495,8 +3495,8 @@ test('v109 Live Sonar Cave & Wreck Cartography Minimap: gating, viewports, fog-o
 });
 
 test('v110 Underwater Strobe Camera & Marine Field Guide: catalog, subject capture, stars, scoring, flash & Logbook UI', async () => {
-  // 1. 18-entry Field Guide catalog & Logbook discovery/upgrade persistence
-  assert.equal(FIELD_GUIDE_CATALOG.length, 18);
+  // 1. 21-entry Field Guide catalog (expanded +3 rare abyssal sightings in v213) & Logbook discovery/upgrade persistence
+  assert.equal(FIELD_GUIDE_CATALOG.length, 21);
   assert.ok(getFieldGuideEntry('shark') && getFieldGuideEntry('hydrovent') && getFieldGuideEntry('remipede'));
 
   let book = createEmptyLogbook();
@@ -11249,4 +11249,134 @@ test('v212 World-Reactive Special Gear FX, Matching Set Synergies & main.js Modu
     (x) => x * 20, (y) => y * 20, 24, 2.5, false, null
   );
   assert.ok(ops > 200, 'World-reactive torch optics & ambient Set Synergy aura must render cleanly');
+});
+
+test('v213 Live Squad Staging Lineup, Interactive Trophy Gallery Diorama, Rare Abyssal Sightings & Co-op Beam Triangulation', async () => {
+  const { drawSquadStagingLineup, drawMiniDiverAvatar } = await import('../public/js/game/rigLivery.js');
+  const { drawTrophyGalleryDiorama } = await import('../public/js/ui/trophyGalleryRenderer.js');
+  const { drawStyledOarfish, drawStyledCoelacanth } = await import('../public/js/game/artSprites.js');
+  const { computeBeamTriangulation } = await import('../public/js/game/renderers/lightingAndFxRenderer.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { renderExpeditionPostcard } = await import('../public/js/game/diveCard.js');
+  const { captureCameraPhoto } = await import('../public/js/game/diveSession.js');
+
+  let ops = 0;
+  const makeMockCtx = () =>
+    new Proxy(
+      {
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+        measureText: () => ({ width: 48 }),
+        canvas: { width: 600, height: 180 },
+      },
+      { get: (t, p) => (p in t ? t[p] : () => { ops++; }), set: (t, p, v) => ((t[p] = v), true) }
+    );
+  const ctx = makeMockCtx();
+
+  // 1. Live Squad Staging Lineup renders 1-4 divers with Set Synergy auras & custom liveries
+  drawSquadStagingLineup(
+    ctx,
+    560,
+    142,
+    [
+      { name: 'Chris', isHost: true, ready: true, livery: { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink' }, hasCcr: true },
+      { name: 'Maya', isHost: false, ready: true, livery: { suitId: 'gold-master', torchId: 'halocline-uv' }, hasDpv: true },
+      { name: 'Kai', isHost: false, ready: false, livery: null },
+    ],
+    { timeSec: 1.8, title: 'ROOM AB12 STAGING' }
+  );
+  drawMiniDiverAvatar(ctx, 44, 28, { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink' }, { hasCcr: true });
+  assert.ok(ops > 150, 'Squad staging lineup and crew mini-avatar must draw cleanly');
+
+  // 2. Interactive Trophy Gallery Diorama returns clickable hitboxes matching pedestals
+  const sampleArtifacts = [
+    { id: 't1', name: 'Kraken Crown', sprite: 'crown', points: 900, scale: 1.4, bossTrophy: true },
+    { id: 't2', name: 'Selenite Prism', sprite: 'crystal', points: 650, scale: 1.2 },
+    { id: 't3', name: 'Brass Sextant', sprite: 'sextant', points: 520, scale: 1.1 },
+  ];
+  const hitboxes = drawTrophyGalleryDiorama(ctx, 600, 176, sampleArtifacts, {
+    livery: { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink' },
+    hasCcr: true,
+    pinnedId: 't1',
+    timeSec: 3.1,
+  });
+  assert.equal(hitboxes.length, 3, 'Diorama must return one clickable pedestal hitbox per featured relic');
+  assert.equal(hitboxes[0].item.id, 't1');
+  assert.ok(hitboxes[0].r >= 18);
+  const emptyHits = drawTrophyGalleryDiorama(ctx, 600, 176, [], { timeSec: 1.0 });
+  assert.equal(emptyHits.length, 0);
+
+  // 3. Rare Abyssal Sightings: Field Guide catalog, procedural sprites & Underwater Camera logging
+  assert.ok(getFieldGuideEntry('oarfish'), 'oarfish must exist in FIELD_GUIDE_CATALOG');
+  assert.ok(getFieldGuideEntry('coelacanth'), 'coelacanth must exist in FIELD_GUIDE_CATALOG');
+  assert.ok(getFieldGuideEntry('biolume-bloom'), 'biolume-bloom must exist in FIELD_GUIDE_CATALOG');
+  const opsBeforeArt = ops;
+  drawStyledOarfish(ctx, 180, 90, 26, 1.5, 1);
+  drawStyledCoelacanth(ctx, 360, 90, 24, 1.5, -1);
+  assert.ok(ops > opsBeforeArt + 30, 'Oarfish and Coelacanth sprites must render cleanly');
+
+  const sess = createDiveSession(LEVEL_1, { diverName: 'AbyssPhotographer' });
+  sess.diver.x = LEVEL_1.spawn.x;
+  sess.diver.y = LEVEL_1.spawn.y + 3;
+  sess.diver.torchAngle = 0;
+  sess.encounters.visitors = [
+    { kind: 'oarfish', x: sess.diver.x + 2.5, y: sess.diver.y, vx: 0.4, vy: 0, dir: 1, size: 2.8 },
+  ];
+  const shotOar = captureCameraPhoto(sess, null, {}, {});
+  assert.equal(shotOar.ok, true);
+  assert.equal(shotOar.subject?.id, 'oarfish');
+
+  sess.camera.cooldownSec = 0;
+  sess.encounters.visitors = [
+    { kind: 'coelacanth', x: sess.diver.x + 2.2, y: sess.diver.y, vx: -0.3, vy: 0, dir: -1, size: 1.9 },
+  ];
+  const shotCoel = captureCameraPhoto(sess, null, {}, {});
+  assert.equal(shotCoel.ok, true);
+  assert.equal(shotCoel.subject?.id, 'coelacanth');
+
+  sess.camera.cooldownSec = 0;
+  sess.encounters.visitors = [
+    { kind: 'biolum-swarm', x: sess.diver.x + 2.0, y: sess.diver.y, vx: 0.2, vy: 0, dir: 1, size: 1.8 },
+  ];
+  const shotBloom = captureCameraPhoto(sess, null, {}, {});
+  assert.equal(shotBloom.ok, true);
+  assert.equal(shotBloom.subject?.id, 'biolume-bloom');
+
+  // 4. Co-op Crossed-Beam Triangulation geometry + world focal bloom & relic glint pass
+  const dA = { x: 10, y: 10, torchAngle: 0, torchOn: true, alive: true };
+  const dB = { x: 14, y: 14, torchAngle: -Math.PI / 2, torchOn: true, alive: true };
+  const hit = computeBeamTriangulation(dA, dB, 14);
+  assert.ok(hit, 'Perpendicular crossing beams must intersect');
+  assert.ok(Math.abs(hit.x - 14) < 0.05 && Math.abs(hit.y - 10) < 0.05, 'Intersection must match (14, 10)');
+  assert.equal(computeBeamTriangulation(dA, { ...dB, torchAngle: 0 }, 14), null, 'Parallel beams must not triangulate');
+  assert.equal(computeBeamTriangulation(dA, { ...dB, torchOn: false }, 14), null, 'Off torch must not triangulate');
+
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  const opsBeforeTri = ops;
+  r._drawCoopBeamTriangulation(
+    ctx,
+    dA,
+    [dB],
+    [{ id: 'relic_near', x: 15, y: 11 }, { id: 'relic_done', x: 14, y: 10 }],
+    new Set(['relic_done']),
+    (x) => x * 20,
+    (y) => y * 20,
+    24,
+    2.4
+  );
+  assert.ok(ops > opsBeforeTri + 20, 'Triangulated beam bloom & relic glint must render cleanly');
+
+  // 5. Upgraded Expedition Postcard renders Set Synergy emblem without errors
+  renderExpeditionPostcard(makeMockCtx(), 1200, 675, {
+    level: LEVEL_1,
+    diverName: 'Chris',
+    success: true,
+    grade: 'S',
+    score: 3420,
+    maxDepthM: 28,
+    diveTimeSec: 112,
+    exploredPct: 94,
+    livery: { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink' },
+  });
 });

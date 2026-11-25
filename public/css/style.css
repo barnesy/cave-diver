@@ -11037,6 +11037,52 @@ summary,
   }
 }
 
+/* ─── v213: Live Squad Staging Lineup, Interactive Trophy Gallery Diorama & Crew Mini-Avatars ─── */
+.lan-staging-wrap {
+  margin: 8px 0 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  background: linear-gradient(180deg, rgba(4, 22, 44, 0.92), rgba(2, 10, 22, 0.96));
+  box-shadow: inset 0 0 22px rgba(56, 189, 248, 0.14), 0 6px 18px rgba(0, 0, 0, 0.42);
+}
+.lan-staging-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 560 / 142;
+}
+.vault-diorama-wrap {
+  margin: 6px 0 10px;
+  border-radius: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(250, 204, 21, 0.34);
+  background: linear-gradient(180deg, rgba(4, 22, 42, 0.94), rgba(2, 9, 20, 0.98));
+  box-shadow: inset 0 0 26px rgba(56, 189, 248, 0.14), 0 8px 22px rgba(0, 0, 0, 0.46);
+}
+.vault-diorama-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 600 / 176;
+  cursor: pointer;
+}
+.team-roster-diver {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.debrief-mini-avatar {
+  width: 44px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  background: #031122;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
 
 
 

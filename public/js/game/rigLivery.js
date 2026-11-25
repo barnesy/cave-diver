@@ -2375,3 +2375,145 @@ export function drawMiniDiverAvatar(ctx, w, h, livery, { hasCcr = false, hasDpv 
   });
   ctx.restore();
 }
+
+/**
+ * Render a live animated underwater Squad & Co-op Staging Bay showing 1–4 divers
+ * hovering side-by-side in their real articulated rigs, animated special gear FX,
+ * Set Synergy auras, torch beams, callsigns & role/ready badges (v213).
+ */
+export function drawSquadStagingLineup(
+  ctx,
+  w,
+  h,
+  members = [],
+  { timeSec = 0, title = 'SQUAD STAGING BAY' } = {}
+) {
+  if (!ctx || !w || !h) return;
+  const crew = Array.isArray(members) && members.length > 0 ? members.slice(0, 4) : [];
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+
+  // Deep illuminated aquatic staging bay backdrop
+  const bg = ctx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, '#04162c');
+  bg.addColorStop(0.55, '#072440');
+  bg.addColorStop(1, '#020b18');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // Soft overhead staging sunbeams
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 4; i++) {
+    const bx = w * (0.14 + i * 0.24) + Math.sin(timeSec * 0.55 + i * 1.6) * 14;
+    const rg = ctx.createLinearGradient(bx, 0, bx + 28, h);
+    rg.addColorStop(0, 'rgba(125, 211, 252, 0.14)');
+    rg.addColorStop(1, 'rgba(125, 211, 252, 0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.moveTo(bx - 18, 0);
+    ctx.lineTo(bx + 18, 0);
+    ctx.lineTo(bx + 46, h);
+    ctx.lineTo(bx - 2, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Ambient rising micro-bubbles across the staging bay
+  for (let i = 0; i < 16; i++) {
+    const bx = (((i * 71 + Math.sin(timeSec * 1.4 + i) * 9) % w) + w) % w;
+    const by = (((i * 37 - timeSec * (12 + (i % 3) * 5)) % h) + h) % h;
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.24)';
+    ctx.beginPath();
+    ctx.arc(bx, by, 1.1 + (i % 2) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Top-left staging header kicker
+  ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = 'rgba(125, 211, 252, 0.82)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`🤿 ${title.toUpperCase()} · ${crew.length} DIVER${crew.length === 1 ? '' : 'S'}`, 10, 8);
+
+  const count = Math.max(1, crew.length);
+  const slotW = w / count;
+  const diverScale = Math.min(slotW * 0.26, h * 0.34, 42);
+
+  for (let i = 0; i < crew.length; i++) {
+    const m = crew[i];
+    const pal = resolveDiverLiveryPalette(m.livery || null);
+    const cx = slotW * (i + 0.52);
+    const bob = Math.sin(timeSec * 1.9 + i * 1.45) * 3.2;
+    const cy = h * 0.50 + bob;
+    const sweepAng = Math.sin(timeSec * 1.1 + i * 1.2) * 0.06;
+
+    // Subtle Set Synergy / Mythic aura glow behind each squad member
+    if (pal.wakeProfile?.active) {
+      const wp = pal.wakeProfile;
+      const ar = diverScale * (wp.isSetAura ? 1.15 : 0.9);
+      const ag = ctx.createRadialGradient(cx - diverScale * 0.12, cy, 4, cx - diverScale * 0.12, cy, ar);
+      ag.addColorStop(0, `rgba(${wp.auraRgb}, ${wp.isSetAura ? 0.28 : 0.16})`);
+      ag.addColorStop(1, `rgba(${wp.auraRgb}, 0)`);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.arc(cx - diverScale * 0.12, cy, ar, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Compact torch cone
+    const torchX = cx + (m.hasDpv ? 0.44 : 0.48) * diverScale + 0.18 * diverScale;
+    const torchY = cy + (m.hasDpv ? 0.16 : 0.21) * diverScale;
+    const coneLen = Math.min(slotW * 0.44, diverScale * 2.1) * (pal.torch?.rangeMult || 1);
+    const cg = ctx.createRadialGradient(torchX, torchY, 2, torchX + coneLen * 0.45, torchY, coneLen * 0.72);
+    cg.addColorStop(0, `rgba(${pal.torch.coreRgb}, 0.64)`);
+    cg.addColorStop(0.45, `rgba(${pal.torch.shaftRgb}, 0.22)`);
+    cg.addColorStop(1, `rgba(${pal.torch.shaftRgb}, 0)`);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.moveTo(torchX, torchY);
+    ctx.arc(torchX, torchY, coneLen, sweepAng - 0.24, sweepAng + 0.24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    _drawArticulatedPreviewDiver(ctx, cx, cy, diverScale, pal, {
+      hasCcr: Boolean(m.hasCcr),
+      hasDpv: Boolean(m.hasDpv),
+      timeSec: timeSec + i * 0.7,
+      sweepAng,
+      animateKick: true,
+    });
+
+    // Nameplate & ready/role subtitle beneath each diver
+    const labelY = h - 22;
+    const roleTxt = m.role ? ` · ${m.role}` : '';
+    const statusDot = m.ready === false ? '#fbbf24' : '#4ade80';
+    ctx.font = '800 10.5px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillText(String(m.name || 'Diver').slice(0, 14), slotW * (i + 0.5), labelY);
+
+    ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillStyle = pal.setSynergy ? pal.setSynergy.color : '#94a3b8';
+    const subTxt = pal.setSynergy
+      ? `${pal.setSynergy.icon} ${pal.setSynergy.auraName}`
+      : `${pal.suit.name}${roleTxt}`;
+    ctx.fillText(subTxt.slice(0, 22), slotW * (i + 0.5), labelY + 12);
+
+    // Status LED dot
+    ctx.fillStyle = statusDot;
+    ctx.beginPath();
+    ctx.arc(slotW * (i + 0.5) - Math.min(slotW * 0.36, 46), labelY, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}

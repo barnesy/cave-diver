@@ -927,10 +927,15 @@ export function captureCameraPhoto(session, ecosystem = null, { knownIds = null 
       consider('crystal', c.x, c.y);
     }
   }
-  // Dynamic Pelagic Visitors (Whale Sharks, Manta Rays, Bioluminescent Swarms) — extended 19m wide-angle lens reach!
+  // Dynamic Pelagic & Rare Abyssal Visitors (Whale Sharks, Manta Rays, Oarfish, Coelacanth, Bioluminescent Blooms)
   if (Array.isArray(session.encounters?.visitors)) {
     for (const v of session.encounters.visitors) {
-      const entryId = v.kind === 'whaleshark' || v.kind === 'mantaray' ? v.kind : 'jellyfish';
+      const entryId =
+        v.kind === 'whaleshark' || v.kind === 'mantaray' || v.kind === 'oarfish' || v.kind === 'coelacanth'
+          ? v.kind
+          : v.kind === 'biolum-swarm'
+            ? 'biolume-bloom'
+            : 'jellyfish';
       const entry = getFieldGuideEntry(entryId);
       if (!entry) continue;
       const dx = v.x - diver.x;
@@ -1177,17 +1182,26 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
   if (!enc || !level || !diver) return null;
 
   const isOcean = enc.isOceanWreck;
-  const kind =
-    kindOverride ||
-    (isOcean ? (enc.visitorCount % 2 === 0 ? 'mantaray' : 'whaleshark') : 'biolum-swarm');
+  const isDeep = (diver.y || 0) >= 20;
+  let autoKind;
+  if (isOcean) {
+    const oceanCycle = ['mantaray', 'whaleshark', 'oarfish'];
+    autoKind = oceanCycle[enc.visitorCount % oceanCycle.length];
+  } else if (isDeep) {
+    const deepCycle = ['coelacanth', 'biolum-swarm', 'oarfish'];
+    autoKind = deepCycle[enc.visitorCount % deepCycle.length];
+  } else {
+    autoKind = 'biolum-swarm';
+  }
+  const kind = kindOverride || autoKind;
   const dir = enc.visitorCount % 2 === 0 ? 1 : -1;
 
-  let startX = diver.x - dir * (kind === 'biolum-swarm' ? 11 : 22);
+  let startX = diver.x - dir * (kind === 'biolum-swarm' || kind === 'coelacanth' ? 11 : 20);
   let startY = isOcean
     ? Math.max(7.5, Math.min((level.wreckDeckY || 42) - 4, diver.y - 2.5))
     : Math.max(12, diver.y - 0.8);
 
-  // For cave swarms, verify an open-water spot near the diver
+  // For cave visitors, verify an open-water spot near the diver
   if (!isOcean) {
     if (evaluateCaveSDF(level, diver.x + dir * 6, diver.y) < -1.0) {
       startX = diver.x + dir * 6;
@@ -1200,7 +1214,11 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
     }
   }
 
-  const speed = kind === 'whaleshark' ? 1.45 : kind === 'mantaray' ? 1.85 : 0.65;
+  const speed =
+    kind === 'whaleshark' ? 1.45 :
+    kind === 'mantaray' ? 1.85 :
+    kind === 'oarfish' ? 1.15 :
+    kind === 'coelacanth' ? 0.58 : 0.65;
   const visitor = {
     id: `vis_${enc.visitorCount + 1}`,
     kind,
@@ -1209,10 +1227,14 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
     vx: dir * speed,
     vy: 0,
     dir,
-    size: kind === 'whaleshark' ? 5.8 : kind === 'mantaray' ? 2.6 : 1.9,
+    size:
+      kind === 'whaleshark' ? 5.8 :
+      kind === 'oarfish' ? 4.4 :
+      kind === 'mantaray' ? 2.6 :
+      kind === 'coelacanth' ? 1.65 : 1.9,
     phase: enc.visitorCount * 1.9,
     ageSec: 0,
-    durationSec: kind === 'biolum-swarm' ? 22 : 24,
+    durationSec: kind === 'biolum-swarm' ? 22 : 26,
   };
   enc.visitors.push(visitor);
   enc.visitorCount += 1;
@@ -1221,8 +1243,12 @@ export function spawnDynamicVisitor(session, kindOverride = null, callbacks = {}
     callbacks.onToast?.('🐋 Rare sighting! A Whale Shark is gliding nearby — snap it with [C]!', 3.6);
   } else if (kind === 'mantaray') {
     callbacks.onToast?.('🦅 Oceanic Manta Ray sweeping past the wreck — press [C] to photograph!', 3.4);
+  } else if (kind === 'oarfish') {
+    callbacks.onToast?.('🐉 Rare Abyssal Sighting! Giant Oarfish ribboning through the deep — photograph [C]!', 4.0);
+  } else if (kind === 'coelacanth') {
+    callbacks.onToast?.('🐟 Living Fossil Sighting! Abyssal Coelacanth hovering nearby — press [C] to log!', 4.0);
   } else {
-    callbacks.onToast?.('✨ Bioluminescent comb-jelly swarm drifting through the cavern!', 3.0);
+    callbacks.onToast?.('✨ Bioluminescent comb-jelly bloom pulsing through the cavern — snap it with [C]!', 3.2);
   }
   return visitor;
 }

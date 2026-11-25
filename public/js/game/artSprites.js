@@ -4633,3 +4633,144 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
 
   ctx.restore();
 }
+
+/**
+ * Rare Abyssal Giant Oarfish (Regalecus glesne) — undulating silver-ribbon body
+ * with radiant crimson dorsal crest fin & flowing crown plumes (v213).
+ */
+export function drawStyledOarfish(ctx, v, sx, sy, scale, timeSec) {
+  const len = (v.size || 4.4) * scale;
+  const dir = (v.dir || 1) >= 0 ? 1 : -1;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(dir, 1);
+
+  const segs = 14;
+  const pts = [];
+  for (let i = 0; i <= segs; i++) {
+    const f = i / segs;
+    const x = len * (0.45 - f);
+    const y = Math.sin(timeSec * 3.4 - f * 5.2 + (v.phase || 0)) * (len * 0.065 * (0.35 + f * 0.85));
+    pts.push([x, y]);
+  }
+
+  // Scarlet undulating dorsal crest fin ribbon
+  ctx.strokeStyle = 'rgba(244, 63, 94, 0.86)';
+  ctx.lineWidth = Math.max(2.2, len * 0.048);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const [x, y] = pts[i];
+    if (i === 0) ctx.moveTo(x, y - len * 0.036);
+    else ctx.lineTo(x, y - len * 0.036);
+  }
+  ctx.stroke();
+
+  // Mirror-silver tapered ribbon body
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = Math.max(3, len * 0.068);
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const [x, y] = pts[i];
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Iridescent cyan lateral shimmer stripe
+  ctx.strokeStyle = 'rgba(125, 211, 252, 0.65)';
+  ctx.lineWidth = Math.max(1.2, len * 0.022);
+  ctx.stroke();
+
+  // Regal crimson head crest plumes + luminous golden eye
+  const [hx, hy] = pts[0];
+  ctx.strokeStyle = '#fb7185';
+  ctx.lineWidth = Math.max(1.6, len * 0.024);
+  for (let p = 0; p < 3; p++) {
+    const sway = Math.sin(timeSec * 4.5 + p * 0.9) * len * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(hx - len * 0.02, hy - len * 0.02);
+    ctx.quadraticCurveTo(hx - len * 0.08, hy - len * (0.14 + p * 0.04) + sway, hx - len * (0.16 + p * 0.04), hy - len * (0.11 + p * 0.02) + sway);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#fde047';
+  ctx.beginPath();
+  ctx.arc(hx + len * 0.01, hy - len * 0.008, Math.max(2, len * 0.022), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(hx + len * 0.014, hy - len * 0.008, Math.max(1, len * 0.011), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Rare Abyssal Coelacanth (Latimeria chalumnae) — prehistoric cobalt-armored
+ * lobe-finned living fossil with distinct white mottling & trilobate tail (v213).
+ */
+export function drawStyledCoelacanth(ctx, v, sx, sy, scale, timeSec) {
+  const sz = (v.size || 1.65) * scale;
+  const dir = (v.dir || 1) >= 0 ? 1 : -1;
+  const sway = Math.sin(timeSec * 2.4 + (v.phase || 0)) * 0.16;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(dir, 1);
+
+  // Iconic trilobate tail fin
+  ctx.save();
+  ctx.translate(-sz * 0.52, 0);
+  ctx.rotate(sway);
+  ctx.fillStyle = '#1e3a8a';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-sz * 0.34, -sz * 0.24);
+  ctx.lineTo(-sz * 0.22, 0);
+  ctx.lineTo(-sz * 0.38, 0);
+  ctx.lineTo(-sz * 0.22, 0);
+  ctx.lineTo(-sz * 0.34, sz * 0.24);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Fleshy lobed pectoral & pelvic fins
+  ctx.fillStyle = '#1d4ed8';
+  const finBeat = Math.sin(timeSec * 3.1 + (v.phase || 0)) * 0.22;
+  for (const [fx, fy, a] of [[0.14, 0.18, 0.55 + finBeat], [-0.18, 0.2, 0.65 - finBeat], [-0.12, -0.22, -0.65 + finBeat]]) {
+    ctx.save();
+    ctx.translate(sz * fx, sz * fy);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 0.16, sz * 0.075, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Deep indigo-cobalt armored body
+  const bg = ctx.createLinearGradient(0, -sz * 0.26, 0, sz * 0.26);
+  bg.addColorStop(0, '#1e40af');
+  bg.addColorStop(0.55, '#1e3a8a');
+  bg.addColorStop(1, '#0f172a');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, sz * 0.56, sz * 0.24, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Signature pale-blue / white coelacanth scale speckles
+  ctx.fillStyle = 'rgba(224, 242, 254, 0.68)';
+  for (const [dx, dy, r] of [[-0.25, -0.06, 0.032], [-0.08, 0.04, 0.036], [0.06, -0.08, 0.03], [0.18, 0.03, 0.028], [-0.16, 0.09, 0.025], [0.0, -0.01, 0.026]]) {
+    ctx.beginPath();
+    ctx.arc(sz * dx, sz * dy, Math.max(1.2, sz * r), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Large golden-green nocturnal eye
+  ctx.fillStyle = '#a7f3d0';
+  ctx.beginPath();
+  ctx.arc(sz * 0.36, -sz * 0.04, Math.max(2, sz * 0.055), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#020617';
+  ctx.beginPath();
+  ctx.arc(sz * 0.37, -sz * 0.04, Math.max(1.1, sz * 0.028), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
