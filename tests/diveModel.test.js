@@ -10787,3 +10787,63 @@ test('v202 AAA Quality & Polish Pass: Frame-Independent Camera Damping, Parallax
   );
   assert.ok(phaseOps >= 3, `Boss Phase 3 atmosphere should paint crimson vignette pulse (got ${phaseOps} ops)`);
 });
+
+test('v204 AAA Polish Wave 2: Biome Depth Color Grading, Shallow Refraction Bands, Boss Ghost-Damage Bar & Reticles', async () => {
+  const { computeBiomeDepthGrade, lightingAndFxMethods } = await import('../public/js/game/renderers/lightingAndFxRenderer.js');
+  const { bossAndLairMethods } = await import('../public/js/game/renderers/bossAndLairRenderer.js');
+
+  // 1. Filmic biome depth color grading classifies all major biomes distinctly and ramps alpha with depth
+  const karstShallow = computeBiomeDepthGrade({ id: 'cenote-el-abismo' }, 5);
+  const karstDeep = computeBiomeDepthGrade({ id: 'cenote-el-abismo' }, 55);
+  const glacial = computeBiomeDepthGrade({ id: 'silfra-katla-aurora-abyss' }, 40);
+  const volcanic = computeBiomeDepthGrade({ id: 'strytan-hydrothermal-chimneys' }, 40);
+  const wreck = computeBiomeDepthGrade({ id: 'sms-markgraf-scapa-flow', isWreck: true }, 45);
+  const pacific = computeBiomeDepthGrade({ id: 'yonaguni-submerged-monument' }, 35);
+  assert.equal(karstShallow.biome, 'karst');
+  assert.ok(karstDeep.alpha > karstShallow.alpha, 'Biome depth color grade must intensify cleanly with depth');
+  assert.equal(glacial.biome, 'glacial');
+  assert.equal(volcanic.biome, 'volcanic');
+  assert.equal(wreck.biome, 'wreck');
+  assert.equal(pacific.biome, 'pacific');
+  assert.notEqual(glacial.rgb, volcanic.rgb);
+
+  // 2. Shallow basin refraction ribbons draw cleanly near surface and skip cleanly at deep depths (>16m)
+  let shallowOps = 0;
+  let deepOps = 0;
+  const makeCtx = (inc) =>
+    new Proxy(
+      {
+        createLinearGradient: () => ({ addColorStop() {} }),
+        createRadialGradient: () => ({ addColorStop() {} }),
+      },
+      { get(t, p) { return p in t ? t[p] : () => { inc(); }; } }
+    );
+  const fakeRenderer = { level: { id: 'yonaguni-submerged-monument' }, _reducedMotion: false, _perfBudget: null };
+  lightingAndFxMethods._drawShallowRefractionBands.call(fakeRenderer, makeCtx(() => shallowOps++), 1280, 720, 60, 4, 1.0, 2.2);
+  lightingAndFxMethods._drawShallowRefractionBands.call(fakeRenderer, makeCtx(() => deepOps++), 1280, 720, -400, 32, 1.0, 2.2);
+  assert.ok(shallowOps >= 4, `Shallow refraction bands should draw near open sunlit basins (got ${shallowOps} ops)`);
+  assert.equal(deepOps, 0, 'Shallow refraction bands must skip cleanly in deep water');
+
+  // 3. Boss Health Bar trailing ghost-damage bar tracks burst damage smoothly behind current HP
+  const mockHudCtx = makeCtx(() => {});
+  const bossState = {
+    combatMode: true,
+    bossDefeated: false,
+    titleBannerSec: 1.5,
+    titleBannerMaxSec: 3.0,
+    titleBannerText: 'PHASE II · ABYSSAL MAELSTROM',
+    titleBannerSub: 'CHARGE RESONANCE CRYSTALS',
+    titleBannerColor: '#c084fc',
+    scaling: { label: '1-DIVER SOLO' },
+    spec: { boss: { icon: '🐉', name: "RYŪJIN'S SERPENT" }, arena: { cx: 274, cy: 50 } },
+    boss: { id: 'boss-coral-dragon', active: true, defeated: false, name: "RYŪJIN'S SERPENT", hp: 4000, maxHp: 4000, phase: 2, aiState: 'roar' },
+  };
+  const bossHost = {};
+  bossAndLairMethods._drawSecretLairHud?.call(bossHost, mockHudCtx, 1280, 720, 1, bossState, 3.0);
+  if (Number.isFinite(bossHost._bossGhostHpRatio)) {
+    assert.equal(bossHost._bossGhostHpRatio, 1);
+    bossState.boss.hp = 2000;
+    bossAndLairMethods._drawSecretLairHud.call(bossHost, mockHudCtx, 1280, 720, 1, bossState, 3.02);
+    assert.ok(bossHost._bossGhostHpRatio > 0.5 && bossHost._bossGhostHpRatio < 1.0, 'Ghost HP bar must trail smoothly behind sudden burst damage');
+  }
+});

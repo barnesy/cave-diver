@@ -4014,6 +4014,15 @@ export const bossAndLairMethods = {
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+          // Rotating lock-on reticle at beam impact endpoint (v204 AAA Polish Wave 2)
+          const retR = (0.55 + (1 - prog) * 0.85) * scale;
+          ctx.beginPath();
+          ctx.arc(ex, ey, retR, timeSec * 3.5, timeSec * 3.5 + Math.PI * 1.45);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(ex, ey, retR * 0.45, 0, Math.PI * 2);
+          ctx.stroke();
           ctx.lineWidth = Math.max(2, 0.09 * scale);
           ctx.beginPath();
           ctx.arc(mx, my, Math.max(1, (2.2 - prog * 1.6) * scale), 0, Math.PI * 2);
@@ -4095,6 +4104,39 @@ export const bossAndLairMethods = {
         ctx.lineTo(dx, dy);
         ctx.stroke();
         ctx.setLineDash([]);
+        // Pulsing destination impact ring during lunge windup (v204 AAA Polish Wave 2)
+        if (!isDash) {
+          const pulse = 0.5 + 0.5 * Math.sin(timeSec * 12);
+          ctx.strokeStyle = `rgba(186, 230, 253, ${(0.55 + pulse * 0.35).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+          ctx.beginPath();
+          ctx.arc(dx, dy, (boss.radius * 0.72 + pulse * 0.35) * scale, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // 3b-ii. Volumetric Radiance Collapse Burst when Guardian is Dying (v204 AAA Polish Wave 2)
+      if (boss.aiState === 'dying') {
+        const prog = Math.max(0, Math.min(1, 1 - Math.max(0, boss.stateTimer || 0) / Math.max(0.2, boss.stateMaxTimer || 2.1)));
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.globalCompositeOperation = 'screen';
+        const rayCount = 10;
+        const maxR = (boss.radius * (1.8 + prog * 2.6)) * scale;
+        for (let r = 0; r < rayCount; r++) {
+          const ang = (r / rayCount) * Math.PI * 2 + timeSec * 0.55;
+          const halfW = 0.08 + prog * 0.06;
+          ctx.fillStyle = r % 2 === 0
+            ? `rgba(254, 240, 138, ${(0.24 * (1 - prog * 0.4)).toFixed(3)})`
+            : `rgba(103, 232, 249, ${(0.22 * (1 - prog * 0.4)).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(ang - halfW) * maxR, Math.sin(ang - halfW) * maxR);
+          ctx.lineTo(Math.cos(ang + halfW) * maxR, Math.sin(ang + halfW) * maxR);
+          ctx.closePath();
+          ctx.fill();
+        }
         ctx.restore();
       }
 
@@ -4975,13 +5017,34 @@ export const bossAndLairMethods = {
       const cy = Math.round(ch * 0.23);
       ctx.save();
       ctx.globalAlpha = bannerA;
+      // Sleek cinematic letterbox backdrop & hairline accent beneath Boss Title Card (v204)
+      const stripH = (lair.titleBannerSub ? 56 : 38) * dpr;
+      const stripW = Math.min(cw * 0.78, 520 * dpr);
+      const bgGrad = ctx.createLinearGradient(cw * 0.5 - stripW * 0.5, cy, cw * 0.5 + stripW * 0.5, cy);
+      bgGrad.addColorStop(0, 'rgba(2, 6, 23, 0)');
+      bgGrad.addColorStop(0.22, 'rgba(2, 6, 23, 0.72)');
+      bgGrad.addColorStop(0.78, 'rgba(2, 6, 23, 0.72)');
+      bgGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(cw * 0.5 - stripW * 0.5, cy - stripH * 0.44, stripW, stripH);
+      const accentCol = lair.titleBannerColor || '#38bdf8';
+      ctx.strokeStyle = accentCol;
+      ctx.lineWidth = Math.max(1, 1.4 * dpr);
+      ctx.globalAlpha = bannerA * 0.62;
+      ctx.beginPath();
+      ctx.moveTo(cw * 0.5 - stripW * 0.34, cy - stripH * 0.44);
+      ctx.lineTo(cw * 0.5 + stripW * 0.34, cy - stripH * 0.44);
+      ctx.moveTo(cw * 0.5 - stripW * 0.34, cy + stripH * 0.56);
+      ctx.lineTo(cw * 0.5 + stripW * 0.34, cy + stripH * 0.56);
+      ctx.stroke();
+      ctx.globalAlpha = bannerA;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = `900 ${Math.round(24 * dpr)}px ui-monospace, monospace`;
       ctx.strokeStyle = 'rgba(2, 6, 23, 0.95)';
       ctx.lineWidth = 5 * dpr;
       ctx.strokeText(lair.titleBannerText, cw * 0.5, cy);
-      ctx.fillStyle = lair.titleBannerColor || '#38bdf8';
+      ctx.fillStyle = accentCol;
       ctx.fillText(lair.titleBannerText, cw * 0.5, cy);
       if (lair.titleBannerSub) {
         ctx.font = `700 ${Math.round(11 * dpr)}px ui-monospace, monospace`;
@@ -5038,6 +5101,26 @@ export const bossAndLairMethods = {
         ctx.rect(bx, by, barW, barH);
       }
       ctx.fill();
+
+      // Trailing AAA Ghost-Damage Bar (smoothly drains behind burst hits so every big hit feels huge!, v204)
+      if (!Number.isFinite(this._bossGhostHpRatio) || this._bossGhostHpId !== boss.id || hpRatio > this._bossGhostHpRatio) {
+        this._bossGhostHpRatio = hpRatio;
+        this._bossGhostHpId = boss.id;
+      } else {
+        this._bossGhostHpRatio += (hpRatio - this._bossGhostHpRatio) * 0.085;
+        if (this._bossGhostHpRatio - hpRatio < 0.002) this._bossGhostHpRatio = hpRatio;
+      }
+      if (this._bossGhostHpRatio > hpRatio + 0.003) {
+        const ghostW = Math.max(0, barW * this._bossGhostHpRatio);
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.78)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bx, by, ghostW, barH, trackR);
+        } else {
+          ctx.rect(bx, by, ghostW, barH);
+        }
+        ctx.fill();
+      }
 
       const fillW = Math.max(0, barW * hpRatio);
       if (fillW > 1) {

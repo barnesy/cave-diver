@@ -5,6 +5,45 @@ import { sampleSiltDensity } from '../silt.js';
 
 const _nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
+/**
+ * Compute filmic biome-specific underwater color grading tint by site archetype & depth (v204 AAA Polish Wave 2).
+ */
+export function computeBiomeDepthGrade(level, depthM = 0) {
+  const d = Math.max(0, Number(depthM) || 0);
+  const id = String(level?.id || '').toLowerCase();
+  let biome = 'karst';
+  let rgb = '4, 36, 68';
+  let shimmerRgb = '103, 232, 249';
+  if (level?.isWreck) {
+    biome = 'wreck';
+    rgb = '7, 32, 48';
+    shimmerRgb = '125, 211, 252';
+  } else if (/silfra|kverkfjoll|scoresby|plura|ice|arctic/i.test(id)) {
+    biome = 'glacial';
+    rgb = '6, 38, 86';
+    shimmerRgb = '186, 230, 253';
+  } else if (/katla|strytan|grjotagja|lanzarote|atlantida/i.test(id)) {
+    biome = 'volcanic';
+    rgb = '22, 26, 56';
+    shimmerRgb = '251, 191, 36';
+  } else if (/yonaguni|chuuk|bermuda|bimini|dahab/i.test(id)) {
+    biome = 'pacific';
+    rgb = '3, 44, 72';
+    shimmerRgb = '45, 212, 191';
+  } else if (/krubera|boy-bulok|boesmansgat|hranicka|pozzo|ojamo/i.test(id)) {
+    biome = 'abyssal';
+    rgb = '5, 22, 54';
+    shimmerRgb = '147, 197, 253';
+  }
+  const depthFactor = Math.min(1, d / 75);
+  return {
+    biome,
+    rgb,
+    shimmerRgb,
+    alpha: Number((0.02 + depthFactor * 0.14).toFixed(4)),
+  };
+}
+
 export const lightingAndFxMethods = {
   _drawVolumetricTorchBeam(ctx, diver, torchData, rangeM, { siltHaze = 0, isPeer = false, intensityMult = 1.0, toScreenX, toScreenY, scale, timeSec = 0 } = {}) {
     if (!torchData) return;
@@ -1197,8 +1236,10 @@ export const lightingAndFxMethods = {
     if (spec.tintAlpha <= 0.005) return;
 
     ctx.save();
-    // 1. Subtle deep-water cobalt spectral wash (reduces red/warm ambient saturation cleanly at depth)
-    ctx.fillStyle = `rgba(4, 32, 74, ${spec.tintAlpha.toFixed(3)})`;
+    // 1. Filmic biome-aware deep-water spectral wash (reduces warm ambient saturation cleanly at depth, v204)
+    const grade = computeBiomeDepthGrade(this.level, diver.y);
+    const blendedAlpha = Math.min(0.42, spec.tintAlpha * 0.72 + grade.alpha * 0.48);
+    ctx.fillStyle = `rgba(${grade.rgb}, ${blendedAlpha.toFixed(3)})`;
     ctx.fillRect(0, 0, cw, ch);
 
     // 2. High-CRI Torch Spectral Restoration Cone: restores warm natural reds/oranges inside the beam!
@@ -2019,6 +2060,34 @@ export const lightingAndFxMethods = {
     vig.addColorStop(1, `rgba(${rgb}, ${maxAlpha.toFixed(3)})`);
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+  },
+
+  /**
+   * Subtle animated sunlit refraction ribbons drifting beneath open shallow basins (y < 14m) (v204 AAA Polish Wave 2).
+   */
+  _drawShallowRefractionBands(ctx, cw, ch, surfY, diverY, weatherCaustics, timeSec) {
+    if (this._reducedMotion || this._perfBudget?.lowPower || weatherCaustics < 0.25) return;
+    if ((diverY || 0) > 16 || surfY > ch - 20) return;
+    const depthFade = Math.max(0, Math.min(1, 1 - Math.max(0, (diverY || 0) - 2) / 14));
+    if (depthFade <= 0.04) return;
+    const minY = Math.max(0, surfY + 4);
+    const bandH = Math.min(ch - minY, ch * 0.42);
+    if (bandH <= 18) return;
+    const grade = computeBiomeDepthGrade(this.level, diverY || 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < 4; i++) {
+      const y = minY + ((i + 0.5) / 4) * bandH + Math.sin(timeSec * (0.9 + i * 0.18) + i * 1.9) * 14;
+      const a = 0.042 * depthFade * weatherCaustics * (1 - i * 0.18);
+      if (a <= 0.004) continue;
+      const g = ctx.createLinearGradient(0, y - 14, 0, y + 14);
+      g.addColorStop(0, `rgba(${grade.shimmerRgb}, 0)`);
+      g.addColorStop(0.5, `rgba(${grade.shimmerRgb}, ${a.toFixed(4)})`);
+      g.addColorStop(1, `rgba(${grade.shimmerRgb}, 0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y - 14, cw, 28);
+    }
     ctx.restore();
   },
 };

@@ -9744,6 +9744,24 @@ summary,
   box-shadow: 0 0 28px rgba(251, 191, 36, 0.42), inset 0 1px 0 rgba(254, 249, 195, 0.55);
 }
 
+/* ─── v204 AAA Polish Wave 2: Zero-Jitter Tabular HUD Numerals & Alert Glow ─── */
+#screen-hud,
+.debrief-card,
+.bounties-milestones,
+.dc-tank-btn,
+.hud-spectate-bar {
+  font-variant-numeric: tabular-nums;
+}
+.dc-tank-btn.active {
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.22);
+}
+#hud-alerts.warn {
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.28);
+}
+#hud-alerts.danger {
+  box-shadow: 0 0 22px rgba(248, 113, 113, 0.44);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dive-setup-modal:not([hidden]) .dive-setup-card,
   .bounties-modal:not([hidden]) .bounties-card,

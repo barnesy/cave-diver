@@ -1130,7 +1130,7 @@ export class CaveRenderer {
 
     // 6. Checkpoints, Collectables & Recovery Target
     this._drawCheckpoints(ctx, toScreenX, toScreenY, scale, checkpointsHit, nextCheckpoint, timeSec);
-    this._drawCollectibles(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, collectedIds, timeSec);
+    this._drawCollectibles(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, collectedIds, timeSec, diver);
     if (this.level.recoveryTarget) {
       this._drawRecoveryTarget(ctx, diver, peerList, bodyRecovered, carryingBody, toScreenX, toScreenY, scale, timeSec);
     }
@@ -1304,6 +1304,7 @@ export class CaveRenderer {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
     }
     this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics, hazards, cw);
+    this._drawShallowRefractionBands?.(ctx, cw, ch, surfY, diver?.y, weatherCaustics, timeSec);
     this._drawParallaxMarineSnow?.(ctx, cw, ch, effCamX, effCamY, surfY, scale, timeSec);
     this._drawBossPhaseAtmosphere?.(ctx, cw, ch, secretLair, timeSec);
     if (!this.level.isWreck) {
@@ -2938,7 +2939,7 @@ export class CaveRenderer {
     ctx.restore();
   }
 
-  _drawCollectibles(ctx, visX0, visX1, toScreenX, toScreenY, scale, collectedIds, timeSec) {
+  _drawCollectibles(ctx, visX0, visX1, toScreenX, toScreenY, scale, collectedIds, timeSec, diver = null) {
     const list = this.level.collectibles;
     if (!list || list.length === 0) return;
     ctx.save();
@@ -2954,6 +2955,28 @@ export class CaveRenderer {
       const isGrand = itemScale >= 1.35;
       const pulse = 0.86 + 0.14 * Math.sin(timeSec * 3.8 + i);
       const r = 0.48 * scale * itemScale;
+
+      // Tactile diegetic proximity focus halo when diver swims within 5.8m of an artifact (v204 AAA Polish Wave 2)
+      if (diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+        const dDist = Math.hypot(item.x - diver.x, item.y - diver.y);
+        if (dDist < 5.8) {
+          const prox = Math.max(0, Math.min(1, 1 - dDist / 5.8));
+          const ringR = r * (1.85 - prox * 0.32) + Math.sin(timeSec * 6.5 + i) * 2.2;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(timeSec * 0.95 + i);
+          ctx.strokeStyle = isGrand
+            ? `rgba(254, 240, 138, ${(0.28 + prox * 0.56).toFixed(3)})`
+            : `rgba(125, 211, 252, ${(0.24 + prox * 0.52).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.2, 0.055 * scale);
+          ctx.setLineDash([Math.max(4, ringR * 0.42), Math.max(4, ringR * 0.36)]);
+          ctx.beginPath();
+          ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
 
       const vis = classifyArtifactVisual(item);
       const stamp =
