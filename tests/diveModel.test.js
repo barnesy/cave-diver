@@ -10579,6 +10579,10 @@ test('v201 37-Site Atlas, 12-Guardian Pantheon (Yonaguni & SMS Markgraf), Intera
     }
     const secretGear = getSecretCosmeticsForTrophy(spec.boss.trophyRelicId);
     assert.ok(secretGear.length >= 1, `${id} boss trophy must unlock a secret cosmetic`);
+    for (const label of secretGear) {
+      assert.equal(typeof label, 'string', `${id} secret cosmetic label must be a string`);
+      assert.ok(label.length > 0 && !/undefined/i.test(label), `${id} secret cosmetic label must not be undefined`);
+    }
   }
 
   // 2. Interactive ROV Sonar Ping reaction renders shockwave & agitated state on Coral Dragon & Scapa Dreadnought

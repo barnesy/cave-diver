@@ -554,7 +554,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=202',
+  mapRasterUrl: './assets/map-expedition.jpg?v=203',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -3511,7 +3511,10 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         `💨 ${lair.dashesUsed || 0} Dashes`,
       ];
       const secretCosmetics = getSecretCosmeticsForTrophy(b.trophyRelicId) || [];
-      const unlockedNames = secretCosmetics.map((c) => `${c.icon || '✨'} ${c.name}`).join(' · ');
+      const unlockedNames = secretCosmetics
+        .map((c) => (typeof c === 'string' ? `✨ ${c}` : `${c?.icon || '✨'} ${c?.name || ''}`.trim()))
+        .filter(Boolean)
+        .join(' · ');
       debriefBossBannerEl.innerHTML =
         `<div class="debrief-boss-head">` +
           `<div class="debrief-boss-title"><span>${b.icon || '🐙'}</span><span>${escapeHtml(b.name)} VANQUISHED</span></div>` +
