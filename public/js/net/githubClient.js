@@ -203,6 +203,40 @@ export class GitHubClient {
   }
 
   /**
+   * Explicitly overwrite the user's Private Gist cloud save with a clean empty career (Start Fresh).
+   */
+  async resetCloudStats() {
+    if (!this.authenticated) {
+      return { ok: false, error: 'Not signed in with GitHub' };
+    }
+    this.syncing = true;
+    try {
+      const res = await fetch('/api/github/sync', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        this.authenticated = false;
+        this.user = null;
+        return { ok: false, expired: true, error: data?.error || 'GitHub session expired' };
+      }
+      if (!res.ok || !data?.ok) {
+        return { ok: false, error: data?.error || `Cloud reset failed (${res.status})` };
+      }
+      this.ghostCount = 0;
+      this.lastSyncedAt = data.syncedAt || new Date().toISOString();
+      return { ok: true, reset: true, syncedAt: this.lastSyncedAt };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'Network error resetting GitHub Gist' };
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  /**
    * Submit a GitHub Issue directly to barnesy/cave-diver under the signed-in user's account.
    */
   async submitIssue({ kind = 'bug', title, description, context = {} }) {

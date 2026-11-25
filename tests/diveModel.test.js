@@ -12130,3 +12130,41 @@ test('v220 Combat/Deep Balance Polish, Discoverable Sunken Treasure Chests & Rar
   assert.ok(sess.chestBonusScore >= 800, 'Opening Mythic treasure chest must award expedition bonus score');
   assert.ok(Boolean(sess.foundGearMap[drop.gearKey]), 'Session foundGearMap must track discovered chest gear immediately');
 });
+
+test('v221 Instant Mid-Dive Loot Upgrade Impact Evaluator (Upgrade, Trade-Off, Downgrade, Set & Purist)', async () => {
+  const { evaluateLootUpgradeImpact } = await import('../public/js/game/gearStats.js');
+  const { DEFAULT_RIG_LIVERY } = await import('../public/js/game/rigLivery.js');
+  const { PROVING_GROUNDS_PRESETS } = await import('../public/js/game/gearProvingGrounds.js');
+
+  // 1. Finding a Mythic Nautilus Suit on Stock gear -> unmistakable UPGRADE with positive deltas & gained Power
+  const stockUpgrade = evaluateLootUpgradeImpact(DEFAULT_RIG_LIVERY, 'suit', 'chest-nautilus-suit', { difficulty: 'standard' });
+  assert.equal(stockUpgrade.verdict, 'upgrade');
+  assert.equal(stockUpgrade.replacedItemName, 'Zissou Tech');
+  assert.ok(stockUpgrade.deltas.some((d) => d.key === 'bonusStartBar' && d.positive));
+  assert.ok(stockUpgrade.gainedPowers.length >= 1, 'Mythic suit must report gained Legendary Power');
+
+  // 2. Finding Sunken Sovereign Lantern on Stock gear -> reports +35% Chest Luck delta!
+  const luckUpgrade = evaluateLootUpgradeImpact(DEFAULT_RIG_LIVERY, 'torch', 'chest-abyssal-lantern', { difficulty: 'standard' });
+  assert.equal(luckUpgrade.verdict, 'upgrade');
+  assert.ok(luckUpgrade.deltas.some((d) => d.key === 'chestLuckBonus' && d.delta >= 30 && d.positive));
+
+  // 3. Comparing starter Brushed AL80 tank against full Thermal Mantle Deep Tech -> unmistakable DOWNGRADE + Set Capstone loss!
+  const deepPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'thermal-mantle');
+  const downgrade = evaluateLootUpgradeImpact(deepPreset.livery, 'tank', 'al80-silver', { difficulty: 'standard' });
+  assert.equal(downgrade.verdict, 'downgrade');
+  assert.ok(downgrade.setChanges.some((s) => !s.positive), 'Replacing a set piece with starter gear must warn about broken Set');
+  assert.ok(downgrade.deltas.some((d) => !d.positive));
+
+  // 4. Swapping a Speed Hydro piece for a Boss Combat piece -> BUILD TRADE-OFF (gains combat, loses speed/set)
+  const speedPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'karst-hydro-glider');
+  const tradeoff = evaluateLootUpgradeImpact(speedPreset.livery, 'visor', 'chest-harpoon-visor', { difficulty: 'standard' });
+  assert.ok(tradeoff.verdict === 'tradeoff' || tradeoff.verdict === 'upgrade');
+  assert.ok(tradeoff.deltas.some((d) => d.key === 'spearPowerMult' && d.positive));
+
+  // 5. Already equipped & Purist mode handling
+  const already = evaluateLootUpgradeImpact(deepPreset.livery, 'suit', deepPreset.livery.suitId, { difficulty: 'standard' });
+  assert.equal(already.verdict, 'same');
+  const purist = evaluateLootUpgradeImpact(DEFAULT_RIG_LIVERY, 'suit', 'chest-nautilus-suit', { difficulty: 'standard', mutatorId: 'purist' });
+  assert.equal(purist.isNormalized, true);
+  assert.equal(purist.verdict, 'same');
+});

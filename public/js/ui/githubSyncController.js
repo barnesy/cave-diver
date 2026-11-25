@@ -89,9 +89,20 @@ export function createGitHubSyncController({
   const issueResultEl = document.getElementById('issue-result');
   const btnIssueSubmit = document.getElementById('btn-issue-submit');
   const btnIssueOpenGh = document.getElementById('btn-issue-open-gh');
+  const btnOpenResetAccount = document.getElementById('btn-open-reset-account');
+  const modalResetAccount = document.getElementById('reset-account-modal');
+  const btnResetAccountClose = document.getElementById('btn-reset-account-close');
+  const btnResetAccountCancel = document.getElementById('btn-reset-account-cancel');
+  const btnResetAccountConfirm = document.getElementById('btn-reset-account-confirm');
+  const resetCloudRowEl = document.getElementById('reset-cloud-row');
+  const resetCloudCheckbox = document.getElementById('reset-cloud-checkbox');
+  const resetCloudLabelEl = document.getElementById('reset-cloud-label');
+  const resetAccountStatusEl = document.getElementById('reset-account-status');
 
   let activeIssueKind = 'bug';
   let ghSyncDebounceTimer = 0;
+  let resetConfirmArmed = false;
+  let resetInFlight = false;
 
   function buildCurrentPrefsForSync() {
     const prefs = {
@@ -514,6 +525,108 @@ export function createGitHubSyncController({
     }
   });
 
+  function openResetAccountModal() {
+    if (!modalResetAccount) return;
+    setHomeMenuOpen(false);
+    resetConfirmArmed = false;
+    resetInFlight = false;
+    if (resetCloudRowEl) {
+      resetCloudRowEl.hidden = !github.authenticated;
+    }
+    if (resetCloudCheckbox) {
+      resetCloudCheckbox.checked = true;
+      resetCloudCheckbox.disabled = false;
+    }
+    if (resetCloudLabelEl && github.authenticated && github.user?.login) {
+      resetCloudLabelEl.textContent = `☁ Also reset @${github.user.login}'s GitHub Cloud Save (Private Gist)`;
+    }
+    if (resetAccountStatusEl) {
+      resetAccountStatusEl.hidden = true;
+      resetAccountStatusEl.textContent = '';
+    }
+    if (btnResetAccountConfirm) {
+      btnResetAccountConfirm.disabled = false;
+      btnResetAccountConfirm.classList.remove('armed');
+      btnResetAccountConfirm.textContent = '🔄 Reset Career...';
+    }
+    modalResetAccount.hidden = false;
+  }
+
+  function closeResetAccountModal() {
+    if (!modalResetAccount || resetInFlight) return;
+    resetConfirmArmed = false;
+    modalResetAccount.hidden = true;
+  }
+
+  btnOpenResetAccount?.addEventListener('click', openResetAccountModal);
+  btnResetAccountClose?.addEventListener('click', closeResetAccountModal);
+  btnResetAccountCancel?.addEventListener('click', closeResetAccountModal);
+  modalResetAccount?.addEventListener('click', (e) => {
+    if (e.target === modalResetAccount) closeResetAccountModal();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalResetAccount && !modalResetAccount.hidden) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeResetAccountModal();
+    }
+  }, true);
+
+  btnResetAccountConfirm?.addEventListener('click', async () => {
+    if (resetInFlight) return;
+    if (!resetConfirmArmed) {
+      resetConfirmArmed = true;
+      btnResetAccountConfirm.classList.add('armed');
+      btnResetAccountConfirm.textContent = '⚠️ Tap Again to Erase & Start Fresh';
+      return;
+    }
+    resetInFlight = true;
+    btnResetAccountConfirm.disabled = true;
+    if (btnResetAccountCancel) btnResetAccountCancel.disabled = true;
+    if (resetCloudCheckbox) resetCloudCheckbox.disabled = true;
+    btnResetAccountConfirm.textContent = 'Resetting...';
+    if (ghSyncDebounceTimer) {
+      clearTimeout(ghSyncDebounceTimer);
+      ghSyncDebounceTimer = 0;
+    }
+
+    if (github.authenticated) {
+      const shouldWipeCloud = Boolean(resetCloudCheckbox?.checked);
+      if (shouldWipeCloud) {
+        const res = await github.resetCloudStats();
+        if (!res.ok) {
+          resetInFlight = false;
+          resetConfirmArmed = false;
+          btnResetAccountConfirm.disabled = false;
+          btnResetAccountConfirm.classList.remove('armed');
+          btnResetAccountConfirm.textContent = '🔄 Reset Career...';
+          if (btnResetAccountCancel) btnResetAccountCancel.disabled = false;
+          if (resetCloudCheckbox) resetCloudCheckbox.disabled = false;
+          if (resetAccountStatusEl) {
+            resetAccountStatusEl.hidden = false;
+            resetAccountStatusEl.className = 'issue-result err';
+            resetAccountStatusEl.textContent = res.error || 'Could not reset GitHub Cloud Save. Try again or uncheck cloud reset.';
+          }
+          return;
+        }
+      } else {
+        // Sign out locally so old cloud progress does not immediately re-merge on reload
+        await github.logout();
+      }
+    }
+
+    try { localStorage.clear(); } catch {}
+    try { sessionStorage.clear(); } catch {}
+    if (resetAccountStatusEl) {
+      resetAccountStatusEl.hidden = false;
+      resetAccountStatusEl.className = 'issue-result ok';
+      resetAccountStatusEl.textContent = '✓ Career erased! Reloading as a brand-new diver...';
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 260);
+  });
+
   async function initGitHubAuth() {
     const ghFlag = urlParams.get('gh');
     if (ghFlag && typeof history !== 'undefined' && typeof history.replaceState === 'function') {
@@ -544,12 +657,15 @@ export function createGitHubSyncController({
 
   return {
     modalIssue,
+    modalResetAccount,
     renderGitHubAccountUi,
     syncCareerStatsWithGitHub,
     scheduleGitHubStatsSync,
     triggerGitHubLogin,
     openIssueModal,
     closeIssueModal,
+    openResetAccountModal,
+    closeResetAccountModal,
     initGitHubAuth,
   };
 }

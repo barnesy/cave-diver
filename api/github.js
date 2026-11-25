@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { mergeCareerLogbooks, mergeGhostTracks, normalizeCareerLogbook } from '../public/js/game/logbookModel.js';
+import { createEmptyLogbook, mergeCareerLogbooks, mergeGhostTracks, normalizeCareerLogbook } from '../public/js/game/logbookModel.js';
 import {
   GITHUB_OAUTH_SCOPES,
   SESSION_COOKIE_NAME,
@@ -287,15 +287,34 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
           }
         }
 
+        const isExplicitReset = body?.reset === true;
         const remoteBook = existing?.data?.logbook || (existing?.data?.cleared ? existing.data : null);
         const clientBook = body?.logbook || null;
-        const mergedLogbook = mergeCareerLogbooks(remoteBook, clientBook);
-        const mergedPrefs = {
-          ...sanitizePrefs(existing?.data?.prefs),
-          ...sanitizePrefs(body?.prefs),
-        };
-        const mergedGhosts = mergeGhostTracks(existing?.data?.ghosts, body?.ghosts);
+        const mergedLogbook = isExplicitReset ? createEmptyLogbook() : mergeCareerLogbooks(remoteBook, clientBook);
+        const mergedPrefs = isExplicitReset
+          ? {}
+          : {
+              ...sanitizePrefs(existing?.data?.prefs),
+              ...sanitizePrefs(body?.prefs),
+            };
+        const mergedGhosts = isExplicitReset ? {} : mergeGhostTracks(existing?.data?.ghosts, body?.ghosts);
         const syncedAt = new Date().toISOString();
+
+        if (isExplicitReset && !gistId) {
+          return jsonWithCookies(
+            {
+              ok: true,
+              reset: true,
+              gistId: null,
+              gistUrl: null,
+              syncedAt,
+              logbook: mergedLogbook,
+              prefs: mergedPrefs,
+              ghosts: mergedGhosts,
+            },
+            200
+          );
+        }
 
         const gistPayload = {
           schema: 'techno-dive-logbook-v1',
@@ -321,6 +340,7 @@ export function createGitHubHandler({ fetchImpl = fetch, env = process.env } = {
         return jsonWithCookies(
           {
             ok: true,
+            ...(isExplicitReset ? { reset: true } : {}),
             gistId: saved.id,
             gistUrl: saved.htmlUrl || `https://gist.github.com/${sess.user.login}/${saved.id}`,
             syncedAt,

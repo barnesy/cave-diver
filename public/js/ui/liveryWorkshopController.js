@@ -33,6 +33,7 @@ import {
   WORLD_GEAR_CACHES,
   computeRigPerformanceProfile,
   diffRigPerformanceProfiles,
+  evaluateLootUpgradeImpact,
   getGearItemStats,
   SET_TIER_BONUSES,
 } from '../game/gearStats.js';
@@ -374,6 +375,63 @@ export function createLiveryWorkshopController({
     }
   }
 
+  function _buildLootImpactSection(slot, itemId, sess) {
+    let fallbackDiff = 'standard';
+    try { if (typeof getDifficulty === 'function') fallbackDiff = getDifficulty() || 'standard'; } catch {}
+    const curLivery = sess?.diver?.livery || activeRigLivery;
+    const tuningCtx = sess?.rigTuningCtx || getWorkshopTuningCtx(fallbackDiff);
+    const impact = evaluateLootUpgradeImpact(curLivery, slot, itemId, tuningCtx);
+
+    const chips = [];
+    for (const sc of impact.setChanges || []) {
+      chips.push(`<span class="loot-impact-chip ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '▲' : '▼'} ${escapeHtml(sc.text)}</span>`);
+    }
+    for (const gp of impact.gainedPowers || []) {
+      chips.push(`<span class="loot-impact-chip pos is-pwr">▲ +⚡ ${escapeHtml(gp.name)}</span>`);
+    }
+    for (const lp of impact.lostPowers || []) {
+      chips.push(`<span class="loot-impact-chip neg is-pwr">▼ -⚡ ${escapeHtml(lp.name)}</span>`);
+    }
+    for (const d of (impact.deltas || []).slice(0, 6)) {
+      chips.push(`<span class="loot-impact-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
+    }
+    if (impact.archChanged && impact.archBefore && impact.archAfter) {
+      chips.push(`<span class="loot-impact-chip neutral">${impact.archBefore.icon} ${escapeHtml(impact.archBefore.short)} → ${impact.archAfter.icon} ${escapeHtml(impact.archAfter.short)}</span>`);
+    }
+
+    const bodyHtml = impact.isNormalized
+      ? `<div class="loot-impact-note">🧭 Purist mode active — cosmetic unlock only (stats normalized).</div>`
+      : impact.verdict === 'same'
+        ? `<div class="loot-impact-note">✓ You already have this item equipped in this slot.</div>`
+        : chips.length > 0
+          ? `<div class="loot-impact-deltas">${chips.join('')}</div>`
+          : `<div class="loot-impact-note">Matches your current build stats closely.</div>`;
+
+    const html = `
+      <div class="loot-impact-box verdict-${impact.verdict}">
+        <div class="loot-impact-head">
+          <span class="loot-verdict-pill verdict-${impact.verdict}">${impact.verdictIcon} ${escapeHtml(impact.verdictLabel)}</span>
+          <span class="loot-impact-vs">vs Equipped: <strong>${escapeHtml(impact.replacedItemName)}</strong></span>
+        </div>
+        ${bodyHtml}
+      </div>
+    `;
+
+    let equipLabel = '⚡ Equip Mid-Dive';
+    let equipCls = 'primary';
+    if (impact.verdict === 'upgrade') {
+      equipLabel = '▲ Equip Upgrade';
+      equipCls = 'primary upgrade-equip';
+    } else if (impact.verdict === 'tradeoff') {
+      equipLabel = '⇄ Swap Mid-Dive';
+      equipCls = 'secondary';
+    } else if (impact.verdict === 'downgrade') {
+      equipLabel = 'Equip Anyway';
+      equipCls = 'ghost';
+    }
+    return { html, impact, equipLabel, equipCls, showEquip: impact.verdict !== 'same' };
+  }
+
   function handleWorldGearFound(gc) {
     if (!gc) return;
     playGearUnlock?.(gc.tier || 'rare');
@@ -400,6 +458,7 @@ export function createLiveryWorkshopController({
     const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
     const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
     const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+    const cmp = _buildLootImpactSection(gc.slot, gc.itemId, sess);
     lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
     lootDiscoveryBannerEl.hidden = false;
     lootDiscoveryBannerEl.innerHTML = `
@@ -410,8 +469,9 @@ export function createLiveryWorkshopController({
       <div class="loot-disc-name">${gc.icon || '📦'} ${escapeHtml(item.name)}</div>
       <div class="loot-disc-pills">${pillsHtml}</div>
       ${pwrHtml}
+      ${cmp.html}
       <div class="loot-disc-actions">
-        ${entry?.field ? `<button type="button" class="btn tiny primary" id="btn-loot-equip-now">⚡ Equip Mid-Dive</button>` : ''}
+        ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
         <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
       </div>
     `;
@@ -429,7 +489,7 @@ export function createLiveryWorkshopController({
       hideLootDiscoveryBanner();
     });
     if (lootBannerTimer) clearTimeout(lootBannerTimer);
-    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9500);
+    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 11500);
   }
 
   function handleTreasureChestOpened(chest, drop) {
@@ -459,6 +519,7 @@ export function createLiveryWorkshopController({
       const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
       const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
       const rarityBadge = drop.rarityLabel || `${tierMeta.badge} CHEST DROP`;
+      const cmp = _buildLootImpactSection(drop.slot, drop.itemId, sess);
       lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
       lootDiscoveryBannerEl.hidden = false;
       lootDiscoveryBannerEl.innerHTML = `
@@ -469,8 +530,9 @@ export function createLiveryWorkshopController({
         <div class="loot-disc-name">${drop.icon || '🧰'} ${escapeHtml(item.name)}</div>
         <div class="loot-disc-pills">${pillsHtml}<span class="livery-stat-pill">+${drop.points || 350} pts · +${drop.gasBonusBar || 10}b</span></div>
         ${pwrHtml}
+        ${cmp.html}
         <div class="loot-disc-actions">
-          ${entry?.field ? `<button type="button" class="btn tiny primary" id="btn-loot-equip-now">⚡ Equip Mid-Dive</button>` : ''}
+          ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
           <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
         </div>
       `;
@@ -483,7 +545,7 @@ export function createLiveryWorkshopController({
         hideLootDiscoveryBanner();
       });
       if (lootBannerTimer) clearTimeout(lootBannerTimer);
-      lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9800);
+      lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 11800);
       return;
     }
 

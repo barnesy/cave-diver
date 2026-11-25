@@ -1621,3 +1621,88 @@ test('v213 Co-op Lobby Rig Livery Sync: P2P Host & LAN Server sanitize and broad
     proc.kill();
   }
 });
+
+test('v221 GitHub Cloud Save explicit reset overwrites Private Gist cleanly without re-merging old progress', async () => {
+  const { createGitHubHandler } = await import('../api/github.js');
+  const { createEmptyLogbook } = await import('../public/js/game/logbookModel.js');
+  const { encryptSessionPayload, SESSION_COOKIE_NAME, getGitHubConfig } = await import('../api/_githubAuth.js');
+
+  const env = {
+    GITHUB_CLIENT_ID: 'Iv1_reset_test',
+    GITHUB_CLIENT_SECRET: 'reset_secret_key_xyz',
+    GITHUB_ISSUES_REPO: 'barnesy/cave-diver',
+  };
+  const cfg = getGitHubConfig(env);
+  const gistId = 'gist_reset_999';
+  let storedContent = JSON.stringify({
+    schema: 'techno-dive-logbook-v1',
+    updatedAt: '2026-11-25T10:00:00Z',
+    githubUser: 'barnesy',
+    logbook: {
+      ...createEmptyLogbook(),
+      totalDives: 42,
+      cleared: { 'cenote-el-abismo': { score: 9500, grade: 'S', bestTimeSec: 88, clears: 5 } },
+      foundWorldGear: { 'suit:chest-nautilus-suit': { foundAt: 12345, siteId: 'cenote-el-abismo' } },
+    },
+    prefs: { difficulty: 'hardcore', playerName: 'Veteran' },
+    ghosts: { 'cenote-el-abismo': { timeSec: 88, frames: [[0, 10, 2, 0]] } },
+  });
+
+  const mockFetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u.startsWith(`https://api.github.com/gists/${gistId}`)) {
+      if (init.method === 'PATCH') {
+        const body = JSON.parse(init.body);
+        storedContent = body.files['techno-dive-logbook.json'].content;
+      }
+      return new Response(
+        JSON.stringify({
+          id: gistId,
+          html_url: `https://gist.github.com/barnesy/${gistId}`,
+          updated_at: '2026-11-25T18:55:00Z',
+          files: { 'techno-dive-logbook.json': { content: storedContent } },
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response(`Unexpected URL ${u}`, { status: 500 });
+  };
+
+  const gh = createGitHubHandler({ fetchImpl: mockFetch, env });
+  const cookieVal = encryptSessionPayload(
+    {
+      token: 'gho_reset_token',
+      user: { id: 9, login: 'barnesy', name: 'Chris', avatarUrl: '', htmlUrl: '' },
+      gistId,
+      gistUrl: `https://gist.github.com/barnesy/${gistId}`,
+      createdAt: Date.now(),
+    },
+    cfg
+  );
+
+  const resetRes = await gh.POST(
+    new Request('https://cave-diver.vercel.app/api/github/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `${SESSION_COOKIE_NAME}=${cookieVal}`,
+      },
+      body: JSON.stringify({ reset: true }),
+    })
+  );
+  assert.equal(resetRes.status, 200);
+  const resetJson = await resetRes.json();
+  assert.equal(resetJson.ok, true);
+  assert.equal(resetJson.reset, true);
+  assert.equal(resetJson.logbook.totalDives, 0);
+  assert.equal(Object.keys(resetJson.logbook.cleared).length, 0);
+  assert.equal(Object.keys(resetJson.logbook.foundWorldGear || {}).length, 0);
+  assert.deepEqual(resetJson.prefs, {});
+  assert.deepEqual(resetJson.ghosts, {});
+
+  // Confirm persisted Private Gist JSON was actually overwritten (not merged!)
+  const persisted = JSON.parse(storedContent);
+  assert.equal(persisted.logbook.totalDives, 0);
+  assert.equal(Object.keys(persisted.logbook.cleared).length, 0);
+  assert.deepEqual(persisted.ghosts, {});
+});

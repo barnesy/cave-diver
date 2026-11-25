@@ -4,6 +4,7 @@ import {
   GEAR_SET_SYNERGIES,
   getGearItemBySlot,
   evaluateGearSetSynergy,
+  resolveDiverLiveryPalette,
 } from './rigLivery.js';
 
 /**
@@ -1014,21 +1015,29 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
 export function diffRigPerformanceProfiles(baseProf, nextProf) {
   if (!baseProf || !nextProf) return [];
   const specs = [
-    { key: 'bonusStartBar', label: 'Start Bar', scale: 1, unit: 'b', higherBetter: true },
-    { key: 'combatMaxHpBonus', label: 'Boss HP', scale: 1, unit: '', higherBetter: true },
-    { key: 'narcDepthBonusM', label: 'Depth Clarity', scale: 1, unit: 'm', higherBetter: true },
-    { key: 'swimSpeedMult', label: 'Swim', scale: 100, unit: '%', higherBetter: true },
-    { key: 'gasBurnMult', label: 'Gas Save', scale: -100, unit: '%', higherBetter: true },
-    { key: 'siltStirMult', label: 'Silt Ctrl', scale: -100, unit: '%', higherBetter: true },
-    { key: 'decoOffgasMult', label: 'Deco', scale: 100, unit: '%', higherBetter: true },
-    { key: 'spearPowerMult', label: 'Spear', scale: 100, unit: '%', higherBetter: true },
-    { key: 'torchReachMult', label: 'Beam', scale: 100, unit: '%', higherBetter: true },
-    { key: 'coldResist', label: 'Cold Res', scale: 100, unit: '%', higherBetter: true },
-    { key: 'narcResist', label: 'Narc Res', scale: 100, unit: '%', higherBetter: true },
-    { key: 'bumpArmor', label: 'Armor', scale: 100, unit: '%', higherBetter: true },
-    { key: 'hydroEfficiency', label: 'Flow', scale: 100, unit: '%', higherBetter: true },
-    { key: 'crankSpeedMult', label: 'Crank', scale: 100, unit: '%', higherBetter: true },
-    { key: 'relicGlowBonusM', label: 'Relic', scale: 1, unit: 'm', higherBetter: true },
+    { key: 'bonusStartBar', label: 'Start Bar', scale: 1, unit: 'b', higherBetter: true, weight: 0.7 },
+    { key: 'combatMaxHpBonus', label: 'Boss HP', scale: 1, unit: '', higherBetter: true, weight: 0.65 },
+    { key: 'narcDepthBonusM', label: 'Depth Clarity', scale: 1, unit: 'm', higherBetter: true, weight: 0.9 },
+    { key: 'swimSpeedMult', label: 'Swim', scale: 100, unit: '%', higherBetter: true, weight: 1.5 },
+    { key: 'gasBurnMult', label: 'Gas Save', scale: -100, unit: '%', higherBetter: true, weight: 1.4 },
+    { key: 'siltStirMult', label: 'Silt Ctrl', scale: -100, unit: '%', higherBetter: true, weight: 0.75 },
+    { key: 'decoOffgasMult', label: 'Deco', scale: 100, unit: '%', higherBetter: true, weight: 0.9 },
+    { key: 'spearPowerMult', label: 'Spear', scale: 100, unit: '%', higherBetter: true, weight: 1.3 },
+    { key: 'spearFireRateMult', label: 'Fire Rate', scale: -100, unit: '%', higherBetter: true, weight: 1.2 },
+    { key: 'dashCooldownMult', label: 'Dash CD', scale: -100, unit: '%', higherBetter: true, weight: 0.8 },
+    { key: 'dpvSpeedBonus', label: 'DPV Speed', scale: 100, unit: '%', higherBetter: true, weight: 1.0 },
+    { key: 'dpvDrainMult', label: 'DPV Batt', scale: -100, unit: '%', higherBetter: true, weight: 0.8 },
+    { key: 'torchReachMult', label: 'Beam', scale: 100, unit: '%', higherBetter: true, weight: 0.75 },
+    { key: 'sonarRangeMult', label: 'Sonar', scale: 100, unit: '%', higherBetter: true, weight: 0.8 },
+    { key: 'coldResist', label: 'Cold Res', scale: 100, unit: '%', higherBetter: true, weight: 0.55 },
+    { key: 'narcResist', label: 'Narc Res', scale: 100, unit: '%', higherBetter: true, weight: 0.6 },
+    { key: 'bumpArmor', label: 'Armor', scale: 100, unit: '%', higherBetter: true, weight: 0.55 },
+    { key: 'hydroEfficiency', label: 'Flow', scale: 100, unit: '%', higherBetter: true, weight: 0.85 },
+    { key: 'crankSpeedMult', label: 'Crank', scale: 100, unit: '%', higherBetter: true, weight: 0.5 },
+    { key: 'salvageDragCut', label: 'Haul', scale: 100, unit: '%', higherBetter: true, weight: 0.5 },
+    { key: 'relicGlowBonusM', label: 'Relic', scale: 1, unit: 'm', higherBetter: true, weight: 0.75 },
+    { key: 'chestLuckBonus', label: 'Chest Luck', scale: 100, unit: '%', higherBetter: true, weight: 0.9 },
+    { key: 'scoreBonusMult', label: 'Score', scale: 100, unit: '%', higherBetter: true, weight: 0.7 },
   ];
   const diffs = [];
   for (const sp of specs) {
@@ -1038,11 +1047,143 @@ export function diffRigPerformanceProfiles(baseProf, nextProf) {
       key: sp.key,
       label: sp.label,
       delta,
+      weight: sp.weight || 1,
       positive: sp.higherBetter ? delta > 0 : delta < 0,
       text: `${delta > 0 ? '+' : ''}${delta}${sp.unit} ${sp.label}`,
     });
   }
   return diffs;
+}
+
+/**
+ * Instantly evaluate whether a discovered gear item upgrades, trades off, or downgrades
+ * the diver's currently equipped mid-dive rig, including exact stat deltas, Powers & Set Tiers (v221).
+ */
+export function evaluateLootUpgradeImpact(currentLivery, slot, itemId, tuningCtx = null) {
+  const curRig = { ...DEFAULT_RIG_LIVERY, ...(currentLivery && typeof currentLivery === 'object' ? currentLivery : {}) };
+  const newEntry = getGearItemBySlot(slot, itemId);
+  const field = newEntry?.field || null;
+  const resolvedCur = resolveDiverLiveryPalette(curRig);
+  const curSlotItem = resolvedCur?.[slot] || null;
+  const curId = (field && curRig[field]) || curSlotItem?.id || null;
+  const curEntry = curId ? getGearItemBySlot(slot, curId) : null;
+  const replacedItemName = curEntry?.item?.name || curSlotItem?.name || 'Standard Issue';
+  const newItemName = newEntry?.item?.name || itemId;
+
+  const baseProf = computeRigPerformanceProfile(curRig, tuningCtx);
+  const nextRig = field ? { ...curRig, [field]: itemId } : curRig;
+  const nextProf = computeRigPerformanceProfile(nextRig, tuningCtx);
+
+  if (curId === itemId) {
+    return {
+      verdict: 'same',
+      verdictIcon: '✓',
+      verdictLabel: 'ALREADY EQUIPPED',
+      slot,
+      field,
+      replacedItemName,
+      newItemName,
+      deltas: [],
+      gainedPowers: [],
+      lostPowers: [],
+      setChanges: [],
+      archBefore: baseProf.dominantArchetype,
+      archAfter: nextProf.dominantArchetype,
+      archChanged: false,
+      isNormalized: Boolean(baseProf.tuning?.isNormalized),
+    };
+  }
+
+  if (baseProf.tuning?.isNormalized) {
+    return {
+      verdict: 'same',
+      verdictIcon: '🧭',
+      verdictLabel: 'COSMETIC ONLY (PURIST)',
+      slot,
+      field,
+      replacedItemName,
+      newItemName,
+      deltas: [],
+      gainedPowers: [],
+      lostPowers: [],
+      setChanges: [],
+      archBefore: baseProf.dominantArchetype,
+      archAfter: nextProf.dominantArchetype,
+      archChanged: false,
+      isNormalized: true,
+    };
+  }
+
+  const rawDeltas = diffRigPerformanceProfiles(baseProf, nextProf);
+  const posDeltas = rawDeltas.filter((d) => d.positive).sort((a, b) => Math.abs(b.delta * b.weight) - Math.abs(a.delta * a.weight));
+  const negDeltas = rawDeltas.filter((d) => !d.positive).sort((a, b) => Math.abs(b.delta * b.weight) - Math.abs(a.delta * a.weight));
+  const deltas = [...posDeltas, ...negDeltas];
+
+  const basePwrMap = new Map((baseProf.powers || []).map((p) => [p.id, p]));
+  const nextPwrMap = new Map((nextProf.powers || []).map((p) => [p.id, p]));
+  const gainedPowers = (nextProf.powers || []).filter((p) => !basePwrMap.has(p.id));
+  const lostPowers = (baseProf.powers || []).filter((p) => !nextPwrMap.has(p.id));
+
+  const baseSetMap = new Map((baseProf.activeSets || []).map((s) => [s.id, s]));
+  const nextSetMap = new Map((nextProf.activeSets || []).map((s) => [s.id, s]));
+  const setChanges = [];
+  for (const [id, ns] of nextSetMap.entries()) {
+    const bs = baseSetMap.get(id);
+    if (!bs) {
+      setChanges.push({ positive: true, text: `Activates ${ns.icon} ${ns.name} (${ns.matched}/${ns.capstoneReq})` });
+    } else if (ns.capstoneActive && !bs.capstoneActive) {
+      setChanges.push({ positive: true, text: `Unlocks ${ns.icon} ${ns.name} Capstone!` });
+    }
+  }
+  for (const [id, bs] of baseSetMap.entries()) {
+    const ns = nextSetMap.get(id);
+    if (!ns) {
+      setChanges.push({ positive: false, text: `Breaks ${bs.icon} ${bs.name} Set` });
+    } else if (bs.capstoneActive && !ns.capstoneActive) {
+      setChanges.push({ positive: false, text: `Loses ${bs.icon} ${bs.name} Capstone` });
+    }
+  }
+
+  // Score net impact (weighted stat gains + powers + set tiers)
+  let posScore = posDeltas.reduce((acc, d) => acc + Math.abs(d.delta) * d.weight, 0);
+  let negScore = negDeltas.reduce((acc, d) => acc + Math.abs(d.delta) * d.weight, 0);
+  posScore += gainedPowers.length * 22 + setChanges.filter((s) => s.positive).length * 28;
+  negScore += lostPowers.length * 22 + setChanges.filter((s) => !s.positive).length * 28;
+
+  let verdict = 'tradeoff';
+  let verdictIcon = '⇄';
+  let verdictLabel = 'BUILD TRADE-OFF';
+  if (posScore > 0 && (negScore === 0 || posScore >= negScore * 1.85)) {
+    verdict = 'upgrade';
+    verdictIcon = '▲';
+    verdictLabel = 'UPGRADE FOR YOUR BUILD';
+  } else if (negScore > 0 && (posScore === 0 || negScore >= posScore * 1.85)) {
+    verdict = 'downgrade';
+    verdictIcon = '▼';
+    verdictLabel = 'LOWER THAN EQUIPPED';
+  }
+
+  const archBefore = baseProf.isHybridMix ? GEAR_ARCHETYPES.hybrid : baseProf.dominantArchetype;
+  const archAfter = nextProf.isHybridMix ? GEAR_ARCHETYPES.hybrid : nextProf.dominantArchetype;
+  const archChanged = Boolean(archBefore?.id && archAfter?.id && archBefore.id !== archAfter.id);
+
+  return {
+    verdict,
+    verdictIcon,
+    verdictLabel,
+    slot,
+    field,
+    replacedItemName,
+    newItemName,
+    deltas,
+    gainedPowers,
+    lostPowers,
+    setChanges,
+    archBefore,
+    archAfter,
+    archChanged,
+    isNormalized: false,
+  };
 }
 
 /**
