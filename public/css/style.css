@@ -8988,6 +8988,7 @@ summary,
 
 /* When in Pure Combat Mode, strip ALL diving telemetry, gas racks, minimap, comms & dive controls! */
 #screen-hud.combat-mode .hud-top-stack,
+#screen-hud.combat-mode .hud-center-console,
 #screen-hud.combat-mode .hud-left-wing,
 #screen-hud.combat-mode .hud-right-wing,
 #screen-hud.combat-mode #hud-reel-status,
@@ -9760,6 +9761,185 @@ summary,
 }
 #hud-alerts.danger {
   box-shadow: 0 0 22px rgba(248, 113, 113, 0.44);
+}
+
+/* ─── v205 Unified Twin-Stick Dive Console (Matches Battle Mode Left/Right Sticks + Center-Above Controls) ─── */
+#screen-hud:not(.combat-mode) .hud-bottom-dock {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  align-items: end;
+  gap: 12px;
+  left: max(18px, env(safe-area-inset-left));
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  max-width: none;
+  margin: 0;
+}
+#screen-hud:not(.combat-mode) .hud-stick-left {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-items: flex-start;
+}
+#screen-hud:not(.combat-mode) .hud-center-console {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  align-self: end;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  max-width: 100%;
+  pointer-events: none;
+}
+#screen-hud:not(.combat-mode) .hud-center-console .hud-left-wing,
+#screen-hud:not(.combat-mode) .hud-center-console .hud-right-wing {
+  grid-column: auto;
+  justify-self: auto;
+}
+#screen-hud:not(.combat-mode) .hud-stick-right {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: auto;
+  gap: 10px;
+}
+#screen-hud:not(.combat-mode) #touch-stick,
+#screen-hud:not(.combat-mode) #torch-stick {
+  width: 96px;
+  height: 96px;
+}
+#screen-hud:not(.combat-mode) #touch-stick .touch-knob,
+#screen-hud:not(.combat-mode) #torch-stick .touch-knob {
+  width: 40px;
+  height: 40px;
+}
+#screen-hud:not(.combat-mode) #torch-stick .torch-knob-svg {
+  width: 21px;
+  height: 21px;
+}
+
+/* Mobile Portrait (<= 680px): Controls centered ABOVE the bottom-left Swim & bottom-right Flashlight sticks */
+@media (max-width: 680px) and (min-height: 461px) {
+  #screen-hud:not(.combat-mode) .hud-bottom-dock {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 8px 10px;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: center;
+    width: 100%;
+    margin-bottom: 0;
+    gap: 6px;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console .hud-left-wing {
+    width: min(192px, 55vw);
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console .hud-right-wing {
+    width: min(140px, 38vw);
+  }
+  #screen-hud:not(.combat-mode) .hud-stick-left {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    align-items: flex-start;
+  }
+  #screen-hud:not(.combat-mode) .hud-stick-right {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    width: auto;
+  }
+  #screen-hud:not(.combat-mode) #touch-stick,
+  #screen-hud:not(.combat-mode) #torch-stick {
+    width: 90px;
+    height: 90px;
+  }
+  #screen-hud:not(.combat-mode) #touch-stick .touch-knob,
+  #screen-hud:not(.combat-mode) #torch-stick .touch-knob {
+    width: 38px;
+    height: 38px;
+  }
+  #screen-hud:not(.combat-mode) #torch-stick .torch-knob-svg {
+    width: 20px;
+    height: 20px;
+  }
+  #screen-hud:not(.combat-mode) .wreck-action-btn {
+    bottom: max(226px, calc(env(safe-area-inset-bottom) + 218px));
+  }
+  #screen-hud:not(.combat-mode) .coop-comms {
+    bottom: max(228px, calc(env(safe-area-inset-bottom) + 220px));
+  }
+}
+
+/* Mobile Landscape (sideways phone, max-height: 460px): Twin-stick corners + compact centered-elevated console */
+@media (max-height: 460px) and (orientation: landscape) {
+  #screen-hud:not(.combat-mode) .hud-bottom-dock {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    align-items: end;
+    gap: 8px;
+    left: max(14px, env(safe-area-inset-left));
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console .dive-telemetry {
+    width: 244px;
+    padding: 4px 6px;
+  }
+  #screen-hud:not(.combat-mode) .hud-center-console .self-health-card {
+    width: 118px;
+  }
+  #screen-hud:not(.combat-mode) .hud-stick-left {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+  #screen-hud:not(.combat-mode) .hud-stick-right {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    width: auto;
+  }
+  #screen-hud:not(.combat-mode) #touch-stick,
+  #screen-hud:not(.combat-mode) #torch-stick {
+    width: 84px;
+    height: 84px;
+  }
+  #screen-hud:not(.combat-mode) #touch-stick .touch-knob,
+  #screen-hud:not(.combat-mode) #torch-stick .touch-knob {
+    width: 36px;
+    height: 36px;
+  }
+  #screen-hud:not(.combat-mode) #torch-stick .torch-knob-svg {
+    width: 19px;
+    height: 19px;
+  }
+  #screen-hud:not(.combat-mode) .wreck-action-btn {
+    bottom: max(112px, calc(env(safe-area-inset-bottom) + 106px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

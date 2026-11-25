@@ -554,7 +554,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=204',
+  mapRasterUrl: './assets/map-expedition.jpg?v=205',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2484,8 +2484,8 @@ function toggleTorchStickOption() {
   scheduleGitHubStatsSync();
   showToast(
     torchStickEnabled
-      ? '🔦 Left flashlight aim joystick enabled.'
-      : '🔦 Left flashlight joystick hidden (beam follows diver).',
+      ? '🔦 Right flashlight aim joystick enabled.'
+      : '🔦 Right flashlight joystick hidden (beam follows diver).',
     2.2
   );
 }
