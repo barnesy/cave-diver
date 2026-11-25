@@ -10482,3 +10482,49 @@ test('v198 Clean Home Screen: Filters & View Toggle Removed (Permanent Split Vie
   // 3. Attempting to dive without a callsign opens the menu so the input is immediately focused
   assert.ok(mainJs.includes('setHomeMenuOpen(true);'), 'requireCallsign must auto-open the Home Menu when callsign is missing');
 });
+
+test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/Clues & Live Trophy Claim Reveal', async () => {
+  const { BOSS_BOUNTIES, resolveBountyBoardState, getBossSilhouetteSvg } = await import('../public/js/game/bossBounties.js');
+  const { SECRET_LAIRS } = await import('../public/js/game/secretLairs.js');
+  const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
+
+  // 1. All 10 Secret Boss Lairs have a corresponding Wanted Bounty Contract
+  const lairList = Object.values(SECRET_LAIRS);
+  assert.equal(BOSS_BOUNTIES.length, 10, 'Must have 10 Wanted Bounty Contracts covering the 10-Guardian Pantheon');
+  assert.equal(BOSS_BOUNTIES.length, lairList.length);
+  const bountyRelics = new Set(BOSS_BOUNTIES.map((b) => b.trophyRelicId));
+  for (const lair of lairList) {
+    assert.ok(bountyRelics.has(lair.boss.trophyRelicId), `Missing bounty contract for ${lair.boss.name}`);
+  }
+
+  // 2. Unclaimed bounties keep exact depths, checkpoints, coordinates & secret cosmetics strictly non-specific/redacted
+  const freshState = resolveBountyBoardState(createEmptyLogbook());
+  assert.equal(freshState.claimedCount, 0);
+  assert.equal(freshState.totalCount, 10);
+  for (const b of freshState.bounties) {
+    assert.equal(b.claimed, false);
+    assert.equal(b.displayName, b.codename);
+    assert.equal(b.unlockedRewards.length, 0, `Unclaimed bounty ${b.id} must not spoil secret cosmetic unlocks`);
+    const rumorText = `${b.watersRumor} ${b.tale}`;
+    assert.equal(/\b\d+\s?m\b/i.test(rumorText), false, `Bounty ${b.id} must not give exact depth meters`);
+    assert.equal(/\bcp\d\b/i.test(rumorText), false, `Bounty ${b.id} must not name exact checkpoints`);
+    assert.equal(/\bL\d+\b|Level\s+\d+/i.test(rumorText), false, `Bounty ${b.id} must not reveal exact level numbers`);
+    assert.ok(b.tale.length >= 90, `Bounty ${b.id} must include a rich folklore tale & general clue`);
+    const svg = getBossSilhouetteSvg(b.silhouetteKind, b.accentColor);
+    assert.ok(svg.includes('<svg') && svg.includes('</svg>'), `Bounty ${b.id} must render a valid silhouette SVG`);
+  }
+
+  // 3. Defeating bosses and logging their trophy relics stamps bounties CLAIMED and reveals true identity & rewards
+  let book = createEmptyLogbook();
+  book = recordArtifactInLogbook(book, { id: 'cenote-el-abismo:l1-kraken-crown', name: 'Abyssal Kraken Crown', points: 2500 }).book;
+  book = recordArtifactInLogbook(book, { id: 'ss-thistlegorm-wreck:thistlegorm-engine-core', name: 'Sunken Engine Core', points: 2750 }).book;
+  const claimedState = resolveBountyBoardState(book);
+  assert.equal(claimedState.claimedCount, 2);
+  const kraken = claimedState.bounties.find((b) => b.trophyRelicId === 'l1-kraken-crown');
+  const iron = claimedState.bounties.find((b) => b.trophyRelicId === 'thistlegorm-engine-core');
+  assert.equal(kraken.claimed, true);
+  assert.equal(kraken.displayName, "XIBALBA'S MAW");
+  assert.ok(kraken.unlockedRewards.length >= 1, 'Claimed Kraken bounty must reveal unlocked secret gear');
+  assert.equal(iron.claimed, true);
+  assert.equal(iron.displayName, 'IRON LEVIATHAN MK-IV');
+});

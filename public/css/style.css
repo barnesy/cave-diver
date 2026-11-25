@@ -9305,4 +9305,203 @@ summary,
   color: #f8fafc;
 }
 
+/* Abyssal Wanted Bounty Board & Weathered Deep-Sea Poster Cards (v199) */
+.bounties-card {
+  width: min(860px, 95vw);
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+.bounties-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+@media (max-width: 680px) {
+  .bounties-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.bounty-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px 12px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--bounty-accent, #38bdf8) 12%, transparent), transparent 55%),
+    linear-gradient(168deg, rgba(24, 21, 18, 0.94), rgba(11, 17, 29, 0.96));
+  border: 1.5px solid rgba(217, 176, 114, 0.38);
+  box-shadow:
+    inset 0 0 0 1px rgba(254, 243, 199, 0.06),
+    0 10px 26px rgba(0, 0, 0, 0.45);
+  transition: transform 0.16s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.bounty-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--bounty-accent, #f59e0b) 62%, rgba(254, 243, 199, 0.4));
+}
+.bounty-card.claimed {
+  border-color: rgba(52, 211, 153, 0.58);
+  background:
+    radial-gradient(circle at 85% 15%, rgba(52, 211, 153, 0.16), transparent 58%),
+    linear-gradient(168deg, rgba(10, 29, 28, 0.94), rgba(8, 17, 29, 0.96));
+}
+.bounty-poster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(217, 176, 114, 0.28);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.bounty-code {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #f3d5a5;
+}
+.bounty-threat {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid color-mix(in srgb, var(--bounty-accent, #38bdf8) 45%, transparent);
+  color: color-mix(in srgb, var(--bounty-accent, #38bdf8) 85%, #ffffff);
+}
+.bounty-portrait {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 82px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(3, 10, 22, 0.92), rgba(7, 18, 32, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+.bounty-portrait.claimed {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.2), rgba(3, 12, 22, 0.95));
+}
+.bounty-silhouette-svg {
+  width: 140px;
+  height: 78px;
+  display: block;
+}
+.bounty-relic-canvas {
+  width: 96px;
+  height: 72px;
+  display: block;
+}
+.bounty-stamp {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  transform: rotate(-7deg);
+  pointer-events: none;
+}
+.bounty-stamp.wanted {
+  color: #fca5a5;
+  border: 1.5px solid rgba(239, 68, 68, 0.78);
+  background: rgba(127, 29, 29, 0.55);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.bounty-stamp.claimed {
+  color: #a7f3d0;
+  border: 1.5px solid rgba(52, 211, 153, 0.85);
+  background: rgba(6, 78, 59, 0.72);
+}
+.bounty-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bounty-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #fef3c7;
+}
+.bounty-card.claimed .bounty-name {
+  color: #ecfdf5;
+}
+.bounty-subtitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.bounty-waters {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.bounty-waters span {
+  color: #94a3b8;
+}
+.bounty-waters strong {
+  color: #e0f2fe;
+}
+.bounty-tale {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2.5px solid rgba(217, 176, 114, 0.5);
+  border-radius: 0 7px 7px 0;
+  background: rgba(2, 8, 20, 0.5);
+  font-size: 0.76rem;
+  line-height: 1.44;
+  font-style: italic;
+  color: #dbeafe;
+}
+.bounty-reward-bar {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px dashed rgba(251, 191, 36, 0.34);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.bounty-reward-pts {
+  color: #fde047;
+}
+.bounty-reward-classified {
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+.bounty-reward-bar.claimed {
+  border-style: solid;
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(6, 46, 36, 0.65);
+}
+.bounty-reward-relic {
+  color: #6ee7b7;
+}
+.bounty-reward-gear {
+  color: #fde68a;
+}
+
+
 

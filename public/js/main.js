@@ -35,6 +35,7 @@ import { createLogbookModalController } from './ui/logbookModalController.js';
 import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralController.js';
 import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
+import { createBountiesController } from './ui/bountiesController.js';
 import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
 import {
   fireSpeargun,
@@ -547,7 +548,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=198',
+  mapRasterUrl: './assets/map-expedition.jpg?v=199',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -883,6 +884,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof proceduralModal !== 'undefined' && proceduralModal && !proceduralModal.hidden, close: () => closeProceduralModal() },
   { isOpen: () => typeof campaignsModal !== 'undefined' && campaignsModal && !campaignsModal.hidden, close: () => closeCampaignsModal() },
   { isOpen: () => typeof drillsModal !== 'undefined' && drillsModal && !drillsModal.hidden, close: () => closeDrillsModal() },
+  { isOpen: () => typeof bountiesModal !== 'undefined' && bountiesModal && !bountiesModal.hidden, close: () => closeBountiesModal() },
   { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
   { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
   { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
@@ -2773,6 +2775,20 @@ const rescueDrillsCtrl = createRescueDrillsController({
   launchRescueDrill,
 });
 const { drillsModal, openDrillsModal, closeDrillsModal } = rescueDrillsCtrl;
+
+const bountiesModal = document.getElementById('bounties-modal');
+const bountiesCtrl = createBountiesController({
+  loadCareerLogbook,
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  els: {
+    btnOpenBounties: document.getElementById('btn-open-bounties'),
+    bountiesModal,
+    btnBountiesClose: document.getElementById('btn-bounties-close'),
+    bountiesGrid: document.getElementById('bounties-grid'),
+    bountiesSubEl: document.getElementById('bounties-modal-sub'),
+  },
+});
+const { closeBountiesModal } = bountiesCtrl;
 
 // ─── Spatial 3D Underwater Audio Mixer & Mobile Haptics (v133) ───
 const AUDIO_MIXER_PREF_KEY = 'caveDiverAudioMix_v1';
