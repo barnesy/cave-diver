@@ -9928,7 +9928,55 @@ summary,
     align-self: end;
     width: 100%;
     min-width: 0;
+    padding: 3px 4px;
+    border-radius: 8px;
     margin-bottom: 0;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-alerts {
+    font-size: 0.5rem;
+    padding: 1px 4px;
+    margin-bottom: 2px;
+    border-radius: 4px;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-primary-grid {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr) 24px;
+    gap: 2px;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-cell {
+    padding: 2px 3px;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-lbl {
+    font-size: 0.45rem;
+    letter-spacing: 0.03em;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-val {
+    font-size: 0.78rem;
+    line-height: 1.08;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-val.big {
+    font-size: 0.86rem;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-sub,
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-sub-pair {
+    font-size: 0.43rem;
+    letter-spacing: -0.02em;
+    gap: 2px;
+    overflow: hidden;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-ascent-col {
+    padding: 2px 1px;
+    border-radius: 5px;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-ascent-track {
+    width: 6px;
+    min-height: 14px;
+    margin: 1px 0;
+  }
+  #screen-hud:not(.combat-mode) .dive-telemetry .dc-ascent-col .dc-subval {
+    font-size: 0.46rem;
+    line-height: 1;
   }
   #screen-hud:not(.combat-mode) .hud-gear-dock {
     grid-column: 3;
@@ -10001,10 +10049,10 @@ summary,
     height: 19px;
   }
   #screen-hud:not(.combat-mode) .wreck-action-btn {
-    bottom: max(224px, calc(env(safe-area-inset-bottom) + 216px));
+    bottom: max(172px, calc(env(safe-area-inset-bottom) + 164px));
   }
   #screen-hud:not(.combat-mode) .coop-comms {
-    bottom: max(226px, calc(env(safe-area-inset-bottom) + 218px));
+    bottom: max(174px, calc(env(safe-area-inset-bottom) + 166px));
   }
 }
 
