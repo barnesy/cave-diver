@@ -3520,7 +3520,7 @@ select:focus-visible {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 224px;
+  width: 248px;
   max-height: calc(100dvh - 76px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -3536,6 +3536,30 @@ select:focus-visible {
   gap: 3px;
   transform-origin: top right;
   z-index: 100;
+}
+.home-menu-popover .home-menu-callsign {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  margin: 2px 0 4px;
+  padding: 6px 8px 8px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.56);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+.home-menu-popover .home-menu-callsign label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+.home-menu-popover .home-menu-callsign input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-size: 0.84rem;
 }
 .home-menu-popover:not([hidden]) {
   animation: popoverDropIn 0.24s var(--ease-spring) both;

@@ -258,11 +258,9 @@ const homeMenuLbLabel = document.getElementById('home-menu-lb-label');
 const btnLbBack = document.getElementById('btn-lb-back');
 const menuDescEl = document.getElementById('menu-desc');
 const btnDescToggle = document.getElementById('btn-desc-toggle');
-const menuIdentityRow = document.getElementById('menu-identity-row');
 const menuSitePicker = document.getElementById('menu-site-picker');
 const soloPanel = document.getElementById('solo-panel');
 const siteBrowserEl = document.getElementById('site-browser');
-const siteCatTabsEl = document.getElementById('site-cat-tabs');
 const siteWorldMapEl = document.getElementById('site-world-map');
 const siteMapRegionBadgeEl = document.getElementById('site-map-region-badge');
 const siteMapCoordsEl = document.getElementById('site-map-coords');
@@ -396,16 +394,17 @@ function requireCallsign() {
   if (activeMenuTab === 'leaderboards') {
     setActiveMenuTab('solo');
   }
+  setHomeMenuOpen(true);
   playerNameInput?.classList.remove('invalid');
   void playerNameInput?.offsetWidth;
   playerNameInput?.classList.add('invalid');
   playerNameInput?.focus();
   playerNameInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showToast(`Enter your diver callsign (1–${CALLSIGN_MAX_LEN} chars) to dive!`, 3.0);
+  showToast(`Enter your diver callsign (1–${CALLSIGN_MAX_LEN} chars) in the ☰ Menu to dive!`, 3.0);
   if (lanStatus && (!soloPanel || !soloPanel.hidden)) {
     lanStatus.hidden = false;
     lanStatus.className = 'lan-status warn';
-    lanStatus.textContent = `Enter a diver callsign (1–${CALLSIGN_MAX_LEN} chars) above first.`;
+    lanStatus.textContent = `Enter a diver callsign (1–${CALLSIGN_MAX_LEN} chars) in the ☰ Menu first.`;
   }
   return '';
 }
@@ -531,6 +530,14 @@ function setLevelSelectionLocked(locked) {
 // Removed legacy inline MAP_LANDMASS_POLYGONS (moved to ./game/worldMapData.js)
 
 // ── Site Browser, Global Dive Map SVG & Level Cards Controller (modularized v172) ──
+playerNameInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && getEnteredCallsign()) {
+    e.preventDefault();
+    playerNameInput.blur();
+    setHomeMenuOpen(false);
+  }
+});
+
 const siteBrowser = createSiteBrowserController({
   lan,
   renderer,
@@ -540,11 +547,10 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=197',
+  mapRasterUrl: './assets/map-expedition.jpg?v=198',
   els: {
     siteWorldMapEl,
     btnMapZoom,
-    siteCatTabsEl,
     siteMapRegionBadgeEl,
     siteMapCoordsEl,
     levelCardsEl,
@@ -557,8 +563,6 @@ const siteBrowser = createSiteBrowserController({
   },
 });
 const {
-  setSiteCategoryFilter,
-  getFilteredLevels,
   renderSiteWorldMap,
   renderLevelCards,
   syncMenuDescToggle,
@@ -4584,9 +4588,6 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   inFlightLoad = null;
   const nextLevel = getLevelById(chosenId);
   activeLevel = nextLevel;
-  if (siteBrowser.getSiteCategoryFilter() !== 'all' && !getFilteredLevels().some((l) => l.id === nextLevel.id)) {
-    setSiteCategoryFilter('all');
-  }
   if (focusMap) {
     siteBrowser.setMapZoomMode('site');
   }
@@ -4645,27 +4646,6 @@ if (btnMapZoom) {
   });
 }
 
-if (siteCatTabsEl) {
-  siteCatTabsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-site-cat]');
-    if (!btn) return;
-    const nextCat =
-      btn.dataset.siteCat === 'wreck' || btn.dataset.siteCat === 'cave' || btn.dataset.siteCat === 'todo'
-        ? btn.dataset.siteCat
-        : 'all';
-    if (nextCat === siteBrowser.getSiteCategoryFilter()) return;
-    setSiteCategoryFilter(nextCat);
-    const visible = getFilteredLevels();
-    if (visible.length > 0 && !visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
-      selectAndLoadLevel(visible[0].id, { focusMap: siteBrowser.getMapZoomMode() === 'site' });
-    } else {
-      renderLevelCards();
-    }
-    retriggerAnim(siteBrowserEl, 'anim-view-morph');
-  });
-}
-
-const btnCycleSiteView = document.getElementById('btn-cycle-site-view');
 const btnSetupDrawerEl = document.getElementById('btn-setup-drawer');
 const diveSetupModalEl = document.getElementById('dive-setup-modal');
 const btnSetupCloseEl = document.getElementById('btn-setup-close');
@@ -4995,31 +4975,6 @@ btnSetupResetEl?.addEventListener('click', () => {
 });
 syncSetupDrawerSummary();
 
-const SITE_VIEW_ORDER = ['split', 'map', 'list'];
-const SITE_VIEW_LABELS = { split: '◫ Split', map: '🗺 Map', list: '☰ List' };
-
-function applySiteViewMode(nextMode) {
-  const cleanMode = nextMode === 'map' || nextMode === 'list' ? nextMode : 'split';
-  if (cleanMode === siteBrowser.getSiteViewMode() && siteBrowserEl?.classList.contains(`view-${cleanMode}`)) return;
-  siteBrowser.setSiteViewMode(cleanMode);
-  if (btnCycleSiteView) {
-    btnCycleSiteView.textContent = SITE_VIEW_LABELS[cleanMode] || '◫ Split';
-  }
-  if (siteBrowserEl) {
-    siteBrowserEl.className = `site-browser view-${siteBrowser.getSiteViewMode()}`;
-    retriggerAnim(siteBrowserEl, 'anim-view-morph');
-  }
-  if (cleanMode !== 'list') {
-    renderSiteWorldMap({ instantZoom: false });
-  }
-}
-
-btnCycleSiteView?.addEventListener('click', () => {
-  const idx = SITE_VIEW_ORDER.indexOf(siteBrowser.getSiteViewMode());
-  const next = SITE_VIEW_ORDER[(idx + 1) % SITE_VIEW_ORDER.length];
-  applySiteViewMode(next);
-});
-
 async function launchOpenCoopDive() {
   const diverName = requireCallsign();
   if (!diverName) return false;
@@ -5163,7 +5118,6 @@ async function setActiveMenuTab(tab = 'solo') {
 
   if (soloPanel) soloPanel.hidden = !isSolo;
   if (leaderboardPanel) leaderboardPanel.hidden = !isLb;
-  if (menuIdentityRow) menuIdentityRow.hidden = isLb;
   syncSitePickerVisibility();
   if (isSolo) {
     requestAnimationFrame(syncMenuDescToggle);
@@ -5173,7 +5127,6 @@ async function setActiveMenuTab(tab = 'solo') {
     if (isLb) {
       retriggerAnim(leaderboardPanel, 'anim-glide-right');
     } else {
-      retriggerAnim(menuIdentityRow, 'anim-glide-left');
       retriggerAnim(menuSitePicker, 'anim-glide-left');
       retriggerAnim(soloPanel, 'anim-glide-left');
     }
@@ -5763,15 +5716,7 @@ btnMenuRadio?.addEventListener('click', handleRadioCycle);
 btnHudRadio?.addEventListener('click', handleRadioCycle);
 
 function reconcileSiteFilterOnMenuReturn() {
-  if (siteBrowser.getSiteCategoryFilter() !== 'todo') return;
-  const visible = getFilteredLevels();
-  if (visible.length === 0) {
-    setSiteCategoryFilter('all');
-  } else if (!visible.some((l) => l.id === activeLevel.id) && !(lan.room && !lan.isHost())) {
-    activeLevel = visible[0];
-    if (selectLevel) selectLevel.value = activeLevel.id;
-    syncMenuLevelLabels(activeLevel);
-  }
+  // Site category filters removed in v198; all expeditions are always visible in Split view.
 }
 
 function abortActiveDiveToMenu() {

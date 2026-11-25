@@ -49,12 +49,12 @@ export function createSiteBrowserController({
     btnDescToggle,
   } = els;
 
-  let siteViewMode = 'split'; // 'split' | 'map' | 'list'
+  let siteViewMode = 'split'; // Permanent split view (Map + Expedition Cards) (v198)
   let mapZoomMode = 'global'; // 'global' | 'site'
   let currentMapViewBox = { ...GLOBAL_MAP_VIEWBOX };
   let mapAnimFrameId = 0;
   let mapBaseInitialized = false;
-  let siteCategoryFilter = 'all'; // 'all' | 'cave' | 'wreck' | 'todo'
+  let siteCategoryFilter = 'all';
   let menuDescExpanded = false;
 
   function formatViewBox(vb) {
@@ -177,27 +177,11 @@ export function createSiteBrowserController({
     siteWorldMapEl.setAttribute('viewBox', formatViewBox(currentMapViewBox));
   }
 
-  function setSiteCategoryFilter(nextCat) {
-    const valid = nextCat === 'wreck' || nextCat === 'cave' || nextCat === 'todo' ? nextCat : 'all';
-    siteCategoryFilter = valid;
-    if (siteCatTabsEl) {
-      const catIdx = valid === 'cave' ? 1 : valid === 'wreck' ? 2 : valid === 'todo' ? 3 : 0;
-      siteCatTabsEl.style.setProperty('--cat-index', String(catIdx));
-      for (const b of siteCatTabsEl.querySelectorAll('button[data-site-cat]')) {
-        const isAct = b.dataset.siteCat === valid;
-        b.classList.toggle('active', isAct);
-        b.setAttribute('aria-selected', String(isAct));
-      }
-    }
+  function setSiteCategoryFilter() {
+    siteCategoryFilter = 'all';
   }
 
-  function getFilteredLevels(bookOverride = null) {
-    if (siteCategoryFilter === 'wreck') return LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck'));
-    if (siteCategoryFilter === 'cave') return LEVELS.filter((l) => !l.isWreck && l.category !== 'wreck');
-    if (siteCategoryFilter === 'todo') {
-      const book = bookOverride || loadCareerLogbook();
-      return LEVELS.filter((l) => !book.cleared?.[l.id]);
-    }
+  function getFilteredLevels() {
     return LEVELS;
   }
 
@@ -361,14 +345,7 @@ export function createSiteBrowserController({
     const visibleLevels = getFilteredLevels(book);
     const pill = document.getElementById('campaign-progress-pill');
     if (pill) {
-      pill.textContent =
-        siteCategoryFilter === 'wreck'
-          ? `${visibleLevels.length} Wrecks · ${clearedCount}/${LEVELS.length}`
-          : siteCategoryFilter === 'cave'
-            ? `${visibleLevels.length} Caves · ${clearedCount}/${LEVELS.length}`
-            : siteCategoryFilter === 'todo'
-              ? `${visibleLevels.length} Uncleared`
-              : `${clearedCount} / ${LEVELS.length} Cleared`;
+      pill.textContent = `${clearedCount} / ${LEVELS.length} Cleared`;
     }
     if (visibleLevels.length === 0) {
       levelCardsEl.innerHTML = `<div class="lvl-empty-msg" style="padding:18px;text-align:center;color:#a7f3d0;font-size:0.8rem;">🏆 All ${LEVELS.length} expeditions cleared! Switch to All to chase S+ records.</div>`;

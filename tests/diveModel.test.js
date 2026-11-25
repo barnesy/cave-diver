@@ -2584,7 +2584,7 @@ test('v102 Career logbook hooks, underwater depth acoustics/ambience, and post-l
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="modal-logbook"'), 'Missing Career Logbook modal');
   assert.ok(html.includes('id="btn-open-logbook"'), 'Missing Logbook menu button');
-  assert.ok(html.includes('data-site-cat="todo"'), 'Missing Todo uncleared site filter tab');
+  assert.ok(html.includes('id="site-browser" class="site-browser view-split"'), 'Site browser must default to permanent Split view (filters removed in v198)');
   assert.ok(html.includes('data-signal="HOLD DECO 🛑"'), 'Missing HOLD DECO co-op quick signal');
 
   // 2. Verify Bundle 2 DiveAudio depth low-pass sweep, splash transient, and biome ambience
@@ -10457,4 +10457,28 @@ test('v197 CCR HUD Controls, A6M Zero & H2S Immersion, 6 Campaigns, Shared World
     subjectLabel: compZero.label,
   });
   assert.equal(stamped, true, 'GPS Expedition Postcard stamp must paint cleanly');
+});
+
+test('v198 Clean Home Screen: Filters & View Toggle Removed (Permanent Split View) and Diver Callsign Moved to Menu', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const mainJs = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+
+  // 1. Site filter tabs (#site-cat-tabs) & view toggle (#btn-cycle-site-view) removed; Split view is permanent default
+  assert.equal(html.includes('id="site-cat-tabs"'), false, 'Site filter tabs must be removed from index.html');
+  assert.equal(html.includes('id="btn-cycle-site-view"'), false, 'Site view toggle must be removed from index.html');
+  assert.ok(html.includes('id="site-browser" class="site-browser view-split"'), 'Site browser must default to Split view');
+
+  // 2. Diver Callsign (#menu-identity-row / #input-player-name) lives inside #home-menu-popover
+  const popStart = html.indexOf('id="home-menu-popover"');
+  const popEnd = html.indexOf('id="pwa-update-banner"');
+  assert.ok(popStart > 0 && popEnd > popStart);
+  const popHtml = html.slice(popStart, popEnd);
+  assert.ok(popHtml.includes('id="menu-identity-row"'), 'Callsign row must live inside #home-menu-popover');
+  assert.ok(popHtml.includes('id="input-player-name"'), 'Diver Callsign input must live inside #home-menu-popover');
+  const afterPopHtml = html.slice(popEnd);
+  assert.equal(afterPopHtml.includes('id="menu-identity-row"'), false, 'Callsign row must not remain on main Home card');
+
+  // 3. Attempting to dive without a callsign opens the menu so the input is immediately focused
+  assert.ok(mainJs.includes('setHomeMenuOpen(true);'), 'requireCallsign must auto-open the Home Menu when callsign is missing');
 });
