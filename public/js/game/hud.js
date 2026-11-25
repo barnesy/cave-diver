@@ -1180,6 +1180,9 @@ export class DiveComputerHUD {
     this.elGasCompactName = document.getElementById('gas-compact-name');
     this.elGasCompactBar = document.getElementById('gas-compact-bar');
     this.elGasCompactFill = document.getElementById('gas-compact-fill');
+    this.elCcrControls = document.getElementById('hud-ccr-controls');
+    this.elCcrSetpoint = document.getElementById('btn-ccr-setpoint');
+    this.elCcrBailout = document.getElementById('btn-ccr-bailout');
     this._gasDrawerOpen = false;
     this._lastObjectiveHtml = '';
     this.tankButtons = {};
@@ -1344,6 +1347,19 @@ export class DiveComputerHUD {
       const inCold = Boolean(hazards.inThermocline || (hazards.thermoclineColdFactor || 0) > 0.2);
       setText(this.elTemp, `${inCold ? '❄️' : ''}${Math.round(hazards.waterTempC)}°C`);
       setClass(this.elTemp, inCold ? 'dc-subval dc-temp cold' : 'dc-subval dc-temp');
+    }
+
+    // Live CCR Rebreather Setpoint & Scrubber Pill (hidden strictly on open-circuit dives! v197)
+    if (this.elCcrControls) {
+      const ccrOn = Boolean(diveState?.ccrEnabled);
+      setHidden(this.elCcrControls, !ccrOn);
+      if (ccrOn) {
+        const sp = Number(diveState.ccrSetpointBar ?? 1.3).toFixed(1);
+        const sc = Math.max(0, Math.round(diveState.ccrScrubberPct ?? 100));
+        setText(this.elCcrSetpoint, `♻️ SP ${sp} · ${sc}%`);
+        setClass(this.elCcrSetpoint, sc <= 25 ? 'ccr-pill-btn low-scrub' : 'ccr-pill-btn');
+        setHidden(this.elCcrBailout, sc > 25);
+      }
     }
 
     // NDL vs Mandatory Deco Stop

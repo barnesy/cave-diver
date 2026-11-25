@@ -929,6 +929,83 @@ export const wreckAndInteractivesMethods = {
             ctx.fill();
           }
           ctx.restore();
+        } else if (prop.kind === 'zero-fighter') {
+          // Iconic Chuuk Lagoon sunken WWII A6M Zero Fighter fuselage resting in Hold #2 (v197)
+          const sc = (prop.scale || 1.0) * scale;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(prop.angle || 0);
+          // Swept port/starboard wing perspective shadow
+          ctx.fillStyle = '#2d4739';
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = Math.max(1.5, 0.06 * sc);
+          ctx.beginPath();
+          ctx.moveTo(-1.1 * sc, 0.25 * sc);
+          ctx.lineTo(0.85 * sc, 0.48 * sc);
+          ctx.lineTo(0.55 * sc, 0.92 * sc);
+          ctx.lineTo(-1.45 * sc, 0.62 * sc);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Tapered olive-slate airframe fuselage + vertical tailfin
+          ctx.fillStyle = '#527d65';
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = Math.max(1.4, 0.055 * sc);
+          ctx.beginPath();
+          ctx.moveTo(2.35 * sc, -0.08 * sc);
+          ctx.quadraticCurveTo(0.6 * sc, -0.62 * sc, -2.15 * sc, -0.34 * sc);
+          ctx.lineTo(-2.55 * sc, -1.12 * sc);
+          ctx.lineTo(-2.95 * sc, -1.02 * sc);
+          ctx.lineTo(-2.85 * sc, 0.16 * sc);
+          ctx.lineTo(2.32 * sc, 0.36 * sc);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Radial engine cowling nose + weathered bent propeller blades
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(2.1 * sc, -0.36 * sc, 0.48 * sc, 0.74 * sc);
+          ctx.strokeRect(2.1 * sc, -0.36 * sc, 0.48 * sc, 0.74 * sc);
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = Math.max(2.0, 0.09 * sc);
+          ctx.beginPath();
+          ctx.moveTo(2.62 * sc, -0.82 * sc);
+          ctx.lineTo(2.68 * sc, 0.02 * sc);
+          ctx.lineTo(2.86 * sc, 0.68 * sc);
+          ctx.stroke();
+
+          // Open greenhouse cockpit canopy frame
+          ctx.fillStyle = 'rgba(125, 211, 252, 0.48)';
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = Math.max(1.4, 0.055 * sc);
+          ctx.beginPath();
+          ctx.moveTo(0.85 * sc, -0.44 * sc);
+          ctx.quadraticCurveTo(0.12 * sc, -0.98 * sc, -0.78 * sc, -0.42 * sc);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Weathered crimson fuselage roundel emblem with thin white ring
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.88)';
+          ctx.strokeStyle = 'rgba(241, 245, 249, 0.55)';
+          ctx.lineWidth = Math.max(1.0, 0.04 * sc);
+          ctx.beginPath();
+          ctx.arc(-1.18 * sc, -0.05 * sc, 0.32 * sc, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Colorful Pacific soft coral fans growing along nose & wingtip
+          ctx.fillStyle = 'rgba(244, 114, 182, 0.88)';
+          ctx.beginPath();
+          ctx.arc(1.75 * sc, -0.42 * sc, 0.25 * sc, 0, Math.PI * 2);
+          ctx.arc(-0.95 * sc, 0.68 * sc, 0.23 * sc, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+          ctx.beginPath();
+          ctx.arc(-2.65 * sc, -1.05 * sc, 0.21 * sc, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
       }
     }

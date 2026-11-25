@@ -571,3 +571,139 @@ export function renderFieldGuideCollectorCard(
   ctx.restore();
   return true;
 }
+
+/**
+ * Smart Photo Composition Detector (v197):
+ * Scans the active Photo Studio camera frame for iconic landmarks, rare wreck set-pieces,
+ * Cenote Angelita's H2S Cloud River, escorting megafauna, and sealed air pockets.
+ */
+export function detectPhotoCompositionSubject({
+  level = null,
+  diver = null,
+  camX = 0,
+  camY = 0,
+  ecosystem = null,
+  stories = null,
+  maxDistM = 13.5,
+} = {}) {
+  const cx = Number.isFinite(camX) ? camX : (diver?.x || 0);
+  const cy = Number.isFinite(camY) ? camY : (diver?.y || 0);
+  const candidates = [];
+
+  // 1. Sunken A6M Zero Fighter inside Fujikawa Maru Hold #2
+  if (Array.isArray(level?.wreckProps)) {
+    for (const p of level.wreckProps) {
+      if (p.kind !== 'zero-fighter' && p.kind !== 'locomotive' && p.kind !== 'conning-tower') continue;
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      if (d <= maxDistM) {
+        const label = p.kind === 'zero-fighter'
+          ? 'A6M Zero Fighter'
+          : p.kind === 'locomotive'
+            ? 'Sunken Steam Locomotive'
+            : 'Submarine Conning Tower';
+        candidates.push({ kind: p.kind, label, bonusPts: p.kind === 'zero-fighter' ? 240 : 210, dist: d, priority: 10 });
+      }
+    }
+  }
+
+  // 2. Cenote Angelita Glowing 30m H2S Cloud River
+  if (level?.h2sCloudLayer && Math.abs(cy - level.h2sCloudLayer.y) <= 6.5) {
+    candidates.push({
+      kind: 'h2s-cloud',
+      label: 'H₂S Cloud River & Sunken Forest',
+      bonusPts: 220,
+      dist: Math.abs(cy - level.h2sCloudLayer.y),
+      priority: 9,
+    });
+  }
+
+  // 3. Pelagic Megafauna (Manta Rays, Reef Sharks, Arctic Belugas)
+  if (Array.isArray(ecosystem?.megafauna)) {
+    for (const m of ecosystem.megafauna) {
+      const d = Math.hypot(m.x - cx, m.y - cy);
+      if (d <= maxDistM) {
+        const escortBoost = m.behavior === 'escort' ? 60 : 0;
+        candidates.push({
+          kind: `megafauna-${m.kind}`,
+          label: m.behavior === 'escort' ? `${m.label || 'Megafauna'} Escort` : (m.label || 'Pelagic Megafauna'),
+          bonusPts: 185 + escortBoost,
+          dist: d,
+          priority: m.behavior === 'escort' ? 11 : 8,
+        });
+      }
+    }
+  }
+
+  // 4. Submerged Lore Landmarks & Sealed Air Pockets
+  if (Array.isArray(stories?.landmarks)) {
+    for (const st of stories.landmarks) {
+      const d = Math.hypot(st.x - cx, st.y - cy);
+      if (d <= maxDistM * 0.85) {
+        candidates.push({ kind: 'landmark', label: st.title || 'Submerged Landmark', bonusPts: 150, dist: d, priority: 6 });
+      }
+    }
+  }
+  if (Array.isArray(stories?.airPockets)) {
+    for (const ap of stories.airPockets) {
+      const d = Math.hypot(ap.x - cx, ap.y - cy);
+      if (d <= maxDistM * 0.85) {
+        candidates.push({ kind: 'air-pocket', label: 'Submerged Air Dome', bonusPts: 140, dist: d, priority: 5 });
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => (b.priority - a.priority) || (a.dist - b.dist));
+  const best = candidates[0];
+  return {
+    kind: best.kind,
+    label: best.label,
+    bonusPts: best.bonusPts,
+    badge: `📷 COMPOSITION LOCK · ${best.label} (+${best.bonusPts})`,
+  };
+}
+
+/**
+ * Paint an ultra-clean translucent National Geographic-style GPS Expedition Postcard Stamp
+ * onto a captured Photo Studio canvas (site name, GPS lat/lng, depth, callsign & subject) (v197).
+ */
+export function stampExpeditionPostcardOverlay(ctx, width, height, meta = {}) {
+  if (!ctx || !width || !height) return false;
+  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.025));
+  const boxW = Math.min(width - pad * 2, Math.max(280, Math.round(width * 0.36)));
+  const boxH = meta.subjectLabel ? 78 : 58;
+  const bx = pad;
+  const by = Number.isFinite(meta.topOffset) ? meta.topOffset : pad;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(4, 12, 26, 0.78)';
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+  ctx.lineWidth = 1.5;
+  fillRoundedRect(ctx, bx, by, boxW, boxH, 10);
+  strokeRoundedRect(ctx, bx, by, boxW, boxH, 10);
+
+  // Subtle gold Nat-Geo accent bar on left edge
+  ctx.fillStyle = '#facc15';
+  ctx.fillRect(bx + 6, by + 8, 3.5, boxH - 16);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 13px system-ui, -apple-system, sans-serif';
+  ctx.fillText(String(meta.siteName || 'CAVE DIVER EXPEDITION').toUpperCase(), bx + 18, by + 10, boxW - 28);
+
+  ctx.fillStyle = '#7dd3fc';
+  ctx.font = '700 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+  const depthTxt = Number.isFinite(meta.depthM) ? `${meta.depthM.toFixed(1)}m` : '';
+  const gpsTxt = meta.gpsLabel ? `${meta.gpsLabel}` : '';
+  const metaLine = [gpsTxt, depthTxt, meta.diverName || 'Diver'].filter(Boolean).join(' · ');
+  ctx.fillText(metaLine, bx + 18, by + 29, boxW - 28);
+
+  if (meta.subjectLabel) {
+    ctx.fillStyle = '#fde047';
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText(`✦ ${meta.subjectLabel}`, bx + 18, by + 49, boxW - 28);
+  }
+  ctx.restore();
+  return true;
+}

@@ -325,4 +325,84 @@ export const underwaterJuiceRendererMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * Dreamy golden-emerald optical haze vignette when swimming *inside* Cenote Angelita's H2S cloud layer (v197).
+   */
+  _drawH2sCloudImmersionVignette(ctx, cw, ch, diver, h2s) {
+    if (!diver || !h2s || !Number.isFinite(h2s.y)) return 0;
+    const halfBand = Math.max(1.5, (h2s.thickness || 3.8) * 0.72);
+    const dist = Math.abs((diver.y || 0) - h2s.y);
+    if (dist >= halfBand) return 0;
+    const immersion = Math.max(0, Math.min(1, 1 - dist / halfBand));
+    ctx.save();
+    const cx = cw * 0.5;
+    const cy = ch * 0.5;
+    const rOut = Math.hypot(cx, cy);
+    const vg = ctx.createRadialGradient(cx, cy, rOut * 0.18, cx, cy, rOut);
+    vg.addColorStop(0, `rgba(190, 242, 100, ${(immersion * 0.14).toFixed(3)})`);
+    vg.addColorStop(0.62, `rgba(132, 204, 22, ${(immersion * 0.28).toFixed(3)})`);
+    vg.addColorStop(1, `rgba(26, 46, 5, ${(immersion * 0.54).toFixed(3)})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+    return immersion;
+  },
+
+  /**
+   * Shared Co-op / Squad Acoustic World Beacons (dropped on [P] ping, piercing silt-outs! v197).
+   */
+  _drawWorldBeacons(ctx, beacons, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(beacons) || beacons.length === 0) return;
+    const dpr = this._cachedDpr || 1;
+    ctx.save();
+    for (let i = 0; i < beacons.length; i++) {
+      const b = beacons[i];
+      const frac = Math.max(0, Math.min(1, b.life / (b.maxLife || 6.5)));
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      const col = b.color || '#38bdf8';
+      const pulse = (timeSec * 1.4 + i * 0.4) % 1;
+      const r1 = (0.8 + pulse * 3.8) * scale;
+      const r2 = (0.8 + ((pulse + 0.5) % 1) * 3.8) * scale;
+
+      ctx.globalAlpha = frac * (1 - pulse) * 0.85;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.8, 0.08 * scale);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r1, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = frac * (1 - ((pulse + 0.5) % 1)) * 0.75;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Core diamond marker
+      ctx.globalAlpha = Math.min(1, frac * 1.4);
+      const dr = Math.max(5 * dpr, 0.28 * scale);
+      ctx.fillStyle = col;
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - dr);
+      ctx.lineTo(sx + dr, sy);
+      ctx.lineTo(sx, sy + dr);
+      ctx.lineTo(sx - dr, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      const tag = b.label || `${b.author || 'PING'} · ${Math.round(b.y)}m`;
+      ctx.font = `800 ${Math.round(10.5 * dpr)}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.strokeStyle = 'rgba(2, 6, 23, 0.92)';
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeText(tag, sx, sy - dr - 4 * dpr);
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillText(tag, sx, sy - dr - 4 * dpr);
+    }
+    ctx.restore();
+  },
 };

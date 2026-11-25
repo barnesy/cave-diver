@@ -42,6 +42,8 @@ export class InputController {
     onSpearRelease,
     onTorchStickTap,
     onCombatDash,
+    onCcrSetpointToggle,
+    onCcrBailout,
   }) {
     this.keys = new Set();
     this.stickVec = { x: 0, y: 0 };
@@ -87,6 +89,8 @@ export class InputController {
     this.onSpearRelease = onSpearRelease;
     this.onTorchStickTap = onTorchStickTap;
     this.onCombatDash = onCombatDash;
+    this.onCcrSetpointToggle = onCcrSetpointToggle;
+    this.onCcrBailout = onCcrBailout;
     this.torchStickHeld = false;
     this.spearKeyHeld = false;
     this._prevGpButtons = [];
@@ -114,6 +118,10 @@ export class InputController {
       }
       if (code === 'KeyL' && !e.repeat) this.onTorchToggle?.();
       if (code === 'KeyG' && !e.repeat) this.onReelToggle?.();
+      if (code === 'KeyV' && !e.repeat) {
+        if (e.shiftKey) this.onCcrBailout?.();
+        else this.onCcrSetpointToggle?.();
+      }
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
       if (code === 'KeyE' && !e.repeat) {
         if (this.onWreckAction?.()) e.preventDefault();

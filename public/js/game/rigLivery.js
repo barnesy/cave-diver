@@ -302,6 +302,8 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'camp-salvage', icon: '🎖️', name: 'Master Salvager', unlockHint: 'Maritime Wreck Salvage Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')) },
   { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', unlockHint: 'Iceland Geothermal Survey Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', unlockHint: 'Abyssal World Record Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
+  { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', unlockHint: 'Coral & Iron Wrecks Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
+  { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', unlockHint: 'Halocline Wonders Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -540,6 +542,17 @@ export const TANK_FINISHES = Object.freeze([
     isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')),
   },
   {
+    id: 'sulfur-emerald-tank',
+    name: 'Sulfur Emerald Twinset',
+    top: '#ecfccb',
+    mid: '#84cc16',
+    bot: '#1a2e05',
+    stroke: '#bef264',
+    ccrShell: '#65a30d',
+    unlockHint: 'Complete Halocline Wonders Campaign',
+    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')),
+  },
+  {
     id: 'secret-dreadnought-brass',
     name: 'Mk-IV Riveted Reactor',
     secret: true,
@@ -598,6 +611,17 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#34d399',
     unlockHint: 'Emergency Troubleshooter or 6+ sites',
     isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 6,
+  },
+  {
+    id: 'pacific-coral-visor',
+    name: 'Pacific Coral Visor',
+    top: '#ffe4e6',
+    mid: '#fb7185',
+    bot: '#9f1239',
+    frame: '#4c0519',
+    hudGlow: '#fda4af',
+    unlockHint: 'Complete Coral & Iron Wrecks Campaign',
+    isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')),
   },
   {
     id: 'secret-aurora-frost',

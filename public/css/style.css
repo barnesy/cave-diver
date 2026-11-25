@@ -9224,4 +9224,61 @@ summary,
   padding: 3px 8px;
 }
 
+/* v197 Live CCR Loop Pill (shown strictly on CCR dives — zero open-circuit clutter!) */
+.hud-ccr-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+}
+.hud-ccr-controls[hidden] {
+  display: none;
+}
+.ccr-pill-btn {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  background: rgba(6, 46, 36, 0.78);
+  color: #a7f3d0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ccr-pill-btn.low-scrub {
+  border-color: rgba(251, 146, 60, 0.75);
+  background: rgba(67, 20, 7, 0.84);
+  color: #fed7aa;
+}
+.ccr-bailout-btn {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.8);
+  background: rgba(127, 29, 29, 0.88);
+  color: #fecaca;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.debrief-superlatives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.debrief-superlative-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #f8fafc;
+}
+
 

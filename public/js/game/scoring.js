@@ -375,3 +375,76 @@ export function computeTeamScoreSummary(localSummary, peerStats = [], { localRes
     teamRank,
   };
 }
+
+/**
+ * Compute celebratory post-dive Expedition & Squad Superlative awards from real run telemetry (v197).
+ * Returns up to 3 earned award badges ({ id, icon, title, detail, color }).
+ */
+export function computeSquadSuperlatives(session, peers = []) {
+  if (!session) return [];
+  const awards = [];
+  const trim = session.trimStats || {};
+  const collectedCount = session.collectedIds?.size || 0;
+  const totalCollectibles = (session.level?.collectibles || []).length;
+  const photoCount = (session.photosTaken || 0) + (session.photoCompositionBonus > 0 ? 1 : 0);
+  const ccrActive = Boolean(session.diveState?.ccrEnabled);
+  const rescuedAny = (session.aiBuddiesRescued || 0) > 0 || (Array.isArray(peers) && peers.some((p) => p && p.rescued));
+  const resolvedIssues = session.aiIssuesResolved || 0;
+  const dashes = session.secretLair?.dashesUsed || 0;
+
+  if (rescuedAny || resolvedIssues >= 1) {
+    awards.push({
+      id: 'guardian-angel',
+      icon: '🛡️',
+      title: 'Guardian Angel',
+      detail: rescuedAny ? 'Brought an incapacitated buddy home alive' : `Resolved ${resolvedIssues} squad emergency`,
+      color: '#38bdf8',
+    });
+  }
+  if (trim.zeroSiltMaster && (trim.disciplinePct ?? 0) >= 88) {
+    awards.push({
+      id: 'master-trim',
+      icon: '🏆',
+      title: 'Master Trim',
+      detail: `${Math.round(trim.disciplinePct ?? 100)}% frog-kick trim · Zero silt blowouts`,
+      color: '#fde047',
+    });
+  }
+  if (totalCollectibles > 0 && collectedCount >= Math.max(3, Math.ceil(totalCollectibles * 0.75))) {
+    awards.push({
+      id: 'relic-hunter',
+      icon: '💎',
+      title: 'Relic Hunter',
+      detail: `Recovered ${collectedCount}/${totalCollectibles} site relics`,
+      color: '#c084fc',
+    });
+  }
+  if (ccrActive && !session.diveState?.ccrBailedOut) {
+    awards.push({
+      id: 'silent-ghost',
+      icon: '♻️',
+      title: 'Silent CCR Ghost',
+      detail: `Zero-bubble closed-circuit run (${Math.round(session.diveState?.ccrScrubberPct ?? 100)}% scrubber left)`,
+      color: '#4ade80',
+    });
+  }
+  if (photoCount >= 2 || (session.photoCompositionBonus || 0) > 0) {
+    awards.push({
+      id: 'wildlife-master',
+      icon: '📸',
+      title: 'Expedition Photographer',
+      detail: session.photoCompositionBonus > 0 ? `Nat-Geo composition (+${session.photoCompositionBonus} pts)` : `${photoCount} underwater frames logged`,
+      color: '#fb923c',
+    });
+  }
+  if (dashes >= 3 || session.secretLair?.bossDefeated) {
+    awards.push({
+      id: 'slipstream-ace',
+      icon: '⚡',
+      title: 'Slipstream Ace',
+      detail: `${dashes} combat Hydro-Dashes executed`,
+      color: '#22d3ee',
+    });
+  }
+  return awards.slice(0, 3);
+}

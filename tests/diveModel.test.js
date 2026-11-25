@@ -7581,8 +7581,8 @@ test('v160 Multi-Dive Expedition Campaigns, Repetitive Surface Intervals & Debri
   const { recordDiveHighlight } = await import('../public/js/game/diveSession.js');
   const { recordCampaignClearInLogbook } = await import('../public/js/game/logbookModel.js');
 
-  // 1. All 4 Expedition Campaigns reference real registered campaign sites
-  assert.equal(EXPEDITION_CAMPAIGNS.length, 4);
+  // 1. All Expedition Campaigns reference real registered campaign sites
+  assert.ok(EXPEDITION_CAMPAIGNS.length >= 6);
   for (const camp of EXPEDITION_CAMPAIGNS) {
     assert.equal(camp.legs.length, 3, `Campaign ${camp.id} must have 3 legs`);
     for (const lid of camp.legs) {
@@ -8565,7 +8565,7 @@ test('v174 Campaign Mastery Rewards, Bidirectional Replay-Depth Sync & Technical
   const { getLevelById } = await import('../public/js/levels/index.js');
 
   // 1. Campaign Mastery Rewards: locked by default, unlocked individually per campaign clear
-  assert.equal(EXPEDITION_CAMPAIGNS.length, 4);
+  assert.ok(EXPEDITION_CAMPAIGNS.length >= 6);
   for (const camp of EXPEDITION_CAMPAIGNS) {
     assert.ok(camp.reward?.patchId && camp.reward?.itemId && camp.reward?.label, `Campaign ${camp.id} missing reward metadata`);
   }
@@ -10349,4 +10349,112 @@ test('v196 2-Site Expansion (Cenote Angelita H2S River & Fujikawa Maru), CCR Ste
   assert.equal(paceGold.band, 'gold');
   assert.equal(pacePar.band, 'par');
   assert.equal(paceBehind.band, 'behind');
+});
+
+test('v197 CCR HUD Controls, A6M Zero & H2S Immersion, 6 Campaigns, Shared World Beacons & Photo Studio 2.0', async () => {
+  const { EXPEDITION_CAMPAIGNS, getExpeditionCampaignById } = await import('../public/js/game/expeditionCampaigns.js');
+  const { computeUnlockedLiveries, VISOR_TINTS, TANK_FINISHES, MILESTONE_PATCHES } = await import('../public/js/game/rigLivery.js');
+  const { recordCampaignClearInLogbook } = await import('../public/js/game/logbookModel.js');
+  const { placeWorldBeacon } = await import('../public/js/game/diveSession.js');
+  const { computeSquadSuperlatives } = await import('../public/js/game/scoring.js');
+  const { detectPhotoCompositionSubject, stampExpeditionPostcardOverlay } = await import('../public/js/game/photoStudio.js');
+  const { InputController } = await import('../public/js/game/input.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Pillar 1: CCR Loop Controls ([V] setpoint toggle & Shift+V bailout callbacks)
+  let ccrToggled = 0;
+  let ccrBailed = 0;
+  const ctrl = new InputController({
+    onCcrSetpointToggle: () => { ccrToggled++; },
+    onCcrBailout: () => { ccrBailed++; },
+  });
+  assert.equal(typeof ctrl.onCcrSetpointToggle, 'function');
+  assert.equal(typeof ctrl.onCcrBailout, 'function');
+  ctrl.onCcrSetpointToggle();
+  ctrl.onCcrBailout();
+  assert.equal(ccrToggled, 1);
+  assert.equal(ccrBailed, 1);
+
+  // 2. Pillar 2: Fujikawa Maru Hold #2 A6M Zero Fighters + Cenote Angelita H2S Cloud Immersion Vignette
+  const fujLvl = getLevelById('fujikawa-maru-chuuk');
+  const angLvl = getLevelById('cenote-angelita-river');
+  const zeroProps = (fujLvl.wreckProps || []).filter((p) => p.kind === 'zero-fighter');
+  assert.equal(zeroProps.length, 2, 'Fujikawa Maru Hold #2 must feature two sunken A6M Zero fighters');
+
+  const drawCalls = [];
+  const mockCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 88 }),
+      canvas: { width: 1280, height: 720 },
+    },
+    { get(t, p) { return p in t ? t[p] : () => drawCalls.push(String(p)); } }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock.level = fujLvl;
+  rMock._drawWreckBackdropDetails(mockCtx, 0, 80, 0, 45, (x) => x * 20, (y) => y * 20, 20, 2.4, {});
+  assert.ok(drawCalls.length > 40, 'A6M Zero Fighter wreck props must render cleanly');
+
+  const vigInside = rMock._drawH2sCloudImmersionVignette(mockCtx, 1280, 720, { x: 26, y: 30.0 }, angLvl.h2sCloudLayer);
+  const vigOutside = rMock._drawH2sCloudImmersionVignette(mockCtx, 1280, 720, { x: 26, y: 12.0 }, angLvl.h2sCloudLayer);
+  assert.ok(vigInside > 0.7, 'Diver inside 30m H2S cloud must receive vivid golden-emerald immersion vignette');
+  assert.equal(vigOutside, 0, 'Diver far above H2S cloud must receive zero H2S immersion vignette');
+
+  // 3. Pillar 3: 6 Expedition Campaigns + Coral & Halocline Mastery Gear Unlocks
+  assert.equal(EXPEDITION_CAMPAIGNS.length, 6, 'Must have 6 multi-dive Expedition Campaigns');
+  assert.ok(getExpeditionCampaignById('coral-iron-wrecks'));
+  assert.ok(getExpeditionCampaignById('halocline-wonders'));
+  assert.ok(VISOR_TINTS.some((v) => v.id === 'pacific-coral-visor'));
+  assert.ok(TANK_FINISHES.some((t) => t.id === 'sulfur-emerald-tank'));
+  assert.ok(MILESTONE_PATCHES.some((p) => p.id === 'camp-coral-wrecks'));
+  assert.ok(MILESTONE_PATCHES.some((p) => p.id === 'camp-halocline'));
+
+  let book = createEmptyLogbook();
+  assert.equal(computeUnlockedLiveries(book).visors.has('pacific-coral-visor'), false);
+  assert.equal(computeUnlockedLiveries(book).tanks.has('sulfur-emerald-tank'), false);
+  book = recordCampaignClearInLogbook(book, 'coral-iron-wrecks').book;
+  book = recordCampaignClearInLogbook(book, 'halocline-wonders').book;
+  const unlocked = computeUnlockedLiveries(book);
+  assert.equal(unlocked.visors.has('pacific-coral-visor'), true, 'Coral & Iron Wrecks must unlock Pacific Coral Visor');
+  assert.equal(unlocked.tanks.has('sulfur-emerald-tank'), true, 'Halocline Wonders must unlock Sulfur Emerald Cylinders');
+  assert.equal(unlocked.patches.has('camp-coral-wrecks'), true);
+  assert.equal(unlocked.patches.has('camp-halocline'), true);
+
+  // 4. Pillar 4: Shared Acoustic World Beacons + Celebratory Expedition Superlatives
+  const sBea = createDiveSession(fujLvl, { diverName: 'EchoLead', gear: { ccr: true } });
+  const b1 = placeWorldBeacon(sBea, { x: 26, y: 28, author: 'EchoLead', label: 'HOLD #2' });
+  assert.ok(b1 && sBea.worldBeacons.length === 1);
+  for (let i = 0; i < 6; i++) placeWorldBeacon(sBea, { x: 20 + i, y: 20, author: `P${i}` });
+  assert.equal(sBea.worldBeacons.length, 4, 'World beacons must cap cleanly at 4 active');
+  const callsBeforeBeacon = drawCalls.length;
+  rMock._drawWorldBeacons(mockCtx, sBea.worldBeacons, (x) => x * 20, (y) => y * 20, 20, 1.5);
+  assert.ok(drawCalls.length > callsBeforeBeacon + 20, 'Acoustic world beacons must paint rings, diamond & callsign tag');
+  stepDiveSession(sBea, { x: 0, y: 0 }, 7.0);
+  assert.equal(sBea.worldBeacons.length, 0, 'Expired acoustic world beacons must auto-prune cleanly');
+
+  sBea.diveState.diveTimeSec = 180;
+  sBea.diveState.ccrEnabled = true;
+  sBea.diveState.ccrBailedOut = false;
+  sBea.diveState.siltKickups = 0;
+  sBea.aiBuddiesRescued = 1;
+  sBea.collectedIds = new Set((fujLvl.collectibles || []).map((c) => c.id));
+  const awards = computeSquadSuperlatives(sBea, []);
+  assert.ok(awards.length >= 2 && awards.length <= 3, 'Must award up to 3 celebratory superlative badges');
+  assert.ok(awards.some((a) => a.id === 'guardian-angel'), 'Rescuing a buddy must award Guardian Angel');
+
+  // 5. Pillar 5: Photo Studio 2.0 Smart Landmark Framing & GPS Expedition Postcard Stamp
+  const compZero = detectPhotoCompositionSubject({ level: fujLvl, camX: 27, camY: 28 });
+  assert.equal(compZero?.kind, 'zero-fighter');
+  assert.ok(compZero?.bonusPts >= 200);
+  const compH2s = detectPhotoCompositionSubject({ level: angLvl, camX: 26, camY: 30.2 });
+  assert.equal(compH2s?.kind, 'h2s-cloud');
+  const stamped = stampExpeditionPostcardOverlay(mockCtx, 1200, 675, {
+    siteName: fujLvl.name,
+    gpsLabel: '7.4°N · 151.9°E',
+    depthM: 28.4,
+    diverName: 'EchoLead',
+    subjectLabel: compZero.label,
+  });
+  assert.equal(stamped, true, 'GPS Expedition Postcard stamp must paint cleanly');
 });

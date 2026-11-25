@@ -76,6 +76,8 @@ export const WRECK_FUJIKAWA = {
     { kind: 'porthole', x: 64.0, y: 29.0, angle: 2.35, beamLen: 5.5 },
     { kind: 'beam', x: 20.0, y: 23.5, len: 5.6, angle: 0 },
     { kind: 'beam', x: 38.0, y: 23.8, len: 5.4, angle: 0.06 },
+    { kind: 'zero-fighter', x: 26.5, y: 27.9, scale: 1.05, angle: -0.08 },
+    { kind: 'zero-fighter', x: 39.2, y: 28.2, scale: 0.96, angle: 0.14 },
     { kind: 'pipe', x: 60.0, y: 32.5, len: 12.0, angle: -0.04 },
     { kind: 'propeller', x: 92.0, y: 31.5, scale: 1.25, angle: 0.2 },
   ],

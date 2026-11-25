@@ -630,6 +630,8 @@ export function createDiveSession(
     cameraKickY: 0,
     biolumWake: [],
     dashSlipstreams: [],
+    worldBeacons: [],
+    photoCompositionBonus: 0,
     hitstopSec: 0,
     timeScale: 1.0,
     crewRole: getCrewRole(crewRoleId || 'balanced'),
@@ -4471,7 +4473,35 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
   return { nextCheckpoint, outcome: null, blockedExitDecoDepthM: 0 };
 }
 
+export function placeWorldBeacon(session, { x, y, author = 'DIVER', label = '', color = '#38bdf8', durationSec = 6.5 } = {}) {
+  if (!session || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (!Array.isArray(session.worldBeacons)) session.worldBeacons = [];
+  if (session.worldBeacons.length >= 4) session.worldBeacons.shift();
+  const beacon = {
+    id: `wb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    x,
+    y,
+    author: String(author || 'DIVER').slice(0, 14),
+    label: String(label || `${String(author || 'DIVER').slice(0, 10)} · ${Math.round(y)}m`),
+    color,
+    life: durationSec,
+    maxLife: durationSec,
+  };
+  session.worldBeacons.push(beacon);
+  return beacon;
+}
+
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+  // Decay active acoustic world beacons in place (v197)
+  if (Array.isArray(session.worldBeacons) && session.worldBeacons.length > 0) {
+    let w = 0;
+    for (let i = 0; i < session.worldBeacons.length; i++) {
+      const b = session.worldBeacons[i];
+      b.life -= dt;
+      if (b.life > 0) session.worldBeacons[w++] = b;
+    }
+    session.worldBeacons.length = w;
+  }
   // Exponentially decay camera shake, directional kick, hitstop freeze-frame, and dramatic killing-blow slow-mo (v182 / v195)
   if ((session.cameraShake || 0) > 0) {
     session.cameraShake = Math.max(0, session.cameraShake - dt * 2.4);

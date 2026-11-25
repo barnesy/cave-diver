@@ -1,5 +1,6 @@
 import {
   LEVELS,
+  CAMPAIGN_PLAN,
   DEFAULT_LEVEL_ID,
   getLevelById,
   getLevelMeta,
@@ -17,6 +18,8 @@ import {
   getShareableGasCandidate,
   donateGasFromState,
   receiveGasIntoState,
+  toggleCcrSetpoint,
+  triggerCcrBailout,
 } from './physics/diveModel.js';
 import { resolveDiverCollision } from './game/collision.js';
 import { escapeHtml } from './util/common.js';
@@ -118,6 +121,7 @@ import {
   sampleGhostPose,
   buildParGhostTrack,
   applyPeerWreckAction,
+  placeWorldBeacon,
 } from './game/diveSession.js';
 import {
   computeDiverScoreSummary,
@@ -125,6 +129,7 @@ import {
   computeHealthPct,
   computeGasRemainingPct,
   markExploredAround,
+  computeSquadSuperlatives,
 } from './game/scoring.js';
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
@@ -158,7 +163,10 @@ import {
   clampPhotoModeState,
   getPhotoFrame,
   renderPhotoSnapshot,
+  detectPhotoCompositionSubject,
+  stampExpeditionPostcardOverlay,
 } from './game/photoStudio.js';
+import { formatLatLng } from './game/worldMapData.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -532,7 +540,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=196',
+  mapRasterUrl: './assets/map-expedition.jpg?v=197',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -781,16 +789,66 @@ function getActivePeers() {
   return session?.aiBuddy ? [session.aiBuddy] : [];
 }
 
+function handleCcrSetpointToggle() {
+  if (mode !== 'diving' || !session?.diveState || divePaused) return false;
+  if (!session.diveState.ccrEnabled) return false;
+  const res = toggleCcrSetpoint(session.diveState);
+  if (!res?.ok) return false;
+  audio.playTone?.(res.setpointBar >= 1.0 ? 740 : 540, 0.08, 'sine', 0.045);
+  showToast(`♻️ CCR Setpoint → ${res.label}`, 2.0);
+  return true;
+}
+
+function handleCcrBailout() {
+  if (mode !== 'diving' || !session?.diveState || divePaused) return false;
+  if (!session.diveState.ccrEnabled) return false;
+  const res = triggerCcrBailout(session.diveState);
+  if (!res?.ok) return false;
+  audio.playWarning?.();
+  input?.rumbleGamepad?.('wallBump');
+  showToast('🚨 OPEN-CIRCUIT BAILOUT — CCR Loop Isolated', 2.8);
+  return true;
+}
+
+document.getElementById('btn-ccr-setpoint')?.addEventListener('click', () => handleCcrSetpointToggle());
+document.getElementById('btn-ccr-bailout')?.addEventListener('click', () => handleCcrBailout());
+
 function handleBuddyLocatePing(targetPeerId = '') {
   if (mode !== 'diving' || !session) return false;
+  // Drop a 6.5s shared acoustic world beacon at the diver's position (pierces zero-vis silt) (v197)
+  if (session.diver) {
+    placeWorldBeacon(session, {
+      x: session.diver.x,
+      y: session.diver.y,
+      author: session.diverName || 'YOU',
+      color: '#38bdf8',
+      durationSec: 6.5,
+    });
+    if (isMultiplayer && lan?.roomCode) {
+      lan.sendSignal('📍 ACOUSTIC BEACON');
+    }
+  }
   const peers = getActivePeers();
-  if (!peers || peers.length === 0) return false;
+  if (!peers || peers.length === 0) {
+    audio.playEncounterChime?.('buddy-ping');
+    showToast('📡 Acoustic World Beacon deployed (6.5s)', 1.8);
+    return true;
+  }
   const peer =
     (targetPeerId ? peers.find((p) => p && (p.id === targetPeerId || p.name === targetPeerId)) : null) ||
     peers.find((p) => p && p.alive === false && !p.rescued) ||
     peers.find((p) => p && !p.surfaced) ||
     peers[0];
   if (!peer) return false;
+  if (Number.isFinite(peer.x) && Number.isFinite(peer.y)) {
+    placeWorldBeacon(session, {
+      x: peer.x,
+      y: peer.y,
+      author: peer.name || 'BUDDY',
+      color: peer.alive === false ? '#f87171' : '#34d399',
+      durationSec: 6.5,
+    });
+  }
   const res = triggerBuddyLocatePing(session, peer, sessionStepCallbacks);
   return Boolean(res?.ok);
 }
@@ -889,6 +947,8 @@ const input = new InputController({
   onMinimapToggle: () => handleMinimapToggle(),
   onCameraSnap: () => (photoModeState.active ? savePhotoStudioSnapshot() : handleCameraSnap()),
   onBuddyPing: () => handleBuddyLocatePing(''),
+  onCcrSetpointToggle: () => handleCcrSetpointToggle(),
+  onCcrBailout: () => handleCcrBailout(),
   onStageDrop: () => handleStageDrop(),
   onLiftBagToggle: () => handleLiftBagToggle(),
   onDropLineCookie: () => handleDropLineCookie(),
@@ -1257,6 +1317,7 @@ function savePhotoStudioSnapshot() {
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
+      worldBeacons: session.worldBeacons || null,
       droppedStages: session.droppedStages || null,
       weather: session.weather || null,
       photoMode: photoModeState,
@@ -1275,29 +1336,63 @@ function savePhotoStudioSnapshot() {
     outCanvas.width = 1200;
     outCanvas.height = 675;
     const outCtx = outCanvas.getContext('2d');
-    const verMeta = document.querySelector('meta[name="app-version"]')?.content || '139';
+    const verMeta = document.querySelector('meta[name="app-version"]')?.content || '197';
+    // Smart Photo Composition Detection & GPS Expedition Postcard Stamp (v197)
+    const comp = detectPhotoCompositionSubject({
+      level: session.level,
+      diver: session.diver,
+      camX: renderer.camX,
+      camY: renderer.camY,
+      ecosystem,
+      stories: session.stories,
+    });
+    if (comp) {
+      if (!session._photoCompKinds) session._photoCompKinds = new Set();
+      if (!session._photoCompKinds.has(comp.kind)) {
+        session._photoCompKinds.add(comp.kind);
+        session.photoCompositionBonus = (session.photoCompositionBonus || 0) + comp.bonusPts;
+      }
+    }
+    const sitePlanSlot = CAMPAIGN_PLAN.find((s) => s.id === session.level?.id);
+    const gpsLabel =
+      sitePlanSlot && Number.isFinite(sitePlanSlot.lat) && Number.isFinite(sitePlanSlot.lng)
+        ? formatLatLng(sitePlanSlot.lat, sitePlanSlot.lng)
+        : '';
+    const siteName = session.level?.name || 'Expedition Site';
+    const depthM = session.diveState?.depthM || session.diver?.y || 0;
+    const diverName = session.diverName || getEnteredCallsign() || 'Diver';
     renderPhotoSnapshot(outCtx, canvas, {
       width: 1200,
       height: 675,
       filterId: photoModeState.filterId,
       frameId: photoModeState.frameId,
-      siteName: session.level?.name || 'Expedition Site',
-      depthM: session.diveState?.depthM || session.diver?.y || 0,
+      siteName,
+      depthM,
       gasLabel: getActiveGasName(session.diveState?.activeGasId || 'EAN32'),
-      diverName: session.diverName || getEnteredCallsign() || 'Diver',
+      diverName,
       weatherLabel: session.weather?.label || '',
       version: `v${verMeta}`,
     });
+    if (photoModeState.frameId !== 'clean') {
+      stampExpeditionPostcardOverlay(outCtx, 1200, 675, {
+        siteName,
+        depthM,
+        diverName,
+        gpsLabel,
+        subjectLabel: comp?.label || '',
+        topOffset: photoModeState.frameId === 'cinema' ? Math.round(675 * 0.11) + 14 : undefined,
+      });
+    }
     const dataUrl = outCanvas.toDataURL('image/png');
     const slug = String(session.level?.id || 'dive').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `techno-dive-photo-${slug}-${Math.round(session.diveState?.depthM || 0)}m.png`;
+    a.download = `techno-dive-photo-${slug}-${Math.round(depthM)}m.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     audio.playCameraShutter(true, false);
-    showToast('📸 High-res Underwater Photo saved as PNG!', 2.4);
+    showToast(comp ? `${comp.badge} · Postcard saved!` : '📸 High-res Expedition Postcard saved as PNG!', 2.6);
   } catch {
     showToast('Could not export photograph on this browser.', 2.0);
   } finally {
@@ -3280,7 +3375,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         (session.contractBonusScore || 0) +
         (session.aiLeadBonusScore || 0) +
         (session.aiBuddiesRescued || 0) * 450,
-      photoBonusScore: session.camera?.photoBonusScore || 0,
+      photoBonusScore: (session.camera?.photoBonusScore || 0) + (session.photoCompositionBonus || 0),
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,
       weatherBonusScore: session.weatherBonusScore || 0,
@@ -3619,6 +3714,23 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     } else {
       debriefCampaignBoxEl.hidden = true;
       debriefCampaignBoxEl.innerHTML = '';
+    }
+  }
+  // Celebratory Co-op & Solo Expedition Superlative Awards (v197)
+  const debriefSuperlativesEl = document.getElementById('debrief-superlatives');
+  if (debriefSuperlativesEl) {
+    const awards = success ? computeSquadSuperlatives(session, getActivePeers()) : [];
+    if (awards.length > 0) {
+      debriefSuperlativesEl.hidden = false;
+      debriefSuperlativesEl.innerHTML = awards
+        .map(
+          (a) =>
+            `<span class="debrief-superlative-chip" title="${escapeHtml(a.detail)}">${a.icon} <strong>${escapeHtml(a.title)}</strong> · ${escapeHtml(a.detail)}</span>`
+        )
+        .join('');
+    } else {
+      debriefSuperlativesEl.hidden = true;
+      debriefSuperlativesEl.innerHTML = '';
     }
   }
   replayTheater.setLastDebriefCardData({
@@ -6223,6 +6335,15 @@ lan.on('peer_signal', (msg) => {
     const p = lan.getPeers().find((peer) => peer && peer.id === msg.playerId);
     if (p && Number.isFinite(p.x)) {
       pan = computeSpatialMix(session.diver.x, session.diver.y, p.x, p.y, { maxDistM: 60 }).pan;
+      if (Number.isFinite(p.y)) {
+        placeWorldBeacon(session, {
+          x: p.x,
+          y: p.y,
+          author: msg.name || p.name || 'BUDDY',
+          color: '#38bdf8',
+          durationSec: 6.5,
+        });
+      }
     }
   }
   audio.playSignal(pan);
@@ -6831,7 +6952,15 @@ function stepSimulation(dt) {
       audio.playSplash(nowSubmerged);
     }
     session._wasSubmerged = nowSubmerged;
-    audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel, session.spaceClearanceM);
+    let effectiveClearance = session.spaceClearanceM;
+    if (level?.h2sCloudLayer) {
+      const h2sHalf = Math.max(2.0, (level.h2sCloudLayer.thickness || 4.0) * 0.65);
+      const h2sDist = Math.abs(diver.y - level.h2sCloudLayer.y);
+      if (h2sDist < h2sHalf) {
+        effectiveClearance = Math.min(effectiveClearance ?? 4.0, 1.35);
+      }
+    }
+    audio.setEnvironmentFilter(diveState.depthM, diveState.narcosisLevel, effectiveClearance);
     if (diveState.alive) {
       const curTank = diveState.tanks?.[diveState.activeGasId];
       audio.stepAmbience(dt, level, diver.y, diver, {
@@ -7391,6 +7520,7 @@ function frame(nowMs) {
       reelingActive: Boolean(session.reelingActive),
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
+      worldBeacons: session.worldBeacons || null,
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
       droppedStages: session.droppedStages || null,

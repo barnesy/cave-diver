@@ -856,6 +856,7 @@ export class CaveRenderer {
     cameraKickY = 0,
     biolumWake = null,
     dashSlipstreams = null,
+    worldBeacons = null,
     timeSec,
     dt,
   }) {
@@ -1233,6 +1234,7 @@ export class CaveRenderer {
     }
     if (this.level.h2sCloudLayer && typeof this._drawH2sCloudRiver === 'function') {
       this._drawH2sCloudRiver(ctx, cw, ch, this.level.h2sCloudLayer, toScreenX, toScreenY, scale, timeSec);
+      this._drawH2sCloudImmersionVignette?.(ctx, cw, ch, diver, this.level.h2sCloudLayer);
     }
     if (bioWake && bioWake.length > 0 && typeof this._drawBioWake === 'function') {
       this._drawBioWake(ctx, bioWake, visX0 - 2, visX1 + 2, visY0 - 2, visY1 + 2, toScreenX, toScreenY, scale, timeSec);
@@ -1295,6 +1297,9 @@ export class CaveRenderer {
     // 11a. Active Acoustic Cave Sonar Overlay (drawn POST-silt so echoes pierce zero-vis silt-outs! v142)
     if (sonarPulse) {
       this._drawSonarPulse(ctx, sonarPulse, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (worldBeacons && worldBeacons.length > 0 && typeof this._drawWorldBeacons === 'function') {
+      this._drawWorldBeacons(ctx, worldBeacons, toScreenX, toScreenY, scale, timeSec);
     }
     if (secretLair && typeof this._drawSecretLairEmissive === 'function') {
       this._drawSecretLairEmissive(ctx, cw, ch, diver, toScreenX, toScreenY, scale, timeSec, secretLair);

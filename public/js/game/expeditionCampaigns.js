@@ -106,6 +106,36 @@ export const EXPEDITION_CAMPAIGNS = Object.freeze([
       label: '💠 Abyssal Carbon-Ti Twinset + 🌌 Crest Patch',
     }),
   }),
+  Object.freeze({
+    id: 'coral-iron-wrecks',
+    name: 'Coral & Iron Wrecks',
+    icon: '🪸',
+    patchName: 'Coral Wrecker',
+    accent: '#fb7185',
+    desc: 'Survey sunlit tropical shipwrecks from Chuuk Lagoon’s Zero-fighter cargo hold to the Red Sea Thistlegorm and Cyprus’s MS Zenobia.',
+    legs: Object.freeze(['fujikawa-maru-chuuk', 'ss-thistlegorm-wreck', 'ms-zenobia-ferry']),
+    reward: Object.freeze({
+      patchId: 'camp-coral-wrecks',
+      itemType: 'visor',
+      itemId: 'pacific-coral-visor',
+      label: '🪸 Pacific Coral Visor Tint + 🪸 Crest Patch',
+    }),
+  }),
+  Object.freeze({
+    id: 'halocline-wonders',
+    name: 'Halocline Wonders',
+    icon: '🧪',
+    patchName: 'Halocline Pioneer',
+    accent: '#a3e635',
+    desc: 'Cross shimmering freshwater-saltwater boundaries across Cenote El Abismo, Bimini’s sunken megaliths, and Angelita’s glowing H₂S cloud river.',
+    legs: Object.freeze(['cenote-el-abismo', 'bimini-road-megalith', 'cenote-angelita-river']),
+    reward: Object.freeze({
+      patchId: 'camp-halocline',
+      itemType: 'tank',
+      itemId: 'sulfur-emerald-tank',
+      label: '🧪 Sulfur Emerald Twinset + 🧪 Crest Patch',
+    }),
+  }),
 ]);
 
 export function getExpeditionCampaignById(id) {
