@@ -11380,3 +11380,103 @@ test('v213 Live Squad Staging Lineup, Interactive Trophy Gallery Diorama, Rare A
     livery: { suitId: 'secret-kraken-biolume', tankId: 'secret-kraken-ink' },
   });
 });
+
+test('v214 Pre-Dive Co-op Staging Controls, Squad Coverage & Diegetic Steady-Trim Deco Mastery', async () => {
+  const { drawSquadStagingLineup, summarizeSquadStagingCoverage } = await import('../public/js/game/rigLivery.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Squad Coverage Strip summarizes active Crew Specialty Roles & Set Synergies
+  const cov = summarizeSquadStagingCoverage([
+    { crewRoleId: 'navigator', livery: { suitId: 'secret-kraken-biolume', torchId: 'halocline-uv' } },
+    { crewRoleId: 'safety', livery: { headgearId: 'secret-dreadnought-helm', tankId: 'secret-dreadnought-brass' } },
+    { crewRoleId: 'balanced', livery: null },
+  ]);
+  assert.equal(cov.uniqueSpecialtyRoles, 2);
+  assert.equal(cov.setSynergyCount, 2);
+  assert.ok(cov.summaryText.includes('Navigator') && cov.summaryText.includes('Safety') && cov.summaryText.includes('2 Set Auras'));
+
+  // 2. Interactive Staging Bay renders active torch beam-check & 👌 OK wave emotes cleanly
+  let ops = 0;
+  const mockCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 52 }),
+      canvas: { width: 560, height: 142 },
+    },
+    { get: (t, p) => (p in t ? t[p] : () => { ops++; }), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const now = Date.now();
+  drawSquadStagingLineup(
+    mockCtx,
+    560,
+    142,
+    [
+      { name: 'Chris', crewRoleId: 'navigator', stagingEmote: { kind: 'torch', seq: 1, at: now - 300 }, nowMs: now },
+      { name: 'Maya', crewRoleId: 'safety', stagingEmote: { kind: 'ok', seq: 2, at: now - 400 }, nowMs: now },
+    ],
+    { timeSec: 2.1, title: 'ROOM STAG STAGING' }
+  );
+  assert.ok(ops > 140, 'Interactive Staging Bay with torch/OK emotes must draw cleanly');
+
+  // 3. Steady-Trim Deco Mastery accelerates Bühlmann offgassing strictly faster than baseline
+  const baseState = createDiveState();
+  const trimState = createDiveState();
+  switchGas(baseState, 'TMX1455');
+  switchGas(trimState, 'TMX1455');
+  for (let i = 0; i < 180; i++) {
+    stepDivePhysiology(baseState, { depthM: 52, prevDepthM: 52, dt: 1, exertion: 0.25 });
+    stepDivePhysiology(trimState, { depthM: 52, prevDepthM: 52, dt: 1, exertion: 0.25 });
+  }
+  assert.ok(baseState.ceilingM > 3.0, 'Deep 52m bottom time must generate mandatory deco ceiling');
+  const stopDepth = baseState.stopDepthM;
+  switchGas(baseState, stopDepth <= 6 ? 'O2' : 'EAN32');
+  switchGas(trimState, stopDepth <= 6 ? 'O2' : 'EAN32');
+  for (let i = 0; i < 45; i++) {
+    stepDivePhysiology(baseState, { depthM: stopDepth, prevDepthM: stopDepth, dt: 1, exertion: 0.1, decoOffgasMult: 1.0 });
+    stepDivePhysiology(trimState, { depthM: stopDepth, prevDepthM: stopDepth, dt: 1, exertion: 0.1, decoOffgasMult: 1.22 });
+  }
+  assert.ok(
+    trimState.ceilingM < baseState.ceilingM - 0.1,
+    `Steady-Trim +22% offgassing must lower deco ceiling faster (${trimState.ceilingM.toFixed(2)}m vs ${baseState.ceilingM.toFixed(2)}m)`
+  );
+
+  // 4. Live DiveSession activates decoMastery while hovering steadily at stopDepthM & awards bonus points
+  const sess = createDiveSession(LEVEL_1, { diverName: 'DecoMaster', crewRoleId: 'safety' });
+  switchGas(sess.diveState, 'TMX1455');
+  for (let i = 0; i < 115; i++) {
+    stepDivePhysiology(sess.diveState, { depthM: 46, prevDepthM: 46, dt: 1, exertion: 0.25 });
+  }
+  const targetStop = sess.diveState.stopDepthM;
+  assert.ok(targetStop >= 3 && targetStop <= 12, `Deco stop should be inside cenote open water (got ${targetStop}m)`);
+  switchGas(sess.diveState, targetStop <= 6 ? 'O2' : 'EAN32');
+  for (let i = 0; i < 25; i++) {
+    const liveStop = sess.diveState.stopDepthM || targetStop;
+    sess.diver.x = LEVEL_1.spawn.x;
+    sess.diver.y = liveStop;
+    sess.diver.vx = 0;
+    sess.diver.vy = 0;
+    stepDiveSession(sess, { x: 0, y: 0 }, 0.1, {});
+  }
+  assert.equal(sess.decoMastery.inStopZone, true);
+  assert.equal(sess.decoMastery.masteryActive, true);
+  assert.ok(sess.decoMastery.bonusScore > 10, 'Steady-Trim Mastery must accrue bonus score while holding stop');
+
+  // 5. Diegetic Decompression Hover Band renders cleanly in CaveRenderer
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  const opsBeforeBand = ops;
+  r._drawDiegeticDecoHoverBand(
+    mockCtx,
+    1280,
+    720,
+    sess.diver,
+    sess.diveState,
+    sess.decoMastery,
+    (x) => 640 + x * 20,
+    (y) => 200 + y * 20,
+    24,
+    2.5
+  );
+  assert.ok(ops > opsBeforeBand + 30, 'Diegetic Decompression Hover Band must render corridor, rails & pill');
+});

@@ -1602,11 +1602,18 @@ test('v213 Co-op Lobby Rig Livery Sync: P2P Host & LAN Server sanitize and broad
       ws2,
       (m) => m.type === 'room_update' && m.room?.players?.some((p) => p.name === 'Chris' && p.livery?.suitId === 'gold-master')
     );
-    ws1.send(JSON.stringify({ type: 'set_player_status', livery: { suitId: 'gold-master', torchId: 'secret-solar-prism' } }));
+    ws1.send(JSON.stringify({
+      type: 'set_player_status',
+      livery: { suitId: 'gold-master', torchId: 'secret-solar-prism' },
+      crewRoleId: 'navigator',
+      stagingEmote: { kind: 'torch', seq: 3 },
+    }));
     const updated = await updateP;
     const chris = updated.room.players.find((p) => p.name === 'Chris');
     assert.equal(chris.livery.suitId, 'gold-master');
     assert.equal(chris.livery.torchId, 'secret-solar-prism');
+    assert.equal(chris.crewRoleId, 'navigator');
+    assert.equal(chris.stagingEmote?.kind, 'torch');
 
     ws1.close();
     ws2.close();

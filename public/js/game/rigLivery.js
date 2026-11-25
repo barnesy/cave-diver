@@ -2465,33 +2465,78 @@ export function drawSquadStagingLineup(
       ctx.restore();
     }
 
-    // Compact torch cone
+    // Interactive Staging Bay Emote timing (v214: torch beam check & 👌 OK wave!)
+    const nowMs = Number.isFinite(m.nowMs) ? m.nowMs : Date.now();
+    const emoteAgeSec = m.stagingEmote?.at ? Math.max(0, (nowMs - m.stagingEmote.at) / 1000) : 99;
+    const isTorchFlash = m.stagingEmote?.kind === 'torch' && emoteAgeSec < 2.2;
+    const isOkWave = m.stagingEmote?.kind === 'ok' && emoteAgeSec < 2.4;
+    const activeSweep = isTorchFlash ? Math.sin(emoteAgeSec * 14) * 0.24 : sweepAng;
+    const flashBoost = isTorchFlash ? 1.55 + 0.45 * Math.abs(Math.sin(emoteAgeSec * 16)) : 1.0;
+
+    // Compact torch cone (flares dramatically on interactive Beam Check!)
     const torchX = cx + (m.hasDpv ? 0.44 : 0.48) * diverScale + 0.18 * diverScale;
     const torchY = cy + (m.hasDpv ? 0.16 : 0.21) * diverScale;
-    const coneLen = Math.min(slotW * 0.44, diverScale * 2.1) * (pal.torch?.rangeMult || 1);
-    const cg = ctx.createRadialGradient(torchX, torchY, 2, torchX + coneLen * 0.45, torchY, coneLen * 0.72);
-    cg.addColorStop(0, `rgba(${pal.torch.coreRgb}, 0.64)`);
-    cg.addColorStop(0.45, `rgba(${pal.torch.shaftRgb}, 0.22)`);
+    const coneLen = Math.min(slotW * 0.48, diverScale * 2.15 * (isTorchFlash ? 1.32 : 1)) * (pal.torch?.rangeMult || 1);
+    const cg = ctx.createRadialGradient(torchX, torchY, 2, torchX + coneLen * 0.45, torchY, coneLen * 0.78);
+    cg.addColorStop(0, `rgba(${pal.torch.coreRgb}, ${Math.min(0.98, 0.64 * flashBoost).toFixed(2)})`);
+    cg.addColorStop(0.45, `rgba(${pal.torch.shaftRgb}, ${Math.min(0.65, 0.22 * flashBoost).toFixed(2)})`);
     cg.addColorStop(1, `rgba(${pal.torch.shaftRgb}, 0)`);
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.fillStyle = cg;
     ctx.beginPath();
     ctx.moveTo(torchX, torchY);
-    ctx.arc(torchX, torchY, coneLen, sweepAng - 0.24, sweepAng + 0.24);
+    ctx.arc(torchX, torchY, coneLen, activeSweep - (isTorchFlash ? 0.31 : 0.24), activeSweep + (isTorchFlash ? 0.31 : 0.24));
     ctx.closePath();
     ctx.fill();
+    if (isTorchFlash) {
+      const fg = ctx.createRadialGradient(torchX, torchY, 1, torchX, torchY, diverScale * 0.72);
+      fg.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+      fg.addColorStop(0.45, `rgba(${pal.torch.coreRgb}, 0.52)`);
+      fg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(torchX, torchY, diverScale * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
 
     _drawArticulatedPreviewDiver(ctx, cx, cy, diverScale, pal, {
       hasCcr: Boolean(m.hasCcr),
       hasDpv: Boolean(m.hasDpv),
       timeSec: timeSec + i * 0.7,
-      sweepAng,
+      sweepAng: activeSweep,
       animateKick: true,
     });
 
+    // Floating emote pill above diver on interactive Wave OK or Beam Check
+    if (isOkWave || isTorchFlash) {
+      const fade = Math.min(1, ((isOkWave ? 2.4 : 2.2) - emoteAgeSec) / 0.45);
+      const lift = emoteAgeSec * 4.5;
+      const badgeY = Math.max(22, cy - diverScale * 0.72 - lift);
+      const badgeTxt = isOkWave ? '👌 OK!' : '🔦 BEAM CHECK';
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, fade));
+      ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const tw = ctx.measureText(badgeTxt).width + 14;
+      ctx.fillStyle = isOkWave ? 'rgba(6, 78, 59, 0.9)' : 'rgba(30, 41, 59, 0.92)';
+      ctx.strokeStyle = isOkWave ? '#4ade80' : '#facc15';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect?.(slotW * (i + 0.5) - tw * 0.5, badgeY - 9, tw, 18, 9) ??
+        ctx.rect(slotW * (i + 0.5) - tw * 0.5, badgeY - 9, tw, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isOkWave ? '#bbf7d0' : '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badgeTxt, slotW * (i + 0.5), badgeY);
+      ctx.restore();
+    }
+
     // Nameplate & ready/role subtitle beneath each diver
+    const STAGING_ROLE_ICONS = { balanced: '🤿', navigator: '🧭', engineer: '⚙️', safety: '🩺' };
+    const roleIcon = STAGING_ROLE_ICONS[m.crewRoleId] || '';
     const labelY = h - 22;
     const roleTxt = m.role ? ` · ${m.role}` : '';
     const statusDot = m.ready === false ? '#fbbf24' : '#4ade80';
@@ -2499,7 +2544,8 @@ export function drawSquadStagingLineup(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f8fafc';
-    ctx.fillText(String(m.name || 'Diver').slice(0, 14), slotW * (i + 0.5), labelY);
+    const namePrefix = roleIcon && m.crewRoleId && m.crewRoleId !== 'balanced' ? `${roleIcon} ` : '';
+    ctx.fillText(`${namePrefix}${String(m.name || 'Diver').slice(0, 14)}`, slotW * (i + 0.5), labelY);
 
     ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.fillStyle = pal.setSynergy ? pal.setSynergy.color : '#94a3b8';
@@ -2516,4 +2562,45 @@ export function drawSquadStagingLineup(
   }
 
   ctx.restore();
+}
+
+const STAGING_ROLE_META = {
+  balanced: { icon: '🤿', label: 'Standard' },
+  navigator: { icon: '🧭', label: 'Navigator' },
+  engineer: { icon: '⚙️', label: 'Engineer' },
+  safety: { icon: '🩺', label: 'Safety' },
+};
+
+/**
+ * Summarize active Crew Roles & Gear Set Synergies for the Co-op Staging Bay coverage strip (v214).
+ */
+export function summarizeSquadStagingCoverage(members = []) {
+  const crew = Array.isArray(members) ? members : [];
+  const roleSet = new Set();
+  const roleBadges = [];
+  const synergyNames = [];
+  for (let i = 0; i < crew.length; i++) {
+    const m = crew[i];
+    if (!m) continue;
+    const rid = STAGING_ROLE_META[m.crewRoleId] ? m.crewRoleId : 'balanced';
+    if (rid !== 'balanced' && !roleSet.has(rid)) {
+      roleSet.add(rid);
+      roleBadges.push(`${STAGING_ROLE_META[rid].icon} ${STAGING_ROLE_META[rid].label}`);
+    }
+    const syn = evaluateGearSetSynergy(m.livery || null);
+    if (syn?.active && !synergyNames.includes(syn.active.auraName)) {
+      synergyNames.push(`${syn.active.icon} ${syn.active.auraName}`);
+    }
+  }
+  const parts = [];
+  if (roleBadges.length > 0) parts.push(roleBadges.join(' · '));
+  else parts.push('🤿 Standard Crew — tap Role to specialize');
+  if (synergyNames.length > 0) parts.push(`✦ ${synergyNames.length} Set Aura${synergyNames.length > 1 ? 's' : ''}`);
+  return {
+    uniqueSpecialtyRoles: roleSet.size,
+    roleBadges,
+    setSynergyCount: synergyNames.length,
+    synergyNames,
+    summaryText: parts.join('  |  '),
+  };
 }

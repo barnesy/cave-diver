@@ -869,6 +869,7 @@ export class CaveRenderer {
     dashSlipstreams = null,
     worldBeacons = null,
     syncedSonarPings = null,
+    decoMastery = null,
     timeSec,
     dt,
   }) {
@@ -1327,6 +1328,8 @@ export class CaveRenderer {
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
     // 11a-pre. Co-op Crossed-Beam Triangulation (drawn post-silt so triangulated focal bloom & relic glints pierce haze! v213)
     this._drawCoopBeamTriangulation?.(ctx, diver, peerList, this.level.collectibles, collectedIds, toScreenX, toScreenY, scale, timeSec);
+    // 11a-deco. Diegetic Decompression Hover Band & Steady-Trim Offgas Reticle (v214)
+    this._drawDiegeticDecoHoverBand?.(ctx, cw, ch, diver, diveState, decoMastery, toScreenX, toScreenY, scale, timeSec);
 
     // 11a. Active Acoustic Cave Sonar Overlay (drawn POST-silt so echoes pierce zero-vis silt-outs! v142)
     if (sonarPulse) {

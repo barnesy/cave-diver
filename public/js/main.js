@@ -164,6 +164,7 @@ import {
   isDefaultRigLivery,
   drawMiniDiverAvatar,
   drawSquadStagingLineup,
+  summarizeSquadStagingCoverage,
 } from './game/rigLivery.js';
 import { getCollectibleLoreNote } from './game/submergedStories.js';
 import {
@@ -300,7 +301,14 @@ const lanRoomsSection = document.getElementById('lan-rooms-section');
 const lanRoomsList = document.getElementById('lan-rooms-list');
 const lanRoomBox = document.getElementById('lan-room-box');
 const lanStagingCanvas = document.getElementById('lan-staging-canvas');
+const lanSquadSynergyStrip = document.getElementById('lan-squad-synergy-strip');
+const btnStageLobby = document.getElementById('btn-stage-lobby');
+const btnStageFlash = document.getElementById('btn-stage-flash');
+const btnStageOk = document.getElementById('btn-stage-ok');
+const btnStageRole = document.getElementById('btn-stage-role');
 let lastBroadcastLiveryJson = '';
+let localStagingEmote = null;
+let stagingEmoteSeq = 0;
 const lanInviteUrlInput = document.getElementById('lan-invite-url');
 const btnCopyInvite = document.getElementById('btn-copy-invite');
 const btnShareInvite = document.getElementById('btn-share-invite');
@@ -562,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=213',
+  mapRasterUrl: './assets/map-expedition.jpg?v=214',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2400,6 +2408,7 @@ function syncCrewRoleUi() {
     menuRolePillEl.textContent = `${role.icon} ${role.shortLabel || role.name}`;
     menuRolePillEl.classList.toggle('active', role.id !== 'balanced');
   }
+  if (btnStageRole) btnStageRole.textContent = `${role.icon} ${role.shortLabel || role.name}`;
   const roleDescEl = document.getElementById('setup-role-desc');
   if (roleDescEl) {
     roleDescEl.textContent = `${role.name}: ${role.perkText}`;
@@ -5419,6 +5428,36 @@ roomCodeInput?.addEventListener('keydown', (e) => {
 
 document.getElementById('btn-join-room').addEventListener('click', triggerJoinFromInput);
 
+function triggerStagingEmote(kind = 'ok') {
+  if (!lan.room) return;
+  stagingEmoteSeq += 1;
+  localStagingEmote = { kind, seq: stagingEmoteSeq, at: Date.now() };
+  lan.setPlayerStatus({ stagingEmote: { kind, seq: stagingEmoteSeq }, crewRoleId: activeCrewRoleId, livery: liveryWorkshop.getActiveRigLivery() });
+  if (kind === 'torch') audio.playClick?.();
+  else audio.playSignal?.(0);
+}
+btnStageLobby?.addEventListener('click', async () => {
+  const diverName = getEnteredCallsign() || 'Lead Diver';
+  lan.connect();
+  btnStageLobby.disabled = true;
+  try {
+    await lan.createRoom(diverName, activeLevel.id, 4);
+    lan.setPlayerStatus({ livery: liveryWorkshop.getActiveRigLivery(), crewRoleId: activeCrewRoleId });
+    showToast(`🤿 Squad Staging Bay open! Share code ${lan.room?.code || ''} to invite crew.`, 3.2);
+  } catch (err) {
+    showToast(`Could not open Staging Lobby: ${err?.message || 'Offline'}`, 2.8);
+  } finally {
+    btnStageLobby.disabled = false;
+  }
+});
+btnStageFlash?.addEventListener('click', () => triggerStagingEmote('torch'));
+btnStageOk?.addEventListener('click', () => triggerStagingEmote('ok'));
+lanStagingCanvas?.addEventListener('click', () => triggerStagingEmote(stagingEmoteSeq % 2 === 0 ? 'torch' : 'ok'));
+btnStageRole?.addEventListener('click', () => {
+  cycleCrewRolePreference();
+  if (lan.room) lan.setPlayerStatus({ crewRoleId: activeCrewRoleId });
+});
+
 async function copyCurrentInviteLink() {
   if (!lan.room) return;
   requestDiverNotificationPermission();
@@ -6184,12 +6223,25 @@ lan.on('room_update', async (room) => {
   lanRoomBox.hidden = false;
   if (lanSetupControls) lanSetupControls.hidden = true;
   if (lanRoomsSection) lanRoomsSection.hidden = true;
-  // Sync custom rig livery into Co-op Lobby immediately so teammates see our real rig in the Staging Lineup (v213)
+  // Sync custom rig livery & Crew Specialty Role into Co-op Lobby immediately (v213/v214)
   const myLiv = liveryWorkshop.getActiveRigLivery();
-  const myLivJson = JSON.stringify(myLiv || {});
+  const myLivJson = JSON.stringify({ l: myLiv || {}, r: activeCrewRoleId });
   if (justEnteredRoom || myLivJson !== lastBroadcastLiveryJson) {
     lastBroadcastLiveryJson = myLivJson;
-    lan.setPlayerStatus({ livery: myLiv });
+    lan.setPlayerStatus({ livery: myLiv, crewRoleId: activeCrewRoleId });
+  }
+  if (lanSquadSynergyStrip) {
+    const cov = summarizeSquadStagingCoverage(
+      (room.players || []).map((p) => ({
+        livery: p.id === lan.clientId ? myLiv : (p.livery || null),
+        crewRoleId: p.id === lan.clientId ? activeCrewRoleId : (p.crewRoleId || 'balanced'),
+      }))
+    );
+    lanSquadSynergyStrip.textContent = cov.summaryText;
+  }
+  if (btnStageRole) {
+    const myRole = getCrewRole(activeCrewRoleId);
+    btnStageRole.textContent = `${myRole.icon} ${myRole.shortLabel || myRole.name}`;
   }
 
   syncRoomInviteUi(room);
@@ -7681,6 +7733,7 @@ function frame(nowMs) {
       surfaceRipples: session.surfaceRipples || null,
       worldBeacons: session.worldBeacons || null,
       syncedSonarPings: session.syncedSonarPings || null,
+      decoMastery: session.decoMastery || null,
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
       droppedStages: session.droppedStages || null,
@@ -7727,17 +7780,21 @@ function frame(nowMs) {
     const sCtx = lanStagingCanvas.getContext?.('2d');
     if (sCtx) {
       const myLiv = liveryWorkshop.getActiveRigLivery();
-      const myLivJson = JSON.stringify(myLiv || {});
+      const myLivJson = JSON.stringify({ l: myLiv || {}, r: activeCrewRoleId });
       if (myLivJson !== lastBroadcastLiveryJson) {
         lastBroadcastLiveryJson = myLivJson;
-        lan.setPlayerStatus({ livery: myLiv });
+        lan.setPlayerStatus({ livery: myLiv, crewRoleId: activeCrewRoleId });
       }
       const loadout = getEffectiveGearLoadout();
+      const nowWall = Date.now();
       const members = lan.room.players.map((p) => ({
         name: p.name || 'Diver',
         isHost: Boolean(p.isHost),
         ready: p.ready !== false,
         livery: p.id === lan.clientId ? myLiv : (p.livery || null),
+        crewRoleId: p.id === lan.clientId ? activeCrewRoleId : (p.crewRoleId || 'balanced'),
+        stagingEmote: p.id === lan.clientId ? (localStagingEmote || p.stagingEmote || null) : (p.stagingEmote || null),
+        nowMs: nowWall,
         hasCcr: p.id === lan.clientId ? Boolean(loadout?.ccr) : false,
         hasDpv: p.id === lan.clientId ? Boolean(loadout?.dpv) : false,
       }));

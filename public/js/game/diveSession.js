@@ -539,6 +539,18 @@ export function createDiveSession(
     relayBonusScore: 0,
     smb: null,
     smbBonusScore: 0,
+    decoMastery: {
+      targetStopM: 0,
+      inStopZone: false,
+      steadySec: 0,
+      masteryActive: false,
+      totalSteadySec: 0,
+      bonusScore: 0,
+      stopsCleared: 0,
+      hadCeiling: false,
+      idealGas: false,
+    },
+    milestones: { mapped100: false, depth50: false, depth100: false },
     wildlifeHarmonyScore: 0,
     lineCookies: [],
     maxLineCookies: MAX_LINE_COOKIES,
@@ -4028,7 +4040,67 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
         (hazRes.gasRateMult || 1.0) *
         (role?.gasBurnMult || 1.0),
+      decoOffgasMult:
+        (role?.decoClearMult || 1.0) *
+        (session.decoMastery?.masteryActive ? 1.22 : 1.0),
     });
+
+    // Steady-Trim Decompression Mastery & Clean Deco-Clear Milestone Tracking (v214)
+    const dm = session.decoMastery;
+    if (dm) {
+      const stopM = diveState.stopDepthM || 0;
+      const curD = Math.max(0, diver.y);
+      dm.targetStopM = stopM;
+      if (stopM > 0 && diveState.ceilingM > 0.4) {
+        dm.hadCeiling = true;
+        const depthErr = Math.abs(curD - stopM);
+        const calmTrim = Math.abs(diver.vy || 0) <= 0.55;
+        dm.inStopZone = depthErr <= 1.35;
+        dm.idealGas =
+          Boolean(diveState.ccrEnabled) ||
+          (stopM <= 6.5 ? diveState.activeGasId === 'O2' : diveState.activeGasId === 'EAN32' || diveState.activeGasId === 'O2');
+        if (dm.inStopZone && calmTrim) {
+          dm.steadySec = Math.min(30, dm.steadySec + dt);
+          dm.totalSteadySec += dt;
+          dm.masteryActive = dm.steadySec >= 1.4;
+          if (dm.masteryActive && dm.bonusScore < 250) {
+            dm.bonusScore = Math.min(250, dm.bonusScore + dt * (dm.idealGas ? 18 : 12));
+          }
+        } else {
+          dm.steadySec = Math.max(0, dm.steadySec - dt * 1.6);
+          dm.masteryActive = dm.steadySec >= 1.4;
+        }
+      } else {
+        if (dm.hadCeiling && diveState.alive) {
+          dm.stopsCleared += 1;
+          dm.hadCeiling = false;
+          const roundedBonus = Math.round(dm.bonusScore);
+          recordDiveHighlight(session, {
+            kind: 'moment',
+            icon: '🫧',
+            label: roundedBonus > 0 ? `Clean Deco (+${roundedBonus} Trim pts)` : 'Decompression Cleared',
+            depthM: curD,
+          });
+          callbacks.onToast?.(
+            roundedBonus > 0
+              ? `✅ Deco Cleared! Steady-Trim Offgas Mastery (+${roundedBonus} pts)`
+              : '✅ Decompression ceiling cleared — safe to surface!',
+            3.4
+          );
+        }
+        dm.inStopZone = false;
+        dm.steadySec = 0;
+        dm.masteryActive = false;
+        dm.idealGas = false;
+      }
+    }
+    if (session.milestones && session.exploreCells?.length > 8) {
+      const pct = (session.exploredCells.size / session.exploreCells.length) * 100;
+      if (!session.milestones.mapped100 && pct >= 99) {
+        session.milestones.mapped100 = true;
+        callbacks.onToast?.('🧭 100% Site Mapped! Complete Expedition Survey!', 3.2);
+      }
+    }
 
     if (session.hrWarnCooldown > 0) session.hrWarnCooldown -= dt;
     if (diveState.heartRateBpm >= 145 && session.hrWarnCooldown <= 0) {
@@ -4415,6 +4487,7 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
         (session.blackBoxBonusScore || 0) +
         (session.relayBonusScore || 0) +
         (session.smbBonusScore || 0) +
+        Math.round(session.decoMastery?.bonusScore || 0) +
         (session.wildlifeHarmonyScore || 0) +
         (session.contractBonusScore || 0) +
         (session.aiLeadBonusScore || 0) +

@@ -282,6 +282,8 @@ export class P2pRoomCoordinator {
         loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
         loadedLevelId: p.loadedLevelId || this.room.levelId,
         livery: p.livery || null,
+        crewRoleId: p.crewRoleId || 'balanced',
+        stagingEmote: p.stagingEmote || null,
       })),
     };
   }
@@ -742,6 +744,26 @@ export class P2pRoomCoordinator {
         if (Number.isFinite(msg.loadPct)) p.loadPct = Math.max(0, Math.min(100, Math.round(msg.loadPct)));
         if (typeof msg.loadedLevelId === 'string') p.loadedLevelId = sanitizeLevelId(msg.loadedLevelId);
         let liveryChanged = false;
+        if (typeof msg.crewRoleId === 'string') {
+          const cleanRole = ['balanced', 'navigator', 'engineer', 'safety'].includes(msg.crewRoleId)
+            ? msg.crewRoleId
+            : 'balanced';
+          if (p.crewRoleId !== cleanRole) {
+            p.crewRoleId = cleanRole;
+            liveryChanged = true;
+          }
+        }
+        if (msg.stagingEmote && typeof msg.stagingEmote === 'object') {
+          const kind = msg.stagingEmote.kind === 'torch' ? 'torch' : msg.stagingEmote.kind === 'ok' ? 'ok' : '';
+          if (kind) {
+            p.stagingEmote = {
+              kind,
+              seq: Math.max(1, Math.round(Number(msg.stagingEmote.seq) || ((p.stagingEmote?.seq || 0) + 1))),
+              at: Date.now(),
+            };
+            liveryChanged = true;
+          }
+        }
         if (msg.livery && typeof msg.livery === 'object') {
           const cleanId = (v) => (typeof v === 'string' ? v.replace(/[^a-z0-9_-]/gi, '').slice(0, 36) : '');
           const liv = {

@@ -11051,6 +11051,31 @@ summary,
   width: 100%;
   height: auto;
   aspect-ratio: 560 / 142;
+  cursor: pointer;
+}
+.lan-staging-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -2px 0 10px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: rgba(6, 20, 38, 0.78);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+}
+.lan-squad-synergy-strip {
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: #bae6fd;
+  letter-spacing: 0.02em;
+}
+.lan-staging-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
 }
 .vault-diorama-wrap {
   margin: 6px 0 10px;

@@ -2365,6 +2365,112 @@ export const lightingAndFxMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * Diegetic In-World Decompression Hover Band & Steady-Trim Offgas Reticle (v214).
+   * Appears gently in the water column when approaching an active Bühlmann deco stop depth
+   * (e.g. 6m, 9m, 12m), lighting emerald-gold when steady trim unlocks +22% offgassing efficiency.
+   */
+  _drawDiegeticDecoHoverBand(ctx, cw, ch, diver, diveState, decoMastery, toScreenX, toScreenY, scale, timeSec) {
+    if (!diver || !diveState || diveState.alive === false) return;
+    const stopM = diveState.stopDepthM || 0;
+    if (stopM <= 0 || (diveState.ceilingM || 0) <= 0.4) return;
+    const vertDist = Math.abs((diver.y || 0) - stopM);
+    if (vertDist > 14) return;
+
+    const visAlpha = Math.max(0.18, Math.min(1, 1 - Math.max(0, vertDist - 5) / 9));
+    const mastery = Boolean(decoMastery?.masteryActive);
+    const inZone = Boolean(decoMastery?.inStopZone);
+    const bandY = toScreenY(stopM);
+    const bandHalfH = Math.max(14, 0.95 * scale);
+    if (bandY + bandHalfH < -40 || bandY - bandHalfH > ch + 40) return;
+
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * (mastery ? 4.2 : 2.6));
+    const accentRgb = mastery ? '74, 222, 128' : inZone ? '56, 189, 248' : '251, 191, 36';
+    const goldRgb = '250, 204, 21';
+
+    ctx.save();
+    // 1. Translucent horizontal decompression corridor shimmer across water column
+    const bg = ctx.createLinearGradient(0, bandY - bandHalfH, 0, bandY + bandHalfH);
+    bg.addColorStop(0, `rgba(${accentRgb}, 0)`);
+    bg.addColorStop(0.5, `rgba(${accentRgb}, ${((mastery ? 0.16 : 0.10) * visAlpha * (0.85 + 0.15 * pulse)).toFixed(3)})`);
+    bg.addColorStop(1, `rgba(${accentRgb}, 0)`);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, bandY - bandHalfH, cw, bandHalfH * 2);
+
+    // 2. Dashed horizontal stop-depth guide rails
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.lineDashOffset = -timeSec * (mastery ? 26 : 14);
+    ctx.strokeStyle = `rgba(${mastery ? goldRgb : accentRgb}, ${(0.48 * visAlpha).toFixed(3)})`;
+    ctx.lineWidth = mastery ? 1.75 : 1.25;
+    ctx.beginPath();
+    ctx.moveTo(0, bandY);
+    ctx.lineTo(cw, bandY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Ascending inert-gas offgas micro-sparkles around the diver while in zone
+    const dx = toScreenX(diver.x);
+    const dy = toScreenY(diver.y);
+    if (inZone) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const count = mastery ? 10 : 5;
+      for (let i = 0; i < count; i++) {
+        const phase = (timeSec * (mastery ? 0.95 : 0.65) + i / count) % 1;
+        const ox = dx + Math.sin(i * 2.7 + timeSec * 2.1) * (1.35 * scale);
+        const oy = dy + (0.4 - phase * 2.2) * scale;
+        const a = Math.sin(phase * Math.PI) * (mastery ? 0.78 : 0.45) * visAlpha;
+        ctx.fillStyle = i % 2 === 0 && mastery ? `rgba(${goldRgb}, ${a.toFixed(3)})` : `rgba(${accentRgb}, ${a.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(ox, oy, Math.max(1.5, (mastery ? 0.065 : 0.048) * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 4. Diegetic Hover Pill anchored cleanly beside diver on the stop depth line
+    const remSec = Math.max(1, Math.ceil(diveState.stopRemainingSec || 0));
+    const remTxt = remSec >= 60 ? `${Math.floor(remSec / 60)}:${String(remSec % 60).padStart(2, '0')}` : `${remSec}s`;
+    const gasHint = stopM <= 6.5 ? (diveState.ccrEnabled ? 'CCR' : 'O2 100%') : diveState.activeGasId || 'EAN32';
+    const dirCue = diver.y > stopM + 1.35 ? '▲ ASCEND TO ' : diver.y < stopM - 1.35 ? '▼ DESCEND TO ' : 'HOLD ';
+    const mainLabel = `${dirCue}${stopM}m STOP · ${gasHint} · ${remTxt}`;
+    const subLabel = mastery
+      ? `✦ STEADY TRIM (+22% OFFGAS · +${Math.round(decoMastery?.bonusScore || 0)} pts)`
+      : inZone
+        ? 'HOLD STEADY TRIM TO LOCK OFFGAS BONUS...'
+        : `CEILING ${Number(diveState.ceilingM || 0).toFixed(1)}m`;
+
+    const pillX = Math.max(124, Math.min(cw - 140, dx + Math.max(54, 2.3 * scale)));
+    const pillY = Math.max(72, Math.min(ch - 140, bandY));
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w1 = ctx.measureText(mainLabel).width;
+    ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w2 = ctx.measureText(subLabel).width;
+    const boxW = Math.max(w1, w2) + 22;
+    const boxH = 34;
+
+    ctx.globalAlpha = visAlpha;
+    ctx.fillStyle = mastery ? 'rgba(6, 52, 42, 0.88)' : 'rgba(6, 18, 34, 0.84)';
+    ctx.strokeStyle = mastery ? 'rgba(250, 204, 21, 0.85)' : `rgba(${accentRgb}, 0.72)`;
+    ctx.lineWidth = mastery ? 1.5 : 1.15;
+    ctx.beginPath();
+    ctx.roundRect?.(pillX - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH, 9) ??
+      ctx.rect(pillX - boxW * 0.5, pillY - boxH * 0.5, boxW, boxH);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillStyle = mastery ? '#fef08a' : '#e0f2fe';
+    ctx.fillText(mainLabel, pillX, pillY - 6);
+    ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillStyle = mastery ? '#86efac' : '#94a3b8';
+    ctx.fillText(subLabel, pillX, pillY + 8);
+    ctx.restore();
+  },
 };
 
 /**

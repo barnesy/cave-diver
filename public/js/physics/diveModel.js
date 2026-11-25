@@ -427,6 +427,7 @@ export function stepDivePhysiology(
     isStuck = false,
     thrustMag = exertion,
     gasBurnMultiplier = 1.0,
+    decoOffgasMult = 1.0,
   }
 ) {
   if (!state.alive || dt <= 0) return state;
@@ -555,12 +556,13 @@ export function stepDivePhysiology(
   // CCR optimal deco setpoint also accelerates shallow decompression off-gassing (1.28x on High 1.3 bar, 1.10x on Low 0.7 bar)
   const deepHeOffgasMult = clampedDepth > 9.0 ? 2.2 : 1.0;
   const ccrDecoOffgasMult = ccrLoopActive && clampedDepth <= 9.5 ? (ccrHighSp ? 1.28 : 1.10) : 1.0;
+  const steadyTrimOffgasMult = Math.max(1.0, Math.min(1.5, Number(decoOffgasMult) || 1.0));
   for (let i = 0; i < state.compartments.length; i++) {
     const c = state.compartments[i];
     const spec = COMPARTMENTS[i];
-    const n2Dt = pAlvN2 < c.pN2 ? dt * ccrDecoOffgasMult : dt;
+    const n2Dt = pAlvN2 < c.pN2 ? dt * ccrDecoOffgasMult * steadyTrimOffgasMult : dt;
     c.pN2 = schrienerUpdate(c.pN2, pAlvN2, n2Dt, spec.halfN2);
-    const heDt = pAlvHe < c.pHe ? dt * deepHeOffgasMult * ccrDecoOffgasMult : dt;
+    const heDt = pAlvHe < c.pHe ? dt * deepHeOffgasMult * ccrDecoOffgasMult * steadyTrimOffgasMult : dt;
     c.pHe = schrienerUpdate(c.pHe, pAlvHe, heDt, spec.halfHe);
   }
 

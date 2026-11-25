@@ -378,6 +378,8 @@ function serializeRoom(room) {
       loadPct: Number.isFinite(p.loadPct) ? p.loadPct : 100,
       loadedLevelId: p.loadedLevelId || room.levelId,
       livery: p.livery || null,
+      crewRoleId: p.crewRoleId || 'balanced',
+      stagingEmote: p.stagingEmote || null,
     })),
   };
 }
@@ -837,6 +839,27 @@ wss.on('connection', (ws) => {
         if (msg.loadStatus) p.loadStatus = sanitizeLoadStatus(msg.loadStatus);
         if (Number.isFinite(msg.loadPct)) p.loadPct = Math.max(0, Math.min(100, Math.round(msg.loadPct)));
         if (msg.loadedLevelId) p.loadedLevelId = sanitizeLevelId(msg.loadedLevelId);
+        let stagingMetaChanged = false;
+        if (typeof msg.crewRoleId === 'string') {
+          const cleanRole = ['balanced', 'navigator', 'engineer', 'safety'].includes(msg.crewRoleId)
+            ? msg.crewRoleId
+            : 'balanced';
+          if (p.crewRoleId !== cleanRole) {
+            p.crewRoleId = cleanRole;
+            stagingMetaChanged = true;
+          }
+        }
+        if (msg.stagingEmote && typeof msg.stagingEmote === 'object') {
+          const kind = msg.stagingEmote.kind === 'torch' ? 'torch' : msg.stagingEmote.kind === 'ok' ? 'ok' : '';
+          if (kind) {
+            p.stagingEmote = {
+              kind,
+              seq: Math.max(1, Math.round(Number(msg.stagingEmote.seq) || ((p.stagingEmote?.seq || 0) + 1))),
+              at: Date.now(),
+            };
+            stagingMetaChanged = true;
+          }
+        }
         if (msg.livery && typeof msg.livery === 'object') {
           const cleanId = (v) => (typeof v === 'string' ? v.replace(/[^a-z0-9_-]/gi, '').slice(0, 36) : '');
           const liv = {
@@ -849,6 +872,9 @@ wss.on('connection', (ws) => {
           if (cleanId(msg.livery.tankId)) liv.tankId = cleanId(msg.livery.tankId);
           if (cleanId(msg.livery.visorId)) liv.visorId = cleanId(msg.livery.visorId);
           p.livery = liv;
+          stagingMetaChanged = true;
+        }
+        if (stagingMetaChanged && room.phase !== 'preparing') {
           broadcastRoom(room, { type: 'room_update', room: serializeRoom(room) });
           break;
         }
