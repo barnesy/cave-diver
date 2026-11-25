@@ -388,9 +388,9 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#292524',
     finTip: '#fde047',
     stageBand: '#eab308',
-    unlockHint: 'Claim all 12 Abyssal Bounties',
-    getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'),
-    isUnlocked: (stats) => _countClaimedBounties(stats) >= 12,
+    unlockHint: 'Claim 12 Abyssal Bounties or 8+ Hardcore clears',
+    getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 12, 'bounties'), _mkProg(s.hardcoreClears, 8, 'hardcore')),
+    isUnlocked: (stats) => _countClaimedBounties(stats) >= 12 || (stats.hardcoreClears || 0) >= 8,
   },
   {
     id: 'world-cartographer-suit',
@@ -547,9 +547,9 @@ export const TORCH_OPTICS = Object.freeze([
     rangeMult: 1.15,
     siltPierce: 0.26,
     specText: 'Deep-stalker crimson-gold plasma · +15% reach & +26% silt pierce',
-    unlockHint: 'Claim 6 Abyssal Bounties',
-    getProgress: (s) => _mkProg(_countClaimedBounties(s), 6, 'bounties'),
-    isUnlocked: (stats) => _countClaimedBounties(stats) >= 6,
+    unlockHint: 'Claim 6 Abyssal Bounties or 4+ Hardcore clears',
+    getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 6, 'bounties'), _mkProg(s.hardcoreClears, 4, 'hardcore')),
+    isUnlocked: (stats) => _countClaimedBounties(stats) >= 6 || (stats.hardcoreClears || 0) >= 4,
   },
   {
     id: 'secret-solar-prism',
@@ -597,14 +597,14 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'cenote-explorer', icon: '🌴', name: 'Cenote Diver', tier: 'uncommon', ladderRank: 24, unlockHint: '3+ clears', getProgress: (s) => _mkProg(s.sitesCleared, 3, 'sites'), isUnlocked: (s) => s.sitesCleared >= 3 },
   { id: 'wreck-penetrator', icon: '⚓', name: 'Wreck Tech', tier: 'rare', ladderRank: 40, unlockHint: '1+ wreck or 5+ clears', getProgress: (s) => _bestProg(_mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 5, 'sites')), isUnlocked: (s) => s.wreckClears >= 1 || s.sitesCleared >= 5 },
   { id: 'wildlife-biologist', icon: '📷', name: 'Marine Bio', tier: 'rare', ladderRank: 46, unlockHint: '5+ Field Guide species', getProgress: (s) => _mkProg(s.speciesLogged, 5, 'species'), isUnlocked: (s) => s.speciesLogged >= 5 },
-  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', tier: 'rare', ladderRank: 60, unlockHint: '10+ clears', getProgress: (s) => _mkProg(s.sitesCleared, 10, 'sites'), isUnlocked: (s) => s.sitesCleared >= 10 },
+  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', tier: 'rare', ladderRank: 60, unlockHint: '2+ Hardcore, 3+ Daily, or 10+ clears', getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 2, 'hardcore'), _mkProg(s.dailyClears, 3, 'daily'), _mkProg(s.sitesCleared, 10, 'sites')), isUnlocked: (s) => (s.hardcoreClears || 0) >= 2 || (s.dailyClears || 0) >= 3 || s.sitesCleared >= 10 },
   { id: 'camp-karst', icon: '🧭', name: 'Karst Pioneer', tier: 'epic', ladderRank: 70, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Yucatán & Karst Circuit Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('cenote-circuit') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('cenote-circuit')) },
   { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', tier: 'epic', ladderRank: 72, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Coral & Iron Wrecks Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('coral-iron-wrecks') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
   { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', tier: 'epic', ladderRank: 74, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Halocline Wonders Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('halocline-wonders') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
   { id: 'camp-salvage', icon: '🎖️', name: 'Master Salvager', tier: 'epic', ladderRank: 76, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Maritime Wreck Salvage Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('wreck-salvage') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('wreck-salvage')) },
   { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', tier: 'epic', ladderRank: 78, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Iceland Geothermal Survey Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('iceland-survey') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', tier: 'epic', ladderRank: 84, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Abyssal World Record Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
-  { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim all 12 Abyssal Bounties', getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'), isUnlocked: (s) => _countClaimedBounties(s) >= 12 },
+  { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim 12 Abyssal Bounties or 8+ Hardcore clears', getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 12, 'bounties'), _mkProg(s.hardcoreClears, 8, 'hardcore')), isUnlocked: (s) => _countClaimedBounties(s) >= 12 || (s.hardcoreClears || 0) >= 8 },
   { id: 'world-arch-crest', icon: '🏛️', name: 'Bells Archway Crest', tier: 'epic', source: 'world', ladderRank: 74, fx: { id: 'crest-halo', name: 'Archway Deep Crest', desc: 'Deep-blue cobalt halo signaling trimix arch mastery.' }, unlockHint: '🗺️ World Cache · Blue Hole Dahab Archway', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-arch-crest')) },
 ]);
 
@@ -648,9 +648,9 @@ export const HEADGEAR_STYLES = Object.freeze([
     ladderRank: 48,
     fx: { id: 'exo-hud', name: 'Live Comms HUD', desc: 'Scanning telemetry lightbar pulses smoothly across the panoramic visor.' },
     specText: 'Comms full-face visor + live interior HUD glow',
-    unlockHint: '3+ Emergency Drills or 5+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 3, 'drills'), _mkProg(s.sitesCleared, 5, 'sites')),
-    isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 5,
+    unlockHint: '2+ Rescue/Emergency Drills or 5+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 2, 'drills'), _mkProg(s.sitesCleared, 5, 'sites')),
+    isUnlocked: (s) => (s.drillsCompleted || 0) >= 2 || s.sitesCleared >= 5,
   },
   {
     id: 'brass-hardhat',
@@ -1086,9 +1086,9 @@ export const VISOR_TINTS = Object.freeze([
     bot: '#064e3b',
     frame: '#022c22',
     hudGlow: '#34d399',
-    unlockHint: '3+ Emergency Drills or 6+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 3, 'drills'), _mkProg(s.sitesCleared, 6, 'sites')),
-    isUnlocked: (s) => (s.drillsCompleted || 0) >= 3 || s.sitesCleared >= 6,
+    unlockHint: '2+ Rescue/Emergency Drills or 6+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 2, 'drills'), _mkProg(s.sitesCleared, 6, 'sites')),
+    isUnlocked: (s) => (s.drillsCompleted || 0) >= 2 || s.sitesCleared >= 6,
   },
   {
     id: 'bounty-hunter-visor',
@@ -1101,9 +1101,9 @@ export const VISOR_TINTS = Object.freeze([
     bot: '#78350f',
     frame: '#1c1917',
     hudGlow: '#fde047',
-    unlockHint: 'Claim 3 Abyssal Bounties',
-    getProgress: (s) => _mkProg(_countClaimedBounties(s), 3, 'bounties'),
-    isUnlocked: (s) => _countClaimedBounties(s) >= 3,
+    unlockHint: 'Claim 3 Abyssal Bounties or 2+ Hardcore clears',
+    getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 3, 'bounties'), _mkProg(s.hardcoreClears, 2, 'hardcore')),
+    isUnlocked: (s) => _countClaimedBounties(s) >= 3 || (s.hardcoreClears || 0) >= 2,
   },
   {
     id: 'pacific-coral-visor',
@@ -1482,9 +1482,9 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
     rising: false,
     slots: Object.freeze([
       { slot: 'suit', field: 'suitId', ids: ['secret-kraken-biolume'] },
-      { slot: 'torch', field: 'torchId', ids: ['halocline-uv', 'aurora-plasma'] },
+      { slot: 'torch', field: 'torchId', ids: ['halocline-uv'] },
       { slot: 'trim', field: 'trimId', ids: ['secret-selenite-trim', 'biolum-violet', 'plasma-circuit-trim'] },
-      { slot: 'visor', field: 'visorId', ids: ['secret-aurora-frost', 'thermocline-prism'] },
+      { slot: 'visor', field: 'visorId', ids: ['secret-aurora-frost', 'reef-mirror'] },
     ]),
   }),
   Object.freeze({
@@ -1523,8 +1523,9 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
     hueB: 142,
     rising: false,
     slots: Object.freeze([
-      { slot: 'suit', field: 'suitId', ids: ['karst-jade'] },
-      { slot: 'tank', field: 'tankId', ids: ['sulfur-emerald-tank'] },
+      { slot: 'suit', field: 'suitId', ids: ['karst-jade', 'abyss-emerald'] },
+      { slot: 'headgear', field: 'headgearId', ids: ['world-thermal-hood'] },
+      { slot: 'tank', field: 'tankId', ids: ['sulfur-emerald-tank', 'world-chimney-tank'] },
       { slot: 'visor', field: 'visorId', ids: ['thermocline-prism'] },
       { slot: 'patch', field: 'patchId', ids: ['camp-karst', 'camp-halocline'] },
     ]),
@@ -1793,6 +1794,9 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   );
   const deepestM = Math.max(0, Number(logbook?.deepestM) || 0);
   const dailyClears = Math.max(0, Number(logbook?.daily?.totalClears) || 0);
+  const drillMasteryClears = logbook?.drillMastery && typeof logbook.drillMastery === 'object'
+    ? Object.values(logbook.drillMastery).reduce((acc, r) => acc + ((r?.clears || 0) > 0 ? 1 : 0), 0)
+    : 0;
   const stats = {
     sitesCleared,
     wreckClears,
@@ -1806,7 +1810,7 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     bountiesClaimed: 0,
     pressurizedEqualizations: Math.max(0, Number(ms.pressurizedEqualizations) || 0),
     cleanSalvageLifts: Math.max(0, Number(ms.cleanSalvageLifts) || 0),
-    drillsCompleted: Math.max(0, Number(ms.drillsCompleted) || 0),
+    drillsCompleted: Math.max(0, Number(ms.drillsCompleted) || 0) + drillMasteryClears,
     zeroSiltClears: Math.max(0, Number(ms.zeroSiltClears) || 0),
   };
   stats.bountiesClaimed = _countClaimedBounties(stats);

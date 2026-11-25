@@ -474,6 +474,7 @@ export function createDiveSession(
     crewRoleId = 'balanced',
     modifiers = [],
     foundGear = null,
+    isRescueDrill = false,
   } = {}
 ) {
   const cleanModifiers = sanitizeExpeditionModifiers(modifiers);
@@ -500,7 +501,16 @@ export function createDiveSession(
       ? { ...(level.gasOverrides || {}), ...customMixOverrides }
       : level.gasOverrides;
   const resolvedWeather = resolveEffectiveWeather(weatherId, { level });
-  const rigPerf = computeRigPerformanceProfile(livery);
+  const rigTuningCtx = {
+    difficulty: cleanDiff,
+    mutatorId: cleanMutator,
+    isDaily: Boolean(cleanDailyKey),
+    isTrench: Boolean(level?.isTrench),
+    trenchChamber: Number(level?.trenchChamber) || 0,
+    isRescueDrill: Boolean(isRescueDrill || level?.isRescueDrill),
+    modifiers: cleanModifiers,
+  };
+  const rigPerf = computeRigPerformanceProfile(livery, rigTuningCtx);
   const worldGearCaches = createWorldGearCachesForLevel(level, foundGear);
   const hazards = createDynamicHazards(level);
   hazards.worldGearCaches = worldGearCaches;
@@ -509,6 +519,7 @@ export function createDiveSession(
   return {
     level,
     rigPerf,
+    rigTuningCtx,
     worldGearCaches,
     difficulty: cleanDiff,
     mutatorId: cleanMutator,

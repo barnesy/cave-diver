@@ -11909,3 +11909,99 @@ test('v218 Deep/Speed/Combat/Hybrid Archetypes, Noticeable Buffs, Level Exploita
   const l1CachesAfter = getWorldGearCachesForSite(LEVEL_1.id, { 'visor:world-cartographer-visor': { foundAt: Date.now() } });
   assert.equal(l1CachesAfter[0].found, true);
 });
+
+test('v219 Mode & Difficulty Gear Tuning, Build Specialization, Trench Scaling, Modifier Synergies & Progression Fast-Tracks', async () => {
+  const {
+    GEAR_TUNING_PROFILES,
+    resolveGearTuningProfile,
+    computeRigPerformanceProfile,
+  } = await import('../public/js/game/gearStats.js');
+  const { PROVING_GROUNDS_PRESETS, applyTrialLiveryToSession } = await import('../public/js/game/gearProvingGrounds.js');
+  const { computeUnlockedLiveries } = await import('../public/js/game/rigLivery.js');
+  const { createTrenchChamberLevel } = await import('../public/js/game/abyssalTrench.js');
+  const { RESCUE_DRILLS, applyRescueDrillScenario } = await import('../public/js/game/rescueDrills.js');
+
+  const deepPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'thermal-mantle');
+  const speedPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'karst-hydro-glider');
+  const combatPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'apex-combat');
+  const cartPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'sunken-cartographer');
+  const hybridPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'hybrid-mix');
+
+  // 1. Sharp Build Specialization Separation (no more Deep Tech / Combat stealing Speed Hydro's +28% Swim or Deep's +40b!)
+  const stdSpeed = computeRigPerformanceProfile(speedPreset.livery, { difficulty: 'standard' });
+  const stdDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard' });
+  const stdCombat = computeRigPerformanceProfile(combatPreset.livery, { difficulty: 'standard' });
+  const stdCart = computeRigPerformanceProfile(cartPreset.livery, { difficulty: 'standard' });
+  assert.ok(stdSpeed.swimSpeedMult >= 1.26, `Speed Hydro must own peak swim speed (got ${stdSpeed.swimSpeedMult})`);
+  assert.ok(stdDeep.swimSpeedMult <= 1.12, `Deep Tech must stay heavy trim (got ${stdDeep.swimSpeedMult})`);
+  assert.ok(stdCombat.swimSpeedMult <= 1.21, `Boss Combat must stay slower than Speed Hydro (got ${stdCombat.swimSpeedMult})`);
+  assert.ok(stdCart.swimSpeedMult < stdSpeed.swimSpeedMult, `Cartographer (${stdCart.swimSpeedMult}) must stay below Speed Hydro (${stdSpeed.swimSpeedMult})`);
+  assert.ok(stdDeep.bonusStartBar >= 40 && stdCombat.bonusStartBar <= 22, `Deep Tech (+${stdDeep.bonusStartBar}b) must clearly lead Boss Combat (+${stdCombat.bonusStartBar}b) on tank overfill`);
+
+  // 2. Difficulty & Mode Tuning Profiles (Guided > Standard > Daily > Hardcore > Drill > Purist)
+  assert.ok(GEAR_TUNING_PROFILES.guided && GEAR_TUNING_PROFILES.hardcore && GEAR_TUNING_PROFILES.purist);
+  const guidDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'guided' });
+  const hardDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'hardcore' });
+  const dailyDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard', isDaily: true });
+  const drillDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard', isRescueDrill: true });
+  const puristDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard', mutatorId: 'purist' });
+
+  assert.ok(guidDeep.bonusStartBar > stdDeep.bonusStartBar, `Guided (+${guidDeep.bonusStartBar}b) must give warmer safety margin than Standard (+${stdDeep.bonusStartBar}b)`);
+  assert.ok(hardDeep.bonusStartBar <= 24, `Hardcore must cap starting overfill at <=24b (got +${hardDeep.bonusStartBar}b)`);
+  assert.ok(hardDeep.coldResist <= 0.75, `Hardcore must cap Cold Resist at <=75% so thermoclines still bite (got ${hardDeep.coldResist})`);
+  assert.ok(hardDeep.scoreBonusMult >= 1.15, `Hardcore equipped rig must grant +15% Hardcore Mastery Score bonus (got ${hardDeep.scoreBonusMult})`);
+  assert.ok(dailyDeep.bonusStartBar < stdDeep.bonusStartBar && dailyDeep.bonusStartBar > drillDeep.bonusStartBar, 'Daily parity must sit between Standard and Rescue Drill calibration');
+  assert.equal(puristDeep.bonusStartBar, 0, 'Purist mutator must normalize bonusStartBar to 0');
+  assert.equal(puristDeep.swimSpeedMult, 1, 'Purist mutator must normalize swimSpeedMult to 1.0');
+  assert.equal(puristDeep.coldResist, 0, 'Purist mutator must normalize coldResist to 0');
+  assert.equal(puristDeep.powers.length, 0, 'Purist mutator must disable all set/legendary powers');
+
+  const hardCombat = computeRigPerformanceProfile(combatPreset.livery, { difficulty: 'hardcore' });
+  assert.ok(hardCombat.combatMaxHpBonus <= 35, `Hardcore Boss HP cap must be <=+35 (got +${hardCombat.combatMaxHpBonus})`);
+  assert.ok(hardCombat.spearPowerMult < stdCombat.spearPowerMult, 'Hardcore Combat DPS must be tighter than Standard');
+
+  // 3. Endless Abyssal Trench Deep Chamber Resonance (Chamber 5 pushes Deep Tech above Standard caps!)
+  const trenchLvl = createTrenchChamberLevel('TRN9X2', 5);
+  const trenchSess = createDiveSession(trenchLvl, { diverName: 'Abyssal', difficulty: 'standard', livery: deepPreset.livery });
+  assert.equal(trenchSess.rigPerf.tuning.modeTag, 'trench');
+  assert.ok(trenchSess.rigPerf.bonusStartBar > stdDeep.bonusStartBar, `Trench Ch.5 Deep Tech (+${trenchSess.rigPerf.bonusStartBar}b) must scale above Standard (+${stdDeep.bonusStartBar}b)`);
+  assert.ok(trenchSess.diveState.tanks.EAN32.bar >= 245, `Trench Ch.5 Deep Tech live tank bar must reflect abyssal resonance (got ${trenchSess.diveState.tanks.EAN32.bar})`);
+
+  // 4. Mastery Modifier Counter-Synergies & Hybrid Adaptation Synergy
+  const surgeSpeed = computeRigPerformanceProfile(speedPreset.livery, { difficulty: 'standard', modifiers: ['surge-tide'] });
+  assert.ok(surgeSpeed.modifierSynergies.some((m) => m.id === 'surge-tide'), 'Speed/Hydro rig must activate Surge Exploited counter-synergy');
+  const ironDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard', modifiers: ['iron-lung'] });
+  assert.ok(ironDeep.modifierSynergies.some((m) => m.id === 'iron-lung'), 'Deep Tech rig must activate Iron Lung Countered synergy');
+  const blackCart = computeRigPerformanceProfile(cartPreset.livery, { difficulty: 'standard', modifiers: ['blackout-abyss'] });
+  assert.ok(blackCart.modifierSynergies.some((m) => m.id === 'blackout-abyss'), 'Cartographer rig must activate Blackout Countered synergy');
+  const hybridProf = computeRigPerformanceProfile(hybridPreset.livery, { difficulty: 'standard' });
+  assert.equal(hybridProf.hybridAdaptation, true, 'Multi-set Hybrid Mix must activate Hybrid Adaptation synergy');
+
+  // 5. Rescue Drill & Proving Grounds Live Difficulty Calibration
+  const drillSess = createDiveSession(LEVEL_1, { diverName: 'Rescue', difficulty: 'standard', livery: deepPreset.livery });
+  applyRescueDrillScenario(drillSess, RESCUE_DRILLS[0]);
+  assert.equal(drillSess.rigPerf.tuning.id, 'drill', 'Rescue Drill scenario must recalibrate rig to Training Parity');
+  assert.ok(drillSess.rigPerf.bonusStartBar <= 16);
+
+  drillSess.isProvingGrounds = true;
+  applyTrialLiveryToSession(drillSess, deepPreset.livery, { difficulty: 'hardcore', isRescueDrill: false, isDaily: false, mutatorId: '' });
+  assert.equal(drillSess.rigPerf.tuning.id, 'hardcore');
+  assert.equal(Math.round(drillSess.diveState.tanks.EAN32.bar), 224, 'Proving Grounds Hardcore toggle must live-recalibrate Deep Tech tanks to 224b');
+
+  // 6. Progression Fast-Tracks (Hardcore Clears, Rescue Drill Mastery, Early/Mid Deep Tech 2pc)
+  const hcBook = createEmptyLogbook();
+  hcBook.cleared['cenote-el-abismo'] = { score: 8500, grade: 'A', bestTimeSec: 120, clears: 1, bestDifficulty: 'hardcore' };
+  hcBook.cleared['eagles-nest-sink'] = { score: 8500, grade: 'A', bestTimeSec: 140, clears: 1, bestDifficulty: 'hardcore' };
+  hcBook.drillMastery['silt-line-recovery'] = { clears: 1, bestGrade: 'S', bestTimeSec: 52, bestScore: 2200 };
+  hcBook.drillMastery['freeflow-bailout'] = { clears: 1, bestGrade: 'A', bestTimeSec: 64, bestScore: 1900 };
+  const hcUnlocks = computeUnlockedLiveries(hcBook);
+  assert.equal(hcUnlocks.visors.has('bounty-hunter-visor'), true, '2 Hardcore clears must fast-track Deep Stalker Visor');
+  assert.equal(hcUnlocks.patches.has('abyss-veteran'), true, '2 Hardcore clears must fast-track Abyss Veteran patch');
+  assert.equal(hcUnlocks.headgears.has('exo-mask'), true, '2 Rescue Drill Mastery clears must unlock Full-Face Exo Mask');
+  assert.equal(hcUnlocks.visors.has('night-emerald'), true, '2 Rescue Drill Mastery clears must unlock Night-Ops Emerald Visor');
+
+  // Early/Mid Deep Tech 2pc (abyss-emerald @ 3 sites + world-thermal-hood @ L5 Plura)
+  const earlyDeep = computeRigPerformanceProfile({ suitId: 'abyss-emerald', headgearId: 'world-thermal-hood' }, { difficulty: 'standard' });
+  assert.ok(earlyDeep.activeSets.some((s) => s.id === 'karst-pioneer' && s.tier2Active), 'Early/mid Deep Tech (abyss-emerald + world-thermal-hood) must activate 2pc Karst & Halocline Explorer');
+  assert.ok(resolveGearTuningProfile({ difficulty: 'hardcore' }).safetyScale < 0.7);
+});

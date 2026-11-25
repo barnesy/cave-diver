@@ -11692,6 +11692,98 @@ summary,
   gap: 8px;
 }
 
+/* v219 Mode & Difficulty Gear Tuning Bar + Modifier Counter-Synergies */
+.livery-tuning-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(6, 16, 34, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.16);
+}
+.livery-tuning-lbl {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-right: 2px;
+}
+.livery-tuning-pill {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.78);
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.livery-tuning-pill:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #f8fafc;
+}
+.livery-tuning-pill.active {
+  background: rgba(14, 165, 233, 0.24);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+.livery-tuning-pill[data-tuning-mode="hardcore"].active {
+  background: rgba(244, 63, 94, 0.24);
+  border-color: #fb7185;
+  color: #ffe4e6;
+}
+.livery-tuning-pill[data-tuning-mode="guided"].active {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: #34d399;
+  color: #d1fae5;
+}
+.livery-tuning-pill[data-tuning-mode="purist"].active {
+  background: rgba(148, 163, 184, 0.26);
+  border-color: #cbd5e1;
+  color: #f8fafc;
+}
+.livery-tuning-badge {
+  margin-left: auto;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #7dd3fc;
+  white-space: nowrap;
+}
+.livery-mod-synergies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.livery-mod-syn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.63rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.48);
+  color: #a7f3d0;
+}
+.hud-gb-mode {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(244, 63, 94, 0.22);
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  color: #fecdd3;
+}
+
 
 
 

@@ -10,6 +10,7 @@
 
 import { switchGas } from '../physics/diveModel.js';
 import { spawnSiltPlume } from './silt.js';
+import { computeRigPerformanceProfile } from './gearStats.js';
 
 export const RESCUE_DRILLS = Object.freeze([
   Object.freeze({
@@ -161,6 +162,18 @@ function pickDrillSpawnPoint(level, targetDepthM) {
 export function applyRescueDrillScenario(session, drill) {
   if (!session || !drill) return session;
   const { level, diver, diveState, checkpointsHit, siltClouds } = session;
+
+  // v219: Calibrate rig stats to Rescue Drill Training Parity so timed S+/S/A medals reward pure emergency skill
+  const drillTuningCtx = {
+    ...(session.rigTuningCtx || {}),
+    difficulty: session.difficulty || drill.difficulty || 'standard',
+    isRescueDrill: true,
+    modifiers: session.modifiers || [],
+  };
+  session.rigTuningCtx = drillTuningCtx;
+  session.rigPerf = computeRigPerformanceProfile(diver?.livery, drillTuningCtx);
+  if (session.hazards) session.hazards.rigPerf = session.rigPerf;
+  if (diver) diver.torchReachMult = session.rigPerf.torchReachMult || 1.0;
 
   // Mark descent checkpoints up through turnaround so exit extraction is immediately active once crisis is solved
   if (Array.isArray(level?.checkpoints) && checkpointsHit) {

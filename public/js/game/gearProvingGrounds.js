@@ -357,21 +357,29 @@ export function configureProvingGroundsSession(session, trialLivery = null) {
 }
 
 /**
- * Hot-swap a diver's livery & live gear performance profile directly inside an active DiveSession (v217).
+ * Hot-swap a diver's livery & live gear performance profile directly inside an active DiveSession (v217–v219).
+ * Respects active Mode & Difficulty tuning (Guided / Standard / Hardcore / Daily / Drill / Trench / Purist).
  */
-export function applyTrialLiveryToSession(session, livery) {
+export function applyTrialLiveryToSession(session, livery, tuningOverride = null) {
   if (!session?.diver || !livery) return null;
   const clean = { ...STOCK_BASELINE_LIVERY, ...livery };
-  const perf = computeRigPerformanceProfile(clean);
+  const tuningCtx = tuningOverride
+    ? { ...(session.rigTuningCtx || {}), ...tuningOverride }
+    : (session.rigTuningCtx || { difficulty: session.difficulty || 'standard', modifiers: session.modifiers || [] });
+  if (tuningOverride) {
+    session.rigTuningCtx = tuningCtx;
+    if (tuningOverride.difficulty) session.difficulty = tuningOverride.difficulty;
+  }
+  const perf = computeRigPerformanceProfile(clean, tuningCtx);
   session.diver.livery = clean;
   session.diver.torchReachMult = perf.torchReachMult || 1.0;
   session.rigPerf = perf;
   if (session.hazards) {
     session.hazards.rigPerf = perf;
   }
-  // v218: In Proving Grounds, immediately reflect the swapped rig's cylinder overfill (+bonusStartBar) on the live Gas Manifold
+  // v218–v219: In Proving Grounds, immediately reflect the swapped rig's mode-tuned cylinder overfill (+bonusStartBar)
   if (session.isProvingGrounds && session.diveState?.tanks && session.diveState?.mixes) {
-    const extraBar = Math.max(0, Math.min(50, Math.round(Number(perf.bonusStartBar) || 0)));
+    const extraBar = Math.max(0, Math.min(55, Math.round(Number(perf.bonusStartBar) || 0)));
     for (const gasId of Object.keys(session.diveState.tanks)) {
       const tank = session.diveState.tanks[gasId];
       const mix = session.diveState.mixes[gasId];
@@ -424,9 +432,17 @@ export function injectTestDecoStop(session) {
   return true;
 }
 
+const PG_TUNING_MODES = Object.freeze([
+  Object.freeze({ id: 'standard', icon: '🤿', label: 'Standard', ctx: { difficulty: 'standard', isDaily: false, mutatorId: '', isRescueDrill: false, isTrench: false } }),
+  Object.freeze({ id: 'hardcore', icon: '🔥', label: 'Hardcore', ctx: { difficulty: 'hardcore', isDaily: false, mutatorId: '', isRescueDrill: false, isTrench: false } }),
+  Object.freeze({ id: 'guided', icon: '🛡️', label: 'Guided', ctx: { difficulty: 'guided', isDaily: false, mutatorId: '', isRescueDrill: false, isTrench: false } }),
+  Object.freeze({ id: 'daily', icon: '📅', label: 'Daily', ctx: { difficulty: 'standard', isDaily: true, mutatorId: '', isRescueDrill: false, isTrench: false } }),
+  Object.freeze({ id: 'purist', icon: '🧭', label: 'Purist', ctx: { difficulty: 'standard', isDaily: false, mutatorId: 'purist', isRescueDrill: false, isTrench: false } }),
+]);
+
 /**
- * Interactive floating HUD bar shown ONLY during a Gear Proving Grounds Field Test (v217).
- * Allows instant mid-water A/B rig swapping, live performance feel telemetry, Deco test, and 1-tap return to Workshop.
+ * Interactive floating HUD bar shown ONLY during a Gear Proving Grounds Field Test (v217–v219).
+ * Allows instant mid-water A/B rig swapping, live Difficulty/Mode tuning, performance telemetry, Deco test & Workshop return.
  */
 export function createProvingGroundsHudBar({
   getSession,
@@ -437,6 +453,7 @@ export function createProvingGroundsHudBar({
 }) {
   const barEl = document.getElementById('proving-grounds-bar');
   let activePresetId = 'equipped';
+  let activeTuningIdx = 0;
   let customTrialLivery = null;
   let customTrialLabel = '';
   let pollTimer = null;
@@ -457,12 +474,13 @@ export function createProvingGroundsHudBar({
     }
     const readEl = barEl.querySelector('#pg-live-readout');
     if (!readEl) return;
-    const perf = sess.rigPerf || computeRigPerformanceProfile(sess.diver?.livery);
+    const perf = sess.rigPerf || computeRigPerformanceProfile(sess.diver?.livery, sess.rigTuningCtx);
     const spd = Math.hypot(sess.diver?.vx || 0, sess.diver?.vy || 0).toFixed(1);
     const swimPct = Math.round((perf.swimSpeedMult - 1) * 100);
     const gasPct = Math.round((1 - perf.gasBurnMult) * 100);
     const coldTxt = perf.coldResist >= 0.99 ? 'COLD-PROOF' : `Cold ${Math.round(perf.coldResist * 100)}%`;
     const archTag = perf.dominantArchetype ? `${perf.dominantArchetype.icon} ${perf.dominantArchetype.short}` : 'HYBRID';
+    const modeTag = perf.tuning && perf.tuning.id !== 'standard' ? ` · ${perf.tuning.icon} ${perf.tuning.label.toUpperCase()}` : '';
     const extraBits = [];
     if (perf.bonusStartBar > 0) extraBits.push(`+${perf.bonusStartBar}b`);
     if (perf.narcDepthBonusM > 0) extraBits.push(`+${perf.narcDepthBonusM}m Depth`);
@@ -470,7 +488,7 @@ export function createProvingGroundsHudBar({
     const hydroMode = sess.hydrology?.mode && sess.hydrology.mode !== 'calm'
       ? ` · 🌊 ${sess.hydrology.mode.toUpperCase()} (-${Math.round((1 - (sess.hydrology.effectiveDragMult || 1)) * 100)}% drag)`
       : '';
-    readEl.textContent = `[${archTag}] ${spd} m/s (+${swimPct}%) · Gas -${gasPct}% · ${coldTxt}${extraBits.length ? ` · ${extraBits.join(' · ')}` : ''}${hydroMode}`;
+    readEl.textContent = `[${archTag}${modeTag}] ${spd} m/s (+${swimPct}%) · Gas -${gasPct}% · ${coldTxt}${extraBits.length ? ` · ${extraBits.join(' · ')}` : ''}${hydroMode}`;
   }
 
   function renderBar() {
@@ -483,11 +501,13 @@ export function createProvingGroundsHudBar({
     for (const pr of PROVING_GROUNDS_PRESETS) {
       pills.push({ id: pr.id, icon: pr.icon, label: pr.label, desc: pr.desc });
     }
+    const modeSpec = PG_TUNING_MODES[activeTuningIdx] || PG_TUNING_MODES[0];
 
     barEl.innerHTML = `
       <div class="pg-bar-top">
         <div class="pg-bar-title">🧪 <strong>GEAR PROVING GROUNDS</strong> <span id="pg-live-readout" class="pg-live-readout">Swim through the 6 lanes · Swap sets live!</span></div>
         <div class="pg-bar-actions">
+          <button type="button" class="btn tiny secondary" id="btn-pg-cycle-mode" title="Cycle Mode & Difficulty gear tuning live (Standard → Hardcore → Guided → Daily → Purist)">${modeSpec.icon} ${modeSpec.label}</button>
           <button type="button" class="btn tiny secondary" id="btn-pg-test-deco" title="Load a quick 6m decompression stop to test Deco Offgas & Steady-Trim">🫧 Test 6m Deco</button>
           <button type="button" class="btn tiny primary" id="btn-pg-exit-workshop">← Back to Workshop</button>
         </div>
@@ -504,6 +524,17 @@ export function createProvingGroundsHudBar({
     barEl.querySelector('#btn-pg-exit-workshop')?.addEventListener('click', () => {
       hide();
       onExitToWorkshop?.();
+    });
+    barEl.querySelector('#btn-pg-cycle-mode')?.addEventListener('click', () => {
+      const sess = getSession?.();
+      if (!sess) return;
+      activeTuningIdx = (activeTuningIdx + 1) % PG_TUNING_MODES.length;
+      const nextMode = PG_TUNING_MODES[activeTuningIdx];
+      const perf = applyTrialLiveryToSession(sess, sess.diver?.livery || STOCK_BASELINE_LIVERY, nextMode.ctx);
+      playGearEquip?.('all', nextMode.id === 'hardcore' ? 'epic' : 'rare');
+      showToast?.(`${perf?.tuning?.badge || `${nextMode.icon} ${nextMode.label}`} — live stats & tank overfill recalibrated!`, 2.8);
+      renderBar();
+      updateLiveTelemetry();
     });
     barEl.querySelector('#btn-pg-test-deco')?.addEventListener('click', () => {
       const sess = getSession?.();
@@ -542,10 +573,12 @@ export function createProvingGroundsHudBar({
     });
   }
 
-  function show({ trialLivery = null, trialLabel = '', initialPresetId = 'equipped' } = {}) {
+  function show({ trialLivery = null, trialLabel = '', initialPresetId = 'equipped', initialModeId = 'standard' } = {}) {
     customTrialLivery = trialLivery ? { ...trialLivery } : null;
     customTrialLabel = trialLabel || '';
     activePresetId = customTrialLivery ? 'trial' : initialPresetId;
+    const foundModeIdx = PG_TUNING_MODES.findIndex((m) => m.id === initialModeId);
+    activeTuningIdx = foundModeIdx >= 0 ? foundModeIdx : 0;
     if (barEl) {
       barEl.hidden = false;
       renderBar();

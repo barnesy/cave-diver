@@ -75,6 +75,8 @@ export function createLiveryWorkshopController({
   spawnConfetti = null,
   launchProvingGrounds = null,
   exitProvingGrounds = null,
+  getDifficulty = null,
+  getActiveModifiers = null,
 }) {
   function getCurrentLiveryUnlocks() {
     let book = null;
@@ -182,6 +184,30 @@ export function createLiveryWorkshopController({
   let liveryPreviewEnv = 'clear';
   let liveryPreviewCcr = null;
   let liveryPreviewDpv = null;
+  let workshopTuningMode = 'standard'; // guided | standard | hardcore | daily | trench | purist
+
+  const WORKSHOP_TUNING_MODES = [
+    { id: 'guided', icon: '🛡️', label: 'Guided' },
+    { id: 'standard', icon: '🤿', label: 'Standard' },
+    { id: 'hardcore', icon: '🔥', label: 'Hardcore' },
+    { id: 'daily', icon: '📅', label: 'Daily' },
+    { id: 'trench', icon: '🌊', label: 'Trench 5' },
+    { id: 'purist', icon: '🧭', label: 'Purist' },
+  ];
+
+  function getWorkshopTuningCtx(modeId = workshopTuningMode) {
+    let mods = [];
+    let curDiff = 'standard';
+    try { if (typeof getActiveModifiers === 'function') mods = getActiveModifiers() || []; } catch {}
+    try { if (typeof getDifficulty === 'function') curDiff = getDifficulty() || 'standard'; } catch {}
+    if (modeId === 'guided' || modeId === 'standard' || modeId === 'hardcore') {
+      return { difficulty: modeId, modifiers: mods };
+    }
+    if (modeId === 'daily') return { difficulty: 'standard', isDaily: true, modifiers: mods };
+    if (modeId === 'trench') return { difficulty: curDiff, isTrench: true, trenchChamber: 5, modifiers: mods };
+    if (modeId === 'purist') return { difficulty: 'standard', mutatorId: 'purist', modifiers: mods };
+    return { difficulty: curDiff, modifiers: mods };
+  }
 
   // Kinetic equip-on-avatar animation state, multi-slot Try-On & Set Inspector state (v211–v217)
   let activeEquipFx = null;
@@ -223,13 +249,18 @@ export function createLiveryWorkshopController({
     setHomeMenuOpen?.(false);
     savedPrevLevelBeforeProving = await launchProvingGrounds(pgLevel);
     const sess = getSession?.();
+    const pgModeId = workshopTuningMode === 'trench' ? 'standard' : workshopTuningMode;
+    const pgTuningCtx = getWorkshopTuningCtx(pgModeId);
     if (sess) {
+      sess.rigTuningCtx = pgTuningCtx;
+      if (pgTuningCtx.difficulty) sess.difficulty = pgTuningCtx.difficulty;
       configureProvingGroundsSession(sess, useLivery);
     }
     provingHudBar.show({
       trialLivery: isCustomTrial ? useLivery : null,
       trialLabel: label,
       initialPresetId: isCustomTrial ? 'trial' : 'equipped',
+      initialModeId: pgModeId,
     });
     showToast?.('🧪 Gear Proving Grounds ready! Swim the 6 lanes & hot-swap Sets live on the top bar.', 3.8);
     return true;
@@ -302,6 +333,11 @@ export function createLiveryWorkshopController({
       hudGearBuffsEl.hidden = true;
       return;
     }
+    if (perf.tuning?.isNormalized) {
+      hudGearBuffsEl.hidden = false;
+      hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-hybrid">🧭 PURIST</span><span class="hud-gb-list"><span>Normalized Baseline (0% Buffs)</span></span>`;
+      return;
+    }
     const chips = [];
     if (perf.bonusStartBar > 0) chips.push(`+${perf.bonusStartBar}b`);
     if (perf.narcDepthBonusM > 0) chips.push(`+${perf.narcDepthBonusM}m Depth`);
@@ -313,13 +349,19 @@ export function createLiveryWorkshopController({
     if (perf.hydroGhost) chips.push('Hydro-Ghost');
     if (perf.relicCompass) chips.push('Relic Compass');
     if (perf.apexOvercharge) chips.push('Hyper-Tip');
+    if (Array.isArray(perf.modifierSynergies)) {
+      for (const ms of perf.modifierSynergies) chips.push(`${ms.icon} ${ms.label}`);
+    }
     if (chips.length === 0) {
       hudGearBuffsEl.hidden = true;
       return;
     }
     const arch = perf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
+    const modeTag = perf.tuning && perf.tuning.modeTag !== 'standard'
+      ? `<span class="hud-gb-mode">${perf.tuning.icon} ${escapeHtml(perf.tuning.modeTag === 'trench' ? `TR.${perf.tuning.trenchChamber}` : perf.tuning.label.toUpperCase())}</span>`
+      : '';
     hudGearBuffsEl.hidden = false;
-    hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-${arch.id}">${arch.icon} ${perf.isHybridMix ? 'HYBRID' : arch.short}</span><span class="hud-gb-list">${chips.slice(0, 4).map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</span>`;
+    hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-${arch.id}">${arch.icon} ${perf.isHybridMix ? 'HYBRID' : arch.short}</span>${modeTag}<span class="hud-gb-list">${chips.slice(0, 4).map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</span>`;
   }
 
   function hideLootDiscoveryBanner() {
@@ -390,7 +432,11 @@ export function createLiveryWorkshopController({
 
   function syncLiveryUi() {
     const pal = resolveDiverLiveryPalette(activeRigLivery);
-    const perf = computeRigPerformanceProfile(activeRigLivery);
+    const session = getSession();
+    let fallbackDiff = 'standard';
+    try { if (typeof getDifficulty === 'function') fallbackDiff = getDifficulty() || 'standard'; } catch {}
+    const liveTuningCtx = session?.rigTuningCtx || getWorkshopTuningCtx(fallbackDiff);
+    const perf = computeRigPerformanceProfile(activeRigLivery, liveTuningCtx);
     const custom = !isDefaultRigLivery(activeRigLivery);
     const unseenCount = getUnseenEntries(getCurrentLiveryUnlocks()).length;
     if (menuLiveryPillEl) {
@@ -404,7 +450,6 @@ export function createLiveryWorkshopController({
       btnHomeOpenLiveryEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name}${unseenCount > 0 ? ` (${unseenCount} NEW unlocked!)` : ' (tap to customize)'}`;
     }
     renderHomeAvatarBadge();
-    const session = getSession();
     if (session?.diver && !session.isProvingGrounds) {
       session.diver.livery = { ...activeRigLivery };
       session.rigPerf = perf;
@@ -708,10 +753,11 @@ export function createLiveryWorkshopController({
       liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · 🗺️ ${worldFoundCount}/10 world caches · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
     }
 
-    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas (v216 / v217 multi-slot set preview)
+    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas, Mode/Difficulty Tuned (v216–v219)
     const previewRigForPerf = getDisplayedRigLivery();
-    const basePerf = computeRigPerformanceProfile(activeRigLivery);
-    const viewPerf = lockedTryOn ? computeRigPerformanceProfile(previewRigForPerf) : basePerf;
+    const wsTuningCtx = getWorkshopTuningCtx(workshopTuningMode);
+    const basePerf = computeRigPerformanceProfile(activeRigLivery, wsTuningCtx);
+    const viewPerf = lockedTryOn ? computeRigPerformanceProfile(previewRigForPerf, wsTuningCtx) : basePerf;
     const perfDiffs = lockedTryOn ? diffRigPerformanceProfiles(basePerf, viewPerf) : [];
     if (liveryPerfPanelEl) {
       const swimPct = Math.round((viewPerf.swimSpeedMult - 1) * 100);
@@ -735,6 +781,18 @@ export function createLiveryWorkshopController({
       ];
       const domArch = viewPerf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
       const archBannerTag = `<span class="livery-arch-pill arch-${domArch.id}">${domArch.icon} ${viewPerf.isHybridMix ? 'HYBRID MIX' : domArch.label.toUpperCase()}</span>`;
+      const tuningStripHtml = `<div class="livery-tuning-bar" role="radiogroup" aria-label="Preview stats by Mode and Difficulty">
+        <span class="livery-tuning-lbl">Tune:</span>
+        ${WORKSHOP_TUNING_MODES.map(
+          (m) => `<button type="button" class="livery-tuning-pill${workshopTuningMode === m.id ? ' active' : ''}" data-tuning-mode="${m.id}">${m.icon} ${m.label}</button>`
+        ).join('')}
+        <span class="livery-tuning-badge" title="${escapeHtml(viewPerf.tuning?.summary || '')}">${escapeHtml(viewPerf.tuning?.badge || '')}</span>
+      </div>`;
+      const modSynHtml = Array.isArray(viewPerf.modifierSynergies) && viewPerf.modifierSynergies.length > 0
+        ? `<div class="livery-mod-synergies">${viewPerf.modifierSynergies
+            .map((ms) => `<span class="livery-mod-syn-chip" title="${escapeHtml(ms.desc)}">${ms.icon} ${escapeHtml(ms.label)}</span>`)
+            .join('')}</div>`
+        : '';
 
       const deltaHtml = perfDiffs.length > 0
         ? `<div class="livery-perf-deltas">${perfDiffs
@@ -742,11 +800,13 @@ export function createLiveryWorkshopController({
             .map((d) => `<span class="livery-delta-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`)
             .join('')}</div>`
         : '';
-      const powersHtml = viewPerf.powers.length > 0
-        ? `<div class="livery-perf-powers">${viewPerf.powers
-            .map((p) => `<span class="livery-perf-power-chip src-${escapeHtml(p.source || 'item')}" title="${escapeHtml(p.desc)}">⚡ ${escapeHtml(p.name)}</span>`)
-            .join('')}</div>`
-        : `<div class="livery-perf-powers empty">Equip Rare/World gear or 2–3pc Sets to unlock Legendary Powers &amp; Immunities.</div>`;
+      const powersHtml = viewPerf.tuning?.isNormalized
+        ? `<div class="livery-perf-powers empty">🧭 Purist Mutator active — all gear stats &amp; set powers are normalized to cosmetic-only pure diving.</div>`
+        : viewPerf.powers.length > 0
+          ? `<div class="livery-perf-powers">${viewPerf.powers
+              .map((p) => `<span class="livery-perf-power-chip src-${escapeHtml(p.source || 'item')}" title="${escapeHtml(p.desc)}">⚡ ${escapeHtml(p.name)}</span>`)
+              .join('')}</div>`
+          : `<div class="livery-perf-powers empty">Equip Rare/World gear or 2–3pc Sets to unlock Legendary Powers &amp; Immunities.</div>`;
       const setBonusHtml = viewPerf.activeSets.length > 0
         ? `<div class="livery-perf-sets">${viewPerf.activeSets
             .map((as) => `<span class="livery-perf-set-pill${as.capstoneActive ? ' capstone' : ''}" style="--set-color:${as.color}">
@@ -759,8 +819,9 @@ export function createLiveryWorkshopController({
       liveryPerfPanelEl.innerHTML = `
         <div class="livery-perf-head">
           <span class="livery-perf-title">⚡ RIG PERFORMANCE ${archBannerTag}${lockedTryOn ? ' · <span class="livery-perf-cmp">COMPARE PREVIEW</span>' : ''}</span>
-          <span class="livery-perf-sub">${viewPerf.powers.length} Power${viewPerf.powers.length === 1 ? '' : 's'} · ${viewPerf.activeSets.length} Set Tier${viewPerf.activeSets.length === 1 ? '' : 's'}${viewPerf.relicGlowBonusM > 0 ? ` · +${viewPerf.relicGlowBonusM}m Relic` : ''}</span>
+          <span class="livery-perf-sub">${viewPerf.powers.length} Power${viewPerf.powers.length === 1 ? '' : 's'} · ${viewPerf.activeSets.length} Set Tier${viewPerf.activeSets.length === 1 ? '' : 's'}${viewPerf.scoreBonusMult > 1.005 ? ` · +${Math.round((viewPerf.scoreBonusMult - 1) * 100)}% Score` : ''}${viewPerf.relicGlowBonusM > 0 ? ` · +${viewPerf.relicGlowBonusM}m Relic` : ''}</span>
         </div>
+        ${tuningStripHtml}
         <div class="livery-perf-grid">
           ${bars
             .map(
@@ -771,10 +832,19 @@ export function createLiveryWorkshopController({
             )
             .join('')}
         </div>
+        ${modSynHtml}
         ${deltaHtml}
         ${setBonusHtml}
         ${powersHtml}
       `;
+      liveryPerfPanelEl.querySelectorAll('button[data-tuning-mode]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const mid = btn.getAttribute('data-tuning-mode');
+          if (!mid || mid === workshopTuningMode) return;
+          workshopTuningMode = mid;
+          renderLiveryWorkshopModal();
+        });
+      });
     }
 
     // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Set Loadout Inspector + Locked Try-On Revert
@@ -1259,6 +1329,12 @@ export function createLiveryWorkshopController({
     closeDiveSetupModal();
     setHomeMenuOpen(false);
     lockedTryOn = null;
+    if (typeof getDifficulty === 'function') {
+      const curD = getDifficulty();
+      if (curD === 'guided' || curD === 'standard' || curD === 'hardcore') {
+        workshopTuningMode = curD;
+      }
+    }
     if (initialTab && liveryPanels[initialTab]) {
       activeLiveryTab = initialTab;
     }

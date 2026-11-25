@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=218',
+  mapRasterUrl: './assets/map-expedition.jpg?v=219',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2473,6 +2473,7 @@ const liveryWorkshop = createLiveryWorkshopController({
   spawnConfetti: () => spawnCelebrationConfetti(),
   launchProvingGrounds: async (pgLvl) => { const prev = activeLevel; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(pgLvl, { showOverlay: true }); startDiveRun(false); return prev; },
   exitProvingGrounds: (prevLvl) => { abortActiveDiveToMenu(); if (prevLvl) ensureLevelLoaded(prevLvl, { showOverlay: false }); },
+  getDifficulty: () => activeDifficulty, getActiveModifiers: () => activeExpeditionModifiers,
 });
 const {
   liveryModalEl,
@@ -3235,6 +3236,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     crewRoleId: activeCrewRoleId,
     modifiers: activeExpeditionModifiers,
     foundGear: loadCareerLogbook()?.foundGear || null,
+    isRescueDrill: isDrillLaunch,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
