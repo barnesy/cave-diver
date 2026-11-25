@@ -73,7 +73,6 @@ import {
   recordRescueDrillClearInLogbook,
   recordCrewDiveInLogbook,
   recordArtifactInLogbook,
-  recordFoundWorldGear,
   getArtifactVaultStats,
   getFieldGuideStats,
 } from './game/logbookModel.js';
@@ -571,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=217',
+  mapRasterUrl: './assets/map-expedition.jpg?v=218',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2465,7 +2464,7 @@ syncWeatherUi();
 
 // ── Diver Gear Workshop, Custom Rig Liveries & Test-Tank Controller (modularized v172) ──
 const liveryWorkshop = createLiveryWorkshopController({
-  liveryPrefKey: LIVERY_PREF_KEY, loadCareerLogbook, getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
+  liveryPrefKey: LIVERY_PREF_KEY, loadCareerLogbook, saveCareerLogbook, getEffectiveGearLoadout: () => getEffectiveGearLoadout(),
   getSavedGearLoadout: () => savedGearLoadout, saveGearLoadout: (...a) => saveGearLoadout(...a),
   renderTechGearDock: () => renderTechGearDock(), getSession: () => session,
   syncSetupDrawerSummary: () => syncSetupDrawerSummary(), closeDiveSetupModal: () => closeDiveSetupModal(),
@@ -3247,6 +3246,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
       ? { ...incomingChallenge }
       : null;
   lastGearHudKey = '';
+  syncLiveryUi();
   syncTechGearHud(session);
   syncSonarOverlayUi();
   refreshActiveGhostTrack(activeLevel);
@@ -6880,14 +6880,8 @@ const sessionStepCallbacks = {
     if (isMultiplayer) lan.sendCheckpoint(cp.id);
   },
   onWorldGearFound: (gc) => {
-    audio.playGearUnlock?.(gc.tier || 'rare');
     triggerHaptic('pickup');
-    if (gc?.isDemoCache || session?.isProvingGrounds) return;
-    try {
-      const res = recordFoundWorldGear(loadCareerLogbook(), { slot: gc.slot, itemId: gc.itemId, siteId: session?.level?.id || '', siteName: session?.level?.name || '' });
-      if (res?.book) saveCareerLogbook(res.book);
-      liveryWorkshop?.syncLiveryUi?.();
-    } catch {}
+    liveryWorkshop?.handleWorldGearFound?.(gc);
   },
   onCollect: (item) => {
     const isGrand = (item.scale || 1) >= 1.35;

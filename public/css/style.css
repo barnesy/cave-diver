@@ -11541,6 +11541,158 @@ summary,
   }
 }
 
+/* ─── v218 Archetype Pills, Site Gear Cache Intel, Live HUD Buffs & Legendary Loot Discovery Banner ─── */
+.livery-arch-pill,
+.lvl-arch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 99px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.arch-deep { background: rgba(14, 165, 233, 0.2); border: 1px solid rgba(56, 189, 248, 0.55); color: #7dd3fc; }
+.arch-speed { background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(52, 211, 153, 0.55); color: #6ee7b7; }
+.arch-combat { background: rgba(244, 63, 94, 0.2); border: 1px solid rgba(251, 113, 133, 0.55); color: #fda4af; }
+.arch-hybrid { background: rgba(250, 204, 21, 0.18); border: 1px solid rgba(250, 204, 21, 0.52); color: #fde047; }
+
+.lvl-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+.lvl-card-intel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.lvl-cache-badge {
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.lvl-cache-badge.unfound {
+  background: rgba(250, 204, 21, 0.2);
+  border: 1px solid rgba(250, 204, 21, 0.62);
+  color: #fef08a;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.22);
+}
+.lvl-cache-badge.found {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #86efac;
+}
+
+.hud-gear-buffs {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 34;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(4, 18, 34, 0.78);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  pointer-events: none;
+  max-width: calc(100vw - 260px);
+}
+.hud-gb-arch {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.hud-gb-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.63rem;
+  font-weight: 700;
+  color: #e0f2fe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 720px) {
+  .hud-gear-buffs {
+    display: none;
+  }
+}
+
+.loot-discovery-banner {
+  position: fixed;
+  top: max(54px, calc(env(safe-area-inset-top) + 46px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  width: min(440px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, rgba(6, 22, 44, 0.96), rgba(4, 12, 26, 0.98));
+  border: 1.5px solid #38bdf8;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 28px rgba(56, 189, 248, 0.28);
+  pointer-events: auto;
+  animation: aaaModalCardIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.loot-discovery-banner[data-tier="epic"] {
+  border-color: #c084fc;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 32px rgba(192, 132, 252, 0.34);
+}
+.loot-discovery-banner[data-tier="mythic"] {
+  border-color: #facc15;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 36px rgba(250, 204, 21, 0.38);
+}
+.loot-disc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.loot-disc-kicker {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fde047;
+}
+.loot-disc-name {
+  font-size: 1.02rem;
+  font-weight: 900;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+.loot-disc-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.loot-disc-power {
+  font-size: 0.72rem;
+  color: #fef08a;
+  margin-bottom: 8px;
+}
+.loot-disc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
 
 
 

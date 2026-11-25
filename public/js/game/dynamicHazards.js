@@ -303,7 +303,7 @@ export function createDynamicHazards(level) {
     return chosen;
   };
 
-  // 1. Cold Thermocline Pockets (1–3 deeper lenses)
+  // 1. Cold Thermocline Pockets (1–3 deeper lenses + guaranteed -12°C Cryo-Guard on signature cold/deep sites for Deep Tech exploitation v218)
   const thermoPool = candidates.filter((c) => c.y >= 12 && c.clear >= 1.5);
   const thermoclines = pickSpaced(thermoPool, isArctic ? 3 : 2, 16).map((c, idx) => ({
     id: `thermo-${idx}`,
@@ -311,9 +311,50 @@ export function createDynamicHazards(level) {
     y: c.y,
     rx: 4.8 + rng() * 2.4,
     ry: 2.3 + rng() * 1.1,
-    tempDropC: Math.round((isArctic ? 8 : 6) + rng() * 4),
+    tempDropC: Math.round((isArctic ? 10 : 6) + rng() * 4),
     phase: rng() * Math.PI * 2,
   }));
+  const isSignatureDeepCold = /plura|strytan|scoresby|silfra|krubera|kverkfjoll/i.test(String(level.id || ''));
+  if (isSignatureDeepCold && thermoPool.length > 0 && !thermoclines.some((t) => t.tempDropC >= 12)) {
+    const midCand = thermoPool[Math.floor(thermoPool.length * 0.5)];
+    if (midCand) {
+      thermoclines.push({
+        id: 'thermo-cryo-guard',
+        x: midCand.x,
+        y: midCand.y,
+        rx: 6.2,
+        ry: 3.1,
+        tempDropC: 12,
+        phase: 0.4,
+      });
+    }
+  }
+
+  // 1b. Archetype Hydro-Slipstream Chutes on karst resurgence caves (exploited by Speed / Hydro-Glider builds v218)
+  const hydroChutes = [];
+  const isHydroKarst = /cenote-el-abismo|eagles-nest-sink|fontaine-de-vaucluse|wakulla|orda-crystal-maze/i.test(String(level.id || ''));
+  if (isHydroKarst && !level.isWreck && segs.length >= 4) {
+    const chuteIdx = Math.max(1, Math.min(segs.length - 2, Math.floor(segs.length * 0.34)));
+    const s = segs[chuteIdx];
+    if (s && !s.secretLair) {
+      const mx = (s.ax + s.bx) * 0.5;
+      const my = (s.ay + s.by) * 0.5;
+      const dx = s.bx - s.ax;
+      const dy = s.by - s.ay;
+      const len = Math.hypot(dx, dy) || 1;
+      if (my >= 8 && evaluateCaveSDF(level, mx, my) < -1.1) {
+        const speedMps = /vaucluse|wakulla/i.test(String(level.id || '')) ? 1.25 : 0.98;
+        hydroChutes.push({
+          x: Math.round(mx * 10) / 10,
+          y: Math.round(my * 10) / 10,
+          radius: Math.max(5.5, Math.min(9.5, len * 0.48)),
+          vx: +((dx / len) * speedMps).toFixed(2),
+          vy: +((dy / len) * speedMps).toFixed(2),
+          label: 'Karst Slipstream Chute',
+        });
+      }
+    }
+  }
 
   // 2. Overhead Bubble Percolation Ceilings (fragile limestone/silt ceilings with rock overhead within 4.5m)
   const percPool = [];
@@ -363,6 +404,7 @@ export function createDynamicHazards(level) {
   const tidalCurrent = computeTidalCurrent(level, 0);
   return {
     thermoclines,
+    hydroChutes,
     percolationZones,
     shiftingHatches,
     halocline,

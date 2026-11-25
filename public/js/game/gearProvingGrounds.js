@@ -37,24 +37,54 @@ export const PROVING_GROUNDS_PRESETS = Object.freeze([
   }),
   Object.freeze({
     id: 'karst-hydro-glider',
-    icon: '🌊',
-    label: 'Hydro-Glider',
-    desc: '3pc World Set: Silt-Ghost + Hydro-Ghost (-84% wall drag)',
+    icon: '⚡',
+    label: 'Speed Hydro',
+    desc: 'SPEED 3pc: +28% Swim, Silt-Ghost (<1.8 m/s), Hydro-Ghost (-85% wall drag) & DPV Overdrive',
     livery: {
       suitId: 'world-hydro-suit',
       trimId: 'world-hydro-fins',
       tankId: 'world-hydro-tank',
       headgearId: 'cave-hood',
-      visorId: 'clear-cyan',
-      torchId: 'emerald-spot',
+      visorId: 'amber-contrast',
+      torchId: 'amber-silt',
       patchId: 'first-descent',
+    },
+  }),
+  Object.freeze({
+    id: 'thermal-mantle',
+    icon: '🌊',
+    label: 'Deep Tech',
+    desc: 'DEEP: +40 Bar Overfill, +18m Depth Clarity, 100% Cold-Proof & +36% Deco Offgas',
+    livery: {
+      suitId: 'secret-volcanic-nautilus',
+      tankId: 'world-chimney-tank',
+      headgearId: 'world-thermal-hood',
+      visorId: 'thermocline-prism',
+      torchId: 'aurora-plasma',
+      trimId: 'secret-selenite-trim',
+      patchId: 'world-arch-crest',
+    },
+  }),
+  Object.freeze({
+    id: 'apex-combat',
+    icon: '🔱',
+    label: 'Boss Combat',
+    desc: 'COMBAT 3pc: 155 Boss HP, +45% Spear DPS, +28% Fire Rate & Every 3rd Shot Golden Hyper-Tip',
+    livery: {
+      suitId: 'bounty-hunter-suit',
+      visorId: 'bounty-hunter-visor',
+      torchId: 'bounty-hunter-torch',
+      headgearId: 'secret-dreadnought-helm',
+      tankId: 'secret-dreadnought-brass',
+      trimId: 'signal-crimson',
+      patchId: 'bounty-hunter-master',
     },
   }),
   Object.freeze({
     id: 'sunken-cartographer',
     icon: '🧭',
     label: 'Cartographer',
-    desc: '3pc World Set: Golden Relic Compass + +16m Relic Glow + +34% Beam',
+    desc: 'EXPLORER 3pc: Golden Relic Compass (32m), +20m Relic Glow, +45% Sonar & +48% Beam',
     livery: {
       suitId: 'world-cartographer-suit',
       visorId: 'world-cartographer-visor',
@@ -66,48 +96,18 @@ export const PROVING_GROUNDS_PRESETS = Object.freeze([
     },
   }),
   Object.freeze({
-    id: 'thermal-mantle',
-    icon: '🔥',
-    label: 'Thermal',
-    desc: '100% Cold-Proof Mantle + Geothermal Core Tank + Nordic Hood',
+    id: 'hybrid-mix',
+    icon: '✨',
+    label: 'Hybrid Mix',
+    desc: 'HYBRID 2pc+2pc: Hydro-Glider (Silt-Ghost + Flow) + Cartographer (Relic Radar + Sonar)',
     livery: {
-      suitId: 'secret-volcanic-nautilus',
-      tankId: 'world-chimney-tank',
+      suitId: 'world-hydro-suit',
+      trimId: 'world-hydro-fins',
+      visorId: 'world-cartographer-visor',
+      torchId: 'world-cartographer-torch',
       headgearId: 'world-thermal-hood',
-      visorId: 'thermocline-prism',
-      torchId: 'aurora-plasma',
-      trimId: 'safety-orange',
+      tankId: 'world-chimney-tank',
       patchId: 'world-arch-crest',
-    },
-  }),
-  Object.freeze({
-    id: 'deep-salvage-master',
-    icon: '⚓',
-    label: 'Salvage',
-    desc: '3pc Set: +42% Crank Speed, Bump Armor & Percolation/Hatch resilience',
-    livery: {
-      suitId: 'wreck-titanium',
-      headgearId: 'secret-dreadnought-helm',
-      tankId: 'secret-dreadnought-brass',
-      visorId: 'world-salvage-visor',
-      trimId: 'salvage-gold',
-      torchId: 'amber-silt',
-      patchId: 'wreck-penetrator',
-    },
-  }),
-  Object.freeze({
-    id: 'abyssal-voidwalker',
-    icon: '🌌',
-    label: 'Voidwalker',
-    desc: '3pc Set: -50% Narcosis, +32% Beam & Deep Pressure Hull',
-    livery: {
-      suitId: 'krubera-obsidian',
-      headgearId: 'abyss-halo-helm',
-      tankId: 'abyssal-titanium',
-      visorId: 'night-emerald',
-      torchId: 'aurora-plasma',
-      trimId: 'biolum-violet',
-      patchId: 'abyss-veteran',
     },
   }),
 ]);
@@ -369,6 +369,24 @@ export function applyTrialLiveryToSession(session, livery) {
   if (session.hazards) {
     session.hazards.rigPerf = perf;
   }
+  // v218: In Proving Grounds, immediately reflect the swapped rig's cylinder overfill (+bonusStartBar) on the live Gas Manifold
+  if (session.isProvingGrounds && session.diveState?.tanks && session.diveState?.mixes) {
+    const extraBar = Math.max(0, Math.min(50, Math.round(Number(perf.bonusStartBar) || 0)));
+    for (const gasId of Object.keys(session.diveState.tanks)) {
+      const tank = session.diveState.tanks[gasId];
+      const mix = session.diveState.mixes[gasId];
+      if (!tank || !mix || !mix.tankVolumeL) continue;
+      const baseStartBar = mix._baseStartBar || 200;
+      mix._baseStartBar = baseStartBar;
+      const targetStartBar = baseStartBar + extraBar;
+      const curFrac = tank.maxLiters > 0 ? Math.max(0, Math.min(1, tank.litersRemaining / tank.maxLiters)) : 1;
+      const nextFrac = curFrac >= 0.9 ? 1 : curFrac;
+      mix.startBar = targetStartBar;
+      tank.maxLiters = mix.tankVolumeL * targetStartBar;
+      tank.litersRemaining = tank.maxLiters * nextFrac;
+      tank.bar = tank.litersRemaining / mix.tankVolumeL;
+    }
+  }
   // Emit a crisp celebratory ring of water bubbles around the diver on hot-swap
   if (Array.isArray(session.bubbles)) {
     for (let i = 0; i < 10; i++) {
@@ -443,15 +461,16 @@ export function createProvingGroundsHudBar({
     const spd = Math.hypot(sess.diver?.vx || 0, sess.diver?.vy || 0).toFixed(1);
     const swimPct = Math.round((perf.swimSpeedMult - 1) * 100);
     const gasPct = Math.round((1 - perf.gasBurnMult) * 100);
-    const siltPct = Math.round((1 - perf.siltStirMult) * 100);
     const coldTxt = perf.coldResist >= 0.99 ? 'COLD-PROOF' : `Cold ${Math.round(perf.coldResist * 100)}%`;
+    const archTag = perf.dominantArchetype ? `${perf.dominantArchetype.icon} ${perf.dominantArchetype.short}` : 'HYBRID';
+    const extraBits = [];
+    if (perf.bonusStartBar > 0) extraBits.push(`+${perf.bonusStartBar}b`);
+    if (perf.narcDepthBonusM > 0) extraBits.push(`+${perf.narcDepthBonusM}m Depth`);
+    if (perf.combatMaxHpBonus > 0) extraBits.push(`${100 + perf.combatMaxHpBonus} HP`);
     const hydroMode = sess.hydrology?.mode && sess.hydrology.mode !== 'calm'
-      ? ` · 🌊 ${sess.hydrology.mode.toUpperCase()} (${Math.round((1 - (sess.hydrology.effectiveDragMult || 1)) * 100)}% cut)`
+      ? ` · 🌊 ${sess.hydrology.mode.toUpperCase()} (-${Math.round((1 - (sess.hydrology.effectiveDragMult || 1)) * 100)}% drag)`
       : '';
-    const activeSetTxt = perf.activeSets?.length
-      ? ` · ${perf.activeSets[0].icon} ${perf.activeSets[0].name}${perf.activeSets[0].capstoneActive ? ' ★' : ' (2pc)'}`
-      : '';
-    readEl.textContent = `Speed ${spd} m/s (+${swimPct}%) · Gas -${gasPct}% · Silt -${siltPct}% · ${coldTxt}${hydroMode}${activeSetTxt}`;
+    readEl.textContent = `[${archTag}] ${spd} m/s (+${swimPct}%) · Gas -${gasPct}% · ${coldTxt}${extraBits.length ? ` · ${extraBits.join(' · ')}` : ''}${hydroMode}`;
   }
 
   function renderBar() {

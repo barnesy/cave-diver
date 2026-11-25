@@ -282,18 +282,20 @@ export function computeTissueCompartmentStatus(state) {
   };
 }
 
-export function createDiveState({ mixOverrides, ccrEnabled = false } = {}) {
+export function createDiveState({ mixOverrides, ccrEnabled = false, bonusStartBar = 0 } = {}) {
   const mixes = {};
   const tanks = {};
+  const extraBar = Math.max(0, Math.min(50, Math.round(Number(bonusStartBar) || 0)));
   for (const id of GAS_ORDER) {
     const base = GAS_MIXES[id];
     const mix = mixOverrides?.[id] ? { ...base, ...mixOverrides[id] } : base;
-    mixes[id] = mix;
+    const startBar = mix.startBar + extraBar;
+    mixes[id] = extraBar > 0 ? { ...mix, startBar } : mix;
     tanks[id] = {
       id,
-      bar: mix.startBar,
-      litersRemaining: mix.tankVolumeL * mix.startBar,
-      maxLiters: mix.tankVolumeL * mix.startBar,
+      bar: startBar,
+      litersRemaining: mix.tankVolumeL * startBar,
+      maxLiters: mix.tankVolumeL * startBar,
     };
   }
 
@@ -429,6 +431,7 @@ export function stepDivePhysiology(
     gasBurnMultiplier = 1.0,
     decoOffgasMult = 1.0,
     narcResist = 0,
+    narcDepthBonusM = 0,
     bumpArmor = 0,
   }
 ) {
@@ -546,8 +549,9 @@ export function stepDivePhysiology(
     state.cnsPercent = Math.max(0, state.cnsPercent - dt * 0.45);
   }
 
-  // 3. NITROGEN NARCOSIS (END > 28m; frame-rate-independent smoothing reverses cleanly on Trimix/ascent)
-  const rawTargetNarc = endM > 28 ? Math.min(1, (endM - 28) / 22) : 0;
+  // 3. NITROGEN NARCOSIS (END > 28m + Deep-Tech narcDepthBonusM; frame-rate-independent smoothing reverses cleanly on Trimix/ascent)
+  const narcOnsetM = 28 + Math.max(0, Math.min(22, Number(narcDepthBonusM) || 0));
+  const rawTargetNarc = endM > narcOnsetM ? Math.min(1, (endM - narcOnsetM) / 22) : 0;
   const narcShield = Math.max(0, Math.min(0.85, Number(narcResist) || 0));
   const targetNarc = rawTargetNarc * (1 - narcShield);
   const narcAlpha = 1 - Math.exp(-dt * 1.8);

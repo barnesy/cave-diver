@@ -1,6 +1,6 @@
 import { escapeHtml } from '../util/common.js';
 import { LEVELS } from '../levels/index.js';
-import { computeUnlockedGear } from '../game/logbookModel.js';
+import { computeUnlockedGear, recordFoundWorldGear } from '../game/logbookModel.js';
 import {
   SUIT_LIVERIES,
   TORCH_OPTICS,
@@ -28,6 +28,7 @@ import {
 } from '../game/rigLivery.js';
 import { createGearUnlockShowcase } from './gearUnlockShowcase.js';
 import {
+  GEAR_ARCHETYPES,
   computeRigPerformanceProfile,
   diffRigPerformanceProfiles,
   getGearItemStats,
@@ -38,6 +39,7 @@ import {
   buildBestOwnedRig,
   createProvingGroundsLevel,
   configureProvingGroundsSession,
+  applyTrialLiveryToSession,
   createProvingGroundsHudBar,
 } from '../game/gearProvingGrounds.js';
 
@@ -57,6 +59,7 @@ const EQUIP_ANIM_DURATION_MS = 860;
 export function createLiveryWorkshopController({
   liveryPrefKey,
   loadCareerLogbook,
+  saveCareerLogbook = null,
   getEffectiveGearLoadout,
   getSavedGearLoadout,
   saveGearLoadout,
@@ -162,6 +165,9 @@ export function createLiveryWorkshopController({
   const liveryPatchGridEl = document.getElementById('livery-patch-grid');
   const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
   const debriefGearUnlocksEl = document.getElementById('debrief-gear-unlocks');
+  const lootDiscoveryBannerEl = document.getElementById('loot-discovery-banner');
+  const hudGearBuffsEl = document.getElementById('hud-gear-buffs');
+  let lootBannerTimer = null;
   const btnLiveryCloseEl = document.getElementById('btn-livery-close');
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
   const btnLiveryDoneEl = document.getElementById('btn-livery-done');
@@ -290,8 +296,101 @@ export function createLiveryWorkshopController({
     drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
   }
 
+  function renderHudGearBuffs(perf, session) {
+    if (!hudGearBuffsEl) return;
+    if (!perf || session?.isProvingGrounds) {
+      hudGearBuffsEl.hidden = true;
+      return;
+    }
+    const chips = [];
+    if (perf.bonusStartBar > 0) chips.push(`+${perf.bonusStartBar}b`);
+    if (perf.narcDepthBonusM > 0) chips.push(`+${perf.narcDepthBonusM}m Depth`);
+    if (perf.swimSpeedMult >= 1.05) chips.push(`+${Math.round((perf.swimSpeedMult - 1) * 100)}% Swim`);
+    if (perf.gasBurnMult <= 0.94) chips.push(`-${Math.round((1 - perf.gasBurnMult) * 100)}% Gas`);
+    if (perf.combatMaxHpBonus > 0) chips.push(`${100 + perf.combatMaxHpBonus} Boss HP`);
+    if (perf.coldResist >= 0.99) chips.push('Cold-Proof');
+    if (perf.siltGhost) chips.push('Silt-Ghost');
+    if (perf.hydroGhost) chips.push('Hydro-Ghost');
+    if (perf.relicCompass) chips.push('Relic Compass');
+    if (perf.apexOvercharge) chips.push('Hyper-Tip');
+    if (chips.length === 0) {
+      hudGearBuffsEl.hidden = true;
+      return;
+    }
+    const arch = perf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
+    hudGearBuffsEl.hidden = false;
+    hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-${arch.id}">${arch.icon} ${perf.isHybridMix ? 'HYBRID' : arch.short}</span><span class="hud-gb-list">${chips.slice(0, 4).map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</span>`;
+  }
+
+  function hideLootDiscoveryBanner() {
+    if (lootBannerTimer) { clearTimeout(lootBannerTimer); lootBannerTimer = null; }
+    if (lootDiscoveryBannerEl) {
+      lootDiscoveryBannerEl.hidden = true;
+      lootDiscoveryBannerEl.innerHTML = '';
+    }
+  }
+
+  function handleWorldGearFound(gc) {
+    if (!gc) return;
+    playGearUnlock?.(gc.tier || 'rare');
+    const sess = getSession?.();
+    const isDemo = Boolean(gc.isDemoCache || sess?.isProvingGrounds);
+    if (!isDemo && typeof saveCareerLogbook === 'function') {
+      try {
+        const res = recordFoundWorldGear(loadCareerLogbook(), {
+          slot: gc.slot,
+          itemId: gc.itemId,
+          siteId: sess?.level?.id || '',
+          siteName: sess?.level?.name || '',
+        });
+        if (res?.book) saveCareerLogbook(res.book);
+      } catch {}
+    }
+    syncLiveryUi();
+
+    if (!lootDiscoveryBannerEl) return;
+    const entry = getGearItemBySlot(gc.slot, gc.itemId);
+    const item = entry?.item || { id: gc.itemId, name: gc.itemName || gc.name || gc.itemId, tier: gc.tier || 'rare' };
+    const info = getGearItemStats(gc.slot, item);
+    const tierMeta = getGearTierMeta(item.tier || gc.tier || 'rare');
+    const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
+    const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+    const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+    lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
+    lootDiscoveryBannerEl.hidden = false;
+    lootDiscoveryBannerEl.innerHTML = `
+      <div class="loot-disc-top">
+        <span class="loot-disc-kicker">${tierMeta.icon} ${isDemo ? 'DEMO CACHE' : 'WORLD GEAR DISCOVERED'} · ${tierMeta.badge}</span>
+        <span class="livery-arch-pill arch-${arch.id}">${arch.icon} ${arch.short}</span>
+      </div>
+      <div class="loot-disc-name">${gc.icon || '📦'} ${escapeHtml(item.name)}</div>
+      <div class="loot-disc-pills">${pillsHtml}</div>
+      ${pwrHtml}
+      <div class="loot-disc-actions">
+        ${entry?.field ? `<button type="button" class="btn tiny primary" id="btn-loot-equip-now">⚡ Equip Mid-Dive</button>` : ''}
+        <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
+      </div>
+    `;
+    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+    lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
+      if (entry?.field && entry?.item) {
+        if (!isDemo) {
+          updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
+        } else if (sess) {
+          applyTrialLiveryToSession(sess, { ...(sess.diver?.livery || activeRigLivery), [entry.field]: entry.item.id });
+          playGearEquip?.(entry.slot, tierMeta.id);
+        }
+        showToast?.(`⚡ Equipped ${entry.item.name} live mid-dive!`, 2.6);
+      }
+      hideLootDiscoveryBanner();
+    });
+    if (lootBannerTimer) clearTimeout(lootBannerTimer);
+    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9500);
+  }
+
   function syncLiveryUi() {
     const pal = resolveDiverLiveryPalette(activeRigLivery);
+    const perf = computeRigPerformanceProfile(activeRigLivery);
     const custom = !isDefaultRigLivery(activeRigLivery);
     const unseenCount = getUnseenEntries(getCurrentLiveryUnlocks()).length;
     if (menuLiveryPillEl) {
@@ -306,13 +405,13 @@ export function createLiveryWorkshopController({
     }
     renderHomeAvatarBadge();
     const session = getSession();
-    if (session?.diver) {
+    if (session?.diver && !session.isProvingGrounds) {
       session.diver.livery = { ...activeRigLivery };
-      const perf = computeRigPerformanceProfile(activeRigLivery);
       session.rigPerf = perf;
       session.diver.torchReachMult = perf.torchReachMult || 1.0;
       if (session.hazards) session.hazards.rigPerf = perf;
     }
+    renderHudGearBuffs(session?.rigPerf || perf, session);
     syncSetupDrawerSummary();
   }
 
@@ -442,6 +541,10 @@ export function createLiveryWorkshopController({
         : itemStats.source === 'earned'
           ? `<span class="livery-source-pill src-earned">🏆 EARNED</span>`
           : '';
+    const archMeta = itemStats.archetype;
+    const archBadge = archMeta && itemStats.pills.length > 0
+      ? `<span class="livery-arch-pill arch-${archMeta.id}" title="${escapeHtml(archMeta.desc)}">${archMeta.icon} ${archMeta.short}</span>`
+      : '';
     const statPillsHtml = itemStats.pills.length > 0
       ? `<span class="livery-stat-pills">${itemStats.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</span>`
       : '';
@@ -469,7 +572,7 @@ export function createLiveryWorkshopController({
       <span class="livery-swatch-copy">
         <span class="livery-swatch-top">
           <span class="livery-swatch-name">${escapeHtml(item.name)}</span>
-          ${newBadge}${sourceBadge}${tierBadge}
+          ${newBadge}${archBadge}${sourceBadge}${tierBadge}
         </span>
         ${statPillsHtml}
         ${powerHtml}
@@ -623,13 +726,15 @@ export function createLiveryWorkshopController({
       const resLabel = coldPct >= 99 ? 'COLD-PROOF' : `C${coldPct}/N${narcPct}/A${armorPct}`;
 
       const bars = [
-        { lbl: '🏊 Swim', val: `+${swimPct}%`, pct: Math.min(100, Math.round((swimPct / 22) * 100)), cls: 'c-cyan' },
-        { lbl: '🫧 Gas Eff', val: `-${gasPct}%`, pct: Math.min(100, Math.round((gasPct / 24) * 100)), cls: 'c-emerald' },
-        { lbl: '🌫️ Silt Ctrl', val: `-${siltPct}%`, pct: Math.min(100, Math.round((siltPct / 50) * 100)), cls: 'c-teal' },
-        { lbl: '⏱️ Deco', val: `+${decoPct}%`, pct: Math.min(100, Math.round((decoPct / 36) * 100)), cls: 'c-amber' },
-        { lbl: '🔦 Beam', val: `+${beamPct}%`, pct: Math.min(100, Math.round((beamPct / 38) * 100)), cls: 'c-violet' },
-        { lbl: '🛡️ Resists', val: resLabel, pct: Math.min(100, resPeak), cls: 'c-rose' },
+        { lbl: '⚡ Swim / DPV', val: `+${swimPct}%${viewPerf.dpvSpeedBonus > 0 ? ` · +${Math.round(viewPerf.dpvSpeedBonus * 100)}% DPV` : ''}`, pct: Math.min(100, Math.round((swimPct / 28) * 100)), cls: 'c-cyan' },
+        { lbl: '🌊 Gas / Bar', val: `-${gasPct}%${viewPerf.bonusStartBar > 0 ? ` · +${viewPerf.bonusStartBar}b` : ''}`, pct: Math.min(100, Math.round(((gasPct + viewPerf.bonusStartBar * 0.4) / 36) * 100)), cls: 'c-emerald' },
+        { lbl: '🌫️ Silt / Flow', val: `-${siltPct}%${viewPerf.hydroEfficiency > 0 ? ` · +${Math.round(viewPerf.hydroEfficiency * 100)}%` : ''}`, pct: Math.min(100, Math.round((siltPct / 55) * 100)), cls: 'c-teal' },
+        { lbl: '⏱️ Deco / Depth', val: `+${decoPct}%${viewPerf.narcDepthBonusM > 0 ? ` · +${viewPerf.narcDepthBonusM}m` : ''}`, pct: Math.min(100, Math.round(((decoPct + viewPerf.narcDepthBonusM) / 50) * 100)), cls: 'c-amber' },
+        { lbl: '🔱 Combat', val: `${100 + viewPerf.combatMaxHpBonus} HP · +${Math.round((viewPerf.spearPowerMult - 1) * 100)}%`, pct: Math.min(100, Math.round(((viewPerf.combatMaxHpBonus + (viewPerf.spearPowerMult - 1) * 100) / 95) * 100)), cls: 'c-rose' },
+        { lbl: '🔦 Beam / Res', val: `+${beamPct}% · ${resLabel}`, pct: Math.min(100, Math.max(Math.round((beamPct / 48) * 100), resPeak)), cls: 'c-violet' },
       ];
+      const domArch = viewPerf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
+      const archBannerTag = `<span class="livery-arch-pill arch-${domArch.id}">${domArch.icon} ${viewPerf.isHybridMix ? 'HYBRID MIX' : domArch.label.toUpperCase()}</span>`;
 
       const deltaHtml = perfDiffs.length > 0
         ? `<div class="livery-perf-deltas">${perfDiffs
@@ -653,7 +758,7 @@ export function createLiveryWorkshopController({
 
       liveryPerfPanelEl.innerHTML = `
         <div class="livery-perf-head">
-          <span class="livery-perf-title">⚡ RIG PERFORMANCE TELEMETRY${lockedTryOn ? ' · <span class="livery-perf-cmp">COMPARE PREVIEW</span>' : ''}</span>
+          <span class="livery-perf-title">⚡ RIG PERFORMANCE ${archBannerTag}${lockedTryOn ? ' · <span class="livery-perf-cmp">COMPARE PREVIEW</span>' : ''}</span>
           <span class="livery-perf-sub">${viewPerf.powers.length} Power${viewPerf.powers.length === 1 ? '' : 's'} · ${viewPerf.activeSets.length} Set Tier${viewPerf.activeSets.length === 1 ? '' : 's'}${viewPerf.relicGlowBonusM > 0 ? ` · +${viewPerf.relicGlowBonusM}m Relic` : ''}</span>
         </div>
         <div class="livery-perf-grid">
@@ -1347,8 +1452,12 @@ export function createLiveryWorkshopController({
     closeLiveryModal,
     startFieldTestDive,
     tryOnFullSet,
+    handleWorldGearFound,
+    hideLootDiscoveryBanner,
     onExitProvingGrounds: () => {
       provingHudBar.hide();
+      hideLootDiscoveryBanner();
+      if (hudGearBuffsEl) hudGearBuffsEl.hidden = true;
       const prev = savedPrevLevelBeforeProving;
       savedPrevLevelBeforeProving = null;
       return prev;

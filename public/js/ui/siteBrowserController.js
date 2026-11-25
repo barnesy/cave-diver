@@ -7,6 +7,7 @@ import {
   computeSiteFocusViewBox,
   formatLatLng,
 } from '../game/worldMapData.js';
+import { getRecommendedArchetypeForLevel, getWorldGearCachesForSite } from '../game/gearStats.js';
 
 export const SITE_COORDS_BY_ID = new Map(CAMPAIGN_PLAN.map((s) => [s.id, s]));
 
@@ -386,6 +387,16 @@ export function createSiteBrowserController({
                 : getLevelDifficultyLabel(idx, lvl);
       const prefix = isWreck ? '🚢 ' : '';
       const tierTag = lvl.reelMetersPerDiver > 0 ? `${prefix}L${idx + 1} · T${meta.tier}` : `${prefix}L${idx + 1}`;
+      const recArch = getRecommendedArchetypeForLevel(lvl);
+      const siteCaches = getWorldGearCachesForSite(lvl.id, book.foundGear);
+      const unfoundCache = siteCaches.find((c) => !c.found) || null;
+      const foundCache = !unfoundCache && siteCaches.length > 0 ? siteCaches[0] : null;
+      const cacheBadgeHtml = unfoundCache
+        ? `<span class="lvl-cache-badge unfound" title="Hidden World Gear Cache: ${escapeHtml(unfoundCache.clue)}">📦 Gear Cache</span>`
+        : foundCache
+          ? `<span class="lvl-cache-badge found" title="Discovered: ${escapeHtml(foundCache.itemName)}">✓ Gear</span>`
+          : '';
+      const archPillHtml = `<span class="lvl-arch-badge arch-${recArch.id}" title="Recommended Build: ${escapeHtml(recArch.label)}">${recArch.icon} ${recArch.short}</span>`;
       return `
       <button
         type="button"
@@ -400,7 +411,10 @@ export function createSiteBrowserController({
           <span class="lvl-card-badges">${badgesHtml}<span class="lvl-card-depth">${depth}</span></span>
         </div>
         <span class="lvl-card-name">${lvl.name}</span>
-        <span class="lvl-card-meta ${best > 0 || isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
+        <div class="lvl-card-foot">
+          <span class="lvl-card-meta ${best > 0 || isCached ? 'cached' : lvl.reelMetersPerDiver > 0 ? 'reel' : ''}">${metaText}</span>
+          <span class="lvl-card-intel">${cacheBadgeHtml}${archPillHtml}</span>
+        </div>
       </button>
     `;
     }).join('');

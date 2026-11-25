@@ -139,120 +139,167 @@ export const WORLD_CACHE_BY_KEY = new Map(
 );
 
 /**
+ * 4 Core Expedition Build Archetypes (v218):
+ * Each piece and Set contributes meaningfully toward Deep Tech, Speed/Hydro, Boss Combat, or Explorer/Hybrid play!
+ */
+export const GEAR_ARCHETYPES = Object.freeze({
+  deep: Object.freeze({
+    id: 'deep',
+    icon: '🌊',
+    label: 'Deep Tech',
+    short: 'DEEP',
+    color: '#38bdf8',
+    desc: 'High-pressure +Bar overfill, deeper narcosis tolerance, Cold Immunity & rapid Bühlmann deco',
+  }),
+  speed: Object.freeze({
+    id: 'speed',
+    icon: '⚡',
+    label: 'Speed / Hydro',
+    short: 'SPEED',
+    color: '#34d399',
+    desc: 'Fast swim propulsion, DPV overdrive, Silt-Ghost gliding & extreme current mastery',
+  }),
+  combat: Object.freeze({
+    id: 'combat',
+    icon: '🔱',
+    label: 'Boss Combat',
+    short: 'COMBAT',
+    color: '#fb7185',
+    desc: 'Bonus Boss Arena Max HP, rapid-fire speargun DPS, Golden Hyper-Tips & fast Hydro-Dash',
+  }),
+  hybrid: Object.freeze({
+    id: 'hybrid',
+    icon: '🧭',
+    label: 'Explorer / Hybrid',
+    short: 'HYBRID',
+    color: '#facc15',
+    desc: 'Golden Relic Compass, long-range sonar, 2× wreck bulkhead cranking & multi-set mixing',
+  }),
+});
+
+/**
  * Diablo III Multi-Tier Set Bonuses (2pc Gateway Utility + Full-Set Archetype Capstone / Zelda Immunities).
  */
 export const SET_TIER_BONUSES = Object.freeze({
   'dreadnought-mk4': Object.freeze({
+    archetype: 'combat',
     capstoneReq: 2,
     tier2: Object.freeze({
       label: '(2) Unbreakable Hull',
-      desc: '+35% Hatch Crank · -45% Wall Shock · Immune to Shifting-Hatch Knockback',
-      stats: { crankSpeed: 0.35, bumpArmor: 0.45 },
-      power: { id: 'hatchKnockbackImmune', name: 'Unbreakable Hull', desc: 'Immune to shifting-hatch knockback & -45% impact shock' },
+      desc: '+45% Hatch Crank · +30 Boss HP · -45% Wall Shock · Immune to Shifting-Hatch Knockback',
+      stats: { crankSpeed: 0.45, bumpArmor: 0.45, combatMaxHpBonus: 30, salvageDragCut: 0.35 },
+      power: { id: 'hatchKnockbackImmune', name: 'Unbreakable Hull', desc: 'Immune to shifting-hatch knockback, +30 Boss HP & -45% impact shock' },
     }),
     tierFull: Object.freeze({
       label: '(2) Furnace Boiler Core',
-      desc: 'Unbreakable Hull + +10% Swim Speed · Molten Steam Aura',
-      stats: { swimSpeed: 0.10, gasSave: 0.05 },
-      power: { id: 'hatchKnockbackImmune', name: 'Unbreakable Hull', desc: 'Immune to shifting-hatch knockback & -45% impact shock' },
+      desc: '+14% Swim · +20 Bar Overfill · +15% Speargun Power',
+      stats: { swimSpeed: 0.14, gasSave: 0.08, bonusStartBar: 20, spearPower: 0.15 },
+      power: { id: 'hatchKnockbackImmune', name: 'Unbreakable Hull', desc: 'Immune to shifting-hatch knockback, +30 Boss HP & -45% impact shock' },
     }),
   }),
   'apex-bounty': Object.freeze({
+    archetype: 'combat',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Predator Tempo',
-      desc: '+14% Speargun Power · +6% Swim Agility',
-      stats: { spearPower: 0.14, swimSpeed: 0.06 },
+      desc: '+22% Speargun Damage · +25 Boss Max HP · -20% Hydro-Dash Cooldown',
+      stats: { spearPower: 0.22, combatMaxHpBonus: 25, dashCdCut: 0.20, swimSpeed: 0.08 },
     }),
     tierFull: Object.freeze({
       label: '(3) Apex Overcharge',
-      desc: 'Every 4th Speargun shot is a Piercing Golden Hyper-Tip · +12% Speargun Power',
-      stats: { spearPower: 0.12, bumpArmor: 0.18 },
-      power: { id: 'apexOvercharge', name: 'Apex Overcharge', desc: 'Every 4th speargun shot fires a piercing golden Hyper-Tip' },
+      desc: 'Every 3rd Speargun shot is a Piercing Golden Hyper-Tip · +22% Fire Rate · +20 Boss HP',
+      stats: { spearPower: 0.18, spearFireRateCut: 0.22, combatMaxHpBonus: 20, bumpArmor: 0.20 },
+      power: { id: 'apexOvercharge', name: 'Apex Overcharge', desc: 'Every 3rd speargun shot fires a piercing golden Hyper-Tip + rapid combat reload' },
     }),
   }),
   'kraken-depths': Object.freeze({
+    archetype: 'speed',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Silt-Shadow Glide',
-      desc: '-22% Fin Silt Stir · +6m Relic Glow Detection',
-      stats: { siltCut: 0.22, relicGlowM: 6 },
+      desc: '-26% Fin Silt Stir · +10% Swim Speed · -20% DPV Battery Drain',
+      stats: { siltCut: 0.26, swimSpeed: 0.10, dpvDrainCut: 0.20, relicGlowM: 6 },
     }),
     tierFull: Object.freeze({
       label: '(3) Abyssal Ghost',
-      desc: 'Zero Ceiling Percolation Silt (CCR-grade stealth) · +10% Swim Speed',
-      stats: { swimSpeed: 0.10, narcResist: 0.15 },
+      desc: 'Zero Ceiling Percolation Silt · +14% Swim · -22% Hydro-Dash CD · +8m Depth Tolerance',
+      stats: { swimSpeed: 0.14, narcResist: 0.18, narcDepthBonusM: 8, dashCdCut: 0.22 },
       power: { id: 'percolationImmune', name: 'Abyssal Ghost', desc: 'Exhale bubbles never trigger overhead ceiling percolation silt' },
     }),
   }),
   'abyssal-void': Object.freeze({
+    archetype: 'deep',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Deep Pressure Mind',
-      desc: '-24% Nitrogen Narcosis · +12% Torch Reach',
-      stats: { narcResist: 0.24, torchReach: 0.12 },
+      desc: '+10m Narcosis Depth Tolerance · -28% Narcosis · +20 Bar Tank Overfill',
+      stats: { narcResist: 0.28, narcDepthBonusM: 10, bonusStartBar: 20, torchReach: 0.14 },
     }),
     tierFull: Object.freeze({
       label: '(3) Void Telemetry',
-      desc: '+25% Sonar Scan Range · +12% Deco Offgas · Void Clarity',
-      stats: { sonarRange: 0.25, decoOffgas: 0.12, siltCut: 0.14 },
-      power: { id: 'voidClarity', name: 'Void Telemetry', desc: '+25% sonar range & crisp clarity in deep dark sumps' },
+      desc: '+30% Sonar Range · +22% Deco Offgas · +8m Depth Tolerance · Void Clarity',
+      stats: { sonarRange: 0.30, decoOffgas: 0.22, narcDepthBonusM: 8, siltCut: 0.16 },
+      power: { id: 'voidClarity', name: 'Void Telemetry', desc: '+30% sonar range, +18m total narcosis tolerance & deep sump clarity' },
     }),
   }),
   'karst-pioneer': Object.freeze({
+    archetype: 'deep',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Halocline Trim',
-      desc: '-9% Gas Burn · +14% Deco Offgassing',
-      stats: { gasSave: 0.09, decoOffgas: 0.14 },
+      desc: '-12% Gas Burn · +20% Deco Offgassing · +15 Bar Tank Overfill',
+      stats: { gasSave: 0.12, decoOffgas: 0.20, bonusStartBar: 15 },
     }),
     tierFull: Object.freeze({
       label: '(3) Halcyon Equilibrium',
-      desc: 'Cold Thermocline Immunity · Steady-Trim Deco locks 2× faster (+30% Offgas)',
-      stats: { coldResist: 1.0, decoOffgas: 0.12 },
+      desc: '100% Cold Thermocline Immunity · Steady-Trim Deco locks 2× faster (+36% Offgas)',
+      stats: { coldResist: 1.0, decoOffgas: 0.18, narcDepthBonusM: 6 },
       power: { id: 'halcyonDecoFastLock', name: 'Halcyon Equilibrium', desc: 'Cold Thermocline immunity & 2× faster Steady-Trim Deco lock-in' },
     }),
   }),
   'wreck-salvager': Object.freeze({
+    archetype: 'hybrid',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Bulkhead Torque',
-      desc: '+24% Hatch Crank Speed · -20% Wall Bump Shock',
-      stats: { crankSpeed: 0.24, bumpArmor: 0.20 },
+      desc: '+38% Hatch Crank · -35% Heavy Salvage Drag · -24% Wall Shock',
+      stats: { crankSpeed: 0.38, salvageDragCut: 0.35, bumpArmor: 0.24 },
     }),
     tierFull: Object.freeze({
       label: '(3) Master Salvager',
-      desc: '+10% Swim Speed · +18% Pull-and-Glide Wall Draft · +8% Expedition Score',
-      stats: { swimSpeed: 0.10, hydroEff: 0.18, scoreBonus: 0.08 },
-      power: { id: 'masterSalvager', name: 'Master Salvager', desc: 'Effortless wreck penetration & +8% expedition score' },
+      desc: 'Hatch Knockback Immunity · +12% Swim · +20% Wall Draft · +10% Score',
+      stats: { swimSpeed: 0.12, hydroEff: 0.20, crankSpeed: 0.25, scoreBonus: 0.10 },
+      power: { id: 'hatchKnockbackImmune', name: 'Master Salvager', desc: 'Immune to shifting-hatch knockback, 2× bulkhead cranking & effortless salvage haul' },
     }),
   }),
   'sunken-cartographer': Object.freeze({
+    archetype: 'hybrid',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Relic Resonance',
-      desc: '+8m Relic & Gear Cache Detection · +18% Sonar Range',
-      stats: { relicGlowM: 8, sonarRange: 0.18 },
+      desc: '+10m Relic & Gear Cache Detection · +25% Sonar Range · +12% DPV Speed',
+      stats: { relicGlowM: 10, sonarRange: 0.25, dpvSpeedBonus: 0.12 },
     }),
     tierFull: Object.freeze({
       label: '(3) Cartographer Compass',
-      desc: 'Live Golden Compass points to nearest hidden Relic or Gear Cache (26m) · +8% Swim',
-      stats: { swimSpeed: 0.08, scoreBonus: 0.06 },
-      power: { id: 'relicCompass', name: 'Cartographer Compass', desc: 'Diegetic golden compass arc tracks nearest hidden relic or Gear Cache within 26m' },
+      desc: 'Live Golden Compass tracks hidden Relics & Gear Caches (32m) · +12% Swim · +10% Score',
+      stats: { swimSpeed: 0.12, scoreBonus: 0.10, torchReach: 0.14 },
+      power: { id: 'relicCompass', name: 'Cartographer Compass', desc: 'Diegetic golden compass arc tracks nearest hidden relic or Gear Cache within 32m' },
     }),
   }),
   'karst-hydro-glider': Object.freeze({
+    archetype: 'speed',
     capstoneReq: 3,
     tier2: Object.freeze({
       label: '(2) Laminar Fin Edge',
-      desc: '-26% Fin Silt Stir · +18% Hydrology Efficiency',
-      stats: { siltCut: 0.26, hydroEff: 0.18 },
+      desc: '-30% Silt Stir · +22% Current Agility · +12% DPV Cruise & -25% Battery Drain',
+      stats: { siltCut: 0.30, hydroEff: 0.22, dpvSpeedBonus: 0.12, dpvDrainCut: 0.25 },
     }),
     tierFull: Object.freeze({
       label: '(3) Hydro-Ghost',
-      desc: '-82% Pull-and-Glide Headwind Drag · +10% Swim · Extra Slipstream Gas Savings',
-      stats: { swimSpeed: 0.10, gasSave: 0.07, hydroEff: 0.16 },
-      power: { id: 'hydroGhost', name: 'Hydro-Ghost', desc: 'Extreme current mastery: up to -82% Pull-and-Glide drag & effortless slipstream surfing' },
+      desc: '-85% Wall Pull-and-Glide Drag · +15% Swim · -25% Hydro-Dash CD · Turbo Slipstream',
+      stats: { swimSpeed: 0.15, gasSave: 0.10, hydroEff: 0.20, dashCdCut: 0.25 },
+      power: { id: 'hydroGhost', name: 'Hydro-Ghost', desc: 'Extreme current mastery: -85% Pull-and-Glide drag, turbo slipstreams & rapid dashing' },
     }),
   }),
 });
@@ -267,136 +314,154 @@ const BESPOKE_ITEM_STATS = Object.freeze({
   'suit:arctic-cobalt': { stats: { coldResist: 0.45, gasSave: 0.03 } },
   'suit:expedition-amber': { stats: { bumpArmor: 0.15, swimSpeed: 0.03 } },
   'suit:cenote-azure': { stats: { swimSpeed: 0.04, siltCut: 0.08 } },
-  'suit:abyss-emerald': { stats: { narcResist: 0.12, decoOffgas: 0.06 } },
-  'suit:wreck-titanium': { stats: { bumpArmor: 0.25, crankSpeed: 0.14 } },
-  'suit:karst-jade': { stats: { siltCut: 0.14, gasSave: 0.05, decoOffgas: 0.06 } },
+  'suit:abyss-emerald': { archetype: 'deep', stats: { narcResist: 0.14, narcDepthBonusM: 6, decoOffgas: 0.08 } },
+  'suit:wreck-titanium': { archetype: 'hybrid', stats: { bumpArmor: 0.28, crankSpeed: 0.22, salvageDragCut: 0.22 } },
+  'suit:karst-jade': { archetype: 'deep', stats: { siltCut: 0.16, gasSave: 0.06, decoOffgas: 0.09, bonusStartBar: 10 } },
   'suit:krubera-obsidian': {
-    stats: { narcResist: 0.22, bumpArmor: 0.28, coldResist: 0.35 },
-    power: { id: 'abyssalPressureHull', name: 'Abyssal Pressure Hull', desc: '-28% wall shock & -22% deep narcosis' },
+    archetype: 'deep',
+    stats: { narcResist: 0.25, narcDepthBonusM: 10, bumpArmor: 0.30, coldResist: 0.40 },
+    power: { id: 'abyssalPressureHull', name: 'Abyssal Pressure Hull', desc: '+10m depth clarity, -30% wall shock & -25% narcosis' },
   },
   'suit:bounty-hunter-suit': {
-    stats: { swimSpeed: 0.07, spearPower: 0.12, bumpArmor: 0.18 },
-    power: { id: 'predatorPlate', name: 'Predator Exo-Plate', desc: '+12% speargun velocity & +7% combat agility' },
+    archetype: 'combat',
+    stats: { swimSpeed: 0.09, spearPower: 0.18, combatMaxHpBonus: 25, bumpArmor: 0.20 },
+    power: { id: 'predatorPlate', name: 'Predator Exo-Plate', desc: '+25 Boss Max HP, +18% speargun damage & combat agility' },
   },
   'suit:secret-kraken-biolume': {
-    stats: { swimSpeed: 0.08, siltCut: 0.20, relicGlowM: 5 },
+    archetype: 'speed',
+    stats: { swimSpeed: 0.11, siltCut: 0.22, dashCdCut: 0.16, relicGlowM: 6 },
     power: { id: 'percolationImmune', name: 'Living Biolume Skin', desc: 'Stealth bubble dispersion prevents ceiling percolation silt' },
   },
   'suit:secret-volcanic-nautilus': {
-    stats: { coldResist: 1.0, decoOffgas: 0.12, bumpArmor: 0.16 },
-    power: { id: 'thermalMantle', name: 'Thermal Mantle', desc: '100% immune to Cold Thermocline shock' },
+    archetype: 'deep',
+    stats: { coldResist: 1.0, decoOffgas: 0.16, bonusStartBar: 15, bumpArmor: 0.18 },
+    power: { id: 'thermalMantle', name: 'Thermal Mantle', desc: '100% immune to Cold Thermocline shock + 15 bar thermal overfill' },
   },
   'suit:secret-empress-sovereign': {
-    stats: { swimSpeed: 0.09, gasSave: 0.08, narcResist: 0.18, scoreBonus: 0.05 },
-    power: { id: 'sovereignGrace', name: 'Sovereign Trim', desc: '+9% swim speed, -8% gas burn & +5% score' },
+    archetype: 'hybrid',
+    stats: { swimSpeed: 0.12, gasSave: 0.10, narcResist: 0.20, combatMaxHpBonus: 20, scoreBonus: 0.06 },
+    power: { id: 'sovereignGrace', name: 'Sovereign Trim', desc: '+12% swim, -10% gas, +20 Boss HP & +6% score' },
   },
   'suit:world-cartographer-suit': {
-    stats: { swimSpeed: 0.05, relicGlowM: 6, sonarRange: 0.12 },
-    power: { id: 'surveyHarness', name: 'Expedition Survey Harness', desc: '+6m hidden relic detection & +12% sonar radius' },
+    archetype: 'hybrid',
+    stats: { swimSpeed: 0.07, relicGlowM: 8, sonarRange: 0.18 },
+    power: { id: 'surveyHarness', name: 'Expedition Survey Harness', desc: '+8m hidden relic detection & +18% sonar radius' },
   },
   'suit:world-hydro-suit': {
-    stats: { swimSpeed: 0.06, hydroEff: 0.16, siltCut: 0.12 },
-    power: { id: 'hydroSkin', name: 'Laminar Aero-Weave', desc: '+16% Slipstream glide & Pull-and-Glide shelter' },
+    archetype: 'speed',
+    stats: { swimSpeed: 0.10, hydroEff: 0.20, siltCut: 0.15, dpvSpeedBonus: 0.10 },
+    power: { id: 'hydroSkin', name: 'Laminar Aero-Weave', desc: '+10% swim/DPV cruise & +20% Slipstream/Pull-and-Glide' },
   },
 
   // Headgear
-  'headgear:zissou-cap': { stats: { swimSpeed: 0.01 } },
-  'headgear:cave-hood': { stats: { coldResist: 0.25, narcResist: 0.05 } },
-  'headgear:cave-helmet': { stats: { bumpArmor: 0.18, torchReach: 0.05 } },
-  'headgear:exo-mask': { stats: { narcResist: 0.14, gasSave: 0.04 } },
-  'headgear:brass-hardhat': { stats: { bumpArmor: 0.26, crankSpeed: 0.10 } },
-  'headgear:abyss-halo-helm': { stats: { narcResist: 0.18, sonarRange: 0.12, torchReach: 0.08 } },
+  'headgear:zissou-cap': { archetype: 'speed', stats: { swimSpeed: 0.01 } },
+  'headgear:cave-hood': { archetype: 'deep', stats: { coldResist: 0.30, narcResist: 0.06 } },
+  'headgear:cave-helmet': { archetype: 'hybrid', stats: { bumpArmor: 0.20, torchReach: 0.07 } },
+  'headgear:exo-mask': { archetype: 'deep', stats: { narcResist: 0.16, narcDepthBonusM: 6, gasSave: 0.05 } },
+  'headgear:brass-hardhat': { archetype: 'hybrid', stats: { bumpArmor: 0.30, crankSpeed: 0.16, salvageDragCut: 0.15 } },
+  'headgear:abyss-halo-helm': { archetype: 'deep', stats: { narcResist: 0.22, narcDepthBonusM: 8, sonarRange: 0.16, torchReach: 0.10 } },
   'headgear:secret-dreadnought-helm': {
-    stats: { bumpArmor: 0.38, coldResist: 0.40 },
-    power: { id: 'armoredDiveBell', name: 'Armored Dive Bell', desc: '-38% head-bump & impact trauma' },
+    archetype: 'combat',
+    stats: { bumpArmor: 0.42, coldResist: 0.45, combatMaxHpBonus: 20 },
+    power: { id: 'armoredDiveBell', name: 'Armored Dive Bell', desc: '+20 Boss HP & -42% head-bump impact trauma' },
   },
   'headgear:world-thermal-hood': {
-    stats: { coldResist: 0.70, gasSave: 0.04 },
-    power: { id: 'arcticInsulation', name: 'Arctic Thermal Seal', desc: '70% Cold Thermocline resistance & calmer breathing' },
+    archetype: 'deep',
+    stats: { coldResist: 0.75, gasSave: 0.06, narcDepthBonusM: 5 },
+    power: { id: 'arcticInsulation', name: 'Arctic Thermal Seal', desc: '75% Cold Thermocline resistance & calmer deep breathing' },
   },
 
   // Torches
-  'torch:tech-led': { stats: { torchReach: 0.02 } },
-  'torch:warm-halogen': { stats: { torchReach: 0.05, siltCut: 0.06 } },
-  'torch:amber-silt': { stats: { torchReach: 0.08, siltCut: 0.12 } },
-  'torch:emerald-spot': { stats: { torchReach: 0.12, relicGlowM: 3 } },
+  'torch:tech-led': { archetype: 'hybrid', stats: { torchReach: 0.02 } },
+  'torch:warm-halogen': { archetype: 'hybrid', stats: { torchReach: 0.06, siltCut: 0.08 } },
+  'torch:amber-silt': { archetype: 'speed', stats: { torchReach: 0.10, siltCut: 0.15 } },
+  'torch:emerald-spot': { archetype: 'hybrid', stats: { torchReach: 0.15, relicGlowM: 4 } },
   'torch:halocline-uv': {
-    stats: { torchReach: 0.16, relicGlowM: 6 },
-    power: { id: 'uvFluorescence', name: 'UV Relic Fluorescence', desc: '+6m fluorescent relic glow through dark sumps' },
+    archetype: 'hybrid',
+    stats: { torchReach: 0.20, relicGlowM: 8 },
+    power: { id: 'uvFluorescence', name: 'UV Relic Fluorescence', desc: '+8m fluorescent relic glow through dark sumps' },
   },
-  'torch:aurora-plasma': { stats: { torchReach: 0.20, coldResist: 0.25, sonarRange: 0.08 } },
-  'torch:bounty-hunter-torch': { stats: { torchReach: 0.18, spearPower: 0.10 } },
+  'torch:aurora-plasma': { archetype: 'deep', stats: { torchReach: 0.24, coldResist: 0.30, sonarRange: 0.12 } },
+  'torch:bounty-hunter-torch': { archetype: 'combat', stats: { torchReach: 0.20, spearPower: 0.16, spearFireRateCut: 0.10 } },
   'torch:secret-solar-prism': {
-    stats: { torchReach: 0.26, relicGlowM: 7, decoOffgas: 0.06 },
-    power: { id: 'heliosBeam', name: 'Helios Prism Beam', desc: '+26% beam reach & brilliant relic illumination' },
+    archetype: 'hybrid',
+    stats: { torchReach: 0.32, relicGlowM: 9, decoOffgas: 0.08 },
+    power: { id: 'heliosBeam', name: 'Helios Prism Beam', desc: '+32% beam reach & brilliant relic illumination' },
   },
   'torch:world-cartographer-torch': {
-    stats: { torchReach: 0.20, relicGlowM: 8, sonarRange: 0.10 },
-    power: { id: 'relicGlintBeam', name: 'Selenite Survey Beam', desc: '+8m relic & Gear Cache highlight range' },
+    archetype: 'hybrid',
+    stats: { torchReach: 0.26, relicGlowM: 10, sonarRange: 0.14 },
+    power: { id: 'relicGlintBeam', name: 'Selenite Survey Beam', desc: '+10m relic & Gear Cache highlight range' },
   },
 
   // Tanks
-  'tank:al80-silver': { stats: { gasSave: 0.01 } },
-  'tank:hivis-yellow': { stats: { gasSave: 0.03, decoOffgas: 0.04 } },
-  'tank:anodized-cobalt': { stats: { gasSave: 0.05, swimSpeed: 0.02 } },
-  'tank:carbon-stealth': { stats: { swimSpeed: 0.04, gasSave: 0.06, siltCut: 0.06 } },
-  'tank:salvage-brass': { stats: { gasSave: 0.05, crankSpeed: 0.12, bumpArmor: 0.10 } },
-  'tank:sulfur-emerald-tank': { stats: { gasSave: 0.07, decoOffgas: 0.10 } },
-  'tank:abyssal-titanium': { stats: { gasSave: 0.09, narcResist: 0.12, decoOffgas: 0.08 } },
-  'tank:secret-dreadnought-brass': { stats: { gasSave: 0.10, bumpArmor: 0.18, crankSpeed: 0.14 } },
+  'tank:al80-silver': { archetype: 'deep', stats: { gasSave: 0.01 } },
+  'tank:hivis-yellow': { archetype: 'deep', stats: { gasSave: 0.04, decoOffgas: 0.05, bonusStartBar: 8 } },
+  'tank:anodized-cobalt': { archetype: 'speed', stats: { gasSave: 0.06, swimSpeed: 0.04, bonusStartBar: 10 } },
+  'tank:carbon-stealth': { archetype: 'speed', stats: { swimSpeed: 0.07, gasSave: 0.07, siltCut: 0.08, dpvDrainCut: 0.14 } },
+  'tank:salvage-brass': { archetype: 'hybrid', stats: { gasSave: 0.06, crankSpeed: 0.18, bumpArmor: 0.12, bonusStartBar: 12 } },
+  'tank:sulfur-emerald-tank': { archetype: 'deep', stats: { gasSave: 0.09, decoOffgas: 0.14, bonusStartBar: 15 } },
+  'tank:abyssal-titanium': { archetype: 'deep', stats: { gasSave: 0.11, narcResist: 0.14, decoOffgas: 0.12, bonusStartBar: 22 } },
+  'tank:secret-dreadnought-brass': { archetype: 'combat', stats: { gasSave: 0.12, bumpArmor: 0.20, crankSpeed: 0.20, bonusStartBar: 20, combatMaxHpBonus: 15 } },
   'tank:world-hydro-tank': {
-    stats: { gasSave: 0.10, decoOffgas: 0.09, hydroEff: 0.10 },
-    power: { id: 'laminarMicroValve', name: 'Laminar Micro-Valve', desc: '-10% breathing gas burn & +9% deco offgas' },
+    archetype: 'speed',
+    stats: { gasSave: 0.12, decoOffgas: 0.10, hydroEff: 0.14, bonusStartBar: 15, dpvDrainCut: 0.16 },
+    power: { id: 'laminarMicroValve', name: 'Laminar Micro-Valve', desc: '+15 bar overfill, -12% gas burn & -16% DPV battery drain' },
   },
   'tank:world-chimney-tank': {
-    stats: { gasSave: 0.11, decoOffgas: 0.16, coldResist: 0.55 },
-    power: { id: 'thermalVentCore', name: 'Geothermal Core Tank', desc: '+16% Bühlmann offgassing & warm-gas cold shield' },
+    archetype: 'deep',
+    stats: { gasSave: 0.14, decoOffgas: 0.20, coldResist: 0.60, bonusStartBar: 25 },
+    power: { id: 'thermalVentCore', name: 'Geothermal Core Tank', desc: '+25 bar overfill, +20% Bühlmann offgas & warm-gas shield' },
   },
 
   // Visors
-  'visor:clear-cyan': { stats: { relicGlowM: 1 } },
-  'visor:amber-contrast': { stats: { siltCut: 0.08, torchReach: 0.04 } },
-  'visor:reef-mirror': { stats: { relicGlowM: 3, swimSpeed: 0.02 } },
-  'visor:thermocline-prism': { stats: { coldResist: 0.25, narcResist: 0.08, relicGlowM: 3 } },
-  'visor:night-emerald': { stats: { torchReach: 0.10, sonarRange: 0.10 } },
-  'visor:bounty-hunter-visor': { stats: { spearPower: 0.10, relicGlowM: 4 } },
-  'visor:secret-aurora-frost': { stats: { coldResist: 0.45, narcResist: 0.14, torchReach: 0.08 } },
+  'visor:clear-cyan': { archetype: 'hybrid', stats: { relicGlowM: 1 } },
+  'visor:amber-contrast': { archetype: 'speed', stats: { siltCut: 0.10, torchReach: 0.06 } },
+  'visor:reef-mirror': { archetype: 'speed', stats: { relicGlowM: 4, swimSpeed: 0.04 } },
+  'visor:thermocline-prism': { archetype: 'deep', stats: { coldResist: 0.30, narcResist: 0.10, narcDepthBonusM: 4, relicGlowM: 4 } },
+  'visor:night-emerald': { archetype: 'deep', stats: { torchReach: 0.12, sonarRange: 0.14, narcDepthBonusM: 5 } },
+  'visor:bounty-hunter-visor': { archetype: 'combat', stats: { spearPower: 0.15, spearFireRateCut: 0.10, relicGlowM: 4 } },
+  'visor:secret-aurora-frost': { archetype: 'deep', stats: { coldResist: 0.50, narcResist: 0.16, narcDepthBonusM: 6, torchReach: 0.10 } },
   'visor:world-cartographer-visor': {
-    stats: { relicGlowM: 8, sonarRange: 0.10 },
-    power: { id: 'relicResonanceLens', name: 'Relic Resonance Lens', desc: '+8m hidden relic & Sunken Gear Cache glint' },
+    archetype: 'hybrid',
+    stats: { relicGlowM: 10, sonarRange: 0.14 },
+    power: { id: 'relicResonanceLens', name: 'Relic Resonance Lens', desc: '+10m hidden relic & Sunken Gear Cache glint' },
   },
   'visor:world-salvage-visor': {
-    stats: { crankSpeed: 0.18, siltCut: 0.12, bumpArmor: 0.10 },
-    power: { id: 'hullBreachOptics', name: 'Hull-Breach Optics', desc: '+18% hatch cranking & clear wreck sightlines' },
+    archetype: 'hybrid',
+    stats: { crankSpeed: 0.24, siltCut: 0.15, bumpArmor: 0.14, salvageDragCut: 0.20 },
+    power: { id: 'hullBreachOptics', name: 'Hull-Breach Optics', desc: '+24% hatch cranking & -20% heavy salvage drag' },
   },
 
   // Trim & Fins
-  'trim:suit-default': { stats: { siltCut: 0.02 } },
-  'trim:safety-orange': { stats: { swimSpeed: 0.02, hydroEff: 0.05 } },
-  'trim:cavern-yellow': { stats: { siltCut: 0.08, swimSpeed: 0.02 } },
-  'trim:tech-cyan': { stats: { swimSpeed: 0.03, siltCut: 0.10 } },
-  'trim:signal-crimson': { stats: { swimSpeed: 0.04, spearPower: 0.05 } },
-  'trim:salvage-gold': { stats: { hydroEff: 0.10, crankSpeed: 0.08 } },
-  'trim:biolum-violet': { stats: { siltCut: 0.16, swimSpeed: 0.04 } },
-  'trim:plasma-circuit-trim': { stats: { swimSpeed: 0.06, hydroEff: 0.12, siltCut: 0.14 } },
-  'trim:secret-selenite-trim': { stats: { siltCut: 0.22, decoOffgas: 0.08, swimSpeed: 0.05 } },
+  'trim:suit-default': { archetype: 'speed', stats: { siltCut: 0.02 } },
+  'trim:safety-orange': { archetype: 'speed', stats: { swimSpeed: 0.04, hydroEff: 0.08 } },
+  'trim:cavern-yellow': { archetype: 'speed', stats: { siltCut: 0.10, swimSpeed: 0.04 } },
+  'trim:tech-cyan': { archetype: 'speed', stats: { swimSpeed: 0.05, siltCut: 0.12, dpvSpeedBonus: 0.06 } },
+  'trim:signal-crimson': { archetype: 'combat', stats: { swimSpeed: 0.06, spearPower: 0.08, dashCdCut: 0.10 } },
+  'trim:salvage-gold': { archetype: 'hybrid', stats: { hydroEff: 0.12, crankSpeed: 0.12, salvageDragCut: 0.15 } },
+  'trim:biolum-violet': { archetype: 'speed', stats: { siltCut: 0.18, swimSpeed: 0.06, dashCdCut: 0.12 } },
+  'trim:plasma-circuit-trim': { archetype: 'speed', stats: { swimSpeed: 0.09, hydroEff: 0.16, siltCut: 0.16, dpvSpeedBonus: 0.10 } },
+  'trim:secret-selenite-trim': { archetype: 'deep', stats: { siltCut: 0.24, decoOffgas: 0.12, swimSpeed: 0.07 } },
   'trim:world-hydro-fins': {
-    stats: { siltCut: 0.24, swimSpeed: 0.06, hydroEff: 0.20 },
-    power: { id: 'siltGhost', name: 'Silt-Ghost Split Blades', desc: 'Zero floor silt kick below 1.2 m/s & +20% current agility' },
+    archetype: 'speed',
+    stats: { siltCut: 0.28, swimSpeed: 0.09, hydroEff: 0.24, dashCdCut: 0.15 },
+    power: { id: 'siltGhost', name: 'Silt-Ghost Split Blades', desc: 'Zero floor silt kick below 1.8 m/s & +24% current agility' },
   },
 
   // Patches / Crests
-  'patch:none': { stats: {} },
-  'patch:cave-arrow': { stats: { sonarRange: 0.04 } },
-  'patch:first-descent': { stats: { gasSave: 0.02, swimSpeed: 0.02 } },
-  'patch:cenote-explorer': { stats: { relicGlowM: 3, siltCut: 0.06 } },
-  'patch:wreck-penetrator': { stats: { crankSpeed: 0.12, bumpArmor: 0.08 } },
-  'patch:wildlife-biologist': { stats: { siltCut: 0.10, scoreBonus: 0.04 } },
-  'patch:abyss-veteran': { stats: { narcResist: 0.10, decoOffgas: 0.08 } },
-  'patch:bounty-hunter-master': { stats: { spearPower: 0.12, scoreBonus: 0.06 } },
+  'patch:none': { archetype: 'hybrid', stats: {} },
+  'patch:cave-arrow': { archetype: 'hybrid', stats: { sonarRange: 0.06 } },
+  'patch:first-descent': { archetype: 'speed', stats: { gasSave: 0.03, swimSpeed: 0.03 } },
+  'patch:cenote-explorer': { archetype: 'hybrid', stats: { relicGlowM: 4, siltCut: 0.08 } },
+  'patch:wreck-penetrator': { archetype: 'hybrid', stats: { crankSpeed: 0.18, bumpArmor: 0.10, salvageDragCut: 0.15 } },
+  'patch:wildlife-biologist': { archetype: 'hybrid', stats: { siltCut: 0.12, scoreBonus: 0.05 } },
+  'patch:abyss-veteran': { archetype: 'deep', stats: { narcResist: 0.12, narcDepthBonusM: 6, decoOffgas: 0.10 } },
+  'patch:bounty-hunter-master': { archetype: 'combat', stats: { spearPower: 0.18, combatMaxHpBonus: 20, scoreBonus: 0.08 } },
   'patch:world-arch-crest': {
-    stats: { narcResist: 0.16, decoOffgas: 0.10, gasSave: 0.04 },
-    power: { id: 'deepLineFocus', name: 'Bells Archway Focus', desc: '-16% narcosis & +10% Bühlmann deco clearing' },
+    archetype: 'deep',
+    stats: { narcResist: 0.18, narcDepthBonusM: 8, decoOffgas: 0.14, gasSave: 0.06 },
+    power: { id: 'deepLineFocus', name: 'Bells Archway Focus', desc: '+8m depth clarity, -18% narcosis & +14% Bühlmann deco clearing' },
   },
 });
 
@@ -418,6 +483,9 @@ function computeFallbackSlotStats(slot, tier = 'common') {
 
 export function formatStatPills(stats = {}) {
   const pills = [];
+  if (stats.bonusStartBar >= 1) pills.push(`+${Math.round(stats.bonusStartBar)} Bar`);
+  if (stats.combatMaxHpBonus >= 1) pills.push(`+${Math.round(stats.combatMaxHpBonus)} Boss HP`);
+  if (stats.narcDepthBonusM >= 1) pills.push(`+${Math.round(stats.narcDepthBonusM)}m Depth`);
   if (stats.swimSpeed > 0.005) pills.push(`+${Math.round(stats.swimSpeed * 100)}% Swim`);
   if (stats.gasSave > 0.005) pills.push(`-${Math.round(stats.gasSave * 100)}% Gas`);
   if (stats.siltCut > 0.005) pills.push(`-${Math.round(stats.siltCut * 100)}% Silt`);
@@ -428,16 +496,36 @@ export function formatStatPills(stats = {}) {
   if (stats.narcResist > 0.03) pills.push(`-${Math.round(stats.narcResist * 100)}% Narc`);
   if (stats.bumpArmor > 0.03) pills.push(`-${Math.round(stats.bumpArmor * 100)}% Shock`);
   if (stats.hydroEff > 0.03) pills.push(`+${Math.round(stats.hydroEff * 100)}% Flow`);
+  if (stats.dpvSpeedBonus > 0.02) pills.push(`+${Math.round(stats.dpvSpeedBonus * 100)}% DPV`);
+  if (stats.dpvDrainCut > 0.03) pills.push(`-${Math.round(stats.dpvDrainCut * 100)}% DPV Drain`);
+  if (stats.spearPower > 0.03) pills.push(`+${Math.round(stats.spearPower * 100)}% Spear`);
+  if (stats.spearFireRateCut > 0.03) pills.push(`+${Math.round(stats.spearFireRateCut * 100)}% RoF`);
+  if (stats.dashCdCut > 0.03) pills.push(`-${Math.round(stats.dashCdCut * 100)}% Dash CD`);
   if (stats.sonarRange > 0.03) pills.push(`+${Math.round(stats.sonarRange * 100)}% Sonar`);
   if (stats.crankSpeed > 0.03) pills.push(`+${Math.round(stats.crankSpeed * 100)}% Crank`);
+  if (stats.salvageDragCut > 0.03) pills.push(`-${Math.round(stats.salvageDragCut * 100)}% Haul Drag`);
   if (stats.relicGlowM >= 1) pills.push(`+${Math.round(stats.relicGlowM)}m Relic`);
-  if (stats.spearPower > 0.03) pills.push(`+${Math.round(stats.spearPower * 100)}% Spear`);
   if (stats.scoreBonus > 0.01) pills.push(`+${Math.round(stats.scoreBonus * 100)}% Score`);
   return pills;
 }
 
+function inferArchetypeFromStats(stats = {}, slot = '') {
+  const scores = {
+    deep: (stats.bonusStartBar || 0) * 0.08 + (stats.narcDepthBonusM || 0) * 0.14 + (stats.coldResist || 0) * 1.4 + (stats.narcResist || 0) * 2.2 + (stats.decoOffgas || 0) * 2.2 + (stats.gasSave || 0) * 1.4,
+    speed: (stats.swimSpeed || 0) * 3.5 + (stats.hydroEff || 0) * 2.4 + (stats.dpvSpeedBonus || 0) * 3.0 + (stats.dpvDrainCut || 0) * 1.8 + (stats.siltCut || 0) * 1.4,
+    combat: (stats.combatMaxHpBonus || 0) * 0.08 + (stats.spearPower || 0) * 3.6 + (stats.spearFireRateCut || 0) * 3.0 + (stats.dashCdCut || 0) * 2.4,
+    hybrid: (stats.relicGlowM || 0) * 0.18 + (stats.sonarRange || 0) * 2.4 + (stats.crankSpeed || 0) * 2.2 + (stats.salvageDragCut || 0) * 2.2 + (stats.torchReach || 0) * 1.6,
+  };
+  let best = slot === 'tank' ? 'deep' : slot === 'trim' ? 'speed' : 'hybrid';
+  let top = 0.05;
+  for (const [k, v] of Object.entries(scores)) {
+    if (v > top) { top = v; best = k; }
+  }
+  return best;
+}
+
 /**
- * Look up the exact gameplay stats, Legendary Power & World/Earned source for any gear item.
+ * Look up the exact gameplay stats, Archetype, Legendary Power & World/Earned source for any gear item.
  */
 export function getGearItemStats(slot, itemOrId) {
   const item = typeof itemOrId === 'string' ? (getGearItemBySlot(slot, itemOrId)?.item || null) : itemOrId;
@@ -447,6 +535,8 @@ export function getGearItemStats(slot, itemOrId) {
   const stats = bespoke?.stats ? { ...bespoke.stats } : computeFallbackSlotStats(slot, item?.tier || 'common');
   const worldCache = WORLD_CACHE_BY_KEY.get(key) || null;
   const source = worldCache ? 'world' : item?.source || (item?.ladderRank <= 2 ? 'starter' : 'earned');
+  const archetypeId = bespoke?.archetype || inferArchetypeFromStats(stats, slot);
+  const archetype = GEAR_ARCHETYPES[archetypeId] || GEAR_ARCHETYPES.hybrid;
   const pills = formatStatPills(stats);
   return {
     key,
@@ -456,6 +546,8 @@ export function getGearItemStats(slot, itemOrId) {
     pills,
     summaryText: pills.slice(0, 3).join(' · ') || 'Baseline Spec',
     power: bespoke?.power || null,
+    archetypeId,
+    archetype,
     source,
     worldCache,
   };
@@ -463,7 +555,7 @@ export function getGearItemStats(slot, itemOrId) {
 
 /**
  * Compute full aggregated dive performance profile across all 7 equipped gear slots
- * + active Diablo III 2-Piece & Full-Set Capstone bonuses + Zelda Single-Piece Powers.
+ * + active Diablo III 2-Piece & Full-Set Capstone bonuses + Zelda Single-Piece Powers (v218 Archetypes).
  */
 export function computeRigPerformanceProfile(livery = null) {
   const cur = {
@@ -484,14 +576,23 @@ export function computeRigPerformanceProfile(livery = null) {
     torchReach: 0,
     coldResist: 0,
     narcResist: 0,
+    narcDepthBonusM: 0,
+    bonusStartBar: 0,
     bumpArmor: 0,
     hydroEff: 0,
+    dpvSpeedBonus: 0,
+    dpvDrainCut: 0,
+    combatMaxHpBonus: 0,
+    spearPower: 0,
+    spearFireRateCut: 0,
+    dashCdCut: 0,
     sonarRange: 0,
     crankSpeed: 0,
+    salvageDragCut: 0,
     relicGlowM: 0,
-    spearPower: 0,
     scoreBonus: 0,
   };
+  const archCounts = { deep: 0, speed: 0, combat: 0, hybrid: 0 };
   const powersMap = new Map();
   const addStats = (s) => {
     if (!s) return;
@@ -503,6 +604,9 @@ export function computeRigPerformanceProfile(livery = null) {
   for (const [slot, id] of Object.entries(cur)) {
     const info = getGearItemStats(slot, id);
     addStats(info.stats);
+    if (info.archetypeId && archCounts[info.archetypeId] !== undefined && info.pills.length > 0) {
+      archCounts[info.archetypeId] += 1;
+    }
     if (info.power) powersMap.set(info.power.id, { ...info.power, source: 'item' });
   }
 
@@ -514,6 +618,9 @@ export function computeRigPerformanceProfile(livery = null) {
     const def = SET_TIER_BONUSES[st.set.id];
     if (!def || st.matched < 2) continue;
     const isCapstone = st.matched >= (def.capstoneReq || st.set.required || 3);
+    if (def.archetype && archCounts[def.archetype] !== undefined) {
+      archCounts[def.archetype] += isCapstone ? 4 : 2;
+    }
     addStats(def.tier2?.stats);
     if (def.tier2?.power) powersMap.set(def.tier2.power.id, { ...def.tier2.power, source: 'set-2pc' });
     if (isCapstone) {
@@ -526,6 +633,7 @@ export function computeRigPerformanceProfile(livery = null) {
       name: st.set.name,
       icon: st.set.icon,
       color: st.set.color,
+      archetype: def.archetype || 'hybrid',
       matched: st.matched,
       capstoneReq: def.capstoneReq || st.set.required || 3,
       tier2Active: true,
@@ -540,21 +648,36 @@ export function computeRigPerformanceProfile(livery = null) {
   const powers = Array.from(powersMap.values());
   const hasPower = (pid) => powersMap.has(pid);
 
-  // Fair simulation clamps so Ultra Mode feels awesome & transformative without breaking Bühlmann physics
-  const swimSpeedMult = +(1 + Math.min(0.22, sum.swimSpeed)).toFixed(3);
-  const gasBurnMult = +(1 - Math.min(0.24, sum.gasSave)).toFixed(3);
-  const siltStirMult = +(1 - Math.min(0.50, sum.siltCut)).toFixed(3);
-  const decoOffgasMult = +(1 + Math.min(0.36, sum.decoOffgas)).toFixed(3);
-  const torchReachMult = +(1 + Math.min(0.38, sum.torchReach)).toFixed(3);
+  // Determine dominant build archetype + Hybrid Mix detection (mixing 2+ distinct set archetypes or balanced multi-pillar specs)
+  const sortedArch = Object.entries(archCounts).sort((a, b) => b[1] - a[1]);
+  const distinctSetArchetypes = new Set(activeSets.map((s) => s.archetype)).size;
+  const isHybridMix = distinctSetArchetypes >= 2 || (sortedArch[0][1] >= 2 && sortedArch[1][1] >= 2 && sortedArch[0][1] - sortedArch[1][1] <= 1);
+  const dominantArchId = isHybridMix ? 'hybrid' : (sortedArch[0][1] > 0 ? sortedArch[0][0] : 'hybrid');
+  const dominantArchetype = GEAR_ARCHETYPES[dominantArchId] || GEAR_ARCHETYPES.hybrid;
+
+  // Noticeable, rewarding simulation clamps that stay fair to Bühlmann physics & Boss balance (v218)
+  const swimSpeedMult = +(1 + Math.min(0.28, sum.swimSpeed)).toFixed(3);
+  const gasBurnMult = +(1 - Math.min(0.28, sum.gasSave)).toFixed(3);
+  const siltStirMult = +(1 - Math.min(0.55, sum.siltCut)).toFixed(3);
+  const decoOffgasMult = +(1 + Math.min(0.45, sum.decoOffgas)).toFixed(3);
+  const torchReachMult = +(1 + Math.min(0.48, sum.torchReach)).toFixed(3);
   const coldResist = +(Math.min(1.0, sum.coldResist)).toFixed(2);
-  const narcResist = +(Math.min(0.50, sum.narcResist)).toFixed(2);
-  const bumpArmor = +(Math.min(0.65, sum.bumpArmor)).toFixed(2);
-  const hydroEfficiency = +(Math.min(0.45, sum.hydroEff)).toFixed(2);
-  const sonarRangeMult = +(1 + Math.min(0.38, sum.sonarRange)).toFixed(3);
-  const crankSpeedMult = +(1 + Math.min(0.50, sum.crankSpeed)).toFixed(3);
-  const relicGlowBonusM = Math.min(16, Math.round(sum.relicGlowM));
-  const spearPowerMult = +(1 + Math.min(0.32, sum.spearPower)).toFixed(3);
-  const scoreBonusMult = +(1 + Math.min(0.16, sum.scoreBonus)).toFixed(3);
+  const narcResist = +(Math.min(0.55, sum.narcResist)).toFixed(2);
+  const narcDepthBonusM = Math.min(20, Math.round(sum.narcDepthBonusM));
+  const bonusStartBar = Math.min(40, Math.round(sum.bonusStartBar));
+  const bumpArmor = +(Math.min(0.70, sum.bumpArmor)).toFixed(2);
+  const hydroEfficiency = +(Math.min(0.55, sum.hydroEff)).toFixed(2);
+  const dpvSpeedBonus = +(Math.min(0.22, sum.dpvSpeedBonus)).toFixed(3);
+  const dpvDrainMult = +(1 - Math.min(0.40, sum.dpvDrainCut)).toFixed(3);
+  const combatMaxHpBonus = Math.min(55, Math.round(sum.combatMaxHpBonus));
+  const spearPowerMult = +(1 + Math.min(0.45, sum.spearPower)).toFixed(3);
+  const spearFireRateMult = +(1 - Math.min(0.28, sum.spearFireRateCut)).toFixed(3);
+  const dashCooldownMult = +(1 - Math.min(0.35, sum.dashCdCut)).toFixed(3);
+  const sonarRangeMult = +(1 + Math.min(0.45, sum.sonarRange)).toFixed(3);
+  const crankSpeedMult = +(1 + Math.min(1.0, sum.crankSpeed)).toFixed(3);
+  const salvageDragCut = +(Math.min(0.55, sum.salvageDragCut)).toFixed(2);
+  const relicGlowBonusM = Math.min(20, Math.round(sum.relicGlowM));
+  const scoreBonusMult = +(1 + Math.min(0.20, sum.scoreBonus)).toFixed(3);
 
   return {
     swimSpeedMult,
@@ -564,12 +687,20 @@ export function computeRigPerformanceProfile(livery = null) {
     torchReachMult,
     coldResist,
     narcResist,
+    narcDepthBonusM,
+    bonusStartBar,
     bumpArmor,
     hydroEfficiency,
+    dpvSpeedBonus,
+    dpvDrainMult,
+    combatMaxHpBonus,
+    spearPowerMult,
+    spearFireRateMult,
+    dashCooldownMult,
     sonarRangeMult,
     crankSpeedMult,
+    salvageDragCut,
     relicGlowBonusM,
-    spearPowerMult,
     scoreBonusMult,
     // Named Legendary / Capstone mechanical flags
     siltGhost: hasPower('siltGhost'),
@@ -582,6 +713,8 @@ export function computeRigPerformanceProfile(livery = null) {
     powers,
     activeSets,
     capstoneActive,
+    dominantArchetype,
+    isHybridMix,
   };
 }
 
@@ -591,15 +724,20 @@ export function computeRigPerformanceProfile(livery = null) {
 export function diffRigPerformanceProfiles(baseProf, nextProf) {
   if (!baseProf || !nextProf) return [];
   const specs = [
+    { key: 'bonusStartBar', label: 'Start Bar', scale: 1, unit: 'b', higherBetter: true },
+    { key: 'combatMaxHpBonus', label: 'Boss HP', scale: 1, unit: '', higherBetter: true },
+    { key: 'narcDepthBonusM', label: 'Depth Clarity', scale: 1, unit: 'm', higherBetter: true },
     { key: 'swimSpeedMult', label: 'Swim', scale: 100, unit: '%', higherBetter: true },
     { key: 'gasBurnMult', label: 'Gas Save', scale: -100, unit: '%', higherBetter: true },
     { key: 'siltStirMult', label: 'Silt Ctrl', scale: -100, unit: '%', higherBetter: true },
     { key: 'decoOffgasMult', label: 'Deco', scale: 100, unit: '%', higherBetter: true },
+    { key: 'spearPowerMult', label: 'Spear', scale: 100, unit: '%', higherBetter: true },
     { key: 'torchReachMult', label: 'Beam', scale: 100, unit: '%', higherBetter: true },
     { key: 'coldResist', label: 'Cold Res', scale: 100, unit: '%', higherBetter: true },
     { key: 'narcResist', label: 'Narc Res', scale: 100, unit: '%', higherBetter: true },
     { key: 'bumpArmor', label: 'Armor', scale: 100, unit: '%', higherBetter: true },
     { key: 'hydroEfficiency', label: 'Flow', scale: 100, unit: '%', higherBetter: true },
+    { key: 'crankSpeedMult', label: 'Crank', scale: 100, unit: '%', higherBetter: true },
     { key: 'relicGlowBonusM', label: 'Relic', scale: 1, unit: 'm', higherBetter: true },
   ];
   const diffs = [];
@@ -615,6 +753,44 @@ export function diffRigPerformanceProfiles(baseProf, nextProf) {
     });
   }
   return diffs;
+}
+
+/**
+ * Recommend the best Gear Build Archetype for any expedition site so players exploit
+ * Deep Tech, Speed/Hydro, Boss Combat, or Explorer/Salvage builds strategically (v218).
+ */
+export function getRecommendedArchetypeForLevel(level) {
+  if (!level) return GEAR_ARCHETYPES.hybrid;
+  const id = String(level.id || '').toLowerCase();
+  const maxD = Number(level.maxDepthM) || 35;
+  if (level.isWreck) return GEAR_ARCHETYPES.hybrid;
+  if (/plura|strytan|scoresby|silfra|kverkfjoll|krubera|boy-bulok|boesmansgat|hranicka|pozzo|dahab/i.test(id) || maxD >= 65) {
+    return GEAR_ARCHETYPES.deep;
+  }
+  if (/vaucluse|wakulla|eagles-nest|cenote|dos-ojos|sac-actun|orda/i.test(id) || (Array.isArray(level.caveCurrents) && level.caveCurrents.length > 0)) {
+    return GEAR_ARCHETYPES.speed;
+  }
+  return GEAR_ARCHETYPES.hybrid;
+}
+
+/**
+ * Return World Gear Cache discovery status for a given dive site (used in Site Browser badges).
+ */
+export function getWorldGearCachesForSite(levelId, foundGearMap = null) {
+  if (!levelId) return [];
+  const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
+  return WORLD_GEAR_CACHES.filter((c) => c.levelId === levelId).map((c) => {
+    const key = `${c.slot}:${c.itemId}`;
+    const item = getGearItemBySlot(c.slot, c.itemId)?.item || null;
+    const stats = getGearItemStats(c.slot, item || c.itemId);
+    return {
+      ...c,
+      gearKey: key,
+      itemName: item?.name || c.itemId,
+      archetype: stats.archetype,
+      found: Boolean(found[key]),
+    };
+  });
 }
 
 const TIER_BEAM_COLORS = {

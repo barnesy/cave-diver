@@ -2067,8 +2067,9 @@ export function claimSecretLairWeapon(session, callbacks = {}) {
   lair.weaponClaimed = true;
   lair.weaponEquipped = true;
   lair.combatMode = true;
-  lair.playerHp = COMBAT_MAX_HP;
-  lair.playerMaxHp = COMBAT_MAX_HP;
+  const rigMaxHp = COMBAT_MAX_HP + (session.rigPerf?.combatMaxHpBonus || 0);
+  lair.playerHp = rigMaxHp;
+  lair.playerMaxHp = rigMaxHp;
   lair.playerIframesSec = 0.6;
   lair.combatHintTimer = 7.5;
   lair.reloadSec = 0;
@@ -2310,7 +2311,7 @@ export function triggerCombatScooterDash(session, { dirX = 0, dirY = 0, buddies 
   lair.dashDirX = ux;
   lair.dashDirY = uy;
   lair.dashTimerSec = SCOOTER_DASH_DURATION_SEC * (slipstreamBuddy ? 1.12 : 1.0);
-  lair.dashCooldownSec = SCOOTER_DASH_COOLDOWN_SEC * (slipstreamBuddy ? 0.78 : 1.0);
+  lair.dashCooldownSec = SCOOTER_DASH_COOLDOWN_SEC * (slipstreamBuddy ? 0.78 : 1.0) * (session.rigPerf?.dashCooldownMult || 1.0);
   lair.playerIframesSec = Math.max(lair.playerIframesSec || 0, SCOOTER_DASH_IFRAMES_SEC);
   lair.dashesUsed = (lair.dashesUsed || 0) + 1;
   if (diver) {
@@ -2394,7 +2395,7 @@ export function fireSpeargun(
     if (!lair.weaponEquipped || !lair.combatMode || lair.bossDefeated) return { ok: false, reason: 'no-weapon' };
     const activeCd = isTap ? lair.tapCooldownSec : lair.reloadSec;
     if (activeCd > 0.015) return { ok: false, reason: 'reloading' };
-    const cdMult = rapidLv >= 2 ? 0.64 : rapidLv === 1 ? 0.78 : 1.0;
+    const cdMult = (rapidLv >= 2 ? 0.64 : rapidLv === 1 ? 0.78 : 1.0) * (session.rigPerf?.spearFireRateMult || 1.0);
     lair.reloadSec = SPEARGUN_AUTOFIRE_SEC * cdMult;
     lair.tapCooldownSec = SPEARGUN_TAP_COOLDOWN_SEC * cdMult;
     lair.recoilSec = 0.11;
@@ -2419,7 +2420,7 @@ export function fireSpeargun(
   const ang = Number.isFinite(aimAngle) ? aimAngle : (diver.torchAngle ?? diver.angle ?? 0);
   const cFrac = Math.max(0, Math.min(1, Number(chargeFrac) || 0));
   const rigSpearMult = isLocal ? (session.rigPerf?.spearPowerMult || 1.0) : 1.0;
-  const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : (isLocal && session.rigPerf?.apexOvercharge ? 4 : 5);
+  const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : (isLocal && session.rigPerf?.apexOvercharge ? 3 : 5);
   const isHyper = (isLocal && lair.shotCounter % hyperEvery === 0) || cFrac >= 0.72;
   const charged = isHyper || cFrac >= 0.45 || overLv >= 1;
   const speedMult = (rapidLv >= 2 ? 1.25 : rapidLv === 1 ? 1.15 : 1.0) * Math.min(1.35, 1 + (rigSpearMult - 1) * 0.55);

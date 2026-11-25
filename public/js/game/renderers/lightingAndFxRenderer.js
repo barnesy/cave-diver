@@ -1749,6 +1749,17 @@ export const lightingAndFxMethods = {
         ctx.beginPath();
         ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
         ctx.fill();
+
+        // Celebratory expanding discovery shockwave ring when cache is opened (v218)
+        if (gc.opened && openedAge < 1.8) {
+          const prog = openedAge / 1.8;
+          const ringR = (0.8 + prog * 6.5) * scale;
+          ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.9).toFixed(3)})`;
+          ctx.lineWidth = Math.max(2, (1 - prog) * 0.14 * scale);
+          ctx.beginPath();
+          ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.restore();
 
         // Waterproof Expedition Pelican Gear Crate silhouette
@@ -1792,6 +1803,42 @@ export const lightingAndFxMethods = {
             ctx.textBaseline = 'middle';
             ctx.fillText(label, sx, ly);
           }
+        }
+      }
+
+      // Unmistakable Proximity Gear Cache Directional Indicator whenever diver approaches within 24m (+Relic Glow) (v218)
+      if (diver) {
+        const detectRange = 24 + rigGlowBonus;
+        for (let i = 0; i < worldCaches.length; i++) {
+          const gc = worldCaches[i];
+          if (!gc || gc.opened) continue;
+          const distM = Math.hypot(gc.x - diver.x, gc.y - diver.y);
+          if (distM > detectRange || distM < 4.5) continue;
+          const pal = TIER_RGB[gc.tier] || TIER_RGB.rare;
+          const ang = Math.atan2(gc.y - diver.y, gc.x - diver.x);
+          const dx = toScreenX(diver.x);
+          const dy = toScreenY(diver.y);
+          const orbR = Math.max(44, 1.95 * scale);
+          const bx = dx + Math.cos(ang) * orbR;
+          const by = dy + Math.sin(ang) * orbR;
+          const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.2 + i);
+          ctx.save();
+          ctx.fillStyle = 'rgba(6, 18, 34, 0.88)';
+          ctx.strokeStyle = pal.hex;
+          ctx.lineWidth = 1.4;
+          const txt = `${gc.icon || '📦'} ${Math.round(distM)}m`;
+          ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+          const tw = ctx.measureText(txt).width + 12;
+          ctx.globalAlpha = 0.72 + pulse * 0.28;
+          ctx.beginPath();
+          ctx.roundRect?.(bx - tw * 0.5, by - 9, tw, 18, 9) ?? ctx.rect(bx - tw * 0.5, by - 9, tw, 18);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = pal.light;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(txt, bx, by);
+          ctx.restore();
         }
       }
     }

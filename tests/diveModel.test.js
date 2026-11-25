@@ -11824,3 +11824,88 @@ test('v217 Effortless Set Equipping, Best-Rig Optimizer & 6-Lane Live Proving Gr
   stepDiveSession(sess, { x: 0, y: 0 }, 0.1, {});
   assert.ok(sess.diveState.stopDepthM >= 3, `Expected active test deco stop, got ${sess.diveState.stopDepthM}m`);
 });
+
+test('v218 Deep/Speed/Combat/Hybrid Archetypes, Noticeable Buffs, Level Exploitation & World Cache Intel', async () => {
+  const {
+    GEAR_ARCHETYPES,
+    computeRigPerformanceProfile,
+    getRecommendedArchetypeForLevel,
+    getWorldGearCachesForSite,
+  } = await import('../public/js/game/gearStats.js');
+  const { PROVING_GROUNDS_PRESETS, STOCK_BASELINE_LIVERY } = await import('../public/js/game/gearProvingGrounds.js');
+  const { createDynamicHazards } = await import('../public/js/game/dynamicHazards.js');
+  const { claimSecretLairWeapon, fireSpeargun } = await import('../public/js/game/secretLairs.js');
+
+  assert.equal(Object.keys(GEAR_ARCHETYPES).length, 4);
+
+  // 1. Deep Tech build: +Bar overfill in real DiveSession + deeper narcosis threshold (0 narcosis at 36m!)
+  const deepPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'thermal-mantle');
+  const deepProf = computeRigPerformanceProfile(deepPreset.livery);
+  assert.equal(deepProf.dominantArchetype.id, 'deep');
+  assert.ok(deepProf.bonusStartBar >= 25, `Deep Tech rig must grant noticeable +Bar overfill (got ${deepProf.bonusStartBar})`);
+  assert.ok(deepProf.narcDepthBonusM >= 10, `Deep Tech rig must shift narcosis depth threshold deeper (got +${deepProf.narcDepthBonusM}m)`);
+
+  const stockSess = createDiveSession(LEVEL_1, { diverName: 'Stock', livery: STOCK_BASELINE_LIVERY });
+  const deepSess = createDiveSession(LEVEL_1, { diverName: 'DeepTech', livery: deepPreset.livery });
+  assert.ok(
+    deepSess.diveState.tanks.EAN32.bar >= stockSess.diveState.tanks.EAN32.bar + 25,
+    `Deep Tech cylinders (${deepSess.diveState.tanks.EAN32.bar}b) must start visibly overfilled vs Stock (${stockSess.diveState.tanks.EAN32.bar}b)`
+  );
+  // At 36m on EAN32: Stock suffers narcosis (>28m END), Deep Tech (+17m onset) stays razor-sharp!
+  stepDivePhysiology(stockSess.diveState, { depthM: 36, prevDepthM: 36, dt: 1.5, narcResist: 0, narcDepthBonusM: 0 });
+  stepDivePhysiology(deepSess.diveState, { depthM: 36, prevDepthM: 36, dt: 1.5, narcResist: deepProf.narcResist, narcDepthBonusM: deepProf.narcDepthBonusM });
+  assert.ok(stockSess.diveState.narcosisLevel > 0.15, 'Stock diver should feel narcosis at 36m');
+  assert.equal(deepSess.diveState.narcosisLevel, 0, 'Deep Tech rig should have zero narcosis at 36m due to +Depth Clarity');
+
+  // 2. Speed / Hydro build: +25%+ Swim, DPV Overdrive & Drain Cut, Hydro-Ghost & Silt-Ghost
+  const speedPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'karst-hydro-glider');
+  const speedProf = computeRigPerformanceProfile(speedPreset.livery);
+  assert.equal(speedProf.dominantArchetype.id, 'speed');
+  assert.ok(speedProf.swimSpeedMult >= 1.24, `Speed Hydro must feel noticeably faster (got ${speedProf.swimSpeedMult})`);
+  assert.ok(speedProf.dpvDrainMult <= 0.72, `Speed Hydro must dramatically cut DPV drain (got ${speedProf.dpvDrainMult})`);
+  assert.ok(speedProf.dpvSpeedBonus >= 0.18, `Speed Hydro must boost DPV cruise speed (got ${speedProf.dpvSpeedBonus})`);
+
+  // 3. Boss Combat build: Bonus Boss Max HP (155 HP!), +Spear DPS/RoF, Every-3rd-Shot Hyper-Tip & Fast Dash
+  const combatPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'apex-combat');
+  const combatProf = computeRigPerformanceProfile(combatPreset.livery);
+  assert.equal(combatProf.dominantArchetype.id, 'combat');
+  assert.ok(combatProf.combatMaxHpBonus >= 45, `Combat rig must add substantial Boss Max HP (got +${combatProf.combatMaxHpBonus})`);
+  assert.ok(combatProf.spearPowerMult >= 1.35);
+  assert.ok(combatProf.spearFireRateMult <= 0.78);
+
+  const bossSess = createDiveSession(LEVEL_1, { diverName: 'Slayer', livery: combatPreset.livery });
+  assert.ok(bossSess.secretLair, 'Level 1 must have secret lair');
+  claimSecretLairWeapon(bossSess);
+  assert.equal(bossSess.secretLair.playerMaxHp, 100 + combatProf.combatMaxHpBonus, 'Claiming speargun must apply Combat Max HP bonus');
+  assert.equal(bossSess.secretLair.playerHp, bossSess.secretLair.playerMaxHp);
+  // Fire 3rd shot with Apex Overcharge -> guaranteed Golden Hyper-Tip!
+  bossSess.secretLair.shotCounter = 2;
+  bossSess.secretLair.reloadSec = 0;
+  bossSess.secretLair.tapCooldownSec = 0;
+  const shot3 = fireSpeargun(bossSess, { isTap: true });
+  assert.equal(shot3.ok, true);
+  assert.equal(shot3.bolts[0].piercing, true, 'Apex Overcharge must fire a piercing Golden Hyper-Tip on every 3rd shot');
+
+  // 4. Hybrid Mix build: combining 2pc Hydro-Glider + 2pc Cartographer triggers TWO simultaneous 2pc Set Tiers!
+  const hybridPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'hybrid-mix');
+  const hybridProf = computeRigPerformanceProfile(hybridPreset.livery);
+  assert.equal(hybridProf.isHybridMix, true, 'Mixing 2pc Hydro-Glider + 2pc Cartographer must activate Hybrid Mix');
+  assert.ok(hybridProf.activeSets.length >= 2, `Expected >=2 simultaneous active set tiers, got ${hybridProf.activeSets.length}`);
+
+  // 5. Level Exploitation Features: Cryo-Guard on Plura & Hydro-Slipstream Chute on Cenote/Vaucluse
+  const plura = getLevelById('plura-marble-sump');
+  const vaucluse = getLevelById('fontaine-de-vaucluse');
+  const pluraHaz = createDynamicHazards(plura);
+  const vaucluseHaz = createDynamicHazards(vaucluse);
+  assert.ok(pluraHaz.thermoclines.some((t) => t.tempDropC >= 12), 'Plura Marble Sump must feature a -12°C Cryo-Thermocline Guard for Deep Tech exploitation');
+  assert.ok(vaucluseHaz.hydroChutes.length >= 1, 'Fontaine de Vaucluse must feature a Karst Slipstream Chute for Speed/Hydro exploitation');
+
+  // 6. Site Browser Gear Intel: Recommended Archetypes & Hidden World Cache Tracking
+  assert.equal(getRecommendedArchetypeForLevel(plura).id, 'deep');
+  assert.equal(getRecommendedArchetypeForLevel(vaucluse).id, 'speed');
+  const l1CachesBefore = getWorldGearCachesForSite(LEVEL_1.id, {});
+  assert.equal(l1CachesBefore.length, 1);
+  assert.equal(l1CachesBefore[0].found, false);
+  const l1CachesAfter = getWorldGearCachesForSite(LEVEL_1.id, { 'visor:world-cartographer-visor': { foundAt: Date.now() } });
+  assert.equal(l1CachesAfter[0].found, true);
+});

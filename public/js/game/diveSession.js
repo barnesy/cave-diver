@@ -612,7 +612,11 @@ export function createDiveSession(
       name: diverName,
       body: createDiverBody(spawnX, spawnY),
     },
-    diveState: createDiveState({ mixOverrides: mergedMixOverrides, ccrEnabled: cleanGear.ccr }),
+    diveState: createDiveState({
+      mixOverrides: mergedMixOverrides,
+      ccrEnabled: cleanGear.ccr,
+      bonusStartBar: rigPerf.bonusStartBar || 0,
+    }),
     droppedStages: [],
     spareStageDropped: false,
     drills: {
@@ -3081,7 +3085,7 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
     } else if (thrustMag > 0.08) {
       dpvThrusting = true;
       // In Boss Combat Mode, scooter draws higher combat thrust power (~3.15%/s) so grabbing arena Battery Cells matters!
-      const drainRate = inCombat ? 3.15 : 1.45;
+      const drainRate = (inCombat ? 3.15 : 1.45) * (session.rigPerf?.dpvDrainMult || 1.0);
       dpv.batteryPct = Math.max(0, dpv.batteryPct - dt * (drainRate * thrustMag));
       dpv.humAccum = (dpv.humAccum || 0) + dt;
       if (dpv.humAccum >= 0.28) {
@@ -3150,13 +3154,15 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const towDrag = session.carryingBody || session.rescueTargetId ? 0.9 : 1.0;
   const stageTrimMult = session.spareStageDropped ? 1.06 : 1.0;
   const rawSalvageDrag = salvageBuo?.swimDragMult ?? 1.0;
+  const salvageDragRelief = (session.crewRole?.salvageDragBonus || 0) + (session.rigPerf?.salvageDragCut || 0) * (1 - rawSalvageDrag);
   const salvageDragMult =
-    rawSalvageDrag < 1.0 && (session.crewRole?.salvageDragBonus || 0) > 0
-      ? Math.min(1.0, rawSalvageDrag + session.crewRole.salvageDragBonus)
+    rawSalvageDrag < 1.0 && salvageDragRelief > 0
+      ? Math.min(1.0, rawSalvageDrag + salvageDragRelief)
       : rawSalvageDrag;
   const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult * salvageDragMult * (session.rigPerf?.swimSpeedMult || 1.0);
-  const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
-  const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
+  const rigDpvBoost = 1 + (session.rigPerf?.dpvSpeedBonus || 0);
+  const dpvHorizMult = dpvThrusting ? 1.82 * rigDpvBoost : 1.0;
+  const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) * rigDpvBoost : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
   const mutVertMult = mutatorId === 'turbo-par' ? 1.16 : 1.0;
   const combatHorizMult = inCombat ? (dpvThrusting ? 1.04 : 1.28) : 1.0;
@@ -3222,11 +3228,15 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
     }
   }
 
-  // Steady underground karst spring / resurgence currents inside cave conduits
+  // Steady underground karst spring / resurgence currents inside cave conduits (including v218 Archetype Hydro Chutes)
   if (session.caveFlowWarnCooldown > 0) session.caveFlowWarnCooldown -= dt;
-  if (Array.isArray(level.caveCurrents)) {
-    for (let c = 0; c < level.caveCurrents.length; c++) {
-      const cur = level.caveCurrents[c];
+  const allCaveCurrents = [
+    ...(Array.isArray(level.caveCurrents) ? level.caveCurrents : []),
+    ...(Array.isArray(session.hazards?.hydroChutes) ? session.hazards.hydroChutes : []),
+  ];
+  if (allCaveCurrents.length > 0) {
+    for (let c = 0; c < allCaveCurrents.length; c++) {
+      const cur = allCaveCurrents[c];
       const cr = cur.radius || 4.0;
       const dist = Math.hypot(diver.x - cur.x, diver.y - cur.y);
       if (dist <= cr) {
@@ -3940,7 +3950,7 @@ function stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx) {
   if (siltStirTimer.warnCooldown > 0) siltStirTimer.warnCooldown -= dt;
   const isSiltStorm = mutatorId === 'silt-storm';
   const curSwimSpeed = Math.hypot(diver.vx || 0, diver.vy || 0);
-  const siltGhostSuppressed = Boolean(session.rigPerf?.siltGhost) && !dpvThrusting && curSwimSpeed < 1.2;
+  const siltGhostSuppressed = Boolean(session.rigPerf?.siltGhost) && !dpvThrusting && curSwimSpeed < 1.8;
   const heavyWash = siltGhostSuppressed
     ? false
     : stirFloorSilt(level, diver, siltClouds, {
@@ -4148,6 +4158,7 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         (session.rigPerf?.decoOffgasMult || 1.0) *
         (session.decoMastery?.masteryActive ? 1.22 : 1.0),
       narcResist: session.rigPerf?.narcResist || 0,
+      narcDepthBonusM: session.rigPerf?.narcDepthBonusM || 0,
       bumpArmor: session.rigPerf?.bumpArmor || 0,
     });
 
