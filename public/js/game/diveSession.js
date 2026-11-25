@@ -30,6 +30,7 @@ import {
   getCrewRole,
   rollDiveContracts,
   evaluateDiveContracts,
+  sanitizeExpeditionModifiers,
 } from './expeditionContracts.js';
 import {
   createSecretLairState,
@@ -468,8 +469,10 @@ export function createDiveSession(
     weatherId = 'clear-day',
     livery = null,
     crewRoleId = 'balanced',
+    modifiers = [],
   } = {}
 ) {
+  const cleanModifiers = sanitizeExpeditionModifiers(modifiers);
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
   const exploreCells = buildExploreCells(level);
@@ -498,6 +501,7 @@ export function createDiveSession(
     level,
     difficulty: cleanDiff,
     mutatorId: cleanMutator,
+    modifiers: cleanModifiers,
     dailyDateKey: cleanDailyKey,
     weather: resolvedWeather,
     weatherBonusScore: resolvedWeather?.scoreBonus || 0,
@@ -3122,7 +3126,8 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   }
 
   // Layered open-ocean drift currents on shipwreck dives (sheltered inside steel hull or when clipped to shot line)
-  const mutCurrentMult = mutatorId === 'surge' ? 1.75 : 1.0;
+  const hasSurgeMod = Array.isArray(session.modifiers) && session.modifiers.includes('surge-tide');
+  const mutCurrentMult = (mutatorId === 'surge' ? 1.75 : 1.0) * (hasSurgeMod ? 1.65 : 1.0);
   const diffCurrentMult = (session.difficulty === 'hardcore' ? 1.28 : session.difficulty === 'guided' ? 0.7 : 1.0) * mutCurrentMult;
   if (Array.isArray(level.driftCurrents) && clearanceM > 1.75 && !session.clippedToShotLine) {
     const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
@@ -3980,6 +3985,7 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
       thrustMag,
       gasBurnMultiplier:
         (mutatorId === 'iron-lungs' ? 1.35 : 1.0) *
+        (Array.isArray(session.modifiers) && session.modifiers.includes('iron-lung') ? 1.28 : 1.0) *
         (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
         (hazRes.gasRateMult || 1.0) *
         (role?.gasBurnMult || 1.0),

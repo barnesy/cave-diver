@@ -326,9 +326,12 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
     hasCcr = false,
     recoveredArtifacts = [],
     pinnedArtifact = null,
+    superlatives = [],
+    modifiers = [],
+    bountyClaimed = null,
     track = [],
     profile = [],
-    version = 'v169',
+    version = 'v201',
     dateLabel = new Date().toISOString().slice(0, 10),
   } = data;
 
@@ -394,6 +397,36 @@ export function renderExpeditionPostcard(ctx, width, height, data = {}) {
       border: 'rgba(251, 191, 36, 0.6)',
       color: '#fef3c7',
     });
+  }
+  if (bountyClaimed?.bossName) {
+    pills.push({
+      text: `✓ BOUNTY CLAIMED · ${bountyClaimed.bossName}`,
+      bg: 'rgba(16, 185, 129, 0.26)',
+      border: 'rgba(52, 211, 153, 0.78)',
+      color: '#a7f3d0',
+    });
+  }
+  if (Array.isArray(modifiers) && modifiers.length > 0) {
+    const modTxt = modifiers.map((m) => `${m.icon || ''} ${m.shortLabel || m.name || m}`).join(' · ').trim();
+    if (modTxt) {
+      pills.push({
+        text: modTxt,
+        bg: 'rgba(244, 63, 94, 0.22)',
+        border: 'rgba(251, 113, 133, 0.62)',
+        color: '#ffe4e6',
+      });
+    }
+  }
+  if (Array.isArray(superlatives) && superlatives.length > 0 && pills.length < 5) {
+    const topAward = superlatives[0];
+    if (topAward?.title) {
+      pills.push({
+        text: `${topAward.icon || '🏅'} ${topAward.title}`,
+        bg: 'rgba(250, 204, 21, 0.18)',
+        border: 'rgba(250, 204, 21, 0.56)',
+        color: '#fef08a',
+      });
+    }
   }
 
   let px = padX;

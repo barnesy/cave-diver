@@ -1763,6 +1763,10 @@ export const bossAndLairMethods = {
       this._drawOrichalcumColossusBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'drill-wyrm') {
       this._drawDrillWyrmBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'coral-dragon') {
+      this._drawCoralDragonBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'spectral-dreadnought') {
+      this._drawSpectralDreadnoughtBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -3348,6 +3352,261 @@ export const bossAndLairMethods = {
       ctx.fillStyle = '#fffbeb';
       ctx.beginPath();
       ctx.arc(ex + er * 0.16, ey - er * 0.16, er * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * BOSS 11 (Yonaguni Monument): RYŪJIN'S SERPENT — Pacific Coral Dragon Leviathan (v201).
+   * Sinuous jade-emerald serpentine coils, crimson coral mane & dorsal crest, golden dragon antlers,
+   * flowing whiskers, and a floating luminous Dragon Pearl orbiting its snout.
+   */
+  _drawCoralDragonBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = anim.facing || -1;
+    const isStunned = boss.aiState === 'stunned';
+    const isAngry = boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_charge' || boss.aiState === 'roar';
+    const flash = boss.hitFlash > 0;
+    const alpha = boss.defeated ? Math.max(0, (boss.defeatAnimSec || 0) / 3.4) : 1;
+    const floatBobY = Math.sin(timeSec * 2.5) * 0.14 * r;
+    const jadeMain = boss.phase >= 3 ? '#10b981' : '#0d9488';
+    const jadeLight = boss.phase >= 3 ? '#5eead4' : '#2dd4bf';
+    const coralMane = boss.phase >= 3 ? '#fb7185' : '#f43f5e';
+    const pearlGlow = '#fef08a';
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+
+    // 1. Sinuous Scaled Dragon Body Coils & Crimson Dorsal Coral Fin
+    for (let s = 5; s >= 1; s--) {
+      const segX = -s * r * 0.44;
+      const segY = Math.sin(timeSec * 3.6 - s * 0.85) * r * 0.28;
+      const segR = r * (0.64 - s * 0.08);
+      // Crimson coral spine ridge
+      ctx.fillStyle = coralMane;
+      ctx.beginPath();
+      ctx.moveTo(segX - segR * 0.35, segY - segR * 0.55);
+      ctx.lineTo(segX, segY - segR * 1.28);
+      ctx.lineTo(segX + segR * 0.38, segY - segR * 0.55);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = flash ? '#ffffff' : (s % 2 === 0 ? jadeLight : jadeMain);
+      ctx.strokeStyle = '#022c22';
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.ellipse(segX, segY, segR * 0.88, segR * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Golden belly plates
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.48)';
+      ctx.beginPath();
+      ctx.ellipse(segX, segY + segR * 0.35, segR * 0.52, segR * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2. Sculpted Dragon Head, Coral Mane & Golden Antler Horns
+    ctx.fillStyle = coralMane;
+    ctx.strokeStyle = '#4c0519';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    for (let m = -2; m <= 2; m++) {
+      const ang = m * 0.36 - 0.15;
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.18 + Math.cos(ang + Math.PI) * r * 0.34, Math.sin(ang) * r * 0.55, r * 0.38, r * 0.2, ang, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Swept Golden Dragon Antlers
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.05, -r * 0.42);
+    ctx.quadraticCurveTo(-r * 0.35, -r * 1.15, -r * 0.78, -r * 1.05);
+    ctx.moveTo(-r * 0.26, -r * 0.78);
+    ctx.lineTo(-r * 0.12, -r * 1.18);
+    ctx.stroke();
+
+    // Jade Dragon Snout & Jaw
+    ctx.fillStyle = flash ? '#ffffff' : jadeLight;
+    ctx.strokeStyle = '#022c22';
+    ctx.lineWidth = Math.max(2.2, 0.088 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.42, -r * 0.48);
+    ctx.quadraticCurveTo(r * 0.45, -r * 0.62, r * 1.02, -r * 0.12);
+    ctx.lineTo(r * 0.88, r * 0.32);
+    ctx.quadraticCurveTo(r * 0.2, r * 0.56, -r * 0.42, r * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Flowing Golden Dragon Whiskers
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+    const wWave = Math.sin(timeSec * 4.4) * r * 0.24;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.82, r * 0.12);
+    ctx.quadraticCurveTo(r * 1.24, r * 0.28 + wWave, r * 1.56, r * 0.06 - wWave);
+    ctx.stroke();
+
+    // Luminous Floating Ryūjin Dragon Pearl ahead of snout
+    const px = r * 1.26;
+    const py = -r * 0.34 + Math.sin(timeSec * 3.8) * r * 0.12;
+    ctx.fillStyle = 'rgba(254, 240, 138, 0.28)';
+    ctx.beginPath();
+    ctx.arc(px, py, r * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = pearlGlow;
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = Math.max(1.2, 0.05 * scale);
+    ctx.beginPath();
+    ctx.arc(px, py, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Expressive Fierce Golden Eye
+    const ex = r * 0.26;
+    const ey = -r * 0.16;
+    const er = r * 0.23;
+    ctx.fillStyle = isAngry ? '#fef08a' : '#fffbeb';
+    ctx.strokeStyle = '#022c22';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, er, er * (isAngry ? 0.68 : 0.86), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (!isStunned && !boss.defeated) {
+      ctx.fillStyle = isAngry ? '#dc2626' : '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(ex + er * 0.22, ey, er * 0.3, er * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.34, ey - er * 0.22, er * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * BOSS 12 (SMS Markgraf — Scapa Flow): SCAPA DREADNOUGHT — Spectral WWI Battleship Leviathan (v201).
+   * Heavy riveted steel dreadnought hull, twin 12-inch armored gun turrets, spectral emerald
+   * waterline glow, ghostly searchlight bow optic, and spinning brass triple propellers.
+   */
+  _drawSpectralDreadnoughtBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = anim.facing || -1;
+    const isStunned = boss.aiState === 'stunned';
+    const isAngry = boss.aiState === 'lunge_windup' || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_charge' || boss.aiState === 'roar';
+    const flash = boss.hitFlash > 0;
+    const alpha = boss.defeated ? Math.max(0, (boss.defeatAnimSec || 0) / 3.4) : 1;
+    const floatBobY = Math.sin(timeSec * 1.9) * 0.11 * r;
+    const ghostGlow = boss.phase >= 3 ? '#5eead4' : '#34d399';
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+
+    // 1. Spectral Emerald Hull Wake Aura
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.85, r * 0.92, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Spinning Brass Stern Propellers
+    const propSpin = Math.sin(timeSec * 18) * r * 0.34;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.56, -propSpin);
+    ctx.lineTo(-r * 1.56, propSpin);
+    ctx.stroke();
+
+    // 3. Armored Dreadnought Main Hull & Ram Bow
+    ctx.fillStyle = flash ? '#ffffff' : '#334155';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = Math.max(2.3, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 1.58, 0.08 * r);
+    ctx.lineTo(r * 1.15, -r * 0.44);
+    ctx.lineTo(-r * 1.25, -r * 0.4);
+    ctx.lineTo(-r * 1.52, 0.1 * r);
+    ctx.lineTo(-r * 1.28, r * 0.56);
+    ctx.lineTo(r * 1.05, r * 0.56);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing Spectral Emerald Armor Belt & Portholes
+    ctx.fillStyle = ghostGlow;
+    ctx.fillRect(-r * 1.18, r * 0.08, r * 2.24, r * 0.14);
+    for (let p = -3; p <= 2; p++) {
+      ctx.beginPath();
+      ctx.arc(p * r * 0.34, -r * 0.14, r * 0.085, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4. Armored Bridge Citadel & Twin 12-Inch Gun Turrets
+    ctx.fillStyle = flash ? '#e2e8f0' : '#475569';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+    ctx.fillRect(-r * 0.36, -r * 1.02, r * 0.74, r * 0.62);
+    ctx.strokeRect(-r * 0.36, -r * 1.02, r * 0.74, r * 0.62);
+
+    // Fore & Aft Twin-Barrel 12-inch Turrets
+    for (const tx of [r * 0.68, -r * 0.78]) {
+      const dir = tx > 0 ? 1 : -1;
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.arc(tx, -r * 0.46, r * 0.28, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.moveTo(tx, -r * 0.56);
+      ctx.lineTo(tx + dir * r * 0.58, -r * 0.68);
+      ctx.moveTo(tx, -r * 0.48);
+      ctx.lineTo(tx + dir * r * 0.56, -r * 0.58);
+      ctx.stroke();
+    }
+
+    // 5. Spectral Bridge Searchlight Optic Eye
+    const ex = r * 0.16;
+    const ey = -r * 0.74;
+    const er = r * 0.22;
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = ghostGlow;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (!isStunned && !boss.defeated) {
+      ctx.fillStyle = isAngry ? '#f43f5e' : ghostGlow;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er * 0.68, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ecfdf5';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.2, ey - er * 0.18, er * 0.24, 0, Math.PI * 2);
       ctx.fill();
     }
 

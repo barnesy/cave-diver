@@ -9513,6 +9513,141 @@ summary,
 .bounty-reward-gear {
   color: #fde68a;
 }
+.bounty-card {
+  cursor: pointer;
+}
+.bounty-card.pinging {
+  border-color: rgba(56, 189, 248, 0.92);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3), 0 12px 28px rgba(14, 165, 233, 0.25);
+}
+.bounties-milestones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+@media (max-width: 720px) {
+  .bounties-milestones {
+    grid-template-columns: 1fr;
+  }
+}
+.bounty-milestone-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  font-size: 0.72rem;
+}
+.bounty-milestone-chip.unlocked {
+  background: rgba(6, 78, 59, 0.45);
+  border-color: rgba(52, 211, 153, 0.62);
+}
+.bounty-ms-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.bounty-ms-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.bounty-ms-copy strong {
+  color: #f8fafc;
+  font-size: 0.72rem;
+}
+.bounty-ms-copy span {
+  color: #94a3b8;
+  font-size: 0.66rem;
+}
+.bounty-milestone-chip.unlocked .bounty-ms-copy span {
+  color: #a7f3d0;
+}
+.bounty-ms-prog {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  color: #fde047;
+  font-size: 0.72rem;
+}
+.setup-modifiers-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+.setup-mod-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  background: rgba(15, 23, 42, 0.74);
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.setup-mod-chip.active {
+  background: rgba(190, 18, 60, 0.34);
+  border-color: rgba(251, 113, 133, 0.78);
+  color: #ffe4e6;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.25);
+}
+.setup-mod-mult {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fde047;
+}
+.hud-spectate-bar {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(4, 15, 30, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.58);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  font-family: ui-monospace, monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #e0f2fe;
+  pointer-events: auto;
+}
+.hud-spectate-btn {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.5);
+  background: rgba(14, 165, 233, 0.25);
+  color: #f0f9ff;
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.debrief-bounty-claim-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(6, 78, 59, 0.45);
+  border: 1px solid rgba(52, 211, 153, 0.55);
+  font-size: 0.76rem;
+  color: #a7f3d0;
+}
+
 
 
 

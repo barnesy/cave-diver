@@ -81,6 +81,9 @@ import {
   cycleCrewRoleId,
   computeGhostCheckpointSplits,
   formatSplitDelta,
+  EXPEDITION_MODIFIERS,
+  sanitizeExpeditionModifiers,
+  computeModifierScoreMultiplier,
 } from './game/expeditionContracts.js';
 import {
   EXPEDITION_CAMPAIGNS,
@@ -326,6 +329,9 @@ const coopWaitTitleEl = document.getElementById('coop-wait-title');
 const coopWaitDetailEl = document.getElementById('coop-wait-detail');
 const btnCoopSpectate = document.getElementById('btn-coop-spectate');
 const btnCoopFinishNow = document.getElementById('btn-coop-finish-now');
+const hudSpectateBarEl = document.getElementById('hud-spectate-bar');
+const hudSpectateLabelEl = document.getElementById('hud-spectate-label');
+const btnHudSpectateNextEl = document.getElementById('btn-hud-spectate-next');
 
 // Session State
 let mode = 'menu'; // 'menu' | 'diving' | 'debrief'
@@ -548,7 +554,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=200',
+  mapRasterUrl: './assets/map-expedition.jpg?v=201',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -958,6 +964,7 @@ const input = new InputController({
   onStageDrop: () => handleStageDrop(),
   onLiftBagToggle: () => handleLiftBagToggle(),
   onDropLineCookie: () => handleDropLineCookie(),
+  onSpectateCycle: () => cycleSpectateTarget({ allowReturnToSelf: true }),
   onDeploySmb: () => handleDeploySmb(),
   onComputerToggle: () => toggleShearwaterComputer(),
   onSignalWheelToggle: () => toggleSignalWheel(),
@@ -1330,6 +1337,7 @@ function savePhotoStudioSnapshot() {
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
+      expeditionModifiers: session.modifiers || null,
       compactHud: Boolean(compactHudEnabled),
       spaceClearanceM: session.spaceClearanceM ?? 4.0,
       breathState: session.breath?.state || 'hold',
@@ -2780,12 +2788,19 @@ const bountiesModal = document.getElementById('bounties-modal');
 const bountiesCtrl = createBountiesController({
   loadCareerLogbook,
   setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  onBountyPing: () => {
+    try {
+      audio.playSonarPing?.();
+    } catch {}
+  },
+  onOpenOutfitter: () => openLiveryModal(),
   els: {
     btnOpenBounties: document.getElementById('btn-open-bounties'),
     bountiesModal,
     btnBountiesClose: document.getElementById('btn-bounties-close'),
     bountiesGrid: document.getElementById('bounties-grid'),
     bountiesSubEl: document.getElementById('bounties-modal-sub'),
+    bountiesMilestonesEl: document.getElementById('bounties-milestones'),
   },
 });
 const { closeBountiesModal } = bountiesCtrl;
@@ -3216,6 +3231,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     weatherId: weatherPrefId,
     livery: liveryWorkshop.getActiveRigLivery(),
     crewRoleId: activeCrewRoleId,
+    modifiers: activeExpeditionModifiers,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
@@ -3355,6 +3371,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
+  if (hudSpectateBarEl) hudSpectateBarEl.hidden = true;
   screenDebrief.hidden = false;
   syncWakeLockFn?.();
 
@@ -3404,6 +3421,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
           ? Math.round(((session.trimStats.disciplinePct || 0) / 100) * 250)
           : Math.round(((session.trimStats?.disciplinePct || 0) / 100) * 100),
       mutatorId: session.mutatorId || '',
+      expeditionModifiers: session.modifiers || [],
     });
 
   if (isMultiplayer) {
@@ -3492,13 +3510,23 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         `🔱 ${lair.upgradesCollected || 0} Upgrades`,
         `💨 ${lair.dashesUsed || 0} Dashes`,
       ];
+      const secretCosmetics = getSecretCosmeticsForTrophy(b.trophyRelicId) || [];
+      const unlockedNames = secretCosmetics.map((c) => `${c.icon || '✨'} ${c.name}`).join(' · ');
       debriefBossBannerEl.innerHTML =
         `<div class="debrief-boss-head">` +
-          `<div class="debrief-boss-title"><span>${b.icon || '🐙'}</span><span>${b.name} VANQUISHED</span></div>` +
+          `<div class="debrief-boss-title"><span>${b.icon || '🐙'}</span><span>${escapeHtml(b.name)} VANQUISHED</span></div>` +
           `<span class="debrief-boss-pts">+${b.bonusPoints || 2500} PTS</span>` +
         `</div>` +
-        `<div class="debrief-boss-relic">🏆 Trophy Relic Claimed: ${b.trophyName}</div>` +
+        `<div class="debrief-bounty-claim-row">` +
+          `<span class="debrief-bounty-badge">✓ BOUNTY CLAIMED</span>` +
+          `<span class="debrief-bounty-reward">${unlockedNames ? `Unlocked: ${escapeHtml(unlockedNames)}` : `Trophy: ${escapeHtml(b.trophyName)}`}</span>` +
+          `<button type="button" class="btn tiny primary" id="btn-debrief-boss-equip">🎨 Equip in Workshop</button>` +
+        `</div>` +
+        `<div class="debrief-boss-relic">🏆 Trophy Relic Claimed: ${escapeHtml(b.trophyName)}</div>` +
         `<div class="debrief-boss-stats">${chips.map((c) => `<span class="debrief-boss-chip">${c}</span>`).join('')}</div>`;
+      debriefBossBannerEl.querySelector('#btn-debrief-boss-equip')?.addEventListener('click', () => {
+        openLiveryModal();
+      });
       debriefBossBannerEl.hidden = false;
     } else {
       debriefBossBannerEl.hidden = true;
@@ -3738,8 +3766,8 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
   }
   // Celebratory Co-op & Solo Expedition Superlative Awards (v197)
   const debriefSuperlativesEl = document.getElementById('debrief-superlatives');
+  const awards = success ? computeSquadSuperlatives(session, getActivePeers()) : [];
   if (debriefSuperlativesEl) {
-    const awards = success ? computeSquadSuperlatives(session, getActivePeers()) : [];
     if (awards.length > 0) {
       debriefSuperlativesEl.hidden = false;
       debriefSuperlativesEl.innerHTML = awards
@@ -3753,6 +3781,13 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       debriefSuperlativesEl.innerHTML = '';
     }
   }
+  const activeRunModsInfo = computeModifierScoreMultiplier(session.modifiers || []);
+  const claimedBoss = session.secretLair?.bossDefeated && session.secretLair?.spec?.boss
+    ? {
+        bossName: session.secretLair.spec.boss.name,
+        trophyName: session.secretLair.spec.boss.trophyName,
+      }
+    : null;
   replayTheater.setLastDebriefCardData({
     level,
     diverName: diver.name || playerNameInput?.value.trim() || 'Diver',
@@ -3769,6 +3804,9 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     hasCcr: Boolean(session.gear?.ccr),
     recoveredArtifacts: (level.collectibles || []).filter((it) => session.collectedIds?.has(it.id)),
     pinnedArtifact: getArtifactVaultStats(loadCareerLogbook(), LEVELS).pinnedArtifact || null,
+    superlatives: awards,
+    modifiers: activeRunModsInfo.activeMods,
+    bountyClaimed: claimedBoss,
     track: replayTrack,
     profile: session?.diveProfile ? session.diveProfile.slice() : [],
   });
@@ -4668,6 +4706,68 @@ const btnSetupCloseEl = document.getElementById('btn-setup-close');
 const btnSetupDoneEl = document.getElementById('btn-setup-done');
 const btnSetupResetEl = document.getElementById('btn-setup-reset');
 
+// ─── Stackable Mastery Expedition Modifiers (v201) ───
+const EXP_MODS_PREF_KEY = 'caveDiverExpMods_v1';
+let activeExpeditionModifiers = [];
+try {
+  const savedMods = JSON.parse(localStorage.getItem(EXP_MODS_PREF_KEY) || '[]');
+  activeExpeditionModifiers = sanitizeExpeditionModifiers(savedMods);
+} catch {
+  activeExpeditionModifiers = [];
+}
+
+function saveExpeditionModifiers() {
+  try {
+    localStorage.setItem(EXP_MODS_PREF_KEY, JSON.stringify(activeExpeditionModifiers));
+  } catch {}
+}
+
+function syncExpeditionModifiersUi() {
+  const rowEl = document.getElementById('setup-modifiers-row');
+  const multEl = document.getElementById('setup-modifiers-mult');
+  const descEl = document.getElementById('setup-modifiers-desc');
+  const cardEl = document.getElementById('setup-card-modifiers');
+  const info = computeModifierScoreMultiplier(activeExpeditionModifiers);
+  if (rowEl) {
+    rowEl.querySelectorAll('[data-exp-mod]').forEach((btn) => {
+      const id = btn.dataset.expMod;
+      const on = activeExpeditionModifiers.includes(id);
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  if (multEl) {
+    multEl.textContent = info.bonusPct > 0 ? `+${info.bonusPct}% Score` : '+0% Score';
+    multEl.classList.toggle('has-bonus', info.bonusPct > 0);
+  }
+  if (cardEl) {
+    cardEl.classList.toggle('active-card', info.activeMods.length > 0);
+  }
+  if (descEl) {
+    descEl.textContent =
+      info.activeMods.length > 0
+        ? `Active (+${info.bonusPct}% total score): ${info.activeMods.map((m) => `${m.icon} ${m.name} — ${m.desc}`).join(' · ')}`
+        : 'Stack optional physics & darkness hazards to earn multiplicative expedition score bonuses (up to +50%).';
+  }
+}
+
+document.getElementById('setup-modifiers-row')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-exp-mod]');
+  if (!btn) return;
+  const modId = btn.dataset.expMod;
+  if (!EXPEDITION_MODIFIERS.some((m) => m.id === modId)) return;
+  const idx = activeExpeditionModifiers.indexOf(modId);
+  if (idx >= 0) {
+    activeExpeditionModifiers.splice(idx, 1);
+  } else {
+    activeExpeditionModifiers.push(modId);
+  }
+  activeExpeditionModifiers = sanitizeExpeditionModifiers(activeExpeditionModifiers);
+  saveExpeditionModifiers();
+  syncExpeditionModifiersUi();
+  syncSetupDrawerSummary();
+});
+
 function getSetupModeDescription(diffId) {
   if (diffId === 'guided') {
     return 'Guided Mode: Gentle silt & currents with full compass guidance. With AI Squad active, Pro Instructors lead you to every artifact & lore landmark and actively stabilize your vitals so you stay safe.';
@@ -4761,6 +4861,10 @@ function syncSetupDrawerSummary() {
     if (effGear.sonar) activeCount++;
     if (effGear.dpv) activeCount++;
     if (effGear.ccr) activeCount++;
+  } catch {}
+  try {
+    activeCount += activeExpeditionModifiers.length;
+    syncExpeditionModifiersUi();
   } catch {}
 
   const isOpen = Boolean(modal && !modal.hidden);
@@ -4985,6 +5089,11 @@ btnSetupResetEl?.addEventListener('click', () => {
     saveGearLoadout();
     renderTechGearDock();
     renderHomeAvatarBadge();
+  }
+  if (activeExpeditionModifiers.length > 0) {
+    activeExpeditionModifiers = [];
+    saveExpeditionModifiers();
+    syncExpeditionModifiersUi();
   }
   syncSetupDrawerSummary();
   showToast('↺ Dive Setup reset to Standard Tech defaults.', 2.2);
@@ -5502,29 +5611,43 @@ coopCommsEl?.addEventListener('click', (e) => {
   dispatchScubaSignal(sig);
 });
 
-btnCoopSpectate?.addEventListener('click', () => {
-  const activePeers = isMultiplayer
-    ? lan.getPeers().filter((p) => p && p.alive !== false && !p.surfaced)
-    : [];
+function cycleSpectateTarget({ allowReturnToSelf = true } = {}) {
+  if (mode !== 'diving' || !session || !isMultiplayer) return false;
+  const allPeers = lan.getPeers().filter(Boolean);
+  if (allPeers.length === 0) return false;
+  const activePeers = allPeers.filter((p) => p.alive !== false && !p.surfaced);
+  const pool = activePeers.length > 0 ? activePeers : allPeers;
+  const canReturnSelf = allowReturnToSelf && session.diver?.alive !== false && !session.localOutcome;
   if (!spectatingPeer) {
     spectatingPeer = true;
     spectatePeerIdx = 0;
-  } else if (activePeers.length > 1 && spectatePeerIdx < activePeers.length - 1) {
+  } else if (pool.length > 1 && spectatePeerIdx < pool.length - 1) {
     spectatePeerIdx += 1;
-  } else {
+  } else if (canReturnSelf) {
     spectatingPeer = false;
     spectatePeerIdx = 0;
+  } else {
+    spectatePeerIdx = (spectatePeerIdx + 1) % pool.length;
   }
   if (btnCoopSpectate) {
     if (!spectatingPeer) {
       btnCoopSpectate.textContent = 'Watch Buddy';
-    } else if (activePeers.length > 1) {
-      const target = activePeers[spectatePeerIdx % activePeers.length];
+    } else if (pool.length > 1) {
+      const target = pool[spectatePeerIdx % pool.length];
       btnCoopSpectate.textContent = `Next (${target?.name || 'Buddy'})`;
     } else {
       btnCoopSpectate.textContent = 'My Diver';
     }
   }
+  return true;
+}
+
+btnCoopSpectate?.addEventListener('click', () => {
+  cycleSpectateTarget({ allowReturnToSelf: true });
+});
+
+btnHudSpectateNextEl?.addEventListener('click', () => {
+  cycleSpectateTarget({ allowReturnToSelf: true });
 });
 
 btnCoopFinishNow?.addEventListener('click', () => {
@@ -5767,6 +5890,7 @@ function abortActiveDiveToMenu() {
   screenHud.hidden = true;
   if (coopCommsEl) coopCommsEl.hidden = true;
   if (coopWaitBannerEl) coopWaitBannerEl.hidden = true;
+  if (hudSpectateBarEl) hudSpectateBarEl.hidden = true;
   screenMenu.hidden = false;
   if (isMultiplayer) {
     lan.leaveRoom();
@@ -7383,6 +7507,14 @@ function frame(nowMs) {
         spectateTarget = humanFramePeers[0];
       }
     }
+    if (hudSpectateBarEl) {
+      const showSpec = Boolean(spectatingPeer && spectateTarget);
+      if (hudSpectateBarEl.hidden !== !showSpec) hudSpectateBarEl.hidden = !showSpec;
+      if (showSpec && hudSpectateLabelEl) {
+        const specText = `👁️ SPECTATING: ${spectateTarget.name || 'Buddy'} · ${Math.max(0, Math.round(spectateTarget.y || 0))}m`;
+        if (hudSpectateLabelEl.textContent !== specText) hudSpectateLabelEl.textContent = specText;
+      }
+    }
     const playerLines = _framePlayerLines;
     playerLines.length = 0;
     if (session.guidelineChains?.length > 0) {
@@ -7491,6 +7623,7 @@ function frame(nowMs) {
       endedState: session.endedState || '',
       difficulty: session.difficulty || activeDifficulty,
       mutatorId: session.mutatorId || '',
+      expeditionModifiers: session.modifiers || null,
       compactHud: Boolean(compactHudEnabled),
       spaceClearanceM: session.spaceClearanceM ?? 4.0,
       breathState: session.breath?.state || 'hold',

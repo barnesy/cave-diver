@@ -1299,6 +1299,237 @@ export const SECRET_LAIRS = Object.freeze({
       bonusPoints: 3300,
     }),
   }),
+
+  // === BOSS 11 (Pacific Megalith Secret Lair): Yonaguni Monument -> RYŪJIN'S SERPENT (v201) ===
+  'yonaguni-submerged-monument': Object.freeze({
+    id: 'yonaguni-dragon-sanctum',
+    levelId: 'yonaguni-submerged-monument',
+    name: 'The Terraced Dragon Sanctum',
+    veil: Object.freeze({
+      id: 'yon-dragon-veil',
+      x: 118.2,
+      y: 52.0,
+      radius: 2.3,
+      sealWallX: 116.5,
+      sealMinY: 47.5,
+      sealMaxY: 56.5,
+      failsafeX: 123.5,
+      label: 'Hollow Megalith Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'yon-speargun-rack',
+      x: 156.0,
+      y: 52.0,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 153.0, y: 53.6 }),
+      Object.freeze({ kind: 'dive-strobe', x: 159.0, y: 50.4 }),
+      Object.freeze({ kind: 'temple-column', x: 184.0, y: 53.2 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 208.0, y: 53.4 }),
+      Object.freeze({ kind: 'temple-column', x: 226.0, y: 53.0 }),
+      Object.freeze({ kind: 'monolith', x: 242.5, y: 46.8, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 242.5, y: 55.2, side: 'bottom' }),
+    ]),
+    foreshadowX: 204.0,
+    arena: Object.freeze({
+      cx: 274.0,
+      cy: 50.0,
+      triggerX: 246.0,
+      rx: 26.0,
+      ry: 13.5,
+      respawnX: 241.0,
+      respawnY: 51.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'pil-yon-w', x: 256.0, y: 50.2, radius: 2.0 }),
+        Object.freeze({ id: 'pil-yon-nw', x: 269.0, y: 42.5, radius: 2.0 }),
+        Object.freeze({ id: 'pil-yon-sw', x: 269.0, y: 57.5, radius: 2.0 }),
+        Object.freeze({ id: 'pil-yon-e', x: 288.0, y: 50.0, radius: 2.0 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 255.0, y: 42.5, color: '#2dd4bf', radius: 14.5 }),
+        Object.freeze({ x: 274.0, y: 39.2, color: '#f43f5e', radius: 15.5 }),
+        Object.freeze({ x: 292.0, y: 43.0, color: '#2dd4bf', radius: 15.0 }),
+        Object.freeze({ x: 256.0, y: 58.0, color: '#2dd4bf', radius: 14.5 }),
+        Object.freeze({ x: 275.0, y: 60.5, color: '#f43f5e', radius: 15.0 }),
+        Object.freeze({ x: 291.0, y: 57.5, color: '#fbbf24', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 281.0, y: 50.0 }),
+        Object.freeze({ x: 266.0, y: 48.8 }),
+        Object.freeze({ x: 285.0, y: 46.8 }),
+        Object.freeze({ x: 274.0, y: 54.0 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'yon-stage-1', x: 251.0, y: 47.0, label: 'Megalith Sanctum Stage (West)' }),
+        Object.freeze({ id: 'yon-stage-2', x: 272.0, y: 59.5, label: 'Megalith Sanctum Stage (South)' }),
+        Object.freeze({ id: 'yon-stage-3', x: 292.0, y: 51.0, label: 'Megalith Sanctum Stage (East)' }),
+        Object.freeze({ id: 'yon-stage-4', x: 275.0, y: 40.5, label: 'Megalith Sanctum Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'yon-corridor-stage', x: 196.0, y: 51.5, label: 'Terrace Corridor Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'yon-pad-w', x: 251.5, y: 47.5 }),
+        Object.freeze({ id: 'yon-pad-s', x: 272.5, y: 59.0 }),
+        Object.freeze({ id: 'yon-pad-n', x: 275.0, y: 41.0 }),
+        Object.freeze({ id: 'yon-pad-e', x: 291.5, y: 51.5 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 198.0, y: 51.4 }),
+      corridorUpgrade: Object.freeze({ x: 215.0, y: 51.3, kind: 'pierce' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-yon-w', x: 263.0, y: 39.2, floorY: 60.8, style: 'limestone' }),
+        Object.freeze({ id: 'stal-yon-c', x: 275.0, y: 38.6, floorY: 61.0, style: 'limestone' }),
+        Object.freeze({ id: 'stal-yon-e', x: 286.0, y: 39.2, floorY: 60.6, style: 'limestone' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 274.0,
+        y: 42.0,
+        radius: 3.6,
+        destX: 112.0,
+        destY: 6.2,
+        label: 'Kuroshio Updraft → Yonaguni 6m O2 Deco Stop',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'yon-m1', kind: 'moray', name: 'Kuroshio Reef Moray', x: 176.0, y: 51.8, hp: 114, radius: 1.24, dropOrb: true }),
+      Object.freeze({ id: 'yon-m2', kind: 'swarmer', name: 'Coral Dart Swarmer', x: 192.0, y: 51.4, hp: 86, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'yon-m3', kind: 'swarmer', name: 'Coral Dart Swarmer', x: 204.0, y: 51.6, hp: 88, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'yon-m4', kind: 'moray', name: 'Kuroshio Reef Moray', x: 218.0, y: 51.2, hp: 118, radius: 1.25, dropOrb: false }),
+      Object.freeze({ id: 'yon-m5', kind: 'stalker', name: 'Megalith Jade Stalker', x: 232.0, y: 51.2, hp: 230, radius: 1.54, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-coral-dragon',
+      kind: 'coral-dragon',
+      musicTheme: 'solar',
+      icon: '🐉',
+      name: "RYŪJIN'S SERPENT",
+      title: 'Pacific Coral Dragon Leviathan',
+      x: 280.0,
+      y: 50.0,
+      radius: 4.6,
+      baseHp: 4650,
+      trophyRelicId: 'yonaguni-dragon-pearl',
+      trophyName: 'Pearl of Ryūjin',
+      bonusPoints: 3450,
+    }),
+  }),
+
+  // === BOSS 12 (Scapa Flow Secret Lair): SMS Markgraf -> SCAPA DREADNOUGHT (v201) ===
+  'sms-markgraf-scapa-flow': Object.freeze({
+    id: 'markgraf-spectral-citadel',
+    levelId: 'sms-markgraf-scapa-flow',
+    name: 'The Spectral Armored Citadel',
+    veil: Object.freeze({
+      id: 'mkg-citadel-veil',
+      x: 97.5,
+      y: 46.5,
+      radius: 2.3,
+      sealWallX: 96.0,
+      sealMinY: 42.0,
+      sealMaxY: 51.0,
+      failsafeX: 103.0,
+      label: 'False Armor Plate Seam',
+      silent: true,
+    }),
+    armory: Object.freeze({
+      id: 'mkg-speargun-rack',
+      x: 134.0,
+      y: 46.5,
+      radius: 3.1,
+      weaponName: 'Pneumatic Titanium Speargun',
+      hint: '',
+    }),
+    landmarks: Object.freeze([
+      Object.freeze({ kind: 'expedition-crate', x: 131.0, y: 48.0 }),
+      Object.freeze({ kind: 'dive-strobe', x: 137.0, y: 44.8 }),
+      Object.freeze({ kind: 'vintage-helmet', x: 162.0, y: 47.8 }),
+      Object.freeze({ kind: 'thermal-vent', x: 188.0, y: 47.6 }),
+      Object.freeze({ kind: 'monolith', x: 219.5, y: 41.5, side: 'top' }),
+      Object.freeze({ kind: 'monolith', x: 219.5, y: 50.5, side: 'bottom' }),
+    ]),
+    foreshadowX: 180.0,
+    arena: Object.freeze({
+      cx: 252.0,
+      cy: 45.5,
+      triggerX: 224.0,
+      rx: 26.0,
+      ry: 13.5,
+      respawnX: 218.0,
+      respawnY: 46.0,
+      pillars: Object.freeze([
+        Object.freeze({ id: 'pil-mkg-w', x: 234.0, y: 45.8, radius: 2.0 }),
+        Object.freeze({ id: 'pil-mkg-nw', x: 247.0, y: 38.0, radius: 2.0 }),
+        Object.freeze({ id: 'pil-mkg-sw', x: 247.0, y: 53.0, radius: 2.0 }),
+        Object.freeze({ id: 'pil-mkg-e', x: 266.0, y: 45.5, radius: 2.0 }),
+      ]),
+      lightSconces: Object.freeze([
+        Object.freeze({ x: 233.0, y: 38.0, color: '#34d399', radius: 14.5 }),
+        Object.freeze({ x: 252.0, y: 34.8, color: '#94a3b8', radius: 15.5 }),
+        Object.freeze({ x: 270.0, y: 38.5, color: '#34d399', radius: 15.0 }),
+        Object.freeze({ x: 234.0, y: 53.5, color: '#34d399', radius: 14.5 }),
+        Object.freeze({ x: 253.0, y: 56.0, color: '#94a3b8', radius: 15.0 }),
+        Object.freeze({ x: 269.0, y: 53.0, color: '#34d399', radius: 14.0 }),
+      ]),
+      bossAnchors: Object.freeze([
+        Object.freeze({ x: 259.0, y: 45.5 }),
+        Object.freeze({ x: 244.0, y: 44.4 }),
+        Object.freeze({ x: 263.0, y: 42.5 }),
+        Object.freeze({ x: 252.0, y: 49.5 }),
+      ]),
+      gasCaches: Object.freeze([
+        Object.freeze({ id: 'mkg-stage-1', x: 229.0, y: 42.5, label: 'Citadel Stage (West)' }),
+        Object.freeze({ id: 'mkg-stage-2', x: 250.0, y: 55.0, label: 'Citadel Stage (South)' }),
+        Object.freeze({ id: 'mkg-stage-3', x: 270.0, y: 46.5, label: 'Citadel Stage (East)' }),
+        Object.freeze({ id: 'mkg-stage-4', x: 253.0, y: 36.2, label: 'Citadel Stage (North)' }),
+      ]),
+      midStage: Object.freeze({ id: 'mkg-corridor-stage', x: 174.0, y: 46.2, label: 'Casemate Corridor Bailout Stage' }),
+      pickupPads: Object.freeze([
+        Object.freeze({ id: 'mkg-pad-w', x: 229.5, y: 43.0 }),
+        Object.freeze({ id: 'mkg-pad-s', x: 250.5, y: 54.5 }),
+        Object.freeze({ id: 'mkg-pad-n', x: 253.0, y: 36.8 }),
+        Object.freeze({ id: 'mkg-pad-e', x: 269.5, y: 47.0 }),
+      ]),
+      corridorBattery: Object.freeze({ x: 176.0, y: 46.0 }),
+      corridorUpgrade: Object.freeze({ x: 192.0, y: 46.0, kind: 'twin' }),
+      stalactites: Object.freeze([
+        Object.freeze({ id: 'stal-mkg-w', x: 241.0, y: 34.8, floorY: 56.2, style: 'iron' }),
+        Object.freeze({ id: 'stal-mkg-c', x: 253.0, y: 34.2, floorY: 56.5, style: 'iron' }),
+        Object.freeze({ id: 'stal-mkg-e', x: 264.0, y: 34.8, floorY: 56.0, style: 'iron' }),
+      ]),
+      exitUpdraft: Object.freeze({
+        x: 252.0,
+        y: 37.5,
+        radius: 3.6,
+        destX: 10.0,
+        destY: 6.0,
+        label: 'Citadel Updraft → Scapa Flow 6m O2 Stop',
+      }),
+    }),
+    minions: Object.freeze([
+      Object.freeze({ id: 'mkg-m1', kind: 'moray', name: 'Turret-Ring Moray', x: 154.0, y: 46.2, hp: 118, radius: 1.24, dropOrb: true }),
+      Object.freeze({ id: 'mkg-m2', kind: 'swarmer', name: 'Spectral Signal Drone', x: 170.0, y: 46.0, hp: 88, radius: 1.0, dropOrb: false }),
+      Object.freeze({ id: 'mkg-m3', kind: 'swarmer', name: 'Spectral Signal Drone', x: 184.0, y: 46.2, hp: 90, radius: 1.0, dropOrb: true }),
+      Object.freeze({ id: 'mkg-m4', kind: 'moray', name: 'Turret-Ring Moray', x: 198.0, y: 46.0, hp: 120, radius: 1.26, dropOrb: false }),
+      Object.freeze({ id: 'mkg-m5', kind: 'stalker', name: 'Dreadnought Hull Stalker', x: 210.0, y: 46.0, hp: 238, radius: 1.56, dropOrb: true }),
+    ]),
+    boss: Object.freeze({
+      id: 'boss-spectral-dreadnought',
+      kind: 'spectral-dreadnought',
+      musicTheme: 'uboat',
+      icon: '⚓',
+      name: 'SCAPA DREADNOUGHT',
+      title: 'Spectral WWI Armored Battleship Leviathan',
+      x: 258.0,
+      y: 45.5,
+      radius: 4.7,
+      baseHp: 4900,
+      trophyRelicId: 'markgraf-fleet-heart',
+      trophyName: 'Heart of Scapa Flow',
+      bonusPoints: 3650,
+    }),
+  }),
 });
 
 export function getSecretLairForLevel(levelId) {
@@ -4234,19 +4465,19 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             ? boss.inkAimAngle
             : Math.atan2(primaryTarget.y - boss.y, primaryTarget.x - boss.x);
           const spread = boss.phase === 3 ? 0.23 : 0.27;
-          const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm')
+          const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' || boss.kind === 'spectral-dreadnought')
             ? 'slag'
             : (boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
-            ? (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c')
+            ? (boss.kind === 'spectral-dreadnought' ? '#34d399' : (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c'))
             : projKind === 'frost'
               ? (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9')
               : projKind === 'prism'
-                ? (boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))
+                ? (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -4977,6 +5208,61 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     }
     callbacks.onCrystalChime?.(1);
     return lastGate;
+  }
+
+  if (boss.kind === 'coral-dragon') {
+    const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingOrbs);
+    let lastOrb = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const ang = (Math.PI * 2 * k) / Math.max(1, toSpawn) + Math.random() * 0.6;
+      const ox = Math.max(ar.cx - ar.rx + 6, Math.min(ar.cx + ar.rx - 6, boss.x + Math.cos(ang) * 9.5));
+      const oy = Math.max(ar.cy - ar.ry + 4, Math.min(ar.cy + ar.ry - 4, boss.y + Math.sin(ang) * 6.5));
+      const orb = {
+        id: `dragonorb_${++lair._hazardSeq}`,
+        kind: 'star-orb',
+        x: ox,
+        y: oy,
+        radius: 1.35,
+        hp: 2,
+        life: 14.0,
+        age: 0,
+        phase: Math.random() * Math.PI * 2,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(orb);
+      addShockwave(lair, ox, oy, 3.8, '#2dd4bf', 0.36);
+      lastOrb = orb;
+    }
+    callbacks.onCrystalChime?.(1);
+    return lastOrb;
+  }
+
+  if (boss.kind === 'spectral-dreadnought') {
+    const existingMines = lair.bossHazards.filter((h) => h.kind === 'naval-mine').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingMines);
+    let lastMine = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const mx = Math.max(ar.cx - ar.rx + 7, Math.min(ar.cx + ar.rx - 7, boss.x - 6 + (Math.random() - 0.5) * 14));
+      const my = Math.max(ar.cy - ar.ry + 5, Math.min(ar.cy + ar.ry - 5, boss.y + (Math.random() - 0.5) * 10));
+      const mine = {
+        id: `dreadmine_${++lair._hazardSeq}`,
+        kind: 'naval-mine',
+        x: mx,
+        y: my,
+        radius: 1.45,
+        hp: 2,
+        life: 16.0,
+        age: 0,
+        phase: Math.random() * Math.PI * 2,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(mine);
+      addShockwave(lair, mx, my, 3.6, '#34d399', 0.34);
+      lastMine = mine;
+    }
+    callbacks.onCrystalChime?.(1);
+    return lastMine;
   }
   return null;
 }

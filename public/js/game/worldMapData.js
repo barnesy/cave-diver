@@ -164,6 +164,13 @@ export const MAP_LANDMASS_POLYGONS = [
   [[114.0, -22.0], [129.0, -14.5], [142.5, -11.0], [153.2, -26.5], [150.0, -37.5], [138.0, -35.5], [115.2, -34.0], [113.8, -26.0]],
   // Chuuk Atoll Reef Ring (Micronesia)
   [[151.4, 7.75], [152.2, 7.7], [152.35, 7.15], [151.6, 7.05], [151.35, 7.45]],
+  // Ryukyu / Okinawa & Yonaguni Arc (v201)
+  [[127.6, 26.8], [128.3, 26.6], [127.9, 26.1], [127.6, 26.3]],
+  [[122.8, 24.55], [123.3, 24.5], [123.25, 24.3], [122.78, 24.35]],
+  // Taiwan (western Kuroshio neighbor to Yonaguni)
+  [[120.2, 22.0], [121.6, 25.3], [122.0, 24.8], [121.1, 22.0]],
+  // Orkney Islands / Scapa Flow (v201)
+  [[-3.35, 59.15], [-2.75, 59.12], [-2.82, 58.78], [-3.3, 58.82]],
 ];
 
 /**
@@ -240,6 +247,8 @@ export function computeSiteFocusViewBox(levelId, slot) {
     'bermuda-devils-wall': { lng: -64.8, lat: 32.3, w: 68, h: 44.6 },
     'cenote-angelita-river': { lng: -87.6, lat: 20.1, w: 54, h: 35.5 },
     'fujikawa-maru-chuuk': { lng: 151.9, lat: 7.4, w: 72, h: 47.2 },
+    'yonaguni-submerged-monument': { lng: 123.5, lat: 25.0, w: 68, h: 44.6 },
+    'sms-markgraf-scapa-flow': { lng: -3.0, lat: 58.6, w: 64, h: 42.0 },
   };
 
   const frame = CUSTOM_FRAMING[levelId];

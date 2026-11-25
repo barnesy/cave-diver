@@ -1,5 +1,6 @@
 import { evaluateCaveSDF } from './collision.js';
 import { clamp as clampVal } from '../util/common.js';
+import { computeModifierScoreMultiplier } from './expeditionContracts.js';
 
 function clamp(min, max, v) {
   return clampVal(v, min, max);
@@ -139,6 +140,7 @@ export function computeDiverScoreSummary({
   trimBonusScore = 0,
   expeditionBonusScore = 0,
   mutatorId = '',
+  expeditionModifiers = [],
 }) {
   const alive = diveState?.alive !== false;
   const cpCount = checkpointsHit instanceof Set ? checkpointsHit.size : Number(checkpointsHit) || 0;
@@ -183,7 +185,7 @@ export function computeDiverScoreSummary({
   const cleanWeatherBonus = alive ? Math.min(MAX_WEATHER_BONUS, Math.max(0, Math.round(Number(weatherBonusScore) || 0))) : 0;
   const cleanTrimBonus = alive ? Math.min(MAX_TRIM_BONUS, Math.max(0, Math.round(Number(trimBonusScore) || 0))) : 0;
   const cleanExpeditionBonus = alive ? Math.min(MAX_EXPEDITION_BONUS, Math.max(0, Math.round(Number(expeditionBonusScore) || 0))) : 0;
-  const totalScore =
+  const preModScore =
     healthScore +
     speedScore +
     collectiblesScore +
@@ -196,6 +198,9 @@ export function computeDiverScoreSummary({
     cleanWeatherBonus +
     cleanTrimBonus +
     cleanExpeditionBonus;
+  const modCalc = computeModifierScoreMultiplier(expeditionModifiers);
+  const modifierBonusScore = alive && modCalc.bonusPct > 0 ? Math.round(preModScore * (modCalc.bonusPct / 100)) : 0;
+  const totalScore = preModScore + modifierBonusScore;
   const baseMaxPossible = 1000 + 800 + maxCollectiblePoints + 400 + 700 + 250 + maxHatchBonus;
   const maxPossible =
     baseMaxPossible +
@@ -233,6 +238,8 @@ export function computeDiverScoreSummary({
     weatherBonusScore: cleanWeatherBonus,
     trimBonusScore: cleanTrimBonus,
     expeditionBonusScore: cleanExpeditionBonus,
+    modifierBonusScore,
+    modifierBonusPct: modCalc.bonusPct,
     healthScore,
     speedScore,
     totalScore,

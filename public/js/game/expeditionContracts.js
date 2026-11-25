@@ -10,6 +10,65 @@
 
 export const CONTRACT_REWARD_PTS = 150;
 
+/**
+ * Stackable Mastery Expedition Modifiers (v201).
+ * Players can opt into high-stakes challenges in Dive Setup for multiplicative score bonuses.
+ */
+export const EXPEDITION_MODIFIERS = Object.freeze([
+  Object.freeze({
+    id: 'blackout-abyss',
+    icon: '🌑',
+    name: 'Blackout Abyss',
+    shortLabel: 'Blackout',
+    bonusPct: 15,
+    desc: 'Ambient water light cut by 55% — pure torch discipline (+15% score)',
+  }),
+  Object.freeze({
+    id: 'surge-tide',
+    icon: '🌊',
+    name: 'Surge Tide',
+    shortLabel: 'Surge',
+    bonusPct: 15,
+    desc: 'Cave currents & tidal surge amplified 1.65× (+15% score)',
+  }),
+  Object.freeze({
+    id: 'iron-lung',
+    icon: '🫁',
+    name: 'Iron Lung',
+    shortLabel: 'Iron Lung',
+    bonusPct: 20,
+    desc: 'Tighter gas & CCR scrubber consumption +28% (+20% score)',
+  }),
+]);
+
+const MOD_BY_ID = new Map(EXPEDITION_MODIFIERS.map((m) => [m.id, m]));
+
+export function sanitizeExpeditionModifiers(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const id of list) {
+    if (typeof id === 'string' && MOD_BY_ID.has(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+export function computeModifierScoreMultiplier(list) {
+  const clean = sanitizeExpeditionModifiers(list);
+  let bonusPct = 0;
+  for (const id of clean) {
+    bonusPct += MOD_BY_ID.get(id)?.bonusPct || 0;
+  }
+  return {
+    multiplier: 1 + bonusPct / 100,
+    bonusPct,
+    activeMods: clean.map((id) => MOD_BY_ID.get(id)),
+  };
+}
+
 export const CREW_ROLES = Object.freeze([
   {
     id: 'balanced',

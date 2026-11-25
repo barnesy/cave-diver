@@ -44,6 +44,7 @@ export class InputController {
     onCombatDash,
     onCcrSetpointToggle,
     onCcrBailout,
+    onSpectateCycle,
   }) {
     this.keys = new Set();
     this.stickVec = { x: 0, y: 0 };
@@ -91,6 +92,7 @@ export class InputController {
     this.onCombatDash = onCombatDash;
     this.onCcrSetpointToggle = onCcrSetpointToggle;
     this.onCcrBailout = onCcrBailout;
+    this.onSpectateCycle = onSpectateCycle;
     this.torchStickHeld = false;
     this.spearKeyHeld = false;
     this._prevGpButtons = [];
@@ -119,8 +121,16 @@ export class InputController {
       if (code === 'KeyL' && !e.repeat) this.onTorchToggle?.();
       if (code === 'KeyG' && !e.repeat) this.onReelToggle?.();
       if (code === 'KeyV' && !e.repeat) {
-        if (e.shiftKey) this.onCcrBailout?.();
-        else this.onCcrSetpointToggle?.();
+        if (e.shiftKey) {
+          if (this.onCcrBailout?.()) e.preventDefault();
+        } else if (this.onCcrSetpointToggle?.()) {
+          e.preventDefault();
+        } else if (this.onDpvToggle?.()) {
+          e.preventDefault();
+        }
+      }
+      if (code === 'Tab' && !e.repeat) {
+        if (this.onSpectateCycle?.()) e.preventDefault();
       }
       if (code === 'KeyR' && !e.repeat) this.onReelRewind?.();
       if (code === 'KeyE' && !e.repeat) {
@@ -141,9 +151,6 @@ export class InputController {
       }
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat) {
         if (this.onCombatDash?.()) e.preventDefault();
-      }
-      if (code === 'KeyV' && !e.repeat) {
-        if (this.onDpvToggle?.()) e.preventDefault();
       }
       if (code === 'KeyM' && !e.repeat) {
         if (this.onMinimapToggle?.()) e.preventDefault();

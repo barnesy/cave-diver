@@ -21,6 +21,29 @@ function _hasTrophyRelic(stats, relicId) {
   return false;
 }
 
+const ALL_BOSS_TROPHY_IDS = Object.freeze([
+  'l1-kraken-crown',
+  'thistlegorm-engine-core',
+  'scoresby-frost-heart',
+  'krubera-empress-diadem',
+  'bluehole-solar-prism',
+  'strytan-magma-pearl',
+  'orda-selenite-prism',
+  'u1206-phantom-compass',
+  'bimini-orichalcum-astrolabe',
+  'ojamo-tungsten-core',
+  'yonaguni-dragon-pearl',
+  'markgraf-fleet-heart',
+]);
+
+function _countClaimedBounties(stats) {
+  let n = 0;
+  for (const id of ALL_BOSS_TROPHY_IDS) {
+    if (_hasTrophyRelic(stats, id)) n++;
+  }
+  return n;
+}
+
 export const SUIT_LIVERIES = Object.freeze([
   {
     id: 'zissou-classic',
@@ -200,6 +223,36 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'bimini-orichalcum-astrolabe'),
   },
+  {
+    id: 'secret-ryujin-suit',
+    name: 'Ryūjin Jade Dragon Suit',
+    secret: true,
+    trophyRelicId: 'yonaguni-dragon-pearl',
+    suitTop: '#0f766e',
+    suitMid: '#115e59',
+    suitBot: '#042f2e',
+    accent: '#f43f5e',
+    trim: '#fde047',
+    finColor: '#134e4a',
+    finTip: '#fb7185',
+    stageBand: '#2dd4bf',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'yonaguni-dragon-pearl'),
+  },
+  {
+    id: 'bounty-hunter-suit',
+    name: 'Master Bounty Hunter Gilded',
+    suitTop: '#422006',
+    suitMid: '#1c1917',
+    suitBot: '#09090b',
+    accent: '#facc15',
+    trim: '#34d399',
+    finColor: '#292524',
+    finTip: '#fde047',
+    stageBand: '#eab308',
+    unlockHint: 'Claim all 12 Abyssal Bounties',
+    isUnlocked: (stats) => _countClaimedBounties(stats) >= 12,
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -289,6 +342,20 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'bluehole-solar-prism'),
   },
+  {
+    id: 'bounty-hunter-torch',
+    name: 'Leviathan Hunter Plasma',
+    shortLabel: 'Hunter Plasma',
+    swatch: '#f43f5e',
+    coreRgb: '255, 228, 230',
+    shaftRgb: '244, 63, 94',
+    warmRgb: '253, 186, 116',
+    rangeMult: 1.15,
+    siltPierce: 0.26,
+    specText: 'Deep-stalker crimson-gold plasma · +15% reach & +26% silt pierce',
+    unlockHint: 'Claim 6 Abyssal Bounties',
+    isUnlocked: (stats) => _countClaimedBounties(stats) >= 6,
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -304,6 +371,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', unlockHint: 'Abyssal World Record Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
   { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', unlockHint: 'Coral & Iron Wrecks Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
   { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', unlockHint: 'Halocline Wonders Campaign', isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
+  { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', unlockHint: 'Claim all 12 Abyssal Bounties', isUnlocked: (s) => _countClaimedBounties(s) >= 12 },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -635,6 +703,30 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#5eead4',
     unlockHint: '✦ Relic Unlock',
     isUnlocked: (s) => _hasTrophyRelic(s, 'scoresby-frost-heart'),
+  },
+  {
+    id: 'secret-markgraf-visor',
+    name: 'Scapa Spectral Visor',
+    secret: true,
+    trophyRelicId: 'markgraf-fleet-heart',
+    top: '#ecfdf5',
+    mid: '#34d399',
+    bot: '#064e3b',
+    frame: '#022c22',
+    hudGlow: '#6ee7b7',
+    unlockHint: '✦ Relic Unlock',
+    isUnlocked: (s) => _hasTrophyRelic(s, 'markgraf-fleet-heart'),
+  },
+  {
+    id: 'bounty-hunter-visor',
+    name: 'Deep Stalker Visor',
+    top: '#fef08a',
+    mid: '#f59e0b',
+    bot: '#78350f',
+    frame: '#1c1917',
+    hudGlow: '#fde047',
+    unlockHint: 'Claim 3 Abyssal Bounties',
+    isUnlocked: (s) => _countClaimedBounties(s) >= 3,
   },
 ]);
 

@@ -846,6 +846,7 @@ export class CaveRenderer {
     endedState = '',
     difficulty = 'standard',
     mutatorId = '',
+    expeditionModifiers = null,
     compactHud = false,
     spaceClearanceM = 4.0,
     breathState = 'hold',
@@ -1223,6 +1224,19 @@ export class CaveRenderer {
       ecosystem,
       secretLair
     );
+    // Mastery Expedition Modifier: Blackout Abyss deepens ambient peripheral darkness (v201)
+    if (Array.isArray(expeditionModifiers) && expeditionModifiers.includes('blackout-abyss')) {
+      const dx = toScreenX(diver.x);
+      const dy = toScreenY(diver.y);
+      ctx.save();
+      const blk = ctx.createRadialGradient(dx, dy, 2.2 * scale, dx, dy, Math.max(cw, ch) * 0.62);
+      blk.addColorStop(0, 'rgba(1, 4, 12, 0)');
+      blk.addColorStop(0.45, 'rgba(1, 4, 12, 0.34)');
+      blk.addColorStop(1, 'rgba(1, 4, 12, 0.66)');
+      ctx.fillStyle = blk;
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+    }
 
     // 10b. Emissive Geothermal Vents, Deep Bioluminescence, Crystal Glint, Spectral Optics & Collect Bursts
     this._drawSpectralAbsorption(ctx, cw, ch, diver, toScreenX, toScreenY, scale);

@@ -5,6 +5,7 @@ import { drawStyledArtifact } from '../game/artSprites.js';
 
 const PORTRAIT_W = 360;
 const PORTRAIT_H = 152;
+const PING_DURATION_SEC = 1.85;
 
 const bossPreviewHost = {
   ...bossAndLairMethods,
@@ -13,13 +14,16 @@ const bossPreviewHost = {
 };
 
 /**
- * Draw a single animated deep-sea portrait frame of one of the 10 Abyssal Guardians (v200).
+ * Draw a single animated deep-sea portrait frame of one of the 12 Abyssal Guardians (v200 / v201 ROV Ping).
  */
-export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
+export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0, { pingAgeSec = -1 } = {}) {
   if (!ctx || !bounty) return false;
   const w = ctx.canvas?.width || PORTRAIT_W;
   const h = ctx.canvas?.height || PORTRAIT_H;
-  const t = timeSec + idx * 1.17;
+  const pingActive = pingAgeSec >= 0 && pingAgeSec < PING_DURATION_SEC;
+  const pingFrac = pingActive ? Math.max(0, Math.min(1, pingAgeSec / PING_DURATION_SEC)) : 0;
+  const reactionIntensity = pingActive ? Math.sin(pingFrac * Math.PI) : 0;
+  const t = timeSec + idx * 1.17 + (pingActive ? pingAgeSec * 1.25 : 0);
   const accent = bounty.accentColor || '#38bdf8';
 
   ctx.save();
@@ -33,10 +37,10 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
 
-  // Subtle biome color wash
+  // Subtle biome color wash (flares brighter during interactive ROV ping!)
   ctx.save();
-  ctx.globalAlpha = bounty.claimed ? 0.16 : 0.19;
-  const tint = ctx.createRadialGradient(w * 0.5, h * 0.46, 4, w * 0.5, h * 0.46, w * 0.46);
+  ctx.globalAlpha = (bounty.claimed ? 0.16 : 0.19) + reactionIntensity * 0.22;
+  const tint = ctx.createRadialGradient(w * 0.5, h * 0.46, 4, w * 0.5, h * 0.46, w * 0.48);
   tint.addColorStop(0, accent);
   tint.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = tint;
@@ -53,8 +57,23 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
   ctx.arc(w * 0.5, h * 0.5, 16 + pulse * (w * 0.42), 0, Math.PI * 2);
   ctx.stroke();
 
+  // Interactive ROV Sonar Ping shockwave rings (v201)
+  if (pingActive) {
+    for (let k = 0; k < 2; k++) {
+      const f = Math.max(0, Math.min(1, pingFrac * 1.35 - k * 0.22));
+      if (f <= 0 || f >= 1) continue;
+      ctx.strokeStyle = k === 0 ? '#38bdf8' : accent;
+      ctx.globalAlpha = (1 - f) * 0.78;
+      ctx.lineWidth = 2.6 - f * 1.4;
+      ctx.beginPath();
+      ctx.arc(w * 0.5, h * 0.5, 12 + f * (w * 0.48), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   // Subtle reticle ticks
-  ctx.globalAlpha = 0.13;
+  ctx.globalAlpha = 0.13 + reactionIntensity * 0.14;
+  ctx.strokeStyle = accent;
   ctx.setLineDash([4, 5]);
   ctx.beginPath();
   ctx.moveTo(14, h * 0.5);
@@ -72,7 +91,7 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
     const py = ((i * 31.3 + Math.sin(t * 0.9 + i * 1.4) * 14 + h) % h);
     const pr = 1.1 + (i % 3) * 0.55;
     ctx.fillStyle = i % 2 === 0 ? accent : '#bae6fd';
-    ctx.globalAlpha = 0.22 + 0.18 * Math.sin(t * 2.1 + i);
+    ctx.globalAlpha = 0.22 + 0.18 * Math.sin(t * 2.1 + i) + reactionIntensity * 0.15;
     ctx.beginPath();
     ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.fill();
@@ -80,11 +99,11 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
   ctx.restore();
 
   // 4. Live fully animated Boss Guardian rendered by the game's real Boss Renderer!
-  const scale = bounty.previewScale || 8.6;
+  const scale = (bounty.previewScale || 8.6) * (1 + reactionIntensity * 0.08);
   const cx = w * 0.5 + Math.sin(t * 0.85) * 9;
-  const cy = h * 0.5 + (bounty.previewOffsetY || 0) + Math.cos(t * 1.25) * 4.5;
+  const cy = h * 0.5 + (bounty.previewOffsetY || 0) + Math.cos(t * 1.25) * 4.5 - reactionIntensity * 3.5;
   const blinkCycle = (t * 0.28) % 1;
-  const blink = blinkCycle > 0.95 ? Math.sin(((blinkCycle - 0.95) / 0.05) * Math.PI) : 0;
+  const blink = !pingActive && blinkCycle > 0.95 ? Math.sin(((blinkCycle - 0.95) / 0.05) * Math.PI) : 0;
   const facing = bounty.bossKind === 'cave-kraken' || bounty.bossKind === 'abyssal-empress' || bounty.bossKind === 'orichalcum-colossus'
     ? (Math.sin(t * 0.45) >= 0 ? 1 : -1)
     : -1;
@@ -101,23 +120,23 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
     radius: 4.5,
     hp: 4000,
     maxHp: 4000,
-    phase: 1,
+    phase: pingActive ? 3 : 1,
     active: true,
     defeated: false,
-    hitFlash: 0,
-    aiState: 'idle',
+    hitFlash: pingActive && pingFrac < 0.09 ? 0.12 : 0,
+    aiState: pingActive ? 'roar' : 'idle',
     stateTimer: 2.0,
     anim: {
       facing,
       blink,
-      squashX: 1 + Math.sin(t * 2.2) * 0.03,
-      squashY: 1 - Math.sin(t * 2.2) * 0.03,
+      squashX: 1 + Math.sin(t * (pingActive ? 6.5 : 2.2)) * (pingActive ? 0.075 : 0.03),
+      squashY: 1 - Math.sin(t * (pingActive ? 6.5 : 2.2)) * (pingActive ? 0.075 : 0.03),
       hurtSec: 0,
       lookX: facing * 0.55,
       lookY: Math.sin(t * 1.1) * 0.22,
-      roarProgress: 0,
+      roarProgress: reactionIntensity,
       slamProgress: 0,
-      tailPhase: t * 2.6,
+      tailPhase: t * (pingActive ? 4.4 : 2.6),
     },
   };
 
@@ -159,15 +178,20 @@ export function renderAnimatedBossPortrait(ctx, bounty, timeSec = 0, idx = 0) {
 }
 
 /**
- * Abyssal Wanted Bounty Board Modal Controller (v199 / v200 Live Animated Boss Portraits).
- * Displays weathered deep-sea Wanted Posters with live animated boss previews and general
- * regional rumors & folklore clues for the 10-Guardian Pantheon.
+ * Abyssal Wanted Bounty Board Modal Controller (v200 / v201 Interactive ROV Pings & Hunter Milestones).
  */
-export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, els = {} } = {}) {
-  const { btnOpenBounties, bountiesModal, btnBountiesClose, bountiesGrid, bountiesSubEl } = els;
+export function createBountiesController({
+  loadCareerLogbook,
+  setHomeMenuOpen,
+  onBountyPing,
+  onOpenOutfitter,
+  els = {},
+} = {}) {
+  const { btnOpenBounties, bountiesModal, btnBountiesClose, bountiesGrid, bountiesSubEl, bountiesMilestonesEl } = els;
 
   let animRafId = 0;
   let activeCanvases = [];
+  const pingStartById = new Map();
 
   function stopBountyAnimation() {
     if (animRafId) {
@@ -176,23 +200,40 @@ export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, e
     }
   }
 
+  function triggerBountyPing(bountyId) {
+    if (!bountyId) return false;
+    pingStartById.set(bountyId, performance.now());
+    onBountyPing?.(bountyId);
+    const cardEl = bountiesGrid?.querySelector?.(`[data-bounty-id="${bountyId}"]`);
+    if (cardEl) {
+      cardEl.classList.remove('pinging');
+      void cardEl.offsetWidth;
+      cardEl.classList.add('pinging');
+      setTimeout(() => cardEl.classList.remove('pinging'), 900);
+    }
+    return true;
+  }
+
   function stepBountyAnimation(nowMs) {
     if (!bountiesModal || bountiesModal.hidden) {
       animRafId = 0;
       return;
     }
-    const timeSec = (nowMs || performance.now()) * 0.001;
+    const now = nowMs || performance.now();
+    const timeSec = now * 0.001;
     const modalRect = bountiesModal.getBoundingClientRect?.() || null;
 
     for (let i = 0; i < activeCanvases.length; i++) {
       const entry = activeCanvases[i];
       if (!entry.ctx || !entry.canvas.isConnected) continue;
-      // Viewport-cull off-screen cards inside the scrollable modal for effortless 60fps
       if (modalRect && modalRect.height > 0) {
         const r = entry.canvas.getBoundingClientRect();
         if (r.bottom < modalRect.top - 40 || r.top > modalRect.bottom + 40) continue;
       }
-      renderAnimatedBossPortrait(entry.ctx, entry.bounty, timeSec, i);
+      const pingStart = pingStartById.get(entry.bounty.id);
+      const pingAgeSec = Number.isFinite(pingStart) ? (now - pingStart) * 0.001 : -1;
+      if (pingAgeSec >= PING_DURATION_SEC) pingStartById.delete(entry.bounty.id);
+      renderAnimatedBossPortrait(entry.ctx, entry.bounty, timeSec, i, { pingAgeSec });
     }
 
     animRafId = requestAnimationFrame(stepBountyAnimation);
@@ -203,10 +244,33 @@ export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, e
     stopBountyAnimation();
 
     const book = loadCareerLogbook?.() || {};
-    const { bounties, claimedCount, totalCount } = resolveBountyBoardState(book);
+    const { bounties, claimedCount, totalCount, milestones } = resolveBountyBoardState(book);
 
     if (bountiesSubEl) {
-      bountiesSubEl.textContent = `${claimedCount}/${totalCount} Abyssal Bounties Claimed · Live ROV sightings & dockside folklore — exact lairs uncharted`;
+      bountiesSubEl.textContent = `${claimedCount}/${totalCount} Abyssal Bounties Claimed · Tap any ROV feed to sonar-ping · Exact lairs uncharted`;
+    }
+
+    if (bountiesMilestonesEl && Array.isArray(milestones)) {
+      bountiesMilestonesEl.innerHTML = milestones
+        .map(
+          (m) => `
+          <div class="bounty-milestone-chip${m.unlocked ? ' unlocked' : ''}">
+            <span class="bounty-ms-icon">${m.icon}</span>
+            <div class="bounty-ms-copy">
+              <strong>${m.threshold} Bounties · ${escapeHtml(m.title)}</strong>
+              <span>${m.unlocked ? '✓ Unlocked: ' : 'Unlocks: '}${escapeHtml(m.rewardLabel)}</span>
+            </div>
+            ${m.unlocked ? `<button type="button" class="btn tiny primary bounty-ms-equip" data-bounty-equip="1">🎨 Equip</button>` : `<span class="bounty-ms-prog">${Math.min(claimedCount, m.threshold)}/${m.threshold}</span>`}
+          </div>`
+        )
+        .join('');
+      bountiesMilestonesEl.querySelectorAll('[data-bounty-equip]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeBountiesModal();
+          onOpenOutfitter?.();
+        });
+      });
     }
 
     bountiesGrid.innerHTML = bounties
@@ -226,14 +290,14 @@ export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, e
           : `<span class="bounty-stamp wanted">WANTED</span>`;
 
         return `
-        <article class="bounty-card${b.claimed ? ' claimed' : ''}" style="--bounty-accent:${b.accentColor};" data-bounty-id="${escapeHtml(b.id)}">
+        <article class="bounty-card${b.claimed ? ' claimed' : ''}" style="--bounty-accent:${b.accentColor};" data-bounty-id="${escapeHtml(b.id)}" tabindex="0" role="button" title="Tap to fire ROV Sonar Ping">
           <div class="bounty-poster-head">
             <span class="bounty-code">${escapeHtml(b.contractCode)}</span>
             <span class="bounty-threat">${escapeHtml(b.threatClass)}</span>
           </div>
           <div class="bounty-portrait${b.claimed ? ' claimed' : ''}">
             <canvas class="bounty-boss-canvas" width="${PORTRAIT_W}" height="${PORTRAIT_H}" data-bounty-idx="${escapeHtml(b.id)}" aria-label="${escapeHtml(b.displayName)} animated preview"></canvas>
-            <span class="bounty-live-pill">● LIVE ROV</span>
+            <span class="bounty-live-pill">● LIVE ROV · PING</span>
             ${stampHtml}
           </div>
           <div class="bounty-name-block">
@@ -254,11 +318,23 @@ export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, e
       const ctx = canvas.getContext?.('2d') || null;
       if (bounty && ctx) {
         activeCanvases.push({ canvas, ctx, bounty });
-        // Render first frame synchronously so cards are immediately vivid on open
         renderAnimatedBossPortrait(ctx, bounty, performance.now() * 0.001, idx);
       }
     });
   }
+
+  bountiesGrid?.addEventListener('click', (e) => {
+    const card = e.target.closest?.('.bounty-card[data-bounty-id]');
+    if (!card) return;
+    triggerBountyPing(card.getAttribute('data-bounty-id'));
+  });
+  bountiesGrid?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest?.('.bounty-card[data-bounty-id]');
+    if (!card) return;
+    e.preventDefault();
+    triggerBountyPing(card.getAttribute('data-bounty-id'));
+  });
 
   function openBountiesModal() {
     if (!bountiesModal) return;
@@ -284,5 +360,6 @@ export function createBountiesController({ loadCareerLogbook, setHomeMenuOpen, e
     openBountiesModal,
     closeBountiesModal,
     renderBountiesModal,
+    triggerBountyPing,
   };
 }

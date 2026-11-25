@@ -201,6 +201,74 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueName: 'ABYSSAL EMPRESS',
     trueTitle: 'Sovereign Bioluminescent Manta-Hydra Queen',
   }),
+  Object.freeze({
+    id: 'bounty-terraced-dragon',
+    contractCode: 'BOUNTY #11',
+    threatClass: 'CLASS IV · PACIFIC',
+    accentColor: '#2dd4bf',
+    silhouetteKind: 'solar',
+    bossKind: 'coral-dragon',
+    previewScale: 8.2,
+    previewOffsetY: 3,
+    codename: 'THE TERRACED DRAGON',
+    watersRumor: 'Okinawa Pacific Shelf',
+    tale: 'Island fishermen drifting past the stepped underwater stone ledges report glowing jade coils darting through the Kuroshio surge. Sweep an active sonar pulse along the deepest carved stone face — a hidden chamber breathes beyond the terrace.',
+    bountyPts: 3450,
+    levelId: 'yonaguni-submerged-monument',
+    trophyRelicId: 'yonaguni-dragon-pearl',
+    trophyName: 'Pearl of Ryūjin',
+    trueName: "RYŪJIN'S SERPENT",
+    trueTitle: 'Pacific Coral Dragon Leviathan',
+  }),
+  Object.freeze({
+    id: 'bounty-orkney-dreadnought',
+    contractCode: 'BOUNTY #12',
+    threatClass: 'CLASS V · FLEET',
+    accentColor: '#34d399',
+    silhouetteKind: 'uboat',
+    bossKind: 'spectral-dreadnought',
+    previewScale: 8.0,
+    previewOffsetY: 6,
+    codename: 'THE ORKNEY DREADNOUGHT',
+    watersRumor: 'North Atlantic Scuttled Fleet',
+    tale: 'Cold-water wreck divers exploring the inverted wartime battleship in the northern sound swear twin turret gears still groan beneath the keel. Ping the shadowed armor bulkheads past the chart vault — an entire spectral citadel waits behind false steel.',
+    bountyPts: 3650,
+    levelId: 'sms-markgraf-scapa-flow',
+    trophyRelicId: 'markgraf-fleet-heart',
+    trophyName: 'Heart of Scapa Flow',
+    trueName: 'SCAPA DREADNOUGHT',
+    trueTitle: 'Spectral WWI Armored Battleship Leviathan',
+  }),
+]);
+
+/**
+ * Career Bounty Hunter Milestone Rewards (v201).
+ */
+export const BOUNTY_MILESTONES = Object.freeze([
+  Object.freeze({
+    id: 'bounty-tier-1',
+    threshold: 3,
+    icon: '🕶️',
+    title: 'Deep Stalker',
+    rewardLabel: 'Deep Stalker Visor',
+    itemId: 'bounty-hunter-visor',
+  }),
+  Object.freeze({
+    id: 'bounty-tier-2',
+    threshold: 6,
+    icon: '🔦',
+    title: 'Leviathan Hunter',
+    rewardLabel: 'Leviathan Hunter Plasma Torch',
+    itemId: 'bounty-hunter-torch',
+  }),
+  Object.freeze({
+    id: 'bounty-tier-3',
+    threshold: 12,
+    icon: '👑',
+    title: 'Master Bounty Hunter',
+    rewardLabel: 'Gilded Hunter Suit & Master Patch',
+    itemId: 'bounty-hunter-suit',
+  }),
 ]);
 
 function hasTrophyInLogbook(logbook, relicId) {
@@ -230,10 +298,15 @@ export function resolveBountyBoardState(logbook = null) {
       unlockedRewards: claimed ? getSecretCosmeticsForTrophy(b.trophyRelicId) : [],
     };
   });
+  const milestones = BOUNTY_MILESTONES.map((m) => ({
+    ...m,
+    unlocked: claimedCount >= m.threshold,
+  }));
   return {
     bounties,
     claimedCount,
     totalCount: BOSS_BOUNTIES.length,
+    milestones,
   };
 }
 

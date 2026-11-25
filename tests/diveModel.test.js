@@ -1043,9 +1043,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 35 campaign levels (26 caves/environments + 9 shipwrecks) validate cleanly and scale monotonically to 198m Krubera-Voronya Abyssal Sump', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 35, 'Campaign roadmap should chart all 35 levels');
-  assert.equal(LEVELS.length, 35, 'All 35 campaign levels should be registered');
+test('All 37 campaign levels (27 caves/environments + 10 shipwrecks) validate cleanly and scale monotonically to 198m Krubera-Voronya Abyssal Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 37, 'Campaign roadmap should chart all 37 levels');
+  assert.equal(LEVELS.length, 37, 'All 37 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -2443,9 +2443,9 @@ test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dr
   assert.equal(vicMeta.rank, 25);
 });
 
-test('v100 Cave Interactive Parity: all 26 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
+test('v100 Cave Interactive Parity: all 27 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
   const caves = LEVELS.filter((l) => !l.isWreck);
-  assert.equal(caves.length, 26);
+  assert.equal(caves.length, 27);
 
   for (const cave of caves) {
     assert.ok(Array.isArray(cave.stageCaches) && cave.stageCaches.length >= 1, `${cave.id} missing stageCaches`);
@@ -10034,8 +10034,8 @@ test('v195 Tactical AI Wingman Combat, Hydro-Dash Slipstream, Reactive Marine Li
   const { drawStyledArtifact } = await import('../public/js/game/artSprites.js');
   const { DiveAudio } = await import('../public/js/game/audio.js');
 
-  // 1. Complete 10-Guardian Hidden Pantheon (Bimini Road Orichalcum Colossus & Ojamo Abyssal Drill-Wyrm)
-  assert.equal(Object.keys(SECRET_LAIRS).length, 10, 'Must have 10 100%-hidden Secret Lairs across the campaign');
+  // 1. Complete 12-Guardian Hidden Pantheon (includes Bimini, Ojamo, Yonaguni & SMS Markgraf)
+  assert.equal(Object.keys(SECRET_LAIRS).length, 12, 'Must have 12 100%-hidden Secret Lairs across the campaign');
   for (const id of ['bimini-road-megalith', 'ojamo-iron-mine']) {
     const lvl = LEVELS.find((l) => l.id === id);
     assert.ok(lvl, `Campaign level ${id} must exist`);
@@ -10488,9 +10488,9 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
   const { SECRET_LAIRS } = await import('../public/js/game/secretLairs.js');
   const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
 
-  // 1. All 10 Secret Boss Lairs have a corresponding Wanted Bounty Contract
+  // 1. All 12 Secret Boss Lairs have a corresponding Wanted Bounty Contract
   const lairList = Object.values(SECRET_LAIRS);
-  assert.equal(BOSS_BOUNTIES.length, 10, 'Must have 10 Wanted Bounty Contracts covering the 10-Guardian Pantheon');
+  assert.equal(BOSS_BOUNTIES.length, 12, 'Must have 12 Wanted Bounty Contracts covering the 12-Guardian Pantheon');
   assert.equal(BOSS_BOUNTIES.length, lairList.length);
   const bountyRelics = new Set(BOSS_BOUNTIES.map((b) => b.trophyRelicId));
   for (const lair of lairList) {
@@ -10500,7 +10500,7 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
   // 2. Unclaimed bounties keep exact depths, checkpoints, coordinates & secret cosmetics strictly non-specific/redacted
   const freshState = resolveBountyBoardState(createEmptyLogbook());
   assert.equal(freshState.claimedCount, 0);
-  assert.equal(freshState.totalCount, 10);
+  assert.equal(freshState.totalCount, 12);
   for (const b of freshState.bounties) {
     assert.equal(b.claimed, false);
     assert.equal(b.displayName, b.codename);
@@ -10547,4 +10547,170 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
     assert.equal(ok, true);
     assert.ok(ops > 60, `Animated portrait for ${b.bossKind} should render full cel-shaded boss geometry (got ${ops} ops)`);
   }
+});
+
+test('v201 37-Site Atlas, 12-Guardian Pantheon (Yonaguni & SMS Markgraf), Interactive ROV Pings, Bounty Milestones, Mastery Modifiers & Postcard Stamps', async () => {
+  const { SECRET_LAIRS, getSecretLairForLevel } = await import('../public/js/game/secretLairs.js');
+  const { BOSS_BOUNTIES, BOUNTY_MILESTONES, resolveBountyBoardState } = await import('../public/js/game/bossBounties.js');
+  const { renderAnimatedBossPortrait } = await import('../public/js/ui/bountiesController.js');
+  const { computeUnlockedLiveries, getSecretCosmeticsForTrophy } = await import('../public/js/game/rigLivery.js');
+  const { recordArtifactInLogbook } = await import('../public/js/game/logbookModel.js');
+  const {
+    EXPEDITION_MODIFIERS,
+    sanitizeExpeditionModifiers,
+    computeModifierScoreMultiplier,
+  } = await import('../public/js/game/expeditionContracts.js');
+  const { renderExpeditionPostcard } = await import('../public/js/game/diveCard.js');
+
+  // 1. Both new real-world sites validate cleanly & have open-water Secret Lairs #11 & #12
+  for (const id of ['yonaguni-submerged-monument', 'sms-markgraf-scapa-flow']) {
+    const lvl = LEVELS.find((l) => l.id === id);
+    assert.ok(lvl, `New v201 site ${id} must be registered in LEVELS`);
+    const v = validateLevel(lvl, { checkGeometry: true });
+    assert.equal(v.valid, true, `${id} failed geometry validation: ${v.errors.join('; ')}`);
+    const spec = getSecretLairForLevel(id);
+    assert.ok(spec && spec.veil?.silent === true, `${id} must have a 100% hidden silent secret lair`);
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -0.9, `${id} armory must sit in open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -2.0, `${id} boss arena must sit in open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -1.5, `${id} boss spawn must sit in open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -0.8, `${id} updraft exit must sit in open water`);
+    for (const pad of spec.arena.pickupPads || []) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -0.6, `${id} pickup pad (${pad.x},${pad.y}) must sit in open water`);
+    }
+    const secretGear = getSecretCosmeticsForTrophy(spec.boss.trophyRelicId);
+    assert.ok(secretGear.length >= 1, `${id} boss trophy must unlock a secret cosmetic`);
+  }
+
+  // 2. Interactive ROV Sonar Ping reaction renders shockwave & agitated state on Coral Dragon & Scapa Dreadnought
+  const freshBoard = resolveBountyBoardState(createEmptyLogbook());
+  for (const kind of ['coral-dragon', 'spectral-dreadnought']) {
+    const entry = freshBoard.bounties.find((b) => b.bossKind === kind);
+    assert.ok(entry, `Missing bounty entry for ${kind}`);
+    let ops = 0;
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: 360, height: 152 },
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+        measureText: () => ({ width: 42 }),
+      },
+      { get(t, p) { return p in t ? t[p] : () => { ops++; }; } }
+    );
+    const ok = renderAnimatedBossPortrait(mockCtx, entry, 3.1, 10, { pingAgeSec: 0.45 });
+    assert.equal(ok, true);
+    assert.ok(ops > 80, `Pinged animated portrait for ${kind} must render boss + shockwave (${ops} ops)`);
+  }
+
+  // 3. Bounty Hunter Milestone tiers (3 / 6 / 12) unlock progressive cosmetics cleanly
+  assert.deepEqual(BOUNTY_MILESTONES.map((m) => m.threshold), [3, 6, 12]);
+  let book = createEmptyLogbook();
+  const allLairs = Object.entries(SECRET_LAIRS);
+  assert.equal(allLairs.length, 12);
+  for (let i = 0; i < 3; i++) {
+    const [lvlId, spec] = allLairs[i];
+    book = recordArtifactInLogbook(book, { id: `${lvlId}:${spec.boss.trophyRelicId}`, name: spec.boss.trophyName, points: 2500 }).book;
+  }
+  let ul3 = computeUnlockedLiveries(book);
+  assert.equal(ul3.visors.has('bounty-hunter-visor'), true, '3 bounties must unlock Bounty Hunter Visor');
+  assert.equal(ul3.torches.has('bounty-hunter-torch'), false, '6-bounty torch must stay locked at 3 bounties');
+
+  for (let i = 3; i < 6; i++) {
+    const [lvlId, spec] = allLairs[i];
+    book = recordArtifactInLogbook(book, { id: `${lvlId}:${spec.boss.trophyRelicId}`, name: spec.boss.trophyName, points: 2500 }).book;
+  }
+  let ul6 = computeUnlockedLiveries(book);
+  assert.equal(ul6.torches.has('bounty-hunter-torch'), true, '6 bounties must unlock Abyssal Hunter Strobe');
+  assert.equal(ul6.suits.has('bounty-hunter-suit'), false, '12-bounty suit must stay locked at 6 bounties');
+
+  for (let i = 6; i < 12; i++) {
+    const [lvlId, spec] = allLairs[i];
+    book = recordArtifactInLogbook(book, { id: `${lvlId}:${spec.boss.trophyRelicId}`, name: spec.boss.trophyName, points: 2500 }).book;
+  }
+  let ul12 = computeUnlockedLiveries(book);
+  assert.equal(ul12.suits.has('bounty-hunter-suit'), true, '12 bounties must unlock Sovereign Abyss Hunter Suit');
+  assert.equal(ul12.patches.has('bounty-hunter-master'), true, '12 bounties must unlock Pantheon Slayer Patch');
+  const fullBoard = resolveBountyBoardState(book);
+  assert.equal(fullBoard.claimedCount, 12);
+  assert.equal(fullBoard.milestones.every((m) => m.unlocked), true, 'All 3 milestone chips must unlock at 12/12');
+
+  // 4. Stackable Mastery Expedition Modifiers: sanitization, score multiplier & Iron Lung gas drain
+  assert.equal(EXPEDITION_MODIFIERS.length, 3);
+  assert.deepEqual(
+    sanitizeExpeditionModifiers(['blackout-abyss', 'invalid-id', 'iron-lung', 'blackout-abyss']),
+    ['blackout-abyss', 'iron-lung']
+  );
+  const multAll = computeModifierScoreMultiplier(['blackout-abyss', 'surge-tide', 'iron-lung']);
+  assert.equal(multAll.bonusPct, 50);
+  assert.equal(multAll.multiplier, 1.5);
+
+  const lvl1 = getLevelById('cenote-el-abismo');
+  const baseSess = createDiveSession(lvl1, { diverName: 'Base', modifiers: [] });
+  const ironSess = createDiveSession(lvl1, { diverName: 'Iron', modifiers: ['iron-lung', 'surge-tide'] });
+  baseSess.diver.y = 12;
+  ironSess.diver.y = 12;
+  for (let s = 0; s < 80; s++) {
+    stepDiveSession(baseSess, { x: 0.4, y: 0.2, boost: false }, 0.1);
+    stepDiveSession(ironSess, { x: 0.4, y: 0.2, boost: false }, 0.1);
+  }
+  const baseGas = baseSess.diveState.tanks[baseSess.diveState.activeGasId].litersRemaining;
+  const ironGas = ironSess.diveState.tanks[ironSess.diveState.activeGasId].litersRemaining;
+  assert.ok(ironGas < baseGas, `Iron Lung modifier must burn gas faster (${ironGas.toFixed(2)} < ${baseGas.toFixed(2)})`);
+
+  const scoreBase = computeDiverScoreSummary({
+    name: 'Base',
+    level: lvl1,
+    diveState: baseSess.diveState,
+    checkpointsHit: new Set(lvl1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(),
+    exploredCount: 50,
+    totalExploreCells: 100,
+    diveTimeSec: 120,
+    expeditionModifiers: [],
+  });
+  const scoreMod = computeDiverScoreSummary({
+    name: 'Mod',
+    level: lvl1,
+    diveState: baseSess.diveState,
+    checkpointsHit: new Set(lvl1.checkpoints.map((c) => c.id)),
+    collectedIds: new Set(),
+    exploredCount: 50,
+    totalExploreCells: 100,
+    diveTimeSec: 120,
+    expeditionModifiers: ['blackout-abyss', 'surge-tide', 'iron-lung'],
+  });
+  assert.equal(scoreMod.modifierBonusPct, 50);
+  assert.ok(scoreMod.modifierBonusScore > 0);
+  assert.equal(scoreMod.totalScore, scoreBase.totalScore + scoreMod.modifierBonusScore);
+
+  // 5. Upgraded Shareable Expedition Postcard stamps bountyClaimed, modifiers & superlatives cleanly
+  const drawnTexts = [];
+  const fakeCtx = new Proxy(
+    {
+      canvas: { width: 1200, height: 630 },
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: (t) => ({ width: String(t).length * 9 }),
+      fillText: (t) => { drawnTexts.push(String(t)); },
+      strokeText: () => {},
+    },
+    { get(t, p) { return p in t ? t[p] : () => {}; } }
+  );
+  const cardOk = renderExpeditionPostcard(fakeCtx, 1200, 630, {
+    level: getLevelById('yonaguni-submerged-monument'),
+    diverName: 'RYUJIN-1',
+    success: true,
+    grade: 'S',
+    score: 18450,
+    maxDepthM: 52,
+    diveTimeSec: 215,
+    exploredPct: 92,
+    difficulty: 'standard',
+    modifiers: multAll.activeMods,
+    bountyClaimed: { bossName: "RYŪJIN'S SERPENT", trophyName: 'Kuroshio Dragon Pearl' },
+    superlatives: [{ icon: '👑', title: 'Apex Hunter', detail: 'Zero-hit guardian clear' }],
+  });
+  assert.equal(cardOk, true);
+  assert.ok(drawnTexts.some((t) => t.includes('BOUNTY CLAIMED') && t.includes("RYŪJIN'S SERPENT")), 'Postcard must stamp claimed bounty');
+  assert.ok(drawnTexts.some((t) => t.includes('Apex Hunter')), 'Postcard must stamp top superlative award');
+  assert.ok(drawnTexts.some((t) => t.includes('Blackout')), 'Postcard must stamp active expedition modifiers');
 });
