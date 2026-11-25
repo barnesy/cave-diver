@@ -11480,3 +11480,98 @@ test('v214 Pre-Dive Co-op Staging Controls, Squad Coverage & Diegetic Steady-Tri
   );
   assert.ok(ops > opsBeforeBand + 30, 'Diegetic Decompression Hover Band must render corridor, rails & pill');
 });
+
+test('v215 Living Cavern Hydrology: Slipstream Riding, Wall Pull-and-Glide Boundary Layer & Flow Ribbons', async () => {
+  const { evaluateDiverHydrology } = await import('../public/js/game/dynamicHazards.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. Pure hydrology physics: Slipstream, Pull-and-Glide, Open Headwind & Calm
+  const slip = evaluateDiverHydrology({ flowVx: 0.75, flowVy: 0, swimX: 1, swimY: 0, clearanceM: 3.5 });
+  assert.equal(slip.mode, 'slipstream');
+  assert.equal(slip.gasBurnMult, 0.82, 'Slipstream riding must reduce gas burn by 18%');
+  assert.ok(slip.slipstreamAssist > 0.1, 'Slipstream riding must grant forward glide assist');
+
+  const pullGlide = evaluateDiverHydrology({ flowVx: 0.75, flowVy: 0, swimX: -1, swimY: 0, clearanceM: 0.85 });
+  assert.equal(pullGlide.mode, 'pull-and-glide');
+  assert.ok(pullGlide.wallShelter > 0.8, 'Hugging cave wall (0.85m clearance) must activate strong boundary-layer shelter');
+  assert.ok(pullGlide.effectiveDragMult < 0.48, 'Pull-and-Glide must shield >50% of head-on current drag');
+  assert.equal(pullGlide.gasBurnMult, 0.88, 'Pull-and-Glide must calm breathing & lower gas burn');
+
+  const headwind = evaluateDiverHydrology({ flowVx: 0.75, flowVy: 0, swimX: -1, swimY: 0, clearanceM: 3.8 });
+  assert.equal(headwind.mode, 'headwind');
+  assert.equal(headwind.effectiveDragMult, 1.0);
+  assert.equal(headwind.gasBurnMult, 1.12);
+
+  const calm = evaluateDiverHydrology({ flowVx: 0.05, flowVy: 0, swimX: 1, swimY: 0, clearanceM: 3.0 });
+  assert.equal(calm.mode, 'calm');
+  assert.equal(calm.gasBurnMult, 1.0);
+
+  // 2. Live DiveSession integration: karst spring conduit triggers slipstream & pull-and-glide + awards bonusScore
+  const testLevel = {
+    ...LEVEL_1,
+    caveCurrents: [{ x: LEVEL_1.spawn.x, y: LEVEL_1.spawn.y + 4, radius: 8.0, vx: 0.9, vy: 0, label: 'Spring Outflow' }],
+  };
+  const sess = createDiveSession(testLevel, { diverName: 'HydroDiver' });
+  sess.diver.x = LEVEL_1.spawn.x;
+  sess.diver.y = LEVEL_1.spawn.y + 4;
+  for (let i = 0; i < 12; i++) {
+    sess.diver.x = LEVEL_1.spawn.x;
+    sess.diver.y = LEVEL_1.spawn.y + 4;
+    stepDiveSession(sess, { x: 1, y: 0 }, 0.1, {});
+  }
+  assert.equal(sess.hydrology.mode, 'slipstream');
+  assert.ok(sess.hydrology.slipstreamSec >= 0.8);
+  assert.ok(sess.hydrology.bonusScore > 5, 'Riding slipstream must accrue Hydrology Mastery bonus');
+  assert.equal(sess.hazards.hydrology, sess.hydrology, 'hazards.hydrology must reference live session.hydrology for renderer');
+
+  // 3. Renderer draws rock-masked Flow Ribbons, Slipstream trails & Pull-and-Glide wall shimmer cleanly
+  let ops = 0;
+  const drawnTexts = [];
+  const mockCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 72 }),
+      fillText: (txt) => { drawnTexts.push(String(txt)); ops++; },
+      canvas: { width: 1280, height: 720 },
+    },
+    { get: (t, p) => (p in t ? t[p] : () => { ops++; }), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = testLevel;
+  r._isCoarseMobile = false;
+  const toX = (x) => 400 + x * 24;
+  const toY = (y) => 200 + y * 24;
+
+  // Slipstream pass
+  r._drawDynamicHazards(
+    mockCtx,
+    { thermoclines: [], percolationZones: [], shiftingHatches: [], tidalCurrent: { enabled: true, vx: 0.8, vy: 0, strength: 0.8 }, hydrology: sess.hydrology },
+    -10, 40, 0, 25, toX, toY, 24, 2.4, sess.diver
+  );
+  assert.ok(drawnTexts.some((t) => t.includes('SLIPSTREAM')), 'Slipstream diegetic callout pill must render');
+
+  // Pull-and-Glide pass
+  r._drawDynamicHazards(
+    mockCtx,
+    {
+      thermoclines: [],
+      percolationZones: [],
+      shiftingHatches: [],
+      tidalCurrent: { enabled: true, vx: 0.8, vy: 0, strength: 0.8 },
+      hydrology: {
+        flowVx: 0.8,
+        flowVy: 0,
+        flowSpeed: 0.8,
+        mode: 'pull-and-glide',
+        wallShelter: 0.9,
+        effectiveDragMult: 0.39,
+        wallNormalX: 0,
+        wallNormalY: 1,
+      },
+    },
+    -10, 40, 0, 25, toX, toY, 24, 2.8, sess.diver
+  );
+  assert.ok(drawnTexts.some((t) => t.includes('PULL-AND-GLIDE')), 'Pull-and-Glide diegetic callout pill must render');
+  assert.ok(ops > 80, 'Rock-masked Flow Ribbons & boundary-layer shimmer must render cleanly');
+});

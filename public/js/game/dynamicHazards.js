@@ -112,6 +112,81 @@ export function computeTidalCurrent(level, simTimeSec = 0) {
 }
 
 /**
+ * Evaluate Living Cavern Hydrology at the diver's position (v215):
+ * Computes Slipstream Riding (riding with flow -> boost + -18% gas),
+ * Authentic Cave-Diver Wall "Pull-and-Glide" (tucking near rock wall in head-on flow -> up to -68% drag + -12% gas),
+ * and open-channel headwind exertion.
+ */
+export function evaluateDiverHydrology({
+  flowVx = 0,
+  flowVy = 0,
+  swimX = 0,
+  swimY = 0,
+  clearanceM = 4.0,
+  clippedToShotLine = false,
+} = {}) {
+  const vx = Number.isFinite(flowVx) ? flowVx : 0;
+  const vy = Number.isFinite(flowVy) ? flowVy : 0;
+  const flowSpeed = Math.hypot(vx, vy);
+  if (clippedToShotLine || flowSpeed < 0.14) {
+    return {
+      flowVx: vx,
+      flowVy: vy,
+      flowSpeed,
+      mode: 'calm',
+      wallShelter: 0,
+      effectiveDragMult: 1.0,
+      slipstreamAssist: 0,
+      gasBurnMult: 1.0,
+      align: 0,
+    };
+  }
+
+  const clear = Math.max(0, Number.isFinite(clearanceM) ? clearanceM : 4.0);
+  const wallShelter = clear <= 1.85 ? Math.max(0, Math.min(1, (1.85 - clear) / 1.15)) : 0;
+
+  const invFlow = 1 / flowSpeed;
+  const fdx = vx * invFlow;
+  const fdy = vy * invFlow;
+  const swimMag = Math.hypot(swimX || 0, swimY || 0);
+  const align = swimMag > 0.08 ? ((swimX / swimMag) * fdx + (swimY / swimMag) * fdy) : 0;
+
+  let mode = 'calm';
+  let effectiveDragMult = 1 - 0.45 * wallShelter;
+  let slipstreamAssist = 0;
+  let gasBurnMult = 1.0;
+
+  if (flowSpeed >= 0.22 && align >= 0.42) {
+    mode = 'slipstream';
+    effectiveDragMult = 1.0;
+    slipstreamAssist = Math.min(0.45, flowSpeed * 0.28 * align);
+    gasBurnMult = 0.82;
+  } else if (flowSpeed >= 0.22 && align <= -0.22 && wallShelter >= 0.30) {
+    mode = 'pull-and-glide';
+    effectiveDragMult = 1 - 0.68 * wallShelter;
+    slipstreamAssist = 0;
+    gasBurnMult = 0.88;
+  } else if (flowSpeed >= 0.26 && align <= -0.35 && wallShelter < 0.30) {
+    mode = 'headwind';
+    effectiveDragMult = 1.0;
+    slipstreamAssist = 0;
+    gasBurnMult = 1.12;
+  }
+
+  return {
+    flowVx: vx,
+    flowVy: vy,
+    flowSpeed,
+    mode,
+    wallShelter,
+    effectiveDragMult,
+    slipstreamAssist,
+    gasBurnMult,
+    align,
+  };
+}
+
+/**
  * Compute deterministic freshwater/saltwater Halocline refraction layer for cenotes & coastal karst (v159).
  */
 export function computeHaloclineLayer(level) {
@@ -472,10 +547,10 @@ export function stepDynamicHazards(session, dt, callbacks = {}) {
   }
   haz.activeHatchAlert = anyHatchAlert;
 
-  // --- 4. Living Sump Hydrology: Tidal Siphon / Outflow Current & Halocline Refraction (v159) ---
+  // --- 4. Living Sump Hydrology: Tidal Siphon / Outflow Current & Halocline Refraction (v159 / v215) ---
   const tidal = computeTidalCurrent(session.level, timeSec);
   haz.tidalCurrent = tidal;
-  if (tidal.enabled && diver.y >= 3.5 && !session.clippedToShotLine) {
+  if (tidal.enabled && diver.y >= 3.5 && !session.clippedToShotLine && !session.hydrology) {
     const tideDiffScale = session.difficulty === 'guided' ? 0.55 : session.difficulty === 'hardcore' ? 1.15 : 0.85;
     diver.vx += tidal.vx * 0.52 * tideDiffScale * dt;
     diver.vy += tidal.vy * 0.35 * tideDiffScale * dt;

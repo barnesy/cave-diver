@@ -1,4 +1,5 @@
 import { castTorchFan, computeSpectralAbsorption } from '../lighting.js';
+import { evaluateCaveSDF } from '../collision.js';
 import { computeStormLightningFlash } from '../weather.js';
 import { getTorchOptic } from '../rigLivery.js';
 import { sampleSiltDensity } from '../silt.js';
@@ -1539,30 +1540,160 @@ export const lightingAndFxMethods = {
       }
     }
 
-    // 4. Living Sump Hydrology: Subtle Tidal Siphon / Outflow Current Drift Streaks (v159)
+    // 4. Living Cavern Hydrology: Readable Animated Flow Ribbons, Slipstream & Wall "Pull-and-Glide" Shimmer (v159 / v215)
+    const hydro = hazards.hydrology || null;
     const tide = hazards.tidalCurrent;
-    if (tide?.enabled && tide.strength >= 0.16 && diver) {
-      const dir = Math.sign(tide.vx || 1);
-      const streakAlpha = Math.min(0.36, tide.strength * 0.48);
-      ctx.strokeStyle = `rgba(186, 230, 253, ${streakAlpha.toFixed(3)})`;
-      ctx.lineWidth = Math.max(1, 0.045 * scale);
-      ctx.lineCap = 'round';
-      const spanX = Math.max(14, visX1 - visX0);
+    const flowVx = hydro && hydro.flowSpeed >= 0.14 ? hydro.flowVx : (tide?.enabled ? (tide.vx || 0) : 0);
+    const flowVy = hydro && hydro.flowSpeed >= 0.14 ? hydro.flowVy : (tide?.enabled ? (tide.vy || 0) : 0);
+    const flowSpd = Math.hypot(flowVx, flowVy);
+    const hasCavernSdf = Boolean(this.level && Array.isArray(this.level.segments) && this.level.segments.length > 0);
+    if (flowSpd >= 0.14 && diver) {
+      const fdx = flowVx / flowSpd;
+      const fdy = flowVy / flowSpd;
+      const perpX = -fdy;
+      const perpY = fdx;
+      const isSlip = hydro?.mode === 'slipstream';
+      const isPullGlide = hydro?.mode === 'pull-and-glide';
+      const ribbonRgb = isSlip ? '52, 211, 153' : isPullGlide ? '103, 232, 249' : '186, 230, 253';
+      const baseAlpha = Math.min(0.46, 0.14 + flowSpd * 0.42);
+      const spanX = Math.max(16, visX1 - visX0);
       const spanY = Math.max(10, visY1 - visY0);
-      for (let i = 0; i < 14; i++) {
+      const ribbonCount = this._isCoarseMobile ? 10 : 16;
+
+      ctx.lineCap = 'round';
+      for (let i = 0; i < ribbonCount; i++) {
         const seed = i * 19.37;
-        const speed = 1.6 + tide.strength * 3.8 + (i % 3) * 0.45;
-        const rawX = (((seed * 7.3 + timeSec * speed * dir) % spanX) + spanX) % spanX;
-        const wx = visX0 + rawX;
-        const wy = Math.max(2.5, visY0 + ((seed * 3.1) % spanY));
-        const sx = toScreenX(wx);
-        const sy = toScreenY(wy);
-        const lenPx = (0.75 + tide.strength * 1.4) * scale;
+        const driftSpd = 1.9 + flowSpd * 4.4 + (i % 3) * 0.55;
+        const adv = timeSec * driftSpd;
+        const wx = visX0 + ((((seed * 7.3 + adv * fdx) % spanX) + spanX) % spanX);
+        const wy = Math.max(2.2, visY0 + ((((seed * 3.1 + adv * fdy) % spanY) + spanY) % spanY));
+        // Skip ribbons inside solid limestone rock walls so flow stays strictly inside open water passages!
+        if (hasCavernSdf && evaluateCaveSDF(this.level, wx, wy) >= -0.25) continue;
+
+        const lenM = Math.min(2.6, 0.85 + flowSpd * 1.45);
+        const waveAmp = 0.14 * Math.sin(timeSec * 3.2 + seed);
+        const x0 = toScreenX(wx - fdx * lenM * 0.5);
+        const y0 = toScreenY(wy - fdy * lenM * 0.5);
+        const xm = toScreenX(wx + perpX * waveAmp);
+        const ym = toScreenY(wy + perpY * waveAmp);
+        const x1 = toScreenX(wx + fdx * lenM * 0.5);
+        const y1 = toScreenY(wy + fdy * lenM * 0.5);
+
+        const rg = ctx.createLinearGradient(x0, y0, x1, y1);
+        rg.addColorStop(0, `rgba(${ribbonRgb}, 0)`);
+        rg.addColorStop(0.55, `rgba(${ribbonRgb}, ${baseAlpha.toFixed(3)})`);
+        rg.addColorStop(1, `rgba(240, 249, 255, ${(baseAlpha * 1.25).toFixed(3)})`);
+        ctx.strokeStyle = rg;
+        ctx.lineWidth = Math.max(1.15, (isSlip ? 0.062 : 0.048) * scale);
         ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx + dir * lenPx, sy + (tide.vy || 0) * lenPx * 0.4);
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(xm, ym, x1, y1);
+        ctx.stroke();
+
+        // Subtle directional chevron tip at ribbon head so flow direction is readable at a glance
+        const ch = Math.max(2.6, 0.10 * scale);
+        ctx.strokeStyle = `rgba(240, 249, 255, ${(baseAlpha * 0.95).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1, 0.036 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x1 - (fdx * ch - perpX * ch * 0.65), y1 - (fdy * ch - perpY * ch * 0.65));
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x1 - (fdx * ch + perpX * ch * 0.65), y1 - (fdy * ch + perpY * ch * 0.65));
         ctx.stroke();
       }
+    }
+
+    // 4b. Localized Karst Spring Conduit Ribbons (readable flow ahead of the diver!)
+    if (Array.isArray(this.level?.caveCurrents) && this.level.caveCurrents.length > 0) {
+      ctx.lineCap = 'round';
+      for (let c = 0; c < this.level.caveCurrents.length; c++) {
+        const cur = this.level.caveCurrents[c];
+        const cr = cur.radius || 4.0;
+        if (cur.x + cr < visX0 || cur.x - cr > visX1 || cur.y + cr < visY0 || cur.y - cr > visY1) continue;
+        const cSpd = Math.hypot(cur.vx || 0, cur.vy || 0);
+        if (cSpd < 0.08) continue;
+        const cdx = (cur.vx || 0) / cSpd;
+        const cdy = (cur.vy || 0) / cSpd;
+        const cpX = -cdy;
+        const cpY = cdx;
+        for (let k = 0; k < 4; k++) {
+          const phase = ((timeSec * (0.9 + cSpd * 0.6) + k * 0.25) % 1) * 2 - 1;
+          const lat = ((k % 3) - 1) * cr * 0.36;
+          const bx = cur.x + cdx * phase * cr * 0.72 + cpX * lat;
+          const by = cur.y + cdy * phase * cr * 0.72 + cpY * lat;
+          const fade = Math.max(0, 1 - Math.abs(phase));
+          const sx0 = toScreenX(bx - cdx * 0.7);
+          const sy0 = toScreenY(by - cdy * 0.7);
+          const sx1 = toScreenX(bx + cdx * 0.7);
+          const sy1 = toScreenY(by + cdy * 0.7);
+          ctx.strokeStyle = `rgba(103, 232, 249, ${(0.42 * fade).toFixed(3)})`;
+          ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+          ctx.beginPath();
+          ctx.moveTo(sx0, sy0);
+          ctx.lineTo(sx1, sy1);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 4c. Diver Hydrology Feedback: Wall Boundary-Layer "Pull-and-Glide" Shimmer OR Slipstream Velocity Lines
+    if (hydro && diver && (hydro.mode === 'pull-and-glide' || hydro.mode === 'slipstream')) {
+      const dx = toScreenX(diver.x);
+      const dy = toScreenY(diver.y);
+      const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
+      const isPull = hydro.mode === 'pull-and-glide';
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      if (isPull && (hydro.wallNormalX !== 0 || hydro.wallNormalY !== 0)) {
+        // Laminar boundary-layer draft shimmer hugging the rock wall beside the diver
+        const wallAng = Math.atan2(-hydro.wallNormalY, -hydro.wallNormalX);
+        const arcR = 0.92 * scale;
+        ctx.strokeStyle = `rgba(103, 232, 249, ${(0.62 + 0.22 * pulse).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2.2, 0.095 * scale);
+        ctx.beginPath();
+        ctx.arc(dx, dy, arcR, wallAng - 0.85, wallAng + 0.85);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(52, 211, 153, ${(0.36 + 0.16 * pulse).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+        ctx.beginPath();
+        ctx.arc(dx, dy, arcR * 1.18, wallAng - 0.65, wallAng + 0.65);
+        ctx.stroke();
+      } else if (!isPull && flowSpd > 0.1) {
+        // Silky Slipstream velocity lines streaming past the diver
+        const fdx = hydro.flowVx / flowSpd;
+        const fdy = hydro.flowVy / flowSpd;
+        const pX = -fdy;
+        const pY = fdx;
+        ctx.strokeStyle = `rgba(52, 211, 153, ${(0.55 + 0.22 * pulse).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+        for (let s = -1; s <= 1; s += 2) {
+          const off = s * 0.56 * scale;
+          const tail = (1.1 + 0.3 * pulse) * scale;
+          ctx.beginPath();
+          ctx.moveTo(dx + pX * off + fdx * 0.2 * scale, dy + pY * off + fdy * 0.2 * scale);
+          ctx.lineTo(dx + pX * off - fdx * tail, dy + pY * off - fdy * tail);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // Compact diegetic callout pill above diver
+      const dragPct = Math.round((1 - (hydro.effectiveDragMult || 1)) * 100);
+      const pillTxt = isPull ? `🪨 PULL-AND-GLIDE · -${Math.max(20, dragPct)}% DRAG` : '🌊 SLIPSTREAM · -18% GAS';
+      ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const tw = ctx.measureText(pillTxt).width + 16;
+      const py = dy - Math.max(28, 1.15 * scale);
+      ctx.fillStyle = isPull ? 'rgba(8, 47, 73, 0.86)' : 'rgba(6, 78, 59, 0.86)';
+      ctx.strokeStyle = isPull ? 'rgba(103, 232, 249, 0.85)' : 'rgba(52, 211, 153, 0.88)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect?.(dx - tw * 0.5, py - 9.5, tw, 19, 9) ?? ctx.rect(dx - tw * 0.5, py - 9.5, tw, 19);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isPull ? '#cffafe' : '#bbf7d0';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pillTxt, dx, py);
     }
 
     ctx.restore();

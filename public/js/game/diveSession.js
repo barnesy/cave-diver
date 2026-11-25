@@ -1,7 +1,7 @@
 import { getAscentConfig } from '../levels/index.js';
 import { createDiveState, stepDivePhysiology, receiveGasIntoState, computeTissueCompartmentStatus } from '../physics/diveModel.js';
 import { resolveDiverCollision, resolveDiverPeerCollisions, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
-import { createDynamicHazards, stepDynamicHazards } from './dynamicHazards.js';
+import { createDynamicHazards, stepDynamicHazards, computeTidalCurrent, evaluateDiverHydrology } from './dynamicHazards.js';
 import { createDiverBody, stepDiverBody, computeTargetSwimAngle } from './diverBody.js';
 import { stirFloorSilt, spawnSiltPlume, stepSiltPhysics } from './silt.js';
 import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PHOTO_BONUS, MAX_ENCOUNTER_BONUS, MAX_DRILL_BONUS } from './scoring.js';
@@ -551,6 +551,22 @@ export function createDiveSession(
       idealGas: false,
     },
     milestones: { mapped100: false, depth50: false, depth100: false },
+    hydrology: {
+      flowVx: 0,
+      flowVy: 0,
+      flowSpeed: 0,
+      mode: 'calm',
+      wallShelter: 0,
+      effectiveDragMult: 1.0,
+      gasBurnMult: 1.0,
+      wallNormalX: 0,
+      wallNormalY: 0,
+      slipstreamSec: 0,
+      pullGlideSec: 0,
+      headwindSec: 0,
+      bonusScore: 0,
+      headwindHintShown: false,
+    },
     wildlifeHarmonyScore: 0,
     lineCookies: [],
     maxLineCookies: MAX_LINE_COOKIES,
@@ -3180,14 +3196,15 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
   const hasSurgeMod = Array.isArray(session.modifiers) && session.modifiers.includes('surge-tide');
   const mutCurrentMult = (mutatorId === 'surge' ? 1.75 : 1.0) * (hasSurgeMod ? 1.65 : 1.0);
   const diffCurrentMult = (session.difficulty === 'hardcore' ? 1.28 : session.difficulty === 'guided' ? 0.7 : 1.0) * mutCurrentMult;
-  if (Array.isArray(level.driftCurrents) && clearanceM > 1.75 && !session.clippedToShotLine) {
-    const shelter = Math.min(1, (clearanceM - 1.75) / 2.6);
+  let rawFlowVx = 0;
+  let rawFlowVy = 0;
+  if (Array.isArray(level.driftCurrents) && !session.clippedToShotLine) {
     for (let c = 0; c < level.driftCurrents.length; c++) {
       const cur = level.driftCurrents[c];
       if (diver.y >= cur.yMin && diver.y <= cur.yMax) {
         const pulse = 0.82 + 0.18 * Math.sin(session.simTimeSec * 0.65 + c * 1.9);
-        diver.vx += (cur.vx || 0) * shelter * pulse * diffCurrentMult * dt;
-        diver.vy += (cur.vy || 0) * shelter * pulse * diffCurrentMult * dt;
+        rawFlowVx += (cur.vx || 0) * pulse * diffCurrentMult;
+        rawFlowVy += (cur.vy || 0) * pulse * diffCurrentMult;
       }
     }
   }
@@ -3202,11 +3219,11 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
       if (dist <= cr) {
         const falloff = 0.48 + 0.52 * (1 - dist / cr);
         const pulse = 0.88 + 0.12 * Math.sin(session.simTimeSec * 1.15 + c * 2.3);
-        diver.vx += (cur.vx || 0) * falloff * pulse * diffCurrentMult * dt;
-        diver.vy += (cur.vy || 0) * falloff * pulse * diffCurrentMult * dt;
+        rawFlowVx += (cur.vx || 0) * falloff * pulse * diffCurrentMult;
+        rawFlowVy += (cur.vy || 0) * falloff * pulse * diffCurrentMult;
         if (session.caveFlowWarnCooldown <= 0) {
           session.caveFlowWarnCooldown = 9.0;
-          callbacks.onToast?.(`💧 ${cur.label || 'Karst spring current'} — hug the wall or ride the flow!`, 2.4);
+          callbacks.onToast?.(`💧 ${cur.label || 'Karst spring current'} — hug the wall to Pull-and-Glide or ride the slipstream!`, 2.6);
         }
       }
     }
@@ -3223,18 +3240,81 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
         const wave = computeSurgeWave(zone, session.simTimeSec);
         if (wave !== 0) {
           const falloff = 0.45 + 0.55 * (1 - dist / zr);
-          diver.vx += (zone.vx || 0) * wave * falloff * diffCurrentMult * dt;
-          diver.vy += (zone.vy || 0) * wave * falloff * diffCurrentMult * dt;
+          rawFlowVx += (zone.vx || 0) * wave * falloff * diffCurrentMult;
+          rawFlowVy += (zone.vy || 0) * wave * falloff * diffCurrentMult;
           if (Math.abs(wave) > 0.65 && session.surgeWarnCooldown <= 0) {
             session.surgeWarnCooldown = 6.0;
-            callbacks.onToast?.(`🌊 ${zone.label || 'Hull-breach surge'} — wait for the lull or ride the flow!`, 2.6);
+            callbacks.onToast?.(`🌊 ${zone.label || 'Hull-breach surge'} — hug the hull to Pull-and-Glide or ride the flow!`, 2.6);
           }
         }
       }
     }
   }
-  if (mutatorId === 'surge' && diver.y > 4.0 && clearanceM > 1.4 && !session.clippedToShotLine) {
-    diver.vx += Math.sin(session.simTimeSec * 0.95) * 0.72 * dt;
+  if (mutatorId === 'surge' && diver.y > 4.0 && !session.clippedToShotLine) {
+    rawFlowVx += Math.sin(session.simTimeSec * 0.95) * 0.72;
+  }
+  const tidalNow = computeTidalCurrent(level, session.simTimeSec);
+  if (tidalNow.enabled && diver.y >= 3.5 && !session.clippedToShotLine) {
+    const tideDiffScale = session.difficulty === 'guided' ? 0.55 : session.difficulty === 'hardcore' ? 1.15 : 0.85;
+    rawFlowVx += tidalNow.vx * 0.52 * tideDiffScale;
+    rawFlowVy += tidalNow.vy * 0.35 * tideDiffScale;
+  }
+
+  // Living Cavern Hydrology: Unified Slipstream Riding & Wall Boundary-Layer "Pull-and-Glide" (v215)
+  const swimRefX = thrustMag > 0.08 ? ctrlX : diver.vx;
+  const swimRefY = thrustMag > 0.08 ? ctrlY : diver.vy;
+  const hydro = evaluateDiverHydrology({
+    flowVx: rawFlowVx,
+    flowVy: rawFlowVy,
+    swimX: swimRefX,
+    swimY: swimRefY,
+    clearanceM,
+    clippedToShotLine: Boolean(session.clippedToShotLine),
+  });
+  if (!session.clippedToShotLine && hydro.flowSpeed > 0.01) {
+    diver.vx += hydro.flowVx * hydro.effectiveDragMult * dt;
+    diver.vy += hydro.flowVy * hydro.effectiveDragMult * dt;
+    if (hydro.slipstreamAssist > 0) {
+      const invSpd = 1 / hydro.flowSpeed;
+      diver.vx += hydro.flowVx * invSpd * hydro.slipstreamAssist * dt;
+      diver.vy += hydro.flowVy * invSpd * hydro.slipstreamAssist * dt;
+    }
+  }
+  if (session.hydrology) {
+    const h = session.hydrology;
+    h.flowVx = hydro.flowVx;
+    h.flowVy = hydro.flowVy;
+    h.flowSpeed = hydro.flowSpeed;
+    h.mode = hydro.mode;
+    h.wallShelter = hydro.wallShelter;
+    h.effectiveDragMult = hydro.effectiveDragMult;
+    h.gasBurnMult = hydro.gasBurnMult;
+    if (hydro.wallShelter > 0.1) {
+      const wn = evaluateCaveNormal(level, diver.x, diver.y);
+      h.wallNormalX = wn.nx || 0;
+      h.wallNormalY = wn.ny || 0;
+    } else {
+      h.wallNormalX = 0;
+      h.wallNormalY = 0;
+    }
+    if (hydro.mode === 'slipstream') {
+      h.slipstreamSec += dt;
+      h.headwindSec = 0;
+      if (h.bonusScore < 150) h.bonusScore = Math.min(150, h.bonusScore + dt * 11);
+    } else if (hydro.mode === 'pull-and-glide') {
+      h.pullGlideSec += dt;
+      h.headwindSec = 0;
+      if (h.bonusScore < 150) h.bonusScore = Math.min(150, h.bonusScore + dt * 13);
+    } else if (hydro.mode === 'headwind') {
+      h.headwindSec += dt;
+      if (!h.headwindHintShown && h.headwindSec >= 1.5) {
+        h.headwindHintShown = true;
+        callbacks.onToast?.('🪨 Strong head-on flow! Tuck close to the cave wall to Pull-and-Glide (-68% drag).', 3.4);
+      }
+    } else {
+      h.headwindSec = Math.max(0, h.headwindSec - dt * 2);
+    }
+    if (session.hazards) session.hazards.hydrology = h;
   }
 
   ctx.mutatorId = mutatorId;
@@ -4039,6 +4119,7 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         (Array.isArray(session.modifiers) && session.modifiers.includes('iron-lung') ? 1.28 : 1.0) *
         (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
         (hazRes.gasRateMult || 1.0) *
+        (session.hydrology?.gasBurnMult || 1.0) *
         (role?.gasBurnMult || 1.0),
       decoOffgasMult:
         (role?.decoClearMult || 1.0) *
@@ -4488,6 +4569,7 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
         (session.relayBonusScore || 0) +
         (session.smbBonusScore || 0) +
         Math.round(session.decoMastery?.bonusScore || 0) +
+        Math.round(session.hydrology?.bonusScore || 0) +
         (session.wildlifeHarmonyScore || 0) +
         (session.contractBonusScore || 0) +
         (session.aiLeadBonusScore || 0) +
