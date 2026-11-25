@@ -392,6 +392,42 @@ export const SUIT_LIVERIES = Object.freeze([
     getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'),
     isUnlocked: (stats) => _countClaimedBounties(stats) >= 12,
   },
+  {
+    id: 'world-cartographer-suit',
+    name: 'Sunken Cartographer Shell',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 44,
+    fx: { id: 'cartographer-glint', name: 'Brass Compass Sheen', desc: 'Warm expedition-gold shoulder compass & relic survey sheen.' },
+    suitTop: '#1e3a5f',
+    suitMid: '#0f243d',
+    suitBot: '#071321',
+    accent: '#fbbf24',
+    trim: '#38bdf8',
+    finColor: '#1e293b',
+    finTip: '#fde047',
+    stageBand: '#f59e0b',
+    unlockHint: '🗺️ World Cache · SS Thistlegorm cargo locker',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:world-cartographer-suit')),
+  },
+  {
+    id: 'world-hydro-suit',
+    name: 'Slipstream Aero Drysuit',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 48,
+    fx: { id: 'hydro-stream', name: 'Laminar Hydro-Weave', desc: 'Silky turquoise boundary-layer shimmer hugs the sleek drysuit.' },
+    suitTop: '#115e59',
+    suitMid: '#0f3f4a',
+    suitBot: '#042029',
+    accent: '#2dd4bf',
+    trim: '#67e8f9',
+    finColor: '#0f172a',
+    finTip: '#2dd4bf',
+    stageBand: '#14b8a6',
+    unlockHint: '🗺️ World Cache · USS Oriskany hangar bulkhead',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:world-hydro-suit')),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -534,6 +570,24 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: '✦ Guardian Relic · Blue Hole Arch',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'bluehole-solar-prism'),
   },
+  {
+    id: 'world-cartographer-torch',
+    name: 'Selenite Survey Beacon',
+    shortLabel: 'Survey Beam',
+    tier: 'epic',
+    source: 'world',
+    ladderRank: 72,
+    fx: { id: 'solar-caustic', name: 'Survey Relic Glint', desc: 'Crisp gold-white survey optics illuminate distant hidden relics.' },
+    swatch: '#fde68a',
+    coreRgb: '254, 243, 199',
+    shaftRgb: '251, 191, 36',
+    warmRgb: '253, 224, 71',
+    rangeMult: 1.12,
+    siltPierce: 0.22,
+    specText: 'World-Found Survey Beam · +20% reach & +8m relic glint',
+    unlockHint: '🗺️ World Cache · Orda Crystal Maze grotto',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:world-cartographer-torch')),
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -551,6 +605,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'camp-polar', icon: '🌋', name: 'Polar Surveyor', tier: 'epic', ladderRank: 78, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Iceland Geothermal Survey Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('iceland-survey') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('iceland-survey')) },
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', tier: 'epic', ladderRank: 84, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Abyssal World Record Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
   { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim all 12 Abyssal Bounties', getProgress: (s) => _mkProg(_countClaimedBounties(s), 12, 'bounties'), isUnlocked: (s) => _countClaimedBounties(s) >= 12 },
+  { id: 'world-arch-crest', icon: '🏛️', name: 'Bells Archway Crest', tier: 'epic', source: 'world', ladderRank: 74, fx: { id: 'crest-halo', name: 'Archway Deep Crest', desc: 'Deep-blue cobalt halo signaling trimix arch mastery.' }, unlockHint: '🗺️ World Cache · Blue Hole Dahab Archway', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-arch-crest')) },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -633,6 +688,17 @@ export const HEADGEAR_STYLES = Object.freeze([
     specText: 'Riveted armored brass dreadnought dome + amber porthole',
     unlockHint: '✦ Guardian Relic · SS Thistlegorm',
     isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
+  },
+  {
+    id: 'world-thermal-hood',
+    name: 'Nordic Thermal Hood',
+    icon: '❄️',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 52,
+    specText: 'Insulated arctic 9mm neoprene hood · 70% Cold Thermocline resist',
+    unlockHint: '🗺️ World Cache · Plura Marble Sump overhang',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:world-thermal-hood')),
   },
 ]);
 
@@ -789,6 +855,22 @@ export const ACCENT_TRIMS = Object.freeze([
     unlockHint: '✦ Guardian Relic · Ojamo Mine',
     isUnlocked: (s) => _hasTrophyRelic(s, 'ojamo-tungsten-core'),
   },
+  {
+    id: 'world-hydro-fins',
+    name: 'Hydro-Glider Split Fins',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 40,
+    fx: { id: 'hydro-blades', name: 'Silt-Ghost Split Blades', desc: 'Zero floor silt kick below 1.2 m/s & glowing aqua hydro edges.' },
+    accent: '#2dd4bf',
+    trim: '#67e8f9',
+    finTip: '#5eead4',
+    stageBand: '#06b6d4',
+    swatchA: '#06b6d4',
+    swatchB: '#5eead4',
+    unlockHint: "🗺️ World Cache · Eagle's Nest Sink shelf",
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:world-hydro-fins')),
+  },
 ]);
 
 export const TANK_FINISHES = Object.freeze([
@@ -905,6 +987,36 @@ export const TANK_FINISHES = Object.freeze([
     ccrShell: '#d97706',
     unlockHint: '✦ Guardian Relic · SS Thistlegorm',
     isUnlocked: (s) => _hasTrophyRelic(s, 'thistlegorm-engine-core'),
+  },
+  {
+    id: 'world-hydro-tank',
+    name: 'Vaucluse Hydro Twinset',
+    tier: 'epic',
+    source: 'world',
+    ladderRank: 78,
+    fx: { id: 'halocline-glow', name: 'Laminar Aqua Flow', desc: 'Crisp cyan laminar streams shimmer across the pressure cylinders.' },
+    top: '#cffafe',
+    mid: '#06b6d4',
+    bot: '#0e7490',
+    stroke: '#22d3ee',
+    ccrShell: '#0891b2',
+    unlockHint: '🗺️ World Cache · Fontaine de Vaucluse resurgence',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:world-hydro-tank')),
+  },
+  {
+    id: 'world-chimney-tank',
+    name: 'Strýtan Geothermal Core',
+    tier: 'mythic',
+    source: 'world',
+    ladderRank: 97,
+    fx: { id: 'reactor-core', name: 'Geothermal Vent Core', desc: 'Warm volcanic gold pressure cells pulse with mineral vent heat.' },
+    top: '#fef08a',
+    mid: '#ea580c',
+    bot: '#431407',
+    stroke: '#fb923c',
+    ccrShell: '#c2410c',
+    unlockHint: '🗺️ World Cache · Strýtan Hydrothermal Chimneys',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:world-chimney-tank')),
   },
 ]);
 
@@ -1039,6 +1151,35 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#6ee7b7',
     unlockHint: '✦ Guardian Relic · SMS Markgraf',
     isUnlocked: (s) => _hasTrophyRelic(s, 'markgraf-fleet-heart'),
+  },
+  {
+    id: 'world-cartographer-visor',
+    name: 'Cartographer Resonance Lens',
+    tier: 'uncommon',
+    source: 'world',
+    ladderRank: 20,
+    fx: { id: 'spectral-scan', name: 'Relic Resonance Lens', desc: 'Golden reticle sweep highlights hidden relics & Sunken Gear Caches.' },
+    top: '#fef9c3',
+    mid: '#eab308',
+    bot: '#713f12',
+    frame: '#422006',
+    hudGlow: '#fde047',
+    unlockHint: '🗺️ World Cache · Cenote El Abismo sunken crate',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:world-cartographer-visor')),
+  },
+  {
+    id: 'world-salvage-visor',
+    name: 'Deck-Clearance HUD Visor',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 54,
+    top: '#e0f2fe',
+    mid: '#0284c7',
+    bot: '#0c4a6e',
+    frame: '#0f172a',
+    hudGlow: '#38bdf8',
+    unlockHint: '🗺️ World Cache · MS Zenobia vehicle deck',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:world-salvage-visor')),
   },
 ]);
 
@@ -1409,6 +1550,48 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'trim', field: 'trimId', ids: ['salvage-gold'] },
     ]),
   }),
+  Object.freeze({
+    id: 'sunken-cartographer',
+    name: 'Sunken Cartographer',
+    icon: '🧭',
+    tier: 'epic',
+    required: 2,
+    secret: false,
+    source: 'world',
+    auraName: 'Cartographer Compass Aura',
+    auraDesc: 'Golden survey compass halo & live directional glint toward hidden relics (26m).',
+    color: '#fbbf24',
+    rgb: '251, 191, 36',
+    hueA: 45,
+    hueB: 196,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['world-cartographer-suit'] },
+      { slot: 'visor', field: 'visorId', ids: ['world-cartographer-visor'] },
+      { slot: 'torch', field: 'torchId', ids: ['world-cartographer-torch'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'karst-hydro-glider',
+    name: 'Karst Hydro-Glider',
+    icon: '🌊',
+    tier: 'epic',
+    required: 2,
+    secret: false,
+    source: 'world',
+    auraName: 'Hydro-Ghost Slipstream',
+    auraDesc: 'Silky turquoise laminar wake & up to -82% Pull-and-Glide headwind drag.',
+    color: '#2dd4bf',
+    rgb: '45, 212, 191',
+    hueA: 174,
+    hueB: 192,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['world-hydro-suit'] },
+      { slot: 'trim', field: 'trimId', ids: ['world-hydro-fins'] },
+      { slot: 'tank', field: 'tankId', ids: ['world-hydro-tank'] },
+    ]),
+  }),
 ]);
 
 /**
@@ -1605,6 +1788,9 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   const artifactIds = new Set(
     logbook?.artifacts && typeof logbook.artifacts === 'object' ? Object.keys(logbook.artifacts) : []
   );
+  const foundGearIds = new Set(
+    logbook?.foundGear && typeof logbook.foundGear === 'object' ? Object.keys(logbook.foundGear) : []
+  );
   const deepestM = Math.max(0, Number(logbook?.deepestM) || 0);
   const dailyClears = Math.max(0, Number(logbook?.daily?.totalClears) || 0);
   const stats = {
@@ -1616,6 +1802,7 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     speciesLogged,
     completedCampaigns,
     artifactIds,
+    foundGearIds,
     bountiesClaimed: 0,
     pressurizedEqualizations: Math.max(0, Number(ms.pressurizedEqualizations) || 0),
     cleanSalvageLifts: Math.max(0, Number(ms.cleanSalvageLifts) || 0),
@@ -2146,6 +2333,18 @@ export function drawLiveryPreview(
     ctx.beginPath();
     ctx.arc(sx - scale * 0.15, sy, auraR, 0, Math.PI * 2);
     ctx.fill();
+    if (wp.isSetAura) {
+      // Full-Set Capstone double-orbit prestige arcs (v216)
+      ctx.strokeStyle = `rgba(${wp.auraRgb}, ${(0.28 + pulse * 0.22).toFixed(2)})`;
+      ctx.lineWidth = 1.6;
+      const rot = timeSec * 1.15;
+      ctx.beginPath();
+      ctx.arc(sx - scale * 0.1, sy, scale * 0.94, rot, rot + Math.PI * 0.62);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx - scale * 0.1, sy, scale * 0.94, rot + Math.PI, rot + Math.PI * 1.62);
+      ctx.stroke();
+    }
     // Subtle drifting rarity wake particles behind fin tips in the test tank
     const finTailX = sx - scale * 1.48;
     for (let k = 0; k < 6; k++) {

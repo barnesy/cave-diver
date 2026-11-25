@@ -5,6 +5,7 @@ import {
   getSetsForGearItem,
   evaluateGearSetSynergy,
 } from '../game/rigLivery.js';
+import { getGearItemStats, SET_TIER_BONUSES } from '../game/gearStats.js';
 
 const EQUIP_ANIM_DURATION_MS = 860;
 
@@ -33,6 +34,7 @@ export function createGearUnlockShowcase({
   const slotEl = document.getElementById('gear-unlock-slot');
   const nameEl = document.getElementById('gear-unlock-name');
   const reasonEl = document.getElementById('gear-unlock-reason');
+  const statsBoxEl = document.getElementById('gear-unlock-stats-box');
   const fxBoxEl = document.getElementById('gear-unlock-fx-box');
   const setBoxEl = document.getElementById('gear-unlock-set-box');
   const dotsEl = document.getElementById('gear-unlock-dots');
@@ -106,7 +108,23 @@ export function createGearUnlockShowcase({
     }
     if (reasonEl) {
       const detail = item.specText ? `${item.specText} · ` : '';
-      reasonEl.textContent = `${detail}Earned: ${item.unlockHint || 'Expedition Milestone'}`;
+      const info = getGearItemStats(entry.slot, item);
+      const srcVerb = info.source === 'world' ? '🗺️ Found in World' : '🏆 Earned';
+      reasonEl.textContent = `${detail}${srcVerb}: ${item.unlockHint || 'Expedition Milestone'}`;
+    }
+    if (statsBoxEl) {
+      const info = getGearItemStats(entry.slot, item);
+      if (info.pills.length > 0 || info.power) {
+        statsBoxEl.hidden = false;
+        const pills = info.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+        const pwr = info.power
+          ? `<div class="gear-unlock-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>`
+          : '';
+        statsBoxEl.innerHTML = `<div class="gear-unlock-stat-pills">${pills}</div>${pwr}`;
+      } else {
+        statsBoxEl.hidden = true;
+        statsBoxEl.innerHTML = '';
+      }
     }
     if (fxBoxEl) {
       if (item.fx) {
@@ -123,8 +141,12 @@ export function createGearUnlockShowcase({
         const set = sets[0];
         const previewSyn = evaluateGearSetSynergy(buildPreviewLivery(entry));
         const st = previewSyn.sets.find((x) => x.set.id === set.id);
+        const tierDef = SET_TIER_BONUSES[set.id];
+        const bonusSummary = tierDef
+          ? ` · (2): ${tierDef.tier2.label} · (${tierDef.capstoneReq || set.required}): ${tierDef.tierFull.label}`
+          : ` — ${set.auraName}`;
         setBoxEl.hidden = false;
-        setBoxEl.innerHTML = `<span class="gear-unlock-set-tag" style="color:${set.color}">${set.icon} SET SYNERGY</span> <strong>${escapeHtml(set.name)}</strong> (${st ? `${st.matched}/${st.required}` : `1/${set.required}`}${st?.active ? ' · ✦ ACTIVE!' : ''}) — ${escapeHtml(set.auraName)}`;
+        setBoxEl.innerHTML = `<span class="gear-unlock-set-tag" style="color:${set.color}">${set.icon} SET BONUS</span> <strong>${escapeHtml(set.name)}</strong> (${st ? `${st.matched}/${st.required}` : `1/${set.required}`}${st?.active ? ' · ✦ CAPSTONE!' : ''})${escapeHtml(bonusSummary)}`;
       } else {
         setBoxEl.hidden = true;
         setBoxEl.innerHTML = '';

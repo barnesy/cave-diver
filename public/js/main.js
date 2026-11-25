@@ -73,6 +73,7 @@ import {
   recordRescueDrillClearInLogbook,
   recordCrewDiveInLogbook,
   recordArtifactInLogbook,
+  recordFoundWorldGear,
   getArtifactVaultStats,
   getFieldGuideStats,
 } from './game/logbookModel.js';
@@ -570,7 +571,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=215',
+  mapRasterUrl: './assets/map-expedition.jpg?v=216',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -3232,6 +3233,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     livery: liveryWorkshop.getActiveRigLivery(),
     crewRoleId: activeCrewRoleId,
     modifiers: activeExpeditionModifiers,
+    foundGear: loadCareerLogbook()?.foundGear || null,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
   session._dailyBadgeLabel = runMutMeta
@@ -6871,6 +6873,15 @@ const sessionStepCallbacks = {
     }
     showToast(`✓ ${cp.name}${splitSuffix} — ${cp.hint}`, 3.8);
     if (isMultiplayer) lan.sendCheckpoint(cp.id);
+  },
+  onWorldGearFound: (gc) => {
+    audio.playGearUnlock?.(gc.tier || 'rare');
+    triggerHaptic('pickup');
+    try {
+      const res = recordFoundWorldGear(loadCareerLogbook(), { slot: gc.slot, itemId: gc.itemId, siteId: session?.level?.id || '', siteName: session?.level?.name || '' });
+      if (res?.book) saveCareerLogbook(res.book);
+      liveryWorkshop?.syncLiveryUi?.();
+    } catch {}
   },
   onCollect: (item) => {
     const isGrand = (item.scale || 1) >= 1.35;

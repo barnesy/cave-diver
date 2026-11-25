@@ -124,6 +124,8 @@ export function evaluateDiverHydrology({
   swimY = 0,
   clearanceM = 4.0,
   clippedToShotLine = false,
+  hydroEfficiency = 0,
+  hydroGhost = false,
 } = {}) {
   const vx = Number.isFinite(flowVx) ? flowVx : 0;
   const vy = Number.isFinite(flowVy) ? flowVy : 0;
@@ -142,8 +144,10 @@ export function evaluateDiverHydrology({
     };
   }
 
+  const hydroBonus = Math.max(0, Math.min(0.85, Number(hydroEfficiency) || 0));
   const clear = Math.max(0, Number.isFinite(clearanceM) ? clearanceM : 4.0);
-  const wallShelter = clear <= 1.85 ? Math.max(0, Math.min(1, (1.85 - clear) / 1.15)) : 0;
+  const shelterRadius = hydroGhost ? 2.25 : 1.85;
+  const wallShelter = clear <= shelterRadius ? Math.max(0, Math.min(1, (shelterRadius - clear) / (shelterRadius - 0.7))) : 0;
 
   const invFlow = 1 / flowSpeed;
   const fdx = vx * invFlow;
@@ -152,25 +156,26 @@ export function evaluateDiverHydrology({
   const align = swimMag > 0.08 ? ((swimX / swimMag) * fdx + (swimY / swimMag) * fdy) : 0;
 
   let mode = 'calm';
-  let effectiveDragMult = 1 - 0.45 * wallShelter;
+  let effectiveDragMult = 1 - Math.min(0.75, 0.45 + hydroBonus * 0.25) * wallShelter;
   let slipstreamAssist = 0;
   let gasBurnMult = 1.0;
 
   if (flowSpeed >= 0.22 && align >= 0.42) {
     mode = 'slipstream';
     effectiveDragMult = 1.0;
-    slipstreamAssist = Math.min(0.45, flowSpeed * 0.28 * align);
-    gasBurnMult = 0.82;
-  } else if (flowSpeed >= 0.22 && align <= -0.22 && wallShelter >= 0.30) {
+    slipstreamAssist = Math.min(hydroGhost ? 0.68 : 0.56, flowSpeed * (0.28 + hydroBonus * 0.22) * align);
+    gasBurnMult = Math.max(0.68, (hydroGhost ? 0.74 : 0.82) - hydroBonus * 0.08);
+  } else if (flowSpeed >= 0.22 && align <= -0.22 && wallShelter >= (hydroGhost ? 0.22 : 0.30)) {
     mode = 'pull-and-glide';
-    effectiveDragMult = 1 - 0.68 * wallShelter;
+    const maxCut = hydroGhost ? 0.84 : Math.min(0.80, 0.68 + hydroBonus * 0.18);
+    effectiveDragMult = 1 - maxCut * wallShelter;
     slipstreamAssist = 0;
-    gasBurnMult = 0.88;
-  } else if (flowSpeed >= 0.26 && align <= -0.35 && wallShelter < 0.30) {
+    gasBurnMult = Math.max(0.76, (hydroGhost ? 0.80 : 0.88) - hydroBonus * 0.06);
+  } else if (flowSpeed >= 0.26 && align <= -0.35 && wallShelter < (hydroGhost ? 0.22 : 0.30)) {
     mode = 'headwind';
-    effectiveDragMult = 1.0;
+    effectiveDragMult = hydroGhost ? 0.82 : Math.max(0.84, 1.0 - hydroBonus * 0.2);
     slipstreamAssist = 0;
-    gasBurnMult = 1.12;
+    gasBurnMult = hydroGhost ? 1.02 : Math.max(1.04, 1.12 - hydroBonus * 0.08);
   }
 
   return {
@@ -421,20 +426,35 @@ export function stepDynamicHazards(session, dt, callbacks = {}) {
   haz.baselineTempC = computeAmbientWaterTempC(session.level, Math.max(0, diver.y), null, session.weather);
   haz.waterTempC = computeAmbientWaterTempC(session.level, Math.max(0, diver.y), haz, session.weather);
 
+  const rigPerf = session.rigPerf || null;
+  const coldResist = Math.max(0, Math.min(1, Number(rigPerf?.coldResist) || 0));
+  const coldImmune = coldResist >= 0.99;
+
   let gasRateMult = 1.0;
   let coldHeartRateBonus = 0;
-  if (haz.thermoclineColdFactor > 0.08) {
-    gasRateMult = 1.0 + haz.thermoclineColdFactor * 0.22 * diffScale;
-    coldHeartRateBonus = haz.thermoclineColdFactor * 14 * diffScale;
+  if (haz.thermoclineColdFactor > 0.08 && !coldImmune) {
+    const coldMult = 1 - coldResist;
+    gasRateMult = 1.0 + haz.thermoclineColdFactor * 0.22 * diffScale * coldMult;
+    coldHeartRateBonus = haz.thermoclineColdFactor * 14 * diffScale * coldMult;
     diveState.heartRateBpm = Math.min(190, (diveState.heartRateBpm || 72) + coldHeartRateBonus * dt * 0.45);
     if (inThermo && haz._thermoToastCd <= 0) {
       haz._thermoToastCd = 11.0;
-      callbacks.onToast?.(`❄️ Cold Thermocline (-${tempDropC}°C) — cold shock increasing breathing rate!`, 2.6);
+      callbacks.onToast?.(
+        coldResist >= 0.35
+          ? `❄️ Cold Thermocline (-${tempDropC}°C) — insulated rig resisting ${Math.round(coldResist * 100)}% of cold shock`
+          : `❄️ Cold Thermocline (-${tempDropC}°C) — cold shock increasing breathing rate!`,
+        2.6
+      );
     }
+  } else if (inThermo && coldImmune && haz._thermoToastCd <= 0) {
+    haz._thermoToastCd = 14.0;
+    callbacks.onToast?.(`🔥 Thermal Mantle active — immune to -${tempDropC}°C Cold Thermocline!`, 2.2);
   }
 
   // --- 2. Overhead Bubble Percolation Silt Showers ---
-  const isCcrBubbleFree = Boolean(session.gear?.ccr && (diveState.ccrScrubberPct ?? 100) > 0);
+  const isCcrBubbleFree =
+    Boolean(session.gear?.ccr && (diveState.ccrScrubberPct ?? 100) > 0) ||
+    Boolean(rigPerf?.percolationImmune);
   const isExhaling = session.breath?.phase === 'exhale';
   const diverSpeed = Math.hypot(diver.vx || 0, diver.vy || 0);
   let maxPerc = 0;
@@ -522,7 +542,7 @@ export function stepDynamicHazards(session, dt, callbacks = {}) {
       anyHatchAlert = true;
     }
     // When hatch slams near-shut (< 0.3) and diver is inside the doorway aperture, eject smoothly out of pinch
-    if (dist <= h.radius * 0.92 && h.openness < 0.3) {
+    if (dist <= h.radius * 0.92 && h.openness < 0.3 && !rigPerf?.hatchKnockbackImmune) {
       const dx = diver.x - h.x;
       const dy = diver.y - h.y;
       const d = Math.hypot(dx, dy) || 1;

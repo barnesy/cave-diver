@@ -27,6 +27,12 @@ import {
   drawMiniDiverAvatar,
 } from '../game/rigLivery.js';
 import { createGearUnlockShowcase } from './gearUnlockShowcase.js';
+import {
+  computeRigPerformanceProfile,
+  diffRigPerformanceProfiles,
+  getGearItemStats,
+  SET_TIER_BONUSES,
+} from '../game/gearStats.js';
 
 export const WRECK_LEVEL_ID_SET = new Set(
   LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck')).map((l) => l.id)
@@ -126,6 +132,7 @@ export function createLiveryWorkshopController({
   const liveryModalEl = document.getElementById('livery-modal');
   const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
   const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
+  const liveryPerfPanelEl = document.getElementById('livery-perf-panel');
   const liveryLadderRailEl = document.getElementById('livery-ladder-rail');
   const liveryPresetRowEl = document.getElementById('livery-preset-row');
   const liverySavedSlotsEl = document.getElementById('livery-saved-slots');
@@ -244,6 +251,10 @@ export function createLiveryWorkshopController({
     const session = getSession();
     if (session?.diver) {
       session.diver.livery = { ...activeRigLivery };
+      const perf = computeRigPerformanceProfile(activeRigLivery);
+      session.rigPerf = perf;
+      session.diver.torchReachMult = perf.torchReachMult || 1.0;
+      if (session.hazards) session.hazards.rigPerf = perf;
     }
     syncSetupDrawerSummary();
   }
@@ -349,6 +360,19 @@ export function createLiveryWorkshopController({
     const justPop = justEquippedKey === key;
     const prog = !unlocked ? getGearItemProgress(item, stats) : null;
     const pct = prog ? Math.round((prog.pct || 0) * 100) : 0;
+    const itemStats = getGearItemStats(slot, item);
+    const sourceBadge =
+      itemStats.source === 'world'
+        ? `<span class="livery-source-pill src-world" title="${escapeHtml(itemStats.worldCache?.clue || item.unlockHint || 'Found in world')}">🗺️ WORLD</span>`
+        : itemStats.source === 'earned'
+          ? `<span class="livery-source-pill src-earned">🏆 EARNED</span>`
+          : '';
+    const statPillsHtml = itemStats.pills.length > 0
+      ? `<span class="livery-stat-pills">${itemStats.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</span>`
+      : '';
+    const powerHtml = itemStats.power
+      ? `<span class="livery-power-badge" title="${escapeHtml(itemStats.power.desc)}">⚡ ${escapeHtml(itemStats.power.name)}</span>`
+      : '';
 
     const fxBadge = item.fx
       ? `<span class="livery-fx-badge" title="${escapeHtml(item.fx.desc)}">✦ ${escapeHtml(item.fx.name)}</span>`
@@ -370,8 +394,10 @@ export function createLiveryWorkshopController({
       <span class="livery-swatch-copy">
         <span class="livery-swatch-top">
           <span class="livery-swatch-name">${escapeHtml(item.name)}</span>
-          ${newBadge}${tierBadge}
+          ${newBadge}${sourceBadge}${tierBadge}
         </span>
+        ${statPillsHtml}
+        ${powerHtml}
         ${fxBadge}
         <span class="livery-swatch-meta">${escapeHtml(unlocked ? (selected ? '✓ Equipped' : unlockedMeta) : `🔒 ${item.unlockHint}`)}</span>
         ${progressHtml}
@@ -499,8 +525,78 @@ export function createLiveryWorkshopController({
       unlocks.torches.size +
       unlocks.patches.size;
     const overallPct = Math.min(100, Math.round((totalUnlocked / Math.max(1, totalItems)) * 100));
+    const worldFoundCount = unlocks.stats.foundGearIds?.size || 0;
     if (liveryUnlockSummaryEl) {
-      liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · ${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${Math.round(unlocks.stats.deepestM || 0)}m max depth. Syncs live in co-op.`;
+      liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · 🗺️ ${worldFoundCount}/10 world caches · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
+    }
+
+    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas (v216)
+    const previewRigForPerf = lockedTryOn
+      ? { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id }
+      : activeRigLivery;
+    const basePerf = computeRigPerformanceProfile(activeRigLivery);
+    const viewPerf = lockedTryOn ? computeRigPerformanceProfile(previewRigForPerf) : basePerf;
+    const perfDiffs = lockedTryOn ? diffRigPerformanceProfiles(basePerf, viewPerf) : [];
+    if (liveryPerfPanelEl) {
+      const swimPct = Math.round((viewPerf.swimSpeedMult - 1) * 100);
+      const gasPct = Math.round((1 - viewPerf.gasBurnMult) * 100);
+      const siltPct = Math.round((1 - viewPerf.siltStirMult) * 100);
+      const decoPct = Math.round((viewPerf.decoOffgasMult - 1) * 100);
+      const beamPct = Math.round((viewPerf.torchReachMult - 1) * 100);
+      const coldPct = Math.round(viewPerf.coldResist * 100);
+      const narcPct = Math.round(viewPerf.narcResist * 100);
+      const armorPct = Math.round(viewPerf.bumpArmor * 100);
+      const resPeak = Math.max(coldPct, narcPct, armorPct);
+      const resLabel = coldPct >= 99 ? 'COLD-PROOF' : `C${coldPct}/N${narcPct}/A${armorPct}`;
+
+      const bars = [
+        { lbl: '🏊 Swim', val: `+${swimPct}%`, pct: Math.min(100, Math.round((swimPct / 22) * 100)), cls: 'c-cyan' },
+        { lbl: '🫧 Gas Eff', val: `-${gasPct}%`, pct: Math.min(100, Math.round((gasPct / 24) * 100)), cls: 'c-emerald' },
+        { lbl: '🌫️ Silt Ctrl', val: `-${siltPct}%`, pct: Math.min(100, Math.round((siltPct / 50) * 100)), cls: 'c-teal' },
+        { lbl: '⏱️ Deco', val: `+${decoPct}%`, pct: Math.min(100, Math.round((decoPct / 36) * 100)), cls: 'c-amber' },
+        { lbl: '🔦 Beam', val: `+${beamPct}%`, pct: Math.min(100, Math.round((beamPct / 38) * 100)), cls: 'c-violet' },
+        { lbl: '🛡️ Resists', val: resLabel, pct: Math.min(100, resPeak), cls: 'c-rose' },
+      ];
+
+      const deltaHtml = perfDiffs.length > 0
+        ? `<div class="livery-perf-deltas">${perfDiffs
+            .slice(0, 6)
+            .map((d) => `<span class="livery-delta-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`)
+            .join('')}</div>`
+        : '';
+      const powersHtml = viewPerf.powers.length > 0
+        ? `<div class="livery-perf-powers">${viewPerf.powers
+            .map((p) => `<span class="livery-perf-power-chip src-${escapeHtml(p.source || 'item')}" title="${escapeHtml(p.desc)}">⚡ ${escapeHtml(p.name)}</span>`)
+            .join('')}</div>`
+        : `<div class="livery-perf-powers empty">Equip Rare/World gear or 2–3pc Sets to unlock Legendary Powers &amp; Immunities.</div>`;
+      const setBonusHtml = viewPerf.activeSets.length > 0
+        ? `<div class="livery-perf-sets">${viewPerf.activeSets
+            .map((as) => `<span class="livery-perf-set-pill${as.capstoneActive ? ' capstone' : ''}" style="--set-color:${as.color}">
+              ${as.icon} <strong>${escapeHtml(as.name)} (${as.matched}/${as.capstoneReq})</strong>:
+              ${escapeHtml(as.tier2Label)}${as.capstoneActive ? ` · ✦ ${escapeHtml(as.tierFullLabel)}` : ` · Next (${as.capstoneReq}): ${escapeHtml(as.tierFullLabel)}`}
+            </span>`)
+            .join('')}</div>`
+        : '';
+
+      liveryPerfPanelEl.innerHTML = `
+        <div class="livery-perf-head">
+          <span class="livery-perf-title">⚡ RIG PERFORMANCE TELEMETRY${lockedTryOn ? ' · <span class="livery-perf-cmp">COMPARE PREVIEW</span>' : ''}</span>
+          <span class="livery-perf-sub">${viewPerf.powers.length} Power${viewPerf.powers.length === 1 ? '' : 's'} · ${viewPerf.activeSets.length} Set Tier${viewPerf.activeSets.length === 1 ? '' : 's'}${viewPerf.relicGlowBonusM > 0 ? ` · +${viewPerf.relicGlowBonusM}m Relic` : ''}</span>
+        </div>
+        <div class="livery-perf-grid">
+          ${bars
+            .map(
+              (b) => `<div class="livery-perf-stat">
+                <div class="livery-perf-stat-row"><span>${b.lbl}</span><strong>${escapeHtml(b.val)}</strong></div>
+                <div class="livery-perf-bar"><span class="livery-perf-fill ${b.cls}" style="width:${Math.max(4, b.pct)}%"></span></div>
+              </div>`
+            )
+            .join('')}
+        </div>
+        ${deltaHtml}
+        ${setBonusHtml}
+        ${powersHtml}
+      `;
     }
 
     // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Unseen New Unlock Callout + Locked Try-On Revert
@@ -544,10 +640,17 @@ export function createLiveryWorkshopController({
                     const uSet = unlocks[setMapKey[r.slot]];
                     return uSet instanceof Set && r.ids.some((id) => uSet.has(id));
                   }).length;
-                  const title = `${s.name} (${st.matched}/${st.required} equipped · ${unlockedSlots}/${s.required} unlocked) — ${s.auraName}: ${s.auraDesc}`;
-                  return `<button type="button" class="livery-set-chip tier-${s.tier}${st.active ? ' active' : ''}" data-set-id="${s.id}" style="--set-color:${s.color}" title="${escapeHtml(title)}">
+                  const tierDef = SET_TIER_BONUSES[s.id];
+                  const tierInfo = tierDef ? ` | (2): ${tierDef.tier2.label} | (${tierDef.capstoneReq || s.required}): ${tierDef.tierFull.label}` : '';
+                  const title = `${s.name} (${st.matched}/${st.required} equipped · ${unlockedSlots}/${s.required} unlocked) — ${s.auraName}${tierInfo}`;
+                  const badgeTxt = st.active
+                    ? `✦ (${st.required}pc) ${tierDef?.tierFull?.label || s.auraName}`
+                    : st.matched >= 2 && tierDef
+                      ? `● (2pc) ${tierDef.tier2.label}`
+                      : `${st.matched}/${st.required}${s.source === 'world' ? ' · 🗺️' : ''}`;
+                  return `<button type="button" class="livery-set-chip tier-${s.tier}${st.active ? ' active' : st.matched >= 2 ? ' tier2' : ''}" data-set-id="${s.id}" style="--set-color:${s.color}" title="${escapeHtml(title)}">
                     <span>${s.icon} ${escapeHtml(s.name)}</span>
-                    <span class="livery-set-count">${st.active ? `✦ ${escapeHtml(s.auraName)}` : `${st.matched}/${st.required}`}</span>
+                    <span class="livery-set-count">${escapeHtml(badgeTxt)}</span>
                   </button>`;
                 })
                 .join('')}

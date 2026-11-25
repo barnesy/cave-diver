@@ -11575,3 +11575,179 @@ test('v215 Living Cavern Hydrology: Slipstream Riding, Wall Pull-and-Glide Bound
   assert.ok(drawnTexts.some((t) => t.includes('PULL-AND-GLIDE')), 'Pull-and-Glide diegetic callout pill must render');
   assert.ok(ops > 80, 'Rock-masked Flow Ribbons & boundary-layer shimmer must render cleanly');
 });
+
+test('v216 Ultra Mode Gear & Avatar: All-Slot Performance, Zelda/Diablo Set Tiers & World-Found Gear Caches', async () => {
+  const { readFileSync } = await import('node:fs');
+  const {
+    SUIT_LIVERIES,
+    HEADGEAR_STYLES,
+    TORCH_OPTICS,
+    TANK_FINISHES,
+    VISOR_TINTS,
+    ACCENT_TRIMS,
+    MILESTONE_PATCHES,
+    computeUnlockedLiveries,
+  } = await import('../public/js/game/rigLivery.js');
+  const {
+    WORLD_GEAR_CACHES,
+    SET_TIER_BONUSES,
+    getGearItemStats,
+    computeRigPerformanceProfile,
+    diffRigPerformanceProfiles,
+    createWorldGearCachesForLevel,
+  } = await import('../public/js/game/gearStats.js');
+  const { recordFoundWorldGear } = await import('../public/js/game/logbookModel.js');
+  const { stepDynamicHazards, evaluateDiverHydrology } = await import('../public/js/game/dynamicHazards.js');
+
+  // 1. 100% of gear items across all 7 slots carry real gameplay performance stats (except patch:none)
+  const catalogs = [
+    ['suit', SUIT_LIVERIES],
+    ['headgear', HEADGEAR_STYLES],
+    ['torch', TORCH_OPTICS],
+    ['tank', TANK_FINISHES],
+    ['visor', VISOR_TINTS],
+    ['trim', ACCENT_TRIMS],
+    ['patch', MILESTONE_PATCHES],
+  ];
+  for (const [slot, list] of catalogs) {
+    for (const item of list) {
+      const info = getGearItemStats(slot, item);
+      if (slot === 'patch' && item.id === 'none') continue;
+      assert.ok(info.pills.length > 0, `Gear item ${slot}:${item.id} must have at least 1 gameplay performance stat`);
+    }
+  }
+
+  // 2. Diablo III Multi-Tier Set Bonuses (2pc Gateway -> 3pc Capstone) + Green/Red Diffs
+  const baseProf = computeRigPerformanceProfile({ suitId: 'zissou-classic', torchId: 'tech-led', patchId: 'none' });
+  const hydro2pc = computeRigPerformanceProfile({
+    suitId: 'world-hydro-suit',
+    trimId: 'world-hydro-fins',
+  });
+  const hydro3pc = computeRigPerformanceProfile({
+    suitId: 'world-hydro-suit',
+    trimId: 'world-hydro-fins',
+    tankId: 'world-hydro-tank',
+  });
+  assert.equal(hydro2pc.activeSets.length, 1);
+  assert.equal(hydro2pc.activeSets[0].tier2Active, true);
+  assert.equal(hydro2pc.activeSets[0].capstoneActive, false);
+  assert.equal(hydro2pc.siltGhost, true, 'World Hydro Fins must grant Silt-Ghost power');
+  assert.equal(hydro3pc.activeSets[0].capstoneActive, true, '3pc Karst Hydro-Glider must unlock Capstone');
+  assert.equal(hydro3pc.hydroGhost, true, '3pc Karst Hydro-Glider Capstone must grant Hydro-Ghost');
+  assert.ok(hydro3pc.swimSpeedMult > hydro2pc.swimSpeedMult, '3pc Capstone must outperform 2pc');
+  assert.ok(hydro3pc.gasBurnMult < baseProf.gasBurnMult, 'Hydro-Glider kit must reduce breathing gas burn');
+
+  const diffs = diffRigPerformanceProfiles(baseProf, hydro3pc);
+  assert.ok(diffs.some((d) => d.key === 'swimSpeedMult' && d.positive), 'Compare diff must show green +Swim');
+  assert.ok(diffs.some((d) => d.key === 'gasBurnMult' && d.positive), 'Compare diff must show green Gas Save');
+
+  // Sunken Cartographer 3pc Capstone -> Relic Compass + huge Relic Glow
+  const cart3pc = computeRigPerformanceProfile({
+    suitId: 'world-cartographer-suit',
+    visorId: 'world-cartographer-visor',
+    torchId: 'world-cartographer-torch',
+  });
+  assert.equal(cart3pc.relicCompass, true, 'Sunken Cartographer 3pc Capstone must unlock Relic Compass');
+  assert.ok(cart3pc.relicGlowBonusM >= 14, 'Cartographer rig must extend relic highlight glow');
+  assert.ok(Object.keys(SET_TIER_BONUSES).length >= 8, 'All 8 gear sets must define 2pc + Capstone bonuses');
+
+  // 3. All 10 World-Found Sunken Gear Caches spawn in navigable open water across their campaign levels
+  assert.equal(WORLD_GEAR_CACHES.length, 10);
+  for (const def of WORLD_GEAR_CACHES) {
+    const lvl = getLevelById(def.levelId);
+    assert.ok(lvl, `World gear cache ${def.id} must reference a valid level (${def.levelId})`);
+    const spawned = createWorldGearCachesForLevel(lvl, {});
+    assert.ok(spawned.length >= 1, `Level ${def.levelId} must spawn its world gear cache`);
+    for (const gc of spawned) {
+      const sdf = evaluateCaveSDF(lvl, gc.x, gc.y);
+      assert.ok(sdf < -0.2, `World gear cache ${gc.id} at (${gc.x},${gc.y}) must be in navigable open water (SDF=${sdf.toFixed(2)})`);
+    }
+  }
+
+  // 4. Live DiveSession world cache discovery -> persistent logbook unlock -> no duplicate unopened respawn
+  let book = createEmptyLogbook();
+  assert.equal(computeUnlockedLiveries(book).visors.has('world-cartographer-visor'), false);
+  const sess1 = createDiveSession(LEVEL_1, {
+    diverName: 'Explorer',
+    livery: { suitId: 'world-hydro-suit', trimId: 'world-hydro-fins', tankId: 'world-hydro-tank' },
+    foundGear: book.foundGear,
+  });
+  assert.equal(sess1.worldGearCaches.length, 1);
+  assert.equal(sess1.worldGearCaches[0].opened, false);
+  const cache = sess1.worldGearCaches[0];
+  let foundEvent = null;
+  sess1.diver.x = cache.x;
+  sess1.diver.y = cache.y;
+  stepDiveSession(sess1, { x: 0, y: 0 }, 0.05, {
+    onWorldGearFound: (gc) => {
+      foundEvent = gc;
+      book = recordFoundWorldGear(book, { slot: gc.slot, itemId: gc.itemId, siteId: LEVEL_1.id, siteName: LEVEL_1.name }).book;
+    },
+  });
+  assert.ok(foundEvent && foundEvent.itemId === 'world-cartographer-visor', 'Swimming onto world gear cache must trigger discovery');
+  assert.equal(cache.opened, true);
+  assert.equal(sess1.gearCacheBonusScore, 300);
+  assert.equal(computeUnlockedLiveries(book).visors.has('world-cartographer-visor'), true, 'Found world gear must unlock in Gear Workshop');
+
+  const sess2 = createDiveSession(LEVEL_1, { diverName: 'Explorer', foundGear: book.foundGear });
+  assert.equal(sess2.worldGearCaches[0].opened, true, 'Already-discovered world cache must stay opened on future dives');
+
+  // 5. Gameplay physics: Thermal Mantle Cold Immunity, Hydro-Ghost wall shelter, Narc Resist & Bump Armor
+  const coldSess = createDiveSession(LEVEL_1, {
+    diverName: 'ThermalTester',
+    livery: { suitId: 'secret-volcanic-nautilus' },
+  });
+  assert.equal(coldSess.rigPerf.coldResist, 1.0);
+  coldSess.hazards.thermoclines = [{ id: 'th-test', x: 20, y: 20, rx: 6, ry: 4, tempDropC: 10, phase: 0 }];
+  coldSess.diver.x = 20;
+  coldSess.diver.y = 20;
+  coldSess.hazards.thermoclineColdFactor = 0.8;
+  const coldRes = stepDynamicHazards(coldSess, 0.2, {});
+  assert.equal(coldRes.gasRateMult, 1.0, 'Thermal Mantle must grant 100% Cold Thermocline gas immunity');
+  assert.equal(coldRes.coldHeartRateBonus, 0, 'Thermal Mantle must grant 100% Cold Thermocline HR immunity');
+
+  const baseHydro = evaluateDiverHydrology({ flowVx: 1.0, flowVy: 0, swimX: -1, swimY: 0, clearanceM: 1.0 });
+  const ghostHydro = evaluateDiverHydrology({ flowVx: 1.0, flowVy: 0, swimX: -1, swimY: 0, clearanceM: 1.0, hydroEfficiency: 0.36, hydroGhost: true });
+  assert.ok(ghostHydro.effectiveDragMult < baseHydro.effectiveDragMult, 'Hydro-Ghost must deepen Pull-and-Glide shelter');
+
+  const stNoRes = createDiveState();
+  const stWithRes = createDiveState();
+  stepDivePhysiology(stNoRes, { depthM: 48, prevDepthM: 48, dt: 1.0, headBumpImpulse: 2.0, narcResist: 0, bumpArmor: 0 });
+  stepDivePhysiology(stWithRes, { depthM: 48, prevDepthM: 48, dt: 1.0, headBumpImpulse: 2.0, narcResist: 0.45, bumpArmor: 0.55 });
+  assert.ok(stWithRes.narcosisLevel < stNoRes.narcosisLevel, 'narcResist must reduce deep nitrogen narcosis');
+  assert.ok(stWithRes.heartRateBpm < stNoRes.heartRateBpm, 'bumpArmor must cushion wall-bump HR shock');
+
+  // 6. Renderer renders World Gear Cache Light Pillar + Cartographer Relic Compass cleanly & line budgets stay safe
+  const drawn = [];
+  const mockCtx = new Proxy(
+    {
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 88 }),
+      fillText: (txt) => drawn.push(String(txt)),
+      canvas: { width: 1280, height: 720 },
+    },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r._isCoarseMobile = false;
+  r._drawDynamicHazards(
+    mockCtx,
+    {
+      thermoclines: [],
+      percolationZones: [],
+      shiftingHatches: [],
+      worldGearCaches: [{ ...cache, opened: false }],
+      rigPerf: cart3pc,
+    },
+    cache.x - 15, cache.x + 15, cache.y - 15, cache.y + 15,
+    (x) => 400 + x * 20, (y) => 200 + y * 20, 20, 3.5, { x: cache.x - 4, y: cache.y }
+  );
+  assert.ok(drawn.some((t) => t.includes('GEAR CACHE')), 'Renderer must draw proximity badge & Diablo light pillar for World Gear Cache');
+
+  const mainLines = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8').split('\n').length;
+  const rendLines = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8').split('\n').length;
+  assert.ok(mainLines < 8000, `main.js must stay < 8000 lines (currently ${mainLines})`);
+  assert.ok(rendLines < 5000, `renderer.js must stay < 5000 lines (currently ${rendLines})`);
+});

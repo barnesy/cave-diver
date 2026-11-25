@@ -506,7 +506,8 @@ export const lightingAndFxMethods = {
     };
 
     const localStrobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
-    carveDiverLight(diver, localTorch, 16.5 * (0.28 + 0.72 * localStrobe));
+    const rigReach = Math.max(0.9, Math.min(1.55, Number(diver.torchReachMult) || 1.0));
+    carveDiverLight(diver, localTorch, 16.5 * rigReach * (0.28 + 0.72 * localStrobe));
     const torchPeerIds = this._torchPeerIdsScratch || (this._torchPeerIdsScratch = new Set());
     torchPeerIds.clear();
     for (let i = 0; i < peerTorches.length; i++) {
@@ -1694,6 +1695,155 @@ export const lightingAndFxMethods = {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(pillTxt, dx, py);
+    }
+
+    // 5. World-Found Sunken Gear Caches with Diablo III Underwater Legendary Light Pillars (v216)
+    const worldCaches = Array.isArray(hazards.worldGearCaches) ? hazards.worldGearCaches : null;
+    if (worldCaches && worldCaches.length > 0) {
+      const TIER_RGB = {
+        uncommon: { rgb: '52, 211, 153', hex: '#34d399', light: '#d1fae5' },
+        rare: { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' },
+        epic: { rgb: '192, 132, 252', hex: '#c084fc', light: '#f3e8ff' },
+        mythic: { rgb: '250, 204, 21', hex: '#facc15', light: '#fef9c3' },
+      };
+      const rigGlowBonus = hazards.rigPerf?.relicGlowBonusM || 0;
+      for (let i = 0; i < worldCaches.length; i++) {
+        const gc = worldCaches[i];
+        if (!gc) continue;
+        const openedAge = gc.opened ? Math.max(0, timeSec - (gc.openedAt || 0)) : 0;
+        if (gc.opened && openedAge > 4.2) continue;
+        if (gc.x + 4 < visX0 || gc.x - 4 > visX1 || gc.y + 8 < visY0 || gc.y - 10 > visY1) continue;
+
+        const pal = TIER_RGB[gc.tier] || TIER_RGB.rare;
+        const bobY = Math.sin(timeSec * 2.2 + i * 1.7) * 0.16;
+        const sx = toScreenX(gc.x);
+        const sy = toScreenY(gc.y + bobY);
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 4.4 + i);
+        const flareAlpha = gc.opened ? Math.max(0, 1 - openedAge / 4.2) : 1;
+
+        // Diablo III Iconic Underwater Rarity Light Pillar rising cleanly through the water column!
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        const pillarH = (gc.opened ? 9.5 + openedAge * 2.2 : 5.4 + pulse * 1.4) * scale;
+        const pillarW = (gc.opened ? 0.55 + (1 - flareAlpha) * 0.5 : 0.34 + pulse * 0.08) * scale;
+        const pg = ctx.createLinearGradient(sx, sy, sx, sy - pillarH);
+        pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.58 * flareAlpha).toFixed(3)})`);
+        pg.addColorStop(0.45, `rgba(${pal.rgb}, ${(0.24 * flareAlpha).toFixed(3)})`);
+        pg.addColorStop(1, `rgba(${pal.rgb}, 0)`);
+        ctx.fillStyle = pg;
+        ctx.beginPath();
+        ctx.moveTo(sx - pillarW, sy);
+        ctx.lineTo(sx - pillarW * 0.32, sy - pillarH);
+        ctx.lineTo(sx + pillarW * 0.32, sy - pillarH);
+        ctx.lineTo(sx + pillarW, sy);
+        ctx.closePath();
+        ctx.fill();
+
+        // Radial loot aura bloom around the sunken case
+        const auraR = (gc.opened ? 2.4 : 1.35 + pulse * 0.32) * scale;
+        const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
+        ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.62 * flareAlpha).toFixed(3)})`);
+        ag.addColorStop(0.5, `rgba(${pal.rgb}, ${(0.20 * flareAlpha).toFixed(3)})`);
+        ag.addColorStop(1, `rgba(${pal.rgb}, 0)`);
+        ctx.fillStyle = ag;
+        ctx.beginPath();
+        ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Waterproof Expedition Pelican Gear Crate silhouette
+        if (!gc.opened) {
+          const bw = Math.max(11, 0.72 * scale);
+          const bh = Math.max(8, 0.48 * scale);
+          ctx.save();
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = pal.hex;
+          ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+          ctx.beginPath();
+          ctx.roundRect?.(sx - bw * 0.5, sy - bh * 0.5, bw, bh, Math.max(2.5, 0.1 * scale)) ??
+            ctx.rect(sx - bw * 0.5, sy - bh * 0.5, bw, bh);
+          ctx.fill();
+          ctx.stroke();
+          // Central clasp + rarity glow strip
+          ctx.fillStyle = pal.hex;
+          ctx.fillRect(sx - bw * 0.42, sy - bh * 0.08, bw * 0.84, Math.max(1.5, bh * 0.16));
+          ctx.fillStyle = pal.light;
+          ctx.beginPath();
+          ctx.arc(sx, sy, Math.max(2, 0.09 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Proximity label when diver is within discovery range
+          const distM = diver ? Math.hypot(diver.x - gc.x, diver.y - gc.y) : 99;
+          if (distM <= 14 + rigGlowBonus) {
+            const label = `${gc.icon || '📦'} GEAR CACHE · ${String(gc.tier || 'rare').toUpperCase()}`;
+            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+            const tw = ctx.measureText(label).width + 12;
+            const ly = sy - bh * 0.5 - 12;
+            ctx.fillStyle = 'rgba(7, 18, 34, 0.88)';
+            ctx.strokeStyle = pal.hex;
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.roundRect?.(sx - tw * 0.5, ly - 8, tw, 16, 7) ?? ctx.rect(sx - tw * 0.5, ly - 8, tw, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = pal.light;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, sx, ly);
+          }
+        }
+      }
+    }
+
+    // 6. Sunken Cartographer Set Capstone: Golden Diegetic Relic & Gear Cache Compass Arc (v216)
+    if (hazards.rigPerf?.relicCompass && diver) {
+      let bestTarget = null;
+      let bestDist = 28;
+      if (Array.isArray(hazards.worldGearCaches)) {
+        for (let i = 0; i < hazards.worldGearCaches.length; i++) {
+          const gc = hazards.worldGearCaches[i];
+          if (!gc || gc.opened) continue;
+          const d = Math.hypot(gc.x - diver.x, gc.y - diver.y);
+          if (d < bestDist && d > 1.8) {
+            bestDist = d;
+            bestTarget = { x: gc.x, y: gc.y, isGear: true };
+          }
+        }
+      }
+      if (!bestTarget && Array.isArray(this.level?.collectibles)) {
+        for (let i = 0; i < this.level.collectibles.length; i++) {
+          const item = this.level.collectibles[i];
+          if (!item) continue;
+          const d = Math.hypot(item.x - diver.x, item.y - diver.y);
+          if (d < bestDist && d > 2.2) {
+            bestDist = d;
+            bestTarget = { x: item.x, y: item.y, isGear: false };
+          }
+        }
+      }
+      if (bestTarget) {
+        const dx = toScreenX(diver.x);
+        const dy = toScreenY(diver.y);
+        const ang = Math.atan2(bestTarget.y - diver.y, bestTarget.x - diver.x);
+        const compassR = Math.max(28, 1.32 * scale);
+        const pulse = 0.55 + 0.45 * Math.sin(timeSec * 4.5);
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.strokeStyle = `rgba(250, 204, 21, ${(0.52 + pulse * 0.36).toFixed(3)})`;
+        ctx.lineWidth = Math.max(2.0, 0.07 * scale);
+        ctx.beginPath();
+        ctx.arc(dx, dy, compassR, ang - 0.36, ang + 0.36);
+        ctx.stroke();
+        // Golden compass pointer chevron tip
+        const tipX = dx + Math.cos(ang) * (compassR + Math.max(6, 0.22 * scale));
+        const tipY = dy + Math.sin(ang) * (compassR + Math.max(6, 0.22 * scale));
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, Math.max(2.4, 0.08 * scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     ctx.restore();

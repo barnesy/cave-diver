@@ -11108,6 +11108,217 @@ summary,
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
 }
 
+/* ─── v216 Ultra Mode Gear Performance Sheet, Diablo III Stat Deltas & World/Earned Badges ─── */
+.livery-perf-panel {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(6, 22, 42, 0.92), rgba(4, 14, 28, 0.96));
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.1), 0 6px 18px rgba(0, 0, 0, 0.34);
+}
+.livery-perf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.livery-perf-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #7dd3fc;
+}
+.livery-perf-cmp {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: rgba(250, 204, 21, 0.18);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  color: #fde047;
+  font-size: 0.65rem;
+}
+.livery-perf-sub {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+.livery-perf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+@media (max-width: 560px) {
+  .livery-perf-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.livery-perf-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  margin-bottom: 3px;
+}
+.livery-perf-stat-row strong {
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+}
+.livery-perf-bar {
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+.livery-perf-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.25s ease;
+}
+.livery-perf-fill.c-cyan { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.livery-perf-fill.c-emerald { background: linear-gradient(90deg, #059669, #34d399); }
+.livery-perf-fill.c-teal { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
+.livery-perf-fill.c-amber { background: linear-gradient(90deg, #d97706, #fbbf24); }
+.livery-perf-fill.c-violet { background: linear-gradient(90deg, #7c3aed, #c084fc); }
+.livery-perf-fill.c-rose { background: linear-gradient(90deg, #e11d48, #fb7185); }
+.livery-perf-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.22);
+}
+.livery-delta-chip {
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-variant-numeric: tabular-nums;
+}
+.livery-delta-chip.pos {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.55);
+  color: #6ee7b7;
+}
+.livery-delta-chip.neg {
+  background: rgba(244, 63, 94, 0.18);
+  border: 1px solid rgba(251, 113, 133, 0.55);
+  color: #fda4af;
+}
+.livery-perf-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 7px;
+}
+.livery-perf-set-pill {
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid color-mix(in srgb, var(--set-color, #38bdf8) 55%, transparent);
+  color: #e2e8f0;
+}
+.livery-perf-set-pill.capstone {
+  background: rgba(30, 27, 75, 0.78);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--set-color, #facc15) 28%, transparent);
+}
+.livery-perf-powers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.livery-perf-powers.empty {
+  font-size: 0.66rem;
+  color: #64748b;
+  font-style: italic;
+}
+.livery-perf-power-chip {
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.42);
+  color: #fef08a;
+}
+.livery-perf-power-chip.src-set-capstone {
+  background: rgba(192, 132, 252, 0.2);
+  border-color: rgba(216, 180, 254, 0.62);
+  color: #f3e8ff;
+}
+.livery-source-pill {
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 99px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.livery-source-pill.src-world {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(52, 211, 153, 0.58);
+  color: #6ee7b7;
+}
+.livery-source-pill.src-earned {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  color: #bae6fd;
+}
+.livery-stat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+.livery-stat-pill {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #e0f2fe;
+  font-variant-numeric: tabular-nums;
+}
+.livery-power-badge {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fde047;
+}
+.livery-set-chip.tier2 {
+  border-color: color-mix(in srgb, var(--set-color, #38bdf8) 65%, transparent);
+  background: rgba(14, 42, 68, 0.72);
+}
+.gear-unlock-stats-box {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(6, 22, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.34);
+}
+.gear-unlock-stat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+}
+.gear-unlock-power {
+  margin-top: 6px;
+  font-size: 0.74rem;
+  color: #fef08a;
+  text-align: center;
+}
+
+
 
 
 

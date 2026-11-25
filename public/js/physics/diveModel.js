@@ -428,6 +428,8 @@ export function stepDivePhysiology(
     thrustMag = exertion,
     gasBurnMultiplier = 1.0,
     decoOffgasMult = 1.0,
+    narcResist = 0,
+    bumpArmor = 0,
   }
 ) {
   if (!state.alive || dt <= 0) return state;
@@ -445,9 +447,10 @@ export function stepDivePhysiology(
 
   // Heart rate & Panic response: head-bumps and stuck swimming spike HR until diver stops swimming to calm down
   const isRestingCalm = thrustMag < 0.12 && !isStuck;
-  if (headBumpImpulse > 0) {
-    state.panicLevel = Math.min(1, (state.panicLevel || 0) + Math.min(0.45, headBumpImpulse * 0.22));
-    state.heartRateBpm = Math.min(198, (state.heartRateBpm || 68) + Math.min(22, headBumpImpulse * 8));
+  const effBump = headBumpImpulse * (1 - Math.max(0, Math.min(0.85, Number(bumpArmor) || 0)));
+  if (effBump > 0) {
+    state.panicLevel = Math.min(1, (state.panicLevel || 0) + Math.min(0.45, effBump * 0.22));
+    state.heartRateBpm = Math.min(198, (state.heartRateBpm || 68) + Math.min(22, effBump * 8));
   }
   if (isStuck) {
     state.panicLevel = Math.min(1, (state.panicLevel || 0) + dt * 0.34);
@@ -544,7 +547,9 @@ export function stepDivePhysiology(
   }
 
   // 3. NITROGEN NARCOSIS (END > 28m; frame-rate-independent smoothing reverses cleanly on Trimix/ascent)
-  const targetNarc = endM > 28 ? Math.min(1, (endM - 28) / 22) : 0;
+  const rawTargetNarc = endM > 28 ? Math.min(1, (endM - 28) / 22) : 0;
+  const narcShield = Math.max(0, Math.min(0.85, Number(narcResist) || 0));
+  const targetNarc = rawTargetNarc * (1 - narcShield);
   const narcAlpha = 1 - Math.exp(-dt * 1.8);
   state.narcosisLevel += (targetNarc - state.narcosisLevel) * narcAlpha;
 
@@ -556,7 +561,7 @@ export function stepDivePhysiology(
   // CCR optimal deco setpoint also accelerates shallow decompression off-gassing (1.28x on High 1.3 bar, 1.10x on Low 0.7 bar)
   const deepHeOffgasMult = clampedDepth > 9.0 ? 2.2 : 1.0;
   const ccrDecoOffgasMult = ccrLoopActive && clampedDepth <= 9.5 ? (ccrHighSp ? 1.28 : 1.10) : 1.0;
-  const steadyTrimOffgasMult = Math.max(1.0, Math.min(1.5, Number(decoOffgasMult) || 1.0));
+  const steadyTrimOffgasMult = Math.max(1.0, Math.min(1.85, Number(decoOffgasMult) || 1.0));
   for (let i = 0; i < state.compartments.length; i++) {
     const c = state.compartments[i];
     const spec = COMPARTMENTS[i];

@@ -1004,6 +1004,23 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.beginPath();
     ctx.arc(u * 0.52, headY - u * 0.285, Math.max(1.4, u * 0.045), 0, Math.PI * 2);
     ctx.fill();
+  } else if (headgearId === 'world-thermal-hood') {
+    // Nordic 9mm Insulated Thermal Hood with frosted arctic fleece collar & glowing ice-cyan seal
+    ctx.fillStyle = '#0c233a';
+    ctx.beginPath();
+    ctx.arc(u * 0.44, headY, u * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#bae6fd';
+    ctx.lineWidth = Math.max(1.8, u * 0.068);
+    ctx.beginPath();
+    ctx.moveTo(u * 0.16, headY - u * 0.24);
+    ctx.quadraticCurveTo(u * 0.24, headY, u * 0.16, headY + u * 0.24);
+    ctx.stroke();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = Math.max(1.3, u * 0.044);
+    ctx.beginPath();
+    ctx.arc(u * 0.43, headY, u * 0.27, Math.PI * 1.05, Math.PI * 1.82);
+    ctx.stroke();
   } else if (headgearId === 'cave-hood') {
     // Contoured 7mm technical neoprene cave hood with twin high-vis reflective trim lines
     ctx.fillStyle = '#0f172a';
@@ -1427,6 +1444,15 @@ export function drawArticulatedDiverLeg(
 
   // Bold high-vis trailing fin-tip accent band + side rails matching Workshop Trim/Fin Accent
   if (finLen > 4) {
+    if (liveryPalette?.trimSpec?.id === 'world-hydro-fins') {
+      // Split-blade hydro-fin vortex channel glowing aqua down the blade center
+      ctx.strokeStyle = '#67e8f9';
+      ctx.lineWidth = Math.max(1.3, 0.036 * scale);
+      ctx.beginPath();
+      ctx.moveTo(midX, midY);
+      ctx.lineTo(fx - dirX * (0.02 * scale), fy - dirY * (0.02 * scale));
+      ctx.stroke();
+    }
     ctx.strokeStyle = finAccentColor;
     ctx.lineWidth = Math.max(1.4, 0.042 * scale);
     ctx.lineCap = 'round';

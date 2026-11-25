@@ -10,6 +10,7 @@ import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
 import { stepSyncedSonarPings } from './sonarPings.js';
 import { resolveGearWakeProfile } from './rigLivery.js';
+import { computeRigPerformanceProfile, createWorldGearCachesForLevel } from './gearStats.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 import {
   createSalvageState,
@@ -472,6 +473,7 @@ export function createDiveSession(
     livery = null,
     crewRoleId = 'balanced',
     modifiers = [],
+    foundGear = null,
   } = {}
 ) {
   const cleanModifiers = sanitizeExpeditionModifiers(modifiers);
@@ -498,9 +500,16 @@ export function createDiveSession(
       ? { ...(level.gasOverrides || {}), ...customMixOverrides }
       : level.gasOverrides;
   const resolvedWeather = resolveEffectiveWeather(weatherId, { level });
+  const rigPerf = computeRigPerformanceProfile(livery);
+  const worldGearCaches = createWorldGearCachesForLevel(level, foundGear);
+  const hazards = createDynamicHazards(level);
+  hazards.worldGearCaches = worldGearCaches;
+  hazards.rigPerf = rigPerf;
 
   return {
     level,
+    rigPerf,
+    worldGearCaches,
     difficulty: cleanDiff,
     mutatorId: cleanMutator,
     modifiers: cleanModifiers,
@@ -532,7 +541,7 @@ export function createDiveSession(
       photos: [],
     },
     encounters: createDynamicEncounters(level),
-    hazards: createDynamicHazards(level),
+    hazards,
     blackBox: createBlackBoxTarget(level),
     blackBoxBonusScore: 0,
     powerRelays: createPowerRelays(level),
@@ -593,6 +602,7 @@ export function createDiveSession(
       torchAngle: 0.15,
       torchManualAim: false,
       torchOn: true,
+      torchReachMult: rigPerf.torchReachMult || 1.0,
       strobeMod: 1.0,
       hasCcr: cleanGear.ccr,
       hasDpv: cleanGear.dpv,
@@ -768,7 +778,7 @@ export function triggerSonarPing(session, callbacks = {}) {
   const { level, diver } = session;
   const isUpgradedSonar = Boolean(session.sonar.equipped);
   const baseRadiusM = isUpgradedSonar ? 28.0 : 16.0;
-  const maxRadiusM = baseRadiusM * (session.crewRole?.sonarRangeMult || 1.0);
+  const maxRadiusM = baseRadiusM * (session.crewRole?.sonarRangeMult || 1.0) * (session.rigPerf?.sonarRangeMult || 1.0);
   const rayCount = isUpgradedSonar ? 48 : 32;
   const wallHits = [];
   for (let i = 0; i < rayCount; i++) {
@@ -811,6 +821,9 @@ export function triggerSonarPing(session, callbacks = {}) {
     if (session.encounters?.beacon && !session.encounters.beacon.claimed) {
       const bc = session.encounters.beacon;
       addContact(bc.x, bc.y, 'beacon', '📡', bc.label);
+    }
+    for (const gc of session.worldGearCaches || []) {
+      if (!gc.opened) addContact(gc.x, gc.y, 'gear-cache', gc.icon || '📦', `GEAR CACHE · ${gc.itemName || gc.itemId}`);
     }
     // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
     if (session.hazards) {
@@ -3141,7 +3154,7 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
     rawSalvageDrag < 1.0 && (session.crewRole?.salvageDragBonus || 0) > 0
       ? Math.min(1.0, rawSalvageDrag + session.crewRole.salvageDragBonus)
       : rawSalvageDrag;
-  const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult * salvageDragMult;
+  const swimMult = (imp.swimMultiplier ?? 1) * towDrag * stageTrimMult * salvageDragMult * (session.rigPerf?.swimSpeedMult || 1.0);
   const dpvHorizMult = dpvThrusting ? 1.82 : 1.0;
   const dpvVertMult = dpvThrusting ? (ctrlY < 0 ? 1.38 : 1.68) : 1.0;
   const mutHorizMult = mutatorId === 'turbo-par' ? 1.22 : 1.0;
@@ -3270,6 +3283,8 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
     swimY: swimRefY,
     clearanceM,
     clippedToShotLine: Boolean(session.clippedToShotLine),
+    hydroEfficiency: session.rigPerf?.hydroEfficiency || 0,
+    hydroGhost: Boolean(session.rigPerf?.hydroGhost),
   });
   if (!session.clippedToShotLine && hydro.flowSpeed > 0.01) {
     diver.vx += hydro.flowVx * hydro.effectiveDragMult * dt;
@@ -3443,7 +3458,8 @@ function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
         }
         session.squadAssistActive = hasSquadHelper;
         const roleCrankMult = session.crewRole?.crankSpeedMult || 1.0;
-        const crankMult = (hasSquadHelper ? 2.0 : 1.0) * roleCrankMult;
+        const rigCrankMult = session.rigPerf?.crankSpeedMult || 1.0;
+        const crankMult = (hasSquadHelper ? 2.0 : 1.0) * roleCrankMult * rigCrankMult;
         session.crankingHatchProgress = Math.min(1, (session.crankingHatchProgress || 0) + (dt / 1.35) * crankMult);
         session.crankTickAccum = (session.crankTickAccum || 0) + dt;
         if (session.crankTickAccum >= 0.28) {
@@ -3923,16 +3939,20 @@ function stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx) {
 
   if (siltStirTimer.warnCooldown > 0) siltStirTimer.warnCooldown -= dt;
   const isSiltStorm = mutatorId === 'silt-storm';
-  const heavyWash = stirFloorSilt(level, diver, siltClouds, {
-    dt,
-    thrustMag,
-    timerState: siltStirTimer,
-    onSpawn: callbacks.onSiltSpawn,
-    difficulty: session.difficulty || 'standard',
-    dpvBoost: dpvThrusting,
-    mutatorMult: isSiltStorm ? 1.75 : 1.0,
-    finTechnique: diver.finTechnique || 'frog',
-  });
+  const curSwimSpeed = Math.hypot(diver.vx || 0, diver.vy || 0);
+  const siltGhostSuppressed = Boolean(session.rigPerf?.siltGhost) && !dpvThrusting && curSwimSpeed < 1.2;
+  const heavyWash = siltGhostSuppressed
+    ? false
+    : stirFloorSilt(level, diver, siltClouds, {
+        dt,
+        thrustMag,
+        timerState: siltStirTimer,
+        onSpawn: callbacks.onSiltSpawn,
+        difficulty: session.difficulty || 'standard',
+        dpvBoost: dpvThrusting,
+        mutatorMult: (isSiltStorm ? 1.75 : 1.0) * (session.rigPerf?.siltStirMult || 1.0),
+        finTechnique: diver.finTechnique || 'frog',
+      });
   if (isSiltStorm && diver.y > 5.0 && thrustMag > 0.18 && siltClouds.length < 135 && Math.random() < dt * 0.85) {
     const wisp = spawnSiltPlume(siltClouds, {
       x: diver.x - Math.cos(diver.angle) * 0.65 + (Math.random() - 0.5) * 0.7,
@@ -3982,7 +4002,8 @@ function stepHydrodynamicsAndSilt(session, thrust, dt, callbacks, ctx) {
       const cdx = item.x - diver.x;
       const cdy = item.y - diver.y;
       const cdist = Math.hypot(cdx, cdy);
-      if (cdist <= 5.2 || (torchActive && cdist <= 13.5 && (cdx * tfx + cdy * tfy) / Math.max(0.01, cdist) > 0.72)) {
+      const relicBonusM = session.rigPerf?.relicGlowBonusM || 0;
+      if (cdist <= 5.2 + relicBonusM * 0.4 || (torchActive && cdist <= 13.5 + relicBonusM && (cdx * tfx + cdy * tfy) / Math.max(0.01, cdist) > 0.72)) {
         session.spottedArtifacts.add(item.id);
       }
     }
@@ -4120,10 +4141,14 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         (session.drills?.active?.kind === 'free-flow' ? 3.0 : 1.0) *
         (hazRes.gasRateMult || 1.0) *
         (session.hydrology?.gasBurnMult || 1.0) *
-        (role?.gasBurnMult || 1.0),
+        (role?.gasBurnMult || 1.0) *
+        (session.rigPerf?.gasBurnMult || 1.0),
       decoOffgasMult:
         (role?.decoClearMult || 1.0) *
+        (session.rigPerf?.decoOffgasMult || 1.0) *
         (session.decoMastery?.masteryActive ? 1.22 : 1.0),
+      narcResist: session.rigPerf?.narcResist || 0,
+      bumpArmor: session.rigPerf?.bumpArmor || 0,
     });
 
     // Steady-Trim Decompression Mastery & Clean Deco-Clear Milestone Tracking (v214)
@@ -4131,6 +4156,7 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
     if (dm) {
       const stopM = diveState.stopDepthM || 0;
       const curD = Math.max(0, diver.y);
+      const lockSec = session.rigPerf?.halcyonDecoFastLock ? 0.7 : 1.4;
       dm.targetStopM = stopM;
       if (stopM > 0 && diveState.ceilingM > 0.4) {
         dm.hadCeiling = true;
@@ -4143,13 +4169,13 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         if (dm.inStopZone && calmTrim) {
           dm.steadySec = Math.min(30, dm.steadySec + dt);
           dm.totalSteadySec += dt;
-          dm.masteryActive = dm.steadySec >= 1.4;
+          dm.masteryActive = dm.steadySec >= lockSec;
           if (dm.masteryActive && dm.bonusScore < 250) {
             dm.bonusScore = Math.min(250, dm.bonusScore + dt * (dm.idealGas ? 18 : 12));
           }
         } else {
           dm.steadySec = Math.max(0, dm.steadySec - dt * 1.6);
-          dm.masteryActive = dm.steadySec >= 1.4;
+          dm.masteryActive = dm.steadySec >= lockSec;
         }
       } else {
         if (dm.hadCeiling && diveState.alive) {
@@ -4326,6 +4352,34 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         duration: 1.35,
       });
       callbacks.onCollect?.(item);
+    }
+  }
+  // World-Found Sunken Gear Caches (v216 Zelda/Diablo world discovery loot crates!)
+  if (Array.isArray(session.worldGearCaches) && session.worldGearCaches.length > 0) {
+    for (let i = 0; i < session.worldGearCaches.length; i++) {
+      const gc = session.worldGearCaches[i];
+      if (!gc || gc.opened) continue;
+      if (Math.hypot(diver.x - gc.x, diver.y - gc.y) <= (gc.radius || 1.9)) {
+        gc.opened = true;
+        gc.openedAt = session.simTimeSec || 0;
+        session.gearCacheBonusScore = (session.gearCacheBonusScore || 0) + 300;
+        session.collectBursts.push({
+          x: gc.x,
+          y: gc.y,
+          points: 300,
+          kind: 'gear-cache',
+          age: 0,
+          duration: 1.85,
+        });
+        recordDiveHighlight(session, {
+          kind: 'moment',
+          icon: gc.icon || '📦',
+          label: `Found Gear: ${gc.itemName || gc.itemId}`,
+          depthM: Math.max(0, gc.y),
+        });
+        callbacks.onToast?.(`📦 SUNKEN GEAR FOUND · ${gc.itemName || gc.itemId} (${gc.tier?.toUpperCase() || 'RARE'}) — Unlocked in Gear Workshop!`, 4.4);
+        callbacks.onWorldGearFound?.(gc);
+      }
     }
   }
   if (session.collectBursts && session.collectBursts.length > 0) {
@@ -4573,7 +4627,9 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
         (session.wildlifeHarmonyScore || 0) +
         (session.contractBonusScore || 0) +
         (session.aiLeadBonusScore || 0) +
-        (session.secretLair?.bonusScore || 0),
+        (session.secretLair?.bonusScore || 0) +
+        (session.gearCacheBonusScore || 0) +
+        Math.round(Math.max(0, (session.rigPerf?.scoreBonusMult || 1) - 1) * 1200),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,
       drillBonusScore: session.drills?.bonusScore || 0,

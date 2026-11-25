@@ -40,6 +40,7 @@ export function createEmptyLogbook() {
     crewBonds: {}, // aiBuddyId -> { dives, clears, rescues } (v161 zero-config passive veteran bond)
     artifacts: {}, // artifactId -> { name, kind, siteId, siteName, lore, points, count, scale } (v168-v169 Trophy Museum Vault)
     pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
+    foundGear: {}, // "slot:itemId" -> { foundAt, siteId, siteName } (v216 World-Found Sunken Gear Caches)
   };
 }
 
@@ -165,6 +166,16 @@ function normalizeBook(raw) {
   if (typeof raw.pinnedArtifactId === 'string') {
     const pid = raw.pinnedArtifactId.trim().slice(0, 64);
     if (pid && base.artifacts[pid]) base.pinnedArtifactId = pid;
+  }
+  if (raw.foundGear && typeof raw.foundGear === 'object') {
+    for (const [gk, rec] of Object.entries(raw.foundGear).slice(0, 80)) {
+      if (!gk || !rec || typeof rec !== 'object') continue;
+      base.foundGear[gk] = {
+        siteId: typeof rec.siteId === 'string' ? rec.siteId.slice(0, 48) : '',
+        siteName: typeof rec.siteName === 'string' ? rec.siteName.slice(0, 64) : '',
+        foundAt: Math.max(0, Math.round(Number(rec.foundAt) || Date.now())),
+      };
+    }
   }
   return base;
 }
@@ -375,6 +386,10 @@ export function mergeCareerLogbooks(rawA, rawB) {
   }
   const candPin = a.pinnedArtifactId || b.pinnedArtifactId || '';
   out.pinnedArtifactId = candPin && out.artifacts[candPin] ? candPin : '';
+  const fgKeys = new Set([...Object.keys(a.foundGear || {}), ...Object.keys(b.foundGear || {})]);
+  for (const gk of fgKeys) {
+    out.foundGear[gk] = { ...(b.foundGear?.[gk] || {}), ...(a.foundGear?.[gk] || {}) };
+  }
 
   return out;
 }
@@ -1545,6 +1560,7 @@ export function exportLogbookToJson(rawBook, levels = [], meta = {}) {
       },
       artifacts: book.artifacts,
       pinnedArtifactId: book.pinnedArtifactId || '',
+      foundGear: book.foundGear || {},
       sites,
     },
     null,
@@ -1602,6 +1618,7 @@ export function parseImportedLogbookJson(rawInput) {
       fieldGuide: fgEntries,
       artifacts: data.artifacts && typeof data.artifacts === 'object' ? data.artifacts : {},
       pinnedArtifactId: typeof data.pinnedArtifactId === 'string' ? data.pinnedArtifactId : '',
+      foundGear: data.foundGear && typeof data.foundGear === 'object' ? data.foundGear : {},
     };
   } else if (data.cleared && typeof data.cleared === 'object' && !Array.isArray(data.cleared)) {
     candidate = data;
@@ -1733,6 +1750,26 @@ export function setPinnedArtifactInLogbook(rawBook, artifactId = '') {
   const cleanId = String(artifactId || '').trim().slice(0, 64);
   book.pinnedArtifactId = cleanId && book.artifacts[cleanId] ? cleanId : '';
   return book;
+}
+
+/**
+ * Permanently record a World-Found Sunken Gear Cache discovery in the Career Logbook (v216).
+ */
+export function recordFoundWorldGear(rawBook, { slot = '', itemId = '', siteId = '', siteName = '' } = {}) {
+  const book = normalizeBook(rawBook);
+  const s = String(slot || '').trim();
+  const id = String(itemId || '').trim();
+  if (!s || !id) return { book, isNew: false, key: '' };
+  const key = `${s}:${id}`;
+  const isNew = !book.foundGear[key];
+  if (isNew) {
+    book.foundGear[key] = {
+      siteId: String(siteId || '').slice(0, 48),
+      siteName: String(siteName || '').slice(0, 64),
+      foundAt: Date.now(),
+    };
+  }
+  return { book, isNew, key };
 }
 
 /**

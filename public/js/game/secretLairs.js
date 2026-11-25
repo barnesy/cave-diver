@@ -2418,12 +2418,13 @@ export function fireSpeargun(
   const sy = Number.isFinite(originY) ? originY : (diver.body?.hand ? diver.body.hand.y : diver.y);
   const ang = Number.isFinite(aimAngle) ? aimAngle : (diver.torchAngle ?? diver.angle ?? 0);
   const cFrac = Math.max(0, Math.min(1, Number(chargeFrac) || 0));
-  const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;
+  const rigSpearMult = isLocal ? (session.rigPerf?.spearPowerMult || 1.0) : 1.0;
+  const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : (isLocal && session.rigPerf?.apexOvercharge ? 4 : 5);
   const isHyper = (isLocal && lair.shotCounter % hyperEvery === 0) || cFrac >= 0.72;
   const charged = isHyper || cFrac >= 0.45 || overLv >= 1;
-  const speedMult = rapidLv >= 2 ? 1.25 : rapidLv === 1 ? 1.15 : 1.0;
+  const speedMult = (rapidLv >= 2 ? 1.25 : rapidLv === 1 ? 1.15 : 1.0) * Math.min(1.35, 1 + (rigSpearMult - 1) * 0.55);
   const speed = (isHyper ? 32 : 27 + cFrac * 7) * speedMult;
-  const overDmgMult = overLv >= 2 ? 1.70 : overLv === 1 ? 1.35 : 1.0;
+  const overDmgMult = (overLv >= 2 ? 1.70 : overLv === 1 ? 1.35 : 1.0) * rigSpearMult;
   const rawBaseDmg = cFrac >= 0.45
     ? SPEARGUN_BASE_DAMAGE * (1 + cFrac * (SPEARGUN_MAX_CHARGE_MULT - 1))
     : SPEARGUN_BASE_DAMAGE * (isHyper ? SPEARGUN_HYPER_MULT : 1.0);
