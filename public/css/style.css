@@ -11593,20 +11593,24 @@ summary,
 
 .hud-gear-buffs {
   position: fixed;
-  top: max(12px, env(safe-area-inset-top));
+  top: max(18px, calc(env(safe-area-inset-top) + 10px));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 34;
+  z-index: 44;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 99px;
-  background: rgba(4, 18, 34, 0.78);
+  background: rgba(6, 22, 42, 0.92);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(56, 189, 248, 0.28);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.42);
   pointer-events: none;
-  max-width: calc(100vw - 260px);
+  max-width: calc(100vw - 440px);
+}
+.hud-gear-buffs[hidden] {
+  display: none !important;
 }
 .hud-gb-arch {
   font-size: 0.62rem;
