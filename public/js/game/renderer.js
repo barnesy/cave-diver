@@ -105,6 +105,12 @@ const nextFrame = () =>
     }
   });
 
+export function computeCameraDampingAlpha(dt, responsiveness = 6.0) {
+  const safeDt = Math.max(0, Math.min(0.25, Number(dt) || 0.016));
+  const rate = Math.max(0.5, Number(responsiveness) || 6.0);
+  return 1 - Math.exp(-rate * safeDt);
+}
+
 export class CaveRenderer {
   constructor(canvas, level, { deferBuild = false } = {}) {
     this.canvas = canvas;
@@ -303,6 +309,8 @@ export class CaveRenderer {
     this._shallowBiolumMotes = null;
     this._activeWeather = null;
     this._skyGradCache = null;
+    this._hydroWakeRing = null;
+    this._hydroWakeLastT = -1;
     this.camX = entry.level.spawn.x;
     this.camY = entry.level.spawn.y;
     this.ready = true;
@@ -909,18 +917,20 @@ export class CaveRenderer {
       const peekScaleY = inCombatMode ? 1.1 : 2.5;
       const peekX = isManualPeek ? Math.cos(camAnchor.torchAngle) * peekScale : 0;
       const peekY = isManualPeek ? Math.sin(camAnchor.torchAngle) * peekScaleY : 0;
-      let lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 0.85 : 2.2) + peekX;
+      const velLeadX = Math.max(-1.6, Math.min(1.6, (camAnchor.vx || 0) * (inCombatMode ? 0.16 : 0.28)));
+      const velLeadY = Math.max(-1.1, Math.min(1.1, (camAnchor.vy || 0) * (inCombatMode ? 0.12 : 0.2)));
+      let lookX = camAnchor.x + Math.cos(camAnchor.angle || 0) * (isManualPeek ? 0.85 : 2.0) + peekX + velLeadX;
       // Subtle plunge-entry camera settle during the first 1.5s of submerging (v161)
       const plungeDrop = !this._reducedMotion && timeSec >= 0 && timeSec < 1.5 && (camAnchor.y || 0) < 4.5
         ? Math.sin((1 - timeSec / 1.5) * Math.PI) * 0.42
         : 0;
-      let lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.6 : 1.4) + peekY + plungeDrop;
+      let lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.6 : 1.3) + peekY + velLeadY + plungeDrop;
       // Dramatic Awakening pan: smoothly frame both diver and *XIBALBA'S MAW* as sconces ignite! (v182)
       if (secretLair?.boss?.aiState === 'awakening' && !this._reducedMotion) {
         lookX = lookX * 0.66 + secretLair.boss.x * 0.34;
         lookY = lookY * 0.66 + secretLair.boss.y * 0.34;
       }
-      const camAlpha = Math.min(1, dt * (inCombatMode ? 5.2 : isManualPeek ? 3.2 : 6.0));
+      const camAlpha = computeCameraDampingAlpha(dt, inCombatMode ? 5.6 : isManualPeek ? 3.5 : 6.4);
       this.camX += (lookX - this.camX) * camAlpha;
       this.camY += (lookY - this.camY) * camAlpha;
     }
@@ -1184,7 +1194,8 @@ export class CaveRenderer {
       this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'world');
     }
 
-    // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams
+    // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams + Hydrodynamic Fin/DPV Wake (v202)
+    this._drawDiverHydroWake?.(ctx, diver, toScreenX, toScreenY, scale, timeSec);
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
     const lairArmed = Boolean(secretLair?.combatMode && secretLair?.weaponEquipped && !secretLair?.bossDefeated);
     for (let i = 0; i < peerList.length; i++) {
@@ -1293,6 +1304,8 @@ export class CaveRenderer {
       this._drawTorchLitBubbles(ctx, cw, ch, diver, bubbles, toScreenX, toScreenY, scale);
     }
     this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics, hazards, cw);
+    this._drawParallaxMarineSnow?.(ctx, cw, ch, effCamX, effCamY, surfY, scale, timeSec);
+    this._drawBossPhaseAtmosphere?.(ctx, cw, ch, secretLair, timeSec);
     if (!this.level.isWreck) {
       this._drawCaveInteractiveBeacons(ctx, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, wreckState);
     }

@@ -48,6 +48,49 @@ export function computeSpatialMix(listenerX, listenerY, sourceX, sourceY, { maxD
   };
 }
 
+/**
+ * Gas-mix & CCR acoustic timbre profile for regulator inhale/exhale synthesis (v202 AAA Polish).
+ * Helium-rich Trimix shifts resonant airflow upward; pure O2 feels denser/warmer;
+ * Closed-Circuit Rebreather (CCR) suppresses exhaust bubble rumble and adds a crisp solenoid micro-click.
+ */
+export function computeGasAcousticProfile(gasId = 'EAN32', ccrActive = false) {
+  const id = String(gasId || 'EAN32').toUpperCase();
+  if (ccrActive) {
+    return Object.freeze({
+      freqScale: 1.06,
+      exhaleGainScale: 0.34,
+      inhaleGainScale: 0.72,
+      lfoScale: 0.75,
+      solenoidClick: true,
+    });
+  }
+  if (id.startsWith('TMX')) {
+    return Object.freeze({
+      freqScale: 1.24,
+      exhaleGainScale: 0.94,
+      inhaleGainScale: 1.04,
+      lfoScale: 1.18,
+      solenoidClick: false,
+    });
+  }
+  if (id === 'O2') {
+    return Object.freeze({
+      freqScale: 0.86,
+      exhaleGainScale: 1.06,
+      inhaleGainScale: 0.96,
+      lfoScale: 0.88,
+      solenoidClick: false,
+    });
+  }
+  return Object.freeze({
+    freqScale: 1.0,
+    exhaleGainScale: 1.0,
+    inhaleGainScale: 1.0,
+    lfoScale: 1.0,
+    solenoidClick: false,
+  });
+}
+
 export class DiveAudio {
   constructor() {
     this.ctx = null;
@@ -388,16 +431,20 @@ export class DiveAudio {
     src.loop = true;
 
     const depthMuffle = Math.max(0.72, 1 - Math.min(120, depthM) / 380);
+    const gasProf = computeGasAcousticProfile(ev?.gasId, Boolean(ev?.ccrActive));
+    if (gasProf.solenoidClick) {
+      this.playTone(1920, 0.018, 'triangle', 0.018, 0, { bus: 'sfx' });
+    }
     const bodyFilter = this.ctx.createBiquadFilter();
     bodyFilter.type = 'lowpass';
-    const bodyPeakHz = (560 + intensity * 140 + panic * 150) * depthMuffle;
+    const bodyPeakHz = (560 + intensity * 140 + panic * 150) * depthMuffle * gasProf.freqScale;
     bodyFilter.frequency.setValueAtTime(Math.max(220, bodyPeakHz * 0.64), t);
     bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(260, bodyPeakHz), t + dur * 0.42);
     bodyFilter.frequency.exponentialRampToValueAtTime(Math.max(200, bodyPeakHz * 0.56), t + dur);
     bodyFilter.Q.value = 0.85;
 
     const bodyGain = this.ctx.createGain();
-    const peak = Math.min(0.044, 0.017 + intensity * 0.014 + panic * 0.01);
+    const peak = Math.min(0.044, 0.017 + intensity * 0.014 + panic * 0.01) * gasProf.inhaleGainScale;
     const riseEnd = t + Math.max(0.14, dur * 0.32);
     const holdEnd = t + dur * 0.62;
     bodyGain.gain.setValueAtTime(0.0001, t);
@@ -408,7 +455,7 @@ export class DiveAudio {
     // Layer 2: Wide, gentle airflow texture well below piercing frequencies
     const airFilter = this.ctx.createBiquadFilter();
     airFilter.type = 'bandpass';
-    const airFreq = (820 + intensity * 190 + panic * 260) * depthMuffle;
+    const airFreq = (820 + intensity * 190 + panic * 260) * depthMuffle * gasProf.freqScale;
     airFilter.frequency.setValueAtTime(airFreq * 0.9, t);
     airFilter.frequency.exponentialRampToValueAtTime(airFreq * 1.06, t + dur * 0.42);
     airFilter.frequency.exponentialRampToValueAtTime(airFreq * 0.84, t + dur);
@@ -455,6 +502,7 @@ export class DiveAudio {
     if (!noise) return;
     const t = this.ctx.currentTime;
     const depthMuffle = Math.max(0.68, 1 - Math.min(150, depthM) / 420);
+    const gasProf = computeGasAcousticProfile(isObj ? ev.gasId : 'EAN32', Boolean(isObj && ev.ccrActive));
 
     // Layer 1: Low-mid pressurized bubble exhaust rumble with organic LFO burble modulation
     const src = this.ctx.createBufferSource();
@@ -463,7 +511,7 @@ export class DiveAudio {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    const centerFreq = (300 + intensity * 140 + panic * 110) * depthMuffle;
+    const centerFreq = (300 + intensity * 140 + panic * 110) * depthMuffle * gasProf.freqScale;
     filter.frequency.setValueAtTime(centerFreq * 1.15, t);
     filter.frequency.exponentialRampToValueAtTime(centerFreq * 0.62, t + dur);
     filter.Q.value = 1.6;
@@ -471,12 +519,12 @@ export class DiveAudio {
     // LFO creates distinct underwater bubble-pocket cadence (enveloped cleanly to prevent onset/tail clicks)
     const lfo = this.ctx.createOscillator();
     lfo.type = 'sine';
-    const lfoRate = 12.5 + intensity * 5.5 + panic * 6.0;
+    const lfoRate = (12.5 + intensity * 5.5 + panic * 6.0) * gasProf.lfoScale;
     lfo.frequency.setValueAtTime(lfoRate * 1.15, t);
     lfo.frequency.linearRampToValueAtTime(lfoRate * 0.72, t + dur);
 
     const lfoGain = this.ctx.createGain();
-    const peak = Math.min(0.088, 0.036 + intensity * 0.026 + panic * 0.02);
+    const peak = Math.min(0.088, 0.036 + intensity * 0.026 + panic * 0.02) * gasProf.exhaleGainScale;
     const attackEnd = t + Math.min(0.09, dur * 0.14);
     lfoGain.gain.setValueAtTime(0.0001, t);
     lfoGain.gain.exponentialRampToValueAtTime(peak * 0.34, attackEnd);
@@ -629,6 +677,50 @@ export class DiveAudio {
     this.playTone(980, 0.045, 'triangle', 0.045, 0);
     this.playTone(1460, 0.035, 'sine', 0.028, 0.02);
     this.triggerHaptic('action');
+  }
+
+  /** Tactile switch toggle foley for Dive Setup & Modifier chips (v202 AAA Polish). */
+  playUiToggle(enabled = true) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (enabled) {
+      this.playTone(620, 0.055, 'triangle', 0.036, 0, { bus: 'sfx' });
+      this.playTone(930, 0.07, 'sine', 0.032, 0.03, { bus: 'sfx' });
+    } else {
+      this.playTone(760, 0.045, 'triangle', 0.028, 0, { bus: 'sfx' });
+      this.playTone(510, 0.06, 'sine', 0.024, 0.028, { bus: 'sfx' });
+    }
+    this.triggerHaptic('action');
+  }
+
+  /** Subtle hydraulic glass-panel chime when opening modals (v202 AAA Polish). */
+  playUiModalOpen() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    this.playTone(440, 0.08, 'sine', 0.022, 0, { bus: 'sfx' });
+    this.playTone(659.25, 0.11, 'sine', 0.018, 0.035, { bus: 'sfx' });
+  }
+
+  /** Satisfying AAA Debrief Grade Seal reveal chord (v202). */
+  playDebriefGrade(grade = 'A', success = true) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const g = String(grade || '').toUpperCase();
+    if (!success || g === 'DNF' || g === 'F') {
+      this.playTone(220, 0.28, 'triangle', 0.042, 0, { bus: 'sfx' });
+      this.playTone(185, 0.38, 'sine', 0.036, 0.14, { bus: 'sfx' });
+      return;
+    }
+    const chord =
+      g === 'S+' || g === 'S'
+        ? [392.0, 493.88, 587.33, 783.99, 987.77]
+        : g === 'A'
+          ? [329.63, 415.3, 493.88, 659.25]
+          : [293.66, 369.99, 440.0];
+    chord.forEach((f, idx) => {
+      this.playTone(f, 0.44, idx === 0 ? 'triangle' : 'sine', 0.042, idx * 0.055, { bus: 'sfx' });
+    });
+    this.triggerHaptic('checkpoint');
   }
 
   playAlarm(level) {
@@ -2150,9 +2242,11 @@ export class DiveAudio {
     this.stopBossMusic();
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
-    const notes = [261.63, 329.63, 392.0, 523.25, 659.25];
+    // Deep sub-bass victory impact + rising harmonic brass-like arpeggio (v202)
+    this.playTone(65.41, 0.55, 'sine', 0.078, 0, { bus: 'sfx' });
+    const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99];
     notes.forEach((f, idx) => {
-      this.playTone(f, 0.48, idx % 2 === 0 ? 'triangle' : 'sine', 0.052, idx * 0.09, { bus: 'sfx' });
+      this.playTone(f, 0.52, idx % 2 === 0 ? 'triangle' : 'sine', 0.052, idx * 0.085, { bus: 'sfx' });
     });
     this.vibrate?.([25, 20, 25, 20, 55]);
   }

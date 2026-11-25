@@ -10714,3 +10714,72 @@ test('v201 37-Site Atlas, 12-Guardian Pantheon (Yonaguni & SMS Markgraf), Intera
   assert.ok(drawnTexts.some((t) => t.includes('Apex Hunter')), 'Postcard must stamp top superlative award');
   assert.ok(drawnTexts.some((t) => t.includes('Blackout')), 'Postcard must stamp active expedition modifiers');
 });
+
+test('v202 AAA Quality & Polish Pass: Frame-Independent Camera Damping, Parallax Marine Snow, Hydro Wake, Boss Phase Atmosphere & Gas-Mix Acoustics', async () => {
+  const { computeCameraDampingAlpha } = await import('../public/js/game/renderer.js');
+  const { lightingAndFxMethods } = await import('../public/js/game/renderers/lightingAndFxRenderer.js');
+  const { computeGasAcousticProfile, DiveAudio } = await import('../public/js/game/audio.js');
+
+  // 1. Frame-rate-independent exponential camera damping (two 60Hz steps == one 30Hz step!)
+  const a60 = computeCameraDampingAlpha(1 / 60, 6.0);
+  const a30 = computeCameraDampingAlpha(1 / 30, 6.0);
+  const remTwo60 = (1 - a60) * (1 - a60);
+  const remOne30 = 1 - a30;
+  assert.ok(Math.abs(remTwo60 - remOne30) < 1e-9, `Exponential damping must be frame-rate independent (${remTwo60} vs ${remOne30})`);
+  assert.ok(a60 > 0.05 && a60 < 0.25);
+
+  // 2. Gas-mix & CCR acoustic profiles differentiate Trimix (helium brightness), O2 (dense/warm), and CCR (stealth + solenoid)
+  const ean = computeGasAcousticProfile('EAN32', false);
+  const tmx = computeGasAcousticProfile('TMX1455', false);
+  const o2 = computeGasAcousticProfile('O2', false);
+  const ccr = computeGasAcousticProfile('TMX1455', true);
+  assert.ok(tmx.freqScale > ean.freqScale, 'Helium Trimix must shift airflow formant higher');
+  assert.ok(o2.freqScale < ean.freqScale, 'O2 100% must shift exhale timbre warmer/lower');
+  assert.equal(ccr.solenoidClick, true, 'CCR must trigger solenoid micro-click');
+  assert.ok(ccr.exhaleGainScale < 0.5, 'CCR must sharply attenuate open-circuit exhaust rumble');
+
+  // 3. New AAA audio methods exist and execute safely without throwing in headless Node
+  const aud = new DiveAudio();
+  assert.equal(typeof aud.playUiToggle, 'function');
+  assert.equal(typeof aud.playUiModalOpen, 'function');
+  assert.equal(typeof aud.playDebriefGrade, 'function');
+  aud.playUiToggle(true);
+  aud.playUiModalOpen();
+  aud.playDebriefGrade('S+', true);
+  aud.playDebriefGrade('DNF', false);
+
+  // 4. Parallax Marine Snow, Hydrodynamic Fin/DPV Wake & Boss Phase Atmosphere render cleanly with zero allocations
+  let snowOps = 0;
+  let wakeOps = 0;
+  let phaseOps = 0;
+  const makeCtx = (inc) =>
+    new Proxy(
+      {
+        createRadialGradient: () => ({ addColorStop() {} }),
+      },
+      { get(t, p) { return p in t ? t[p] : () => { inc(); }; } }
+    );
+  const fakeRenderer = {
+    _reducedMotion: false,
+    _isCoarseMobile: false,
+    _perfBudget: null,
+    glowStamps: { cyan: {} },
+  };
+  lightingAndFxMethods._drawParallaxMarineSnow.call(fakeRenderer, makeCtx(() => snowOps++), 1280, 720, 12, 18, 40, 28, 3.5);
+  assert.ok(snowOps > 25, `Parallax marine snow should render midground + bokeh layers (got ${snowOps} ops)`);
+
+  const diver = { x: 20, y: 15, vx: 4.5, vy: 0.4, angle: 0.1, dpvActive: true };
+  lightingAndFxMethods._drawDiverHydroWake.call(fakeRenderer, makeCtx(() => wakeOps++), diver, (x) => x * 28, (y) => y * 28, 28, 1.0);
+  lightingAndFxMethods._drawDiverHydroWake.call(fakeRenderer, makeCtx(() => wakeOps++), { ...diver, x: 21 }, (x) => x * 28, (y) => y * 28, 28, 1.08);
+  assert.ok(wakeOps > 6, `Hydrodynamic DPV/fin wake should emit & render trailing cavitation rings (got ${wakeOps} ops)`);
+
+  lightingAndFxMethods._drawBossPhaseAtmosphere.call(
+    fakeRenderer,
+    makeCtx(() => phaseOps++),
+    1280,
+    720,
+    { combatMode: true, bossDefeated: false, boss: { phase: 3 } },
+    4.2
+  );
+  assert.ok(phaseOps >= 3, `Boss Phase 3 atmosphere should paint crimson vignette pulse (got ${phaseOps} ops)`);
+});

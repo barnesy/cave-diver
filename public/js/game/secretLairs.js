@@ -3710,6 +3710,9 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
         if (session.cameraShake !== undefined) {
           session.cameraShake = Math.max(session.cameraShake || 0, 0.72);
         }
+        if (session.hitstopSec !== undefined) {
+          session.hitstopSec = Math.max(session.hitstopSec || 0, 0.055);
+        }
         if (isAuthority) {
           const dropPad = _pickOpenArenaPad(lair, boss.x, boss.y);
           if ((lair.weaponUpgrades || []).filter((u) => u.inArena).length < 2) {
@@ -4909,6 +4912,9 @@ function _detonateNavalMine(session, lair, idx, { triggeredByPlayer = false } = 
   addSparkBurst(lair, mine.x, mine.y, '#fde047', 16, triggeredByPlayer ? '💥 MINE BLAST!' : '💥 DETONATION!', triggeredByPlayer);
   if (session.cameraShake !== undefined) {
     session.cameraShake = Math.max(session.cameraShake || 0, 0.52);
+  }
+  if (triggeredByPlayer && session.hitstopSec !== undefined) {
+    session.hitstopSec = Math.max(session.hitstopSec || 0, 0.04);
   }
   callbacks.onMineBlast?.(mine);
 

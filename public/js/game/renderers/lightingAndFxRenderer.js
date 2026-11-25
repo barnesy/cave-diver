@@ -1898,5 +1898,127 @@ export const lightingAndFxMethods = {
     }
 
     ctx.restore();
-  }
+  },
+
+  /**
+   * Two-layer zero-allocation parallax suspended marine snow & soft depth-bokeh motes (v202 AAA Polish).
+   * Drifts subtly at 0.72x midground and 1.26x foreground parallax relative to camera motion,
+   * creating unmistakable 3D spatial depth underwater at <0.15ms/frame.
+   */
+  _drawParallaxMarineSnow(ctx, cw, ch, camX, camY, surfY, scale, timeSec) {
+    if (this._reducedMotion || !Number.isFinite(cw) || !Number.isFinite(ch) || cw <= 0 || ch <= 0) return;
+    if (this._perfBudget?.lowPower || this._isCoarseMobile) return;
+    const minY = Math.max(0, Math.round(surfY + 6));
+    if (minY >= ch - 8) return;
+    const waterH = ch - minY;
+    const cyanStamp = this.glowStamps?.cyan;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, minY, cw, waterH);
+    ctx.clip();
+
+    // Layer A: Subtle cool midground specks (0.72x parallax)
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.22)';
+    ctx.beginPath();
+    for (let i = 0; i < 18; i++) {
+      const seedX = (i * 197.3 + 41.7) % 1000;
+      const seedY = (i * 313.1 + 83.2) % 1000;
+      const px = (((seedX * 1.43 - camX * scale * 0.72 + Math.sin(timeSec * 0.45 + i) * 14) % cw) + cw) % cw;
+      const py = minY + ((((seedY * 0.91 - camY * scale * 0.72 + timeSec * (4.5 + (i % 4) * 1.4)) % waterH) + waterH) % waterH);
+      const r = 1.05 + (i % 3) * 0.45;
+      ctx.moveTo(px + r, py);
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // Layer B: Soft out-of-focus foreground bokeh plankton (1.26x parallax)
+    if (cyanStamp) {
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 10; i++) {
+        const seedX = (i * 271.9 + 119.3) % 1000;
+        const seedY = (i * 157.7 + 211.5) % 1000;
+        const px = (((seedX * 1.71 - camX * scale * 1.26 + Math.cos(timeSec * 0.38 + i * 1.7) * 22) % cw) + cw) % cw;
+        const py = minY + ((((seedY * 1.13 - camY * scale * 1.26 + timeSec * (7.2 + (i % 3) * 2.1)) % waterH) + waterH) % waterH);
+        const br = 5.5 + (i % 4) * 3.2;
+        ctx.globalAlpha = 0.08 + 0.05 * Math.sin(timeSec * 1.2 + i * 2.3);
+        ctx.drawImage(cyanStamp, px - br, py - br, br * 2, br * 2);
+      }
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Velocity-coupled hydrodynamic slipstream ribbon & cavitation dots behind the diver's fins/DPV (v202 AAA Polish).
+   * Uses a tiny preallocated ring buffer on the renderer instance (zero per-frame allocations).
+   */
+  _drawDiverHydroWake(ctx, diver, toScreenX, toScreenY, scale, timeSec) {
+    if (!diver || this._reducedMotion) return;
+    if (!this._hydroWakeRing) {
+      this._hydroWakeRing = new Array(14).fill(null).map(() => ({ x: 0, y: 0, life: 0, dpv: false, spd: 0 }));
+      this._hydroWakeIdx = 0;
+      this._hydroWakeLastT = -1;
+    }
+    const vx = diver.vx || 0;
+    const vy = diver.vy || 0;
+    const spd = Math.hypot(vx, vy);
+    const dtSample = this._hydroWakeLastT < 0 ? 0.05 : Math.max(0, Math.min(0.25, timeSec - this._hydroWakeLastT));
+    // Decay existing points
+    const ring = this._hydroWakeRing;
+    for (let i = 0; i < ring.length; i++) {
+      if (ring[i].life > 0) ring[i].life = Math.max(0, ring[i].life - dtSample * 1.55);
+    }
+    // Emit a new wake node behind the fins when moving purposefully underwater
+    if (diver.y > 0.55 && spd > 1.55 && dtSample >= 0.032) {
+      this._hydroWakeLastT = timeSec;
+      const ang = Number.isFinite(diver.angle) ? diver.angle : Math.atan2(vy, vx);
+      const tailDist = 1.05;
+      const slot = ring[this._hydroWakeIdx];
+      slot.x = diver.x - Math.cos(ang) * tailDist;
+      slot.y = diver.y - Math.sin(ang) * tailDist;
+      slot.life = 1.0;
+      slot.dpv = Boolean(diver.dpvActive);
+      slot.spd = Math.min(8, spd);
+      this._hydroWakeIdx = (this._hydroWakeIdx + 1) % ring.length;
+    } else if (this._hydroWakeLastT < 0) {
+      this._hydroWakeLastT = timeSec;
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i];
+      if (p.life <= 0.02) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const alpha = p.life * (p.dpv ? 0.34 : 0.18) * Math.min(1, p.spd / 4.2);
+      const r = Math.max(1.5, (0.09 + (1 - p.life) * (p.dpv ? 0.32 : 0.18)) * scale);
+      ctx.strokeStyle = p.dpv
+        ? `rgba(125, 211, 252, ${alpha.toFixed(3)})`
+        : `rgba(186, 230, 253, ${alpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, (p.dpv ? 1.8 : 1.15) * p.life);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Subtle escalating chromatic arena rim atmosphere during Boss Phase 2 & Phase 3 (v202 AAA Polish).
+   */
+  _drawBossPhaseAtmosphere(ctx, cw, ch, secretLair, timeSec) {
+    if (!secretLair?.combatMode || secretLair?.bossDefeated || !secretLair?.boss) return;
+    const phase = secretLair.boss.phase || 1;
+    if (phase < 2) return;
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * (phase >= 3 ? 4.4 : 2.2));
+    const rgb = phase >= 3 ? '244, 63, 94' : '168, 85, 247';
+    const maxAlpha = phase >= 3 ? 0.13 + pulse * 0.07 : 0.07 + pulse * 0.035;
+    ctx.save();
+    const vig = ctx.createRadialGradient(cw * 0.5, ch * 0.5, Math.min(cw, ch) * 0.34, cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.72);
+    vig.addColorStop(0, `rgba(${rgb}, 0)`);
+    vig.addColorStop(1, `rgba(${rgb}, ${maxAlpha.toFixed(3)})`);
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+  },
 };

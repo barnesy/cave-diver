@@ -554,7 +554,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=201',
+  mapRasterUrl: './assets/map-expedition.jpg?v=202',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -4116,6 +4116,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       debriefAnimFrame = requestAnimationFrame(stepOdometer);
     } else {
       gradeEl.classList.add('revealed');
+      audio.playDebriefGrade?.(teamSummary.teamRank.grade, success);
       debriefAnimFrame = 0;
     }
   };
@@ -4757,6 +4758,7 @@ document.getElementById('setup-modifiers-row')?.addEventListener('click', (e) =>
   const modId = btn.dataset.expMod;
   if (!EXPEDITION_MODIFIERS.some((m) => m.id === modId)) return;
   const idx = activeExpeditionModifiers.indexOf(modId);
+  const nowEnabled = idx < 0;
   if (idx >= 0) {
     activeExpeditionModifiers.splice(idx, 1);
   } else {
@@ -4766,6 +4768,7 @@ document.getElementById('setup-modifiers-row')?.addEventListener('click', (e) =>
   saveExpeditionModifiers();
   syncExpeditionModifiersUi();
   syncSetupDrawerSummary();
+  audio.playUiToggle?.(nowEnabled);
 });
 
 function getSetupModeDescription(diffId) {
@@ -4785,6 +4788,7 @@ function openDiveSetupModal() {
   renderTechGearDock();
   modal.hidden = false;
   syncSetupDrawerSummary();
+  audio.playUiModalOpen?.();
 }
 
 function closeDiveSetupModal() {
@@ -6635,8 +6639,20 @@ const sessionStepCallbacks = {
   onToast: showToast,
   onImpactSound: (spd) => audio.playImpact(spd),
   onAlarm: (lvl) => audio.playAlarm(lvl),
-  onInhale: (ev) => audio.playRegulatorInhale(ev),
-  onExhale: (ev) => (ev?.isCcr ? audio.playCcrSolenoid() : audio.playRegulatorExhale(ev)),
+  onInhale: (ev) =>
+    audio.playRegulatorInhale({
+      ...(typeof ev === 'object' && ev ? ev : { intensity: ev }),
+      gasId: session?.diveState?.activeGasId,
+      ccrActive: Boolean(session?.diveState?.ccrLoopActive),
+    }),
+  onExhale: (ev) =>
+    ev?.isCcr
+      ? audio.playCcrSolenoid()
+      : audio.playRegulatorExhale({
+          ...(typeof ev === 'object' && ev ? ev : { intensity: ev }),
+          gasId: session?.diveState?.activeGasId,
+          ccrActive: Boolean(session?.diveState?.ccrLoopActive),
+        }),
   onDpvHum: (mag) => audio.playDpvHum(mag, Math.min(1, Math.hypot(session?.diver?.vx || 0, session?.diver?.vy || 0) / 7.5)),
   onHullGroan: (depthRatio) => audio.playHullGroan(depthRatio),
   onHatchCrank: (progress) => audio.playHatchCrank(progress),
