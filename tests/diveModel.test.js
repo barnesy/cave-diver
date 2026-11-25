@@ -10947,3 +10947,110 @@ test('v206 Ergonomic Twin-Stick HUD, Endless Abyssal Trench (Seeded Risk-Reward)
   assert.ok(beamOps >= 6, 'Volumetric skylight beams must draw in shallow water on high/balanced tiers');
   assert.equal(perfSkipOps, 0, 'Volumetric skylight beams must skip cleanly in performance tier');
 });
+
+test('v207 Synced Tactical Sonar Waypoint Pings: sanitization, cap/decay, inverse scope mapping & dual rendering', async () => {
+  const {
+    SONAR_PING_KINDS,
+    SONAR_PING_ORDER,
+    MAX_ACTIVE_SONAR_PINGS,
+    sanitizeSonarPing,
+    addSyncedSonarPing,
+    stepSyncedSonarPings,
+    formatSonarPingCallout,
+  } = await import('../public/js/game/sonarPings.js');
+  const { computeMinimapViewport, drawSonarMinimap } = await import('../public/js/game/hud.js');
+
+  // 1. Kinds, sanitization & coordinate clamping
+  assert.deepEqual(SONAR_PING_ORDER, ['rally', 'relic', 'gas', 'hazard']);
+  assert.equal(sanitizeSonarPing(null), null);
+  assert.equal(sanitizeSonarPing({ x: NaN, y: 12 }), null);
+  const clamped = sanitizeSonarPing(
+    { kind: 'unknown_kind', x: 9999, y: -99, author: '<Maya>\nLeadDiver123456789' },
+    { isSelf: false }
+  );
+  assert.equal(clamped.kind, 'rally', 'Unknown kind should default safely to rally');
+  assert.equal(clamped.x, 2000);
+  assert.equal(clamped.y, -5);
+  assert.ok(!clamped.author.includes('<') && clamped.author.length <= 14);
+  assert.equal(clamped.color, SONAR_PING_KINDS.rally.color);
+
+  // 2. Session cap, ID dedupe, decay & callout formatting
+  const level = getLevelById('cenote-el-abismo');
+  const session = createDiveSession(level, { mode: 'solo', difficulty: 'standard' });
+  for (let i = 0; i < MAX_ACTIVE_SONAR_PINGS + 3; i++) {
+    addSyncedSonarPing(session, { id: `p${i}`, kind: SONAR_PING_ORDER[i % 4], x: 10 + i * 5, y: 14 + i, author: 'Maya' });
+  }
+  assert.equal(session.syncedSonarPings.length, MAX_ACTIVE_SONAR_PINGS, 'Active pings must cap at MAX_ACTIVE_SONAR_PINGS');
+  assert.equal(session.syncedSonarPings[0].id, 'p3', 'Oldest ping should be evicted FIFO');
+
+  // Refresh existing ID in place without growing array
+  const refreshed = addSyncedSonarPing(session, { id: 'p5', kind: 'relic', x: 42, y: 27, author: 'Leo' }, { isSelf: false });
+  assert.equal(session.syncedSonarPings.length, MAX_ACTIVE_SONAR_PINGS);
+  assert.equal(formatSonarPingCallout(refreshed), '💎 Leo pinged: RELIC (27m)');
+
+  const selfPing = sanitizeSonarPing({ kind: 'hazard', x: 18, y: 31, author: 'Chris' }, { isSelf: true });
+  assert.equal(formatSonarPingCallout(selfPing), '⚠️ Sonar Ping: HAZARD (31m)');
+
+  // Step decay expires pings cleanly
+  stepSyncedSonarPings(session, 10);
+  assert.ok(session.syncedSonarPings.every((p) => p.ageSec >= 10));
+  stepSyncedSonarPings(session, 25);
+  assert.equal(session.syncedSonarPings.length, 0, 'Expired sonar pings must be pruned cleanly');
+
+  // 3. Inverse viewport transform (fromX / fromY) round-trips accurately in both follow & full modes
+  for (const zoomMode of ['follow', 'full']) {
+    const vp = computeMinimapViewport(level, { x: 24, y: 18 }, { zoomMode, width: 384, height: 216 });
+    assert.equal(typeof vp.fromX, 'function');
+    assert.equal(typeof vp.fromY, 'function');
+    const sx = vp.toX(37.5);
+    const sy = vp.toY(22.25);
+    assert.ok(Math.abs(vp.fromX(sx) - 37.5) < 1e-6, `fromX round-trip mismatch in ${zoomMode}`);
+    assert.ok(Math.abs(vp.fromY(sy) - 22.25) < 1e-6, `fromY round-trip mismatch in ${zoomMode}`);
+  }
+
+  // 4. Dual rendering: drawSonarMinimap + CaveRenderer._drawSyncedSonarPings (on-screen & off-screen edge arrow)
+  const pings = [
+    sanitizeSonarPing({ id: 'on', kind: 'relic', x: 14, y: 12, author: 'Maya' }, { isSelf: false }),
+    sanitizeSonarPing({ id: 'off', kind: 'hazard', x: 140, y: 48, author: 'Leo' }, { isSelf: false }),
+  ];
+  const scopeOps = [];
+  const mockScopeCtx = new Proxy(
+    {
+      measureText: (t) => ({ width: String(t).length * 6 }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+      fillText: (t) => scopeOps.push(`text:${t}`),
+    },
+    { get(t, p) { return p in t ? t[p] : () => {}; } }
+  );
+  drawSonarMinimap(mockScopeCtx, 384, 216, {
+    level,
+    diver: { x: 10, y: 10, angle: 0, torchOn: true },
+    syncedSonarPings: pings,
+    zoomMode: 'follow',
+    timeSec: 1.5,
+  });
+  assert.ok(scopeOps.some((s) => s.includes('RELIC')), 'Sonar scope must draw badge label for on-scope ping');
+
+  const worldTexts = [];
+  const mockWorldCtx = new Proxy(
+    {
+      measureText: (t) => ({ width: String(t).length * 7 }),
+      fillText: (t) => worldTexts.push(String(t)),
+    },
+    { get(t, p) { return p in t ? t[p] : () => {}; } }
+  );
+  CaveRenderer.prototype._drawSyncedSonarPings.call(
+    { _cachedDpr: 1 },
+    mockWorldCtx,
+    1280,
+    720,
+    pings,
+    { x: 10, y: 10 },
+    (wx) => 640 + (wx - 10) * 28,
+    (wy) => 360 + (wy - 10) * 28,
+    28,
+    2.4
+  );
+  assert.ok(worldTexts.some((t) => t.includes('💎 Maya · 12m')), 'World renderer must render on-screen sonar hologram badge');
+  assert.ok(worldTexts.some((t) => t.includes('⚠️') && t.includes('m')), 'World renderer must render clamped off-screen distance pill');
+});

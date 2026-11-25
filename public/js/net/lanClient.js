@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=206');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=207');
   }
   return trysteroModulePromise;
 }
@@ -1644,6 +1644,9 @@ export class LanClient {
           this.emit('peer_signal', msg);
           break;
         }
+        case 'peer_sonar_ping':
+          this.emit('peer_sonar_ping', msg);
+          break;
         case 'peer_silt':
           this.emit('peer_silt', msg);
           break;
@@ -1930,6 +1933,24 @@ export class LanClient {
     if (now - (this._lastSignalSentAt || 0) < 600) return;
     this._lastSignalSentAt = now;
     this.send({ type: 'diver_signal', signal });
+  }
+
+  sendSonarPing(ping) {
+    if (!this.room || !this.connected || !ping) return false;
+    if (!Number.isFinite(Number(ping.x)) || !Number.isFinite(Number(ping.y))) return false;
+    const now = nowMs();
+    if (now - (this._lastSonarPingSentAt || 0) < 350) return false;
+    this._lastSonarPingSentAt = now;
+    this.send({
+      type: 'sonar_ping',
+      ping: {
+        id: ping.id || `sp_${Date.now().toString(36)}`,
+        kind: ping.kind || 'rally',
+        x: Number(Number(ping.x).toFixed(2)),
+        y: Number(Number(ping.y).toFixed(2)),
+      },
+    });
+    return true;
   }
 
   sendGasShare(targetPlayerId, gasId, amountBar) {

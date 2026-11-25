@@ -1432,3 +1432,101 @@ test('v118 GitHub Verified Leaderboards (anti-spoof), Daily Challenge Board & cr
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="btn-lb-daily"') && html.includes('data-lb-mode="daily"'));
 });
+
+test('v207 Synced Tactical Sonar Pings: LAN WebSocket & P2P Host sanitize and broadcast peer_sonar_ping', async () => {
+  const { P2pRoomCoordinator } = await import('../public/js/net/p2pRoomHost.js');
+
+  // 1. P2P Host relay sanitization & broadcast
+  const sentToHost = [];
+  const sentToPeer = [];
+  const host = new P2pRoomCoordinator({
+    code: 'SONR',
+    hostId: 'p_host',
+    hostName: 'Lead',
+    maxPlayers: 2,
+  });
+  host.bindPlayerSender('p_host', (msg) => sentToHost.push(msg));
+  const buddyId = host.handleRemoteJoin({ name: 'Maya' }, (msg) => sentToPeer.push(msg), 'p_buddy');
+  host.handleMessage('p_host', {
+    type: 'sonar_ping',
+    ping: { id: 'ping_1', kind: 'relic', x: 42.346, y: 28.12 },
+  });
+  const peerRelayed = sentToPeer.find((m) => m.type === 'peer_sonar_ping');
+  assert.ok(peerRelayed, 'P2P Host must relay peer_sonar_ping to remote peers');
+  assert.equal(peerRelayed.ping.kind, 'relic');
+  assert.equal(peerRelayed.ping.x, 42.35);
+  assert.equal(peerRelayed.ping.y, 28.12);
+  assert.equal(peerRelayed.name, 'Lead');
+
+  // Invalid kind falls back to rally & out-of-range coords clamp safely
+  host.handleMessage(buddyId, {
+    type: 'sonar_ping',
+    ping: { id: 'ping_2', kind: 'invalid', x: 99999, y: -500 },
+  });
+  const hostRelayed = sentToHost.find((m) => m.type === 'peer_sonar_ping');
+  assert.ok(hostRelayed, 'P2P Host must relay peer_sonar_ping back to host');
+  assert.equal(hostRelayed.ping.kind, 'rally');
+  assert.equal(hostRelayed.ping.x, 2000);
+  assert.equal(hostRelayed.ping.y, -5);
+
+  // 2. LAN WebSocket server 2-player sonar_ping broadcast
+  const port = 3479;
+  const proc = spawn(process.execPath, ['server.js'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Server start timeout')), 5000);
+      proc.stdout.on('data', (chunk) => {
+        if (chunk.toString().includes('LAN Server Ready')) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      proc.stderr.on('data', (chunk) => {
+        clearTimeout(timeout);
+        reject(new Error(chunk.toString()));
+      });
+    });
+
+    const ws1 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const ws2 = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const nextMsg = (ws, type) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ws.off('message', handler);
+          reject(new Error(`Timed out waiting for "${type}"`));
+        }, 4000);
+        const handler = (raw) => {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === type) {
+            clearTimeout(timer);
+            ws.off('message', handler);
+            resolve(msg);
+          }
+        };
+        ws.on('message', handler);
+      });
+
+    await Promise.all([nextMsg(ws1, 'welcome'), nextMsg(ws2, 'welcome')]);
+    ws1.send(JSON.stringify({ type: 'create_room', name: 'Chris', maxPlayers: 2 }));
+    const created = await nextMsg(ws1, 'room_joined');
+    ws2.send(JSON.stringify({ type: 'join_room', code: created.room.code, name: 'Maya' }));
+    await nextMsg(ws2, 'room_joined');
+
+    const pPingPromise = nextMsg(ws2, 'peer_sonar_ping');
+    ws1.send(JSON.stringify({ type: 'sonar_ping', ping: { id: 'lan_ping_1', kind: 'gas', x: 33.4, y: 21.8 } }));
+    const received = await pPingPromise;
+    assert.equal(received.ping.kind, 'gas');
+    assert.equal(received.ping.x, 33.4);
+    assert.equal(received.ping.y, 21.8);
+    assert.equal(received.name, 'Chris');
+
+    ws1.close();
+    ws2.close();
+  } finally {
+    proc.kill();
+  }
+});

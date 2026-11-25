@@ -8,6 +8,7 @@ import { buildExploreCells, markExploredAround, computeDiverScoreSummary, MAX_PH
 import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
+import { stepSyncedSonarPings } from './sonarPings.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 import {
   createSalvageState,
@@ -4498,6 +4499,8 @@ export function placeWorldBeacon(session, { x, y, author = 'DIVER', label = '', 
 }
 
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+  // Decay active synced tactical sonar pings in place (v207)
+  stepSyncedSonarPings(session, dt);
   // Decay active acoustic world beacons in place (v197)
   if (Array.isArray(session.worldBeacons) && session.worldBeacons.length > 0) {
     let w = 0;

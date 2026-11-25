@@ -827,6 +827,38 @@ export class P2pRoomCoordinator {
         break;
       }
 
+      case 'sonar_ping': {
+        const now = Date.now();
+        if (now - (p._lastSonarPingAt || 0) < 350) return;
+        p._lastSonarPingAt = now;
+        const rawPing = msg.ping || msg;
+        const px = Number(rawPing?.x);
+        const py = Number(rawPing?.y);
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+        const allowedKinds = new Set(['rally', 'relic', 'gas', 'hazard']);
+        const kind = allowedKinds.has(rawPing?.kind) ? rawPing.kind : 'rally';
+        const id =
+          typeof rawPing?.id === 'string' && rawPing.id.trim()
+            ? rawPing.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28)
+            : `sp_${Date.now().toString(36)}`;
+        this._broadcast(
+          {
+            type: 'peer_sonar_ping',
+            playerId: p.id,
+            name: p.name,
+            ping: {
+              id,
+              kind,
+              x: Math.max(-400, Math.min(2000, Number(px.toFixed(2)))),
+              y: Math.max(-5, Math.min(400, Number(py.toFixed(2)))),
+              author: p.name,
+            },
+          },
+          p.id
+        );
+        break;
+      }
+
       case 'silt_event': {
         const pl = msg.plume;
         if (!pl || !Number.isFinite(pl.x) || !Number.isFinite(pl.y)) return;

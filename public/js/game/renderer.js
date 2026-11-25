@@ -866,6 +866,7 @@ export class CaveRenderer {
     biolumWake = null,
     dashSlipstreams = null,
     worldBeacons = null,
+    syncedSonarPings = null,
     timeSec,
     dt,
   }) {
@@ -1329,6 +1330,9 @@ export class CaveRenderer {
     }
     if (worldBeacons && worldBeacons.length > 0 && typeof this._drawWorldBeacons === 'function') {
       this._drawWorldBeacons(ctx, worldBeacons, toScreenX, toScreenY, scale, timeSec);
+    }
+    if (syncedSonarPings && syncedSonarPings.length > 0 && typeof this._drawSyncedSonarPings === 'function') {
+      this._drawSyncedSonarPings(ctx, cw, ch, syncedSonarPings, diver, toScreenX, toScreenY, scale, timeSec);
     }
     if (secretLair && typeof this._drawSecretLairEmissive === 'function') {
       this._drawSecretLairEmissive(ctx, cw, ch, diver, toScreenX, toScreenY, scale, timeSec, secretLair);
@@ -2453,6 +2457,154 @@ export class CaveRenderer {
       ctx.strokeText(label, cx, sy - 6);
       ctx.fillStyle = z.color;
       ctx.fillText(label, cx, sy - 6);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Render Synced Tactical Sonar Waypoint Pings (v207) in 2D underwater world space
+   * (drawn post-silt so pings cut cleanly through zero-vis silt-outs) + clamped
+   * off-screen viewport edge arrows so teammates never miss a distant callout.
+   */
+  _drawSyncedSonarPings(ctx, cw, ch, pings, diver, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(pings) || pings.length === 0) return;
+    const dpr = this._cachedDpr || 1;
+    const padX = Math.round(54 * dpr);
+    const padTop = Math.round(78 * dpr);
+    const padBot = Math.round((cw < ch ? 226 : 124) * dpr);
+
+    ctx.save();
+    for (let i = 0; i < pings.length; i++) {
+      const p = pings[i];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const rgb = p.rgb || '56, 189, 248';
+      const color = p.color || '#38bdf8';
+      const fade = Math.max(0, Math.min(1, (p.life || 1) / 2.6));
+      const distM =
+        diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)
+          ? Math.round(Math.hypot(p.x - diver.x, p.y - diver.y))
+          : null;
+      const depthM = Math.max(0, Math.round(p.y));
+      const onScreen = sx >= 18 * dpr && sx <= cw - 18 * dpr && sy >= 18 * dpr && sy <= ch - 18 * dpr;
+
+      if (onScreen) {
+        // Dual expanding holographic acoustic sonar rings
+        const w1 = ((timeSec * 0.95 + i * 0.31) % 1);
+        const w2 = ((timeSec * 0.95 + i * 0.31 + 0.5) % 1);
+        const maxR = Math.max(24 * dpr, 2.4 * scale);
+
+        ctx.lineWidth = Math.max(1.5, 2.2 * dpr);
+        ctx.strokeStyle = `rgba(${rgb}, ${((1 - w1) * 0.82 * fade).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6 * dpr + w1 * maxR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.lineWidth = Math.max(1, 1.4 * dpr);
+        ctx.strokeStyle = `rgba(${rgb}, ${((1 - w2) * 0.6 * fade).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6 * dpr + w2 * maxR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crisp tactical diamond reticle
+        const r = Math.max(7, 9 * dpr);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = `rgba(2, 12, 24, 0.85)`;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1.6, 2.0 * dpr);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - r);
+        ctx.lineTo(sx + r, sy);
+        ctx.lineTo(sx, sy + r);
+        ctx.lineTo(sx - r, sy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(2.6, 3.2 * dpr), 0, Math.PI * 2);
+        ctx.fill();
+
+        // Floating pill badge (icon + label/author + depth)
+        const who = p.isSelf ? (p.shortLabel || 'PING') : (p.author || p.shortLabel || 'PING');
+        const badgeText = `${p.icon || '📍'} ${who} · ${depthM}m`;
+        ctx.font = `800 ${Math.round(11 * dpr)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        const tw = ctx.measureText(badgeText).width;
+        const bw = tw + 14 * dpr;
+        const bh = 20 * dpr;
+        const bx = sx - bw * 0.5;
+        const by = sy - r - bh - 6 * dpr;
+
+        ctx.fillStyle = 'rgba(2, 11, 22, 0.86)';
+        ctx.strokeStyle = `rgba(${rgb}, 0.85)`;
+        ctx.lineWidth = Math.max(1.2, 1.4 * dpr);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bx, by, bw, bh, 6 * dpr);
+        } else {
+          ctx.rect(bx, by, bw, bh);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badgeText, sx, by + bh * 0.52);
+        ctx.globalAlpha = 1;
+      } else {
+        // Off-screen clamped directional edge indicator pill pointing toward ping
+        const cx = cw * 0.5;
+        const cy = ch * 0.5;
+        const ang = Math.atan2(sy - cy, sx - cx);
+        const ex = Math.max(padX, Math.min(cw - padX, sx));
+        const ey = Math.max(padTop, Math.min(ch - padBot, sy));
+
+        const edgeText = distM !== null ? `${p.icon || '📍'} ${distM}m` : `${p.icon || '📍'} ${depthM}m`;
+        ctx.globalAlpha = Math.max(0.45, fade);
+        ctx.font = `800 ${Math.round(10.5 * dpr)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        const tw = ctx.measureText(edgeText).width;
+        const bw = tw + 16 * dpr;
+        const bh = 21 * dpr;
+
+        ctx.fillStyle = 'rgba(2, 11, 22, 0.88)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1.3, 1.6 * dpr);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(ex - bw * 0.5, ey - bh * 0.5, bw, bh, 9 * dpr);
+        } else {
+          ctx.rect(ex - bw * 0.5, ey - bh * 0.5, bw, bh);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(edgeText, ex, ey + 0.5 * dpr);
+
+        // Directional chevron outside the pill pointing toward the off-screen target
+        const arrowDist = Math.max(bw, bh) * 0.5 + 8 * dpr;
+        const ax = ex + Math.cos(ang) * arrowDist;
+        const ay = ey + Math.sin(ang) * arrowDist;
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(ang);
+        ctx.fillStyle = color;
+        const sz = Math.max(5.5, 6.5 * dpr);
+        ctx.beginPath();
+        ctx.moveTo(sz, 0);
+        ctx.lineTo(-sz * 0.65, -sz * 0.65);
+        ctx.lineTo(-sz * 0.3, 0);
+        ctx.lineTo(-sz * 0.65, sz * 0.65);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
     }
     ctx.restore();
   }

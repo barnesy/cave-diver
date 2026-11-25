@@ -979,6 +979,42 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'sonar_ping': {
+        const room = rooms.get(client.roomCode);
+        if (!room) return;
+        const p = room.players.get(client.id);
+        const now = Date.now();
+        if (p && now - (p._lastSonarPingAt || 0) < 350) return;
+        if (p) p._lastSonarPingAt = now;
+        const rawPing = msg.ping || msg;
+        const px = Number(rawPing?.x);
+        const py = Number(rawPing?.y);
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+        const allowedKinds = new Set(['rally', 'relic', 'gas', 'hazard']);
+        const kind = allowedKinds.has(rawPing?.kind) ? rawPing.kind : 'rally';
+        const id =
+          typeof rawPing?.id === 'string' && rawPing.id.trim()
+            ? rawPing.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28)
+            : `sp_${Date.now().toString(36)}`;
+        broadcastRoom(
+          room,
+          {
+            type: 'peer_sonar_ping',
+            playerId: client.id,
+            name: p?.name || 'Buddy',
+            ping: {
+              id,
+              kind,
+              x: Math.max(-400, Math.min(2000, Number(px.toFixed(2)))),
+              y: Math.max(-5, Math.min(400, Number(py.toFixed(2)))),
+              author: p?.name || 'Buddy',
+            },
+          },
+          client.id
+        );
+        break;
+      }
+
       case 'guideline_sync': {
         const room = rooms.get(client.roomCode);
         if (!room) return;

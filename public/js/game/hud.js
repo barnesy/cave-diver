@@ -249,6 +249,8 @@ export function computeMinimapViewport(level, diver, { zoomMode = 'follow', widt
       viewMaxY: (height - offY) / scale,
       toX: (wx) => offX + wx * scale,
       toY: (wy) => offY + wy * scale,
+      fromX: (sx) => (sx - offX) / scale,
+      fromY: (sy) => (sy - offY) / scale,
     };
   }
 
@@ -285,6 +287,8 @@ export function computeMinimapViewport(level, diver, { zoomMode = 'follow', widt
     viewMaxY: cy + halfSpanY,
     toX: (wx) => offX + wx * scale,
     toY: (wy) => offY + wy * scale,
+    fromX: (sx) => (sx - offX) / scale,
+    fromY: (sy) => (sy - offY) / scale,
   };
 }
 
@@ -353,6 +357,7 @@ export function drawSonarMinimap(ctx, width, height, state) {
     droppedStages = null,
     surveyPins = null,
     secretLair = null,
+    syncedSonarPings = null,
     difficulty = 'standard',
     zoomMode = 'follow',
     timeSec = 0,
@@ -935,6 +940,108 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
+  // 8c. Synced Tactical Sonar Waypoint Pings (v207 — Tap-to-Ping Co-op & Solo Squad Callouts)
+  if (Array.isArray(syncedSonarPings) && syncedSonarPings.length > 0) {
+    // Dashed tactical bearing vector from diver to the most recent teammate ping (or latest ping)
+    let latestRemote = null;
+    for (let i = syncedSonarPings.length - 1; i >= 0; i--) {
+      const p = syncedSonarPings[i];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      if (!p.isSelf) {
+        latestRemote = p;
+        break;
+      }
+      if (!latestRemote) latestRemote = p;
+    }
+    if (latestRemote && diver && Number.isFinite(diver.x) && Number.isFinite(diver.y)) {
+      const fadeVec = Math.max(0.25, Math.min(1, (latestRemote.life || 1) / 3.5));
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = `rgba(${latestRemote.rgb || '56, 189, 248'}, ${(0.55 * fadeVec).toFixed(2)})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(toX(diver.x), toY(diver.y));
+      ctx.lineTo(toX(latestRemote.x), toY(latestRemote.y));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    for (let i = 0; i < syncedSonarPings.length; i++) {
+      const p = syncedSonarPings[i];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const sx = toX(p.x);
+      const sy = toY(p.y);
+      const rgb = p.rgb || '56, 189, 248';
+      const color = p.color || '#38bdf8';
+      const fade = Math.max(0, Math.min(1, (p.life || 1) / 2.6));
+      const offScope = sx < 8 || sx > width - 8 || sy < 8 || sy > height - 8;
+
+      if (offScope) {
+        // Clamped directional edge chevron on the sonar border when ping lies outside follow-zoom window
+        const cx = Math.max(12, Math.min(width - 12, sx));
+        const cy = Math.max(12, Math.min(height - 12, sy));
+        const ang = Math.atan2(sy - cy, sx - cx);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ang);
+        ctx.fillStyle = `rgba(${rgb}, ${(0.88 * fade).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.moveTo(6.5, 0);
+        ctx.lineTo(-4.5, -4.5);
+        ctx.lineTo(-2.2, 0);
+        ctx.lineTo(-4.5, 4.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      // Dual expanding concentric radar ping ripples
+      const wave1 = ((timeSec * 1.15 + i * 0.37) % 1);
+      const wave2 = ((timeSec * 1.15 + i * 0.37 + 0.5) % 1);
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = `rgba(${rgb}, ${((1 - wave1) * 0.85 * fade).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4 + wave1 * 18, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.lineWidth = 1.1;
+      ctx.strokeStyle = `rgba(${rgb}, ${((1 - wave2) * 0.65 * fade).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4 + wave2 * 18, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // High-contrast beacon diamond core
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 5.4);
+      ctx.lineTo(sx + 5.0, sy);
+      ctx.lineTo(sx, sy + 5.4);
+      ctx.lineTo(sx - 5.0, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Compact tactical badge label above ping
+      const tag = p.shortLabel || 'PING';
+      ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.82)';
+      const tw = ctx.measureText(tag).width + 8;
+      const lx = Math.max(tw * 0.5 + 4, Math.min(width - tw * 0.5 - 4, sx));
+      const ly = Math.max(16, sy - 7.5);
+      ctx.fillRect(lx - tw * 0.5, ly - 11, tw, 11.5);
+      ctx.fillStyle = color;
+      ctx.fillText(tag, lx, ly - 0.5);
+      ctx.restore();
+    }
+  }
+
   // 9. Co-op Buddy Dots (+ active Buddy Locate Ping reticle)
   if (Array.isArray(peers)) {
     for (let i = 0; i < peers.length; i++) {
@@ -1313,6 +1420,7 @@ export class DiveComputerHUD {
     droppedStages = null,
     surveyPins = null,
     secretLair = null,
+    syncedSonarPings = null,
     rescueDrillMeta = null,
     endedState = '',
     spectatingPeer = false,
@@ -1885,7 +1993,8 @@ export class DiveComputerHUD {
           expSize !== this._minimapLastExplored ||
           minimapZoomMode !== this._minimapLastZoom ||
           Boolean(sonarPulse) ||
-          Boolean(buddyPing);
+          Boolean(buddyPing) ||
+          Boolean(syncedSonarPings && syncedSonarPings.length > 0);
         if (needsRedraw) {
           this._minimapRedrawAccum = 0;
           this._minimapLastExplored = expSize;
@@ -1916,6 +2025,7 @@ export class DiveComputerHUD {
               buddyPing,
               droppedStages,
               secretLair,
+              syncedSonarPings,
               difficulty: cleanDiff,
               zoomMode: minimapZoomMode,
               timeSec,

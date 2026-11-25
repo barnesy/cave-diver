@@ -140,8 +140,9 @@ import {
 import { CaveRenderer } from './game/renderer.js';
 import { createMarineEcosystem, stepMarineEcosystem } from './game/marineLife.js';
 import { spawnSiltPlume } from './game/silt.js';
-import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer } from './game/hud.js';
+import { DiveComputerHUD, isMinimapAllowed, drawShearwaterComputer, computeMinimapViewport } from './game/hud.js';
 import { SCUBA_SIGNALS, triggerDiverSignal } from './game/diveSignals.js';
+import { createSonarPingController, formatSonarPingCallout } from './game/sonarPings.js';
 import {
   AI_SQUAD_ROSTER,
   getAiDifficultyProfile,
@@ -556,7 +557,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=206',
+  mapRasterUrl: './assets/map-expedition.jpg?v=207',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1070,11 +1071,48 @@ shearwaterCanvasEl?.addEventListener('click', (e) => {
   toggleShearwaterComputer(false);
 });
 
-// High-Tech Tactical Sonar Overlay controls (v186 — Wetnotes removed)
+// High-Tech Tactical Sonar Overlay controls (v186 — Wetnotes removed; v207 Synced Waypoint Pings)
 const btnSonarCloseEl = document.getElementById('btn-sonar-close');
 const btnSonarOverlayPingEl = document.getElementById('btn-sonar-overlay-ping');
 const hudSonarRangeEl = document.getElementById('hud-sonar-range');
 const btnMinimapZoomEl = document.getElementById('hud-minimap-zoom');
+const hudMinimapCanvasEl = document.getElementById('hud-minimap-canvas');
+const hudSonarPingBarEl = document.getElementById('hud-sonar-ping-bar');
+const sonarPingCtrl = createSonarPingController({
+  canvasEl: hudMinimapCanvasEl,
+  pingBarEl: hudSonarPingBarEl,
+  computeViewport: computeMinimapViewport,
+  isAllowed: (s) => isMinimapAllowed(s?.difficulty || activeDifficulty, s?.mutatorId || ''),
+  getContext: () => ({
+    active: mode === 'diving' && !divePaused,
+    session,
+    minimapVisible,
+    zoomMode: minimapZoomMode,
+    fallbackName: playerNameInput?.value || 'DIVER',
+  }),
+  onDropLocal: (ping, s) => {
+    if (isMultiplayer && lan?.sendSonarPing) lan.sendSonarPing({ id: ping.id, kind: ping.kind, x: ping.x, y: ping.y });
+    audio.playSonarPing?.();
+    triggerHaptic('sonar');
+    showToast(formatSonarPingCallout(ping), 2.5, { critical: true });
+    if (Array.isArray(s.aiSquad) && s.aiSquad.length > 0 && (!isMultiplayer || lan.getPeers().length === 0)) {
+      const leadAi = s.aiSquad.find((ai) => ai && ai.alive !== false) || s.aiSquad[0];
+      if (leadAi) {
+        leadAi.signalText = { rally: 'COPY 📍', relic: 'ON IT 💎', gas: 'CHECK ⛽', hazard: 'ROGER ⚠️' }[ping.kind] || 'COPY 📍';
+        leadAi.signalTimer = 2.8;
+      }
+    }
+  },
+  onReceiveRemote: (ping, s) => {
+    const pan = s?.diver && Number.isFinite(s.diver.x)
+      ? computeSpatialMix(s.diver.x, s.diver.y, ping.x, ping.y, { maxDistM: 80 }).pan
+      : 0;
+    audio.playSonarPing?.();
+    audio.playSignal?.(pan);
+    triggerHaptic('sonar');
+    showToast(formatSonarPingCallout(ping), 3.0, { critical: true });
+  },
+});
 
 function syncSonarOverlayUi() {
   const diff = session?.difficulty || activeDifficulty;
@@ -1083,6 +1121,9 @@ function syncSonarOverlayUi() {
   const sonarViewEl = document.getElementById('hud-minimap-sonar-view');
   if (sonarViewEl) {
     sonarViewEl.hidden = Boolean(!sonarAllowed || !minimapVisible);
+  }
+  if (hudSonarPingBarEl) {
+    hudSonarPingBarEl.hidden = Boolean(!sonarAllowed || !minimapVisible);
   }
   if (hudMinimapWrapEl) {
     hudMinimapWrapEl.hidden = Boolean(!sonarAllowed || !minimapVisible);
@@ -1335,6 +1376,7 @@ function savePhotoStudioSnapshot() {
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       worldBeacons: session.worldBeacons || null,
+      syncedSonarPings: session.syncedSonarPings || null,
       droppedStages: session.droppedStages || null,
       weather: session.weather || null,
       photoMode: photoModeState,
@@ -1480,7 +1522,7 @@ canvas?.addEventListener('wheel', (e) => {
   syncPhotoStudioUi();
 }, { passive: false });
 hudMinimapWrapEl?.addEventListener('click', (e) => {
-  if (e.target?.closest?.('button')) return;
+  if (e.target?.closest?.('button') || e.target === hudMinimapCanvasEl || e.target?.closest?.('#hud-sonar-ping-bar')) return;
   e.stopPropagation();
   toggleMinimapZoom();
 });
@@ -6480,6 +6522,10 @@ lan.on('peer_signal', (msg) => {
   showToast(`${msg.name || 'Buddy'}: ${msg.signal}`, 3.0);
 });
 
+lan.on('peer_sonar_ping', (msg) => {
+  sonarPingCtrl.receiveRemote(msg);
+});
+
 lan.on('peer_guideline', (msg) => {
   if (!session || !msg?.playerId) return;
   if (!session.restoredPeerLines) session.restoredPeerLines = new Map();
@@ -7356,6 +7402,7 @@ function stepSimulation(dt) {
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
     secretLair: session.secretLair || null,
+    syncedSonarPings: session.syncedSonarPings || null,
     rescueDrillMeta: session.rescueDrillMeta || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
@@ -7686,6 +7733,7 @@ function frame(nowMs) {
       bioWake: session.bioWake || null,
       surfaceRipples: session.surfaceRipples || null,
       worldBeacons: session.worldBeacons || null,
+      syncedSonarPings: session.syncedSonarPings || null,
       buddyPing: session.buddyPing || null,
       airShareBeams: session.airShareBeams || null,
       droppedStages: session.droppedStages || null,
