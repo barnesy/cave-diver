@@ -10527,4 +10527,24 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
   assert.ok(kraken.unlockedRewards.length >= 1, 'Claimed Kraken bounty must reveal unlocked secret gear');
   assert.equal(iron.claimed, true);
   assert.equal(iron.displayName, 'IRON LEVIATHAN MK-IV');
+
+  // 4. v200: Live animated boss portrait renderer renders all 10 guardians cleanly (both wanted & claimed)
+  const { renderAnimatedBossPortrait } = await import('../public/js/ui/bountiesController.js');
+  for (let i = 0; i < claimedState.bounties.length; i++) {
+    const b = claimedState.bounties[i];
+    assert.ok(b.bossKind, `Bounty ${b.id} must define bossKind for animated portrait`);
+    let ops = 0;
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: 360, height: 152 },
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+        measureText: () => ({ width: 42 }),
+      },
+      { get(t, p) { return p in t ? t[p] : () => { ops++; }; } }
+    );
+    const ok = renderAnimatedBossPortrait(mockCtx, b, 2.4, i);
+    assert.equal(ok, true);
+    assert.ok(ops > 60, `Animated portrait for ${b.bossKind} should render full cel-shaded boss geometry (got ${ops} ops)`);
+  }
 });
