@@ -1043,9 +1043,9 @@ test('Guideline reel edge cases: lined level noop, too-far guard, multi-chain ti
   assert.equal(toggleGuidelineReel(sess6).action, 'none');
 });
 
-test('All 33 campaign levels (25 caves/environments + 8 shipwrecks) validate cleanly and scale monotonically to 198m Krubera-Voronya Abyssal Sump', () => {
-  assert.equal(CAMPAIGN_PLAN.length, 33, 'Campaign roadmap should chart all 33 levels');
-  assert.equal(LEVELS.length, 33, 'All 33 campaign levels should be registered');
+test('All 35 campaign levels (26 caves/environments + 9 shipwrecks) validate cleanly and scale monotonically to 198m Krubera-Voronya Abyssal Sump', () => {
+  assert.equal(CAMPAIGN_PLAN.length, 35, 'Campaign roadmap should chart all 35 levels');
+  assert.equal(LEVELS.length, 35, 'All 35 campaign levels should be registered');
   const seenIds = new Set();
   for (let i = 0; i < CAMPAIGN_PLAN.length; i++) {
     const slot = CAMPAIGN_PLAN[i];
@@ -2443,9 +2443,9 @@ test('v99 reliability fixes: wreck ascent checkpoint gating, hatchBonusScore, dr
   assert.equal(vicMeta.rank, 25);
 });
 
-test('v100 Cave Interactive Parity: all 25 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
+test('v100 Cave Interactive Parity: all 26 caves enriched with open-water stage caches, markers, currents/surges, line traps & co-op sync', () => {
   const caves = LEVELS.filter((l) => !l.isWreck);
-  assert.equal(caves.length, 25);
+  assert.equal(caves.length, 26);
 
   for (const cave of caves) {
     assert.ok(Array.isArray(cave.stageCaches) && cave.stageCaches.length >= 1, `${cave.id} missing stageCaches`);
@@ -8623,8 +8623,8 @@ test('v174 Campaign Mastery Rewards, Bidirectional Replay-Depth Sync & Technical
   assert.equal(scrubbedT, 30);
   assert.ok(fakeScrub.textContent.includes('34.0m') && fakeScrub.textContent.includes('TMX1455'));
 
-  // 3. Dedicated Technical Rescue Drills: all 4 scenarios, grading & Career Logbook Drill Mastery merge
-  assert.equal(RESCUE_DRILLS.length, 4);
+  // 3. Dedicated Technical Rescue Drills: all 6 scenarios, grading & Career Logbook Drill Mastery merge
+  assert.ok(RESCUE_DRILLS.length >= 6);
   for (const drill of RESCUE_DRILLS) {
     const lvl = getLevelById(drill.levelId);
     const sess = createDiveSession(lvl, { diverName: 'DrillDiver', difficulty: drill.difficulty, drillsEnabled: true });
@@ -10227,4 +10227,126 @@ test('v195 Tactical AI Wingman Combat, Hydro-Dash Slipstream, Reactive Marine Li
   }
   const avgMs = (performance.now() - t0) / 120;
   assert.ok(avgMs < 4.0, `120-frame combat + wingman + juice sim must stay well under 4ms/frame (got ${avgMs.toFixed(3)}ms)`);
+});
+
+test('v196 2-Site Expansion (Cenote Angelita H2S River & Fujikawa Maru), CCR Stealth/Setpoint/Bailout, Gamepad Combat/Rumble, Procedural 2.0 & 6 Rescue Drills + Live Par Pace', async () => {
+  const { toggleCcrSetpoint, triggerCcrBailout } = await import('../public/js/physics/diveModel.js');
+  const { createMarineEcosystem, stepMarineEcosystem } = await import('../public/js/game/marineLife.js');
+  const { InputController, RUMBLE_PRESETS } = await import('../public/js/game/input.js');
+  const { RESCUE_DRILLS, getRescueDrillById, applyRescueDrillScenario, evaluateRescueDrillResult, computeDrillPaceStatus } = await import('../public/js/game/rescueDrills.js');
+
+  // 1. Pillar 1: Cenote Angelita (H2S River) & Fujikawa Maru (Chuuk Lagoon) validate cleanly & render H2S Cloud River
+  const angelita = getLevelById('cenote-angelita-river');
+  const fujikawa = getLevelById('fujikawa-maru-chuuk');
+  assert.ok(angelita && angelita.h2sCloudLayer?.y === 30.0, 'Cenote Angelita must define 30m H2S cloud river');
+  assert.ok(fujikawa && fujikawa.isWreck === true && fujikawa.watertightHatches.length >= 2, 'Fujikawa Maru must be a wreck with watertight bulkheads');
+  assert.equal(validateLevel(angelita, { checkGeometry: true }).valid, true, 'Cenote Angelita geometry must validate');
+  assert.equal(validateLevel(fujikawa, { checkGeometry: true }).valid, true, 'Fujikawa Maru geometry must validate');
+  const h2sOps = [];
+  const mockCtx = new Proxy(
+    { createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }) },
+    { get(t, p) { return p in t ? t[p] : () => h2sOps.push(String(p)); } }
+  );
+  const rMock = Object.create(CaveRenderer.prototype);
+  rMock._drawH2sCloudRiver(mockCtx, 1280, 720, angelita.h2sCloudLayer, (x) => 200 + x * 12, (y) => y * 12, 12, 2.5);
+  assert.ok(h2sOps.includes('fillRect') && h2sOps.includes('stroke'), 'H2S Cloud River & sunken forest silhouettes must render cleanly');
+
+  // 2. Pillar 2: CCR Setpoint Toggle (1.3 <-> 0.7), Open-Circuit Bailout, Low-Scrubber Alert & Silent Wildlife Stealth
+  const ccrState = createDiveState({ ccrEnabled: true });
+  assert.equal(ccrState.ccrSetpointBar, 1.3);
+  const spLow = toggleCcrSetpoint(ccrState);
+  assert.equal(spLow.ok, true);
+  assert.equal(spLow.setpointBar, 0.7);
+  const spHigh = toggleCcrSetpoint(ccrState);
+  assert.equal(spHigh.setpointBar, 1.3);
+
+  const sCcr = createDiveSession(fujikawa, { diverName: 'Rebreather', gear: { ccr: true } });
+  sCcr.diveState.ccrScrubberPct = 14;
+  let lowScrubNotified = false;
+  stepDiveSession(sCcr, { x: 0, y: 0 }, 0.05, {
+    onCcrLowScrubber: () => { lowScrubNotified = true; },
+  });
+  assert.equal(lowScrubNotified, true, 'Low CCR scrubber (<=15%) must trigger bailout warning callback');
+  const bail = triggerCcrBailout(sCcr.diveState);
+  assert.equal(bail.ok, true);
+  assert.equal(sCcr.diveState.ccrEnabled, false);
+  assert.equal(sCcr.diveState.ccrBailedOut, true);
+
+  // CCR Silent Wildlife Stealth: megafauna accumulates escort progress 2x faster with ccrSilent
+  const ecoOpen = createMarineEcosystem(fujikawa);
+  const ecoCcr = createMarineEcosystem(fujikawa);
+  const mOpen = ecoOpen.megafauna[0];
+  const mCcr = ecoCcr.megafauna[0];
+  assert.ok(mOpen && mCcr, 'Fujikawa Maru must host pelagic megafauna');
+  const calmDiver = { x: mOpen.x - 5.0, y: mOpen.y, vx: 0.4, vy: 0, angle: 0, dpvThrusting: false, torchOn: true, torchAngle: 0 };
+  stepMarineEcosystem(ecoOpen, calmDiver, 0.5, 4.0, fujikawa, { ccrSilent: false });
+  stepMarineEcosystem(ecoCcr, calmDiver, 0.5, 4.0, fujikawa, { ccrSilent: true });
+  assert.ok(mCcr.escortTimeSec > mOpen.escortTimeSec * 1.5, 'Silent CCR must accelerate megafauna curious/escort bonding 2x faster');
+
+  // 3. Pillar 3: Console Gamepad Combat Hydro-Dash (LB/B) & Dual-Motor Rumble Presets
+  assert.ok(RUMBLE_PRESETS.crit && RUMBLE_PRESETS.dash && RUMBLE_PRESETS.bossRoar);
+  let dashTriggered = false;
+  let reelTriggered = false;
+  const ctrl = new InputController({
+    onCombatDash: () => { dashTriggered = true; },
+    onReelToggle: () => { reelTriggered = true; },
+  });
+  const rumbleCalls = [];
+  const origGetGamepads = navigator.getGamepads;
+  Object.defineProperty(navigator, 'getGamepads', {
+    configurable: true,
+    value: () => [{
+      connected: true,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 16 }, (_, idx) => ({ pressed: idx === 4, value: idx === 4 ? 1 : 0 })),
+      vibrationActuator: {
+        playEffect(type, opts) { rumbleCalls.push({ type, opts }); return Promise.resolve(); },
+      },
+    }],
+  });
+  try {
+    ctrl.combatModeActive = true;
+    ctrl._pollGamepad();
+    assert.equal(dashTriggered, true, 'LB (button 4) must trigger Combat Hydro-Dash when in Combat Mode');
+    assert.equal(reelTriggered, false);
+    const didRumble = ctrl.rumbleGamepad('crit');
+    assert.equal(didRumble, true);
+    assert.equal(rumbleCalls[0]?.type, 'dual-rumble');
+  } finally {
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: origGetGamepads });
+  }
+
+  // 4. Pillar 4: Procedural "Uncharted Sump" 2.0 (7 biomes including biolum & bluehole, bulkheads, arches & bonus vault relics)
+  assert.ok(PROCEDURAL_BIOMES.biolum && PROCEDURAL_BIOMES.bluehole, 'Must include biolum and bluehole procedural biomes');
+  const procBiolum = generateProceduralLevel({ seed: 'BIO99X', tier: 'deep', biome: 'biolum' });
+  const procBlue = generateProceduralLevel({ seed: 'ARCH42', tier: 'shallow', biome: 'bluehole' });
+  assert.equal(validateLevel(procBiolum, { checkGeometry: true }).valid, true, 'Bioluminescent Abyss procedural sump must validate');
+  assert.equal(validateLevel(procBlue, { checkGeometry: true }).valid, true, 'Coral Blue Hole procedural sump must validate');
+  assert.equal(procBiolum.theme.bioluminescent, true, 'biolum procedural biome must enable bioluminescence');
+  assert.ok(Array.isArray(procBiolum.watertightHatches) && procBiolum.watertightHatches.length >= 1, 'Deep procedural sump must spawn crankable bulkhead');
+  assert.ok(Array.isArray(procBlue.archWindows) && procBlue.archWindows.length >= 2, 'bluehole procedural biome must spawn sunlit arch windows');
+  assert.ok(procBiolum.collectibles.some((c) => c.bonusVault), 'Procedural 2.0 must place rare bonus-vault relic');
+  assert.deepEqual(parseProceduralLevelId(procBiolum.id), { seed: 'BIO99X', tier: 'deep', biome: 'biolum', unlined: false });
+
+  // 5. Pillar 5: 6 Technical Rescue Drills + Live Par Pace Indicator
+  assert.equal(RESCUE_DRILLS.length, 6, 'Must have 6 Technical Rescue Drills');
+  const bulkDrill = getRescueDrillById('wreck-bulkhead-entrapment');
+  const narcDrill = getRescueDrillById('narcosis-buddy-tow');
+  assert.ok(bulkDrill && narcDrill);
+
+  const sBulk = createDiveSession(getLevelById(bulkDrill.levelId), { diverName: 'HatchPro' });
+  applyRescueDrillScenario(sBulk, bulkDrill);
+  assert.ok(sBulk.diveState.tanks.TMX1455.bar <= 80, 'Bulkhead entrapment drill must start on realistic reserve gas');
+  sBulk.openedHatchIds.add(sBulk.rescueDrillMeta.targetHatchId);
+  sBulk.diveState.diveTimeSec = 52;
+  const bulkRes = evaluateRescueDrillResult(bulkDrill, sBulk, { success: true });
+  assert.equal(bulkRes.passed, true);
+  assert.equal(bulkRes.grade, 'S+');
+
+  const paceGold = computeDrillPaceStatus(80, 40);
+  const pacePar = computeDrillPaceStatus(80, 74);
+  const paceBehind = computeDrillPaceStatus(80, 92);
+  assert.equal(paceGold.band, 'gold');
+  assert.equal(pacePar.band, 'par');
+  assert.equal(paceBehind.band, 'behind');
 });

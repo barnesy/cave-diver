@@ -23,6 +23,7 @@ import { LEVEL_22 } from './level22_scoresby.js';
 import { LEVEL_23 } from './level23_bermuda.js';
 import { LEVEL_24 } from './level24_bimini.js';
 import { LEVEL_25 } from './level25_krubera.js';
+import { LEVEL_26 } from './level26_angelita.js';
 import { WRECK_ORISKANY } from './wreck1_oriskany.js';
 import { WRECK_ANDREA_DORIA } from './wreck2_andrea_doria.js';
 import { WRECK_BRITANNIC } from './wreck3_britannic.js';
@@ -31,6 +32,7 @@ import { WRECK_EDMUND_FITZGERALD } from './wreck5_edmund_fitzgerald.js';
 import { WRECK_THISTLEGORM } from './wreck6_thistlegorm.js';
 import { WRECK_U1206 } from './wreck7_u1206.js';
 import { WRECK_ZENOBIA } from './wreck8_zenobia.js';
+import { WRECK_FUJIKAWA } from './wreck9_fujikawa.js';
 import { CAMPAIGN_PLAN, CAMPAIGN_TIERS } from './campaign.js';
 import { evaluateCaveSDF } from '../game/collision.js';
 import { enrichCaveInteractives } from './caveInteractives.js';
@@ -102,6 +104,8 @@ export const LEVELS = [
   LEVEL_24,
   WRECK_ZENOBIA,
   LEVEL_25,
+  LEVEL_26,
+  WRECK_FUJIKAWA,
 ];
 
 const LAZY_INTERACTIVE_KEYS = ['stageCaches', 'lineAnchors', 'caveCurrents', 'surgeZones', 'snagZones'];

@@ -248,4 +248,81 @@ export const underwaterJuiceRendererMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * Cenote Angelita's iconic glowing 30m Hydrogen Sulfide (H2S) Cloud River & sunken jungle tree silhouettes (v196).
+   */
+  _drawH2sCloudRiver(ctx, cw, ch, h2s, toScreenX, toScreenY, scale, timeSec) {
+    if (!h2s || !Number.isFinite(h2s.y)) return;
+    const cloudY = toScreenY(h2s.y);
+    const bandH = (h2s.thickness || 3.8) * scale;
+    if (cloudY + bandH * 2 < 0 || cloudY - bandH * 2 > ch) return;
+
+    ctx.save();
+    // 1. Eerie sunken mahogany tree trunks & gnarled branches poking through the misty cloud bank
+    if (Array.isArray(h2s.trees)) {
+      ctx.strokeStyle = 'rgba(28, 37, 24, 0.86)';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < h2s.trees.length; i++) {
+        const tr = h2s.trees[i];
+        const tx = toScreenX(tr.x);
+        const baseY = toScreenY(tr.y + 1.8);
+        const topY = toScreenY(tr.y - (tr.h || 6.0));
+        const leanPx = (tr.lean || 0) * (tr.h || 6.0) * scale;
+        if (tx < -120 || tx > cw + 120) continue;
+        ctx.lineWidth = Math.max(3.5, 0.34 * scale);
+        ctx.beginPath();
+        ctx.moveTo(tx, baseY);
+        ctx.quadraticCurveTo(tx + leanPx * 0.5, (baseY + topY) * 0.5, tx + leanPx, topY);
+        ctx.stroke();
+        // Two gnarled skeletal branches
+        ctx.lineWidth = Math.max(2.0, 0.16 * scale);
+        const midY = baseY * 0.38 + topY * 0.62;
+        const midX = tx + leanPx * 0.62;
+        ctx.beginPath();
+        ctx.moveTo(midX, midY);
+        ctx.lineTo(midX - 1.7 * scale, midY - 1.3 * scale);
+        ctx.moveTo(midX + leanPx * 0.15, midY - 0.8 * scale);
+        ctx.lineTo(midX + 1.9 * scale, midY - 2.1 * scale);
+        ctx.stroke();
+      }
+    }
+
+    // 2. Multi-ribbon glowing golden-chartreuse H2S sulfurous mist river
+    const x0 = Math.max(0, toScreenX(h2s.xMin ?? -20));
+    const x1 = Math.min(cw, toScreenX(h2s.xMax ?? 140));
+    if (x1 > x0) {
+      const grad = ctx.createLinearGradient(0, cloudY - bandH * 0.9, 0, cloudY + bandH * 1.05);
+      grad.addColorStop(0, 'rgba(163, 230, 53, 0)');
+      grad.addColorStop(0.28, 'rgba(190, 242, 100, 0.24)');
+      grad.addColorStop(0.55, 'rgba(163, 230, 53, 0.44)');
+      grad.addColorStop(0.82, 'rgba(101, 163, 13, 0.28)');
+      grad.addColorStop(1, 'rgba(54, 83, 20, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x0, cloudY - bandH * 0.9, x1 - x0, bandH * 1.95);
+
+      // Rolling sulfurous cloud billows drifting gently along the river top
+      const billowStamp = _getGlowStamp('h2s-cloud', 'rgba(217, 249, 157, 0.42)', 'rgba(163, 230, 53, 0.16)');
+      const count = 14;
+      const span = Math.max(10, (h2s.xMax ?? 118) - (h2s.xMin ?? -12));
+      for (let i = 0; i < count; i++) {
+        const wx = (h2s.xMin ?? -12) + ((i + 0.5) / count) * span + Math.sin(timeSec * 0.35 + i * 1.7) * 2.2;
+        const wy = h2s.y + Math.cos(timeSec * 0.45 + i * 2.1) * 0.48;
+        const bx = toScreenX(wx);
+        const by = toScreenY(wy);
+        if (bx < -160 || bx > cw + 160) continue;
+        const rw = (3.4 + (i % 3) * 1.1) * scale;
+        const rh = (1.35 + (i % 2) * 0.45) * scale;
+        if (billowStamp) {
+          ctx.drawImage(billowStamp, bx - rw, by - rh, rw * 2, rh * 2);
+        } else {
+          ctx.fillStyle = 'rgba(190, 242, 100, 0.22)';
+          ctx.beginPath();
+          ctx.ellipse(bx, by, rw * 0.7, rh * 0.7, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  },
 };

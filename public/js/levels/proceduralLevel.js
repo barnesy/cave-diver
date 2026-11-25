@@ -108,6 +108,22 @@ export const PROCEDURAL_BIOMES = {
     roughness: 0.31,
     namePrefix: 'Crystal Sink',
   },
+  biolum: {
+    id: 'biolum',
+    label: 'Bioluminescent Abyss',
+    themeId: 'abaco-crystal',
+    roughness: 0.33,
+    namePrefix: 'Biolume Vault',
+    forceBiolum: true,
+  },
+  bluehole: {
+    id: 'bluehole',
+    label: 'Coral Blue Hole',
+    themeId: 'abaco-crystal',
+    roughness: 0.27,
+    namePrefix: 'Coral Arch',
+    hasSunArches: true,
+  },
 };
 
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -453,6 +469,79 @@ export function generateProceduralLevel(opts = {}) {
     );
   }
 
+  // Procedural 2.0 (v196): Biome-specific Sunlit Arches & Surge Zones, Crankable Bulkheads & Rare Bonus Relic Vault!
+  const archWindows = [];
+  const procSurgeZones = [];
+  if (biomeSpec.hasSunArches && descentNodes.length >= 2) {
+    const a1 = descentNodes[0];
+    const a2 = chimSwitch;
+    archWindows.push(
+      { x: a1.x, y: Math.min(18, a1.y), radiusX: 10.5, radiusY: 5.0 },
+      { x: a2.x, y: Math.min(20, a2.y), radiusX: 9.5, radiusY: 4.8 }
+    );
+    procSurgeZones.push({
+      id: `proc_surge_${seed}`,
+      x: sumpMid.x,
+      y: sumpMid.y,
+      radius: 4.2,
+      vx: 1.9,
+      vy: 0.5,
+      periodSec: 8.6,
+      phase: round1(rng() * 6.0),
+      label: 'Blue Hole Tidal Surge',
+    });
+  }
+
+  // Procedural Crankable Watertight Bulkhead inside Mine biome or Deep/Extreme side-vaults
+  const watertightHatches = [];
+  if ((biomeSpec.id === 'mine' || tierSpec.id === 'deep' || tierSpec.id === 'extreme') && alcoveTips.length > 0) {
+    const hostIdx = candidateIdxs[0];
+    const host = nodes[hostIdx];
+    const tip = alcoveTips[0];
+    if (host && tip) {
+      watertightHatches.push({
+        id: `proc_hatch_${seed}`,
+        x: round1((host.x + tip.x) * 0.5),
+        y: round1((host.y + tip.y) * 0.5),
+        radius: 1.75,
+        label: biomeSpec.id === 'mine' ? 'Flooded Ore-Vault Bulkhead' : 'Sealed Sump Pressure Gate',
+        bonusPoints: 185,
+      });
+    }
+  }
+
+  // Rare High-Value Procedural Bonus Relic tucked at the deepest side alcove tip
+  if (alcoveTips.length > 0) {
+    const deepestTip = alcoveTips.reduce((a, b) => (b.depth > a.depth ? b : a), alcoveTips[0]);
+    const existing = collectibles.find((c) => Math.hypot(c.x - deepestTip.x, c.y - deepestTip.y) < 2.2);
+    const relicName = biomeSpec.forceBiolum
+      ? 'Bioluminescent Abyssal Pearl'
+      : biomeSpec.hasSunArches
+        ? 'Blue Hole Coral Astrolabe'
+        : 'Uncharted Vault Chronometer';
+    if (existing) {
+      existing.name = relicName;
+      existing.kind = 'relic';
+      existing.points = Math.max(existing.points || 0, 560);
+      existing.scale = 1.48;
+      existing.bonusVault = true;
+    } else {
+      collectibles.push({
+        id: `proc_${seed}_vault_relic`,
+        name: relicName,
+        x: deepestTip.x,
+        y: deepestTip.y,
+        kind: 'relic',
+        points: 560,
+        scale: 1.48,
+        bonusVault: true,
+      });
+    }
+  }
+
+  const baseTheme = createLevelTheme(biomeSpec.themeId);
+  const resolvedTheme = biomeSpec.forceBiolum ? { ...baseTheme, bioluminescent: true } : baseTheme;
+
   const level = {
     id,
     name: `${biomeSpec.namePrefix} #${seed}`,
@@ -492,9 +581,12 @@ export function generateProceduralLevel(opts = {}) {
     reelMetersPerDiver: unlined ? Math.round(totalRouteM * 1.45) : 0,
     hideWaypointCompass: unlined,
     parTimeSec: tierSpec.parTimeSec,
-    theme: createLevelTheme(biomeSpec.themeId),
+    theme: resolvedTheme,
     ...(tierSpec.gasOverrides ? { gasOverrides: tierSpec.gasOverrides } : {}),
     ...(geothermalVents.length > 0 ? { geothermalVents } : {}),
+    ...(archWindows.length > 0 ? { archWindows } : {}),
+    ...(procSurgeZones.length > 0 ? { surgeZones: procSurgeZones } : {}),
+    ...(watertightHatches.length > 0 ? { watertightHatches } : {}),
     openBasins: [
       {
         kind: 'entry',

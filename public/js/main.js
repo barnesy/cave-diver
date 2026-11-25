@@ -532,7 +532,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=195',
+  mapRasterUrl: './assets/map-expedition.jpg?v=196',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -6452,20 +6452,50 @@ const sessionStepCallbacks = {
     }
   },
   onWeaponEquip: () => audio.playClipLine?.(true),
-  onSpeargunFire: ({ charged }) => audio.playSpeargunFire?.(charged),
-  onSpearHit: ({ crit }) => audio.playSpearHit?.(crit),
-  onBossRoar: (phase) => audio.playBossRoar?.(phase),
-  onBossSlam: () => audio.playBossSlam?.(),
+  onSpeargunFire: ({ charged, isLocal }) => {
+    audio.playSpeargunFire?.(charged);
+    if (isLocal !== false) input?.rumbleGamepad?.(charged ? 'crit' : 'spear');
+  },
+  onSpearHit: ({ crit }) => {
+    audio.playSpearHit?.(crit);
+    if (crit) input?.rumbleGamepad?.('crit');
+  },
+  onBossRoar: (phase) => {
+    audio.playBossRoar?.(phase);
+    input?.rumbleGamepad?.('bossRoar');
+  },
+  onBossSlam: () => {
+    audio.playBossSlam?.();
+    input?.rumbleGamepad?.('wallBump');
+  },
   onBossBeam: (stage) => audio.playBossBeam?.(stage),
   onCrystalChime: (level) => audio.playCrystalChime?.(level),
+  onPlayerCombatDamage: () => {
+    audio.playHeadBump?.(0.8);
+    input?.rumbleGamepad?.('hit');
+  },
+  onCcrLowScrubber: ({ scrubberPct }) => {
+    showToast(`⚠️ CCR Scrubber at ${scrubberPct}% — prepare Open-Circuit Bailout!`, 3.2);
+    audio.playTone?.(520, 0.14, 'triangle', 0.05);
+    input?.rumbleGamepad?.('wallBump');
+  },
   onResonanceBreak: () => audio.playResonanceBreak?.(),
   onHealOrb: () => audio.playHealOrb?.(),
   onBatteryPickup: () => audio.playBatteryPickup?.(),
   onWeaponUpgrade: () => audio.playWeaponUpgrade?.(),
-  onScooterDash: () => audio.playScooterDash?.(),
+  onScooterDash: () => {
+    audio.playScooterDash?.();
+    input?.rumbleGamepad?.('dash');
+  },
   onHaloclineCross: (goingDeeper) => audio.playHaloclineShimmer?.(goingDeeper),
-  onStalactiteCrush: () => audio.playStalactiteCrush?.(),
-  onMineBlast: () => audio.playMineBlast?.(),
+  onStalactiteCrush: () => {
+    audio.playStalactiteCrush?.();
+    input?.rumbleGamepad?.('crit');
+  },
+  onMineBlast: () => {
+    audio.playMineBlast?.();
+    input?.rumbleGamepad?.('crit');
+  },
   onSconceIgnite: (idx) => audio.playSconceIgnite?.(idx),
   onForeshadow: () => audio.playForeshadowGroan?.(),
   onBossDefeat: () => {
@@ -6722,6 +6752,11 @@ function stepSimulation(dt) {
   }
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
     _marineStepOpts.localSiltDensity = session?.localSiltDensity || 0;
+    _marineStepOpts.ccrSilent = Boolean(
+      mode === 'diving' &&
+      session?.diveState?.ccrEnabled &&
+      (session?.diveState?.ccrScrubberPct ?? 0) > 0.1
+    );
     stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, _marineStepOpts);
   }
 
@@ -7049,6 +7084,7 @@ function stepSimulation(dt) {
     buddyPing: session.buddyPing || null,
     droppedStages: session.droppedStages || null,
     secretLair: session.secretLair || null,
+    rescueDrillMeta: session.rescueDrillMeta || null,
     endedState: session.endedState || '',
     spectatingPeer: Boolean(spectatingPeer),
     timeSec: session.simTimeSec,

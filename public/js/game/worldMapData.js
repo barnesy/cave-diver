@@ -6,7 +6,7 @@
 export const GLOBAL_MAP_VIEWBOX = Object.freeze({
   x: -10,
   y: -30,
-  w: 378,
+  w: 548,
   h: 248,
 });
 
@@ -157,6 +157,13 @@ export const MAP_LANDMASS_POLYGONS = [
   ],
   // Madagascar
   [[49.2, -12.0], [50.4, -15.5], [47.5, -24.8], [44.2, -25.1], [43.3, -21.0], [46.3, -15.6]],
+  // East Asia / Japan / Philippines / New Guinea / Australia (Pacific expansion for Chuuk Lagoon, v196)
+  [[130.0, 31.0], [135.5, 34.0], [140.8, 35.8], [141.5, 41.2], [145.0, 43.5], [141.0, 45.2], [136.5, 37.2], [130.5, 33.8]],
+  [[120.0, 18.2], [122.4, 16.5], [124.2, 13.0], [126.2, 7.2], [122.5, 6.8], [120.2, 13.8]],
+  [[132.0, -1.5], [141.0, -2.8], [150.5, -10.2], [146.0, -9.5], [136.0, -4.8], [131.0, -2.5]],
+  [[114.0, -22.0], [129.0, -14.5], [142.5, -11.0], [153.2, -26.5], [150.0, -37.5], [138.0, -35.5], [115.2, -34.0], [113.8, -26.0]],
+  // Chuuk Atoll Reef Ring (Micronesia)
+  [[151.4, 7.75], [152.2, 7.7], [152.35, 7.15], [151.6, 7.05], [151.35, 7.45]],
 ];
 
 /**
@@ -231,6 +238,8 @@ export function computeSiteFocusViewBox(levelId, slot) {
     'scoresby-sund-iceberg': { lng: -35.5, lat: 65.2, w: 74, h: 48.5 },
     'u1206-north-sea-sub': { lng: -2.0, lat: 57.0, w: 66, h: 43.3 },
     'bermuda-devils-wall': { lng: -64.8, lat: 32.3, w: 68, h: 44.6 },
+    'cenote-angelita-river': { lng: -87.6, lat: 20.1, w: 54, h: 35.5 },
+    'fujikawa-maru-chuuk': { lng: 151.9, lat: 7.4, w: 72, h: 47.2 },
   };
 
   const frame = CUSTOM_FRAMING[levelId];

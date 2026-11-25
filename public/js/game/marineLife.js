@@ -695,8 +695,9 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
   const divY = hasDiver ? diver.y : 0;
   const diverSpeed = hasDiver ? Math.hypot(diver.vx || 0, diver.vy || 0) : 0;
   const siltDens = Math.max(0, Number(opts?.localSiltDensity) || 0);
-  const isCalmDiver = hasDiver && diverSpeed <= 1.35 && !diver.dpvThrusting && siltDens < 0.3;
-  const isLoudDiver = hasDiver && (diverSpeed > 2.35 || Boolean(diver.dpvThrusting) || siltDens >= 0.42);
+  const ccrSilent = Boolean(opts?.ccrSilent);
+  const isCalmDiver = hasDiver && diverSpeed <= (ccrSilent ? 2.05 : 1.35) && !diver.dpvThrusting && siltDens < 0.3;
+  const isLoudDiver = hasDiver && (diverSpeed > (ccrSilent ? 3.2 : 2.35) || Boolean(diver.dpvThrusting) || siltDens >= 0.42);
   const lightLerp = Math.min(1, dt * 5.0);
 
   // Fish schooling + gentle swim-away near diver & torch-beam avoidance (distance-culled for distant chambers)
@@ -859,8 +860,9 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
         m.litIntensity = (m.litIntensity || 0) + (lit - (m.litIntensity || 0)) * lightLerp;
       }
 
-      if (hasDiver && canEscort && distToDiver <= 16.5) {
-        if (!m.nearTriggered && distToDiver <= 13.5 && (m.kind === 'manta' || m.kind === 'beluga')) {
+      const megaRange = ccrSilent ? 22.0 : 16.5;
+      if (hasDiver && canEscort && distToDiver <= megaRange) {
+        if (!m.nearTriggered && distToDiver <= (ccrSilent ? 16.5 : 13.5) && (m.kind === 'manta' || m.kind === 'beluga')) {
           m.nearTriggered = true;
           opts?.onMegafaunaNear?.(m);
         }
@@ -869,8 +871,8 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
           m.spookTimer = 6.5;
           m.escortTimeSec = 0;
         } else if (m.spookTimer <= 0 && isCalmDiver) {
-          m.escortTimeSec = (m.escortTimeSec || 0) + dt;
-          if (m.escortTimeSec >= 1.4 && distToDiver <= 12.5) {
+          m.escortTimeSec = (m.escortTimeSec || 0) + dt * (ccrSilent ? 2.0 : 1.0);
+          if (m.escortTimeSec >= 1.4 && distToDiver <= (ccrSilent ? 16.0 : 12.5)) {
             m.behavior = 'escort';
             if (!m.escortAwarded) {
               m.escortAwarded = true;
@@ -900,9 +902,9 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
         maxSpeed *= 1.95;
         accel = 3.2;
       } else if ((m.behavior === 'curious' || m.behavior === 'escort') && hasDiver) {
-        // Wide, slow majestic wing-glide orbit alongside the calm diver
+        // Wide, slow majestic wing-glide orbit alongside the calm diver (closer on silent CCR!)
         const orbitAng = timeSec * 0.32 + (m.phase || 0);
-        const wingDist = m.behavior === 'escort' ? 5.2 : 7.4;
+        const wingDist = m.behavior === 'escort' ? (ccrSilent ? 4.2 : 5.2) : (ccrSilent ? 6.0 : 7.4);
         tx = divX + Math.cos(orbitAng) * wingDist;
         ty = Math.max(3.4, divY - 1.3 + Math.sin(orbitAng * 1.15) * 1.5);
         maxSpeed *= 0.85;
@@ -1046,10 +1048,10 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
           }
           opts?.onDenizenInk?.(d);
         }
-      } else if (dist < 10.5 && (diver.torchOn === false || lit < 0.28) && diverSpeed <= 1.45) {
-        // Stealth / low-beam calm approach coaxes the denizen curiously out of its den!
+      } else if (dist < (ccrSilent ? 13.0 : 10.5) && (ccrSilent || diver.torchOn === false || lit < 0.28) && diverSpeed <= (ccrSilent ? 2.0 : 1.45)) {
+        // Stealth / low-beam or silent CCR approach coaxes the denizen curiously out of its den!
         d.state = 'curious';
-        d.emergence += (1.0 - d.emergence) * Math.min(1, dt * 1.45);
+        d.emergence += (1.0 - d.emergence) * Math.min(1, dt * (ccrSilent ? 2.4 : 1.45));
         d.chromaBlend += (0.55 - d.chromaBlend) * Math.min(1, dt * 2.2);
         if (d.emergence >= 0.78 && !d.emergeNotified) {
           d.emergeNotified = true;

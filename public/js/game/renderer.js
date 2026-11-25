@@ -1231,6 +1231,9 @@ export class CaveRenderer {
     if (this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum) {
       this._drawBioluminescence(ctx, viewWorldLeft, viewWorldRight, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
     }
+    if (this.level.h2sCloudLayer && typeof this._drawH2sCloudRiver === 'function') {
+      this._drawH2sCloudRiver(ctx, cw, ch, this.level.h2sCloudLayer, toScreenX, toScreenY, scale, timeSec);
+    }
     if (bioWake && bioWake.length > 0 && typeof this._drawBioWake === 'function') {
       this._drawBioWake(ctx, bioWake, visX0 - 2, visX1 + 2, visY0 - 2, visY1 + 2, toScreenX, toScreenY, scale, timeSec);
     }

@@ -1,6 +1,16 @@
 /**
- * Unified mobile touch joystick + desktop keyboard controller.
+ * Unified mobile touch joystick + desktop keyboard + console gamepad controller.
  */
+
+export const RUMBLE_PRESETS = Object.freeze({
+  sonar: Object.freeze({ durationMs: 95, strongMagnitude: 0.14, weakMagnitude: 0.35 }),
+  spear: Object.freeze({ durationMs: 65, strongMagnitude: 0.22, weakMagnitude: 0.4 }),
+  crit: Object.freeze({ durationMs: 140, strongMagnitude: 0.68, weakMagnitude: 0.85 }),
+  dash: Object.freeze({ durationMs: 120, strongMagnitude: 0.42, weakMagnitude: 0.62 }),
+  hit: Object.freeze({ durationMs: 175, strongMagnitude: 0.78, weakMagnitude: 0.55 }),
+  wallBump: Object.freeze({ durationMs: 80, strongMagnitude: 0.3, weakMagnitude: 0.18 }),
+  bossRoar: Object.freeze({ durationMs: 320, strongMagnitude: 0.85, weakMagnitude: 0.5 }),
+});
 
 export class InputController {
   constructor({
@@ -89,6 +99,7 @@ export class InputController {
   }
 
   _bindKeyboard() {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = e.target?.tagName;
@@ -442,7 +453,11 @@ export class InputController {
       // A / Cross: contextual Wreck Action if available, else Recommended Gas Switch
       if (!this.onWreckAction?.()) this.onRecommendedGasSwitch?.();
     }
-    if (justPressed(1)) this.onReelToggle?.(); // B / Circle
+    if (justPressed(1)) {
+      // B / Circle -> Hydro-Dash in Combat Mode, else Guideline Reel toggle
+      if (this.combatModeActive) this.onCombatDash?.();
+      else this.onReelToggle?.();
+    }
     if (justPressed(2)) this.onRecommendedGasSwitch?.(); // X / Square
     if (justPressed(3)) this.onTorchToggle?.(); // Y / Triangle
     if (justPressed(5)) this.onWreckAction?.(); // RB / R1
@@ -454,8 +469,12 @@ export class InputController {
     if (justPressed(8) || justPressed(11)) this.onSonarPing?.(); // Select/View or R3 -> Sonar Ping
     if (justPressed(10)) this.onMinimapToggle?.(); // L3 -> Toggle Sonar Minimap
     if (justPressed(9)) this.onPauseToggle?.(); // Start / Options
-    if (justPressed(4)) this.onReelRewind?.(); // LB / L1
-    this._gpRewindHeld = pressed(4);
+    if (justPressed(4)) {
+      // LB / L1 -> Instant Hydro-Dash in Combat Mode, else Guideline Reel Rewind
+      if (this.combatModeActive) this.onCombatDash?.();
+      else this.onReelRewind?.();
+    }
+    this._gpRewindHeld = !this.combatModeActive && pressed(4);
 
     // Save button states for edge detection
     const bLen = gp.buttons?.length || 0;
@@ -496,6 +515,44 @@ export class InputController {
     }
 
     return { x: gx * precision, y: gy * precision };
+  }
+
+  /**
+   * Trigger dual-motor controller vibration haptics (Xbox / DualSense / Steam Deck / Backbone) (v196).
+   * Gracefully no-ops when no gamepad is attached or prefers-reduced-motion is enabled.
+   */
+  rumbleGamepad(presetOrOpts = 'spear') {
+    if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return false;
+    try {
+      if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+        return false;
+      }
+      const cfg = typeof presetOrOpts === 'string'
+        ? (RUMBLE_PRESETS[presetOrOpts] || RUMBLE_PRESETS.spear)
+        : (presetOrOpts || RUMBLE_PRESETS.spear);
+      const pads = navigator.getGamepads() || [];
+      for (let i = 0; i < pads.length; i++) {
+        const gp = pads[i];
+        const act = gp?.connected ? (gp.vibrationActuator || gp.hapticActuators?.[0]) : null;
+        if (!act) continue;
+        if (typeof act.playEffect === 'function') {
+          act.playEffect('dual-rumble', {
+            startDelay: 0,
+            duration: Math.max(20, Math.min(600, Number(cfg.durationMs) || 80)),
+            strongMagnitude: Math.max(0, Math.min(1, Number(cfg.strongMagnitude) || 0.25)),
+            weakMagnitude: Math.max(0, Math.min(1, Number(cfg.weakMagnitude) || 0.3)),
+          }).catch?.(() => {});
+          return true;
+        }
+        if (typeof act.pulse === 'function') {
+          act.pulse(Math.max(0, Math.min(1, Number(cfg.strongMagnitude) || 0.3)), Math.max(20, Number(cfg.durationMs) || 80));
+          return true;
+        }
+      }
+    } catch {
+      return false;
+    }
+    return false;
   }
 
   getThrust() {

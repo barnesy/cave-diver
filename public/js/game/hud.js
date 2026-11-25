@@ -2,6 +2,7 @@ import { GAS_MIXES, GAS_ORDER, computePPO2, computeTissueCompartmentStatus, getR
 import { getAscentConfig } from '../levels/index.js';
 import { EXPLORE_GRID_CELL_M } from './scoring.js';
 import { formatClock } from '../util/common.js';
+import { computeDrillPaceStatus } from './rescueDrills.js';
 
 const GAS_HOTKEY_LABELS = { EAN32: '1', TMX1455: '2', O2: '3' };
 
@@ -1309,6 +1310,7 @@ export class DiveComputerHUD {
     droppedStages = null,
     surveyPins = null,
     secretLair = null,
+    rescueDrillMeta = null,
     endedState = '',
     spectatingPeer = false,
     timeSec = 0,
@@ -1330,7 +1332,14 @@ export class DiveComputerHUD {
     }
     setText(this.elDepth, diveState.depthM.toFixed(1));
     setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
-    setText(this.elTime, formatClock(diveState.diveTimeSec));
+    if (rescueDrillMeta?.parTimeSec > 0) {
+      const pace = computeDrillPaceStatus(rescueDrillMeta.parTimeSec, diveState.diveTimeSec);
+      setText(this.elTime, `${formatClock(diveState.diveTimeSec)} · ${pace.label}`);
+      if (this.elTime?.style) this.elTime.style.color = pace.color;
+    } else {
+      setText(this.elTime, formatClock(diveState.diveTimeSec));
+      if (this.elTime?.style && this.elTime.style.color) this.elTime.style.color = '';
+    }
     if (this.elTemp && hazards && Number.isFinite(hazards.waterTempC)) {
       const inCold = Boolean(hazards.inThermocline || (hazards.thermoclineColdFactor || 0) > 0.2);
       setText(this.elTemp, `${inCold ? '❄️' : ''}${Math.round(hazards.waterTempC)}°C`);

@@ -84,6 +84,42 @@ export const RESCUE_DRILLS = Object.freeze([
     ]),
     needsAiBuddy: false,
   }),
+  Object.freeze({
+    id: 'wreck-bulkhead-entrapment',
+    icon: '🚪',
+    name: 'Deep Wreck Bulkhead Entrapment',
+    shortName: 'Bulkhead Escape',
+    levelId: 'ss-thistlegorm-wreck',
+    difficulty: 'standard',
+    parTimeSec: 78,
+    accent: '#f97316',
+    summary: 'Sealed inside the flooded Forepeak Chain Locker at 34m on low reserve gas. Equalize & crank the watertight bulkhead ([E]) and ascend cleanly.',
+    briefing: '🚪 DRILL LIVE: Trapped behind sealed bulkhead at 34m on reserve gas! Crank hatch [E] & extract under 78s!',
+    objectives: Object.freeze([
+      'Equalize & crank open the sealed Forepeak watertight bulkhead ([E])',
+      'Manage remaining reserve gas cleanly during ascent',
+      'Surface safely at the liveaboard platform under 78s par',
+    ]),
+    needsAiBuddy: false,
+  }),
+  Object.freeze({
+    id: 'narcosis-buddy-tow',
+    icon: '🧭',
+    name: 'Deep Narcosis & Buddy Escort Rescue',
+    shortName: 'Narcosis Rescue',
+    levelId: 'cenote-el-abismo',
+    difficulty: 'hardcore',
+    parTimeSec: 95,
+    accent: '#22d3ee',
+    summary: 'Crewmate Maya is severely narced and disoriented at 40m. Close in, guide her shallower to clear narcosis, and surface together under par.',
+    briefing: '🧭 DRILL LIVE: Maya is NARCED at 40m! Close in, lead her shallower to stabilize & exit together (<95s par)!',
+    objectives: Object.freeze([
+      'Intercept disoriented Crewmate Maya at 40m',
+      'Lead her shallower to clear Nitrogen Narcosis cleanly',
+      'Bring both divers home safely under 95s par',
+    ]),
+    needsAiBuddy: true,
+  }),
 ]);
 
 const DRILL_BY_ID = new Map(RESCUE_DRILLS.map((d) => [d.id, d]));
@@ -242,9 +278,98 @@ export function applyRescueDrillScenario(session, drill) {
     }
     diveState.ceilingM = Math.max(diveState.ceilingM || 0, 4.2);
     diveState.stopDepthM = Math.max(diveState.stopDepthM || 0, 6);
+  } else if (drill.id === 'wreck-bulkhead-entrapment') {
+    // Spawn inside the sealed Forepeak Chain Locker behind hatch thi_hatch_bow (-5, 34.5) on reserve gas
+    const hatch = Array.isArray(level?.watertightHatches) && level.watertightHatches.length > 0
+      ? level.watertightHatches[0]
+      : { id: 'thi_hatch_bow', x: -5.0, y: 34.5 };
+    diver.x = hatch.x - 4.2;
+    diver.y = hatch.y;
+    diveState.depthM = hatch.y;
+    diveState.maxDepthM = Math.max(diveState.maxDepthM || 0, hatch.y);
+    switchGas(diveState, 'TMX1455');
+    // Put active tank on realistic reserve (~78 bar) so composure matters!
+    const tmxTank = diveState.tanks?.TMX1455;
+    if (tmxTank) {
+      tmxTank.bar = Math.min(tmxTank.bar, 78);
+      if (Number.isFinite(tmxTank.maxLiters)) {
+        tmxTank.litersRemaining = (tmxTank.bar / 200) * tmxTank.maxLiters;
+      }
+    }
+    session.rescueDrillMeta.targetHatchId = hatch.id;
+  } else if (drill.id === 'narcosis-buddy-tow') {
+    const pt = pickDrillSpawnPoint(level, 40);
+    diver.x = pt.x;
+    diver.y = pt.y;
+    diveState.depthM = pt.y;
+    diveState.maxDepthM = Math.max(diveState.maxDepthM || 0, pt.y);
+    switchGas(diveState, 'TMX1455');
+    if (Array.isArray(session.aiSquad) && session.aiSquad.length > 0) {
+      const maya = session.aiSquad[0];
+      maya.x = pt.x + 2.4;
+      maya.y = pt.y;
+      maya.depthM = maya.y;
+      maya.condition = 'NARCED';
+      maya.issue = {
+        kind: 'narcosis',
+        icon: '🌀',
+        title: 'Deep Nitrogen Narcosis',
+        condition: 'NARCED',
+        hudLabel: '🧭 LEAD SHALLOWER',
+        hint: 'Stay close to Maya and guide her shallower (<26m) so her narcosis clears!',
+        progress: 0,
+        startedAt: Date.now(),
+        startDepthM: maya.y,
+        anchorX: maya.x,
+        anchorY: maya.y,
+        snagIndex: -1,
+        snagKey: '',
+        countdownSec: 70,
+        maxCountdownSec: 70,
+      };
+    }
   }
 
   return session;
+}
+
+/**
+ * Compute Live Par Pace indicator during an active Technical Rescue Drill (v196).
+ * Compares elapsed time against S+ Gold target (0.82x par) and Par (1.0x par).
+ */
+export function computeDrillPaceStatus(drillOrParSec, elapsedSec = 0) {
+  const par = Math.max(20, Number(typeof drillOrParSec === 'object' ? drillOrParSec?.parTimeSec : drillOrParSec) || 75);
+  const t = Math.max(0, Number(elapsedSec) || 0);
+  const goldTarget = par * 0.82;
+  const deltaToParSec = Math.round((t - par) * 10) / 10;
+  const deltaToGoldSec = Math.round((t - goldTarget) * 10) / 10;
+  if (t <= goldTarget) {
+    const rem = Math.max(0, goldTarget - t);
+    return {
+      band: 'gold',
+      deltaToParSec,
+      deltaToGoldSec,
+      label: `-${rem.toFixed(0)}s S+`,
+      color: '#fde047',
+    };
+  }
+  if (t <= par) {
+    const rem = Math.max(0, par - t);
+    return {
+      band: 'par',
+      deltaToParSec,
+      deltaToGoldSec,
+      label: `-${rem.toFixed(0)}s PAR`,
+      color: '#4ade80',
+    };
+  }
+  return {
+    band: 'behind',
+    deltaToParSec,
+    deltaToGoldSec,
+    label: `+${(t - par).toFixed(0)}s PAR`,
+    color: '#fb7185',
+  };
 }
 
 /**
@@ -265,6 +390,11 @@ export function evaluateRescueDrillResult(drill, session, { success = false } = 
     crisisSolved = Boolean(success && (meta.sharedGasWithBuddy || (maya && maya.activeBar >= 25 && maya.alive !== false)));
   } else if (drill.id === 'net-cut-deco') {
     crisisSolved = Boolean(success && ((session.cutSnagIds?.size || 0) >= 1 || meta.cutSnag));
+  } else if (drill.id === 'wreck-bulkhead-entrapment') {
+    crisisSolved = Boolean(success && ((session.openedHatchIds?.size || 0) >= 1 || meta.openedBulkhead));
+  } else if (drill.id === 'narcosis-buddy-tow') {
+    const maya = session.aiSquad?.[0];
+    crisisSolved = Boolean(success && ((session.aiIssuesResolved || 0) >= 1 || (maya && !maya.issue && maya.alive !== false)));
   }
 
   if (!success) {

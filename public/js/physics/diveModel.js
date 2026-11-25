@@ -492,8 +492,10 @@ export function stepDivePhysiology(
   const gasCompressionScale = 5.0;
   const effAmb = pAmb <= 10.0 ? pAmb : 10.0 + (pAmb - 10.0) * 0.48;
   const ccrLoopActive = Boolean(state.ccrEnabled) && (state.ccrScrubberPct ?? 0) > 0.1;
+  const ccrHighSp = (state.ccrSetpointBar ?? 1.3) >= 1.0;
   if (state.ccrEnabled && clampedDepth > 0.3) {
-    const scrubBurnRate = 0.115 + exertion * 0.065 + (state.panicLevel || 0) * 0.08;
+    const spBurnMult = ccrHighSp ? 1.0 : 0.82;
+    const scrubBurnRate = (0.115 + exertion * 0.065 + (state.panicLevel || 0) * 0.08) * spBurnMult;
     state.ccrScrubberPct = Math.max(0, (state.ccrScrubberPct ?? 100) - scrubBurnRate * dt);
   }
   const ccrGasMult = ccrLoopActive ? 0.38 : 1.0;
@@ -550,9 +552,9 @@ export function stepDivePhysiology(
   const pAlvHe = Math.max(0, pAmb - WATER_VAPOR_BAR) * gas.fHe;
 
   // Gameplay-paced deep helium off-gassing above 9m keeps 120-185m deco stops engaging (1-2 min) rather than 8-11 min idle waiting
-  // CCR optimal deco setpoint also accelerates shallow decompression off-gassing by ~22%
+  // CCR optimal deco setpoint also accelerates shallow decompression off-gassing (1.28x on High 1.3 bar, 1.10x on Low 0.7 bar)
   const deepHeOffgasMult = clampedDepth > 9.0 ? 2.2 : 1.0;
-  const ccrDecoOffgasMult = ccrLoopActive && clampedDepth <= 9.5 ? 1.22 : 1.0;
+  const ccrDecoOffgasMult = ccrLoopActive && clampedDepth <= 9.5 ? (ccrHighSp ? 1.28 : 1.10) : 1.0;
   for (let i = 0; i < state.compartments.length; i++) {
     const c = state.compartments[i];
     const spec = COMPARTMENTS[i];
@@ -968,4 +970,38 @@ export function receiveGasIntoState(state, gasId, amountBar) {
     tank.litersRemaining = Math.min(tank.maxLiters, (tank.bar / startBar) * tank.maxLiters);
   }
   return Math.max(0, Math.round((tank.bar - prev) * 10) / 10);
+}
+
+/**
+ * Toggle Closed-Circuit Rebreather (CCR) PPO2 loop setpoint between Low (0.7 bar conservative travel)
+ * and High (1.3 bar optimal deep/deco off-gassing) (v196).
+ */
+export function toggleCcrSetpoint(state) {
+  if (!state || !state.ccrEnabled || (state.ccrScrubberPct ?? 0) <= 0.1) {
+    return { ok: false, setpointBar: state?.ccrSetpointBar ?? 1.3 };
+  }
+  const next = (state.ccrSetpointBar ?? 1.3) >= 1.0 ? 0.7 : 1.3;
+  state.ccrSetpointBar = next;
+  return {
+    ok: true,
+    setpointBar: next,
+    label: next >= 1.0 ? 'HIGH 1.3 bar (Optimal Deco)' : 'LOW 0.7 bar (Eco Scrubber)',
+  };
+}
+
+/**
+ * Perform an immediate Open-Circuit Bailout off a Closed-Circuit Rebreather loop
+ * (e.g., when CO2 scrubber drops low or loop malfunctions) (v196).
+ */
+export function triggerCcrBailout(state) {
+  if (!state || !state.ccrEnabled) {
+    return { ok: false, prevActive: false, scrubberPct: state?.ccrScrubberPct ?? 0 };
+  }
+  state.ccrEnabled = false;
+  state.ccrBailedOut = true;
+  return {
+    ok: true,
+    prevActive: true,
+    scrubberPct: Math.round(state.ccrScrubberPct ?? 0),
+  };
 }

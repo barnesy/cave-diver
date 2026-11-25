@@ -4508,5 +4508,9 @@ export function stepDiveSession(session, thrust, dt, callbacks = {}) {
     );
   }
   stepPhysiologyAndObjectives(session, simDt, callbacks, ctx);
+  if (session.diveState?.ccrEnabled && (session.diveState.ccrScrubberPct ?? 100) <= 15 && !session._ccrLowScrubberWarned) {
+    session._ccrLowScrubberWarned = true;
+    callbacks.onCcrLowScrubber?.({ scrubberPct: Math.round(session.diveState.ccrScrubberPct ?? 0) });
+  }
   return stepTelemetryAndExitOutcome(session, simDt, callbacks);
 }
