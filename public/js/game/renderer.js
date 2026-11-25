@@ -3029,8 +3029,13 @@ export class CaveRenderer {
       }
     }
 
-    // 3. Bioluminescent Fin-Wake Sparks directly behind articulated fin tips in Night/Biolum mode
-    const bioActive = Boolean(this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum);
+    // 2b. World-Reactive Special Torch Optic FX inside the active ray-cast beam cone (v212)
+    const diverPal = diver.livery ? resolveDiverLiveryPalette(diver.livery) : null;
+    if (diverPal?.torchFx) this._drawWorldSpecialTorchFx?.(ctx, diver, diverPal, toScreenX, toScreenY, scale, timeSec);
+
+    // 3. Bioluminescent / Special-Gear Fin-Wake Sparks directly behind articulated fin tips (v119 / v212)
+    const wakeProf = diverPal?.wakeProfile || null;
+    const bioActive = Boolean(this.level.theme?.bioluminescent || this._activeWeather?.forceBiolum || wakeProf?.active);
     if (bioActive && diver.body?.legs && diver.y > 1.0) {
       const spd = Math.hypot(diver.vx || 0, diver.vy || 0);
       if (spd > 0.25) {
@@ -3043,9 +3048,16 @@ export class CaveRenderer {
           for (let k = 0; k < 5; k++) {
             const t = (k + ((timeSec * 3.8 + li * 0.5) % 1)) * 0.34;
             const px = tip.x + bx * t * 1.45 + Math.sin(timeSec * 5 + k * 2.1 + li) * 0.18;
-            const py = tip.y + by * t * 1.45 + Math.cos(timeSec * 4.4 + k * 1.9) * 0.15;
-            const a = Math.max(0, (1 - k / 5) * 0.72 * inten);
-            ctx.fillStyle = k % 2 === 0 ? `rgba(56, 232, 255, ${a.toFixed(3)})` : `rgba(110, 231, 183, ${(a * 0.85).toFixed(3)})`;
+            const py = tip.y + by * t * 1.45 + Math.cos(timeSec * 4.4 + k * 1.9) * 0.15 - (wakeProf?.rising ? t * 0.36 : 0);
+            const a = Math.max(0, (1 - k / 5) * (wakeProf?.isSetAura ? 0.85 : 0.72) * inten);
+            if (wakeProf?.active) {
+              const hue = wakeProf.prism
+                ? Math.round((timeSec * 120 + k * 48 + li * 60) % 360)
+                : (k % 2 === 0 ? wakeProf.hueA : wakeProf.hueB);
+              ctx.fillStyle = `hsla(${hue}, 96%, 72%, ${a.toFixed(3)})`;
+            } else {
+              ctx.fillStyle = k % 2 === 0 ? `rgba(56, 232, 255, ${a.toFixed(3)})` : `rgba(110, 231, 183, ${(a * 0.85).toFixed(3)})`;
+            }
             ctx.beginPath();
             ctx.arc(toScreenX(px), toScreenY(py), Math.max(1.3, (0.065 - k * 0.008) * scale), 0, Math.PI * 2);
             ctx.fill();
@@ -4026,37 +4038,6 @@ export class CaveRenderer {
     );
   }
 
-  /**
-   * Emissive bioluminescent plankton / dinoflagellate fin-wake sparkle trails (v119).
-   */
-  _drawBioWake(ctx, bioWake, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec) {
-    if (!Array.isArray(bioWake) || bioWake.length === 0) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < bioWake.length; i++) {
-      const p = bioWake[i];
-      if (!p || p.x < xMin || p.x > xMax || p.y < yMin || p.y > yMax) continue;
-      const frac = Math.max(0, Math.min(1, p.age / Math.max(0.2, p.life)));
-      const fadeIn = Math.min(1, p.age / 0.14);
-      const twinkle = 0.68 + 0.32 * Math.sin(timeSec * 8.5 + (p.phase || i));
-      const alpha = fadeIn * (1 - frac) * (1 - frac) * 0.72 * twinkle;
-      if (alpha < 0.02) continue;
-      const sx = toScreenX(p.x);
-      const sy = toScreenY(p.y);
-      const r = Math.max(1.2, (p.size || 0.06) * scale * (1.15 - frac * 0.45));
-      const hue = Math.round(p.hue || 184);
-      ctx.fillStyle = `hsla(${hue}, 96%, 68%, ${(alpha * 0.38).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(sx, sy, r * 2.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `hsla(${hue}, 100%, 86%, ${alpha.toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
   _drawDynamicEncounters(ctx, encounters, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec, pass = 'world') {
     if (!encounters) return;
     ctx.save();
@@ -4453,6 +4434,7 @@ export class CaveRenderer {
     ctx.save();
 
     const liveryPalette = diver.livery ? resolveDiverLiveryPalette(diver.livery) : null;
+    if (liveryPalette?.wakeProfile?.active) this._drawDiverGearAura?.(ctx, sx, sy, scale, timeSec, liveryPalette);
 
     // 1. Far leg (behind torso)
     this._drawArticulatedLeg(ctx, body.pelvis, body.legs[1], toScreenX, toScreenY, scale, isPeer, true, liveryPalette, timeSec);

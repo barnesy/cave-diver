@@ -1281,8 +1281,248 @@ export function getNextGearMilestones(unlocks, limit = 3) {
 }
 
 /**
+ * Matching Gear Set Synergies (v212): pairing themed pieces across slots activates
+ * bespoke visual set auras, synchronized wake trails, and Workshop set-completion badges.
+ */
+export const GEAR_SET_SYNERGIES = Object.freeze([
+  Object.freeze({
+    id: 'dreadnought-mk4',
+    name: 'WWII Dreadnought Mk-IV',
+    icon: '⚙️',
+    tier: 'mythic',
+    required: 2,
+    secret: true,
+    auraName: 'Furnace Steam Aura',
+    auraDesc: 'Synchronized brass boiler shimmer & rising golden steam-ember wake.',
+    color: '#fbbf24',
+    rgb: '251, 191, 36',
+    hueA: 38,
+    hueB: 48,
+    rising: true,
+    slots: Object.freeze([
+      { slot: 'headgear', field: 'headgearId', ids: ['secret-dreadnought-helm'] },
+      { slot: 'tank', field: 'tankId', ids: ['secret-dreadnought-brass'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'apex-bounty',
+    name: 'Apex Leviathan Hunter',
+    icon: '👑',
+    tier: 'mythic',
+    required: 3,
+    secret: false,
+    auraName: 'Apex Sovereign Crest',
+    auraDesc: 'Radiant crimson-gold sovereign halo & predator plasma fin-wake.',
+    color: '#facc15',
+    rgb: '250, 204, 21',
+    hueA: 46,
+    hueB: 348,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['bounty-hunter-suit'] },
+      { slot: 'torch', field: 'torchId', ids: ['bounty-hunter-torch'] },
+      { slot: 'visor', field: 'visorId', ids: ['bounty-hunter-visor'] },
+      { slot: 'patch', field: 'patchId', ids: ['bounty-hunter-master'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'kraken-depths',
+    name: 'Biolume Leviathan',
+    icon: '🐙',
+    tier: 'mythic',
+    required: 2,
+    secret: true,
+    auraName: 'Living Biolume Bloom',
+    auraDesc: 'Luminous cyan-violet plankton bloom trailing every fin kick.',
+    color: '#22d3ee',
+    rgb: '34, 211, 238',
+    hueA: 190,
+    hueB: 282,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['secret-kraken-biolume'] },
+      { slot: 'torch', field: 'torchId', ids: ['halocline-uv', 'aurora-plasma'] },
+      { slot: 'trim', field: 'trimId', ids: ['secret-selenite-trim', 'biolum-violet', 'plasma-circuit-trim'] },
+      { slot: 'visor', field: 'visorId', ids: ['secret-aurora-frost', 'thermocline-prism'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'abyssal-void',
+    name: 'Abyssal Voidwalker',
+    icon: '🛸',
+    tier: 'epic',
+    required: 3,
+    secret: false,
+    auraName: 'Void Resonance Field',
+    auraDesc: 'Pulsing indigo-cyan telemetry aura & electric plasma fin-wake.',
+    color: '#c084fc',
+    rgb: '192, 132, 252',
+    hueA: 274,
+    hueB: 194,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['krubera-obsidian', 'secret-empress-sovereign'] },
+      { slot: 'headgear', field: 'headgearId', ids: ['abyss-halo-helm', 'exo-mask'] },
+      { slot: 'tank', field: 'tankId', ids: ['abyssal-titanium'] },
+      { slot: 'trim', field: 'trimId', ids: ['plasma-circuit-trim', 'biolum-violet'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'karst-pioneer',
+    name: 'Karst & Halocline Explorer',
+    icon: '🌿',
+    tier: 'epic',
+    required: 2,
+    secret: false,
+    auraName: 'Halocline Caustic Wake',
+    auraDesc: 'Shimmering cenote turquoise-emerald caustic ribbon wake.',
+    color: '#2dd4bf',
+    rgb: '45, 212, 191',
+    hueA: 168,
+    hueB: 142,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['karst-jade'] },
+      { slot: 'tank', field: 'tankId', ids: ['sulfur-emerald-tank'] },
+      { slot: 'visor', field: 'visorId', ids: ['thermocline-prism'] },
+      { slot: 'patch', field: 'patchId', ids: ['camp-karst', 'camp-halocline'] },
+    ]),
+  }),
+  Object.freeze({
+    id: 'wreck-salvager',
+    name: 'Deep Salvage Specialist',
+    icon: '⚓',
+    tier: 'rare',
+    required: 3,
+    secret: false,
+    auraName: 'Burnished Salvage Halo',
+    auraDesc: 'Warm amber-bronze salvage glint trail & rescue beacon aura.',
+    color: '#f59e0b',
+    rgb: '245, 158, 11',
+    hueA: 38,
+    hueB: 45,
+    rising: false,
+    slots: Object.freeze([
+      { slot: 'suit', field: 'suitId', ids: ['wreck-titanium'] },
+      { slot: 'headgear', field: 'headgearId', ids: ['brass-hardhat', 'cave-helmet'] },
+      { slot: 'tank', field: 'tankId', ids: ['salvage-brass'] },
+      { slot: 'trim', field: 'trimId', ids: ['salvage-gold'] },
+    ]),
+  }),
+]);
+
+/**
+ * Evaluate which Gear Set Synergies are active or partially matched on a livery (v212).
+ */
+export function evaluateGearSetSynergy(livery = null) {
+  const cur = {
+    suitId: livery?.suitId || DEFAULT_RIG_LIVERY.suitId,
+    torchId: livery?.torchId || DEFAULT_RIG_LIVERY.torchId,
+    patchId: livery?.patchId || DEFAULT_RIG_LIVERY.patchId,
+    headgearId: livery?.headgearId || DEFAULT_MODULAR_IDS.headgearId,
+    trimId: livery?.trimId || DEFAULT_MODULAR_IDS.trimId,
+    tankId: livery?.tankId || DEFAULT_MODULAR_IDS.tankId,
+    visorId: livery?.visorId || DEFAULT_MODULAR_IDS.visorId,
+  };
+  const statuses = [];
+  let active = null;
+  for (const set of GEAR_SET_SYNERGIES) {
+    let matched = 0;
+    for (const rule of set.slots) {
+      if (rule.ids.includes(cur[rule.field])) matched++;
+    }
+    const isActive = matched >= set.required;
+    const st = {
+      set,
+      matched,
+      required: set.required,
+      active: isActive,
+      pct: Math.min(1, matched / Math.max(1, set.required)),
+    };
+    statuses.push(st);
+    if (isActive) {
+      if (!active || getGearTierMeta(set.tier).rank > getGearTierMeta(active.tier).rank) {
+        active = set;
+      }
+    }
+  }
+  return { active, sets: statuses };
+}
+
+/**
+ * Find any Gear Set Synergies that include a given gear slot + item ID.
+ */
+export function getSetsForGearItem(slot, itemId) {
+  if (!slot || !itemId) return [];
+  return GEAR_SET_SYNERGIES.filter((set) =>
+    set.slots.some((rule) => rule.slot === slot && rule.ids.includes(itemId))
+  );
+}
+
+/**
+ * Resolve world-space fin-wake trail & subtle ambient aura profile for Mythic/Epic gear
+ * and active Set Synergies during live dives (v212).
+ */
+export function resolveGearWakeProfile(livery = null) {
+  if (!livery) return null;
+  const suit = getSuitLivery(livery.suitId);
+  const trimSpec = getAccentTrim(livery.trimId);
+  const syn = evaluateGearSetSynergy(livery);
+  const activeSet = syn.active;
+
+  if (activeSet) {
+    return {
+      active: true,
+      hueA: activeSet.hueA,
+      hueB: activeSet.hueB,
+      prism: trimSpec?.fx?.id === 'selenite-prism',
+      rising: Boolean(activeSet.rising),
+      rateMult: activeSet.tier === 'mythic' ? 1.45 : 1.22,
+      minDepth: 1.2,
+      auraColor: activeSet.color,
+      auraRgb: activeSet.rgb,
+      isSetAura: true,
+      label: activeSet.auraName,
+    };
+  }
+  const sfx = suit?.fx?.id || '';
+  const tfx = trimSpec?.fx?.id || '';
+  if (tfx === 'selenite-prism') {
+    return { active: true, hueA: 292, hueB: 192, prism: true, rising: false, rateMult: 1.35, minDepth: 1.2, auraColor: '#e879f9', auraRgb: '232, 121, 249', isSetAura: false, label: 'Prismatic Wake' };
+  }
+  if (sfx === 'magma-embers' || tfx === 'foundry-sparks') {
+    return { active: true, hueA: 26, hueB: 44, prism: false, rising: true, rateMult: 1.35, minDepth: 1.2, auraColor: '#fb923c', auraRgb: '251, 146, 60', isSetAura: false, label: 'Molten Ember Wake' };
+  }
+  if (sfx === 'biolume-pulse') {
+    return { active: true, hueA: 190, hueB: 280, prism: false, rising: false, rateMult: 1.35, minDepth: 1.2, auraColor: '#22d3ee', auraRgb: '34, 211, 238', isSetAura: false, label: 'Biolume Spore Wake' };
+  }
+  if (sfx === 'sovereign-aura') {
+    return { active: true, hueA: 48, hueB: 158, prism: false, rising: false, rateMult: 1.32, minDepth: 1.2, auraColor: '#facc15', auraRgb: '250, 204, 21', isSetAura: false, label: 'Sovereign Mote Wake' };
+  }
+  if (sfx === 'phantom-phase') {
+    return { active: true, hueA: 168, hueB: 184, prism: false, rising: false, rateMult: 1.28, minDepth: 1.2, auraColor: '#5eead4', auraRgb: '94, 234, 212', isSetAura: false, label: 'Spectral Wake' };
+  }
+  if (sfx === 'orichalcum-runes') {
+    return { active: true, hueA: 46, hueB: 192, prism: false, rising: false, rateMult: 1.28, minDepth: 1.2, auraColor: '#fbbf24', auraRgb: '251, 191, 36', isSetAura: false, label: 'Orichalcum Wake' };
+  }
+  if (sfx === 'dragon-jade') {
+    return { active: true, hueA: 166, hueB: 350, prism: false, rising: true, rateMult: 1.3, minDepth: 1.2, auraColor: '#2dd4bf', auraRgb: '45, 212, 191', isSetAura: false, label: 'Dragon Lantern Wake' };
+  }
+  if (tfx === 'plasma-wave') {
+    return { active: true, hueA: 194, hueB: 208, prism: false, rising: false, rateMult: 1.18, minDepth: 1.6, auraColor: '#38bdf8', auraRgb: '56, 189, 248', isSetAura: false, label: 'Plasma Conduit Wake' };
+  }
+  if (sfx === 'karst-caustics') {
+    return { active: true, hueA: 168, hueB: 182, prism: false, rising: false, rateMult: 1.15, minDepth: 1.6, auraColor: '#2dd4bf', auraRgb: '45, 212, 191', isSetAura: false, label: 'Caustic Wake' };
+  }
+  if (sfx === 'abyssal-shimmer' || tfx === 'abyssal-shimmer') {
+    return { active: true, hueA: 278, hueB: 296, prism: false, rising: false, rateMult: 1.15, minDepth: 1.8, auraColor: '#c084fc', auraRgb: '192, 132, 252', isSetAura: false, label: 'Abyssal Sheen Wake' };
+  }
+  return null;
+}
+
+/**
  * Resolve any modular livery object into a complete drawing palette used consistently
- * by CaveRenderer, artSprites, Workshop Test-Tank Preview, and Home Mini-Avatar Badge (v153 / v211).
+ * by CaveRenderer, artSprites, Workshop Test-Tank Preview, and Home Mini-Avatar Badge (v153 / v211 / v212).
  */
 export function resolveDiverLiveryPalette(livery = null) {
   const suit = getSuitLivery(livery?.suitId);
@@ -1296,6 +1536,8 @@ export function resolveDiverLiveryPalette(livery = null) {
   const tierRanks = [suit, torch, patch, headgear, trimSpec, tank, visor].map((x) => getGearTierMeta(x?.tier).rank);
   const maxRank = Math.max(...tierRanks);
   const maxTier = Object.values(GEAR_TIERS).find((t) => t.rank === maxRank) || GEAR_TIERS.common;
+  const setSynergy = evaluateGearSetSynergy(livery).active;
+  const wakeProfile = resolveGearWakeProfile(livery);
 
   return {
     suit,
@@ -1326,6 +1568,8 @@ export function resolveDiverLiveryPalette(livery = null) {
     patchFx: patch.fx?.id || '',
     patchTier: patch.tier || 'common',
     maxTier,
+    setSynergy,
+    wakeProfile,
   };
 }
 
@@ -1888,6 +2132,35 @@ export function drawLiveryPreview(
     ctx.fill();
   }
 
+  // Draw subtle ambient Set Synergy / Mythic aura behind the diver in the Test Tank (v212)
+  if (pal.wakeProfile?.active) {
+    const wp = pal.wakeProfile;
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.2);
+    const auraR = scale * (wp.isSetAura ? 1.15 : 0.92);
+    const ag = ctx.createRadialGradient(sx - scale * 0.15, sy, scale * 0.12, sx - scale * 0.15, sy, auraR);
+    ag.addColorStop(0, `rgba(${wp.auraRgb}, ${(wp.isSetAura ? 0.24 + pulse * 0.1 : 0.14 + pulse * 0.06).toFixed(2)})`);
+    ag.addColorStop(1, `rgba(${wp.auraRgb}, 0)`);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = ag;
+    ctx.beginPath();
+    ctx.arc(sx - scale * 0.15, sy, auraR, 0, Math.PI * 2);
+    ctx.fill();
+    // Subtle drifting rarity wake particles behind fin tips in the test tank
+    const finTailX = sx - scale * 1.48;
+    for (let k = 0; k < 6; k++) {
+      const ph = ((timeSec * 0.85 + k / 6) % 1);
+      const wx = finTailX - ph * scale * 0.72;
+      const wy = sy + Math.sin(timeSec * 3.8 + k * 1.9) * scale * 0.18 - (wp.rising ? ph * scale * 0.42 : 0);
+      const hue = wp.prism ? Math.round((timeSec * 120 + k * 55) % 360) : (k % 2 === 0 ? wp.hueA : wp.hueB);
+      ctx.fillStyle = `hsla(${hue}, 96%, 72%, ${((1 - ph) * 0.72).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(wx, wy, 1.8 + (1 - ph) * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // Draw the exact 1:1 in-game articulated diver with live animated properties + equip animation
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
@@ -1898,7 +2171,7 @@ export function drawLiveryPreview(
     equipFx,
   });
 
-  // Top-left live equip or locked-try-on status pill inside the tank
+  // Top-left live equip, locked-try-on, or active Set Synergy status pill inside the tank
   if (previewLockedLabel) {
     ctx.save();
     ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -1931,6 +2204,24 @@ export function drawLiveryPreview(
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#f8fafc';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, 19, 21);
+    ctx.restore();
+  } else if (pal.setSynergy) {
+    const set = pal.setSynergy;
+    ctx.save();
+    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const txt = `${set.icon} SET SYNERGY · ${set.auraName.toUpperCase()}`;
+    const tw = ctx.measureText(txt).width + 18;
+    ctx.fillStyle = 'rgba(7, 20, 38, 0.86)';
+    ctx.strokeStyle = set.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = set.color;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(txt, 19, 21);

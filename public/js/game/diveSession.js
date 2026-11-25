@@ -9,6 +9,7 @@ import { getFieldGuideEntry } from './logbookModel.js';
 import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
 import { stepSyncedSonarPings } from './sonarPings.js';
+import { resolveGearWakeProfile } from './rigLivery.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 import {
   createSalvageState,
@@ -1318,36 +1319,47 @@ function stepBioWake(session, dt, peers = null) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.vx *= drag;
-    p.vy = p.vy * drag - 0.04 * dt;
+    p.vy = p.vy * drag - (p.rising ? 0.32 : 0.04) * dt;
   }
 
   const level = session.level;
   const weather = session.weather;
   const isBiolumSite = Boolean(level?.theme?.bioluminescent || weather?.forceBiolum);
-  const minDepth = weather?.forceBiolum ? 1.4 : isBiolumSite ? 4.5 : level?.isWreck ? 15.0 : 11.5;
+  const defaultMinDepth = weather?.forceBiolum ? 1.4 : isBiolumSite ? 4.5 : level?.isWreck ? 15.0 : 11.5;
   const hueBase = weather?.forceBiolum ? 186 : isBiolumSite ? 172 : level?.isWreck ? 192 : 184;
+  const tNow = session.simTimeSec || 0;
 
   const emitFromDiver = (d, rateMult = 1.0) => {
-    if (!d || d.y < minDepth) return;
+    if (!d) return;
+    const gearWake = d.livery ? resolveGearWakeProfile(d.livery) : null;
+    const effMinDepth = gearWake?.active ? Math.min(defaultMinDepth, gearWake.minDepth) : defaultMinDepth;
+    if (d.y < effMinDepth) return;
     const spd = Math.hypot(d.vx || 0, d.vy || 0);
-    if (spd < 0.48) return;
+    if (spd < (gearWake?.isSetAura ? 0.32 : 0.48)) return;
     const ang = Number.isFinite(d.angle) ? d.angle : 0;
     const finX = d.x - Math.cos(ang) * 0.85;
     const finY = d.y - Math.sin(ang) * 0.85;
-    const count = spd > 2.6 || d.dpvThrusting ? 2 : 1;
+    const count = spd > 2.6 || d.dpvThrusting || gearWake?.isSetAura ? 2 : 1;
     for (let k = 0; k < count; k++) {
       if (wake.length >= MAX_BIO_WAKE) wake.shift();
       const spread = (Math.random() - 0.5) * 0.45;
       const jitter = (Math.random() - 0.5) * 0.6;
+      let pHue = hueBase + (Math.random() - 0.5) * 34;
+      if (gearWake?.active) {
+        pHue = gearWake.prism
+          ? ((tNow * 130 + k * 75 + Math.random() * 45) % 360)
+          : (Math.random() < 0.55 ? gearWake.hueA : gearWake.hueB) + (Math.random() - 0.5) * 18;
+      }
       wake.push({
         x: finX + (Math.random() - 0.5) * 0.36,
         y: finY + (Math.random() - 0.5) * 0.36,
         vx: -Math.cos(ang + spread) * (0.45 + spd * 0.18) * rateMult + jitter * 0.25,
-        vy: -Math.sin(ang + spread) * (0.45 + spd * 0.18) * rateMult + jitter * 0.25,
+        vy: -Math.sin(ang + spread) * (0.45 + spd * 0.18) * rateMult + jitter * 0.25 - (gearWake?.rising ? 0.24 : 0),
         age: 0,
-        life: 1.15 + Math.random() * 1.05,
-        size: 0.045 + Math.random() * 0.055,
-        hue: hueBase + (Math.random() - 0.5) * 34,
+        life: (gearWake?.isSetAura ? 1.35 : 1.15) + Math.random() * 1.05,
+        size: (gearWake?.isSetAura ? 0.056 : 0.045) + Math.random() * 0.055,
+        hue: pHue,
+        rising: Boolean(gearWake?.rising),
         phase: Math.random() * Math.PI * 2,
       });
     }

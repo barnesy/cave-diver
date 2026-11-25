@@ -2140,4 +2140,132 @@ export const lightingAndFxMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * World-Reactive Special Torch Optic FX inside the active ray-cast beam cone (v212):
+   * Solar Caustic ripples, Polar Aurora strands, Crimson Hunter Plasma rings & UV Fluorescence specks.
+   */
+  _drawWorldSpecialTorchFx(ctx, diver, diverPal, toScreenX, toScreenY, scale, timeSec) {
+    if (this._reducedMotion || diver.torchOn === false || !diverPal?.torchFx) return;
+    const tfxId = diverPal.torchFx;
+    const tox = diver.body?.hand ? diver.body.hand.x : diver.x;
+    const toy = diver.body?.hand ? diver.body.hand.y : diver.y;
+    const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+    const tsx = toScreenX(tox);
+    const tsy = toScreenY(toy);
+    const beamPx = (11.5 * (diverPal.torch?.rangeMult || 1)) * scale;
+    if (tfxId === 'solar-caustic') {
+      for (let r = 0; r < 3; r++) {
+        const wave = ((timeSec * 0.72 + r / 3) % 1);
+        const rad = beamPx * (0.16 + wave * 0.78);
+        ctx.strokeStyle = `rgba(254, 240, 138, ${((1 - wave) * 0.30).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, 0.075 * scale);
+        ctx.beginPath();
+        ctx.arc(tsx, tsy, rad, tang - 0.34, tang + 0.34);
+        ctx.stroke();
+      }
+    } else if (tfxId === 'aurora-arc') {
+      ctx.lineWidth = Math.max(1.6, 0.07 * scale);
+      for (let strand = 0; strand < 2; strand++) {
+        const sOff = strand === 0 ? -0.14 : 0.14;
+        const sway = Math.sin(timeSec * 3.1 + strand * 2.2) * 0.12;
+        ctx.strokeStyle = strand === 0 ? 'rgba(125, 211, 252, 0.30)' : 'rgba(94, 234, 212, 0.24)';
+        ctx.beginPath();
+        ctx.moveTo(tsx, tsy);
+        ctx.quadraticCurveTo(
+          tsx + Math.cos(tang + sOff + sway) * beamPx * 0.5,
+          tsy + Math.sin(tang + sOff + sway) * beamPx * 0.5,
+          tsx + Math.cos(tang + sOff * 0.6) * beamPx * 0.92,
+          tsy + Math.sin(tang + sOff * 0.6) * beamPx * 0.92
+        );
+        ctx.stroke();
+      }
+    } else if (tfxId === 'hunter-plasma') {
+      for (let r = 0; r < 2; r++) {
+        const wave = ((timeSec * 1.15 + r * 0.5) % 1);
+        const rad = beamPx * (0.12 + wave * 0.56);
+        ctx.strokeStyle = `rgba(251, 113, 133, ${((1 - wave) * 0.34).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.6, 0.08 * scale);
+        ctx.beginPath();
+        ctx.arc(tsx, tsy, rad, tang - 0.36, tang + 0.36);
+        ctx.stroke();
+      }
+    } else if (tfxId === 'uv-fluorescence') {
+      for (let i = 0; i < 10; i++) {
+        const dFrac = ((i * 0.13 + timeSec * 0.24) % 0.84) + 0.12;
+        const spread = Math.sin(i * 3.1 + timeSec * 1.9) * 0.30;
+        const fx = tsx + Math.cos(tang + spread) * beamPx * dFrac;
+        const fy = tsy + Math.sin(tang + spread) * beamPx * dFrac;
+        const pulse = 0.45 + 0.55 * Math.sin(timeSec * 5.4 + i * 1.7);
+        ctx.fillStyle = i % 2 === 0
+          ? `rgba(216, 180, 254, ${(0.58 * pulse).toFixed(3)})`
+          : `rgba(56, 232, 255, ${(0.62 * pulse).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(fx, fy, Math.max(1.6, (0.048 + (i % 3) * 0.018) * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  },
+
+  /**
+   * Subtle world-space ambient prestige aura & orbiting crest motes for Mythic Suits & Active Set Synergies (v212).
+   */
+  _drawDiverGearAura(ctx, sx, sy, scale, timeSec, liveryPalette) {
+    if (!liveryPalette?.wakeProfile?.active || (!liveryPalette.wakeProfile.isSetAura && (liveryPalette.maxTier?.rank || 0) < 5)) return;
+    const wp = liveryPalette.wakeProfile;
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.1);
+    const auraR = (wp.isSetAura ? 1.18 : 0.92) * scale;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const ag = ctx.createRadialGradient(sx, sy, 0.1 * scale, sx, sy, auraR);
+    ag.addColorStop(0, `rgba(${wp.auraRgb}, ${(wp.isSetAura ? 0.22 + pulse * 0.08 : 0.13 + pulse * 0.05).toFixed(3)})`);
+    ag.addColorStop(1, `rgba(${wp.auraRgb}, 0)`);
+    ctx.fillStyle = ag;
+    ctx.beginPath();
+    ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
+    ctx.fill();
+    if (wp.isSetAura) {
+      for (let m = 0; m < 2; m++) {
+        const ang = timeSec * 1.9 + m * Math.PI;
+        const mx = sx + Math.cos(ang) * (0.72 * scale);
+        const my = sy + Math.sin(ang) * (0.44 * scale);
+        ctx.fillStyle = `rgba(${wp.auraRgb}, 0.78)`;
+        ctx.beginPath();
+        ctx.arc(mx, my, Math.max(1.6, 0.052 * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Emissive bioluminescent & rarity-matched gear fin-wake sparkle trails (v119 / v212).
+   */
+  _drawBioWake(ctx, bioWake, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale, timeSec) {
+    if (!Array.isArray(bioWake) || bioWake.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < bioWake.length; i++) {
+      const p = bioWake[i];
+      if (!p || p.x < xMin || p.x > xMax || p.y < yMin || p.y > yMax) continue;
+      const frac = Math.max(0, Math.min(1, p.age / Math.max(0.2, p.life)));
+      const fadeIn = Math.min(1, p.age / 0.14);
+      const twinkle = 0.68 + 0.32 * Math.sin(timeSec * 8.5 + (p.phase || i));
+      const alpha = fadeIn * (1 - frac) * (1 - frac) * 0.72 * twinkle;
+      if (alpha < 0.02) continue;
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      const r = Math.max(1.2, (p.size || 0.06) * scale * (1.15 - frac * 0.45));
+      const hue = Math.round(p.hue || 184);
+      ctx.fillStyle = `hsla(${hue}, 96%, 68%, ${(alpha * 0.38).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsla(${hue}, 100%, 86%, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
 };

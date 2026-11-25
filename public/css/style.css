@@ -10604,6 +10604,66 @@ summary,
   color: #94a3b8;
   flex-shrink: 0;
 }
+.livery-set-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(192, 132, 252, 0.24);
+  background: rgba(12, 18, 36, 0.78);
+}
+.livery-set-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.livery-set-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.86);
+  color: #e2e8f0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.12s ease, box-shadow 0.14s ease;
+}
+.livery-set-chip:hover {
+  border-color: var(--set-color, #38bdf8);
+  transform: translateY(-1px);
+}
+.livery-set-chip.active {
+  border-color: var(--set-color, #facc15);
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.34), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.28);
+  color: #fef9c3;
+}
+.livery-set-count {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.58rem;
+  color: var(--set-color, #7dd3fc);
+}
+.gear-unlock-set-box {
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  background: rgba(7, 20, 38, 0.82);
+  color: #e2e8f0;
+  font-size: 0.7rem;
+  width: 100%;
+}
+.gear-unlock-set-tag {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+}
 
 /* Enhanced Difficulty-Tiered Gear Swatch Cards */
 .livery-swatch-btn {

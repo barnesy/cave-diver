@@ -17,6 +17,7 @@ import {
   getNextGearMilestones,
   diffUnlockedLiveries,
   getGearItemBySlot,
+  evaluateGearSetSynergy,
   resolveDiverLiveryPalette,
   computeUnlockedLiveries,
   sanitizeRigLivery,
@@ -502,10 +503,24 @@ export function createLiveryWorkshopController({
       liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · ${unlocks.stats.sitesCleared} sites · ${unlocks.stats.wreckClears} wrecks · ${Math.round(unlocks.stats.deepestM || 0)}m max depth. Syncs live in co-op.`;
     }
 
-    // Progression Ladder Rail: Next Closest Unlocks + Unseen New Unlock Callout + Locked Try-On Revert
+    // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Unseen New Unlock Callout + Locked Try-On Revert
     if (liveryLadderRailEl) {
       const unseen = getUnseenEntries(unlocks);
       const nextList = getNextGearMilestones(unlocks, 2);
+      const previewRig = lockedTryOn
+        ? { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id }
+        : activeRigLivery;
+      const synergyState = evaluateGearSetSynergy(previewRig);
+      const setMapKey = { suit: 'suits', trim: 'trims', headgear: 'headgears', visor: 'visors', tank: 'tanks', torch: 'torches', patch: 'patches' };
+      const visibleSets = synergyState.sets.filter((st) => {
+        if (!st.set.secret) return true;
+        // Keep secret boss sets zero-spoiler until player unlocks at least 1 piece of the set
+        return st.set.slots.some((r) => {
+          const uSet = unlocks[setMapKey[r.slot]];
+          return uSet instanceof Set && r.ids.some((id) => uSet.has(id));
+        });
+      });
+
       const tryOnBanner = lockedTryOn
         ? `<div class="livery-tryon-banner">
             <span>👁 Previewing locked <strong>${escapeHtml(lockedTryOn.name)}</strong> — ${escapeHtml(lockedTryOn.hint)}</span>
@@ -517,6 +532,27 @@ export function createLiveryWorkshopController({
             <span>🎁 <strong>${unseen.length} New Gear Unlock${unseen.length > 1 ? 's' : ''}</strong> Ready to Inspect &amp; Equip!</span>
             <span class="livery-unseen-cta">Open Card →</span>
           </button>`
+        : '';
+      const setStrip = visibleSets.length > 0
+        ? `<div class="livery-set-row" aria-label="Gear Set Synergies">
+            <span class="livery-next-kicker">${synergyState.active ? '✦ SET ACTIVE' : 'SET SYNERGIES'}</span>
+            <div class="livery-set-chips">
+              ${visibleSets
+                .map((st) => {
+                  const s = st.set;
+                  const unlockedSlots = s.slots.filter((r) => {
+                    const uSet = unlocks[setMapKey[r.slot]];
+                    return uSet instanceof Set && r.ids.some((id) => uSet.has(id));
+                  }).length;
+                  const title = `${s.name} (${st.matched}/${st.required} equipped · ${unlockedSlots}/${s.required} unlocked) — ${s.auraName}: ${s.auraDesc}`;
+                  return `<button type="button" class="livery-set-chip tier-${s.tier}${st.active ? ' active' : ''}" data-set-id="${s.id}" style="--set-color:${s.color}" title="${escapeHtml(title)}">
+                    <span>${s.icon} ${escapeHtml(s.name)}</span>
+                    <span class="livery-set-count">${st.active ? `✦ ${escapeHtml(s.auraName)}` : `${st.matched}/${st.required}`}</span>
+                  </button>`;
+                })
+                .join('')}
+            </div>
+          </div>`
         : '';
       const nextChips = nextList.length > 0
         ? `<div class="livery-next-row">
@@ -532,13 +568,46 @@ export function createLiveryWorkshopController({
               .join('')}
           </div>`
         : `<div class="livery-next-row complete">✦ Every standard ladder item unlocked — hunt hidden Guardian Relics for Mythic gear!</div>`;
-      liveryLadderRailEl.innerHTML = `${tryOnBanner}${unseenBanner}${nextChips}`;
+      liveryLadderRailEl.innerHTML = `${tryOnBanner}${unseenBanner}${setStrip}${nextChips}`;
       liveryLadderRailEl.querySelector('#btn-livery-clear-tryon')?.addEventListener('click', () => {
         lockedTryOn = null;
         renderLiveryWorkshopModal();
       });
       liveryLadderRailEl.querySelector('#btn-livery-view-unseen')?.addEventListener('click', () => {
         unlockShowcase.openShowcase(unseen);
+      });
+      liveryLadderRailEl.querySelectorAll('button[data-set-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sid = btn.getAttribute('data-set-id');
+          const st = visibleSets.find((x) => x.set.id === sid);
+          if (!st) return;
+          const patch = {};
+          let equippedCnt = 0;
+          let firstLocked = null;
+          for (const rule of st.set.slots) {
+            const uSet = unlocks[setMapKey[rule.slot]];
+            const ownedId = rule.ids.find((id) => uSet instanceof Set && uSet.has(id));
+            if (ownedId) {
+              patch[rule.field] = ownedId;
+              equippedCnt++;
+            } else if (!firstLocked) {
+              firstLocked = { slot: rule.slot, field: rule.field, id: rule.ids[0] };
+            }
+          }
+          if (equippedCnt > 0) {
+            updateActiveLiveryField(patch, { slot: 'all', itemMeta: { name: st.set.name, tier: st.set.tier } });
+            showToast(
+              equippedCnt >= st.set.required
+                ? `${st.set.icon} Set Synergy Active: ${st.set.name} (${st.set.auraName})!`
+                : `${st.set.icon} Equipped ${equippedCnt}/${st.set.required} pieces of ${st.set.name} — unlock ${st.set.required - equippedCnt} more for ${st.set.auraName}!`,
+              2.8
+            );
+          } else if (firstLocked) {
+            const entry = getGearItemBySlot(firstLocked.slot, firstLocked.id);
+            if (entry) tryOnLockedItem(firstLocked.slot, firstLocked.field, entry.item);
+            showToast(`🔒 Previewing ${st.set.name} — unlock ${st.set.required} pieces to activate ${st.set.auraName}.`, 2.6);
+          }
+        });
       });
       liveryLadderRailEl.querySelectorAll('button[data-next-id]').forEach((btn) => {
         btn.addEventListener('click', () => {

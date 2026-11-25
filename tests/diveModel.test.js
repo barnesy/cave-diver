@@ -11178,3 +11178,75 @@ test('v211 Major Gear Workshop Upgrade: 5-Tier Difficulty Ladder, Unlock Diffing
   assert.equal(typeof DiveAudio.prototype.playGearEquip, 'function');
   assert.equal(typeof DiveAudio.prototype.playGearUnlock, 'function');
 });
+
+test('v212 World-Reactive Special Gear FX, Matching Set Synergies & main.js Modular Headroom', async () => {
+  const fs = await import('node:fs');
+  const {
+    GEAR_SET_SYNERGIES,
+    evaluateGearSetSynergy,
+    getSetsForGearItem,
+    resolveGearWakeProfile,
+    resolveDiverLiveryPalette,
+  } = await import('../public/js/game/rigLivery.js');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+
+  // 1. main.js stays well under 8000 lines after extracting pwaAndAudioController.js
+  const mainLines = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8').split(/\r?\n/).length;
+  assert.ok(mainLines < 8000, `main.js should have generous headroom (<8000L), got ${mainLines}L`);
+
+  // 2. All 6 Gear Set Synergies evaluate cleanly & activate when required pieces match
+  assert.ok(GEAR_SET_SYNERGIES.length >= 6);
+  const dreadRig = { headgearId: 'secret-dreadnought-helm', tankId: 'secret-dreadnought-brass' };
+  const dreadSyn = evaluateGearSetSynergy(dreadRig);
+  assert.equal(dreadSyn.active?.id, 'dreadnought-mk4');
+  assert.equal(resolveGearWakeProfile(dreadRig)?.rising, true);
+  assert.equal(resolveGearWakeProfile(dreadRig)?.isSetAura, true);
+  assert.equal(resolveDiverLiveryPalette(dreadRig).setSynergy?.id, 'dreadnought-mk4');
+
+  const krakenSets = getSetsForGearItem('suit', 'secret-kraken-biolume');
+  assert.ok(krakenSets.some((s) => s.id === 'kraken-depths'));
+
+  // 3. Special Mythic/Epic gear emits custom world fin-wake at shallow depths (even outside biolum sites)
+  const session = createDiveSession(LEVEL_1, {
+    diverName: 'RelicTester',
+    livery: { suitId: 'secret-volcanic-nautilus', torchId: 'halocline-uv', trimId: 'secret-selenite-trim' },
+  });
+  session.diver.y = 3.2;
+  session.diver.vx = 1.8;
+  session.diver.vy = 0.2;
+  for (let i = 0; i < 6; i++) {
+    stepDiveSession(session, { x: 1, y: 0.15 }, 0.06, {});
+  }
+  assert.ok(session.bioWake.length > 0, 'Special Mythic/Epic gear must emit custom fin-wake particles at shallow depth');
+
+  // 4. World-reactive torch optics & ambient Set Synergy diver aura draw cleanly in CaveRenderer
+  let ops = 0;
+  const mockCtx = new Proxy(
+    {
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      measureText: () => ({ width: 40 }),
+    },
+    { get: (t, p) => (p in t ? t[p] : () => { ops++; }), set: (t, p, v) => ((t[p] = v), true) }
+  );
+  const r = Object.create(CaveRenderer.prototype);
+  r.level = LEVEL_1;
+  r.glowStamps = {};
+  for (const torchId of ['halocline-uv', 'secret-solar-prism', 'aurora-plasma', 'bounty-hunter-torch']) {
+    r._drawTorchMarineSnowAndCaustics(
+      mockCtx,
+      {
+        x: 20, y: 12, vx: 1.4, vy: 0, angle: 0, torchAngle: 0, torchOn: true,
+        body: { hand: { x: 20.5, y: 12 }, legs: [{ finTip: { x: 18.5, y: 12 } }] },
+        livery: { suitId: 'secret-kraken-biolume', torchId },
+      },
+      10, 30, 5, 25, (x) => x * 20, (y) => y * 20, 24, 2.5, 1, null, 1280
+    );
+  }
+  r._drawDiver(
+    mockCtx,
+    { x: 20, y: 12, angle: 0, torchAngle: 0, torchOn: true, livery: dreadRig },
+    (x) => x * 20, (y) => y * 20, 24, 2.5, false, null
+  );
+  assert.ok(ops > 200, 'World-reactive torch optics & ambient Set Synergy aura must render cleanly');
+});

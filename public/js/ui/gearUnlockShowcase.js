@@ -1,5 +1,10 @@
 import { escapeHtml } from '../util/common.js';
-import { drawGearShowcasePreview, getGearTierMeta } from '../game/rigLivery.js';
+import {
+  drawGearShowcasePreview,
+  getGearTierMeta,
+  getSetsForGearItem,
+  evaluateGearSetSynergy,
+} from '../game/rigLivery.js';
 
 const EQUIP_ANIM_DURATION_MS = 860;
 
@@ -29,6 +34,7 @@ export function createGearUnlockShowcase({
   const nameEl = document.getElementById('gear-unlock-name');
   const reasonEl = document.getElementById('gear-unlock-reason');
   const fxBoxEl = document.getElementById('gear-unlock-fx-box');
+  const setBoxEl = document.getElementById('gear-unlock-set-box');
   const dotsEl = document.getElementById('gear-unlock-dots');
   const btnEquipEl = document.getElementById('btn-gear-unlock-equip');
   const btnWorkshopEl = document.getElementById('btn-gear-unlock-workshop');
@@ -109,6 +115,19 @@ export function createGearUnlockShowcase({
       } else {
         fxBoxEl.hidden = true;
         fxBoxEl.innerHTML = '';
+      }
+    }
+    if (setBoxEl) {
+      const sets = getSetsForGearItem(entry.slot, item.id);
+      if (sets.length > 0) {
+        const set = sets[0];
+        const previewSyn = evaluateGearSetSynergy(buildPreviewLivery(entry));
+        const st = previewSyn.sets.find((x) => x.set.id === set.id);
+        setBoxEl.hidden = false;
+        setBoxEl.innerHTML = `<span class="gear-unlock-set-tag" style="color:${set.color}">${set.icon} SET SYNERGY</span> <strong>${escapeHtml(set.name)}</strong> (${st ? `${st.matched}/${st.required}` : `1/${set.required}`}${st?.active ? ' · ✦ ACTIVE!' : ''}) — ${escapeHtml(set.auraName)}`;
+      } else {
+        setBoxEl.hidden = true;
+        setBoxEl.innerHTML = '';
       }
     }
     if (dotsEl) {
