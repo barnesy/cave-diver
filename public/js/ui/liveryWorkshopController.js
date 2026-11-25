@@ -29,6 +29,8 @@ import {
 import { createGearUnlockShowcase } from './gearUnlockShowcase.js';
 import {
   GEAR_ARCHETYPES,
+  CHEST_GEAR_DROPS,
+  WORLD_GEAR_CACHES,
   computeRigPerformanceProfile,
   diffRigPerformanceProfiles,
   getGearItemStats,
@@ -430,6 +432,83 @@ export function createLiveryWorkshopController({
     lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9500);
   }
 
+  function handleTreasureChestOpened(chest, drop) {
+    if (!chest || !drop) return;
+    const sess = getSession?.();
+    if (drop.kind === 'gear') {
+      playGearUnlock?.(drop.tier || 'rare');
+      if (typeof saveCareerLogbook === 'function') {
+        try {
+          const res = recordFoundWorldGear(loadCareerLogbook(), {
+            slot: drop.slot,
+            itemId: drop.itemId,
+            siteId: sess?.level?.id || '',
+            siteName: sess?.level?.name || '',
+          });
+          if (res?.book) saveCareerLogbook(res.book);
+        } catch {}
+      }
+      syncLiveryUi();
+
+      if (!lootDiscoveryBannerEl) return;
+      const entry = getGearItemBySlot(drop.slot, drop.itemId);
+      const item = entry?.item || { id: drop.itemId, name: drop.name || drop.itemId, tier: drop.tier || 'rare' };
+      const info = drop.statsInfo || getGearItemStats(drop.slot, item);
+      const tierMeta = getGearTierMeta(item.tier || drop.tier || 'rare');
+      const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
+      const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+      const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+      const rarityBadge = drop.rarityLabel || `${tierMeta.badge} CHEST DROP`;
+      lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
+      lootDiscoveryBannerEl.hidden = false;
+      lootDiscoveryBannerEl.innerHTML = `
+        <div class="loot-disc-top">
+          <span class="loot-disc-kicker">🧰 ${escapeHtml(rarityBadge)} · ${tierMeta.icon} ${tierMeta.badge}</span>
+          <span class="livery-arch-pill arch-${arch.id}">${arch.icon} ${arch.short}</span>
+        </div>
+        <div class="loot-disc-name">${drop.icon || '🧰'} ${escapeHtml(item.name)}</div>
+        <div class="loot-disc-pills">${pillsHtml}<span class="livery-stat-pill">+${drop.points || 350} pts · +${drop.gasBonusBar || 10}b</span></div>
+        ${pwrHtml}
+        <div class="loot-disc-actions">
+          ${entry?.field ? `<button type="button" class="btn tiny primary" id="btn-loot-equip-now">⚡ Equip Mid-Dive</button>` : ''}
+          <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
+        </div>
+      `;
+      lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+      lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
+        if (entry?.field && entry?.item) {
+          updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
+          showToast?.(`⚡ Equipped ${entry.item.name} live mid-dive!`, 2.6);
+        }
+        hideLootDiscoveryBanner();
+      });
+      if (lootBannerTimer) clearTimeout(lootBannerTimer);
+      lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9800);
+      return;
+    }
+
+    // Salvage treasure drop (Spare Pony Bottle, DPV Cell, Doubloons, or Abyssal Reliquary)
+    playGearEquip?.('all', drop.tier || 'rare');
+    if (!lootDiscoveryBannerEl) return;
+    const tierMeta = getGearTierMeta(drop.tier || 'rare');
+    lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
+    lootDiscoveryBannerEl.hidden = false;
+    lootDiscoveryBannerEl.innerHTML = `
+      <div class="loot-disc-top">
+        <span class="loot-disc-kicker">🧰 SUNKEN TREASURE CHEST · ${escapeHtml(drop.rarityLabel || tierMeta.badge)}</span>
+        <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.icon} ${tierMeta.badge}</span>
+      </div>
+      <div class="loot-disc-name">${drop.icon || '🪙'} ${escapeHtml(drop.name || 'Sunken Treasure')}</div>
+      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)}</div>
+      <div class="loot-disc-actions">
+        <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Continue Dive</button>
+      </div>
+    `;
+    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+    if (lootBannerTimer) clearTimeout(lootBannerTimer);
+    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 4800);
+  }
+
   function syncLiveryUi() {
     const pal = resolveDiverLiveryPalette(activeRigLivery);
     const session = getSession();
@@ -583,9 +662,11 @@ export function createLiveryWorkshopController({
     const sourceBadge =
       itemStats.source === 'world'
         ? `<span class="livery-source-pill src-world" title="${escapeHtml(itemStats.worldCache?.clue || item.unlockHint || 'Found in world')}">🗺️ WORLD</span>`
-        : itemStats.source === 'earned'
-          ? `<span class="livery-source-pill src-earned">🏆 EARNED</span>`
-          : '';
+        : itemStats.source === 'chest'
+          ? `<span class="livery-source-pill src-chest${item.dropRarity === 'very-rare' ? ' very-rare' : ''}" title="${escapeHtml(item.unlockHint || 'Rare random drop from Sunken Treasure Chests')}">${item.dropRarity === 'very-rare' ? '🧰 VERY RARE' : '🧰 CHEST'}</span>`
+          : itemStats.source === 'earned'
+            ? `<span class="livery-source-pill src-earned">🏆 EARNED</span>`
+            : '';
     const archMeta = itemStats.archetype;
     const archBadge = archMeta && itemStats.pills.length > 0
       ? `<span class="livery-arch-pill arch-${archMeta.id}" title="${escapeHtml(archMeta.desc)}">${archMeta.icon} ${archMeta.short}</span>`
@@ -748,9 +829,11 @@ export function createLiveryWorkshopController({
       unlocks.torches.size +
       unlocks.patches.size;
     const overallPct = Math.min(100, Math.round((totalUnlocked / Math.max(1, totalItems)) * 100));
-    const worldFoundCount = unlocks.stats.foundGearIds?.size || 0;
+    const foundSet = unlocks.stats.foundGearIds || new Set();
+    const worldFoundCount = WORLD_GEAR_CACHES.filter((c) => foundSet.has(`${c.slot}:${c.itemId}`)).length;
+    const chestFoundCount = CHEST_GEAR_DROPS.filter((c) => foundSet.has(`${c.slot}:${c.itemId}`)).length;
     if (liveryUnlockSummaryEl) {
-      liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · 🗺️ ${worldFoundCount}/10 world caches · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
+      liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear (${overallPct}%) · 🗺️ ${worldFoundCount}/${WORLD_GEAR_CACHES.length} caches · 🧰 ${chestFoundCount}/${CHEST_GEAR_DROPS.length} chest relics · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
     }
 
     // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas, Mode/Difficulty Tuned (v216–v219)
@@ -1529,6 +1612,7 @@ export function createLiveryWorkshopController({
     startFieldTestDive,
     tryOnFullSet,
     handleWorldGearFound,
+    handleTreasureChestOpened,
     hideLootDiscoveryBanner,
     onExitProvingGrounds: () => {
       provingHudBar.hide();

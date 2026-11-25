@@ -3985,7 +3985,7 @@ select:focus-visible {
   left: 50%;
   bottom: calc(max(134px, 21vh) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  z-index: 26;
+  z-index: 38;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -4044,6 +4044,12 @@ select:focus-visible {
   background: rgba(42, 26, 8, 0.9);
   color: #fef3c7;
   box-shadow: 0 8px 26px rgba(120, 53, 15, 0.5), 0 0 18px rgba(251, 191, 36, 0.32);
+}
+.wreck-action-btn.is-treasure {
+  border-color: rgba(250, 204, 21, 0.96);
+  background: linear-gradient(155deg, rgba(66, 36, 6, 0.95), rgba(32, 18, 4, 0.95));
+  color: #fef9c3;
+  box-shadow: 0 10px 28px rgba(120, 53, 15, 0.58), 0 0 24px rgba(250, 204, 21, 0.44);
 }
 .wreck-action-btn.is-unclip {
   border-color: rgba(52, 211, 153, 0.85);
@@ -10116,11 +10122,16 @@ summary,
     width: 19px;
     height: 19px;
   }
-  #screen-hud:not(.combat-mode) .wreck-action-btn {
-    bottom: max(172px, calc(env(safe-area-inset-bottom) + 164px));
+  #screen-hud .wreck-action-btn {
+    bottom: max(248px, calc(env(safe-area-inset-bottom) + 240px));
+    min-width: 172px;
+    max-width: min(86vw, 276px);
+    padding: 8px 14px;
+    z-index: 38;
   }
-  #screen-hud:not(.combat-mode) .coop-comms {
-    bottom: max(174px, calc(env(safe-area-inset-bottom) + 166px));
+  #screen-hud .coop-comms {
+    bottom: max(250px, calc(env(safe-area-inset-bottom) + 242px));
+    z-index: 36;
   }
 }
 
@@ -10203,8 +10214,9 @@ summary,
     width: 19px;
     height: 19px;
   }
-  #screen-hud:not(.combat-mode) .wreck-action-btn {
-    bottom: max(108px, calc(env(safe-area-inset-bottom) + 102px));
+  #screen-hud .wreck-action-btn {
+    bottom: max(124px, calc(env(safe-area-inset-bottom) + 116px));
+    z-index: 38;
   }
 }
 
@@ -11266,6 +11278,17 @@ summary,
   border: 1px solid rgba(52, 211, 153, 0.58);
   color: #6ee7b7;
 }
+.livery-source-pill.src-chest {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.62);
+  color: #fde68a;
+}
+.livery-source-pill.src-chest.very-rare {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.28), rgba(192, 132, 252, 0.26));
+  border-color: rgba(250, 204, 21, 0.85);
+  color: #fef08a;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.24);
+}
 .livery-source-pill.src-earned {
   background: rgba(56, 189, 248, 0.16);
   border: 1px solid rgba(125, 211, 252, 0.42);
@@ -11637,28 +11660,45 @@ summary,
   }
 }
 
+@keyframes lootCardPopIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -44%) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 .loot-discovery-banner {
   position: fixed;
-  top: max(54px, calc(env(safe-area-inset-top) + 46px));
+  top: 46%;
   left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
+  transform: translate(-50%, -50%);
+  z-index: 64;
   width: min(440px, calc(100vw - 28px));
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
   background: linear-gradient(155deg, rgba(6, 22, 44, 0.96), rgba(4, 12, 26, 0.98));
   border: 1.5px solid #38bdf8;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 28px rgba(56, 189, 248, 0.28);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 34px rgba(56, 189, 248, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   pointer-events: auto;
-  animation: aaaModalCardIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: lootCardPopIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.loot-discovery-banner[data-tier="uncommon"] {
+  border-color: #34d399;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 34px rgba(52, 211, 153, 0.34);
 }
 .loot-discovery-banner[data-tier="epic"] {
   border-color: #c084fc;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 32px rgba(192, 132, 252, 0.34);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 38px rgba(192, 132, 252, 0.4);
 }
 .loot-discovery-banner[data-tier="mythic"] {
   border-color: #facc15;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.68), 0 0 36px rgba(250, 204, 21, 0.38);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 44px rgba(250, 204, 21, 0.46);
 }
 .loot-disc-top {
   display: flex;
@@ -11668,16 +11708,22 @@ summary,
   margin-bottom: 4px;
 }
 .loot-disc-kicker {
-  font-size: 0.65rem;
+  font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: #fde047;
 }
 .loot-disc-name {
-  font-size: 1.02rem;
+  font-size: 1.06rem;
   font-weight: 900;
   color: #f8fafc;
   margin-bottom: 6px;
+}
+.loot-disc-detail {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  line-height: 1.35;
+  margin-bottom: 8px;
 }
 .loot-disc-pills {
   display: flex;

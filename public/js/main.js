@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=219',
+  mapRasterUrl: './assets/map-expedition.jpg?v=220',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -3123,6 +3123,7 @@ function syncWreckActionHud(prompt) {
   lastWreckActionKey = key;
   btnWreckAction.classList.toggle('is-cut', prompt.kind === 'cut-net');
   btnWreckAction.classList.toggle('is-hatch', prompt.kind === 'open-hatch' || prompt.kind === 'equalize-valve');
+  btnWreckAction.classList.toggle('is-treasure', prompt.kind === 'treasure-chest');
   btnWreckAction.classList.toggle('is-clip', prompt.kind === 'clip-line');
   btnWreckAction.classList.toggle('is-unclip', prompt.kind === 'unclip-line');
   btnWreckAction.classList.toggle('is-stage', prompt.kind === 'refill-stage' || prompt.kind === 'inflate-liftbag' || prompt.kind === 'retrieve-stage');
@@ -6884,6 +6885,10 @@ const sessionStepCallbacks = {
   onWorldGearFound: (gc) => {
     triggerHaptic('pickup');
     liveryWorkshop?.handleWorldGearFound?.(gc);
+  },
+  onTreasureChestOpened: (chest, drop) => {
+    triggerHaptic(drop?.kind === 'gear' ? 'pickup' : 'light');
+    liveryWorkshop?.handleTreasureChestOpened?.(chest, drop);
   },
   onCollect: (item) => {
     const isGrand = (item.scale || 1) >= 1.35;

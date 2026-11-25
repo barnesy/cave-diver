@@ -10,7 +10,12 @@ import { castLightRay } from './lighting.js';
 import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js';
 import { stepSyncedSonarPings } from './sonarPings.js';
 import { resolveGearWakeProfile } from './rigLivery.js';
-import { computeRigPerformanceProfile, createWorldGearCachesForLevel } from './gearStats.js';
+import {
+  computeRigPerformanceProfile,
+  createWorldGearCachesForLevel,
+  createTreasureChestsForLevel,
+  rollTreasureChestLoot,
+} from './gearStats.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 import {
   createSalvageState,
@@ -512,8 +517,10 @@ export function createDiveSession(
   };
   const rigPerf = computeRigPerformanceProfile(livery, rigTuningCtx);
   const worldGearCaches = createWorldGearCachesForLevel(level, foundGear);
+  const treasureChests = createTreasureChestsForLevel(level, { excludePoints: worldGearCaches });
   const hazards = createDynamicHazards(level);
   hazards.worldGearCaches = worldGearCaches;
+  hazards.treasureChests = treasureChests;
   hazards.rigPerf = rigPerf;
 
   return {
@@ -521,6 +528,10 @@ export function createDiveSession(
     rigPerf,
     rigTuningCtx,
     worldGearCaches,
+    treasureChests,
+    foundGearMap: foundGear && typeof foundGear === 'object' ? { ...foundGear } : {},
+    chestBonusScore: 0,
+    chestDryStreak: 0,
     difficulty: cleanDiff,
     mutatorId: cleanMutator,
     modifiers: cleanModifiers,
@@ -839,6 +850,9 @@ export function triggerSonarPing(session, callbacks = {}) {
     }
     for (const gc of session.worldGearCaches || []) {
       if (!gc.opened) addContact(gc.x, gc.y, 'gear-cache', gc.icon || '📦', `GEAR CACHE · ${gc.itemName || gc.itemId}`);
+    }
+    for (const tc of session.treasureChests || []) {
+      if (!tc.opened) addContact(tc.x, tc.y, 'gear-cache', '🧰', tc.name || 'SUNKEN TREASURE CHEST');
     }
     // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
     if (session.hazards) {
@@ -2194,6 +2208,78 @@ export function stepEmergencyDrills(session, dt, callbacks = {}) {
  * 4) Clip a glowing directional cave arrow & recover jump-spool line at an unlined junction (caves)
  * 5) Clip onto or unclip from the open-water shot line (shipwrecks)
  */
+/**
+ * Crack open a discoverable Sunken Treasure Chest and award rolled loot (v220).
+ * Supports rare/very-rare RNG Chase Gear drops as well as instant gas, DPV & gold salvage jackpots.
+ */
+export function openTreasureChest(session, chest, callbacks = {}, { rng = Math.random } = {}) {
+  if (!session || !chest || chest.opened) return null;
+  chest.opened = true;
+  chest.openedAt = session.simTimeSec || 0;
+  const drop = rollTreasureChestLoot({
+    foundGearMap: session.foundGearMap,
+    tuningCtx: session.rigTuningCtx,
+    rigPerf: session.rigPerf,
+    dryStreak: session.chestDryStreak || 0,
+    hasDpv: Boolean(session.dpv?.equipped),
+    rng,
+  });
+  chest.drop = drop;
+  chest.beamColor = drop.beamColor || '#facc15';
+  if (drop.kind === 'gear') {
+    session.chestDryStreak = 0;
+    if (session.foundGearMap && drop.gearKey) {
+      session.foundGearMap[drop.gearKey] = { foundAt: Date.now(), siteId: session.level?.id || '' };
+    }
+  } else {
+    session.chestDryStreak = (session.chestDryStreak || 0) + 1;
+  }
+
+  const pts = drop.points || 300;
+  session.chestBonusScore = (session.chestBonusScore || 0) + pts;
+  if (drop.gasBonusBar > 0 && session.diveState?.tanks) {
+    const activeGas = session.diveState.activeGasId || 'EAN32';
+    receiveGasIntoState(session.diveState, activeGas, drop.gasBonusBar);
+  }
+  if (drop.dpvBatteryBonus > 0 && session.dpv?.equipped) {
+    session.dpv.batteryPct = Math.min(100, (session.dpv.batteryPct || 0) + drop.dpvBatteryBonus);
+  }
+  if (drop.calmHr && session.diveState) {
+    session.diveState.panicLevel = Math.max(0, (session.diveState.panicLevel || 0) - 0.35);
+    session.diveState.heartRateBpm = Math.max(66, (session.diveState.heartRateBpm || 80) - 24);
+  }
+  if (Array.isArray(session.collectBursts)) {
+    session.collectBursts.push({
+      x: chest.x,
+      y: chest.y,
+      points: pts,
+      kind: 'treasure-chest',
+      age: 0,
+      duration: 2.0,
+    });
+  }
+  if (Array.isArray(session.bubbles)) {
+    for (let k = 0; k < 14; k++) {
+      spawnExhaustBubble(
+        session.bubbles,
+        chest.x + (Math.random() - 0.5) * 0.8,
+        chest.y - 0.1,
+        (Math.random() - 0.5) * 1.4,
+        -0.9 - Math.random() * 1.1,
+        { primary: k < 8, intensity: 1.0, depthM: chest.y }
+      );
+    }
+  }
+  recordDiveHighlight(session, {
+    kind: 'moment',
+    icon: drop.icon || '🧰',
+    label: drop.kind === 'gear' ? `Chest Relic: ${drop.name}` : `Treasure: ${drop.name}`,
+    depthM: Math.max(0, chest.y),
+  });
+  callbacks.onTreasureChestOpened?.(chest, drop);
+  return drop;
+}
+
 export function triggerWreckAction(session, callbacks = {}) {
   if (!session || !session.level || session.diveState?.alive === false) {
     return { handled: false, kind: null };
@@ -2376,6 +2462,18 @@ export function triggerWreckAction(session, callbacks = {}) {
         }
         callbacks.onToast?.(`⛽ Topped up ${gasName} (+${Math.round(added)} bar) from ${cache.label}!`, 3.0);
         return { handled: true, kind: 'refill-stage', targetId: cache.id, gasId: cache.gasId, addedBar: added };
+      }
+    }
+  }
+
+  // 3b. Priority 3b: Open a nearby discoverable Sunken Treasure Chest ([E] or mobile interact button)
+  if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {
+    for (let i = 0; i < session.treasureChests.length; i++) {
+      const tc = session.treasureChests[i];
+      if (!tc || tc.opened) continue;
+      if (Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8) {
+        const drop = openTreasureChest(session, tc, callbacks);
+        return { handled: true, kind: 'treasure-chest', targetId: tc.id, drop };
       }
     }
   }
@@ -3736,6 +3834,14 @@ function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
       detail: `+${session.blackBox.points || BLACK_BOX_BONUS_PTS} pts · 18m Acoustic Scan`,
       progress: 0,
     };
+  } else if (Array.isArray(session.treasureChests) && session.treasureChests.some((tc) => tc && !tc.opened && Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8)) {
+    const nearChest = session.treasureChests.find((tc) => tc && !tc.opened && Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8);
+    session.wreckActionPrompt = {
+      kind: 'treasure-chest',
+      label: '🧰 OPEN TREASURE CHEST [E]',
+      detail: nearChest?.name || 'Sunken Brass Chest · Rare Gear or Salvage Drop',
+      progress: 0,
+    };
   } else if (nearBeacon) {
     session.wreckActionPrompt = {
       kind: 'claim-beacon',
@@ -4404,6 +4510,16 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
       }
     }
   }
+  // v220: Direct close-contact swim-through pickup for discoverable Sunken Treasure Chests
+  if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {
+    for (let i = 0; i < session.treasureChests.length; i++) {
+      const tc = session.treasureChests[i];
+      if (!tc || tc.opened) continue;
+      if (Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 1.75) {
+        openTreasureChest(session, tc, callbacks);
+      }
+    }
+  }
   if (session.collectBursts && session.collectBursts.length > 0) {
     for (let i = session.collectBursts.length - 1; i >= 0; i--) {
       session.collectBursts[i].age += dt;
@@ -4651,6 +4767,7 @@ function stepTelemetryAndExitOutcome(session, dt, callbacks) {
         (session.aiLeadBonusScore || 0) +
         (session.secretLair?.bonusScore || 0) +
         (session.gearCacheBonusScore || 0) +
+        (session.chestBonusScore || 0) +
         Math.round(Math.max(0, (session.rigPerf?.scoreBonusMult || 1) - 1) * 1200),
       photoBonusScore: session.camera?.photoBonusScore || 0,
       encounterBonusScore: session.encounters?.encounterBonusScore || 0,

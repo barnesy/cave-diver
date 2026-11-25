@@ -1698,15 +1698,15 @@ export const lightingAndFxMethods = {
     }
 
     // 5. World-Found Sunken Gear Caches with Diablo III Underwater Legendary Light Pillars (v216)
+    const TIER_RGB = {
+      uncommon: { rgb: '52, 211, 153', hex: '#34d399', light: '#d1fae5' },
+      rare: { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' },
+      epic: { rgb: '192, 132, 252', hex: '#c084fc', light: '#f3e8ff' },
+      mythic: { rgb: '250, 204, 21', hex: '#facc15', light: '#fef9c3' },
+    };
+    const rigGlowBonus = hazards.rigPerf?.relicGlowBonusM || 0;
     const worldCaches = Array.isArray(hazards.worldGearCaches) ? hazards.worldGearCaches : null;
     if (worldCaches && worldCaches.length > 0) {
-      const TIER_RGB = {
-        uncommon: { rgb: '52, 211, 153', hex: '#34d399', light: '#d1fae5' },
-        rare: { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' },
-        epic: { rgb: '192, 132, 252', hex: '#c084fc', light: '#f3e8ff' },
-        mythic: { rgb: '250, 204, 21', hex: '#facc15', light: '#fef9c3' },
-      };
-      const rigGlowBonus = hazards.rigPerf?.relicGlowBonusM || 0;
       for (let i = 0; i < worldCaches.length; i++) {
         const gc = worldCaches[i];
         if (!gc) continue;
@@ -1843,7 +1843,156 @@ export const lightingAndFxMethods = {
       }
     }
 
-    // 6. Sunken Cartographer Set Capstone: Golden Diegetic Relic & Gear Cache Compass Arc (v216)
+    // 5b. Discoverable Sunken Brass Treasure Chests with Rare Gear Drops (v220)
+    const treasureChests = Array.isArray(hazards.treasureChests) ? hazards.treasureChests : null;
+    if (treasureChests && treasureChests.length > 0) {
+      for (let i = 0; i < treasureChests.length; i++) {
+        const tc = treasureChests[i];
+        if (!tc) continue;
+        const openedAge = tc.opened ? Math.max(0, timeSec - (tc.openedAt || 0)) : 0;
+        if (tc.x + 5 < visX0 || tc.x - 5 > visX1 || tc.y + 9 < visY0 || tc.y - 10 > visY1) continue;
+
+        const pal = tc.opened
+          ? (TIER_RGB[tc.drop?.tier] || TIER_RGB.mythic)
+          : { rgb: '245, 158, 11', hex: '#f59e0b', light: '#fef3c7' };
+        const sx = toScreenX(tc.x);
+        const sy = toScreenY(tc.y);
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.8 + (tc.glintPhase || i));
+        const flareAlpha = tc.opened ? Math.max(0, 1 - openedAge / 4.4) : 0.85;
+
+        // Subtle golden treasure shimmer before opening, intense tier-colored pillar on open!
+        if (!tc.opened || openedAge < 4.4) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const pillarH = (tc.opened ? 9.8 + openedAge * 2.4 : 3.2 + pulse * 1.1) * scale;
+          const pillarW = (tc.opened ? 0.62 + (1 - flareAlpha) * 0.45 : 0.28 + pulse * 0.08) * scale;
+          const pg = ctx.createLinearGradient(sx, sy, sx, sy - pillarH);
+          pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.56 * flareAlpha).toFixed(3)})`);
+          pg.addColorStop(0.5, `rgba(${pal.rgb}, ${(0.2 * flareAlpha).toFixed(3)})`);
+          pg.addColorStop(1, `rgba(${pal.rgb}, 0)`);
+          ctx.fillStyle = pg;
+          ctx.beginPath();
+          ctx.moveTo(sx - pillarW, sy);
+          ctx.lineTo(sx - pillarW * 0.3, sy - pillarH);
+          ctx.lineTo(sx + pillarW * 0.3, sy - pillarH);
+          ctx.lineTo(sx + pillarW, sy);
+          ctx.closePath();
+          ctx.fill();
+
+          const auraR = (tc.opened ? 2.5 : 1.15 + pulse * 0.28) * scale;
+          const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
+          ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.58 * flareAlpha).toFixed(3)})`);
+          ag.addColorStop(0.55, `rgba(${pal.rgb}, ${(0.18 * flareAlpha).toFixed(3)})`);
+          ag.addColorStop(1, `rgba(${pal.rgb}, 0)`);
+          ctx.fillStyle = ag;
+          ctx.beginPath();
+          ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (tc.opened && openedAge < 1.9) {
+            const prog = openedAge / 1.9;
+            const ringR = (0.7 + prog * 6.8) * scale;
+            ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.92).toFixed(3)})`;
+            ctx.lineWidth = Math.max(2, (1 - prog) * 0.16 * scale);
+            ctx.beginPath();
+            ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // Ornate brass-bound sunken treasure chest silhouette
+        const cw = Math.max(13, 0.86 * scale);
+        const ch = Math.max(9, 0.56 * scale);
+        ctx.save();
+        // Chest lower wooden body
+        ctx.fillStyle = tc.opened ? '#2e1d0f' : '#4a2c12';
+        ctx.strokeStyle = tc.opened ? '#b45309' : '#fbbf24';
+        ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+        ctx.beginPath();
+        ctx.roundRect?.(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66, Math.max(2, 0.08 * scale)) ??
+          ctx.rect(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66);
+        ctx.fill();
+        ctx.stroke();
+
+        // Arched lid (tilts back when opened)
+        ctx.save();
+        if (tc.opened) {
+          ctx.translate(sx - cw * 0.46, sy - ch * 0.18);
+          ctx.rotate(-0.62);
+          ctx.translate(-(sx - cw * 0.46), -(sy - ch * 0.18));
+        }
+        ctx.fillStyle = tc.opened ? '#3b2412' : '#653b16';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy - ch * 0.18, cw * 0.5, ch * 0.34, 0, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Twin vertical brass straps
+        ctx.fillStyle = tc.opened ? '#d97706' : '#fcd34d';
+        const strapW = Math.max(1.5, cw * 0.1);
+        ctx.fillRect(sx - cw * 0.32, sy - ch * 0.42, strapW, ch * 0.9);
+        ctx.fillRect(sx + cw * 0.22, sy - ch * 0.42, strapW, ch * 0.9);
+
+        // Glowing brass keyhole clasp when closed; soft inner glow when opened
+        ctx.fillStyle = tc.opened ? pal.light : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(sx, sy - ch * 0.08, Math.max(2.1, 0.095 * scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        if (!tc.opened) {
+          const distM = diver ? Math.hypot(diver.x - tc.x, diver.y - tc.y) : 99;
+          if (distM <= 12 + rigGlowBonus) {
+            const label = '🧰 TREASURE CHEST';
+            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+            const tw = ctx.measureText(label).width + 12;
+            const ly = sy - ch * 0.65 - 12;
+            ctx.fillStyle = 'rgba(20, 12, 4, 0.88)';
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.roundRect?.(sx - tw * 0.5, ly - 8, tw, 16, 7) ?? ctx.rect(sx - tw * 0.5, ly - 8, tw, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#fef3c7';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, sx, ly);
+          }
+          // Subtle directional proximity pill within 20m (+Relic Glow)
+          if (diver && distM <= 20 + rigGlowBonus && distM >= 4.5) {
+            const ang = Math.atan2(tc.y - diver.y, tc.x - diver.x);
+            const dx = toScreenX(diver.x);
+            const dy = toScreenY(diver.y);
+            const orbR = Math.max(44, 1.95 * scale);
+            const bx = dx + Math.cos(ang) * orbR;
+            const by = dy + Math.sin(ang) * orbR;
+            ctx.save();
+            ctx.fillStyle = 'rgba(26, 16, 4, 0.88)';
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.35;
+            const txt = `🧰 ${Math.round(distM)}m`;
+            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+            const tw = ctx.measureText(txt).width + 12;
+            ctx.globalAlpha = 0.72 + pulse * 0.28;
+            ctx.beginPath();
+            ctx.roundRect?.(bx - tw * 0.5, by - 9, tw, 18, 9) ?? ctx.rect(bx - tw * 0.5, by - 9, tw, 18);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#fef3c7';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(txt, bx, by);
+            ctx.restore();
+          }
+        }
+      }
+    }
+
+    // 6. Sunken Cartographer Set Capstone: Golden Diegetic Relic, Treasure Chest & Gear Cache Compass Arc (v216–v220)
     if (hazards.rigPerf?.relicCompass && diver) {
       let bestTarget = null;
       let bestDist = 28;
@@ -1855,6 +2004,17 @@ export const lightingAndFxMethods = {
           if (d < bestDist && d > 1.8) {
             bestDist = d;
             bestTarget = { x: gc.x, y: gc.y, isGear: true };
+          }
+        }
+      }
+      if (Array.isArray(hazards.treasureChests)) {
+        for (let i = 0; i < hazards.treasureChests.length; i++) {
+          const tc = hazards.treasureChests[i];
+          if (!tc || tc.opened) continue;
+          const d = Math.hypot(tc.x - diver.x, tc.y - diver.y);
+          if (d < bestDist && d > 1.8) {
+            bestDist = d;
+            bestTarget = { x: tc.x, y: tc.y, isGear: true };
           }
         }
       }

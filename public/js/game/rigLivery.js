@@ -428,6 +428,25 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: '🗺️ World Cache · USS Oriskany hangar bulkhead',
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:world-hydro-suit')),
   },
+  {
+    id: 'chest-nautilus-suit',
+    name: 'Gilded Nautilus Relic Suit',
+    tier: 'mythic',
+    source: 'chest',
+    dropRarity: 'very-rare',
+    ladderRank: 98,
+    fx: { id: 'sovereign-aura', name: 'Nautilus Gold Filigree', desc: 'Rare sunken brass-gold filigree pulses with abyssal reserve energy.' },
+    suitTop: '#1e3a5f',
+    suitMid: '#0f2340',
+    suitBot: '#050d1c',
+    accent: '#fbbf24',
+    trim: '#38bdf8',
+    finColor: '#1e293b',
+    finTip: '#fde047',
+    stageBand: '#f59e0b',
+    unlockHint: '🧰 Very Rare Random Drop · Sunken Treasure Chests (~3.5%)',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:chest-nautilus-suit')),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -588,6 +607,25 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: '🗺️ World Cache · Orda Crystal Maze grotto',
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:world-cartographer-torch')),
   },
+  {
+    id: 'chest-abyssal-lantern',
+    name: 'Sunken Sovereign Lantern',
+    shortLabel: 'Sovereign Lantern',
+    tier: 'mythic',
+    source: 'chest',
+    dropRarity: 'very-rare',
+    ladderRank: 98,
+    fx: { id: 'solar-caustic', name: 'Sovereign Treasure Ray', desc: 'Radiant golden caustic beam highlights distant chests & relics.' },
+    swatch: '#facc15',
+    coreRgb: '254, 249, 195',
+    shaftRgb: '250, 204, 21',
+    warmRgb: '251, 146, 60',
+    rangeMult: 1.18,
+    siltPierce: 0.28,
+    specText: 'Very Rare Chest Relic · +30% beam & +35% Chest Luck',
+    unlockHint: '🧰 Very Rare Random Drop · Sunken Treasure Chests (~3.5%)',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:chest-abyssal-lantern')),
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -606,6 +644,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', tier: 'epic', ladderRank: 84, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Abyssal World Record Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
   { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim 12 Abyssal Bounties or 8+ Hardcore clears', getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 12, 'bounties'), _mkProg(s.hardcoreClears, 8, 'hardcore')), isUnlocked: (s) => _countClaimedBounties(s) >= 12 || (s.hardcoreClears || 0) >= 8 },
   { id: 'world-arch-crest', icon: '🏛️', name: 'Bells Archway Crest', tier: 'epic', source: 'world', ladderRank: 74, fx: { id: 'crest-halo', name: 'Archway Deep Crest', desc: 'Deep-blue cobalt halo signaling trimix arch mastery.' }, unlockHint: '🗺️ World Cache · Blue Hole Dahab Archway', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-arch-crest')) },
+  { id: 'chest-corsair-crest', icon: '🏴‍☠️', name: 'Sunken Corsair Crest', tier: 'rare', source: 'chest', dropRarity: 'rare', ladderRank: 64, fx: { id: 'crest-halo', name: "Corsair's Fortune", desc: 'Gilded compass rose halo increasing sunken treasure luck (+20%).' }, unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~12%)', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:chest-corsair-crest')) },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -871,6 +910,23 @@ export const ACCENT_TRIMS = Object.freeze([
     unlockHint: "🗺️ World Cache · Eagle's Nest Sink shelf",
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:world-hydro-fins')),
   },
+  {
+    id: 'chest-manta-fins',
+    name: 'Pelagic Manta Hydro-Blades',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 82,
+    fx: { id: 'hydro-blades', name: 'Manta Wing Glide', desc: 'Swept cyan-gold hydro-wings slice cleanly through surging karst flow.' },
+    accent: '#38bdf8',
+    trim: '#fde047',
+    finTip: '#38bdf8',
+    stageBand: '#0ea5e9',
+    swatchA: '#0284c7',
+    swatchB: '#fde047',
+    unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~7%)',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:chest-manta-fins')),
+  },
 ]);
 
 export const TANK_FINISHES = Object.freeze([
@@ -1017,6 +1073,22 @@ export const TANK_FINISHES = Object.freeze([
     ccrShell: '#c2410c',
     unlockHint: '🗺️ World Cache · Strýtan Hydrothermal Chimneys',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:world-chimney-tank')),
+  },
+  {
+    id: 'chest-titanium-twin',
+    name: 'Hadal Overpressure Twinset',
+    tier: 'rare',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 66,
+    fx: { id: 'titanium-pulse', name: 'Overpressure Manifold', desc: 'High-strength banded titanium twins built for deep reserve dives.' },
+    top: '#e2e8f0',
+    mid: '#0284c7',
+    bot: '#082f49',
+    stroke: '#7dd3fc',
+    ccrShell: '#0369a1',
+    unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~12%)',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:chest-titanium-twin')),
   },
 ]);
 
@@ -1180,6 +1252,22 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#38bdf8',
     unlockHint: '🗺️ World Cache · MS Zenobia vehicle deck',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:world-salvage-visor')),
+  },
+  {
+    id: 'chest-harpoon-visor',
+    name: 'Leviathan Sight-Core Visor',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 84,
+    fx: { id: 'stalker-lock', name: 'Weakpoint Optical Core', desc: 'Crimson-amber combat reticle tracks boss weakpoints & firing cadence.' },
+    top: '#fecdd3',
+    mid: '#f43f5e',
+    bot: '#4c0519',
+    frame: '#0f172a',
+    hudGlow: '#fb7185',
+    unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~7%)',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:chest-harpoon-visor')),
   },
 ]);
 

@@ -11870,8 +11870,8 @@ test('v218 Deep/Speed/Combat/Hybrid Archetypes, Noticeable Buffs, Level Exploita
   const combatProf = computeRigPerformanceProfile(combatPreset.livery);
   assert.equal(combatProf.dominantArchetype.id, 'combat');
   assert.ok(combatProf.combatMaxHpBonus >= 45, `Combat rig must add substantial Boss Max HP (got +${combatProf.combatMaxHpBonus})`);
-  assert.ok(combatProf.spearPowerMult >= 1.35);
-  assert.ok(combatProf.spearFireRateMult <= 0.78);
+  assert.ok(combatProf.spearPowerMult >= 1.32 && combatProf.spearPowerMult <= 1.36);
+  assert.ok(combatProf.spearFireRateMult <= 0.82 && combatProf.spearFireRateMult >= 0.78);
 
   const bossSess = createDiveSession(LEVEL_1, { diverName: 'Slayer', livery: combatPreset.livery });
   assert.ok(bossSess.secretLair, 'Level 1 must have secret lair');
@@ -12004,4 +12004,129 @@ test('v219 Mode & Difficulty Gear Tuning, Build Specialization, Trench Scaling, 
   const earlyDeep = computeRigPerformanceProfile({ suitId: 'abyss-emerald', headgearId: 'world-thermal-hood' }, { difficulty: 'standard' });
   assert.ok(earlyDeep.activeSets.some((s) => s.id === 'karst-pioneer' && s.tier2Active), 'Early/mid Deep Tech (abyss-emerald + world-thermal-hood) must activate 2pc Karst & Halocline Explorer');
   assert.ok(resolveGearTuningProfile({ difficulty: 'hardcore' }).safetyScale < 0.7);
+});
+
+test('v220 Combat/Deep Balance Polish, Discoverable Sunken Treasure Chests & Rare Random Gear Drops', async () => {
+  const {
+    CHEST_GEAR_DROPS,
+    computeChestDropLuck,
+    rollTreasureChestLoot,
+    createTreasureChestsForLevel,
+    computeRigPerformanceProfile,
+    getGearItemStats,
+  } = await import('../public/js/game/gearStats.js');
+  const { getGearItemBySlot, computeUnlockedLiveries } = await import('../public/js/game/rigLivery.js');
+  const { PROVING_GROUNDS_PRESETS } = await import('../public/js/game/gearProvingGrounds.js');
+  const { openTreasureChest } = await import('../public/js/game/diveSession.js');
+  const { createTrenchChamberLevel } = await import('../public/js/game/abyssalTrench.js');
+
+  // 1. Tightened Boss Combat DPS (~1.67x Standard, ~1.52x Hardcore) & Pure Deep Tech Cold/Overfill Exclusivity
+  const deepPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'thermal-mantle');
+  const combatPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'apex-combat');
+  const hybridPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'hybrid-mix');
+  const stdDeep = computeRigPerformanceProfile(deepPreset.livery, { difficulty: 'standard' });
+  const stdHybrid = computeRigPerformanceProfile(hybridPreset.livery, { difficulty: 'standard' });
+  const stdCombat = computeRigPerformanceProfile(combatPreset.livery, { difficulty: 'standard' });
+  const hardCombat = computeRigPerformanceProfile(combatPreset.livery, { difficulty: 'hardcore' });
+
+  const stdCombatDpsMult = stdCombat.spearPowerMult / stdCombat.spearFireRateMult;
+  const hardCombatDpsMult = hardCombat.spearPowerMult / hardCombat.spearFireRateMult;
+  assert.ok(stdCombatDpsMult >= 1.55 && stdCombatDpsMult <= 1.75, `Standard Boss Combat DPS mult should sit ~1.67x (got ${stdCombatDpsMult.toFixed(2)}x)`);
+  assert.ok(hardCombatDpsMult >= 1.42 && hardCombatDpsMult <= 1.62, `Hardcore Boss Combat DPS mult should sit ~1.52x (got ${hardCombatDpsMult.toFixed(2)}x)`);
+  assert.equal(stdDeep.coldResist, 1, 'Pure Deep Tech must remain 100% COLD-PROOF on Standard');
+  assert.equal(stdDeep.bonusStartBar, 40, 'Pure Deep Tech must remain +40b full overfill');
+  assert.ok(stdHybrid.coldResist < 0.9, `Hybrid Mix must not steal 100% COLD-PROOF from Deep Tech (got ${stdHybrid.coldResist})`);
+  assert.ok(stdHybrid.bonusStartBar < 40, `Hybrid Mix must not steal +40b full overfill from Deep Tech (got +${stdHybrid.bonusStartBar}b)`);
+
+  // 2. All 6 Chest-Exclusive Chase Items exist, are source:'chest', have bespoke stats & unlock cleanly when found
+  assert.equal(CHEST_GEAR_DROPS.length, 6);
+  const mythicDrops = CHEST_GEAR_DROPS.filter((d) => d.tier === 'mythic');
+  assert.equal(mythicDrops.length, 2, 'Should have 2 very-rare Mythic chest chase relics');
+  for (const d of CHEST_GEAR_DROPS) {
+    const entry = getGearItemBySlot(d.slot, d.itemId);
+    assert.ok(entry?.item, `Missing chest item ${d.slot}:${d.itemId}`);
+    assert.equal(entry.item.source, 'chest');
+    const st = getGearItemStats(d.slot, entry.item);
+    assert.equal(st.source, 'chest');
+    assert.ok(st.pills.length >= 2, `Chest item ${d.itemId} must grant meaningful stats`);
+  }
+  const luckPerf = computeRigPerformanceProfile({ torchId: 'chest-abyssal-lantern', patchId: 'chest-corsair-crest' });
+  assert.ok(luckPerf.chestLuckBonus >= 0.5, `Sovereign Lantern + Corsair Crest should grant >=+50% Chest Luck (got ${luckPerf.chestLuckBonus})`);
+
+  const { recordFoundWorldGear } = await import('../public/js/game/logbookModel.js');
+  const chestBookRes = recordFoundWorldGear(createEmptyLogbook(), {
+    slot: 'suit',
+    itemId: 'chest-nautilus-suit',
+    siteId: LEVEL_1.id,
+    siteName: LEVEL_1.name,
+  });
+  const unlockedAfterChest = computeUnlockedLiveries(chestBookRes.book);
+  assert.equal(unlockedAfterChest.suits.has('chest-nautilus-suit'), true, 'Found chest gear must unlock immediately in rigLivery');
+  assert.equal(unlockedAfterChest.torches.has('chest-abyssal-lantern'), false, 'Unfound chest gear must remain locked');
+
+  // 3. Chest Drop Luck Scaling (Guided < Standard < Hardcore, +Modifiers, +Trench, +Gear Luck, +Dry Streak)
+  const luckGuided = computeChestDropLuck({ difficulty: 'guided' });
+  const luckStd = computeChestDropLuck({ difficulty: 'standard' });
+  const luckHard = computeChestDropLuck({ difficulty: 'hardcore' });
+  const luckHardMod = computeChestDropLuck({ difficulty: 'hardcore', modifiers: ['surge-tide', 'iron-lung'] });
+  const luckTrench = computeChestDropLuck({ difficulty: 'standard', trenchChamber: 5 });
+  const luckGear = computeChestDropLuck({ difficulty: 'standard', rigPerf: luckPerf });
+  const luckDry = computeChestDropLuck({ difficulty: 'standard', dryStreak: 4 });
+  assert.ok(luckGuided < luckStd && luckStd < luckHard && luckHard < luckHardMod);
+  assert.ok(luckTrench > luckStd && luckGear > luckStd && luckDry > luckStd);
+
+  // 4. Statistical Rarity Distribution (4,000 simulated Standard rolls: Mythic genuinely rare ~3.5%, Epic ~7%, Rare ~12%)
+  let s = 424242;
+  const detRng = () => {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const counts = { mythic: 0, epic: 0, rare: 0, salvage: 0 };
+  const N = 4000;
+  for (let i = 0; i < N; i++) {
+    const drop = rollTreasureChestLoot({ foundGearMap: {}, tuningCtx: { difficulty: 'standard' }, hasDpv: true, rng: detRng });
+    if (drop.kind === 'gear') counts[drop.tier]++;
+    else {
+      counts.salvage++;
+      assert.ok(drop.points >= 300, 'Non-gear chest salvage must always award points');
+    }
+  }
+  const mythicRate = counts.mythic / N;
+  const epicRate = counts.epic / N;
+  const rareRate = counts.rare / N;
+  assert.ok(mythicRate >= 0.02 && mythicRate <= 0.055, `Mythic drop rate must be genuinely very rare ~3.5% (got ${(mythicRate * 100).toFixed(2)}%)`);
+  assert.ok(epicRate >= 0.05 && epicRate <= 0.095, `Epic drop rate must be ~7% (got ${(epicRate * 100).toFixed(2)}%)`);
+  assert.ok(rareRate >= 0.09 && rareRate <= 0.155, `Rare drop rate must be ~12% (got ${(rareRate * 100).toFixed(2)}%)`);
+
+  // 5. Navigable Open-Water Placement across expedition sites & Trench chambers + live openTreasureChest reward flow
+  const plura = getLevelById('plura-marble-sump');
+  const trenchLvl = createTrenchChamberLevel('TRN220', 3);
+  for (const lvl of [LEVEL_1, plura, trenchLvl]) {
+    const chests = createTreasureChestsForLevel(lvl, { seed: 220220 });
+    assert.ok(chests.length >= 1 && chests.length <= 2, `Expected 1-2 treasure chests on ${lvl.id}, got ${chests.length}`);
+    for (const tc of chests) {
+      const sdf = evaluateCaveSDF(lvl, tc.x, tc.y);
+      assert.ok(sdf < -0.65, `Treasure chest ${tc.id} on ${lvl.id} must be in navigable open water (SDF=${sdf.toFixed(2)})`);
+    }
+  }
+
+  const sess = createDiveSession(plura, { diverName: 'Hunter', difficulty: 'standard' });
+  assert.ok(Array.isArray(sess.treasureChests) && sess.treasureChests.length >= 1, 'Dive session must spawn discoverable treasureChests');
+  const tc = sess.treasureChests[0];
+  let cbChest = null;
+  let cbDrop = null;
+  // Force a guaranteed Mythic roll (rng returns 0.005)
+  const drop = openTreasureChest(
+    sess,
+    tc,
+    { onTreasureChestOpened: (c, d) => { cbChest = c; cbDrop = d; } },
+    { rng: () => 0.005 }
+  );
+  assert.equal(tc.opened, true);
+  assert.equal(cbChest, tc);
+  assert.equal(cbDrop, drop);
+  assert.equal(drop.kind, 'gear');
+  assert.equal(drop.tier, 'mythic');
+  assert.ok(sess.chestBonusScore >= 800, 'Opening Mythic treasure chest must award expedition bonus score');
+  assert.ok(Boolean(sess.foundGearMap[drop.gearKey]), 'Session foundGearMap must track discovered chest gear immediately');
 });

@@ -195,7 +195,7 @@ export const GEAR_TUNING_PROFILES = Object.freeze({
     utilityScale: 1.20,
     scoreBonusAdd: 0,
     maxSwimSpeed: 0.30,
-    maxSpearPower: 0.50,
+    maxSpearPower: 0.38,
     maxColdResist: 1.0,
     maxNarcResist: 0.60,
     maxNarcDepthM: 22,
@@ -218,7 +218,7 @@ export const GEAR_TUNING_PROFILES = Object.freeze({
     utilityScale: 1.0,
     scoreBonusAdd: 0,
     maxSwimSpeed: 0.28,
-    maxSpearPower: 0.45,
+    maxSpearPower: 0.34,
     maxColdResist: 1.0,
     maxNarcResist: 0.55,
     maxNarcDepthM: 20,
@@ -241,7 +241,7 @@ export const GEAR_TUNING_PROFILES = Object.freeze({
     utilityScale: 1.05,
     scoreBonusAdd: 0.15,
     maxSwimSpeed: 0.26,
-    maxSpearPower: 0.36,
+    maxSpearPower: 0.26,
     maxColdResist: 0.75,
     maxNarcResist: 0.40,
     maxNarcDepthM: 12,
@@ -264,7 +264,7 @@ export const GEAR_TUNING_PROFILES = Object.freeze({
     utilityScale: 0.90,
     scoreBonusAdd: 0,
     maxSwimSpeed: 0.22,
-    maxSpearPower: 0.36,
+    maxSpearPower: 0.26,
     maxColdResist: 0.85,
     maxNarcResist: 0.45,
     maxNarcDepthM: 16,
@@ -287,7 +287,7 @@ export const GEAR_TUNING_PROFILES = Object.freeze({
     utilityScale: 0.70,
     scoreBonusAdd: 0,
     maxSwimSpeed: 0.16,
-    maxSpearPower: 0.25,
+    maxSpearPower: 0.18,
     maxColdResist: 0.60,
     maxNarcResist: 0.30,
     maxNarcDepthM: 10,
@@ -549,6 +549,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { swimSpeed: 0.10, hydroEff: 0.20, siltCut: 0.15, dpvSpeedBonus: 0.10 },
     power: { id: 'hydroSkin', name: 'Laminar Aero-Weave', desc: '+10% swim/DPV cruise & +20% Slipstream/Pull-and-Glide' },
   },
+  'suit:chest-nautilus-suit': {
+    archetype: 'deep',
+    stats: { bonusStartBar: 22, narcDepthBonusM: 10, decoOffgas: 0.18, coldResist: 0.65, gasSave: 0.08 },
+    power: { id: 'nautilusReserve', name: 'Abyssal Reserve Vault', desc: '+22 bar overfill, +10m depth clarity & +18% Bühlmann deco clearing' },
+  },
 
   // Headgear
   'headgear:zissou-cap': { archetype: 'speed', stats: { swimSpeed: 0.01 } },
@@ -564,8 +569,8 @@ const BESPOKE_ITEM_STATS = Object.freeze({
   },
   'headgear:world-thermal-hood': {
     archetype: 'deep',
-    stats: { coldResist: 0.75, gasSave: 0.06, narcDepthBonusM: 5 },
-    power: { id: 'arcticInsulation', name: 'Arctic Thermal Seal', desc: '75% Cold Thermocline resistance & calmer deep breathing' },
+    stats: { coldResist: 0.50, gasSave: 0.06, narcDepthBonusM: 5 },
+    power: { id: 'arcticInsulation', name: 'Arctic Thermal Seal', desc: '50% Cold Thermocline resistance & calmer deep breathing' },
   },
 
   // Torches
@@ -590,6 +595,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { torchReach: 0.26, relicGlowM: 10, sonarRange: 0.14 },
     power: { id: 'relicGlintBeam', name: 'Selenite Survey Beam', desc: '+10m relic & Gear Cache highlight range' },
   },
+  'torch:chest-abyssal-lantern': {
+    archetype: 'hybrid',
+    stats: { torchReach: 0.30, relicGlowM: 14, sonarRange: 0.22, chestLuckBonus: 0.35 },
+    power: { id: 'sovereignBeacon', name: 'Sovereign Treasure Beacon', desc: '+35% Sunken Treasure Chest Rare Drop Luck & +14m relic/chest glint' },
+  },
 
   // Tanks
   'tank:al80-silver': { archetype: 'deep', stats: { gasSave: 0.01 } },
@@ -607,8 +617,13 @@ const BESPOKE_ITEM_STATS = Object.freeze({
   },
   'tank:world-chimney-tank': {
     archetype: 'deep',
-    stats: { gasSave: 0.14, decoOffgas: 0.20, coldResist: 0.60, bonusStartBar: 25 },
-    power: { id: 'thermalVentCore', name: 'Geothermal Core Tank', desc: '+25 bar overfill, +20% Bühlmann offgas & warm-gas shield' },
+    stats: { gasSave: 0.12, decoOffgas: 0.16, coldResist: 0.30, bonusStartBar: 18 },
+    power: { id: 'thermalVentCore', name: 'Geothermal Core Tank', desc: '+18 bar overfill, +16% Bühlmann offgas & +30% warm-gas shield' },
+  },
+  'tank:chest-titanium-twin': {
+    archetype: 'deep',
+    stats: { gasSave: 0.10, decoOffgas: 0.12, bonusStartBar: 18, narcResist: 0.12 },
+    power: { id: 'twinManifoldReserve', name: 'Twin-Manifold Reserve', desc: '+18 bar overpressure twinset & -10% trimix burn' },
   },
 
   // Visors
@@ -629,6 +644,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { crankSpeed: 0.24, siltCut: 0.15, bumpArmor: 0.14, salvageDragCut: 0.20 },
     power: { id: 'hullBreachOptics', name: 'Hull-Breach Optics', desc: '+24% hatch cranking & -20% heavy salvage drag' },
   },
+  'visor:chest-harpoon-visor': {
+    archetype: 'combat',
+    stats: { spearPower: 0.16, spearFireRateCut: 0.12, combatMaxHpBonus: 18 },
+    power: { id: 'predatorWeakpoint', name: 'Predator Weakpoint Optic', desc: '+16% Speargun damage, +12% reload cadence & +18 Boss HP' },
+  },
 
   // Trim & Fins
   'trim:suit-default': { archetype: 'speed', stats: { siltCut: 0.02 } },
@@ -645,6 +665,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { siltCut: 0.28, swimSpeed: 0.09, hydroEff: 0.24, dashCdCut: 0.15 },
     power: { id: 'siltGhost', name: 'Silt-Ghost Split Blades', desc: 'Zero floor silt kick below 1.8 m/s & +24% current agility' },
   },
+  'trim:chest-manta-fins': {
+    archetype: 'speed',
+    stats: { swimSpeed: 0.11, hydroEff: 0.24, siltCut: 0.22, dashCdCut: 0.14, dpvSpeedBonus: 0.08 },
+    power: { id: 'mantaGlide', name: 'Manta Wing Glide', desc: '+11% swim, +24% current efficiency & faster Hydro-Dash recovery' },
+  },
 
   // Patches / Crests
   'patch:none': { archetype: 'hybrid', stats: {} },
@@ -659,6 +684,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     archetype: 'deep',
     stats: { narcResist: 0.18, narcDepthBonusM: 8, decoOffgas: 0.14, gasSave: 0.06 },
     power: { id: 'deepLineFocus', name: 'Bells Archway Focus', desc: '+8m depth clarity, -18% narcosis & +14% Bühlmann deco clearing' },
+  },
+  'patch:chest-corsair-crest': {
+    archetype: 'hybrid',
+    stats: { scoreBonus: 0.10, crankSpeed: 0.18, relicGlowM: 6, chestLuckBonus: 0.20 },
+    power: { id: 'corsairsFortune', name: "Corsair's Fortune", desc: '+20% Sunken Treasure Chest Rare Drop Luck, +10% Score & +6m Relic Glint' },
   },
 });
 
@@ -702,6 +732,7 @@ export function formatStatPills(stats = {}) {
   if (stats.crankSpeed > 0.03) pills.push(`+${Math.round(stats.crankSpeed * 100)}% Crank`);
   if (stats.salvageDragCut > 0.03) pills.push(`-${Math.round(stats.salvageDragCut * 100)}% Haul Drag`);
   if (stats.relicGlowM >= 1) pills.push(`+${Math.round(stats.relicGlowM)}m Relic`);
+  if (stats.chestLuckBonus > 0.01) pills.push(`+${Math.round(stats.chestLuckBonus * 100)}% Chest Luck`);
   if (stats.scoreBonus > 0.01) pills.push(`+${Math.round(stats.scoreBonus * 100)}% Score`);
   return pills;
 }
@@ -789,6 +820,7 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     crankSpeed: 0,
     salvageDragCut: 0,
     relicGlowM: 0,
+    chestLuckBonus: 0,
     scoreBonus: 0,
   };
   const archCounts = { deep: 0, speed: 0, combat: 0, hybrid: 0 };
@@ -923,12 +955,13 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
   const dpvDrainMult = +(1 - Math.min(0.45, sum.dpvDrainCut * sMob * trenchBoost)).toFixed(3);
   const combatMaxHpBonus = Math.min(tuning.maxCombatHp, Math.round(sum.combatMaxHpBonus * sSafe));
   const spearPowerMult = +(1 + Math.min(tuning.maxSpearPower, sum.spearPower * sComb)).toFixed(3);
-  const spearFireRateMult = +(1 - Math.min(0.32, sum.spearFireRateCut * sSkill)).toFixed(3);
+  const spearFireRateMult = +(1 - Math.min(0.20, sum.spearFireRateCut * sSkill)).toFixed(3);
   const dashCooldownMult = +(1 - Math.min(0.38, sum.dashCdCut * sSkill)).toFixed(3);
   const sonarRangeMult = +(1 + Math.min(0.50, sum.sonarRange * sUtil)).toFixed(3);
   const crankSpeedMult = +(1 + Math.min(1.10, sum.crankSpeed * sSkill)).toFixed(3);
   const salvageDragCut = +(Math.min(0.60, sum.salvageDragCut * sUtil)).toFixed(2);
   const relicGlowBonusM = Math.min(24, Math.round(sum.relicGlowM * sUtil));
+  const chestLuckBonus = tuning.isNormalized ? 0 : +(Math.min(0.65, sum.chestLuckBonus)).toFixed(2);
   const rawScoreBonus = tuning.isNormalized ? 0 : (sum.scoreBonus + (activeSets.length > 0 || powers.length > 0 ? (tuning.scoreBonusAdd || 0) : 0));
   const scoreBonusMult = +(1 + Math.min(0.35, rawScoreBonus)).toFixed(3);
 
@@ -954,6 +987,7 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     crankSpeedMult,
     salvageDragCut,
     relicGlowBonusM,
+    chestLuckBonus,
     scoreBonusMult,
     // Named Legendary / Capstone mechanical flags (gated cleanly by mode tuning)
     siltGhost: hasPower('siltGhost'),
@@ -1131,4 +1165,238 @@ export function createWorldGearCachesForLevel(level, foundGearMap = null) {
     });
   }
   return caches;
+}
+
+/**
+ * Ultra-Rare Random Treasure Chest Chase Gear Drops (v220).
+ * These 6 iconic pieces ONLY drop randomly from discoverable Sunken Treasure Chests!
+ */
+export const CHEST_GEAR_DROPS = Object.freeze([
+  Object.freeze({ slot: 'suit', itemId: 'chest-nautilus-suit', tier: 'mythic', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🐚' }),
+  Object.freeze({ slot: 'torch', itemId: 'chest-abyssal-lantern', tier: 'mythic', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🏮' }),
+  Object.freeze({ slot: 'trim', itemId: 'chest-manta-fins', tier: 'epic', rarityLabel: 'RARE EPIC', baseChance: 0.07, icon: '🪽' }),
+  Object.freeze({ slot: 'visor', itemId: 'chest-harpoon-visor', tier: 'epic', rarityLabel: 'RARE EPIC', baseChance: 0.07, icon: '🎯' }),
+  Object.freeze({ slot: 'tank', itemId: 'chest-titanium-twin', tier: 'rare', rarityLabel: 'RARE DROP', baseChance: 0.12, icon: '🫧' }),
+  Object.freeze({ slot: 'patch', itemId: 'chest-corsair-crest', tier: 'rare', rarityLabel: 'RARE DROP', baseChance: 0.12, icon: '🏴‍☠️' }),
+]);
+
+/**
+ * Compute balanced Treasure Chest drop-luck multiplier from Difficulty, Mastery Modifiers,
+ * Trench Chamber depth, equipped Luck gear (Sovereign Lantern / Corsair Crest), and gentle bad-luck protection (v220).
+ */
+export function computeChestDropLuck({
+  difficulty = 'standard',
+  modifiers = [],
+  trenchChamber = 0,
+  rigPerf = null,
+  dryStreak = 0,
+} = {}) {
+  const diffMult = difficulty === 'hardcore' ? 1.65 : difficulty === 'guided' ? 0.75 : 1.0;
+  const modBonus = Array.isArray(modifiers) ? Math.min(0.6, modifiers.length * 0.2) : 0;
+  const trenchBonus = trenchChamber >= 2 ? Math.min(0.9, (trenchChamber - 1) * 0.18) : 0;
+  const gearLuck = Math.max(0, Number(rigPerf?.chestLuckBonus) || 0);
+  const pityBonus = Math.min(0.8, Math.max(0, Number(dryStreak) || 0) * 0.08);
+  return +(Math.min(3.5, diffMult + modBonus + trenchBonus + gearLuck + pityBonus)).toFixed(2);
+}
+
+/**
+ * Roll balanced loot when opening a discoverable Sunken Treasure Chest (v220).
+ * Keeps Mythic chase gear genuinely rare (~3.5% base) and Epic (~7% base) while guaranteeing
+ * every chest feels rewarding (spare pony bottle gas top-up, DPV cell, or gold salvage jackpot).
+ */
+export function rollTreasureChestLoot({
+  foundGearMap = null,
+  tuningCtx = null,
+  rigPerf = null,
+  dryStreak = 0,
+  hasDpv = false,
+  rng = Math.random,
+} = {}) {
+  const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
+  const luck = computeChestDropLuck({
+    difficulty: tuningCtx?.difficulty || 'standard',
+    modifiers: tuningCtx?.modifiers || [],
+    trenchChamber: tuningCtx?.trenchChamber || 0,
+    rigPerf,
+    dryStreak,
+  });
+
+  const roll = Math.max(0, Math.min(0.999999, Number(rng()) || 0));
+  const mythicP = Math.min(0.12, 0.035 * luck);
+  const epicP = Math.min(0.20, 0.07 * luck);
+  const rareP = Math.min(0.30, 0.12 * luck);
+
+  const pickUnowned = (tier) => {
+    const pool = CHEST_GEAR_DROPS.filter((d) => d.tier === tier && !found[`${d.slot}:${d.itemId}`]);
+    if (pool.length === 0) return null;
+    return pool[Math.floor(rng() * pool.length) % pool.length];
+  };
+
+  let chosenGear = null;
+  if (roll < mythicP) {
+    chosenGear = pickUnowned('mythic') || pickUnowned('epic') || pickUnowned('rare');
+  } else if (roll < mythicP + epicP) {
+    chosenGear = pickUnowned('epic') || pickUnowned('rare');
+  } else if (roll < mythicP + epicP + rareP) {
+    chosenGear = pickUnowned('rare');
+  }
+
+  if (chosenGear) {
+    const gearKey = `${chosenGear.slot}:${chosenGear.itemId}`;
+    const itemMeta = getGearItemBySlot(chosenGear.slot, chosenGear.itemId)?.item || null;
+    const statsInfo = getGearItemStats(chosenGear.slot, itemMeta || chosenGear.itemId);
+    return {
+      kind: 'gear',
+      gearKey,
+      slot: chosenGear.slot,
+      itemId: chosenGear.itemId,
+      name: itemMeta?.name || chosenGear.itemId,
+      tier: chosenGear.tier,
+      rarityLabel: chosenGear.rarityLabel,
+      icon: chosenGear.icon,
+      points: chosenGear.tier === 'mythic' ? 800 : chosenGear.tier === 'epic' ? 550 : 350,
+      gasBonusBar: 10,
+      luckMult: luck,
+      beamColor: TIER_BEAM_COLORS[chosenGear.tier] || '#facc15',
+      statsInfo,
+    };
+  }
+
+  // Rewarding non-gear sunken treasure salvage (always useful mid-dive!)
+  const salvageRoll = rng();
+  if (salvageRoll < 0.34) {
+    return {
+      kind: 'gas-cache',
+      tier: 'uncommon',
+      rarityLabel: 'SPARE PONY BOTTLE',
+      icon: '🫧',
+      name: 'Sealed Trimix Pony Bottle',
+      detail: '+22 bar instant reserve refill & +300 Salvage pts',
+      points: 300,
+      gasBonusBar: 22,
+      luckMult: luck,
+      beamColor: TIER_BEAM_COLORS.uncommon,
+    };
+  }
+  if (hasDpv && salvageRoll < 0.56) {
+    return {
+      kind: 'dpv-cell',
+      tier: 'rare',
+      rarityLabel: 'HIGH-DENSITY CELL',
+      icon: '🔋',
+      name: 'Watertight DPV Lithium Pack',
+      detail: '+45% DPV Scooter charge & +350 Salvage pts',
+      points: 350,
+      dpvBatteryBonus: 45,
+      luckMult: luck,
+      beamColor: TIER_BEAM_COLORS.rare,
+    };
+  }
+  if (salvageRoll < 0.84) {
+    return {
+      kind: 'doubloons',
+      tier: 'rare',
+      rarityLabel: 'SUNKEN TREASURE',
+      icon: '🪙',
+      name: 'Gilded Expedition Doubloons',
+      detail: '+550 Expedition Bonus Score & +10 bar calm reserve',
+      points: 550,
+      gasBonusBar: 10,
+      luckMult: luck,
+      beamColor: TIER_BEAM_COLORS.rare,
+    };
+  }
+  return {
+    kind: 'reliquary',
+    tier: 'epic',
+    rarityLabel: 'RARE RELIQUARY',
+    icon: '💎',
+    name: 'Abyssal Pearl Reliquary',
+    detail: '+850 Bonus Score, +15 bar reserve & calm HR recovery',
+    points: 850,
+    gasBonusBar: 15,
+    calmHr: true,
+    luckMult: luck,
+    beamColor: TIER_BEAM_COLORS.epic,
+  };
+}
+
+function _hashChestSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Spawn 1–2 discoverable brass-bound Sunken Treasure Chests in verified navigable open water
+ * on any expedition site or Endless Trench chamber (v220).
+ */
+export function createTreasureChestsForLevel(level, { seed = null, excludePoints = [] } = {}) {
+  if (!level || level.isProvingGrounds) return [];
+  const segs = Array.isArray(level.segments) ? level.segments : [];
+  if (segs.length < 2) return [];
+
+  const spawnX = level.spawn?.x ?? 10;
+  const spawnY = level.spawn?.y ?? 2;
+  const seedVal = Number.isFinite(seed)
+    ? (seed >>> 0)
+    : _hashChestSeed(`${level.id || 'site'}:${Date.now() ^ Math.floor(Math.random() * 1e9)}`);
+
+  // Deterministic PRNG per dive run so chests appear in fresh exciting side-alcoves each expedition!
+  let s = (seedVal || 1337) >>> 0;
+  const nextRng = () => {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+
+  // Deeper / longer sites spawn 2 chests; shorter intro sites spawn 1–2
+  const desiredCount = segs.length >= 6 || (level.maxDepthM || 0) >= 55 ? 2 : 1;
+  const chests = [];
+  const usedFracs = [0.34 + nextRng() * 0.16, 0.66 + nextRng() * 0.18];
+
+  for (let i = 0; i < desiredCount; i++) {
+    const segIdx = Math.max(1, Math.min(segs.length - 1, Math.floor(segs.length * usedFracs[i % usedFracs.length])));
+    const seg = segs[segIdx];
+    const ax = seg.x1 ?? seg.ax ?? 0;
+    const ay = seg.y1 ?? seg.ay ?? 10;
+    const bx = seg.x2 ?? seg.bx ?? ax;
+    const by = seg.y2 ?? seg.by ?? ay;
+    const mx = (ax + bx) * 0.5;
+    const my = (ay + by) * 0.5;
+    const r = Math.max(1.2, (seg.r ?? seg.ra ?? seg.radius ?? 3.2) * 0.52);
+    const sign = nextRng() < 0.5 ? -1 : 1;
+
+    const candidates = [
+      { x: mx + sign * r * 0.55, y: my + r * 0.45 },
+      { x: mx - sign * r * 0.45, y: my + r * 0.35 },
+      { x: mx, y: my },
+    ];
+    let best = null;
+    for (const pt of candidates) {
+      if (Math.hypot(pt.x - spawnX, pt.y - spawnY) < 10) continue;
+      if (excludePoints.some((ep) => Math.hypot(pt.x - ep.x, pt.y - ep.y) < 7)) continue;
+      if (chests.some((c) => Math.hypot(pt.x - c.x, pt.y - c.y) < 12)) continue;
+      if (evaluateCaveSDF(level, pt.x, pt.y) < -0.65) {
+        best = pt;
+        break;
+      }
+    }
+    if (!best) continue;
+
+    chests.push({
+      id: `chest-${level.id || 's'}-${i + 1}`,
+      name: i === 0 ? 'Sunken Brass Treasure Chest' : 'Deep Grotto Relic Chest',
+      x: Math.round(best.x * 100) / 100,
+      y: Math.round(best.y * 100) / 100,
+      opened: false,
+      openAnim: 0,
+      drop: null,
+      beamColor: '#facc15',
+      glintPhase: nextRng() * Math.PI * 2,
+    });
+  }
+  return chests;
 }
