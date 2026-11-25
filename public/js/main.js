@@ -571,7 +571,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=216',
+  mapRasterUrl: './assets/map-expedition.jpg?v=217',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2472,6 +2472,8 @@ const liveryWorkshop = createLiveryWorkshopController({
   setHomeMenuOpen: (v) => setHomeMenuOpen(v), scheduleGitHubStatsSync: () => scheduleGitHubStatsSync(), showToast,
   playGearEquip: (s, t) => audio.playGearEquip?.(s, t), playGearUnlock: (t) => audio.playGearUnlock?.(t),
   spawnConfetti: () => spawnCelebrationConfetti(),
+  launchProvingGrounds: async (pgLvl) => { const prev = activeLevel; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(pgLvl, { showOverlay: true }); startDiveRun(false); return prev; },
+  exitProvingGrounds: (prevLvl) => { abortActiveDiveToMenu(); if (prevLvl) ensureLevelLoaded(prevLvl, { showOverlay: false }); },
 });
 const {
   liveryModalEl,
@@ -3355,6 +3357,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
 
 function finishDiveRun(success, title, detail, outcomeScore = null) {
   if (!session) return;
+  if (session.level?.isProvingGrounds) { abortActiveDiveToMenu(); openLiveryModal(); showToast('🧪 Proving Grounds trial complete — back in Gear Workshop!', 2.8); return; }
   cancelDebriefAnimations();
   input?.resetAll?.();
   audio.resetEnvironmentFilter();
@@ -5919,6 +5922,8 @@ function reconcileSiteFilterOnMenuReturn() {
 }
 
 function abortActiveDiveToMenu() {
+  const prevPgLvl = liveryWorkshop?.onExitProvingGrounds?.();
+  if (prevPgLvl && prevPgLvl !== activeLevel) ensureLevelLoaded(prevPgLvl, { showOverlay: false });
   const prevCode = lan.room?.code || '';
   activeDailyChallenge = null;
   cancelDebriefAnimations();
@@ -6877,6 +6882,7 @@ const sessionStepCallbacks = {
   onWorldGearFound: (gc) => {
     audio.playGearUnlock?.(gc.tier || 'rare');
     triggerHaptic('pickup');
+    if (gc?.isDemoCache || session?.isProvingGrounds) return;
     try {
       const res = recordFoundWorldGear(loadCareerLogbook(), { slot: gc.slot, itemId: gc.itemId, siteId: session?.level?.id || '', siteName: session?.level?.name || '' });
       if (res?.book) saveCareerLogbook(res.book);

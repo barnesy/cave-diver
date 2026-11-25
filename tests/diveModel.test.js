@@ -11751,3 +11751,76 @@ test('v216 Ultra Mode Gear & Avatar: All-Slot Performance, Zelda/Diablo Set Tier
   assert.ok(mainLines < 8000, `main.js must stay < 8000 lines (currently ${mainLines})`);
   assert.ok(rendLines < 5000, `renderer.js must stay < 5000 lines (currently ${rendLines})`);
 });
+
+test('v217 Effortless Set Equipping, Best-Rig Optimizer & 6-Lane Live Proving Grounds Field Test', async () => {
+  const { GEAR_SET_SYNERGIES, computeUnlockedLiveries } = await import('../public/js/game/rigLivery.js');
+  const { computeRigPerformanceProfile } = await import('../public/js/game/gearStats.js');
+  const {
+    PROVING_GROUNDS_LEVEL_ID,
+    PROVING_GROUNDS_PRESETS,
+    STOCK_BASELINE_LIVERY,
+    buildSetPreviewPatch,
+    buildBestOwnedRig,
+    createProvingGroundsLevel,
+    configureProvingGroundsSession,
+    applyTrialLiveryToSession,
+    injectTestDecoStop,
+  } = await import('../public/js/game/gearProvingGrounds.js');
+  const { recordFoundWorldGear } = await import('../public/js/game/logbookModel.js');
+
+  // 1. buildSetPreviewPatch builds a complete Capstone preview for every Gear Set
+  for (const set of GEAR_SET_SYNERGIES) {
+    const patch = buildSetPreviewPatch(set);
+    const prof = computeRigPerformanceProfile(patch);
+    assert.equal(prof.capstoneActive, true, `Full preview patch for ${set.id} must activate Capstone`);
+  }
+
+  // 2. buildBestOwnedRig prioritizes highest-tier owned Set + fills remaining slots cleanly
+  let book = createEmptyLogbook();
+  book = recordFoundWorldGear(book, { slot: 'suit', itemId: 'world-hydro-suit', siteId: 'uss-oriskany-carrier' }).book;
+  book = recordFoundWorldGear(book, { slot: 'trim', itemId: 'world-hydro-fins', siteId: 'eagles-nest-sink' }).book;
+  book = recordFoundWorldGear(book, { slot: 'tank', itemId: 'world-hydro-tank', siteId: 'fontaine-de-vaucluse' }).book;
+  const unlocks = computeUnlockedLiveries(book);
+  const best = buildBestOwnedRig(unlocks);
+  assert.equal(best.isCapstone, true, 'Best Rig optimizer must lock onto owned 3pc Karst Hydro-Glider Capstone');
+  assert.equal(best.livery.suitId, 'world-hydro-suit');
+  assert.equal(best.livery.trimId, 'world-hydro-fins');
+  assert.equal(best.livery.tankId, 'world-hydro-tank');
+
+  // 3. 6-Lane Proving Grounds level is 100% SDF-navigable at spawn, all checkpoints, collectibles & demo cache
+  const pgLvl = createProvingGroundsLevel();
+  assert.equal(pgLvl.id, PROVING_GROUNDS_LEVEL_ID);
+  assert.equal(pgLvl.isProvingGrounds, true);
+  assert.equal(pgLvl.noLogbook, true);
+  assert.ok(evaluateCaveSDF(pgLvl, pgLvl.spawn.x, pgLvl.spawn.y) < -0.5, 'Proving Grounds spawn must be open water');
+  for (const cp of pgLvl.checkpoints) {
+    assert.ok(evaluateCaveSDF(pgLvl, cp.x, cp.y) < -0.5, `Proving Grounds checkpoint ${cp.id} must be open water`);
+  }
+  for (const col of pgLvl.collectibles) {
+    assert.ok(evaluateCaveSDF(pgLvl, col.x, col.y) < -0.3, `Proving Grounds collectible ${col.id} must be open water`);
+  }
+
+  // 4. Live mid-water hot-swap inside Proving Grounds changes physics immediately without reload
+  const sess = createDiveSession(pgLvl, { diverName: 'Tester', livery: STOCK_BASELINE_LIVERY });
+  configureProvingGroundsSession(sess, STOCK_BASELINE_LIVERY);
+  assert.equal(sess.isProvingGrounds, true);
+  assert.equal(sess.hazards.thermoclines.length, 1);
+  assert.equal(sess.worldGearCaches[0].isDemoCache, true);
+  assert.ok(evaluateCaveSDF(pgLvl, sess.worldGearCaches[0].x, sess.worldGearCaches[0].y) < -0.4);
+
+  const stockSwim = sess.rigPerf.swimSpeedMult;
+  const hydroPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'karst-hydro-glider');
+  const thermalPreset = PROVING_GROUNDS_PRESETS.find((p) => p.id === 'thermal-mantle');
+  applyTrialLiveryToSession(sess, hydroPreset.livery);
+  assert.ok(sess.rigPerf.swimSpeedMult > stockSwim, 'Mid-water swap to Hydro-Glider must boost live swim speed');
+  assert.equal(sess.rigPerf.hydroGhost, true);
+  assert.equal(sess.rigPerf.siltGhost, true);
+
+  applyTrialLiveryToSession(sess, thermalPreset.livery);
+  assert.equal(sess.rigPerf.coldResist, 1.0, 'Mid-water swap to Thermal Mantle must grant instant 100% Cold Immunity');
+
+  // 5. injectTestDecoStop loads a clean 6m calibration stop
+  assert.equal(injectTestDecoStop(sess), true);
+  stepDiveSession(sess, { x: 0, y: 0 }, 0.1, {});
+  assert.ok(sess.diveState.stopDepthM >= 3, `Expected active test deco stop, got ${sess.diveState.stopDepthM}m`);
+});

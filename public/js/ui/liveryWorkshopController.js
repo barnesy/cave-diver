@@ -33,6 +33,13 @@ import {
   getGearItemStats,
   SET_TIER_BONUSES,
 } from '../game/gearStats.js';
+import {
+  buildSetPreviewPatch,
+  buildBestOwnedRig,
+  createProvingGroundsLevel,
+  configureProvingGroundsSession,
+  createProvingGroundsHudBar,
+} from '../game/gearProvingGrounds.js';
 
 export const WRECK_LEVEL_ID_SET = new Set(
   LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck')).map((l) => l.id)
@@ -63,6 +70,8 @@ export function createLiveryWorkshopController({
   playGearEquip = null,
   playGearUnlock = null,
   spawnConfetti = null,
+  launchProvingGrounds = null,
+  exitProvingGrounds = null,
 }) {
   function getCurrentLiveryUnlocks() {
     let book = null;
@@ -141,7 +150,9 @@ export function createLiveryWorkshopController({
   const liveryEnvTabsEl = document.getElementById('livery-env-tabs');
   const btnLiveryPrevCcrEl = document.getElementById('btn-livery-prev-ccr');
   const btnLiveryPrevDpvEl = document.getElementById('btn-livery-prev-dpv');
+  const btnLiveryBestEl = document.getElementById('btn-livery-best');
   const btnLiveryRandomEl = document.getElementById('btn-livery-random');
+  const btnLiveryFieldTestEl = document.getElementById('btn-livery-field-test');
   const liverySuitGridEl = document.getElementById('livery-suit-grid');
   const liveryTrimGridEl = document.getElementById('livery-trim-grid');
   const liveryHeadgearGridEl = document.getElementById('livery-headgear-grid');
@@ -166,11 +177,57 @@ export function createLiveryWorkshopController({
   let liveryPreviewCcr = null;
   let liveryPreviewDpv = null;
 
-  // Kinetic equip-on-avatar animation state & locked try-on preview state (v211)
+  // Kinetic equip-on-avatar animation state, multi-slot Try-On & Set Inspector state (v211–v217)
   let activeEquipFx = null;
   let justEquippedKey = '';
-  let lockedTryOn = null; // { slot, field, id, name, hint, tier } | null
+  let lockedTryOn = null; // { slot, field, id, patch?, name, hint, tier, isSet?, setId? } | null
+  let inspectedSetId = '';
   let recentDiveUnlocks = [];
+  let savedPrevLevelBeforeProving = null;
+
+  function getDisplayedRigLivery() {
+    if (!lockedTryOn) return activeRigLivery;
+    if (lockedTryOn.patch && typeof lockedTryOn.patch === 'object') {
+      return { ...activeRigLivery, ...lockedTryOn.patch };
+    }
+    return { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id };
+  }
+
+  const provingHudBar = createProvingGroundsHudBar({
+    getSession,
+    getEquippedLivery: () => activeRigLivery,
+    onExitToWorkshop: () => {
+      const prevLvl = savedPrevLevelBeforeProving;
+      savedPrevLevelBeforeProving = null;
+      exitProvingGrounds?.(prevLvl);
+      openLiveryModal(activeLiveryTab);
+    },
+    playGearEquip,
+    showToast,
+  });
+
+  async function startFieldTestDive({ trialLivery = null, trialLabel = '' } = {}) {
+    if (typeof launchProvingGrounds !== 'function') return false;
+    const pgLevel = createProvingGroundsLevel();
+    const useLivery = trialLivery ? { ...trialLivery } : { ...getDisplayedRigLivery() };
+    const isCustomTrial = Boolean(trialLivery || lockedTryOn);
+    const label = trialLabel || (lockedTryOn ? lockedTryOn.name : '');
+    closeLiveryModal();
+    closeDiveSetupModal?.();
+    setHomeMenuOpen?.(false);
+    savedPrevLevelBeforeProving = await launchProvingGrounds(pgLevel);
+    const sess = getSession?.();
+    if (sess) {
+      configureProvingGroundsSession(sess, useLivery);
+    }
+    provingHudBar.show({
+      trialLivery: isCustomTrial ? useLivery : null,
+      trialLabel: label,
+      initialPresetId: isCustomTrial ? 'trial' : 'equipped',
+    });
+    showToast?.('🧪 Gear Proving Grounds ready! Swim the 6 lanes & hot-swap Sets live on the top bar.', 3.8);
+    return true;
+  }
 
   let savedLiverySlots = [null, null, null];
   try {
@@ -276,9 +333,7 @@ export function createLiveryWorkshopController({
     const showCcr = ccrUnlocked ? hasCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr);
     const showDpv = dpvUnlocked ? hasDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv);
 
-    const previewLivery = lockedTryOn
-      ? { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id }
-      : activeRigLivery;
+    const previewLivery = getDisplayedRigLivery();
 
     let equipFxArg = null;
     if (activeEquipFx) {
@@ -330,11 +385,31 @@ export function createLiveryWorkshopController({
       slot,
       field,
       id: item.id,
+      patch: { [field]: item.id },
       name: item.name,
       hint: item.unlockHint || 'Locked',
       tier: item.tier || 'uncommon',
     };
     triggerEquipAnimation(slot, item, { silentAudio: false });
+    renderLiveryWorkshopModal();
+  }
+
+  function tryOnFullSet(setObj) {
+    if (!setObj) return;
+    const patch = buildSetPreviewPatch(setObj);
+    const capReq = SET_TIER_BONUSES[setObj.id]?.capstoneReq || setObj.required || 3;
+    lockedTryOn = {
+      slot: 'all',
+      field: 'suitId',
+      id: patch.suitId || '',
+      patch,
+      isSet: true,
+      setId: setObj.id,
+      name: `${setObj.icon} ${setObj.name} (Full Set)`,
+      hint: `${capReq}pc Capstone Preview`,
+      tier: setObj.tier || 'epic',
+    };
+    triggerEquipAnimation('all', { name: setObj.name, tier: setObj.tier }, { silentAudio: false });
     renderLiveryWorkshopModal();
   }
 
@@ -530,10 +605,8 @@ export function createLiveryWorkshopController({
       liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear pieces (${overallPct}%) · 🗺️ ${worldFoundCount}/10 world caches · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
     }
 
-    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas (v216)
-    const previewRigForPerf = lockedTryOn
-      ? { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id }
-      : activeRigLivery;
+    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas (v216 / v217 multi-slot set preview)
+    const previewRigForPerf = getDisplayedRigLivery();
     const basePerf = computeRigPerformanceProfile(activeRigLivery);
     const viewPerf = lockedTryOn ? computeRigPerformanceProfile(previewRigForPerf) : basePerf;
     const perfDiffs = lockedTryOn ? diffRigPerformanceProfiles(basePerf, viewPerf) : [];
@@ -599,13 +672,11 @@ export function createLiveryWorkshopController({
       `;
     }
 
-    // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Unseen New Unlock Callout + Locked Try-On Revert
+    // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Set Loadout Inspector + Locked Try-On Revert
     if (liveryLadderRailEl) {
       const unseen = getUnseenEntries(unlocks);
       const nextList = getNextGearMilestones(unlocks, 2);
-      const previewRig = lockedTryOn
-        ? { ...activeRigLivery, [lockedTryOn.field]: lockedTryOn.id }
-        : activeRigLivery;
+      const previewRig = getDisplayedRigLivery();
       const synergyState = evaluateGearSetSynergy(previewRig);
       const setMapKey = { suit: 'suits', trim: 'trims', headgear: 'headgears', visor: 'visors', tank: 'tanks', torch: 'torches', patch: 'patches' };
       const visibleSets = synergyState.sets.filter((st) => {
@@ -619,8 +690,11 @@ export function createLiveryWorkshopController({
 
       const tryOnBanner = lockedTryOn
         ? `<div class="livery-tryon-banner">
-            <span>👁 Previewing locked <strong>${escapeHtml(lockedTryOn.name)}</strong> — ${escapeHtml(lockedTryOn.hint)}</span>
-            <button type="button" class="btn tiny secondary" id="btn-livery-clear-tryon">↺ Equipped Rig</button>
+            <span>👁 Previewing <strong>${escapeHtml(lockedTryOn.name)}</strong> — ${escapeHtml(lockedTryOn.hint)}</span>
+            <span class="livery-tryon-btns">
+              <button type="button" class="btn tiny primary" id="btn-livery-tryon-field-test">🧪 Test in Water</button>
+              <button type="button" class="btn tiny secondary" id="btn-livery-clear-tryon">↺ Equipped Rig</button>
+            </span>
           </div>`
         : '';
       const unseenBanner = unseen.length > 0
@@ -629,9 +703,60 @@ export function createLiveryWorkshopController({
             <span class="livery-unseen-cta">Open Card →</span>
           </button>`
         : '';
+
+      const inspectedSetSt = inspectedSetId ? visibleSets.find((x) => x.set.id === inspectedSetId) || null : null;
+      let setInspectorHtml = '';
+      if (inspectedSetSt) {
+        const s = inspectedSetSt.set;
+        const tierDef = SET_TIER_BONUSES[s.id];
+        const slotIcons = { suit: '🤿', headgear: '⛑️', torch: '🔦', tank: '🛢', visor: '🕶️', trim: '⚡', patch: '🎖️' };
+        let ownedCount = 0;
+        const piecesHtml = s.slots
+          .map((rule) => {
+            const uSet = unlocks[setMapKey[rule.slot]];
+            const ownedId = rule.ids.find((id) => uSet instanceof Set && uSet.has(id)) || '';
+            const primaryId = ownedId || rule.ids[0];
+            const entry = getGearItemBySlot(rule.slot, primaryId);
+            const item = entry?.item;
+            const isOwned = Boolean(ownedId);
+            if (isOwned) ownedCount++;
+            const isEquipped = isOwned && (activeRigLivery[rule.field] || '') === ownedId;
+            const stats = item ? getGearItemStats(rule.slot, item) : null;
+            return `<button type="button" class="livery-set-piece-btn${isOwned ? ' owned' : ' locked'}${isEquipped ? ' equipped' : ''}" data-sp-slot="${rule.slot}" data-sp-field="${rule.field}" data-sp-id="${primaryId}" data-sp-owned="${isOwned ? '1' : '0'}" title="${escapeHtml(item?.unlockHint || '')}">
+              <span class="livery-sp-head">${slotIcons[rule.slot] || '•'} <strong>${escapeHtml(item?.name || primaryId)}</strong> <span class="livery-sp-tag">${isEquipped ? '✓ Equipped' : isOwned ? 'Owned · Tap Equip' : stats?.source === 'world' ? '🗺️ World Cache' : '🔒 Locked'}</span></span>
+              <span class="livery-sp-sub">${escapeHtml(stats?.summaryText || '')}${!isOwned && item?.unlockHint ? ` · ${escapeHtml(item.unlockHint)}` : ''}</span>
+            </button>`;
+          })
+          .join('');
+
+        const reqFull = tierDef?.capstoneReq || s.required || 3;
+        const t2Lit = inspectedSetSt.matched >= 2;
+        const tFullLit = inspectedSetSt.matched >= reqFull;
+        setInspectorHtml = `
+          <div id="livery-set-inspector" class="livery-set-inspector" style="--set-color:${s.color}">
+            <div class="livery-si-head">
+              <div>
+                <strong>${s.icon} ${escapeHtml(s.name)}</strong>
+                <span class="livery-si-count">${ownedCount}/${s.slots.length} Owned · ${inspectedSetSt.matched}/${reqFull} Equipped</span>
+              </div>
+              <button type="button" class="btn tiny ghost" id="btn-si-close" aria-label="Close set inspector">✕</button>
+            </div>
+            ${tierDef ? `<div class="livery-si-bonuses">
+              <div class="livery-si-bonus${t2Lit ? ' lit' : ''}"><span>(2)</span> <strong>${escapeHtml(tierDef.tier2.label)}</strong> — ${escapeHtml(tierDef.tier2.desc)}</div>
+              <div class="livery-si-bonus${tFullLit ? ' lit capstone' : ''}"><span>(${reqFull})</span> <strong>${escapeHtml(tierDef.tierFull.label)}</strong> — ${escapeHtml(tierDef.tierFull.desc)}</div>
+            </div>` : ''}
+            <div class="livery-si-pieces">${piecesHtml}</div>
+            <div class="livery-si-actions">
+              <button type="button" class="btn tiny ${ownedCount > 0 ? 'primary' : 'secondary'}" id="btn-si-equip-set" ${ownedCount === 0 ? 'disabled' : ''}>⚡ ${ownedCount >= s.slots.length ? 'Equip Full Set' : ownedCount > 0 ? `Equip ${ownedCount}/${s.slots.length} Owned` : '0 Pieces Owned'}</button>
+              <button type="button" class="btn tiny secondary" id="btn-si-try-full">👁 Try Full Set</button>
+              <button type="button" class="btn tiny accent" id="btn-si-field-test">🧪 Field Test Set</button>
+            </div>
+          </div>`;
+      }
+
       const setStrip = visibleSets.length > 0
         ? `<div class="livery-set-row" aria-label="Gear Set Synergies">
-            <span class="livery-next-kicker">${synergyState.active ? '✦ SET ACTIVE' : 'SET SYNERGIES'}</span>
+            <span class="livery-next-kicker">${synergyState.active ? '✦ SET ACTIVE · TAP ANY SET TO EQUIP OR TEST' : 'GEAR SETS · TAP TO EQUIP / TRY FULL SET'}</span>
             <div class="livery-set-chips">
               ${visibleSets
                 .map((st) => {
@@ -641,20 +766,24 @@ export function createLiveryWorkshopController({
                     return uSet instanceof Set && r.ids.some((id) => uSet.has(id));
                   }).length;
                   const tierDef = SET_TIER_BONUSES[s.id];
-                  const tierInfo = tierDef ? ` | (2): ${tierDef.tier2.label} | (${tierDef.capstoneReq || s.required}): ${tierDef.tierFull.label}` : '';
-                  const title = `${s.name} (${st.matched}/${st.required} equipped · ${unlockedSlots}/${s.required} unlocked) — ${s.auraName}${tierInfo}`;
-                  const badgeTxt = st.active
-                    ? `✦ (${st.required}pc) ${tierDef?.tierFull?.label || s.auraName}`
+                  const capReq = tierDef?.capstoneReq || s.required || 3;
+                  const isCap = st.matched >= capReq;
+                  const tierInfo = tierDef ? ` | (2): ${tierDef.tier2.label} | (${capReq}): ${tierDef.tierFull.label}` : '';
+                  const title = `${s.name} (${st.matched}/${capReq} equipped · ${unlockedSlots}/${s.slots.length} owned) — ${s.auraName}${tierInfo}`;
+                  const badgeTxt = isCap
+                    ? `✦ (${capReq}pc) ${tierDef?.tierFull?.label || s.auraName}`
                     : st.matched >= 2 && tierDef
                       ? `● (2pc) ${tierDef.tier2.label}`
-                      : `${st.matched}/${st.required}${s.source === 'world' ? ' · 🗺️' : ''}`;
-                  return `<button type="button" class="livery-set-chip tier-${s.tier}${st.active ? ' active' : st.matched >= 2 ? ' tier2' : ''}" data-set-id="${s.id}" style="--set-color:${s.color}" title="${escapeHtml(title)}">
+                      : `${st.matched}/${capReq}${s.source === 'world' ? ' · 🗺️' : ''}`;
+                  const isInspected = inspectedSetId === s.id;
+                  return `<button type="button" class="livery-set-chip tier-${s.tier}${isCap ? ' active' : st.matched >= 2 ? ' tier2' : ''}${isInspected ? ' inspected' : ''}" data-set-id="${s.id}" style="--set-color:${s.color}" title="${escapeHtml(title)}">
                     <span>${s.icon} ${escapeHtml(s.name)}</span>
                     <span class="livery-set-count">${escapeHtml(badgeTxt)}</span>
                   </button>`;
                 })
                 .join('')}
             </div>
+            ${setInspectorHtml}
           </div>`
         : '';
       const nextChips = nextList.length > 0
@@ -676,42 +805,69 @@ export function createLiveryWorkshopController({
         lockedTryOn = null;
         renderLiveryWorkshopModal();
       });
+      liveryLadderRailEl.querySelector('#btn-livery-tryon-field-test')?.addEventListener('click', () => {
+        startFieldTestDive();
+      });
       liveryLadderRailEl.querySelector('#btn-livery-view-unseen')?.addEventListener('click', () => {
         unlockShowcase.openShowcase(unseen);
       });
       liveryLadderRailEl.querySelectorAll('button[data-set-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const sid = btn.getAttribute('data-set-id');
-          const st = visibleSets.find((x) => x.set.id === sid);
-          if (!st) return;
+          inspectedSetId = inspectedSetId === sid ? '' : sid;
+          renderLiveryWorkshopModal();
+        });
+      });
+      if (inspectedSetSt) {
+        liveryLadderRailEl.querySelector('#btn-si-close')?.addEventListener('click', () => {
+          inspectedSetId = '';
+          renderLiveryWorkshopModal();
+        });
+        liveryLadderRailEl.querySelector('#btn-si-equip-set')?.addEventListener('click', () => {
           const patch = {};
           let equippedCnt = 0;
-          let firstLocked = null;
-          for (const rule of st.set.slots) {
+          for (const rule of inspectedSetSt.set.slots) {
             const uSet = unlocks[setMapKey[rule.slot]];
             const ownedId = rule.ids.find((id) => uSet instanceof Set && uSet.has(id));
             if (ownedId) {
               patch[rule.field] = ownedId;
               equippedCnt++;
-            } else if (!firstLocked) {
-              firstLocked = { slot: rule.slot, field: rule.field, id: rule.ids[0] };
             }
           }
           if (equippedCnt > 0) {
-            updateActiveLiveryField(patch, { slot: 'all', itemMeta: { name: st.set.name, tier: st.set.tier } });
+            updateActiveLiveryField(patch, { slot: 'all', itemMeta: { name: inspectedSetSt.set.name, tier: inspectedSetSt.set.tier } });
             showToast(
-              equippedCnt >= st.set.required
-                ? `${st.set.icon} Set Synergy Active: ${st.set.name} (${st.set.auraName})!`
-                : `${st.set.icon} Equipped ${equippedCnt}/${st.set.required} pieces of ${st.set.name} — unlock ${st.set.required - equippedCnt} more for ${st.set.auraName}!`,
+              equippedCnt >= inspectedSetSt.set.required
+                ? `${inspectedSetSt.set.icon} Full Set Equipped: ${inspectedSetSt.set.name} — Capstone Active!`
+                : `${inspectedSetSt.set.icon} Equipped ${equippedCnt}/${inspectedSetSt.set.slots.length} owned pieces of ${inspectedSetSt.set.name}!`,
               2.8
             );
-          } else if (firstLocked) {
-            const entry = getGearItemBySlot(firstLocked.slot, firstLocked.id);
-            if (entry) tryOnLockedItem(firstLocked.slot, firstLocked.field, entry.item);
-            showToast(`🔒 Previewing ${st.set.name} — unlock ${st.set.required} pieces to activate ${st.set.auraName}.`, 2.6);
           }
         });
-      });
+        liveryLadderRailEl.querySelector('#btn-si-try-full')?.addEventListener('click', () => {
+          tryOnFullSet(inspectedSetSt.set);
+          showToast(`👁 Previewing full ${inspectedSetSt.set.name} Capstone on your diver — check live telemetry deltas!`, 2.8);
+        });
+        liveryLadderRailEl.querySelector('#btn-si-field-test')?.addEventListener('click', () => {
+          const fullPatch = buildSetPreviewPatch(inspectedSetSt.set);
+          startFieldTestDive({
+            trialLivery: { ...activeRigLivery, ...fullPatch },
+            trialLabel: `${inspectedSetSt.set.icon} ${inspectedSetSt.set.name}`,
+          });
+        });
+        liveryLadderRailEl.querySelectorAll('button[data-sp-id]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const slot = btn.getAttribute('data-sp-slot');
+            const field = btn.getAttribute('data-sp-field');
+            const id = btn.getAttribute('data-sp-id');
+            const owned = btn.getAttribute('data-sp-owned') === '1';
+            const entry = getGearItemBySlot(slot, id);
+            if (!entry?.item) return;
+            if (owned) updateActiveLiveryField({ [field]: id }, { slot, itemMeta: entry.item });
+            else tryOnLockedItem(slot, field, entry.item);
+          });
+        });
+      }
       liveryLadderRailEl.querySelectorAll('button[data-next-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const slot = btn.getAttribute('data-next-slot');
@@ -1097,6 +1253,25 @@ export function createLiveryWorkshopController({
       showToast('👁 Previewing DPV in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
     }
   });
+  btnLiveryBestEl?.addEventListener('click', () => {
+    lockedTryOn = null;
+    const unlocks = getCurrentLiveryUnlocks();
+    const best = buildBestOwnedRig(unlocks);
+    activeRigLivery = sanitizeRigLivery(best.livery, unlocks);
+    triggerEquipAnimation('all', { name: best.activeSetName || 'Best Owned Rig', tier: best.isCapstone ? 'mythic' : 'epic' });
+    saveRigLivery();
+    syncLiveryUi();
+    renderLiveryWorkshopModal();
+    showToast(
+      best.activeSetName
+        ? `⚡ Equipped Best Rig (${best.activeSetName} ${best.activeSetCount}pc${best.isCapstone ? ' Capstone' : ''})!`
+        : '⚡ Equipped your strongest unlocked gear across all 7 slots!',
+      2.6
+    );
+  });
+  btnLiveryFieldTestEl?.addEventListener('click', () => {
+    startFieldTestDive();
+  });
   btnLiveryRandomEl?.addEventListener('click', () => {
     lockedTryOn = null;
     const unlocks = getCurrentLiveryUnlocks();
@@ -1170,5 +1345,13 @@ export function createLiveryWorkshopController({
     renderLiveryWorkshopModal,
     openLiveryModal,
     closeLiveryModal,
+    startFieldTestDive,
+    tryOnFullSet,
+    onExitProvingGrounds: () => {
+      provingHudBar.hide();
+      const prev = savedPrevLevelBeforeProving;
+      savedPrevLevelBeforeProving = null;
+      return prev;
+    },
   };
 }
