@@ -36,6 +36,8 @@ import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralC
 import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { createBountiesController } from './ui/bountiesController.js';
+import { createTrenchController } from './ui/trenchController.js';
+import { triggerHaptic } from './ui/touchFeedback.js';
 import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
 import {
   fireSpeargun,
@@ -554,7 +556,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=205',
+  mapRasterUrl: './assets/map-expedition.jpg?v=206',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -578,7 +580,7 @@ const {
 } = siteBrowser;
 
 async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoad = false } = {}) {
-  const nextLevel = getLevelById(levelId);
+  const nextLevel = typeof levelId === 'object' && levelId?.id ? levelId : getLevelById(levelId);
 
   // Deduplicate identical in-flight load so rapid events (e.g. dive_preparing + dive_started) share one build
   if (inFlightLoad && inFlightLoad.levelId === nextLevel.id) {
@@ -779,6 +781,7 @@ function trySwitchGas(gasId, { bypassSafety = false } = {}) {
 
   if (switchGas(ds, gasId)) {
     audio.playGasSwitch();
+    triggerHaptic('gasSwitch');
     if (session.drills?.active?.kind === 'free-flow') {
       resolveEmergencyDrill(session, 'free-flow', sessionStepCallbacks);
     } else {
@@ -891,6 +894,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof campaignsModal !== 'undefined' && campaignsModal && !campaignsModal.hidden, close: () => closeCampaignsModal() },
   { isOpen: () => typeof drillsModal !== 'undefined' && drillsModal && !drillsModal.hidden, close: () => closeDrillsModal() },
   { isOpen: () => typeof bountiesModal !== 'undefined' && bountiesModal && !bountiesModal.hidden, close: () => closeBountiesModal() },
+  { isOpen: () => typeof trenchModalEl !== 'undefined' && trenchModalEl && !trenchModalEl.hidden, close: () => trenchCtrl?.closeTrenchModal?.() },
   { isOpen: () => typeof dailyCalModalEl !== 'undefined' && dailyCalModalEl && !dailyCalModalEl.hidden, close: () => closeDailyCalendarModal() },
   { isOpen: () => typeof audioMixerModalEl !== 'undefined' && audioMixerModalEl && !audioMixerModalEl.hidden, close: () => closeAudioMixerModal() },
   { isOpen: () => typeof modalIssue !== 'undefined' && modalIssue && !modalIssue.hidden, close: () => closeIssueModal() },
@@ -2804,6 +2808,38 @@ const bountiesCtrl = createBountiesController({
   },
 });
 const { closeBountiesModal } = bountiesCtrl;
+
+const trenchModalEl = document.getElementById('modal-trench');
+const trenchCtrl = createTrenchController({
+  modalManager: {
+    open: (el) => { if (el) el.hidden = false; },
+    close: (el) => { if (el) el.hidden = true; },
+  },
+  setHomeMenuOpen: (v) => setHomeMenuOpen(v),
+  closeDiveSetupModal: () => closeDiveSetupModal(),
+  launchTrenchLevel: async (trenchLvl) => {
+    activeDailyChallenge = null;
+    activeRescueDrill = null;
+    if (lan.room) {
+      lan.leaveRoom();
+      resetLobbyUiState();
+    }
+    await ensureLevelLoaded(trenchLvl, { showOverlay: true });
+    startDiveRun(false);
+    trenchCtrl.syncHudPill();
+  },
+  finishTrenchToDebrief: (summary, ctx) => {
+    const title = `🌊 Trench Extracted · ${summary.chambersCleared} ${summary.chambersCleared === 1 ? 'Chamber' : 'Chambers'}!`;
+    const detail = `Seed ${summary.seed} · Max ${summary.maxDepthM.toFixed(1)}m · Banked ${summary.finalScore.toLocaleString()} pts (${summary.peakMultiplier.toFixed(1)}× Peak)`;
+    const boostedScore = ctx?.scoreResult
+      ? { ...ctx.scoreResult, totalScore: summary.finalScore }
+      : null;
+    finishDiveRun(true, title, detail, boostedScore);
+  },
+  showToast: (msg, sec) => showToast(msg, sec),
+  playUiModalOpen: () => audio.playUiModalOpen?.(),
+  playUiToggle: () => audio.playUiToggle?.(),
+});
 
 // ─── Spatial 3D Underwater Audio Mixer & Mobile Haptics (v133) ───
 const AUDIO_MIXER_PREF_KEY = 'caveDiverAudioMix_v1';
@@ -5112,6 +5148,7 @@ async function launchOpenCoopDive() {
   if (!diverName) return false;
   activeDailyChallenge = null;
   activeRescueDrill = null;
+  trenchCtrl?.resetTrenchRun?.();
   if (lan.room) {
     lan.leaveRoom();
     resetLobbyUiState();
@@ -5945,6 +5982,7 @@ btnAbortEl?.addEventListener('click', () => {
     }
   }
   resetAbortArmState();
+  trenchCtrl?.resetTrenchRun?.();
   abortActiveDiveToMenu();
 });
 
@@ -6800,6 +6838,7 @@ const sessionStepCallbacks = {
     const isGrand = (item.scale || 1) >= 1.35;
     if (typeof audio.playArtifactDiscover === 'function') audio.playArtifactDiscover(isGrand);
     else audio.playCollect();
+    triggerHaptic('pickup');
     const lore = getCollectibleLoreNote(item, session?.level);
     let isNew = false;
     try {
@@ -7351,6 +7390,20 @@ function stepSimulation(dt) {
       : [];
 
     if (!isMultiplayer || pendingPeers.length === 0) {
+      if (trenchCtrl?.isTrenchActive?.()) {
+        if (result.outcome.success) {
+          divePaused = true;
+          input?.resetAll?.();
+          trenchCtrl.handleChamberCleared({ scoreResult: result.outcome.scoreSummary, session });
+          return;
+        }
+        const tSummary = trenchCtrl.handleTrenchFailed();
+        const salvageDetail = tSummary
+          ? `Lost in Trench Ch.${tSummary.chambersCleared + 1} (Seed ${tSummary.seed}) · 25% salvage credit: ${tSummary.finalScore.toLocaleString()} pts.`
+          : result.outcome.detail;
+        finishDiveRun(false, `🌊 Lost in Abyssal Trench`, salvageDetail, result.outcome.scoreSummary);
+        return;
+      }
       finishDiveRun(
         result.outcome.success,
         result.outcome.title,

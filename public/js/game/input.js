@@ -1,6 +1,7 @@
 /**
  * Unified mobile touch joystick + desktop keyboard + console gamepad controller.
  */
+import { triggerHaptic, updateStickAimArc, clearStickAimArc } from '../ui/touchFeedback.js';
 
 export const RUMBLE_PRESETS = Object.freeze({
   sonar: Object.freeze({ durationMs: 95, strongMagnitude: 0.14, weakMagnitude: 0.35 }),
@@ -223,6 +224,7 @@ export class InputController {
       if (rawNorm <= DEADZONE) {
         this.stickVec.x = 0;
         this.stickVec.y = 0;
+        clearStickAimArc(this.stickBaseEl);
         return;
       }
       const norm = (rawNorm - DEADZONE) / (1 - DEADZONE);
@@ -230,6 +232,7 @@ export class InputController {
       const curved = Math.pow(norm, 1.45);
       this.stickVec.x = Math.cos(angle) * curved;
       this.stickVec.y = Math.sin(angle) * curved;
+      updateStickAimArc(this.stickBaseEl, angle, norm);
     };
 
     this.stickBaseEl.addEventListener('pointerdown', (e) => {
@@ -290,6 +293,7 @@ export class InputController {
       this.stickRingEl.style.transform = 'translate(0px, 0px)';
     }
     this.stickBaseEl?.classList?.remove('active');
+    clearStickAimArc(this.stickBaseEl);
   }
 
   _bindTorchStick() {
@@ -313,6 +317,7 @@ export class InputController {
         this.torchVec.y = 0;
         this.torchVec.active = false;
         this.torchStickBaseEl.classList.remove('aiming');
+        clearStickAimArc(this.torchStickBaseEl);
         return;
       }
       const nextX = Math.cos(angle);
@@ -330,6 +335,7 @@ export class InputController {
       }
       this.torchVec.active = true;
       this.torchStickBaseEl.classList.add('aiming');
+      updateStickAimArc(this.torchStickBaseEl, Math.atan2(this.torchVec.y, this.torchVec.x), Math.min(1, rawNorm));
     };
 
     this.torchStickBaseEl.addEventListener('pointerdown', (e) => {
@@ -393,6 +399,7 @@ export class InputController {
       this.torchStickRingEl.style.transform = 'translate(0px, 0px)';
     }
     this.torchStickBaseEl?.classList.remove('aiming');
+    clearStickAimArc(this.torchStickBaseEl);
   }
 
   getTorchAim() {
@@ -563,6 +570,20 @@ export class InputController {
           act.pulse(Math.max(0, Math.min(1, Number(cfg.strongMagnitude) || 0.3)), Math.max(20, Number(cfg.durationMs) || 80));
           return true;
         }
+      }
+      // Mobile touch haptic fallback when no gamepad vibration actuator handled the event
+      const presetKey = typeof presetOrOpts === 'string' ? presetOrOpts : 'tap';
+      const hapticMap = {
+        sonar: 'sonar',
+        dash: 'dash',
+        crit: 'hitstop',
+        hit: 'hitstop',
+        bossRoar: 'bossDefeat',
+        wallBump: 'warning',
+        spear: 'tap',
+      };
+      if (hapticMap[presetKey]) {
+        return triggerHaptic(hapticMap[presetKey]);
       }
     } catch {
       return false;

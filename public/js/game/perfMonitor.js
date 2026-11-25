@@ -17,6 +17,8 @@ export const PERF_TIERS = Object.freeze({
     lightmapScale: 0.35,
     dprCap: 2.0,
     bioStride: 1,
+    bossParticleScale: 1.0,
+    volumetricBeams: true,
   }),
   balanced: Object.freeze({
     tier: 'balanced',
@@ -27,6 +29,8 @@ export const PERF_TIERS = Object.freeze({
     lightmapScale: 0.31,
     dprCap: 1.5,
     bioStride: 2,
+    bossParticleScale: 0.72,
+    volumetricBeams: true,
   }),
   performance: Object.freeze({
     tier: 'performance',
@@ -37,6 +41,8 @@ export const PERF_TIERS = Object.freeze({
     lightmapScale: 0.26,
     dprCap: 1.25,
     bioStride: 3,
+    bossParticleScale: 0.48,
+    volumetricBeams: false,
   }),
 });
 

@@ -2090,4 +2090,54 @@ export const lightingAndFxMethods = {
     }
     ctx.restore();
   },
+
+  /**
+   * Volumetric skylight & wreck porthole sunbeam shafts streaming through open shallow water (v206 AAA Polish Wave 3).
+   */
+  _drawVolumetricSkylightBeams(ctx, cw, ch, surfY, diverY, weatherCaustics, timeSec, toScreenX, scale) {
+    if (this._reducedMotion || this._perfBudget?.lowPower || this._perfBudget?.volumetricBeams === false) return;
+    if (weatherCaustics < 0.22) return;
+    const maxDepthVis = this.level?.isWreck ? 28 : 20;
+    if ((diverY || 0) > maxDepthVis || surfY > ch - 24) return;
+    const depthFade = Math.max(0, Math.min(1, 1 - Math.max(0, (diverY || 0) - 1.5) / maxDepthVis));
+    if (depthFade <= 0.05) return;
+
+    const grade = computeBiomeDepthGrade(this.level, diverY || 0);
+    const spawnX = this.level?.spawn?.x ?? 10;
+    const exitX = this.level?.exitZone?.x ?? spawnX;
+    const anchors = Math.abs(exitX - spawnX) > 22 ? [spawnX, exitX] : [spawnX];
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const topY = Math.max(-12, surfY);
+    for (let aIdx = 0; aIdx < anchors.length; aIdx++) {
+      const baseSx = typeof toScreenX === 'function' ? toScreenX(anchors[aIdx]) : cw * 0.5;
+      if (baseSx < -cw * 0.45 || baseSx > cw * 1.45) continue;
+      for (let i = 0; i < 3; i++) {
+        const offsetM = (i - 1) * (this.level?.isWreck ? 6.5 : 3.6);
+        const sway = Math.sin(timeSec * (0.45 + i * 0.14) + aIdx * 2.1 + i * 1.4) * 18;
+        const sx = baseSx + offsetM * (scale || 28) + sway * 0.4;
+        const topW = (24 + i * 12) * Math.min(1.4, (scale || 28) / 26);
+        const beamH = Math.min(ch - topY + 20, (this.level?.isWreck ? 22 : 17) * (scale || 28));
+        if (beamH < 30) continue;
+        const slant = beamH * 0.24 + sway;
+        const botW = topW * 2.15;
+        const alpha = 0.052 * depthFade * weatherCaustics * (0.72 + 0.28 * Math.sin(timeSec * 0.8 + i * 2.3));
+        if (alpha <= 0.004) continue;
+        const grad = ctx.createLinearGradient(sx, topY, sx + slant, topY + beamH);
+        grad.addColorStop(0, `rgba(${grade.shimmerRgb}, ${alpha.toFixed(4)})`);
+        grad.addColorStop(0.55, `rgba(${grade.shimmerRgb}, ${(alpha * 0.45).toFixed(4)})`);
+        grad.addColorStop(1, `rgba(${grade.shimmerRgb}, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(sx - topW * 0.5, topY);
+        ctx.lineTo(sx + topW * 0.5, topY);
+        ctx.lineTo(sx + slant + botW * 0.5, topY + beamH);
+        ctx.lineTo(sx + slant - botW * 0.5, topY + beamH);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  },
 };

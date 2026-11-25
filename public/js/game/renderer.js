@@ -1305,6 +1305,7 @@ export class CaveRenderer {
     }
     this._drawTorchMarineSnowAndCaustics(ctx, diver, viewWorldLeft, viewWorldRight, viewWorldTop, viewWorldBottom, toScreenX, toScreenY, scale, timeSec, weatherCaustics, hazards, cw);
     this._drawShallowRefractionBands?.(ctx, cw, ch, surfY, diver?.y, weatherCaustics, timeSec);
+    this._drawVolumetricSkylightBeams?.(ctx, cw, ch, surfY, diver?.y, weatherCaustics, timeSec, toScreenX, scale);
     this._drawParallaxMarineSnow?.(ctx, cw, ch, effCamX, effCamY, surfY, scale, timeSec);
     this._drawBossPhaseAtmosphere?.(ctx, cw, ch, secretLair, timeSec);
     if (!this.level.isWreck) {

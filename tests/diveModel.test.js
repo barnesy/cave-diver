@@ -10847,3 +10847,103 @@ test('v204 AAA Polish Wave 2: Biome Depth Color Grading, Shallow Refraction Band
     assert.ok(bossHost._bossGhostHpRatio > 0.5 && bossHost._bossGhostHpRatio < 1.0, 'Ghost HP bar must trail smoothly behind sudden burst damage');
   }
 });
+
+test('v206 Ergonomic Twin-Stick HUD, Endless Abyssal Trench (Seeded Risk-Reward), Aim-Arc Haptics, Volumetric Beams & Perf Budgets', async () => {
+  const {
+    normalizeTrenchSeed,
+    generateTrenchSeed,
+    getTrenchChamberMeta,
+    createTrenchChamberLevel,
+    createTrenchRunState,
+    recordTrenchChamberClear,
+    finalizeTrenchRun,
+    buildTrenchShareUrl,
+    parseTrenchFromSearch,
+  } = await import('../public/js/game/abyssalTrench.js');
+  const { updateStickAimArc, clearStickAimArc, triggerHaptic, HAPTIC_PATTERNS } = await import('../public/js/ui/touchFeedback.js');
+  const { PERF_TIERS } = await import('../public/js/game/perfMonitor.js');
+  const { lightingAndFxMethods } = await import('../public/js/game/renderers/lightingAndFxRenderer.js');
+
+  // 1. Shareable 6-char Trench seeds normalize, generate & round-trip via URL
+  const rndSeed = generateTrenchSeed();
+  assert.equal(rndSeed.length, 6, 'Generated Trench seed must be 6 characters');
+  assert.equal(normalizeTrenchSeed('ab-12!z9'), 'AB12Z9');
+  const shareUrl = buildTrenchShareUrl('https://cave-diver.vercel.app/', 'trn7k4');
+  assert.equal(parseTrenchFromSearch(new URL(shareUrl).search)?.seed, 'TRN7K4');
+
+  // 2. Deterministic Trench Chamber progression across 6 chambers validates cleanly & scales multipliers
+  const ch1a = createTrenchChamberLevel('TRN7K4', 1);
+  const ch1b = createTrenchChamberLevel('TRN7K4', 1);
+  assert.equal(ch1a.id, ch1b.id, 'Same Trench seed + chamber must produce identical deterministic level ID');
+  assert.equal(ch1a.isTrench, true);
+  assert.equal(ch1a.trenchMultiplier, 1.0);
+  for (let c = 1; c <= 6; c++) {
+    const lvl = createTrenchChamberLevel('TRN7K4', c);
+    validateLevel(lvl);
+    const meta = getTrenchChamberMeta(c);
+    assert.equal(lvl.trenchChamber, c);
+    assert.equal(lvl.trenchMultiplier, meta.multiplier);
+    if (c > 1) {
+      assert.ok(meta.multiplier > getTrenchChamberMeta(c - 1).multiplier, `Chamber ${c} multiplier must strictly increase`);
+    }
+  }
+
+  // 3. Risk-reward banking: Extraction locks 100%, loss yields 25% salvage credit
+  const runExtract = createTrenchRunState('TRN7K4');
+  const clr1 = recordTrenchChamberClear(runExtract, { baseScore: 800, relics: 2, maxDepthM: 34.5, elapsedSec: 90, healthPct: 100 });
+  assert.equal(clr1.chamberCleared, 1);
+  assert.equal(clr1.nextChamber, 2);
+  assert.equal(clr1.nextMultiplier, 1.5);
+  runExtract.chamber = 2;
+  const clr2 = recordTrenchChamberClear(runExtract, { baseScore: 900, relics: 3, maxDepthM: 76.2, elapsedSec: 120, healthPct: 90 });
+  assert.ok(clr2.chamberPoints > clr1.chamberPoints, 'Chamber 2 1.5x multiplier must boost points');
+  const extSummary = finalizeTrenchRun(runExtract, { extracted: true });
+  assert.equal(extSummary.extracted, true);
+  assert.equal(extSummary.chambersCleared, 2);
+  assert.equal(extSummary.finalScore, clr2.bankedScore);
+
+  const runLoss = createTrenchRunState('TRN7K4');
+  recordTrenchChamberClear(runLoss, { baseScore: 1000, relics: 1, maxDepthM: 32, elapsedSec: 80, healthPct: 80 });
+  const lossSummary = finalizeTrenchRun(runLoss, { extracted: false });
+  assert.equal(lossSummary.extracted, false);
+  assert.equal(lossSummary.finalScore, Math.round(runLoss.bankedScore * 0.25));
+
+  // 4. Touch Aim-Arc & Haptics safe behavior
+  const props = {};
+  const classes = new Set();
+  const fakeStick = {
+    style: { setProperty: (k, v) => { props[k] = v; } },
+    classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) },
+  };
+  updateStickAimArc(fakeStick, 0, 0.85);
+  assert.equal(props['--stick-angle'], '90deg');
+  assert.ok(classes.has('has-arc'));
+  clearStickAimArc(fakeStick);
+  assert.ok(!classes.has('has-arc'));
+  assert.ok(HAPTIC_PATTERNS.extract && HAPTIC_PATTERNS.bossDefeat);
+  assert.equal(triggerHaptic('sonar'), false, 'Haptics must safely no-op in Node without navigator.vibrate');
+
+  // 5. Perf tier boss particle scaling & volumetric skylight beam gating
+  assert.ok(PERF_TIERS.high.bossParticleScale > PERF_TIERS.balanced.bossParticleScale);
+  assert.ok(PERF_TIERS.balanced.bossParticleScale > PERF_TIERS.performance.bossParticleScale);
+  assert.equal(PERF_TIERS.high.volumetricBeams, true);
+  assert.equal(PERF_TIERS.performance.volumetricBeams, false);
+
+  let beamOps = 0;
+  let perfSkipOps = 0;
+  const makeBeamCtx = (inc) =>
+    new Proxy(
+      { createLinearGradient: () => ({ addColorStop() {} }) },
+      { get(t, p) { return p in t ? t[p] : () => { inc(); }; } }
+    );
+  lightingAndFxMethods._drawVolumetricSkylightBeams.call(
+    { level: { id: 'dos-ojos', spawn: { x: 10 }, exitZone: { x: 90 } }, _reducedMotion: false, _perfBudget: PERF_TIERS.high },
+    makeBeamCtx(() => beamOps++), 1280, 720, 60, 4, 1.0, 1.5, () => 400, 28
+  );
+  lightingAndFxMethods._drawVolumetricSkylightBeams.call(
+    { level: { id: 'dos-ojos', spawn: { x: 10 }, exitZone: { x: 90 } }, _reducedMotion: false, _perfBudget: PERF_TIERS.performance },
+    makeBeamCtx(() => perfSkipOps++), 1280, 720, 60, 4, 1.0, 1.5, () => 400, 28
+  );
+  assert.ok(beamOps >= 6, 'Volumetric skylight beams must draw in shallow water on high/balanced tiers');
+  assert.equal(perfSkipOps, 0, 'Volumetric skylight beams must skip cleanly in performance tier');
+});
