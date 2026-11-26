@@ -18,6 +18,7 @@ import {
   underwaterJuiceRendererMethods,
   computeCavernFramingZoom,
 } from './renderers/underwaterJuiceRenderer.js';
+import { foregroundDepthRendererMethods } from './renderers/foregroundDepthRenderer.js';
 import { createDiverBody } from './diverBody.js';
 import { castSunCurtain } from './lighting.js';
 import { getScubaSignalById } from './diveSignals.js';
@@ -1326,6 +1327,8 @@ export class CaveRenderer {
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
+    // 11-fg. Strategic Near-Camera Foreground Parallax Silhouettes (auto-fades near diver for 100% clarity, v224)
+    this._drawForegroundDepthElements?.(ctx, cw, ch, effCamX, effCamY, viewCenterX, viewCenterY, scale, timeSec, diver, secretLair);
     // 11a-pre. Co-op Crossed-Beam Triangulation (drawn post-silt so triangulated focal bloom & relic glints pierce haze! v213)
     this._drawCoopBeamTriangulation?.(ctx, diver, peerList, this.level.collectibles, collectedIds, toScreenX, toScreenY, scale, timeSec);
     // 11a-deco. Diegetic Decompression Hover Band & Steady-Trim Offgas Reticle (v214)
@@ -4985,5 +4988,6 @@ Object.assign(
   wreckAndInteractivesMethods,
   lightingAndFxMethods,
   bossAndLairMethods,
-  underwaterJuiceRendererMethods
+  underwaterJuiceRendererMethods,
+  foregroundDepthRendererMethods
 );

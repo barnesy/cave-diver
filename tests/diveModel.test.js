@@ -12263,3 +12263,58 @@ test('v223 Even 37-Level Gear Distribution & Proving Grounds Crash/Isolation Har
   assert.equal(pgSess.isFirstDive, false, 'Proving Grounds must never trigger First-Dive tips or chests');
   assert.equal(pgSess.treasureChests.length, 0, 'Proving Grounds must never spawn permanent Treasure Chests');
 });
+
+test('v224 Strategic Foreground Parallax Depth Elements across all 37 levels & 7 biomes', async () => {
+  const { LEVELS } = await import('../public/js/levels/index.js');
+  const {
+    classifyForegroundBiome,
+    buildForegroundDepthElements,
+    foregroundDepthRendererMethods,
+  } = await import('../public/js/game/renderers/foregroundDepthRenderer.js');
+
+  // 1. All 7 biome styles are represented across the 37-level atlas & every level spawns strategic elements
+  const biomesSeen = new Set();
+  for (const lvl of LEVELS) {
+    const biome = classifyForegroundBiome(lvl);
+    biomesSeen.add(biome);
+    const els = buildForegroundDepthElements(lvl);
+    assert.ok(els.length >= 4 && els.length <= 44, `${lvl.id} should have 4..44 foreground elements, got ${els.length}`);
+    for (const el of els) {
+      assert.ok(el.parallax > 1.05 && el.parallax <= 1.25, `Foreground element must use near-camera parallax > 1.0, got ${el.parallax}`);
+      assert.ok(el.side === 'ceiling' || el.side === 'floor');
+      // Verify clear-corridor guard keeps elements away from spawn
+      if (lvl.spawn) {
+        assert.ok(Math.hypot(el.x - lvl.spawn.x, el.y - lvl.spawn.y) >= 2.5, `${lvl.id} foreground prop too close to spawn`);
+      }
+    }
+  }
+  for (const b of ['cenote', 'wreck', 'ice', 'volcanic', 'crystal', 'mine', 'monolith']) {
+    assert.ok(biomesSeen.has(b), `Expected foreground biome ${b} to be represented in LEVELS`);
+  }
+
+  // 2. Renderer draws cleanly with diver-proximity auto-fade & Boss Combat translucency (zero exceptions)
+  const alphas = [];
+  const grad = { addColorStop() {} };
+  const mockCtx = {
+    save() {}, restore() {}, beginPath() {}, closePath() {}, fill() {}, stroke() {},
+    moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
+    createLinearGradient() { return grad; },
+    set globalAlpha(v) { alphas.push(v); },
+  };
+  const fakeRenderer = { level: LEVELS[0], _reducedMotion: false };
+  const firstEl = buildForegroundDepthElements(LEVELS[0])[0];
+  // Far diver -> higher atmospheric alpha
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    fakeRenderer, mockCtx, 1280, 800, firstEl.x, firstEl.y, 640, 400, 32, 1.5,
+    { x: firstEl.x + 25, y: firstEl.y, angle: 0, torchOn: true }, null
+  );
+  const farPeak = Math.max(...alphas);
+  alphas.length = 0;
+  // Diver right next to element -> smoothly auto-fades for 100% clear visibility
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    fakeRenderer, mockCtx, 1280, 800, firstEl.x, firstEl.y, 640, 400, 32, 1.5,
+    { x: firstEl.x, y: firstEl.y, angle: 0, torchOn: true }, null
+  );
+  const nearAlpha = alphas[0] ?? 1;
+  assert.ok(nearAlpha < farPeak * 0.5, `Foreground element must auto-fade near diver (near=${nearAlpha.toFixed(2)}, far=${farPeak.toFixed(2)})`);
+});
