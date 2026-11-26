@@ -12341,12 +12341,17 @@ test('v226 Main Menu Core-4 Priority (Gear Workshop, Logbook, Leaderboard, Setup
   const acctEnd = html.indexOf('</details>', acctStart);
   assert.ok(popStart > 0 && moreStart > popStart && acctStart > moreEnd, 'Collapsible secondary drawers must follow Core 4 in #home-menu-popover');
   const coreSlice = html.slice(popStart, moreStart);
-  for (const id of ['btn-home-open-livery', 'btn-open-logbook', 'btn-open-leaderboard', 'btn-home-open-setup']) {
+  for (const id of ['btn-home-open-livery', 'btn-open-bounties', 'btn-open-logbook', 'btn-open-leaderboard', 'btn-home-open-setup']) {
     assert.ok(coreSlice.includes(`id="${id}"`), `Priority item ${id} must appear before secondary disclosures`);
   }
+  assert.ok(
+    coreSlice.indexOf('id="btn-home-open-livery"') < coreSlice.indexOf('id="btn-open-bounties"') &&
+      coreSlice.indexOf('id="btn-open-bounties"') < coreSlice.indexOf('id="btn-open-logbook"'),
+    'Abyssal Bounties must appear immediately below Gear Workshop in #home-menu-popover'
+  );
   const moreSlice = html.slice(moreStart, moreEnd);
   assert.ok(!moreSlice.startsWith('<details id="home-menu-more-modes" open'), 'More Modes & Tools drawer must start collapsed');
-  for (const id of ['btn-open-daily-calendar', 'btn-open-trench', 'btn-open-procedural', 'btn-open-campaigns', 'btn-open-drills', 'btn-open-bounties', 'btn-open-gas-planner', 'btn-open-challenge']) {
+  for (const id of ['btn-open-daily-calendar', 'btn-open-trench', 'btn-open-procedural', 'btn-open-campaigns', 'btn-open-drills', 'btn-open-gas-planner', 'btn-open-challenge']) {
     assert.ok(moreSlice.includes(`id="${id}"`), `Secondary mode/tool ${id} must be tucked inside More Modes & Tools drawer`);
   }
   const acctSlice = html.slice(acctStart, acctEnd);
