@@ -13967,3 +13967,225 @@ summary,
   border: none;
   background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 72%);
 }
+
+/* ============================================================================
+ * v238 FRAMELESS & SUBTLY FLOATY HOME SCREEN
+ * Removes the outer home container border/box so every panel floats organically
+ * over the deep-water backdrop with softer, rounder pill/squircle silhouettes.
+ * ============================================================================ */
+@keyframes abyssalBuoyantFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+@keyframes abyssalDivePulse {
+  0%, 100% {
+    box-shadow: 0 14px 36px rgba(2, 132, 199, 0.42), 0 0 26px rgba(56, 189, 248, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  }
+  50% {
+    box-shadow: 0 18px 42px rgba(2, 132, 199, 0.54), 0 0 38px rgba(56, 189, 248, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+}
+
+#screen-menu.overlay-screen {
+  background: radial-gradient(ellipse at 50% 22%, rgba(12, 60, 96, 0.48), rgba(2, 10, 22, 0.84) 74%);
+  backdrop-filter: blur(8px);
+}
+#screen-menu > .menu-card {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 16px 20px 22px;
+}
+#screen-menu > .menu-card::before,
+#screen-menu > .menu-card::after {
+  display: none !important;
+}
+#screen-menu .menu-brand-icon {
+  border-radius: 16px;
+  border: none;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+}
+#screen-menu .home-menu-btn {
+  border-radius: 999px !important;
+  width: 42px;
+  height: 42px;
+  background: rgba(10, 28, 50, 0.56) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
+}
+#screen-menu .home-menu-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(56, 189, 248, 0.2) !important;
+  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.24);
+}
+#screen-menu .home-menu-popover {
+  border: none !important;
+  border-radius: 22px;
+  background: linear-gradient(168deg, rgba(10, 26, 48, 0.92), rgba(4, 12, 24, 0.96));
+  backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+}
+#screen-menu .campaign-progress-pill {
+  border: none !important;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.18);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
+}
+#screen-menu .campaign-progress-pill:hover {
+  transform: translateY(-1.5px);
+  background: rgba(56, 189, 248, 0.26);
+}
+#screen-menu .site-map-panel {
+  border: none;
+  border-radius: 24px;
+  background: radial-gradient(circle at 55% 40%, rgba(10, 38, 66, 0.78), rgba(3, 13, 27, 0.86));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+  animation: abyssalBuoyantFloat 8s ease-in-out infinite;
+}
+#screen-menu .site-map-region-badge,
+#screen-menu .site-map-zoom-btn,
+#screen-menu .site-map-legend {
+  border-radius: 999px !important;
+}
+#screen-menu .level-cards {
+  gap: 8px;
+  padding: 2px 4px 6px 2px;
+}
+#screen-menu .level-card-btn {
+  border: none;
+  border-radius: 18px;
+  background: rgba(8, 24, 44, 0.56);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.08);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
+}
+#screen-menu .level-card-btn.is-wreck {
+  background: rgba(34, 20, 18, 0.56);
+}
+#screen-menu .level-card-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(56, 189, 248, 0.16);
+  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+}
+#screen-menu .level-card-btn.is-wreck:hover:not(:disabled) {
+  background: rgba(249, 115, 22, 0.18);
+  box-shadow: 0 14px 30px rgba(234, 88, 12, 0.22), inset 0 1px 0 rgba(254, 215, 170, 0.18);
+}
+#screen-menu .level-card-btn.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.32), rgba(10, 56, 94, 0.52));
+  box-shadow: 0 14px 32px rgba(2, 132, 199, 0.3), inset 0 1px 0 rgba(186, 230, 253, 0.3);
+}
+#screen-menu .level-card-btn.is-wreck.active {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(124, 45, 18, 0.44));
+  box-shadow: 0 14px 32px rgba(234, 88, 12, 0.28), inset 0 1px 0 rgba(254, 215, 170, 0.28);
+}
+#screen-menu .first-play-welcome-strip {
+  border: none !important;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 78, 59, 0.4));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(6, 78, 59, 0.32), inset 0 1px 0 rgba(167, 243, 208, 0.24);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, background 0.18s ease;
+}
+#screen-menu .first-play-welcome-strip:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 78, 59, 0.5));
+  box-shadow: 0 16px 36px rgba(16, 185, 129, 0.34), inset 0 1px 0 rgba(167, 243, 208, 0.34);
+}
+#screen-menu #btn-play-solo {
+  border-radius: 999px;
+  animation: abyssalDivePulse 4.6s ease-in-out infinite;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, filter 0.2s ease;
+}
+#screen-menu #btn-play-solo:hover:not(:disabled) {
+  transform: translateY(-2.5px);
+  filter: brightness(1.06);
+}
+#screen-menu .home-core-btn {
+  border: none !important;
+  border-radius: 999px !important;
+  background: rgba(9, 25, 46, 0.58) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
+}
+#screen-menu .home-core-btn:hover:not(:disabled) {
+  transform: translateY(-2.5px);
+  background: rgba(56, 189, 248, 0.18) !important;
+  box-shadow: 0 16px 32px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.24);
+}
+#screen-menu .home-core-btn.has-new-gear {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(6, 78, 59, 0.38)) !important;
+  box-shadow: 0 10px 26px rgba(16, 185, 129, 0.22), inset 0 1px 0 rgba(167, 243, 208, 0.26);
+}
+#screen-menu .dive-coop-dock {
+  border: none !important;
+  border-radius: 22px;
+  background: rgba(7, 20, 38, 0.46);
+  backdrop-filter: blur(14px);
+  padding: 9px 15px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(224, 242, 254, 0.08);
+}
+#screen-menu .coop-dock-toggle {
+  border-radius: 999px !important;
+}
+#screen-menu .lan-room-box,
+#screen-menu .leaderboard-panel {
+  border: none !important;
+  border-radius: 24px;
+  background: linear-gradient(168deg, rgba(9, 24, 44, 0.8), rgba(4, 12, 24, 0.88));
+  backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+  padding: 18px 20px;
+}
+#screen-menu .pwa-update-banner,
+#screen-menu .challenge-banner {
+  border: none !important;
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+}
+
+/* Softer rounding on modal cards and buttons to match the floaty home page */
+.lb-stats-card {
+  border-radius: 26px;
+}
+.gear-slot-preview-wrap,
+.livery-preview-wrap {
+  border-radius: 20px;
+}
+.gear-slot-equipped-hero,
+.gear-slot-cmp-card,
+.livery-equipped-card {
+  border-radius: 18px;
+}
+
+@media (max-width: 560px) {
+  #screen-menu > .menu-card {
+    padding: 10px 10px 16px;
+  }
+  #screen-menu .first-play-welcome-strip {
+    border-radius: 20px;
+  }
+  #screen-menu .home-core-btn {
+    border-radius: 18px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-menu .site-map-panel,
+  #screen-menu #btn-play-solo {
+    animation: none;
+  }
+}
