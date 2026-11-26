@@ -47,6 +47,7 @@ import {
   drawMiniDiverAvatar,
 } from '../game/rigLivery.js';
 import { createGearUnlockShowcase } from './gearUnlockShowcase.js';
+import { renderGearArtworkSvg } from './gearArtwork.js';
 import {
   GEAR_ARCHETYPES,
   CHEST_GEAR_DROPS,
@@ -212,7 +213,6 @@ export function createLiveryWorkshopController({
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
   const btnLiveryDoneEl = document.getElementById('btn-livery-done');
   const gearSlotModalEl = document.getElementById('gear-slot-modal');
-  const gearSlotModalKickerEl = document.getElementById('gear-slot-modal-kicker');
   const gearSlotModalTitleEl = document.getElementById('gear-slot-modal-title');
   const gearSlotModalSubEl = document.getElementById('gear-slot-modal-sub');
   const gearSlotEquippedHeroEl = document.getElementById('gear-slot-equipped-hero');
@@ -221,7 +221,6 @@ export function createLiveryWorkshopController({
   const gearSlotBuybackWrapEl = document.getElementById('gear-slot-buyback-wrap');
   const gearSlotBuybackListEl = document.getElementById('gear-slot-buyback-list');
   const btnGearSlotCloseEl = document.getElementById('btn-gear-slot-close');
-  const btnGearSlotDoneEl = document.getElementById('btn-gear-slot-done');
   let activeCompareSlot = null;
   const liveryPanels = {
     equipped: document.getElementById('livery-panel-equipped'),
@@ -580,20 +579,23 @@ export function createLiveryWorkshopController({
     const item = entry?.item || { id: gc.itemId, name: gc.itemName || gc.name || gc.itemId, tier: gc.tier || 'rare' };
     const info = getGearItemStats(gc.slot, item);
     const tierMeta = getGearTierMeta(item.tier || gc.tier || 'rare');
-    const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
     const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
-    const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+    const pwrHtml = info.power ? `<span class="livery-power-badge" title="${escapeHtml(info.power.desc)}">⚡ ${escapeHtml(info.power.name)}</span>` : '';
+    const artHtml = renderGearArtworkSvg(gc.slot, item, { size: 54 });
     const cmp = _buildLootImpactSection(gc.slot, gc.itemId, sess);
     lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
     lootDiscoveryBannerEl.hidden = false;
     lootDiscoveryBannerEl.innerHTML = `
-      <div class="loot-disc-top">
-        <span class="loot-disc-kicker">${tierMeta.icon} ${isDemo ? 'DEMO CACHE' : 'WORLD GEAR DISCOVERED'} · ${tierMeta.badge}</span>
-        <span class="livery-arch-pill arch-${arch.id}">${arch.icon} ${arch.short}</span>
+      <div class="loot-disc-hero">
+        <div class="loot-disc-art">${artHtml}</div>
+        <div class="loot-disc-info">
+          <div class="loot-disc-top">
+            <span class="loot-disc-kicker">${tierMeta.icon} ${isDemo ? 'DEMO CACHE' : tierMeta.badge}</span>
+          </div>
+          <div class="loot-disc-name">${escapeHtml(item.name)}</div>
+          <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
+        </div>
       </div>
-      <div class="loot-disc-name">${gc.icon || '📦'} ${escapeHtml(item.name)}</div>
-      <div class="loot-disc-pills">${pillsHtml}</div>
-      ${pwrHtml}
       ${cmp.html}
       <div class="loot-disc-actions">
         ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
@@ -671,24 +673,27 @@ export function createLiveryWorkshopController({
       const item = entry?.item || { id: drop.itemId, name: drop.name || drop.itemId, tier: drop.tier || 'rare' };
       const info = drop.statsInfo || getGearItemStats(drop.slot, item);
       const tierMeta = getGearTierMeta(item.tier || drop.tier || 'rare');
-      const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
       const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
-      const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+      const pwrHtml = info.power ? `<span class="livery-power-badge" title="${escapeHtml(info.power.desc)}">⚡ ${escapeHtml(info.power.name)}</span>` : '';
       const mapLeadHtml = chartedLead
-        ? `<div class="loot-disc-power">🗺️ <strong>New Treasure Map Charted!</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} Lead marked on World Map (${escapeHtml(chartedLead.siteName)})</div>`
+        ? `<div class="loot-disc-power">🗺️ <strong>Map Found:</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} → ${escapeHtml(chartedLead.siteName)}</div>`
         : '';
-      const rarityBadge = drop.rarityLabel || `${tierMeta.badge} CHEST DROP`;
+      const artHtml = renderGearArtworkSvg(drop.slot, item, { size: 54 });
       const cmp = _buildLootImpactSection(drop.slot, drop.itemId, sess);
       lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
       lootDiscoveryBannerEl.hidden = false;
       lootDiscoveryBannerEl.innerHTML = `
-        <div class="loot-disc-top">
-          <span class="loot-disc-kicker">🧰 ${escapeHtml(rarityBadge)} · ${tierMeta.icon} ${tierMeta.badge}</span>
-          <span class="livery-arch-pill arch-${arch.id}">${arch.icon} ${arch.short}</span>
+        <div class="loot-disc-hero">
+          <div class="loot-disc-art">${artHtml}</div>
+          <div class="loot-disc-info">
+            <div class="loot-disc-top">
+              <span class="loot-disc-kicker">🧰 ${tierMeta.icon} ${tierMeta.badge}</span>
+              <span class="livery-stat-pill">+${drop.gasBonusBar || 10}b · +${gearCoins} 🪙</span>
+            </div>
+            <div class="loot-disc-name">${escapeHtml(item.name)}</div>
+            <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
+          </div>
         </div>
-        <div class="loot-disc-name">${drop.icon || '🧰'} ${escapeHtml(item.name)}</div>
-        <div class="loot-disc-pills">${pillsHtml}<span class="livery-stat-pill">+${drop.points || 350} pts · +${drop.gasBonusBar || 10}b</span></div>
-        ${pwrHtml}
         ${mapLeadHtml}
         ${cmp.html}
         <div class="loot-disc-actions">
@@ -1006,43 +1011,34 @@ export function createLiveryWorkshopController({
         })()
       : null);
 
-    // Default calm summary of the current tab's equipped gear when nothing is hovered or inspected
+    // Default: hide inspector bar when idle on Equipped Rig tab to keep Workshop zero-noise (v232)
     if (!activeTarget || !activeTarget.item) {
-      const pal = resolveDiverLiveryPalette(activeRigLivery);
       if (activeLiveryTab === 'chroma') {
         const curChroma = getGearChroma(activeRigLivery.dyeId || 'none');
-        const book = loadCareerLogbook();
-        const bal = Math.max(0, Math.round(Number(book?.doubloons) || 0));
+        liveryInspectorBarEl.hidden = false;
         liveryInspectorBarEl.dataset.state = 'idle';
         liveryInspectorBarEl.innerHTML = `
           <div class="livery-insp-row">
-            <span class="livery-insp-kicker">ACTIVE COLOR COAT</span>
+            <span class="livery-insp-kicker">COATING</span>
             <strong class="livery-insp-name">${escapeHtml(curChroma.name)}</strong>
-            <span class="livery-insp-verdict verdict-same">🪙 ${bal} Doubloons</span>
-            <span class="livery-insp-hint">Hover or tap any finish to preview live on your diver</span>
-          </div>
-          <div class="livery-insp-deltas">
-            <span class="livery-insp-pill neutral">Cosmetic Coating · Keeps 100% of gear stats &amp; Set Bonuses</span>
             ${curChroma.fxName ? `<span class="livery-insp-pill fx">✦ ${escapeHtml(curChroma.fxName)}</span>` : ''}
           </div>
         `;
         return;
       }
-      const perfNow = computeRigPerformanceProfile(activeRigLivery, tuningCtx);
-      const actSetTxt = perfNow.activeSets?.length > 0
-        ? perfNow.activeSets.map((s) => `${s.icon} ${s.name}`).join(' · ')
-        : '';
-      liveryInspectorBarEl.dataset.state = 'idle';
-      liveryInspectorBarEl.innerHTML = `
-        <div class="livery-insp-row">
-          <span class="livery-insp-kicker">EQUIPPED RIG</span>
-          <strong class="livery-insp-name">${escapeHtml(pal.suit?.name || 'Standard Issue')}</strong>
-          <span class="livery-insp-hint">Tap any equipped slot below to compare against gear you own</span>
-        </div>
-        ${actSetTxt ? `<div class="livery-insp-deltas"><span class="livery-insp-pill pos is-set">✦ ${escapeHtml(actSetTxt)}</span></div>` : ''}
-      `;
+      liveryInspectorBarEl.hidden = true;
+      liveryInspectorBarEl.innerHTML = '';
       return;
     }
+
+    // Also keep inspector bar hidden when merely hovering equipped cards on the Equipped Rig tab (card itself shows art & stats)
+    if (hoveredGear && activeLiveryTab === 'equipped' && activeTarget.slot !== 'chroma') {
+      liveryInspectorBarEl.hidden = true;
+      liveryInspectorBarEl.innerHTML = '';
+      return;
+    }
+
+    liveryInspectorBarEl.hidden = false;
 
     // Specialized clean inspector mode for Color Finishes & Animated Coatings (v229)
     if (activeTarget.slot === 'chroma') {
@@ -1292,16 +1288,7 @@ export function createLiveryWorkshopController({
           justEquipped: true,
         };
       } else {
-        const entry = getGearItemBySlot(slot, itemMeta.id);
-        pinnedInspect = {
-          slot,
-          field: entry?.field || Object.keys(patchObj)[0] || '',
-          item: entry?.item || itemMeta,
-          unlocked: true,
-          justEquipped: true,
-          replacedName: preImpact?.replacedItemName || '',
-          impact: preImpact,
-        };
+        pinnedInspect = null;
         markEntrySeen(`${slot}:${itemMeta.id}`);
       }
     } else {
@@ -1619,8 +1606,8 @@ export function createLiveryWorkshopController({
     const chestFoundCount = CHEST_GEAR_DROPS.filter((c) => foundSet.has(`${c.slot}:${c.itemId}`)).length;
     const activeLeadsCount = Array.isArray(loadCareerLogbook()?.treasureMapLeads) ? loadCareerLogbook().treasureMapLeads.length : 0;
     if (liveryUnlockSummaryEl) {
-      const leadNote = activeLeadsCount > 0 ? ` · 🗺️ ${activeLeadsCount} active Treasure Map${activeLeadsCount === 1 ? '' : 's'}` : '';
-      liveryUnlockSummaryEl.textContent = `${totalUnlocked} gear pieces owned${leadNote} · Tap any equipped slot to compare & swap`;
+      const leadNote = activeLeadsCount > 0 ? ` · 🗺️ ${activeLeadsCount} map${activeLeadsCount === 1 ? '' : 's'}` : '';
+      liveryUnlockSummaryEl.textContent = `${totalUnlocked} owned${leadNote}`;
     }
 
     // First-Play Expedition Welcome Crate & Starter Outfitting Stage (v222)
@@ -1726,26 +1713,30 @@ export function createLiveryWorkshopController({
       const decoPct = Math.round((viewPerf.decoOffgasMult - 1) * 100);
       const beamPct = Math.round((viewPerf.torchReachMult - 1) * 100);
       const coldPct = Math.round(viewPerf.coldResist * 100);
-      const narcPct = Math.round(viewPerf.narcResist * 100);
       const armorPct = Math.round(viewPerf.bumpArmor * 100);
-      const resPeak = Math.max(coldPct, narcPct, armorPct);
-      const resLabel = coldPct >= 99 ? ' · Cold-Proof' : resPeak > 0 ? ` · C${coldPct}/N${narcPct}/A${armorPct}` : '';
+      const shieldMax = Math.round(viewPerf.shieldMax || 0);
+      const stealthPct = Math.round((viewPerf.stealth || 0) * 100);
+
+      const extraRes = [];
+      if (shieldMax > 0) extraRes.push(`+${shieldMax} Shld`);
+      if (armorPct > 0) extraRes.push(`${armorPct}% Arm`);
+      if (coldPct >= 99) extraRes.push('Cold-Proof');
+      else if (coldPct > 0) extraRes.push(`${coldPct}% Cold`);
+      if (stealthPct > 0) extraRes.push(`${stealthPct}% Stealth`);
 
       const bars = [
-        { lbl: '⚡ Swim', val: `+${swimPct}%${viewPerf.dpvSpeedBonus > 0 ? ` · +${Math.round(viewPerf.dpvSpeedBonus * 100)}% DPV` : ''}`, pct: Math.min(100, Math.round((swimPct / 28) * 100)), cls: 'c-cyan' },
-        { lbl: '🌊 Gas', val: `-${gasPct}%${viewPerf.bonusStartBar > 0 ? ` · +${viewPerf.bonusStartBar}b` : ''}`, pct: Math.min(100, Math.round(((gasPct + viewPerf.bonusStartBar * 0.4) / 36) * 100)), cls: 'c-emerald' },
-        { lbl: '🌫️ Silt', val: `-${siltPct}%${viewPerf.hydroEfficiency > 0 ? ` · +${Math.round(viewPerf.hydroEfficiency * 100)}% Flow` : ''}`, pct: Math.min(100, Math.round((siltPct / 55) * 100)), cls: 'c-teal' },
-        { lbl: '⏱️ Deco', val: `+${decoPct}%${viewPerf.narcDepthBonusM > 0 ? ` · +${viewPerf.narcDepthBonusM}m` : ''}`, pct: Math.min(100, Math.round(((decoPct + viewPerf.narcDepthBonusM) / 50) * 100)), cls: 'c-amber' },
-        { lbl: '🔱 Combat', val: `${100 + viewPerf.combatMaxHpBonus} HP${viewPerf.spearPowerMult > 1.005 ? ` · +${Math.round((viewPerf.spearPowerMult - 1) * 100)}%` : ''}`, pct: Math.min(100, Math.round(((viewPerf.combatMaxHpBonus + (viewPerf.spearPowerMult - 1) * 100) / 95) * 100)), cls: 'c-rose' },
-        { lbl: '🔦 Beam', val: `+${beamPct}%${resLabel}`, pct: Math.min(100, Math.max(Math.round((beamPct / 48) * 100), resPeak)), cls: 'c-violet' },
+        { lbl: '⚡ Swim', val: swimPct > 0 ? `+${swimPct}%` : '—', active: swimPct > 0 || viewPerf.dpvSpeedBonus > 0, cls: 'c-cyan' },
+        { lbl: '🌊 Gas', val: gasPct > 0 || viewPerf.bonusStartBar > 0 ? `${gasPct > 0 ? `-${gasPct}%` : ''}${gasPct > 0 && viewPerf.bonusStartBar > 0 ? ' ' : ''}${viewPerf.bonusStartBar > 0 ? `+${viewPerf.bonusStartBar}b` : ''}` : '—', active: gasPct > 0 || viewPerf.bonusStartBar > 0, cls: 'c-emerald' },
+        { lbl: '🌫️ Silt', val: siltPct > 0 ? `-${siltPct}%` : '—', active: siltPct > 0, cls: 'c-teal' },
+        { lbl: '⏱️ Deco', val: decoPct > 0 || viewPerf.narcDepthBonusM > 0 ? `${decoPct > 0 ? `+${decoPct}%` : ''}${decoPct > 0 && viewPerf.narcDepthBonusM > 0 ? ' ' : ''}${viewPerf.narcDepthBonusM > 0 ? `+${viewPerf.narcDepthBonusM}m` : ''}` : '—', active: decoPct > 0 || viewPerf.narcDepthBonusM > 0, cls: 'c-amber' },
+        { lbl: '🛡️ Combat', val: viewPerf.combatMaxHpBonus > 0 || shieldMax > 0 || armorPct > 0 ? `${100 + viewPerf.combatMaxHpBonus} HP${shieldMax > 0 ? ` · +${shieldMax}S` : ''}` : '100 HP', active: viewPerf.combatMaxHpBonus > 0 || shieldMax > 0 || armorPct > 0, cls: 'c-rose' },
+        { lbl: '🔦 Beam', val: beamPct > 0 || viewPerf.siltPierce > 0 ? `+${beamPct}%${viewPerf.siltPierce >= 0.2 ? ` · ${Math.round(viewPerf.siltPierce * 100)}%P` : ''}` : '—', active: beamPct > 0 || viewPerf.siltPierce > 0, cls: 'c-violet' },
       ];
-      const domArch = viewPerf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
-      const archBannerTag = `<span class="livery-arch-pill arch-${domArch.id}">${domArch.icon} ${viewPerf.isHybridMix ? 'HYBRID' : domArch.short}</span>`;
       const curModeSpec = WORKSHOP_TUNING_MODES.find((m) => m.id === workshopTuningMode) || WORKSHOP_TUNING_MODES[1];
       const tuningOpenAttr = workshopTuningMode !== 'standard' ? ' open' : '';
       const tuningStripHtml = `<details class="livery-disclosure livery-tuning-disclosure"${tuningOpenAttr}>
         <summary class="livery-disclosure-sum subtle">
-          <span>🎛️ Mode Preview: <strong>${curModeSpec.icon} ${curModeSpec.label}</strong></span>
+          <span>${curModeSpec.icon} ${curModeSpec.label}</span>
           <span class="livery-disclosure-caret">▾</span>
         </summary>
         <div class="livery-tuning-bar" role="radiogroup" aria-label="Preview stats by Mode and Difficulty">
@@ -1755,51 +1746,37 @@ export function createLiveryWorkshopController({
           <span class="livery-tuning-badge" title="${escapeHtml(viewPerf.tuning?.summary || '')}">${escapeHtml(viewPerf.tuning?.badge || '')}</span>
         </div>
       </details>`;
-      const modSynHtml = Array.isArray(viewPerf.modifierSynergies) && viewPerf.modifierSynergies.length > 0
-        ? `<div class="livery-mod-synergies">${viewPerf.modifierSynergies
-            .map((ms) => `<span class="livery-mod-syn-chip" title="${escapeHtml(ms.desc)}">${ms.icon} ${escapeHtml(ms.label)}</span>`)
-            .join('')}</div>`
-        : '';
-
       const deltaHtml = perfDiffs.length > 0
-        ? `<div class="livery-perf-deltas${activeFlash ? ' is-equip-flash' : ''}">${activeFlash ? `<span class="livery-flash-tag">✓ ${escapeHtml(activeFlash.itemName)}:</span>` : ''}${perfDiffs
-            .slice(0, 6)
+        ? `<div class="livery-perf-deltas${activeFlash ? ' is-equip-flash' : ''}">${activeFlash ? `<span class="livery-flash-tag">✓ ${escapeHtml(activeFlash.itemName)}</span>` : ''}${perfDiffs
+            .slice(0, 5)
             .map((d) => `<span class="livery-delta-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`)
             .join('')}</div>`
         : '';
       const powersHtml = viewPerf.tuning?.isNormalized
-        ? `<div class="livery-perf-powers empty">🧭 Purist active — cosmetic-only baseline.</div>`
-        : viewPerf.powers.length > 0
-          ? `<div class="livery-perf-powers">${viewPerf.powers
+        ? `<div class="livery-perf-powers empty">🧭 Purist — normalized stats</div>`
+        : (viewPerf.powers.length > 0 || extraRes.length > 0)
+          ? `<div class="livery-perf-powers">${extraRes
+              .map((r) => `<span class="livery-perf-res-chip">${escapeHtml(r)}</span>`)
+              .join('')}${viewPerf.powers
+              .slice(0, 4)
               .map((p) => `<span class="livery-perf-power-chip src-${escapeHtml(p.source || 'item')}" title="${escapeHtml(p.desc)}">⚡ ${escapeHtml(p.name)}</span>`)
               .join('')}</div>`
           : '';
       const setBonusHtml = viewPerf.activeSets.length > 0
         ? `<div class="livery-perf-sets">${viewPerf.activeSets
             .map((as) => `<span class="livery-perf-set-pill${as.capstoneActive ? ' capstone' : ''}" style="--set-color:${as.color}">
-              ${as.icon} <strong>${escapeHtml(as.name)} (${as.matched}/${as.capstoneReq})</strong>:
-              ${escapeHtml(as.tier2Label)}${as.capstoneActive ? ` · ✦ ${escapeHtml(as.tierFullLabel)}` : ` · Next (${as.capstoneReq}): ${escapeHtml(as.tierFullLabel)}`}
+              ${as.icon} <strong>${escapeHtml(as.name)} (${as.matched}/${as.capstoneReq})</strong> · ${escapeHtml(as.capstoneActive ? as.tierFullLabel : as.tier2Label)}
             </span>`)
             .join('')}</div>`
         : '';
 
-      const perfSubBits = [];
-      if (viewPerf.powers.length > 0) perfSubBits.push(`${viewPerf.powers.length} Power${viewPerf.powers.length === 1 ? '' : 's'}`);
-      if (viewPerf.activeSets.length > 0) perfSubBits.push(`${viewPerf.activeSets.length} Set${viewPerf.activeSets.length === 1 ? '' : 's'}`);
-      if (viewPerf.scoreBonusMult > 1.005) perfSubBits.push(`+${Math.round((viewPerf.scoreBonusMult - 1) * 100)}% Score`);
-      if (viewPerf.relicGlowBonusM > 1) perfSubBits.push(`+${viewPerf.relicGlowBonusM}m Relic`);
-
       liveryPerfPanelEl.innerHTML = `
-        <div class="livery-perf-head">
-          <span class="livery-perf-title">RIG STATS ${archBannerTag}${lockedTryOn ? ' · <span class="livery-perf-cmp">PREVIEW</span>' : ''}</span>
-          ${perfSubBits.length > 0 ? `<span class="livery-perf-sub">${perfSubBits.join(' · ')}</span>` : ''}
-        </div>
-        <div class="livery-perf-grid">
+        <div class="livery-perf-compact-grid">
           ${bars
             .map(
-              (b) => `<div class="livery-perf-stat">
-                <div class="livery-perf-stat-row"><span>${b.lbl}</span><strong>${escapeHtml(b.val)}</strong></div>
-                <div class="livery-perf-bar"><span class="livery-perf-fill ${b.cls}" style="width:${Math.max(4, b.pct)}%"></span></div>
+              (b) => `<div class="livery-perf-stat ${b.cls}${b.active ? ' is-boosted' : ' is-base'}">
+                <span class="livery-perf-stat-lbl">${b.lbl}</span>
+                <strong class="livery-perf-stat-val">${escapeHtml(b.val)}</strong>
               </div>`
             )
             .join('')}
@@ -1807,7 +1784,6 @@ export function createLiveryWorkshopController({
         ${deltaHtml}
         ${setBonusHtml}
         ${powersHtml}
-        ${modSynHtml}
         ${tuningStripHtml}
       `;
       liveryPerfPanelEl.querySelectorAll('button[data-tuning-mode]').forEach((btn) => {
@@ -2146,57 +2122,16 @@ export function createLiveryWorkshopController({
       { slot: 'patch', field: 'patchId', setKey: 'patches', icon: '🎖️', label: 'Expedition Crest', list: MILESTONE_PATCHES, equipped: pal.patch },
     ];
 
-    const _chipForSlotItem = (slot, item) => {
-      if (!item) return { style: 'background: rgba(15, 23, 42, 0.9);', content: '' };
-      if (slot === 'suit') {
-        return {
-          style: `background: linear-gradient(135deg, ${item.suitTop} 0%, ${item.suitMid} 52%, ${item.accent} 53%, ${item.trim} 100%);`,
-          content: item.fx ? '✦' : '',
-        };
-      }
-      if (slot === 'trim') {
-        return {
-          style:
-            item.id === 'suit-default'
-              ? `background: linear-gradient(135deg, ${pal.suit.accent} 0%, ${pal.suit.trim} 100%);`
-              : `background: linear-gradient(135deg, ${item.swatchA} 0%, ${item.swatchB} 100%);`,
-          content: item.fx ? '✦' : '',
-        };
-      }
-      if (slot === 'headgear') {
-        return { style: 'background: rgba(15, 23, 42, 0.92);', content: escapeHtml(item.icon || '⛑️') };
-      }
-      if (slot === 'visor') {
-        return {
-          style: `background: linear-gradient(135deg, ${item.top} 0%, ${item.mid} 50%, ${item.bot} 100%);`,
-          content: item.fx ? '✦' : '',
-        };
-      }
-      if (slot === 'tank') {
-        return {
-          style: `background: linear-gradient(180deg, ${item.top} 0%, ${item.mid} 50%, ${item.bot} 100%);`,
-          content: item.fx ? '✦' : '',
-        };
-      }
-      if (slot === 'torch') {
-        return {
-          style: `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${item.swatch} 55%, #0f172a 100%);`,
-          content: item.fx ? '✦' : '',
-        };
-      }
-      return { style: 'background: rgba(15, 23, 42, 0.9);', content: escapeHtml(item.icon || '🎖️') };
-    };
-
     const careerBook = loadCareerLogbook();
 
-    // v231 Ultra-Clean Equipped-Only Gear Grid: NEVER shows unequipped or undiscovered gear on main Workshop screen!
+    // v232 Image-Focused Equipped Gear Grid: crisp custom hardware artwork + only the stats that matter, zero noise!
     if (liveryEquippedGridEl) {
       const slotCardsHtml = _slotConfigs
         .map((cfg) => {
           const item = cfg.equipped;
           const tierMeta = getGearTierMeta(item?.tier);
           const itemStats = getGearItemStats(cfg.slot, item);
-          const chip = _chipForSlotItem(cfg.slot, item);
+          const artSvg = renderGearArtworkSvg(cfg.slot, item, { suitFallback: pal.suit, size: 74 });
           const ownedSet = unlocks[cfg.setKey];
           const ownedCount = ownedSet instanceof Set ? ownedSet.size : 1;
           const altCount = Math.max(0, ownedCount - 1);
@@ -2204,47 +2139,51 @@ export function createLiveryWorkshopController({
           const hasUnseenInSlot = Array.from(ownedSet || []).some(
             (id) => id !== item?.id && !seenUnlockKeys.has(`${cfg.slot}:${id}`) && getGearItemBySlot(cfg.slot, id)?.item?.tier !== 'common'
           );
-          const swapLabel = altCount > 0
-            ? `${altCount} other owned · Swap ›`
-            : soldCount > 0
-              ? `${soldCount} sold · Buyback ›`
-              : 'Inspect ›';
-          const pillsHtml = itemStats.pills.length > 0
-            ? `<span class="livery-stat-pills">${itemStats.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</span>`
-            : `<span class="livery-swatch-meta">Standard Issue baseline</span>`;
-          const pwrHtml = itemStats.power
-            ? `<span class="livery-power-badge" title="${escapeHtml(itemStats.power.desc)}">⚡ ${escapeHtml(itemStats.power.name)}</span>`
+          const cornerBadge = hasUnseenInSlot
+            ? `<span class="livery-card-badge is-new">NEW</span>`
+            : altCount > 0
+              ? `<span class="livery-card-badge" title="${altCount} other owned">⇄ ${altCount}</span>`
+              : soldCount > 0
+                ? `<span class="livery-card-badge" title="${soldCount} sold">🪙</span>`
+                : '';
+          const tierGem = tierMeta.id === 'legendary'
+            ? `<span class="livery-card-gem is-legendary" title="Legendary">🔥</span>`
+            : tierMeta.id === 'mythic'
+              ? `<span class="livery-card-gem is-mythic" title="Mythic Relic">✦</span>`
+              : '';
+          const statItems = itemStats.pills.slice(0, 2).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`);
+          if (itemStats.power) {
+            statItems.push(`<span class="livery-power-badge" title="${escapeHtml(itemStats.power.desc)}">⚡ ${escapeHtml(itemStats.power.name)}</span>`);
+          }
+          const statsHtml = statItems.length > 0
+            ? `<span class="livery-card-stats">${statItems.slice(0, 3).join('')}</span>`
             : '';
-          const tierPill = tierMeta.rank >= 2
-            ? `<span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>`
-            : '';
-          return `<button type="button" class="livery-equipped-card tier-${tierMeta.id}${hasUnseenInSlot ? ' has-new-alt' : ''}" data-open-slot="${cfg.slot}" data-item-id="${escapeHtml(item?.id || '')}">
-            <span class="livery-swatch-chip" style="${chip.style}" aria-hidden="true">${chip.content}</span>
-            <span class="livery-swatch-copy">
-              <span class="livery-equipped-kicker">${cfg.icon} ${escapeHtml(cfg.label.toUpperCase())}${hasUnseenInSlot ? ' <span class="livery-new-badge">NEW</span>' : ''}</span>
-              <span class="livery-swatch-top">
-                <span class="livery-swatch-name">${escapeHtml(item?.name || 'Standard Issue')}</span>
-                ${tierPill}
-              </span>
-              ${pillsHtml}
-              ${pwrHtml}
-              <span class="livery-equipped-cta">${escapeHtml(swapLabel)}</span>
+          return `<button type="button" class="livery-equipped-card tier-${tierMeta.id}${hasUnseenInSlot ? ' has-new-alt' : ''}" data-open-slot="${cfg.slot}" data-item-id="${escapeHtml(item?.id || '')}" title="${escapeHtml(`${cfg.label}: ${item?.name || 'Standard Issue'}`)}">
+            <span class="livery-card-stage">
+              ${tierGem}
+              ${cornerBadge}
+              ${artSvg}
+            </span>
+            <span class="livery-card-body">
+              <span class="livery-card-slot">${escapeHtml(cfg.label)}</span>
+              <span class="livery-card-name">${escapeHtml(item?.name || 'Standard Issue')}</span>
+              ${statsHtml}
             </span>
           </button>`;
         })
         .join('');
 
       const activeChroma = getGearChroma(activeRigLivery.dyeId || 'none');
-      const [c0, c1, c2] = activeChroma.swatch || ['#1e293b', '#0f172a', '#38bdf8'];
-      const chromaCardHtml = `<button type="button" class="livery-equipped-card livery-equipped-chroma-card" data-open-chroma="1">
-        <span class="livery-swatch-chip${activeChroma.animated ? ' chroma-anim-chip' : ''}" style="background: linear-gradient(135deg, ${c0} 0%, ${c1} 54%, ${c2} 100%);" aria-hidden="true">${activeChroma.animated ? '✦' : '🎨'}</span>
-        <span class="livery-swatch-copy">
-          <span class="livery-equipped-kicker">🎨 COLOR &amp; FX COATING</span>
-          <span class="livery-swatch-top">
-            <span class="livery-swatch-name">${escapeHtml(activeChroma.name)}</span>
-          </span>
-          <span class="livery-swatch-meta">${escapeHtml(activeChroma.fxName ? `✦ ${activeChroma.fxName} · Cosmetic` : 'Purely cosmetic · Keeps 100% stats')}</span>
-          <span class="livery-equipped-cta">Customize Colors &amp; FX ›</span>
+      const chromaArtSvg = renderGearArtworkSvg('chroma', activeChroma, { size: 74 });
+      const chromaCardHtml = `<button type="button" class="livery-equipped-card livery-equipped-chroma-card" data-open-chroma="1" title="Color & FX Coating">
+        <span class="livery-card-stage">
+          <span class="livery-card-badge">🎨</span>
+          ${chromaArtSvg}
+        </span>
+        <span class="livery-card-body">
+          <span class="livery-card-slot">Color Coat</span>
+          <span class="livery-card-name">${escapeHtml(activeChroma.name)}</span>
+          ${activeChroma.fxName ? `<span class="livery-card-stats"><span class="livery-power-badge">✦ ${escapeHtml(activeChroma.fxName)}</span></span>` : ''}
         </span>
       </button>`;
 
@@ -2255,12 +2194,10 @@ export function createLiveryWorkshopController({
         if (!cfg) return;
         btn.addEventListener('mouseenter', () => {
           hoveredGear = { slot: cfg.slot, field: cfg.field, item: cfg.equipped, unlocked: true };
-          renderInspectorBar();
           renderLiveryPreviewFrame(performance.now() * 0.001);
         });
         btn.addEventListener('mouseleave', () => {
           hoveredGear = null;
-          renderInspectorBar();
           renderLiveryPreviewFrame(performance.now() * 0.001);
         });
         btn.addEventListener('click', () => {
@@ -2272,28 +2209,27 @@ export function createLiveryWorkshopController({
       });
     }
 
-    // v231 Active Treasure Map Leads: ONLY show undiscovered gear if you hold a Treasure Map to it, with 1-tap Dive Launch!
+    // v232 Image-Focused Active Treasure Map Leads: compact visual lead + 1-tap Dive Launch!
     const activeMapLeads = Array.isArray(careerBook?.treasureMapLeads) ? careerBook.treasureMapLeads : [];
     if (liveryTreasureMapsSectionEl) {
       if (activeMapLeads.length > 0) {
         liveryTreasureMapsSectionEl.hidden = false;
         liveryTreasureMapsSectionEl.innerHTML = `
-          <div class="livery-section-label">🗺️ ACTIVE TREASURE MAPS (${activeMapLeads.length}) · MARKED ON WORLD MAP</div>
+          <div class="livery-section-label">🗺️ TREASURE MAPS (${activeMapLeads.length})</div>
           <div class="livery-map-leads-grid">
             ${activeMapLeads
               .map((lead) => {
-                const tierMeta = getGearTierMeta(lead.hintTier || 'rare');
+                const mapArt = renderGearArtworkSvg('treasure-map', lead, { size: 54 });
                 return `<div class="livery-map-lead-card" style="--tm-col:${escapeHtml(lead.color || '#facc15')}">
-                  <div class="livery-map-lead-top">
-                    <span class="livery-map-lead-badge">${escapeHtml(lead.skillIcon || '🗺️')} ${escapeHtml(lead.skillLabel || 'SKILL BOOST')}</span>
-                    <span class="livery-tier-pill tier-${tierMeta.id}">${lead.hintTier === 'legendary' ? 'UP TO LEGENDARY' : tierMeta.badge}</span>
+                  <div class="livery-map-lead-art">${mapArt}</div>
+                  <div class="livery-map-lead-copy">
+                    <div class="livery-map-lead-title">${escapeHtml(lead.hintTitle || `Uncharted ${lead.hintSlotLabel || 'Gear'}`)}</div>
+                    <div class="livery-map-lead-meta">
+                      <span class="livery-map-lead-badge">${escapeHtml(lead.skillIcon || '🗺️')} ${escapeHtml(lead.skillShort || lead.skillLabel || 'SKILL')}</span>
+                      <span class="livery-map-lead-site">📍 ${escapeHtml(lead.siteName || lead.levelId)}</span>
+                    </div>
                   </div>
-                  <div class="livery-map-lead-title">❓ ${escapeHtml(lead.hintTitle || `Uncharted ${lead.hintSlotLabel || 'Gear'}`)}</div>
-                  <div class="livery-map-lead-verb">${escapeHtml(lead.skillVerb || '')}</div>
-                  <div class="livery-map-lead-foot">
-                    <span class="livery-map-lead-site" title="${escapeHtml(lead.hintClue || '')}">📍 ${escapeHtml(lead.siteName || lead.levelId)}</span>
-                    <button type="button" class="btn tiny primary livery-map-dive-btn" data-map-dive-level="${escapeHtml(lead.levelId)}">🤿 Start Dive →</button>
-                  </div>
+                  <button type="button" class="btn tiny primary livery-map-dive-btn" data-map-dive-level="${escapeHtml(lead.levelId)}">🤿 Dive →</button>
                 </div>`;
               })
               .join('')}
@@ -2319,12 +2255,8 @@ export function createLiveryWorkshopController({
       }
     }
     if (liveryDiscoveryWhisperEl) {
-      if (activeMapLeads.length === 0) {
-        liveryDiscoveryWhisperEl.hidden = false;
-        liveryDiscoveryWhisperEl.textContent = '🗺️ Undiscovered gear stays hidden until found — recover Treasure Maps on dives to reveal hinted leads & World Map markers.';
-      } else {
-        liveryDiscoveryWhisperEl.hidden = true;
-      }
+      liveryDiscoveryWhisperEl.hidden = true;
+      liveryDiscoveryWhisperEl.textContent = '';
     }
 
     // Keep open Slot Comparison Modal synced whenever Workshop re-renders (e.g. after Equip/Sell/Buyback)
@@ -2332,7 +2264,7 @@ export function createLiveryWorkshopController({
       renderGearSlotModal();
     }
 
-    // Salvage Doubloons Wallet & Gear Color / Animated Coating Foundry (v229)
+    // Salvage Doubloons Wallet & Gear Color / Animated Coating Foundry (v229 / v232)
     const doubloonsBal = Math.max(0, Math.round(Number(careerBook?.doubloons) || 0));
     if (liveryWalletPillEl) {
       liveryWalletPillEl.textContent = `🪙 ${doubloonsBal.toLocaleString()}`;
@@ -2344,39 +2276,27 @@ export function createLiveryWorkshopController({
       const eligible = isChromaExclusiveEligible(ch, unlocks.stats);
       const canAfford = doubloonsBal >= ch.cost;
       const isInspected = Boolean(pinnedInspect && !pinnedInspect.justEquipped && pinnedInspect.slot === 'chroma' && pinnedInspect.item?.id === ch.id);
-      const [c0, c1, c2] = ch.swatch || ['#1e293b', '#0f172a', '#38bdf8'];
-      const chipStyle = `background: linear-gradient(135deg, ${c0} 0%, ${c1} 54%, ${c2} 100%);`;
-      const chipGlyph = ch.animated ? '✦' : (!owned && !eligible ? '🔒' : '');
-      const tierBadge = ch.tier === 'rare'
-        ? `<span class="livery-chroma-tier tier-rare">RARE</span>`
-        : ch.tier === 'animated'
-          ? `<span class="livery-chroma-tier tier-animated">✦ ANIMATED</span>`
-          : ch.tier === 'exclusive'
-            ? `<span class="livery-chroma-tier tier-exclusive">★ EXCLUSIVE</span>`
-            : '';
+      const orbSvg = renderGearArtworkSvg('chroma', ch, { size: 46 });
       const priceTag = selected
-        ? `<span class="livery-chroma-price is-active">✓ Active</span>`
+        ? `<span class="livery-chroma-price is-active">✓</span>`
         : owned
           ? `<span class="livery-chroma-price is-owned">Owned</span>`
           : !eligible
-            ? `<span class="livery-chroma-price is-locked">🔒 🪙 ${ch.cost}</span>`
+            ? `<span class="livery-chroma-price is-locked">🔒 ${ch.cost}</span>`
             : `<span class="livery-chroma-price${canAfford ? ' is-affordable' : ' is-short'}">🪙 ${ch.cost}</span>`;
       const subLine = ch.fxName
         ? `<span class="livery-power-badge">✦ ${escapeHtml(ch.fxName)}</span>`
-        : '';
-      const metaLine = !owned && !eligible && ch.requirementHint
-        ? `<span class="livery-swatch-meta">🔒 ${escapeHtml(ch.requirementHint)}</span>`
-        : `<span class="livery-swatch-meta">${escapeHtml(ch.desc)}</span>`;
+        : (!owned && !eligible && ch.requirementHint)
+          ? `<span class="livery-swatch-meta">🔒 ${escapeHtml(ch.requirementHint)}</span>`
+          : '';
       return `<button type="button" class="livery-swatch-btn livery-chroma-card chroma-${ch.tier}${selected ? ' active' : ''}${owned ? '' : ' locked'}${isInspected ? ' inspecting' : ''}${ch.animated ? ' has-fx' : ''}" data-chroma-id="${ch.id}" data-owned="${owned ? '1' : '0'}" title="${escapeHtml(`${ch.name} — ${ch.desc}`)}" role="radio" aria-checked="${selected}">
-        <span class="livery-swatch-chip${ch.animated ? ' chroma-anim-chip' : ''}" style="${chipStyle}" aria-hidden="true">${chipGlyph}</span>
+        <span class="livery-chroma-orb" aria-hidden="true">${orbSvg}</span>
         <span class="livery-swatch-copy">
           <span class="livery-swatch-top">
             <span class="livery-swatch-name">${escapeHtml(ch.name)}</span>
-            ${tierBadge}
             ${priceTag}
           </span>
           ${subLine}
-          ${metaLine}
         </span>
       </button>`;
     };
@@ -2469,13 +2389,9 @@ export function createLiveryWorkshopController({
     // Any previously sold Milestone/Secret items for this slot (for Buyback!)
     const soldForSlot = cfg.list.filter((it) => unlocks.soldGear?.has(`${cfg.slot}:${it.id}`));
 
-    if (gearSlotModalKickerEl) gearSlotModalKickerEl.textContent = `EQUIPPED VS. OWNED · ${cfg.label.toUpperCase()}`;
     if (gearSlotModalTitleEl) gearSlotModalTitleEl.textContent = `${cfg.icon} ${cfg.label}`;
     if (gearSlotModalSubEl) {
-      gearSlotModalSubEl.textContent =
-        otherOwned.length > 0
-          ? `Comparing ${eqItem?.name || 'Equipped'} against ${otherOwned.length} other owned ${cfg.label.toLowerCase()} option${otherOwned.length === 1 ? '' : 's'}.`
-          : `You currently own 1 ${cfg.label.toLowerCase()}. Discover more in dives, chests & Treasure Maps!`;
+      gearSlotModalSubEl.textContent = `${otherOwned.length + 1} owned`;
     }
 
     const eqKey = `${cfg.slot}:${eqItem?.id || ''}`;
@@ -2483,33 +2399,42 @@ export function createLiveryWorkshopController({
     const eqConfirm = pendingSellKey === eqKey;
     const eqSellBtn = eqSellVal > 0
       ? eqConfirm
-        ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(eqItem.id)}">⚠️ Confirm Sell (+${eqSellVal} 🪙)</button>`
-        : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(eqItem.id)}">🪙 Sell +${eqSellVal}</button>`
+        ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(eqItem.id)}">Confirm +${eqSellVal} 🪙</button>`
+        : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(eqItem.id)}" title="Sell for +${eqSellVal} Doubloons">🪙 ${eqSellVal}</button>`
       : '';
 
     if (gearSlotEquippedHeroEl) {
-      const eqPills = eqStats.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+      const eqArt = renderGearArtworkSvg(cfg.slot, eqItem, { suitFallback: pal.suit, size: 76 });
+      const eqPills = eqStats.pills.slice(0, 5).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`);
+      if (eqStats.power) {
+        eqPills.push(`<span class="livery-power-badge" title="${escapeHtml(eqStats.power.desc)}">⚡ ${escapeHtml(eqStats.power.name)}</span>`);
+      }
+      const eqTierBadge = eqTier.rank >= 3
+        ? `<span class="livery-tier-pill tier-${eqTier.id}">${eqTier.badge}</span>`
+        : '';
+      gearSlotEquippedHeroEl.className = `gear-slot-equipped-hero tier-${eqTier.id}`;
       gearSlotEquippedHeroEl.innerHTML = `
-        <div class="gear-slot-hero-top">
-          <div>
-            <span class="gear-slot-hero-badge">✓ CURRENTLY EQUIPPED</span>
-            <span class="livery-tier-pill tier-${eqTier.id}">${eqTier.badge}</span>
+        <div class="gear-slot-art-box is-hero">${eqArt}</div>
+        <div class="gear-slot-hero-body">
+          <div class="gear-slot-hero-top">
+            <span class="gear-slot-hero-badge">✓ EQUIPPED</span>
+            ${eqTierBadge}
           </div>
-          ${eqSellBtn}
+          <div class="gear-slot-hero-name">${escapeHtml(eqItem?.name || 'Standard Issue')}</div>
+          ${eqPills.length > 0 ? `<div class="livery-stat-pills">${eqPills.join('')}</div>` : ''}
         </div>
-        <div class="gear-slot-hero-name">${escapeHtml(eqItem?.name || 'Standard Issue')}</div>
-        <div class="livery-stat-pills">${eqPills || '<span class="livery-swatch-meta">Baseline Expedition Spec</span>'}</div>
-        ${eqStats.power ? `<div class="gear-slot-hero-pwr">⚡ <strong>${escapeHtml(eqStats.power.name)}</strong> — ${escapeHtml(eqStats.power.desc)}</div>` : ''}
+        ${eqSellBtn ? `<div class="gear-slot-cmp-actions">${eqSellBtn}</div>` : ''}
       `;
     }
 
     if (gearSlotOwnedHeadingEl) {
-      gearSlotOwnedHeadingEl.textContent = `OTHER OWNED ${cfg.label.toUpperCase()} (${otherOwned.length})`;
+      gearSlotOwnedHeadingEl.hidden = otherOwned.length === 0;
+      gearSlotOwnedHeadingEl.textContent = `OWNED (${otherOwned.length})`;
     }
 
     if (gearSlotOwnedListEl) {
       if (otherOwned.length === 0) {
-        gearSlotOwnedListEl.innerHTML = `<div class="gear-slot-empty">No other ${escapeHtml(cfg.label.toLowerCase())} owned yet. Explore dive sites, open Sunken Treasure Chests, or follow 🗺️ Treasure Maps to discover more!</div>`;
+        gearSlotOwnedListEl.innerHTML = `<div class="gear-slot-empty">No other ${escapeHtml(cfg.label.toLowerCase())} owned yet.</div>`;
       } else {
         gearSlotOwnedListEl.innerHTML = otherOwned
           .map((item) => {
@@ -2519,49 +2444,51 @@ export function createLiveryWorkshopController({
             const key = `${cfg.slot}:${item.id}`;
             const sellVal = isGearSellable(item) ? getGearSellValue(item.tier) : 0;
             const isConfirm = pendingSellKey === key;
-            const deltaChips = [];
+            const itemArt = renderGearArtworkSvg(cfg.slot, item, { suitFallback: pal.suit, size: 66 });
+
+            // Unified single stat row: show net deltas vs. equipped (no triple repetition!)
+            const statChips = [];
             if (impact && !impact.isNormalized) {
               for (const sc of impact.setChanges || []) {
-                deltaChips.push(`<span class="livery-insp-pill ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '✦' : '⚠'} ${escapeHtml(sc.text)}</span>`);
+                statChips.push(`<span class="livery-insp-pill ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '✦' : '⚠'} ${escapeHtml(sc.text)}</span>`);
               }
               for (const gp of impact.gainedPowers || []) {
-                deltaChips.push(`<span class="livery-insp-pill pos is-pwr">+⚡ ${escapeHtml(gp.name)}</span>`);
+                statChips.push(`<span class="livery-insp-pill pos is-pwr" title="${escapeHtml(gp.desc || '')}">⚡ ${escapeHtml(gp.name)}</span>`);
               }
-              for (const lp of impact.lostPowers || []) {
-                deltaChips.push(`<span class="livery-insp-pill neg is-pwr">-⚡ ${escapeHtml(lp.name)}</span>`);
+              for (const d of (impact.deltas || []).slice(0, 5)) {
+                statChips.push(`<span class="livery-insp-pill ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
               }
-              for (const d of (impact.deltas || []).slice(0, 6)) {
-                deltaChips.push(`<span class="livery-insp-pill ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
+              for (const lp of (impact.lostPowers || []).slice(0, 1)) {
+                statChips.push(`<span class="livery-insp-pill neg is-pwr" title="${escapeHtml(lp.desc || '')}">-⚡ ${escapeHtml(lp.name)}</span>`);
               }
             }
-            const verdictCls = impact?.verdict || 'tradeoff';
-            const verdictTxt = impact?.isNormalized
-              ? '🧭 PURIST'
-              : impact?.verdict === 'upgrade'
-                ? '▲ UPGRADE'
-                : impact?.verdict === 'downgrade'
-                  ? '▼ LOWER'
-                  : '⇄ SWAP';
+            if (statChips.length === 0 && itemStats.pills.length > 0) {
+              for (const p of itemStats.pills.slice(0, 4)) {
+                statChips.push(`<span class="livery-stat-pill">${escapeHtml(p)}</span>`);
+              }
+            }
+
+            const tierPill = tierMeta.rank >= 3
+              ? `<span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>`
+              : '';
             const sellBtn = sellVal > 0
               ? isConfirm
-                ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(item.id)}">⚠️ Confirm (+${sellVal} 🪙)</button>`
-                : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(item.id)}">🪙 Sell +${sellVal}</button>`
+                ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(item.id)}">Confirm +${sellVal}</button>`
+                : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(item.id)}" title="Sell for +${sellVal} Doubloons">🪙 ${sellVal}</button>`
               : '';
             return `<div class="gear-slot-cmp-card tier-${tierMeta.id}" data-cmp-item-id="${escapeHtml(item.id)}">
-              <div class="gear-slot-cmp-head">
+              <div class="gear-slot-art-box">${itemArt}</div>
+              <div class="gear-slot-cmp-body">
                 <div class="gear-slot-cmp-title-wrap">
                   <strong class="gear-slot-cmp-name">${escapeHtml(item.name)}</strong>
-                  <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>
-                  <span class="livery-insp-verdict verdict-${verdictCls}">${verdictTxt}</span>
+                  ${tierPill}
                 </div>
-                <div class="gear-slot-cmp-actions">
-                  <button type="button" class="btn tiny primary" data-slot-equip="${escapeHtml(item.id)}">⚡ Equip</button>
-                  ${sellBtn}
-                </div>
+                ${statChips.length > 0 ? `<div class="gear-slot-cmp-deltas">${statChips.slice(0, 6).join('')}</div>` : ''}
               </div>
-              <div class="livery-stat-pills">${itemStats.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</div>
-              ${itemStats.power ? `<div class="gear-slot-cmp-pwr">⚡ <strong>${escapeHtml(itemStats.power.name)}</strong> — ${escapeHtml(itemStats.power.desc)}</div>` : ''}
-              ${deltaChips.length > 0 ? `<div class="gear-slot-cmp-deltas"><span class="gear-slot-vs-lbl">vs. ${escapeHtml(eqItem?.name || 'Equipped')}:</span> ${deltaChips.join('')}</div>` : ''}
+              <div class="gear-slot-cmp-actions">
+                <button type="button" class="btn tiny primary" data-slot-equip="${escapeHtml(item.id)}">Equip</button>
+                ${sellBtn}
+              </div>
             </div>`;
           })
           .join('');
@@ -2576,13 +2503,16 @@ export function createLiveryWorkshopController({
           .map((item) => {
             const cost = getGearBuybackCost(item.tier);
             const canAfford = bal >= cost;
+            const bbArt = renderGearArtworkSvg(cfg.slot, item, { suitFallback: pal.suit, size: 54 });
             return `<div class="gear-slot-cmp-card is-buyback">
-              <div class="gear-slot-cmp-head">
+              <div class="gear-slot-art-box is-sm">${bbArt}</div>
+              <div class="gear-slot-cmp-body">
                 <div class="gear-slot-cmp-title-wrap">
                   <strong class="gear-slot-cmp-name">${escapeHtml(item.name)}</strong>
-                  <span class="livery-tier-pill tier-${getGearTierMeta(item.tier).id}">${getGearTierMeta(item.tier).badge}</span>
                 </div>
-                <button type="button" class="btn tiny ${canAfford ? 'primary' : 'secondary'}" data-slot-buyback="${escapeHtml(item.id)}" ${canAfford ? '' : 'disabled'}>🪙 Buy Back (${cost})</button>
+              </div>
+              <div class="gear-slot-cmp-actions">
+                <button type="button" class="btn tiny ${canAfford ? 'primary' : 'secondary'}" data-slot-buyback="${escapeHtml(item.id)}" ${canAfford ? '' : 'disabled'}>🪙 ${cost}</button>
               </div>
             </div>`;
           })
@@ -2652,7 +2582,6 @@ export function createLiveryWorkshopController({
   }
 
   btnGearSlotCloseEl?.addEventListener('click', closeGearSlotModal);
-  btnGearSlotDoneEl?.addEventListener('click', closeGearSlotModal);
   gearSlotModalEl?.addEventListener('click', (e) => {
     if (e.target === gearSlotModalEl) closeGearSlotModal();
   });
