@@ -169,18 +169,22 @@ export const surfaceRendererMethods = {
       ctx.restore();
     }
 
-    const rayGrad = ctx.createLinearGradient(sunScreenX, sunScreenY, sunScreenX, skyBotY);
-    rayGrad.addColorStop(0, 'rgba(255, 249, 224, 0.065)');
-    rayGrad.addColorStop(1, 'rgba(255, 249, 224, 0)');
-    ctx.fillStyle = rayGrad;
+    const rayKey = `${Math.round(sunScreenY / 4)}|${Math.round(skyBotY / 4)}`;
+    if (!this._skyRayGradCache || this._skyRayGradCache.key !== rayKey) {
+      const rayGrad = ctx.createLinearGradient(0, sunScreenY, 0, Math.max(sunScreenY + 1, skyBotY));
+      rayGrad.addColorStop(0, 'rgba(255, 249, 224, 0.065)');
+      rayGrad.addColorStop(1, 'rgba(255, 249, 224, 0)');
+      this._skyRayGradCache = { key: rayKey, grad: rayGrad };
+    }
+    ctx.fillStyle = this._skyRayGradCache.grad;
+    ctx.beginPath();
     for (let r = -2; r <= 2; r++) {
-      ctx.beginPath();
       ctx.moveTo(sunScreenX, sunScreenY);
       ctx.lineTo(sunScreenX + (r - 0.32) * 85 - 45, skyBotY);
       ctx.lineTo(sunScreenX + (r + 0.32) * 85 + 45, skyBotY);
       ctx.closePath();
-      ctx.fill();
     }
+    ctx.fill();
 
     // 3. Low-lying humid forest mist wisps drifting gently above the sinkhole waterline (stamp-based, 0 gradients/frame)
     const mistDrift = -parallaxCam * 0.10 * scale + timeSec * 5.2;
@@ -198,19 +202,19 @@ export const surfaceRendererMethods = {
       ctx.restore();
     }
 
-    // 4. Subtle distant gliding birds in aerial perspective
+    // 4. Subtle distant gliding birds in aerial perspective (batched single path!)
     ctx.strokeStyle = birdCol;
     ctx.lineWidth = 1.25;
+    ctx.beginPath();
     for (let b = 0; b < 4; b++) {
       const bx = ((cw * 0.25 + b * 145 + timeSec * (11 + b * 2.5) - parallaxCam * 0.05 * scale) % (cw + 120)) - 60;
       const by = Math.max(18, horizonY * (0.34 + b * 0.1) + Math.sin(timeSec * 1.8 + b) * 5);
       const wing = Math.sin(timeSec * 4.8 + b * 1.9) * 3.2;
-      ctx.beginPath();
       ctx.moveTo(bx - 5.5, by + wing);
       ctx.quadraticCurveTo(bx - 2.5, by - 2.4, bx, by);
       ctx.quadraticCurveTo(bx + 2.5, by - 2.4, bx + 5.5, by + wing);
-      ctx.stroke();
     }
+    ctx.stroke();
 
     ctx.restore();
   },

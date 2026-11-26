@@ -3730,6 +3730,15 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
 
         applyBossDamage(session, dmg, { crit, hitX: sp.x, hitY: sp.y }, callbacks);
         if (sp.isLocal) {
+          if (crit) {
+            if (session.hitstopSec !== undefined) {
+              session.hitstopSec = Math.max(session.hitstopSec || 0, 0.032);
+            }
+            if (session.cameraShake !== undefined) {
+              session.cameraShake = Math.max(session.cameraShake || 0, 0.28);
+            }
+            addShockwave(lair, sp.x, sp.y, 4.4, '#fde047', 0.28);
+          }
           callbacks.onLocalBossHit?.({ damage: dmg, crit, x: sp.x, y: sp.y });
         }
         if (lair.spears[i] === sp) lair.spears.splice(i, 1);

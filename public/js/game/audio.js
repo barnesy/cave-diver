@@ -1305,19 +1305,33 @@ export class DiveAudio {
     }
 
     const style = level.theme?.surfaceStyle || '';
+    const themeId = String(level.theme?.id || '').toLowerCase();
     const lid = String(level.id || '').toLowerCase();
     const isGlacier =
       style === 'kverkfjoll-glacier' ||
       style === 'aurora-basalt' ||
       style === 'scoresby-iceberg' ||
-      lid.includes('scoresby');
+      themeId.includes('nordic-marble') ||
+      themeId.includes('ice') ||
+      lid.includes('scoresby') ||
+      lid.includes('plura');
+    const isIronMine =
+      themeId.includes('mine') ||
+      lid.includes('ojamo') ||
+      lid.includes('mine');
+    const isMonolith =
+      lid.includes('yonaguni') ||
+      lid.includes('bimini');
     const isReef =
       lid.includes('blue-hole') ||
       lid.includes('dahab') ||
-      lid.includes('bimini') ||
       lid.includes('bermuda') ||
       lid.includes('lanzarote');
-    const isCrystalCave = lid.includes('orda') || lid.includes('crystal');
+    const isCrystalCave =
+      themeId.includes('crystal') ||
+      lid.includes('orda') ||
+      lid.includes('crystal') ||
+      lid.includes('dans-cave');
     const hasVents = Array.isArray(level.geothermalVents) && level.geothermalVents.length > 0;
 
     // Gentle fin-kick water displacement whoosh when swimming briskly without DPV (v194)
@@ -1463,19 +1477,61 @@ export class DiveAudio {
           this.playTone(cf, 0.022, 'triangle', 0.007, k * (0.09 + Math.random() * 0.14), { pan: ambPan * (0.6 - k * 0.3), bus: 'ambience' });
         }
       }
+    } else if (isIronMine && Math.random() < 0.66) {
+      // Flooded iron-mine resonant timber groan + distant steel rail ping (v256)
+      this._ambienceTimer = 5.4 + Math.random() * 5.2;
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const filt = this.ctx.createBiquadFilter();
+      const g = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      const f0 = 86 + Math.random() * 22;
+      osc.frequency.setValueAtTime(f0, t);
+      osc.frequency.exponentialRampToValueAtTime(f0 * 0.62, t + 1.55);
+      filt.type = 'bandpass';
+      filt.frequency.value = 320;
+      filt.Q.value = 2.8;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.015, t + 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+      osc.connect(filt);
+      filt.connect(g);
+      const panner = this._connectSpatial(g, { pan: ambPan, bus: 'ambience' });
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { filt.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { panner?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 1.65);
+      // Hollow metallic shaft echo ping
+      const pingF = 440 + Math.random() * 180;
+      this.playTone(pingF, 0.28, 'sine', 0.011, 0.22, { pan: -ambPan * 0.65, bus: 'ambience' });
+      this.playTone(pingF * 1.005, 0.36, 'sine', 0.006, 0.48, { pan: ambPan * 0.4, bus: 'ambience' });
+    } else if (isMonolith && Math.random() < 0.64) {
+      // Ancient submerged monolith resonant stone hum & harmonic fifth overtone (v256)
+      this._ambienceTimer = 6.2 + Math.random() * 5.8;
+      const base = 110 + Math.random() * 32;
+      this.playTone(base, 1.45, 'sine', 0.017, 0, { pan: ambPan * 0.7, bus: 'ambience' });
+      this.playTone(base * 1.498, 1.15, 'triangle', 0.009, 0.16, { pan: -ambPan * 0.5, bus: 'ambience' });
+      this.playTone(base * 2.0, 0.85, 'sine', 0.006, 0.34, { pan: ambPan * 0.35, bus: 'ambience' });
     } else if (isCrystalCave && Math.random() < 0.62) {
-      // Translucent gypsum crystal cavern harmonic shimmer (v194)
+      // Translucent gypsum / aragonite crystal cavern harmonic shimmer (v194/v256)
       this._ambienceTimer = 5.0 + Math.random() * 4.8;
       const base = 740 + Math.random() * 320;
       this.playTone(base, 0.42, 'sine', 0.013, 0, { pan: ambPan, bus: 'ambience' });
       this.playTone(base * 1.5, 0.56, 'sine', 0.009, 0.12, { pan: -ambPan * 0.6, bus: 'ambience' });
     } else {
-      // Resonant 3-tap karst cave water-drip echo (spatialized onto ambienceBus)
+      // Resonant 3-tap karst cave water-drip echo + subtle deep hydrostatic pressure murmur (v256)
       this._ambienceTimer = 5.2 + Math.random() * 6.5;
       const base = 680 + Math.random() * 480;
       this.playTone(base, 0.14, 'sine', 0.016, 0, { pan: ambPan, bus: 'ambience' });
       this.playTone(base * 1.18, 0.18, 'sine', 0.01, 0.14, { pan: ambPan * 0.7, bus: 'ambience' });
       this.playTone(base * 1.16, 0.22, 'sine', 0.0055, 0.32, { pan: ambPan * 0.4, bus: 'ambience' });
+      if (depthM > 38) {
+        this.playTone(54 + Math.random() * 14, 1.15, 'sine', 0.012, 0.06, { pan: ambPan * 0.3, bus: 'ambience' });
+      }
     }
   }
 

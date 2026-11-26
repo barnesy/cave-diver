@@ -13238,3 +13238,37 @@ test('v255 Zero-rebuild dual-light foreground sprite cache (incl. kelp/roots she
   assert.ok(renSrc.includes('for (let phase = 0; phase < 2; phase++)'), '_drawCaustics must batch sun shafts into 2 alternating shimmer gradients');
   assert.ok(renSrc.includes('Sunlit freshwater Chara stonewort & cenote aquatic moss tufts (batched into 1 path/stroke!)'), '_drawAnchoredLife must batch chara tufts into a single path');
 });
+
+test('v256 4-Pillar Polish: Mobile 60 FPS Wave 2, Biome Soundscape & Glints, AI Buddy Steep-Sump LOS & Boss Combat Juice', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { hasOpenLineOfSight } = await import('../public/js/game/aiBuddy.js');
+  const { LEVELS } = await import('../public/js/levels/index.js');
+
+  // Pillar 1: Mobile 60 FPS Wave 2 (stamp refraction, batched skylight/sky rays, spawn FG prewarm)
+  const lightSrc = readFileSync(new URL('../public/js/game/renderers/lightingAndFxRenderer.js', import.meta.url), 'utf8');
+  assert.ok(lightSrc.includes('_getShallowRefractionStamp('), 'Expected pre-baked shallow refraction stamp');
+  assert.ok(lightSrc.includes("this._perfBudget?.tier === 'performance'"), 'Shallow refraction must skip on performance tier');
+  const surfSrc = readFileSync(new URL('../public/js/game/renderers/surfaceRenderer.js', import.meta.url), 'utf8');
+  assert.ok(surfSrc.includes('this._skyRayGradCache'), 'Expected cached atmospheric sky ray gradient');
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('_prewarmForegroundSprites('), 'Expected spawn foreground wall-sampler prewarm');
+
+  // Pillar 2: Expanded biome soundscape (Plura ice, Ojamo iron mine, Dan\'s Cave crystal, Yonaguni monolith) + dynamic FG glints
+  const audioSrc = readFileSync(new URL('../public/js/game/audio.js', import.meta.url), 'utf8');
+  assert.ok(audioSrc.includes("lid.includes('plura')") && audioSrc.includes('isIronMine') && audioSrc.includes('isMonolith'), 'Expected Plura glacier, Ojamo iron mine & monolith ambience profiles');
+  assert.ok(fgSrc.includes('Dynamic torch-reactive wet leaf/bark micro-specular shimmer'), 'Expected zero-rebuild Pass 2 wet foliage micro-glints');
+
+  // Pillar 3: AI Buddy open-water line-of-sight & anti-wedge tangential slide
+  const lvl1 = LEVELS[0];
+  assert.equal(hasOpenLineOfSight(lvl1, lvl1.spawn.x, lvl1.spawn.y, lvl1.spawn.x, lvl1.spawn.y + 1.5), true, 'Open water near spawn must have clear LOS');
+  assert.equal(hasOpenLineOfSight(lvl1, lvl1.spawn.x, lvl1.spawn.y, lvl1.bounds.xMin + 1, lvl1.bounds.yMax - 1), false, 'Ray across solid rock wall must return false');
+  const buddySrc = readFileSync(new URL('../public/js/game/aiBuddy.js', import.meta.url), 'utf8');
+  assert.ok(buddySrc.includes('buddy._stuckSec'), 'Expected anti-wedge stuck tangential slide recovery in aiBuddy.js');
+
+  // Pillar 4: Boss weak-point crit hitstop/shockwave & offscreen telegraph edge chevron
+  const lairSrc = readFileSync(new URL('../public/js/game/secretLairs.js', import.meta.url), 'utf8');
+  assert.ok(lairSrc.includes("addShockwave(lair, sp.x, sp.y, 4.4, '#fde047', 0.28)"), 'Expected golden crit shockwave on local weak-point strikes');
+  const bossRenSrc = readFileSync(new URL('../public/js/game/renderers/bossAndLairRenderer.js', import.meta.url), 'utf8');
+  assert.ok(bossRenSrc.includes('Offscreen Boss & Telegraph Edge Chevron'), 'Expected mobile-portrait offscreen boss telegraph chevron');
+  assert.ok(bossRenSrc.includes('★ STUNNED 1.65×'), 'Expected high-contrast stunned weak-point callout');
+});

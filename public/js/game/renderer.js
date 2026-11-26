@@ -646,6 +646,7 @@ export class CaveRenderer {
     };
     this._saveBakedLevel(entry);
     this._applyBakedLevel(entry);
+    this._prewarmForegroundSprites?.(targetLevel);
     return { cancelled: false, fromCache: false };
   }
 

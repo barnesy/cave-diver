@@ -3245,30 +3245,39 @@ function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light,
         ctx.fill();
       }
     }
+    // Dynamic torch-reactive wet leaf/bark micro-specular shimmer (zero sprite rebuilds!)
+    const wetA = _clamp((light.beamLit - 0.22) * 0.72 + light.sunLit * 0.28, 0, 0.62) * vis;
+    if (wetA > 0.10) {
+      const shimmer = reduced ? 0.85 : 0.62 + 0.38 * Math.sin(timeSec * 3.6 + el.phase);
+      const gx = sx + light.lightDirX * wPx * 0.24 + swayPx * 0.45;
+      const gy = sy + dir * hPx * 0.56;
+      _drawStarGlint(ctx, gx, gy, Math.max(3.2, hPx * 0.048), sssRgb, wetA * shimmer);
+    }
   } else if (el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster') {
-    const glintA = _clamp((light.beamLit - 0.18) * 0.95 + light.sunLit * 0.36 + light.backLit * 0.34, 0, 0.92) * vis;
-    if (glintA > 0.09) {
+    const glintA = _clamp((light.beamLit - 0.16) * 0.98 + light.sunLit * 0.36 + light.backLit * 0.36, 0, 0.94) * vis;
+    if (glintA > 0.08) {
       const twinkle = reduced ? 1 : 0.70 + 0.30 * Math.sin(timeSec * 4.4 + el.phase);
-      _drawStarGlint(ctx, sx + leanPx * 0.36, sy + dir * hPx * 0.94, Math.max(5.5, hPx * 0.095), rimRgb, glintA * twinkle);
-      if (glintA > 0.32) {
-        _drawStarGlint(ctx, sx - wPx * 0.20, wallY(-wPx * 0.20) + dir * hPx * 0.58, Math.max(3.6, hPx * 0.055), sssRgb, glintA * 0.65 * twinkle);
+      const beamShift = light.lightDirX * wPx * 0.12;
+      _drawStarGlint(ctx, sx + leanPx * 0.36 + beamShift, sy + dir * hPx * 0.92, Math.max(5.5, hPx * 0.095), rimRgb, glintA * twinkle);
+      if (glintA > 0.28) {
+        _drawStarGlint(ctx, sx - wPx * 0.20 + beamShift * 0.6, wallY(-wPx * 0.20) + dir * hPx * 0.56, Math.max(3.6, hPx * 0.058), sssRgb, glintA * 0.68 * twinkle);
       }
     }
-  } else if (el.kind === 'wreck-girder') {
-    const rimA = _clamp(light.backLit * 0.48 + (light.beamLit - 0.18) * 0.46, 0, 0.66) * vis;
+  } else if (el.kind === 'wreck-girder' || el.kind === 'rock-pillar') {
+    const rimA = _clamp(light.backLit * 0.48 + (light.beamLit - 0.18) * 0.50, 0, 0.68) * vis;
     if (rimA > 0.09) {
-      const bw = Math.max(18, wPx * 0.42);
+      const bw = Math.max(18, wPx * (el.kind === 'rock-pillar' ? 0.36 : 0.42));
       const sideSign = light.lightDirX >= 0 ? 1 : -1;
-      const tipX = sx + leanPx * 1.1 + sideSign * bw * 0.44;
-      const tipY = sy + dir * hPx * 0.95;
-      const baseX = sx + sideSign * bw * 0.68;
-      const baseY = wallY(sideSign * bw * 0.68);
+      const tipX = sx + leanPx * 0.9 + sideSign * bw * 0.44;
+      const tipY = sy + dir * hPx * 0.86;
+      const baseX = sx + sideSign * bw * 0.62;
+      const baseY = wallY(sideSign * bw * 0.62) + dir * hPx * 0.14;
       const rGrad = ctx.createLinearGradient(tipX, tipY, baseX, baseY);
       rGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimA * 0.85).toFixed(3)})`);
       rGrad.addColorStop(0.65, `rgba(${rimRgb}, ${(rimA * 0.28).toFixed(3)})`);
       rGrad.addColorStop(1, `rgba(${rimRgb}, 0)`);
       ctx.strokeStyle = rGrad;
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = el.kind === 'rock-pillar' ? 2.2 : 2.0;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(baseX, baseY);
@@ -3307,6 +3316,27 @@ export const foregroundDepthRendererMethods = {
       });
     });
     return Promise.all(tasks);
+  },
+
+  _prewarmForegroundSprites(level = this.level) {
+    if (!level || !Array.isArray(level.segments) || level.segments.length === 0) return;
+    const elements = buildForegroundDepthElements(level);
+    if (!elements || elements.length === 0) return;
+    const spawnX = level.spawn?.x ?? 0;
+    const spawnY = level.spawn?.y ?? 2;
+    const scale = this.pxPerM || 24;
+    // Pre-sample live SDF wall profiles for the nearest 6 formations around spawn during level load (0ms first-frame hitch!)
+    const sorted = elements
+      .map((el) => ({ el, d2: (el.x - spawnX) * (el.x - spawnX) + (el.y - spawnY) * (el.y - spawnY) }))
+      .sort((a, b) => a.d2 - b.d2);
+    const limit = Math.min(6, sorted.length);
+    for (let i = 0; i < limit; i++) {
+      const el = sorted[i].el;
+      const dir = el.side === 'ceiling' ? 1 : -1;
+      const sx = 640 + (el.x - spawnX) * scale;
+      const sy = 360 + (el.y - spawnY) * scale;
+      _buildLiveWallSampler(level, el, sx, sy, el.widthM * scale, dir, spawnX, spawnY, 640, 360, scale);
+    }
   },
 
   /**
@@ -3451,7 +3481,7 @@ export const foregroundDepthRendererMethods = {
 
       // Record accent-eligible visible elements for zero-cost Pass 2 reuse
       if (
-        (el.kind === 'kelp-fronds' || el.kind === 'cenote-roots' || el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster' || el.kind === 'wreck-girder') &&
+        (el.kind === 'kelp-fronds' || el.kind === 'cenote-roots' || el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster' || el.kind === 'wreck-girder' || el.kind === 'rock-pillar') &&
         light.lightVis >= 0.06 &&
         Math.max(light.beamLit, light.backLit, light.sunLit, light.ventLit, light.biolumLit) >= 0.16
       ) {

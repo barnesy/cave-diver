@@ -2770,11 +2770,30 @@ export const lightingAndFxMethods = {
     ctx.restore();
   },
 
+  _getShallowRefractionStamp(rgb) {
+    if (this._refractionStamp && this._refractionStampRgb === rgb) return this._refractionStamp;
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+    const c = document.createElement('canvas');
+    c.width = 1;
+    c.height = 32;
+    const gctx = c.getContext('2d');
+    if (!gctx) return null;
+    const g = gctx.createLinearGradient(0, 0, 0, 32);
+    g.addColorStop(0, `rgba(${rgb}, 0)`);
+    g.addColorStop(0.5, `rgba(${rgb}, 1)`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
+    gctx.fillStyle = g;
+    gctx.fillRect(0, 0, 1, 32);
+    this._refractionStamp = c;
+    this._refractionStampRgb = rgb;
+    return c;
+  },
+
   /**
-   * Subtle animated sunlit refraction ribbons drifting beneath open shallow basins (y < 14m) (v204 AAA Polish Wave 2).
+   * Subtle animated sunlit refraction ribbons drifting beneath open shallow basins (y < 14m) (v204 / v256 stamp-batched).
    */
   _drawShallowRefractionBands(ctx, cw, ch, surfY, diverY, weatherCaustics, timeSec) {
-    if (this._reducedMotion || this._perfBudget?.lowPower || weatherCaustics < 0.25) return;
+    if (this._reducedMotion || this._perfBudget?.lowPower || this._perfBudget?.tier === 'performance' || weatherCaustics < 0.25) return;
     if ((diverY || 0) > 16 || surfY > ch - 20) return;
     const depthFade = Math.max(0, Math.min(1, 1 - Math.max(0, (diverY || 0) - 2) / 14));
     if (depthFade <= 0.04) return;
@@ -2782,24 +2801,31 @@ export const lightingAndFxMethods = {
     const bandH = Math.min(ch - minY, ch * 0.42);
     if (bandH <= 18) return;
     const grade = computeBiomeDepthGrade(this.level, diverY || 0);
+    const stamp = this._getShallowRefractionStamp?.(grade.shimmerRgb) || null;
+    const count = this._isCoarseMobile ? 3 : 4;
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    for (let i = 0; i < 4; i++) {
-      const y = minY + ((i + 0.5) / 4) * bandH + Math.sin(timeSec * (0.9 + i * 0.18) + i * 1.9) * 14;
+    for (let i = 0; i < count; i++) {
+      const y = minY + ((i + 0.5) / count) * bandH + Math.sin(timeSec * (0.9 + i * 0.18) + i * 1.9) * 14;
       const a = 0.042 * depthFade * weatherCaustics * (1 - i * 0.18);
       if (a <= 0.004) continue;
-      const g = ctx.createLinearGradient(0, y - 14, 0, y + 14);
-      g.addColorStop(0, `rgba(${grade.shimmerRgb}, 0)`);
-      g.addColorStop(0.5, `rgba(${grade.shimmerRgb}, ${a.toFixed(4)})`);
-      g.addColorStop(1, `rgba(${grade.shimmerRgb}, 0)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, y - 14, cw, 28);
+      if (stamp) {
+        ctx.globalAlpha = a;
+        ctx.drawImage(stamp, 0, y - 14, cw, 28);
+      } else {
+        const g = ctx.createLinearGradient(0, y - 14, 0, y + 14);
+        g.addColorStop(0, `rgba(${grade.shimmerRgb}, 0)`);
+        g.addColorStop(0.5, `rgba(${grade.shimmerRgb}, ${a.toFixed(4)})`);
+        g.addColorStop(1, `rgba(${grade.shimmerRgb}, 0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, y - 14, cw, 28);
+      }
     }
     ctx.restore();
   },
 
   /**
-   * Volumetric skylight & wreck porthole sunbeam shafts streaming through open shallow water (v206 AAA Polish Wave 3).
+   * Volumetric skylight & wreck porthole sunbeam shafts streaming through open shallow water (v206 / v256 batched).
    */
   _drawVolumetricSkylightBeams(ctx, cw, ch, surfY, diverY, weatherCaustics, timeSec, toScreenX, scale) {
     if (this._reducedMotion || this._perfBudget?.lowPower || this._perfBudget?.volumetricBeams === false) return;
@@ -2817,31 +2843,34 @@ export const lightingAndFxMethods = {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     const topY = Math.max(-12, surfY);
-    for (let aIdx = 0; aIdx < anchors.length; aIdx++) {
-      const baseSx = typeof toScreenX === 'function' ? toScreenX(anchors[aIdx]) : cw * 0.5;
-      if (baseSx < -cw * 0.45 || baseSx > cw * 1.45) continue;
-      for (let i = 0; i < 3; i++) {
-        const offsetM = (i - 1) * (this.level?.isWreck ? 6.5 : 3.6);
-        const sway = Math.sin(timeSec * (0.45 + i * 0.14) + aIdx * 2.1 + i * 1.4) * 18;
-        const sx = baseSx + offsetM * (scale || 28) + sway * 0.4;
-        const topW = (24 + i * 12) * Math.min(1.4, (scale || 28) / 26);
-        const beamH = Math.min(ch - topY + 20, (this.level?.isWreck ? 22 : 17) * (scale || 28));
-        if (beamH < 30) continue;
-        const slant = beamH * 0.24 + sway;
-        const botW = topW * 2.15;
-        const alpha = 0.052 * depthFade * weatherCaustics * (0.72 + 0.28 * Math.sin(timeSec * 0.8 + i * 2.3));
-        if (alpha <= 0.004) continue;
-        const grad = ctx.createLinearGradient(sx, topY, sx + slant, topY + beamH);
+    const beamH = Math.min(ch - topY + 20, (this.level?.isWreck ? 22 : 17) * (scale || 28));
+    if (beamH >= 30) {
+      const pulse = 0.78 + 0.22 * Math.sin(timeSec * 0.8);
+      const alpha = 0.050 * depthFade * weatherCaustics * pulse;
+      if (alpha > 0.004) {
+        const grad = ctx.createLinearGradient(0, topY, 0, topY + beamH);
         grad.addColorStop(0, `rgba(${grade.shimmerRgb}, ${alpha.toFixed(4)})`);
         grad.addColorStop(0.55, `rgba(${grade.shimmerRgb}, ${(alpha * 0.45).toFixed(4)})`);
         grad.addColorStop(1, `rgba(${grade.shimmerRgb}, 0)`);
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.moveTo(sx - topW * 0.5, topY);
-        ctx.lineTo(sx + topW * 0.5, topY);
-        ctx.lineTo(sx + slant + botW * 0.5, topY + beamH);
-        ctx.lineTo(sx + slant - botW * 0.5, topY + beamH);
-        ctx.closePath();
+        for (let aIdx = 0; aIdx < anchors.length; aIdx++) {
+          const baseSx = typeof toScreenX === 'function' ? toScreenX(anchors[aIdx]) : cw * 0.5;
+          if (baseSx < -cw * 0.45 || baseSx > cw * 1.45) continue;
+          for (let i = 0; i < 3; i++) {
+            const offsetM = (i - 1) * (this.level?.isWreck ? 6.5 : 3.6);
+            const sway = Math.sin(timeSec * (0.45 + i * 0.14) + aIdx * 2.1 + i * 1.4) * 18;
+            const sx = baseSx + offsetM * (scale || 28) + sway * 0.4;
+            const topW = (24 + i * 12) * Math.min(1.4, (scale || 28) / 26);
+            const slant = beamH * 0.24 + sway;
+            const botW = topW * 2.15;
+            ctx.moveTo(sx - topW * 0.5, topY);
+            ctx.lineTo(sx + topW * 0.5, topY);
+            ctx.lineTo(sx + slant + botW * 0.5, topY + beamH);
+            ctx.lineTo(sx + slant - botW * 0.5, topY + beamH);
+            ctx.closePath();
+          }
+        }
         ctx.fill();
       }
     }

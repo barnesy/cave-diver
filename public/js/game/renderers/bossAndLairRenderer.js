@@ -4288,7 +4288,7 @@ export const bossAndLairMethods = {
         ctx.beginPath();
         ctx.arc(coreX, coreY, coreR * 0.92, 0, Math.PI * 2);
         ctx.stroke();
-        // 3 orbiting diamond reticle petals around core
+        // 3 orbiting diamond reticle petals around core + crisp crosshair ticks (v256)
         for (let p = 0; p < 3; p++) {
           const pa = timeSec * 2.2 + (p * Math.PI * 2) / 3;
           const ptx = coreX + Math.cos(pa) * coreR * 1.18;
@@ -4298,7 +4298,79 @@ export const bossAndLairMethods = {
           ctx.arc(ptx, pty, Math.max(2.2, 0.1 * scale), 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.strokeStyle = boss.aiState === 'stunned' ? '#fde047' : 'rgba(254, 240, 138, 0.82)';
+        ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+        ctx.beginPath();
+        const tickIn = coreR * 0.98;
+        const tickOut = coreR * 1.42;
+        for (let t = 0; t < 4; t++) {
+          const ta = (t * Math.PI) / 2;
+          ctx.moveTo(coreX + Math.cos(ta) * tickIn, coreY + Math.sin(ta) * tickIn);
+          ctx.lineTo(coreX + Math.cos(ta) * tickOut, coreY + Math.sin(ta) * tickOut);
+        }
+        ctx.stroke();
+        if (boss.aiState === 'stunned') {
+          ctx.font = `800 ${Math.max(10, Math.round(11 * dpr))}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.strokeStyle = 'rgba(2, 6, 23, 0.92)';
+          ctx.lineWidth = 3 * dpr;
+          ctx.strokeText('★ STUNNED 1.65×', coreX, coreY - coreR * 1.58);
+          ctx.fillStyle = '#fde047';
+          ctx.fillText('★ STUNNED 1.65×', coreX, coreY - coreR * 1.58);
+        }
         ctx.restore();
+      }
+
+      // 3j. Offscreen Boss & Telegraph Edge Chevron for mobile portrait spatial awareness (v256)
+      if (boss.aiState !== 'dormant') {
+        const margin = 28 * dpr;
+        if (bx < margin || bx > cw - margin || by < margin || by > ch - margin) {
+          const cxScreen = cw * 0.5;
+          const cyScreen = ch * 0.5;
+          const ang = Math.atan2(by - cyScreen, bx - cxScreen);
+          const cosA = Math.cos(ang);
+          const sinA = Math.sin(ang);
+          const halfW = cw * 0.5 - margin;
+          const halfH = ch * 0.5 - margin;
+          const tEdge = Math.min(
+            Math.abs(cosA) > 0.001 ? halfW / Math.abs(cosA) : 1e6,
+            Math.abs(sinA) > 0.001 ? halfH / Math.abs(sinA) : 1e6
+          );
+          const ex = cxScreen + cosA * tEdge;
+          const ey = cyScreen + sinA * tEdge;
+          const isWindup =
+            boss.aiState === 'lunge_windup' ||
+            boss.aiState === 'lunge_dash' ||
+            boss.aiState === 'slam_windup' ||
+            boss.aiState === 'beam_windup' ||
+            boss.aiState === 'beam_sweep';
+          const pulse = 0.72 + 0.28 * Math.sin(timeSec * (isWindup ? 14 : 6));
+          const chevR = (isWindup ? 14 : 11) * dpr;
+          ctx.save();
+          ctx.translate(ex, ey);
+          ctx.rotate(ang);
+          ctx.globalAlpha = pulse;
+          ctx.fillStyle = isWindup ? '#fb7185' : pal.accent;
+          ctx.strokeStyle = 'rgba(2, 6, 23, 0.9)';
+          ctx.lineWidth = 2.2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(chevR, 0);
+          ctx.lineTo(-chevR * 0.72, -chevR * 0.68);
+          ctx.lineTo(-chevR * 0.35, 0);
+          ctx.lineTo(-chevR * 0.72, chevR * 0.68);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          if (isWindup) {
+            ctx.rotate(-ang);
+            ctx.font = `900 ${Math.max(11, Math.round(12 * dpr))}px ui-monospace, monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fef08a';
+            ctx.fillText('!', -cosA * (chevR * 1.45), -sinA * (chevR * 1.45));
+          }
+          ctx.restore();
+        }
       }
     }
 

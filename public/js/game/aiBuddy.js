@@ -237,6 +237,24 @@ function openWaterClearance(level, x, y) {
   return -evaluateCaveSDF(level, x, y);
 }
 
+/**
+ * Fast 4-sample open-water line-of-sight check between two world points (v256):
+ * prevents AI buddies from selecting formation/guide points across thin rock ledges or steep sump ceilings.
+ */
+export function hasOpenLineOfSight(level, x1, y1, x2, y2, minClearM = 0.28) {
+  if (!level) return true;
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  if (dist < 0.35) return true;
+  const steps = Math.max(2, Math.min(6, Math.ceil(dist / 0.85)));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (openWaterClearance(level, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) < minClearM) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function findSafeSpawnOffset(level, diver, slotIndex = 0) {
   const baseX = Number(diver?.x) || 0;
   const baseY = Number(diver?.y) || 1.2;
@@ -897,10 +915,14 @@ function chooseFormationTarget(level, diver, buddy, session = null, profile = AI
       const gDist = Math.hypot(gx, gy);
       if (gDist > 1.2) {
         const leadDist = Math.min(2.65, gDist * 0.72);
-        const tx = diver.x + (gx / gDist) * leadDist;
-        const ty = Math.max(0.85, diver.y + (gy / gDist) * leadDist);
-        if (openWaterClearance(level, tx, ty) >= 0.68) {
-          return { x: tx, y: ty };
+        const baseAng = Math.atan2(gy, gx);
+        // Probe direct line + ±0.48 rad corridor-hug arcs so Maya never pushes into steep sump ceilings/ledges (v256)
+        for (const offsetAng of [0, 0.48, -0.48]) {
+          const tx = diver.x + Math.cos(baseAng + offsetAng) * leadDist;
+          const ty = Math.max(0.85, diver.y + Math.sin(baseAng + offsetAng) * leadDist);
+          if (openWaterClearance(level, tx, ty) >= 0.68 && hasOpenLineOfSight(level, diver.x, diver.y, tx, ty, 0.32)) {
+            return { x: tx, y: ty };
+          }
         }
       }
     }
@@ -938,7 +960,8 @@ function chooseFormationTarget(level, diver, buddy, session = null, profile = AI
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i];
     const clear = openWaterClearance(level, s.x, s.y);
-    const score = Math.min(2.4, clear) + s.bonus;
+    const losBonus = hasOpenLineOfSight(level, diver.x, diver.y, s.x, s.y, 0.24) ? 0.45 : -1.25;
+    const score = Math.min(2.4, clear) + s.bonus + losBonus;
     if (score > bestScore) {
       bestScore = score;
       bestSlot = s;
@@ -1411,12 +1434,31 @@ export function stepAiBuddy(buddy, session, dt, callbacks = {}) {
   }
 
   // Gentle wall-clearance repulsion using cave SDF gradient (normal points INTO rock, so push along -normal)
+  // Plus anti-wedge tangential slide around steep sumps & tight overhangs (v256)
   const wallClear = openWaterClearance(level, buddy.x, buddy.y);
-  if (wallClear < 1.25) {
+  const actualSpd = Math.hypot(buddy.vx || 0, buddy.vy || 0);
+  if (!pinnedByIssue && !needsLeadNear && desiredSpeed > 0.6 && actualSpd < 0.24 && distToTarget > 1.0) {
+    buddy._stuckSec = (buddy._stuckSec || 0) + clampedDt;
+  } else {
+    buddy._stuckSec = Math.max(0, (buddy._stuckSec || 0) - clampedDt * 2.5);
+  }
+  if (wallClear < 1.25 || (buddy._stuckSec || 0) > 0.35) {
     evaluateCaveNormal(level, buddy.x, buddy.y, _normScratch);
-    const push = (1.25 - wallClear) * 2.4;
-    desVx -= _normScratch.nx * push;
-    desVy -= _normScratch.ny * push;
+    if (wallClear < 1.25) {
+      const push = (1.25 - wallClear) * 2.4;
+      desVx -= _normScratch.nx * push;
+      desVy -= _normScratch.ny * push;
+    }
+    if ((buddy._stuckSec || 0) > 0.35) {
+      // Slide cleanly along wall tangent in the direction closest to the target
+      const tx1 = -_normScratch.ny;
+      const ty1 = _normScratch.nx;
+      const dot = tx1 * dx + ty1 * dy;
+      const sign = dot >= 0 ? 1 : -1;
+      const slideMag = Math.min(2.8, desiredSpeed * 0.95);
+      desVx += tx1 * sign * slideMag - _normScratch.nx * 0.85;
+      desVy += ty1 * sign * slideMag - _normScratch.ny * 0.85;
+    }
   }
 
   // Arena cover-pillar avoidance during Secret Lair boss fight (v182)
