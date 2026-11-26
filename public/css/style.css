@@ -14052,19 +14052,34 @@ h1, h2, h3,
   display: none !important;
 }
 
-/* ─── v242 SEQUENCED STAGGERED FLOATY VIEW CHOREOGRAPHY (IN & OUT ACROSS ALL VIEWS) ─── */
-@keyframes uwStaggerFloatIn {
-  from {
+/* ─── v245 ELASTIC BUBBLE-LIKE INDIVIDUAL VIEW CHOREOGRAPHY (IN & OUT ACROSS ALL VIEWS) ─── */
+@keyframes uwBubblePopIn {
+  0% {
     opacity: 0;
-    translate: 0 20px;
+    translate: 0 34px;
+    scale: 0.78;
   }
-  to {
+  52% {
+    opacity: 1;
+    translate: 0 -7px;
+    scale: 1.055;
+  }
+  75% {
+    translate: 0 3px;
+    scale: 0.982;
+  }
+  89% {
+    translate: 0 -1px;
+    scale: 1.008;
+  }
+  100% {
     opacity: 1;
     translate: 0 0;
+    scale: 1;
   }
 }
 
-/* Disable legacy sectionRise fill-mode:both animation so v242 staggered IN & OUT transitions have 100% control */
+/* Disable legacy sectionRise fill-mode:both animation so v245 elastic bubble IN & OUT transitions have 100% control */
 #screen-menu:not([hidden]) .menu-header,
 #screen-menu:not([hidden]) .menu-desc-wrap,
 #screen-menu:not([hidden]) .level-picker-block,
@@ -14072,7 +14087,7 @@ h1, h2, h3,
   animation: none !important;
 }
 
-/* Home Screen individual elements: buoyant staggered entrance on boot / return & staggered exit when leaving for a modal */
+/* Home Screen individual elements: elastic buoyant bubble pop IN on boot / return & elastic pop OUT when leaving for a modal */
 #screen-menu .menu-header,
 #screen-menu .level-picker-head,
 #screen-menu #site-map-panel,
@@ -14083,29 +14098,32 @@ h1, h2, h3,
 #screen-menu #lan-setup-controls {
   opacity: 1;
   translate: 0 0;
+  scale: 1;
+  transform-origin: center center;
   transition:
-    opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    translate 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.56s cubic-bezier(0.34, 1.56, 0.64, 1),
+    scale 0.54s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
     background 0.16s ease,
     border-color 0.16s ease,
     box-shadow 0.2s ease;
 }
 
-/* Staggered return-to-Home delays (only on opacity & translate so hover transform stays 0ms snappy!) */
-#screen-menu .menu-header { transition-delay: 110ms, 110ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu .level-picker-head { transition-delay: 145ms, 145ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #site-map-panel { transition-delay: 180ms, 180ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #level-cards { transition-delay: 215ms, 215ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #first-play-welcome-strip { transition-delay: 250ms, 250ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu .menu-actions-primary { transition-delay: 280ms, 280ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(1) { transition-delay: 310ms, 310ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(2) { transition-delay: 340ms, 340ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(3) { transition-delay: 370ms, 370ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(4) { transition-delay: 400ms, 400ms, 0ms, 0ms, 0ms, 0ms; }
-#screen-menu #lan-setup-controls { transition-delay: 430ms, 430ms, 0ms, 0ms, 0ms, 0ms; }
+/* Staggered elastic bubble return-to-Home delays (only on opacity, translate, scale — hover transform stays 0ms snappy!) */
+#screen-menu .menu-header { transition-delay: 95ms, 95ms, 95ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu .level-picker-head { transition-delay: 130ms, 130ms, 130ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #site-map-panel { transition-delay: 165ms, 165ms, 165ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #level-cards { transition-delay: 200ms, 200ms, 200ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #first-play-welcome-strip { transition-delay: 235ms, 235ms, 235ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu .menu-actions-primary { transition-delay: 270ms, 270ms, 270ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(1) { transition-delay: 300ms, 300ms, 300ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(2) { transition-delay: 332ms, 332ms, 332ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(3) { transition-delay: 364ms, 364ms, 364ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #menu-actions-core4 > .home-core-btn:nth-child(4) { transition-delay: 396ms, 396ms, 396ms, 0ms, 0ms, 0ms, 0ms; }
+#screen-menu #lan-setup-controls { transition-delay: 428ms, 428ms, 428ms, 0ms, 0ms, 0ms, 0ms; }
 
-/* Initial boot & return-from-dive staggered float-in via @starting-style */
+/* Initial boot & return-from-dive elastic bubble pop-in via @starting-style */
 @starting-style {
   #screen-menu:not([hidden]) .menu-header,
   #screen-menu:not([hidden]) .level-picker-head,
@@ -14116,11 +14134,12 @@ h1, h2, h3,
   #screen-menu:not([hidden]) #menu-actions-core4 > .home-core-btn,
   #screen-menu:not([hidden]) #lan-setup-controls {
     opacity: 0;
-    translate: 0 22px;
+    translate: 0 30px;
+    scale: 0.84;
   }
 }
 
-/* Phase 1 when leaving Home for ANY modal (Logbook, Gear Workshop, Dive Setup, etc.): Home floats OUT staggered */
+/* Phase 1 when leaving Home for ANY modal: Home elements float UP & pop OUT like rising bubbles individually */
 body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-header,
 body:has(.lb-stats-modal:not([hidden])) #screen-menu .level-picker-head,
 body:has(.lb-stats-modal:not([hidden])) #screen-menu #site-map-panel,
@@ -14130,39 +14149,41 @@ body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-actions-primary,
 body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn,
 body:has(.lb-stats-modal:not([hidden])) #screen-menu #lan-setup-controls {
   opacity: 0;
-  translate: 0 -16px;
+  translate: 0 -24px;
+  scale: 0.86;
   pointer-events: none;
-  transition-duration: 0.2s, 0.24s, 0.16s, 0.16s, 0.16s, 0.16s;
+  transition-duration: 0.22s, 0.3s, 0.28s, 0.16s, 0.16s, 0.16s, 0.16s;
+  transition-timing-function: ease-in, cubic-bezier(0.55, -0.24, 0.72, 0.14), cubic-bezier(0.55, -0.24, 0.72, 0.14), ease, ease, ease, ease;
 }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-header { transition-delay: 0ms, 0ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu .level-picker-head { transition-delay: 18ms, 18ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #site-map-panel { transition-delay: 34ms, 34ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #level-cards { transition-delay: 48ms, 48ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #first-play-welcome-strip { transition-delay: 64ms, 64ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-actions-primary { transition-delay: 78ms, 78ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(1) { transition-delay: 90ms, 90ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(2) { transition-delay: 102ms, 102ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(3) { transition-delay: 114ms, 114ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(4) { transition-delay: 126ms, 126ms, 0ms, 0ms, 0ms, 0ms; }
-body:has(.lb-stats-modal:not([hidden])) #screen-menu #lan-setup-controls { transition-delay: 138ms, 138ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-header { transition-delay: 0ms, 0ms, 0ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu .level-picker-head { transition-delay: 18ms, 18ms, 18ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #site-map-panel { transition-delay: 34ms, 34ms, 34ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #level-cards { transition-delay: 50ms, 50ms, 50ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #first-play-welcome-strip { transition-delay: 66ms, 66ms, 66ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu .menu-actions-primary { transition-delay: 82ms, 82ms, 82ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(1) { transition-delay: 96ms, 96ms, 96ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(2) { transition-delay: 110ms, 110ms, 110ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(3) { transition-delay: 124ms, 124ms, 124ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #menu-actions-core4 > .home-core-btn:nth-child(4) { transition-delay: 138ms, 138ms, 138ms, 0ms, 0ms, 0ms, 0ms; }
+body:has(.lb-stats-modal:not([hidden])) #screen-menu #lan-setup-controls { transition-delay: 152ms, 152ms, 152ms, 0ms, 0ms, 0ms, 0ms; }
 
-/* Phase 2 when entering ANY Modal View (Gear Workshop, Logbook, Dive Setup, etc.):
-   Wait briefly as Home clears out, then float modal + every individual child element IN staggered!
-   On close: immediate 0ms exit float-out before Home returns. */
+/* Phase 2 when entering ANY Modal View:
+   Wait briefly as Home clears out, then every individual element pops IN like rising elastic bubbles!
+   On close: immediate elastic pop-out before Home returns. */
 .lb-stats-modal {
-  background: radial-gradient(circle at 50% 35%, rgba(4, 18, 34, 0.52), rgba(1, 7, 16, 0.74));
-  backdrop-filter: blur(6px);
+  background: radial-gradient(circle at 50% 30%, rgba(4, 18, 36, 0.56), rgba(1, 7, 16, 0.82));
+  backdrop-filter: blur(10px);
   opacity: 1;
   transition:
-    opacity 0.22s ease 55ms,
-    display 0.24s allow-discrete;
+    opacity 0.24s ease 55ms,
+    display 0.26s allow-discrete;
 }
 .lb-stats-modal[hidden] {
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity 0.2s ease 0ms,
-    display 0.22s allow-discrete;
+    opacity 0.22s ease 0ms,
+    display 0.24s allow-discrete;
 }
 @starting-style {
   .lb-stats-modal:not([hidden]) {
@@ -14179,105 +14200,427 @@ body:has(.lb-stats-modal:not([hidden])) #screen-menu #lan-setup-controls { trans
   opacity: 1;
   translate: 0 0;
   transition:
-    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1) 110ms,
-    translate 0.34s cubic-bezier(0.22, 1, 0.36, 1) 110ms;
+    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1) 95ms,
+    translate 0.42s cubic-bezier(0.34, 1.48, 0.64, 1) 95ms;
 }
 .lb-stats-modal[hidden] .lb-stats-card {
   opacity: 0;
-  translate: 0 20px;
+  translate: 0 -18px;
   transition:
     opacity 0.18s ease 0ms,
-    translate 0.2s ease 0ms;
+    translate 0.22s cubic-bezier(0.55, -0.22, 0.72, 0.14) 0ms;
 }
 @starting-style {
   .lb-stats-modal:not([hidden]) .lb-stats-card {
     opacity: 0;
-    translate: 0 24px;
+    translate: 0 26px;
   }
 }
 
-/* Individual child sections inside EVERY modal float IN staggered after the card arrives, and float OUT on close */
+/* Individual child sections inside EVERY modal pop IN like elastic bubbles, and float/pop OUT on close */
 .lb-stats-modal .lb-stats-card > * {
   opacity: 1;
   translate: 0 0;
+  scale: 1;
+  transform-origin: center center;
   transition:
     opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    translate 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    translate 0.54s cubic-bezier(0.34, 1.56, 0.64, 1),
+    scale 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.lb-stats-modal .lb-stats-card > *:nth-child(1) { transition-delay: 135ms; }
-.lb-stats-modal .lb-stats-card > *:nth-child(2) { transition-delay: 170ms; }
-.lb-stats-modal .lb-stats-card > *:nth-child(3) { transition-delay: 205ms; }
-.lb-stats-modal .lb-stats-card > *:nth-child(4) { transition-delay: 240ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(1) { transition-delay: 115ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(2) { transition-delay: 155ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(3) { transition-delay: 195ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(4) { transition-delay: 235ms; }
 .lb-stats-modal .lb-stats-card > *:nth-child(5) { transition-delay: 275ms; }
-.lb-stats-modal .lb-stats-card > *:nth-child(6) { transition-delay: 310ms; }
-.lb-stats-modal .lb-stats-card > *:nth-child(n+7) { transition-delay: 345ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(6) { transition-delay: 315ms; }
+.lb-stats-modal .lb-stats-card > *:nth-child(n+7) { transition-delay: 350ms; }
 
 .lb-stats-modal[hidden] .lb-stats-card > * {
   opacity: 0;
-  translate: 0 12px;
-  transition-duration: 0.16s, 0.18s;
+  translate: 0 -18px;
+  scale: 0.86;
+  transition-duration: 0.18s, 0.24s, 0.24s;
+  transition-timing-function: ease-in, cubic-bezier(0.55, -0.24, 0.72, 0.14), cubic-bezier(0.55, -0.24, 0.72, 0.14);
   transition-delay: 0ms;
 }
 @starting-style {
   .lb-stats-modal:not([hidden]) .lb-stats-card > * {
     opacity: 0;
-    translate: 0 18px;
+    translate: 0 28px;
+    scale: 0.86;
   }
 }
 
-/* Staggered card wave inside Gear Workshop, Slot Modal, Logbook & Leaderboard */
+/* Elastic individual bubble wave for cards, tiles, stats & portraits inside Gear Workshop, Slot Modal, Logbook, Bounties & Leaderboard */
 #livery-modal:not([hidden]) .livery-equipped-card,
+#livery-modal:not([hidden]) .livery-perf-stat,
+#livery-modal:not([hidden]) .livery-welcome-card,
+#gear-slot-modal:not([hidden]) .gear-slot-equipped-hero,
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card,
-#modal-logbook:not([hidden]) .logbook-stat-card,
+#modal-logbook:not([hidden]) .logbook-kpi,
 #modal-logbook:not([hidden]) .logbook-cert-card,
+#modal-logbook:not([hidden]) .fg-card,
+#bounties-modal:not([hidden]) .bounty-card,
 #leaderboard-panel:not([hidden]) > * {
-  animation: uwStaggerFloatIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: uwBubblePopIn 0.56s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(1),
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(1),
+#livery-modal:not([hidden]) .livery-welcome-card:nth-child(1),
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(1),
-#modal-logbook:not([hidden]) .logbook-stat-card:nth-child(1),
-#leaderboard-panel:not([hidden]) > *:nth-child(1) { animation-delay: 180ms; }
+#modal-logbook:not([hidden]) .logbook-kpi:nth-child(1),
+#modal-logbook:not([hidden]) .logbook-cert-card:nth-child(1),
+#modal-logbook:not([hidden]) .fg-card:nth-child(1),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(1),
+#leaderboard-panel:not([hidden]) > *:nth-child(1) { animation-delay: 165ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(2),
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(2),
+#livery-modal:not([hidden]) .livery-welcome-card:nth-child(2),
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(2),
-#modal-logbook:not([hidden]) .logbook-stat-card:nth-child(2),
-#leaderboard-panel:not([hidden]) > *:nth-child(2) { animation-delay: 210ms; }
+#modal-logbook:not([hidden]) .logbook-kpi:nth-child(2),
+#modal-logbook:not([hidden]) .logbook-cert-card:nth-child(2),
+#modal-logbook:not([hidden]) .fg-card:nth-child(2),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(2),
+#leaderboard-panel:not([hidden]) > *:nth-child(2) { animation-delay: 200ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(3),
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(3),
+#livery-modal:not([hidden]) .livery-welcome-card:nth-child(3),
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(3),
-#modal-logbook:not([hidden]) .logbook-stat-card:nth-child(3),
-#leaderboard-panel:not([hidden]) > *:nth-child(3) { animation-delay: 240ms; }
+#modal-logbook:not([hidden]) .logbook-kpi:nth-child(3),
+#modal-logbook:not([hidden]) .logbook-cert-card:nth-child(3),
+#modal-logbook:not([hidden]) .fg-card:nth-child(3),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(3),
+#leaderboard-panel:not([hidden]) > *:nth-child(3) { animation-delay: 235ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(4),
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(4),
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(4),
-#modal-logbook:not([hidden]) .logbook-stat-card:nth-child(4),
+#modal-logbook:not([hidden]) .logbook-kpi:nth-child(4),
+#modal-logbook:not([hidden]) .logbook-cert-card:nth-child(4),
+#modal-logbook:not([hidden]) .fg-card:nth-child(4),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(4),
 #leaderboard-panel:not([hidden]) > *:nth-child(4) { animation-delay: 270ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(5),
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(5),
 #gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(5),
-#leaderboard-panel:not([hidden]) > *:nth-child(5) { animation-delay: 300ms; }
+#modal-logbook:not([hidden]) .logbook-cert-card:nth-child(5),
+#modal-logbook:not([hidden]) .fg-card:nth-child(5),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(5),
+#leaderboard-panel:not([hidden]) > *:nth-child(5) { animation-delay: 305ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(6),
-#gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(6) { animation-delay: 330ms; }
-#livery-modal:not([hidden]) .livery-equipped-card:nth-child(7) { animation-delay: 355ms; }
-#livery-modal:not([hidden]) .livery-equipped-card:nth-child(8) { animation-delay: 380ms; }
-#livery-modal:not([hidden]) .livery-equipped-card:nth-child(9) { animation-delay: 405ms; }
-#livery-modal:not([hidden]) .livery-equipped-card:nth-child(n+10) { animation-delay: 430ms; }
+#livery-modal:not([hidden]) .livery-perf-stat:nth-child(6),
+#gear-slot-modal:not([hidden]) .gear-slot-cmp-card:nth-child(6),
+#modal-logbook:not([hidden]) .fg-card:nth-child(6),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(6) { animation-delay: 340ms; }
+#livery-modal:not([hidden]) .livery-equipped-card:nth-child(7),
+#modal-logbook:not([hidden]) .fg-card:nth-child(n+7),
+#bounties-modal:not([hidden]) .bounty-card:nth-child(n+7) { animation-delay: 375ms; }
+#livery-modal:not([hidden]) .livery-equipped-card:nth-child(8) { animation-delay: 400ms; }
+#livery-modal:not([hidden]) .livery-equipped-card:nth-child(9) { animation-delay: 425ms; }
+#livery-modal:not([hidden]) .livery-equipped-card:nth-child(n+10) { animation-delay: 450ms; }
 
-/* Nested Modal Sequenced Handoff: Gear Workshop floats OUT staggered when Gear Slot Modal opens, then floats back IN on close */
+/* Nested Modal Sequenced Elastic Handoff: Gear Workshop pops OUT when Gear Slot Modal opens, then bounces back IN on close */
 body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
   opacity: 0;
-  translate: 0 -16px;
-  scale: 0.968;
+  translate: 0 -22px;
+  scale: 0.92;
   pointer-events: none;
   transition:
     opacity 0.2s ease 0ms,
-    translate 0.24s ease 0ms,
-    scale 0.24s ease 0ms;
+    translate 0.26s cubic-bezier(0.55, -0.22, 0.72, 0.14) 0ms,
+    scale 0.26s cubic-bezier(0.55, -0.22, 0.72, 0.14) 0ms;
 }
 body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   opacity: 0;
-  translate: 0 -12px;
-  transition-duration: 0.18s, 0.2s;
+  translate: 0 -16px;
+  scale: 0.88;
+  transition-duration: 0.18s, 0.22s, 0.22s;
   transition-delay: 0ms;
 }
 
-/* Popover smooth IN & OUT transitions */
+/* ─── v245 SIMPLIFIED FRAMELESS, GRAPHIC-CENTRAL GEAR, LOGBOOK & BOUNTY PAGES ─── */
+#livery-modal .livery-modal-card,
+#gear-slot-modal .gear-slot-modal-card,
+#modal-logbook .logbook-card,
+#bounties-modal .bounties-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 12px 14px 20px;
+}
+
+#livery-modal .lb-stats-title,
+#gear-slot-modal .lb-stats-title,
+#modal-logbook .lb-stats-title,
+#bounties-modal .lb-stats-title {
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.78);
+}
+
+/* Gear Workshop & Gear Selection: Frameless Hero Stage & Floating Central Gear Artwork */
+#livery-modal .livery-preview-wrap,
+#gear-slot-modal .gear-slot-preview-wrap {
+  border: none !important;
+  border-radius: 22px;
+  background: transparent !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(186, 230, 253, 0.12);
+}
+#livery-modal .livery-welcome-stage {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 0 6px;
+}
+#livery-modal .livery-welcome-card {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 16px;
+  box-shadow: none !important;
+  padding: 6px 8px;
+}
+#livery-modal .livery-perf-panel {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px 0;
+}
+#livery-modal .livery-perf-compact-grid .livery-perf-stat {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 6px;
+}
+#livery-modal .livery-cat-tabs {
+  background: rgba(4, 16, 32, 0.36) !important;
+  border: none !important;
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.1);
+}
+#livery-modal .livery-cat-tab {
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+}
+#livery-modal .livery-cat-tab.active {
+  background: rgba(56, 189, 248, 0.22);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.24);
+}
+#livery-modal .livery-equipped-grid {
+  gap: 10px 8px;
+}
+#livery-modal .livery-equipped-card,
+#livery-modal .livery-equipped-card.tier-uncommon,
+#livery-modal .livery-equipped-card.tier-rare,
+#livery-modal .livery-equipped-card.tier-epic,
+#livery-modal .livery-equipped-card.tier-mythic,
+#livery-modal .livery-equipped-card.tier-legendary,
+#livery-modal .livery-equipped-card.has-new-alt {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 6px 4px 8px;
+}
+#livery-modal .livery-equipped-card:hover {
+  background: radial-gradient(circle at 50% 42%, rgba(56, 189, 248, 0.18), transparent 72%) !important;
+  box-shadow: none !important;
+  transform: translateY(-4px) scale(1.04);
+}
+#livery-modal .livery-card-stage {
+  min-height: 76px;
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.14), transparent 70%);
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
+}
+#livery-modal .livery-equipped-card:hover .livery-card-stage {
+  transform: scale(1.1);
+  filter: drop-shadow(0 14px 24px rgba(56, 189, 248, 0.34));
+}
+#livery-modal .livery-card-stage svg {
+  width: 68px;
+  height: 68px;
+}
+#livery-modal .livery-swatch-btn,
+#livery-modal .livery-chroma-card,
+#livery-modal .livery-map-lead-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+#livery-modal .livery-swatch-btn:hover,
+#livery-modal .livery-chroma-card:hover {
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.14), transparent 72%) !important;
+}
+
+/* Gear Selection Modal: Borderless Graphic-First Equipped Hero & Owned Swap Rows */
+#gear-slot-modal .gear-slot-equipped-hero,
+#gear-slot-modal .gear-slot-cmp-card {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(186, 230, 253, 0.08) !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  padding: 12px 6px;
+}
+#gear-slot-modal .gear-slot-cmp-card:hover {
+  background: radial-gradient(circle at 18% 50%, rgba(56, 189, 248, 0.14), transparent 70%) !important;
+  transform: translateX(4px);
+}
+#gear-slot-modal .gear-slot-art-box {
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.18), transparent 72%) !important;
+  border: none !important;
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.56));
+}
+#gear-slot-modal .gear-slot-art-box.is-hero {
+  width: 88px;
+  height: 88px;
+  background: radial-gradient(circle at 50% 50%, rgba(52, 211, 153, 0.22), transparent 72%) !important;
+}
+#gear-slot-modal .gear-slot-art-box svg {
+  width: 90%;
+  height: 90%;
+}
+
+/* Logbook: Background-Free Typography + Central Floating Trophy Diorama, Specimen Art & Cert Emblems */
+#modal-logbook .logbook-github-bar,
+#modal-logbook .logbook-export-bar,
+#modal-logbook .logbook-kpi,
+#modal-logbook .logbook-cert-card,
+#modal-logbook .drill-mastery-card,
+#modal-logbook .logbook-fg-trophy,
+#modal-logbook .fg-card,
+#modal-logbook .logbook-lore-card,
+#modal-logbook .logbook-site-row,
+#modal-logbook .vault-diorama-wrap,
+#modal-logbook .fg-toolbar {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+#modal-logbook .logbook-kpi {
+  text-align: center;
+  padding: 6px 4px;
+}
+#modal-logbook .logbook-kpi strong {
+  font-size: 1.48rem;
+  text-shadow: 0 4px 16px rgba(56, 189, 248, 0.28);
+}
+#modal-logbook .vault-diorama-wrap {
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(186, 230, 253, 0.12) !important;
+}
+#modal-logbook .vault-diorama-canvas {
+  aspect-ratio: 600 / 212;
+}
+#modal-logbook .logbook-cert-card {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 10px 6px;
+}
+#modal-logbook .logbook-cert-icon {
+  font-size: 2.1rem;
+  filter: drop-shadow(0 8px 16px rgba(56, 189, 248, 0.3));
+}
+#modal-logbook .fg-card {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 10px 6px;
+}
+#modal-logbook .fg-card:hover {
+  background: radial-gradient(circle at 50% 38%, rgba(56, 189, 248, 0.16), transparent 72%) !important;
+  transform: translateY(-3px) scale(1.03);
+}
+#modal-logbook .fg-icon {
+  font-size: 2.35rem;
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.16), transparent 70%);
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+}
+#modal-logbook .fg-head {
+  justify-content: center;
+}
+#modal-logbook .fg-badge-strip {
+  justify-content: center;
+}
+#modal-logbook .logbook-site-row {
+  border-bottom: 1px solid rgba(186, 230, 253, 0.08) !important;
+  border-radius: 0;
+  padding: 9px 4px;
+}
+
+/* Abyssal Bounties: Background-Free Posters — Full-Bleed Animated Boss Portraits Front & Center */
+#bounties-modal .bounties-grid {
+  gap: 22px 18px;
+}
+#bounties-modal .bounty-card,
+#bounties-modal .bounty-card.claimed {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px;
+  gap: 10px;
+}
+#bounties-modal .bounty-card:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+#bounties-modal .bounty-poster-head {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+#bounties-modal .bounty-portrait {
+  height: 204px;
+  border-radius: 18px;
+  border: none !important;
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--bounty-accent, #38bdf8) 16%, rgba(4, 16, 34, 0.72)), rgba(2, 9, 20, 0.88));
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(186, 230, 253, 0.12);
+}
+#bounties-modal .bounty-portrait.claimed {
+  box-shadow: 0 22px 48px rgba(16, 185, 129, 0.24), 0 0 0 1px rgba(52, 211, 153, 0.34);
+}
+#bounties-modal .bounty-name-block {
+  text-align: center;
+  align-items: center;
+}
+#bounties-modal .bounty-waters {
+  justify-content: center;
+  background: transparent !important;
+  border: none !important;
+}
+#bounties-modal .bounty-tale,
+#bounties-modal .bounty-reward-bar,
+#bounties-modal .bounty-milestone-chip,
+#bounties-modal .bounty-clue-box,
+#bounties-modal .bounty-rumor {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+#bounties-modal .bounty-tale {
+  padding: 2px 6px;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.82);
+}
+#bounties-modal .bounty-reward-bar {
+  padding: 2px 4px;
+  justify-content: center;
+  gap: 10px;
+}
+#bounties-modal .bounty-milestone-chip {
+  padding: 6px 4px;
+}
+
+/* Popover elastic bubble IN & OUT transitions */
 .home-menu-popover,
 .hud-menu-popover {
   border: 1px solid rgba(224, 242, 254, 0.09) !important;
@@ -14289,21 +14632,21 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   transform: translateY(0) scale(1);
   transform-origin: top right;
   transition:
-    opacity 0.16s ease,
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    display 0.16s allow-discrete;
+    opacity 0.2s ease,
+    transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1),
+    display 0.2s allow-discrete;
 }
 .home-menu-popover[hidden],
 .hud-menu-popover[hidden] {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-6px) scale(0.97);
+  transform: translateY(-10px) scale(0.88);
 }
 @starting-style {
   .home-menu-popover:not([hidden]),
   .hud-menu-popover:not([hidden]) {
     opacity: 0;
-    transform: translateY(-8px) scale(0.96);
+    transform: translateY(-12px) scale(0.86);
   }
 }
 
@@ -14602,6 +14945,16 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   .lb-stats-modal,
   .lb-stats-modal .lb-stats-card,
   .lb-stats-modal .lb-stats-card > *,
+  #livery-modal .livery-equipped-card,
+  #livery-modal .livery-perf-stat,
+  #livery-modal .livery-welcome-card,
+  #gear-slot-modal .gear-slot-equipped-hero,
+  #gear-slot-modal .gear-slot-cmp-card,
+  #modal-logbook .logbook-kpi,
+  #modal-logbook .logbook-cert-card,
+  #modal-logbook .fg-card,
+  #bounties-modal .bounty-card,
+  #leaderboard-panel > *,
   .home-menu-popover,
   .hud-menu-popover,
   .game-toast {

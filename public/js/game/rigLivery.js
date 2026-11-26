@@ -2936,7 +2936,7 @@ function _drawPreviewCornerCaption(ctx, w, txt, accentColor, textColor = '#f1f5f
  * Shared articulated diver renderer for both the Gear Workshop Test-Tank Preview,
  * the Gear Unlock Showcase Card, and the Home Screen Mini-Avatar Badge (v166 / v211).
  */
-function _drawArticulatedPreviewDiver(
+export function _drawArticulatedPreviewDiver(
   ctx,
   sx,
   sy,

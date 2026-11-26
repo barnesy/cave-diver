@@ -698,10 +698,10 @@ export class CaveRenderer {
    * Living underwater cavern/wreck backdrop for Home & Menu screens (v240):
    * renders the full-detail live in-game level when baked, falling back to diorama while baking.
    */
-  renderMenuBackdrop(level, timeSec = 0, weather = null) {
+  renderMenuBackdrop(level, timeSec = 0, weather = null, livery = null) {
     this._activeWeather = weather ? (typeof weather === 'string' ? getWeatherById(weather) : weather) : null;
     this.resize();
-    drawMenuBackdropDiorama(this, level, timeSec);
+    drawMenuBackdropDiorama(this, level, timeSec, livery);
     if (this._activeWeather && this._activeWeather.id !== 'clear-day') {
       this._drawWeatherSkyAtmosphere(this.ctx, this.canvas.width, this.canvas.height * 0.44, timeSec);
       this._drawWeatherPrecipitation(this.ctx, this.canvas.width, this.canvas.height, this.canvas.height * 0.44, timeSec);
@@ -730,7 +730,7 @@ export class CaveRenderer {
       this.render({ diver, diveState, peerDiver: null, checkpointsHit: this._menuEmptySet, nextCheckpoint: lvl.checkpoints?.[0] || null, siltClouds: this._menuEmptyArr, bubbles: this._menuEmptyArr, ecosystem, weather, timeSec, dt });
       return;
     }
-    this.renderMenuBackdrop(level, timeSec, weather);
+    this.renderMenuBackdrop(level, timeSec, weather, livery);
   }
 
   /**
