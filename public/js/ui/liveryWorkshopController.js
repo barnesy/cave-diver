@@ -5,6 +5,8 @@ import {
   recordFoundWorldGear,
   awardDoubloonsInLogbook,
   purchaseGearChromaInLogbook,
+  sellGearInLogbook,
+  buybackGearInLogbook,
 } from '../game/logbookModel.js';
 import {
   GEAR_CHROMA_FINISHES,
@@ -25,6 +27,9 @@ import {
   DEFAULT_RIG_LIVERY,
   getSuitLivery,
   getGearTierMeta,
+  getGearSellValue,
+  getGearBuybackCost,
+  isGearSellable,
   getGearItemProgress,
   getNextGearMilestones,
   diffUnlockedLiveries,
@@ -603,6 +608,8 @@ export function createLiveryWorkshopController({
     const sess = getSession?.();
     if (drop.kind === 'gear') {
       playGearUnlock?.(drop.tier || 'rare');
+      const bonusMult = Math.max(1, Number(sess?.rigPerf?.salvageBonusMult) || 1);
+      const gearCoins = Math.round((drop.tier === 'legendary' ? 160 : drop.tier === 'mythic' ? 95 : 65) * bonusMult);
       if (typeof saveCareerLogbook === 'function') {
         try {
           const res = recordFoundWorldGear(loadCareerLogbook(), {
@@ -611,7 +618,7 @@ export function createLiveryWorkshopController({
             siteId: sess?.level?.id || '',
             siteName: sess?.level?.name || '',
           });
-          const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), 65);
+          const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), gearCoins);
           if (credited?.book) saveCareerLogbook(credited.book);
         } catch {}
       }
@@ -657,7 +664,9 @@ export function createLiveryWorkshopController({
     }
 
     // Salvage treasure drop (Spare Pony Bottle, DPV Cell, Doubloons, or Abyssal Reliquary)
-    const chestCoins = drop.tier === 'mythic' ? 130 : drop.tier === 'epic' ? 90 : 55;
+    const bonusMult = Math.max(1, Number(sess?.rigPerf?.salvageBonusMult) || 1);
+    const baseCoins = Number(drop.doubloonBonus) || (drop.tier === 'mythic' ? 130 : drop.tier === 'epic' ? 90 : 55);
+    const chestCoins = Math.round(baseCoins * bonusMult);
     if (!sess?.isProvingGrounds && typeof saveCareerLogbook === 'function') {
       try {
         const credited = awardDoubloonsInLogbook(loadCareerLogbook(), chestCoins);
@@ -683,6 +692,29 @@ export function createLiveryWorkshopController({
     lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
     if (lootBannerTimer) clearTimeout(lootBannerTimer);
     lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 4800);
+  }
+
+  function handleTreasureMapFound(map, beacon) {
+    if (!map || !beacon || !lootDiscoveryBannerEl) return;
+    const sess = getSession?.();
+    const distM = sess?.diver ? Math.round(Math.hypot(beacon.x - sess.diver.x, beacon.y - sess.diver.y)) : 0;
+    const depthM = Math.max(0, Math.round(beacon.y || 0));
+    lootDiscoveryBannerEl.dataset.tier = 'legendary';
+    lootDiscoveryBannerEl.hidden = false;
+    lootDiscoveryBannerEl.innerHTML = `
+      <div class="loot-disc-top">
+        <span class="loot-disc-kicker">🗺️ TREASURE MAP DECODED · SONAR BEACON LOCKED</span>
+        <span class="livery-tier-pill tier-legendary">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillShort)}</span>
+      </div>
+      <div class="loot-disc-name">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillLabel)} Gear Vault</div>
+      <div class="loot-disc-detail"><strong>Boosts:</strong> ${escapeHtml(beacon.skillVerb)} · Track pulsing <strong>${escapeHtml(beacon.skillIcon)}</strong> beacon on your Sonar (${distM}m away · ${depthM}m depth)</div>
+      <div class="loot-disc-actions">
+        <button type="button" class="btn tiny primary" id="btn-loot-dismiss">📡 Track on Sonar</button>
+      </div>
+    `;
+    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+    if (lootBannerTimer) clearTimeout(lootBannerTimer);
+    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 7500);
   }
 
   function syncLiveryUi() {
@@ -717,6 +749,8 @@ export function createLiveryWorkshopController({
       session.diver.livery = { ...activeRigLivery };
       session.rigPerf = perf;
       session.diver.torchReachMult = perf.torchReachMult || 1.0;
+      session.diver.siltPierce = perf.siltPierce || 0;
+      session.diver.stealth = perf.stealth || 0;
       if (session.hazards) session.hazards.rigPerf = perf;
     }
     renderHudGearBuffs(session?.rigPerf || perf, session);
@@ -822,6 +856,62 @@ export function createLiveryWorkshopController({
       { slot: 'chroma', itemMeta: { id: res.chroma.id, name: res.chroma.name, tier: res.chroma.exclusive ? 'mythic' : res.chroma.animated ? 'epic' : 'rare' }, silentAudio: res.reason === 'purchased' }
     );
     return true;
+  }
+
+  let pendingSellKey = null;
+
+  function sellGearItem(slot, field, item) {
+    if (!item || !slot) return;
+    const key = `${slot}:${item.id}`;
+    const perf = computeRigPerformanceProfile(activeRigLivery, getWorkshopTuningCtx(workshopTuningMode));
+    const res = sellGearInLogbook(loadCareerLogbook(), slot, item.id, {
+      salvageBonusMult: perf?.salvageBonusMult || 1.0,
+    });
+    pendingSellKey = null;
+    if (!res.ok) {
+      showToast?.('Standard Issue gear cannot be sold.', 2.2);
+      return;
+    }
+    if (typeof saveCareerLogbook === 'function') {
+      try { saveCareerLogbook(res.book); } catch {}
+    }
+    if (field && activeRigLivery[field] === item.id) {
+      activeRigLivery = { ...activeRigLivery, [field]: DEFAULT_RIG_LIVERY[field] };
+      saveRigLivery();
+    }
+    pinnedInspect = null;
+    lockedTryOn = null;
+    playGearEquip?.('all', 'rare');
+    syncLiveryUi();
+    renderLiveryWorkshopModal();
+    const note = res.reentersLootPool
+      ? 'Returned to Chest/World loot pool.'
+      : 'Available for Buyback anytime in Workshop.';
+    showToast?.(`🪙 Sold ${item.name} for +${res.value} Doubloons! ${note}`, 3.4);
+  }
+
+  function buybackSoldGearItem(slot, field, item) {
+    if (!item || !slot) return;
+    const res = buybackGearInLogbook(loadCareerLogbook(), slot, item.id);
+    if (!res.ok) {
+      if (res.reason === 'insufficient-funds') {
+        const bal = Math.max(0, Math.round(Number(res.book?.doubloons) || 0));
+        showToast?.(`🪙 Need ${res.cost - bal} more Doubloons to buy back ${item.name}.`, 2.8);
+      }
+      return;
+    }
+    if (typeof saveCareerLogbook === 'function') {
+      try { saveCareerLogbook(res.book); } catch {}
+    }
+    pinnedInspect = null;
+    lockedTryOn = null;
+    if (field) {
+      updateActiveLiveryField({ [field]: item.id }, { slot, itemMeta: item });
+    } else {
+      syncLiveryUi();
+      renderLiveryWorkshopModal();
+    }
+    showToast?.(`🪙 Bought back & equipped ${item.name} (-${res.cost} 🪙)!`, 2.8);
   }
 
   function renderInspectorBar() {
@@ -1008,11 +1098,30 @@ export function createLiveryWorkshopController({
           ? escapeHtml(item.unlockHint || 'Locked')
           : '';
 
+    const itemKey = `${slot}:${item.id}`;
+    const unlocksNow = getCurrentLiveryUnlocks();
+    const wasSold = Boolean(unlocksNow.soldGear?.has(itemKey));
+    const sellVal = isGearSellable(item) ? getGearSellValue(item.tier) : 0;
+    const buybackCost = wasSold ? getGearBuybackCost(item.tier) : 0;
+    const curBal = Math.max(0, Math.round(Number(loadCareerLogbook()?.doubloons) || 0));
+    const isConfirmingSell = pendingSellKey === itemKey;
+
     let actionHtml = '';
     if (!hoveredGear && pinnedInspect) {
-      if (unlocked && !isEquippedNow) {
-        actionHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-equip">⚡ Equip</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Close inspector">✕</button>`;
-      } else if (!unlocked) {
+      if (unlocked) {
+        const equipBtn = !isEquippedNow
+          ? `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-equip">⚡ Equip</button>`
+          : '';
+        const sellBtn = sellVal > 0
+          ? isConfirmingSell
+            ? `<button type="button" class="btn tiny danger livery-insp-act" id="btn-insp-sell-confirm">⚠️ Confirm Sell (+${sellVal} 🪙)</button>`
+            : `<button type="button" class="btn tiny ghost livery-insp-act livery-sell-btn" id="btn-insp-sell" title="Sell for +${sellVal} Salvage Doubloons">🪙 Sell +${sellVal}</button>`
+          : '';
+        actionHtml = `${equipBtn}${sellBtn}<button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Close inspector">✕</button>`;
+      } else if (wasSold && buybackCost > 0) {
+        const canAffordBb = curBal >= buybackCost;
+        actionHtml = `<button type="button" class="btn tiny ${canAffordBb ? 'primary' : 'secondary'} livery-insp-act" id="btn-insp-buyback" ${canAffordBb ? '' : 'disabled'}>🪙 Buy Back (${buybackCost})</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Revert preview">↺</button>`;
+      } else {
         actionHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-test">🧪 Test</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Revert preview">↺</button>`;
       }
     }
@@ -1020,7 +1129,7 @@ export function createLiveryWorkshopController({
     const noteFallback = impact?.isNormalized
       ? `<span class="livery-insp-note">Purist mode normalizes stats — visual swap only.</span>`
       : chips.length === 0
-        ? `<span class="livery-insp-note">${!unlocked ? `🔒 ${escapeHtml(item.unlockHint || 'Locked')}` : 'Same baseline stats as current gear.'}</span>`
+        ? `<span class="livery-insp-note">${wasSold ? `Sold · Buy back anytime for ${buybackCost} 🪙` : !unlocked ? `🔒 ${escapeHtml(item.unlockHint || 'Locked')}` : 'Same baseline stats as current gear.'}</span>`
         : '';
 
     liveryInspectorBarEl.dataset.state = verdictCls;
@@ -1036,15 +1145,28 @@ export function createLiveryWorkshopController({
     `;
 
     liveryInspectorBarEl.querySelector('#btn-insp-equip')?.addEventListener('click', () => {
+      pendingSellKey = null;
       if (field && item) updateActiveLiveryField({ [field]: item.id }, { slot, itemMeta: item });
     });
+    liveryInspectorBarEl.querySelector('#btn-insp-sell')?.addEventListener('click', () => {
+      pendingSellKey = itemKey;
+      renderInspectorBar();
+    });
+    liveryInspectorBarEl.querySelector('#btn-insp-sell-confirm')?.addEventListener('click', () => {
+      sellGearItem(slot, field, item);
+    });
+    liveryInspectorBarEl.querySelector('#btn-insp-buyback')?.addEventListener('click', () => {
+      buybackSoldGearItem(slot, field, item);
+    });
     liveryInspectorBarEl.querySelector('#btn-insp-test')?.addEventListener('click', () => {
+      pendingSellKey = null;
       startFieldTestDive({
         trialLivery: { ...activeRigLivery, [field]: item.id },
         trialLabel: item.name,
       });
     });
     liveryInspectorBarEl.querySelector('#btn-insp-clear')?.addEventListener('click', () => {
+      pendingSellKey = null;
       pinnedInspect = null;
       lockedTryOn = null;
       renderLiveryWorkshopModal();
@@ -1193,7 +1315,7 @@ export function createLiveryWorkshopController({
       itemStats.source === 'world'
         ? `<span class="livery-source-pill src-world" title="${escapeHtml(itemStats.worldCache?.clue || item.unlockHint || 'Found in world')}">🗺️ World</span>`
         : itemStats.source === 'chest'
-          ? `<span class="livery-source-pill src-chest${item.dropRarity === 'very-rare' ? ' very-rare' : ''}" title="${escapeHtml(item.unlockHint || 'Rare random drop from Sunken Treasure Chests')}">${item.dropRarity === 'very-rare' ? '🧰 Rare Chest' : '🧰 Chest'}</span>`
+          ? `<span class="livery-source-pill src-chest${item.dropRarity === 'legendary' ? ' legendary' : item.dropRarity === 'very-rare' ? ' very-rare' : ''}" title="${escapeHtml(item.unlockHint || 'Rare random drop from Sunken Treasure Chests')}">${item.dropRarity === 'legendary' ? '🗺️ Vault / Chest' : item.dropRarity === 'very-rare' ? '🧰 Rare Chest' : '🧰 Chest'}</span>`
           : itemStats.source === 'earned'
             ? `<span class="livery-source-pill src-earned" aria-hidden="true">Earned</span>`
             : '';
@@ -2432,6 +2554,7 @@ export function createLiveryWorkshopController({
     tryOnFullSet,
     handleWorldGearFound,
     handleTreasureChestOpened,
+    handleTreasureMapFound,
     hideLootDiscoveryBanner,
     onExitProvingGrounds: () => {
       provingHudBar.hide();

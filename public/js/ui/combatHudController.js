@@ -77,14 +77,20 @@ export function createCombatHudController({
     }
     if (!active) return { active, armed };
 
-    const hp = Math.max(0, Math.min(100, Math.round(lair.playerHp ?? 100)));
-    if (hp !== lastHp) {
-      lastHp = hp;
-      if (combatHpValEl) combatHpValEl.textContent = String(hp);
+    const maxHp = Math.max(100, Math.round(lair.playerMaxHp || 100));
+    const hp = Math.max(0, Math.min(maxHp, Math.round(lair.playerHp ?? maxHp)));
+    const maxSh = Math.max(0, Math.round(sess?.diver?.maxShield || 0));
+    const sh = Math.max(0, Math.min(maxSh, Math.round(sess?.diver?.shield || 0)));
+    const hpKey = `${hp}:${maxHp}:${sh}:${maxSh}`;
+    if (hpKey !== lastHp) {
+      lastHp = hpKey;
+      if (combatHpValEl) {
+        combatHpValEl.textContent = maxSh > 0 ? `${hp} · 🛡️${sh}` : String(hp);
+      }
       if (combatHpSegsEl) {
         const segs = combatHpSegsEl.children;
-        const litCount = Math.ceil((hp / 100) * segs.length);
-        const isLow = hp <= 35;
+        const litCount = Math.ceil((hp / maxHp) * segs.length);
+        const isLow = hp <= Math.round(maxHp * 0.35);
         for (let i = 0; i < segs.length; i++) {
           segs[i].classList.toggle('filled', i < litCount);
           segs[i].classList.toggle('low', isLow);

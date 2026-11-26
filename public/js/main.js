@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=229',
+  mapRasterUrl: './assets/map-expedition.jpg?v=230',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2257,7 +2257,9 @@ function syncTechGearHud(sess) {
     btnHudSonar.className = `gear-hud-btn sonar ${cdSec > 0 ? 'cooling' : 'ready'}`;
   }
   if (hudSonarRangeEl) {
-    hudSonarRangeEl.textContent = hasSonar ? '28M' : '16M';
+    const baseR = hasSonar || session?.rigPerf?.passiveSonar ? 28 : 16;
+    const effR = Math.round(baseR * (session?.crewRole?.sonarRangeMult || 1) * (session?.rigPerf?.sonarRangeMult || 1));
+    hudSonarRangeEl.textContent = session?.rigPerf?.passiveSonar ? `AUTO ${effR}M` : `${effR}M`;
   }
   if (btnSonarOverlayPingEl) {
     btnSonarOverlayPingEl.textContent = cdSec > 0 ? `${cdSec}s` : 'PING';
@@ -6897,6 +6899,11 @@ const sessionStepCallbacks = {
     triggerHaptic(drop?.kind === 'gear' ? 'pickup' : 'light');
     liveryWorkshop?.handleTreasureChestOpened?.(chest, drop);
   },
+  onTreasureMapFound: (map, beacon) => {
+    audio.playTreasureMapFound?.();
+    liveryWorkshop?.handleTreasureMapFound?.(map, beacon);
+  },
+  onShieldHit: (_amt, broken) => audio.playShieldHit?.(broken),
   onCollect: (item) => {
     const isGrand = (item.scale || 1) >= 1.35;
     if (typeof audio.playArtifactDiscover === 'function') audio.playArtifactDiscover(isGrand);
@@ -7086,11 +7093,8 @@ function stepSimulation(dt) {
   }
   if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
     _marineStepOpts.localSiltDensity = session?.localSiltDensity || 0;
-    _marineStepOpts.ccrSilent = Boolean(
-      mode === 'diving' &&
-      session?.diveState?.ccrEnabled &&
-      (session?.diveState?.ccrScrubberPct ?? 0) > 0.1
-    );
+    _marineStepOpts.stealthBonus = mode === 'diving' ? (session?.rigPerf?.stealth || 0) : 0;
+    _marineStepOpts.ccrSilent = Boolean(mode === 'diving' && session?.diveState?.ccrEnabled && (session?.diveState?.ccrScrubberPct ?? 0) > 0.1);
     stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, _marineStepOpts);
   }
 

@@ -298,10 +298,13 @@ export const lightingAndFxMethods = {
     const nowLightMs = _nowMs();
     const hasActiveSilt = siltClouds && siltClouds.length > 0;
     let localTorch = null;
+    const localOptic = getTorchOptic(diver?.livery?.torchId);
+    const localRigReach = Math.max(0.9, Math.min(1.55, Number(diver.torchReachMult) || 1.0));
+    const localSiltPierce = Math.max(0, Math.min(0.88, Math.max(Number(localOptic.siltPierce) || 0, Number(diver.siltPierce) || 0)));
     if (diver.torchOn !== false) {
       const lox = diver.body?.hand ? diver.body.hand.x : diver.x;
       const loy = diver.body?.hand ? diver.body.hand.y : diver.y;
-      const lRange = 16.5 * (getTorchOptic(diver?.livery?.torchId).rangeMult || 1.0);
+      const lRange = 16.5 * (localOptic.rangeMult || 1.0) * localRigReach;
       const prev = this._localTorchCache;
       const canReuse =
         prev &&
@@ -309,6 +312,7 @@ export const lightingAndFxMethods = {
         prev.levelId === this.level?.id &&
         prev.rayCount === localRayCount &&
         prev.range === lRange &&
+        prev.siltPierce === localSiltPierce &&
         nowLightMs - prev.ts < 75 &&
         Math.abs(lox - prev.ox) < 0.03 &&
         Math.abs(loy - prev.oy) < 0.03 &&
@@ -326,7 +330,8 @@ export const lightingAndFxMethods = {
           lRange,
           localRayCount,
           siltClouds,
-          this._localTorchRaysPool
+          this._localTorchRaysPool,
+          localSiltPierce
         );
         localTorch = { ox: lox, oy: loy, rays };
         this._localTorchCache = {
@@ -336,6 +341,7 @@ export const lightingAndFxMethods = {
           ang: localTorchAng,
           rayCount: localRayCount,
           range: lRange,
+          siltPierce: localSiltPierce,
           ts: nowLightMs,
           torch: localTorch,
         };
@@ -506,8 +512,8 @@ export const lightingAndFxMethods = {
     };
 
     const localStrobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
-    const rigReach = Math.max(0.9, Math.min(1.55, Number(diver.torchReachMult) || 1.0));
-    carveDiverLight(diver, localTorch, 16.5 * rigReach * (0.28 + 0.72 * localStrobe));
+    const effLocalRange = 16.5 * (localOptic.rangeMult || 1.0) * localRigReach;
+    carveDiverLight(diver, localTorch, effLocalRange * (0.28 + 0.72 * localStrobe));
     const torchPeerIds = this._torchPeerIdsScratch || (this._torchPeerIdsScratch = new Set());
     torchPeerIds.clear();
     for (let i = 0; i < peerTorches.length; i++) {
@@ -739,8 +745,8 @@ export const lightingAndFxMethods = {
 
     // Volumetric scattering cone + limestone wall bounce highlights for local diver & peer buddies
     if (localTorch) {
-      this._drawVolumetricTorchBeam(ctx, diver, localTorch, 15.5 * (0.3 + 0.7 * localStrobe), {
-        siltHaze: localSiltDensity,
+      this._drawVolumetricTorchBeam(ctx, diver, localTorch, effLocalRange * 0.94 * (0.3 + 0.7 * localStrobe), {
+        siltHaze: localSiltDensity * (1 - localSiltPierce * 0.75),
         isPeer: false,
         intensityMult: 0.22 + 0.78 * localStrobe,
         toScreenX,
@@ -866,6 +872,9 @@ export const lightingAndFxMethods = {
     const warmStamp = this.glowStamps.warm;
 
     const localBeamAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
+    const localOptic = getTorchOptic(diver?.livery?.torchId);
+    const localSiltPierce = Math.max(0, Math.min(0.88, Math.max(Number(localOptic.siltPierce) || 0, Number(diver.siltPierce) || 0)));
+    const localPierceRange = 16.5 * (localOptic.rangeMult || 1.0) * Math.max(0.9, Number(diver.torchReachMult) || 1.0);
     // Zero-GC reusable light source pool for silt backscatter (v144)
     const lights = this._siltLightsScratch || (this._siltLightsScratch = []);
     let lightCount = 1;
@@ -907,41 +916,50 @@ export const lightingAndFxMethods = {
 
       let lit = 0.24;
       let glare = 0;
+      let beamPierceCut = 0;
       for (let l = 0; l < lightCount; l++) {
         const src = lights[l];
         const dx = s.x - src.x;
         const dy = s.y - src.y;
         const dSq = dx * dx + dy * dy;
-        if (dSq >= 210.25) continue; // 14.5^2
+        const maxD = l === 0 ? Math.max(14.5, localPierceRange) : 14.5;
+        if (dSq >= maxD * maxD) continue;
         const dist = Math.sqrt(dSq);
-        const nearLit = 1 - dist / 14.5;
+        const nearLit = Math.max(0, 1 - dist / 14.5);
         if (nearLit > lit) lit = nearLit;
-        if (src.torchOn && dist < 13.0) {
+        if (src.torchOn && dist < (l === 0 ? Math.max(13.0, localPierceRange) : 13.0)) {
           const align = dist > 0.1 ? (dx * src.fx + dy * src.fy) / dist : 1;
           if (align > 0.46) {
-            const beamGlare = (align - 0.46) * 1.95 * Math.max(0, 1 - dist / 13.0) * s.alpha;
+            const beamFac = Math.min(1, (align - 0.46) * 2.2) * Math.max(0, 1 - dist / maxD);
+            if (l === 0 && localSiltPierce > 0.04) {
+              // Silt-Piercing Lamp parts visual cloud opacity & kills harsh backscatter inside the torch cone! (v230)
+              beamPierceCut = Math.max(beamPierceCut, localSiltPierce * beamFac);
+            }
+            const glareMult = l === 0 ? Math.max(0.12, 1 - localSiltPierce * 0.88) : 1.0;
+            const beamGlare = (align - 0.46) * 1.95 * Math.max(0, 1 - dist / 13.0) * s.alpha * glareMult;
             if (beamGlare > glare) glare = beamGlare;
           }
         }
       }
+      const pierceAlphaMult = Math.max(0.22, 1 - beamPierceCut * 0.78);
       const lifeRatio = s.maxLife > 0 ? s.life / s.maxLife : 1;
       const rot = (s.rot ?? s.seed ?? 0) + Math.sin(timeSec * 0.35 + (s.seed || 0)) * 0.25;
 
       // Soft ambient silt body + multi-lobed rotating wispy cloud layers in world space
       const cloudBase = s.isRust ? rustStamp : baseStamp;
-      ctx.globalAlpha = Math.min(0.72, s.alpha * (0.36 + lit * 0.4));
+      ctx.globalAlpha = Math.min(0.72, s.alpha * (0.36 + lit * 0.4)) * pierceAlphaMult;
       ctx.drawImage(cloudBase, sx - r * 0.92, sy - r * 0.92, r * 1.84, r * 1.84);
 
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(rot);
-      ctx.globalAlpha = Math.min(0.88, s.alpha * (0.48 + lit * 0.44));
+      ctx.globalAlpha = Math.min(0.88, s.alpha * (0.48 + lit * 0.44)) * pierceAlphaMult;
       ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 1.15, -r * 1.05, r * 2.3, r * 2.1);
 
       // Counter-rotating secondary billowing tendril (governed by adaptive 60 FPS mobile budget)
       if (lifeRatio < 0.96 && siltClouds.length <= tendrilLimit) {
         ctx.rotate(-rot * 1.7 + 1.1);
-        ctx.globalAlpha = Math.min(0.54, s.alpha * 0.42);
+        ctx.globalAlpha = Math.min(0.54, s.alpha * 0.42) * pierceAlphaMult;
         ctx.drawImage(s.isRust ? rustStamp : wispStamp, -r * 0.85, -r * 0.95, r * 1.9, r * 1.75);
       }
       ctx.restore();
@@ -1703,6 +1721,7 @@ export const lightingAndFxMethods = {
       rare: { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' },
       epic: { rgb: '192, 132, 252', hex: '#c084fc', light: '#f3e8ff' },
       mythic: { rgb: '250, 204, 21', hex: '#facc15', light: '#fef9c3' },
+      legendary: { rgb: '255, 149, 36', hex: '#ff9524', light: '#ffedd5' },
     };
     const rigGlowBonus = hazards.rigPerf?.relicGlowBonusM || 0;
     const worldCaches = Array.isArray(hazards.worldGearCaches) ? hazards.worldGearCaches : null;
@@ -1843,86 +1862,278 @@ export const lightingAndFxMethods = {
       }
     }
 
-    // 5b. Discoverable Sunken Brass Treasure Chests with Rare Gear Drops (v220)
+    // 5a.5. Waterproof Brass-Tube Treasure Maps with Skill-Targeted Sonar Beacons (v230)
+    const treasureMaps = Array.isArray(hazards.treasureMaps) ? hazards.treasureMaps : null;
+    if (treasureMaps && treasureMaps.length > 0) {
+      for (let i = 0; i < treasureMaps.length; i++) {
+        const tm = treasureMaps[i];
+        if (!tm || tm.claimed) continue;
+        if (tm.x + 5 < visX0 || tm.x - 5 > visX1 || tm.y + 6 < visY0 || tm.y - 6 > visY1) continue;
+        const bobY = Math.sin(timeSec * 2.6 + (tm.bobPhase || i)) * 0.16;
+        const sx = toScreenX(tm.x);
+        const sy = toScreenY(tm.y + bobY);
+        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 4.2 + i);
+        const rgb = tm.rgb || '250, 204, 21';
+        const hex = tm.color || '#facc15';
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        const auraR = (1.15 + pulse * 0.35) * scale;
+        const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
+        ag.addColorStop(0, `rgba(${rgb}, 0.62)`);
+        ag.addColorStop(0.55, `rgba(${rgb}, 0.18)`);
+        ag.addColorStop(1, `rgba(${rgb}, 0)`);
+        ctx.fillStyle = ag;
+        ctx.beginPath();
+        ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulsing sonar-ring teaser around the map scroll
+        const ringProg = (timeSec * 0.85 + i * 0.33) % 1;
+        ctx.strokeStyle = `rgba(${rgb}, ${((1 - ringProg) * 0.72).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.beginPath();
+        ctx.arc(sx, sy, (0.35 + ringProg * 1.45) * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Tilted brass scroll tube + glowing wax seal
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(-0.34 + Math.sin(timeSec * 1.8 + i) * 0.08);
+        const twTube = Math.max(14, 0.72 * scale);
+        const thTube = Math.max(6, 0.28 * scale);
+        ctx.fillStyle = '#78350f';
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+        ctx.beginPath();
+        ctx.roundRect?.(-twTube * 0.5, -thTube * 0.5, twTube, thTube, thTube * 0.45) ??
+          ctx.rect(-twTube * 0.5, -thTube * 0.5, twTube, thTube);
+        ctx.fill();
+        ctx.stroke();
+        // Brass end-caps & wax seal
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(-twTube * 0.46, -thTube * 0.52, twTube * 0.14, thTube * 1.04);
+        ctx.fillRect(twTube * 0.32, -thTube * 0.52, twTube * 0.14, thTube * 1.04);
+        ctx.fillStyle = hex;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(2.6, thTube * 0.38), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Unmistakable Skill Badge floating above the Treasure Map!
+        const distM = diver ? Math.hypot(diver.x - tm.x, diver.y - tm.y) : 99;
+        if (distM <= 15 + rigGlowBonus) {
+          const label = `🗺️ MAP · ${tm.skillIcon} ${tm.skillShort}`;
+          ctx.save();
+          ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+          const tw = ctx.measureText(label).width + 14;
+          const ly = sy - Math.max(15, 0.65 * scale);
+          ctx.fillStyle = 'rgba(10, 16, 28, 0.92)';
+          ctx.strokeStyle = hex;
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.roundRect?.(sx - tw * 0.5, ly - 9, tw, 18, 8) ?? ctx.rect(sx - tw * 0.5, ly - 9, tw, 18);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#fef9c3';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, sx, ly);
+          ctx.restore();
+        }
+      }
+    }
+
+    // 5b. Discoverable Sunken Brass, Deep Grotto & Map-Marked Vault Chests with Spectacular Opening Moment (v220 / v230)
     const treasureChests = Array.isArray(hazards.treasureChests) ? hazards.treasureChests : null;
     if (treasureChests && treasureChests.length > 0) {
       for (let i = 0; i < treasureChests.length; i++) {
         const tc = treasureChests[i];
         if (!tc) continue;
         const openedAge = tc.opened ? Math.max(0, timeSec - (tc.openedAt || 0)) : 0;
-        if (tc.x + 5 < visX0 || tc.x - 5 > visX1 || tc.y + 9 < visY0 || tc.y - 10 > visY1) continue;
+        const isLegendaryDrop = tc.opened && tc.drop?.tier === 'legendary';
+        const isMythicDrop = tc.opened && tc.drop?.tier === 'mythic';
+        const spectacleDur = isLegendaryDrop ? 6.2 : isMythicDrop ? 5.2 : 4.4;
+
+        // Always render directional Sonar Beacon pointer for Map-Revealed Vault Chests even when far offscreen!
+        if (!tc.opened && tc.beaconRevealed && diver) {
+          const distM = Math.hypot(tc.x - diver.x, tc.y - diver.y);
+          if (distM >= 4.2) {
+            const ang = Math.atan2(tc.y - diver.y, tc.x - diver.x);
+            const dx = toScreenX(diver.x);
+            const dy = toScreenY(diver.y);
+            const orbR = Math.max(54, 2.35 * scale);
+            const bx = dx + Math.cos(ang) * orbR;
+            const by = dy + Math.sin(ang) * orbR;
+            const bCol = tc.beamColor || '#facc15';
+            const bPulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2 + i);
+            const linkedMap = (hazards.treasureMaps || []).find((m) => m.targetChestId === tc.id);
+            const skillTag = linkedMap ? `${linkedMap.skillIcon} ${linkedMap.skillShort}` : 'VAULT';
+            const txt = `🗺️ ${skillTag} · ${Math.round(distM)}m`;
+            ctx.save();
+            ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+            const tw = ctx.measureText(txt).width + 14;
+            ctx.globalAlpha = 0.8 + bPulse * 0.2;
+            ctx.fillStyle = 'rgba(8, 15, 28, 0.92)';
+            ctx.strokeStyle = bCol;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.roundRect?.(bx - tw * 0.5, by - 10, tw, 20, 10) ?? ctx.rect(bx - tw * 0.5, by - 10, tw, 20);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#fef9c3';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(txt, bx, by);
+            ctx.restore();
+          }
+        }
+
+        if (tc.x + 7 < visX0 || tc.x - 7 > visX1 || tc.y + 12 < visY0 || tc.y - 14 > visY1) continue;
 
         const pal = tc.opened
           ? (TIER_RGB[tc.drop?.tier] || TIER_RGB.mythic)
-          : { rgb: '245, 158, 11', hex: '#f59e0b', light: '#fef3c7' };
+          : tc.isMapVault
+            ? { rgb: '255, 180, 48', hex: tc.beamColor || '#ff9524', light: '#fef3c7' }
+            : tc.chestTier === 'grotto'
+              ? { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' }
+              : { rgb: '245, 158, 11', hex: '#f59e0b', light: '#fef3c7' };
         const sx = toScreenX(tc.x);
         const sy = toScreenY(tc.y);
         const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.8 + (tc.glintPhase || i));
-        const flareAlpha = tc.opened ? Math.max(0, 1 - openedAge / 4.4) : 0.85;
+        const flareAlpha = tc.opened ? Math.max(0, 1 - openedAge / spectacleDur) : 0.88;
 
-        // Subtle golden treasure shimmer before opening, intense tier-colored pillar on open!
-        if (!tc.opened || openedAge < 4.4) {
+        // Spectacular Underwater Opening Spectacle: Volumetric God-Ray Fan + Twin Shockwaves + Prismatic Rune Rings + Rising Embers!
+        if (!tc.opened || openedAge < spectacleDur) {
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
-          const pillarH = (tc.opened ? 9.8 + openedAge * 2.4 : 3.2 + pulse * 1.1) * scale;
-          const pillarW = (tc.opened ? 0.62 + (1 - flareAlpha) * 0.45 : 0.28 + pulse * 0.08) * scale;
+          const tierScale = isLegendaryDrop ? 1.65 : isMythicDrop ? 1.32 : tc.opened ? 1.08 : (tc.isMapVault ? 1.25 : 1.0);
+          const pillarH = (tc.opened ? (10.5 + openedAge * 2.8) * tierScale : (3.4 + pulse * 1.2) * tierScale) * scale;
+          const pillarW = (tc.opened ? (0.72 + (1 - flareAlpha) * 0.62) * tierScale : (0.3 + pulse * 0.09) * tierScale) * scale;
           const pg = ctx.createLinearGradient(sx, sy, sx, sy - pillarH);
-          pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.56 * flareAlpha).toFixed(3)})`);
-          pg.addColorStop(0.5, `rgba(${pal.rgb}, ${(0.2 * flareAlpha).toFixed(3)})`);
+          pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.68 * flareAlpha).toFixed(3)})`);
+          pg.addColorStop(0.45, `rgba(${pal.rgb}, ${(0.28 * flareAlpha).toFixed(3)})`);
           pg.addColorStop(1, `rgba(${pal.rgb}, 0)`);
           ctx.fillStyle = pg;
           ctx.beginPath();
           ctx.moveTo(sx - pillarW, sy);
-          ctx.lineTo(sx - pillarW * 0.3, sy - pillarH);
-          ctx.lineTo(sx + pillarW * 0.3, sy - pillarH);
+          ctx.lineTo(sx - pillarW * 0.24, sy - pillarH);
+          ctx.lineTo(sx + pillarW * 0.24, sy - pillarH);
           ctx.lineTo(sx + pillarW, sy);
           ctx.closePath();
           ctx.fill();
 
-          const auraR = (tc.opened ? 2.5 : 1.15 + pulse * 0.28) * scale;
+          // Twin angled god-ray fan when chest bursts open!
+          if (tc.opened && openedAge < spectacleDur * 0.88) {
+            const fanAngles = isLegendaryDrop ? [-0.46, -0.22, 0.22, 0.46] : [-0.32, 0.32];
+            for (let fi = 0; fi < fanAngles.length; fi++) {
+              ctx.save();
+              ctx.translate(sx, sy - 0.1 * scale);
+              ctx.rotate(fanAngles[fi] + Math.sin(timeSec * 2.4 + fi) * 0.05);
+              ctx.fillStyle = pg;
+              ctx.globalAlpha = (isLegendaryDrop ? 0.56 : 0.36) * flareAlpha;
+              ctx.beginPath();
+              ctx.moveTo(-pillarW * 0.42, 0);
+              ctx.lineTo(-pillarW * 0.12, -pillarH * 0.78);
+              ctx.lineTo(pillarW * 0.12, -pillarH * 0.78);
+              ctx.lineTo(pillarW * 0.42, 0);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          const auraR = (tc.opened ? 2.8 * tierScale : (1.2 + pulse * 0.32) * tierScale) * scale;
           const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
-          ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.58 * flareAlpha).toFixed(3)})`);
-          ag.addColorStop(0.55, `rgba(${pal.rgb}, ${(0.18 * flareAlpha).toFixed(3)})`);
+          ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.68 * flareAlpha).toFixed(3)})`);
+          ag.addColorStop(0.55, `rgba(${pal.rgb}, ${(0.22 * flareAlpha).toFixed(3)})`);
           ag.addColorStop(1, `rgba(${pal.rgb}, 0)`);
           ctx.fillStyle = ag;
           ctx.beginPath();
           ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
           ctx.fill();
 
-          if (tc.opened && openedAge < 1.9) {
-            const prog = openedAge / 1.9;
-            const ringR = (0.7 + prog * 6.8) * scale;
-            ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.92).toFixed(3)})`;
-            ctx.lineWidth = Math.max(2, (1 - prog) * 0.16 * scale);
+          // Expanding shockwave ring(s) on chest burst!
+          if (tc.opened && openedAge < 2.2) {
+            const prog = openedAge / 2.2;
+            const ringR = (0.7 + prog * (isLegendaryDrop ? 10.5 : isMythicDrop ? 8.2 : 6.8)) * scale;
+            ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.95).toFixed(3)})`;
+            ctx.lineWidth = Math.max(2.2, (1 - prog) * (isLegendaryDrop ? 0.24 : 0.16) * scale);
             ctx.beginPath();
             ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
             ctx.stroke();
+
+            // Second delayed harmonic ring for Mythic & Legendary drops!
+            if ((isLegendaryDrop || isMythicDrop) && openedAge > 0.28 && openedAge < 2.4) {
+              const p2 = Math.min(1, (openedAge - 0.28) / 2.1);
+              const r2 = (0.5 + p2 * (isLegendaryDrop ? 8.8 : 6.4)) * scale;
+              ctx.strokeStyle = isLegendaryDrop
+                ? `rgba(254, 240, 138, ${((1 - p2) * 0.92).toFixed(3)})`
+                : `rgba(${pal.rgb}, ${((1 - p2) * 0.78).toFixed(3)})`;
+              ctx.lineWidth = Math.max(1.8, (1 - p2) * 0.14 * scale);
+              ctx.beginPath();
+              ctx.arc(sx, sy, r2, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+
+          // Rising glowing gold/rarity motes & orbiting rune ring for opened chests!
+          if (tc.opened && openedAge < spectacleDur) {
+            const moteCount = isLegendaryDrop ? 16 : isMythicDrop ? 12 : 7;
+            for (let mi = 0; mi < moteCount; mi++) {
+              const mp = (openedAge * 0.55 + mi / moteCount) % 1;
+              const mx = sx + Math.sin(timeSec * 3.1 + mi * 2.1) * (0.45 + mp * 1.45) * scale;
+              const my = sy - (0.3 + mp * (isLegendaryDrop ? 6.2 : 4.2)) * scale;
+              const mr = Math.max(1.6, (1 - mp) * (isLegendaryDrop ? 4.2 : 3.0));
+              ctx.fillStyle = mi % 2 === 0 ? pal.light : pal.hex;
+              ctx.globalAlpha = (1 - mp) * flareAlpha * 0.92;
+              ctx.beginPath();
+              ctx.arc(mx, my, mr, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            if (isLegendaryDrop || isMythicDrop) {
+              const holoY = sy - Math.min(2.6, 0.7 + openedAge * 1.05) * scale;
+              ctx.save();
+              ctx.translate(sx, holoY);
+              ctx.rotate(timeSec * (isLegendaryDrop ? 1.8 : 1.1));
+              ctx.strokeStyle = `rgba(${pal.rgb}, ${(0.82 * flareAlpha).toFixed(3)})`;
+              ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+              ctx.setLineDash([6, 5]);
+              ctx.beginPath();
+              ctx.arc(0, 0, (isLegendaryDrop ? 1.18 : 0.95) * scale, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.restore();
+            }
           }
           ctx.restore();
         }
 
-        // Ornate brass-bound sunken treasure chest silhouette
-        const cw = Math.max(13, 0.86 * scale);
-        const ch = Math.max(9, 0.56 * scale);
+        // Ornate brass-bound sunken treasure chest silhouette (Vault chests gleam with wider crown trim!)
+        const sizeMult = tc.isMapVault ? 1.16 : 1.0;
+        const cw = Math.max(13, 0.86 * scale * sizeMult);
+        const ch = Math.max(9, 0.56 * scale * sizeMult);
         ctx.save();
         // Chest lower wooden body
-        ctx.fillStyle = tc.opened ? '#2e1d0f' : '#4a2c12';
-        ctx.strokeStyle = tc.opened ? '#b45309' : '#fbbf24';
-        ctx.lineWidth = Math.max(1.4, 0.06 * scale);
+        ctx.fillStyle = tc.opened ? '#2e1d0f' : tc.isMapVault ? '#451a03' : '#4a2c12';
+        ctx.strokeStyle = tc.opened ? '#b45309' : pal.hex;
+        ctx.lineWidth = Math.max(1.4, 0.065 * scale);
         ctx.beginPath();
         ctx.roundRect?.(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66, Math.max(2, 0.08 * scale)) ??
           ctx.rect(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66);
         ctx.fill();
         ctx.stroke();
 
-        // Arched lid (tilts back when opened)
+        // Arched lid (springs open smoothly!)
         ctx.save();
         if (tc.opened) {
+          const lidAngle = -Math.min(0.78, 0.15 + openedAge * 2.4);
           ctx.translate(sx - cw * 0.46, sy - ch * 0.18);
-          ctx.rotate(-0.62);
+          ctx.rotate(lidAngle);
           ctx.translate(-(sx - cw * 0.46), -(sy - ch * 0.18));
         }
-        ctx.fillStyle = tc.opened ? '#3b2412' : '#653b16';
+        ctx.fillStyle = tc.opened ? '#3b2412' : tc.isMapVault ? '#7c2d12' : '#653b16';
         ctx.beginPath();
         ctx.ellipse(sx, sy - ch * 0.18, cw * 0.5, ch * 0.34, 0, Math.PI, 0);
         ctx.closePath();
@@ -1931,39 +2142,83 @@ export const lightingAndFxMethods = {
         ctx.restore();
 
         // Twin vertical brass straps
-        ctx.fillStyle = tc.opened ? '#d97706' : '#fcd34d';
+        ctx.fillStyle = tc.opened ? '#d97706' : tc.isMapVault ? '#fde047' : '#fcd34d';
         const strapW = Math.max(1.5, cw * 0.1);
         ctx.fillRect(sx - cw * 0.32, sy - ch * 0.42, strapW, ch * 0.9);
         ctx.fillRect(sx + cw * 0.22, sy - ch * 0.42, strapW, ch * 0.9);
 
-        // Glowing brass keyhole clasp when closed; soft inner glow when opened
+        // Glowing keyhole clasp when closed; bright relic core glow when opened
         ctx.fillStyle = tc.opened ? pal.light : '#fef08a';
         ctx.beginPath();
         ctx.arc(sx, sy - ch * 0.08, Math.max(2.1, 0.095 * scale), 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
+        // Floating Holographic Gear Relic & Rarity Callout rising out of the opened chest! (v230)
+        if (tc.opened && tc.drop && openedAge < spectacleDur) {
+          const rise = Math.min(1, openedAge / 0.75);
+          const easeRise = 1 - Math.pow(1 - rise, 3);
+          const holoY = sy - (0.65 + easeRise * 2.0 + Math.sin(timeSec * 3.5) * 0.12) * scale;
+          const fadeOut = openedAge > spectacleDur - 1.1 ? Math.max(0, (spectacleDur - openedAge) / 1.1) : 1;
+          ctx.save();
+          ctx.globalAlpha = fadeOut;
+          // Holographic medallion disc
+          const discR = Math.max(13, (isLegendaryDrop ? 0.58 : 0.46) * scale);
+          ctx.fillStyle = 'rgba(8, 14, 26, 0.9)';
+          ctx.strokeStyle = pal.hex;
+          ctx.lineWidth = isLegendaryDrop ? 2.4 : 1.8;
+          ctx.beginPath();
+          ctx.arc(sx, holoY, discR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.font = `${Math.round(discR * 1.12)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(tc.drop.icon || '🧰', sx, holoY + 1);
+
+          // Crisp rarity + item name callout banner above hologram
+          const topTxt =
+            tc.drop.kind === 'gear'
+              ? `${isLegendaryDrop ? '🔥 LEGENDARY · ' : `${(tc.drop.tier || 'rare').toUpperCase()} · `}${tc.drop.name}`
+              : `${tc.drop.icon || '🪙'} ${tc.drop.name}`;
+          ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+          const tw = ctx.measureText(topTxt).width + 14;
+          const ly = holoY - discR - 13;
+          ctx.fillStyle = isLegendaryDrop ? 'rgba(67, 20, 7, 0.94)' : 'rgba(10, 16, 28, 0.92)';
+          ctx.strokeStyle = pal.hex;
+          ctx.lineWidth = isLegendaryDrop ? 1.6 : 1.2;
+          ctx.beginPath();
+          ctx.roundRect?.(sx - tw * 0.5, ly - 9, tw, 18, 8) ?? ctx.rect(sx - tw * 0.5, ly - 9, tw, 18);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = pal.light;
+          ctx.fillText(topTxt, sx, ly);
+          ctx.restore();
+        }
+
         if (!tc.opened) {
           const distM = diver ? Math.hypot(diver.x - tc.x, diver.y - tc.y) : 99;
-          if (distM <= 12 + rigGlowBonus) {
-            const label = '🧰 TREASURE CHEST';
+          if (distM <= 13 + rigGlowBonus || tc.beaconRevealed) {
+            const label = tc.isMapVault ? `👑 ${tc.name.toUpperCase()}` : tc.chestTier === 'grotto' ? '💠 GROTTO RELIC CHEST' : '🧰 TREASURE CHEST';
+            ctx.save();
             ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
             const tw = ctx.measureText(label).width + 12;
             const ly = sy - ch * 0.65 - 12;
-            ctx.fillStyle = 'rgba(20, 12, 4, 0.88)';
-            ctx.strokeStyle = '#fbbf24';
-            ctx.lineWidth = 1.1;
+            ctx.fillStyle = 'rgba(20, 12, 4, 0.9)';
+            ctx.strokeStyle = pal.hex;
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.roundRect?.(sx - tw * 0.5, ly - 8, tw, 16, 7) ?? ctx.rect(sx - tw * 0.5, ly - 8, tw, 16);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = '#fef3c7';
+            ctx.fillStyle = pal.light;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(label, sx, ly);
+            ctx.restore();
           }
-          // Subtle directional proximity pill within 20m (+Relic Glow)
-          if (diver && distM <= 20 + rigGlowBonus && distM >= 4.5) {
+          // Subtle directional proximity pill within 20m (+Relic Glow) if not already showing the stronger Map Beacon arrow
+          if (diver && !tc.beaconRevealed && distM <= 20 + rigGlowBonus && distM >= 4.5) {
             const ang = Math.atan2(tc.y - diver.y, tc.x - diver.x);
             const dx = toScreenX(diver.x);
             const dy = toScreenY(diver.y);
@@ -1972,7 +2227,7 @@ export const lightingAndFxMethods = {
             const by = dy + Math.sin(ang) * orbR;
             ctx.save();
             ctx.fillStyle = 'rgba(26, 16, 4, 0.88)';
-            ctx.strokeStyle = '#fbbf24';
+            ctx.strokeStyle = pal.hex;
             ctx.lineWidth = 1.35;
             const txt = `🧰 ${Math.round(distM)}m`;
             ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -1982,13 +2237,55 @@ export const lightingAndFxMethods = {
             ctx.roundRect?.(bx - tw * 0.5, by - 9, tw, 18, 9) ?? ctx.rect(bx - tw * 0.5, by - 9, tw, 18);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = '#fef3c7';
+            ctx.fillStyle = pal.light;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(txt, bx, by);
             ctx.restore();
           }
         }
+      }
+    }
+
+    // 5c. Diegetic Rechargeable Hydro-Shield Halo & Stealth Acoustic Cloak Ripple around Diver (v230)
+    if (diver) {
+      const dx = toScreenX(diver.x);
+      const dy = toScreenY(diver.y);
+      if (diver.maxShield > 0 && ((diver.shield || 0) > 0.5 || (diver.shieldHitFlash || 0) > 0.02)) {
+        const shFrac = Math.max(0, Math.min(1, (diver.shield || 0) / diver.maxShield));
+        const flash = Math.max(0, Math.min(1, diver.shieldHitFlash || 0));
+        const baseAlpha = 0.14 + shFrac * 0.16 + flash * 0.52;
+        const shR = Math.max(18, 0.92 * scale);
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.strokeStyle = flash > 0.1 ? `rgba(125, 211, 252, ${Math.min(0.95, baseAlpha + 0.2).toFixed(3)})` : `rgba(56, 189, 248, ${baseAlpha.toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, (0.065 + flash * 0.08) * scale);
+        ctx.beginPath();
+        ctx.arc(dx, dy, shR, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * Math.max(0.08, shFrac));
+        ctx.stroke();
+        if (flash > 0.05) {
+          const sg = ctx.createRadialGradient(dx, dy, shR * 0.4, dx, dy, shR * 1.25);
+          sg.addColorStop(0, `rgba(56, 189, 248, ${(flash * 0.35).toFixed(3)})`);
+          sg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+          ctx.fillStyle = sg;
+          ctx.beginPath();
+          ctx.arc(dx, dy, shR * 1.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      if ((diver.stealth || 0) >= 0.25) {
+        const cloakPulse = 0.5 + 0.5 * Math.sin(timeSec * 2.2);
+        const stR = Math.max(15, (0.78 + cloakPulse * 0.12) * scale);
+        ctx.save();
+        ctx.strokeStyle = `rgba(192, 132, 252, ${(0.12 + cloakPulse * 0.12).toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath();
+        ctx.arc(dx, dy, stR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
       }
     }
 

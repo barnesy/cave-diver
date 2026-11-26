@@ -11,6 +11,13 @@ import {
   computeDiveDoubloonPayout,
   computeRetroactiveDoubloons,
 } from './gearChroma.js';
+import {
+  getGearItemBySlot,
+  getGearSellValue,
+  getGearBuybackCost,
+  isGearSellable,
+  computeUnlockedLiveries,
+} from './rigLivery.js';
 
 const GRADE_RANK = { 'S+': 6, S: 5, A: 4, B: 3, C: 2, DNF: 1 };
 const DIFFICULTY_RANK = { guided: 1, standard: 2, hardcore: 3 };
@@ -50,6 +57,7 @@ export function createEmptyLogbook() {
     artifacts: {}, // artifactId -> { name, kind, siteId, siteName, lore, points, count, scale } (v168-v169 Trophy Museum Vault)
     pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
     foundGear: {}, // "slot:itemId" -> { foundAt, siteId, siteName } (v216 World-Found Sunken Gear Caches)
+    soldGear: {}, // "slot:itemId" -> { soldAt, value } (v230 Sold Milestone/Secret gear eligible for Workshop Buyback)
     doubloons: STARTER_DOUBLOONS, // v229 Salvage Doubloons in-game currency for gear color finishes & animated coatings
     lifetimeDoubloons: STARTER_DOUBLOONS,
     ownedDyes: [], // purchased GEAR_CHROMA_FINISHES IDs
@@ -180,12 +188,22 @@ function normalizeBook(raw) {
     if (pid && base.artifacts[pid]) base.pinnedArtifactId = pid;
   }
   if (raw.foundGear && typeof raw.foundGear === 'object') {
-    for (const [gk, rec] of Object.entries(raw.foundGear).slice(0, 80)) {
+    for (const [gk, rec] of Object.entries(raw.foundGear).slice(0, 120)) {
       if (!gk || !rec || typeof rec !== 'object') continue;
       base.foundGear[gk] = {
         siteId: typeof rec.siteId === 'string' ? rec.siteId.slice(0, 48) : '',
         siteName: typeof rec.siteName === 'string' ? rec.siteName.slice(0, 64) : '',
         foundAt: Math.max(0, Math.round(Number(rec.foundAt) || Date.now())),
+      };
+    }
+  }
+  if (raw.soldGear && typeof raw.soldGear === 'object') {
+    for (const [gk, rec] of Object.entries(raw.soldGear).slice(0, 120)) {
+      if (!gk || !rec || typeof rec !== 'object') continue;
+      if (base.foundGear[gk]) continue;
+      base.soldGear[gk] = {
+        soldAt: Math.max(0, Math.round(Number(rec.soldAt) || Date.now())),
+        value: Math.max(0, Math.round(Number(rec.value) || 0)),
       };
     }
   }
@@ -415,6 +433,11 @@ export function mergeCareerLogbooks(rawA, rawB) {
   for (const gk of fgKeys) {
     out.foundGear[gk] = { ...(b.foundGear?.[gk] || {}), ...(a.foundGear?.[gk] || {}) };
   }
+  const sgKeys = new Set([...Object.keys(a.soldGear || {}), ...Object.keys(b.soldGear || {})]);
+  for (const gk of sgKeys) {
+    if (out.foundGear[gk]) continue;
+    out.soldGear[gk] = { ...(b.soldGear?.[gk] || {}), ...(a.soldGear?.[gk] || {}) };
+  }
   out.doubloons = Math.max(a.doubloons || 0, b.doubloons || 0);
   out.lifetimeDoubloons = Math.max(out.doubloons, a.lifetimeDoubloons || 0, b.lifetimeDoubloons || 0);
   out.ownedDyes = Array.from(new Set([...(a.ownedDyes || []), ...(b.ownedDyes || [])])).slice(0, 48);
@@ -600,6 +623,86 @@ export function purchaseGearChromaInLogbook(rawBook, dyeId, stats = null) {
   book.doubloons -= cost;
   book.ownedDyes.push(chroma.id);
   return { ok: true, reason: 'purchased', book, chroma, cost };
+}
+
+/**
+ * Sell an owned non-starter gear item for Salvage Doubloons (v230).
+ * - Chest / World-found gear is removed from `foundGear` so it cleanly re-enters the loot pool!
+ * - Milestone / Secret gear is recorded in `soldGear` (preventing free re-unlock exploits) and can
+ *   be bought back later in the Gear Workshop via `buybackGearInLogbook`.
+ */
+export function sellGearInLogbook(rawBook, slot, itemId, { salvageBonusMult = 1.0 } = {}) {
+  const book = normalizeBook(rawBook);
+  const entry = getGearItemBySlot(slot, itemId);
+  if (!entry || !entry.item) {
+    return { ok: false, reason: 'invalid', book, value: 0, gearKey: '' };
+  }
+  const item = entry.item;
+  if (!isGearSellable(item)) {
+    return { ok: false, reason: 'unsellable', book, value: 0, gearKey: entry.key };
+  }
+  const unlocked = computeUnlockedLiveries(book);
+  const set = unlocked?.[entry.setKey];
+  if (!set || !set.has(item.id)) {
+    return { ok: false, reason: 'not-owned', book, value: 0, gearKey: entry.key };
+  }
+  const baseVal = getGearSellValue(item.tier);
+  const mult = Math.max(1.0, Math.min(1.5, Number(salvageBonusMult) || 1.0));
+  const value = Math.round(baseVal * mult);
+  const isLootSource = item.source === 'chest' || item.source === 'world';
+  if (isLootSource && book.foundGear?.[entry.key]) {
+    delete book.foundGear[entry.key];
+    if (book.soldGear?.[entry.key]) delete book.soldGear[entry.key];
+  } else {
+    book.soldGear[entry.key] = { soldAt: Date.now(), value: baseVal };
+    if (book.foundGear?.[entry.key]) delete book.foundGear[entry.key];
+  }
+  book.doubloons = Math.max(0, (book.doubloons || 0) + value);
+  book.lifetimeDoubloons = Math.max(book.doubloons, (book.lifetimeDoubloons || 0) + value);
+  return {
+    ok: true,
+    reason: 'sold',
+    book,
+    gearKey: entry.key,
+    slot: entry.slot,
+    field: entry.field,
+    item,
+    value,
+    balance: book.doubloons,
+    reentersLootPool: isLootSource,
+    canBuyback: !isLootSource,
+  };
+}
+
+/**
+ * Buy back a previously sold Milestone or Secret gear piece from the Workshop Salvage Ledger (v230).
+ */
+export function buybackGearInLogbook(rawBook, slot, itemId) {
+  const book = normalizeBook(rawBook);
+  const entry = getGearItemBySlot(slot, itemId);
+  if (!entry || !entry.item) {
+    return { ok: false, reason: 'invalid', book, cost: 0, gearKey: '' };
+  }
+  if (!book.soldGear?.[entry.key]) {
+    return { ok: false, reason: 'not-sold', book, cost: 0, gearKey: entry.key };
+  }
+  const cost = getGearBuybackCost(entry.item.tier);
+  if ((book.doubloons || 0) < cost) {
+    return { ok: false, reason: 'insufficient-funds', book, cost, gearKey: entry.key };
+  }
+  book.doubloons -= cost;
+  delete book.soldGear[entry.key];
+  return {
+    ok: true,
+    reason: 'bought-back',
+    book,
+    gearKey: entry.key,
+    slot: entry.slot,
+    field: entry.field,
+    item: entry.item,
+    cost,
+    balance: book.doubloons,
+  };
 }
 
 export function recordLoreDiscoveryInLogbook(rawBook, { kind, title, lore, siteName = '' } = {}) {

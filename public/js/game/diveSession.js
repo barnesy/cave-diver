@@ -11,11 +11,17 @@ import { getScubaSignalById, computeTorchSignalGesture } from './diveSignals.js'
 import { stepSyncedSonarPings } from './sonarPings.js';
 import { resolveGearWakeProfile } from './rigLivery.js';
 import {
+  CHEST_GEAR_DROPS,
   computeRigPerformanceProfile,
   createWorldGearCachesForLevel,
   createTreasureChestsForLevel,
   rollTreasureChestLoot,
 } from './gearStats.js';
+import {
+  createTreasureMapsForLevel,
+  claimTreasureMap,
+  resolveTreasureBeaconOnChestOpen,
+} from './treasureMaps.js';
 import { resolveEffectiveWeather, computeWeatherSwellForce } from './weather.js';
 import {
   createSalvageState,
@@ -520,9 +526,18 @@ export function createDiveSession(
   const rigPerf = computeRigPerformanceProfile(livery, rigTuningCtx);
   const worldGearCaches = isProvingGrounds ? [] : createWorldGearCachesForLevel(level, foundGear);
   const treasureChests = isProvingGrounds ? [] : createTreasureChestsForLevel(level, { excludePoints: worldGearCaches });
+  const treasureMaps = isProvingGrounds
+    ? []
+    : createTreasureMapsForLevel(level, {
+        chests: treasureChests,
+        chestPool: CHEST_GEAR_DROPS,
+        foundGearMap: foundGear,
+        excludePoints: [...worldGearCaches, ...treasureChests],
+      });
   const hazards = createDynamicHazards(level);
   hazards.worldGearCaches = worldGearCaches;
   hazards.treasureChests = treasureChests;
+  hazards.treasureMaps = treasureMaps;
   hazards.rigPerf = rigPerf;
 
   return {
@@ -532,6 +547,8 @@ export function createDiveSession(
     rigTuningCtx,
     worldGearCaches,
     treasureChests,
+    treasureMaps,
+    activeTreasureBeacons: [],
     foundGearMap: foundGear && typeof foundGear === 'object' ? { ...foundGear } : {},
     isFirstDive: !isProvingGrounds && Boolean(isFirstDive),
     _firstChestAwarded: false,
@@ -558,6 +575,7 @@ export function createDiveSession(
       cooldownSec: 0,
       maxCooldownSec: 9.0,
       activePulse: null,
+      passiveTimerSec: 0.8,
     },
     camera: {
       cooldownSec: 0,
@@ -628,9 +646,15 @@ export function createDiveSession(
       angle: 0.15,
       angVel: 0,
       torchAngle: 0.15,
+      shield: rigPerf?.shieldMax || 0,
+      maxShield: rigPerf?.shieldMax || 0,
+      shieldRegenDelay: 0,
+      shieldHitFlash: 0,
       torchManualAim: false,
       torchOn: true,
       torchReachMult: rigPerf.torchReachMult || 1.0,
+      siltPierce: rigPerf.siltPierce || 0,
+      stealth: rigPerf.stealth || 0,
       strobeMod: 1.0,
       hasCcr: cleanGear.ccr,
       hasDpv: cleanGear.dpv,
@@ -799,19 +823,20 @@ export function toggleDpvScooter(session) {
  * Emit a 360-degree Cave Sonar hydrophone pulse (28m range, 9s cooldown).
  * Maps rock-wall echo contours & highlights nearby relics, hatches, stage caches, markers & targets through darkness/silt.
  */
-export function triggerSonarPing(session, callbacks = {}) {
+export function triggerSonarPing(session, callbacks = {}, { passive = false } = {}) {
   if (!session?.sonar || !session.diveState?.alive || session.surfaced) {
     return { ok: false, reason: 'unavailable' };
   }
-  if ((session.sonar.cooldownSec || 0) > 0.05) {
+  if (!passive && (session.sonar.cooldownSec || 0) > 0.05) {
     return { ok: false, reason: 'cooldown', remainingSec: session.sonar.cooldownSec };
   }
 
   const { level, diver } = session;
-  const isUpgradedSonar = Boolean(session.sonar.equipped);
+  const hasPassiveVisor = Boolean(session.rigPerf?.passiveSonar);
+  const isUpgradedSonar = Boolean(session.sonar.equipped || hasPassiveVisor);
   const baseRadiusM = isUpgradedSonar ? 28.0 : 16.0;
   const maxRadiusM = baseRadiusM * (session.crewRole?.sonarRangeMult || 1.0) * (session.rigPerf?.sonarRangeMult || 1.0);
-  const rayCount = isUpgradedSonar ? 48 : 32;
+  const rayCount = passive ? 36 : (isUpgradedSonar ? 48 : 32);
   const wallHits = [];
   for (let i = 0; i < rayCount; i++) {
     const ang = (i / rayCount) * Math.PI * 2;
@@ -833,6 +858,29 @@ export function triggerSonarPing(session, callbacks = {}) {
     const v = session.secretLair.spec.veil;
     const vDist = Math.hypot(v.x - diver.x, v.y - diver.y);
     contacts.push({ x: v.x, y: v.y, dist: vDist, kind: 'secret-veil', icon: '📡', label: v.label });
+  }
+  // Treasure Maps ping cleanly on upgraded sonar or Map-Tracking gear
+  if (isUpgradedSonar || session.rigPerf?.mapSonarTrack) {
+    for (const tm of session.treasureMaps || []) {
+      if (!tm.claimed) {
+        addContact(tm.x, tm.y, 'treasure-map', '🗺️', `MAP · ${tm.skillShort}`, {
+          color: tm.color,
+          skillIcon: tm.skillIcon,
+        });
+      }
+    }
+  }
+  // Omniscanner / Predator-tracking sonar highlights live hostile predators & bosses!
+  if (session.rigPerf?.sonarTrackPredators && session.secretLair) {
+    for (const m of session.secretLair.minions || []) {
+      if (m && m.alive) {
+        addContact(m.x, m.y, 'predator', '⚠️', m.name || 'Predator', { color: '#fb7185' });
+      }
+    }
+    const boss = session.secretLair.boss;
+    if (boss && !boss.defeated) {
+      addContact(boss.x, boss.y, 'predator', '💀', boss.name || 'Apex Boss', { color: '#ef4444' });
+    }
   }
   if (isUpgradedSonar) {
     for (const c of level.collectibles || []) {
@@ -858,7 +906,11 @@ export function triggerSonarPing(session, callbacks = {}) {
       if (!gc.opened) addContact(gc.x, gc.y, 'gear-cache', gc.icon || '📦', `GEAR CACHE · ${gc.itemName || gc.itemId}`);
     }
     for (const tc of session.treasureChests || []) {
-      if (!tc.opened) addContact(tc.x, tc.y, 'gear-cache', '🧰', tc.name || 'SUNKEN TREASURE CHEST');
+      if (!tc.opened) {
+        addContact(tc.x, tc.y, 'gear-cache', tc.isMapVault ? '👑' : '🧰', tc.name || 'SUNKEN TREASURE CHEST', {
+          color: tc.beamColor || '#facc15',
+        });
+      }
     }
     // v142 Acoustic Hazard Echoes: tag shifting surge hatches, fragile percolation ceilings & thermoclines through silt
     if (session.hazards) {
@@ -898,9 +950,10 @@ export function triggerSonarPing(session, callbacks = {}) {
     x: diver.x,
     y: diver.y,
     ageSec: 0,
-    durationSec: isUpgradedSonar ? 3.8 : 2.6,
+    durationSec: passive ? 3.1 : (isUpgradedSonar ? 3.8 : 2.6),
     maxRadiusM,
     upgraded: isUpgradedSonar,
+    passive: Boolean(passive),
     wallHits,
     contacts,
     summary: {
@@ -912,8 +965,10 @@ export function triggerSonarPing(session, callbacks = {}) {
     },
   };
   session.sonar.activePulse = pulse;
-  session.sonar.cooldownSec = isUpgradedSonar ? (session.sonar.maxCooldownSec || 9.0) : 5.5;
-  callbacks.onSonarPing?.(pulse);
+  if (!passive) {
+    session.sonar.cooldownSec = isUpgradedSonar ? (session.sonar.maxCooldownSec || 9.0) : 5.5;
+    callbacks.onSonarPing?.(pulse);
+  }
   return { ok: true, pulse };
 }
 
@@ -2230,11 +2285,15 @@ export function openTreasureChest(session, chest, callbacks = {}, { rng = Math.r
     dryStreak: session.chestDryStreak || 0,
     hasDpv: Boolean(session.dpv?.equipped),
     isFirstChestEver,
+    skillFocus: chest.skillFocus || null,
+    chestTier: chest.chestTier || 'brass',
+    isMapVault: Boolean(chest.isMapVault),
     rng,
   });
   if (isFirstChestEver) session._firstChestAwarded = true;
   chest.drop = drop;
   chest.beamColor = drop.beamColor || '#facc15';
+  resolveTreasureBeaconOnChestOpen(session, chest.id);
   if (drop.kind === 'gear') {
     session.chestDryStreak = 0;
     if (session.foundGearMap && drop.gearKey) {
@@ -2257,25 +2316,32 @@ export function openTreasureChest(session, chest, callbacks = {}, { rng = Math.r
     session.diveState.panicLevel = Math.max(0, (session.diveState.panicLevel || 0) - 0.35);
     session.diveState.heartRateBpm = Math.max(66, (session.diveState.heartRateBpm || 80) - 24);
   }
+  // v230 Big Chest Opening Moment: camera punch & scaled pressurized bubble/glint eruption!
+  const tierShake = drop.tier === 'legendary' ? 0.55 : drop.tier === 'mythic' ? 0.36 : drop.tier === 'epic' ? 0.22 : 0.12;
+  if (session.cameraShake !== undefined) {
+    session.cameraShake = Math.max(session.cameraShake || 0, tierShake);
+  }
   if (Array.isArray(session.collectBursts)) {
     session.collectBursts.push({
       x: chest.x,
       y: chest.y,
       points: pts,
       kind: 'treasure-chest',
+      tier: drop.tier || 'rare',
       age: 0,
-      duration: 2.0,
+      duration: drop.tier === 'legendary' ? 3.2 : drop.tier === 'mythic' ? 2.6 : 2.1,
     });
   }
   if (Array.isArray(session.bubbles)) {
-    for (let k = 0; k < 14; k++) {
+    const bubbleCount = drop.tier === 'legendary' ? 32 : drop.tier === 'mythic' ? 24 : 16;
+    for (let k = 0; k < bubbleCount; k++) {
       spawnExhaustBubble(
         session.bubbles,
-        chest.x + (Math.random() - 0.5) * 0.8,
+        chest.x + (Math.random() - 0.5) * 1.1,
         chest.y - 0.1,
-        (Math.random() - 0.5) * 1.4,
-        -0.9 - Math.random() * 1.1,
-        { primary: k < 8, intensity: 1.0, depthM: chest.y }
+        (Math.random() - 0.5) * 2.2,
+        -1.0 - Math.random() * 1.6,
+        { primary: k < Math.floor(bubbleCount * 0.6), intensity: 1.0, depthM: chest.y }
       );
     }
   }
@@ -2287,6 +2353,40 @@ export function openTreasureChest(session, chest, callbacks = {}, { rng = Math.r
   });
   callbacks.onTreasureChestOpened?.(chest, drop);
   return drop;
+}
+
+/**
+ * Claim a discovered Waterproof Treasure Map mid-dive, activating an unmistakable
+ * Skill-Targeted Sonar Beacon pointing straight to its linked Vault Chest (v230).
+ */
+export function collectTreasureMap(session, map, callbacks = {}) {
+  if (!session || !map || map.claimed) return null;
+  const beacon = claimTreasureMap(session, map);
+  if (!beacon) return null;
+  session.chestBonusScore = (session.chestBonusScore || 0) + 150;
+  if (Array.isArray(session.collectBursts)) {
+    session.collectBursts.push({
+      x: map.x,
+      y: map.y,
+      points: 150,
+      kind: 'treasure-map',
+      age: 0,
+      duration: 2.0,
+    });
+  }
+  const distM = Math.round(Math.hypot(beacon.x - session.diver.x, beacon.y - session.diver.y));
+  recordDiveHighlight(session, {
+    kind: 'moment',
+    icon: '🗺️',
+    label: `Treasure Map: ${beacon.skillIcon} ${beacon.skillLabel}`,
+    depthM: Math.max(0, map.y),
+  });
+  callbacks.onToast?.(
+    `🗺️ TREASURE MAP FOUND · ${beacon.skillIcon} ${beacon.skillLabel} — Sonar Beacon locked (${distM}m away)!`,
+    5.2
+  );
+  callbacks.onTreasureMapFound?.(map, beacon);
+  return beacon;
 }
 
 export function triggerWreckAction(session, callbacks = {}) {
@@ -2558,6 +2658,18 @@ export function triggerWreckAction(session, callbacks = {}) {
       const bbRes = recoverBlackBox(session, callbacks);
       if (bbRes.ok) {
         return { handled: true, kind: 'recover-blackbox', targetId: bbRes.blackBox.id, points: bbRes.points };
+      }
+    }
+  }
+
+  // 5b.5. Claim a nearby Waterproof Treasure Map ([E] or mobile interact button) (v230)
+  if (Array.isArray(session.treasureMaps) && session.treasureMaps.length > 0) {
+    for (let i = 0; i < session.treasureMaps.length; i++) {
+      const tm = session.treasureMaps[i];
+      if (!tm || tm.claimed) continue;
+      if (Math.hypot(diver.x - tm.x, diver.y - tm.y) <= 3.6) {
+        const beacon = collectTreasureMap(session, tm, callbacks);
+        return { handled: true, kind: 'treasure-map', targetId: tm.id, beacon };
       }
     }
   }
@@ -3244,6 +3356,35 @@ function stepPropulsionAndCurrents(session, thrust, dt, callbacks, ctx) {
         session.sonar.activePulse = null;
       }
     }
+    // v230 Always-On Wide Tracking Sonar: continuous passive radar sweeps without blocking manual pings!
+    if (session.rigPerf?.passiveSonar && session.diveState?.alive && !session.surfaced) {
+      session.sonar.passiveTimerSec = Math.max(0, (session.sonar.passiveTimerSec ?? 0.6) - dt);
+      if (session.sonar.passiveTimerSec <= 0 && !session.sonar.activePulse) {
+        triggerSonarPing(session, callbacks, { passive: true });
+        session.sonar.passiveTimerSec = session.rigPerf?.sonarTrackPredators ? 3.2 : 3.9;
+      }
+    }
+  }
+  // v230 Rechargeable Hydro-Shield sync & regeneration (works in both standard cave dives & boss lairs!)
+  const desiredMaxShield = Math.max(0, Math.round(session.rigPerf?.shieldMax || 0));
+  if (diver.maxShield !== desiredMaxShield) {
+    const prevMax = diver.maxShield || 0;
+    diver.maxShield = desiredMaxShield;
+    if (desiredMaxShield > prevMax) {
+      diver.shield = Math.min(desiredMaxShield, (diver.shield || 0) + (desiredMaxShield - prevMax));
+    } else {
+      diver.shield = Math.min(desiredMaxShield, diver.shield || 0);
+    }
+  }
+  if (diver.shieldHitFlash > 0) {
+    diver.shieldHitFlash = Math.max(0, diver.shieldHitFlash - dt * 1.6);
+  }
+  if (diver.maxShield > 0) {
+    if ((diver.shieldRegenDelay || 0) > 0) {
+      diver.shieldRegenDelay = Math.max(0, diver.shieldRegenDelay - dt);
+    } else if ((diver.shield || 0) < diver.maxShield) {
+      diver.shield = Math.min(diver.maxShield, (diver.shield || 0) + 9.0 * dt);
+    }
   }
   if (session.camera) {
     if (session.camera.cooldownSec > 0) {
@@ -3843,6 +3984,14 @@ function stepWreckAndCaveInteractives(session, dt, callbacks, ctx) {
       detail: `+${session.blackBox.points || BLACK_BOX_BONUS_PTS} pts · 18m Acoustic Scan`,
       progress: 0,
     };
+  } else if (Array.isArray(session.treasureMaps) && session.treasureMaps.some((tm) => tm && !tm.claimed && Math.hypot(diver.x - tm.x, diver.y - tm.y) <= 3.6)) {
+    const nearMap = session.treasureMaps.find((tm) => tm && !tm.claimed && Math.hypot(diver.x - tm.x, diver.y - tm.y) <= 3.6);
+    session.wreckActionPrompt = {
+      kind: 'treasure-map',
+      label: `🗺️ CLAIM TREASURE MAP [E]`,
+      detail: `${nearMap.skillIcon} ${nearMap.skillLabel} · Locks Gear Beacon on Sonar`,
+      progress: 0,
+    };
   } else if (Array.isArray(session.treasureChests) && session.treasureChests.some((tc) => tc && !tc.opened && Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8)) {
     const nearChest = session.treasureChests.find((tc) => tc && !tc.opened && Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8);
     session.wreckActionPrompt = {
@@ -4286,7 +4435,14 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
       narcResist: session.rigPerf?.narcResist || 0,
       narcDepthBonusM: session.rigPerf?.narcDepthBonusM || 0,
       bumpArmor: session.rigPerf?.bumpArmor || 0,
+      armorDR: session.rigPerf?.armorDR || 0,
+      shieldActive: Boolean(diver.maxShield > 0 && (diver.shield || 0) > 1),
     });
+    if (headBumpImpulse > 0.25 && diver.maxShield > 0 && (diver.shield || 0) > 0) {
+      diver.shield = Math.max(0, diver.shield - Math.min(diver.shield, headBumpImpulse * 4.5));
+      diver.shieldRegenDelay = Math.max(diver.shieldRegenDelay || 0, 3.2);
+      diver.shieldHitFlash = Math.max(diver.shieldHitFlash || 0, 0.45);
+    }
 
     // Steady-Trim Decompression Mastery & Clean Deco-Clear Milestone Tracking (v214)
     const dm = session.decoMastery;
@@ -4523,6 +4679,16 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
   if (session.isFirstDive && !session._firstDiveTipShown && diver.y >= 6.5 && !session.isProvingGrounds) {
     session._firstDiveTipShown = true;
     callbacks.onToast?.('✨ Explorer Tip: Watch for glowing Gear Caches & Sunken Brass Chests along the cavern shelves!', 4.4);
+  }
+  // v230: Direct close-contact swim-through pickup for Waterproof Treasure Maps
+  if (Array.isArray(session.treasureMaps) && session.treasureMaps.length > 0) {
+    for (let i = 0; i < session.treasureMaps.length; i++) {
+      const tm = session.treasureMaps[i];
+      if (!tm || tm.claimed) continue;
+      if (Math.hypot(diver.x - tm.x, diver.y - tm.y) <= 2.15) {
+        collectTreasureMap(session, tm, callbacks);
+      }
+    }
   }
   // v220: Direct close-contact swim-through pickup for discoverable Sunken Treasure Chests
   if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {

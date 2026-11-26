@@ -123,7 +123,46 @@ export const GEAR_TIERS = Object.freeze({
     glow: 'rgba(250, 204, 21, 0.65)',
     bg: 'rgba(113, 63, 18, 0.48)',
   }),
+  legendary: Object.freeze({
+    id: 'legendary',
+    rank: 6,
+    badge: 'LEGENDARY',
+    title: 'Tier VI · Ultra-Rare Legendary',
+    icon: '🔥',
+    color: '#ff9524',
+    glow: 'rgba(255, 149, 36, 0.78)',
+    bg: 'rgba(154, 52, 18, 0.56)',
+  }),
 });
+
+/**
+ * Salvage Doubloons sell & buyback pricing by gear rarity tier (v230).
+ * Common/starter issue gear cannot be sold so divers always retain a baseline kit.
+ */
+export const GEAR_SELL_VALUES = Object.freeze({
+  common: 0,
+  uncommon: 60,
+  rare: 130,
+  epic: 260,
+  mythic: 520,
+  legendary: 1200,
+});
+
+export function getGearSellValue(tierId) {
+  return GEAR_SELL_VALUES[tierId] || 0;
+}
+
+export function getGearBuybackCost(tierId) {
+  const sell = getGearSellValue(tierId);
+  return sell > 0 ? Math.round(sell * 1.25) : 0;
+}
+
+export function isGearSellable(item) {
+  if (!item || !item.id) return false;
+  if (getGearSellValue(item.tier) <= 0) return false;
+  if (item.ladderRank === 0 && item.tier === 'common') return false;
+  return true;
+}
 
 export function getGearTierMeta(tierId) {
   return (tierId && GEAR_TIERS[tierId]) || GEAR_TIERS.common;
@@ -452,6 +491,44 @@ export const SUIT_LIVERIES = Object.freeze([
     unlockHint: '🧰 Very Rare Random Drop · Sunken Treasure Chests (~3.5%)',
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:chest-nautilus-suit')),
   },
+  {
+    id: 'chest-bulwark-shell',
+    name: 'Bulwark Hydro-Plate Suit',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 84,
+    fx: { id: 'armor-plate', name: 'Ceramic Hydro-Plate', desc: 'Reinforced cobalt armor weave with integrated rechargeable hydro-shield cells.' },
+    suitTop: '#1d4ed8',
+    suitMid: '#1e3a8a',
+    suitBot: '#0b1634',
+    accent: '#60a5fa',
+    trim: '#93c5fd',
+    finColor: '#1e293b',
+    finTip: '#60a5fa',
+    stageBand: '#3b82f6',
+    unlockHint: '🧰 Rare Chest / 🛡️ Shield Map Vault Drop',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:chest-bulwark-shell')),
+  },
+  {
+    id: 'legendary-aegis-exosuit',
+    name: 'Aegis Hydro-Shield Exosuit',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 112,
+    fx: { id: 'prism-shift', name: 'Aegis Shield Matrix', desc: 'Ultra-rare rechargeable hydro-shield matrix absorbs predator bites & cavern shock.' },
+    suitTop: '#1e40af',
+    suitMid: '#0f172a',
+    suitBot: '#020617',
+    accent: '#ff9524',
+    trim: '#38bdf8',
+    finColor: '#0f172a',
+    finTip: '#ff9524',
+    stageBand: '#38bdf8',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & 🛡️ Shield Maps',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:legendary-aegis-exosuit')),
+  },
 ]);
 
 export const TORCH_OPTICS = Object.freeze([
@@ -649,6 +726,44 @@ export const TORCH_OPTICS = Object.freeze([
     unlockHint: '🧰 Very Rare Random Drop · Sunken Treasure Chests (~3.5%)',
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:chest-abyssal-lantern')),
   },
+  {
+    id: 'chest-amber-cutter',
+    name: 'Amber Silt-Cutter Flood',
+    shortLabel: 'Silt-Cutter',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 85,
+    fx: { id: 'solar-caustic', name: 'Polarized Silt Beam', desc: 'Narrow-wavelength amber optic parts dense cave silt clouds.' },
+    swatch: '#fbbf24',
+    coreRgb: '254, 243, 199',
+    shaftRgb: '245, 158, 11',
+    warmRgb: '251, 146, 60',
+    rangeMult: 1.12,
+    siltPierce: 0.48,
+    specText: 'Chest / 🔦 Silt Map Relic · Cuts 48% Silt Haze & +18% Beam Reach',
+    unlockHint: '🧰 Rare Chest / 🔦 Silt Lamp Map Vault Drop',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:chest-amber-cutter')),
+  },
+  {
+    id: 'legendary-photon-lance',
+    name: 'Helios Silt-Piercer Lance',
+    shortLabel: 'Helios Lance',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 114,
+    fx: { id: 'solar-caustic', name: 'Helios Coherent Beam', desc: 'Ultra-rare coherent gold-amber laser flood slices straight through blinding cave silt.' },
+    swatch: '#ff9524',
+    coreRgb: '255, 251, 235',
+    shaftRgb: '255, 179, 71',
+    warmRgb: '251, 146, 60',
+    rangeMult: 1.24,
+    siltPierce: 0.78,
+    specText: '🔥 Legendary · Pierces 78% Cave Silt & +32% Beam Reach',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & 🔦 Silt Maps',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:legendary-photon-lance')),
+  },
 ]);
 
 export const MILESTONE_PATCHES = Object.freeze([
@@ -669,6 +784,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'world-arch-crest', icon: '🏛️', name: 'Bells Archway Crest', tier: 'epic', source: 'world', ladderRank: 74, fx: { id: 'crest-halo', name: 'Archway Deep Crest', desc: 'Deep-blue cobalt halo signaling trimix arch mastery.' }, unlockHint: '🗺️ World Cache · Blue Hole Dahab Archway', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-arch-crest')) },
   { id: 'world-monolith-seal', icon: '🗿', name: 'Yonaguni Monolith Seal', tier: 'mythic', source: 'world', ladderRank: 96, fx: { id: 'crest-halo', name: 'Monolith Sovereign Aura', desc: 'Ancient sandstone-gold crest radiating guardian resonance.' }, unlockHint: '🗺️ World Cache · Yonaguni Submerged Monument', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-monolith-seal')) },
   { id: 'chest-corsair-crest', icon: '🏴‍☠️', name: 'Sunken Corsair Crest', tier: 'rare', source: 'chest', dropRarity: 'rare', ladderRank: 64, fx: { id: 'crest-halo', name: "Corsair's Fortune", desc: 'Gilded compass rose halo increasing sunken treasure luck (+20%).' }, unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~12%)', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:chest-corsair-crest')) },
+  { id: 'legendary-cartographer-compass', icon: '🧭', name: 'Sovereign Treasure Compass', tier: 'legendary', source: 'chest', dropRarity: 'legendary', ladderRank: 115, fx: { id: 'crest-halo', name: 'Sovereign Astrolabe', desc: 'Ultra-rare radiant astrolabe crest amplifying chest luck, doubloons, armor & stealth.' }, unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & Vault Maps', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:legendary-cartographer-compass')) },
 ]);
 
 export const HEADGEAR_STYLES = Object.freeze([
@@ -774,6 +890,32 @@ export const HEADGEAR_STYLES = Object.freeze([
     specText: 'World-Found H₂S Halocline Mask · +24% Deco, -24% Silt & +10m Relic',
     unlockHint: '🗺️ World Cache · Cenote Angelita H₂S river ledge',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:world-halocline-mask')),
+  },
+  {
+    id: 'chest-ghost-hood',
+    name: 'Shadow-Weave Acoustic Hood',
+    icon: '🥷',
+    tier: 'rare',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 68,
+    fx: { id: 'halo-telemetry', name: 'Acoustic Dampener', desc: 'Matte sound-absorbing neoprene cuts predator detection & fin wake noise.' },
+    specText: 'Chest / 🥷 Stealth Map Relic · +28% Stealth & -18% Silt Stir',
+    unlockHint: '🧰 Rare Chest / 🥷 Stealth Map Vault Drop',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:chest-ghost-hood')),
+  },
+  {
+    id: 'legendary-phantom-shroud',
+    name: 'Abyssal Phantom Shroud',
+    icon: '👻',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 113,
+    fx: { id: 'halo-telemetry', name: 'Phantom Acoustic Cloak', desc: 'Ultra-rare void-weave shroud cuts predator detection by 56% & calms megafauna.' },
+    specText: '🔥 Legendary · +56% Stealth, +25% Cold Resist & -14% Gas Burn',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & 🥷 Stealth Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:legendary-phantom-shroud')),
   },
 ]);
 
@@ -979,6 +1121,23 @@ export const ACCENT_TRIMS = Object.freeze([
     unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~7%)',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:chest-manta-fins')),
   },
+  {
+    id: 'legendary-slipstream-fins',
+    name: 'Slipstream Apex Fins',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 112,
+    fx: { id: 'hydro-blades', name: 'Slipstream Cavitation Wake', desc: 'Ultra-rare active hydrofoil blades deliver peak swim speed, DPV thrust & Silt-Ghost glide.' },
+    accent: '#34d399',
+    trim: '#ff9524',
+    finTip: '#fde047',
+    stageBand: '#10b981',
+    swatchA: '#10b981',
+    swatchB: '#ff9524',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & ⚡ Speed Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:legendary-slipstream-fins')),
+  },
 ]);
 
 export const TANK_FINISHES = Object.freeze([
@@ -1141,6 +1300,22 @@ export const TANK_FINISHES = Object.freeze([
     ccrShell: '#0369a1',
     unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~12%)',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:chest-titanium-twin')),
+  },
+  {
+    id: 'legendary-cryo-titan-tank',
+    name: 'Cryo-Titan Abyssal Twins',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 113,
+    fx: { id: 'reactor-core', name: 'Cryo-Heliox Core', desc: 'Ultra-rare insulated titanium twins defy lethal cold, crush depth & narcosis.' },
+    top: '#ecfeff',
+    mid: '#06b6d4',
+    bot: '#083344',
+    stroke: '#ff9524',
+    ccrShell: '#0891b2',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & ❄️ Depth Res Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:legendary-cryo-titan-tank')),
   },
 ]);
 
@@ -1335,6 +1510,38 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#fb7185',
     unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~7%)',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:chest-harpoon-visor')),
+  },
+  {
+    id: 'chest-echo-array',
+    name: 'Echo-Array Wide Sonar Visor',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 86,
+    fx: { id: 'stalker-lock', name: 'Passive Echo Sweep', desc: 'Continuous wide-band sonar visor passively pings chests & relics on your scope.' },
+    top: '#bae6fd',
+    mid: '#0ea5e9',
+    bot: '#082f49',
+    frame: '#0f172a',
+    hudGlow: '#38bdf8',
+    unlockHint: '🧰 Rare Chest / 📡 Sonar Map Vault Drop',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:chest-echo-array')),
+  },
+  {
+    id: 'legendary-omniscanner-visor',
+    name: 'Omniscanner Pulse Visor',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 114,
+    fx: { id: 'stalker-lock', name: 'Omniscanner Continuous Radar', desc: 'Ultra-rare always-on wide-range sonar tracks Chests, Maps, Relics & Predators live.' },
+    top: '#fef08a',
+    mid: '#38bdf8',
+    bot: '#0f172a',
+    frame: '#ff9524',
+    hudGlow: '#ff9524',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & 📡 Sonar Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:legendary-omniscanner-visor')),
   },
 ]);
 
@@ -1972,20 +2179,44 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   };
   stats.bountiesClaimed = _countClaimedBounties(stats);
 
+  const soldGear = new Set(
+    logbook?.soldGear && typeof logbook.soldGear === 'object' ? Object.keys(logbook.soldGear) : []
+  );
   const suits = new Set();
-  for (const s of SUIT_LIVERIES) if (s.isUnlocked(stats) || foundGearIds.has(`suit:${s.id}`)) suits.add(s.id);
+  for (const s of SUIT_LIVERIES) {
+    const k = `suit:${s.id}`;
+    if ((s.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) suits.add(s.id);
+  }
   const torches = new Set();
-  for (const t of TORCH_OPTICS) if (t.isUnlocked(stats) || foundGearIds.has(`torch:${t.id}`)) torches.add(t.id);
+  for (const t of TORCH_OPTICS) {
+    const k = `torch:${t.id}`;
+    if ((t.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) torches.add(t.id);
+  }
   const patches = new Set();
-  for (const p of MILESTONE_PATCHES) if (p.isUnlocked(stats) || foundGearIds.has(`patch:${p.id}`)) patches.add(p.id);
+  for (const p of MILESTONE_PATCHES) {
+    const k = `patch:${p.id}`;
+    if ((p.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) patches.add(p.id);
+  }
   const headgears = new Set();
-  for (const h of HEADGEAR_STYLES) if (h.isUnlocked(stats) || foundGearIds.has(`headgear:${h.id}`)) headgears.add(h.id);
+  for (const h of HEADGEAR_STYLES) {
+    const k = `headgear:${h.id}`;
+    if ((h.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) headgears.add(h.id);
+  }
   const trims = new Set();
-  for (const tr of ACCENT_TRIMS) if (tr.isUnlocked(stats) || foundGearIds.has(`trim:${tr.id}`)) trims.add(tr.id);
+  for (const tr of ACCENT_TRIMS) {
+    const k = `trim:${tr.id}`;
+    if ((tr.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) trims.add(tr.id);
+  }
   const tanks = new Set();
-  for (const tk of TANK_FINISHES) if (tk.isUnlocked(stats) || foundGearIds.has(`tank:${tk.id}`)) tanks.add(tk.id);
+  for (const tk of TANK_FINISHES) {
+    const k = `tank:${tk.id}`;
+    if ((tk.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) tanks.add(tk.id);
+  }
   const visors = new Set();
-  for (const vs of VISOR_TINTS) if (vs.isUnlocked(stats) || foundGearIds.has(`visor:${vs.id}`)) visors.add(vs.id);
+  for (const vs of VISOR_TINTS) {
+    const k = `visor:${vs.id}`;
+    if ((vs.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) visors.add(vs.id);
+  }
   const dyes = new Set(['none']);
   if (Array.isArray(logbook?.ownedDyes)) {
     for (const did of logbook.ownedDyes) {
@@ -1993,7 +2224,7 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     }
   }
 
-  return { stats, suits, torches, patches, headgears, trims, tanks, visors, dyes };
+  return { stats, suits, torches, patches, headgears, trims, tanks, visors, dyes, soldGear };
 }
 
 /**

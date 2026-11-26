@@ -2607,16 +2607,53 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
   if (lair.combatMode) {
     if (!continuous && lair.playerIframesSec > 0) return;
     const diffScale = session.difficulty === 'guided' ? 0.65 : session.difficulty === 'hardcore' ? 1.15 : 1.0;
+    const armorDR = Math.max(0, Math.min(0.55, Number(session.rigPerf?.armorDR) || 0));
     // CRITICAL FIX (v182): continuous damage is dt-scaled and MUST NOT clamp to 1.0 HP/frame!
-    const dmg = continuous ? Math.max(0, amount * diffScale) : Math.max(6, amount * diffScale);
-    lair.playerHp = Math.max(0, (lair.playerHp ?? COMBAT_MAX_HP) - dmg);
+    let dmg = continuous
+      ? Math.max(0, amount * diffScale * (1 - armorDR))
+      : Math.max(4, amount * diffScale * (1 - armorDR));
+
+    // v230 Rechargeable Hydro-Shield absorbs damage before HP!
+    const div = session.diver;
+    let shieldAbsorbed = 0;
+    if (div && div.maxShield > 0 && (div.shield || 0) > 0 && dmg > 0) {
+      shieldAbsorbed = Math.min(div.shield, dmg);
+      div.shield = Math.max(0, div.shield - shieldAbsorbed);
+      div.shieldRegenDelay = 4.5;
+      div.shieldHitFlash = Math.max(div.shieldHitFlash || 0, continuous ? 0.22 : 0.65);
+      dmg = Math.max(0, dmg - shieldAbsorbed);
+      if (!continuous && shieldAbsorbed >= 1) {
+        addSparkBurst(
+          lair,
+          div.x,
+          div.y,
+          '#38bdf8',
+          div.shield <= 0.01 ? 14 : 8,
+          div.shield <= 0.01 ? '🛡️ SHIELD BROKEN' : `🛡️ -${Math.round(shieldAbsorbed)}`,
+          false
+        );
+      }
+    } else if (div && div.maxShield > 0 && dmg > 0) {
+      div.shieldRegenDelay = 4.5;
+    }
+
+    const maxHp = lair.playerMaxHp || COMBAT_MAX_HP;
+    lair.playerHp = Math.max(0, (lair.playerHp ?? maxHp) - dmg);
     if (!continuous) {
       lair.playerIframesSec = 0.85;
-      lair.playerHitFlash = 0.38;
-      if (session.cameraShake !== undefined) {
-        session.cameraShake = Math.max(session.cameraShake || 0, 0.42);
+      if (dmg > 0.5) {
+        lair.playerHitFlash = 0.38;
+        if (session.cameraShake !== undefined) {
+          session.cameraShake = Math.max(session.cameraShake || 0, 0.42);
+        }
+        callbacks.onAlarm?.('danger');
+      } else if (shieldAbsorbed > 0) {
+        lair.playerHitFlash = Math.max(lair.playerHitFlash || 0, 0.14);
+        if (session.cameraShake !== undefined) {
+          session.cameraShake = Math.max(session.cameraShake || 0, 0.18);
+        }
+        callbacks.onShieldHit?.(shieldAbsorbed, div?.shield <= 0.01);
       }
-      callbacks.onAlarm?.('danger');
     } else if (dmg > 0.01) {
       lair.playerHitFlash = Math.max(lair.playerHitFlash || 0, 0.14);
     }
@@ -2627,7 +2664,11 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
       session.diver.y = ry;
       session.diver.vx = 0;
       session.diver.vy = 0;
-      lair.playerHp = COMBAT_MAX_HP;
+      lair.playerHp = maxHp;
+      if (div && div.maxShield > 0) {
+        div.shield = div.maxShield;
+        div.shieldRegenDelay = 0;
+      }
       lair.playerIframesSec = 2.2;
       lair.playerHitFlash = 0.45;
       lair.enemyProjectiles.length = 0;
@@ -2689,7 +2730,19 @@ function applyDamageToLocalDiver(session, amount, sourceLabel, callbacks, { cont
 
   // Fallback outside combatMode
   const diffScale = session.difficulty === 'guided' ? 0.6 : session.difficulty === 'hardcore' ? 1.2 : 1.0;
-  const dmg = continuous ? Math.max(0, amount * diffScale) : Math.max(2, amount * diffScale);
+  const armorDR = Math.max(0, Math.min(0.55, Number(session.rigPerf?.armorDR) || 0));
+  let dmg = continuous
+    ? Math.max(0, amount * diffScale * (1 - armorDR))
+    : Math.max(2, amount * diffScale * (1 - armorDR));
+  const div = session.diver;
+  if (div && div.maxShield > 0 && (div.shield || 0) > 0 && dmg > 0) {
+    const abs = Math.min(div.shield, dmg);
+    div.shield = Math.max(0, div.shield - abs);
+    div.shieldRegenDelay = 4.5;
+    div.shieldHitFlash = Math.max(div.shieldHitFlash || 0, 0.55);
+    dmg = Math.max(0, dmg - abs);
+    if (!continuous && abs > 0) callbacks.onShieldHit?.(abs, div.shield <= 0.01);
+  }
   ds.health = Math.max(0, (ds.health ?? 100) - dmg);
   if (!continuous && session.cameraShake !== undefined) {
     session.cameraShake = Math.max(session.cameraShake || 0, 0.35);
@@ -4032,12 +4085,24 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
       if (m.cooldown > 0) m.cooldown = Math.max(0, m.cooldown - dt);
 
       let nearest = null;
-      let bestDist = 17.5;
+      let bestDist = Infinity;
+      const localStealth = Math.max(0, Math.min(0.75, Number(session.rigPerf?.stealth) || 0));
+      const localTorchFactor = diver?.torchOn === false ? 0.72 : 1.0;
+      const localDpvFactor = diver?.dpvThrusting ? 1.22 : 1.0;
       for (const t of targets) {
         const d = Math.hypot(t.x - m.x, t.y - m.y);
-        if (d < bestDist) { bestDist = d; nearest = t; }
+        // v230 Stealth cuts hostile predator detection radius (and allows slipping away to drop aggro!)
+        const isLocal = t.id === 'local' || t.isLocal;
+        const detectRadius = isLocal
+          ? Math.max(4.5, 17.5 * (1 - localStealth) * localTorchFactor * localDpvFactor * (m.aggro ? 1.18 : 1.0))
+          : 17.5;
+        if (d < detectRadius && d < bestDist) {
+          bestDist = d;
+          nearest = t;
+        }
       }
       if (!nearest) {
+        m.aggro = false;
         const tx = m.homeX + Math.cos(m.wigglePhase * 0.25) * 1.4;
         const ty = m.homeY + Math.sin(m.wigglePhase * 0.32) * 0.9;
         m.x += (tx - m.x) * Math.min(1, dt * 1.5);

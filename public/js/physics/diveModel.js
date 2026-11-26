@@ -433,6 +433,8 @@ export function stepDivePhysiology(
     narcResist = 0,
     narcDepthBonusM = 0,
     bumpArmor = 0,
+    armorDR = 0,
+    shieldActive = false,
   }
 ) {
   if (!state.alive || dt <= 0) return state;
@@ -450,7 +452,9 @@ export function stepDivePhysiology(
 
   // Heart rate & Panic response: head-bumps and stuck swimming spike HR until diver stops swimming to calm down
   const isRestingCalm = thrustMag < 0.12 && !isStuck;
-  const effBump = headBumpImpulse * (1 - Math.max(0, Math.min(0.85, Number(bumpArmor) || 0)));
+  const totalBumpMit = Math.max(0, Math.min(0.9, (Number(bumpArmor) || 0) + (Number(armorDR) || 0) * 0.65));
+  const shieldScale = shieldActive ? 0.35 : 1.0;
+  const effBump = headBumpImpulse * (1 - totalBumpMit) * shieldScale;
   if (effBump > 0) {
     state.panicLevel = Math.min(1, (state.panicLevel || 0) + Math.min(0.45, effBump * 0.22));
     state.heartRateBpm = Math.min(198, (state.heartRateBpm || 68) + Math.min(22, effBump * 8));

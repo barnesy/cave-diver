@@ -2262,25 +2262,65 @@ export class DiveAudio {
     // Crisp mechanical latch click + resonant lock tone
     this.playTone(isHeavy ? 185 : isOptic ? 720 : 340, 0.055, 'triangle', 0.06, 0, { bus: 'sfx' });
     this.playTone(isHeavy ? 420 : isOptic ? 1120 : 640, 0.11, 'sine', 0.055, 0.04, { bus: 'sfx' });
-    if (tier === 'rare' || tier === 'epic' || tier === 'mythic') {
+    if (tier === 'rare' || tier === 'epic' || tier === 'mythic' || tier === 'legendary') {
       this.playTone(987.77, 0.18, 'sine', 0.042, 0.085, { bus: 'sfx' });
     }
-    if (tier === 'epic' || tier === 'mythic') {
+    if (tier === 'epic' || tier === 'mythic' || tier === 'legendary') {
       this.playTone(1318.51, 0.24, 'triangle', 0.04, 0.125, { bus: 'sfx' });
     }
-    if (tier === 'mythic') {
+    if (tier === 'mythic' || tier === 'legendary') {
       this.playTone(1567.98, 0.34, 'sine', 0.045, 0.17, { bus: 'sfx' });
     }
-    this.vibrate?.(tier === 'mythic' ? [14, 18, 28] : [12]);
+    if (tier === 'legendary') {
+      this.playTone(2093.0, 0.42, 'sine', 0.045, 0.22, { bus: 'sfx' });
+    }
+    this.vibrate?.(tier === 'legendary' ? [18, 16, 26, 16, 42] : tier === 'mythic' ? [14, 18, 28] : [12]);
   }
 
   /**
-   * Celebratory rarity-scaled treasure reveal fanfare when unlocking a new piece of gear (v211).
+   * Shimmering nautical-sonar lock chime when claiming a Treasure Map mid-dive (v230).
+   */
+  playTreasureMapFound() {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    [523.25, 659.25, 783.99, 1174.66].forEach((f, idx) => {
+      this.playTone(f, 0.32, idx === 3 ? 'sine' : 'triangle', 0.048, idx * 0.065, { bus: 'sfx' });
+    });
+    this.vibrate?.([14, 14, 24]);
+  }
+
+  /**
+   * Crisp crystalline hydro-shield absorption shimmer ping (v230).
+   */
+  playShieldHit(broken = false) {
+    this.unlock();
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (broken) {
+      this.playTone(620, 0.16, 'sawtooth', 0.045, 0, { bus: 'sfx' });
+      this.playTone(280, 0.28, 'triangle', 0.05, 0.08, { bus: 'sfx' });
+      this.vibrate?.([22, 18, 30]);
+    } else {
+      this.playTone(920, 0.12, 'sine', 0.045, 0, { bus: 'sfx' });
+      this.playTone(1380, 0.16, 'triangle', 0.032, 0.035, { bus: 'sfx' });
+      this.vibrate?.([10]);
+    }
+  }
+
+  /**
+   * Celebratory rarity-scaled treasure reveal fanfare when unlocking a new piece of gear (v211 / v230).
    */
   playGearUnlock(tier = 'uncommon') {
     this.unlock();
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
-    if (tier === 'mythic') {
+    if (tier === 'legendary') {
+      // Grand resonant deep sub-chord + soaring solar-prismatic arpeggio for Ultra-Rare Legendary drops!
+      this.playTone(98.0, 0.9, 'sine', 0.075, 0, { bus: 'sfx' });
+      this.playTone(196.0, 0.85, 'triangle', 0.05, 0.04, { bus: 'sfx' });
+      [392.0, 493.88, 587.33, 783.99, 987.77, 1174.66, 1567.98].forEach((f, idx) => {
+        this.playTone(f, 0.52, idx % 2 === 0 ? 'triangle' : 'sine', 0.056, idx * 0.072, { bus: 'sfx' });
+      });
+      this.vibrate?.([20, 16, 24, 16, 30, 16, 55]);
+    } else if (tier === 'mythic') {
       this.playTone(130.81, 0.55, 'sine', 0.065, 0, { bus: 'sfx' });
       [392.0, 523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((f, idx) => {
         this.playTone(f, 0.44, idx % 2 === 0 ? 'triangle' : 'sine', 0.052, idx * 0.075, { bus: 'sfx' });

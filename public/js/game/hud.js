@@ -862,22 +862,88 @@ export function drawSonarMinimap(ctx, width, height, state) {
     const contacts = sonarPulse.contacts || [];
     for (let i = 0; i < contacts.length; i++) {
       const c = contacts[i];
-      if (c.kind !== 'shifting-hatch' && c.kind !== 'percolation' && c.kind !== 'thermocline' && c.kind !== 'secret-veil') continue;
+      const isLootOrThreat = c.kind === 'gear-cache' || c.kind === 'treasure-map' || c.kind === 'predator';
+      if (!isLootOrThreat && c.kind !== 'shifting-hatch' && c.kind !== 'percolation' && c.kind !== 'thermocline' && c.kind !== 'secret-veil') continue;
       const cx = toX(c.x);
       const cy = toY(c.y);
       ctx.fillStyle =
-        c.kind === 'secret-veil'
-          ? `rgba(103, 232, 249, ${(fade * 0.72).toFixed(2)})`
-          : c.kind === 'shifting-hatch'
-            ? (c.hatchRef?.openness ?? 1) < 0.35
-              ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
-              : `rgba(74, 222, 128, ${(fade * 0.95).toFixed(2)})`
-            : c.kind === 'percolation'
-              ? `rgba(251, 191, 36, ${(fade * 0.9).toFixed(2)})`
-              : `rgba(125, 211, 252, ${(fade * 0.9).toFixed(2)})`;
+        c.kind === 'predator'
+          ? `rgba(251, 113, 133, ${(fade * 0.96).toFixed(2)})`
+          : c.kind === 'treasure-map'
+            ? `rgba(253, 224, 71, ${(fade * 0.96).toFixed(2)})`
+            : c.kind === 'gear-cache'
+              ? `rgba(250, 204, 21, ${(fade * 0.92).toFixed(2)})`
+              : c.kind === 'secret-veil'
+                ? `rgba(103, 232, 249, ${(fade * 0.72).toFixed(2)})`
+                : c.kind === 'shifting-hatch'
+                  ? (c.hatchRef?.openness ?? 1) < 0.35
+                    ? `rgba(248, 113, 113, ${(fade * 0.95).toFixed(2)})`
+                    : `rgba(74, 222, 128, ${(fade * 0.95).toFixed(2)})`
+                  : c.kind === 'percolation'
+                    ? `rgba(251, 191, 36, ${(fade * 0.9).toFixed(2)})`
+                    : `rgba(125, 211, 252, ${(fade * 0.9).toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, c.kind === 'secret-veil' ? 4.8 : c.kind === 'thermocline' ? 4.2 : 3.2, 0, Math.PI * 2);
+      if (c.kind === 'predator') {
+        // Sharp crimson diamond for hostile predator sonar contact
+        ctx.moveTo(cx, cy - 4.4);
+        ctx.lineTo(cx + 4.4, cy);
+        ctx.lineTo(cx, cy + 4.4);
+        ctx.lineTo(cx - 4.4, cy);
+        ctx.closePath();
+      } else {
+        ctx.arc(cx, cy, c.kind === 'secret-veil' ? 4.8 : isLootOrThreat ? 3.8 : c.kind === 'thermocline' ? 4.2 : 3.2, 0, Math.PI * 2);
+      }
       ctx.fill();
+    }
+  }
+
+  // 8a.5. Live Pulsing Treasure Map Gear Beacons on Player's Sonar Scope (v230)
+  const mapChests = Array.isArray(hazards?.treasureChests) ? hazards.treasureChests : null;
+  const mapsList = Array.isArray(hazards?.treasureMaps) ? hazards.treasureMaps : null;
+  if (mapChests && mapChests.length > 0) {
+    for (let i = 0; i < mapChests.length; i++) {
+      const tc = mapChests[i];
+      if (!tc || tc.opened || !tc.beaconRevealed) continue;
+      const linkedMap = mapsList?.find((m) => m.targetChestId === tc.id) || null;
+      const col = linkedMap?.color || tc.beamColor || '#facc15';
+      const rgb = linkedMap?.rgb || '250, 204, 21';
+      const rawX = toX(tc.x);
+      const rawY = toY(tc.y);
+      const pad = 10;
+      const clampedX = Math.max(pad, Math.min(width - pad, rawX));
+      const clampedY = Math.max(pad, Math.min(height - pad, rawY));
+      const isOffEdge = Math.abs(rawX - clampedX) > 1 || Math.abs(rawY - clampedY) > 1;
+      const ringP = (timeSec * 0.95 + i * 0.37) % 1;
+
+      ctx.save();
+      // Expanding sonar homing ring
+      ctx.strokeStyle = `rgba(${rgb}, ${((1 - ringP) * 0.95).toFixed(2)})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(clampedX, clampedY, 4 + ringP * 11, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Bright skill-colored diamond beacon core
+      ctx.fillStyle = col;
+      ctx.strokeStyle = '#08111f';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(clampedX, clampedY - 5);
+      ctx.lineTo(clampedX + 5, clampedY);
+      ctx.lineTo(clampedX, clampedY + 5);
+      ctx.lineTo(clampedX - 5, clampedY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Compact Skill Tag on the Sonar Scope so player never forgets what skill this beacon drops!
+      const tag = `${linkedMap?.skillIcon || '🗺️'}${linkedMap?.skillShort || 'GEAR'}${isOffEdge ? '↗' : ''}`;
+      ctx.font = '800 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = clampedX > width * 0.65 ? 'right' : 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fef9c3';
+      ctx.fillText(tag, clampedX + (clampedX > width * 0.65 ? -7 : 7), clampedY);
+      ctx.restore();
     }
   }
 

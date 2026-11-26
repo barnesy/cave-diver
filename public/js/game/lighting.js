@@ -11,7 +11,7 @@ export function castLightRay(
   angle,
   maxRangeM,
   siltClouds = [],
-  { stopAtSurface = true, sdfFn = null, out = null } = {}
+  { stopAtSurface = true, sdfFn = null, out = null, siltPierce = 0 } = {}
 ) {
   const res = out || { x: 0, y: 0, dist: 0, hitWall: false, hitSurface: false, nx: 0, ny: 0, incidence: 0 };
   const evalSdf = sdfFn || ((x, y) => evaluateCaveSDF(level, x, y));
@@ -28,8 +28,11 @@ export function castLightRay(
     }
   }
 
-  // Attenuate beam reach strongly when shooting through dense cave silt clouds
-  if (siltClouds.length > 0) {
+  // Attenuate beam reach when shooting through dense cave silt clouds (reduced by Silt-Piercing Lamps, v230)
+  const pierce = Math.max(0, Math.min(0.9, Number(siltPierce) || 0));
+  if (siltClouds.length > 0 && pierce < 0.98) {
+    const attenScale = 0.72 * (1 - pierce);
+    const minFloor = 1.2 + pierce * 5.2;
     for (let i = 0; i < siltClouds.length; i++) {
       const s = siltClouds[i];
       if (s.alpha < 0.08) continue;
@@ -41,7 +44,7 @@ export function castLightRay(
         const r = s.radius * 0.92;
         if (perpSq < r * r) {
           const density = (1 - Math.sqrt(Math.max(0, perpSq)) / r) * s.alpha;
-          effectiveMax = Math.max(1.2, effectiveMax * (1 - Math.min(0.82, density * 0.72)));
+          effectiveMax = Math.max(minFloor, effectiveMax * (1 - Math.min(0.82, density * attenScale)));
         }
       }
     }
@@ -119,7 +122,7 @@ const _fanLocalSiltScratch = [];
  * Prunes segments, basins, and silt clouds once to the torch bounding box.
  * Accepts optional reusable `outRays` pool for zero-GC per-frame raycasting.
  */
-export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, rayCount = 40, siltClouds = [], outRays = null) {
+export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, rayCount = 40, siltClouds = [], outRays = null, siltPierce = 0) {
   const rays = Array.isArray(outRays) ? outRays : new Array(rayCount);
   rays.length = rayCount;
   const start = centerAngle - halfSpread;
@@ -150,7 +153,7 @@ export function castTorchFan(level, ox, oy, centerAngle, halfSpread, maxRangeM, 
     localSilt = _fanLocalSiltScratch;
   }
 
-  const opts = { stopAtSurface: true, sdfFn: localSdf, out: null };
+  const opts = { stopAtSurface: true, sdfFn: localSdf, out: null, siltPierce };
   for (let i = 0; i < rayCount; i++) {
     const a = start + step * i;
     const slot = rays[i] || { x: 0, y: 0, dist: 0, hitWall: false, hitSurface: false, nx: 0, ny: 0, incidence: 0 };

@@ -10713,6 +10713,12 @@ summary,
   background: linear-gradient(145deg, rgba(133, 77, 14, 0.3), rgba(15, 23, 42, 0.9));
   box-shadow: 0 0 14px rgba(250, 204, 21, 0.14);
 }
+.livery-swatch-btn.tier-legendary:not(.locked) {
+  border-color: rgba(255, 149, 36, 0.88);
+  background: linear-gradient(145deg, rgba(154, 52, 18, 0.42), rgba(113, 63, 18, 0.28) 52%, rgba(15, 23, 42, 0.94));
+  box-shadow: 0 0 18px rgba(255, 149, 36, 0.28), inset 0 0 12px rgba(253, 224, 71, 0.1);
+}
+.livery-swatch-btn.tier-legendary:not(.locked)::after,
 .livery-swatch-btn.tier-mythic:not(.locked)::after,
 .livery-swatch-btn.tier-epic:not(.locked).has-fx::after {
   content: '';
@@ -10759,6 +10765,12 @@ summary,
 .livery-tier-pill.tier-rare { color: #7dd3fc; border-color: rgba(56, 189, 248, 0.6); background: rgba(12, 74, 110, 0.55); }
 .livery-tier-pill.tier-epic { color: #e9d5ff; border-color: rgba(192, 132, 252, 0.65); background: rgba(88, 28, 135, 0.58); }
 .livery-tier-pill.tier-mythic { color: #fef08a; border-color: rgba(250, 204, 21, 0.78); background: rgba(113, 63, 18, 0.68); }
+.livery-tier-pill.tier-legendary {
+  color: #ffedd5;
+  border-color: rgba(255, 149, 36, 0.92);
+  background: linear-gradient(135deg, rgba(194, 65, 12, 0.85), rgba(161, 98, 7, 0.8));
+  box-shadow: 0 0 10px rgba(255, 149, 36, 0.38);
+}
 
 .livery-new-badge {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -10810,6 +10822,7 @@ summary,
 .livery-prog-fill.tier-rare { background: linear-gradient(90deg, #0284c7, #7dd3fc); }
 .livery-prog-fill.tier-epic { background: linear-gradient(90deg, #9333ea, #e879f9); }
 .livery-prog-fill.tier-mythic { background: linear-gradient(90deg, #eab308, #fef08a); }
+.livery-prog-fill.tier-legendary { background: linear-gradient(90deg, #ea580c, #ff9524, #fde047); }
 .livery-prog-label {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.56rem;
@@ -11289,6 +11302,20 @@ summary,
   color: #fef08a;
   box-shadow: 0 0 10px rgba(250, 204, 21, 0.24);
 }
+.livery-source-pill.src-chest.legendary {
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.36), rgba(250, 204, 21, 0.3));
+  border-color: rgba(255, 149, 36, 0.95);
+  color: #ffedd5;
+  box-shadow: 0 0 12px rgba(255, 149, 36, 0.36);
+}
+.livery-sell-btn {
+  border-color: rgba(250, 204, 21, 0.52) !important;
+  color: #fde68a !important;
+}
+.livery-sell-btn:hover {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border-color: rgba(251, 191, 36, 0.85) !important;
+}
 .livery-source-pill.src-earned {
   background: rgba(56, 189, 248, 0.16);
   border: 1px solid rgba(125, 211, 252, 0.42);
@@ -11699,6 +11726,11 @@ summary,
 .loot-discovery-banner[data-tier="mythic"] {
   border-color: #facc15;
   box-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 44px rgba(250, 204, 21, 0.46);
+}
+.loot-discovery-banner[data-tier="legendary"] {
+  border-color: #ff9524;
+  background: linear-gradient(160deg, rgba(67, 20, 7, 0.96), rgba(12, 18, 34, 0.97));
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.82), 0 0 56px rgba(255, 149, 36, 0.62);
 }
 .loot-disc-top {
   display: flex;

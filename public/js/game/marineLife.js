@@ -696,8 +696,11 @@ export function stepMarineEcosystem(eco, diver, dt, timeSec, level, opts = {}) {
   const diverSpeed = hasDiver ? Math.hypot(diver.vx || 0, diver.vy || 0) : 0;
   const siltDens = Math.max(0, Number(opts?.localSiltDensity) || 0);
   const ccrSilent = Boolean(opts?.ccrSilent);
-  const isCalmDiver = hasDiver && diverSpeed <= (ccrSilent ? 2.05 : 1.35) && !diver.dpvThrusting && siltDens < 0.3;
-  const isLoudDiver = hasDiver && (diverSpeed > (ccrSilent ? 3.2 : 2.35) || Boolean(diver.dpvThrusting) || siltDens >= 0.42);
+  const stealthBonus = Math.max(0, Math.min(0.75, Number(opts?.stealthBonus) || 0));
+  const calmSpeedCap = (ccrSilent ? 2.05 : 1.35) * (1 + stealthBonus * 0.85);
+  const loudSpeedCap = (ccrSilent ? 3.2 : 2.35) * (1 + stealthBonus * 0.95);
+  const isCalmDiver = hasDiver && diverSpeed <= calmSpeedCap && (!diver.dpvThrusting || stealthBonus >= 0.45) && siltDens < (0.3 + stealthBonus * 0.25);
+  const isLoudDiver = hasDiver && stealthBonus < 0.5 && (diverSpeed > loudSpeedCap || Boolean(diver.dpvThrusting) || siltDens >= (0.42 + stealthBonus * 0.25));
   const lightLerp = Math.min(1, dt * 5.0);
 
   // Fish schooling + gentle swim-away near diver & torch-beam avoidance (distance-culled for distant chambers)

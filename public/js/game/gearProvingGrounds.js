@@ -381,6 +381,10 @@ export function applyTrialLiveryToSession(session, livery, tuningOverride = null
   const perf = computeRigPerformanceProfile(clean, tuningCtx);
   session.diver.livery = clean;
   session.diver.torchReachMult = perf.torchReachMult || 1.0;
+  session.diver.siltPierce = perf.siltPierce || 0;
+  session.diver.stealth = perf.stealth || 0;
+  session.diver.maxShield = Math.max(0, Math.round(perf.shieldMax || 0));
+  session.diver.shield = session.diver.maxShield;
   session.rigPerf = perf;
   if (session.hazards) {
     session.hazards.rigPerf = perf;

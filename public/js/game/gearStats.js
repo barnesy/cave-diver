@@ -615,18 +615,28 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { bonusStartBar: 22, narcDepthBonusM: 10, decoOffgas: 0.18, coldResist: 0.65, gasSave: 0.08 },
     power: { id: 'nautilusReserve', name: 'Abyssal Reserve Vault', desc: '+22 bar overfill, +10m depth clarity & +18% Bühlmann deco clearing' },
   },
+  'suit:chest-bulwark-shell': {
+    archetype: 'combat',
+    stats: { armorDR: 0.16, shieldMax: 24, combatMaxHpBonus: 18, bumpArmor: 0.24 },
+    power: { id: 'bulwarkHydroShield', name: 'Bulwark Hydro-Shield', desc: '+16% Armor DR & 24-pt Rechargeable Hydro-Shield cushioning bites & cave shock' },
+  },
+  'suit:legendary-aegis-exosuit': {
+    archetype: 'combat',
+    stats: { armorDR: 0.28, shieldMax: 45, combatMaxHpBonus: 30, bumpArmor: 0.35, coldResist: 0.35 },
+    power: { id: 'aegisShieldMatrix', name: 'Aegis Shield Matrix', desc: '🔥 Legendary: +28% Armor DR & 45-pt fast-recharging Hydro-Shield protecting HP & dive shock' },
+  },
 
   // Headgear
   'headgear:zissou-cap': { archetype: 'speed', stats: { swimSpeed: 0.01 } },
   'headgear:cave-hood': { archetype: 'deep', stats: { coldResist: 0.30, narcResist: 0.06 } },
-  'headgear:cave-helmet': { archetype: 'hybrid', stats: { bumpArmor: 0.20, torchReach: 0.07, combatMaxHpBonus: 10 } },
+  'headgear:cave-helmet': { archetype: 'hybrid', stats: { bumpArmor: 0.20, armorDR: 0.06, torchReach: 0.07, combatMaxHpBonus: 10 } },
   'headgear:exo-mask': { archetype: 'deep', stats: { narcResist: 0.16, narcDepthBonusM: 6, gasSave: 0.05 } },
-  'headgear:brass-hardhat': { archetype: 'hybrid', stats: { bumpArmor: 0.30, crankSpeed: 0.16, salvageDragCut: 0.15 } },
+  'headgear:brass-hardhat': { archetype: 'hybrid', stats: { bumpArmor: 0.30, armorDR: 0.10, shieldMax: 12, crankSpeed: 0.16, salvageDragCut: 0.15 } },
   'headgear:abyss-halo-helm': { archetype: 'deep', stats: { narcResist: 0.22, narcDepthBonusM: 8, sonarRange: 0.16, torchReach: 0.10 } },
   'headgear:secret-dreadnought-helm': {
     archetype: 'combat',
-    stats: { bumpArmor: 0.42, coldResist: 0.45, combatMaxHpBonus: 20 },
-    power: { id: 'armoredDiveBell', name: 'Armored Dive Bell', desc: '+20 Boss HP & -42% head-bump impact trauma' },
+    stats: { bumpArmor: 0.42, armorDR: 0.15, shieldMax: 20, coldResist: 0.45, combatMaxHpBonus: 20 },
+    power: { id: 'armoredDiveBell', name: 'Armored Dive Bell', desc: '+20 Boss HP, +15% Armor DR, +20 Shield & -42% wall shock' },
   },
   'headgear:world-thermal-hood': {
     archetype: 'deep',
@@ -638,11 +648,21 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { decoOffgas: 0.24, siltCut: 0.24, relicGlowM: 10, gasSave: 0.08 },
     power: { id: 'haloclineMistSeal', name: 'H₂S Halocline Seal', desc: '+24% Bühlmann deco clearing, -24% silt & +10m relic glint in mist' },
   },
+  'headgear:chest-ghost-hood': {
+    archetype: 'speed',
+    stats: { stealth: 0.28, siltCut: 0.18, swimSpeed: 0.05 },
+    power: { id: 'acousticHood', name: 'Acoustic Stealth Weave', desc: '+28% Stealth: cuts predator detection radius & calms startled wildlife' },
+  },
+  'headgear:legendary-phantom-shroud': {
+    archetype: 'speed',
+    stats: { stealth: 0.56, coldResist: 0.25, gasSave: 0.14, siltCut: 0.24 },
+    power: { id: 'phantomCloak', name: 'Phantom Acoustic Cloak', desc: '🔥 Legendary: +56% Stealth slashes predator aggro in half & quiets torch/bubble signature' },
+  },
 
   // Torches
   'torch:tech-led': { archetype: 'hybrid', stats: { torchReach: 0.02 } },
-  'torch:warm-halogen': { archetype: 'hybrid', stats: { torchReach: 0.06, siltCut: 0.08 } },
-  'torch:amber-silt': { archetype: 'speed', stats: { torchReach: 0.10, siltCut: 0.15 } },
+  'torch:warm-halogen': { archetype: 'hybrid', stats: { torchReach: 0.06, siltCut: 0.08, siltPierce: 0.14 } },
+  'torch:amber-silt': { archetype: 'speed', stats: { torchReach: 0.10, siltCut: 0.15, siltPierce: 0.30 } },
   'torch:emerald-spot': { archetype: 'hybrid', stats: { torchReach: 0.15, relicGlowM: 4 } },
   'torch:halocline-uv': {
     archetype: 'hybrid',
@@ -668,15 +688,25 @@ const BESPOKE_ITEM_STATS = Object.freeze({
   },
   'torch:chest-abyssal-lantern': {
     archetype: 'hybrid',
-    stats: { torchReach: 0.30, relicGlowM: 14, sonarRange: 0.22, chestLuckBonus: 0.35 },
+    stats: { torchReach: 0.30, siltPierce: 0.28, relicGlowM: 14, sonarRange: 0.22, chestLuckBonus: 0.35 },
     power: { id: 'sovereignBeacon', name: 'Sovereign Treasure Beacon', desc: '+35% Sunken Treasure Chest Rare Drop Luck & +14m relic/chest glint' },
+  },
+  'torch:chest-amber-cutter': {
+    archetype: 'hybrid',
+    stats: { torchReach: 0.18, siltPierce: 0.48, siltCut: 0.14, relicGlowM: 6 },
+    power: { id: 'amberSiltCutter', name: 'Polarized Silt-Cutter', desc: 'Slices through 48% of dense cave silt clouds & eliminates harsh torch backscatter' },
+  },
+  'torch:legendary-photon-lance': {
+    archetype: 'hybrid',
+    stats: { torchReach: 0.34, siltPierce: 0.78, relicGlowM: 14, sonarRange: 0.16 },
+    power: { id: 'heliosSiltLance', name: 'Helios Silt-Piercing Lance', desc: '🔥 Legendary: Pierces 78% of blinding cave silt clouds & extends torch beam +34%' },
   },
 
   // Tanks
   'tank:al80-silver': { archetype: 'deep', stats: { gasSave: 0.01 } },
   'tank:hivis-yellow': { archetype: 'deep', stats: { gasSave: 0.04, decoOffgas: 0.05, bonusStartBar: 8 } },
   'tank:anodized-cobalt': { archetype: 'speed', stats: { gasSave: 0.06, swimSpeed: 0.04, bonusStartBar: 10 } },
-  'tank:carbon-stealth': { archetype: 'speed', stats: { swimSpeed: 0.07, gasSave: 0.07, siltCut: 0.08, dpvDrainCut: 0.14 } },
+  'tank:carbon-stealth': { archetype: 'speed', stats: { swimSpeed: 0.07, gasSave: 0.07, siltCut: 0.08, stealth: 0.16, dpvDrainCut: 0.14 } },
   'tank:salvage-brass': { archetype: 'hybrid', stats: { gasSave: 0.06, crankSpeed: 0.18, bumpArmor: 0.12, bonusStartBar: 12 } },
   'tank:sulfur-emerald-tank': { archetype: 'deep', stats: { gasSave: 0.09, decoOffgas: 0.14, bonusStartBar: 15 } },
   'tank:abyssal-titanium': { archetype: 'deep', stats: { gasSave: 0.11, narcResist: 0.14, decoOffgas: 0.12, bonusStartBar: 22 } },
@@ -695,6 +725,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     archetype: 'deep',
     stats: { gasSave: 0.10, decoOffgas: 0.12, bonusStartBar: 18, narcResist: 0.12 },
     power: { id: 'twinManifoldReserve', name: 'Twin-Manifold Reserve', desc: '+18 bar overpressure twinset & -10% trimix burn' },
+  },
+  'tank:legendary-cryo-titan-tank': {
+    archetype: 'deep',
+    stats: { coldResist: 0.72, narcDepthBonusM: 18, narcResist: 0.28, bonusStartBar: 34, gasSave: 0.16, armorDR: 0.14 },
+    power: { id: 'cryoTitanHull', name: 'Cryo-Titan Abyssal Core', desc: '🔥 Legendary: +72% Cold Resist, +18m Depth Clarity, +34 bar Start Gas & +14% Armor' },
   },
 
   // Visors
@@ -725,6 +760,16 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { spearPower: 0.16, spearFireRateCut: 0.12, combatMaxHpBonus: 18 },
     power: { id: 'predatorWeakpoint', name: 'Predator Weakpoint Optic', desc: '+16% Speargun damage, +12% reload cadence & +18 Boss HP' },
   },
+  'visor:chest-echo-array': {
+    archetype: 'hybrid',
+    stats: { sonarRange: 0.34, relicGlowM: 8 },
+    power: { id: 'passiveSonar', name: 'Always-On Echo Sweep', desc: 'Continuous passive wide sonar pulse every 3.8s tagging chests, maps & relics' },
+  },
+  'visor:legendary-omniscanner-visor': {
+    archetype: 'hybrid',
+    stats: { sonarRange: 0.58, relicGlowM: 14, siltPierce: 0.18 },
+    power: { id: 'omniscannerSonar', name: 'Omniscanner Tracking Array', desc: '🔥 Legendary: Always-On Wide Sonar (+58% range) continuously tracks Chests, Maps, Relics & Predators' },
+  },
 
   // Trim & Fins
   'trim:suit-default': { archetype: 'speed', stats: { siltCut: 0.02 } },
@@ -751,6 +796,11 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { swimSpeed: 0.11, hydroEff: 0.24, siltCut: 0.22, dashCdCut: 0.14, dpvSpeedBonus: 0.08 },
     power: { id: 'mantaGlide', name: 'Manta Wing Glide', desc: '+11% swim, +24% current efficiency & faster Hydro-Dash recovery' },
   },
+  'trim:legendary-slipstream-fins': {
+    archetype: 'speed',
+    stats: { swimSpeed: 0.22, dpvSpeedBonus: 0.24, dashCdCut: 0.26, hydroEff: 0.36, siltCut: 0.32 },
+    power: { id: 'siltGhost', name: 'Slipstream Hyper-Glide', desc: '🔥 Legendary: +22% Swim, +24% DPV, -26% Dash CD & zero floor silt kick while gliding' },
+  },
 
   // Patches / Crests
   'patch:none': { archetype: 'hybrid', stats: {} },
@@ -776,9 +826,14 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { scoreBonus: 0.10, crankSpeed: 0.18, relicGlowM: 6, chestLuckBonus: 0.20 },
     power: { id: 'corsairsFortune', name: "Corsair's Fortune", desc: '+20% Sunken Treasure Chest Rare Drop Luck, +10% Score & +6m Relic Glint' },
   },
+  'patch:legendary-cartographer-compass': {
+    archetype: 'hybrid',
+    stats: { chestLuckBonus: 0.45, salvageBonus: 0.30, armorDR: 0.14, stealth: 0.16, sonarRange: 0.22, relicGlowM: 12 },
+    power: { id: 'sovereignCompass', name: 'Sovereign Treasure Compass', desc: '🔥 Legendary: +45% Chest Luck, +30% Doubloons, reveals Treasure Maps on sonar + Armor & Stealth aura' },
+  },
 });
 
-const TIER_STAT_SCALE = { common: 1.0, uncommon: 1.35, rare: 1.8, epic: 2.35, mythic: 2.9 };
+const TIER_STAT_SCALE = { common: 1.0, uncommon: 1.35, rare: 1.8, epic: 2.35, mythic: 2.9, legendary: 3.6 };
 
 function computeFallbackSlotStats(slot, tier = 'common') {
   const m = TIER_STAT_SCALE[tier] || 1.0;
@@ -804,9 +859,13 @@ export function formatStatPills(stats = {}) {
   if (stats.siltCut > 0.005) pills.push(`-${Math.round(stats.siltCut * 100)}% Silt`);
   if (stats.decoOffgas > 0.005) pills.push(`+${Math.round(stats.decoOffgas * 100)}% Deco`);
   if (stats.torchReach > 0.005) pills.push(`+${Math.round(stats.torchReach * 100)}% Beam`);
+  if (stats.siltPierce > 0.03) pills.push(`+${Math.round(stats.siltPierce * 100)}% Silt Pierce`);
   if (stats.coldResist >= 0.99) pills.push('Cold-Proof');
   else if (stats.coldResist > 0.04) pills.push(`+${Math.round(stats.coldResist * 100)}% Cold`);
   if (stats.narcResist > 0.03) pills.push(`-${Math.round(stats.narcResist * 100)}% Narc`);
+  if (stats.armorDR > 0.02) pills.push(`+${Math.round(stats.armorDR * 100)}% Armor`);
+  if (stats.shieldMax >= 1) pills.push(`+${Math.round(stats.shieldMax)} Shield`);
+  if (stats.stealth > 0.03) pills.push(`+${Math.round(stats.stealth * 100)}% Stealth`);
   if (stats.bumpArmor > 0.03) pills.push(`-${Math.round(stats.bumpArmor * 100)}% Shock`);
   if (stats.hydroEff > 0.03) pills.push(`+${Math.round(stats.hydroEff * 100)}% Flow`);
   if (stats.dpvSpeedBonus > 0.02) pills.push(`+${Math.round(stats.dpvSpeedBonus * 100)}% DPV`);
@@ -819,6 +878,7 @@ export function formatStatPills(stats = {}) {
   if (stats.salvageDragCut > 0.03) pills.push(`-${Math.round(stats.salvageDragCut * 100)}% Haul Drag`);
   if (stats.relicGlowM >= 1) pills.push(`+${Math.round(stats.relicGlowM)}m Relic`);
   if (stats.chestLuckBonus > 0.01) pills.push(`+${Math.round(stats.chestLuckBonus * 100)}% Chest Luck`);
+  if (stats.salvageBonus > 0.01) pills.push(`+${Math.round(stats.salvageBonus * 100)}% 🪙`);
   if (stats.scoreBonus > 0.01) pills.push(`+${Math.round(stats.scoreBonus * 100)}% Score`);
   return pills;
 }
@@ -890,11 +950,15 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     siltCut: 0,
     decoOffgas: 0,
     torchReach: 0,
+    siltPierce: 0,
     coldResist: 0,
     narcResist: 0,
     narcDepthBonusM: 0,
     bonusStartBar: 0,
     bumpArmor: 0,
+    armorDR: 0,
+    shieldMax: 0,
+    stealth: 0,
     hydroEff: 0,
     dpvSpeedBonus: 0,
     dpvDrainCut: 0,
@@ -907,6 +971,7 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     salvageDragCut: 0,
     relicGlowM: 0,
     chestLuckBonus: 0,
+    salvageBonus: 0,
     scoreBonus: 0,
   };
   const archCounts = { deep: 0, speed: 0, combat: 0, hybrid: 0 };
@@ -1030,24 +1095,29 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
   const gasBurnMult = +(1 - Math.min(tuning.maxGasSave, sum.gasSave * sSafe)).toFixed(3);
   const siltStirMult = +(1 - Math.min(0.55, sum.siltCut * sSkill)).toFixed(3);
   const decoOffgasMult = +(1 + Math.min(0.55 * trenchBoost, sum.decoOffgas * sSkill * trenchBoost)).toFixed(3);
-  const torchReachMult = +(1 + Math.min(0.52, sum.torchReach * sUtil)).toFixed(3);
+  const torchReachMult = +(1 + Math.min(0.55, sum.torchReach * sUtil)).toFixed(3);
+  const siltPierce = +(Math.min(0.85, sum.siltPierce * sUtil)).toFixed(2);
   const coldResist = +(Math.min(tuning.maxColdResist, sum.coldResist * sSafe)).toFixed(2);
   const narcResist = +(Math.min(tuning.maxNarcResist, sum.narcResist * sSafe)).toFixed(2);
   const narcDepthBonusM = Math.min(Math.round(tuning.maxNarcDepthM * trenchBoost), Math.round(sum.narcDepthBonusM * sSafe * trenchBoost));
   const bonusStartBar = Math.min(Math.round(tuning.maxBonusStartBar * trenchBoost), Math.round(sum.bonusStartBar * sSafe * trenchBoost));
   const bumpArmor = +(Math.min(0.70, sum.bumpArmor * sSafe)).toFixed(2);
+  const armorDR = +(Math.min(0.48, sum.armorDR * sSafe)).toFixed(2);
+  const shieldMax = tuning.isNormalized ? 0 : Math.min(60, Math.round(sum.shieldMax * sSafe));
+  const stealth = +(Math.min(0.68, sum.stealth * sSkill)).toFixed(2);
   const hydroEfficiency = +(Math.min(0.60, sum.hydroEff * sSkill * trenchBoost)).toFixed(2);
-  const dpvSpeedBonus = +(Math.min(0.24, sum.dpvSpeedBonus * sMob)).toFixed(3);
+  const dpvSpeedBonus = +(Math.min(0.28, sum.dpvSpeedBonus * sMob)).toFixed(3);
   const dpvDrainMult = +(1 - Math.min(0.45, sum.dpvDrainCut * sMob * trenchBoost)).toFixed(3);
   const combatMaxHpBonus = Math.min(tuning.maxCombatHp, Math.round(sum.combatMaxHpBonus * sSafe));
   const spearPowerMult = +(1 + Math.min(tuning.maxSpearPower, sum.spearPower * sComb)).toFixed(3);
   const spearFireRateMult = +(1 - Math.min(0.20, sum.spearFireRateCut * sSkill)).toFixed(3);
   const dashCooldownMult = +(1 - Math.min(0.38, sum.dashCdCut * sSkill)).toFixed(3);
-  const sonarRangeMult = +(1 + Math.min(0.50, sum.sonarRange * sUtil)).toFixed(3);
+  const sonarRangeMult = +(1 + Math.min(0.68, sum.sonarRange * sUtil)).toFixed(3);
   const crankSpeedMult = +(1 + Math.min(1.10, sum.crankSpeed * sSkill)).toFixed(3);
   const salvageDragCut = +(Math.min(0.60, sum.salvageDragCut * sUtil)).toFixed(2);
-  const relicGlowBonusM = Math.min(24, Math.round(sum.relicGlowM * sUtil));
-  const chestLuckBonus = tuning.isNormalized ? 0 : +(Math.min(0.65, sum.chestLuckBonus)).toFixed(2);
+  const relicGlowBonusM = Math.min(26, Math.round(sum.relicGlowM * sUtil));
+  const chestLuckBonus = tuning.isNormalized ? 0 : +(Math.min(0.85, sum.chestLuckBonus)).toFixed(2);
+  const salvageBonusMult = tuning.isNormalized ? 1.0 : +(1 + Math.min(0.45, sum.salvageBonus)).toFixed(2);
   const rawScoreBonus = tuning.isNormalized ? 0 : (sum.scoreBonus + (activeSets.length > 0 || powers.length > 0 ? (tuning.scoreBonusAdd || 0) : 0));
   const scoreBonusMult = +(1 + Math.min(0.35, rawScoreBonus)).toFixed(3);
 
@@ -1057,11 +1127,15 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     siltStirMult,
     decoOffgasMult,
     torchReachMult,
+    siltPierce,
     coldResist,
     narcResist,
     narcDepthBonusM,
     bonusStartBar,
     bumpArmor,
+    armorDR,
+    shieldMax,
+    stealth,
     hydroEfficiency,
     dpvSpeedBonus,
     dpvDrainMult,
@@ -1074,6 +1148,7 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     salvageDragCut,
     relicGlowBonusM,
     chestLuckBonus,
+    salvageBonusMult,
     scoreBonusMult,
     // Named Legendary / Capstone mechanical flags (gated cleanly by mode tuning)
     siltGhost: hasPower('siltGhost'),
@@ -1081,9 +1156,12 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     hatchKnockbackImmune: hasPower('hatchKnockbackImmune'),
     halcyonDecoFastLock: hasPower('halcyonDecoFastLock'),
     apexOvercharge: hasPower('apexOvercharge'),
-    relicCompass: hasPower('relicCompass'),
+    relicCompass: hasPower('relicCompass') || hasPower('sovereignCompass'),
     hydroGhost: hasPower('hydroGhost'),
     hybridAdaptation: hasPower('hybridAdaptation'),
+    passiveSonar: hasPower('passiveSonar') || hasPower('omniscannerSonar'),
+    sonarTrackPredators: hasPower('omniscannerSonar'),
+    mapSonarTrack: hasPower('sovereignCompass') || hasPower('omniscannerSonar'),
     powers,
     activeSets: tuning.isNormalized ? [] : activeSets,
     capstoneActive: tuning.isNormalized ? false : capstoneActive,
@@ -1113,10 +1191,14 @@ export function diffRigPerformanceProfiles(baseProf, nextProf) {
     { key: 'dpvSpeedBonus', label: 'DPV Speed', scale: 100, unit: '%', higherBetter: true, weight: 1.0 },
     { key: 'dpvDrainMult', label: 'DPV Batt', scale: -100, unit: '%', higherBetter: true, weight: 0.8 },
     { key: 'torchReachMult', label: 'Beam', scale: 100, unit: '%', higherBetter: true, weight: 0.75 },
-    { key: 'sonarRangeMult', label: 'Sonar', scale: 100, unit: '%', higherBetter: true, weight: 0.8 },
+    { key: 'siltPierce', label: 'Silt Pierce', scale: 100, unit: '%', higherBetter: true, weight: 1.25 },
+    { key: 'sonarRangeMult', label: 'Sonar', scale: 100, unit: '%', higherBetter: true, weight: 0.9 },
     { key: 'coldResist', label: 'Cold Res', scale: 100, unit: '%', higherBetter: true, weight: 0.55 },
     { key: 'narcResist', label: 'Narc Res', scale: 100, unit: '%', higherBetter: true, weight: 0.6 },
-    { key: 'bumpArmor', label: 'Armor', scale: 100, unit: '%', higherBetter: true, weight: 0.55 },
+    { key: 'armorDR', label: 'Armor', scale: 100, unit: '%', higherBetter: true, weight: 1.15 },
+    { key: 'shieldMax', label: 'Shield', scale: 1, unit: '', higherBetter: true, weight: 1.05 },
+    { key: 'stealth', label: 'Stealth', scale: 100, unit: '%', higherBetter: true, weight: 1.15 },
+    { key: 'bumpArmor', label: 'Shock Res', scale: 100, unit: '%', higherBetter: true, weight: 0.55 },
     { key: 'hydroEfficiency', label: 'Flow', scale: 100, unit: '%', higherBetter: true, weight: 0.85 },
     { key: 'crankSpeedMult', label: 'Crank', scale: 100, unit: '%', higherBetter: true, weight: 0.5 },
     { key: 'salvageDragCut', label: 'Haul', scale: 100, unit: '%', higherBetter: true, weight: 0.5 },
@@ -1315,6 +1397,7 @@ const TIER_BEAM_COLORS = {
   rare: '#38bdf8',
   epic: '#c084fc',
   mythic: '#facc15',
+  legendary: '#ff9524',
 };
 
 /**
@@ -1394,21 +1477,39 @@ export function createWorldGearCachesForLevel(level, foundGearMap = null) {
 }
 
 /**
- * Ultra-Rare Random Treasure Chest Chase Gear Drops (v220).
- * These 6 iconic pieces ONLY drop randomly from discoverable Sunken Treasure Chests!
+ * Expanded Random Treasure Chest & Treasure-Map Vault Chase Gear Pool (v230).
+ * 17 discoverable items spanning Rare, Epic, Mythic, and Ultra-Rare Legendary tiers,
+ * tagged with their primary Skill Focus (`speed`, `visibility`, `sonar`, `resistance`, `armor`, `stealth`)
+ * so Treasure Maps unambiguously guide players to the exact skill upgrade they're hunting!
  */
 export const CHEST_GEAR_DROPS = Object.freeze([
-  Object.freeze({ slot: 'suit', itemId: 'chest-nautilus-suit', tier: 'mythic', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🐚' }),
-  Object.freeze({ slot: 'torch', itemId: 'chest-abyssal-lantern', tier: 'mythic', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🏮' }),
-  Object.freeze({ slot: 'trim', itemId: 'chest-manta-fins', tier: 'epic', rarityLabel: 'RARE EPIC', baseChance: 0.07, icon: '🪽' }),
-  Object.freeze({ slot: 'visor', itemId: 'chest-harpoon-visor', tier: 'epic', rarityLabel: 'RARE EPIC', baseChance: 0.07, icon: '🎯' }),
-  Object.freeze({ slot: 'tank', itemId: 'chest-titanium-twin', tier: 'rare', rarityLabel: 'RARE DROP', baseChance: 0.12, icon: '🫧' }),
-  Object.freeze({ slot: 'patch', itemId: 'chest-corsair-crest', tier: 'rare', rarityLabel: 'RARE DROP', baseChance: 0.12, icon: '🏴‍☠️' }),
+  // Ultra-Rare Legendary Crown Jewels (~0.8% base; up to ~5.5% in Map Vaults / High Luck)
+  Object.freeze({ slot: 'suit', itemId: 'legendary-aegis-exosuit', tier: 'legendary', skillId: 'armor', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🛡️' }),
+  Object.freeze({ slot: 'torch', itemId: 'legendary-photon-lance', tier: 'legendary', skillId: 'visibility', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🔦' }),
+  Object.freeze({ slot: 'visor', itemId: 'legendary-omniscanner-visor', tier: 'legendary', skillId: 'sonar', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '📡' }),
+  Object.freeze({ slot: 'trim', itemId: 'legendary-slipstream-fins', tier: 'legendary', skillId: 'speed', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '⚡' }),
+  Object.freeze({ slot: 'headgear', itemId: 'legendary-phantom-shroud', tier: 'legendary', skillId: 'stealth', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🥷' }),
+  Object.freeze({ slot: 'tank', itemId: 'legendary-cryo-titan-tank', tier: 'legendary', skillId: 'resistance', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '❄️' }),
+  Object.freeze({ slot: 'patch', itemId: 'legendary-cartographer-compass', tier: 'legendary', skillId: 'sonar', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🧭' }),
+  // Very Rare Mythic Drops
+  Object.freeze({ slot: 'suit', itemId: 'chest-nautilus-suit', tier: 'mythic', skillId: 'resistance', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🐚' }),
+  Object.freeze({ slot: 'torch', itemId: 'chest-abyssal-lantern', tier: 'mythic', skillId: 'visibility', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🏮' }),
+  // Rare Epic Specialist Drops
+  Object.freeze({ slot: 'suit', itemId: 'chest-bulwark-shell', tier: 'epic', skillId: 'armor', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🛡️' }),
+  Object.freeze({ slot: 'torch', itemId: 'chest-amber-cutter', tier: 'epic', skillId: 'visibility', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🔦' }),
+  Object.freeze({ slot: 'visor', itemId: 'chest-echo-array', tier: 'epic', skillId: 'sonar', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '📡' }),
+  Object.freeze({ slot: 'trim', itemId: 'chest-manta-fins', tier: 'epic', skillId: 'speed', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🪽' }),
+  Object.freeze({ slot: 'visor', itemId: 'chest-harpoon-visor', tier: 'epic', skillId: 'armor', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🎯' }),
+  // Veteran Rare Drops
+  Object.freeze({ slot: 'headgear', itemId: 'chest-ghost-hood', tier: 'rare', skillId: 'stealth', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🥷' }),
+  Object.freeze({ slot: 'tank', itemId: 'chest-titanium-twin', tier: 'rare', skillId: 'resistance', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🫧' }),
+  Object.freeze({ slot: 'patch', itemId: 'chest-corsair-crest', tier: 'rare', skillId: 'speed', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🏴‍☠️' }),
 ]);
 
 /**
  * Compute balanced Treasure Chest drop-luck multiplier from Difficulty, Mastery Modifiers,
- * Trench Chamber depth, equipped Luck gear (Sovereign Lantern / Corsair Crest), and gentle bad-luck protection (v220).
+ * Trench Chamber depth, equipped Luck gear (Sovereign Lantern / Compass / Corsair Crest),
+ * chest tier (brass / grotto / vault), and gentle bad-luck protection (v220 / v230).
  */
 export function computeChestDropLuck({
   difficulty = 'standard',
@@ -1416,19 +1517,23 @@ export function computeChestDropLuck({
   trenchChamber = 0,
   rigPerf = null,
   dryStreak = 0,
+  chestTier = 'brass',
+  isMapVault = false,
 } = {}) {
   const diffMult = difficulty === 'hardcore' ? 1.65 : difficulty === 'guided' ? 0.75 : 1.0;
   const modBonus = Array.isArray(modifiers) ? Math.min(0.6, modifiers.length * 0.2) : 0;
   const trenchBonus = trenchChamber >= 2 ? Math.min(0.9, (trenchChamber - 1) * 0.18) : 0;
   const gearLuck = Math.max(0, Number(rigPerf?.chestLuckBonus) || 0);
-  const pityBonus = Math.min(0.8, Math.max(0, Number(dryStreak) || 0) * 0.08);
-  return +(Math.min(3.5, diffMult + modBonus + trenchBonus + gearLuck + pityBonus)).toFixed(2);
+  const pityBonus = Math.min(0.85, Math.max(0, Number(dryStreak) || 0) * 0.09);
+  const vaultBonus = isMapVault || chestTier === 'vault' ? 0.65 : chestTier === 'grotto' ? 0.25 : 0;
+  return +(Math.min(4.2, diffMult + modBonus + trenchBonus + gearLuck + pityBonus + vaultBonus)).toFixed(2);
 }
 
 /**
- * Roll balanced loot when opening a discoverable Sunken Treasure Chest (v220).
- * Keeps Mythic chase gear genuinely rare (~3.5% base) and Epic (~7% base) while guaranteeing
- * every chest feels rewarding (spare pony bottle gas top-up, DPV cell, or gold salvage jackpot).
+ * Roll balanced loot when opening a discoverable Sunken Treasure Chest or Treasure-Map Vault (v230).
+ * - Ultra-Rare Legendary drops start at ~0.8% base (up to ~5.5% in Map Vaults / high luck).
+ * - Map-Linked Vault Chests (`skillFocus`) guarantee a gear drop matching that advertised Skill
+ *   whenever any unowned piece exists for that skill, making Treasure Maps genuinely rewarding!
  */
 export function rollTreasureChestLoot({
   foundGearMap = null,
@@ -1437,6 +1542,9 @@ export function rollTreasureChestLoot({
   dryStreak = 0,
   hasDpv = false,
   isFirstChestEver = false,
+  skillFocus = null,
+  chestTier = 'brass',
+  isMapVault = false,
   rng = Math.random,
 } = {}) {
   const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
@@ -1446,28 +1554,50 @@ export function rollTreasureChestLoot({
     trenchChamber: tuningCtx?.trenchChamber || 0,
     rigPerf,
     dryStreak,
+    chestTier,
+    isMapVault,
   });
 
   const roll = Math.max(0, Math.min(0.999999, Number(rng()) || 0));
-  const mythicP = Math.min(0.12, 0.035 * luck);
-  const epicP = Math.min(0.20, 0.07 * luck);
-  const rareP = Math.min(0.30, 0.12 * luck);
+  const legendaryP = Math.min(isMapVault ? 0.055 : 0.032, (isMapVault ? 0.018 : 0.008) * luck);
+  const mythicP = Math.min(0.15, (isMapVault ? 0.055 : 0.035) * luck);
+  const epicP = Math.min(0.24, (isMapVault ? 0.12 : 0.075) * luck);
+  const rareP = Math.min(0.32, 0.13 * luck);
 
-  const pickUnowned = (tier) => {
-    const pool = CHEST_GEAR_DROPS.filter((d) => d.tier === tier && !found[`${d.slot}:${d.itemId}`]);
+  const pickUnowned = (tier, skillOnly = null) => {
+    const pool = CHEST_GEAR_DROPS.filter(
+      (d) => d.tier === tier && !found[`${d.slot}:${d.itemId}`] && (!skillOnly || d.skillId === skillOnly)
+    );
     if (pool.length === 0) return null;
-    return pool[Math.floor(rng() * pool.length) % pool.length];
+    return pool[Math.floor((Number(rng()) || 0) * pool.length) % pool.length];
   };
 
   let chosenGear = null;
-  if (isFirstChestEver && !CHEST_GEAR_DROPS.some((d) => Boolean(found[`${d.slot}:${d.itemId}`]))) {
+  if (skillFocus) {
+    // Treasure-Map Vault Chest: honor the advertised Skill with boosted rarity roll!
+    if (roll < legendaryP) {
+      chosenGear = pickUnowned('legendary', skillFocus) || pickUnowned('mythic', skillFocus) || pickUnowned('epic', skillFocus) || pickUnowned('rare', skillFocus);
+    } else if (roll < legendaryP + mythicP) {
+      chosenGear = pickUnowned('mythic', skillFocus) || pickUnowned('epic', skillFocus) || pickUnowned('rare', skillFocus) || pickUnowned('legendary', skillFocus);
+    } else if (roll < legendaryP + mythicP + epicP + 0.25) {
+      chosenGear = pickUnowned('epic', skillFocus) || pickUnowned('rare', skillFocus) || pickUnowned('mythic', skillFocus) || pickUnowned('legendary', skillFocus);
+    } else {
+      chosenGear = pickUnowned('rare', skillFocus) || pickUnowned('epic', skillFocus) || pickUnowned('mythic', skillFocus) || pickUnowned('legendary', skillFocus);
+    }
+    // If every piece in that skill is already owned, still give a fair roll on any unowned chest piece
+    if (!chosenGear && roll < 0.45) {
+      chosenGear = pickUnowned('epic') || pickUnowned('rare') || pickUnowned('mythic');
+    }
+  } else if (isFirstChestEver && !CHEST_GEAR_DROPS.some((d) => Boolean(found[`${d.slot}:${d.itemId}`]))) {
     // Make a new player's very first Sunken Treasure Chest unforgettable with a guaranteed Rare chest relic!
     chosenGear = pickUnowned('rare');
-  } else if (roll < mythicP) {
+  } else if (roll < legendaryP) {
+    chosenGear = pickUnowned('legendary') || pickUnowned('mythic') || pickUnowned('epic') || pickUnowned('rare');
+  } else if (roll < legendaryP + mythicP) {
     chosenGear = pickUnowned('mythic') || pickUnowned('epic') || pickUnowned('rare');
-  } else if (roll < mythicP + epicP) {
+  } else if (roll < legendaryP + mythicP + epicP) {
     chosenGear = pickUnowned('epic') || pickUnowned('rare');
-  } else if (roll < mythicP + epicP + rareP) {
+  } else if (roll < legendaryP + mythicP + epicP + rareP) {
     chosenGear = pickUnowned('rare');
   }
 
@@ -1475,25 +1605,45 @@ export function rollTreasureChestLoot({
     const gearKey = `${chosenGear.slot}:${chosenGear.itemId}`;
     const itemMeta = getGearItemBySlot(chosenGear.slot, chosenGear.itemId)?.item || null;
     const statsInfo = getGearItemStats(chosenGear.slot, itemMeta || chosenGear.itemId);
+    const ptsByTier = { legendary: 1500, mythic: 850, epic: 550, rare: 350 };
     return {
       kind: 'gear',
       gearKey,
       slot: chosenGear.slot,
       itemId: chosenGear.itemId,
+      skillId: chosenGear.skillId || skillFocus || null,
       name: itemMeta?.name || chosenGear.itemId,
       tier: chosenGear.tier,
       rarityLabel: chosenGear.rarityLabel,
       icon: chosenGear.icon,
-      points: chosenGear.tier === 'mythic' ? 800 : chosenGear.tier === 'epic' ? 550 : 350,
-      gasBonusBar: 10,
+      points: ptsByTier[chosenGear.tier] || 400,
+      gasBonusBar: chosenGear.tier === 'legendary' ? 18 : 10,
       luckMult: luck,
       beamColor: TIER_BEAM_COLORS[chosenGear.tier] || '#facc15',
       statsInfo,
+      fromMapVault: Boolean(isMapVault || skillFocus),
     };
   }
 
-  // Rewarding non-gear sunken treasure salvage (always useful mid-dive!)
-  const salvageRoll = rng();
+  // Rewarding non-gear sunken treasure salvage (Map Vaults pay out extra-generous jackpots if skill pool is complete!)
+  const salvageRoll = Number(rng()) || 0;
+  if (isMapVault) {
+    return {
+      kind: 'reliquary',
+      tier: 'epic',
+      rarityLabel: 'VAULT SALVAGE JACKPOT',
+      icon: '💎',
+      name: 'Sunken Cartographer Vault Hoard',
+      detail: '+1100 Bonus Score, +20 bar reserve & hefty Salvage Doubloons',
+      points: 1100,
+      gasBonusBar: 20,
+      doubloonBonus: 185,
+      calmHr: true,
+      luckMult: luck,
+      beamColor: TIER_BEAM_COLORS.epic,
+      fromMapVault: true,
+    };
+  }
   if (salvageRoll < 0.34) {
     return {
       kind: 'gas-cache',
@@ -1561,8 +1711,9 @@ function _hashChestSeed(str) {
 }
 
 /**
- * Spawn 1–2 discoverable brass-bound Sunken Treasure Chests in verified navigable open water
- * on any expedition site or Endless Trench chamber (v220).
+ * Spawn 1–3 tiered discoverable Sunken Treasure Chests in verified navigable open water
+ * on any expedition site or Endless Trench chamber (v220 / v230).
+ * Deeper pockets yield Grotto Relic Chests with elevated rare/legendary drop luck!
  */
 export function createTreasureChestsForLevel(level, { seed = null, excludePoints = [] } = {}) {
   if (!level || level.isProvingGrounds) return [];
@@ -1582,10 +1733,18 @@ export function createTreasureChestsForLevel(level, { seed = null, excludePoints
     return s / 4294967296;
   };
 
-  // Deeper / longer sites spawn 2 chests; shorter intro sites spawn 1–2
-  const desiredCount = segs.length >= 6 || (level.maxDepthM || 0) >= 55 ? 2 : 1;
+  // Scale chest count with site length & depth: intro 2 chests (so 1 can be a Map Vault!), grand deep sites 3 chests
+  const desiredCount =
+    segs.length >= 10 || (level.maxDepthM || 0) >= 80
+      ? 3
+      : segs.length >= 4 || (level.maxDepthM || 0) >= 35
+        ? 2
+        : 1;
   const chests = [];
-  const usedFracs = [0.34 + nextRng() * 0.16, 0.66 + nextRng() * 0.18];
+  const usedFracs =
+    desiredCount >= 3
+      ? [0.30 + nextRng() * 0.12, 0.56 + nextRng() * 0.12, 0.78 + nextRng() * 0.14]
+      : [0.36 + nextRng() * 0.14, 0.68 + nextRng() * 0.16];
 
   for (let i = 0; i < desiredCount; i++) {
     const segIdx = Math.max(1, Math.min(segs.length - 1, Math.floor(segs.length * usedFracs[i % usedFracs.length])));
@@ -1600,15 +1759,15 @@ export function createTreasureChestsForLevel(level, { seed = null, excludePoints
     const sign = nextRng() < 0.5 ? -1 : 1;
 
     const candidates = [
-      { x: mx + sign * r * 0.55, y: my + r * 0.45 },
-      { x: mx - sign * r * 0.45, y: my + r * 0.35 },
+      { x: mx + sign * r * 0.58, y: my + r * 0.44 },
+      { x: mx - sign * r * 0.48, y: my + r * 0.34 },
       { x: mx, y: my },
     ];
     let best = null;
     for (const pt of candidates) {
-      if (Math.hypot(pt.x - spawnX, pt.y - spawnY) < 10) continue;
-      if (excludePoints.some((ep) => Math.hypot(pt.x - ep.x, pt.y - ep.y) < 7)) continue;
-      if (chests.some((c) => Math.hypot(pt.x - c.x, pt.y - c.y) < 12)) continue;
+      if (Math.hypot(pt.x - spawnX, pt.y - spawnY) < 9.5) continue;
+      if (excludePoints.some((ep) => Math.hypot(pt.x - ep.x, pt.y - ep.y) < 6.5)) continue;
+      if (chests.some((c) => Math.hypot(pt.x - c.x, pt.y - c.y) < 11)) continue;
       if (evaluateCaveSDF(level, pt.x, pt.y) < -0.65) {
         best = pt;
         break;
@@ -1616,15 +1775,21 @@ export function createTreasureChestsForLevel(level, { seed = null, excludePoints
     }
     if (!best) continue;
 
+    const chestTier = i === 0 ? 'brass' : 'grotto';
     chests.push({
       id: `chest-${level.id || 's'}-${i + 1}`,
-      name: i === 0 ? 'Sunken Brass Treasure Chest' : 'Deep Grotto Relic Chest',
+      name: chestTier === 'grotto' ? 'Deep Grotto Relic Chest' : 'Sunken Brass Treasure Chest',
+      chestTier,
+      isMapVault: false,
+      skillFocus: null,
+      linkedMapId: null,
+      beaconRevealed: false,
       x: Math.round(best.x * 100) / 100,
       y: Math.round(best.y * 100) / 100,
       opened: false,
       openAnim: 0,
       drop: null,
-      beamColor: '#facc15',
+      beamColor: chestTier === 'grotto' ? '#38bdf8' : '#facc15',
       glintPhase: nextRng() * Math.PI * 2,
     });
   }

@@ -11071,7 +11071,7 @@ test('v211 Major Gear Workshop Upgrade: 5-Tier Difficulty Ladder, Unlock Diffing
 
   // 1. Every gear piece across all 7 categories has a valid tier & difficulty-aligned ladderRank
   const validTiers = new Set(Object.keys(GEAR_TIERS));
-  assert.equal(validTiers.size, 5);
+  assert.ok(validTiers.size >= 5, 'Must support at least 5 gear prestige tiers (6 with Legendary)');
   for (const cat of GEAR_CATEGORIES) {
     for (const item of cat.list) {
       assert.ok(validTiers.has(item.tier), `${cat.slot}:${item.id} missing valid tier`);
@@ -12038,8 +12038,8 @@ test('v220 Combat/Deep Balance Polish, Discoverable Sunken Treasure Chests & Rar
   assert.ok(stdHybrid.coldResist < 0.9, `Hybrid Mix must not steal 100% COLD-PROOF from Deep Tech (got ${stdHybrid.coldResist})`);
   assert.ok(stdHybrid.bonusStartBar < 40, `Hybrid Mix must not steal +40b full overfill from Deep Tech (got +${stdHybrid.bonusStartBar}b)`);
 
-  // 2. All 6 Chest-Exclusive Chase Items exist, are source:'chest', have bespoke stats & unlock cleanly when found
-  assert.equal(CHEST_GEAR_DROPS.length, 6);
+  // 2. All Chest-Exclusive Chase Items exist, are source:'chest', have bespoke stats & unlock cleanly when found
+  assert.ok(CHEST_GEAR_DROPS.length >= 6, 'Must have expanded chest chase gear pool (17 in v230)');
   const mythicDrops = CHEST_GEAR_DROPS.filter((d) => d.tier === 'mythic');
   assert.equal(mythicDrops.length, 2, 'Should have 2 very-rare Mythic chest chase relics');
   for (const d of CHEST_GEAR_DROPS) {
@@ -12103,7 +12103,7 @@ test('v220 Combat/Deep Balance Polish, Discoverable Sunken Treasure Chests & Rar
   const trenchLvl = createTrenchChamberLevel('TRN220', 3);
   for (const lvl of [LEVEL_1, plura, trenchLvl]) {
     const chests = createTreasureChestsForLevel(lvl, { seed: 220220 });
-    assert.ok(chests.length >= 1 && chests.length <= 2, `Expected 1-2 treasure chests on ${lvl.id}, got ${chests.length}`);
+    assert.ok(chests.length >= 1 && chests.length <= 3, `Expected 1-3 treasure chests on ${lvl.id}, got ${chests.length}`);
     for (const tc of chests) {
       const sdf = evaluateCaveSDF(lvl, tc.x, tc.y);
       assert.ok(sdf < -0.65, `Treasure chest ${tc.id} on ${lvl.id} must be in navigable open water (SDF=${sdf.toFixed(2)})`);
@@ -12126,7 +12126,7 @@ test('v220 Combat/Deep Balance Polish, Discoverable Sunken Treasure Chests & Rar
   assert.equal(cbChest, tc);
   assert.equal(cbDrop, drop);
   assert.equal(drop.kind, 'gear');
-  assert.equal(drop.tier, 'mythic');
+  assert.ok(['mythic', 'legendary'].includes(drop.tier), `Ultra-low roll should hit Mythic or Legendary (got ${drop.tier})`);
   assert.ok(sess.chestBonusScore >= 800, 'Opening Mythic treasure chest must award expedition bonus score');
   assert.ok(Boolean(sess.foundGearMap[drop.gearKey]), 'Session foundGearMap must track discovered chest gear immediately');
 });
@@ -12515,4 +12515,175 @@ test('v229 Salvage Doubloons Currency & Gear Color / Animated Coating Foundry', 
       equipFx: { slot: 'chroma', progress: 0.4, color: '#facc15', tier: 'mythic', itemName: dyeId },
     });
   }
+});
+
+test('v230 Treasure Maps + Sonar Beacons, Ultra-Rare Legendaries, Silt-Pierce / Always-On Sonar / Armor & Shield / Stealth & Gear Selling', async () => {
+  const {
+    GEAR_TIERS,
+    getGearSellValue,
+    getGearBuybackCost,
+    computeUnlockedLiveries,
+    getGearItemBySlot,
+  } = await import('../public/js/game/rigLivery.js');
+  const {
+    CHEST_GEAR_DROPS,
+    computeRigPerformanceProfile,
+    rollTreasureChestLoot,
+    createTreasureChestsForLevel,
+  } = await import('../public/js/game/gearStats.js');
+  const {
+    TREASURE_SKILL_ORDER,
+    createTreasureMapsForLevel,
+  } = await import('../public/js/game/treasureMaps.js');
+  const {
+    createEmptyLogbook,
+    sellGearInLogbook,
+    buybackGearInLogbook,
+    mergeCareerLogbooks,
+    recordDiveInLogbook,
+  } = await import('../public/js/game/logbookModel.js');
+  const { castLightRay } = await import('../public/js/game/lighting.js');
+  const {
+    collectTreasureMap,
+    openTreasureChest,
+    triggerSonarPing,
+  } = await import('../public/js/game/diveSession.js');
+  const { evaluateCaveSDF } = await import('../public/js/game/collision.js');
+
+  // 1. Legendary Tier & 17-item Expanded Chest Loot Pool across all 6 skills
+  assert.equal(GEAR_TIERS.legendary.rank, 6);
+  const legDrops = CHEST_GEAR_DROPS.filter((d) => d.tier === 'legendary');
+  assert.equal(legDrops.length, 7, 'Must have 7 ultra-rare Legendary crown jewels across all 7 slots');
+  assert.equal(new Set(legDrops.map((d) => d.slot)).size, 7, 'Each gear slot must have a Legendary');
+  for (const sk of TREASURE_SKILL_ORDER) {
+    assert.ok(CHEST_GEAR_DROPS.some((d) => d.skillId === sk), `Chest pool must cover skill ${sk}`);
+  }
+
+  // 2. Treasure Maps spawn in navigable water, clearly advertise Skill, lock Sonar Beacon, and guarantee matching skill loot!
+  const chests = createTreasureChestsForLevel(LEVEL_1, { seed: 4242 });
+  assert.ok(chests.length >= 1);
+  const maps = createTreasureMapsForLevel(LEVEL_1, { chests, chestPool: CHEST_GEAR_DROPS, seed: 4242 });
+  assert.ok(maps.length >= 1, 'Level 1 must spawn at least 1 Treasure Map');
+  const firstMap = maps[0];
+  assert.ok(evaluateCaveSDF(LEVEL_1, firstMap.x, firstMap.y) < -0.5, 'Treasure Map must sit in open navigable water');
+  assert.ok(firstMap.skillId && firstMap.skillLabel && firstMap.skillIcon && firstMap.skillVerb);
+
+  const s = createDiveSession(LEVEL_1);
+  assert.ok(Array.isArray(s.treasureMaps) && s.treasureMaps.length >= 1);
+  const tm = s.treasureMaps[0];
+  const linkedChest = s.treasureChests.find((c) => c.id === tm.targetChestId);
+  assert.ok(linkedChest && linkedChest.isMapVault && linkedChest.skillFocus === tm.skillId);
+
+  let mapCbFired = false;
+  const beacon = collectTreasureMap(s, tm, { onTreasureMapFound: () => { mapCbFired = true; } });
+  assert.ok(beacon && mapCbFired);
+  assert.equal(linkedChest.beaconRevealed, true);
+  assert.equal(s.activeTreasureBeacons.length, 1);
+
+  // Opening the linked Vault Chest guarantees gear matching the map's skill & completes the beacon!
+  const drop = openTreasureChest(s, linkedChest, {}, { rng: () => 0.001 });
+  assert.equal(drop.kind, 'gear');
+  assert.equal(drop.skillId, tm.skillId, 'Vault Chest must drop gear boosting the Treasure Map skill');
+  assert.equal(s.activeTreasureBeacons[0].completed, true);
+
+  // 3. Ultra-Rare Legendary Drop Probability check (roll=0.001 hits Legendary; roll=0.5 does not)
+  const legRoll = rollTreasureChestLoot({ foundGearMap: {}, rng: () => 0.001 });
+  assert.equal(legRoll.kind, 'gear');
+  assert.equal(legRoll.tier, 'legendary');
+  const commonRoll = rollTreasureChestLoot({ foundGearMap: {}, rng: () => 0.92 });
+  assert.notEqual(commonRoll.tier, 'legendary');
+
+  // 4. All 5 New Mechanics verified in computeRigPerformanceProfile & simulation!
+  const dreamRig = {
+    suitId: 'legendary-aegis-exosuit',
+    torchId: 'legendary-photon-lance',
+    visorId: 'legendary-omniscanner-visor',
+    trimId: 'legendary-slipstream-fins',
+    headgearId: 'legendary-phantom-shroud',
+    tankId: 'legendary-cryo-titan-tank',
+    patchId: 'legendary-cartographer-compass',
+  };
+  const dreamPerf = computeRigPerformanceProfile(dreamRig);
+  assert.ok(dreamPerf.siltPierce >= 0.75, 'Helios Lance must grant >=75% Silt Pierce');
+  assert.ok(dreamPerf.armorDR >= 0.35, 'Aegis + Titan + Compass must grant strong Armor DR');
+  assert.ok(dreamPerf.shieldMax >= 40, 'Aegis Exosuit must grant Rechargeable Hydro-Shield');
+  assert.ok(dreamPerf.stealth >= 0.6, 'Phantom Shroud must grant high Stealth');
+  assert.equal(dreamPerf.passiveSonar, true, 'Omniscanner must grant Always-On Passive Sonar');
+  assert.equal(dreamPerf.sonarTrackPredators, true, 'Omniscanner must track Predators on Sonar');
+  assert.ok(dreamPerf.sonarRangeMult >= 1.6, 'Omniscanner must grant wide Sonar range');
+  assert.ok(dreamPerf.swimSpeedMult >= 1.2, 'Slipstream Fins must grant strong Swim Speed');
+  assert.ok(dreamPerf.coldResist >= 0.95 && dreamPerf.narcDepthBonusM >= 15, 'Cryo-Titan must grant Cold & Depth Resist');
+
+  // 4a. Silt-Piercing Lamp cuts through dense silt in castLightRay
+  const denseSilt = [
+    { x: LEVEL_1.spawn.x + 2.5, y: LEVEL_1.spawn.y + 1.0, radius: 3.0, alpha: 0.95 },
+    { x: LEVEL_1.spawn.x + 4.5, y: LEVEL_1.spawn.y + 1.0, radius: 3.0, alpha: 0.95 },
+  ];
+  const rayNoPierce = castLightRay(LEVEL_1, LEVEL_1.spawn.x, LEVEL_1.spawn.y + 1.0, 0, 14, denseSilt, { siltPierce: 0 });
+  const rayHelios = castLightRay(LEVEL_1, LEVEL_1.spawn.x, LEVEL_1.spawn.y + 1.0, 0, 14, denseSilt, { siltPierce: 0.78 });
+  assert.ok(rayHelios.dist > rayNoPierce.dist * 1.6, `Silt-Piercing Lamp (${rayHelios.dist.toFixed(2)}m) must pierce far deeper than baseline (${rayNoPierce.dist.toFixed(2)}m)`);
+
+  // 4b. Passive Always-On Sonar pings without consuming manual cooldown
+  const sonarSess = createDiveSession(LEVEL_1, { livery: dreamRig });
+  assert.equal(sonarSess.diver.maxShield, dreamPerf.shieldMax);
+  assert.equal(sonarSess.diver.shield, dreamPerf.shieldMax);
+  const pRes = triggerSonarPing(sonarSess, {}, { passive: true });
+  assert.equal(pRes.ok, true);
+  assert.equal(pRes.pulse.passive, true);
+  assert.equal(sonarSess.sonar.cooldownSec, 0, 'Passive sonar sweep must not put manual sonar on cooldown');
+
+  // 4c. Armor & Hydro-Shield cushion cave wall bump panic/HR
+  const dsPlain = createDiveState();
+  const dsShield = createDiveState();
+  stepDivePhysiology(dsPlain, { depthM: 20, prevDepthM: 20, dt: 0.25, headBumpImpulse: 2.0 });
+  stepDivePhysiology(dsShield, { depthM: 20, prevDepthM: 20, dt: 0.25, headBumpImpulse: 2.0, armorDR: 0.3, shieldActive: true });
+  assert.ok(dsShield.panicLevel < dsPlain.panicLevel * 0.4, 'Armor & Hydro-Shield must dramatically cushion cave impact shock');
+
+  // 5. Gear Selling & Buyback Economy
+  let book = createEmptyLogbook();
+  // Starter item cannot be sold
+  const unsell = sellGearInLogbook(book, 'suit', 'zissou-classic');
+  assert.equal(unsell.ok, false);
+  assert.equal(unsell.reason, 'unsellable');
+
+  // Selling a Legendary Chest item pays +1200 Doubloons & returns it to loot pool!
+  book.foundGear['suit:legendary-aegis-exosuit'] = { foundAt: Date.now(), siteId: 'cenote-el-abismo' };
+  assert.ok(computeUnlockedLiveries(book).suits.has('legendary-aegis-exosuit'));
+  const soldLeg = sellGearInLogbook(book, 'suit', 'legendary-aegis-exosuit');
+  assert.equal(soldLeg.ok, true);
+  assert.equal(soldLeg.value, getGearSellValue('legendary'));
+  assert.equal(soldLeg.reentersLootPool, true);
+  assert.equal(Boolean(soldLeg.book.foundGear['suit:legendary-aegis-exosuit']), false);
+  assert.equal(computeUnlockedLiveries(soldLeg.book).suits.has('legendary-aegis-exosuit'), false);
+
+  // Selling a Milestone item prevents free re-unlock exploit & supports Workshop Buyback!
+  book = recordDiveInLogbook(soldLeg.book, { levelId: 'cenote-el-abismo', success: true, score: 1500, grade: 'A', maxDepthM: 25, diveTimeSec: 120 });
+  assert.ok(computeUnlockedLiveries(book).suits.has('cenote-azure'), 'Clearing 1 site unlocks cenote-azure');
+  const soldMs = sellGearInLogbook(book, 'suit', 'cenote-azure');
+  assert.equal(soldMs.ok, true);
+  assert.equal(soldMs.canBuyback, true);
+  assert.equal(computeUnlockedLiveries(soldMs.book).suits.has('cenote-azure'), false, 'Sold milestone gear stays locked until bought back');
+  // Merge preserves soldGear cleanly
+  const merged = mergeCareerLogbooks(soldMs.book, createEmptyLogbook());
+  assert.ok(merged.soldGear['suit:cenote-azure']);
+  // Buyback restores it for 1.25x sell price
+  const bb = buybackGearInLogbook(soldMs.book, 'suit', 'cenote-azure');
+  assert.equal(bb.ok, true);
+  assert.equal(bb.cost, getGearBuybackCost('uncommon'));
+  assert.equal(computeUnlockedLiveries(bb.book).suits.has('cenote-azure'), true);
+
+  // 6. Minimap renders active Treasure Map Beacons & Predator Sonar contacts cleanly without errors
+  const noop = new Proxy(
+    { createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }), measureText: () => ({ width: 40 }) },
+    { get: (t, p) => (p in t ? t[p] : () => {}), set: () => true }
+  );
+  const s2 = createDiveSession(LEVEL_1, { livery: dreamRig });
+  collectTreasureMap(s2, s2.treasureMaps[0]);
+  drawSonarMinimap(noop, 320, 220, {
+    level: LEVEL_1,
+    diver: s2.diver,
+    hazards: s2.hazards,
+    sonarPulse: triggerSonarPing(s2, {}, { passive: true }).pulse,
+    timeSec: 4.2,
+  });
 });
