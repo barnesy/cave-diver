@@ -54,7 +54,16 @@ export const LIVERY_SLOTS_KEY = 'caveDiverLiverySlots_v1';
 export const SQUAD_UNIFORM_KEY = 'caveDiverSquadUniform_v1';
 export const SEEN_GEAR_UNLOCKS_KEY = 'caveDiverSeenGearUnlocks_v1';
 const SAVED_KIT_LABELS = ['Cave Kit', 'Wreck Kit', 'Night Ops'];
-const EQUIP_ANIM_DURATION_MS = 860;
+const EQUIP_ANIM_DURATION_MS = 2400;
+const SLOT_DISPLAY_NAMES = {
+  suit: 'Drysuit',
+  trim: 'Trim & Fins',
+  headgear: 'Headgear',
+  visor: 'Visor Lens',
+  tank: 'Twin Tanks',
+  torch: 'Primary Torch',
+  patch: 'Shoulder Patch',
+};
 
 /**
  * Diver Gear Workshop, Difficulty-Aligned Progression Ladder, Kinetic Equip Animations,
@@ -151,6 +160,7 @@ export function createLiveryWorkshopController({
   const liveryModalEl = document.getElementById('livery-modal');
   const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
   const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
+  const liveryInspectorBarEl = document.getElementById('livery-inspector-bar');
   const liveryWelcomeStageEl = document.getElementById('livery-welcome-stage');
   const firstPlayWelcomeStripEl = document.getElementById('first-play-welcome-strip');
   const btnLiveryLaunchDiveEl = document.getElementById('btn-livery-launch-dive');
@@ -217,10 +227,12 @@ export function createLiveryWorkshopController({
     return { difficulty: curDiff, modifiers: mods };
   }
 
-  // Kinetic equip-on-avatar animation state, multi-slot Try-On, Equip Flash & Set Inspector state (v211–v222)
+  // Kinetic equip-on-avatar animation state, multi-slot Try-On, Equip Flash, Gear Inspector & Set Inspector state (v211–v228)
   let activeEquipFx = null;
   let justEquippedKey = '';
   let lockedTryOn = null; // { slot, field, id, patch?, name, hint, tier, isSet?, setId? } | null
+  let hoveredGear = null; // { slot, field, item, unlocked } | null (live hover preview without modal re-render)
+  let pinnedInspect = null; // { slot, field, item, unlocked, justEquipped?, replacedName?, impact? } | null
   let lastEquipFlash = null; // { itemName, diffs, expiresAt } | null
   let inspectedSetId = '';
   let recentDiveUnlocks = [];
@@ -273,6 +285,12 @@ export function createLiveryWorkshopController({
   }
 
   function getDisplayedRigLivery() {
+    if (hoveredGear?.field && hoveredGear?.item?.id) {
+      return { ...activeRigLivery, [hoveredGear.field]: hoveredGear.item.id };
+    }
+    if (pinnedInspect && !pinnedInspect.justEquipped && pinnedInspect.field && pinnedInspect.item?.id) {
+      return { ...activeRigLivery, [pinnedInspect.field]: pinnedInspect.item.id };
+    }
     if (!lockedTryOn) return activeRigLivery;
     if (lockedTryOn.patch && typeof lockedTryOn.patch === 'object') {
       return { ...activeRigLivery, ...lockedTryOn.patch };
@@ -708,6 +726,35 @@ export function createLiveryWorkshopController({
       }
     }
 
+    // Live slot focus spotlight on the avatar when hovering, inspecting, or trying on gear (v228)
+    let focusHighlight = null;
+    if (hoveredGear?.slot && hoveredGear?.item) {
+      const tm = getGearTierMeta(hoveredGear.item.tier);
+      const isSame = hoveredGear.field && (activeRigLivery[hoveredGear.field] || '') === hoveredGear.item.id;
+      focusHighlight = {
+        slot: hoveredGear.slot,
+        color: isSame ? '#38bdf8' : tm.color,
+        kicker: isSame ? 'EQUIPPED' : hoveredGear.unlocked ? 'PREVIEW' : 'LOCKED PREVIEW',
+        label: hoveredGear.item.name,
+      };
+    } else if (!equipFxArg && pinnedInspect?.slot && pinnedInspect?.item) {
+      const tm = getGearTierMeta(pinnedInspect.item.tier);
+      focusHighlight = {
+        slot: pinnedInspect.slot,
+        color: pinnedInspect.justEquipped ? '#34d399' : tm.color,
+        kicker: pinnedInspect.justEquipped ? 'EQUIPPED' : pinnedInspect.unlocked ? 'INSPECTING' : 'LOCKED PREVIEW',
+        label: pinnedInspect.item.name,
+      };
+    } else if (!equipFxArg && lockedTryOn?.slot && lockedTryOn.slot !== 'all') {
+      const tm = getGearTierMeta(lockedTryOn.tier);
+      focusHighlight = {
+        slot: lockedTryOn.slot,
+        color: '#facc15',
+        kicker: 'TRY-ON',
+        label: lockedTryOn.name,
+      };
+    }
+
     try {
       drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, previewLivery, {
         hasCcr: showCcr,
@@ -715,16 +762,157 @@ export function createLiveryWorkshopController({
         envMode: liveryPreviewEnv,
         timeSec,
         equipFx: equipFxArg,
-        previewLockedLabel: lockedTryOn ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
+        focusHighlight,
+        previewLockedLabel: lockedTryOn && !hoveredGear ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
       });
     } catch (err) {
       console.error('Livery preview render error:', err);
     }
   }
 
+  function renderInspectorBar() {
+    if (!liveryInspectorBarEl) return;
+    const tuningCtx = getWorkshopTuningCtx(workshopTuningMode);
+    const activeTarget = hoveredGear || (pinnedInspect ? pinnedInspect : null) || (lockedTryOn && !lockedTryOn.isSet
+      ? (() => {
+          const entry = getGearItemBySlot(lockedTryOn.slot, lockedTryOn.id);
+          return entry ? { slot: lockedTryOn.slot, field: lockedTryOn.field, item: entry.item, unlocked: false } : null;
+        })()
+      : null);
+
+    // Default calm summary of the current tab's equipped gear when nothing is hovered or inspected
+    if (!activeTarget || !activeTarget.item) {
+      const pal = resolveDiverLiveryPalette(activeRigLivery);
+      const tabSlotMap = {
+        suit: { slot: 'suit', item: pal.suit },
+        head: { slot: 'headgear', item: pal.headgear },
+        gear: { slot: 'tank', item: pal.tank },
+        patch: { slot: 'patch', item: pal.patch },
+      };
+      const cur = tabSlotMap[activeLiveryTab] || tabSlotMap.suit;
+      const stats = cur.item ? getGearItemStats(cur.slot, cur.item) : null;
+      const pills = stats?.pills?.slice(0, 3).map((p) => `<span class="livery-insp-pill neutral">${escapeHtml(p)}</span>`).join('') || '';
+      const pwr = stats?.power ? `<span class="livery-insp-pill pwr">⚡ ${escapeHtml(stats.power.name)}</span>` : '';
+      liveryInspectorBarEl.dataset.state = 'idle';
+      liveryInspectorBarEl.innerHTML = `
+        <div class="livery-insp-row">
+          <span class="livery-insp-kicker">EQUIPPED ${escapeHtml((SLOT_DISPLAY_NAMES[cur.slot] || cur.slot).toUpperCase())}</span>
+          <strong class="livery-insp-name">${escapeHtml(cur.item?.name || 'Standard Issue')}</strong>
+          <span class="livery-insp-hint">Hover or tap ℹ on any gear to preview on diver &amp; see loadout impact</span>
+        </div>
+        ${pills || pwr ? `<div class="livery-insp-deltas">${pills}${pwr}</div>` : ''}
+      `;
+      return;
+    }
+
+    const { slot, field, item, unlocked, justEquipped, replacedName, impact: cachedImpact } = activeTarget;
+    const slotLbl = SLOT_DISPLAY_NAMES[slot] || slot;
+    const isEquippedNow = field && (activeRigLivery[field] || '') === item.id;
+    const impact = justEquipped && cachedImpact
+      ? cachedImpact
+      : evaluateLootUpgradeImpact(activeRigLivery, slot, item.id, tuningCtx);
+    const itemStats = getGearItemStats(slot, item);
+    const chips = [];
+
+    if (impact && !impact.isNormalized && (justEquipped || !isEquippedNow)) {
+      for (const sc of impact.setChanges || []) {
+        chips.push(`<span class="livery-insp-pill ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '✦' : '⚠'} ${escapeHtml(sc.text)}</span>`);
+      }
+      for (const gp of impact.gainedPowers || []) {
+        chips.push(`<span class="livery-insp-pill pos is-pwr">+⚡ ${escapeHtml(gp.name)}</span>`);
+      }
+      for (const lp of impact.lostPowers || []) {
+        chips.push(`<span class="livery-insp-pill neg is-pwr">-⚡ ${escapeHtml(lp.name)}</span>`);
+      }
+      for (const d of (impact.deltas || []).slice(0, 5)) {
+        chips.push(`<span class="livery-insp-pill ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
+      }
+      if (impact.archChanged && impact.archBefore && impact.archAfter) {
+        chips.push(`<span class="livery-insp-pill neutral">${impact.archBefore.icon} ${escapeHtml(impact.archBefore.short)} → ${impact.archAfter.icon} ${escapeHtml(impact.archAfter.short)}</span>`);
+      }
+    } else if (isEquippedNow) {
+      for (const p of itemStats.pills.slice(0, 4)) {
+        chips.push(`<span class="livery-insp-pill neutral">${escapeHtml(p)}</span>`);
+      }
+      if (itemStats.power) {
+        chips.push(`<span class="livery-insp-pill pwr" title="${escapeHtml(itemStats.power.desc)}">⚡ ${escapeHtml(itemStats.power.name)}</span>`);
+      }
+    }
+    if (item.fx) {
+      chips.push(`<span class="livery-insp-pill fx" title="${escapeHtml(item.fx.desc)}">✦ ${escapeHtml(item.fx.name)}</span>`);
+    }
+
+    const verdictCls = justEquipped
+      ? 'equipped'
+      : isEquippedNow
+        ? 'same'
+        : impact?.verdict || 'tradeoff';
+    const verdictText = justEquipped
+      ? '✓ EQUIPPED'
+      : isEquippedNow
+        ? '✓ CURRENTLY EQUIPPED'
+        : impact?.isNormalized
+          ? '🧭 PURIST (COSMETIC)'
+          : impact?.verdict === 'upgrade'
+            ? '▲ UPGRADE'
+            : impact?.verdict === 'downgrade'
+              ? '▼ LOWER STATS'
+              : '⇄ TRADE-OFF';
+    const vsText = justEquipped && replacedName && replacedName !== item.name
+      ? `Replaced <strong>${escapeHtml(replacedName)}</strong>`
+      : !isEquippedNow && impact?.replacedItemName
+        ? `vs. <strong>${escapeHtml(impact.replacedItemName)}</strong>`
+        : !unlocked
+          ? escapeHtml(item.unlockHint || 'Locked')
+          : '';
+
+    let actionHtml = '';
+    if (!hoveredGear && pinnedInspect) {
+      if (unlocked && !isEquippedNow) {
+        actionHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-equip">⚡ Equip</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Close inspector">✕</button>`;
+      } else if (!unlocked) {
+        actionHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-test">🧪 Test</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Revert preview">↺</button>`;
+      }
+    }
+
+    const noteFallback = impact?.isNormalized
+      ? `<span class="livery-insp-note">Purist mode normalizes stats — visual swap only.</span>`
+      : chips.length === 0
+        ? `<span class="livery-insp-note">${!unlocked ? `🔒 ${escapeHtml(item.unlockHint || 'Locked')}` : 'Same baseline stats as current gear.'}</span>`
+        : '';
+
+    liveryInspectorBarEl.dataset.state = verdictCls;
+    liveryInspectorBarEl.innerHTML = `
+      <div class="livery-insp-row">
+        <span class="livery-insp-kicker">${escapeHtml(slotLbl.toUpperCase())}</span>
+        <strong class="livery-insp-name">${escapeHtml(item.name)}</strong>
+        <span class="livery-insp-verdict verdict-${verdictCls}">${verdictText}</span>
+        ${vsText ? `<span class="livery-insp-vs">${vsText}</span>` : ''}
+        ${actionHtml ? `<span class="livery-insp-actions">${actionHtml}</span>` : ''}
+      </div>
+      <div class="livery-insp-deltas">${chips.join('')}${noteFallback}</div>
+    `;
+
+    liveryInspectorBarEl.querySelector('#btn-insp-equip')?.addEventListener('click', () => {
+      if (field && item) updateActiveLiveryField({ [field]: item.id }, { slot, itemMeta: item });
+    });
+    liveryInspectorBarEl.querySelector('#btn-insp-test')?.addEventListener('click', () => {
+      startFieldTestDive({
+        trialLivery: { ...activeRigLivery, [field]: item.id },
+        trialLabel: item.name,
+      });
+    });
+    liveryInspectorBarEl.querySelector('#btn-insp-clear')?.addEventListener('click', () => {
+      pinnedInspect = null;
+      lockedTryOn = null;
+      renderLiveryWorkshopModal();
+    });
+  }
+
   function setLiveryActiveTab(tabId) {
     if (!liveryPanels[tabId]) return;
     activeLiveryTab = tabId;
+    hoveredGear = null;
     liveryCatTabsEl?.querySelectorAll?.('button[data-livery-tab]')?.forEach?.((btn) => {
       const on = btn.getAttribute('data-livery-tab') === tabId;
       btn.classList.toggle('active', on);
@@ -733,12 +921,18 @@ export function createLiveryWorkshopController({
     for (const [k, el] of Object.entries(liveryPanels)) {
       if (el) el.hidden = k !== tabId;
     }
+    renderInspectorBar();
   }
 
   function updateActiveLiveryField(patchObj, { slot = 'all', itemMeta = null, silentAudio = false } = {}) {
     lockedTryOn = null;
+    hoveredGear = null;
     const prevTuningCtx = getWorkshopTuningCtx(workshopTuningMode);
-    const prevPerf = computeRigPerformanceProfile(activeRigLivery, prevTuningCtx);
+    const prevLivery = { ...activeRigLivery };
+    const prevPerf = computeRigPerformanceProfile(prevLivery, prevTuningCtx);
+    const preImpact = slot && slot !== 'all' && itemMeta?.id
+      ? evaluateLootUpgradeImpact(prevLivery, slot, itemMeta.id, prevTuningCtx)
+      : null;
     const unlocks = getCurrentLiveryUnlocks();
     activeRigLivery = sanitizeRigLivery({ ...activeRigLivery, ...patchObj }, unlocks);
     const nextPerf = computeRigPerformanceProfile(activeRigLivery, prevTuningCtx);
@@ -748,7 +942,21 @@ export function createLiveryWorkshopController({
     } else {
       lastEquipFlash = null;
     }
-    if (slot && itemMeta?.id) markEntrySeen(`${slot}:${itemMeta.id}`);
+    if (slot && slot !== 'all' && itemMeta?.id) {
+      const entry = getGearItemBySlot(slot, itemMeta.id);
+      pinnedInspect = {
+        slot,
+        field: entry?.field || Object.keys(patchObj)[0] || '',
+        item: entry?.item || itemMeta,
+        unlocked: true,
+        justEquipped: true,
+        replacedName: preImpact?.replacedItemName || '',
+        impact: preImpact,
+      };
+      markEntrySeen(`${slot}:${itemMeta.id}`);
+    } else {
+      pinnedInspect = null;
+    }
     triggerEquipAnimation(slot, itemMeta, { silentAudio });
     saveRigLivery();
     syncLiveryUi();
@@ -757,6 +965,7 @@ export function createLiveryWorkshopController({
 
   function tryOnLockedItem(slot, field, item) {
     if (!item) return;
+    hoveredGear = null;
     lockedTryOn = {
       slot,
       field,
@@ -766,12 +975,15 @@ export function createLiveryWorkshopController({
       hint: item.unlockHint || 'Locked',
       tier: item.tier || 'uncommon',
     };
+    pinnedInspect = { slot, field, item, unlocked: false, justEquipped: false };
     triggerEquipAnimation(slot, item, { silentAudio: false });
     renderLiveryWorkshopModal();
   }
 
   function tryOnFullSet(setObj) {
     if (!setObj) return;
+    hoveredGear = null;
+    pinnedInspect = null;
     const patch = buildSetPreviewPatch(setObj);
     const capReq = SET_TIER_BONUSES[setObj.id]?.capstoneReq || setObj.required || 3;
     lockedTryOn = {
@@ -808,10 +1020,23 @@ export function createLiveryWorkshopController({
     const key = `${slot}:${item.id}`;
     const isNew = unlocked && !seenUnlockKeys.has(key) && item.tier !== 'common';
     const isTrying = Boolean(lockedTryOn && lockedTryOn.slot === slot && lockedTryOn.id === item.id);
+    const isInspected = Boolean(pinnedInspect && !pinnedInspect.justEquipped && pinnedInspect.slot === slot && pinnedInspect.item?.id === item.id);
     const justPop = justEquippedKey === key;
     const prog = !unlocked ? getGearItemProgress(item, stats) : null;
     const pct = prog ? Math.round((prog.pct || 0) * 100) : 0;
     const itemStats = getGearItemStats(slot, item);
+    const tuningCtx = getWorkshopTuningCtx(workshopTuningMode);
+    const impact = !selected ? evaluateLootUpgradeImpact(activeRigLivery, slot, item.id, tuningCtx) : null;
+    const hasSetBoost = Boolean(impact?.setChanges?.some((sc) => sc.positive));
+    const impactBadge = selected || !impact || impact.isNormalized
+      ? ''
+      : hasSetBoost
+        ? `<span class="livery-impact-tag tag-set" title="Advances or activates a Gear Set bonus">✦ Set</span>`
+        : impact.verdict === 'upgrade'
+          ? `<span class="livery-impact-tag tag-upgrade" title="Net upgrade over your currently equipped ${escapeHtml(SLOT_DISPLAY_NAMES[slot] || slot)}">▲ Upgrade</span>`
+          : impact.verdict === 'tradeoff' && unlocked
+            ? `<span class="livery-impact-tag tag-swap" title="Stat trade-off vs. ${escapeHtml(impact.replacedItemName)}">⇄ Swap</span>`
+            : '';
     const sourceBadge =
       itemStats.source === 'world'
         ? `<span class="livery-source-pill src-world" title="${escapeHtml(itemStats.worldCache?.clue || item.unlockHint || 'Found in world')}">🗺️ World</span>`
@@ -831,7 +1056,12 @@ export function createLiveryWorkshopController({
         ? `<span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>`
         : '';
     const newBadge = isNew ? `<span class="livery-new-badge">NEW</span>` : '';
-    const cardTitle = [item.name, item.fx ? `Visual FX: ${item.fx.name} — ${item.fx.desc}` : '', !unlocked ? item.unlockHint : ''].filter(Boolean).join(' · ');
+    const cardTitle = [
+      item.name,
+      impact && !selected && !impact.isNormalized ? `${impact.verdictIcon} ${impact.verdictLabel} vs. ${impact.replacedItemName}` : '',
+      item.fx ? `Visual FX: ${item.fx.name} — ${item.fx.desc}` : '',
+      !unlocked ? item.unlockHint : '',
+    ].filter(Boolean).join(' · ');
     const progLabel = prog?.label || item.unlockHint || 'Locked';
     const isDupHint = !unlocked && progLabel.trim() === String(item.unlockHint || '').trim();
     const progressHtml = !unlocked
@@ -846,12 +1076,13 @@ export function createLiveryWorkshopController({
         ? ''
         : `<span class="livery-swatch-meta">${escapeHtml(`🔒 ${item.unlockHint}`)}</span>`;
 
-    return `<button type="button" class="livery-swatch-btn tier-${tierMeta.id}${selected ? ' active' : ''}${unlocked ? '' : ' locked'}${isTrying ? ' trying' : ''}${item.fx ? ' has-fx' : ''}${justPop ? ' equip-pop' : ''}" data-slot="${slot}" data-field="${field}" data-item-id="${item.id}" data-unlocked="${unlocked ? '1' : '0'}" title="${escapeHtml(cardTitle)}" role="radio" aria-checked="${selected}">
+    return `<button type="button" class="livery-swatch-btn tier-${tierMeta.id}${selected ? ' active' : ''}${unlocked ? '' : ' locked'}${isTrying ? ' trying' : ''}${isInspected ? ' inspecting' : ''}${item.fx ? ' has-fx' : ''}${justPop ? ' equip-pop' : ''}" data-slot="${slot}" data-field="${field}" data-item-id="${item.id}" data-unlocked="${unlocked ? '1' : '0'}" title="${escapeHtml(cardTitle)}" role="radio" aria-checked="${selected}">
       <span class="livery-swatch-chip" style="${chipStyle}" aria-hidden="true">${chipContent}</span>
       <span class="livery-swatch-copy">
         <span class="livery-swatch-top">
           <span class="livery-swatch-name">${escapeHtml(item.name)}</span>
-          ${newBadge}${sourceBadge}${tierBadge}
+          ${newBadge}${impactBadge}${sourceBadge}${tierBadge}
+          <span class="livery-inspect-btn" role="button" tabindex="0" data-inspect-item="1" title="Inspect loadout impact &amp; spotlight on avatar" aria-label="Inspect ${escapeHtml(item.name)}">ℹ</span>
         </span>
         ${statPillsHtml}
         ${powerHtml}
@@ -863,15 +1094,57 @@ export function createLiveryWorkshopController({
 
   function _bindGridHandlers(gridEl, list, slot, field, unlockedSet) {
     if (!gridEl) return;
+    gridEl.onmouseleave = () => {
+      if (hoveredGear) {
+        hoveredGear = null;
+        renderInspectorBar();
+        renderLiveryPreviewFrame(performance.now() * 0.001);
+      }
+    };
     gridEl.querySelectorAll('button[data-item-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-item-id');
-        const item = list.find((x) => x.id === id);
-        if (!item) return;
-        if (unlockedSet.has(id)) {
+      const id = btn.getAttribute('data-item-id');
+      const item = list.find((x) => x.id === id);
+      if (!item) return;
+      const isUnlocked = unlockedSet.has(id);
+
+      const enterPreview = () => {
+        hoveredGear = { slot, field, item, unlocked: isUnlocked };
+        renderInspectorBar();
+        renderLiveryPreviewFrame(performance.now() * 0.001);
+      };
+      btn.addEventListener('mouseenter', enterPreview);
+      btn.addEventListener('focus', enterPreview);
+
+      btn.addEventListener('click', (e) => {
+        if (e.target?.closest?.('[data-inspect-item]')) {
+          e.preventDefault();
+          e.stopPropagation();
+          hoveredGear = null;
+          if (!isUnlocked) {
+            tryOnLockedItem(slot, field, item);
+          } else {
+            pinnedInspect = { slot, field, item, unlocked: true, justEquipped: false };
+            renderLiveryWorkshopModal();
+          }
+          return;
+        }
+        if (isUnlocked) {
           updateActiveLiveryField({ [field]: id }, { slot, itemMeta: item });
         } else {
           tryOnLockedItem(slot, field, item);
+        }
+      });
+
+      btn.querySelector('[data-inspect-item]')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          hoveredGear = null;
+          if (!isUnlocked) tryOnLockedItem(slot, field, item);
+          else {
+            pinnedInspect = { slot, field, item, unlocked: true, justEquipped: false };
+            renderLiveryWorkshopModal();
+          }
         }
       });
     });
@@ -907,15 +1180,25 @@ export function createLiveryWorkshopController({
       .map((entry, idx) => {
         const tm = getGearTierMeta(entry.item?.tier);
         const equipped = (activeRigLivery[entry.field] || '') === entry.item.id;
+        const impact = !equipped ? evaluateLootUpgradeImpact(activeRigLivery, entry.slot, entry.item.id) : null;
+        const topDeltas = impact && !impact.isNormalized
+          ? (impact.deltas || []).slice(0, 3).map((d) => `${d.positive ? '▲' : '▼'} ${d.text}`).join(' · ')
+          : '';
+        const impactLine = equipped
+          ? `<span class="debrief-unlock-impact verdict-same">✓ Equipped on Rig</span>`
+          : impact && !impact.isNormalized
+            ? `<span class="debrief-unlock-impact verdict-${impact.verdict}">${impact.verdictIcon} ${impact.verdict === 'upgrade' ? 'Upgrade' : impact.verdict === 'downgrade' ? 'Lower' : 'Trade-off'} vs. ${escapeHtml(impact.replacedItemName)}${topDeltas ? ` · ${escapeHtml(topDeltas)}` : ''}</span>`
+            : '';
         return `<div class="debrief-unlock-chip tier-${tm.id}">
           <span class="debrief-unlock-copy">
             <span class="livery-tier-pill tier-${tm.id}">${tm.icon} ${tm.badge}</span>
             <strong>${escapeHtml(entry.item.name)}</strong>
             <span class="debrief-unlock-slot">${escapeHtml(entry.categoryLabel)}${entry.item.fx ? ` · ✦ ${escapeHtml(entry.item.fx.name)}` : ''}</span>
+            ${impactLine}
           </span>
           <span class="debrief-unlock-btns">
-            <button type="button" class="btn tiny ${equipped ? 'secondary' : 'primary'}" data-debrief-equip="${idx}">${equipped ? '✓ Equipped' : '⚡ Equip'}</button>
-            <button type="button" class="btn tiny ghost" data-debrief-card="${idx}" title="View Collector Unlock Card">✨</button>
+            <button type="button" class="btn tiny ${equipped ? 'secondary' : 'primary'}" data-debrief-equip="${idx}">${equipped ? '✓ Equipped' : impact?.verdict === 'upgrade' ? '▲ Equip' : '⚡ Equip'}</button>
+            <button type="button" class="btn tiny ghost" data-debrief-card="${idx}" title="Inspect Loadout Impact &amp; Collector Card">ℹ</button>
           </span>
         </div>`;
       })
@@ -1040,6 +1323,8 @@ export function createLiveryWorkshopController({
               hint: `Free Welcome Relic: ${ch.giftName}`,
               tier: 'uncommon',
             };
+            const giftEntry = getGearItemBySlot(ch.giftSlot, ch.giftItemId);
+            pinnedInspect = giftEntry ? { slot: ch.giftSlot, field: ch.giftField, item: giftEntry.item, unlocked: false, justEquipped: false } : null;
             triggerEquipAnimation(ch.giftSlot, { name: ch.giftName, tier: 'uncommon' });
             renderLiveryWorkshopModal();
           });
@@ -1326,6 +1611,7 @@ export function createLiveryWorkshopController({
       liveryLadderRailEl.innerHTML = `${tryOnBanner}${unseenBanner}${ladderDrawer}`;
       liveryLadderRailEl.querySelector('#btn-livery-clear-tryon')?.addEventListener('click', () => {
         lockedTryOn = null;
+        pinnedInspect = null;
         renderLiveryWorkshopModal();
       });
       liveryLadderRailEl.querySelector('#btn-livery-tryon-field-test')?.addEventListener('click', () => {
@@ -1677,6 +1963,8 @@ export function createLiveryWorkshopController({
     closeDiveSetupModal();
     setHomeMenuOpen(false);
     lockedTryOn = null;
+    hoveredGear = null;
+    pinnedInspect = null;
     if (typeof getDifficulty === 'function') {
       const curD = getDifficulty();
       if (curD === 'guided' || curD === 'standard' || curD === 'hardcore') {
@@ -1693,6 +1981,8 @@ export function createLiveryWorkshopController({
   function closeLiveryModal() {
     if (!liveryModalEl) return;
     lockedTryOn = null;
+    hoveredGear = null;
+    pinnedInspect = null;
     liveryModalEl.hidden = true;
   }
 
@@ -1784,6 +2074,8 @@ export function createLiveryWorkshopController({
   });
   btnLiveryBestEl?.addEventListener('click', () => {
     lockedTryOn = null;
+    hoveredGear = null;
+    pinnedInspect = null;
     const unlocks = getCurrentLiveryUnlocks();
     const best = buildBestOwnedRig(unlocks);
     activeRigLivery = sanitizeRigLivery(best.livery, unlocks);
@@ -1803,6 +2095,8 @@ export function createLiveryWorkshopController({
   });
   btnLiveryRandomEl?.addEventListener('click', () => {
     lockedTryOn = null;
+    hoveredGear = null;
+    pinnedInspect = null;
     const unlocks = getCurrentLiveryUnlocks();
     activeRigLivery = randomizeUnlockedLivery(unlocks);
     triggerEquipAnimation('all', { name: 'Custom Mix', tier: 'rare' });
@@ -1835,6 +2129,8 @@ export function createLiveryWorkshopController({
   });
   btnLiveryResetEl?.addEventListener('click', () => {
     lockedTryOn = null;
+    hoveredGear = null;
+    pinnedInspect = null;
     activeRigLivery = { ...DEFAULT_RIG_LIVERY };
     triggerEquipAnimation('all', { name: 'Standard Issue', tier: 'common' });
     saveRigLivery();

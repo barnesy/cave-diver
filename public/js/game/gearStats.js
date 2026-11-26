@@ -1149,7 +1149,7 @@ export function evaluateLootUpgradeImpact(currentLivery, slot, itemId, tuningCtx
   const newEntry = getGearItemBySlot(slot, itemId);
   const field = newEntry?.field || null;
   const resolvedCur = resolveDiverLiveryPalette(curRig);
-  const curSlotItem = resolvedCur?.[slot] || null;
+  const curSlotItem = resolvedCur?.[slot === 'trim' ? 'trimSpec' : slot] || null;
   const curId = (field && curRig[field]) || curSlotItem?.id || null;
   const curEntry = curId ? getGearItemBySlot(slot, curId) : null;
   const replacedItemName = curEntry?.item?.name || curSlotItem?.name || 'Standard Issue';

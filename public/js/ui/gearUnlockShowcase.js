@@ -5,9 +5,9 @@ import {
   getSetsForGearItem,
   evaluateGearSetSynergy,
 } from '../game/rigLivery.js';
-import { getGearItemStats, SET_TIER_BONUSES } from '../game/gearStats.js';
+import { getGearItemStats, SET_TIER_BONUSES, evaluateLootUpgradeImpact } from '../game/gearStats.js';
 
-const EQUIP_ANIM_DURATION_MS = 860;
+const EQUIP_ANIM_DURATION_MS = 2400;
 
 /**
  * Celebratory Gear Unlock Showcase Card Modal (v211).
@@ -114,13 +114,36 @@ export function createGearUnlockShowcase({
     }
     if (statsBoxEl) {
       const info = getGearItemStats(entry.slot, item);
-      if (info.pills.length > 0 || info.power) {
+      const impact = evaluateLootUpgradeImpact(activeRig, entry.slot, item.id);
+      if (info.pills.length > 0 || info.power || impact) {
         statsBoxEl.hidden = false;
         const pills = info.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
         const pwr = info.power
           ? `<div class="gear-unlock-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>`
           : '';
-        statsBoxEl.innerHTML = `<div class="gear-unlock-stat-pills">${pills}</div>${pwr}`;
+        const impChips = [];
+        for (const sc of impact.setChanges || []) {
+          impChips.push(`<span class="loot-impact-chip ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '▲' : '▼'} ${escapeHtml(sc.text)}</span>`);
+        }
+        for (const gp of impact.gainedPowers || []) {
+          impChips.push(`<span class="loot-impact-chip pos is-pwr">▲ +⚡ ${escapeHtml(gp.name)}</span>`);
+        }
+        for (const lp of impact.lostPowers || []) {
+          impChips.push(`<span class="loot-impact-chip neg is-pwr">▼ -⚡ ${escapeHtml(lp.name)}</span>`);
+        }
+        for (const d of (impact.deltas || []).slice(0, 6)) {
+          impChips.push(`<span class="loot-impact-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
+        }
+        const impactBlock = alreadyEquipped || impact.verdict === 'same'
+          ? `<div class="loot-impact-box verdict-same"><div class="loot-impact-head"><span class="loot-verdict-pill verdict-same">✓ EQUIPPED ON YOUR RIG</span></div></div>`
+          : `<div class="loot-impact-box verdict-${impact.verdict}">
+              <div class="loot-impact-head">
+                <span class="loot-verdict-pill verdict-${impact.verdict}">${impact.verdictIcon} ${escapeHtml(impact.verdictLabel)}</span>
+                <span class="loot-impact-vs">vs. <strong>${escapeHtml(impact.replacedItemName)}</strong></span>
+              </div>
+              ${impChips.length > 0 ? `<div class="loot-impact-deltas">${impChips.join('')}</div>` : ''}
+            </div>`;
+        statsBoxEl.innerHTML = `<div class="gear-unlock-stat-pills">${pills}</div>${pwr}${impactBlock}`;
       } else {
         statsBoxEl.hidden = true;
         statsBoxEl.innerHTML = '';
@@ -208,12 +231,16 @@ export function createGearUnlockShowcase({
           equipAnim = null;
         }
       }
+      const tierMeta = getGearTierMeta(entry.item?.tier || 'uncommon');
       drawGearShowcasePreview(ctx, canvasEl.width, canvasEl.height, buildPreviewLivery(entry), {
         tier: entry.item?.tier || 'uncommon',
         hasCcr,
         hasDpv,
         timeSec: nowMs * 0.001,
         equipFx: fxArg,
+        focusHighlight: !fxArg && entry.slot
+          ? { slot: entry.slot, color: tierMeta.color, label: entry.item?.name || '' }
+          : null,
       });
     }
     rafId = requestAnimationFrame(drawFrame);

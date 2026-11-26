@@ -12540,6 +12540,240 @@ summary,
   padding: 1px 6px;
 }
 
+/* ========================================================================
+   v228: Gear Loadout Inspector, Impact Tags & Avatar Spotlight Polish
+   ======================================================================== */
+.livery-inspector-bar {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(4, 13, 26, 0.94);
+  padding: 7px 11px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-left: 3px solid rgba(56, 189, 248, 0.45);
+  transition: border-left-color 0.16s ease, background 0.16s ease;
+}
+.livery-inspector-bar[data-state="upgrade"],
+.livery-inspector-bar[data-state="equipped"] {
+  border-left-color: #34d399;
+}
+.livery-inspector-bar[data-state="tradeoff"] {
+  border-left-color: #facc15;
+}
+.livery-inspector-bar[data-state="downgrade"] {
+  border-left-color: #f87171;
+}
+.livery-insp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+.livery-insp-kicker {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+.livery-insp-name {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+.livery-insp-hint {
+  font-size: 0.66rem;
+  color: #64748b;
+  margin-left: auto;
+}
+.livery-insp-vs {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+.livery-insp-vs strong {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+.livery-insp-verdict {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+}
+.livery-insp-verdict.verdict-upgrade,
+.livery-insp-verdict.verdict-equipped {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(6, 78, 59, 0.42);
+  color: #6ee7b7;
+}
+.livery-insp-verdict.verdict-tradeoff {
+  border-color: rgba(250, 204, 21, 0.48);
+  background: rgba(113, 63, 18, 0.35);
+  color: #fde047;
+}
+.livery-insp-verdict.verdict-downgrade {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.32);
+  color: #fca5a5;
+}
+.livery-insp-verdict.verdict-same {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(8, 47, 73, 0.45);
+  color: #7dd3fc;
+}
+.livery-insp-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.livery-insp-act {
+  padding: 2px 8px !important;
+  font-size: 0.68rem !important;
+  min-height: 22px !important;
+}
+.livery-insp-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.livery-insp-pill {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.livery-insp-pill.pos {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(6, 78, 59, 0.34);
+  color: #6ee7b7;
+}
+.livery-insp-pill.neg {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fca5a5;
+}
+.livery-insp-pill.is-set {
+  border-color: rgba(250, 204, 21, 0.55);
+  color: #fef08a;
+}
+.livery-insp-pill.pwr,
+.livery-insp-pill.fx {
+  border-color: rgba(192, 132, 252, 0.38);
+  background: rgba(88, 28, 135, 0.24);
+  color: #e9d5ff;
+}
+.livery-insp-note {
+  font-size: 0.66rem;
+  color: #94a3b8;
+}
+
+/* Swatch Card Net-Impact Micro-Tags & Inspect Icon */
+.livery-swatch-top {
+  width: 100%;
+}
+.livery-impact-tag {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.livery-impact-tag.tag-upgrade {
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.42);
+  background: rgba(6, 78, 59, 0.34);
+}
+.livery-impact-tag.tag-set {
+  color: #fde047;
+  border-color: rgba(250, 204, 21, 0.48);
+  background: rgba(113, 63, 18, 0.34);
+}
+.livery-impact-tag.tag-swap {
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.28);
+  background: rgba(120, 53, 15, 0.2);
+}
+.livery-inspect-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.72);
+  color: #94a3b8;
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.56;
+  cursor: pointer;
+  transition: opacity 0.14s ease, border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+.livery-swatch-btn:hover .livery-inspect-btn,
+.livery-swatch-btn.inspecting .livery-inspect-btn,
+.livery-inspect-btn:hover,
+.livery-inspect-btn:focus-visible {
+  opacity: 1;
+  border-color: rgba(56, 189, 248, 0.72);
+  background: rgba(14, 116, 144, 0.38);
+  color: #e0f2fe;
+}
+.livery-swatch-btn.inspecting {
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.28);
+}
+
+/* Post-Dive Debrief Unlock Impact Line & Showcase Impact Box */
+.debrief-unlock-impact {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  margin-top: 2px;
+  color: #94a3b8;
+}
+.debrief-unlock-impact.verdict-upgrade {
+  color: #6ee7b7;
+}
+.debrief-unlock-impact.verdict-tradeoff {
+  color: #fde047;
+}
+.debrief-unlock-impact.verdict-downgrade {
+  color: #fca5a5;
+}
+.debrief-unlock-impact.verdict-same {
+  color: #7dd3fc;
+}
+#gear-unlock-stats-box .loot-impact-box {
+  margin-top: 7px;
+  text-align: left;
+}
+@media (max-width: 580px) {
+  .livery-inspector-bar {
+    padding: 6px 9px;
+    gap: 4px;
+  }
+  .livery-insp-hint {
+    display: none;
+  }
+}
+
+
 
 
 

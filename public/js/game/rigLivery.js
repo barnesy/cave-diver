@@ -2133,95 +2133,305 @@ function _easeOutBack(t) {
 }
 
 /**
- * Draw kinetic slot-targeted gear equip overlay FX on the preview avatar (v211):
- * holographic scan arcs, hydro-seal energy sweep, metallic backplate clamp rings,
- * optical torch ignition flare, and floating micro-sparks.
+ * Resolve exact avatar anchor, highlight geometry, and callout direction for every gear slot (v228).
  */
-function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx) {
-  if (!equipFx || !(equipFx.progress >= 0 && equipFx.progress < 1)) return;
-  const t = Math.max(0, Math.min(1, equipFx.progress));
-  const fade = Math.pow(1 - t, 1.35);
-  const slot = equipFx.slot || 'all';
-  const color = equipFx.color || '#38bdf8';
+function _getSlotPreviewAnchor(slot, sx, sy, scale) {
   const u = scale * 0.55;
+  if (slot === 'headgear') {
+    return { ax: sx + u * 0.52, ay: sy - u * 0.14, rx: u * 0.48, ry: u * 0.42, shape: 'circle', label: 'HEADGEAR', dirX: 1, dirY: -1 };
+  }
+  if (slot === 'visor') {
+    return { ax: sx + u * 0.72, ay: sy - u * 0.02, rx: u * 0.30, ry: u * 0.28, shape: 'circle', label: 'VISOR LENS', dirX: 1, dirY: -1 };
+  }
+  if (slot === 'tank' || slot === 'ccr') {
+    return {
+      ax: sx - u * 0.28,
+      ay: sy - u * 0.40,
+      rx: u * 0.68,
+      ry: u * 0.28,
+      shape: 'capsule',
+      label: slot === 'ccr' ? 'CCR LOOP' : 'TWIN TANKS',
+      dirX: -1,
+      dirY: -1,
+    };
+  }
+  if (slot === 'torch') {
+    return { ax: sx + 0.58 * scale, ay: sy + 0.21 * scale, rx: u * 0.44, ry: u * 0.44, shape: 'circle', label: 'PRIMARY TORCH', dirX: 1, dirY: 1 };
+  }
+  if (slot === 'patch') {
+    return { ax: sx - u * 0.02, ay: sy + u * 0.01, rx: u * 0.32, ry: u * 0.32, shape: 'circle', label: 'SHOULDER PATCH', dirX: -1, dirY: 1 };
+  }
+  if (slot === 'trim') {
+    return {
+      ax: sx - 0.32 * scale,
+      ay: sy - 0.02 * scale,
+      rx: scale * 0.48,
+      ry: scale * 0.20,
+      shape: 'capsule',
+      secondary: { ax: sx - 1.32 * scale, ay: sy - 0.14 * scale, r: u * 0.48 },
+      label: 'TRIM & FINS',
+      dirX: -1,
+      dirY: 1,
+    };
+  }
+  if (slot === 'suit') {
+    return { ax: sx - 0.24 * scale, ay: sy + 0.02 * scale, rx: scale * 0.64, ry: scale * 0.28, shape: 'capsule', label: 'DRYSUIT', dirX: -1, dirY: 1 };
+  }
+  if (slot === 'dpv') {
+    return { ax: sx + u * 1.15, ay: sy + u * 0.24, rx: u * 0.62, ry: u * 0.48, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
+  }
+  return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, shape: 'capsule', label: 'FULL RIG', dirX: 1, dirY: -1 };
+}
 
+function _drawSlotGlowShape(ctx, anchor, color, alpha, pulse, scale) {
+  if (alpha <= 0.01) return;
+  const { ax, ay, rx, ry, shape, secondary } = anchor;
+  const boost = 1 + pulse * 0.08;
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
 
-  // Target anchor in diver preview coordinates
-  let ax = sx;
-  let ay = sy;
-  let baseR = scale * 0.55;
-  if (slot === 'headgear' || slot === 'visor') {
-    ax = sx + u * 0.52;
-    ay = sy - u * 0.04;
-    baseR = u * 0.62;
-  } else if (slot === 'tank' || slot === 'ccr') {
-    ax = sx - u * 0.34;
-    ay = sy - u * 0.42;
-    baseR = u * 0.72;
-  } else if (slot === 'torch') {
-    ax = sx + 0.64 * scale;
-    ay = sy + 0.21 * scale;
-    baseR = u * 0.58;
-  } else if (slot === 'patch') {
-    ax = sx - u * 0.18;
-    ay = sy - u * 0.02;
-    baseR = u * 0.42;
-  } else if (slot === 'dpv') {
-    ax = sx + u * 1.18;
-    ay = sy + u * 0.26;
-    baseR = u * 0.66;
-  }
-
-  // 1. Expanding holographic lock-on ring + counter-rotating calibration brackets
-  const ringR = baseR * (0.42 + _easeOutBack(Math.min(1, t * 1.45)) * 0.72);
-  ctx.strokeStyle = color;
-  ctx.globalAlpha = fade * 0.85;
-  ctx.lineWidth = Math.max(1.5, scale * 0.032 * (1 - t * 0.45));
+  // Soft radial illumination bloom centered directly on the gear slot
+  const bloomR = Math.max(rx, ry) * (1.85 + pulse * 0.2);
+  const bg = ctx.createRadialGradient(ax, ay, Math.min(rx, ry) * 0.15, ax, ay, bloomR);
+  bg.addColorStop(0, color);
+  bg.addColorStop(0.55, color);
+  bg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.globalAlpha = alpha * 0.26;
+  ctx.fillStyle = bg;
   ctx.beginPath();
-  ctx.arc(ax, ay, ringR, 0, Math.PI * 2);
+  ctx.arc(ax, ay, bloomR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crisp precision highlight ring / capsule around the exact slot
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha * 0.92;
+  ctx.lineWidth = Math.max(1.6, scale * 0.026);
+  ctx.beginPath();
+  if (shape === 'capsule') {
+    ctx.ellipse(ax, ay, rx * boost, ry * boost, 0, 0, Math.PI * 2);
+  } else {
+    ctx.arc(ax, ay, rx * boost, 0, Math.PI * 2);
+  }
   ctx.stroke();
 
-  // Segmented precision calibration arcs
-  const arcSpin = t * Math.PI * 1.6;
-  ctx.lineWidth = Math.max(1.2, scale * 0.022);
-  ctx.globalAlpha = fade * 0.75;
-  for (let a = 0; a < 3; a++) {
-    const start = arcSpin + (a * Math.PI * 2) / 3;
+  // Bright inner white specular core rim
+  ctx.strokeStyle = '#ffffff';
+  ctx.globalAlpha = alpha * 0.55;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (shape === 'capsule') {
+    ctx.ellipse(ax, ay, rx * (boost - 0.04), ry * (boost - 0.04), 0, 0, Math.PI * 2);
+  } else {
+    ctx.arc(ax, ay, Math.max(4, rx * (boost - 0.04)), 0, Math.PI * 2);
+  }
+  ctx.stroke();
+
+  // Secondary fin-tip highlight ring when equipping/inspecting Trim & Fins
+  if (secondary) {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha * 0.82;
+    ctx.lineWidth = Math.max(1.4, scale * 0.022);
     ctx.beginPath();
-    ctx.arc(ax, ay, ringR * 1.24, start, start + 0.68);
+    ctx.arc(secondary.ax, secondary.ay, secondary.r * boost, 0, Math.PI * 2);
     ctx.stroke();
   }
+  ctx.restore();
+}
 
-  // 2. Full-body hydro-seal sweep wave for Drysuit, Trim, or Full Kit equip
-  if (slot === 'suit' || slot === 'trim' || slot === 'all') {
-    const sweepX = sx + 0.75 * scale - t * (2.35 * scale);
-    const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.28, sy, sweepX + scale * 0.28, sy);
-    waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
-    waveGrad.addColorStop(0.5, color);
-    waveGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = waveGrad;
-    ctx.globalAlpha = fade * 0.48;
-    ctx.fillRect(sweepX - scale * 0.28, sy - scale * 0.56, scale * 0.56, scale * 1.05);
-  }
+/**
+ * Draw a crisp blueprint leader-line callout pin pointing directly to a gear slot on the diver (v228).
+ */
+function _drawBlueprintCalloutPin(ctx, anchor, w, h, color, kicker, label, alpha) {
+  if (!w || !h || alpha <= 0.02) return;
+  const { ax, ay, dirX, dirY } = anchor;
+  const textMain = label ? `${kicker} · ${label}` : kicker;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, alpha);
+  ctx.font = '800 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+  const tw = Math.min(w * 0.56, ctx.measureText(textMain).width + 18);
+  const pillH = 20;
 
-  // 3. Radial sparkle & pressure-bubble burst radiating from the newly locked slot
-  const sparkCount = equipFx.tier === 'mythic' ? 14 : equipFx.tier === 'epic' ? 11 : 8;
-  for (let i = 0; i < sparkCount; i++) {
-    const ang = (i / sparkCount) * Math.PI * 2 + (slot === 'torch' ? -0.35 : 0.25);
-    const dist = baseR * (0.28 + t * (1.15 + (i % 3) * 0.22));
-    const px = ax + Math.cos(ang) * dist;
-    const py = ay + Math.sin(ang) * dist - t * 9;
-    const pr = Math.max(1.1, (1 - t * 0.65) * (2.1 + (i % 2) * 1.2));
-    ctx.fillStyle = i % 2 === 0 ? '#ffffff' : color;
-    ctx.globalAlpha = fade * 0.9;
-    ctx.beginPath();
-    ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fill();
+  // Choose elbow & pill placement cleanly away from top-left status pill & bottom-right spec tag
+  let ex = ax + dirX * 26;
+  let ey = ay + dirY * 32;
+  // Keep callout cleanly within safe band (y: 36..h-32)
+  ey = Math.max(38, Math.min(h - 36, ey));
+  let px = dirX >= 0 ? ex + 10 : ex - 10 - tw;
+  if (px < 10) {
+    px = 10;
+    ex = Math.max(ax + 12, px + tw * 0.35);
+  } else if (px + tw > w - 10) {
+    px = w - 10 - tw;
+    ex = Math.min(ax - 12, px + tw * 0.65);
   }
+  const py = ey - pillH * 0.5;
+  const attachX = px + tw < ax ? px + tw : px > ax ? px : Math.max(px + 8, Math.min(px + tw - 8, ex));
+
+  // Glowing anchor pin directly on the gear slot
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(ax, ay, 4.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(ax, ay, 2.0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crisp leader line from slot anchor -> elbow -> callout pill
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(attachX, ey);
+  ctx.stroke();
+
+  // Translucent dark-glass callout pill
+  ctx.fillStyle = 'rgba(4, 14, 28, 0.90)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect?.(px, py, tw, pillH, 99) ?? ctx.rect(px, py, tw, pillH);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px + 7, py, tw - 14, pillH);
+  ctx.clip();
+  ctx.fillText(textMain, px + 9, ey + 0.5);
+  ctx.restore();
 
   ctx.restore();
+}
+
+/**
+ * Draw kinetic slot-targeted gear equip overlay FX on the preview avatar (v211 / v228):
+ * Phase 1 (0..38%): fast kinetic lock-on ring, hydro-seal sweep & sparkle burst.
+ * Phase 1-2 (0..100%): soft radial spotlight + unmistakable glowing slot halo + blueprint callout pin.
+ */
+function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, w = 0, h = 0, timeSec = 0) {
+  if (!equipFx || !(equipFx.progress >= 0 && equipFx.progress < 1)) return;
+  const t = Math.max(0, Math.min(1, equipFx.progress));
+  const slot = equipFx.slot || 'all';
+  const color = equipFx.color || '#38bdf8';
+  const anchor = _getSlotPreviewAnchor(slot, sx, sy, scale);
+  const { ax, ay } = anchor;
+  const baseR = Math.max(anchor.rx, anchor.ry);
+
+  // Smooth spotlight envelope: ramps in instantly, holds brightly through 74%, gently fades to 0
+  const holdAlpha = t < 0.08 ? t / 0.08 : t < 0.74 ? 1 : Math.max(0, (1 - t) / 0.26);
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 8.5);
+
+  // 0. Subtle backdrop focus dim with soft spotlight cutout centered on the newly equipped slot
+  if (w > 0 && h > 0 && slot !== 'all') {
+    ctx.save();
+    const spotR = Math.max(baseR * 2.1, scale * 0.72);
+    const vig = ctx.createRadialGradient(ax, ay, spotR * 0.45, ax, ay, Math.max(w, h) * 0.72);
+    vig.addColorStop(0, 'rgba(2, 8, 20, 0)');
+    vig.addColorStop(0.55, `rgba(2, 8, 20, ${(0.18 * holdAlpha).toFixed(3)})`);
+    vig.addColorStop(1, `rgba(2, 8, 20, ${(0.34 * holdAlpha).toFixed(3)})`);
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
+  // 1. Sustained unmistakable glowing slot highlight halo
+  _drawSlotGlowShape(ctx, anchor, color, holdAlpha * 0.95, pulse, scale);
+
+  // 2. Initial fast kinetic lock-on burst (first 38% of 2.4s window = ~900ms)
+  if (t < 0.42) {
+    const bt = t / 0.42;
+    const bFade = Math.pow(1 - bt, 1.35);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const ringR = baseR * (0.48 + _easeOutBack(Math.min(1, bt * 1.45)) * 0.85);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = bFade * 0.88;
+    ctx.lineWidth = Math.max(1.6, scale * 0.032 * (1 - bt * 0.45));
+    ctx.beginPath();
+    ctx.arc(ax, ay, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const arcSpin = bt * Math.PI * 1.7;
+    ctx.lineWidth = Math.max(1.3, scale * 0.022);
+    ctx.globalAlpha = bFade * 0.78;
+    for (let a = 0; a < 3; a++) {
+      const start = arcSpin + (a * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(ax, ay, ringR * 1.24, start, start + 0.72);
+      ctx.stroke();
+    }
+
+    // Full-body hydro-seal sweep wave for Drysuit, Trim, or Full Kit equip
+    if (slot === 'suit' || slot === 'trim' || slot === 'all') {
+      const sweepX = sx + 0.75 * scale - bt * (2.35 * scale);
+      const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.28, sy, sweepX + scale * 0.28, sy);
+      waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      waveGrad.addColorStop(0.5, color);
+      waveGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = waveGrad;
+      ctx.globalAlpha = bFade * 0.48;
+      ctx.fillRect(sweepX - scale * 0.28, sy - scale * 0.56, scale * 0.56, scale * 1.05);
+    }
+
+    // Radial sparkle burst radiating from the newly locked slot
+    const sparkCount = equipFx.tier === 'mythic' ? 14 : equipFx.tier === 'epic' ? 11 : 8;
+    for (let i = 0; i < sparkCount; i++) {
+      const ang = (i / sparkCount) * Math.PI * 2 + (slot === 'torch' ? -0.35 : 0.25);
+      const dist = baseR * (0.28 + bt * (1.15 + (i % 3) * 0.22));
+      const px = ax + Math.cos(ang) * dist;
+      const py = ay + Math.sin(ang) * dist - bt * 9;
+      const pr = Math.max(1.1, (1 - bt * 0.65) * (2.1 + (i % 2) * 1.2));
+      ctx.fillStyle = i % 2 === 0 ? '#ffffff' : color;
+      ctx.globalAlpha = bFade * 0.9;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 3. Precision blueprint callout pin pointing straight at the newly equipped piece
+  if (w > 0 && h > 0 && slot !== 'all') {
+    const shortName = equipFx.itemName ? equipFx.itemName.toUpperCase() : '';
+    _drawBlueprintCalloutPin(ctx, anchor, w, h, color, anchor.label, shortName, holdAlpha);
+  }
+}
+
+/**
+ * Draw persistent subtle live spotlight + blueprint callout pin while hovering/inspecting a gear slot (v228).
+ */
+function _drawInspectSpotlightFx(ctx, sx, sy, scale, focusHighlight, w = 0, h = 0, timeSec = 0) {
+  if (!focusHighlight || !focusHighlight.slot || focusHighlight.slot === 'all') return;
+  const anchor = _getSlotPreviewAnchor(focusHighlight.slot, sx, sy, scale);
+  const color = focusHighlight.color || '#38bdf8';
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
+  const baseR = Math.max(anchor.rx, anchor.ry);
+
+  if (w > 0 && h > 0) {
+    ctx.save();
+    const spotR = Math.max(baseR * 2.15, scale * 0.72);
+    const vig = ctx.createRadialGradient(anchor.ax, anchor.ay, spotR * 0.45, anchor.ax, anchor.ay, Math.max(w, h) * 0.72);
+    vig.addColorStop(0, 'rgba(2, 8, 20, 0)');
+    vig.addColorStop(0.58, 'rgba(2, 8, 20, 0.14)');
+    vig.addColorStop(1, 'rgba(2, 8, 20, 0.26)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
+  _drawSlotGlowShape(ctx, anchor, color, 0.78, pulse, scale);
+
+  if (w > 0 && h > 0) {
+    const kicker = focusHighlight.kicker || anchor.label;
+    const label = focusHighlight.label ? focusHighlight.label.toUpperCase() : '';
+    _drawBlueprintCalloutPin(ctx, anchor, w, h, color, kicker, label, 0.94);
+  }
 }
 
 /**
@@ -2234,7 +2444,7 @@ function _drawArticulatedPreviewDiver(
   sy,
   scale,
   pal,
-  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true, equipFx = null } = {}
+  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true, equipFx = null, focusHighlight = null, canvasW = 0, canvasH = 0 } = {}
 ) {
   const u = scale * 0.55;
   const equipKickBoost = equipFx && equipFx.progress < 0.7 ? Math.sin(equipFx.progress * Math.PI) * 0.35 : 0;
@@ -2349,9 +2559,11 @@ function _drawArticulatedPreviewDiver(
     { torchOn: true, timeSec }
   );
 
-  // 6. Kinetic slot-targeted equip overlay animation
+  // 6. Kinetic slot-targeted equip spotlight + persistent hover/inspect highlight (v211 / v228)
   if (equipFx) {
-    _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx);
+    _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, canvasW, canvasH, timeSec);
+  } else if (focusHighlight) {
+    _drawInspectSpotlightFx(ctx, sx, sy, scale, focusHighlight, canvasW, canvasH, timeSec);
   }
 
   // Return exact world-space torch lens tip & regulator mouthpiece coords for beam & bubbles
@@ -2424,7 +2636,7 @@ export function drawLiveryPreview(
   w,
   h,
   livery,
-  { hasCcr = false, hasDpv = false, envMode = 'clear', timeSec = 0, equipFx = null, previewLockedLabel = '' } = {}
+  { hasCcr = false, hasDpv = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '' } = {}
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
@@ -2584,7 +2796,7 @@ export function drawLiveryPreview(
     ctx.restore();
   }
 
-  // Draw the exact 1:1 in-game articulated diver with live animated properties + equip animation
+  // Draw the exact 1:1 in-game articulated diver with live animated properties + equip/inspect spotlight
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
@@ -2592,6 +2804,9 @@ export function drawLiveryPreview(
     sweepAng,
     animateKick: true,
     equipFx,
+    focusHighlight,
+    canvasW: w,
+    canvasH: h,
   });
 
   // Top-left live equip, locked-try-on, or active Set Synergy status pill inside the tank
@@ -2670,7 +2885,7 @@ export function drawGearShowcasePreview(
   w,
   h,
   livery,
-  { tier = 'rare', hasCcr = false, hasDpv = false, timeSec = 0, equipFx = null } = {}
+  { tier = 'rare', hasCcr = false, hasDpv = false, timeSec = 0, equipFx = null, focusHighlight = null } = {}
 ) {
   if (!ctx || !w || !h) return;
   const tierMeta = getGearTierMeta(tier);
@@ -2755,6 +2970,9 @@ export function drawGearShowcasePreview(
     sweepAng,
     animateKick: true,
     equipFx,
+    focusHighlight,
+    canvasW: w,
+    canvasH: h,
   });
 
   ctx.restore();

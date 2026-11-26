@@ -12360,3 +12360,48 @@ test('v226 Main Menu Core-4 Priority (Gear Workshop, Logbook, Leaderboard, Setup
     assert.ok(acctSlice.includes(`id="${id}"`), `Account/pref control ${id} must be tucked inside Account & Preferences drawer`);
   }
 });
+
+test('v228 Gear Loadout Inspector, Trim Impact Resolution & Avatar Slot Spotlight Callouts', async () => {
+  const fs = await import('node:fs');
+  const { evaluateLootUpgradeImpact } = await import('../public/js/game/gearStats.js');
+  const { DEFAULT_RIG_LIVERY, drawLiveryPreview } = await import('../public/js/game/rigLivery.js');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const prevStart = html.indexOf('class="livery-preview-wrap"');
+  const prevEnd = html.indexOf('</div>', html.indexOf('id="livery-inspector-bar"', prevStart));
+  assert.ok(prevStart > 0 && prevEnd > prevStart, 'Sticky #livery-inspector-bar must live inside .livery-preview-wrap');
+
+  // 1. evaluateLootUpgradeImpact cleanly resolves trim (trimSpec) and every gear slot
+  const trimImp = evaluateLootUpgradeImpact(DEFAULT_RIG_LIVERY, 'trim', 'plasma-circuit-trim');
+  assert.equal(trimImp.replacedItemName, 'Match Drysuit', 'Trim impact must resolve default trimSpec name');
+  assert.equal(trimImp.verdict, 'upgrade', 'Master trim over Suit Standard must classify as upgrade');
+  assert.ok(trimImp.deltas.length >= 2, 'Trim impact must report exact stat deltas');
+
+  // 2. drawLiveryPreview & drawGearShowcasePreview draw slot spotlights + blueprint callout pins across all slots
+  const calls = [];
+  const grad = { addColorStop() {} };
+  const mockCtx = {
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, fill() {}, stroke() {}, fillRect() {}, rect() {},
+    roundRect() {}, arc() {}, ellipse() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {},
+    bezierCurveTo() {}, setLineDash() {},
+    createLinearGradient() { return grad; },
+    createRadialGradient() { return grad; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+    fillText(txt) { calls.push(String(txt)); },
+    globalAlpha: 1, globalCompositeOperation: 'source-over',
+    fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt', lineJoin: 'miter',
+    font: '', textAlign: 'left', textBaseline: 'alphabetic',
+  };
+  for (const slot of ['suit', 'trim', 'headgear', 'visor', 'tank', 'torch', 'patch', 'ccr', 'dpv', 'all']) {
+    drawLiveryPreview(mockCtx, 640, 248, DEFAULT_RIG_LIVERY, {
+      timeSec: 1.2,
+      equipFx: { slot, progress: 0.35, color: '#38bdf8', tier: 'epic', itemName: `Test ${slot}` },
+    });
+    drawLiveryPreview(mockCtx, 640, 248, DEFAULT_RIG_LIVERY, {
+      timeSec: 1.5,
+      focusHighlight: { slot, color: '#34d399', kicker: 'PREVIEW', label: `Inspect ${slot}` },
+    });
+  }
+  assert.ok(calls.some((t) => t.includes('VISOR LENS · TEST VISOR')), 'Blueprint callout pin must render slot + item name during equip spotlight');
+  assert.ok(calls.some((t) => t.includes('PREVIEW · INSPECT TANK')), 'Blueprint callout pin must render during live hover/inspect spotlight');
+});
