@@ -1,12 +1,15 @@
 :root {
   --bg-deep: #020b14;
-  --surface-0: rgba(4, 12, 24, 0.94);
-  --surface-1: rgba(8, 17, 31, 0.92);
-  --surface-2: rgba(15, 27, 46, 0.88);
-  --bezel: rgba(8, 15, 26, 0.9);
-  --bezel-border: rgba(56, 189, 248, 0.28);
-  --border-subtle: rgba(148, 163, 184, 0.24);
-  --border-accent: rgba(56, 189, 248, 0.48);
+  --surface-0: rgba(5, 14, 28, 0.86);
+  --surface-1: rgba(9, 20, 38, 0.74);
+  --surface-2: rgba(16, 32, 56, 0.56);
+  --glass-fill: rgba(255, 255, 255, 0.036);
+  --glass-fill-hover: rgba(125, 211, 252, 0.085);
+  --glass-rim: rgba(224, 242, 254, 0.085);
+  --bezel: rgba(8, 16, 30, 0.82);
+  --bezel-border: rgba(186, 230, 253, 0.11);
+  --border-subtle: rgba(148, 163, 184, 0.12);
+  --border-accent: rgba(56, 189, 248, 0.32);
   --text-main: #f1f5f9;
   --text-muted: #94a3b8;
   --ok: #4ade80;
@@ -15,9 +18,9 @@
   --cyan: #38bdf8;
   --purple: #c084fc;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
   --radius-pill: 999px;
   --z-hud: 28;
   --z-popover: 45;
@@ -13431,13 +13434,547 @@ summary,
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.6rem;
   font-weight: 800;
   color: #fef9c3;
-  background: rgba(120, 53, 15, 0.78);
-  border: 1px solid var(--tm-col, #facc15);
-  box-shadow: 0 0 8px rgba(250, 204, 21, 0.28);
+  background: rgba(120, 53, 15, 0.72);
+  border: 1px solid color-mix(in srgb, var(--tm-col, #facc15) 65%, transparent);
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.24);
+}
+
+/* ========================================================================
+   v234: "Abyssal Float" Whole-UI Visual Theme Pass
+   Eliminates nested boundary boxes & harsh 1px wireframe containers across
+   the Home Screen, Gear Workshop, Slot Modal, Logbook, Dive Setup,
+   Leaderboard & Overlays — depth via translucent glass, soft tonal surfaces,
+   ambient glow, hairline specular sheen, and whisper-thin dark scrollbars.
+   ======================================================================== */
+
+/* 1. Whisper-thin translucent dark scrollbars (no jarring white OS bars!) */
+.lb-stats-card,
+.gear-slot-owned-list,
+.level-cards,
+.overlay-screen,
+.lb-rows,
+.logbook-sites-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+}
+.lb-stats-card::-webkit-scrollbar,
+.gear-slot-owned-list::-webkit-scrollbar,
+.level-cards::-webkit-scrollbar,
+.overlay-screen::-webkit-scrollbar,
+.lb-rows::-webkit-scrollbar,
+.logbook-sites-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.lb-stats-card::-webkit-scrollbar-track,
+.gear-slot-owned-list::-webkit-scrollbar-track,
+.level-cards::-webkit-scrollbar-track,
+.overlay-screen::-webkit-scrollbar-track,
+.lb-rows::-webkit-scrollbar-track,
+.logbook-sites-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lb-stats-card::-webkit-scrollbar-thumb,
+.gear-slot-owned-list::-webkit-scrollbar-thumb,
+.level-cards::-webkit-scrollbar-thumb,
+.overlay-screen::-webkit-scrollbar-thumb,
+.lb-rows::-webkit-scrollbar-thumb,
+.logbook-sites-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+}
+.lb-stats-card::-webkit-scrollbar-thumb:hover,
+.gear-slot-owned-list::-webkit-scrollbar-thumb:hover,
+.level-cards::-webkit-scrollbar-thumb:hover {
+  background: rgba(125, 211, 252, 0.36);
+}
+
+/* 2. Floaty Translucent Abyssal Glass Outer Shells */
+.overlay-screen {
+  background: radial-gradient(ellipse at 50% 24%, rgba(10, 48, 78, 0.56), rgba(2, 9, 19, 0.88) 72%);
+  backdrop-filter: blur(10px);
+}
+.lb-stats-modal {
+  background: radial-gradient(circle at 50% 32%, rgba(6, 26, 48, 0.58), rgba(2, 7, 16, 0.84));
+  backdrop-filter: blur(10px);
+}
+.menu-card {
+  background: linear-gradient(168deg, rgba(9, 22, 40, 0.82), rgba(4, 11, 22, 0.9));
+  backdrop-filter: blur(22px) saturate(135%);
+  border: 1px solid rgba(224, 242, 254, 0.08);
+  border-radius: 24px;
+  padding: 22px 24px 24px;
+  box-shadow:
+    0 34px 88px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(224, 242, 254, 0.14);
+}
+.lb-stats-card {
+  background: linear-gradient(168deg, rgba(10, 24, 44, 0.86), rgba(4, 11, 23, 0.93));
+  backdrop-filter: blur(24px) saturate(135%);
+  border: 1px solid rgba(224, 242, 254, 0.09);
+  border-radius: 22px;
+  padding: 20px 22px;
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(224, 242, 254, 0.14);
+}
+@media (max-width: 520px) {
+  .menu-card,
+  .lb-stats-card {
+    padding: 15px 14px 16px;
+    border-radius: 18px;
+  }
+}
+
+/* 3. Airy Buttons & Translucent Controls (no rigid dark-border rectangles) */
+.btn.secondary {
+  background: rgba(255, 255, 255, 0.048);
+  border: 1px solid rgba(224, 242, 254, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.16s ease, transform 0.14s ease, box-shadow 0.18s ease, border-color 0.16s ease;
+}
+.btn.secondary:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(125, 211, 252, 0.24);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.18), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+}
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid transparent;
+}
+.btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: transparent;
+}
+.btn.primary {
+  border: none;
+  box-shadow: 0 10px 28px rgba(2, 132, 199, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* 4. Home Screen — Borderless World Map, Floating Site Rows & Airy Core-4 Pills */
+.site-map-panel {
+  border: none;
+  border-radius: 16px;
+  background: radial-gradient(circle at 55% 40%, rgba(9, 34, 58, 0.9), rgba(3, 12, 24, 0.94));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(224, 242, 254, 0.08);
+}
+.site-map-region-badge,
+.site-map-zoom-btn,
+.site-map-legend {
+  border: none !important;
+  background: rgba(4, 13, 26, 0.68) !important;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+.level-card-btn {
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: background 0.16s ease, transform 0.14s ease, box-shadow 0.18s ease;
+}
+.level-card-btn.is-wreck {
+  background: rgba(249, 115, 22, 0.055);
+  border-color: transparent;
+}
+.level-card-btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(56, 189, 248, 0.11);
+  transform: translateY(-1px);
+}
+.level-card-btn.is-wreck:hover:not(:disabled) {
+  background: rgba(249, 115, 22, 0.12);
+}
+.level-card-btn.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.24), rgba(12, 74, 110, 0.34));
+  box-shadow: 0 8px 22px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(186, 230, 253, 0.24);
+}
+.level-card-btn.is-wreck.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.24), rgba(124, 45, 18, 0.32));
+  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.22), inset 0 1px 0 rgba(254, 215, 170, 0.24);
+}
+.home-core-btn {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.048) !important;
+  border-radius: 12px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.home-core-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.13) !important;
+  transform: translateY(-1px);
+}
+.home-core-btn.has-new-gear {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 78, 59, 0.28)) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.18), inset 0 1px 0 rgba(167, 243, 208, 0.22);
+}
+.home-menu-btn,
+.coop-dock-toggle {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.home-menu-btn:hover,
+.coop-dock-toggle:hover {
+  background: rgba(56, 189, 248, 0.14) !important;
+}
+
+/* 5. Gear Workshop — Frameless Floating Preview, Borderless Stats & Airy 5×2 Gallery */
+.livery-modal-card {
+  gap: 0;
+}
+.livery-wallet-pill {
+  border: none;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(113, 63, 18, 0.28));
+  box-shadow: inset 0 1px 0 rgba(254, 240, 138, 0.22);
+}
+.livery-wallet-pill:hover {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.28), rgba(133, 77, 14, 0.38));
+}
+.livery-preview-wrap {
+  border: none !important;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(3, 12, 24, 0.56), rgba(4, 15, 30, 0.84));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(224, 242, 254, 0.08);
+  margin: 10px 0 12px;
+}
+.livery-tank-toolbar {
+  background: rgba(4, 14, 28, 0.42);
+  border-bottom: none;
+  padding: 7px 10px 4px;
+}
+.livery-tank-pill {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.livery-tank-pill:hover {
+  background: rgba(125, 211, 252, 0.14);
+  color: #f8fafc;
+}
+.livery-tank-pill.active {
+  background: rgba(14, 165, 233, 0.26);
+  color: #e0f2fe;
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.26);
+}
+.livery-tank-pill.field-test {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(6, 182, 212, 0.24));
+  box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.22);
+}
+.livery-modal-card .livery-perf-panel {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 0 6px !important;
+  margin: 4px 0 10px;
+}
+.livery-perf-compact-grid {
+  gap: 6px;
+}
+.livery-perf-compact-grid .livery-perf-stat {
+  border: none !important;
+  border-radius: 11px;
+  padding: 6px 5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.livery-perf-compact-grid .livery-perf-stat.is-base {
+  opacity: 0.45;
+}
+.livery-perf-compact-grid .livery-perf-stat.is-boosted {
+  background: rgba(56, 189, 248, 0.11);
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.14);
+}
+.livery-perf-compact-grid .livery-perf-stat.is-boosted.c-emerald {
+  background: rgba(52, 211, 153, 0.12);
+}
+.livery-perf-compact-grid .livery-perf-stat.is-boosted.c-rose {
+  background: rgba(251, 113, 133, 0.13);
+}
+.livery-perf-compact-grid .livery-perf-stat.is-boosted.c-violet {
+  background: rgba(192, 132, 252, 0.13);
+}
+.livery-perf-set-pill,
+.livery-perf-power-chip,
+.livery-perf-res-chip {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.055);
+}
+.livery-perf-set-pill {
+  background: color-mix(in srgb, var(--set-color, #facc15) 14%, rgba(15, 23, 42, 0.5)) !important;
+}
+.livery-perf-power-chip {
+  background: rgba(250, 204, 21, 0.12) !important;
+}
+.livery-perf-res-chip {
+  background: rgba(56, 189, 248, 0.14) !important;
+}
+.livery-disclosure,
+.livery-tuning-disclosure {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.032) !important;
+  border-radius: 12px;
+}
+.livery-disclosure-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.livery-unseen-banner {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.16), rgba(192, 132, 252, 0.16)) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(254, 240, 138, 0.22);
+}
+
+/* Segmented Floating Pill Track for Workshop Tabs */
+#livery-cat-tabs.livery-cat-tabs {
+  background: rgba(2, 8, 18, 0.48);
+  padding: 4px;
+  border-radius: 14px;
+  gap: 4px;
+  margin: 4px 0 12px;
+}
+.livery-cat-tab {
+  border: none !important;
+  background: transparent !important;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #94a3b8;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+.livery-cat-tab:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+.livery-cat-tab.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.26), rgba(30, 58, 138, 0.3)) !important;
+  color: #f0f9ff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(186, 230, 253, 0.24);
+}
+
+/* Borderless Image-First Equipped Gear Tiles */
+.livery-equipped-grid {
+  gap: 10px;
+  margin-top: 6px;
+}
+.livery-equipped-card {
+  border: 1px solid transparent !important;
+  background: rgba(255, 255, 255, 0.028) !important;
+  border-radius: 16px;
+  padding: 8px 6px 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.livery-equipped-card:hover {
+  transform: translateY(-3px);
+  background: rgba(56, 189, 248, 0.09) !important;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+}
+.livery-equipped-card.tier-uncommon {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.07), rgba(255, 255, 255, 0.02)) !important;
+}
+.livery-equipped-card.tier-rare {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.09), rgba(255, 255, 255, 0.02)) !important;
+}
+.livery-equipped-card.tier-epic {
+  background: linear-gradient(180deg, rgba(192, 132, 252, 0.11), rgba(255, 255, 255, 0.02)) !important;
+}
+.livery-equipped-card.tier-mythic {
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.12), rgba(255, 255, 255, 0.02)) !important;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.12), inset 0 1px 0 rgba(254, 240, 138, 0.22);
+}
+.livery-equipped-card.tier-legendary {
+  background: linear-gradient(180deg, rgba(255, 149, 36, 0.16), rgba(154, 52, 18, 0.08)) !important;
+  box-shadow: 0 8px 26px rgba(255, 149, 36, 0.18), inset 0 1px 0 rgba(253, 186, 116, 0.28);
+}
+.livery-equipped-card.has-new-alt {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(6, 78, 59, 0.08)) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.14), inset 0 1px 0 rgba(167, 243, 208, 0.24);
+}
+.livery-card-stage {
+  background: radial-gradient(circle at 50% 48%, rgba(56, 189, 248, 0.08), transparent 72%);
+  border: none;
+  border-radius: 12px;
+}
+.livery-card-badge {
+  border: none;
+  background: rgba(6, 14, 28, 0.62);
+  backdrop-filter: blur(6px);
+}
+.livery-card-badge.is-new {
+  border: none;
+  box-shadow: 0 2px 10px rgba(52, 211, 153, 0.42);
+}
+
+/* Borderless Stat & Delta Chips Everywhere */
+.livery-stat-pill,
+.livery-power-badge,
+.livery-insp-pill,
+.livery-tier-pill {
+  border: none !important;
+}
+.livery-stat-pill {
+  background: rgba(56, 189, 248, 0.13);
+  border-radius: 6px;
+}
+.livery-power-badge {
+  background: rgba(250, 204, 21, 0.14);
+  border-radius: 6px;
+}
+.livery-insp-pill.pos {
+  background: rgba(52, 211, 153, 0.16);
+}
+.livery-insp-pill.neg {
+  background: rgba(248, 113, 113, 0.16);
+}
+.livery-insp-pill.is-set {
+  background: rgba(250, 204, 21, 0.16);
+}
+.livery-swatch-btn,
+.livery-chroma-card {
+  border: none !important;
+  background: rgba(255, 255, 255, 0.032);
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.livery-swatch-btn:hover,
+.livery-chroma-card:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+.livery-swatch-btn.active,
+.livery-chroma-card.active {
+  background: rgba(14, 165, 233, 0.2);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.2), inset 0 1px 0 rgba(186, 230, 253, 0.25);
+}
+.livery-map-lead-card {
+  border: none !important;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tm-col, #facc15) 14%, rgba(15, 23, 42, 0.72)), rgba(8, 16, 30, 0.78));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 color-mix(in srgb, var(--tm-col, #facc15) 30%, transparent);
+}
+.livery-map-lead-art {
+  background: radial-gradient(circle, color-mix(in srgb, var(--tm-col, #facc15) 16%, transparent), transparent 72%);
+}
+
+/* 6. Equipped vs. Owned Slot Modal — Floaty Art, Zero Nested Boxes */
+.gear-slot-equipped-hero {
+  border: none !important;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.22), rgba(15, 23, 42, 0.52));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+  margin-bottom: 14px;
+}
+.gear-slot-equipped-hero.tier-legendary {
+  background: linear-gradient(135deg, rgba(255, 149, 36, 0.2), rgba(124, 45, 18, 0.22));
+  box-shadow: 0 10px 28px rgba(255, 149, 36, 0.16), inset 0 1px 0 rgba(253, 186, 116, 0.28);
+}
+.gear-slot-art-box {
+  border: none !important;
+  background: radial-gradient(circle at 50% 48%, rgba(56, 189, 248, 0.12), transparent 72%);
+  border-radius: 14px;
+}
+.gear-slot-owned-list {
+  gap: 8px;
+}
+.gear-slot-cmp-card {
+  border: none !important;
+  border-radius: 15px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease, transform 0.14s ease, box-shadow 0.16s ease;
+}
+.gear-slot-cmp-card:hover {
+  background: rgba(56, 189, 248, 0.095);
+  transform: translateY(-1px);
+}
+.gear-slot-cmp-card.tier-epic {
+  background: linear-gradient(135deg, rgba(192, 132, 252, 0.11), rgba(255, 255, 255, 0.025));
+}
+.gear-slot-cmp-card.tier-mythic {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(255, 255, 255, 0.025));
+}
+.gear-slot-cmp-card.tier-legendary {
+  background: linear-gradient(135deg, rgba(255, 149, 36, 0.16), rgba(154, 52, 18, 0.08));
+  box-shadow: 0 6px 22px rgba(255, 149, 36, 0.14), inset 0 1px 0 rgba(253, 186, 116, 0.24);
+}
+.gear-slot-empty {
+  border: none;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 12px;
+}
+.livery-sell-btn {
+  border: none !important;
+  background: rgba(250, 204, 21, 0.11) !important;
+  color: #fde68a !important;
+}
+.livery-sell-btn:hover {
+  background: rgba(250, 204, 21, 0.22) !important;
+  color: #fef9c3 !important;
+}
+
+/* 7. Logbook, Dive Setup, Leaderboard & Secondary Modals — Borderless Tonal Cards */
+.logbook-github-bar,
+.logbook-export-bar,
+.logbook-kpi,
+.logbook-cert-card,
+.logbook-site-row,
+.dive-setup-item,
+.gear-loadout-dock,
+.lb-row,
+.bounty-card,
+.drill-card {
+  border: 1px solid transparent !important;
+  background: rgba(255, 255, 255, 0.036);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.logbook-cert-card:not(.locked) {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(6, 78, 59, 0.18));
+  box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.2);
+}
+.logbook-cert-card.locked {
+  background: rgba(255, 255, 255, 0.024);
+}
+.dive-setup-item:hover,
+.lb-row:hover {
+  background: rgba(56, 189, 248, 0.09);
+}
+.dive-setup-item.active-card {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.22), rgba(15, 23, 42, 0.55));
+  box-shadow: 0 8px 22px rgba(2, 132, 199, 0.14), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+}
+.lb-row.me {
+  background: rgba(14, 165, 233, 0.16);
+  box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.2);
+}
+.gear-loadout-dock {
+  background: rgba(4, 14, 28, 0.45);
+  padding: 12px 14px;
+}
+
+/* 8. Mid-Dive Toasts & Loot Discovery Banner — Matching Floaty Glass */
+.game-toast {
+  border: none;
+  background: rgba(6, 17, 34, 0.84);
+  backdrop-filter: blur(16px);
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(186, 230, 253, 0.16);
+}
+.loot-discovery-banner {
+  border: none !important;
+  background: linear-gradient(160deg, rgba(8, 22, 42, 0.88), rgba(4, 11, 23, 0.94)) !important;
+  backdrop-filter: blur(20px);
+  border-radius: 18px;
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(224, 242, 254, 0.18);
+}
+.loot-disc-art {
+  border: none;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 72%);
 }
