@@ -12281,7 +12281,7 @@ test('v224 Strategic Foreground Parallax Depth Elements across all 37 levels & 7
     const els = buildForegroundDepthElements(lvl);
     assert.ok(els.length >= 4 && els.length <= 44, `${lvl.id} should have 4..44 foreground elements, got ${els.length}`);
     for (const el of els) {
-      assert.ok(el.parallax > 1.05 && el.parallax <= 1.25, `Foreground element must use near-camera parallax > 1.0, got ${el.parallax}`);
+      assert.equal(el.parallax, 1.0, `Foreground element must stay world-locked (parallax === 1.0) so attachments never drift, got ${el.parallax}`);
       assert.ok(el.side === 'ceiling' || el.side === 'floor');
       // Verify clear-corridor guard keeps elements away from spawn
       if (lvl.spawn) {
@@ -12311,13 +12311,13 @@ test('v224 Strategic Foreground Parallax Depth Elements across all 37 levels & 7
   );
   const farPeak = Math.max(...alphas);
   alphas.length = 0;
-  // Diver right next to element -> smoothly auto-fades for 100% clear visibility
+  // Diver right next to element -> stays 100% solid (v254 removed proxFade translucency so lights/divers never bleed through foreground formations)
   foregroundDepthRendererMethods._drawForegroundDepthElements.call(
     fakeRenderer, mockCtx, 1280, 800, firstEl.x, firstEl.y, 640, 400, 32, 1.5,
     { x: firstEl.x, y: firstEl.y, angle: 0, torchOn: true }, null
   );
   const nearAlpha = alphas[0] ?? 1;
-  assert.ok(nearAlpha < farPeak * 0.5, `Foreground element must auto-fade near diver (near=${nearAlpha.toFixed(2)}, far=${farPeak.toFixed(2)})`);
+  assert.equal(nearAlpha, 1.0, `Foreground element must stay 100% opaque near diver (near=${nearAlpha.toFixed(2)}, far=${farPeak.toFixed(2)})`);
 });
 
 test('v226 Main Menu Core-4 Priority (Gear Workshop, Logbook, Leaderboard, Setup) & Collapsible Secondary Drawers', async () => {
@@ -13022,7 +13022,7 @@ test('v249 Living light-integrated foreground depth elements: wallSlope anchorin
   const coreA = ctxCore.alphas[0];
   assert.ok(farA >= 0.85, `Expected crisp far foreground alpha, got ${farA}`);
   assert.ok(edgeA >= 0.72, `Diver at outer edge should stay occluded behind edge (>=0.72), got ${edgeA}`);
-  assert.ok(coreA < farA * 0.55, `Diver dead-center on anchor core must gently soften (<55% far), got ${coreA} vs ${farA}`);
+  assert.equal(coreA, 1.0, `v254: Foreground must stay 100% opaque even when diver passes behind anchor core (no translucency bleed), got ${coreA}`);
 });
 
 test('v250 Post-lighting foreground occlusion, tunnel-anchored rock pillars & avatar-free menu', async () => {
@@ -13188,4 +13188,36 @@ test('v253 Flashlight occlusion clipping, extended foreground welds & 60 FPS spr
   assert.ok(fgSrc.includes('const baseAlpha = inCombat ? 0.36 : 1.0;'), 'Non-combat foreground formations must stay 100% opaque to block flashlight behind them');
   assert.ok(fgSrc.includes("sctx.globalCompositeOperation = 'source-atop';"), 'Cached sprites must shade via source-atop to prevent 1px anti-aliased fringe');
   assert.ok(fgSrc.includes("sctx.globalCompositeOperation = 'destination-in';"), 'Cached sprites must alpha-feather buried rock skirts cleanly inside solid rock');
+});
+
+test('v254 World-locked foreground attachments, pixel-exact rock-wall masking & ray-clipped silt torch glare', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { buildForegroundDepthElements } = await import('../public/js/game/renderers/foregroundDepthRenderer.js');
+  const { LEVELS } = await import('../public/js/levels/index.js');
+
+  // 1. All foreground elements across every level must be strictly world-locked (parallax = 1.0)
+  for (const level of LEVELS) {
+    const els = buildForegroundDepthElements(level);
+    for (const el of els) {
+      assert.equal(el.parallax, 1.0, `Expected world-locked parallax === 1.0 on ${level.id} (${el.kind}), got ${el.parallax}`);
+    }
+  }
+
+  // 2. foregroundDepthRenderer removes proxFade translucency and uses pixel-exact rockChunks destination-out masking
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('function _stampRockChunksMask('), 'Expected pixel-exact rockChunks mask stamper');
+  assert.ok(fgSrc.includes('function _applyRockWallFeather('), 'Expected 4-step rock-wall alpha feather helper');
+  assert.ok(fgSrc.includes("sctx.globalCompositeOperation = 'destination-out';"), 'Expected destination-out rock-wall masking inside _compositeHiResShape');
+  assert.ok(fgSrc.includes('const finalAlpha = baseAlpha;'), 'Foreground elements must stay 100% solid (no proxFade translucency behind formations)');
+
+  // 3. lightingAndFxRenderer records active ray-cast torches and clips Pass 2 silt torch glare to open-water beam polygons
+  const lightSrc = readFileSync(new URL('../public/js/game/renderers/lightingAndFxRenderer.js', import.meta.url), 'utf8');
+  assert.ok(lightSrc.includes('this._frameActiveTorches'), 'Expected _frameActiveTorches tracking in lightingAndFxRenderer');
+  const siltIdx = lightSrc.indexOf('_drawSiltClouds(');
+  const siltEnd = lightSrc.indexOf('_getVignetteCache(', siltIdx);
+  const siltSlice = lightSrc.slice(siltIdx, siltEnd > siltIdx ? siltEnd : siltIdx + 12000);
+  assert.ok(
+    siltSlice.includes('this._frameActiveTorches') && siltSlice.includes('ctx.clip();'),
+    '_drawSiltClouds Pass 2 torch backscatter glare must clip to active ray-cast torch polygons'
+  );
 });

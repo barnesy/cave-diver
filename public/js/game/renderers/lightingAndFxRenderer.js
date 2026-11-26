@@ -755,8 +755,13 @@ export const lightingAndFxMethods = {
       ctx.restore();
     }
 
+    // Record active ray-cast torch polygons (local + peer buddies) so downstream silt glare stays strictly in open water
+    const frameTorches = this._frameActiveTorches || (this._frameActiveTorches = []);
+    frameTorches.length = 0;
+
     // Volumetric scattering cone + limestone wall bounce highlights for local diver & peer buddies
     if (localTorch) {
+      if (localTorch.rays?.length >= 2) frameTorches.push(localTorch);
       this._drawVolumetricTorchBeam(ctx, diver, localTorch, effLocalRange * 0.94 * (0.3 + 0.7 * localStrobe), {
         siltHaze: localSiltDensity * (1 - localSiltPierce * 0.75),
         isPeer: false,
@@ -769,6 +774,7 @@ export const lightingAndFxMethods = {
     }
     for (let i = 0; i < peerTorches.length; i++) {
       const pt = peerTorches[i];
+      if (pt.torch?.rays?.length >= 2) frameTorches.push(pt.torch);
       this._drawVolumetricTorchBeam(ctx, pt.peer, pt.torch, 13.0, {
         siltHaze: sampleSiltDensity(pt.torch.ox, pt.torch.oy, siltClouds),
         isPeer: true,
@@ -982,32 +988,54 @@ export const lightingAndFxMethods = {
     }
 
     // Pass 2: single batched 'screen' torch backscatter (warm limestone vs burnt-orange shipwreck rust!)
+    // Clipped strictly to the union of active ray-cast torch polygons so beam glare NEVER spills through solid rock or behind foreground attachments!
     if (glareList.length > 0) {
-      ctx.globalCompositeOperation = 'screen';
-      for (let i = 0; i < glareList.length; i += 6) {
-        const sx = glareList[i];
-        const sy = glareList[i + 1];
-        const r = glareList[i + 2];
-        const glare = glareList[i + 3];
-        const isRust = glareList[i + 5] === 1;
-        ctx.globalAlpha = Math.min(0.65, glare * (isRust ? 0.82 : 0.72));
-        ctx.drawImage(isRust ? rustStamp : warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
-      }
-
-      // Pass 3: single batched 'source-over' suspended sediment glints
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
-      for (let i = 0; i < glareList.length; i += 6) {
-        const sx = glareList[i];
-        const sy = glareList[i + 1];
-        const r = glareList[i + 2];
-        const seed = glareList[i + 4];
-        for (let k = 0; k < 4; k++) {
-          const a = seed + k * 1.65 + timeSec * 0.25;
-          const d = r * (0.25 + ((k * 37) % 10) * 0.055);
-          ctx.fillRect(sx + Math.cos(a) * d, sy + Math.sin(a * 1.2) * d * 0.75, 2.2, 2.2);
+      const activeTorches = this._frameActiveTorches;
+      const hasTorchClip = Array.isArray(activeTorches) && activeTorches.length > 0 && typeof ctx.clip === 'function';
+      if (hasTorchClip || !this.level) {
+        ctx.save();
+        if (hasTorchClip) {
+          ctx.beginPath();
+          for (let t = 0; t < activeTorches.length; t++) {
+            const td = activeTorches[t];
+            ctx.moveTo(toScreenX(td.ox), toScreenY(td.oy));
+            for (let k = 0; k < td.rays.length; k++) {
+              const pt = td.rays[k];
+              const padX = pt.hitWall ? -pt.nx * 0.10 : 0;
+              const padY = pt.hitWall ? -pt.ny * 0.10 : 0;
+              ctx.lineTo(toScreenX(pt.x + padX), toScreenY(pt.y + padY));
+            }
+            ctx.closePath();
+          }
+          ctx.clip();
         }
+        ctx.globalCompositeOperation = 'screen';
+        for (let i = 0; i < glareList.length; i += 6) {
+          const sx = glareList[i];
+          const sy = glareList[i + 1];
+          const r = glareList[i + 2];
+          const glare = glareList[i + 3];
+          const isRust = glareList[i + 5] === 1;
+          ctx.globalAlpha = Math.min(0.65, glare * (isRust ? 0.82 : 0.72));
+          ctx.drawImage(isRust ? rustStamp : warmStamp, sx - r * 0.9, sy - r * 0.9, r * 1.8, r * 1.8);
+        }
+
+        // Pass 3: single batched 'source-over' suspended sediment glints
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(236, 224, 198, 0.45)';
+        for (let i = 0; i < glareList.length; i += 6) {
+          const sx = glareList[i];
+          const sy = glareList[i + 1];
+          const r = glareList[i + 2];
+          const seed = glareList[i + 4];
+          for (let k = 0; k < 4; k++) {
+            const a = seed + k * 1.65 + timeSec * 0.25;
+            const d = r * (0.25 + ((k * 37) % 10) * 0.055);
+            ctx.fillRect(sx + Math.cos(a) * d, sy + Math.sin(a * 1.2) * d * 0.75, 2.2, 2.2);
+          }
+        }
+        ctx.restore();
       }
     }
 

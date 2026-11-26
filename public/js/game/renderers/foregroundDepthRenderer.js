@@ -319,7 +319,8 @@ export function buildForegroundDepthElements(level) {
 
       const isMidPlane = isPillar ? r4 < 0.45 : (isCurtain || isCrystal ? r4 < 0.65 : r4 < 0.58);
       const depthLayer = isMidPlane ? 'mid' : 'near';
-      const parallax = isMidPlane ? 1.07 + r1 * 0.04 : 1.12 + r1 * 0.06;
+      // World-locked (parallax = 1.0) so foreground attachments NEVER drift sideways off sloped walls or ledges!
+      const parallax = 1.0;
 
       // Reach well into the swim corridor so the diver genuinely glides behind sculpted edges, roots, kelp & pillars!
       let heightM;
@@ -344,14 +345,62 @@ export function buildForegroundDepthElements(level) {
         widthM = Math.max(2.9, heightM * (1.42 + r3 * 0.52));
       }
 
+      // Strict continuous-wall flank check: verify solid rock spans BOTH left & right attachment flanks
+      // without a vertical cliff drop-off so no attachment point can ever hang in open water!
+      // If a non-pillar element's initially chosen side fails (e.g. an open shaft on one side), try the opposite wall with the same strict check.
+      const checkFlankWall = (testDir, testWallY, testFlankHalf, testMaxDelta) => {
+        const fL = _probeRockBoundary(level, mx - testFlankHalf, my, testDir, 13.0);
+        const fR = _probeRockBoundary(level, mx + testFlankHalf, my, testDir, 13.0);
+        return (
+          fL !== null &&
+          fR !== null &&
+          Math.abs(fL - testWallY) <= testMaxDelta &&
+          Math.abs(fR - testWallY) <= testMaxDelta &&
+          evaluateCaveSDF(level, mx - testFlankHalf, fL + testDir * 0.70) > 0.06 &&
+          evaluateCaveSDF(level, mx + testFlankHalf, fR + testDir * 0.70) > 0.06
+        );
+      };
+      let chosenOnCeiling = placeOnCeiling || canPlacePillar;
+      let chosenWallY = wallY;
+      let chosenAnchorY = anchorY;
+      let chosenSlope = wallSlope;
+      const flankHalfM = isPillar
+        ? Math.max(1.6, widthM * 1.35)
+        : (kind === 'wreck-chain' ? 0.55 : Math.max(0.85, widthM * 0.48));
+      const maxFlankDelta = isPillar ? 1.55 : Math.max(1.35, widthM * 0.48);
+
+      if (!checkFlankWall(chosenOnCeiling ? -1 : 1, chosenWallY, flankHalfM, maxFlankDelta)) {
+        const altOnCeiling = !chosenOnCeiling;
+        const altWallY = altOnCeiling ? ceilY : floorY;
+        if (!isPillar && (!altOnCeiling || ceilY > 1.8) && checkFlankWall(altOnCeiling ? -1 : 1, altWallY, flankHalfM, maxFlankDelta)) {
+          chosenOnCeiling = altOnCeiling;
+          chosenWallY = altWallY;
+          chosenAnchorY = chosenOnCeiling ? ceilY - 0.16 : floorY + 0.16;
+          const agx = evaluateCaveSDF(level, mx + eps, chosenWallY) - evaluateCaveSDF(level, mx - eps, chosenWallY);
+          const agy = evaluateCaveSDF(level, mx, chosenWallY + eps) - evaluateCaveSDF(level, mx, chosenWallY - eps);
+          chosenSlope = Math.abs(agy) > 0.025 ? _clamp(-agx / agy, -0.54, 0.54) : 0;
+          if (biome === 'wreck') {
+            kind = chosenOnCeiling ? (r1 < 0.35 ? 'wreck-chain' : 'wreck-girder') : (r1 < 0.38 ? 'wreck-railing' : 'wreck-girder');
+          } else if (biome === 'cenote' || biome === 'limestone') {
+            if (chosenOnCeiling) kind = chosenAnchorY < 24 && (sIdx + k) % 3 !== 2 ? 'cenote-roots' : 'limestone-overhang';
+            else kind = chosenAnchorY < 26 && (sIdx + k) % 3 !== 2 ? 'kelp-fronds' : 'limestone-overhang';
+          }
+        } else {
+          continue;
+        }
+      }
+      if (isPillar && !checkFlankWall(1, floorY, flankHalfM, 1.55)) {
+        continue;
+      }
+
       elements.push({
         x: mx,
-        y: anchorY,
-        side: (placeOnCeiling || canPlacePillar) ? 'ceiling' : 'floor',
+        y: chosenAnchorY,
+        side: chosenOnCeiling ? 'ceiling' : 'floor',
         biome,
         kind,
         depthLayer,
-        wallSlope,
+        wallSlope: chosenSlope,
         widthM,
         heightM,
         parallax,
@@ -878,12 +927,80 @@ function _computeDirectShadeRgba(light, isNearPlane, boost = 1.0) {
 }
 
 /**
+ * Stamp pre-baked `this.rockChunks` solid-rock silhouette onto an element's tight sprite canvas
+ * (in screen coordinates; translation-invariant because foreground elements are world-locked at parallax=1).
+ * Used with `destination-out` shifted slightly into solid rock so every foreground formation terminates
+ * PIXEL-EXACTLY inside the real curved/sloped cave wall with ZERO visible attachment edges!
+ */
+function _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, alpha, bounds) {
+  const chunks = renderCtx?.rockChunks;
+  const pxPerM = renderCtx?.rockPxPerM;
+  const scale = renderCtx?.scale;
+  if (!chunks || !chunks.length || !pxPerM || !scale) return false;
+
+  const padM = (Math.max(Math.abs(shiftX), Math.abs(shiftY)) + 12) / scale;
+  const worldMinX = renderCtx.effCamX + (bounds.x - renderCtx.viewCenterX) / scale - padM;
+  const worldMaxX = renderCtx.effCamX + (bounds.x + bounds.w - renderCtx.viewCenterX) / scale + padM;
+  const worldMinY = renderCtx.effCamY + (bounds.y - renderCtx.viewCenterY) / scale - padM;
+  const worldMaxY = renderCtx.effCamY + (bounds.y + bounds.h - renderCtx.viewCenterY) / scale + padM;
+  const yMin = renderCtx.levelYMin ?? -6;
+
+  sctx.save();
+  sctx.globalAlpha = alpha;
+  for (let i = 0; i < chunks.length; i++) {
+    const chnk = chunks[i];
+    const cx0 = Math.max(worldMinX, chnk.x0);
+    const cx1 = Math.min(worldMaxX, chnk.x1);
+    if (cx1 <= cx0) continue;
+
+    const tileY0 = chnk.y0 ?? yMin;
+    const tileY1 = chnk.y1 ?? worldMaxY;
+    const cy0 = Math.max(worldMinY, tileY0);
+    const cy1 = Math.min(worldMaxY, tileY1);
+    if (cy1 <= cy0) continue;
+
+    const dx = renderCtx.viewCenterX + (cx0 - renderCtx.effCamX) * scale + shiftX;
+    const dy = renderCtx.viewCenterY + (cy0 - renderCtx.effCamY) * scale + shiftY;
+    const dw = (cx1 - cx0) * scale;
+    const dh = (cy1 - cy0) * scale;
+
+    if (chnk.solidRock || !chnk.canvas) {
+      sctx.fillStyle = '#ffffff';
+      sctx.fillRect(dx, dy, dw + 1, dh + 1);
+    } else {
+      const sx0 = (cx0 - chnk.x0) * pxPerM;
+      const sw = (cx1 - cx0) * pxPerM;
+      const sy0 = (cy0 - tileY0) * pxPerM;
+      const sh = (cy1 - cy0) * pxPerM;
+      sctx.drawImage(chnk.canvas, sx0, sy0, sw, sh, dx, dy, dw, dh);
+    }
+  }
+  sctx.restore();
+  return true;
+}
+
+/**
+ * 3-step soft rock-silhouette `destination-out` mask:
+ *   - 0..5px past wall lip into rock: 100% OPAQUE (seals wall seam & covers 100% of torch scatter rim!)
+ *   - 5..18px inside solid rock: dissolves smoothly following the EXACT curved/sloped `rockChunks` contour
+ *   - >18px inside solid rock: 0% alpha (ZERO dark caps, ZERO horizontal cutoffs, ZERO visible attachment edges!)
+ */
+function _applyRockWallFeather(sctx, renderCtx, shiftX, shiftY, bounds) {
+  if (!renderCtx?.rockChunks?.length) return false;
+  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.25, shiftY * 0.25, 0.22, bounds);
+  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.52, shiftY * 0.52, 0.42, bounds);
+  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.78, shiftY * 0.78, 0.68, bounds);
+  _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, 1.0, bounds);
+  return true;
+}
+
+/**
  * High-res 512px texture renderer with TWO ultra-fast paths (both 60 FPS):
  *   A. Cached Tight-Sprite Path (static rock overhangs, pillars, girders, crystals, icicles):
- *      - Caches a tightly-cropped element-local sprite in `_fgSpriteCache` keyed by quantized lighting & wall rev.
- *      - Cache hits (~90%+ of frames) execute ONE single `mainCtx.drawImage()` (~0.02 ms/frame!).
+ *      - Caches a tightly-cropped element-local sprite in `_fgSpriteCache` keyed by quantized lighting & scale.
+ *      - Cache hits (~95%+ of frames, since parallax=1.0 is world-locked!) execute ONE `mainCtx.drawImage()` (~0.02 ms!).
  *      - Cache misses paint atomic `pattern` fill + `source-atop` shade/overlay (ZERO 1px anti-aliased fringe!)
- *        + optional `destination-in` alpha feather strictly deep inside solid rock (ZERO hard buried back edge!).
+ *        + pixel-exact `rockChunks` `destination-out` feather (ZERO visible attachment point on any slope or curve!).
  *   B. Zero-Scratch Direct-Draw Path (swaying kelp fronds & mangrove roots):
  *      - Clips `mainCtx` once to the exact silhouette, paints full-res 512px texture + shade + overlay directly.
  */
@@ -906,6 +1023,7 @@ function _compositeHiResShape(
     boost = 1.0,
     drawOverlay = null,
     drawAlphaMask = null,
+    drawRockMask = null,
     cacheEl = null,
     cacheKey = '',
     anchorX = 0,
@@ -914,7 +1032,7 @@ function _compositeHiResShape(
 ) {
   if (!pattern || typeof mainCtx.fillRect !== 'function') return false;
 
-  // Path A: Cached tight-bounds sprite (for static formations needing seamless alpha-feathered rock welds)
+  // Path A: Cached tight-bounds sprite (for static formations needing seamless pixel-exact rock welds)
   if (
     cacheEl &&
     cacheKey &&
@@ -924,8 +1042,8 @@ function _compositeHiResShape(
   ) {
     const localX = Math.floor(bounds.x - anchorX);
     const localY = Math.floor(bounds.y - anchorY);
-    const bw = Math.min(768, Math.ceil(bounds.w));
-    const bh = Math.min(768, Math.ceil(bounds.h));
+    const bw = Math.min(896, Math.ceil(bounds.w));
+    const bh = Math.min(896, Math.ceil(bounds.h));
     if (bw <= 2 || bh <= 2) return false;
 
     const dstX = Math.round(anchorX + localX);
@@ -943,8 +1061,8 @@ function _compositeHiResShape(
     ) {
       if (!entry) {
         const canvas = document.createElement('canvas');
-        const capW = Math.min(768, Math.max(64, Math.ceil(bw / 64) * 64));
-        const capH = Math.min(768, Math.max(64, Math.ceil(bh / 64) * 64));
+        const capW = Math.min(896, Math.max(64, Math.ceil(bw / 64) * 64));
+        const capH = Math.min(896, Math.max(64, Math.ceil(bh / 64) * 64));
         canvas.width = capW;
         canvas.height = capH;
         const sctx = canvas.getContext('2d');
@@ -952,8 +1070,8 @@ function _compositeHiResShape(
         entry = { canvas, ctx: sctx, capW, capH, key: '', localX: 0, localY: 0, bw: 0, bh: 0 };
         _fgSpriteCache.set(cacheEl, entry);
       } else if (bw > entry.capW || bh > entry.capH) {
-        entry.capW = Math.min(768, Math.max(entry.capW, Math.ceil(bw / 64) * 64));
-        entry.capH = Math.min(768, Math.max(entry.capH, Math.ceil(bh / 64) * 64));
+        entry.capW = Math.min(896, Math.max(entry.capW, Math.ceil(bw / 64) * 64));
+        entry.capH = Math.min(896, Math.max(entry.capH, Math.ceil(bh / 64) * 64));
         entry.canvas.width = entry.capW;
         entry.canvas.height = entry.capH;
       }
@@ -992,8 +1110,13 @@ function _compositeHiResShape(
         drawOverlay(sctx);
       }
 
-      // Pass 3: Smooth alpha-feather strictly deep inside solid rock (ZERO visible back polygon!)
-      if (drawAlphaMask) {
+      // Pass 3: Pixel-exact `rockChunks` silhouette mask (`destination-out`) OR linear fallback (`destination-in`)
+      let maskedByRock = false;
+      if (drawRockMask) {
+        sctx.globalCompositeOperation = 'destination-out';
+        maskedByRock = Boolean(drawRockMask(sctx));
+      }
+      if (!maskedByRock && drawAlphaMask) {
         sctx.globalCompositeOperation = 'destination-in';
         drawAlphaMask(sctx);
       }
@@ -1087,29 +1210,36 @@ function _probeWallExact(level, wx, startY, probeDir, maxDistM = 6.0) {
 }
 
 /**
- * Sample (and cache by world X!) the LIVE background cave wall contour directly behind a foreground
- * element's screen X span so attachments lock pixel-tight to sloped/curved walls at 60 FPS!
+ * Sample (and cache permanently for world-locked parallax=1 elements!) the LIVE cave wall contour(s)
+ * across the element's full horizontal span — including BOTH ceiling & floor contours for spanning pillars/girders!
  */
 function _buildLiveWallSampler(level, el, sx, fallbackSy, wPx, dir, effCamX, effCamY, viewCenterX, viewCenterY, scale) {
   const slope = Number.isFinite(el.wallSlope) ? el.wallSlope : 0;
   const fallbackFn = (dx) => fallbackSy + dx * slope;
 
   if (!level || !Array.isArray(level.segments) || level.segments.length === 0 || !scale || scale < 4) {
+    const fbOpp = el.kind === 'rock-pillar' ? fallbackSy + dir * el.heightM * scale : null;
     return {
       hasWall: true,
       centerSy: fallbackSy,
-      oppSy: el.kind === 'rock-pillar' ? fallbackSy + dir * el.heightM * scale * el.parallax : null,
+      oppSy: fbOpp,
       wallSy: fallbackFn,
+      oppWallSy: fbOpp !== null ? () => fbOpp : null,
+      minWallSy: fallbackSy,
+      maxWallSy: fallbackSy,
+      minOppSy: fbOpp,
+      maxOppSy: fbOpp,
       wallSlopePx: slope,
       cacheRev: 0,
     };
   }
 
-  const spanHalf = Math.max(wPx * 0.76, 32);
+  const isDualSpan = el.kind === 'rock-pillar' || el.kind === 'wreck-girder';
+  const spanHalf = Math.max(isDualSpan ? wPx * 1.45 : wPx * 0.82, 36);
   const spanHalfM = spanHalf / scale;
   const centerWx = effCamX + (sx - viewCenterX) / scale;
-  const sampleCount = 5;
-  const midIdx = 2;
+  const sampleCount = 7;
+  const midIdx = 3;
 
   let cached = _fgWallSampleCache.get(el);
   if (
@@ -1121,11 +1251,12 @@ function _buildLiveWallSampler(level, el, sx, fallbackSy, wPx, dir, effCamX, eff
     const probeStartY = el.y + dir * Math.min(2.6, Math.max(1.0, el.heightM * 0.44));
     const maxDriftM = Math.max(3.8, el.heightM * 0.58);
     const worldYs = cached ? cached.worldYs : new Array(sampleCount);
+    const oppWorldYs = isDualSpan ? (cached?.oppWorldYs || new Array(sampleCount)) : null;
     const stepWorldX = (spanHalfM * 2) / (sampleCount - 1);
 
     for (let i = 0; i < sampleCount; i++) {
       const wx = centerWx + (i - midIdx) * stepWorldX;
-      const hitY = _probeWallExact(level, wx, probeStartY, -dir, 6.2);
+      const hitY = _probeWallExact(level, wx, probeStartY, -dir, 6.8);
       worldYs[i] = hitY !== null && Math.abs(hitY - el.y) <= maxDriftM ? hitY : null;
     }
 
@@ -1138,9 +1269,22 @@ function _buildLiveWallSampler(level, el, sx, fallbackSy, wPx, dir, effCamX, eff
       for (let i = midIdx + 1; i < sampleCount; i++) {
         if (worldYs[i] === null) worldYs[i] = worldYs[i - 1] + stepWorldX * slope;
       }
-      if (el.kind === 'rock-pillar' || el.kind === 'wreck-girder') {
+      if (isDualSpan) {
         const midCorridorY = el.y + dir * Math.min(el.heightM * 0.50, 5.0);
-        oppWorldY = _probeWallExact(level, centerWx, midCorridorY, dir, Math.max(9.0, el.heightM * 1.15));
+        const oppMaxDist = Math.max(9.5, el.heightM * 1.25);
+        for (let i = 0; i < sampleCount; i++) {
+          const wx = centerWx + (i - midIdx) * stepWorldX;
+          oppWorldYs[i] = _probeWallExact(level, wx, midCorridorY, dir, oppMaxDist);
+        }
+        oppWorldY = oppWorldYs[midIdx];
+        if (oppWorldY !== null) {
+          for (let i = midIdx - 1; i >= 0; i--) {
+            if (oppWorldYs[i] === null) oppWorldYs[i] = oppWorldYs[i + 1];
+          }
+          for (let i = midIdx + 1; i < sampleCount; i++) {
+            if (oppWorldYs[i] === null) oppWorldYs[i] = oppWorldYs[i - 1];
+          }
+        }
         if (el.kind === 'rock-pillar' && oppWorldY === null) hasWall = false;
       }
     }
@@ -1152,22 +1296,64 @@ function _buildLiveWallSampler(level, el, sx, fallbackSy, wPx, dir, effCamX, eff
       hasWall,
       worldYs,
       oppWorldY,
+      oppWorldYs,
       screenYs: cached ? cached.screenYs : new Array(sampleCount),
+      oppScreenYs: isDualSpan ? (cached?.oppScreenYs || new Array(sampleCount)) : null,
       rev: cached ? (cached.rev || 0) + 1 : 1,
     };
     _fgWallSampleCache.set(el, cached);
   }
 
   if (!cached.hasWall) {
-    return { hasWall: false, centerSy: fallbackSy, oppSy: null, wallSy: fallbackFn, wallSlopePx: slope, cacheRev: cached.rev || 0 };
+    return {
+      hasWall: false,
+      centerSy: fallbackSy,
+      oppSy: null,
+      wallSy: fallbackFn,
+      oppWallSy: null,
+      minWallSy: fallbackSy,
+      maxWallSy: fallbackSy,
+      minOppSy: null,
+      maxOppSy: null,
+      wallSlopePx: slope,
+      cacheRev: cached.rev || 0,
+    };
   }
 
   const rawYs = cached.screenYs;
+  let minWallSy = Infinity;
+  let maxWallSy = -Infinity;
   for (let i = 0; i < sampleCount; i++) {
-    rawYs[i] = viewCenterY + (cached.worldYs[i] - effCamY) * scale;
+    const syVal = viewCenterY + (cached.worldYs[i] - effCamY) * scale;
+    rawYs[i] = syVal;
+    if (syVal < minWallSy) minWallSy = syVal;
+    if (syVal > maxWallSy) maxWallSy = syVal;
   }
-  const oppSy = cached.oppWorldY !== null ? viewCenterY + (cached.oppWorldY - effCamY) * scale : null;
+
+  let oppSy = null;
+  let minOppSy = null;
+  let maxOppSy = null;
+  let oppWallSy = null;
   const invSpan = 1 / Math.max(1, spanHalf * 2);
+  if (cached.oppWorldY !== null && cached.oppWorldYs && cached.oppScreenYs) {
+    const oppRaw = cached.oppScreenYs;
+    minOppSy = Infinity;
+    maxOppSy = -Infinity;
+    for (let i = 0; i < sampleCount; i++) {
+      const oy = viewCenterY + (cached.oppWorldYs[i] - effCamY) * scale;
+      oppRaw[i] = oy;
+      if (oy < minOppSy) minOppSy = oy;
+      if (oy > maxOppSy) maxOppSy = oy;
+    }
+    oppSy = oppRaw[midIdx];
+    oppWallSy = (dx) => {
+      const t = _clamp((dx + spanHalf) * invSpan, 0, 1) * (sampleCount - 1);
+      const i0 = Math.floor(t);
+      const i1 = i0 < sampleCount - 1 ? i0 + 1 : i0;
+      return oppRaw[i0] + (oppRaw[i1] - oppRaw[i0]) * (t - i0);
+    };
+  }
+
   const wallSy = (dx) => {
     const t = _clamp((dx + spanHalf) * invSpan, 0, 1) * (sampleCount - 1);
     const i0 = Math.floor(t);
@@ -1181,6 +1367,11 @@ function _buildLiveWallSampler(level, el, sx, fallbackSy, wPx, dir, effCamX, eff
     centerSy: rawYs[midIdx],
     oppSy,
     wallSy,
+    oppWallSy,
+    minWallSy,
+    maxWallSy,
+    minOppSy,
+    maxOppSy,
     wallSlopePx,
     cacheRev: cached.rev || 0,
   };
@@ -1289,12 +1480,12 @@ function _fillWallHuggingRock(
   const lit = _clamp((light.totalLight - 0.04) * 1.10, 0, 1);
   const rimPower = _computeRimPower(light);
   const rimRgb = _blendWithLight(pal.rimRgb, light, 0.72);
-  const bury = Math.max(58, hPx * 0.65);
+  const bury = Math.max(78, hPx * 0.72);
   const mergeRgb = _getWallMergeRgb(pal, light, isNearPlane);
   const { nx, ny } = _computeWallNormal(wallY, halfW, dir);
 
-  // Tuck outer wing roots 14px into solid rock so formations extend cleanly & organically into the cave wall
-  const wingTuck = dir * 14;
+  // Tuck outer wing roots 24px into solid rock so formations extend cleanly & organically into any sloped cave wall
+  const wingTuck = dir * 24;
   const traceCrest = (c) => {
     c.moveTo(pts[0].x, pts[0].y - wingTuck);
     for (let i = 1; i < pts.length - 1; i++) {
@@ -1312,12 +1503,12 @@ function _fillWallHuggingRock(
     if (pts[i].y < minY) minY = pts[i].y;
     if (pts[i].y > maxY) maxY = pts[i].y;
   }
-  const backHalfW = halfW * 1.18;
+  const backHalfW = halfW * 1.24;
   const backPts = [];
   for (let i = 6; i >= 0; i--) {
     const u = i / 6;
     const dx = (u - 0.5) * backHalfW * 2;
-    const env = 0.56 + 0.44 * Math.sin(u * Math.PI);
+    const env = 0.65 + 0.35 * Math.sin(u * Math.PI);
     const by = wallY(dx) - dir * bury * env;
     backPts.push({ x: sx + dx, y: by });
     if (by < minY) minY = by;
@@ -1333,9 +1524,6 @@ function _fillWallHuggingRock(
     c.closePath();
   };
 
-  // 0. Subtle wall-hugging contact crevice AO strictly tucked inside the formation width (no corner dots!)
-  _drawWallWeldCollar(ctx, sx, wallY, halfW * 0.86, dir, 5, 14, mergeRgb, 0.44, vis);
-
   // 1. Soft water-facing cast shadow behind the sculpted crest (instant 3D separation!)
   ctx.save();
   ctx.lineJoin = 'round';
@@ -1348,7 +1536,7 @@ function _fillWallHuggingRock(
   ctx.stroke();
   ctx.restore();
 
-  // 2. High-Res 512px Photorealistic Rock Body — Cached Tight-Sprite Composite (0.02ms blit, ZERO fringe, seamless buried fade!)
+  // 2. High-Res 512px Photorealistic Rock Body — Cached Tight-Sprite + Pixel-Exact `rockChunks` Mask!
   const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.96);
   const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.80);
   const totalDepth = hPx + bury;
@@ -1364,12 +1552,13 @@ function _fillWallHuggingRock(
   if (renderCtx?.mats?.rock) {
     const cacheEl = renderCtx.el || null;
     const cacheKey = cacheEl ? _buildSpriteCacheKey(cacheEl, light, rimPower, renderCtx.wallProfile, renderCtx.scale || 24, 'rock') : '';
+    const spriteBounds = { x: sx - backHalfW - 8, y: minY - 8, w: backHalfW * 2 + 16, h: maxY - minY + 16 };
     drewHiRes = _compositeHiResShape(
       ctx,
       null,
       renderCtx.cw,
       renderCtx.ch,
-      { x: sx - backHalfW - 8, y: minY - 8, w: backHalfW * 2 + 16, h: maxY - minY + 16 },
+      spriteBounds,
       {
         tracePath: (sctx) => {
           sctx.beginPath();
@@ -1423,9 +1612,8 @@ function _fillWallHuggingRock(
             c.fillRect(sx - backHalfW - 10, minY - 10, backHalfW * 2 + 20, maxY - minY + 20);
           }
         },
+        drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -nx * 18, -ny * 18, spriteBounds),
         drawAlphaMask: (c) => {
-          // 100% OPAQUE across open water + wall lip + first 20px of solid rock (ZERO light leak!),
-          // then dissolves smoothly to 0.0 BEFORE reaching backPts (ZERO dark polygon, ZERO 1px fringe!)
           const maskGrad = c.createLinearGradient(gX0, gY0, gX1, gY1);
           maskGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
           maskGrad.addColorStop(tSolidInRock, 'rgba(255, 255, 255, 1)');
@@ -1507,16 +1695,19 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
   switch (el.kind) {
     case 'rock-pillar': {
-      // Sculpted near-camera cave column locked pixel-tight to LIVE ceiling & floor SDF lips!
-      // Stays 100% OPAQUE across the entire water span AND past both ceiling & floor rock seams (zero light leaks!),
-      // flares into wide buttress roots, and dissolves smoothly to 0% strictly deep inside solid rock!
+      // Sculpted near-camera cave column locked pixel-tight to LIVE ceiling & floor SDF contours!
+      // Extends past the extreme ceiling/floor bounds across its entire flared width, then trims
+      // pixel-exact inside solid rock via `rockChunks` so ZERO horizontal cap or gap can EVER show!
       const topLip = sy;
       const botLip = wallProfile && Number.isFinite(wallProfile.oppSy) ? wallProfile.oppSy : sy + hPx;
+      const topMinY = wallProfile && Number.isFinite(wallProfile.minWallSy) ? Math.min(topLip, wallProfile.minWallSy) : topLip;
+      const botMaxY = wallProfile && Number.isFinite(wallProfile.maxOppSy) ? Math.max(botLip, wallProfile.maxOppSy) : botLip;
       const waterSpan = Math.max(40, botLip - topLip);
-      const bury = Math.max(60, Math.min(102, waterSpan * 0.36));
-      const topY = topLip - bury;
-      const botY = botLip + bury;
+      const bury = Math.max(54, Math.min(92, waterSpan * 0.30));
+      const topY = topMinY - bury;
+      const botY = botMaxY + bury;
       const span = Math.max(64, botY - topY);
+      const midY = (topLip + botLip) * 0.5;
       const steps = 12;
       const leftPts = [];
       const rightPts = [];
@@ -1524,8 +1715,8 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const t = i / steps;
         const py = topY + span * t;
         // Normalized position across the open-water span (0 at ceiling lip, 1 at floor lip)
-        const uWater = _clamp((py - topLip) / waterSpan, -0.45, 1.45);
-        const flare = Math.pow(Math.min(1.44, Math.abs(uWater - 0.5) * 2), 2.10);
+        const uWater = _clamp((py - topLip) / waterSpan, -0.55, 1.55);
+        const flare = Math.pow(Math.min(1.52, Math.abs(uWater - 0.5) * 2), 2.10);
         const halfW = wPx * (0.34 + flare * 1.18);
         const curveX = Math.sin(_clamp(uWater, 0, 1) * Math.PI) * leanPx * 1.35;
         const nL = Math.sin(t * 9.5 + el.seed * 1.3) * wPx * 0.075;
@@ -1564,27 +1755,24 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         c.closePath();
       };
 
-      // 0. Subtle contact-crevice AO at ceiling & floor buttress joints
-      const rootHalfW = wPx * 1.10;
-      _drawWallWeldCollar(ctx, sx, () => topLip, rootHalfW, 1, 5, 14, mergeRgb, 0.42, vis);
-      _drawWallWeldCollar(ctx, sx, () => botLip, rootHalfW, -1, 5, 14, mergeRgb, 0.42, vis);
-
-      // 1. Soft depth drop-shadow behind both flanks across open water (fading smoothly to 0% inside rock roots)
-      const tTopLip = _clamp(bury / span, 0.08, 0.34);
-      const tBotLip = _clamp(1 - bury / span, 0.66, 0.92);
-      const tTopSolid = _clamp((bury - Math.min(20, bury * 0.36)) / span, 0.06, tTopLip - 0.02);
-      const tBotSolid = _clamp(1 - (bury - Math.min(20, bury * 0.36)) / span, tBotLip + 0.02, 0.94);
-      const tTopMid = _clamp(0.05 + (tTopSolid - 0.05) * 0.48, 0.06, tTopSolid - 0.01);
-      const tBotMid = _clamp(tBotSolid + (0.95 - tBotSolid) * 0.52, tBotSolid + 0.01, 0.94);
+      // 1. Soft depth drop-shadow behind both flanks strictly across open water
+      const tTopLip = _clamp((topLip - topY) / span, 0.08, 0.38);
+      const tBotLip = _clamp((botLip - topY) / span, 0.62, 0.92);
+      const tTopSolid = _clamp(tTopLip * 0.60, 0.05, tTopLip - 0.02);
+      const tBotSolid = _clamp(1 - (1 - tBotLip) * 0.60, tBotLip + 0.02, 0.95);
+      const tTopMid = _clamp(0.04 + (tTopSolid - 0.04) * 0.48, 0.05, tTopSolid - 0.01);
+      const tBotMid = _clamp(tBotSolid + (0.96 - tBotSolid) * 0.52, tBotSolid + 0.01, 0.95);
 
       ctx.save();
       const shadowGrad = ctx.createLinearGradient(sx, topY, sx, botY);
       shadowGrad.addColorStop(0, 'rgba(2, 6, 14, 0)');
-      shadowGrad.addColorStop(tTopLip, `rgba(2, 6, 14, ${(0.36 * vis).toFixed(3)})`);
-      shadowGrad.addColorStop(tBotLip, `rgba(2, 6, 14, ${(0.36 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(tTopLip, 'rgba(2, 6, 14, 0)');
+      shadowGrad.addColorStop(Math.min(0.48, tTopLip + 0.08), `rgba(2, 6, 14, ${(0.34 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(Math.max(0.52, tBotLip - 0.08), `rgba(2, 6, 14, ${(0.34 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(tBotLip, 'rgba(2, 6, 14, 0)');
       shadowGrad.addColorStop(1, 'rgba(2, 6, 14, 0)');
       ctx.strokeStyle = shadowGrad;
-      ctx.lineWidth = isNearPlane ? 15 : 9;
+      ctx.lineWidth = isNearPlane ? 14 : 8;
       ctx.lineCap = 'butt';
       ctx.beginPath();
       traceLeft(ctx);
@@ -1592,22 +1780,23 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       ctx.stroke();
       ctx.restore();
 
-      // 2. High-Res 512px Photorealistic Rock Pillar — Cached Tight-Sprite Composite (0.02ms blit, ZERO dark caps!)
+      // 2. High-Res 512px Photorealistic Rock Pillar — Cached Tight-Sprite + Pixel-Exact `rockChunks` Ceiling/Floor Mask!
       const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.98);
       const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.78);
       const litRight = light.lightDirX >= 0;
       const focusY = topLip + waterSpan * _clamp(0.50 + light.lightDirY * 0.22, 0.28, 0.72);
-      const colHalfBound = wPx * 2.25 + Math.abs(leanPx) * 1.4;
+      const colHalfBound = wPx * 2.40 + Math.abs(leanPx) * 1.4;
 
       let drewPillarHiRes = false;
       if (renderCtx?.mats?.rock) {
-        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, `p${Math.round(waterSpan / 8)}`);
+        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, `p${Math.round(span / 8)}`);
+        const spriteBounds = { x: sx - colHalfBound, y: topY - 4, w: colHalfBound * 2, h: span + 8 };
         drewPillarHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: sx - colHalfBound, y: topY - 4, w: colHalfBound * 2, h: span + 8 },
+          spriteBounds,
           {
             tracePath: (sctx) => {
               sctx.beginPath();
@@ -1634,15 +1823,13 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
               c.fillRect(sx - colHalfBound, topY - 4, colHalfBound * 2, span + 8);
 
               // Top & bottom root depth shading into ceiling & floor rock
-              const backAlpha = _clamp(0.76 - light.sunLit * 0.36, 0.36, 0.76);
+              const backAlpha = _clamp(0.92 - light.sunLit * 0.44, 0.44, 0.92);
               const rootTint = c.createLinearGradient(sx, topY, sx, botY);
               rootTint.addColorStop(0, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
-              rootTint.addColorStop(tTopSolid, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
-              rootTint.addColorStop(tTopLip, `rgba(${mergeRgb}, 0.42)`);
-              rootTint.addColorStop(tTopLip + 0.10, 'rgba(0, 0, 0, 0)');
-              rootTint.addColorStop(tBotLip - 0.10, 'rgba(0, 0, 0, 0)');
-              rootTint.addColorStop(tBotLip, `rgba(${mergeRgb}, 0.42)`);
-              rootTint.addColorStop(tBotSolid, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
+              rootTint.addColorStop(tTopLip, `rgba(${mergeRgb}, ${(backAlpha * 0.85).toFixed(3)})`);
+              rootTint.addColorStop(Math.min(0.49, tTopLip + 0.14), 'rgba(0, 0, 0, 0)');
+              rootTint.addColorStop(Math.max(0.51, tBotLip - 0.14), 'rgba(0, 0, 0, 0)');
+              rootTint.addColorStop(tBotLip, `rgba(${mergeRgb}, ${(backAlpha * 0.85).toFixed(3)})`);
               rootTint.addColorStop(1, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
               c.fillStyle = rootTint;
               c.fillRect(sx - colHalfBound, topY - 4, colHalfBound * 2, span + 8);
@@ -1663,9 +1850,25 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
                 c.stroke();
               }
             },
+            drawRockMask: (c) => {
+              if (!renderCtx?.rockChunks?.length) return false;
+              // Top half: trim pixel-exact 6..26px inside the REAL sloped/curved ceiling rock
+              c.save();
+              c.beginPath();
+              c.rect(spriteBounds.x - 4, spriteBounds.y - 4, spriteBounds.w + 8, midY - spriteBounds.y + 4);
+              c.clip();
+              _applyRockWallFeather(c, renderCtx, 0, -26, spriteBounds);
+              c.restore();
+              // Bottom half: trim pixel-exact 6..26px inside the REAL sloped/curved floor rock
+              c.save();
+              c.beginPath();
+              c.rect(spriteBounds.x - 4, midY, spriteBounds.w + 8, spriteBounds.y + spriteBounds.h - midY + 8);
+              c.clip();
+              _applyRockWallFeather(c, renderCtx, 0, 26, spriteBounds);
+              c.restore();
+              return true;
+            },
             drawAlphaMask: (c) => {
-              // 100% OPAQUE across open water + first 20px inside BOTH ceiling & floor rock (ZERO light leak!),
-              // dissolving smoothly to 0.0 BEFORE reaching topY / botY (ZERO dark rectangular caps!)
               const maskGrad = c.createLinearGradient(sx, topY, sx, botY);
               maskGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
               maskGrad.addColorStop(0.05, 'rgba(255, 255, 255, 0)');
@@ -2189,12 +2392,14 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const tAnchorSolid = _clamp((buryG - 14) / gSpan, 0.06, 0.24);
         const tOppSolid = _clamp(1 - (buryG - 14) / gSpan, 0.76, 0.94);
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, `g${spanToOpp ? 1 : 0}_${Math.round(waterLen / 8)}`);
+        const gBounds = { x: gMinX, y: gMinY, w: gMaxX - gMinX, h: gMaxY - gMinY };
+        const gMidY = (sy + endLipY) * 0.5;
         drewSteelHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: gMinX, y: gMinY, w: gMaxX - gMinX, h: gMaxY - gMinY },
+          gBounds,
           {
             tracePath: traceGirderPath,
             fillRule: 'evenodd',
@@ -2222,6 +2427,26 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
               }
               c.fillStyle = sg;
               c.fillRect(gMinX, gMinY, gMaxX - gMinX, gMaxY - gMinY);
+            },
+            drawRockMask: (c) => {
+              if (!renderCtx?.rockChunks?.length) return false;
+              if (spanToOpp) {
+                c.save();
+                c.beginPath();
+                c.rect(gBounds.x - 4, gBounds.y - 4, gBounds.w + 8, gMidY - gBounds.y + 4);
+                c.clip();
+                _applyRockWallFeather(c, renderCtx, 0, -16, gBounds);
+                c.restore();
+                c.save();
+                c.beginPath();
+                c.rect(gBounds.x - 4, gMidY, gBounds.w + 8, gBounds.y + gBounds.h - gMidY + 8);
+                c.clip();
+                _applyRockWallFeather(c, renderCtx, 0, 16, gBounds);
+                c.restore();
+              } else {
+                _applyRockWallFeather(c, renderCtx, 0, -dir * 16, gBounds);
+              }
+              return true;
             },
             drawAlphaMask: (c) => {
               const mg = c.createLinearGradient(sx, yL, tipX, endY);
@@ -2420,23 +2645,23 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
         const dx0 = u * wPx * 0.48;
         const bx = sx + dx0;
-        const by = wallY(dx0) - dir * 14;
+        const by = wallY(dx0) - dir * 32;
         const ax = Math.sin(tilt);
         const ay = dir * Math.cos(tilt);
         const px = Math.cos(tilt);
         const py = -dir * Math.sin(tilt);
 
-        const tipX = bx + ax * cLen;
-        const tipY = by + ay * cLen;
-        const shDist = cLen * 0.74;
+        const tipX = bx + ax * (cLen + 18);
+        const tipY = by + ay * (cLen + 18);
+        const shDist = (cLen + 18) * 0.74;
         const lShX = bx + ax * shDist - px * cHalfW;
         const lShY = by + ay * shDist - py * cHalfW;
         const rShX = bx + ax * shDist + px * cHalfW;
         const rShY = by + ay * shDist + py * cHalfW;
-        const lBaseX = bx - px * cHalfW * 0.82;
-        const lBaseY = by - py * cHalfW * 0.82;
-        const rBaseX = bx + px * cHalfW * 0.82;
-        const rBaseY = by + py * cHalfW * 0.82;
+        const lBaseX = bx - px * cHalfW * 0.88;
+        const lBaseY = by - py * cHalfW * 0.88;
+        const rBaseX = bx + px * cHalfW * 0.88;
+        const rBaseY = by + py * cHalfW * 0.88;
         for (const [qx, qy] of [[lBaseX, lBaseY], [lShX, lShY], [tipX, tipY], [rShX, rShY], [rBaseX, rBaseY]]) {
           if (qx - 6 < minX) minX = qx - 6;
           if (qx + 6 > maxX) maxX = qx + 6;
@@ -2456,17 +2681,18 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       };
 
       // Cached tight-sprite high-res 512px faceted amethyst/quartz cluster (`tex-fg-crystal.jpg`)!
-      // Smoothly alpha-feathers its 14px buried crystal roots into the real cave rock strata (ZERO dark oval blob!)
+      // Pixel-exact `rockChunks` mask trims buried roots along the exact curved/sloped cave rock strata!
       const { nx: cNx, ny: cNy } = _computeWallNormal(wallY, wPx * 0.46, dir);
       let drewCrystalHiRes = false;
       if (renderCtx?.mats?.crystal) {
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'cry');
+        const cBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         drewCrystalHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          cBounds,
           {
             tracePath: (sctx) => {
               sctx.beginPath();
@@ -2529,8 +2755,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
                 }
               }
             },
+            drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -cNx * 14, -cNy * 14, cBounds),
             drawAlphaMask: (c) => {
-              const mg = c.createLinearGradient(sx - cNx * 14, sy - cNy * 14, sx + cNx * 4, sy + cNy * 4);
+              const mg = c.createLinearGradient(sx - cNx * 22, sy - cNy * 22, sx + cNx * 4, sy + cNy * 4);
               mg.addColorStop(0, 'rgba(255, 255, 255, 0)');
               mg.addColorStop(0.28, 'rgba(255, 255, 255, 0.45)');
               mg.addColorStop(0.75, 'rgba(255, 255, 255, 1)');
@@ -2581,30 +2808,36 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       _drawWallWeldCollar(ctx, sx, wallY, halfW * 0.94, dir, Math.max(5, Math.min(7, hPx * 0.065)), Math.max(30, hPx * 0.24), mergeRgb, 0.50, vis);
 
       const spearGeoms = [];
-      let minX = sx - halfW * 1.1;
-      let maxX = sx + halfW * 1.1;
-      let minY = Math.min(sy, sy + dir * hPx) - 22;
-      let maxY = Math.max(sy, sy + dir * hPx) + 22;
+      let minX = sx - halfW * 1.15;
+      let maxX = sx + halfW * 1.15;
+      let minY = Math.min(sy, sy + dir * hPx) - 42;
+      let maxY = Math.max(sy, sy + dir * hPx) + 42;
       for (let i = 0; i < spears; i++) {
         const u = spears <= 1 ? 0 : i / (spears - 1) - 0.5;
         const j = (_hash01(el.seed + i * 29.3) - 0.5) * 0.14;
-        const dx0 = (u + j) * halfW * 1.70;
+        const dx0 = (u + j) * halfW * 1.62;
         const bx = sx + dx0;
-        const by = wallY(dx0) - dir * 10;
+        const by = wallY(dx0);
         const isMain = Math.abs(u) < 0.22;
         const len = hPx * (isMain ? 0.84 + _hash01(el.seed + i * 7) * 0.22 : 0.36 + _hash01(el.seed + i * 17) * 0.40);
-        const halfBase = Math.max(3.6, wPx * (isMain ? 0.105 : 0.072));
+        const halfBase = Math.max(3.8, wPx * (isMain ? 0.105 : 0.072));
         const tipX = bx + leanPx * 0.28;
         const tipY = by + dir * len;
-        if (tipY - 6 < minY) minY = tipY - 6;
-        if (tipY + 6 > maxY) maxY = tipY + 6;
-        spearGeoms.push({ bx, by, dx0, isMain, len, halfBase, tipX, tipY });
+        const rootYL = wallY(dx0 - halfBase) - dir * 34;
+        const rootYR = wallY(dx0 + halfBase) - dir * 34;
+        for (const qy of [rootYL, rootYR, by, tipY]) {
+          if (qy - 8 < minY) minY = qy - 8;
+          if (qy + 8 > maxY) maxY = qy + 8;
+        }
+        if (bx - halfBase - 8 < minX) minX = bx - halfBase - 8;
+        if (bx + halfBase + 8 > maxX) maxX = bx + halfBase + 8;
+        spearGeoms.push({ bx, by, dx0, isMain, len, halfBase, tipX, tipY, rootYL, rootYR });
       }
 
       const traceIcicleSubpath = (c, g) => {
-        c.moveTo(g.bx - g.halfBase, wallY(g.dx0 - g.halfBase) - dir * 14);
-        c.quadraticCurveTo(g.bx - g.halfBase * 0.30, g.by + dir * g.len * 0.52, g.tipX, g.tipY);
-        c.quadraticCurveTo(g.bx + g.halfBase * 0.34, g.by + dir * g.len * 0.52, g.bx + g.halfBase, wallY(g.dx0 + g.halfBase) - dir * 14);
+        c.moveTo(g.bx - g.halfBase * 1.08, g.rootYL);
+        c.quadraticCurveTo(g.bx - g.halfBase * 0.34, g.by + dir * g.len * 0.50, g.tipX, g.tipY);
+        c.quadraticCurveTo(g.bx + g.halfBase * 0.38, g.by + dir * g.len * 0.50, g.bx + g.halfBase * 1.08, g.rootYR);
         c.closePath();
       };
 
@@ -2612,12 +2845,13 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       let drewIceHiRes = false;
       if (renderCtx?.mats?.ice) {
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'ice');
+        const iBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         drewIceHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          iBounds,
           {
             tracePath: (sctx) => {
               sctx.beginPath();
@@ -2643,8 +2877,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
               c.fillStyle = ig;
               c.fillRect(minX, minY, maxX - minX, maxY - minY);
             },
+            drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -iNx * 14, -iNy * 14, iBounds),
             drawAlphaMask: (c) => {
-              const mg = c.createLinearGradient(sx - iNx * 14, sy - iNy * 14, sx + iNx * 4, sy + iNy * 4);
+              const mg = c.createLinearGradient(sx - iNx * 22, sy - iNy * 22, sx + iNx * 4, sy + iNy * 4);
               mg.addColorStop(0, 'rgba(255, 255, 255, 0)');
               mg.addColorStop(0.28, 'rgba(255, 255, 255, 0.45)');
               mg.addColorStop(0.75, 'rgba(255, 255, 255, 1)');
@@ -2935,11 +3170,6 @@ export const foregroundDepthRendererMethods = {
     const mats = _getHiResMaterialPatterns(this, ctx, this.level);
     const inCombat = Boolean(secretLair?.combatMode);
     const reduced = Boolean(this._reducedMotion);
-    const diverSx = diver ? viewCenterX + (diver.x - effCamX) * scale : -9999;
-    const diverSy = diver ? viewCenterY + (diver.y - effCamY) * scale : -9999;
-
-    const innerClearR = Math.max(12, scale * 0.34);
-    const outerClearR = Math.max(24, scale * 0.64);
 
     const solveOpts = {
       weather: this._activeWeather || null,
@@ -2953,29 +3183,53 @@ export const foregroundDepthRendererMethods = {
 
     const renderCtx =
       this._fgRenderCtxScratch ||
-      (this._fgRenderCtxScratch = { mats: null, cw: 0, ch: 0, texOriginX: 0, texOriginY: 0, scale: 0, el: null, wallProfile: null });
+      (this._fgRenderCtxScratch = {
+        mats: null,
+        cw: 0,
+        ch: 0,
+        texOriginX: 0,
+        texOriginY: 0,
+        scale: 0,
+        el: null,
+        wallProfile: null,
+        rockChunks: null,
+        rockPxPerM: 24,
+        levelYMin: -6,
+        effCamX: 0,
+        effCamY: 0,
+        viewCenterX: 0,
+        viewCenterY: 0,
+      });
     renderCtx.mats = mats;
     renderCtx.cw = cw;
     renderCtx.ch = ch;
     renderCtx.scale = scale;
+    renderCtx.rockChunks = this.rockChunks || null;
+    renderCtx.rockPxPerM = this._rockPxPerM || 24;
+    renderCtx.levelYMin = this.level?.bounds?.yMin ?? -6;
+    renderCtx.effCamX = effCamX;
+    renderCtx.effCamY = effCamY;
+    renderCtx.viewCenterX = viewCenterX;
+    renderCtx.viewCenterY = viewCenterY;
 
     // Share visible accent candidates with Pass 2 so _drawForegroundDepthLightingAccents does ZERO duplicate SDF probes!
     const accentCache = this._fgAccentCache || (this._fgAccentCache = { key: '', items: [], count: 0 });
     accentCache.key = `${this.level.id}|${timeSec}|${effCamX}|${effCamY}`;
     accentCache.count = 0;
 
+    // 100% solid opaque outside boss combat so flashlights, buddies & silt NEVER bleed through foreground elements!
+    const baseAlpha = inCombat ? 0.36 : 1.0;
+
     ctx.save();
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
-      const p = el.parallax;
-      const pyScale = 1 + (p - 1) * 0.14;
-      const dxPar = (el.x - effCamX) * scale * (p - 1);
-      const sx = viewCenterX + (el.x - effCamX) * scale + dxPar;
-      const fallbackSy = viewCenterY + (el.y - effCamY) * scale * pyScale + dxPar * (el.wallSlope || 0) * 0.88;
+      // World-locked (parallax = 1.0): zero drift off sloped walls, ceilings, or ledges!
+      const sx = viewCenterX + (el.x - effCamX) * scale;
+      const fallbackSy = viewCenterY + (el.y - effCamY) * scale;
 
-      const wPx = el.widthM * scale * p;
-      const hPx = el.heightM * scale * p;
-      const margin = Math.max(wPx, hPx) + 54;
+      const wPx = el.widthM * scale;
+      const hPx = el.heightM * scale;
+      const margin = Math.max(wPx, hPx) + 64;
       if (sx < -margin || sx > cw + margin || fallbackSy < -margin || fallbackSy > ch + margin) continue;
 
       // Early light gate BEFORE live SDF wall probing — skips pitch-black off-beam formations at 0 SDF cost!
@@ -2999,17 +3253,7 @@ export const foregroundDepthRendererMethods = {
       if (!wallProfile.hasWall) continue;
       const sy = wallProfile.centerSy;
 
-      // Anchor core-fade strictly at the buried wall-contact root so open-water bodies stay 100% SOLID (blocks all flashlight behind!)
-      const coreY = sy + dir * Math.min(hPx * 0.18, scale * 0.28);
-      const distCore = Math.hypot(sx - diverSx, coreY - diverSy);
-      let proxFade = 1.0;
-      if (distCore < outerClearR) {
-        const u = _clamp((distCore - innerClearR) / Math.max(1, outerClearR - innerClearR), 0, 1);
-        proxFade = 0.34 + u * u * 0.66;
-      }
-
-      const baseAlpha = inCombat ? 0.36 : 1.0;
-      const finalAlpha = baseAlpha * proxFade;
+      const finalAlpha = baseAlpha;
       if (finalAlpha < 0.04) continue;
 
       const swayPx = reduced
@@ -3105,15 +3349,12 @@ export const foregroundDepthRendererMethods = {
     ctx.save();
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
-      const p = el.parallax;
-      const pyScale = 1 + (p - 1) * 0.14;
-      const dxPar = (el.x - effCamX) * scale * (p - 1);
-      const sx = viewCenterX + (el.x - effCamX) * scale + dxPar;
-      const sy = viewCenterY + (el.y - effCamY) * scale * pyScale + dxPar * (el.wallSlope || 0) * 0.88;
+      const sx = viewCenterX + (el.x - effCamX) * scale;
+      const sy = viewCenterY + (el.y - effCamY) * scale;
 
-      const wPx = el.widthM * scale * p;
-      const hPx = el.heightM * scale * p;
-      const margin = Math.max(wPx, hPx) + 54;
+      const wPx = el.widthM * scale;
+      const hPx = el.heightM * scale;
+      const margin = Math.max(wPx, hPx) + 64;
       if (sx < -margin || sx > cw + margin || sy < -margin || sy > ch + margin) continue;
 
       const dir = el.side === 'ceiling' ? 1 : -1;
