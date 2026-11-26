@@ -926,6 +926,31 @@ export function createLiveryWorkshopController({
         const modalHasDpv = activeCompareSlot === 'scooter'
           ? Boolean(previewLivery?.scooterId && previewLivery.scooterId !== 'none')
           : showDpv;
+        let modalFocus = focusHighlight;
+        if (!modalFocus && !equipFxArg && activeCompareSlot) {
+          const palNow = resolveDiverLiveryPalette(previewLivery);
+          const slotItemMap = {
+            suit: palNow.suit,
+            trim: palNow.trimSpec,
+            headgear: palNow.headgear,
+            visor: palNow.visor,
+            tank: palNow.tank,
+            torch: palNow.torch,
+            scooter: palNow.scooter,
+            harpoon: palNow.harpoon,
+            patch: palNow.patch,
+          };
+          const eqSlotItem = slotItemMap[activeCompareSlot];
+          if (eqSlotItem) {
+            const tm = getGearTierMeta(eqSlotItem.tier);
+            modalFocus = {
+              slot: activeCompareSlot,
+              color: tm.color,
+              kicker: 'EQUIPPED',
+              label: eqSlotItem.name,
+            };
+          }
+        }
         drawLiveryPreview(gearSlotPreviewCtx, gearSlotPreviewCanvasEl.width, gearSlotPreviewCanvasEl.height, previewLivery, {
           hasCcr: showCcr,
           hasDpv: modalHasDpv,
@@ -933,7 +958,7 @@ export function createLiveryWorkshopController({
           envMode: liveryPreviewEnv,
           timeSec,
           equipFx: equipFxArg,
-          focusHighlight,
+          focusHighlight: modalFocus,
         });
       }
     } catch (err) {

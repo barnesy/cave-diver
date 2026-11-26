@@ -2612,22 +2612,23 @@ function _easeOutBack(t) {
 }
 
 /**
- * Resolve exact avatar anchor, highlight geometry, and callout direction for every gear slot (v228).
+ * Resolve exact avatar anchor, studio backlight geometry, and camera zoom framing for every gear slot (v228 / v236).
  */
 function _getSlotPreviewAnchor(slot, sx, sy, scale) {
   const u = scale * 0.55;
   if (slot === 'headgear') {
-    return { ax: sx + u * 0.52, ay: sy - u * 0.14, rx: u * 0.48, ry: u * 0.42, shape: 'circle', label: 'HEADGEAR', dirX: 1, dirY: -1 };
+    return { ax: sx + u * 0.52, ay: sy - u * 0.14, rx: u * 0.50, ry: u * 0.44, zoom: 1.62, shape: 'circle', label: 'HEADGEAR', dirX: 1, dirY: -1 };
   }
   if (slot === 'visor') {
-    return { ax: sx + u * 0.72, ay: sy - u * 0.02, rx: u * 0.30, ry: u * 0.28, shape: 'circle', label: 'VISOR LENS', dirX: 1, dirY: -1 };
+    return { ax: sx + u * 0.72, ay: sy - u * 0.02, rx: u * 0.34, ry: u * 0.32, zoom: 1.74, shape: 'circle', label: 'VISOR LENS', dirX: 1, dirY: -1 };
   }
   if (slot === 'tank' || slot === 'ccr') {
     return {
       ax: sx - u * 0.28,
       ay: sy - u * 0.40,
-      rx: u * 0.68,
-      ry: u * 0.28,
+      rx: u * 0.72,
+      ry: u * 0.32,
+      zoom: 1.50,
       shape: 'capsule',
       label: slot === 'ccr' ? 'CCR LOOP' : 'TWIN TANKS',
       dirX: -1,
@@ -2635,170 +2636,192 @@ function _getSlotPreviewAnchor(slot, sx, sy, scale) {
     };
   }
   if (slot === 'torch') {
-    return { ax: sx + 0.58 * scale, ay: sy + 0.21 * scale, rx: u * 0.44, ry: u * 0.44, shape: 'circle', label: 'PRIMARY TORCH', dirX: 1, dirY: 1 };
+    return { ax: sx + 0.58 * scale, ay: sy + 0.21 * scale, rx: u * 0.48, ry: u * 0.46, zoom: 1.58, shape: 'circle', label: 'PRIMARY TORCH', dirX: 1, dirY: 1 };
   }
   if (slot === 'patch') {
-    return { ax: sx - u * 0.02, ay: sy + u * 0.01, rx: u * 0.32, ry: u * 0.32, shape: 'circle', label: 'SHOULDER PATCH', dirX: -1, dirY: 1 };
+    return { ax: sx - u * 0.02, ay: sy + u * 0.01, rx: u * 0.36, ry: u * 0.36, zoom: 1.72, shape: 'circle', label: 'SHOULDER PATCH', dirX: -1, dirY: 1 };
   }
   if (slot === 'trim') {
     return {
-      ax: sx - 0.32 * scale,
-      ay: sy - 0.02 * scale,
-      rx: scale * 0.48,
-      ry: scale * 0.20,
+      ax: sx - 0.56 * scale,
+      ay: sy - 0.05 * scale,
+      rx: scale * 0.58,
+      ry: scale * 0.26,
+      zoom: 1.32,
       shape: 'capsule',
-      secondary: { ax: sx - 1.32 * scale, ay: sy - 0.14 * scale, r: u * 0.48 },
+      secondary: { ax: sx - 1.30 * scale, ay: sy - 0.14 * scale, r: u * 0.52 },
       label: 'TRIM & FINS',
       dirX: -1,
       dirY: 1,
     };
   }
   if (slot === 'suit') {
-    return { ax: sx - 0.24 * scale, ay: sy + 0.02 * scale, rx: scale * 0.64, ry: scale * 0.28, shape: 'capsule', label: 'DRYSUIT', dirX: -1, dirY: 1 };
+    return { ax: sx - 0.26 * scale, ay: sy + 0.02 * scale, rx: scale * 0.68, ry: scale * 0.32, zoom: 1.26, shape: 'capsule', label: 'DRYSUIT', dirX: -1, dirY: 1 };
   }
   if (slot === 'dpv' || slot === 'scooter') {
-    return { ax: sx + u * 1.15, ay: sy + u * 0.24, rx: u * 0.62, ry: u * 0.48, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
+    return { ax: sx + u * 0.92, ay: sy + u * 0.16, rx: u * 0.68, ry: u * 0.52, zoom: 1.40, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
   }
   if (slot === 'harpoon') {
-    return { ax: sx + 0.66 * scale, ay: sy + 0.22 * scale, rx: u * 0.56, ry: u * 0.36, shape: 'capsule', label: 'HARPOON', dirX: 1, dirY: 1 };
+    return { ax: sx + 0.68 * scale, ay: sy + 0.16 * scale, rx: u * 0.68, ry: u * 0.42, zoom: 1.36, shape: 'capsule', label: 'HARPOON', dirX: 1, dirY: 1 };
   }
   if (slot === 'chroma') {
-    return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.86, ry: scale * 0.42, shape: 'capsule', label: 'COLOR COAT', dirX: -1, dirY: -1 };
+    return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.88, ry: scale * 0.44, zoom: 1.18, shape: 'capsule', label: 'COLOR COAT', dirX: -1, dirY: -1 };
   }
-  return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, shape: 'capsule', label: 'FULL RIG', dirX: 1, dirY: -1 };
+  return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, zoom: 1.0, shape: 'capsule', label: 'FULL RIG', dirX: 1, dirY: -1 };
 }
 
-function _drawSlotGlowShape(ctx, anchor, color, alpha, pulse, scale) {
+/**
+ * Per-canvas smooth camera zoom & focus pan state (v236).
+ * WeakMap keeps zero leaks across modal/canvas lifecycles and snaps immediately on first draw.
+ */
+const _previewCameraStates = new WeakMap();
+
+function _resolvePreviewCameraTarget(slot, sx, syBase, scale, w, h, equipFx) {
+  if (!slot || slot === 'all') {
+    return { zoom: 1.0, cx: w * 0.50, cy: h * 0.52 };
+  }
+  const anchor = _getSlotPreviewAnchor(slot, sx, syBase, scale);
+  let zoom = anchor.zoom || 1.25;
+  // Subtle cinematic lock-in zoom pulse when freshly equipped
+  if (equipFx && equipFx.progress >= 0 && equipFx.progress < 0.55) {
+    const k = Math.sin((equipFx.progress / 0.55) * Math.PI);
+    zoom += k * 0.07;
+  }
+  // Blend anchor slightly toward diver center so silhouette context stays clear
+  const cx = anchor.ax * 0.88 + sx * 0.12;
+  const cy = anchor.ay * 0.88 + syBase * 0.12;
+  return { zoom, cx, cy };
+}
+
+function _stepPreviewCamera(ctx, target, timeSec) {
+  if (!ctx || typeof ctx !== 'object') return target;
+  const prev = _previewCameraStates.get(ctx);
+  if (!prev || !Number.isFinite(timeSec)) {
+    const init = { zoom: target.zoom, cx: target.cx, cy: target.cy, lastTimeSec: Number.isFinite(timeSec) ? timeSec : 0 };
+    _previewCameraStates.set(ctx, init);
+    return init;
+  }
+  const rawDt = timeSec - prev.lastTimeSec;
+  if (rawDt < -0.05) {
+    // Timeline reset (e.g. unit test or fresh session) -> snap immediately
+    prev.zoom = target.zoom;
+    prev.cx = target.cx;
+    prev.cy = target.cy;
+    prev.lastTimeSec = timeSec;
+    return prev;
+  }
+  if (rawDt > 0.35) {
+    // Modal was closed and reopened -> start gently pulled back for a smooth zoom-in reveal
+    prev.zoom = Math.max(1.02, target.zoom * 0.86);
+    prev.cx = target.cx;
+    prev.cy = target.cy;
+    prev.lastTimeSec = timeSec;
+    return prev;
+  }
+  const dt = Math.max(0.008, Math.min(0.06, rawDt || 0.016));
+  const k = 1 - Math.exp(-dt * 9.5);
+  prev.zoom += (target.zoom - prev.zoom) * k;
+  prev.cx += (target.cx - prev.cx) * k;
+  prev.cy += (target.cy - prev.cy) * k;
+  prev.lastTimeSec = timeSec;
+  return prev;
+}
+
+/**
+ * Draw luminous underwater studio backlighting strictly BEHIND the diver silhouette (v236).
+ * Replaces harsh foreground outlines so every piece of gear stays 100% crisp and unobstructed.
+ */
+function _drawSlotBacklight(ctx, anchor, color, alpha, pulse, scale, timeSec = 0, equipBurst = 0) {
   if (alpha <= 0.01) return;
-  const { ax, ay, rx, ry, shape, secondary } = anchor;
-  const boost = 1 + pulse * 0.08;
+  const { ax, ay, rx, ry, secondary } = anchor;
+  const baseR = Math.max(rx, ry);
+  const bloomR = baseR * (2.55 + pulse * 0.16 + equipBurst * 0.85);
+
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
 
-  // Soft radial illumination bloom centered directly on the gear slot
-  const bloomR = Math.max(rx, ry) * (1.85 + pulse * 0.2);
-  const bg = ctx.createRadialGradient(ax, ay, Math.min(rx, ry) * 0.15, ax, ay, bloomR);
-  bg.addColorStop(0, color);
-  bg.addColorStop(0.55, color);
-  bg.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.globalAlpha = alpha * 0.26;
-  ctx.fillStyle = bg;
+  // 1. Wide feathered studio atmospheric wash behind the gear piece
+  const wash = ctx.createRadialGradient(ax, ay, baseR * 0.08, ax, ay, bloomR);
+  wash.addColorStop(0, '#ffffff');
+  wash.addColorStop(0.24, color);
+  wash.addColorStop(0.58, color);
+  wash.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.globalAlpha = Math.min(0.72, alpha * (0.34 + pulse * 0.06 + equipBurst * 0.28));
+  ctx.fillStyle = wash;
   ctx.beginPath();
   ctx.arc(ax, ay, bloomR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Crisp precision highlight ring / capsule around the exact slot
-  ctx.strokeStyle = color;
-  ctx.globalAlpha = alpha * 0.92;
-  ctx.lineWidth = Math.max(1.6, scale * 0.026);
+  // 2. Tighter bright specular rim-core right behind the item silhouette so edges pop cleanly
+  const coreR = baseR * (1.28 + pulse * 0.08 + equipBurst * 0.35);
+  const core = ctx.createRadialGradient(ax, ay, 2, ax, ay, coreR);
+  core.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+  core.addColorStop(0.45, color);
+  core.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.globalAlpha = Math.min(0.68, alpha * (0.28 + pulse * 0.05 + equipBurst * 0.26));
+  ctx.fillStyle = core;
   ctx.beginPath();
-  if (shape === 'capsule') {
-    ctx.ellipse(ax, ay, rx * boost, ry * boost, 0, 0, Math.PI * 2);
-  } else {
-    ctx.arc(ax, ay, rx * boost, 0, Math.PI * 2);
-  }
-  ctx.stroke();
+  ctx.arc(ax, ay, coreR, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Bright inner white specular core rim
-  ctx.strokeStyle = '#ffffff';
-  ctx.globalAlpha = alpha * 0.55;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  if (shape === 'capsule') {
-    ctx.ellipse(ax, ay, rx * (boost - 0.04), ry * (boost - 0.04), 0, 0, Math.PI * 2);
-  } else {
-    ctx.arc(ax, ay, Math.max(4, rx * (boost - 0.04)), 0, Math.PI * 2);
-  }
-  ctx.stroke();
-
-  // Secondary fin-tip highlight ring when equipping/inspecting Trim & Fins
-  if (secondary) {
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = alpha * 0.82;
-    ctx.lineWidth = Math.max(1.4, scale * 0.022);
+  // 3. Soft feathered volumetric backlight rays fanning gently from behind the item
+  const rayCount = 5;
+  const rayR = bloomR * 1.12;
+  const rotBase = timeSec * 0.16;
+  ctx.globalAlpha = Math.min(0.28, alpha * (0.07 + pulse * 0.025 + equipBurst * 0.12));
+  for (let i = 0; i < rayCount; i++) {
+    const a0 = rotBase + (i / rayCount) * Math.PI * 2;
+    const rg = ctx.createRadialGradient(ax, ay, baseR * 0.15, ax, ay, rayR);
+    rg.addColorStop(0, '#ffffff');
+    rg.addColorStop(0.35, color);
+    rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = rg;
     ctx.beginPath();
-    ctx.arc(secondary.ax, secondary.ay, secondary.r * boost, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.moveTo(ax, ay);
+    ctx.arc(ax, ay, rayR, a0, a0 + 0.28);
+    ctx.closePath();
+    ctx.fill();
   }
-  ctx.restore();
-}
 
-/**
- * Draw a crisp blueprint leader-line callout pin pointing directly to a gear slot on the diver (v228).
- */
-function _drawBlueprintCalloutPin(ctx, anchor, w, h, color, kicker, label, alpha) {
-  if (!w || !h || alpha <= 0.02) return;
-  const { ax, ay, dirX, dirY } = anchor;
-  const textMain = label ? `${kicker} · ${label}` : kicker;
-  ctx.save();
-  ctx.globalAlpha = Math.min(1, alpha);
-  ctx.font = '800 10px ui-monospace, SFMono-Regular, Menlo, monospace';
-  const tw = Math.min(w * 0.56, ctx.measureText(textMain).width + 18);
-  const pillH = 20;
-
-  // Choose elbow & pill placement cleanly away from top-left status pill & bottom-right spec tag
-  let ex = ax + dirX * 26;
-  let ey = ay + dirY * 32;
-  // Keep callout cleanly within safe band (y: 36..h-32)
-  ey = Math.max(38, Math.min(h - 36, ey));
-  let px = dirX >= 0 ? ex + 10 : ex - 10 - tw;
-  if (px < 10) {
-    px = 10;
-    ex = Math.max(ax + 12, px + tw * 0.35);
-  } else if (px + tw > w - 10) {
-    px = w - 10 - tw;
-    ex = Math.min(ax - 12, px + tw * 0.65);
+  // 4. Secondary soft backlight behind fin tips when inspecting/equipping Trim & Fins
+  if (secondary) {
+    const sR = secondary.r * (2.35 + pulse * 0.16 + equipBurst * 0.6);
+    const sg = ctx.createRadialGradient(secondary.ax, secondary.ay, 2, secondary.ax, secondary.ay, sR);
+    sg.addColorStop(0, '#ffffff');
+    sg.addColorStop(0.32, color);
+    sg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalAlpha = Math.min(0.56, alpha * (0.28 + pulse * 0.05 + equipBurst * 0.22));
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(secondary.ax, secondary.ay, sR, 0, Math.PI * 2);
+    ctx.fill();
   }
-  const py = ey - pillH * 0.5;
-  const attachX = px + tw < ax ? px + tw : px > ax ? px : Math.max(px + 8, Math.min(px + tw - 8, ex));
-
-  // Glowing anchor pin directly on the gear slot
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(ax, ay, 4.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(ax, ay, 2.0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Crisp leader line from slot anchor -> elbow -> callout pill
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(ax, ay);
-  ctx.lineTo(ex, ey);
-  ctx.lineTo(attachX, ey);
-  ctx.stroke();
-
-  // Translucent dark-glass callout pill
-  ctx.fillStyle = 'rgba(4, 14, 28, 0.90)';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.roundRect?.(px, py, tw, pillH, 99) ?? ctx.rect(px, py, tw, pillH);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#f8fafc';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(px + 7, py, tw - 14, pillH);
-  ctx.clip();
-  ctx.fillText(textMain, px + 9, ey + 0.5);
-  ctx.restore();
 
   ctx.restore();
 }
 
 /**
- * Draw kinetic slot-targeted gear equip overlay FX on the preview avatar (v211 / v228):
- * Phase 1 (0..38%): fast kinetic lock-on ring, hydro-seal sweep & sparkle burst.
- * Phase 1-2 (0..100%): soft radial spotlight + unmistakable glowing slot halo + blueprint callout pin.
+ * Draw subtle peripheral depth-dimming vignette centered on the focused gear slot (v236).
  */
-function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, w = 0, h = 0, timeSec = 0) {
+function _drawFocusVignette(ctx, anchor, w, h, scale, alpha) {
+  if (!w || !h || alpha <= 0.01) return;
+  const { ax, ay, rx, ry } = anchor;
+  const baseR = Math.max(rx, ry);
+  const spotR = Math.max(baseR * 2.4, scale * 0.82);
+  ctx.save();
+  const vig = ctx.createRadialGradient(ax, ay, spotR * 0.52, ax, ay, Math.max(w, h) * 0.85);
+  vig.addColorStop(0, 'rgba(2, 8, 20, 0)');
+  vig.addColorStop(0.58, `rgba(2, 8, 20, ${(0.14 * alpha).toFixed(3)})`);
+  vig.addColorStop(1, `rgba(2, 8, 20, ${(0.28 * alpha).toFixed(3)})`);
+  ctx.fillStyle = vig;
+  ctx.fillRect(ax - w, ay - h, w * 2, h * 2);
+  ctx.restore();
+}
+
+/**
+ * Draw backlighting + rising luminous motes behind the diver when freshly equipping gear (v236).
+ */
+function _drawEquipBacklightFx(ctx, sx, sy, scale, equipFx, w = 0, h = 0, timeSec = 0) {
   if (!equipFx || !(equipFx.progress >= 0 && equipFx.progress < 1)) return;
   const t = Math.max(0, Math.min(1, equipFx.progress));
   const slot = equipFx.slot || 'all';
@@ -2807,116 +2830,106 @@ function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, w = 0, h = 0, timeSec 
   const { ax, ay } = anchor;
   const baseR = Math.max(anchor.rx, anchor.ry);
 
-  // Smooth spotlight envelope: ramps in instantly, holds brightly through 74%, gently fades to 0
-  const holdAlpha = t < 0.08 ? t / 0.08 : t < 0.74 ? 1 : Math.max(0, (1 - t) / 0.26);
-  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 8.5);
+  const holdAlpha = t < 0.08 ? t / 0.08 : t < 0.76 ? 1 : Math.max(0, (1 - t) / 0.24);
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 4.5);
+  const equipBurst = t < 0.45 ? Math.pow(1 - t / 0.45, 1.55) : 0;
 
-  // 0. Subtle backdrop focus dim with soft spotlight cutout centered on the newly equipped slot
-  if (w > 0 && h > 0 && slot !== 'all') {
-    ctx.save();
-    const spotR = Math.max(baseR * 2.1, scale * 0.72);
-    const vig = ctx.createRadialGradient(ax, ay, spotR * 0.45, ax, ay, Math.max(w, h) * 0.72);
-    vig.addColorStop(0, 'rgba(2, 8, 20, 0)');
-    vig.addColorStop(0.55, `rgba(2, 8, 20, ${(0.18 * holdAlpha).toFixed(3)})`);
-    vig.addColorStop(1, `rgba(2, 8, 20, ${(0.34 * holdAlpha).toFixed(3)})`);
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
+  if (slot !== 'all') {
+    _drawFocusVignette(ctx, anchor, w, h, scale, holdAlpha);
   }
+  _drawSlotBacklight(ctx, anchor, color, holdAlpha, pulse, scale, timeSec, equipBurst);
 
-  // 1. Sustained unmistakable glowing slot highlight halo
-  _drawSlotGlowShape(ctx, anchor, color, holdAlpha * 0.95, pulse, scale);
-
-  // 2. Initial fast kinetic lock-on burst (first 38% of 2.4s window = ~900ms)
-  if (t < 0.42) {
-    const bt = t / 0.42;
-    const bFade = Math.pow(1 - bt, 1.35);
+  // Soft rising backlight motes drifting behind the silhouette during lock-in
+  if (t < 0.55) {
+    const bt = t / 0.55;
+    const bFade = Math.pow(1 - bt, 1.4);
+    const moteCount = equipFx.tier === 'legendary' || equipFx.tier === 'mythic' ? 12 : 8;
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-
-    const ringR = baseR * (0.48 + _easeOutBack(Math.min(1, bt * 1.45)) * 0.85);
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = bFade * 0.88;
-    ctx.lineWidth = Math.max(1.6, scale * 0.032 * (1 - bt * 0.45));
-    ctx.beginPath();
-    ctx.arc(ax, ay, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    const arcSpin = bt * Math.PI * 1.7;
-    ctx.lineWidth = Math.max(1.3, scale * 0.022);
-    ctx.globalAlpha = bFade * 0.78;
-    for (let a = 0; a < 3; a++) {
-      const start = arcSpin + (a * Math.PI * 2) / 3;
-      ctx.beginPath();
-      ctx.arc(ax, ay, ringR * 1.24, start, start + 0.72);
-      ctx.stroke();
-    }
-
-    // Full-body hydro-seal sweep wave for Drysuit, Trim, Chroma Finish, or Full Kit equip
-    if (slot === 'suit' || slot === 'trim' || slot === 'chroma' || slot === 'all') {
-      const sweepX = sx + 0.75 * scale - bt * (2.35 * scale);
-      const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.28, sy, sweepX + scale * 0.28, sy);
-      waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      waveGrad.addColorStop(0.5, color);
-      waveGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = waveGrad;
-      ctx.globalAlpha = bFade * 0.48;
-      ctx.fillRect(sweepX - scale * 0.28, sy - scale * 0.56, scale * 0.56, scale * 1.05);
-    }
-
-    // Radial sparkle burst radiating from the newly locked slot
-    const sparkCount = equipFx.tier === 'mythic' ? 14 : equipFx.tier === 'epic' ? 11 : 8;
-    for (let i = 0; i < sparkCount; i++) {
-      const ang = (i / sparkCount) * Math.PI * 2 + (slot === 'torch' ? -0.35 : 0.25);
-      const dist = baseR * (0.28 + bt * (1.15 + (i % 3) * 0.22));
+    for (let i = 0; i < moteCount; i++) {
+      const ang = (i / moteCount) * Math.PI * 2 + 0.3;
+      const dist = baseR * (0.45 + bt * (1.25 + (i % 3) * 0.25));
       const px = ax + Math.cos(ang) * dist;
-      const py = ay + Math.sin(ang) * dist - bt * 9;
-      const pr = Math.max(1.1, (1 - bt * 0.65) * (2.1 + (i % 2) * 1.2));
+      const py = ay + Math.sin(ang) * dist - bt * 12;
+      const pr = Math.max(1.0, (1 - bt * 0.6) * (1.7 + (i % 2) * 0.9));
       ctx.fillStyle = i % 2 === 0 ? '#ffffff' : color;
-      ctx.globalAlpha = bFade * 0.9;
+      ctx.globalAlpha = bFade * 0.68;
       ctx.beginPath();
       ctx.arc(px, py, pr, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
   }
-
-  // 3. Precision blueprint callout pin pointing straight at the newly equipped piece
-  if (w > 0 && h > 0 && slot !== 'all') {
-    const shortName = equipFx.itemName ? equipFx.itemName.toUpperCase() : '';
-    _drawBlueprintCalloutPin(ctx, anchor, w, h, color, anchor.label, shortName, holdAlpha);
-  }
 }
 
 /**
- * Draw persistent subtle live spotlight + blueprint callout pin while hovering/inspecting a gear slot (v228).
+ * Draw calm, persistent studio backlighting behind the selected/hovered gear slot (v236).
  */
-function _drawInspectSpotlightFx(ctx, sx, sy, scale, focusHighlight, w = 0, h = 0, timeSec = 0) {
+function _drawInspectBacklightFx(ctx, sx, sy, scale, focusHighlight, w = 0, h = 0, timeSec = 0) {
   if (!focusHighlight || !focusHighlight.slot || focusHighlight.slot === 'all') return;
   const anchor = _getSlotPreviewAnchor(focusHighlight.slot, sx, sy, scale);
   const color = focusHighlight.color || '#38bdf8';
-  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2);
-  const baseR = Math.max(anchor.rx, anchor.ry);
+  const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.0);
 
-  if (w > 0 && h > 0) {
-    ctx.save();
-    const spotR = Math.max(baseR * 2.15, scale * 0.72);
-    const vig = ctx.createRadialGradient(anchor.ax, anchor.ay, spotR * 0.45, anchor.ax, anchor.ay, Math.max(w, h) * 0.72);
-    vig.addColorStop(0, 'rgba(2, 8, 20, 0)');
-    vig.addColorStop(0.58, 'rgba(2, 8, 20, 0.14)');
-    vig.addColorStop(1, 'rgba(2, 8, 20, 0.26)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
+  _drawFocusVignette(ctx, anchor, w, h, scale, 0.85);
+  _drawSlotBacklight(ctx, anchor, color, 0.92, pulse, scale, timeSec, 0);
+}
+
+/**
+ * Whisper-soft translucent hydro-sheen sweep on full-body equips (zero outlines or rings).
+ */
+function _drawEquipForegroundSheen(ctx, sx, sy, scale, equipFx) {
+  if (!equipFx || !(equipFx.progress >= 0 && equipFx.progress < 0.42)) return;
+  const slot = equipFx.slot || 'all';
+  if (slot !== 'suit' && slot !== 'trim' && slot !== 'chroma' && slot !== 'all') return;
+  const bt = equipFx.progress / 0.42;
+  const bFade = Math.pow(1 - bt, 1.5);
+  const color = equipFx.color || '#38bdf8';
+  const sweepX = sx + 0.72 * scale - bt * (2.25 * scale);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.24, sy, sweepX + scale * 0.24, sy);
+  waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
+  waveGrad.addColorStop(0.5, color);
+  waveGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = waveGrad;
+  ctx.globalAlpha = bFade * 0.22;
+  ctx.fillRect(sweepX - scale * 0.24, sy - scale * 0.52, scale * 0.48, scale * 0.98);
+  ctx.restore();
+}
+
+/**
+ * Draw a clean, borderless frosted-glass corner status caption in screen space (v236).
+ * Stays completely off the diver so gear artwork is never obscured by leader lines or boxes.
+ */
+function _drawPreviewCornerCaption(ctx, w, txt, accentColor, textColor = '#f1f5f9', alpha = 1) {
+  if (!txt || alpha <= 0.02) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, alpha);
+  ctx.font = '800 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+  const dotSpace = accentColor ? 12 : 0;
+  const tw = Math.min(w - 20, ctx.measureText(txt).width + 20 + dotSpace);
+  const pillH = 22;
+  ctx.fillStyle = 'rgba(4, 14, 28, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect?.(10, 10, tw, pillH, 99) ?? ctx.rect(10, 10, tw, pillH);
+  ctx.fill();
+  if (accentColor) {
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    ctx.arc(20, 21, 3.2, 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  _drawSlotGlowShape(ctx, anchor, color, 0.78, pulse, scale);
-
-  if (w > 0 && h > 0) {
-    const kicker = focusHighlight.kicker || anchor.label;
-    const label = focusHighlight.label ? focusHighlight.label.toUpperCase() : '';
-    _drawBlueprintCalloutPin(ctx, anchor, w, h, color, kicker, label, 0.94);
-  }
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(10, 10, tw - 8, pillH);
+  ctx.clip();
+  ctx.fillText(txt, 19 + dotSpace, 21.2);
+  ctx.restore();
+  ctx.restore();
 }
 
 /**
@@ -3044,11 +3057,9 @@ function _drawArticulatedPreviewDiver(
     { torchOn: true, hasSpeargun, timeSec }
   );
 
-  // 6. Kinetic slot-targeted equip spotlight + persistent hover/inspect highlight (v211 / v228)
+  // 6. Subtle translucent foreground hydro-sheen only during full-body equip lock-in (zero outlines!)
   if (equipFx) {
-    _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, canvasW, canvasH, timeSec);
-  } else if (focusHighlight) {
-    _drawInspectSpotlightFx(ctx, sx, sy, scale, focusHighlight, canvasW, canvasH, timeSec);
+    _drawEquipForegroundSheen(ctx, sx, sy, scale, equipFx);
   }
 
   // Return exact world-space torch lens tip & regulator mouthpiece coords for beam & bubbles
@@ -3114,7 +3125,8 @@ function _drawAnimatedTorchBeamFx(ctx, torchX, torchY, coneLen, sweepAng, torch,
 
 /**
  * Render a live animated "Test Tank" diorama preview of the customized diver rig + torch beam
- * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153 / v166 / v211).
+ * across Clear Water, Silt Haze (backscatter comparison), or Night Bioluminescence environments (v153 / v166 / v211 / v236).
+ * Smoothly zooms onto selected/equipped gear slots with luminous backlighting strictly behind the diver.
  */
 export function drawLiveryPreview(
   ctx,
@@ -3188,13 +3200,27 @@ export function drawLiveryPreview(
   // Frame the full articulated in-game diver (fin tips to outstretched torch hand) cleanly inside tank
   const scale = Math.min(w * 0.215, h * 0.56);
   const sx = w * 0.445;
-  const sy = h * 0.54 + Math.sin(timeSec * 1.8) * 3.4 + recoilY;
+  const syBase = h * 0.54;
+  const sy = syBase + Math.sin(timeSec * 1.8) * 3.4 + recoilY;
   const sweepAng = Math.sin(timeSec * 1.15) * 0.08;
   const breath = Math.sin(timeSec * 1.7) * 0.02;
   const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
   const hyPre = sy + (hasDpv ? 0.16 : 0.21 + breath) * scale;
   const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
   const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+
+  // Smooth camera zoom & focus pan onto selected / equipped gear slot (v236)
+  const activeSlot = equipFx?.slot || focusHighlight?.slot || null;
+  const camTarget = _resolvePreviewCameraTarget(activeSlot, sx, syBase, scale, w, h, equipFx);
+  const cam = _stepPreviewCamera(ctx, camTarget, timeSec);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
+  ctx.translate(w * 0.50, h * 0.52);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.translate(-cam.cx, -cam.cy);
 
   // Volumetric torch cone preview (with optical ignition flare when torch is freshly equipped!)
   const torchIgniteScale =
@@ -3256,8 +3282,8 @@ export function drawLiveryPreview(
     ctx.fill();
     if (wp.isSetAura) {
       // Full-Set Capstone double-orbit prestige arcs (v216)
-      ctx.strokeStyle = `rgba(${wp.auraRgb}, ${(0.28 + pulse * 0.22).toFixed(2)})`;
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = `rgba(${wp.auraRgb}, ${(0.24 + pulse * 0.18).toFixed(2)})`;
+      ctx.lineWidth = 1.4;
       const rot = timeSec * 1.15;
       ctx.beginPath();
       ctx.arc(sx - scale * 0.1, sy, scale * 0.94, rot, rot + Math.PI * 0.62);
@@ -3281,7 +3307,14 @@ export function drawLiveryPreview(
     ctx.restore();
   }
 
-  // Draw the exact 1:1 in-game articulated diver with live animated properties + equip/inspect spotlight
+  // Luminous studio backlighting strictly BEHIND the diver for selected / equipped gear (v236)
+  if (equipFx) {
+    _drawEquipBacklightFx(ctx, sx, sy, scale, equipFx, w, h, timeSec);
+  } else if (focusHighlight) {
+    _drawInspectBacklightFx(ctx, sx, sy, scale, focusHighlight, w, h, timeSec);
+  }
+
+  // Draw the exact 1:1 in-game articulated diver crisp & unobstructed in front of the backlight
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
@@ -3290,71 +3323,35 @@ export function drawLiveryPreview(
     sweepAng,
     animateKick: true,
     equipFx,
-    focusHighlight,
+    focusHighlight: null,
     canvasW: w,
     canvasH: h,
   });
 
-  // Top-left live equip, locked-try-on, or active Set Synergy status pill inside the tank
+  ctx.restore();
+
+  // Top-left borderless frosted status caption in crisp screen space (never overlaps diver gear)
   if (previewLockedLabel) {
-    ctx.save();
-    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-    const txt = `🔒 TRY-ON PREVIEW · ${previewLockedLabel}`;
-    const tw = ctx.measureText(txt).width + 18;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.86)';
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#fde047';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(txt, 19, 21);
-    ctx.restore();
+    _drawPreviewCornerCaption(ctx, w, `🔒 TRY-ON PREVIEW · ${previewLockedLabel}`, '#facc15', '#fde047', 1);
   } else if (equipFx && equipFx.itemName && equipFx.progress < 0.98) {
     const pillAlpha = Math.min(1, (1 - equipFx.progress) * 2.4);
-    ctx.save();
-    ctx.globalAlpha = pillAlpha;
-    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-    const txt = `${equipFx.isPreview ? '👁 PREVIEW' : '⚡ EQUIPPED'} · ${equipFx.itemName.toUpperCase()}`;
-    const tw = ctx.measureText(txt).width + 18;
-    ctx.fillStyle = 'rgba(7, 22, 42, 0.88)';
-    ctx.strokeStyle = equipFx.color || '#38bdf8';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#f8fafc';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(txt, 19, 21);
-    ctx.restore();
+    const slotAnchor = equipFx.slot && equipFx.slot !== 'all' ? _getSlotPreviewAnchor(equipFx.slot, sx, syBase, scale) : null;
+    const prefix = equipFx.isPreview ? '👁 PREVIEW' : slotAnchor ? `⚡ ${slotAnchor.label}` : '⚡ EQUIPPED';
+    _drawPreviewCornerCaption(ctx, w, `${prefix} · ${equipFx.itemName.toUpperCase()}`, equipFx.color || '#38bdf8', '#f8fafc', pillAlpha);
+  } else if (focusHighlight && focusHighlight.slot && focusHighlight.slot !== 'all') {
+    const slotAnchor = _getSlotPreviewAnchor(focusHighlight.slot, sx, syBase, scale);
+    const kicker = (focusHighlight.kicker || slotAnchor.label).toUpperCase();
+    const label = focusHighlight.label ? focusHighlight.label.toUpperCase() : '';
+    const txt = label ? `${kicker} · ${label}` : kicker;
+    _drawPreviewCornerCaption(ctx, w, txt, focusHighlight.color || '#38bdf8', '#f1f5f9', 0.96);
   } else if (pal.setSynergy) {
     const set = pal.setSynergy;
-    ctx.save();
-    ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-    const txt = `${set.icon} SET SYNERGY · ${set.auraName.toUpperCase()}`;
-    const tw = ctx.measureText(txt).width + 18;
-    ctx.fillStyle = 'rgba(7, 20, 38, 0.86)';
-    ctx.strokeStyle = set.color;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = set.color;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(txt, 19, 21);
-    ctx.restore();
+    _drawPreviewCornerCaption(ctx, w, `${set.icon} SET SYNERGY · ${set.auraName.toUpperCase()}`, set.color, set.color, 0.96);
   }
 
   // Corner optical & gear telemetry tag
-  ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
+  ctx.font = '700 10.5px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(203, 213, 225, 0.74)';
   ctx.textAlign = 'right';
   const chromaTag = pal.chroma && pal.chroma.id !== 'none' ? ` · 🎨 ${pal.chroma.name}` : '';
   const specSummary = `${suit.name} · ${headgear.name} · ${tank.name} · ${torch.shortLabel}${patch.id !== 'none' ? ` ${patch.icon}` : ''}${chromaTag}`;
@@ -3363,9 +3360,9 @@ export function drawLiveryPreview(
 }
 
 /**
- * Hero collector-card renderer for newly unlocked gear reveals (v211):
- * renders rarity-tuned rotating god-rays, floating shimmer particles, zoomed diver avatar
- * wearing the unlocked piece, and full kinetic equip-snap animation.
+ * Hero collector-card renderer for newly unlocked gear reveals (v211 / v236):
+ * renders rarity-tuned rotating god-rays, floating shimmer particles, zoomed backlit diver avatar
+ * wearing the unlocked piece, and full kinetic equip-snap animation with zero foreground outlines.
  */
 export function drawGearShowcasePreview(
   ctx,
@@ -3423,16 +3420,31 @@ export function drawGearShowcasePreview(
   }
   ctx.globalAlpha = 1;
 
-  // Diver hero scale + kinetic recoil
+  // Diver hero scale + kinetic recoil + smooth focus zoom onto the unlocked slot
   const recoilY = equipFx && equipFx.progress < 1 ? Math.sin(equipFx.progress * Math.PI * 2.2) * (1 - equipFx.progress) * 5.2 : 0;
   const scale = Math.min(w * 0.24, h * 0.60);
   const sx = w * 0.47;
-  const sy = h * 0.54 + Math.sin(timeSec * 2.0) * 3.8 + recoilY;
+  const syBase = h * 0.54;
+  const sy = syBase + Math.sin(timeSec * 2.0) * 3.8 + recoilY;
   const sweepAng = Math.sin(timeSec * 1.25) * 0.08;
   const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
   const hyPre = sy + (hasDpv ? 0.16 : 0.21) * scale;
   const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
   const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+
+  const activeSlot = equipFx?.slot || focusHighlight?.slot || null;
+  const rawTarget = _resolvePreviewCameraTarget(activeSlot, sx, syBase, scale, w, h, equipFx);
+  // Showcase card is already generously zoomed, so cap extra zoom gently for full hero framing
+  const camTarget = { zoom: Math.min(1.42, 1 + (rawTarget.zoom - 1) * 0.62), cx: rawTarget.cx, cy: rawTarget.cy };
+  const cam = _stepPreviewCamera(ctx, camTarget, timeSec);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
+  ctx.translate(w * 0.50, h * 0.52);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.translate(-cam.cx, -cam.cy);
 
   const coneLen = w * 0.44 * torch.rangeMult;
   const coneGrad = ctx.createRadialGradient(torchX, torchY, 4, torchX + coneLen * 0.45, torchY, coneLen * 0.68);
@@ -3450,6 +3462,13 @@ export function drawGearShowcasePreview(
   ctx.restore();
   _drawAnimatedTorchBeamFx(ctx, torchX, torchY, coneLen, sweepAng, torch, timeSec);
 
+  // Studio backlighting strictly behind the unlocked gear slot
+  if (equipFx) {
+    _drawEquipBacklightFx(ctx, sx, sy, scale, equipFx, w, h, timeSec);
+  } else if (focusHighlight) {
+    _drawInspectBacklightFx(ctx, sx, sy, scale, focusHighlight, w, h, timeSec);
+  }
+
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
@@ -3458,11 +3477,12 @@ export function drawGearShowcasePreview(
     sweepAng,
     animateKick: true,
     equipFx,
-    focusHighlight,
+    focusHighlight: null,
     canvasW: w,
     canvasH: h,
   });
 
+  ctx.restore();
   ctx.restore();
 }
 
