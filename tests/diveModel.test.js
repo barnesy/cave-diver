@@ -13149,3 +13149,43 @@ test('v252 Gear Workshop dedicated Set Bonuses panel & enlarged boosted metrics 
   );
   assert.ok(css.includes('.gear-sets-modal-card'), 'style.css must style the Set Bonuses panel card');
 });
+
+test('v253 Flashlight occlusion clipping, extended foreground welds & 60 FPS sprite/SDF caching', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  // 1. Flashlight volumetric wall scatter, spectral warm restoration, and special optic FX are clipped to the ray-cast beam polygon
+  const lightSrc = readFileSync(new URL('../public/js/game/renderers/lightingAndFxRenderer.js', import.meta.url), 'utf8');
+  assert.ok(
+    lightSrc.includes('const padX = pt.hitWall ? -pt.nx * 0.18 : 0;'),
+    '_drawVolumetricTorchBeam wall scatter stamps must clip tightly to the ray-cast polygon'
+  );
+  const specIdx = lightSrc.indexOf('_drawSpectralAbsorption(');
+  const specSlice = lightSrc.slice(specIdx, specIdx + 3000);
+  assert.ok(
+    specSlice.includes('this._localTorchCache?.torch') && specSlice.includes('ctx.clip();'),
+    '_drawSpectralAbsorption warm torch restoration cone must clip to cachedTorch.rays'
+  );
+  const specialIdx = lightSrc.indexOf('_drawWorldSpecialTorchFx(');
+  const specialSlice = lightSrc.slice(specialIdx, specialIdx + 1200);
+  assert.ok(
+    specialSlice.includes('this._localTorchCache?.torch') && specialSlice.includes('ctx.clip();'),
+    '_drawWorldSpecialTorchFx must clip special optic graphics to cachedTorch.rays'
+  );
+
+  // 2. Torch-lit marine snow bokeh specks cannot illuminate inside solid cave rock
+  const rendererSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  assert.ok(
+    rendererSrc.includes('evaluateCaveSDF(this.level, wx, wy) < -0.05'),
+    'Torch marine snow bokeh must verify open water via evaluateCaveSDF'
+  );
+
+  // 3. Foreground renderer caches tight alpha-feathered sprites, world-X wall samples, and Pass 2 accents while staying 100% opaque
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('const _fgSpriteCache = new WeakMap();'), 'Expected per-element tight sprite WeakMap cache');
+  assert.ok(fgSrc.includes('const _fgWallSampleCache = new WeakMap();'), 'Expected world-X live wall-sample WeakMap cache');
+  assert.ok(fgSrc.includes('this._fgAccentCache'), 'Expected Pass 1 -> Pass 2 shared accent cache');
+  assert.ok(fgSrc.includes('function _buildSpriteCacheKey('), 'Expected quantized lighting/wall sprite cache key helper');
+  assert.ok(fgSrc.includes('const baseAlpha = inCombat ? 0.36 : 1.0;'), 'Non-combat foreground formations must stay 100% opaque to block flashlight behind them');
+  assert.ok(fgSrc.includes("sctx.globalCompositeOperation = 'source-atop';"), 'Cached sprites must shade via source-atop to prevent 1px anti-aliased fringe');
+  assert.ok(fgSrc.includes("sctx.globalCompositeOperation = 'destination-in';"), 'Cached sprites must alpha-feather buried rock skirts cleanly inside solid rock');
+});

@@ -2944,7 +2944,7 @@ export class CaveRenderer {
               if (dSq > 0.36 && dSq < 196) {
                 const dist = Math.sqrt(dSq);
                 const dot = (dx * tfx + dy * tfy) / dist;
-                if (dot > 0.72) {
+                if (dot > 0.72 && evaluateCaveSDF(this.level, wx, wy) < -0.05) {
                   torchBoost = ((dot - 0.72) / 0.28) * Math.max(0, 1 - dist / 14);
                 }
               }

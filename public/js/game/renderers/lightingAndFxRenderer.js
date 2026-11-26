@@ -172,7 +172,19 @@ export const lightingAndFxMethods = {
     ctx.restore();
 
     // Normal-weighted 2D diffuse limestone wall scatter + Snell's-window underside surface reflection
+    // Clipped tightly to the ray-cast polygon (+0.18m rock lip) so glow stamps kiss the cave surface
+    // WITHOUT bleeding 60px deep behind solid rock or behind attached foreground formations!
     ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    for (let i = 0; i < torchData.rays.length; i++) {
+      const pt = torchData.rays[i];
+      const padX = pt.hitWall ? -pt.nx * 0.18 : 0;
+      const padY = pt.hitWall ? -pt.ny * 0.18 : 0;
+      ctx.lineTo(toScreenX(pt.x + padX), toScreenY(pt.y + padY));
+    }
+    ctx.closePath();
+    ctx.clip();
     ctx.globalCompositeOperation = 'lighter';
     const warmStamp = this.glowStamps.warm;
     const cyanStamp = this.glowStamps.cyan;
@@ -1262,14 +1274,16 @@ export const lightingAndFxMethods = {
     ctx.fillStyle = `rgba(${grade.rgb}, ${blendedAlpha.toFixed(3)})`;
     ctx.fillRect(0, 0, cw, ch);
 
-    // 2. High-CRI Torch Spectral Restoration Cone: restores warm natural reds/oranges inside the beam!
-    if (diver.torchOn !== false && spec.warmRestoreStrength > 0.08) {
+    // 2. High-CRI Torch Spectral Restoration Cone: restores warm natural reds/oranges strictly inside the ray-cast beam!
+    const cachedTorch = this._localTorchCache?.torch;
+    const hasRayClip = Boolean(cachedTorch && cachedTorch.rays?.length >= 2);
+    if (diver.torchOn !== false && spec.warmRestoreStrength > 0.08 && (hasRayClip || !this.level)) {
       const strobe = Number.isFinite(diver.strobeMod) ? diver.strobeMod : 1.0;
       const beamAlpha = spec.warmRestoreStrength * (0.11 + (diver.backupTorchActive ? 0.05 : 0)) * (0.25 + 0.75 * strobe);
       if (beamAlpha > 0.01) {
         const ang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle || 0;
-        const ox = toScreenX(diver.x + Math.cos(ang) * 0.45);
-        const oy = toScreenY(diver.y + Math.sin(ang) * 0.45);
+        const ox = hasRayClip ? toScreenX(cachedTorch.ox) : toScreenX(diver.x + Math.cos(ang) * 0.45);
+        const oy = hasRayClip ? toScreenY(cachedTorch.oy) : toScreenY(diver.y + Math.sin(ang) * 0.45);
         const reachPx = Math.max(40, (diver.backupTorchActive ? 9.5 : 13.0) * scale * (0.35 + 0.65 * strobe));
         const tx = ox + Math.cos(ang) * reachPx * 0.48;
         const ty = oy + Math.sin(ang) * reachPx * 0.48;
@@ -1279,6 +1293,17 @@ export const lightingAndFxMethods = {
         g.addColorStop(0, `rgba(${warmRgb}, ${(beamAlpha * 1.15).toFixed(3)})`);
         g.addColorStop(0.55, `rgba(${warmRgb}, ${(beamAlpha * 0.48).toFixed(3)})`);
         g.addColorStop(1, `rgba(${warmRgb}, 0)`);
+        ctx.save();
+        if (hasRayClip && typeof ctx.clip === 'function') {
+          ctx.beginPath();
+          ctx.moveTo(ox, oy);
+          for (let i = 0; i < cachedTorch.rays.length; i++) {
+            const pt = cachedTorch.rays[i];
+            ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          }
+          ctx.closePath();
+          ctx.clip();
+        }
         ctx.globalCompositeOperation = 'screen';
         ctx.fillStyle = g;
         ctx.beginPath();
@@ -1287,6 +1312,7 @@ export const lightingAndFxMethods = {
         ctx.arc(ox, oy, reachPx, ang - halfCone, ang + halfCone);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
       }
     }
 
@@ -2800,13 +2826,24 @@ export const lightingAndFxMethods = {
    */
   _drawWorldSpecialTorchFx(ctx, diver, diverPal, toScreenX, toScreenY, scale, timeSec) {
     if (this._reducedMotion || diver.torchOn === false || !diverPal?.torchFx) return;
+    const cachedTorch = this._localTorchCache?.torch;
+    if (!cachedTorch || !cachedTorch.rays || cachedTorch.rays.length < 2) return;
     const tfxId = diverPal.torchFx;
-    const tox = diver.body?.hand ? diver.body.hand.x : diver.x;
-    const toy = diver.body?.hand ? diver.body.hand.y : diver.y;
+    const tox = cachedTorch.ox;
+    const toy = cachedTorch.oy;
     const tang = Number.isFinite(diver.torchAngle) ? diver.torchAngle : (diver.angle || 0);
     const tsx = toScreenX(tox);
     const tsy = toScreenY(toy);
     const beamPx = (11.5 * (diverPal.torch?.rangeMult || 1)) * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tsx, tsy);
+    for (let i = 0; i < cachedTorch.rays.length; i++) {
+      const pt = cachedTorch.rays[i];
+      ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    }
+    ctx.closePath();
+    ctx.clip();
     if (tfxId === 'solar-caustic') {
       for (let r = 0; r < 3; r++) {
         const wave = ((timeSec * 0.72 + r / 3) % 1);
@@ -2858,6 +2895,7 @@ export const lightingAndFxMethods = {
         ctx.fill();
       }
     }
+    ctx.restore();
   },
 
   /**
