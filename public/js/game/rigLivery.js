@@ -1545,6 +1545,186 @@ export const VISOR_TINTS = Object.freeze([
   },
 ]);
 
+export const SCOOTER_MODELS = Object.freeze([
+  {
+    id: 'none',
+    name: 'No Scooter',
+    icon: '—',
+    tier: 'common',
+    ladderRank: 0,
+    hull: '#334155',
+    shroud: '#0f172a',
+    accent: '#64748b',
+    unlockHint: 'Standard Free-Swim (no scooter equipped)',
+    isUnlocked: () => true,
+  },
+  {
+    id: 'expedition-dpv',
+    name: 'Expedition Mk-I DPV',
+    icon: '🛴',
+    tier: 'uncommon',
+    ladderRank: 22,
+    hull: '#facc15',
+    shroud: '#1e293b',
+    accent: '#38bdf8',
+    unlockHint: 'Clear 3+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 3, 'sites'),
+    isUnlocked: (s) => s.sitesCleared >= 3,
+  },
+  {
+    id: 'salvage-tug-dpv',
+    name: 'Salvage Tug DPV',
+    icon: '⚓',
+    tier: 'rare',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 46,
+    hull: '#f59e0b',
+    shroud: '#292524',
+    accent: '#fef08a',
+    unlockHint: '🧰 Rare Chest Drop · Deep Salvage Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('scooter:salvage-tug-dpv')),
+  },
+  {
+    id: 'hydro-glider-dpv',
+    name: 'Hydro-Glider Torpedo',
+    icon: '🌊',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 76,
+    fx: { id: 'hydro-blades', name: 'Laminar Hydro-Drive', desc: 'Turquoise laminar impeller wake minimizes silt kick at cruise speed.' },
+    hull: '#0d9488',
+    shroud: '#042f2e',
+    accent: '#5eead4',
+    unlockHint: '🧰 Epic Chest / ⚡ Speed Map Vault · Hydro-Glider Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('scooter:hydro-glider-dpv')),
+  },
+  {
+    id: 'phantom-whisper-dpv',
+    name: 'Phantom Whisper Drive',
+    icon: '🥷',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 84,
+    fx: { id: 'phantom-phase', name: 'Silent Magneto-Drive', desc: 'Shrouded acoustic-stealth impeller cuts predator detection.' },
+    hull: '#18181b',
+    shroud: '#09090b',
+    accent: '#c084fc',
+    unlockHint: '🧰 Epic Chest / 🥷 Stealth Map Vault · Voidwalker Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('scooter:phantom-whisper-dpv')),
+  },
+  {
+    id: 'legendary-valkyrie-dpv',
+    name: 'Valkyrie Cavitation DPV',
+    icon: '🔥',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 115,
+    fx: { id: 'prism-shift', name: 'Supercavitation Surge', desc: 'Ultra-rare hyper-scooter generating a low-drag cavitation plasma cone.' },
+    hull: '#ff9524',
+    shroud: '#0f172a',
+    accent: '#38bdf8',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & ⚡ Speed Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('scooter:legendary-valkyrie-dpv')),
+  },
+]);
+
+export const HARPOON_MODELS = Object.freeze([
+  {
+    id: 'pneumatic-mk1',
+    name: 'Mk-I Pneumatic Spear',
+    icon: '🔱',
+    tier: 'common',
+    ladderRank: 0,
+    barrel: '#cbd5e1',
+    rail: '#38bdf8',
+    band: '#f59e0b',
+    tip: '#bae6fd',
+    unlockHint: 'Standard Expedition Issue',
+    isUnlocked: () => true,
+  },
+  {
+    id: 'reef-carbine',
+    name: 'Reef Carbon Carbine',
+    icon: '🎯',
+    tier: 'uncommon',
+    ladderRank: 20,
+    barrel: '#334155',
+    rail: '#34d399',
+    band: '#fbbf24',
+    tip: '#6ee7b7',
+    unlockHint: 'Clear 2+ expedition sites',
+    getProgress: (s) => _mkProg(s.sitesCleared, 2, 'sites'),
+    isUnlocked: (s) => s.sitesCleared >= 2,
+  },
+  {
+    id: 'salvage-rivet-lance',
+    name: 'Salvage Rivet Harpoon',
+    icon: '⚓',
+    tier: 'rare',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 48,
+    barrel: '#b45309',
+    rail: '#fbbf24',
+    band: '#f97316',
+    tip: '#fef08a',
+    unlockHint: '🧰 Rare Chest Drop · Deep Salvage Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('harpoon:salvage-rivet-lance')),
+  },
+  {
+    id: 'kraken-biolume-spear',
+    name: 'Biolume Spine Launcher',
+    icon: '🐙',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 78,
+    fx: { id: 'biolume-pulse', name: 'Bio-Tether Rail', desc: 'Silent bioluminescent rail discharges high-velocity cyan bolts.' },
+    barrel: '#1e1b4b',
+    rail: '#22d3ee',
+    band: '#c084fc',
+    tip: '#67e8f9',
+    unlockHint: '🧰 Epic Chest / 🥷 Stealth Map Vault · Biolume Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('harpoon:kraken-biolume-spear')),
+  },
+  {
+    id: 'apex-hunter-railgun',
+    name: 'Apex Leviathan Rail-Spear',
+    icon: '👑',
+    tier: 'epic',
+    source: 'chest',
+    dropRarity: 'rare',
+    ladderRank: 86,
+    fx: { id: 'hunter-plasma', name: 'Predator Twin-Rail', desc: 'Crimson-gold twin pneumatic rails built for Leviathan boss hunts.' },
+    barrel: '#27272a',
+    rail: '#f43f5e',
+    band: '#facc15',
+    tip: '#fda4af',
+    unlockHint: '🧰 Epic Chest / 🛡️ Shield Map Vault · Apex Hunter Set',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('harpoon:apex-hunter-railgun')),
+  },
+  {
+    id: 'legendary-poseidon-trident',
+    name: 'Poseidon Arc-Rail Harpoon',
+    icon: '🔥',
+    tier: 'legendary',
+    source: 'chest',
+    dropRarity: 'legendary',
+    ladderRank: 116,
+    fx: { id: 'sovereign-aura', name: 'Poseidon Arc-Tip', desc: 'Ultra-rare electromagnetic trident harpoon supercharges every 3rd bolt into a Golden Hyper-Tip.' },
+    barrel: '#1e3a8a',
+    rail: '#ff9524',
+    band: '#fde047',
+    tip: '#ff9524',
+    unlockHint: '🔥 Ultra-Rare Legendary · Treasure Chests & 🛡️ Shield Maps',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('harpoon:legendary-poseidon-trident')),
+  },
+]);
+
 export const OUTFITTER_PRESETS = Object.freeze([
   {
     id: 'zissou-expedition',
@@ -1595,6 +1775,8 @@ const DEFAULT_MODULAR_IDS = Object.freeze({
   trimId: 'suit-default',
   tankId: 'al80-silver',
   visorId: 'clear-cyan',
+  scooterId: 'none',
+  harpoonId: 'pneumatic-mk1',
   dyeId: 'none',
 });
 
@@ -1605,6 +1787,8 @@ const HEADGEAR_BY_ID = new Map(HEADGEAR_STYLES.map((h) => [h.id, h]));
 const TRIM_BY_ID = new Map(ACCENT_TRIMS.map((t) => [t.id, t]));
 const TANK_BY_ID = new Map(TANK_FINISHES.map((t) => [t.id, t]));
 const VISOR_BY_ID = new Map(VISOR_TINTS.map((v) => [v.id, v]));
+const SCOOTER_BY_ID = new Map(SCOOTER_MODELS.map((sc) => [sc.id, sc]));
+const HARPOON_BY_ID = new Map(HARPOON_MODELS.map((hp) => [hp.id, hp]));
 
 export function getSuitLivery(suitId) {
   return (suitId && SUIT_BY_ID.get(suitId)) || SUIT_LIVERIES[0];
@@ -1634,6 +1818,14 @@ export function getVisorTint(visorId) {
   return (visorId && VISOR_BY_ID.get(visorId)) || VISOR_TINTS[0];
 }
 
+export function getScooterModel(scooterId) {
+  return (scooterId && SCOOTER_BY_ID.get(scooterId)) || SCOOTER_MODELS[0];
+}
+
+export function getHarpoonModel(harpoonId) {
+  return (harpoonId && HARPOON_BY_ID.get(harpoonId)) || HARPOON_MODELS[0];
+}
+
 /**
  * Return any secret Gear Workshop cosmetic names unlocked by a specific trophy relic ID.
  * Used only when a player actively earns that trophy (zero spoilers beforehand).
@@ -1648,6 +1840,8 @@ export function getSecretCosmeticsForTrophy(trophyRelicId) {
     ...TORCH_OPTICS,
     ...ACCENT_TRIMS,
     ...MILESTONE_PATCHES,
+    ...SCOOTER_MODELS,
+    ...HARPOON_MODELS,
   ];
   return all.filter((item) => item.secret && item.trophyRelicId === trophyRelicId).map((item) => item.name);
 }
@@ -1659,6 +1853,8 @@ export const GEAR_CATEGORIES = Object.freeze([
   Object.freeze({ slot: 'visor', field: 'visorId', setKey: 'visors', tabId: 'head', label: 'Visor Tint', list: VISOR_TINTS }),
   Object.freeze({ slot: 'tank', field: 'tankId', setKey: 'tanks', tabId: 'gear', label: 'Tank Finish', list: TANK_FINISHES }),
   Object.freeze({ slot: 'torch', field: 'torchId', setKey: 'torches', tabId: 'gear', label: 'Torch Optic', list: TORCH_OPTICS }),
+  Object.freeze({ slot: 'scooter', field: 'scooterId', setKey: 'scooters', tabId: 'gear', label: 'DPV Scooter', list: SCOOTER_MODELS }),
+  Object.freeze({ slot: 'harpoon', field: 'harpoonId', setKey: 'harpoons', tabId: 'gear', label: 'Harpoon', list: HARPOON_MODELS }),
   Object.freeze({ slot: 'patch', field: 'patchId', setKey: 'patches', tabId: 'patch', label: 'Milestone Patch', list: MILESTONE_PATCHES }),
 ]);
 
@@ -1826,6 +2022,8 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'suit', field: 'suitId', ids: ['bounty-hunter-suit'] },
       { slot: 'torch', field: 'torchId', ids: ['bounty-hunter-torch'] },
       { slot: 'visor', field: 'visorId', ids: ['bounty-hunter-visor'] },
+      { slot: 'harpoon', field: 'harpoonId', ids: ['apex-hunter-railgun', 'legendary-poseidon-trident'] },
+      { slot: 'scooter', field: 'scooterId', ids: ['legendary-valkyrie-dpv'] },
       { slot: 'patch', field: 'patchId', ids: ['bounty-hunter-master'] },
     ]),
   }),
@@ -1848,6 +2046,7 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'torch', field: 'torchId', ids: ['halocline-uv'] },
       { slot: 'trim', field: 'trimId', ids: ['secret-selenite-trim', 'biolum-violet', 'plasma-circuit-trim'] },
       { slot: 'visor', field: 'visorId', ids: ['secret-aurora-frost', 'reef-mirror'] },
+      { slot: 'harpoon', field: 'harpoonId', ids: ['kraken-biolume-spear'] },
     ]),
   }),
   Object.freeze({
@@ -1869,6 +2068,8 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'headgear', field: 'headgearId', ids: ['abyss-halo-helm', 'exo-mask'] },
       { slot: 'tank', field: 'tankId', ids: ['abyssal-titanium'] },
       { slot: 'trim', field: 'trimId', ids: ['plasma-circuit-trim', 'biolum-violet'] },
+      { slot: 'scooter', field: 'scooterId', ids: ['phantom-whisper-dpv'] },
+      { slot: 'harpoon', field: 'harpoonId', ids: ['legendary-poseidon-trident'] },
     ]),
   }),
   Object.freeze({
@@ -1912,6 +2113,8 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'headgear', field: 'headgearId', ids: ['brass-hardhat', 'cave-helmet'] },
       { slot: 'tank', field: 'tankId', ids: ['salvage-brass'] },
       { slot: 'trim', field: 'trimId', ids: ['salvage-gold'] },
+      { slot: 'scooter', field: 'scooterId', ids: ['salvage-tug-dpv'] },
+      { slot: 'harpoon', field: 'harpoonId', ids: ['salvage-rivet-lance'] },
     ]),
   }),
   Object.freeze({
@@ -1933,6 +2136,7 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'suit', field: 'suitId', ids: ['world-cartographer-suit'] },
       { slot: 'visor', field: 'visorId', ids: ['world-cartographer-visor'] },
       { slot: 'torch', field: 'torchId', ids: ['world-cartographer-torch'] },
+      { slot: 'scooter', field: 'scooterId', ids: ['hydro-glider-dpv'] },
     ]),
   }),
   Object.freeze({
@@ -1954,6 +2158,7 @@ export const GEAR_SET_SYNERGIES = Object.freeze([
       { slot: 'suit', field: 'suitId', ids: ['world-hydro-suit'] },
       { slot: 'trim', field: 'trimId', ids: ['world-hydro-fins'] },
       { slot: 'tank', field: 'tankId', ids: ['world-hydro-tank'] },
+      { slot: 'scooter', field: 'scooterId', ids: ['hydro-glider-dpv', 'legendary-valkyrie-dpv'] },
     ]),
   }),
 ]);
@@ -1970,6 +2175,8 @@ export function evaluateGearSetSynergy(livery = null) {
     trimId: livery?.trimId || DEFAULT_MODULAR_IDS.trimId,
     tankId: livery?.tankId || DEFAULT_MODULAR_IDS.tankId,
     visorId: livery?.visorId || DEFAULT_MODULAR_IDS.visorId,
+    scooterId: livery?.scooterId || DEFAULT_MODULAR_IDS.scooterId,
+    harpoonId: livery?.harpoonId || DEFAULT_MODULAR_IDS.harpoonId,
   };
   const statuses = [];
   let active = null;
@@ -2079,8 +2286,10 @@ export function resolveDiverLiveryPalette(livery = null) {
   const trimSpec = getAccentTrim(livery?.trimId);
   const tank = getTankFinish(livery?.tankId);
   const visor = getVisorTint(livery?.visorId);
+  const scooter = getScooterModel(livery?.scooterId);
+  const harpoon = getHarpoonModel(livery?.harpoonId);
 
-  const tierRanks = [suit, torch, patch, headgear, trimSpec, tank, visor].map((x) => getGearTierMeta(x?.tier).rank);
+  const tierRanks = [suit, torch, patch, headgear, trimSpec, tank, visor, scooter, harpoon].map((x) => getGearTierMeta(x?.tier).rank);
   const maxRank = Math.max(...tierRanks);
   const maxTier = Object.values(GEAR_TIERS).find((t) => t.rank === maxRank) || GEAR_TIERS.common;
   const setSynergy = evaluateGearSetSynergy(livery).active;
@@ -2094,6 +2303,8 @@ export function resolveDiverLiveryPalette(livery = null) {
     trimSpec,
     tank,
     visor,
+    scooter,
+    harpoon,
     suitTop: suit.suitTop,
     suitMid: suit.suitMid,
     suitBot: suit.suitBot,
@@ -2217,6 +2428,16 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     const k = `visor:${vs.id}`;
     if ((vs.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) visors.add(vs.id);
   }
+  const scooters = new Set();
+  for (const sc of SCOOTER_MODELS) {
+    const k = `scooter:${sc.id}`;
+    if ((sc.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) scooters.add(sc.id);
+  }
+  const harpoons = new Set();
+  for (const hp of HARPOON_MODELS) {
+    const k = `harpoon:${hp.id}`;
+    if ((hp.isUnlocked(stats) || foundGearIds.has(k)) && !soldGear.has(k)) harpoons.add(hp.id);
+  }
   const dyes = new Set(['none']);
   if (Array.isArray(logbook?.ownedDyes)) {
     for (const did of logbook.ownedDyes) {
@@ -2224,7 +2445,7 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
     }
   }
 
-  return { stats, suits, torches, patches, headgears, trims, tanks, visors, dyes, soldGear };
+  return { stats, suits, torches, patches, headgears, trims, tanks, visors, scooters, harpoons, dyes, soldGear };
 }
 
 /**
@@ -2309,6 +2530,8 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   let trimId = typeof raw?.trimId === 'string' && TRIM_BY_ID.has(raw.trimId) ? raw.trimId : DEFAULT_MODULAR_IDS.trimId;
   let tankId = typeof raw?.tankId === 'string' && TANK_BY_ID.has(raw.tankId) ? raw.tankId : DEFAULT_MODULAR_IDS.tankId;
   let visorId = typeof raw?.visorId === 'string' && VISOR_BY_ID.has(raw.visorId) ? raw.visorId : DEFAULT_MODULAR_IDS.visorId;
+  let scooterId = typeof raw?.scooterId === 'string' && SCOOTER_BY_ID.has(raw.scooterId) ? raw.scooterId : DEFAULT_MODULAR_IDS.scooterId;
+  let harpoonId = typeof raw?.harpoonId === 'string' && HARPOON_BY_ID.has(raw.harpoonId) ? raw.harpoonId : DEFAULT_MODULAR_IDS.harpoonId;
   let dyeId = typeof raw?.dyeId === 'string' && isValidGearChromaId(raw.dyeId) ? raw.dyeId : DEFAULT_MODULAR_IDS.dyeId;
 
   if (unlocked) {
@@ -2319,6 +2542,8 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
     if (unlocked.trims && !unlocked.trims.has(trimId)) trimId = DEFAULT_MODULAR_IDS.trimId;
     if (unlocked.tanks && !unlocked.tanks.has(tankId)) tankId = DEFAULT_MODULAR_IDS.tankId;
     if (unlocked.visors && !unlocked.visors.has(visorId)) visorId = DEFAULT_MODULAR_IDS.visorId;
+    if (unlocked.scooters && !unlocked.scooters.has(scooterId)) scooterId = DEFAULT_MODULAR_IDS.scooterId;
+    if (unlocked.harpoons && !unlocked.harpoons.has(harpoonId)) harpoonId = DEFAULT_MODULAR_IDS.harpoonId;
     if (unlocked.dyes && !unlocked.dyes.has(dyeId)) dyeId = DEFAULT_MODULAR_IDS.dyeId;
   }
 
@@ -2327,6 +2552,8 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   if (trimId !== DEFAULT_MODULAR_IDS.trimId) out.trimId = trimId;
   if (tankId !== DEFAULT_MODULAR_IDS.tankId) out.tankId = tankId;
   if (visorId !== DEFAULT_MODULAR_IDS.visorId) out.visorId = visorId;
+  if (scooterId !== DEFAULT_MODULAR_IDS.scooterId) out.scooterId = scooterId;
+  if (harpoonId !== DEFAULT_MODULAR_IDS.harpoonId) out.harpoonId = harpoonId;
   if (dyeId !== DEFAULT_MODULAR_IDS.dyeId) out.dyeId = dyeId;
   return out;
 }
@@ -2341,6 +2568,8 @@ export function isDefaultRigLivery(livery) {
     (livery.trimId || DEFAULT_MODULAR_IDS.trimId) === DEFAULT_MODULAR_IDS.trimId &&
     (livery.tankId || DEFAULT_MODULAR_IDS.tankId) === DEFAULT_MODULAR_IDS.tankId &&
     (livery.visorId || DEFAULT_MODULAR_IDS.visorId) === DEFAULT_MODULAR_IDS.visorId &&
+    (livery.scooterId || DEFAULT_MODULAR_IDS.scooterId) === DEFAULT_MODULAR_IDS.scooterId &&
+    (livery.harpoonId || DEFAULT_MODULAR_IDS.harpoonId) === DEFAULT_MODULAR_IDS.harpoonId &&
     (livery.dyeId || DEFAULT_MODULAR_IDS.dyeId) === DEFAULT_MODULAR_IDS.dyeId
   );
 }
@@ -2363,6 +2592,8 @@ export function randomizeUnlockedLivery(unlocked = null, rng = Math.random) {
       trimId: pick(ACCENT_TRIMS, unlocked?.trims),
       tankId: pick(TANK_FINISHES, unlocked?.tanks),
       visorId: pick(VISOR_TINTS, unlocked?.visors),
+      scooterId: pick(SCOOTER_MODELS, unlocked?.scooters),
+      harpoonId: pick(HARPOON_MODELS, unlocked?.harpoons),
     },
     unlocked
   );
@@ -2425,8 +2656,11 @@ function _getSlotPreviewAnchor(slot, sx, sy, scale) {
   if (slot === 'suit') {
     return { ax: sx - 0.24 * scale, ay: sy + 0.02 * scale, rx: scale * 0.64, ry: scale * 0.28, shape: 'capsule', label: 'DRYSUIT', dirX: -1, dirY: 1 };
   }
-  if (slot === 'dpv') {
+  if (slot === 'dpv' || slot === 'scooter') {
     return { ax: sx + u * 1.15, ay: sy + u * 0.24, rx: u * 0.62, ry: u * 0.48, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
+  }
+  if (slot === 'harpoon') {
+    return { ax: sx + 0.66 * scale, ay: sy + 0.22 * scale, rx: u * 0.56, ry: u * 0.36, shape: 'capsule', label: 'HARPOON', dirX: 1, dirY: 1 };
   }
   if (slot === 'chroma') {
     return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.86, ry: scale * 0.42, shape: 'capsule', label: 'COLOR COAT', dirX: -1, dirY: -1 };

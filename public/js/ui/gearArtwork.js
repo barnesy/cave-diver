@@ -314,6 +314,77 @@ export function renderGearArtworkSvg(slot, item, { suitFallback = null, size = 7
         fill="none" stroke="${escapeHtml(glowCol)}" stroke-width="1" opacity="0.45"/>
       <text x="40" y="47" text-anchor="middle" font-size="24" fill="#f8fafc">${icon}</text>
     `;
+  } else if (slot === 'scooter') {
+    const isNone = !item || item.id === 'none';
+    const hull = item?.hull || '#facc15';
+    const shroud = item?.shroud || '#1e293b';
+    const acc = item?.accent || '#38bdf8';
+    const gSc = _uid('gsc');
+    const isLeg = item?.tier === 'legendary';
+    if (isNone) {
+      body = `
+        <g transform="translate(40,41) rotate(-20) translate(-40,-41)" opacity="0.42">
+          <rect x="14" y="29" width="16" height="22" rx="4" fill="none" stroke="#64748b" stroke-width="1.6" stroke-dasharray="3 3"/>
+          <path d="M30 32 L54 32 Q69 40 54 48 L30 48 Z" fill="none" stroke="#64748b" stroke-width="1.6" stroke-dasharray="3 3"/>
+          <line x1="20" y1="22" x2="60" y2="58" stroke="#64748b" stroke-width="1.6" stroke-linecap="round"/>
+        </g>
+      `;
+    } else {
+      body = `
+        <defs>
+          <linearGradient id="${gSc}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f8fafc" stop-opacity="0.35"/>
+            <stop offset="30%" stop-color="${escapeHtml(hull)}"/>
+            <stop offset="100%" stop-color="#090d16"/>
+          </linearGradient>
+        </defs>
+        <g transform="translate(40,41) rotate(-20) translate(-40,-41)">
+          <!-- Prop wake rings -->
+          <path d="M8 33 Q4 40 8 47" fill="none" stroke="${escapeHtml(acc)}" stroke-width="1.5" stroke-linecap="round" opacity="0.72"/>
+          <!-- Twin steering handles -->
+          <path d="M19 29 L13 24 M19 51 L13 56" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round"/>
+          <!-- Shrouded ducted propeller housing -->
+          <rect x="15" y="27" width="16" height="26" rx="5" fill="${escapeHtml(shroud)}" stroke="${escapeHtml(acc)}" stroke-width="1.6"/>
+          <line x1="22" y1="31" x2="22" y2="49" stroke="${escapeHtml(acc)}" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+          <!-- Torpedo hull & nosecone -->
+          <path d="M30 31 L53 31 Q70 40 53 49 L30 49 Z" fill="${escapeHtml(hull)}" stroke="#0f172a" stroke-width="1.4"/>
+          <path d="M30 31 L53 31 Q70 40 53 49 L30 49 Z" fill="url(#${gSc})" opacity="0.55"/>
+          <!-- Racing stripe & nose headlamp -->
+          <line x1="33" y1="40" x2="54" y2="40" stroke="${escapeHtml(acc)}" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="56" cy="40" r="3" fill="#ffffff" stroke="${escapeHtml(acc)}" stroke-width="1.4"/>
+          ${isLeg ? `<path d="M58 26 Q76 40 58 54" fill="none" stroke="#67e8f9" stroke-width="2" stroke-linecap="round" opacity="0.9"/>` : ''}
+        </g>
+      `;
+    }
+  } else if (slot === 'harpoon') {
+    const barrel = item?.barrel || '#cbd5e1';
+    const rail = item?.rail || '#38bdf8';
+    const band = item?.band || '#f59e0b';
+    const tip = item?.tip || '#bae6fd';
+    const isTrident = item?.id === 'legendary-poseidon-trident';
+    body = `
+      <g transform="translate(40,42) rotate(-28) translate(-40,-42)">
+        <!-- Ergonomic pistol grip & trigger guard -->
+        <path d="M16 44 L11 58 L20 59 L24 46 Z" fill="#1e293b" stroke="${escapeHtml(rail)}" stroke-width="1.2" stroke-linejoin="round"/>
+        <rect x="8" y="38" width="11" height="8" rx="2.5" fill="#0f172a" stroke="#64748b" stroke-width="1.1"/>
+        <!-- Underslung line reel -->
+        <circle cx="31" cy="49" r="5" fill="#0f172a" stroke="${escapeHtml(band)}" stroke-width="1.4"/>
+        <!-- Pneumatic barrel -->
+        <rect x="17" y="36" width="38" height="9" rx="3" fill="${escapeHtml(barrel)}" stroke="#0f172a" stroke-width="1.2"/>
+        <!-- Glowing pressure rail -->
+        <rect x="22" y="38.5" width="30" height="3" rx="1.2" fill="${escapeHtml(rail)}"/>
+        <!-- Tensioned power band -->
+        <line x1="25" y1="35" x2="52" y2="35" stroke="${escapeHtml(band)}" stroke-width="2.2" stroke-linecap="round"/>
+        <!-- Muzzle head -->
+        <rect x="51" y="34" width="6" height="12" rx="1.8" fill="#1e293b" stroke="${escapeHtml(rail)}" stroke-width="1.2"/>
+        <!-- Spear shaft & barbed tip -->
+        <line x1="56" y1="39.5" x2="71" y2="39.5" stroke="#f8fafc" stroke-width="2.4" stroke-linecap="round"/>
+        ${isTrident
+          ? `<path d="M64 33 L73 33 M64 46 L73 46 M65 39.5 L77 39.5 M64 33 L64 46" fill="none" stroke="${escapeHtml(tip)}" stroke-width="2.2" stroke-linecap="round"/><polygon points="78,39.5 71,35.5 73,39.5 71,43.5" fill="${escapeHtml(tip)}"/>`
+          : `<polygon points="77,39.5 66,34.5 69,39.5 66,44.5" fill="${escapeHtml(tip)}" stroke="${escapeHtml(rail)}" stroke-width="1"/>`
+        }
+      </g>
+    `;
   } else if (slot === 'chroma') {
     const [c0, c1, c2] = Array.isArray(item?.swatch) ? item.swatch : ['#1e293b', '#0f172a', '#38bdf8'];
     const gOrb = _uid('gob');

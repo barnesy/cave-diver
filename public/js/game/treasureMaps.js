@@ -329,6 +329,8 @@ const SLOT_LABELS_MAP = Object.freeze({
   visor: 'Mask Visor',
   tank: 'Tank System',
   torch: 'Dive Torch',
+  scooter: 'DPV Scooter',
+  harpoon: 'Harpoon',
   patch: 'Expedition Crest',
 });
 
@@ -339,6 +341,8 @@ const WORLD_SLOT_SKILL = Object.freeze({
   visor: 'sonar',
   tank: 'resistance',
   torch: 'visibility',
+  scooter: 'speed',
+  harpoon: 'armor',
   patch: 'armor',
 });
 

@@ -502,11 +502,12 @@ export function createDiveSession(
   const cleanMutator = typeof mutatorId === 'string' ? mutatorId.trim() : '';
   const cleanDailyKey = typeof dailyDateKey === 'string' ? dailyDateKey.trim() : '';
   const isPurist = cleanMutator === 'purist';
+  const hasEquippedScooterGear = Boolean(livery?.scooterId && livery.scooterId !== 'none');
   const cleanGear = isPurist
     ? { sonar: false, dpv: false, ccr: false }
     : {
         sonar: Boolean(gear?.sonar),
-        dpv: Boolean(gear?.dpv),
+        dpv: Boolean(gear?.dpv || hasEquippedScooterGear),
         ccr: Boolean(gear?.ccr),
       };
   const mergedMixOverrides =

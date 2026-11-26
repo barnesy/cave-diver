@@ -13041,11 +13041,11 @@ summary,
 }
 .livery-equipped-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
   margin-top: 8px;
 }
-@media (max-width: 580px) {
+@media (max-width: 620px) {
   .livery-equipped-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

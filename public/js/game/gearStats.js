@@ -831,6 +831,46 @@ const BESPOKE_ITEM_STATS = Object.freeze({
     stats: { chestLuckBonus: 0.45, salvageBonus: 0.30, armorDR: 0.14, stealth: 0.16, sonarRange: 0.22, relicGlowM: 12 },
     power: { id: 'sovereignCompass', name: 'Sovereign Treasure Compass', desc: '🔥 Legendary: +45% Chest Luck, +30% Doubloons, reveals Treasure Maps on sonar + Armor & Stealth aura' },
   },
+
+  // DPV Scooters (v233 — Loot Pool, Armor Sets & Legendary)
+  'scooter:none': { archetype: 'hybrid', stats: {} },
+  'scooter:expedition-dpv': { archetype: 'speed', stats: { dpvSpeedBonus: 0.08, dpvDrainCut: 0.10 } },
+  'scooter:salvage-tug-dpv': { archetype: 'hybrid', stats: { dpvSpeedBonus: 0.12, dpvDrainCut: 0.14, salvageDragCut: 0.22, armorDR: 0.10 } },
+  'scooter:hydro-glider-dpv': {
+    archetype: 'speed',
+    stats: { dpvSpeedBonus: 0.18, dpvDrainCut: 0.20, hydroEff: 0.14, siltCut: 0.18 },
+    power: { id: 'laminarTow', name: 'Laminar Hydro-Drive', desc: '+18% DPV Speed, -20% Battery Drain & smooth low-silt hydro cruise' },
+  },
+  'scooter:phantom-whisper-dpv': {
+    archetype: 'speed',
+    stats: { dpvSpeedBonus: 0.16, dpvDrainCut: 0.22, stealth: 0.26, siltCut: 0.16 },
+    power: { id: 'silentDrive', name: 'Silent Magneto-Drive', desc: '+26% Stealth, +16% DPV Speed & whisper-quiet impeller drive' },
+  },
+  'scooter:legendary-valkyrie-dpv': {
+    archetype: 'speed',
+    stats: { dpvSpeedBonus: 0.34, dpvDrainCut: 0.38, swimSpeed: 0.10, dashCdCut: 0.25, hydroEff: 0.25, shieldMax: 20 },
+    power: { id: 'supercavitationSurge', name: 'Supercavitation Surge', desc: '🔥 Legendary: +34% DPV Overdrive, -38% Drain, +20 Hydro-Shield & -25% Dash CD' },
+  },
+
+  // Harpoons / Spearguns (v233 — Loot Pool, Armor Sets & Legendary)
+  'harpoon:pneumatic-mk1': { archetype: 'combat', stats: { spearPower: 0.02 } },
+  'harpoon:reef-carbine': { archetype: 'combat', stats: { spearPower: 0.08, spearFireRateCut: 0.06 } },
+  'harpoon:salvage-rivet-lance': { archetype: 'combat', stats: { spearPower: 0.14, combatMaxHpBonus: 15, armorDR: 0.10 } },
+  'harpoon:kraken-biolume-spear': {
+    archetype: 'combat',
+    stats: { spearPower: 0.18, spearFireRateCut: 0.14, stealth: 0.18, sonarRange: 0.12 },
+    power: { id: 'bioTetherBolt', name: 'Bio-Tether Rail', desc: '+18% Spear DPS, +14% Fire Rate & acoustic-stealth biolume bolts' },
+  },
+  'harpoon:apex-hunter-railgun': {
+    archetype: 'combat',
+    stats: { spearPower: 0.24, spearFireRateCut: 0.16, combatMaxHpBonus: 20, dashCdCut: 0.14 },
+    power: { id: 'predatorOverdrive', name: 'Predator Twin-Rail', desc: '+24% Spear DPS, +16% Fire Rate & +20 Boss Arena HP' },
+  },
+  'harpoon:legendary-poseidon-trident': {
+    archetype: 'combat',
+    stats: { spearPower: 0.38, spearFireRateCut: 0.24, combatMaxHpBonus: 28, armorDR: 0.16, shieldMax: 25, dashCdCut: 0.22 },
+    power: { id: 'poseidonArcTip', name: 'Poseidon Arc-Tip', desc: '🔥 Legendary: Every 3rd shot fires a Golden Hyper-Tip + +38% Spear DPS, +25 Shield & +16% Armor' },
+  },
 });
 
 const TIER_STAT_SCALE = { common: 1.0, uncommon: 1.35, rare: 1.8, epic: 2.35, mythic: 2.9, legendary: 3.6 };
@@ -844,6 +884,8 @@ function computeFallbackSlotStats(slot, tier = 'common') {
     case 'tank': return { gasSave: +(0.025 * m).toFixed(3), decoOffgas: +(0.03 * m).toFixed(3) };
     case 'visor': return { siltCut: +(0.04 * m).toFixed(3), sonarRange: +(0.035 * m).toFixed(3) };
     case 'trim': return { siltCut: +(0.05 * m).toFixed(3), hydroEff: +(0.04 * m).toFixed(3) };
+    case 'scooter': return { dpvSpeedBonus: +(0.05 * m).toFixed(3), dpvDrainCut: +(0.06 * m).toFixed(3) };
+    case 'harpoon': return { spearPower: +(0.06 * m).toFixed(3), spearFireRateCut: +(0.04 * m).toFixed(3) };
     case 'patch': return { decoOffgas: +(0.025 * m).toFixed(3), scoreBonus: +(0.015 * m).toFixed(3) };
     default: return {};
   }
@@ -941,6 +983,8 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     tank: livery?.tankId || 'al80-silver',
     visor: livery?.visorId || 'clear-cyan',
     trim: livery?.trimId || 'suit-default',
+    scooter: livery?.scooterId || 'none',
+    harpoon: livery?.harpoonId || 'pneumatic-mk1',
     patch: livery?.patchId || DEFAULT_RIG_LIVERY.patchId,
   };
 
@@ -1106,8 +1150,8 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
   const shieldMax = tuning.isNormalized ? 0 : Math.min(60, Math.round(sum.shieldMax * sSafe));
   const stealth = +(Math.min(0.68, sum.stealth * sSkill)).toFixed(2);
   const hydroEfficiency = +(Math.min(0.60, sum.hydroEff * sSkill * trenchBoost)).toFixed(2);
-  const dpvSpeedBonus = +(Math.min(0.28, sum.dpvSpeedBonus * sMob)).toFixed(3);
-  const dpvDrainMult = +(1 - Math.min(0.45, sum.dpvDrainCut * sMob * trenchBoost)).toFixed(3);
+  const dpvSpeedBonus = +(Math.min(0.42, sum.dpvSpeedBonus * sMob)).toFixed(3);
+  const dpvDrainMult = +(1 - Math.min(0.50, sum.dpvDrainCut * sMob * trenchBoost)).toFixed(3);
   const combatMaxHpBonus = Math.min(tuning.maxCombatHp, Math.round(sum.combatMaxHpBonus * sSafe));
   const spearPowerMult = +(1 + Math.min(tuning.maxSpearPower, sum.spearPower * sComb)).toFixed(3);
   const spearFireRateMult = +(1 - Math.min(0.20, sum.spearFireRateCut * sSkill)).toFixed(3);
@@ -1155,7 +1199,7 @@ export function computeRigPerformanceProfile(livery = null, tuningContext = null
     percolationImmune: hasPower('percolationImmune'),
     hatchKnockbackImmune: hasPower('hatchKnockbackImmune'),
     halcyonDecoFastLock: hasPower('halcyonDecoFastLock'),
-    apexOvercharge: hasPower('apexOvercharge'),
+    apexOvercharge: hasPower('apexOvercharge') || hasPower('poseidonArcTip'),
     relicCompass: hasPower('relicCompass') || hasPower('sovereignCompass'),
     hydroGhost: hasPower('hydroGhost'),
     hybridAdaptation: hasPower('hybridAdaptation'),
@@ -1491,6 +1535,8 @@ export const CHEST_GEAR_DROPS = Object.freeze([
   Object.freeze({ slot: 'headgear', itemId: 'legendary-phantom-shroud', tier: 'legendary', skillId: 'stealth', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🥷' }),
   Object.freeze({ slot: 'tank', itemId: 'legendary-cryo-titan-tank', tier: 'legendary', skillId: 'resistance', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '❄️' }),
   Object.freeze({ slot: 'patch', itemId: 'legendary-cartographer-compass', tier: 'legendary', skillId: 'sonar', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🧭' }),
+  Object.freeze({ slot: 'scooter', itemId: 'legendary-valkyrie-dpv', tier: 'legendary', skillId: 'speed', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🛴' }),
+  Object.freeze({ slot: 'harpoon', itemId: 'legendary-poseidon-trident', tier: 'legendary', skillId: 'armor', rarityLabel: 'ULTRA-RARE LEGENDARY', baseChance: 0.008, icon: '🔱' }),
   // Very Rare Mythic Drops
   Object.freeze({ slot: 'suit', itemId: 'chest-nautilus-suit', tier: 'mythic', skillId: 'resistance', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🐚' }),
   Object.freeze({ slot: 'torch', itemId: 'chest-abyssal-lantern', tier: 'mythic', skillId: 'visibility', rarityLabel: 'VERY RARE MYTHIC', baseChance: 0.035, icon: '🏮' }),
@@ -1500,10 +1546,16 @@ export const CHEST_GEAR_DROPS = Object.freeze([
   Object.freeze({ slot: 'visor', itemId: 'chest-echo-array', tier: 'epic', skillId: 'sonar', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '📡' }),
   Object.freeze({ slot: 'trim', itemId: 'chest-manta-fins', tier: 'epic', skillId: 'speed', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🪽' }),
   Object.freeze({ slot: 'visor', itemId: 'chest-harpoon-visor', tier: 'epic', skillId: 'armor', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🎯' }),
+  Object.freeze({ slot: 'scooter', itemId: 'hydro-glider-dpv', tier: 'epic', skillId: 'speed', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🛴' }),
+  Object.freeze({ slot: 'scooter', itemId: 'phantom-whisper-dpv', tier: 'epic', skillId: 'stealth', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🛴' }),
+  Object.freeze({ slot: 'harpoon', itemId: 'kraken-biolume-spear', tier: 'epic', skillId: 'stealth', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🔱' }),
+  Object.freeze({ slot: 'harpoon', itemId: 'apex-hunter-railgun', tier: 'epic', skillId: 'armor', rarityLabel: 'RARE EPIC', baseChance: 0.075, icon: '🔱' }),
   // Veteran Rare Drops
   Object.freeze({ slot: 'headgear', itemId: 'chest-ghost-hood', tier: 'rare', skillId: 'stealth', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🥷' }),
   Object.freeze({ slot: 'tank', itemId: 'chest-titanium-twin', tier: 'rare', skillId: 'resistance', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🫧' }),
   Object.freeze({ slot: 'patch', itemId: 'chest-corsair-crest', tier: 'rare', skillId: 'speed', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🏴‍☠️' }),
+  Object.freeze({ slot: 'scooter', itemId: 'salvage-tug-dpv', tier: 'rare', skillId: 'speed', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🛴' }),
+  Object.freeze({ slot: 'harpoon', itemId: 'salvage-rivet-lance', tier: 'rare', skillId: 'armor', rarityLabel: 'RARE DROP', baseChance: 0.13, icon: '🔱' }),
 ]);
 
 /**

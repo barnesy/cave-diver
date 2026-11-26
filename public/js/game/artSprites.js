@@ -1321,10 +1321,14 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   ctx.quadraticCurveTo(u * 0.62, u * 0.42, u * 0.68, u * 0.14);
   ctx.stroke();
 
-  // Torpedo DPV Underwater Scooter gripped ahead of diver when equipped (with glide-in equip animation!)
-  if (hasDpv) {
+  // Torpedo DPV Underwater Scooter gripped ahead of diver ONLY when equipped & active (v233)!
+  if (hasDpv && dpvActive) {
+    const scSpec = pal?.scooter && pal.scooter.id !== 'none'
+      ? pal.scooter
+      : { hull: '#facc15', shroud: '#1e293b', accent: '#22d3ee', tier: 'common' };
+    const isLegDpv = scSpec.tier === 'legendary';
     const dpvSlideX =
-      equipFx && equipFx.slot === 'dpv' && equipT < 0.72
+      equipFx && (equipFx.slot === 'dpv' || equipFx.slot === 'scooter') && equipT < 0.72
         ? (1 - _equipEaseOutBack(Math.min(1, equipT / 0.58))) * (u * 0.85)
         : 0;
     ctx.save();
@@ -1337,25 +1341,25 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.lineTo(-u * 1.0, -u * 0.1);
     ctx.stroke();
     // Rear prop shroud
-    ctx.fillStyle = '#1e293b';
-    ctx.strokeStyle = dpvActive ? '#22d3ee' : '#64748b';
+    ctx.fillStyle = scSpec.shroud || '#1e293b';
+    ctx.strokeStyle = scSpec.accent || '#22d3ee';
     ctx.lineWidth = Math.max(1.1, u * 0.045);
     ctx.beginPath();
     ctx.roundRect(-u * 0.46, -u * 0.24, u * 0.34, u * 0.48, u * 0.08);
     ctx.fill();
     ctx.stroke();
-    // Spinning cyan propeller blur when throttling
+    // Spinning propeller blur when throttling
     if (dpvThrusting) {
       const spin = Math.sin(timeSec * 42) * u * 0.16;
-      ctx.strokeStyle = 'rgba(103, 232, 249, 0.9)';
+      ctx.strokeStyle = scSpec.accent || 'rgba(103, 232, 249, 0.9)';
       ctx.lineWidth = Math.max(1.4, u * 0.06);
       ctx.beginPath();
       ctx.moveTo(-u * 0.38, -Math.abs(spin) - u * 0.04);
       ctx.lineTo(-u * 0.38, Math.abs(spin) + u * 0.04);
       ctx.stroke();
     }
-    // Streamlined yellow torpedo battery body & nosecone
-    ctx.fillStyle = dpvActive ? '#facc15' : '#ca8a04';
+    // Streamlined torpedo battery body & nosecone tinted to equipped Scooter model
+    ctx.fillStyle = scSpec.hull || '#facc15';
     ctx.beginPath();
     ctx.moveTo(-u * 0.14, -u * 0.19);
     ctx.lineTo(u * 0.36, -u * 0.19);
@@ -1366,13 +1370,26 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = Math.max(1, u * 0.04);
     ctx.stroke();
-    // Nosecone active status LED
-    if (dpvActive) {
-      ctx.fillStyle = dpvThrusting ? '#67e8f9' : '#4ade80';
+    // Accent racing stripe along torpedo body
+    ctx.strokeStyle = scSpec.accent || '#38bdf8';
+    ctx.lineWidth = Math.max(1, u * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.08, 0);
+    ctx.lineTo(u * 0.34, 0);
+    ctx.stroke();
+    // Legendary Valkyrie supercavitation plasma arc on nosecone
+    if (isLegDpv) {
+      ctx.strokeStyle = 'rgba(103, 232, 249, 0.85)';
+      ctx.lineWidth = Math.max(1.2, u * 0.05);
       ctx.beginPath();
-      ctx.arc(u * 0.34, 0, Math.max(1.4, u * 0.055), 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(u * 0.34, 0, u * 0.28, -0.78, 0.78);
+      ctx.stroke();
     }
+    // Nosecone active status LED
+    ctx.fillStyle = dpvThrusting ? (scSpec.accent || '#67e8f9') : '#4ade80';
+    ctx.beginPath();
+    ctx.arc(u * 0.34, 0, Math.max(1.4, u * 0.055), 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 }
@@ -1557,8 +1574,13 @@ export function drawDetailedSpeargun(ctx, scale, {
   glowStamps = null,
   recoil = 0,
   muzzleFlash = 0,
+  harpoonSpec = null,
 } = {}) {
   const s = scale;
+  const hpBarrel = harpoonSpec?.barrel || '#cbd5e1';
+  const hpRail = harpoonSpec?.rail || '#38bdf8';
+  const hpBand = harpoonSpec?.band || '#f59e0b';
+  const hpTip = harpoonSpec?.tip || '#bae6fd';
   const recoilPx = Math.max(0, Number(recoil) || 0) * 0.24 * s;
   ctx.save();
   ctx.translate(-recoilPx, 0);
@@ -1636,7 +1658,7 @@ export function drawDetailedSpeargun(ctx, scale, {
   // 4. Sculpted Carbon-Core & Brushed-Titanium Pneumatic Barrel + Receiver Block
   const barrelGrad = ctx.createLinearGradient(0, -0.10 * s, 0, 0.08 * s);
   barrelGrad.addColorStop(0, '#f8fafc');
-  barrelGrad.addColorStop(0.32, '#cbd5e1');
+  barrelGrad.addColorStop(0.32, hpBarrel);
   barrelGrad.addColorStop(0.65, '#475569');
   barrelGrad.addColorStop(1, '#0f172a');
   ctx.fillStyle = barrelGrad;
@@ -1647,10 +1669,10 @@ export function drawDetailedSpeargun(ctx, scale, {
   ctx.fill();
   ctx.stroke();
 
-  // Machined barrel cooling slots & glowing cyan pneumatic pressure rail
-  ctx.fillStyle = '#0284c7';
+  // Machined barrel cooling slots & glowing pneumatic pressure rail
+  ctx.fillStyle = hpRail;
   ctx.fillRect(0.08 * s, -0.052 * s, 0.72 * s, 0.036 * s);
-  ctx.fillStyle = '#7dd3fc';
+  ctx.fillStyle = hpTip;
   ctx.fillRect(0.10 * s, -0.046 * s, 0.68 * s, 0.016 * s);
   ctx.fillStyle = '#0f172a';
   for (let k = 0; k < 5; k++) {
@@ -1665,7 +1687,7 @@ export function drawDetailedSpeargun(ctx, scale, {
   ctx.arc(-0.02 * s, -0.015 * s, 0.052 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = '#38bdf8';
+  ctx.strokeStyle = hpRail;
   ctx.lineWidth = Math.max(0.8, 0.016 * s);
   ctx.beginPath();
   ctx.moveTo(-0.02 * s, -0.015 * s);
@@ -1673,7 +1695,7 @@ export function drawDetailedSpeargun(ctx, scale, {
   ctx.stroke();
 
   // 5. Twin Tensioned Power Sling Bands stretching from Wishbone Notch to Muzzle Roller Pulleys
-  ctx.strokeStyle = '#f59e0b';
+  ctx.strokeStyle = hpBand;
   ctx.lineWidth = Math.max(1.2, 0.03 * s);
   ctx.beginPath();
   ctx.moveTo(0.16 * s, -0.068 * s);
@@ -1690,7 +1712,7 @@ export function drawDetailedSpeargun(ctx, scale, {
   ctx.roundRect(0.84 * s, -0.105 * s, 0.13 * s, 0.185 * s, 0.03 * s);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#38bdf8';
+  ctx.fillStyle = hpRail;
   ctx.beginPath();
   ctx.arc(0.905 * s, -0.068 * s, 0.028 * s, 0, Math.PI * 2);
   ctx.fill();
@@ -1705,8 +1727,8 @@ export function drawDetailedSpeargun(ctx, scale, {
     ctx.lineTo(1.34 * s, -0.025 * s);
     ctx.stroke();
     // Dual hinged flopper barbs + razor broadhead tip
-    ctx.fillStyle = '#bae6fd';
-    ctx.strokeStyle = '#0284c7';
+    ctx.fillStyle = hpTip;
+    ctx.strokeStyle = hpRail;
     ctx.lineWidth = Math.max(0.8, 0.016 * s);
     ctx.beginPath();
     ctx.moveTo(1.52 * s, -0.025 * s);
@@ -1852,6 +1874,7 @@ export function drawDiverArmAndTorch(
       glowStamps,
       recoil: opts.spearRecoil || 0,
       muzzleFlash: opts.muzzleFlash || 0,
+      harpoonSpec: liveryPalette?.harpoon || null,
     });
   } else {
     ctx.fillStyle = '#e2e8f0';

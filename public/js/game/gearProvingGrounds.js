@@ -8,6 +8,8 @@ import {
   ACCENT_TRIMS,
   TANK_FINISHES,
   VISOR_TINTS,
+  SCOOTER_MODELS,
+  HARPOON_MODELS,
   getGearTierMeta,
 } from './rigLivery.js';
 import { computeRigPerformanceProfile } from './gearStats.js';
@@ -143,6 +145,8 @@ export function buildBestOwnedRig(unlocks) {
     visor: 'visors',
     tank: 'tanks',
     torch: 'torches',
+    scooter: 'scooters',
+    harpoon: 'harpoons',
     patch: 'patches',
   };
 
@@ -185,6 +189,8 @@ export function buildBestOwnedRig(unlocks) {
     ['tankId', TANK_FINISHES, unlocks.tanks],
     ['visorId', VISOR_TINTS, unlocks.visors],
     ['trimId', ACCENT_TRIMS, unlocks.trims],
+    ['scooterId', SCOOTER_MODELS, unlocks.scooters],
+    ['harpoonId', HARPOON_MODELS, unlocks.harpoons],
     ['patchId', MILESTONE_PATCHES, unlocks.patches],
   ];
   for (const [field, list, uSet] of slotCatalogs) {

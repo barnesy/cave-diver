@@ -25,6 +25,8 @@ import {
   ACCENT_TRIMS,
   TANK_FINISHES,
   VISOR_TINTS,
+  SCOOTER_MODELS,
+  HARPOON_MODELS,
   OUTFITTER_PRESETS,
   WELCOME_RELIC_CHOICES,
   DEFAULT_RIG_LIVERY,
@@ -82,6 +84,8 @@ const SLOT_DISPLAY_NAMES = {
   visor: 'Visor Lens',
   tank: 'Twin Tanks',
   torch: 'Primary Torch',
+  scooter: 'DPV Scooter',
+  harpoon: 'Harpoon',
   patch: 'Shoulder Patch',
   chroma: 'Color Coat',
 };
@@ -139,6 +143,8 @@ export function createLiveryWorkshopController({
     for (const id of unlocks.visors || []) keys.push(`visor:${id}`);
     for (const id of unlocks.tanks || []) keys.push(`tank:${id}`);
     for (const id of unlocks.torches || []) keys.push(`torch:${id}`);
+    for (const id of unlocks.scooters || []) keys.push(`scooter:${id}`);
+    for (const id of unlocks.harpoons || []) keys.push(`harpoon:${id}`);
     for (const id of unlocks.patches || []) keys.push(`patch:${id}`);
     return keys;
   }
@@ -443,7 +449,7 @@ export function createLiveryWorkshopController({
     try {
       const eq = getEffectiveGearLoadout();
       hasCcr = Boolean(eq?.ccr);
-      hasDpv = Boolean(eq?.dpv);
+      hasDpv = Boolean(eq?.dpv || (activeRigLivery?.scooterId && activeRigLivery.scooterId !== 'none'));
     } catch {}
     drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
   }
@@ -858,10 +864,10 @@ export function createLiveryWorkshopController({
       ccrUnlocked = unlockedIds.has('ccr');
       dpvUnlocked = unlockedIds.has('dpv');
     } catch {}
-    const showCcr = ccrUnlocked ? hasCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr);
-    const showDpv = dpvUnlocked ? hasDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv);
-
     const previewLivery = getDisplayedRigLivery();
+    const hasEquippedScooter = Boolean(previewLivery?.scooterId && previewLivery.scooterId !== 'none');
+    const showCcr = ccrUnlocked ? hasCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : hasCcr);
+    const showDpv = hasEquippedScooter || (dpvUnlocked ? hasDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : hasDpv));
 
     let equipFxArg = null;
     if (activeEquipFx) {
@@ -963,8 +969,20 @@ export function createLiveryWorkshopController({
       try { saveCareerLogbook(res.book); } catch {}
     }
     if (field && activeRigLivery[field] === item.id) {
-      activeRigLivery = { ...activeRigLivery, [field]: DEFAULT_RIG_LIVERY[field] };
+      const nextRaw = { ...activeRigLivery };
+      delete nextRaw[field];
+      activeRigLivery = sanitizeRigLivery(nextRaw, getCurrentLiveryUnlocks());
       saveRigLivery();
+      if (slot === 'scooter') {
+        try {
+          const savedGearLoadout = getSavedGearLoadout();
+          if (savedGearLoadout) {
+            savedGearLoadout.dpv = false;
+            saveGearLoadout();
+            renderTechGearDock();
+          }
+        } catch {}
+      }
     }
     pinnedInspect = null;
     lockedTryOn = null;
@@ -1294,6 +1312,17 @@ export function createLiveryWorkshopController({
     } else {
       pinnedInspect = null;
     }
+    if (slot === 'scooter' && patchObj && Object.prototype.hasOwnProperty.call(patchObj, 'scooterId')) {
+      try {
+        const savedGearLoadout = getSavedGearLoadout();
+        if (savedGearLoadout) {
+          savedGearLoadout.dpv = patchObj.scooterId !== 'none';
+          liveryPreviewDpv = null;
+          saveGearLoadout();
+          renderTechGearDock();
+        }
+      } catch {}
+    }
     triggerEquipAnimation(slot, itemMeta, { silentAudio });
     saveRigLivery();
     syncLiveryUi();
@@ -1599,6 +1628,8 @@ export function createLiveryWorkshopController({
       unlocks.visors.size +
       unlocks.tanks.size +
       unlocks.torches.size +
+      (unlocks.scooters?.size || 0) +
+      (unlocks.harpoons?.size || 0) +
       unlocks.patches.size;
     const overallPct = Math.min(100, Math.round((totalUnlocked / Math.max(1, totalItems)) * 100));
     const foundSet = unlocks.stats.foundGearIds || new Set();
@@ -2119,6 +2150,8 @@ export function createLiveryWorkshopController({
       { slot: 'visor', field: 'visorId', setKey: 'visors', icon: '🕶️', label: 'Mask Visor', list: VISOR_TINTS, equipped: pal.visor },
       { slot: 'tank', field: 'tankId', setKey: 'tanks', icon: '🛢', label: 'Twin Tanks', list: TANK_FINISHES, equipped: pal.tank },
       { slot: 'torch', field: 'torchId', setKey: 'torches', icon: '🔦', label: 'Primary Torch', list: TORCH_OPTICS, equipped: pal.torch },
+      { slot: 'scooter', field: 'scooterId', setKey: 'scooters', icon: '🛴', label: 'DPV Scooter', list: SCOOTER_MODELS, equipped: pal.scooter },
+      { slot: 'harpoon', field: 'harpoonId', setKey: 'harpoons', icon: '🔱', label: 'Harpoon', list: HARPOON_MODELS, equipped: pal.harpoon },
       { slot: 'patch', field: 'patchId', setKey: 'patches', icon: '🎖️', label: 'Expedition Crest', list: MILESTONE_PATCHES, equipped: pal.patch },
     ];
 
@@ -2372,6 +2405,8 @@ export function createLiveryWorkshopController({
       visor: { slot: 'visor', field: 'visorId', setKey: 'visors', icon: '🕶️', label: 'Mask Visor', list: VISOR_TINTS, equipped: pal.visor },
       tank: { slot: 'tank', field: 'tankId', setKey: 'tanks', icon: '🛢', label: 'Twin Tanks', list: TANK_FINISHES, equipped: pal.tank },
       torch: { slot: 'torch', field: 'torchId', setKey: 'torches', icon: '🔦', label: 'Primary Torch', list: TORCH_OPTICS, equipped: pal.torch },
+      scooter: { slot: 'scooter', field: 'scooterId', setKey: 'scooters', icon: '🛴', label: 'DPV Scooter', list: SCOOTER_MODELS, equipped: pal.scooter },
+      harpoon: { slot: 'harpoon', field: 'harpoonId', setKey: 'harpoons', icon: '🔱', label: 'Harpoon', list: HARPOON_MODELS, equipped: pal.harpoon },
       patch: { slot: 'patch', field: 'patchId', setKey: 'patches', icon: '🎖️', label: 'Expedition Crest', list: MILESTONE_PATCHES, equipped: pal.patch },
     };
     const cfg = slotDefs[activeCompareSlot];

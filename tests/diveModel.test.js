@@ -12553,8 +12553,8 @@ test('v230 Treasure Maps + Sonar Beacons, Ultra-Rare Legendaries, Silt-Pierce / 
   // 1. Legendary Tier & 17-item Expanded Chest Loot Pool across all 6 skills
   assert.equal(GEAR_TIERS.legendary.rank, 6);
   const legDrops = CHEST_GEAR_DROPS.filter((d) => d.tier === 'legendary');
-  assert.equal(legDrops.length, 7, 'Must have 7 ultra-rare Legendary crown jewels across all 7 slots');
-  assert.equal(new Set(legDrops.map((d) => d.slot)).size, 7, 'Each gear slot must have a Legendary');
+  assert.equal(legDrops.length, 9, 'Must have 9 ultra-rare Legendary crown jewels across all 9 slots (including Scooter & Harpoon)');
+  assert.equal(new Set(legDrops.map((d) => d.slot)).size, 9, 'Each gear slot must have a Legendary');
   for (const sk of TREASURE_SKILL_ORDER) {
     assert.ok(CHEST_GEAR_DROPS.some((d) => d.skillId === sk), `Chest pool must cover skill ${sk}`);
   }
@@ -12784,4 +12784,96 @@ test('v232 Image-Focused Gear Artwork SVG generator covers every slot, legendari
     assert.ok(m && !seenBgIds.has(m[1]), `Expected unique radialGradient ID for slot ${slot}`);
     seenBgIds.add(m[1]);
   }
+});
+
+test('v233 Scooters & Harpoons in Loot Pool, Armor Sets, Legendaries & In-Game Scooter Visibility', async () => {
+  const {
+    SCOOTER_MODELS,
+    HARPOON_MODELS,
+    GEAR_SET_SYNERGIES,
+    evaluateGearSetSynergy,
+    resolveDiverLiveryPalette,
+    sanitizeRigLivery,
+    computeUnlockedLiveries,
+  } = await import('../public/js/game/rigLivery.js');
+  const { CHEST_GEAR_DROPS, computeRigPerformanceProfile, getGearItemStats } = await import('../public/js/game/gearStats.js');
+  const { drawStyledDiverRig } = await import('../public/js/game/artSprites.js');
+  const { renderGearArtworkSvg } = await import('../public/js/ui/gearArtwork.js');
+
+  // 1. Both Scooters and Harpoons have full catalogs including Ultra-Rare Legendaries in CHEST_GEAR_DROPS
+  const legScooter = SCOOTER_MODELS.find((s) => s.tier === 'legendary');
+  const legHarpoon = HARPOON_MODELS.find((h) => h.tier === 'legendary');
+  assert.ok(legScooter && legScooter.id === 'legendary-valkyrie-dpv');
+  assert.ok(legHarpoon && legHarpoon.id === 'legendary-poseidon-trident');
+  assert.ok(CHEST_GEAR_DROPS.some((d) => d.slot === 'scooter' && d.itemId === legScooter.id && d.tier === 'legendary'));
+  assert.ok(CHEST_GEAR_DROPS.some((d) => d.slot === 'harpoon' && d.itemId === legHarpoon.id && d.tier === 'legendary'));
+  assert.ok(CHEST_GEAR_DROPS.filter((d) => d.slot === 'scooter').length >= 4, 'Loot pool must contain multiple Scooters');
+  assert.ok(CHEST_GEAR_DROPS.filter((d) => d.slot === 'harpoon').length >= 4, 'Loot pool must contain multiple Harpoons');
+
+  // 2. Scooters & Harpoons belong to Armor Sets and activate Set Synergies
+  assert.ok(GEAR_SET_SYNERGIES.some((s) => s.slots.some((r) => r.slot === 'scooter')), 'Armor sets must include Scooters');
+  assert.ok(GEAR_SET_SYNERGIES.some((s) => s.slots.some((r) => r.slot === 'harpoon')), 'Armor sets must include Harpoons');
+  const hydroSyn = evaluateGearSetSynergy({ suitId: 'world-hydro-suit', scooterId: 'legendary-valkyrie-dpv' });
+  const hydroSt = hydroSyn.sets.find((x) => x.set.id === 'karst-hydro-glider');
+  assert.equal(hydroSt.matched, 2, 'Legendary Scooter must count toward Karst Hydro-Glider set');
+  assert.equal(hydroSt.active, true);
+  const apexSyn = evaluateGearSetSynergy({ suitId: 'bounty-hunter-suit', harpoonId: 'legendary-poseidon-trident', scooterId: 'legendary-valkyrie-dpv' });
+  const apexSt = apexSyn.sets.find((x) => x.set.id === 'apex-bounty');
+  assert.equal(apexSt.matched, 3, 'Legendary Harpoon + Scooter must complete 3pc Apex Leviathan Hunter set');
+  assert.equal(apexSt.active, true);
+
+  // 3. Legendary Scooter & Harpoon grant real performance buffs & Poseidon Arc-Tip overcharge
+  const perf = computeRigPerformanceProfile({ scooterId: legScooter.id, harpoonId: legHarpoon.id });
+  assert.ok(perf.dpvSpeedBonus >= 0.30, 'Legendary Scooter must boost DPV speed');
+  assert.ok(perf.spearPowerMult >= 1.30, 'Legendary Harpoon must boost spear power');
+  assert.equal(perf.apexOvercharge, true, 'Legendary Poseidon Harpoon must grant Golden Hyper-Tip overcharge');
+  assert.ok(getGearItemStats('scooter', legScooter).pills.length >= 3);
+  assert.ok(getGearItemStats('harpoon', legHarpoon).pills.length >= 3);
+
+  // 4. Equipping a Scooter gear item enables DPV in createDiveSession; 'none' leaves DPV unequipped
+  const sNoDpv = createDiveSession(LEVEL_1, { gear: { dpv: false }, livery: { scooterId: 'none' } });
+  assert.equal(sNoDpv.dpv.equipped, false);
+  assert.equal(sNoDpv.diver.hasDpv, false);
+  assert.equal(sNoDpv.diver.dpvActive, false);
+  const sWithLegDpv = createDiveSession(LEVEL_1, { gear: { dpv: false }, livery: { scooterId: legScooter.id } });
+  assert.equal(sWithLegDpv.dpv.equipped, true, 'Equipping a looted Scooter must equip DPV for the dive');
+  assert.equal(sWithLegDpv.diver.hasDpv, true);
+  assert.equal(sWithLegDpv.diver.dpvActive, false, 'Scooter starts stowed until engaged');
+
+  // 5. In-game scooter visibility: drawStyledDiverRig ONLY translates to scooter anchor when hasDpv && dpvActive!
+  const makeTrackCtx = () => {
+    const translates = [];
+    return {
+      translates,
+      save() {}, restore() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {},
+      quadraticCurveTo() {}, bezierCurveTo() {}, arc() {}, ellipse() {}, rect() {}, roundRect() {},
+      fill() {}, stroke() {}, fillRect() {}, strokeRect() {}, fillText() {}, rotate() {}, scale() {},
+      translate(x, y) { translates.push([x, y]); },
+      createLinearGradient() { return { addColorStop() {} }; },
+      createRadialGradient() { return { addColorStop() {} }; },
+      setLineDash() {},
+    };
+  };
+  const pal = resolveDiverLiveryPalette({ scooterId: legScooter.id, harpoonId: legHarpoon.id });
+  const u = 20;
+  const ctxOff = makeTrackCtx();
+  drawStyledDiverRig(ctxOff, u, 36, false, 1, { hasDpv: true, dpvActive: false, dpvThrusting: false, liveryPalette: pal });
+  assert.equal(ctxOff.translates.some(([x]) => Math.abs(x - u * 1.18) < 0.5), false, 'Scooter must NOT be drawn when stowed/inactive');
+
+  const ctxNone = makeTrackCtx();
+  drawStyledDiverRig(ctxNone, u, 36, false, 1, { hasDpv: false, dpvActive: true, dpvThrusting: false, liveryPalette: pal });
+  assert.equal(ctxNone.translates.some(([x]) => Math.abs(x - u * 1.18) < 0.5), false, 'Scooter must NOT be drawn when not equipped');
+
+  const ctxOn = makeTrackCtx();
+  drawStyledDiverRig(ctxOn, u, 36, false, 1, { hasDpv: true, dpvActive: true, dpvThrusting: true, liveryPalette: pal });
+  assert.equal(ctxOn.translates.some(([x]) => Math.abs(x - u * 1.18) < 0.5), true, 'Scooter MUST be drawn when equipped and active');
+
+  // 6. Sanitization & artwork SVG coverage for scooter & harpoon
+  const unlocks = computeUnlockedLiveries({ foundGear: { [`scooter:${legScooter.id}`]: {}, [`harpoon:${legHarpoon.id}`]: {} } });
+  const clean = sanitizeRigLivery({ scooterId: legScooter.id, harpoonId: legHarpoon.id }, unlocks);
+  assert.equal(clean.scooterId, legScooter.id);
+  assert.equal(clean.harpoonId, legHarpoon.id);
+  assert.ok(renderGearArtworkSvg('scooter', legScooter).includes('<svg '));
+  assert.ok(renderGearArtworkSvg('scooter', SCOOTER_MODELS[0]).includes('<svg '));
+  assert.ok(renderGearArtworkSvg('harpoon', legHarpoon).includes('<svg '));
 });
