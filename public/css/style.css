@@ -14307,8 +14307,9 @@ body:has(.lb-stats-modal:not([hidden])) #screen-menu #lan-setup-controls { trans
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(9) { animation-delay: 425ms; }
 #livery-modal:not([hidden]) .livery-equipped-card:nth-child(n+10) { animation-delay: 450ms; }
 
-/* Nested Modal Sequenced Elastic Handoff: Gear Workshop pops OUT when Gear Slot Modal opens, then bounces back IN on close */
-body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
+/* Nested Modal Sequenced Elastic Handoff: Gear Workshop pops OUT when Gear Slot or Set Bonuses Modal opens, then bounces back IN on close */
+body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card,
+body:has(#gear-sets-modal:not([hidden])) #livery-modal .livery-modal-card {
   opacity: 0;
   translate: 0 -22px;
   scale: 0.92;
@@ -15351,6 +15352,18 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   position: sticky;
   border-radius: 18px;
 }
+.livery-canvas-stage {
+  position: relative;
+}
+.livery-preview-overlay-left {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .livery-preview-overlay-actions {
   position: absolute;
   top: 10px;
@@ -15360,6 +15373,7 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   align-items: center;
   gap: 5px;
 }
+.livery-preview-overlay-left .livery-tank-pill,
 .livery-preview-overlay-actions .livery-tank-pill {
   padding: 4px 10px;
   border-radius: 999px;
@@ -15369,12 +15383,283 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(224, 242, 254, 0.14);
 }
+.livery-preview-overlay-left .livery-tank-pill:hover,
 .livery-preview-overlay-actions .livery-tank-pill:hover {
   transform: translateY(-1px);
   background: rgba(14, 165, 233, 0.28);
 }
+.livery-preview-overlay-left .livery-tank-pill.sets-btn.has-active-set {
+  border-color: rgba(56, 189, 248, 0.68);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.56), rgba(30, 58, 138, 0.52));
+  color: #e0f2fe;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.28), inset 0 1px 0 rgba(224, 242, 254, 0.24);
+}
+.livery-preview-overlay-left .livery-tank-pill.sets-btn.has-capstone {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: linear-gradient(135deg, rgba(161, 98, 7, 0.56), rgba(30, 41, 59, 0.72));
+  color: #fef08a;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.32), inset 0 1px 0 rgba(254, 240, 138, 0.28);
+}
 .livery-preview-overlay-actions .livery-tank-pill.field-test {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.34), rgba(6, 182, 212, 0.34));
+}
+
+/* v252: Larger, crisp boosted metrics directly under the Workshop diver avatar */
+#livery-modal .livery-perf-panel {
+  margin: 4px 0 8px;
+}
+#livery-modal .livery-perf-compact-grid {
+  gap: 6px;
+}
+#livery-modal .livery-perf-compact-grid .livery-perf-stat {
+  gap: 2px;
+  padding: 5px 4px;
+}
+#livery-modal .livery-perf-stat-lbl {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+}
+#livery-modal .livery-perf-stat-val {
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.18;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+#livery-modal .livery-perf-stat.is-boosted .livery-perf-stat-lbl {
+  color: #cbd5e1;
+}
+#livery-modal .livery-perf-stat.is-boosted .livery-perf-stat-val {
+  font-size: 1.06rem;
+  color: #f8fafc;
+}
+#livery-modal .livery-perf-stat.is-boosted.c-cyan .livery-perf-stat-val {
+  color: #67e8f9;
+  text-shadow: 0 0 14px rgba(34, 211, 238, 0.34);
+}
+#livery-modal .livery-perf-stat.is-boosted.c-emerald .livery-perf-stat-val {
+  color: #6ee7b7;
+  text-shadow: 0 0 14px rgba(52, 211, 153, 0.34);
+}
+#livery-modal .livery-perf-stat.is-boosted.c-teal .livery-perf-stat-val {
+  color: #5eead4;
+  text-shadow: 0 0 14px rgba(45, 212, 191, 0.34);
+}
+#livery-modal .livery-perf-stat.is-boosted.c-amber .livery-perf-stat-val {
+  color: #fcd34d;
+  text-shadow: 0 0 14px rgba(251, 191, 36, 0.34);
+}
+#livery-modal .livery-perf-stat.is-boosted.c-rose .livery-perf-stat-val {
+  color: #fda4af;
+  text-shadow: 0 0 14px rgba(251, 113, 133, 0.34);
+}
+#livery-modal .livery-perf-stat.is-boosted.c-violet .livery-perf-stat-val {
+  color: #d8b4fe;
+  text-shadow: 0 0 14px rgba(192, 132, 252, 0.34);
+}
+@media (max-width: 580px) {
+  #livery-modal .livery-perf-stat-lbl {
+    font-size: 0.68rem;
+  }
+  #livery-modal .livery-perf-stat-val {
+    font-size: 0.90rem;
+  }
+  #livery-modal .livery-perf-stat.is-boosted .livery-perf-stat-val {
+    font-size: 1.0rem;
+  }
+}
+
+/* v252: Dedicated Set Bonuses & Powers Modal Panel */
+.gear-sets-modal {
+  z-index: 120;
+}
+.gear-sets-modal-card {
+  display: flex;
+  flex-direction: column;
+  max-width: 620px;
+  width: min(94vw, 620px);
+  overflow: hidden !important;
+  max-height: min(88dvh, 800px) !important;
+  padding: 0 16px 18px !important;
+  background: linear-gradient(165deg, rgba(6, 20, 38, 0.96), rgba(3, 12, 24, 0.98)) !important;
+  border: 1px solid rgba(186, 230, 253, 0.14) !important;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.68) !important;
+}
+#gear-sets-modal .gear-sets-modal-card > .lb-stats-head {
+  background: linear-gradient(180deg, rgba(3, 12, 24, 0.97) 0%, rgba(3, 12, 24, 0.92) 86%, rgba(3, 12, 24, 0.84) 100%);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(186, 230, 253, 0.1);
+  border-radius: 16px 16px 0 0;
+  margin: 0 -16px 12px;
+  padding: 14px 16px 12px;
+}
+.gear-sets-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
+}
+.gear-sets-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.gear-sets-empty {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.56);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+.gear-sets-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gear-sets-active-pill {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(8, 28, 52, 0.75));
+  border: 1px solid var(--set-color, rgba(56, 189, 248, 0.45));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+.gear-sets-active-pill.capstone {
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.34), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.18);
+}
+.gear-sets-active-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: #f8fafc;
+}
+.gear-sets-badge {
+  font-size: 0.70rem;
+  font-weight: 700;
+  color: var(--set-color, #7dd3fc);
+}
+.gear-sets-active-desc {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+.gear-sets-powers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gear-sets-power-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+.gear-sets-power-row strong {
+  color: #fef08a;
+  font-size: 0.78rem;
+}
+.gear-sets-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gear-sets-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(10, 22, 40, 0.74);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.gear-sets-card.active {
+  border-color: rgba(56, 189, 248, 0.42);
+}
+.gear-sets-card.capstone {
+  border-color: var(--set-color, rgba(250, 204, 21, 0.58));
+  background: linear-gradient(155deg, rgba(113, 63, 18, 0.20), rgba(10, 22, 40, 0.86));
+}
+.gear-sets-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gear-sets-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.84rem;
+  color: #f8fafc;
+}
+.gear-sets-card-counts {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+.gear-sets-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gear-sets-pieces-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.gear-sets-piece-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.gear-sets-piece-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.52);
+}
+.gear-sets-piece-chip.owned {
+  color: #e2e8f0;
+  border-color: rgba(56, 189, 248, 0.34);
+  background: rgba(12, 42, 74, 0.56);
+}
+.gear-sets-piece-chip.equipped {
+  color: #ecfeff;
+  border-color: rgba(52, 211, 153, 0.56);
+  background: rgba(6, 78, 59, 0.48);
+}
+.gear-sets-piece-chip.locked {
+  opacity: 0.64;
+}
+.gear-sets-piece-state {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #7dd3fc;
+}
+.gear-sets-piece-chip.equipped .gear-sets-piece-state {
+  color: #6ee7b7;
 }
 
 .gear-slot-preview-wrap {

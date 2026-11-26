@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=251',
+  mapRasterUrl: './assets/map-expedition.jpg?v=252',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -911,6 +911,7 @@ const hud = new DiveComputerHUD({
 const modalManager = createModalManager([
   { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearUnlockModalEl?.hidden, close: () => liveryWorkshop.closeGearUnlockShowcase() },
   { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearSlotModalEl?.hidden, close: () => liveryWorkshop.closeGearSlotModal() },
+  { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearSetsModalEl?.hidden, close: () => liveryWorkshop.closeGearSetsModal() },
   { isOpen: () => photoModeState.active, close: () => setPhotoModeActive(false) },
   { isOpen: () => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, close: () => closeFieldGuideCardModal() },
   { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && !artifactInspectorModalEl?.hidden, close: () => closeArtifactInspector() },

@@ -5966,7 +5966,8 @@ test('v143 UX, Mobile Ergonomics, Accessibility & Design System Overhaul: modal 
   // 1. Centralized Modal Escape Stack orders child modals BEFORE parent modals
   const stackStart = mainSrc.indexOf('createModalManager([');
   assert.ok(stackStart > 0, 'main.js must wire centralized createModalManager([...])');
-  const stackBlock = mainSrc.slice(stackStart, stackStart + 2600);
+  const stackEnd = mainSrc.indexOf(']);', stackStart);
+  const stackBlock = mainSrc.slice(stackStart, stackEnd > stackStart ? stackEnd : stackStart + 4000);
   assert.ok(stackBlock.indexOf('fgCardModalEl') < stackBlock.indexOf('modalLogbook'), 'Collector card must close before Logbook');
   assert.ok(stackBlock.indexOf('replayModal') < stackBlock.indexOf('modalLogbook'), 'Replay modal must close before Logbook');
   assert.ok(stackBlock.indexOf('liveryModalEl') < stackBlock.indexOf('diveSetupModalEl'), 'Gear Workshop must close before Dive Setup');
@@ -13123,4 +13124,28 @@ test('v251 Live SDF wall-weld anchoring & high-res 512px foreground textures', a
   assert.ok(fgSrc.includes('traceBladeSubpath(sctx, b);'), 'Kelp high-res drawShape must batch blades into one atomic path');
   assert.ok(fgSrc.includes('traceSpireSubpath(sctx, sp);'), 'Crystal high-res drawShape must batch spires into one atomic path');
   assert.ok(fgSrc.includes('traceIcicleSubpath(sctx, g);'), 'Icicle high-res drawShape must batch spears into one atomic path');
+});
+
+test('v252 Gear Workshop dedicated Set Bonuses panel & enlarged boosted metrics under avatar', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="btn-livery-sets"'), 'Gear Workshop must expose a Sets button');
+  assert.ok(html.includes('id="gear-sets-modal"'), 'Dedicated Set Bonuses panel modal must exist in index.html');
+  assert.ok(html.includes('id="gear-sets-modal-body"'), 'Set Bonuses panel must provide a scrollable body container');
+
+  const ctrlSrc = readFileSync(new URL('../public/js/ui/liveryWorkshopController.js', import.meta.url), 'utf8');
+  assert.ok(ctrlSrc.includes('function renderGearSetsModal('), 'Controller must render Set Bonuses inside renderGearSetsModal');
+  assert.ok(ctrlSrc.includes('function openGearSetsModal('), 'Controller must expose openGearSetsModal');
+  assert.equal(ctrlSrc.includes('class="livery-perf-sets"'), false, 'Inline set bonus pills must no longer bloat #livery-perf-panel');
+
+  const mainSrc = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  assert.ok(mainSrc.includes('liveryWorkshop.gearSetsModalEl'), 'modalManager must close Set Bonuses panel before Gear Workshop on Escape');
+
+  const css = readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.ok(
+    css.includes('#livery-modal .livery-perf-stat.is-boosted .livery-perf-stat-val'),
+    'style.css must enlarge boosted metrics right under the avatar'
+  );
+  assert.ok(css.includes('.gear-sets-modal-card'), 'style.css must style the Set Bonuses panel card');
 });
