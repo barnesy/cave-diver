@@ -707,7 +707,12 @@ export class CaveRenderer {
   }
 
   renderMenuScene({ level, diver, diveState, ecosystem, weather, timeSec, dt, livery }) {
-    if (this.ready && this.level && diver) {
+    // Throttle live Home backdrop to ~24fps so GPU stays cool and dive transitions are instant (v241)
+    if (this._lastMenuSceneT && timeSec - this._lastMenuSceneT > 0 && timeSec - this._lastMenuSceneT < 0.04) {
+      return;
+    }
+    this._lastMenuSceneT = timeSec;
+    if (this.ready && this.level && this.level.id === level?.id && diver) {
       const lvl = this.level;
       const swayX = Math.sin(timeSec * 0.28) * 3.4;
       const swayVx = Math.cos(timeSec * 0.28) * 0.95;

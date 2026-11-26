@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=240',
+  mapRasterUrl: './assets/map-expedition.jpg?v=241',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -595,10 +595,17 @@ const {
 
 async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoad = false, silent = false } = {}) {
   const nextLevel = typeof levelId === 'object' && levelId?.id ? levelId : getLevelById(levelId);
+  if (menuBgBakeTimer) { clearTimeout(menuBgBakeTimer); menuBgBakeTimer = null; }
 
-  // Deduplicate identical in-flight load so rapid events (e.g. dive_preparing + dive_started) share one build
+  // Deduplicate identical in-flight load and promote silent pre-bake to visible loader if dive starts
   if (inFlightLoad && inFlightLoad.levelId === nextLevel.id) {
-    if (showOverlay) screenLoader.classList.remove('done');
+    if (showOverlay) {
+      inFlightLoad.showOverlay = true;
+      inFlightLoad.silent = false;
+      screenLoader.classList.remove('done');
+      setLoaderProgress(inFlightLoad.lastPct || 25, inFlightLoad.lastLabel || `Loading ${nextLevel.name}...`);
+    }
+    if (keepOpenAfterLoad) inFlightLoad.keepOpenAfterLoad = true;
     return inFlightLoad.promise;
   }
 
@@ -633,13 +640,14 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
     const p = Math.max(0, Math.min(100, rawPct));
     return joiningRoomCode ? Math.round(44 + (p / 100) * 52) : p;
   };
-  if (showOverlay && (!isCached || keepOpenAfterLoad)) {
+  const loadRec = { seq: mySeq, levelId: nextLevel.id, promise: null, showOverlay, keepOpenAfterLoad, silent };
+  if (loadRec.showOverlay && (!isCached || loadRec.keepOpenAfterLoad)) {
     screenLoader.classList.remove('done');
   }
-  if (!isCached && inlineLoaderEl && !silent) {
+  if (!isCached && inlineLoaderEl && !loadRec.silent) {
     inlineLoaderEl.hidden = false;
   }
-  if (!silent) setLoaderProgress(mapPct(isCached ? 95 : 8), `Loading ${nextLevel.name}...`);
+  if (!loadRec.silent) setLoaderProgress(mapPct(isCached ? 95 : 8), `Loading ${nextLevel.name}...`);
 
   let lastStatusBroadcastAt = 0;
   let lastBroadcastPct = -1;
@@ -666,7 +674,9 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
       const res = await renderer.setLevel(nextLevel, {
         onProgress: (pct, label) => {
           if (mySeq !== loadSeq) return;
-          setLoaderProgress(mapPct(pct), label);
+          loadRec.lastPct = mapPct(pct);
+          loadRec.lastLabel = label;
+          if (!loadRec.silent) setLoaderProgress(loadRec.lastPct, label);
           if (pct < 100) broadcastLoadProgress(pct);
         },
       });
@@ -699,7 +709,7 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
       }
       if (mySeq === loadSeq) {
         if (inlineLoaderEl) inlineLoaderEl.hidden = true;
-        if (showOverlay && !keepOpenAfterLoad) {
+        if (loadRec.showOverlay && !loadRec.keepOpenAfterLoad) {
           setTimeout(() => {
             if (mySeq === loadSeq) screenLoader.classList.add('done');
           }, isCached ? 50 : 120);
@@ -709,7 +719,8 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
     return nextLevel;
   })();
 
-  inFlightLoad = { seq: mySeq, levelId: nextLevel.id, promise: runPromise };
+  loadRec.promise = runPromise;
+  inFlightLoad = loadRec;
   return runPromise;
 }
 
@@ -4697,12 +4708,9 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // Restore immediately if cached; otherwise silently pre-bake after a brief debounce (v240)
+  // Restore immediately if already baked in cache; defer baking other sites until Dive starts (zero browse lag)
   if (renderer.isLevelCached(nextLevel.id)) {
     await ensureLevelLoaded(nextLevel.id, { showOverlay: false, silent: true });
-  } else if (mode === 'menu') {
-    const targetId = nextLevel.id;
-    menuBgBakeTimer = setTimeout(() => { menuBgBakeTimer = null; if (mode === 'menu' && activeLevel.id === targetId && !inFlightLoad) ensureLevelLoaded(targetId, { showOverlay: false, silent: true }).catch(() => {}); }, 260);
   }
 }
 
@@ -5146,6 +5154,7 @@ syncSetupDrawerSummary();
 async function launchOpenCoopDive() {
   const diverName = requireCallsign();
   if (!diverName) return false;
+  if (menuBgBakeTimer) { clearTimeout(menuBgBakeTimer); menuBgBakeTimer = null; }
   activeDailyChallenge = null;
   activeRescueDrill = null;
   trenchCtrl?.resetTrenchRun?.();
@@ -5153,12 +5162,14 @@ async function launchOpenCoopDive() {
     lan.leaveRoom();
     resetLobbyUiState();
   }
+  const alreadyReady = Boolean(renderer.ready && renderer.level?.id === activeLevel.id && ecosystem && !inFlightLoad);
   btnPlaySolo.disabled = true;
-  if (!screenMenu.hidden) {
+  if (!screenMenu.hidden && !alreadyReady) {
     screenMenu.classList.add('menu-submerging');
   }
   try {
     lan.connect();
+    const roomTimeoutMs = alreadyReady ? 350 : 1600;
     const roomPromise =
       typeof navigator !== 'undefined' && navigator.onLine === false
         ? Promise.resolve(null)
@@ -5171,10 +5182,10 @@ async function launchOpenCoopDive() {
                 playerLines: [],
               })
               .catch(() => null),
-            new Promise((resolve) => setTimeout(() => resolve(null), 2200)),
+            new Promise((resolve) => setTimeout(() => resolve(null), roomTimeoutMs)),
           ]);
     const [, room] = await Promise.all([
-      ensureLevelLoaded(activeLevel.id, { showOverlay: true }),
+      ensureLevelLoaded(activeLevel.id, { showOverlay: !alreadyReady }),
       roomPromise,
     ]);
     if (room?.code) {
@@ -5188,6 +5199,7 @@ async function launchOpenCoopDive() {
   } finally {
     btnPlaySolo.disabled = false;
     screenMenu.classList.remove('menu-submerging');
+    if (mode !== 'diving') screenLoader.classList.add('done');
   }
 }
 
@@ -7979,7 +7991,7 @@ async function bootGame() {
   initGitHubAuth();
   requestAnimationFrame(frame);
   if (!INITIAL_ROOM_CODE && !incomingChallenge && !incomingProc) {
-    setTimeout(() => { if (mode === 'menu' && !inFlightLoad) ensureLevelLoaded(activeLevel.id, { showOverlay: false, silent: true }).catch(() => {}); }, 80);
+    setTimeout(() => { if (mode === 'menu' && !inFlightLoad) ensureLevelLoaded(activeLevel.id, { showOverlay: false, silent: true }).catch(() => {}); }, 260);
   }
 }
 

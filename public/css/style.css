@@ -14029,22 +14029,14 @@ h1, h2, h3,
   background: radial-gradient(ellipse at 50% 44%, rgba(2, 12, 24, 0.22) 0%, rgba(2, 9, 19, 0.48) 64%, rgba(1, 6, 14, 0.72) 100%);
   backdrop-filter: none;
   overflow-x: hidden;
+  animation: none;
   opacity: 1;
-  transform: scale(1);
-  transition:
-    opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    display 0.28s allow-discrete;
+  transform: none;
+  transition: opacity 0.22s ease;
 }
 #screen-menu.overlay-screen[hidden] {
   opacity: 0;
-  transform: scale(1.018);
-}
-@starting-style {
-  #screen-menu.overlay-screen:not([hidden]) {
-    opacity: 0;
-    transform: scale(0.985);
-  }
+  pointer-events: none;
 }
 
 #screen-menu > .menu-card {
@@ -14055,70 +14047,64 @@ h1, h2, h3,
   box-shadow: none;
   padding: 18px 20px 22px;
   transition:
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.24s ease,
-    filter 0.28s ease;
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease;
 }
 #screen-menu > .menu-card::before,
 #screen-menu > .menu-card::after {
   display: none !important;
 }
 
-/* Depth-of-field recession when a modal opens over the Home Screen */
+/* Depth-of-field recession when a modal opens over the Home Screen (pure GPU opacity+scale, zero blur freeze) */
 body:has(.lb-stats-modal:not([hidden])) #screen-menu > .menu-card {
-  transform: scale(0.976);
-  opacity: 0.34;
-  filter: blur(4px);
+  transform: scale(0.98);
+  opacity: 0.32;
   pointer-events: none;
 }
 /* Nested modal depth recession when Gear Slot Modal opens over Gear Workshop */
 body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
-  transform: scale(0.968);
+  transform: scale(0.972);
   opacity: 0.46;
-  filter: blur(2.5px);
 }
 
-/* True Animating IN and OUT for all Modals (native allow-discrete + @starting-style) */
+/* Smooth GPU-composited IN and OUT for Modals (no backdrop-filter animation stalls, immediate pointer release) */
 .lb-stats-modal {
-  background: radial-gradient(circle at 50% 35%, rgba(4, 18, 34, 0.56), rgba(1, 7, 16, 0.78));
-  backdrop-filter: blur(12px);
+  background: radial-gradient(circle at 50% 35%, rgba(4, 18, 34, 0.62), rgba(1, 7, 16, 0.82));
+  backdrop-filter: blur(8px);
   opacity: 1;
   transition:
-    opacity 0.22s ease,
-    backdrop-filter 0.22s ease,
-    display 0.22s allow-discrete;
+    opacity 0.2s ease,
+    display 0.2s allow-discrete;
 }
 .lb-stats-modal[hidden] {
   opacity: 0;
-  backdrop-filter: blur(0px);
+  pointer-events: none;
 }
 @starting-style {
   .lb-stats-modal:not([hidden]) {
     opacity: 0;
-    backdrop-filter: blur(0px);
   }
 }
 .lb-stats-modal .lb-stats-card {
   border-radius: 22px;
-  background: linear-gradient(168deg, rgba(8, 22, 40, 0.88), rgba(4, 11, 23, 0.94));
-  backdrop-filter: blur(24px) saturate(135%);
+  background: linear-gradient(168deg, rgba(8, 22, 40, 0.94), rgba(4, 11, 23, 0.97));
+  backdrop-filter: none;
   border: 1px solid rgba(224, 242, 254, 0.08);
   box-shadow: 0 32px 84px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(224, 242, 254, 0.14);
   opacity: 1;
   transform: translateY(0) scale(1);
   transition:
-    transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.22s ease,
-    filter 0.24s ease;
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease;
 }
 .lb-stats-modal[hidden] .lb-stats-card {
   opacity: 0;
-  transform: translateY(12px) scale(0.975);
+  transform: translateY(10px) scale(0.978);
 }
 @starting-style {
   .lb-stats-modal:not([hidden]) .lb-stats-card {
     opacity: 0;
-    transform: translateY(16px) scale(0.972);
+    transform: translateY(14px) scale(0.975);
   }
 }
 
@@ -14127,20 +14113,21 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
 .hud-menu-popover {
   border: 1px solid rgba(224, 242, 254, 0.09) !important;
   border-radius: 18px;
-  background: linear-gradient(168deg, rgba(8, 22, 42, 0.94), rgba(4, 11, 22, 0.97));
-  backdrop-filter: blur(22px) saturate(140%);
+  background: linear-gradient(168deg, rgba(8, 22, 42, 0.96), rgba(4, 11, 22, 0.98));
+  backdrop-filter: none;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.66), inset 0 1px 0 rgba(224, 242, 254, 0.14);
   opacity: 1;
   transform: translateY(0) scale(1);
   transform-origin: top right;
   transition:
-    opacity 0.18s ease,
-    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-    display 0.18s allow-discrete;
+    opacity 0.16s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    display 0.16s allow-discrete;
 }
 .home-menu-popover[hidden],
 .hud-menu-popover[hidden] {
   opacity: 0;
+  pointer-events: none;
   transform: translateY(-6px) scale(0.97);
 }
 @starting-style {
@@ -14229,16 +14216,16 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
   padding: 2px 4px 4px 2px;
 }
 #screen-menu .level-card-btn {
-  border: 1px solid rgba(224, 242, 254, 0.05);
+  border: 1px solid rgba(224, 242, 254, 0.06);
   border-radius: 15px;
   padding: 10px 13px;
-  background: rgba(6, 18, 35, 0.62);
-  backdrop-filter: blur(14px);
+  background: rgba(6, 18, 35, 0.78);
+  backdrop-filter: none;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.07);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, border-color 0.16s ease, box-shadow 0.2s ease;
 }
 #screen-menu .level-card-btn.is-wreck {
-  background: rgba(28, 17, 16, 0.62);
+  background: rgba(28, 17, 16, 0.78);
 }
 #screen-menu .level-card-btn .lvl-card-top {
   opacity: 0.66;
