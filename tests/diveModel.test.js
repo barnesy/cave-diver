@@ -12877,3 +12877,149 @@ test('v233 Scooters & Harpoons in Loot Pool, Armor Sets, Legendaries & In-Game S
   assert.ok(renderGearArtworkSvg('scooter', SCOOTER_MODELS[0]).includes('<svg '));
   assert.ok(renderGearArtworkSvg('harpoon', legHarpoon).includes('<svg '));
 });
+
+test('v249 Living light-integrated foreground depth elements: wallSlope anchoring, real lighting, optic RGB, edge occlusion & Pass 2 accents', async () => {
+  const {
+    buildForegroundDepthElements,
+    computeForegroundElementLighting,
+    foregroundDepthRendererMethods,
+  } = await import('../public/js/game/renderers/foregroundDepthRenderer.js');
+
+  // 1. Every level produces valid wallSlope-anchored elements with mid/near depth layers
+  let totalNear = 0;
+  let totalMid = 0;
+  for (const lvl of LEVELS) {
+    const els = buildForegroundDepthElements(lvl);
+    assert.ok(els.length >= 4 && els.length <= 44, `${lvl.id} element count out of range: ${els.length}`);
+    for (const el of els) {
+      assert.ok(Number.isFinite(el.wallSlope) && Math.abs(el.wallSlope) <= 0.60, `${lvl.id} invalid wallSlope ${el.wallSlope}`);
+      assert.ok(el.depthLayer === 'mid' || el.depthLayer === 'near', `${lvl.id} invalid depthLayer ${el.depthLayer}`);
+      if (el.depthLayer === 'near') totalNear++;
+      else totalMid++;
+    }
+  }
+  assert.ok(totalMid > 0 && totalNear > 0, 'Foreground elements must span both mid and near parallax planes');
+
+  // 2. Real lighting integration via computeForegroundElementLighting
+  const deepEl = {
+    x: 42, y: 55, side: 'ceiling', widthM: 2.2, heightM: 1.6,
+    parallax: 1.12, depthLayer: 'mid', kind: 'limestone-overhang', biome: 'cenote', wallSlope: 0.15,
+  };
+  const darkLit = computeForegroundElementLighting(deepEl, LEVEL_1, {
+    diver: { x: 10, y: 10, torchOn: false, torchAngle: 0, angle: 0 },
+    timeSec: 2.0,
+  });
+  assert.ok(darkLit.beamLit === 0, 'Unlit deep element with torch off must have 0 beamLit');
+  assert.ok(darkLit.totalLight < 0.20, `Deep unlit element should stay dark, got ${darkLit.totalLight}`);
+
+  // Aimed diver torch with warm-halogen optic illuminates element and shifts light RGB warm
+  const amberLit = computeForegroundElementLighting(deepEl, LEVEL_1, {
+    diver: {
+      x: 37, y: 55.8, torchOn: true, torchAngle: 0, angle: 0,
+      livery: { torchId: 'warm-halogen' },
+    },
+    timeSec: 2.0,
+  });
+  const coolLit = computeForegroundElementLighting(deepEl, LEVEL_1, {
+    diver: {
+      x: 37, y: 55.8, torchOn: true, torchAngle: 0, angle: 0,
+      livery: { torchId: 'tech-led' },
+    },
+    timeSec: 2.0,
+  });
+  assert.ok(amberLit.beamLit > 0.45, `Aimed diver torch must illuminate foreground element, got ${amberLit.beamLit}`);
+  assert.ok(amberLit.lightR > amberLit.lightB + 30, `Amber halogen optic should tint light warm, got RGB(${amberLit.lightR},${amberLit.lightG},${amberLit.lightB})`);
+  assert.ok(coolLit.lightB >= amberLit.lightB, 'Cool tech-led optic should carry more blue than amber halogen');
+
+  // Peer buddy torch illuminates element even when local diver is far away with torch off
+  const peerLit = computeForegroundElementLighting(deepEl, LEVEL_1, {
+    diver: { x: 0, y: 0, torchOn: false, torchAngle: 0, angle: 0 },
+    peers: [{ x: 37.5, y: 55.8, torchOn: true, torchAngle: 0, angle: 0 }],
+    timeSec: 2.0,
+  });
+  assert.ok(peerLit.beamLit > 0.35, `Peer buddy torch must illuminate foreground element, got ${peerLit.beamLit}`);
+
+  // Shallow cenote open-basin sunlight + water caustics
+  const shallowEl = {
+    x: LEVEL_1.spawn.x + 1.2, y: 6.0, side: 'floor', widthM: 2.0, heightM: 1.5,
+    parallax: 1.10, depthLayer: 'mid', kind: 'kelp-fronds', biome: 'cenote', wallSlope: 0.05,
+  };
+  const sunLit = computeForegroundElementLighting(shallowEl, LEVEL_1, {
+    diver: { x: 90, y: 90, torchOn: false, torchAngle: 0, angle: 0 },
+    timeSec: 3.1,
+  });
+  assert.ok(sunLit.sunLit > 0.40, `Shallow cenote element should catch real sunlight, got ${sunLit.sunLit}`);
+  assert.ok(sunLit.causticAlpha > 0.25, `Shallow sunlit element should receive caustics, got ${sunLit.causticAlpha}`);
+
+  // Geothermal vent + active shipwreck power relay floodlights
+  const volcanicLvl = LEVELS.find((l) => Array.isArray(l.geothermalVents) && l.geothermalVents.length > 0);
+  assert.ok(volcanicLvl, 'Expected at least one level with geothermalVents');
+  const v0 = volcanicLvl.geothermalVents[0];
+  const ventEl = {
+    x: v0.x + 1.5, y: v0.y - 1.5, side: 'floor', widthM: 2.0, heightM: 1.8,
+    parallax: 1.10, depthLayer: 'mid', kind: 'basalt-spire', biome: 'volcanic', wallSlope: 0,
+  };
+  const ventLit = computeForegroundElementLighting(ventEl, volcanicLvl, {
+    diver: { x: 0, y: 0, torchOn: false, torchAngle: 0, angle: 0 },
+    timeSec: 1.5,
+  });
+  assert.ok(ventLit.ventLit > 0.30, `Element near geothermal vent must pick up ventLit, got ${ventLit.ventLit}`);
+
+  const relayLit = computeForegroundElementLighting(deepEl, LEVEL_1, {
+    diver: { x: 0, y: 0, torchOn: false, torchAngle: 0, angle: 0 },
+    powerRelays: [{ x: 40, y: 55.5, active: true }],
+    timeSec: 1.5,
+  });
+  assert.ok(relayLit.beamLit > 0.25, `Active power relay floodlight must illuminate nearby foreground element, got ${relayLit.beamLit}`);
+
+  // 3. Edge-occlusion depth vs buried-core fade + Pass 2 lighting accents smoke test
+  const lvl1Els = buildForegroundDepthElements(LEVEL_1);
+  const target = lvl1Els[0];
+  const dir = target.side === 'ceiling' ? 1 : -1;
+  const makeMockCtx = () => {
+    const alphas = [];
+    return {
+      alphas,
+      globalCompositeOperation: 'source-over',
+      save() {}, restore() {}, beginPath() {}, closePath() {}, fill() {}, stroke() {}, clip() {},
+      moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
+      createLinearGradient() { return { addColorStop() {} }; },
+      createRadialGradient() { return { addColorStop() {} }; },
+      set globalAlpha(v) { alphas.push(v); },
+      get globalAlpha() { return alphas[alphas.length - 1] ?? 1; },
+    };
+  };
+  const host = { level: LEVEL_1, _reducedMotion: false, _activeWeather: null };
+
+  // Diver far away
+  const ctxFar = makeMockCtx();
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    host, ctxFar, 1280, 800, target.x, target.y, 640, 400, 40, 2.0,
+    { x: target.x + 25, y: target.y + 25, torchOn: true, torchAngle: 0, angle: 0 }
+  );
+  // Diver subtly tucked right behind the water-facing edge tip (should stay mostly opaque for depth!)
+  const ctxEdge = makeMockCtx();
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    host, ctxEdge, 1280, 800, target.x, target.y, 640, 400, 40, 2.0,
+    { x: target.x - target.widthM * 0.45, y: target.y + dir * target.heightM * 1.15, torchOn: true, torchAngle: 0, angle: 0 }
+  );
+  // Diver directly at the buried anchor core (softly fades for visibility safety)
+  const ctxCore = makeMockCtx();
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    host, ctxCore, 1280, 800, target.x, target.y, 640, 400, 40, 2.0,
+    { x: target.x, y: target.y + dir * target.heightM * 0.22, torchOn: true, torchAngle: 0, angle: 0 }
+  );
+  // Pass 2 post-lighting accents must render cleanly without errors
+  const ctxAccent = makeMockCtx();
+  foregroundDepthRendererMethods._drawForegroundDepthLightingAccents.call(
+    host, ctxAccent, 1280, 800, target.x, target.y, 640, 400, 40, 2.0,
+    { x: target.x - 1.5, y: target.y + dir * 1.2, torchOn: true, torchAngle: 0, angle: 0 }
+  );
+
+  const farA = ctxFar.alphas[0];
+  const edgeA = ctxEdge.alphas[0];
+  const coreA = ctxCore.alphas[0];
+  assert.ok(farA >= 0.85, `Expected crisp far foreground alpha, got ${farA}`);
+  assert.ok(edgeA >= 0.72, `Diver at outer edge should stay occluded behind edge (>=0.72), got ${edgeA}`);
+  assert.ok(coreA < farA * 0.55, `Diver dead-center on anchor core must gently soften (<55% far), got ${coreA} vs ${farA}`);
+});
