@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=241',
+  mapRasterUrl: './assets/map-expedition.jpg?v=242',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -7990,9 +7990,6 @@ async function bootGame() {
 
   initGitHubAuth();
   requestAnimationFrame(frame);
-  if (!INITIAL_ROOM_CODE && !incomingChallenge && !incomingProc) {
-    setTimeout(() => { if (mode === 'menu' && !inFlightLoad) ensureLevelLoaded(activeLevel.id, { showOverlay: false, silent: true }).catch(() => {}); }, 260);
-  }
 }
 
 bootGame();

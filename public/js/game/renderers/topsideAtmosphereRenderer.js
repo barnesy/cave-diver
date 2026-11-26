@@ -233,16 +233,314 @@ export function drawTopsideAtmosphereExtras(renderer, ctx, visX0, visX1, toScree
   ctx.restore();
 }
 
+const _DEFAULT_BG_URLS = {
+  sky: './assets/sky-yucatan.jpg',
+  rock: './assets/tex-limestone-wall.jpg',
+  back: './assets/tex-cave-backwall.jpg',
+  foliage: './assets/tex-foliage-canopy.jpg',
+  palapa: './assets/surf-palapa.webp',
+  palm: './assets/surf-tree-palm.webp',
+};
+
+const _defaultBgAssets = {
+  started: false,
+  rev: 0,
+  imgs: {},
+};
+
 /**
- * Rich, living underwater cavern / shipwreck diorama rendered behind the Home & Gear Workshop
- * screens even before cave chunks are baked (v240). Matches in-game biome palettes, volumetric
- * sunbeams, sculpted walls/stalactites, schooling fish, swaying kelp, marine snow & bubbles.
+ * Eagerly preload the photorealistic in-game textures & surface props used by the
+ * universal default menu background so first paint matches in-game visual fidelity
+ * instantaneously without waiting for heavy SDF chunk baking (v242).
+ */
+export function preloadDefaultMenuBackdrop() {
+  if (_defaultBgAssets.started || typeof Image === 'undefined') return;
+  _defaultBgAssets.started = true;
+  for (const [key, src] of Object.entries(_DEFAULT_BG_URLS)) {
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        if ((img.naturalWidth || img.width) > 0) {
+          _defaultBgAssets.imgs[key] = img;
+          _defaultBgAssets.rev += 1;
+        }
+      };
+      img.src = src;
+    } catch (_) {}
+  }
+}
+
+function _buildDefaultCenoteLayer(cw, ch) {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = cw;
+  c.height = ch;
+  const g = c.getContext('2d');
+  if (!g) return null;
+
+  const waterY = Math.round(ch * 0.295);
+  const imgs = _defaultBgAssets.imgs;
+  const rockNoise = (t, seed) =>
+    Math.sin(t * 7.3 + seed) * 0.45 +
+    Math.sin(t * 15.1 + seed * 1.9) * 0.28 +
+    Math.sin(t * 29.7 + seed * 3.1) * 0.14 +
+    Math.cos(t * 4.2 + seed * 0.7) * 0.13;
+
+  // 1. Topside sky & jungle panorama (real sky-yucatan.jpg, exact same asset as Level 1)
+  const skyGrad = g.createLinearGradient(0, 0, 0, waterY);
+  skyGrad.addColorStop(0, '#1e3a4c');
+  skyGrad.addColorStop(0.55, '#4b6c6e');
+  skyGrad.addColorStop(1, '#78988a');
+  g.fillStyle = skyGrad;
+  g.fillRect(0, 0, cw, waterY + 4);
+
+  if (imgs.sky && (imgs.sky.naturalWidth || imgs.sky.width) > 0) {
+    const sw = imgs.sky.naturalWidth || imgs.sky.width;
+    const sh = imgs.sky.naturalHeight || imgs.sky.height;
+    const skyH = waterY + 8;
+    const scaleCover = Math.max(cw / sw, skyH / sh);
+    const dw = sw * scaleCover;
+    const dh = sh * scaleCover;
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, cw, skyH);
+    g.clip();
+    g.drawImage(imgs.sky, (cw - dw) * 0.5, skyH - dh * 0.92, dw, dh);
+    const mist = g.createLinearGradient(0, 0, 0, skyH);
+    mist.addColorStop(0, 'rgba(6, 18, 30, 0.24)');
+    mist.addColorStop(0.65, 'rgba(18, 42, 48, 0.06)');
+    mist.addColorStop(1, 'rgba(120, 195, 198, 0.22)');
+    g.fillStyle = mist;
+    g.fillRect(0, 0, cw, skyH);
+    g.restore();
+  }
+
+  // 2. Submerged Cenote Water Column + Recessed Photorealistic Cavern Backwall
+  const waterGrad = g.createLinearGradient(0, waterY, 0, ch);
+  waterGrad.addColorStop(0, '#36b5c8');
+  waterGrad.addColorStop(0.18, '#167c94');
+  waterGrad.addColorStop(0.5, '#0b455e');
+  waterGrad.addColorStop(0.82, '#052236');
+  waterGrad.addColorStop(1, '#020d1a');
+  g.fillStyle = waterGrad;
+  g.fillRect(0, waterY, cw, ch - waterY);
+
+  if (imgs.back && g.createPattern) {
+    g.save();
+    g.beginPath();
+    g.rect(0, waterY, cw, ch - waterY);
+    g.clip();
+    const backPat = g.createPattern(imgs.back, 'repeat');
+    if (backPat) {
+      g.globalAlpha = 0.24;
+      g.fillStyle = backPat;
+      g.fillRect(0, waterY, cw, ch - waterY);
+    }
+    const shaftGlow = g.createRadialGradient(cw * 0.48, waterY + ch * 0.12, cw * 0.04, cw * 0.48, waterY + ch * 0.34, cw * 0.48);
+    shaftGlow.addColorStop(0, 'rgba(125, 224, 240, 0.28)');
+    shaftGlow.addColorStop(0.5, 'rgba(14, 116, 144, 0.1)');
+    shaftGlow.addColorStop(1, 'rgba(2, 10, 22, 0.62)');
+    g.globalAlpha = 1;
+    g.fillStyle = shaftGlow;
+    g.fillRect(0, waterY, cw, ch - waterY);
+    g.restore();
+  }
+
+  // Authentic karst limestone cliffs framing a wide cenote shaft opening into lower-right cavern mouth
+  const cliffTopY = Math.round(ch * 0.085);
+  const traceLeftCliff = () => {
+    g.beginPath();
+    g.moveTo(0, cliffTopY);
+    for (let i = 0; i <= 10; i++) {
+      const u = i / 10;
+      const x = cw * (u * 0.23);
+      const y = cliffTopY + Math.sin(u * Math.PI * 1.4) * ch * 0.014 + rockNoise(u, 0.9) * ch * 0.008;
+      g.lineTo(x, y);
+    }
+    for (let i = 0; i <= 32; i++) {
+      const u = i / 32;
+      const y = cliffTopY + u * (ch - cliffTopY);
+      const overhang = u < 0.26 ? Math.sin((u / 0.26) * Math.PI) * cw * 0.015 : 0;
+      const cavernSlope = u > 0.56 ? Math.pow((u - 0.56) / 0.44, 1.45) * cw * 0.46 : 0;
+      const x = cw * 0.225 + overhang + cavernSlope + rockNoise(u, 2.3) * cw * 0.018;
+      g.lineTo(x, y);
+    }
+    g.lineTo(0, ch);
+    g.closePath();
+  };
+
+  const traceRightCliff = () => {
+    g.beginPath();
+    g.moveTo(cw, cliffTopY - ch * 0.01);
+    for (let i = 0; i <= 12; i++) {
+      const u = i / 12;
+      const x = cw * (1 - u * 0.44);
+      const y = cliffTopY - ch * 0.01 + Math.sin(u * Math.PI * 1.1) * ch * 0.018 + rockNoise(u, 3.1) * ch * 0.008;
+      g.lineTo(x, y);
+    }
+    for (let i = 0; i <= 32; i++) {
+      const u = i / 32;
+      const y = cliffTopY + u * (ch - cliffTopY);
+      const lip = u < 0.28 ? -Math.sin((u / 0.28) * Math.PI) * cw * 0.02 : 0;
+      const mouthOpen = u > 0.48 ? Math.pow((u - 0.48) / 0.52, 1.35) * cw * 0.36 : 0;
+      const x = cw * 0.565 + lip + mouthOpen + rockNoise(u, 5.4) * cw * 0.019;
+      g.lineTo(x, y);
+    }
+    g.lineTo(cw, ch);
+    g.closePath();
+  };
+
+  const rockPat = imgs.rock && g.createPattern ? g.createPattern(imgs.rock, 'repeat') : null;
+  const paintCliff = (traceFn, isLeft) => {
+    g.save();
+    traceFn();
+    g.clip();
+    if (rockPat) {
+      g.save();
+      const s = Math.max(0.75, Math.min(1.25, cw / 1280));
+      g.scale(s, s);
+      g.fillStyle = rockPat;
+      g.fillRect(0, 0, cw / s, ch / s);
+      g.restore();
+    } else {
+      g.fillStyle = '#5c4b37';
+      g.fillRect(0, 0, cw, ch);
+    }
+    const rockDepth = g.createLinearGradient(0, cliffTopY, 0, ch);
+    rockDepth.addColorStop(0, 'rgba(32, 24, 16, 0.26)');
+    rockDepth.addColorStop(0.24, 'rgba(20, 18, 16, 0.34)');
+    rockDepth.addColorStop(0.55, 'rgba(7, 18, 26, 0.58)');
+    rockDepth.addColorStop(1, 'rgba(2, 9, 18, 0.84)');
+    g.fillStyle = rockDepth;
+    g.fillRect(0, cliffTopY - 20, cw, ch - cliffTopY + 30);
+
+    const rimX0 = isLeft ? cw * 0.28 : cw * 0.52;
+    const rimX1 = isLeft ? cw * 0.02 : cw * 0.98;
+    const bounce = g.createLinearGradient(rimX0, waterY, rimX1, waterY + ch * 0.25);
+    bounce.addColorStop(0, 'rgba(56, 189, 248, 0.16)');
+    bounce.addColorStop(0.35, 'rgba(14, 116, 144, 0.05)');
+    bounce.addColorStop(1, 'rgba(0, 0, 0, 0.28)');
+    g.fillStyle = bounce;
+    g.fillRect(0, waterY - 10, cw, ch - waterY + 20);
+    g.restore();
+
+    g.save();
+    traceFn();
+    g.strokeStyle = 'rgba(4, 10, 16, 0.58)';
+    g.lineWidth = Math.max(2, cw * 0.0022);
+    g.stroke();
+    g.restore();
+  };
+
+  paintCliff(traceLeftCliff, true);
+  paintCliff(traceRightCliff, false);
+
+  // 3. Topside Jungle Canopy Rim (real tex-foliage-canopy.jpg) + Palapa Hut + Palms
+  const folPat = imgs.foliage && g.createPattern ? g.createPattern(imgs.foliage, 'repeat') : null;
+  const drawFoliageCap = (x0, x1, baseY) => {
+    g.save();
+    g.beginPath();
+    g.moveTo(x0, baseY + ch * 0.018);
+    const steps = 16;
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps;
+      const x = x0 + (x1 - x0) * u;
+      const tuft = Math.sin(u * Math.PI) * ch * 0.026 + Math.abs(Math.sin(u * 13.7)) * ch * 0.011;
+      g.lineTo(x, baseY - tuft);
+    }
+    g.lineTo(x1, baseY + ch * 0.018);
+    g.closePath();
+    g.clip();
+    g.fillStyle = folPat || '#1d4d2c';
+    g.fillRect(x0 - 4, baseY - ch * 0.06, x1 - x0 + 8, ch * 0.09);
+    const fg = g.createLinearGradient(0, baseY - ch * 0.04, 0, baseY + ch * 0.02);
+    fg.addColorStop(0, 'rgba(74, 222, 128, 0.14)');
+    fg.addColorStop(1, 'rgba(5, 22, 14, 0.56)');
+    g.fillStyle = fg;
+    g.fillRect(x0 - 4, baseY - ch * 0.06, x1 - x0 + 8, ch * 0.09);
+    g.restore();
+  };
+  drawFoliageCap(0, cw * 0.235, cliffTopY + ch * 0.004);
+  drawFoliageCap(cw * 0.555, cw, cliffTopY - ch * 0.004);
+
+  if (imgs.palapa && (imgs.palapa.naturalWidth || imgs.palapa.width) > 0) {
+    const ph = ch * 0.125;
+    const pw = ph * ((imgs.palapa.naturalWidth || 1) / Math.max(1, imgs.palapa.naturalHeight || 1));
+    g.save();
+    g.globalAlpha = 0.92;
+    g.drawImage(imgs.palapa, cw * 0.085, cliffTopY - ph * 0.86, pw, ph);
+    g.restore();
+  }
+  if (imgs.palm && (imgs.palm.naturalWidth || imgs.palm.width) > 0) {
+    const drawPalm = (px, py, ph, flip = false) => {
+      const pw = ph * ((imgs.palm.naturalWidth || 1) / Math.max(1, imgs.palm.naturalHeight || 1));
+      g.save();
+      g.globalAlpha = 0.88;
+      g.translate(px, py);
+      if (flip) g.scale(-1, 1);
+      g.drawImage(imgs.palm, -pw * 0.5, -ph * 0.9, pw, ph);
+      g.restore();
+    };
+    drawPalm(cw * 0.04, cliffTopY + ch * 0.005, ch * 0.15, false);
+    drawPalm(cw * 0.62, cliffTopY - ch * 0.004, ch * 0.145, true);
+    drawPalm(cw * 0.91, cliffTopY - ch * 0.004, ch * 0.155, false);
+  }
+
+  // 4. Authentic Wooden Cenote Dive Platform & Entry Ladder descending into water
+  const dockX = cw * 0.21;
+  const dockW = cw * 0.068;
+  const dockY = waterY - ch * 0.012;
+  g.save();
+  g.strokeStyle = '#4a321d';
+  g.lineWidth = Math.max(2, cw * 0.0024);
+  g.beginPath();
+  g.moveTo(dockX + dockW * 0.25, dockY);
+  g.lineTo(dockX + dockW * 0.25, waterY + ch * 0.075);
+  g.moveTo(dockX + dockW * 0.82, dockY);
+  g.lineTo(dockX + dockW * 0.82, waterY + ch * 0.075);
+  g.stroke();
+  g.fillStyle = '#6c492c';
+  g.fillRect(dockX - cw * 0.01, dockY - 3, dockW + cw * 0.01, Math.max(5, ch * 0.008));
+  g.fillStyle = 'rgba(255, 224, 178, 0.18)';
+  g.fillRect(dockX - cw * 0.01, dockY - 3, dockW + cw * 0.01, 2);
+  const ladX = cw * 0.228;
+  const ladW = Math.max(9, cw * 0.011);
+  g.strokeStyle = '#5a3c22';
+  g.lineWidth = Math.max(1.8, cw * 0.0018);
+  g.beginPath();
+  g.moveTo(ladX, cliffTopY + ch * 0.01);
+  g.lineTo(ladX - cw * 0.008, waterY + ch * 0.05);
+  g.moveTo(ladX + ladW, cliffTopY + ch * 0.01);
+  g.lineTo(ladX + ladW - cw * 0.008, waterY + ch * 0.05);
+  g.stroke();
+  g.lineWidth = Math.max(1.3, cw * 0.0014);
+  for (let r = 0; r < 10; r++) {
+    const u = r / 9;
+    const rx = ladX - cw * 0.008 * u;
+    const ry = cliffTopY + ch * 0.015 + u * (waterY + ch * 0.035 - cliffTopY);
+    g.beginPath();
+    g.moveTo(rx, ry);
+    g.lineTo(rx + ladW, ry);
+    g.stroke();
+  }
+  g.restore();
+
+  return c;
+}
+
+/**
+ * Photorealistic preloaded default underwater cenote backdrop (v242):
+ * Matches in-game level texture & environmental fidelity using cached real game assets,
+ * smoothly tinted to any selected expedition's biome palette before a level is baked.
  */
 export function drawMenuBackdropDiorama(renderer, level, timeSec = 0) {
+  preloadDefaultMenuBackdrop();
   const ctx = renderer.ctx;
   const cw = renderer.canvas.width;
   const ch = renderer.canvas.height;
   const theme = level?.theme || {};
+  const waterY = Math.round(ch * 0.295);
 
   const targetHexes = [
     theme.waterSurface || '#67e8f9',
@@ -272,260 +570,202 @@ export function drawMenuBackdropDiorama(renderer, level, timeSec = 0) {
       cur[2] += (tgt[2] - cur[2]) * alpha;
     }
   }
-  const rgbStop = (i) => {
+  const rgbaStop = (i, a) => {
     const c = renderer._menuBackdropRgb[i];
-    return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+    return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
   };
 
-  const grad = ctx.createLinearGradient(0, 0, 0, ch);
-  grad.addColorStop(0, rgbStop(0));
-  grad.addColorStop(0.22, rgbStop(1));
-  grad.addColorStop(0.54, rgbStop(2));
-  grad.addColorStop(0.82, rgbStop(3));
-  grad.addColorStop(1, rgbStop(4));
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
+  // Build / reuse cached photorealistic static cenote canvas (1 blit per frame!)
+  const cache = renderer._defaultBackdropCache;
+  if (!cache || cache.w !== cw || cache.h !== ch || cache.rev !== _defaultBgAssets.rev) {
+    const layer = _buildDefaultCenoteLayer(cw, ch);
+    renderer._defaultBackdropCache = layer ? { w: cw, h: ch, rev: _defaultBgAssets.rev, canvas: layer } : null;
+  }
+
+  if (renderer._defaultBackdropCache?.canvas) {
+    ctx.drawImage(renderer._defaultBackdropCache.canvas, 0, 0);
+  } else {
+    const fallbackGrad = ctx.createLinearGradient(0, 0, 0, ch);
+    fallbackGrad.addColorStop(0, rgbaStop(0, 1));
+    fallbackGrad.addColorStop(0.35, rgbaStop(2, 1));
+    fallbackGrad.addColorStop(1, rgbaStop(4, 1));
+    ctx.fillStyle = fallbackGrad;
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  // Gentle biome water color-grading glaze clipped cleanly inside the submerged cenote shaft (zero seam on rock cliffs!)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cw * 0.215, waterY);
+  ctx.lineTo(cw * 0.575, waterY);
+  ctx.lineTo(cw * 0.96, ch);
+  ctx.lineTo(cw * 0.65, ch);
+  ctx.lineTo(cw * 0.215, ch * 0.65);
+  ctx.closePath();
+  ctx.clip();
+  const biomeTint = ctx.createLinearGradient(0, waterY, 0, ch);
+  biomeTint.addColorStop(0, rgbaStop(0, 0.16));
+  biomeTint.addColorStop(0.28, rgbaStop(1, 0.22));
+  biomeTint.addColorStop(0.62, rgbaStop(2, 0.24));
+  biomeTint.addColorStop(1, rgbaStop(4, 0.32));
+  ctx.fillStyle = biomeTint;
+  ctx.fillRect(0, waterY, cw, ch - waterY);
+  ctx.restore();
 
   const mdpr = renderer._cachedDpr || 1;
-  const isWreck = Boolean(level?.isWreck || level?.category === 'wreck');
-  const isIce = /ice|arctic|glacial|scoresby|kverk/i.test(`${level?.id || ''} ${level?.name || ''}`);
   const tAnim = renderer._reducedMotion ? 0 : timeSec;
 
   ctx.save();
 
-  // 1. Subtle refracted water surface caustic bands along top water column
+  // 1. Live volumetric cenote sunbeams piercing down through the water surface opening
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  for (let c = 0; c < 4; c++) {
-    const cy = ch * (0.04 + c * 0.045) + Math.sin(tAnim * (0.45 + c * 0.1) + c * 1.9) * ch * 0.012;
-    const cg = ctx.createLinearGradient(0, cy - ch * 0.03, 0, cy + ch * 0.045);
-    cg.addColorStop(0, 'rgba(186, 230, 253, 0)');
-    cg.addColorStop(0.5, `rgba(186, 230, 253, ${(0.085 - c * 0.014).toFixed(3)})`);
-    cg.addColorStop(1, 'rgba(186, 230, 253, 0)');
-    ctx.fillStyle = cg;
-    ctx.beginPath();
-    ctx.moveTo(0, cy);
-    for (let x = 0; x <= cw; x += Math.max(48, cw / 14)) {
-      const wy = cy + Math.sin(x * 0.0045 + tAnim * 0.75 + c * 1.4) * ch * 0.014;
-      ctx.lineTo(x, wy);
-    }
-    ctx.lineTo(cw, cy + ch * 0.055);
-    ctx.lineTo(0, cy + ch * 0.055);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // Helper: trace an organic rocky contour using multi-frequency harmonic curves (no sharp spikes)
-  const rockNoise = (t, seed) =>
-    Math.sin(t * 7.3 + seed) * 0.45 +
-    Math.sin(t * 15.1 + seed * 1.9) * 0.28 +
-    Math.sin(t * 29.7 + seed * 3.1) * 0.14 +
-    Math.cos(t * 4.2 + seed * 0.7) * 0.13;
-
-  // 2. Far misty cavern formations & distant canyon floor (asymmetric organic depth layer)
-  ctx.fillStyle = isIce ? 'rgba(10, 44, 72, 0.36)' : isWreck ? 'rgba(10, 22, 36, 0.38)' : 'rgba(4, 24, 40, 0.38)';
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(cw, 0);
-  for (let i = 0; i <= 28; i++) {
-    const u = i / 28;
-    const x = cw * (1 - u);
-    const arch = Math.pow(Math.abs(u - 0.54) * 1.85, 1.7);
-    const baseDepth = ch * (0.045 + Math.min(0.32, arch * 0.22));
-    const y = baseDepth + rockNoise(u, 1.3) * ch * 0.032;
-    ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // Distant organic canyon floor sloping gently from left to deep basin on right
-  ctx.fillStyle = isIce ? 'rgba(6, 26, 48, 0.46)' : 'rgba(2, 13, 25, 0.48)';
-  ctx.beginPath();
-  ctx.moveTo(0, ch);
-  for (let i = 0; i <= 28; i++) {
-    const u = i / 28;
-    const x = cw * u;
-    const valley = Math.sin(u * Math.PI) * ch * 0.14;
-    const y = ch * 0.76 + valley + rockNoise(u, 4.7) * ch * 0.034;
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(cw, ch);
-  ctx.closePath();
-  ctx.fill();
-
-  // 3. Soft volumetric sunbeams streaming diagonally through the natural cenote skylight
-  ctx.save();
+  ctx.rect(cw * 0.21, waterY, cw * 0.56, ch - waterY);
+  ctx.clip();
   ctx.globalCompositeOperation = 'screen';
   for (let i = 0; i < 6; i++) {
-    const baseX = cw * (0.18 + i * 0.13) + Math.sin(tAnim * 0.2 + i * 1.55) * cw * 0.028;
-    const topW = cw * (0.024 + (i % 3) * 0.013);
-    const botW = cw * (0.105 + (i % 3) * 0.034);
-    const shimmer = 0.075 + 0.038 * Math.sin(tAnim * 0.48 + i * 2.1);
-    const rayGrad = ctx.createLinearGradient(baseX, 0, baseX + cw * 0.07, ch * 0.9);
-    rayGrad.addColorStop(0, `rgba(224, 242, 254, ${shimmer.toFixed(3)})`);
-    rayGrad.addColorStop(0.55, `rgba(56, 189, 248, ${(shimmer * 0.4).toFixed(3)})`);
+    const baseX = cw * (0.27 + i * 0.068) + Math.sin(tAnim * 0.22 + i * 1.45) * cw * 0.016;
+    const topW = cw * (0.016 + (i % 3) * 0.009);
+    const botW = cw * (0.072 + (i % 3) * 0.022);
+    const shimmer = 0.095 + 0.045 * Math.sin(tAnim * 0.55 + i * 2.1);
+    const rayGrad = ctx.createLinearGradient(baseX, waterY, baseX + cw * 0.06, ch * 0.92);
+    rayGrad.addColorStop(0, `rgba(224, 248, 255, ${shimmer.toFixed(3)})`);
+    rayGrad.addColorStop(0.55, `rgba(56, 189, 248, ${(shimmer * 0.42).toFixed(3)})`);
     rayGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
     ctx.fillStyle = rayGrad;
     ctx.beginPath();
-    ctx.moveTo(baseX - topW, 0);
-    ctx.lineTo(baseX + topW, 0);
-    ctx.lineTo(baseX + botW + cw * 0.07, ch * 0.94);
-    ctx.lineTo(baseX - botW * 0.38 + cw * 0.07, ch * 0.94);
+    ctx.moveTo(baseX - topW, waterY);
+    ctx.lineTo(baseX + topW, waterY);
+    ctx.lineTo(baseX + botW + cw * 0.075, ch * 0.94);
+    ctx.lineTo(baseX - botW * 0.35 + cw * 0.075, ch * 0.94);
     ctx.closePath();
     ctx.fill();
   }
   ctx.restore();
 
-  // 4. Living midground school of graceful fish silhouettes gliding through the sunlit column
+  // 2. Shimmering animated water surface meniscus + floating cenote lily pads
   ctx.save();
-  for (let f = 0; f < 10; f++) {
-    const dir = f % 3 === 0 ? -1 : 1;
-    const speed = (0.011 + (f % 4) * 0.004) * dir;
-    const fx = (((f * 0.183 + tAnim * speed) % 1.16) + 1.16) % 1.16 - 0.08;
-    const fy = 0.22 + (f % 5) * 0.12 + Math.sin(tAnim * 0.8 + f * 1.7) * 0.016;
-    const sx = fx * cw;
-    const sy = fy * ch;
-    const flen = (7.5 + (f % 4) * 3.0) * mdpr;
-    const tailWag = Math.sin(tAnim * (5.0 + (f % 3)) + f * 2.1) * flen * 0.22;
-    ctx.save();
-    ctx.translate(sx, sy);
-    if (dir < 0) ctx.scale(-1, 1);
-    ctx.fillStyle = f % 2 === 0 ? 'rgba(148, 218, 245, 0.2)' : 'rgba(56, 189, 248, 0.14)';
+  const surfX0 = cw * 0.215;
+  const surfX1 = cw * 0.575;
+  ctx.strokeStyle = 'rgba(207, 250, 254, 0.72)';
+  ctx.lineWidth = Math.max(1.8, 2.1 * mdpr);
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i++) {
+    const u = i / 24;
+    const x = surfX0 + (surfX1 - surfX0) * u;
+    const y = waterY + Math.sin(u * 14 + tAnim * 1.9) * 1.8 * mdpr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  const pads = [0.275, 0.325, 0.385, 0.465, 0.515];
+  for (let p = 0; p < pads.length; p++) {
+    const px = cw * pads[p] + Math.sin(tAnim * 0.7 + p * 1.8) * 2.5 * mdpr;
+    const py = waterY + Math.sin(tAnim * 1.5 + p * 2.1) * 1.2 * mdpr;
+    ctx.strokeStyle = 'rgba(34, 128, 72, 0.42)';
+    ctx.lineWidth = Math.max(1.1, 1.3 * mdpr);
     ctx.beginPath();
-    ctx.moveTo(flen * 0.65, 0);
-    ctx.quadraticCurveTo(flen * 0.1, -flen * 0.34, -flen * 0.52, tailWag * 0.45);
-    ctx.lineTo(-flen * 0.92, -flen * 0.28 + tailWag);
-    ctx.lineTo(-flen * 0.72, tailWag * 0.5);
-    ctx.lineTo(-flen * 0.92, flen * 0.28 + tailWag);
-    ctx.lineTo(-flen * 0.52, tailWag * 0.45);
-    ctx.quadraticCurveTo(flen * 0.1, flen * 0.34, flen * 0.65, 0);
-    ctx.closePath();
+    ctx.moveTo(px, py + 2);
+    ctx.quadraticCurveTo(px + Math.sin(tAnim * 0.9 + p) * 5 * mdpr, py + ch * 0.07, px, py + ch * 0.14);
+    ctx.stroke();
+    ctx.fillStyle = '#2d7a46';
+    ctx.beginPath();
+    ctx.ellipse(px, py, (10 + (p % 2) * 3) * mdpr, 3.2 * mdpr, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   }
   ctx.restore();
 
-  // 5. Organic asymmetric limestone rock ledges framing outer viewport margins (zero sharp spikes)
-  const wallGradL = ctx.createLinearGradient(0, 0, cw * 0.18, 0);
-  wallGradL.addColorStop(0, isIce ? 'rgba(5, 24, 42, 0.94)' : isWreck ? 'rgba(8, 16, 26, 0.94)' : 'rgba(2, 10, 20, 0.92)');
-  wallGradL.addColorStop(0.65, isIce ? 'rgba(10, 42, 68, 0.66)' : 'rgba(4, 18, 32, 0.62)');
-  wallGradL.addColorStop(1, 'rgba(4, 18, 32, 0)');
-  ctx.fillStyle = wallGradL;
+  // 3. Golden cave guideline curving from entry ladder down into the cavern gate (bottom-right)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.52)';
+  ctx.lineWidth = Math.max(1.5, 1.8 * mdpr);
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  for (let i = 0; i <= 24; i++) {
-    const u = i / 24;
-    const y = ch * u;
-    const cornerFlare = Math.pow(Math.max(0, 0.28 - u) / 0.28, 1.8) * cw * 0.11 + Math.pow(Math.max(0, u - 0.72) / 0.28, 1.8) * cw * 0.14;
-    const x = cw * 0.045 + cornerFlare + rockNoise(u, 2.6) * cw * 0.022;
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(0, ch);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(cw * 0.26, waterY + ch * 0.05);
+  ctx.quadraticCurveTo(cw * 0.42, ch * 0.56, cw * 0.92, ch * 0.85);
+  ctx.stroke();
+  ctx.restore();
 
-  const wallGradR = ctx.createLinearGradient(cw, 0, cw * 0.82, 0);
-  wallGradR.addColorStop(0, isIce ? 'rgba(5, 24, 42, 0.94)' : isWreck ? 'rgba(8, 16, 26, 0.94)' : 'rgba(2, 10, 20, 0.92)');
-  wallGradR.addColorStop(0.65, isIce ? 'rgba(10, 42, 68, 0.66)' : 'rgba(4, 18, 32, 0.62)');
-  wallGradR.addColorStop(1, 'rgba(4, 18, 32, 0)');
-  ctx.fillStyle = wallGradR;
-  ctx.beginPath();
-  ctx.moveTo(cw, 0);
-  for (let i = 0; i <= 24; i++) {
-    const u = i / 24;
-    const y = ch * u;
-    const cornerFlare = Math.pow(Math.max(0, 0.24 - u) / 0.24, 1.8) * cw * 0.09 + Math.pow(Math.max(0, u - 0.70) / 0.30, 1.8) * cw * 0.15;
-    const x = cw - (cw * 0.04 + cornerFlare + rockNoise(u, 6.1) * cw * 0.022);
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(cw, ch);
-  ctx.closePath();
-  ctx.fill();
-
-  if (isWreck) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(251, 146, 60, 0.11)';
-    ctx.lineWidth = Math.max(1.8, 2.2 * mdpr);
-    for (let r = 0; r < 4; r++) {
-      const rx = cw * (0.03 + r * 0.028);
-      ctx.beginPath();
-      ctx.moveTo(rx, ch * (0.9 - r * 0.035));
-      ctx.quadraticCurveTo(rx + cw * 0.018, ch * (0.72 - r * 0.03), rx - cw * 0.008, ch * (0.6 - r * 0.02));
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  // 6. Delicate hanging cenote roots (upper corners) & gently swaying kelp fronds (lower corners)
+  // 4. Gently swaying hanging jungle vines along cliff lips
   ctx.save();
   ctx.lineCap = 'round';
-  if (!isWreck && !isIce) {
-    const rootAnchors = [
-      { x: 0.055, len: 0.17, ph: 0.3 },
-      { x: 0.095, len: 0.11, ph: 1.5 },
-      { x: 0.915, len: 0.13, ph: 2.4 },
-      { x: 0.955, len: 0.19, ph: 0.9 },
-    ];
-    for (let r = 0; r < rootAnchors.length; r++) {
-      const ra = rootAnchors[r];
-      const rx = cw * ra.x;
-      const rlen = ch * ra.len;
-      const sway = Math.sin(tAnim * 0.75 + ra.ph) * cw * 0.008;
-      ctx.strokeStyle = 'rgba(12, 42, 46, 0.48)';
-      ctx.lineWidth = Math.max(1.2, 1.8 * mdpr);
-      ctx.beginPath();
-      ctx.moveTo(rx, 0);
-      ctx.quadraticCurveTo(rx + sway * 0.5, rlen * 0.52, rx + sway, rlen);
-      ctx.stroke();
-    }
-  }
-  const kelpAnchors = [
-    { x: 0.038, y: 1.0, h: 0.15, ph: 0.4 },
-    { x: 0.072, y: 1.0, h: 0.11, ph: 1.7 },
-    { x: 0.925, y: 1.0, h: 0.12, ph: 2.2 },
-    { x: 0.962, y: 1.0, h: 0.16, ph: 3.5 },
+  const vines = [
+    { x: 0.215, y0: 0.09, len: 0.19, ph: 0.4 },
+    { x: 0.555, y0: 0.085, len: 0.23, ph: 1.8 },
+    { x: 0.578, y0: 0.09, len: 0.15, ph: 2.9 },
   ];
-  for (let k = 0; k < kelpAnchors.length; k++) {
-    const ka = kelpAnchors[k];
-    const bx = cw * ka.x;
-    const by = ch * ka.y;
-    const kh = ch * ka.h;
-    const sway = Math.sin(tAnim * 0.95 + ka.ph) * cw * 0.012;
-    ctx.strokeStyle = isIce ? 'rgba(56, 189, 248, 0.2)' : 'rgba(13, 66, 76, 0.52)';
-    ctx.lineWidth = Math.max(1.8, 2.6 * mdpr);
+  for (let v = 0; v < vines.length; v++) {
+    const vn = vines[v];
+    const vx = cw * vn.x;
+    const vy0 = ch * vn.y0;
+    const vlen = ch * vn.len;
+    const sway = Math.sin(tAnim * 0.85 + vn.ph) * cw * 0.008;
+    ctx.strokeStyle = 'rgba(44, 128, 64, 0.58)';
+    ctx.lineWidth = Math.max(1.3, 1.8 * mdpr);
     ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.quadraticCurveTo(bx + sway * 0.45, by - kh * 0.55, bx + sway, by - kh);
+    ctx.moveTo(vx, vy0);
+    ctx.quadraticCurveTo(vx + sway * 0.5, vy0 + vlen * 0.52, vx + sway, vy0 + vlen);
     ctx.stroke();
   }
   ctx.restore();
 
-  // 7. Drifting parallax marine snow & specular rising bubbles (zero-alloc)
+  // 5. Living colorful cenote fish swimming calmly through the sunlit shaft
+  ctx.save();
+  const fishPalette = ['#fb923c', '#38bdf8', '#facc15', '#34d399', '#f97316'];
+  for (let f = 0; f < 9; f++) {
+    const dir = f % 3 === 0 ? -1 : 1;
+    const speed = (0.009 + (f % 4) * 0.0032) * dir;
+    const spanU = (((f * 0.173 + tAnim * speed) % 1) + 1) % 1;
+    const fx = 0.25 + spanU * 0.44;
+    const fy = 0.36 + (f % 5) * 0.075 + Math.sin(tAnim * 0.85 + f * 1.7) * 0.012;
+    const sx = fx * cw;
+    const sy = fy * ch;
+    const flen = (6.5 + (f % 3) * 2.4) * mdpr;
+    const tailWag = Math.sin(tAnim * (5.2 + (f % 3)) + f * 2.1) * flen * 0.22;
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (dir < 0) ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = fishPalette[f % fishPalette.length];
+    ctx.beginPath();
+    ctx.moveTo(flen * 0.65, 0);
+    ctx.quadraticCurveTo(flen * 0.1, -flen * 0.36, -flen * 0.52, tailWag * 0.45);
+    ctx.lineTo(-flen * 0.92, -flen * 0.3 + tailWag);
+    ctx.lineTo(-flen * 0.72, tailWag * 0.5);
+    ctx.lineTo(-flen * 0.92, flen * 0.3 + tailWag);
+    ctx.lineTo(-flen * 0.52, tailWag * 0.45);
+    ctx.quadraticCurveTo(flen * 0.1, flen * 0.36, flen * 0.65, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 6. Drifting marine snow & rising specular cenote bubbles
   if (!renderer._reducedMotion) {
-    for (let s = 0; s < 34; s++) {
+    for (let s = 0; s < 26; s++) {
       const seed = (s + 3) * 1.6180339;
-      const sx = ((((seed * 11.7) % 1) + Math.sin(tAnim * 0.32 + s * 1.3) * 0.015 + 1) % 1) * cw;
-      const sy = ((((seed * 5.3) % 1) + tAnim * (0.004 + (s % 4) * 0.002)) % 1) * ch;
+      const sx = (0.18 + ((((seed * 11.7) % 1) + Math.sin(tAnim * 0.32 + s * 1.3) * 0.015 + 1) % 1) * 0.68) * cw;
+      const sy = waterY + ((((seed * 5.3) % 1) + tAnim * (0.004 + (s % 4) * 0.002)) % 1) * (ch - waterY);
       const sr = (0.7 + (s % 3) * 0.55) * mdpr;
-      ctx.fillStyle = `rgba(224, 242, 254, ${(0.12 + (s % 3) * 0.06).toFixed(2)})`;
+      ctx.fillStyle = `rgba(224, 242, 254, ${(0.12 + (s % 3) * 0.05).toFixed(2)})`;
       ctx.beginPath();
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.lineWidth = Math.max(1, mdpr * 0.8);
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 18; i++) {
       const seed = (i + 1) * 1.6180339;
-      const speed = 0.02 + (i % 7) * 0.0065;
+      const speed = 0.024 + (i % 7) * 0.007;
       const phase = (tAnim * speed + (seed % 1)) % 1;
-      const by = ch * (1.06 - phase * 1.12);
-      const bx = cw * (((seed * 7.31) % 1) + Math.sin(tAnim * (0.6 + (i % 4) * 0.25) + i * 2.3) * 0.015);
-      const r = (1.8 + (i % 5) * 1.15) * (0.65 + (1 - phase) * 0.45) * mdpr;
+      const by = ch - phase * (ch - waterY);
+      const bx = cw * (0.24 + ((seed * 7.31) % 0.46) + Math.sin(tAnim * (0.65 + (i % 4) * 0.25) + i * 2.3) * 0.012);
+      const r = (1.6 + (i % 5) * 1.05) * (0.65 + (1 - phase) * 0.45) * mdpr;
       const fade = Math.sin(phase * Math.PI);
-      const alpha = fade * (0.14 + (i % 3) * 0.055);
+      const alpha = fade * (0.16 + (i % 3) * 0.06);
       ctx.fillStyle = `rgba(186, 230, 253, ${(alpha * 0.48).toFixed(3)})`;
-      ctx.strokeStyle = `rgba(224, 242, 254, ${(alpha * 1.15).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(224, 242, 254, ${(alpha * 1.2).toFixed(3)})`;
       ctx.beginPath();
       ctx.ellipse(bx, by, r * 1.06, r * 0.94, Math.sin(tAnim + i) * 0.14, 0, Math.PI * 2);
       ctx.fill();

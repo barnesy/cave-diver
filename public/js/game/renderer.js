@@ -1,6 +1,6 @@
 import { evaluateCaveSDF } from './collision.js';
 import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
-import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama } from './renderers/topsideAtmosphereRenderer.js';
+import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama, preloadDefaultMenuBackdrop } from './renderers/topsideAtmosphereRenderer.js';
 import {
   CACHE_PX_PER_M,
   MOBILE_CACHE_PX_PER_M,
@@ -210,6 +210,8 @@ export class CaveRenderer {
       this.rockChunks = this._buildRockChunks(level);
       this.ready = true;
       this._loadBitmapTextures();
+    } else {
+      preloadDefaultMenuBackdrop();
     }
   }
 
