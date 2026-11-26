@@ -494,6 +494,7 @@ export class CaveRenderer {
     const backSrc = level?.theme?.backTexture || '/assets/tex-cave-backwall.jpg';
     const { skySrc, foliageSrc } = this._getSurfaceAssetPaths(level);
     this._preloadLevelSurfaceProps(level);
+    this._preloadForegroundTextures?.();
     Promise.all([
       this._loadBitmapAsset(rockSrc),
       this._loadBitmapAsset(backSrc),
@@ -567,6 +568,7 @@ export class CaveRenderer {
         return img;
       }),
       this._preloadLevelSurfaceProps(targetLevel),
+      this._preloadForegroundTextures?.(),
     ]);
 
     if (epoch !== this._loadEpoch) return { cancelled: true };

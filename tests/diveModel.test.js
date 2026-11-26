@@ -13089,3 +13089,38 @@ test('v250 Post-lighting foreground occlusion, tunnel-anchored rock pillars & av
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.equal(html.includes('home-avatar-canvas'), false, 'home-avatar-canvas must be removed from index.html');
 });
+
+test('v251 Live SDF wall-weld anchoring & high-res 512px foreground textures', async () => {
+  const { existsSync, readFileSync, statSync } = await import('node:fs');
+
+  // 1. All 4 bespoke 512px foreground material textures exist on disk with substantial byte size & are precached in sw.js
+  const swSrc = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  const fgAssets = [
+    'tex-fg-kelp.jpg',
+    'tex-fg-roots.jpg',
+    'tex-fg-crystal.jpg',
+    'tex-fg-ice.jpg',
+  ];
+  for (const fname of fgAssets) {
+    const assetUrl = new URL(`../public/assets/${fname}`, import.meta.url);
+    assert.ok(existsSync(assetUrl), `Missing foreground texture public/assets/${fname}`);
+    assert.ok(statSync(assetUrl).size > 25000, `Foreground texture ${fname} looks empty or corrupt`);
+    assert.ok(swSrc.includes(`./assets/${fname}`), `Service worker CORE_SHELL must precache ./assets/${fname}`);
+  }
+
+  // 2. Renderer preloads foreground textures during initialize() and _loadBitmapTextures()
+  const rendererSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  assert.ok(
+    rendererSrc.includes('this._preloadForegroundTextures?.()'),
+    'renderer.js must preload high-res foreground textures on level load'
+  );
+
+  // 3. foregroundDepthRenderer probes live SDF walls, composites full-res 512px textures, and never calls per-blade fill() inside destination-in masks
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('function _buildLiveWallSampler('), 'Expected live SDF wall contour sampler');
+  assert.ok(fgSrc.includes('function _compositeHiResShape('), 'Expected offscreen high-res scratch compositor');
+  assert.ok(fgSrc.includes('function _drawWallWeldCollar('), 'Expected light-sealed wall-weld collar helper');
+  assert.ok(fgSrc.includes('traceBladeSubpath(sctx, b);'), 'Kelp high-res drawShape must batch blades into one atomic path');
+  assert.ok(fgSrc.includes('traceSpireSubpath(sctx, sp);'), 'Crystal high-res drawShape must batch spires into one atomic path');
+  assert.ok(fgSrc.includes('traceIcicleSubpath(sctx, g);'), 'Icicle high-res drawShape must batch spears into one atomic path');
+});
