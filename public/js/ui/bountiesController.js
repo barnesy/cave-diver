@@ -3,9 +3,17 @@ import { resolveBountyBoardState } from '../game/bossBounties.js';
 import { bossAndLairMethods } from '../game/renderers/bossAndLairRenderer.js';
 import { drawStyledArtifact } from '../game/artSprites.js';
 
-const PORTRAIT_W = 360;
-const PORTRAIT_H = 152;
+const PORTRAIT_W = 400;
+const PORTRAIT_H = 200;
 const PING_DURATION_SEC = 1.85;
+const BOUNTY_FRAME_INTERVAL_MS = 42; // Smooth ~24 FPS portrait animation with zero GPU jitter
+const BOUNTY_ENTRANCE_DEFER_MS = 560; // Let elastic bubble-in complete before starting live canvas loop
+
+function toTitleCase(str = '') {
+  return String(str)
+    .toLowerCase()
+    .replace(/(^|[\s'’\-])([a-z])/g, (_, sep, ch) => `${sep}${ch.toUpperCase()}`);
+}
 
 const bossPreviewHost = {
   ...bossAndLairMethods,
@@ -190,14 +198,27 @@ export function createBountiesController({
   const { btnOpenBounties, bountiesModal, btnBountiesClose, bountiesGrid, bountiesSubEl, bountiesMilestonesEl } = els;
 
   let animRafId = 0;
+  let animStartTimer = 0;
+  let lastFrameMs = 0;
   let activeCanvases = [];
+  let visibleCanvases = new Set();
+  let portraitObserver = null;
   const pingStartById = new Map();
 
   function stopBountyAnimation() {
+    if (animStartTimer) {
+      clearTimeout(animStartTimer);
+      animStartTimer = 0;
+    }
     if (animRafId) {
       cancelAnimationFrame(animRafId);
       animRafId = 0;
     }
+    if (portraitObserver) {
+      try { portraitObserver.disconnect(); } catch (_) {}
+      portraitObserver = null;
+    }
+    visibleCanvases.clear();
   }
 
   function triggerBountyPing(bountyId) {
@@ -211,6 +232,15 @@ export function createBountiesController({
       cardEl.classList.add('pinging');
       setTimeout(() => cardEl.classList.remove('pinging'), 900);
     }
+    // Start loop immediately if user pings during the entrance defer window
+    if (!animRafId && bountiesModal && !bountiesModal.hidden) {
+      if (animStartTimer) {
+        clearTimeout(animStartTimer);
+        animStartTimer = 0;
+      }
+      lastFrameMs = 0;
+      animRafId = requestAnimationFrame(stepBountyAnimation);
+    }
     return true;
   }
 
@@ -220,16 +250,17 @@ export function createBountiesController({
       return;
     }
     const now = nowMs || performance.now();
+    if (lastFrameMs && now - lastFrameMs < BOUNTY_FRAME_INTERVAL_MS) {
+      animRafId = requestAnimationFrame(stepBountyAnimation);
+      return;
+    }
+    lastFrameMs = now;
     const timeSec = now * 0.001;
-    const modalRect = bountiesModal.getBoundingClientRect?.() || null;
 
     for (let i = 0; i < activeCanvases.length; i++) {
       const entry = activeCanvases[i];
       if (!entry.ctx || !entry.canvas.isConnected) continue;
-      if (modalRect && modalRect.height > 0) {
-        const r = entry.canvas.getBoundingClientRect();
-        if (r.bottom < modalRect.top - 40 || r.top > modalRect.bottom + 40) continue;
-      }
+      if (visibleCanvases.size > 0 && !visibleCanvases.has(entry.canvas)) continue;
       const pingStart = pingStartById.get(entry.bounty.id);
       const pingAgeSec = Number.isFinite(pingStart) ? (now - pingStart) * 0.001 : -1;
       if (pingAgeSec >= PING_DURATION_SEC) pingStartById.delete(entry.bounty.id);
@@ -247,7 +278,7 @@ export function createBountiesController({
     const { bounties, claimedCount, totalCount, milestones } = resolveBountyBoardState(book);
 
     if (bountiesSubEl) {
-      bountiesSubEl.textContent = `${claimedCount}/${totalCount} Abyssal Bounties Claimed · Tap any ROV feed to sonar-ping · Exact lairs uncharted`;
+      bountiesSubEl.textContent = `${claimedCount}/${totalCount} Claimed · Tap any portrait to ping`;
     }
 
     if (bountiesMilestonesEl && Array.isArray(milestones)) {
@@ -256,11 +287,8 @@ export function createBountiesController({
           (m) => `
           <div class="bounty-milestone-chip${m.unlocked ? ' unlocked' : ''}">
             <span class="bounty-ms-icon">${m.icon}</span>
-            <div class="bounty-ms-copy">
-              <strong>${m.threshold} Bounties · ${escapeHtml(m.title)}</strong>
-              <span>${m.unlocked ? '✓ Unlocked: ' : 'Unlocks: '}${escapeHtml(m.rewardLabel)}</span>
-            </div>
-            ${m.unlocked ? `<button type="button" class="btn tiny primary bounty-ms-equip" data-bounty-equip="1">🎨 Equip</button>` : `<span class="bounty-ms-prog">${Math.min(claimedCount, m.threshold)}/${m.threshold}</span>`}
+            <span class="bounty-ms-label">${escapeHtml(m.rewardLabel)}</span>
+            ${m.unlocked ? `<button type="button" class="btn tiny primary bounty-ms-equip" data-bounty-equip="1">Equip</button>` : `<span class="bounty-ms-prog">${Math.min(claimedCount, m.threshold)}/${m.threshold}</span>`}
           </div>`
         )
         .join('');
@@ -275,52 +303,80 @@ export function createBountiesController({
 
     bountiesGrid.innerHTML = bounties
       .map((b) => {
-        const rewardHtml = b.claimed
-          ? `<div class="bounty-reward-bar claimed">
-              <span class="bounty-reward-relic">🏆 ${escapeHtml(b.trophyName)}</span>
-              ${b.unlockedRewards.length > 0 ? `<span class="bounty-reward-gear">🎨 ${escapeHtml(b.unlockedRewards.join(' · '))}</span>` : ''}
-            </div>`
-          : `<div class="bounty-reward-bar">
-              <span class="bounty-reward-pts">💰 ${b.bountyPts.toLocaleString()} PTS</span>
-              <span class="bounty-reward-classified">??? CLASSIFIED RELIC &amp; GEAR</span>
-            </div>`;
+        const cleanName = toTitleCase(b.displayName);
+        const rightMeta = b.claimed
+          ? `<span class="bounty-pts claimed">🏆 ${escapeHtml(b.trophyName)}</span>`
+          : `<span class="bounty-pts">${b.bountyPts.toLocaleString()} pts</span>`;
 
         const stampHtml = b.claimed
-          ? `<span class="bounty-stamp claimed">✓ CLAIMED</span>`
-          : `<span class="bounty-stamp wanted">WANTED</span>`;
+          ? `<span class="bounty-stamp claimed">✓ Claimed</span>`
+          : `<span class="bounty-stamp wanted">Wanted</span>`;
 
         return `
-        <article class="bounty-card${b.claimed ? ' claimed' : ''}" style="--bounty-accent:${b.accentColor};" data-bounty-id="${escapeHtml(b.id)}" tabindex="0" role="button" title="Tap to fire ROV Sonar Ping">
-          <div class="bounty-poster-head">
-            <span class="bounty-code">${escapeHtml(b.contractCode)}</span>
-            <span class="bounty-threat">${escapeHtml(b.threatClass)}</span>
-          </div>
+        <article class="bounty-card${b.claimed ? ' claimed' : ''}" style="--bounty-accent:${b.accentColor};" data-bounty-id="${escapeHtml(b.id)}" tabindex="0" role="button" title="${escapeHtml(b.tale)}">
           <div class="bounty-portrait${b.claimed ? ' claimed' : ''}">
-            <canvas class="bounty-boss-canvas" width="${PORTRAIT_W}" height="${PORTRAIT_H}" data-bounty-idx="${escapeHtml(b.id)}" aria-label="${escapeHtml(b.displayName)} animated preview"></canvas>
-            <span class="bounty-live-pill">● LIVE ROV · PING</span>
+            <canvas class="bounty-boss-canvas" width="${PORTRAIT_W}" height="${PORTRAIT_H}" data-bounty-idx="${escapeHtml(b.id)}" aria-label="${escapeHtml(cleanName)} animated preview"></canvas>
             ${stampHtml}
           </div>
-          <div class="bounty-name-block">
-            <h3 class="bounty-name">${escapeHtml(b.displayName)}</h3>
-            <div class="bounty-subtitle">${escapeHtml(b.displaySubtitle)}</div>
+          <div class="bounty-meta-row">
+            <h3 class="bounty-name">${escapeHtml(cleanName)}</h3>
+            ${rightMeta}
           </div>
-          <div class="bounty-waters">🧭 <span>Rumored Waters:</span> <strong>${escapeHtml(b.watersRumor)}</strong></div>
-          <blockquote class="bounty-tale">“${escapeHtml(b.tale)}”</blockquote>
-          ${rewardHtml}
+          <div class="bounty-waters">${escapeHtml(b.watersRumor)}</div>
         </article>`;
       })
       .join('');
 
     activeCanvases = [];
     const byId = new Map(bounties.map((b) => [b.id, b]));
+    const nowSec = performance.now() * 0.001;
     bountiesGrid.querySelectorAll('canvas[data-bounty-idx]').forEach((canvas, idx) => {
       const bounty = byId.get(canvas.getAttribute('data-bounty-idx'));
       const ctx = canvas.getContext?.('2d') || null;
       if (bounty && ctx) {
-        activeCanvases.push({ canvas, ctx, bounty });
-        renderAnimatedBossPortrait(ctx, bounty, performance.now() * 0.001, idx);
+        const entry = { canvas, ctx, bounty, idx, painted: false };
+        activeCanvases.push(entry);
+        // Paint only the first 4 above-the-fold portraits immediately so modal entrance has zero stutter
+        if (idx < 4) {
+          renderAnimatedBossPortrait(ctx, bounty, nowSec, idx);
+          entry.painted = true;
+          visibleCanvases.add(canvas);
+        }
       }
     });
+
+    if (typeof IntersectionObserver !== 'undefined' && bountiesModal) {
+      const rootEl = bountiesModal.querySelector('.bounties-card') || bountiesModal;
+      portraitObserver = new IntersectionObserver(
+        (entries) => {
+          const tSec = performance.now() * 0.001;
+          for (const io of entries) {
+            if (io.isIntersecting) {
+              visibleCanvases.add(io.target);
+              const hit = activeCanvases.find((e) => e.canvas === io.target);
+              if (hit && !hit.painted) {
+                renderAnimatedBossPortrait(hit.ctx, hit.bounty, tSec, hit.idx);
+                hit.painted = true;
+              }
+            } else {
+              visibleCanvases.delete(io.target);
+            }
+          }
+        },
+        { root: rootEl, rootMargin: '120px 0px' }
+      );
+      for (const entry of activeCanvases) {
+        portraitObserver.observe(entry.canvas);
+      }
+    } else {
+      for (const entry of activeCanvases) {
+        if (!entry.painted) {
+          renderAnimatedBossPortrait(entry.ctx, entry.bounty, nowSec, entry.idx);
+          entry.painted = true;
+        }
+        visibleCanvases.add(entry.canvas);
+      }
+    }
   }
 
   bountiesGrid?.addEventListener('click', (e) => {
@@ -341,8 +397,14 @@ export function createBountiesController({
     setHomeMenuOpen?.(false);
     renderBountiesModal();
     bountiesModal.hidden = false;
-    stopBountyAnimation();
-    animRafId = requestAnimationFrame(stepBountyAnimation);
+    lastFrameMs = 0;
+    // Defer live 24fps canvas loop until the elastic bubble entrance settles smoothly
+    animStartTimer = setTimeout(() => {
+      animStartTimer = 0;
+      if (bountiesModal && !bountiesModal.hidden && !animRafId) {
+        animRafId = requestAnimationFrame(stepBountyAnimation);
+      }
+    }, BOUNTY_ENTRANCE_DEFER_MS);
   }
 
   function closeBountiesModal() {

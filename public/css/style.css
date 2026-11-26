@@ -14990,15 +14990,48 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   color: rgba(186, 230, 253, 0.72);
 }
 
-/* 4. Abyssal Bounties (#bounties-modal): Background-Free Posters — Full-Bleed Animated Boss Portraits Front & Center */
+/* 4. Abyssal Bounties (#bounties-modal): Minimalist Graphic-First Cards & Silky Zero-Jitter Entrance */
 #bounties-modal .bounties-card {
   width: min(860px, 95vw);
   max-height: min(90dvh, 860px);
 }
+/* Keep grid wrapper stationary so only individual .bounty-card bubbles animate (zero double-transform jitter!) */
+#bounties-modal .bounties-card > #bounties-grid {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  transition: none !important;
+}
 #bounties-modal .bounties-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 18px;
   border-bottom: 1px solid rgba(186, 230, 253, 0.09);
-  padding-bottom: 12px;
+  padding: 2px 2px 12px;
   margin-bottom: 16px;
+}
+#bounties-modal .bounty-milestone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+#bounties-modal .bounty-ms-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.86);
+}
+#bounties-modal .bounty-ms-prog {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: rgba(250, 204, 21, 0.88);
 }
 #bounties-modal .bounties-grid {
   gap: 24px 20px;
@@ -15008,56 +15041,76 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  padding: 4px;
-  gap: 10px;
+  padding: 0;
+  gap: 8px;
+  contain: layout style;
+  will-change: transform, opacity;
 }
 #bounties-modal .bounty-card:hover {
-  transform: translateY(-4px) scale(1.02);
-}
-#bounties-modal .bounty-poster-head {
-  border-bottom: none;
-  padding-bottom: 0;
+  transform: translateY(-4px) scale(1.015);
 }
 #bounties-modal .bounty-portrait {
   height: 204px;
   border-radius: 18px;
   border: none !important;
   background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--bounty-accent, #38bdf8) 16%, rgba(4, 16, 34, 0.72)), rgba(2, 9, 20, 0.88));
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(186, 230, 253, 0.12);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(186, 230, 253, 0.12);
 }
 #bounties-modal .bounty-portrait.claimed {
   box-shadow: 0 22px 48px rgba(16, 185, 129, 0.24), 0 0 0 1px rgba(52, 211, 153, 0.34);
 }
-#bounties-modal .bounty-name-block {
-  text-align: center;
-  align-items: center;
+#bounties-modal .bounty-stamp {
+  top: 10px;
+  right: 10px;
+  transform: none;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: none;
+}
+#bounties-modal .bounty-stamp.wanted {
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.68);
+}
+#bounties-modal .bounty-stamp.claimed {
+  color: #a7f3d0;
+  background: rgba(6, 95, 70, 0.76);
+}
+#bounties-modal .bounty-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+#bounties-modal .bounty-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+}
+#bounties-modal .bounty-pts {
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(250, 204, 21, 0.9);
+}
+#bounties-modal .bounty-pts.claimed {
+  color: #6ee7b7;
 }
 #bounties-modal .bounty-waters {
-  justify-content: center;
+  padding: 0 2px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.84);
   background: transparent !important;
   border: none !important;
-}
-#bounties-modal .bounty-tale,
-#bounties-modal .bounty-reward-bar,
-#bounties-modal .bounty-milestone-chip,
-#bounties-modal .bounty-clue-box,
-#bounties-modal .bounty-rumor {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-#bounties-modal .bounty-tale {
-  padding: 2px 6px;
-  text-align: center;
-  color: rgba(226, 232, 240, 0.82);
-}
-#bounties-modal .bounty-reward-bar {
-  padding: 2px 4px;
-  justify-content: center;
-  gap: 10px;
-}
-#bounties-modal .bounty-milestone-chip {
-  padding: 6px 4px;
 }
 
 /* Popover elastic bubble IN & OUT transitions */
