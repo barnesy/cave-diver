@@ -14375,13 +14375,14 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(186, 230, 253, 0.1);
 }
-.lb-stats-modal .lb-stats-kicker {
-  font-family: var(--font-ui);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: rgba(125, 211, 252, 0.82);
-  text-transform: uppercase;
+.lb-stats-modal .lb-stats-kicker,
+.lb-stats-kicker,
+.menu-eyebrow,
+.trench-choice-kicker {
+  display: none !important;
+}
+#screen-menu .menu-brand {
+  align-items: center;
 }
 .lb-stats-modal .lb-stats-title {
   margin: 1px 0 2px;
