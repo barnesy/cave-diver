@@ -256,9 +256,9 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#1e1b4b',
     finTip: '#c084fc',
     stageBand: '#a855f7',
-    unlockHint: 'Clear 12+ sites or log 8+ species',
-    getProgress: (s) => _bestProg(_mkProg(s.sitesCleared, 12, 'sites'), _mkProg(s.speciesLogged, 8, 'species')),
-    isUnlocked: (stats) => stats.sitesCleared >= 12 || stats.speciesLogged >= 8,
+    unlockHint: 'Clear 20+ sites or log 8+ species',
+    getProgress: (s) => _bestProg(_mkProg(s.sitesCleared, 20, 'sites'), _mkProg(s.speciesLogged, 8, 'species')),
+    isUnlocked: (stats) => stats.sitesCleared >= 20 || stats.speciesLogged >= 8,
   },
   {
     id: 'secret-kraken-biolume',
@@ -425,7 +425,7 @@ export const SUIT_LIVERIES = Object.freeze([
     finColor: '#0f172a',
     finTip: '#2dd4bf',
     stageBand: '#14b8a6',
-    unlockHint: '🗺️ World Cache · USS Oriskany hangar bulkhead',
+    unlockHint: "🗺️ World Cache · Dan's Cave Abaco karst tunnel",
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('suit:world-hydro-suit')),
   },
   {
@@ -530,9 +530,9 @@ export const TORCH_OPTICS = Object.freeze([
     rangeMult: 1.10,
     siltPierce: 0.18,
     specText: 'Actinic UV-cyan spotter · +10% reach & +18% silt pierce',
-    unlockHint: 'Clear 1+ Daily Dive, 6+ species, or 7+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.dailyClears, 1, 'daily'), _mkProg(s.speciesLogged, 6, 'species'), _mkProg(s.sitesCleared, 7, 'sites')),
-    isUnlocked: (stats) => (stats.dailyClears || 0) >= 1 || stats.speciesLogged >= 6 || stats.sitesCleared >= 7,
+    unlockHint: 'Clear 1+ Daily Dive, 6+ species, or 11+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.dailyClears, 1, 'daily'), _mkProg(s.speciesLogged, 6, 'species'), _mkProg(s.sitesCleared, 11, 'sites')),
+    isUnlocked: (stats) => (stats.dailyClears || 0) >= 1 || stats.speciesLogged >= 6 || stats.sitesCleared >= 11,
   },
   {
     id: 'aurora-plasma',
@@ -604,8 +604,26 @@ export const TORCH_OPTICS = Object.freeze([
     rangeMult: 1.12,
     siltPierce: 0.22,
     specText: 'World-Found Survey Beam · +20% reach & +8m relic glint',
-    unlockHint: '🗺️ World Cache · Orda Crystal Maze grotto',
+    unlockHint: '🗺️ World Cache · Ox Bel Ha Grand Traverse',
     isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:world-cartographer-torch')),
+  },
+  {
+    id: 'world-rift-flare',
+    name: 'Rift Plasma Floodlight',
+    shortLabel: 'Rift Plasma',
+    tier: 'epic',
+    source: 'world',
+    ladderRank: 80,
+    fx: { id: 'solar-caustic', name: 'Geothermal Rift Flare', desc: 'Incandescent coral-cyan volcanic torch beam cuts frigid rift shadows.' },
+    swatch: '#fb923c',
+    coreRgb: '255, 237, 213',
+    shaftRgb: '249, 115, 22',
+    warmRgb: '56, 189, 248',
+    rangeMult: 1.15,
+    siltPierce: 0.24,
+    specText: 'World-Found Rift Floodlight · +24% beam, +16% Spear & +35% Cold',
+    unlockHint: '🗺️ World Cache · Grjótagjá Rift volcanic chamber',
+    isUnlocked: (stats) => Boolean(stats.foundGearIds?.has('torch:world-rift-flare')),
   },
   {
     id: 'chest-abyssal-lantern',
@@ -635,7 +653,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'cenote-explorer', icon: '🌴', name: 'Cenote Diver', tier: 'uncommon', ladderRank: 24, unlockHint: '3+ clears', getProgress: (s) => _mkProg(s.sitesCleared, 3, 'sites'), isUnlocked: (s) => s.sitesCleared >= 3 },
   { id: 'wreck-penetrator', icon: '⚓', name: 'Wreck Tech', tier: 'rare', ladderRank: 40, unlockHint: '1+ wreck or 5+ clears', getProgress: (s) => _bestProg(_mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 5, 'sites')), isUnlocked: (s) => s.wreckClears >= 1 || s.sitesCleared >= 5 },
   { id: 'wildlife-biologist', icon: '📷', name: 'Marine Bio', tier: 'rare', ladderRank: 46, unlockHint: '5+ Field Guide species', getProgress: (s) => _mkProg(s.speciesLogged, 5, 'species'), isUnlocked: (s) => s.speciesLogged >= 5 },
-  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', tier: 'rare', ladderRank: 60, unlockHint: '2+ Hardcore, 3+ Daily, or 10+ clears', getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 2, 'hardcore'), _mkProg(s.dailyClears, 3, 'daily'), _mkProg(s.sitesCleared, 10, 'sites')), isUnlocked: (s) => (s.hardcoreClears || 0) >= 2 || (s.dailyClears || 0) >= 3 || s.sitesCleared >= 10 },
+  { id: 'abyss-veteran', icon: '🔱', name: 'Abyss Veteran', tier: 'rare', ladderRank: 60, unlockHint: '2+ Hardcore, 3+ Daily, or 16+ clears', getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 2, 'hardcore'), _mkProg(s.dailyClears, 3, 'daily'), _mkProg(s.sitesCleared, 16, 'sites')), isUnlocked: (s) => (s.hardcoreClears || 0) >= 2 || (s.dailyClears || 0) >= 3 || s.sitesCleared >= 16 },
   { id: 'camp-karst', icon: '🧭', name: 'Karst Pioneer', tier: 'epic', ladderRank: 70, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Yucatán & Karst Circuit Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('cenote-circuit') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('cenote-circuit')) },
   { id: 'camp-coral-wrecks', icon: '🪸', name: 'Coral Wrecker', tier: 'epic', ladderRank: 72, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Coral & Iron Wrecks Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('coral-iron-wrecks') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('coral-iron-wrecks')) },
   { id: 'camp-halocline', icon: '🧪', name: 'Halocline Pioneer', tier: 'epic', ladderRank: 74, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Halocline Wonders Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('halocline-wonders') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('halocline-wonders')) },
@@ -644,6 +662,7 @@ export const MILESTONE_PATCHES = Object.freeze([
   { id: 'camp-abyssal', icon: '🌌', name: 'Abyssal Legend', tier: 'epic', ladderRank: 84, fx: { id: 'crest-halo', name: 'Mastery Crest Ring', desc: 'Pulsing prestige halo ring around shoulder patch.' }, unlockHint: 'Abyssal World Record Campaign', getProgress: (s) => _mkProg(s.completedCampaigns?.has('abyssal-record') ? 1 : 0, 1, 'campaign'), isUnlocked: (s) => Boolean(s.completedCampaigns?.has('abyssal-record')) },
   { id: 'bounty-hunter-master', icon: '📜', name: 'Master Bounty Hunter', tier: 'mythic', ladderRank: 100, fx: { id: 'crest-halo', name: 'Mythic Gilded Crest', desc: 'Radiant golden rotating prestige halo on harness.' }, unlockHint: 'Claim 12 Abyssal Bounties or 8+ Hardcore clears', getProgress: (s) => _bestProg(_mkProg(_countClaimedBounties(s), 12, 'bounties'), _mkProg(s.hardcoreClears, 8, 'hardcore')), isUnlocked: (s) => _countClaimedBounties(s) >= 12 || (s.hardcoreClears || 0) >= 8 },
   { id: 'world-arch-crest', icon: '🏛️', name: 'Bells Archway Crest', tier: 'epic', source: 'world', ladderRank: 74, fx: { id: 'crest-halo', name: 'Archway Deep Crest', desc: 'Deep-blue cobalt halo signaling trimix arch mastery.' }, unlockHint: '🗺️ World Cache · Blue Hole Dahab Archway', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-arch-crest')) },
+  { id: 'world-monolith-seal', icon: '🗿', name: 'Yonaguni Monolith Seal', tier: 'mythic', source: 'world', ladderRank: 96, fx: { id: 'crest-halo', name: 'Monolith Sovereign Aura', desc: 'Ancient sandstone-gold crest radiating guardian resonance.' }, unlockHint: '🗺️ World Cache · Yonaguni Submerged Monument', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:world-monolith-seal')) },
   { id: 'chest-corsair-crest', icon: '🏴‍☠️', name: 'Sunken Corsair Crest', tier: 'rare', source: 'chest', dropRarity: 'rare', ladderRank: 64, fx: { id: 'crest-halo', name: "Corsair's Fortune", desc: 'Gilded compass rose halo increasing sunken treasure luck (+20%).' }, unlockHint: '🧰 Rare Random Drop · Sunken Treasure Chests (~12%)', isUnlocked: (s) => Boolean(s.foundGearIds?.has('patch:chest-corsair-crest')) },
 ]);
 
@@ -711,9 +730,9 @@ export const HEADGEAR_STYLES = Object.freeze([
     ladderRank: 84,
     fx: { id: 'halo-telemetry', name: 'Orbital Telemetry Halo', desc: 'Animated holographic cyan ring & twin synchronized strobe beacons.' },
     specText: 'Armored titanium sump dome + animated telemetry halo',
-    unlockHint: 'Hardcore clear, 100m+ depth, or 15+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 100, 'm depth'), _mkProg(s.sitesCleared, 15, 'sites')),
-    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 100 || s.sitesCleared >= 15,
+    unlockHint: 'Hardcore clear, 100m+ depth, or 28+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 100, 'm depth'), _mkProg(s.sitesCleared, 28, 'sites')),
+    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 100 || s.sitesCleared >= 28,
   },
   {
     id: 'secret-dreadnought-helm',
@@ -738,6 +757,18 @@ export const HEADGEAR_STYLES = Object.freeze([
     specText: 'Insulated arctic 9mm neoprene hood · 70% Cold Thermocline resist',
     unlockHint: '🗺️ World Cache · Plura Marble Sump overhang',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:world-thermal-hood')),
+  },
+  {
+    id: 'world-halocline-mask',
+    name: 'Angelita Halocline Mask',
+    icon: '🌫️',
+    tier: 'epic',
+    source: 'world',
+    ladderRank: 86,
+    fx: { id: 'halo-telemetry', name: 'H₂S Mist Filter', desc: 'Emerald-mist positive-pressure seal cuts dense halocline & ceiling silt.' },
+    specText: 'World-Found H₂S Halocline Mask · +24% Deco, -24% Silt & +10m Relic',
+    unlockHint: '🗺️ World Cache · Cenote Angelita H₂S river ledge',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('headgear:world-halocline-mask')),
   },
 ]);
 
@@ -824,9 +855,9 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#f59e0b',
     swatchA: '#d97706',
     swatchB: '#fef08a',
-    unlockHint: 'Salvage Master cert, 1+ wreck, or 5+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.cleanSalvageLifts, 1, 'salvage'), _mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 5, 'sites')),
-    isUnlocked: (s) => (s.cleanSalvageLifts || 0) >= 1 || s.wreckClears >= 1 || s.sitesCleared >= 5,
+    unlockHint: 'Salvage Master cert, 1+ wreck, or 8+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.cleanSalvageLifts, 1, 'salvage'), _mkProg(s.wreckClears, 1, 'wreck'), _mkProg(s.sitesCleared, 8, 'sites')),
+    isUnlocked: (s) => (s.cleanSalvageLifts || 0) >= 1 || s.wreckClears >= 1 || s.sitesCleared >= 8,
   },
   {
     id: 'biolum-violet',
@@ -840,9 +871,9 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#a855f7',
     swatchA: '#a855f7',
     swatchB: '#f0abfc',
-    unlockHint: '4+ Field Guide species or 8+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.speciesLogged, 4, 'species'), _mkProg(s.sitesCleared, 8, 'sites')),
-    isUnlocked: (s) => s.speciesLogged >= 4 || s.sitesCleared >= 8,
+    unlockHint: '4+ Field Guide species or 13+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.speciesLogged, 4, 'species'), _mkProg(s.sitesCleared, 13, 'sites')),
+    isUnlocked: (s) => s.speciesLogged >= 4 || s.sitesCleared >= 13,
   },
   {
     id: 'plasma-circuit-trim',
@@ -856,9 +887,9 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#22d3ee',
     swatchA: '#0ea5e9',
     swatchB: '#a5f3fc',
-    unlockHint: 'Hardcore clear, 90m+ depth, or 14+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 90, 'm depth'), _mkProg(s.sitesCleared, 14, 'sites')),
-    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 90 || s.sitesCleared >= 14,
+    unlockHint: 'Hardcore clear, 90m+ depth, or 24+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.hardcoreClears, 1, 'Hardcore'), _mkProg(s.deepestM, 90, 'm depth'), _mkProg(s.sitesCleared, 24, 'sites')),
+    isUnlocked: (s) => (s.hardcoreClears || 0) >= 1 || (s.deepestM || 0) >= 90 || s.sitesCleared >= 24,
   },
   {
     id: 'secret-selenite-trim',
@@ -907,8 +938,24 @@ export const ACCENT_TRIMS = Object.freeze([
     stageBand: '#06b6d4',
     swatchA: '#06b6d4',
     swatchB: '#5eead4',
-    unlockHint: "🗺️ World Cache · Eagle's Nest Sink shelf",
+    unlockHint: '🗺️ World Cache · Fontaine de Vaucluse karst shelf',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:world-hydro-fins')),
+  },
+  {
+    id: 'world-reef-thrusters',
+    name: "Devil's Wall Jet-Fins",
+    tier: 'epic',
+    source: 'world',
+    ladderRank: 76,
+    fx: { id: 'hydro-blades', name: 'Reef-Drop Jet Fins', desc: 'Twin crimson-aqua venturi jet slots accelerate dashes & drop-off sprints.' },
+    accent: '#fb7185',
+    trim: '#38bdf8',
+    finTip: '#f43f5e',
+    stageBand: '#e11d48',
+    swatchA: '#e11d48',
+    swatchB: '#38bdf8',
+    unlockHint: "🗺️ World Cache · Bermuda Devil's Wall drop-off",
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('trim:world-reef-thrusters')),
   },
   {
     id: 'chest-manta-fins',
@@ -1046,7 +1093,7 @@ export const TANK_FINISHES = Object.freeze([
   },
   {
     id: 'world-hydro-tank',
-    name: 'Vaucluse Hydro Twinset',
+    name: 'Lagoa Hydro Twinset',
     tier: 'epic',
     source: 'world',
     ladderRank: 78,
@@ -1056,7 +1103,7 @@ export const TANK_FINISHES = Object.freeze([
     bot: '#0e7490',
     stroke: '#22d3ee',
     ccrShell: '#0891b2',
-    unlockHint: '🗺️ World Cache · Fontaine de Vaucluse resurgence',
+    unlockHint: '🗺️ World Cache · Lagoa Misteriosa crystal shaft',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('tank:world-hydro-tank')),
   },
   {
@@ -1158,9 +1205,9 @@ export const VISOR_TINTS = Object.freeze([
     bot: '#064e3b',
     frame: '#022c22',
     hudGlow: '#34d399',
-    unlockHint: '2+ Rescue/Emergency Drills or 6+ sites',
-    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 2, 'drills'), _mkProg(s.sitesCleared, 6, 'sites')),
-    isUnlocked: (s) => (s.drillsCompleted || 0) >= 2 || s.sitesCleared >= 6,
+    unlockHint: '2+ Rescue/Emergency Drills or 9+ sites',
+    getProgress: (s) => _bestProg(_mkProg(s.drillsCompleted, 2, 'drills'), _mkProg(s.sitesCleared, 9, 'sites')),
+    isUnlocked: (s) => (s.drillsCompleted || 0) >= 2 || s.sitesCleared >= 9,
   },
   {
     id: 'bounty-hunter-visor',
@@ -1238,6 +1285,21 @@ export const VISOR_TINTS = Object.freeze([
     hudGlow: '#fde047',
     unlockHint: '🗺️ World Cache · Cenote El Abismo sunken crate',
     isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:world-cartographer-visor')),
+  },
+  {
+    id: 'world-abyss-lens',
+    name: 'Boesmansgat Depth Lens',
+    tier: 'rare',
+    source: 'world',
+    ladderRank: 50,
+    fx: { id: 'spectral-scan', name: 'Abyssal Clarity Optic', desc: 'Deep-cobalt polarization sharpens vision & steadies narcosis past 80m.' },
+    top: '#dbeafe',
+    mid: '#2563eb',
+    bot: '#172554',
+    frame: '#0f172a',
+    hudGlow: '#60a5fa',
+    unlockHint: '🗺️ World Cache · Boesmansgat Abyss cavern ledge',
+    isUnlocked: (s) => Boolean(s.foundGearIds?.has('visor:world-abyss-lens')),
   },
   {
     id: 'world-salvage-visor',
@@ -2542,7 +2604,7 @@ export function drawLiveryPreview(
     ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#fde047';
@@ -2561,7 +2623,7 @@ export function drawLiveryPreview(
     ctx.strokeStyle = equipFx.color || '#38bdf8';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#f8fafc';
@@ -2579,7 +2641,7 @@ export function drawLiveryPreview(
     ctx.strokeStyle = set.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99);
+    ctx.roundRect?.(10, 10, Math.min(w - 20, tw), 22, 99) ?? ctx.rect(10, 10, Math.min(w - 20, tw), 22);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = set.color;

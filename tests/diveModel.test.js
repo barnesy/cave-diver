@@ -11651,8 +11651,8 @@ test('v216 Ultra Mode Gear & Avatar: All-Slot Performance, Zelda/Diablo Set Tier
   assert.ok(cart3pc.relicGlowBonusM >= 14, 'Cartographer rig must extend relic highlight glow');
   assert.ok(Object.keys(SET_TIER_BONUSES).length >= 8, 'All 8 gear sets must define 2pc + Capstone bonuses');
 
-  // 3. All 10 World-Found Sunken Gear Caches spawn in navigable open water across their campaign levels
-  assert.equal(WORLD_GEAR_CACHES.length, 10);
+  // 3. All 15 World-Found Sunken Gear Caches spawn in navigable open water across their campaign levels
+  assert.equal(WORLD_GEAR_CACHES.length, 15);
   for (const def of WORLD_GEAR_CACHES) {
     const lvl = getLevelById(def.levelId);
     assert.ok(lvl, `World gear cache ${def.id} must reference a valid level (${def.levelId})`);
@@ -12216,4 +12216,50 @@ test('v222 First-Play Magic: Welcome Relic Choices, Universal Found-Gear Unlock 
   firstSess.diver.y = Math.max(8, cp0.y);
   stepDiveSession(firstSess, { x: 0, y: 0 }, 0.05, { onToast: (m) => toasts.push(m) });
   assert.ok(toasts.some((m) => m.includes('Gear Caches') && m.includes('Brass Chests')), 'First dive past 6.5m must show friendly explorer tip');
+});
+
+test('v223 Even 37-Level Gear Distribution & Proving Grounds Crash/Isolation Hardening', async () => {
+  const { LEVELS } = await import('../public/js/levels/index.js');
+  const { WORLD_GEAR_CACHES, getGearItemStats } = await import('../public/js/game/gearStats.js');
+  const { getGearItemBySlot, computeUnlockedLiveries } = await import('../public/js/game/rigLivery.js');
+  const { createProvingGroundsLevel } = await import('../public/js/game/gearProvingGrounds.js');
+
+  // 1. All 15 World Gear Caches are evenly dispersed across L1–L37 (max gap <= 3 levels, spanning L1 to L36!)
+  assert.equal(WORLD_GEAR_CACHES.length, 15);
+  const indices = WORLD_GEAR_CACHES.map((c) => LEVELS.findIndex((l) => l.id === c.levelId) + 1).sort((a, b) => a - b);
+  assert.equal(indices[0], 1, 'First World Gear Cache must be on Level 1');
+  assert.ok(indices[indices.length - 1] >= 35, `Last World Gear Cache must reach late-game L35+, got L${indices[indices.length - 1]}`);
+  for (let i = 1; i < indices.length; i++) {
+    const gap = indices[i] - indices[i - 1];
+    assert.ok(gap >= 2 && gap <= 3, `World Gear Caches must be evenly spaced (2-3 levels apart); found gap ${gap} between L${indices[i - 1]} and L${indices[i]}`);
+  }
+  // Every World Gear Cache item exists in catalog with real stats & powers
+  for (const c of WORLD_GEAR_CACHES) {
+    const entry = getGearItemBySlot(c.slot, c.itemId);
+    assert.ok(entry?.item, `Catalog entry missing for ${c.slot}:${c.itemId}`);
+    const st = getGearItemStats(c.slot, entry.item);
+    assert.ok(st.pills.length >= 2 && st.power, `World relic ${c.itemId} must have real stat pills & signature power`);
+  }
+
+  // 2. Earned site-clear unlocks span cleanly past L20 (no dead zone in the back half of the 37-level atlas!)
+  const mkCleared = (n) => {
+    const b = createEmptyLogbook();
+    for (let i = 0; i < n; i++) b.cleared[LEVELS[i].id] = { bestScore: 2000, bestGrade: 'A' };
+    return computeUnlockedLiveries(b);
+  };
+  const u15 = mkCleared(15);
+  const u28 = mkCleared(28);
+  assert.equal(u15.suits.has('krubera-obsidian'), false, 'Krubera Obsidian should unlock past 15 sites on site-clear track');
+  assert.equal(u28.suits.has('krubera-obsidian'), true, 'Krubera Obsidian must unlock by 28 sites');
+  assert.equal(u15.headgears.has('abyss-halo-helm'), false, 'Abyssal Halo Helm should unlock past 15 sites on site-clear track');
+  assert.equal(u28.headgears.has('abyss-halo-helm'), true, 'Abyssal Halo Helm must unlock by 28 sites');
+
+  // 3. Proving Grounds session isolation & full level schema parity
+  const pgLvl = createProvingGroundsLevel();
+  assert.ok(Number.isFinite(pgLvl.parTimeSec) && pgLvl.parTimeSec > 0);
+  assert.ok(Array.isArray(pgLvl.zoneLines) && Array.isArray(pgLvl.depthMarkers));
+  const pgSess = createDiveSession(pgLvl, { diverName: 'NewDiver', isFirstDive: true });
+  assert.equal(pgSess.isProvingGrounds, true);
+  assert.equal(pgSess.isFirstDive, false, 'Proving Grounds must never trigger First-Dive tips or chests');
+  assert.equal(pgSess.treasureChests.length, 0, 'Proving Grounds must never spawn permanent Treasure Chests');
 });

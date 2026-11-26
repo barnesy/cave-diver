@@ -57,3 +57,10 @@ export function escapeHtml(raw) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// Polyfill CanvasRenderingContext2D.prototype.roundRect for older Safari / iOS WebViews (v223)
+if (typeof CanvasRenderingContext2D !== 'undefined' && typeof CanvasRenderingContext2D.prototype.roundRect !== 'function') {
+  CanvasRenderingContext2D.prototype.roundRect = function roundRectPolyfill(x, y, w, h) {
+    return this.rect(x, y, w, h);
+  };
+}

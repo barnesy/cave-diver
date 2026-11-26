@@ -224,6 +224,7 @@ export function createLiveryWorkshopController({
   let inspectedSetId = '';
   let recentDiveUnlocks = [];
   let savedPrevLevelBeforeProving = null;
+  let launchingFieldTest = false;
 
   function getWelcomeCrateState() {
     let book = null;
@@ -260,8 +261,8 @@ export function createLiveryWorkshopController({
       }
     } catch {}
     markEntrySeen(`${ch.giftSlot}:${ch.giftItemId}`);
-    playGearUnlock?.('uncommon');
-    spawnConfetti?.();
+    try { playGearUnlock?.('uncommon'); } catch {}
+    try { spawnConfetti?.(); } catch {}
     updateActiveLiveryField(
       { ...ch.fullRig },
       { slot: ch.giftSlot, itemMeta: { id: ch.giftItemId, name: ch.giftName, tier: 'uncommon' }, silentAudio: true }
@@ -292,31 +293,49 @@ export function createLiveryWorkshopController({
   });
 
   async function startFieldTestDive({ trialLivery = null, trialLabel = '' } = {}) {
-    if (typeof launchProvingGrounds !== 'function') return false;
-    const pgLevel = createProvingGroundsLevel();
-    const useLivery = trialLivery ? { ...trialLivery } : { ...getDisplayedRigLivery() };
-    const isCustomTrial = Boolean(trialLivery || lockedTryOn);
-    const label = trialLabel || (lockedTryOn ? lockedTryOn.name : '');
-    closeLiveryModal();
-    closeDiveSetupModal?.();
-    setHomeMenuOpen?.(false);
-    savedPrevLevelBeforeProving = await launchProvingGrounds(pgLevel);
-    const sess = getSession?.();
-    const pgModeId = workshopTuningMode === 'trench' ? 'standard' : workshopTuningMode;
-    const pgTuningCtx = getWorkshopTuningCtx(pgModeId);
-    if (sess) {
-      sess.rigTuningCtx = pgTuningCtx;
-      if (pgTuningCtx.difficulty) sess.difficulty = pgTuningCtx.difficulty;
-      configureProvingGroundsSession(sess, useLivery);
+    if (launchingFieldTest || typeof launchProvingGrounds !== 'function') return false;
+    launchingFieldTest = true;
+    try {
+      const pgLevel = createProvingGroundsLevel();
+      const useLivery = trialLivery ? { ...trialLivery } : { ...getDisplayedRigLivery() };
+      const isCustomTrial = Boolean(trialLivery || lockedTryOn);
+      const label = trialLabel || (lockedTryOn ? lockedTryOn.name : '');
+      closeLiveryModal();
+      closeDiveSetupModal?.();
+      setHomeMenuOpen?.(false);
+      const prevLvl = await launchProvingGrounds(pgLevel);
+      if (prevLvl && !prevLvl.isProvingGrounds) {
+        savedPrevLevelBeforeProving = prevLvl;
+      } else if (!savedPrevLevelBeforeProving) {
+        savedPrevLevelBeforeProving = LEVELS[0] || null;
+      }
+      const sess = getSession?.();
+      const pgModeId = workshopTuningMode === 'trench' ? 'standard' : workshopTuningMode;
+      const pgTuningCtx = getWorkshopTuningCtx(pgModeId);
+      if (sess) {
+        sess.rigTuningCtx = pgTuningCtx;
+        if (pgTuningCtx.difficulty) sess.difficulty = pgTuningCtx.difficulty;
+        configureProvingGroundsSession(sess, useLivery);
+      }
+      provingHudBar.show({
+        trialLivery: isCustomTrial ? useLivery : null,
+        trialLabel: label,
+        initialPresetId: isCustomTrial ? 'trial' : 'equipped',
+        initialModeId: pgModeId,
+      });
+      showToast?.('🧪 Gear Proving Grounds ready! Swim the 6 lanes & hot-swap Sets live on the top bar.', 3.8);
+      return true;
+    } catch (err) {
+      console.error('Proving Grounds launch failed:', err);
+      const prev = savedPrevLevelBeforeProving || LEVELS[0] || null;
+      savedPrevLevelBeforeProving = null;
+      try { exitProvingGrounds?.(prev); } catch {}
+      try { openLiveryModal(activeLiveryTab); } catch {}
+      showToast?.('Could not launch Proving Grounds — returned safely to Gear Workshop.', 3.2);
+      return false;
+    } finally {
+      launchingFieldTest = false;
     }
-    provingHudBar.show({
-      trialLivery: isCustomTrial ? useLivery : null,
-      trialLabel: label,
-      initialPresetId: isCustomTrial ? 'trial' : 'equipped',
-      initialModeId: pgModeId,
-    });
-    showToast?.('🧪 Gear Proving Grounds ready! Swim the 6 lanes & hot-swap Sets live on the top bar.', 3.8);
-    return true;
   }
 
   let savedLiverySlots = [null, null, null];
@@ -345,7 +364,7 @@ export function createLiveryWorkshopController({
       justEquippedKey = `${slot}:${itemOrMeta.id}`;
     }
     if (!silentAudio) {
-      playGearEquip?.(slot, tierMeta.id);
+      try { playGearEquip?.(slot, tierMeta.id); } catch {}
     }
   }
 
@@ -684,14 +703,18 @@ export function createLiveryWorkshopController({
       }
     }
 
-    drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, previewLivery, {
-      hasCcr: showCcr,
-      hasDpv: showDpv,
-      envMode: liveryPreviewEnv,
-      timeSec,
-      equipFx: equipFxArg,
-      previewLockedLabel: lockedTryOn ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
-    });
+    try {
+      drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, previewLivery, {
+        hasCcr: showCcr,
+        hasDpv: showDpv,
+        envMode: liveryPreviewEnv,
+        timeSec,
+        equipFx: equipFxArg,
+        previewLockedLabel: lockedTryOn ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
+      });
+    } catch (err) {
+      console.error('Livery preview render error:', err);
+    }
   }
 
   function setLiveryActiveTab(tabId) {

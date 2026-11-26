@@ -516,9 +516,10 @@ export function createDiveSession(
     isRescueDrill: Boolean(isRescueDrill || level?.isRescueDrill),
     modifiers: cleanModifiers,
   };
+  const isProvingGrounds = Boolean(level?.isProvingGrounds);
   const rigPerf = computeRigPerformanceProfile(livery, rigTuningCtx);
-  const worldGearCaches = createWorldGearCachesForLevel(level, foundGear);
-  const treasureChests = createTreasureChestsForLevel(level, { excludePoints: worldGearCaches });
+  const worldGearCaches = isProvingGrounds ? [] : createWorldGearCachesForLevel(level, foundGear);
+  const treasureChests = isProvingGrounds ? [] : createTreasureChestsForLevel(level, { excludePoints: worldGearCaches });
   const hazards = createDynamicHazards(level);
   hazards.worldGearCaches = worldGearCaches;
   hazards.treasureChests = treasureChests;
@@ -526,12 +527,13 @@ export function createDiveSession(
 
   return {
     level,
+    isProvingGrounds,
     rigPerf,
     rigTuningCtx,
     worldGearCaches,
     treasureChests,
     foundGearMap: foundGear && typeof foundGear === 'object' ? { ...foundGear } : {},
-    isFirstDive: Boolean(isFirstDive),
+    isFirstDive: !isProvingGrounds && Boolean(isFirstDive),
     _firstChestAwarded: false,
     _firstDiveTipShown: false,
     chestBonusScore: 0,

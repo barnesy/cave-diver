@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=222',
+  mapRasterUrl: './assets/map-expedition.jpg?v=223',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2471,8 +2471,8 @@ const liveryWorkshop = createLiveryWorkshopController({
   setHomeMenuOpen: (v) => setHomeMenuOpen(v), scheduleGitHubStatsSync: () => scheduleGitHubStatsSync(), showToast,
   playGearEquip: (s, t) => audio.playGearEquip?.(s, t), playGearUnlock: (t) => audio.playGearUnlock?.(t),
   spawnConfetti: () => spawnCelebrationConfetti(),
-  launchProvingGrounds: async (pgLvl) => { const prev = activeLevel; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(pgLvl, { showOverlay: true }); startDiveRun(false); return prev; },
-  exitProvingGrounds: (prevLvl) => { abortActiveDiveToMenu(); if (prevLvl) ensureLevelLoaded(prevLvl, { showOverlay: false }); },
+  launchProvingGrounds: async (pgLvl) => { const prev = activeLevel?.isProvingGrounds ? null : activeLevel; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(pgLvl, { showOverlay: true }); startDiveRun(false); return prev; },
+  exitProvingGrounds: (prevLvl) => { abortActiveDiveToMenu(); if (prevLvl && !prevLvl.isProvingGrounds && activeLevel?.id !== prevLvl.id) ensureLevelLoaded(prevLvl, { showOverlay: false }); },
   getDifficulty: () => activeDifficulty, getActiveModifiers: () => activeExpeditionModifiers,
 });
 const {
@@ -2596,20 +2596,18 @@ function openDiveGuideModal(launchAfter = false) {
   if (modalDiveGuide) modalDiveGuide.hidden = false;
   setHomeMenuOpen(false);
 }
-
 function closeDiveGuideModal(startNow = false) {
+  const wasOpen = Boolean(modalDiveGuide && !modalDiveGuide.hidden);
   if (modalDiveGuide) modalDiveGuide.hidden = true;
-  try { localStorage.setItem(BRIEFED_PREF_KEY, '1'); } catch {}
+  if (wasOpen || startNow) { try { localStorage.setItem(BRIEFED_PREF_KEY, '1'); } catch {} }
   const shouldLaunch = startNow && pendingGuideLaunch;
   pendingGuideLaunch = false;
-  if (shouldLaunch) {
-    const csVal = document.getElementById('input-guide-callsign')?.value?.trim();
-    if (!getEnteredCallsign() && playerNameInput) {
-      playerNameInput.value = csVal || 'Explorer';
-      playerNameInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    launchOpenCoopDive();
+  if (!shouldLaunch) return;
+  if (!getEnteredCallsign() && playerNameInput) {
+    playerNameInput.value = document.getElementById('input-guide-callsign')?.value?.trim() || 'Explorer';
+    playerNameInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
+  launchOpenCoopDive();
 }
 
 btnOpenGuide?.addEventListener('click', () => openDiveGuideModal(false));
@@ -3248,7 +3246,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     crewRoleId: activeCrewRoleId,
     modifiers: activeExpeditionModifiers,
     foundGear: loadCareerLogbook()?.foundGear || null,
-    isFirstDive: (loadCareerLogbook()?.totalDives || 0) === 0,
+    isFirstDive: !activeLevel.isProvingGrounds && (loadCareerLogbook()?.totalDives || 0) === 0,
     isRescueDrill: isDrillLaunch,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;
