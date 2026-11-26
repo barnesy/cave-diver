@@ -184,8 +184,6 @@ export function createLiveryWorkshopController({
   const menuLiveryPillEl = document.getElementById('menu-livery-pill');
   const btnHomeOpenLiveryEl = document.getElementById('btn-home-open-livery');
   const btnHomeQuickLiveryEl = document.getElementById('btn-home-quick-livery');
-  const homeAvatarCanvasEl = document.getElementById('home-avatar-canvas');
-  const homeAvatarCtx = homeAvatarCanvasEl?.getContext?.('2d') || null;
   const liveryModalEl = document.getElementById('livery-modal');
   const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
   const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
@@ -441,15 +439,7 @@ export function createLiveryWorkshopController({
   }
 
   function renderHomeAvatarBadge() {
-    if (!homeAvatarCtx || !homeAvatarCanvasEl) return;
-    let hasCcr = false;
-    let hasDpv = false;
-    try {
-      const eq = getEffectiveGearLoadout();
-      hasCcr = Boolean(eq?.ccr);
-      hasDpv = Boolean(eq?.dpv || (activeRigLivery?.scooterId && activeRigLivery.scooterId !== 'none'));
-    } catch {}
-    drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
+    // Menu diver avatar thumbnail removed by user request; kept as no-op for caller compatibility.
   }
 
   function hideLootDiscoveryBanner() {

@@ -1157,22 +1157,6 @@ export class CaveRenderer {
       this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx);
     }
 
-    // 9.5. Living Foreground Parallax Formations (drawn IN FRONT of diver & BEFORE lighting so diver subtly goes behind edges while real darkness/sun/torches light every pixel! v224/v249)
-    this._drawForegroundDepthElements?.(
-      ctx,
-      cw,
-      ch,
-      effCamX,
-      effCamY,
-      viewCenterX,
-      viewCenterY,
-      scale,
-      timeSec,
-      diver,
-      secretLair,
-      { peers: peerList, powerRelays, localSiltDensity }
-    );
-
     // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering + Dynamic Boss Arena Lighting
     this._drawLighting(
       ctx,
@@ -1281,7 +1265,23 @@ export class CaveRenderer {
 
     // 11. World-space Diffusing Cavern Silt Clouds & Torch Backscatter across ALL divers' lights
     this._drawSiltClouds(ctx, cw, ch, toScreenX, toScreenY, scale, siltClouds, diver, peerList, timeSec);
-    // 11-fg. Post-Lighting Foreground Backlit Edge-Wrap, Subsurface Glow & Specular Glints (strictly light-gated! v249)
+    // 11-fg. Near-Plane Foreground Parallax Formations & Backlit Lighting Accents
+    // Rendered AFTER diver, volumetric beams, sun shafts & silt so formations truly sit in front of the
+    // diver and torch cone—eclipsing them cleanly while shaded by real cave darkness & backlit Fresnel rims!
+    this._drawForegroundDepthElements?.(
+      ctx,
+      cw,
+      ch,
+      effCamX,
+      effCamY,
+      viewCenterX,
+      viewCenterY,
+      scale,
+      timeSec,
+      diver,
+      secretLair,
+      { peers: peerList, powerRelays, localSiltDensity }
+    );
     this._drawForegroundDepthLightingAccents?.(
       ctx,
       cw,

@@ -3,19 +3,21 @@ import { getTorchOptic } from '../rigLivery.js';
 import { computeStormLightningFlash } from '../weather.js';
 
 /**
- * Living, Light-Integrated Foreground Parallax Depth Elements (v224 / v249).
+ * Living, Light-Integrated Foreground Parallax Depth Elements (v224 / v249 / v250).
  *
- * Two-pass rendering architecture seamlessly integrated with the lighting system:
- * - Pass 1 (`_drawForegroundDepthElements`, rendered RIGHT AFTER the diver and RIGHT BEFORE `_drawLighting`):
- *   Draws sculpted, biome-crafted foreground formations anchored along the exact local cave wall slope
- *   (`wallSlope` computed from the cave SDF gradient!) directly IN FRONT of the diver so the diver
- *   subtly glides behind their outer edges, root curtains, kelp fronds, crystal spires, and hull ribs.
- *   Because `_drawLighting` runs immediately afterward, real ray-cast cave darkness, cenote sun shafts,
- *   ray-cast diver & peer torch cones, geothermal vents, and power-relay floodlights illuminate every
- *   foreground pixel naturally—zero glowing stickers in unlit darkness!
- * - Pass 2 (`_drawForegroundDepthLightingAccents`, rendered AFTER `_drawLighting`):
- *   Adds delicate edge-hugging backlit rim wrap, translucent subsurface leaf/root/ice edge highlights,
- *   and pinpoint crystal/wet-metal diamond glints strictly where real light sources strike!
+ * Cinematic Near-Plane Architecture:
+ * - Drawn AFTER the diver, volumetric torch cones, sunlight shafts & silt clouds so foreground
+ *   formations truly sit IN FRONT of both the diver and the volumetric light behind them.
+ * - Strictly light-gated (`lightVis`): in pitch-black unlit caverns elements dissolve seamlessly
+ *   to 0% visibility (zero dark cutout stickers over navy darkness). The moment sunlight, the
+ *   diver's torch cone, a buddy's torch, a geothermal vent, or a wreck floodlight illuminates the
+ *   water behind or around them, they emerge organically with rich near-plane depth contrast and
+ *   directional backlit Fresnel rim highlights tinted by the real light source (including Torch Optics).
+ * - Wall-slope SDF anchoring (`wallSlope`) + soft feathered wall-tuck keeps every formation seamlessly
+ *   rooted into angled ceilings and floors with zero floating edges or self-intersecting curves.
+ * - Subtle edge occlusion: the diver's fins, tanks, and outer silhouette genuinely glide behind the
+ *   sculpted edges of overhangs, wispy root veils, undulating kelp ribbons, crystal tips, icicles,
+ *   and hollow-cutout shipwreck girders, while gently softening if the diver enters the buried core.
  */
 
 const FG_CACHE = new WeakMap();
@@ -76,88 +78,88 @@ function _getBiomePalette(biome, level = null) {
   switch (biome) {
     case 'wreck':
       return {
-        rockDark: [26, 33, 42],
-        rockMid: [56, 68, 80],
-        rockHighlight: [106, 122, 138],
-        rustRgb: [140, 74, 42],
-        rimRgb: [178, 208, 228],
-        floraDark: [18, 44, 38],
-        floraMid: [38, 88, 68],
-        sssRgb: [84, 212, 176],
-        mossRgb: [44, 106, 76],
+        rockDark: [22, 30, 40],
+        rockMid: [50, 64, 78],
+        rockHighlight: [112, 134, 152],
+        rustRgb: [134, 68, 38],
+        rimRgb: [182, 218, 240],
+        floraDark: [16, 42, 36],
+        floraMid: [34, 86, 66],
+        sssRgb: [86, 218, 178],
+        mossRgb: [42, 108, 76],
       };
     case 'ice':
       return {
-        rockDark: rockBase ? [Math.round(rockBase[0] * 0.65), Math.round(rockBase[1] * 0.76), Math.round(rockBase[2] * 0.88)] : [24, 58, 92],
-        rockMid: [72, 146, 196],
-        rockHighlight: [186, 236, 255],
-        rustRgb: [134, 214, 248],
-        rimRgb: [216, 246, 255],
-        floraDark: [24, 66, 102],
-        floraMid: [82, 172, 220],
-        sssRgb: [142, 234, 255],
+        rockDark: [18, 48, 82],
+        rockMid: [62, 136, 188],
+        rockHighlight: [188, 238, 255],
+        rustRgb: [128, 210, 248],
+        rimRgb: [218, 248, 255],
+        floraDark: [20, 58, 94],
+        floraMid: [76, 168, 218],
+        sssRgb: [148, 238, 255],
         mossRgb: [152, 226, 250],
       };
     case 'volcanic':
       return {
-        rockDark: [24, 21, 28],
-        rockMid: [50, 44, 56],
-        rockHighlight: [92, 80, 92],
+        rockDark: [20, 18, 26],
+        rockMid: [44, 38, 52],
+        rockHighlight: [96, 82, 96],
         rustRgb: [255, 114, 36],
-        rimRgb: [255, 168, 96],
-        floraDark: [30, 22, 24],
-        floraMid: [66, 44, 38],
-        sssRgb: [255, 134, 52],
-        mossRgb: [204, 88, 34],
+        rimRgb: [255, 176, 104],
+        floraDark: [28, 20, 22],
+        floraMid: [64, 42, 36],
+        sssRgb: [255, 138, 56],
+        mossRgb: [208, 92, 38],
       };
     case 'crystal':
       return {
-        rockDark: rockBase || [46, 38, 34],
-        rockMid: [82, 96, 158],
-        rockHighlight: [184, 212, 255],
-        rustRgb: [168, 146, 252],
-        rimRgb: [218, 232, 255],
-        floraDark: [40, 50, 96],
-        floraMid: [102, 132, 214],
-        sssRgb: [168, 218, 255],
+        rockDark: rockBase || [38, 32, 34],
+        rockMid: [76, 94, 164],
+        rockHighlight: [188, 216, 255],
+        rustRgb: [164, 140, 252],
+        rimRgb: [220, 236, 255],
+        floraDark: [34, 44, 92],
+        floraMid: [96, 128, 216],
+        sssRgb: [176, 222, 255],
         mossRgb: [146, 208, 250],
       };
     case 'mine':
       return {
-        rockDark: [38, 28, 20],
-        rockMid: [86, 62, 40],
-        rockHighlight: [142, 104, 68],
-        rustRgb: [168, 96, 46],
-        rimRgb: [228, 168, 98],
-        floraDark: [36, 26, 18],
-        floraMid: [78, 58, 38],
-        sssRgb: [236, 172, 90],
+        rockDark: [34, 24, 18],
+        rockMid: [78, 56, 36],
+        rockHighlight: [144, 106, 68],
+        rustRgb: [168, 96, 44],
+        rimRgb: [232, 174, 104],
+        floraDark: [32, 24, 16],
+        floraMid: [74, 54, 36],
+        sssRgb: [238, 176, 94],
         mossRgb: [116, 86, 50],
       };
     case 'monolith':
       return {
-        rockDark: rockBase || [38, 50, 58],
-        rockMid: [70, 96, 106],
-        rockHighlight: [126, 164, 174],
-        rustRgb: [82, 188, 200],
-        rimRgb: [162, 228, 246],
-        floraDark: [22, 58, 56],
-        floraMid: [48, 118, 108],
-        sssRgb: [96, 226, 228],
+        rockDark: rockBase || [32, 46, 54],
+        rockMid: [64, 92, 104],
+        rockHighlight: [128, 168, 178],
+        rustRgb: [82, 192, 204],
+        rimRgb: [166, 232, 248],
+        floraDark: [20, 54, 52],
+        floraMid: [44, 114, 104],
+        sssRgb: [98, 228, 232],
         mossRgb: [56, 152, 132],
       };
     case 'cenote':
     default:
       return {
-        rockDark: rockBase || [48, 38, 30],
-        rockMid: rockBase ? [Math.round(rockBase[0] * 1.45), Math.round(rockBase[1] * 1.4), Math.round(rockBase[2] * 1.35)] : [78, 62, 48],
-        rockHighlight: [128, 108, 86],
-        rustRgb: [68, 46, 30], // gnarled cenote mangrove mahogany bark
-        rimRgb: [152, 224, 226],
-        floraDark: [18, 54, 42],
-        floraMid: [44, 114, 78],
-        sssRgb: [104, 236, 162],
-        mossRgb: [56, 142, 86],
+        rockDark: rockBase || [44, 34, 28],
+        rockMid: rockBase ? [Math.round(rockBase[0] * 1.4), Math.round(rockBase[1] * 1.35), Math.round(rockBase[2] * 1.3)] : [74, 58, 44],
+        rockHighlight: [132, 112, 88],
+        rustRgb: [72, 48, 30], // cenote mahogany bark
+        rimRgb: [158, 232, 234],
+        floraDark: [14, 48, 38],
+        floraMid: [34, 108, 72],
+        sssRgb: [112, 244, 168],
+        mossRgb: [52, 146, 86],
       };
   }
 }
@@ -175,10 +177,7 @@ function _probeRockBoundary(level, x, startY, dirY, maxDistM) {
 }
 
 /**
- * Deterministically generate strategic ceiling & floor foreground depth elements for a level.
- * Anchors right along real cavern rock boundaries AND samples the exact local SDF wall slope
- * (`wallSlope = dy/dx`) so every rock overhang, crystal geode, icicle curtain, root crown & kelp
- * holdfast hugs the real sloping cave geometry with zero flat horizontal seams!
+ * Deterministically generate wall-slope-anchored foreground depth elements for a level.
  */
 export function buildForegroundDepthElements(level) {
   if (!level || !Array.isArray(level.segments) || level.segments.length === 0) return [];
@@ -192,7 +191,7 @@ export function buildForegroundDepthElements(level) {
   if (level.exitZone) avoidPts.push({ x: level.exitZone.x, y: level.exitZone.y, r: 4.5 });
   for (const cp of level.checkpoints || []) {
     if (cp && Number.isFinite(cp.x) && Number.isFinite(cp.y)) {
-      avoidPts.push({ x: cp.x, y: cp.y, r: 3.2 });
+      avoidPts.push({ x: cp.x, y: cp.y, r: 3.0 });
     }
   }
 
@@ -202,7 +201,7 @@ export function buildForegroundDepthElements(level) {
 
   const elements = [];
   const MAX_ELEMENTS = 44;
-  const MIN_SPACING_SQ = 7.8 * 7.8;
+  const MIN_SPACING_SQ = 6.0 * 6.0;
 
   for (let sIdx = 0; sIdx < segs.length && elements.length < MAX_ELEMENTS; sIdx++) {
     const s = segs[sIdx];
@@ -211,16 +210,16 @@ export function buildForegroundDepthElements(level) {
     const bx = s.bx ?? s.x2 ?? ax;
     const by = s.by ?? s.y2 ?? ay;
     const len = Math.hypot(bx - ax, by - ay);
-    if (len < 3.5) continue;
+    if (len < 3.0) continue;
 
-    const samples = Math.max(1, Math.min(4, Math.floor(len / 9.0)));
+    const samples = Math.max(1, Math.min(5, Math.floor(len / 7.0)));
     for (let k = 0; k < samples && elements.length < MAX_ELEMENTS; k++) {
       const seed = idHash + sIdx * 131 + k * 29;
-      const t = (k + 0.28 + _hash01(seed) * 0.44) / samples;
+      const t = (k + 0.24 + _hash01(seed) * 0.52) / samples;
       const mx = ax + (bx - ax) * t;
       const my = ay + (by - ay) * t;
 
-      if (my < 2.8 || evaluateCaveSDF(level, mx, my) > -1.35) continue;
+      if (my < 2.4 || evaluateCaveSDF(level, mx, my) > -1.2) continue;
 
       let blocked = false;
       for (let a = 0; a < avoidPts.length; a++) {
@@ -238,18 +237,36 @@ export function buildForegroundDepthElements(level) {
       const floorY = _probeRockBoundary(level, mx, my, 1, 13.0);
       if (ceilY === null || floorY === null) continue;
       const spanH = floorY - ceilY;
-      if (spanH < 4.8) continue;
+      if (spanH < 3.6) continue;
 
       const placeOnCeiling = ((sIdx + k) % 2 === 0) && ceilY > 1.8;
-      const wallY = placeOnCeiling ? ceilY : floorY;
-      // Compute local wall tangent slope (dy/dx) from SDF gradient so bases hug angled cave walls!
-      const eps = 0.28;
+      // Signature foreground corridor-crossing arch pillars roughly 1 in 4 formations in solid enclosed caves!
+      // Verify solid ceiling & floor rock on BOTH left/right flanks AND clear of open surface basins so parallax never exposes a floating end.
+      const nearOpenBasin = (level.openBasins || []).some(
+        (b) => mx >= (b.xMin ?? -1e9) - 3.6 && mx <= (b.xMax ?? 1e9) + 3.6
+      );
+      const hasSolidPillarAnchors =
+        !nearOpenBasin &&
+        evaluateCaveSDF(level, mx - 1.5, ceilY - 0.75) > 0.05 &&
+        evaluateCaveSDF(level, mx + 1.5, ceilY - 0.75) > 0.05 &&
+        evaluateCaveSDF(level, mx - 1.5, floorY + 0.75) > 0.05 &&
+        evaluateCaveSDF(level, mx + 1.5, floorY + 0.75) > 0.05;
+      const canPlacePillar =
+        !level.isWreck &&
+        biome !== 'mine' &&
+        ceilY > 2.4 &&
+        spanH >= 4.0 &&
+        spanH <= 13.5 &&
+        hasSolidPillarAnchors &&
+        ((sIdx + k) % 4 === 1);
+      const wallY = (placeOnCeiling || canPlacePillar) ? ceilY : floorY;
+      const eps = 0.30;
       const gx = evaluateCaveSDF(level, mx + eps, wallY) - evaluateCaveSDF(level, mx - eps, wallY);
       const gy = evaluateCaveSDF(level, mx, wallY + eps) - evaluateCaveSDF(level, mx, wallY - eps);
-      const wallSlope = Math.abs(gy) > 0.025 ? _clamp(-gx / gy, -0.58, 0.58) : 0;
+      const wallSlope = Math.abs(gy) > 0.025 ? _clamp(-gx / gy, -0.54, 0.54) : 0;
 
-      // Tuck anchor slightly inside the rock lip so sloping bases never leave an air gap
-      const anchorY = placeOnCeiling ? ceilY - 0.16 : floorY + 0.16;
+      // Tuck slightly inside the cave rock lip so sloping bases never show a gap
+      const anchorY = (placeOnCeiling || canPlacePillar) ? ceilY - 0.16 : floorY + 0.16;
 
       let tooClose = false;
       for (let e = 0; e < elements.length; e++) {
@@ -268,46 +285,69 @@ export function buildForegroundDepthElements(level) {
       const r4 = _hash01(seed + 73);
 
       let kind = 'limestone-overhang';
-      if (biome === 'wreck') {
-        if (placeOnCeiling) kind = r1 < 0.48 ? 'wreck-chain' : 'wreck-girder';
-        else kind = r1 < 0.52 ? 'wreck-railing' : 'wreck-girder';
+      if (canPlacePillar) {
+        kind = 'rock-pillar';
+      } else if (biome === 'wreck') {
+        if (placeOnCeiling) kind = r1 < 0.35 ? 'wreck-chain' : 'wreck-girder';
+        else kind = r1 < 0.38 ? 'wreck-railing' : 'wreck-girder';
       } else if (biome === 'ice') {
-        kind = placeOnCeiling ? 'icicle-cluster' : (r1 < 0.42 ? 'icicle-cluster' : 'limestone-overhang');
+        kind = placeOnCeiling ? 'icicle-cluster' : (r1 < 0.52 ? 'icicle-cluster' : 'limestone-overhang');
       } else if (biome === 'volcanic') {
         kind = placeOnCeiling ? 'limestone-overhang' : 'basalt-spire';
       } else if (biome === 'crystal') {
         kind = 'crystal-cluster';
       } else if (biome === 'mine') {
-        kind = placeOnCeiling ? (r1 < 0.48 ? 'mine-beam' : 'wreck-chain') : 'mine-beam';
+        kind = placeOnCeiling ? (r1 < 0.52 ? 'mine-beam' : 'wreck-chain') : 'mine-beam';
       } else if (biome === 'monolith') {
         kind = 'monolith-block';
       } else {
         if (placeOnCeiling) {
-          kind = anchorY < 20 && (sIdx + k) % 3 !== 2 ? 'cenote-roots' : 'limestone-overhang';
+          kind = anchorY < 24 && (sIdx + k) % 3 !== 2 ? 'cenote-roots' : 'limestone-overhang';
         } else {
-          kind = anchorY < 22 && (sIdx + k) % 3 !== 2 ? 'kelp-fronds' : 'limestone-overhang';
+          kind = anchorY < 26 && (sIdx + k) % 3 !== 2 ? 'kelp-fronds' : 'limestone-overhang';
         }
       }
 
+      const isPillar = kind === 'rock-pillar';
+      const isGirder = kind === 'wreck-girder';
       const isCurtain =
         kind === 'cenote-roots' ||
         kind === 'kelp-fronds' ||
         kind === 'wreck-chain' ||
-        kind === 'icicle-cluster' ||
-        kind === 'crystal-cluster';
+        kind === 'icicle-cluster';
+      const isCrystal = kind === 'crystal-cluster';
 
-      const isMidPlane = isCurtain ? r4 < 0.72 : r4 < 0.62;
+      const isMidPlane = isPillar ? r4 < 0.45 : (isCurtain || isCrystal ? r4 < 0.65 : r4 < 0.58);
       const depthLayer = isMidPlane ? 'mid' : 'near';
-      const parallax = isMidPlane ? 1.06 + r1 * 0.04 : 1.11 + r1 * 0.06;
+      const parallax = isMidPlane ? 1.09 + r1 * 0.05 : 1.16 + r1 * 0.07;
 
-      const maxReach = isCurtain ? Math.min(3.75, spanH * 0.36) : Math.min(3.15, spanH * 0.29);
-      const heightM = Math.max(1.35, maxReach * (0.64 + r2 * 0.36));
-      const widthM = Math.max(1.25, heightM * (0.68 + r3 * 0.44));
+      // Reach well into the swim corridor so the diver genuinely glides behind sculpted edges, roots, kelp & pillars!
+      let heightM;
+      let widthM;
+      if (isPillar) {
+        heightM = spanH + 0.32;
+        widthM = 0.92 + r3 * 0.52; // slender waist (~1.1m) so diver emerges cleanly on both sides!
+      } else if (isGirder) {
+        heightM = Math.min(spanH * 0.92, Math.max(2.4, spanH * (0.64 + r2 * 0.24)));
+        widthM = Math.max(1.55, 1.35 + r3 * 0.55);
+      } else if (isCurtain) {
+        const maxReach = Math.min(5.2, spanH * 0.56);
+        heightM = Math.max(1.95, maxReach * (0.72 + r2 * 0.28));
+        widthM = Math.max(1.85, heightM * (0.76 + r3 * 0.36));
+      } else if (isCrystal) {
+        const maxReach = Math.min(3.5, spanH * 0.40);
+        heightM = Math.max(1.65, maxReach * (0.72 + r2 * 0.28));
+        widthM = Math.max(1.75, heightM * (0.88 + r3 * 0.40));
+      } else {
+        const maxReach = Math.min(3.3, spanH * 0.34);
+        heightM = Math.max(1.60, maxReach * (0.70 + r2 * 0.30));
+        widthM = Math.max(2.9, heightM * (1.42 + r3 * 0.52));
+      }
 
       elements.push({
         x: mx,
         y: anchorY,
-        side: placeOnCeiling ? 'ceiling' : 'floor',
+        side: (placeOnCeiling || canPlacePillar) ? 'ceiling' : 'floor',
         biome,
         kind,
         depthLayer,
@@ -315,7 +355,7 @@ export function buildForegroundDepthElements(level) {
         widthM,
         heightM,
         parallax,
-        lean: (r2 - 0.5) * 0.32,
+        lean: (r2 - 0.5) * (isPillar ? 0.16 : 0.26),
         phase: r3 * Math.PI * 2,
         subCount: 2 + Math.floor(r1 * 3),
         seed: r1 * 100 + r2 * 10,
@@ -335,6 +375,7 @@ const _lightScratch = {
   ventLit: 0,
   biolumLit: 0,
   totalLight: 0.08,
+  lightVis: 0,
   lightR: 128,
   lightG: 206,
   lightB: 214,
@@ -352,7 +393,12 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
   const res = out || { ..._lightScratch };
   const dir = el.side === 'ceiling' ? 1 : -1;
   const wx = el.x;
-  const wy = el.y + dir * el.heightM * 0.55;
+  let wy = el.y + dir * el.heightM * 0.55;
+  if (el.kind === 'rock-pillar' && opts.diver && Number.isFinite(opts.diver.y)) {
+    const minY = el.y + el.heightM * 0.24;
+    const maxY = el.y + el.heightM * 0.76;
+    wy = _clamp(opts.diver.y, minY, maxY);
+  }
 
   const weather = opts.weather || null;
   const timeSec = opts.timeSec || 0;
@@ -423,10 +469,10 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
     const [shaftR, shaftG, shaftB] = _parseRgb(optic.shaftRgb, [186, 230, 253]);
 
     const haloDist = Math.hypot(wx - d.x, wy - d.y);
-    if (haloDist < 5.0) {
-      const hFrac = _smoothstep(5.0, 0.6, haloDist);
+    if (haloDist < 5.2) {
+      const hFrac = _smoothstep(5.2, 0.6, haloDist);
       const weight = hFrac * (isLocal ? 0.56 : 0.34);
-      backLit = Math.max(backLit, hFrac * (isLocal ? 0.58 : 0.32));
+      backLit = Math.max(backLit, hFrac * (isLocal ? 0.62 : 0.34));
       if (isLocal) {
         edgeOcc = Math.max(edgeOcc, _smoothstep(4.2, 0.65, haloDist));
       }
@@ -452,12 +498,12 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
       const absD = Math.abs(_wrapAngle(angToEl - beamAng));
       const rangeFalloff = Math.pow(Math.max(0, 1 - dist / maxRange), 1.25);
 
-      if (absD < 0.78) {
-        const coneSoft = _smoothstep(0.78, 0.14, absD);
-        const hotCore = _smoothstep(0.28, 0.0, absD) * 0.35;
-        const lit = Math.min(1.15, (coneSoft + hotCore) * rangeFalloff * (isLocal ? 1.05 : 0.68));
+      if (absD < 0.88) {
+        const coneSoft = _smoothstep(0.88, 0.14, absD);
+        const hotCore = _smoothstep(0.30, 0.0, absD) * 0.35;
+        const lit = Math.min(1.15, (coneSoft + hotCore) * rangeFalloff * (isLocal ? 1.08 : 0.70));
         beamLit = Math.max(beamLit, lit);
-        const w = lit * 1.6;
+        const w = lit * 1.65;
         accW += w;
         accR += (coreR * 0.65 + shaftR * 0.35) * w;
         accG += (coreG * 0.65 + shaftG * 0.35) * w;
@@ -466,12 +512,12 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
         dirY += toLy * w;
       }
 
-      if (dist < 6.2 && absD < 1.55) {
-        const prox = _smoothstep(6.2, 0.8, dist);
-        const sideWrap = _smoothstep(1.55, 0.25, absD);
-        const bl = prox * (0.38 + sideWrap * 0.62) * (isLocal ? 1.0 : 0.6);
+      if (dist < 7.8 && absD < 1.65) {
+        const prox = _smoothstep(7.8, 0.9, dist);
+        const sideWrap = _smoothstep(1.65, 0.25, absD);
+        const bl = prox * (0.42 + sideWrap * 0.58) * (isLocal ? 1.0 : 0.62);
         backLit = Math.max(backLit, bl);
-        const w = bl * 1.2;
+        const w = bl * 1.25;
         accW += w;
         accR += coreR * w;
         accG += coreG * w;
@@ -580,6 +626,9 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
     0.04,
     1.0
   );
+  // Real visibility envelope: dissolves cleanly to 0 in unlit deep caves (ZERO dark cutout stickers!)
+  const realStim = Math.max(sunLit, beamLit, backLit * 0.88, ventLit, biolumLit * 0.8, Math.max(0, ambient - 0.18) * 1.35);
+  const lightVis = _smoothstep(0.04, 0.24, realStim);
 
   const lR = Math.round(_clamp(accR / accW, 0, 255));
   const lG = Math.round(_clamp(accG / accW, 0, 255));
@@ -593,6 +642,7 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
   res.ventLit = _clamp(ventLit, 0, 1);
   res.biolumLit = _clamp(biolumLit, 0, 1);
   res.totalLight = totalLight;
+  res.lightVis = lightVis;
   res.lightR = lR;
   res.lightG = lG;
   res.lightB = lB;
@@ -604,10 +654,6 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
   return res;
 }
 
-function _rgbStr(rgb) {
-  return `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
-}
-
 function _blendWithLight(baseRgb, light, factor) {
   const k = _clamp(factor, 0, 1);
   const r = Math.round(baseRgb[0] + (light.lightR - baseRgb[0]) * k);
@@ -616,26 +662,41 @@ function _blendWithLight(baseRgb, light, factor) {
   return `${r}, ${g}, ${b}`;
 }
 
+/**
+ * Physically shade a near-plane material by scene lighting:
+ * darker & richer than mid-ground cave rock so the foreground depth layer pops unmistakably!
+ */
+function _shadeNearRgb(baseRgb, light, isNearPlane, lift = 1.0) {
+  const lit = _clamp((light.totalLight - 0.04) * 1.12 * lift, 0, 1);
+  const depthScale = isNearPlane ? 0.56 : 0.74;
+  const k = lit * depthScale;
+  const tint = _clamp((light.beamLit * 0.24 + light.ventLit * 0.30 + light.sunLit * 0.16) * lit, 0, 0.36);
+  const sr = baseRgb[0] * (1 - tint) + light.lightR * tint;
+  const sg = baseRgb[1] * (1 - tint) + light.lightG * tint;
+  const sb = baseRgb[2] * (1 - tint) + light.lightB * tint;
+  const r = Math.round(4 + (sr - 4) * k);
+  const g = Math.round(10 + (sg - 10) * k);
+  const b = Math.round(20 + (sb - 20) * k);
+  return `${_clamp(r, 0, 255)}, ${_clamp(g, 0, 255)}, ${_clamp(b, 0, 255)}`;
+}
+
+function _computeRimPower(light) {
+  const raw = Math.max(
+    light.backLit * 0.96,
+    light.beamLit * 0.92,
+    light.sunLit * 0.68,
+    light.ventLit * 0.96,
+    light.biolumLit * 0.45,
+    light.edgeOcc * 0.65
+  );
+  return _clamp((raw - 0.10) * 1.10, 0, 0.92);
+}
+
 function _applyRockPatternTransform(pattern, sx, sy) {
   if (!pattern || typeof pattern.setTransform !== 'function' || typeof DOMMatrix === 'undefined') return;
   try {
-    pattern.setTransform(new DOMMatrix().translate(sx, sy).scale(0.92, 0.92));
+    pattern.setTransform(new DOMMatrix().translate(sx, sy).scale(0.90, 0.90));
   } catch {}
-}
-
-function _strokeDropShadow(ctx, tracePath, dir, offsetPx, widthPx, alpha = 0.28) {
-  ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = `rgba(2, 6, 12, ${alpha.toFixed(3)})`;
-  ctx.lineWidth = widthPx;
-  if (typeof ctx.translate === 'function') {
-    ctx.translate(0, dir * offsetPx);
-  }
-  ctx.beginPath();
-  tracePath();
-  ctx.stroke();
-  ctx.restore();
 }
 
 function _drawCausticRibbons(ctx, sx, sy, wPx, hPx, dir, timeSec, reduced, light) {
@@ -643,16 +704,16 @@ function _drawCausticRibbons(ctx, sx, sy, wPx, hPx, dir, timeSec, reduced, light
   const phase = reduced ? 0 : timeSec * 1.85;
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  ctx.strokeStyle = `rgba(176, 248, 255, ${light.causticAlpha.toFixed(3)})`;
+  ctx.strokeStyle = `rgba(176, 248, 255, ${(light.causticAlpha * light.lightVis).toFixed(3)})`;
   ctx.lineCap = 'round';
   for (let i = 0; i < 3; i++) {
     const u = (i + 0.5) / 3;
     const wave = Math.sin(phase + i * 2.1 + sx * 0.015) * wPx * 0.14;
-    const y0 = sy + dir * hPx * (0.24 + u * 0.46);
-    ctx.lineWidth = Math.max(1.3, hPx * 0.026);
+    const y0 = sy + dir * hPx * (0.24 + u * 0.44);
+    ctx.lineWidth = Math.max(1.3, hPx * 0.025);
     ctx.beginPath();
-    ctx.moveTo(sx - wPx * 0.44 + wave, y0);
-    ctx.quadraticCurveTo(sx + wave * 0.4, y0 + dir * hPx * 0.07, sx + wPx * 0.42 + wave * 0.8, y0 - dir * hPx * 0.04);
+    ctx.moveTo(sx - wPx * 0.38 + wave, y0);
+    ctx.quadraticCurveTo(sx + wave * 0.4, y0 + dir * hPx * 0.06, sx + wPx * 0.36 + wave * 0.8, y0 - dir * hPx * 0.04);
     ctx.stroke();
   }
   ctx.restore();
@@ -664,288 +725,447 @@ function _drawStarGlint(ctx, gx, gy, rad, rgb, alpha) {
   ctx.globalCompositeOperation = 'screen';
   ctx.strokeStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
   ctx.lineCap = 'round';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.25;
   ctx.beginPath();
   ctx.moveTo(gx - rad, gy);
   ctx.lineTo(gx + rad, gy);
   ctx.moveTo(gx, gy - rad);
   ctx.lineTo(gx, gy + rad);
   ctx.stroke();
-  ctx.fillStyle = `rgba(255, 255, 255, ${(alpha * 0.88).toFixed(3)})`;
+  ctx.fillStyle = `rgba(255, 255, 255, ${(alpha * 0.90).toFixed(3)})`;
   ctx.beginPath();
-  ctx.ellipse(gx, gy, rad * 0.24, rad * 0.24, 0, 0, Math.PI * 2);
+  ctx.ellipse(gx, gy, rad * 0.22, rad * 0.22, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
 /**
- * Draw a rock-anchored formation that hugs the EXACT local cave wall slope (`wallSlope`),
- * blends seamlessly into the real rock wall with ZERO dark top cutoff seam, and casts a soft
- * water-side drop-shadow onto anything passing behind its sculpted edge!
+ * Draw a sculpted, wall-hugging rock formation that NEVER self-intersects, melts softly into the
+ * cave wall with zero sharp back edge, renders darker than mid-ground rock for crisp 3D depth,
+ * and catches a soft directional backlit rim ONLY on the exact water-facing side facing light!
  */
-function _fillRockAnchoredForm(
+function _fillWallHuggingRock(
   ctx,
   sx,
   sy,
   wPx,
   hPx,
   dir,
+  slope,
   pal,
   light,
   rockPattern,
   isNearPlane,
-  traceCrest,
-  closeWallHugBase,
+  pts,
   drawDetails = null
 ) {
+  const vis = light.lightVis;
+  if (vis < 0.02 || pts.length < 3) return;
+
   const tipY = sy + dir * hPx;
+  const wallY = (dx) => sy + dx * slope;
+  const lit = _clamp((light.totalLight - 0.04) * 1.10, 0, 1);
+  const rimPower = _computeRimPower(light);
+  const rimRgb = _blendWithLight(pal.rimRgb, light, 0.72);
+  const tuck = Math.max(8, hPx * 0.24);
 
-  // 1. Soft water-facing drop shadow (creates immediate 3D separation over the diver behind!)
-  _strokeDropShadow(ctx, traceCrest, dir, isNearPlane ? 5 : 3, isNearPlane ? 9 : 6, isNearPlane ? 0.28 : 0.20);
+  const traceCrest = () => {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) * 0.5;
+      const my = (pts[i].y + pts[i + 1].y) * 0.5;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last.x, last.y);
+  };
 
-  // 2. Main textured rock body: seamlessly uses the cave's REAL rock texture pattern!
-  ctx.beginPath();
-  traceCrest();
-  closeWallHugBase();
-  ctx.closePath();
-
-  if (rockPattern) {
-    _applyRockPatternTransform(rockPattern, sx, sy);
-    ctx.fillStyle = rockPattern;
-    ctx.fill();
-    // Gentle depth shading strictly toward the water-facing crest -> 0% opacity at the wall contact
-    // so there is ZERO visible seam where the foreground rock joins the cavern wall!
-    const glaze = ctx.createLinearGradient(sx, tipY, sx, sy);
-    glaze.addColorStop(0, `rgba(${_rgbStr(pal.rockDark)}, 0.34)`);
-    glaze.addColorStop(0.55, `rgba(${_rgbStr(pal.rockDark)}, 0.14)`);
-    glaze.addColorStop(1, `rgba(${_rgbStr(pal.rockDark)}, 0)`);
-    ctx.fillStyle = glaze;
-    ctx.fill();
-  } else {
-    const grad = ctx.createLinearGradient(sx, tipY, sx, sy);
-    grad.addColorStop(0, `rgba(${_rgbStr(pal.rockMid)}, 0.96)`);
-    grad.addColorStop(0.6, `rgba(${_rgbStr(pal.rockDark)}, 0.92)`);
-    grad.addColorStop(1, `rgba(${_rgbStr(pal.rockDark)}, 0.72)`);
-    ctx.fillStyle = grad;
-    ctx.fill();
-  }
-
-  // 3. Clipped internal rock sculpture & caustics
-  if (typeof ctx.clip === 'function') {
-    ctx.save();
-    ctx.beginPath();
+  const traceFullClosed = () => {
     traceCrest();
-    closeWallHugBase();
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    // Tuck softly behind the wall lip so the base NEVER reveals a sharp floating chord line
+    ctx.lineTo(last.x, last.y - dir * tuck);
+    ctx.lineTo(sx, sy - dir * tuck * 1.15);
+    ctx.lineTo(first.x, first.y - dir * tuck);
     ctx.closePath();
-    ctx.clip();
+  };
 
-    const gx0 = sx + light.lightDirX * wPx * 0.9;
-    const gy0 = (sy + tipY) * 0.5 + light.lightDirY * hPx * 0.65;
-    const gx1 = sx - light.lightDirX * wPx * 0.9;
-    const gy1 = (sy + tipY) * 0.5 - light.lightDirY * hPx * 0.65;
-    const hlGrad = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
-    hlGrad.addColorStop(0, `rgba(${_rgbStr(pal.rockHighlight)}, 0.28)`);
-    hlGrad.addColorStop(0.45, `rgba(${_rgbStr(pal.rockHighlight)}, 0.08)`);
-    hlGrad.addColorStop(1, 'rgba(0, 0, 0, 0.18)');
-    ctx.fillStyle = hlGrad;
-    ctx.fill();
-
-    if (drawDetails) drawDetails();
-
-    ctx.restore();
-  }
-
-  // 4. Delicate water-facing edge highlight facing the light (NEVER strokes the wall-contact base!)
-  const rx0 = sx + light.lightDirX * wPx * 0.85;
-  const rx1 = sx - light.lightDirX * wPx * 0.65;
-  const bevelGrad = ctx.createLinearGradient(rx0, tipY, rx1, sy);
-  bevelGrad.addColorStop(0, `rgba(${_rgbStr(pal.rockHighlight)}, 0.42)`);
-  bevelGrad.addColorStop(0.55, `rgba(${_rgbStr(pal.rockHighlight)}, 0.12)`);
-  bevelGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.strokeStyle = bevelGrad;
-  ctx.lineWidth = Math.max(1.1, Math.min(2.1, hPx * 0.018));
+  // 1. Soft water-facing cast shadow behind the sculpted crest (instant 3D separation!)
+  ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(2, 6, 14, ${(0.34 * vis * (isNearPlane ? 1.15 : 0.85)).toFixed(3)})`;
+  ctx.lineWidth = isNearPlane ? 14 : 9;
+  if (typeof ctx.translate === 'function') ctx.translate(0, dir * (isNearPlane ? 6 : 4));
   ctx.beginPath();
   traceCrest();
   ctx.stroke();
+  ctx.restore();
+
+  // 2. Main sculpted rock body (gradient fades to 0 alpha across the wall-tuck zone so it melts into rock!)
+  const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.96);
+  const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.82);
+
+  ctx.beginPath();
+  traceFullClosed();
+  const bodyGrad = ctx.createLinearGradient(sx, tipY, sx, sy - dir * tuck);
+  bodyGrad.addColorStop(0, `rgba(${rockMidShaded}, ${(0.96 * vis).toFixed(3)})`);
+  bodyGrad.addColorStop(0.58, `rgba(${rockDarkShaded}, ${(0.94 * vis).toFixed(3)})`);
+  bodyGrad.addColorStop(0.84, `rgba(${rockDarkShaded}, ${(0.62 * vis).toFixed(3)})`);
+  bodyGrad.addColorStop(1, `rgba(${rockDarkShaded}, 0)`);
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  // 3. Clipped sculptural near-plane rock strata + directional inner-edge light bounce
+  // (All internal layers fade smoothly to 0% alpha before the wall-tuck edge so zero hard polygon seams ever appear on dark cave rock!)
+  if (typeof ctx.clip === 'function') {
+    ctx.save();
+    ctx.beginPath();
+    traceFullClosed();
+    ctx.clip();
+
+    // Sculpted crest depth bevel: subtle lighter mineral catch near the water-facing edge fading to 0 before the back wall
+    if (lit > 0.12) {
+      const rockHiShaded = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 0.88);
+      const bevelGrad = ctx.createLinearGradient(sx, tipY, sx, sy + dir * hPx * 0.22);
+      bevelGrad.addColorStop(0, `rgba(${rockHiShaded}, ${(0.26 * lit * vis).toFixed(3)})`);
+      bevelGrad.addColorStop(0.55, `rgba(${rockHiShaded}, ${(0.08 * lit * vis).toFixed(3)})`);
+      bevelGrad.addColorStop(1, `rgba(${rockHiShaded}, 0)`);
+      ctx.fillStyle = bevelGrad;
+      ctx.fill();
+    }
+
+    if (drawDetails) drawDetails();
+
+    if (rimPower > 0.08) {
+      const gx0 = sx + light.lightDirX * wPx * 0.60;
+      const gy0 = tipY;
+      const gx1 = sx - light.lightDirX * wPx * 0.45;
+      const gy1 = sy + dir * hPx * 0.14;
+      const hlGrad = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+      hlGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.26 * vis).toFixed(3)})`);
+      hlGrad.addColorStop(0.45, `rgba(${rimRgb}, ${(rimPower * 0.07 * vis).toFixed(3)})`);
+      hlGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = hlGrad;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 4. Soft, localized directional backlit Fresnel rim strictly on the light-facing water crest (NEVER a wireframe outline!)
+  if (rimPower > 0.07) {
+    const focusX = sx + light.lightDirX * wPx * 0.34;
+    const focusY = wallY(light.lightDirX * wPx * 0.34) + dir * hPx * 0.82;
+    const rad = Math.max(26, wPx * 0.68);
+    let rimStroke = `rgba(${rimRgb}, ${(rimPower * 0.52 * vis).toFixed(3)})`;
+    if (typeof ctx.createRadialGradient === 'function') {
+      const rg = ctx.createRadialGradient(focusX, focusY, 2, focusX, focusY, rad);
+      rg.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.72 * vis).toFixed(3)})`);
+      rg.addColorStop(0.55, `rgba(${rimRgb}, ${(rimPower * 0.28 * vis).toFixed(3)})`);
+      rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      rimStroke = rg;
+    }
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = rimStroke;
+    ctx.lineWidth = Math.max(1.5, Math.min(2.6, hPx * 0.022));
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    traceCrest();
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 /**
- * PASS 1 (Pre-Lighting): Draw rich, wall-hugging, biome-crafted foreground formations
- * ON TOP of the diver and INSIDE the real lighting pipeline!
+ * Render each sculpted, biome-authentic near-plane foreground element.
  */
 function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced, rockPattern) {
+  const vis = light.lightVis;
+  if (vis < 0.02) return;
+
   const leanPx = el.lean * wPx;
   const slope = Number.isFinite(el.wallSlope) ? el.wallSlope : 0;
   const wallY = (dx) => sy + dx * slope;
   const isNearPlane = el.depthLayer === 'near';
+  const lit = _clamp((light.totalLight - 0.04) * 1.10, 0, 1);
+  const rimPower = _computeRimPower(light);
+  const rimRgb = _blendWithLight(pal.rimRgb, light, 0.72);
+  const sssRgb = _blendWithLight(pal.sssRgb, light, 0.56);
 
   switch (el.kind) {
-    case 'cenote-roots': {
-      // Organic gnarled mahogany cenote mangrove & strangler-fig root curtain hugging the sloping ceiling!
-      const rootDark = '34, 22, 14';
-      const rootMid = _rgbStr(pal.rustRgb);
-      const rootHl = '118, 86, 56';
-
-      // Soft mossy root pads tucked right along the sloping ceiling rock
-      for (let m = -1; m <= 1; m++) {
-        const mdx = m * wPx * 0.24;
-        ctx.fillStyle = `rgba(${_rgbStr(m === 0 ? pal.floraDark : pal.mossRgb)}, ${m === 0 ? 0.72 : 0.48})`;
-        ctx.beginPath();
-        ctx.ellipse(sx + mdx, wallY(mdx) + 2, wPx * (m === 0 ? 0.28 : 0.18), Math.max(3.5, hPx * 0.065), Math.atan(slope), 0, Math.PI * 2);
-        ctx.fill();
+    case 'rock-pillar': {
+      // Sculpted near-camera cave column / stalactite-stalagmite arch pillar crossing the foreground plane!
+      // Slender organic waist in the swim lane so the diver visibly glides right BEHIND it while
+      // fins & torch cone emerge cleanly on both sides with backlit Fresnel rim light!
+      // Top & bottom roots fade smoothly to 0% alpha into the ceiling & floor rock (ZERO flat seams or dot caps!).
+      const rootTuck = Math.max(24, hPx * 0.14);
+      const topY = sy - rootTuck;
+      const botY = sy + hPx + rootTuck;
+      const span = Math.max(48, botY - topY);
+      const steps = 10;
+      const leftPts = [];
+      const rightPts = [];
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const flare = Math.pow(Math.abs(t - 0.5) * 2, 2.1); // broad at ceiling & floor, slender in swim lane
+        const halfW = wPx * (0.34 + flare * 0.72);
+        const curveX = Math.sin(t * Math.PI) * leanPx * 1.4;
+        const nL = Math.sin(t * 9.5 + el.seed * 1.3) * wPx * 0.075;
+        const nR = Math.cos(t * 8.2 + el.seed * 2.1) * wPx * 0.075;
+        const py = topY + span * t;
+        leftPts.push({ x: sx + curveX - halfW + nL, y: py });
+        rightPts.push({ x: sx + curveX + halfW + nR, y: py });
       }
 
-      const strands = el.subCount + 3;
-      ctx.lineCap = 'round';
-      for (let i = 0; i < strands; i++) {
-        const u = strands === 1 ? 0 : i / (strands - 1) - 0.5;
-        const jitter = (_hash01(el.seed + i * 17.3) - 0.5) * 0.24;
-        const frac = u + jitter;
-        const isHair = i % 2 === 1;
-        const dx0 = frac * wPx * 0.90;
-        const bx = sx + dx0;
-        const by = wallY(dx0);
-        const archOut = frac * wPx * (0.34 + _hash01(el.seed + i * 9.1) * 0.22);
-        const len = hPx * (isHair ? 0.55 + _hash01(el.seed + i * 31) * 0.44 : 0.68 + _hash01(el.seed + i * 13) * 0.38);
-        const sw = swayPx * (isHair ? 1.25 : 0.68 + (i % 3) * 0.22);
-        const topW = Math.max(isHair ? 1.3 : 3.8, wPx * (isHair ? 0.028 : 0.078 - Math.abs(u) * 0.02));
+      const traceLeft = () => {
+        ctx.moveTo(leftPts[0].x, leftPts[0].y);
+        for (let i = 1; i < steps; i++) {
+          const mx = (leftPts[i].x + leftPts[i + 1].x) * 0.5;
+          const my = (leftPts[i].y + leftPts[i + 1].y) * 0.5;
+          ctx.quadraticCurveTo(leftPts[i].x, leftPts[i].y, mx, my);
+        }
+        ctx.lineTo(leftPts[steps].x, leftPts[steps].y);
+      };
+      const traceRight = () => {
+        ctx.moveTo(rightPts[0].x, rightPts[0].y);
+        for (let i = 1; i < steps; i++) {
+          const mx = (rightPts[i].x + rightPts[i + 1].x) * 0.5;
+          const my = (rightPts[i].y + rightPts[i + 1].y) * 0.5;
+          ctx.quadraticCurveTo(rightPts[i].x, rightPts[i].y, mx, my);
+        }
+        ctx.lineTo(rightPts[steps].x, rightPts[steps].y);
+      };
+      const tracePillarClosed = () => {
+        traceLeft();
+        ctx.lineTo(rightPts[steps].x, rightPts[steps].y);
+        for (let i = steps - 1; i >= 1; i--) {
+          const mx = (rightPts[i].x + rightPts[i - 1].x) * 0.5;
+          const my = (rightPts[i].y + rightPts[i - 1].y) * 0.5;
+          ctx.quadraticCurveTo(rightPts[i].x, rightPts[i].y, mx, my);
+        }
+        ctx.lineTo(rightPts[0].x, rightPts[0].y);
+        ctx.closePath();
+      };
 
-        const c1x = bx + archOut * 0.65 + leanPx * 0.3 + sw * 0.28;
-        const c1y = by + len * 0.34;
-        const c2x = bx + archOut * 0.35 + leanPx * 0.72 + sw * 0.68 - Math.sign(frac || 1) * wPx * 0.08;
-        const c2y = by + len * 0.68;
-        const tipX = bx + archOut * 0.55 + leanPx + sw;
-        const tipY = by + len;
+      // 1. Soft depth drop-shadow behind both flanks, fading smoothly to 0% at ceiling & floor roots (butt caps = zero dots!)
+      ctx.save();
+      const shadowGrad = ctx.createLinearGradient(sx, topY, sx, botY);
+      shadowGrad.addColorStop(0, 'rgba(2, 6, 14, 0)');
+      shadowGrad.addColorStop(0.20, `rgba(2, 6, 14, ${(0.36 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(0.80, `rgba(2, 6, 14, ${(0.36 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(1, 'rgba(2, 6, 14, 0)');
+      ctx.strokeStyle = shadowGrad;
+      ctx.lineWidth = isNearPlane ? 16 : 10;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      traceLeft();
+      traceRight();
+      ctx.stroke();
+      ctx.restore();
 
-        if (isHair) {
-          const hg = ctx.createLinearGradient(bx, by, tipX, tipY);
-          hg.addColorStop(0, `rgba(${rootMid}, 0.88)`);
-          hg.addColorStop(0.75, `rgba(${rootMid}, 0.74)`);
-          hg.addColorStop(1, `rgba(${rootMid}, 0.14)`);
-          ctx.strokeStyle = hg;
-          ctx.lineWidth = topW;
-          ctx.beginPath();
-          ctx.moveTo(bx, by);
-          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
-          ctx.stroke();
-        } else {
-          ctx.strokeStyle = 'rgba(2, 6, 10, 0.26)';
-          ctx.lineWidth = topW * 1.6;
-          ctx.beginPath();
-          ctx.moveTo(bx, by + 2);
-          ctx.bezierCurveTo(c1x, c1y + 2, c2x, c2y + 2, tipX, tipY + 2);
-          ctx.stroke();
+      // 2. Solid near-plane rock pillar core — 99% opaque across the open swim corridor, melting to 0% alpha into ceiling & floor!
+      const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.98);
+      const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.76);
+      const litRight = light.lightDirX >= 0;
+      const bodyGrad = ctx.createLinearGradient(sx, topY, sx, botY);
+      bodyGrad.addColorStop(0, `rgba(${rockDarkShaded}, 0)`);
+      bodyGrad.addColorStop(0.18, `rgba(${rockDarkShaded}, ${(0.98 * vis).toFixed(3)})`);
+      bodyGrad.addColorStop(0.50, `rgba(${rockDarkShaded}, ${(0.99 * vis).toFixed(3)})`);
+      bodyGrad.addColorStop(0.82, `rgba(${rockDarkShaded}, ${(0.98 * vis).toFixed(3)})`);
+      bodyGrad.addColorStop(1, `rgba(${rockDarkShaded}, 0)`);
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      tracePillarClosed();
+      ctx.fill();
 
-          const tg = ctx.createLinearGradient(bx, by, tipX, tipY);
-          tg.addColorStop(0, `rgba(${rootDark}, 0.98)`);
-          tg.addColorStop(0.45, `rgba(${rootMid}, 0.96)`);
-          tg.addColorStop(0.85, `rgba(${rootMid}, 0.88)`);
-          tg.addColorStop(1, `rgba(${rootDark}, 0.22)`);
-          ctx.fillStyle = tg;
-          ctx.beginPath();
-          ctx.moveTo(bx - topW * 0.72, by - 2);
-          ctx.bezierCurveTo(c1x - topW * 0.44, c1y, c2x - topW * 0.24, c2y, tipX, tipY);
-          ctx.bezierCurveTo(c2x + topW * 0.24, c2y, c1x + topW * 0.44, c1y, bx + topW * 0.72, by - 2);
-          ctx.closePath();
+      // 3. Clipped directional torch-lit mineral volume + organic karst vertical flutes (all fading to 0% before roots!)
+      const focusY = sy + hPx * _clamp(0.50 + light.lightDirY * 0.22, 0.28, 0.72);
+      if (typeof ctx.clip === 'function') {
+        ctx.save();
+        ctx.beginPath();
+        tracePillarClosed();
+        ctx.clip();
+
+        if (lit > 0.10 && typeof ctx.createRadialGradient === 'function') {
+          const flankX = sx + (litRight ? wPx * 0.36 : -wPx * 0.36);
+          const volRad = Math.min(span * 0.42, Math.max(wPx * 1.55, hPx * 0.46));
+          const volGrad = ctx.createRadialGradient(flankX, focusY, 2, flankX, focusY, volRad);
+          volGrad.addColorStop(0, `rgba(${rockMidShaded}, ${(0.88 * vis).toFixed(3)})`);
+          volGrad.addColorStop(0.55, `rgba(${rockMidShaded}, ${(0.34 * vis).toFixed(3)})`);
+          volGrad.addColorStop(1, `rgba(${rockMidShaded}, 0)`);
+          ctx.fillStyle = volGrad;
           ctx.fill();
+        }
 
-          const hlSign = light.lightDirX >= 0 ? 1 : -1;
-          ctx.strokeStyle = `rgba(${rootHl}, 0.44)`;
-          ctx.lineWidth = Math.max(1.0, topW * 0.22);
+        // Subtle karst vertical grooves / volcanic ember crack — vertical fade to 0 at both roots
+        const grooveRgb = el.biome === 'volcanic'
+          ? '255, 118, 42'
+          : _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 0.92);
+        const grooveA = el.biome === 'volcanic'
+          ? Math.max(light.ventLit * 0.85, lit * 0.42) * vis
+          : 0.24 * lit * vis;
+        if (grooveA > 0.03) {
+          const gGrad = ctx.createLinearGradient(sx, topY + span * 0.16, sx, botY - span * 0.16);
+          gGrad.addColorStop(0, `rgba(${grooveRgb}, 0)`);
+          gGrad.addColorStop(0.32, `rgba(${grooveRgb}, ${grooveA.toFixed(3)})`);
+          gGrad.addColorStop(0.68, `rgba(${grooveRgb}, ${grooveA.toFixed(3)})`);
+          gGrad.addColorStop(1, `rgba(${grooveRgb}, 0)`);
+          ctx.strokeStyle = gGrad;
+          ctx.lineWidth = el.biome === 'volcanic' ? 1.6 : 1.2;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(bx + hlSign * topW * 0.34, by);
-          ctx.bezierCurveTo(c1x + hlSign * topW * 0.22, c1y, c2x + hlSign * topW * 0.12, c2y, tipX, tipY);
-          ctx.stroke();
-
-          const fSign = frac >= 0 ? 1 : -1;
-          const fx0 = c1x * 0.55 + c2x * 0.45;
-          const fy0 = c1y * 0.55 + c2y * 0.45;
-          const fTipX = fx0 + fSign * wPx * 0.26 + sw * 0.85;
-          const fTipY = fy0 + len * 0.34;
-          ctx.strokeStyle = `rgba(${rootMid}, 0.82)`;
-          ctx.lineWidth = Math.max(1.2, topW * 0.32);
-          ctx.beginPath();
-          ctx.moveTo(fx0, fy0);
-          ctx.quadraticCurveTo(fx0 + fSign * wPx * 0.18, fy0 + len * 0.14, fTipX, fTipY);
+          ctx.moveTo(sx - wPx * 0.08, topY + span * 0.18);
+          ctx.quadraticCurveTo(sx + leanPx * 0.8, sy + hPx * 0.5, sx + wPx * 0.06, botY - span * 0.18);
           ctx.stroke();
         }
+
+        ctx.restore();
+      }
+
+      // 4. Crisp localized directional backlit Fresnel rim along the vertical pillar edge facing the light!
+      if (rimPower > 0.07) {
+        const focusX = sx + (litRight ? wPx * 0.36 : -wPx * 0.36);
+        const rad = Math.min(span * 0.38, Math.max(46, hPx * 0.44));
+        let rimStroke = `rgba(${rimRgb}, ${(rimPower * 0.65 * vis).toFixed(3)})`;
+        if (typeof ctx.createRadialGradient === 'function') {
+          const rg = ctx.createRadialGradient(focusX, focusY, 3, focusX, focusY, rad);
+          rg.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.92 * vis).toFixed(3)})`);
+          rg.addColorStop(0.55, `rgba(${rimRgb}, ${(rimPower * 0.36 * vis).toFixed(3)})`);
+          rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          rimStroke = rg;
+        }
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.strokeStyle = rimStroke;
+        ctx.lineWidth = Math.max(1.8, Math.min(3.2, wPx * 0.05));
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        if (litRight) traceRight();
+        else traceLeft();
+        ctx.stroke();
+        ctx.restore();
       }
       break;
     }
 
-    case 'kelp-fronds': {
-      // Lush asymmetric giant kelp stalks rooted right along the sloping floor edge,
-      // with staggered ruffled leaf blades & golden-olive air bladders!
-      const stalkDark = _rgbStr(pal.floraDark);
-      const leafMid = _rgbStr(pal.floraMid);
-      const leafLit = _rgbStr(pal.mossRgb);
+    case 'cenote-roots': {
+      // Painterly, delicate hanging cenote mangrove root veil & wispy aerial tendrils
+      // (zero sausage drop shadows, zero flat green oval pancakes — pure organic cenote atmosphere!)
+      const rootDark = _shadeNearRgb([30, 19, 12], light, isNearPlane, 0.90);
+      const rootMid = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.08);
+      const leafCol = _shadeNearRgb(pal.mossRgb, light, isNearPlane, 1.05);
 
-      const stalks = el.subCount + 1;
+      const strands = el.subCount + 5;
       ctx.lineCap = 'round';
-      for (let i = 0; i < stalks; i++) {
-        const u = stalks === 1 ? 0 : i / (stalks - 1) - 0.5;
-        const jitter = (_hash01(el.seed + i * 21.7) - 0.5) * 0.22;
-        const frac = u + jitter;
-        const dx0 = frac * wPx * 0.82;
+      for (let i = 0; i < strands; i++) {
+        const u = strands <= 1 ? 0 : i / (strands - 1) - 0.5;
+        const j = (_hash01(el.seed + i * 17.3) - 0.5) * 0.18;
+        const frac = u + j;
+        const isFine = i % 3 !== 0;
+        const dx0 = frac * wPx * 0.96;
         const bx = sx + dx0;
-        const by = wallY(dx0);
-        const len = hPx * (0.58 + _hash01(el.seed + i * 11.3) * 0.46);
-        const archX = (frac * 0.48 + el.lean * 0.9) * wPx;
-        const sw = swayPx * (0.78 + (i % 3) * 0.28);
+        const by = wallY(dx0) - 6; // tucked slightly up into ceiling rock
+        const archOut = (frac * 0.28 + (_hash01(el.seed + i * 9.1) - 0.5) * 0.22) * wPx;
+        const len = hPx * (isFine ? 0.50 + _hash01(el.seed + i * 31) * 0.52 : 0.72 + _hash01(el.seed + i * 13) * 0.34);
+        const sw = swayPx * (isFine ? 1.35 : 0.65 + (i % 3) * 0.20);
+        const baseW = Math.max(isFine ? 1.0 : 3.2, wPx * (isFine ? 0.015 : 0.048 - Math.abs(u) * 0.014));
 
-        const c1x = bx + archX * 0.32 + sw * 0.32;
-        const c1y = by - len * 0.36;
-        const c2x = bx + archX * 0.78 + sw * 0.72;
-        const c2y = by - len * 0.72;
-        const tipX = bx + archX + sw;
-        const tipY = by - len;
+        const c1x = bx + archOut * 0.55 + leanPx * 0.25 + sw * 0.26;
+        const c1y = by + len * 0.36;
+        const c2x = bx + archOut * 0.30 + leanPx * 0.65 + sw * 0.70 - Math.sign(frac || 1) * wPx * 0.06;
+        const c2y = by + len * 0.72;
+        const tipX = bx + archOut * 0.45 + leanPx * 0.85 + sw;
+        const tipY = by + len;
 
-        // Tiny root holdfast knot right on the rock surface
-        ctx.fillStyle = `rgba(${stalkDark}, 0.85)`;
-        ctx.beginPath();
-        ctx.ellipse(bx, by, 4.5, 2.4, Math.atan(slope), 0, Math.PI * 2);
-        ctx.fill();
-
-        // Flexible kelp stipe
-        ctx.strokeStyle = `rgba(${stalkDark}, 0.94)`;
-        ctx.lineWidth = Math.max(2.0, wPx * 0.032);
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
-        ctx.stroke();
-
-        // Alternating ruffled kelp blades
-        const leafCount = 5 + (i % 3);
-        for (let l = 1; l <= leafCount; l++) {
-          const lt = l / (leafCount + 0.5);
-          const inv = 1 - lt;
-          const lx = inv * inv * inv * bx + 3 * inv * inv * lt * c1x + 3 * inv * lt * lt * c2x + lt * lt * lt * tipX;
-          const ly = inv * inv * inv * by + 3 * inv * inv * lt * c1y + 3 * inv * lt * lt * c2y + lt * lt * lt * tipY;
-          const side = (l + i) % 2 === 0 ? 1 : -1;
-          const leafLen = Math.max(12, wPx * (0.28 - lt * 0.10) * (0.82 + ((l * 17) % 5) * 0.08));
-          const leafW = Math.max(4.5, leafLen * 0.28);
-          const droopY = ly - leafLen * (0.35 + lt * 0.22);
-          const endX = lx + side * leafLen * 0.86 + sw * lt * 0.45;
-          const endY = droopY - side * leafLen * 0.08;
-
-          const lg = ctx.createLinearGradient(lx, ly, endX, endY);
-          lg.addColorStop(0, `rgba(${stalkDark}, 0.92)`);
-          lg.addColorStop(0.55, `rgba(${leafMid}, 0.88)`);
-          lg.addColorStop(1, `rgba(${leafLit}, 0.76)`);
-          ctx.fillStyle = lg;
+        if (isFine) {
+          // Hair-fine dangling aerial rootlet fading delicately to water
+          const hg = ctx.createLinearGradient(bx, by, tipX, tipY);
+          hg.addColorStop(0, `rgba(${rootDark}, ${(0.82 * vis).toFixed(3)})`);
+          hg.addColorStop(0.55, `rgba(${rootMid}, ${(0.70 * vis).toFixed(3)})`);
+          hg.addColorStop(1, `rgba(${rootMid}, 0)`);
+          ctx.strokeStyle = hg;
+          ctx.lineWidth = baseW;
           ctx.beginPath();
-          ctx.moveTo(lx, ly);
-          ctx.quadraticCurveTo(lx + side * leafLen * 0.46, ly - leafW * 1.15, endX, endY);
-          ctx.quadraticCurveTo(lx + side * leafLen * 0.48, ly + leafW * 0.65, lx, ly);
+          ctx.moveTo(bx, by);
+          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
+          ctx.stroke();
+
+          if (rimPower > 0.12 && i % 2 === 0) {
+            const rg = ctx.createLinearGradient(tipX, tipY, bx, by);
+            rg.addColorStop(0, `rgba(${rimRgb}, 0)`);
+            rg.addColorStop(0.35, `rgba(${rimRgb}, ${(rimPower * 0.42 * vis).toFixed(3)})`);
+            rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.strokeStyle = rg;
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(bx + 0.8, by);
+            ctx.bezierCurveTo(c1x + 0.8, c1y, c2x + 0.8, c2y, tipX + 0.8, tipY);
+            ctx.stroke();
+            ctx.restore();
+          }
+        } else {
+          // Tapered organic main mangrove root trunk
+          const tg = ctx.createLinearGradient(bx, by, tipX, tipY);
+          tg.addColorStop(0, `rgba(${rootDark}, ${(0.94 * vis).toFixed(3)})`);
+          tg.addColorStop(0.45, `rgba(${rootMid}, ${(0.90 * vis).toFixed(3)})`);
+          tg.addColorStop(0.84, `rgba(${rootDark}, ${(0.68 * vis).toFixed(3)})`);
+          tg.addColorStop(1, `rgba(${rootDark}, 0)`);
+          ctx.fillStyle = tg;
+          ctx.beginPath();
+          ctx.moveTo(bx - baseW * 0.75, by);
+          ctx.bezierCurveTo(c1x - baseW * 0.40, c1y, c2x - baseW * 0.18, c2y, tipX, tipY);
+          ctx.bezierCurveTo(c2x + baseW * 0.18, c2y, c1x + baseW * 0.40, c1y, bx + baseW * 0.75, by);
           ctx.closePath();
           ctx.fill();
 
-          if (l % 2 === 1) {
-            ctx.fillStyle = `rgba(${leafLit}, 0.88)`;
+          // Delicate backlit rim on the light-facing edge
+          if (rimPower > 0.08) {
+            const hlSign = light.lightDirX >= 0 ? 1 : -1;
+            const rg = ctx.createLinearGradient(tipX, tipY, bx, by);
+            rg.addColorStop(0, `rgba(${rimRgb}, 0)`);
+            rg.addColorStop(0.28, `rgba(${rimRgb}, ${(rimPower * 0.56 * vis).toFixed(3)})`);
+            rg.addColorStop(0.75, `rgba(${sssRgb}, ${(rimPower * 0.24 * vis).toFixed(3)})`);
+            rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.strokeStyle = rg;
+            ctx.lineWidth = Math.max(1.0, baseW * 0.22);
             ctx.beginPath();
-            ctx.ellipse(lx + side * 2.4, ly - 1.5, 2.2, 1.7, side * 0.3, 0, Math.PI * 2);
+            ctx.moveTo(bx + hlSign * baseW * 0.42, by);
+            ctx.bezierCurveTo(c1x + hlSign * baseW * 0.24, c1y, c2x + hlSign * baseW * 0.12, c2y, tipX, tipY);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Two organic forked rootlet wisps
+          for (const fSign of [-1, 1]) {
+            const fT = fSign < 0 ? 0.42 : 0.62;
+            const inv = 1 - fT;
+            const fx0 = inv * inv * inv * bx + 3 * inv * inv * fT * c1x + 3 * inv * fT * fT * c2x + fT * fT * fT * tipX;
+            const fy0 = inv * inv * inv * by + 3 * inv * inv * fT * c1y + 3 * inv * fT * fT * c2y + fT * fT * fT * tipY;
+            const fTipX = fx0 + fSign * wPx * 0.18 + sw * 0.9;
+            const fTipY = fy0 + len * 0.30;
+            const fg = ctx.createLinearGradient(fx0, fy0, fTipX, fTipY);
+            fg.addColorStop(0, `rgba(${rootMid}, ${(0.78 * vis).toFixed(3)})`);
+            fg.addColorStop(1, `rgba(${rootDark}, 0)`);
+            ctx.strokeStyle = fg;
+            ctx.lineWidth = Math.max(0.9, baseW * 0.26);
+            ctx.beginPath();
+            ctx.moveTo(fx0, fy0);
+            ctx.quadraticCurveTo(fx0 + fSign * wPx * 0.11, fy0 + len * 0.13, fTipX, fTipY);
+            ctx.stroke();
+          }
+
+          // Subtle small water-moss leaf cluster near ceiling root crown
+          if (el.y < 18) {
+            ctx.fillStyle = `rgba(${leafCol}, ${(0.64 * vis).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.ellipse(bx + leanPx * 0.08, by + 10, baseW * 1.15, baseW * 0.55, 0.35, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -953,13 +1173,111 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       break;
     }
 
+    case 'kelp-fronds': {
+      // Painterly undulating translucent sea-kelp ribbons (fluid S-curved underwater ribbons, NOT stiff fern sticks!)
+      const stalkDark = _shadeNearRgb(pal.floraDark, light, isNearPlane, 0.88);
+      const bladeMid = _shadeNearRgb(pal.floraMid, light, isNearPlane, 1.06);
+      const bladeLit = _shadeNearRgb(pal.mossRgb, light, isNearPlane, 1.22);
+
+      const ribbons = el.subCount + 3;
+      for (let i = 0; i < ribbons; i++) {
+        const u = ribbons <= 1 ? 0 : i / (ribbons - 1) - 0.5;
+        const j = (_hash01(el.seed + i * 21.7) - 0.5) * 0.16;
+        const frac = u + j;
+        const dx0 = frac * wPx * 0.82;
+        const bx = sx + dx0;
+        const by = wallY(dx0) + 5; // tucked gently into floor rock
+        const hMul = 0.56 + (1 - Math.abs(u) * 1.1) * 0.34 + _hash01(el.seed + i * 11.3) * 0.22;
+        const len = hPx * hMul;
+        const ribbonW = Math.max(5.5, wPx * (0.085 + _hash01(el.seed + i * 7.7) * 0.045));
+        const wavePh = el.phase + i * 1.45 + (reduced ? 0 : timeSec * 1.35);
+        const lean = (frac * 0.35 + el.lean * 0.8) * wPx;
+        const sw = swayPx * (0.75 + (i % 3) * 0.25);
+
+        // Build smooth undulating left & right ribbon edges
+        const segs = 7;
+        const leftPts = [];
+        const rightPts = [];
+        for (let s = 0; s <= segs; s++) {
+          const t = s / segs;
+          const taper = Math.sin(Math.pow(t, 0.72) * Math.PI * 0.94); // slender holdfast -> full undulating blade -> tapered tip
+          const halfW = Math.max(0.8, ribbonW * (0.28 + 0.72 * taper));
+          const wave = Math.sin(wavePh + t * 3.8) * ribbonW * (0.45 + t * 0.95);
+          const cx = bx + lean * t * t + sw * t * t + wave;
+          const cy = by - len * t;
+          const ruffle = Math.sin(t * 14.0 + i * 2.3) * ribbonW * 0.16 * taper;
+          leftPts.push({ x: cx - halfW + ruffle, y: cy });
+          rightPts.push({ x: cx + halfW + ruffle, y: cy });
+        }
+
+        const tip = leftPts[segs];
+        const bg = ctx.createLinearGradient(bx, by, tip.x, tip.y);
+        bg.addColorStop(0, `rgba(${stalkDark}, ${(0.97 * vis).toFixed(3)})`);
+        bg.addColorStop(0.48, `rgba(${bladeMid}, ${(0.94 * vis).toFixed(3)})`);
+        bg.addColorStop(0.88, `rgba(${bladeLit}, ${(0.88 * vis).toFixed(3)})`);
+        bg.addColorStop(1, `rgba(${bladeLit}, ${(0.55 * vis).toFixed(3)})`);
+        ctx.fillStyle = bg;
+
+        ctx.beginPath();
+        ctx.moveTo(leftPts[0].x, leftPts[0].y);
+        for (let s = 1; s < segs; s++) {
+          const mx = (leftPts[s].x + leftPts[s + 1].x) * 0.5;
+          const my = (leftPts[s].y + leftPts[s + 1].y) * 0.5;
+          ctx.quadraticCurveTo(leftPts[s].x, leftPts[s].y, mx, my);
+        }
+        ctx.lineTo(tip.x, tip.y);
+        for (let s = segs - 1; s >= 1; s--) {
+          const mx = (rightPts[s].x + rightPts[s - 1].x) * 0.5;
+          const my = (rightPts[s].y + rightPts[s - 1].y) * 0.5;
+          ctx.quadraticCurveTo(rightPts[s].x, rightPts[s].y, mx, my);
+        }
+        ctx.lineTo(rightPts[0].x, rightPts[0].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Subtle central midrib vein
+        ctx.strokeStyle = `rgba(${stalkDark}, ${(0.55 * vis).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.0, ribbonW * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        for (let s = 1; s <= segs; s++) {
+          ctx.lineTo((leftPts[s].x + rightPts[s].x) * 0.5, leftPts[s].y);
+        }
+        ctx.stroke();
+
+        // Translucent glowing backlit leaf edge strictly on the light-facing margin!
+        if (rimPower > 0.08) {
+          const edgePts = light.lightDirX >= 0 ? rightPts : leftPts;
+          const eg = ctx.createLinearGradient(tip.x, tip.y, bx, by);
+          eg.addColorStop(0, `rgba(${sssRgb}, ${(rimPower * 0.68 * vis).toFixed(3)})`);
+          eg.addColorStop(0.65, `rgba(${sssRgb}, ${(rimPower * 0.28 * vis).toFixed(3)})`);
+          eg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = eg;
+          ctx.lineWidth = 1.35;
+          ctx.beginPath();
+          ctx.moveTo(edgePts[0].x, edgePts[0].y);
+          for (let s = 1; s < segs; s++) {
+            const mx = (edgePts[s].x + edgePts[s + 1].x) * 0.5;
+            const my = (edgePts[s].y + edgePts[s + 1].y) * 0.5;
+            ctx.quadraticCurveTo(edgePts[s].x, edgePts[s].y, mx, my);
+          }
+          ctx.lineTo(edgePts[segs].x, edgePts[segs].y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      break;
+    }
+
     case 'wreck-chain': {
-      const links = Math.max(4, Math.min(10, Math.round(hPx / Math.max(10, wPx * 0.18))));
+      const links = Math.max(4, Math.min(10, Math.round(hPx / Math.max(12, wPx * 0.19))));
       const linkH = hPx / links;
-      const linkW = Math.max(5.5, wPx * 0.17);
-      const steelDark = _rgbStr(pal.rockDark);
-      const steelMid = _rgbStr(pal.rockMid);
-      const rustStr = _rgbStr(pal.rustRgb);
+      const linkW = Math.max(6.0, wPx * 0.16);
+      const steelDark = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.86);
+      const steelMid = _shadeNearRgb(pal.rockMid, light, isNearPlane, 1.0);
+      const rustStr = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.05);
 
       for (let i = 0; i < links; i++) {
         const u = (i + 0.5) / links;
@@ -969,51 +1287,61 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const rx = isBroad ? linkW * 0.56 : linkW * 0.25;
         const ry = linkH * 0.60;
 
-        ctx.strokeStyle = 'rgba(2, 6, 12, 0.34)';
-        ctx.lineWidth = Math.max(5.0, linkW * 0.52);
+        ctx.strokeStyle = `rgba(2, 6, 12, ${(0.34 * vis).toFixed(3)})`;
+        ctx.lineWidth = Math.max(5.0, linkW * 0.50);
         ctx.beginPath();
-        ctx.ellipse(lx + 1.5, ly + dir * 2, rx, ry, 0, 0, Math.PI * 2);
+        ctx.ellipse(lx + 2, ly + dir * 2, rx, ry, 0, 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.strokeStyle = `rgba(${i % 3 === 0 ? rustStr : steelMid}, 0.96)`;
-        ctx.lineWidth = Math.max(2.8, linkW * 0.32);
+        ctx.strokeStyle = `rgba(${i % 3 === 0 ? rustStr : steelMid}, ${(0.95 * vis).toFixed(3)})`;
+        ctx.lineWidth = Math.max(3.0, linkW * 0.32);
         ctx.beginPath();
         ctx.ellipse(lx, ly, rx, ry, 0, 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.strokeStyle = `rgba(${steelDark}, 0.72)`;
+        ctx.strokeStyle = `rgba(${steelDark}, ${(0.72 * vis).toFixed(3)})`;
         ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.ellipse(lx, ly, Math.max(1, rx - 1.4), Math.max(1, ry - 1.4), 0, 0, Math.PI * 2);
         ctx.stroke();
 
         if (isBroad) {
-          ctx.strokeStyle = `rgba(${steelMid}, 0.95)`;
+          ctx.strokeStyle = `rgba(${steelMid}, ${(0.92 * vis).toFixed(3)})`;
           ctx.lineWidth = Math.max(2.0, linkW * 0.22);
           ctx.beginPath();
           ctx.moveTo(lx - rx * 0.8, ly);
           ctx.lineTo(lx + rx * 0.8, ly);
           ctx.stroke();
         }
+
+        if (rimPower > 0.10) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * 0.50 * vis).toFixed(3)})`;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.ellipse(lx + (light.lightDirX >= 0 ? 1.1 : -1.1), ly, rx * 0.90, ry * 0.90, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
       break;
     }
 
     case 'wreck-girder': {
-      // Riveted steel shipwreck hull rib with TRUE hollow circular lightening holes (`evenodd` fill!)
-      const bw = Math.max(14, wPx * 0.38);
-      const tipX = sx + leanPx * 1.15;
-      const tipY = sy + dir * hPx * 0.96;
-      const holeCount = Math.max(2, Math.min(4, Math.round(hPx / 26)));
-      const yL = wallY(-bw * 0.72);
-      const yR = wallY(bw * 0.72);
-
-      _strokeDropShadow(ctx, () => {
-        ctx.moveTo(sx - bw * 0.72, yL);
-        ctx.lineTo(tipX - bw * 0.46, tipY);
-        ctx.lineTo(tipX + bw * 0.46, tipY);
-        ctx.lineTo(sx + bw * 0.72, yR);
-      }, dir, 4, 8, 0.32);
+      // Riveted steel shipwreck hull rib with TRUE transparent circular lightening holes (`evenodd`)
+      // Diver silhouette & glowing torch beam shine straight through the cutouts!
+      const bw = Math.max(18, wPx * 0.42);
+      const tipX = sx + leanPx * 1.1;
+      const tipY = sy + dir * hPx * 0.95;
+      const holeCount = Math.max(2, Math.min(4, Math.round(hPx / 32)));
+      const yL = wallY(-bw * 0.72) - dir * 6;
+      const yR = wallY(bw * 0.72) - dir * 6;
+      const steelDark = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.88);
+      const steelMid = _shadeNearRgb(pal.rockMid, light, isNearPlane, 1.02);
+      const rustStr = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.05);
+      const steelHl = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 1.2);
+      const kelpStr = _shadeNearRgb(pal.floraMid, light, isNearPlane, 1.05);
 
       ctx.beginPath();
       ctx.moveTo(sx - bw * 0.72, yL);
@@ -1027,16 +1355,16 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const u = (h + 0.52) / (holeCount + 0.25);
         const hx = sx + (tipX - sx) * u;
         const hy = sy + (tipY - sy) * u;
-        const hr = Math.max(3.2, bw * (0.21 - u * 0.04));
+        const hr = Math.max(4.5, bw * (0.23 - u * 0.04));
         holes.push({ hx, hy, hr, u });
         ctx.moveTo(hx + hr, hy);
         ctx.ellipse(hx, hy, hr, hr, 0, 0, Math.PI * 2);
       }
 
       const steelGrad = ctx.createLinearGradient(sx - bw * 0.7, sy, sx + bw * 0.7, tipY);
-      steelGrad.addColorStop(0, `rgba(${_rgbStr(pal.rockMid)}, 0.98)`);
-      steelGrad.addColorStop(0.55, `rgba(${_rgbStr(pal.rockDark)}, 0.96)`);
-      steelGrad.addColorStop(1, `rgba(${_rgbStr(pal.rustRgb)}, 0.92)`);
+      steelGrad.addColorStop(0, `rgba(${steelMid}, ${(0.96 * vis).toFixed(3)})`);
+      steelGrad.addColorStop(0.55, `rgba(${steelDark}, ${(0.95 * vis).toFixed(3)})`);
+      steelGrad.addColorStop(1, `rgba(${rustStr}, ${(0.92 * vis).toFixed(3)})`);
       ctx.fillStyle = steelGrad;
       try {
         ctx.fill('evenodd');
@@ -1044,8 +1372,8 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         ctx.fill();
       }
 
-      ctx.strokeStyle = `rgba(${_rgbStr(pal.rockHighlight)}, 0.48)`;
-      ctx.lineWidth = Math.max(1.8, bw * 0.09);
+      ctx.strokeStyle = `rgba(${steelHl}, ${((0.20 + rimPower * 0.52) * vis).toFixed(3)})`;
+      ctx.lineWidth = Math.max(2.0, bw * 0.085);
       ctx.beginPath();
       ctx.moveTo(sx - bw * 0.66, yL);
       ctx.lineTo(tipX - bw * 0.42, tipY);
@@ -1055,22 +1383,24 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
       for (let h = 0; h < holes.length; h++) {
         const { hx, hy, hr, u } = holes[h];
-        ctx.strokeStyle = `rgba(${_rgbStr(pal.rockHighlight)}, 0.45)`;
-        ctx.lineWidth = 1.15;
+        ctx.strokeStyle = rimPower > 0.08
+          ? `rgba(${rimRgb}, ${(rimPower * 0.65 * vis).toFixed(3)})`
+          : `rgba(${steelHl}, ${(0.26 * vis).toFixed(3)})`;
+        ctx.lineWidth = rimPower > 0.08 ? 1.45 : 1.0;
         ctx.beginPath();
         ctx.ellipse(hx, hy, hr, hr, 0, 0, Math.PI * 2);
         ctx.stroke();
 
         const flX = bw * (0.52 - u * 0.12);
-        ctx.fillStyle = `rgba(${_rgbStr(pal.rockHighlight)}, 0.56)`;
+        ctx.fillStyle = `rgba(${steelHl}, ${((0.32 + rimPower * 0.42) * vis).toFixed(3)})`;
         ctx.beginPath();
-        ctx.ellipse(hx - flX, hy, 1.5, 1.5, 0, 0, Math.PI * 2);
-        ctx.ellipse(hx + flX, hy, 1.5, 1.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(hx - flX, hy, 1.6, 1.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(hx + flX, hy, 1.6, 1.6, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      ctx.strokeStyle = `rgba(${_rgbStr(pal.floraMid)}, 0.82)`;
-      ctx.lineWidth = Math.max(1.6, bw * 0.08);
+      ctx.strokeStyle = `rgba(${kelpStr}, ${(0.84 * vis).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.6, bw * 0.07);
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(tipX + bw * 0.28, tipY);
@@ -1080,24 +1410,19 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
     }
 
     case 'mine-beam': {
-      const bw = Math.max(12, wPx * 0.35);
-      const tipX = sx + leanPx * 1.05;
-      const tipY = sy + dir * hPx * 0.92;
-      const yL = wallY(-bw * 0.66);
-      const yR = wallY(bw * 0.66);
-      const traceCrest = () => {
-        ctx.moveTo(sx - bw * 0.66, yL);
-        ctx.lineTo(tipX - bw * 0.52, tipY);
-        ctx.lineTo(tipX + bw * 0.52, tipY);
-        ctx.lineTo(sx + bw * 0.66, yR);
-      };
-      const closeBase = () => {
-        ctx.lineTo(sx - bw * 0.66, yL);
-      };
+      const bw = Math.max(14, wPx * 0.34);
+      const tipX = sx + leanPx * 1.0;
+      const tipY = sy + dir * hPx * 0.90;
+      const pts = [
+        { x: sx - bw * 0.64, y: wallY(-bw * 0.64) },
+        { x: tipX - bw * 0.50, y: tipY },
+        { x: tipX + bw * 0.50, y: tipY },
+        { x: sx + bw * 0.64, y: wallY(bw * 0.64) },
+      ];
       const drawTimberDetail = () => {
-        ctx.strokeStyle = `rgba(${_rgbStr(pal.rockDark)}, 0.55)`;
+        ctx.strokeStyle = `rgba(${_shadeNearRgb(pal.rockDark, light, isNearPlane, 0.75)}, ${(0.60 * vis).toFixed(3)})`;
         ctx.lineWidth = 1.2;
-        for (const f of [-0.26, 0.04, 0.28]) {
+        for (const f of [-0.24, 0.04, 0.26]) {
           ctx.beginPath();
           ctx.moveTo(sx + bw * f, wallY(bw * f));
           ctx.lineTo(tipX + bw * f * 0.84, tipY);
@@ -1105,78 +1430,88 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         }
         const bx = sx + (tipX - sx) * 0.72;
         const by = sy + (tipY - sy) * 0.72;
-        ctx.strokeStyle = `rgba(${_rgbStr(pal.rustRgb)}, 0.88)`;
-        ctx.lineWidth = Math.max(4, bw * 0.24);
+        ctx.strokeStyle = `rgba(${_shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.05)}, ${(0.90 * vis).toFixed(3)})`;
+        ctx.lineWidth = Math.max(4, bw * 0.22);
         ctx.beginPath();
-        ctx.moveTo(bx - bw * 0.6, by);
-        ctx.lineTo(bx + bw * 0.6, by);
+        ctx.moveTo(bx - bw * 0.58, by);
+        ctx.lineTo(bx + bw * 0.58, by);
         ctx.stroke();
       };
-      _fillRockAnchoredForm(ctx, sx, sy, wPx, hPx, dir, pal, light, null, isNearPlane, traceCrest, closeBase, drawTimberDetail);
+      _fillWallHuggingRock(ctx, sx, sy, wPx, hPx, dir, slope, pal, light, null, isNearPlane, pts, drawTimberDetail);
       break;
     }
 
     case 'wreck-railing': {
       const posts = 3;
-      const railOffset = dir * hPx * 0.78;
-      const steelMid = _rgbStr(pal.rockMid);
-      const steelHl = _rgbStr(pal.rockHighlight);
-      const rustStr = _rgbStr(pal.rustRgb);
+      const railOffset = dir * hPx * 0.76;
+      const steelMid = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.96);
+      const rustStr = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.02);
+      const floraStr = _shadeNearRgb(pal.floraMid, light, isNearPlane, 1.0);
 
       ctx.lineCap = 'round';
-      ctx.lineWidth = Math.max(3.0, wPx * 0.068);
+      ctx.lineWidth = Math.max(3.2, wPx * 0.065);
       for (let i = 0; i < posts; i++) {
         const frac = i / (posts - 1) - 0.5;
-        const dx0 = frac * wPx * 0.96;
+        const dx0 = frac * wPx * 0.92;
         const px = sx + dx0;
         const py = wallY(dx0);
-        ctx.strokeStyle = `rgba(${i === 1 ? rustStr : steelMid}, 0.95)`;
+        ctx.strokeStyle = `rgba(${i === 1 ? rustStr : steelMid}, ${(0.95 * vis).toFixed(3)})`;
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(px + leanPx * 0.45, py + railOffset);
         ctx.stroke();
       }
-      const xL = sx - wPx * 0.58 + leanPx * 0.45;
-      const xR = sx + wPx * 0.58 + leanPx * 0.45;
-      const yL = wallY(-wPx * 0.58);
-      const yR = wallY(wPx * 0.58);
-      for (const hFrac of [0.78, 0.44]) {
+      const xL = sx - wPx * 0.56 + leanPx * 0.45;
+      const xR = sx + wPx * 0.56 + leanPx * 0.45;
+      const yL = wallY(-wPx * 0.56);
+      const yR = wallY(wPx * 0.56);
+      for (const hFrac of [0.76, 0.42]) {
         const off = dir * hPx * hFrac;
-        ctx.strokeStyle = `rgba(${steelMid}, 0.94)`;
+        ctx.strokeStyle = `rgba(${steelMid}, ${(0.94 * vis).toFixed(3)})`;
         ctx.beginPath();
         ctx.moveTo(xL, yL + off);
-        ctx.quadraticCurveTo(sx + leanPx * 0.45, sy + off + dir * hPx * 0.05, xR, yR + off);
+        ctx.quadraticCurveTo(sx + leanPx * 0.45, sy + off + dir * hPx * 0.04, xR, yR + off);
         ctx.stroke();
       }
-      ctx.strokeStyle = `rgba(${steelHl}, 0.46)`;
-      ctx.lineWidth = 1.2;
+      if (rimPower > 0.08) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * 0.62 * vis).toFixed(3)})`;
+        ctx.lineWidth = 1.45;
+        ctx.beginPath();
+        ctx.moveTo(xL, yL + railOffset - dir * 1.4);
+        ctx.quadraticCurveTo(sx + leanPx * 0.45, sy + railOffset + dir * hPx * 0.04 - dir * 1.4, xR, yR + railOffset - dir * 1.4);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.strokeStyle = `rgba(${floraStr}, ${(0.82 * vis).toFixed(3)})`;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(xL, yL + railOffset - dir * 1.2);
-      ctx.quadraticCurveTo(sx + leanPx * 0.45, sy + railOffset + dir * hPx * 0.05 - dir * 1.2, xR, yR + railOffset - dir * 1.2);
-      ctx.stroke();
-      ctx.strokeStyle = `rgba(${_rgbStr(pal.floraMid)}, 0.80)`;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(sx - wPx * 0.48 + leanPx * 0.45, wallY(-wPx * 0.48) + railOffset);
-      ctx.quadraticCurveTo(sx + leanPx * 0.45 + swayPx * 0.75, sy + railOffset - dir * hPx * 0.22, sx + wPx * 0.48 + leanPx * 0.45, wallY(wPx * 0.48) + railOffset);
+      ctx.moveTo(sx - wPx * 0.46 + leanPx * 0.45, wallY(-wPx * 0.46) + railOffset);
+      ctx.quadraticCurveTo(sx + leanPx * 0.45 + swayPx * 0.75, sy + railOffset - dir * hPx * 0.22, sx + wPx * 0.46 + leanPx * 0.45, wallY(wPx * 0.46) + railOffset);
       ctx.stroke();
       break;
     }
 
     case 'crystal-cluster': {
-      // Natural radiating fan of tilted hexagonal mineral crystal spears rooted right into the sloping cave rock!
+      // Translucent radiating hexagonal mineral crystal cluster rooted in an organic dark rock pocket
+      // (zero flat cutoff across brown rock; delicate backlit crystal tips let the diver peek behind!)
       const count = el.subCount + 3;
       const litRight = light.lightDirX >= 0;
+      const baseShaded = _shadeNearRgb(pal.floraDark, light, isNearPlane, 0.90);
+      const midShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 1.06);
+      const tipShaded = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 1.24);
+      const prismShaded = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.14);
 
       for (let i = 0; i < count; i++) {
         const order = i === count - 1 ? Math.floor(count / 2) : (i >= Math.floor(count / 2) ? i + 1 : i);
         const u = count <= 1 ? 0 : order / (count - 1) - 0.5;
         const isHero = order === Math.floor(count / 2);
-        const tilt = u * 1.14 + el.lean * 0.45 + (_hash01(el.seed + order * 19) - 0.5) * 0.16;
-        const cLen = hPx * (isHero ? 1.04 : 0.46 + (1 - Math.abs(u) * 1.35) * 0.36 + _hash01(el.seed + order * 7) * 0.14);
-        const cHalfW = Math.max(4.5, wPx * (isHero ? 0.155 : 0.11));
+        const tilt = u * 1.08 + el.lean * 0.38 + (_hash01(el.seed + order * 19) - 0.5) * 0.14;
+        const cLen = hPx * (isHero ? 1.02 : 0.44 + (1 - Math.abs(u) * 1.35) * 0.34 + _hash01(el.seed + order * 7) * 0.12);
+        const cHalfW = Math.max(4.5, wPx * (isHero ? 0.145 : 0.10));
 
-        const dx0 = u * wPx * 0.52;
+        const dx0 = u * wPx * 0.48;
         const bx = sx + dx0;
         const by = wallY(dx0);
         const ax = Math.sin(tilt);
@@ -1186,30 +1521,22 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
         const tipX = bx + ax * cLen;
         const tipY = by + ay * cLen;
-        const shDist = cLen * 0.76;
+        const shDist = cLen * 0.74;
         const lShX = bx + ax * shDist - px * cHalfW;
         const lShY = by + ay * shDist - py * cHalfW;
         const rShX = bx + ax * shDist + px * cHalfW;
         const rShY = by + ay * shDist + py * cHalfW;
-        const lBaseX = bx - px * cHalfW * 0.84;
-        const lBaseY = by - py * cHalfW * 0.84;
-        const rBaseX = bx + px * cHalfW * 0.84;
-        const rBaseY = by + py * cHalfW * 0.84;
+        const lBaseX = bx - px * cHalfW * 0.78;
+        const lBaseY = by - py * cHalfW * 0.78;
+        const rBaseX = bx + px * cHalfW * 0.78;
+        const rBaseY = by + py * cHalfW * 0.78;
 
-        ctx.fillStyle = 'rgba(2, 6, 14, 0.24)';
-        ctx.beginPath();
-        ctx.moveTo(lBaseX + 2, lBaseY + dir * 2);
-        ctx.lineTo(lShX + 2, lShY + dir * 2);
-        ctx.lineTo(tipX + 2, tipY + dir * 2);
-        ctx.lineTo(rShX + 2, rShY + dir * 2);
-        ctx.lineTo(rBaseX + 2, rBaseY + dir * 2);
-        ctx.closePath();
-        ctx.fill();
-
+        // Translucent base fade so crystal roots emerge smoothly out of the cave wall!
         const cg = ctx.createLinearGradient(bx, by, tipX, tipY);
-        cg.addColorStop(0, `rgba(${_rgbStr(pal.floraDark)}, 0.94)`);
-        cg.addColorStop(0.55, `rgba(${_rgbStr(pal.rockMid)}, 0.88)`);
-        cg.addColorStop(1, `rgba(${_rgbStr(pal.rockHighlight)}, 0.94)`);
+        cg.addColorStop(0, `rgba(${baseShaded}, ${(0.25 * vis).toFixed(3)})`);
+        cg.addColorStop(0.22, `rgba(${baseShaded}, ${(0.88 * vis).toFixed(3)})`);
+        cg.addColorStop(0.62, `rgba(${midShaded}, ${(0.84 * vis).toFixed(3)})`);
+        cg.addColorStop(1, `rgba(${tipShaded}, ${(0.86 * vis).toFixed(3)})`);
         ctx.fillStyle = cg;
         ctx.beginPath();
         ctx.moveTo(lBaseX, lBaseY);
@@ -1220,104 +1547,104 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         ctx.closePath();
         ctx.fill();
 
-        const fGrad = ctx.createLinearGradient(tipX, tipY, bx, by);
-        fGrad.addColorStop(0, 'rgba(232, 244, 255, 0.62)');
-        fGrad.addColorStop(0.65, `rgba(${_rgbStr(pal.rustRgb)}, 0.26)`);
-        fGrad.addColorStop(1, `rgba(${_rgbStr(pal.rockMid)}, 0.05)`);
-        ctx.fillStyle = fGrad;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(tipX, tipY);
-        if (litRight) {
-          ctx.lineTo(rShX, rShY);
-          ctx.lineTo(rBaseX, rBaseY);
-        } else {
-          ctx.lineTo(lShX, lShY);
-          ctx.lineTo(lBaseX, lBaseY);
-        }
-        ctx.closePath();
-        ctx.fill();
+        if (rimPower > 0.06) {
+          const fGrad = ctx.createLinearGradient(tipX, tipY, bx, by);
+          fGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.56 * vis).toFixed(3)})`);
+          fGrad.addColorStop(0.58, `rgba(${prismShaded}, ${(rimPower * 0.28 * vis).toFixed(3)})`);
+          fGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = fGrad;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tipX, tipY);
+          if (litRight) {
+            ctx.lineTo(rShX, rShY);
+            ctx.lineTo(rBaseX, rBaseY);
+          } else {
+            ctx.lineTo(lShX, lShY);
+            ctx.lineTo(lBaseX, lBaseY);
+          }
+          ctx.closePath();
+          ctx.fill();
 
-        ctx.strokeStyle = 'rgba(240, 248, 255, 0.56)';
-        ctx.lineWidth = isHero ? 1.25 : 0.95;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * (isHero ? 0.78 : 0.52) * vis).toFixed(3)})`;
+          ctx.lineWidth = isHero ? 1.45 : 1.05;
+          ctx.beginPath();
+          ctx.moveTo(lShX, lShY);
+          ctx.lineTo(tipX, tipY);
+          ctx.lineTo(rShX, rShY);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
       break;
     }
 
     case 'icicle-cluster': {
-      // Organic glassy glacial icicle curtain (ceiling) or frosted ice stalagmite cluster (floor)
-      // emerging directly out of the sloping rock surface — ZERO flat horizontal bar!
+      // Slender, translucent glacial ice spears fading cleanly into the cave wall
       const spears = el.subCount + 3;
       const halfW = wPx * 0.66;
+      const iceDark = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.88);
+      const iceMid = _shadeNearRgb(pal.rockMid, light, isNearPlane, 1.05);
+      const iceTip = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 1.22);
 
       for (let i = 0; i < spears; i++) {
         const u = spears <= 1 ? 0 : i / (spears - 1) - 0.5;
         const j = (_hash01(el.seed + i * 29.3) - 0.5) * 0.14;
-        const dx0 = (u + j) * halfW * 1.72;
+        const dx0 = (u + j) * halfW * 1.70;
         const bx = sx + dx0;
         const by = wallY(dx0);
         const isMain = Math.abs(u) < 0.22;
-        const len = hPx * (isMain ? 0.82 + _hash01(el.seed + i * 7) * 0.24 : 0.36 + _hash01(el.seed + i * 17) * 0.42);
-        const halfBase = Math.max(3.4, wPx * (isMain ? 0.115 : 0.078));
-        const tipX = bx + leanPx * 0.32;
+        const len = hPx * (isMain ? 0.84 + _hash01(el.seed + i * 7) * 0.22 : 0.36 + _hash01(el.seed + i * 17) * 0.40);
+        const halfBase = Math.max(3.6, wPx * (isMain ? 0.105 : 0.072));
+        const tipX = bx + leanPx * 0.28;
         const tipY = by + dir * len;
 
-        // Soft drop shadow behind spear
-        ctx.fillStyle = 'rgba(2, 8, 18, 0.22)';
-        ctx.beginPath();
-        ctx.moveTo(bx - halfBase + 2, by + dir * 2);
-        ctx.quadraticCurveTo(bx - halfBase * 0.32 + 2, by + dir * len * 0.52, tipX + 2, tipY + dir * 2);
-        ctx.quadraticCurveTo(bx + halfBase * 0.38 + 2, by + dir * len * 0.52, bx + halfBase + 2, by + dir * 2);
-        ctx.closePath();
-        ctx.fill();
-
-        // Translucent sapphire-to-frost ice spear fading gently right at the rock lip
         const ig = ctx.createLinearGradient(bx, by, tipX, tipY);
-        ig.addColorStop(0, `rgba(${_rgbStr(pal.rockDark)}, 0.48)`);
-        ig.addColorStop(0.22, `rgba(${_rgbStr(pal.rockMid)}, 0.86)`);
-        ig.addColorStop(0.82, `rgba(${_rgbStr(pal.rockHighlight)}, 0.94)`);
-        ig.addColorStop(1, 'rgba(242, 252, 255, 0.98)');
+        ig.addColorStop(0, `rgba(${iceDark}, ${(0.22 * vis).toFixed(3)})`);
+        ig.addColorStop(0.24, `rgba(${iceMid}, ${(0.82 * vis).toFixed(3)})`);
+        ig.addColorStop(0.84, `rgba(${iceTip}, ${(0.88 * vis).toFixed(3)})`);
+        ig.addColorStop(1, `rgba(${rimPower > 0.10 ? rimRgb : iceTip}, ${(0.92 * vis).toFixed(3)})`);
         ctx.fillStyle = ig;
         ctx.beginPath();
         ctx.moveTo(bx - halfBase, wallY(dx0 - halfBase));
-        ctx.quadraticCurveTo(bx - halfBase * 0.32, by + dir * len * 0.52, tipX, tipY);
-        ctx.quadraticCurveTo(bx + halfBase * 0.38, by + dir * len * 0.52, bx + halfBase, wallY(dx0 + halfBase));
+        ctx.quadraticCurveTo(bx - halfBase * 0.30, by + dir * len * 0.52, tipX, tipY);
+        ctx.quadraticCurveTo(bx + halfBase * 0.34, by + dir * len * 0.52, bx + halfBase, wallY(dx0 + halfBase));
         ctx.closePath();
         ctx.fill();
 
-        const hlSign = light.lightDirX >= 0 ? 1 : -1;
-        ctx.strokeStyle = 'rgba(232, 248, 255, 0.64)';
-        ctx.lineWidth = isMain ? 1.25 : 0.9;
-        ctx.beginPath();
-        ctx.moveTo(bx + hlSign * halfBase * 0.3, by + dir * 3);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
+        if (rimPower > 0.06) {
+          const hlSign = light.lightDirX >= 0 ? 1 : -1;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * (isMain ? 0.78 : 0.54) * vis).toFixed(3)})`;
+          ctx.lineWidth = isMain ? 1.45 : 1.0;
+          ctx.beginPath();
+          ctx.moveTo(bx + hlSign * halfBase * 0.42, by + dir * 3);
+          ctx.quadraticCurveTo(bx + hlSign * halfBase * 0.16, by + dir * len * 0.52, tipX, tipY);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
       break;
     }
 
     case 'monolith-block': {
-      const bw = wPx * 0.74;
+      const bw = wPx * 0.52;
       const stepH = hPx * 0.54;
-      const traceCrest = () => {
-        ctx.moveTo(sx - bw, wallY(-bw));
-        ctx.lineTo(sx - bw * 0.90, wallY(-bw * 0.90) + dir * stepH * 0.74);
-        ctx.lineTo(sx - bw * 0.46, wallY(-bw * 0.46) + dir * stepH * 0.74);
-        ctx.lineTo(sx - bw * 0.40, wallY(-bw * 0.40) + dir * hPx);
-        ctx.lineTo(sx + bw * 0.34, wallY(bw * 0.34) + dir * hPx);
-        ctx.lineTo(sx + bw * 0.40, wallY(bw * 0.40) + dir * stepH);
-        ctx.lineTo(sx + bw * 0.92, wallY(bw * 0.92) + dir * stepH);
-        ctx.lineTo(sx + bw, wallY(bw));
-      };
-      const closeBase = () => {
-        ctx.lineTo(sx - bw, wallY(-bw));
-      };
+      const pts = [
+        { x: sx - bw, y: wallY(-bw) },
+        { x: sx - bw * 0.90, y: wallY(-bw * 0.90) + dir * stepH * 0.72 },
+        { x: sx - bw * 0.48, y: wallY(-bw * 0.48) + dir * stepH * 0.74 },
+        { x: sx - bw * 0.40, y: wallY(-bw * 0.40) + dir * hPx },
+        { x: sx + bw * 0.34, y: wallY(bw * 0.34) + dir * hPx },
+        { x: sx + bw * 0.42, y: wallY(bw * 0.42) + dir * stepH },
+        { x: sx + bw * 0.90, y: wallY(bw * 0.90) + dir * stepH },
+        { x: sx + bw, y: wallY(bw) },
+      ];
       const drawCarvedRelief = () => {
-        ctx.strokeStyle = `rgba(${_rgbStr(pal.rustRgb)}, 0.58)`;
+        ctx.strokeStyle = `rgba(${_shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.15)}, ${(0.52 * lit * vis).toFixed(3)})`;
         ctx.lineWidth = Math.max(1.2, hPx * 0.018);
         const yBand1 = sy + dir * hPx * 0.76;
         const yBand2 = sy + dir * hPx * 0.42;
@@ -1329,152 +1656,117 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         ctx.stroke();
         _drawCausticRibbons(ctx, sx, sy, wPx, hPx, dir, timeSec, reduced, light);
       };
-      _fillRockAnchoredForm(ctx, sx, sy, wPx, hPx, dir, pal, light, rockPattern, isNearPlane, traceCrest, closeBase, drawCarvedRelief);
+      _fillWallHuggingRock(ctx, sx, sy, wPx, hPx, dir, slope, pal, light, rockPattern, isNearPlane, pts, drawCarvedRelief);
       break;
     }
 
     case 'basalt-spire': {
+      // Clean monotonic stepped hexagonal volcanic basalt columns with glowing magma seams!
       const cols = Math.max(3, Math.min(5, el.subCount + 1));
-      const halfW = wPx * 0.78;
+      const halfW = wPx * 0.46;
       const colData = [];
+      const pts = [{ x: sx - halfW, y: wallY(-halfW) }];
       for (let i = 0; i < cols; i++) {
         const u0 = i / cols;
         const u1 = (i + 1) / cols;
         const centerDist = Math.abs((i + 0.5) / cols - 0.5) * 2;
-        const ch = hPx * (1.0 - centerDist * 0.44 + ((i * 19 + Math.floor(el.seed)) % 7) * 0.025);
+        const ch = hPx * (0.98 - centerDist * 0.46 + ((i * 19 + Math.floor(el.seed)) % 7) * 0.02);
         const dx0 = (u0 - 0.5) * halfW * 2;
         const dx1 = (u1 - 0.5) * halfW * 2;
-        colData.push({ x0: sx + dx0, x1: sx + dx1, y0: wallY(dx0), y1: wallY(dx1), h: ch });
+        const x0 = sx + dx0;
+        const x1 = sx + dx1;
+        const y0 = wallY(dx0);
+        const y1 = wallY(dx1);
+        const by = (y0 + y1) * 0.5;
+        colData.push({ x0, x1, y0, y1, by, h: ch });
+        pts.push({ x: x0 + (x1 - x0) * 0.08, y: by + dir * ch });
+        pts.push({ x: x1 - (x1 - x0) * 0.08, y: by + dir * (ch * 0.95) });
       }
-      const traceCrest = () => {
-        ctx.moveTo(sx - halfW, wallY(-halfW));
-        for (let i = 0; i < colData.length; i++) {
-          const c = colData[i];
-          const bevel = (c.x1 - c.x0) * 0.14;
-          const by = (c.y0 + c.y1) * 0.5;
-          ctx.lineTo(c.x0 + bevel * 0.4, by + dir * c.h);
-          ctx.lineTo(c.x1 - bevel * 0.4, by + dir * (c.h * 0.94));
-          if (i < colData.length - 1) {
-            const nextH = Math.min(c.h, colData[i + 1].h) * 0.86;
-            ctx.lineTo(c.x1, c.y1 + dir * nextH);
-          }
-        }
-        ctx.lineTo(sx + halfW, wallY(halfW));
-      };
-      const closeBase = () => {
-        ctx.lineTo(sx - halfW, wallY(-halfW));
-      };
+      pts.push({ x: sx + halfW, y: wallY(halfW) });
+
       const drawBasaltColumns = () => {
         const litRight = light.lightDirX >= 0;
+        const facetHl = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 1.12);
         for (let i = 0; i < colData.length; i++) {
           const c = colData[i];
           const midX = (c.x0 + c.x1) * 0.5;
-          const by = (c.y0 + c.y1) * 0.5;
-          ctx.fillStyle = `rgba(${_rgbStr(pal.rockHighlight)}, 0.24)`;
+          ctx.fillStyle = `rgba(${facetHl}, ${(0.28 * lit * vis).toFixed(3)})`;
           ctx.beginPath();
-          ctx.moveTo(litRight ? midX : c.x0, by);
-          ctx.lineTo(litRight ? midX : c.x0, by + dir * c.h);
-          ctx.lineTo(litRight ? c.x1 : midX, by + dir * c.h * 0.95);
-          ctx.lineTo(litRight ? c.x1 : midX, by);
+          ctx.moveTo(litRight ? midX : c.x0, c.by);
+          ctx.lineTo(litRight ? midX : c.x0, c.by + dir * c.h);
+          ctx.lineTo(litRight ? c.x1 : midX, c.by + dir * c.h * 0.95);
+          ctx.lineTo(litRight ? c.x1 : midX, c.by);
           ctx.closePath();
           ctx.fill();
           if (i > 0) {
+            const seamVis = el.biome === 'volcanic' ? Math.max(light.ventLit * 0.92, lit * 0.50) * vis : lit * 0.55 * vis;
             ctx.strokeStyle = el.biome === 'volcanic'
-              ? `rgba(255, 118, 42, ${(0.28 + light.ventLit * 0.58).toFixed(3)})`
-              : `rgba(${_rgbStr(pal.rockDark)}, 0.65)`;
-            ctx.lineWidth = el.biome === 'volcanic' ? 1.4 : 1.0;
+              ? `rgba(255, 118, 42, ${seamVis.toFixed(3)})`
+              : `rgba(${_shadeNearRgb(pal.rockDark, light, isNearPlane, 0.8)}, ${seamVis.toFixed(3)})`;
+            ctx.lineWidth = el.biome === 'volcanic' ? 1.6 : 1.0;
             ctx.beginPath();
             ctx.moveTo(c.x0, c.y0);
-            ctx.lineTo(c.x0, c.y0 + dir * Math.min(c.h, colData[i - 1].h) * 0.82);
+            ctx.lineTo(c.x0, c.y0 + dir * Math.min(c.h, colData[i - 1].h) * 0.84);
             ctx.stroke();
           }
         }
       };
-      _fillRockAnchoredForm(ctx, sx, sy, wPx, hPx, dir, pal, light, rockPattern, isNearPlane, traceCrest, closeBase, drawBasaltColumns);
+      _fillWallHuggingRock(ctx, sx, sy, wPx, hPx, dir, slope, pal, light, rockPattern, isNearPlane, pts, drawBasaltColumns);
       break;
     }
 
     case 'limestone-overhang':
     default: {
-      // Sculpted asymmetric karst limestone spur hugging the EXACT sloping cave ceiling/floor
-      // and filled with the level's real procedural rock texture — ZERO flat seam!
-      const halfW = wPx * 0.98;
-      const flip = ((Math.floor(el.seed) % 2) === 0) ? 1 : -1;
-      const dxPeak = flip * halfW * 0.16 + leanPx * 0.48;
-      const dxShoulder = -flip * halfW * 0.42;
-      const dxMinor = flip * halfW * 0.54;
-      const peakX = sx + dxPeak;
-      const shoulderX = sx + dxShoulder;
-      const minorX = sx + dxMinor;
-      const shoulderH = hPx * (0.44 + ((el.seed * 7) % 10) * 0.022);
-      const mainH = hPx * 0.96;
-      const minorH = hPx * (0.36 + ((el.seed * 13) % 10) * 0.018);
-
-      const traceCrest = () => {
-        ctx.moveTo(sx - halfW, wallY(-halfW));
-        ctx.bezierCurveTo(
-          sx - halfW * 0.84, wallY(-halfW * 0.84) + dir * shoulderH * 0.65,
-          shoulderX - halfW * 0.18, wallY(dxShoulder - halfW * 0.18) + dir * shoulderH * 1.05,
-          shoulderX + flip * halfW * 0.14, wallY(dxShoulder + flip * halfW * 0.14) + dir * shoulderH * 0.78
-        );
-        ctx.bezierCurveTo(
-          peakX - flip * halfW * 0.24, wallY(dxPeak - flip * halfW * 0.24) + dir * mainH * 0.92,
-          peakX - flip * halfW * 0.04, wallY(dxPeak - flip * halfW * 0.04) + dir * mainH * 1.08,
-          peakX + flip * halfW * 0.16, wallY(dxPeak + flip * halfW * 0.16) + dir * mainH * 0.74
-        );
-        ctx.bezierCurveTo(
-          minorX - flip * halfW * 0.12, wallY(dxMinor - flip * halfW * 0.12) + dir * minorH * 1.08,
-          sx + halfW * 0.76, wallY(halfW * 0.76) + dir * minorH * 0.72,
-          sx + halfW, wallY(halfW)
-        );
-      };
-      const closeBase = () => {
-        // Follows the exact sloping rock wall back to the start point — seamless with cavern geometry!
-        ctx.lineTo(sx - halfW, wallY(-halfW));
-      };
+      // Strictly monotonic organic karst limestone overhang ridge (GUARANTEED zero self-intersection / zero bowties!)
+      const halfW = wPx * 0.54;
+      const ridgeSteps = 10;
+      const pts = [];
+      for (let i = 0; i <= ridgeSteps; i++) {
+        const u = i / ridgeSteps; // 0 -> 1 strictly increasing X!
+        const dx = (u - 0.5) * halfW * 2;
+        const env = Math.pow(Math.sin(u * Math.PI), 1.18);
+        // Sculpted natural karst lobes + subtle stalactite dips
+        const lobe =
+          0.66 +
+          0.26 * Math.sin(u * Math.PI * 2.4 + el.seed * 0.7) +
+          0.14 * Math.sin(u * Math.PI * 5.2 + el.seed * 1.9);
+        const h = i === 0 || i === ridgeSteps ? 0 : hPx * env * _clamp(lobe, 0.28, 1.08);
+        pts.push({ x: sx + dx, y: wallY(dx) + dir * h });
+      }
 
       const drawKarstDetail = () => {
-        ctx.fillStyle = `rgba(${_rgbStr(pal.rockDark)}, 0.34)`;
-        ctx.beginPath();
-        ctx.moveTo(sx - halfW * 0.72, wallY(-halfW * 0.72));
-        ctx.quadraticCurveTo(peakX - flip * halfW * 0.1, wallY(dxPeak) + dir * mainH * 0.62, sx + halfW * 0.66, wallY(halfW * 0.66));
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.strokeStyle = `rgba(${_rgbStr(pal.rockDark)}, 0.38)`;
-        ctx.lineWidth = 1.1;
-        for (const frac of [0.36, 0.60]) {
-          const yL = wallY(-halfW * 0.56) + dir * hPx * frac;
-          const yM = wallY(dxPeak) + dir * hPx * (frac + 0.05);
-          const yR = wallY(halfW * 0.52) + dir * hPx * (frac - 0.02);
+        ctx.strokeStyle = `rgba(${_shadeNearRgb(pal.rockHighlight, light, isNearPlane, 0.95)}, ${(0.22 * lit * vis).toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        for (const frac of [0.34, 0.58]) {
+          const yL = wallY(-halfW * 0.58) + dir * hPx * frac;
+          const yM = sy + dir * hPx * (frac + 0.06);
+          const yR = wallY(halfW * 0.58) + dir * hPx * (frac - 0.02);
           ctx.beginPath();
-          ctx.moveTo(sx - halfW * 0.56, yL);
-          ctx.quadraticCurveTo(peakX, yM, sx + halfW * 0.52, yR);
+          ctx.moveTo(sx - halfW * 0.58, yL);
+          ctx.quadraticCurveTo(sx, yM, sx + halfW * 0.58, yR);
           ctx.stroke();
         }
-
         if (el.biome === 'cenote' && el.y < 24) {
-          ctx.fillStyle = `rgba(${_rgbStr(pal.mossRgb)}, 0.42)`;
+          ctx.fillStyle = `rgba(${_shadeNearRgb(pal.mossRgb, light, isNearPlane, 1.15)}, ${(0.48 * lit * vis).toFixed(3)})`;
           ctx.beginPath();
-          ctx.ellipse(shoulderX, wallY(dxShoulder) + dir * shoulderH * 0.72, halfW * 0.22, Math.max(4, hPx * 0.085), Math.atan(slope) + flip * 0.14, 0, Math.PI * 2);
+          ctx.ellipse(sx - halfW * 0.22, wallY(-halfW * 0.22) + dir * hPx * 0.54, halfW * 0.22, Math.max(4, hPx * 0.085), Math.atan(slope), 0, Math.PI * 2);
           ctx.fill();
         }
-
         _drawCausticRibbons(ctx, sx, sy, wPx, hPx, dir, timeSec, reduced, light);
       };
 
-      _fillRockAnchoredForm(ctx, sx, sy, wPx, hPx, dir, pal, light, rockPattern, isNearPlane, traceCrest, closeBase, drawKarstDetail);
+      _fillWallHuggingRock(ctx, sx, sy, wPx, hPx, dir, slope, pal, light, rockPattern, isNearPlane, pts, drawKarstDetail);
       break;
     }
   }
 }
 
 /**
- * PASS 2 (Post-Lighting Optical Finish): Strictly gated by real light sources!
- * Edge-hugging backlit rim highlights (zero geometric oval blobs!), sparkling crystal/ice glints,
- * and bioluminescent micro-spores.
+ * Optical Finish Accents (diamond crystal/ice twinkles, bioluminescent micro-spores, wet-steel specular).
  */
 function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced) {
+  const vis = light.lightVis;
+  if (vis < 0.06) return;
   const realLight = Math.max(light.beamLit, light.backLit, light.sunLit * 0.85, light.ventLit * 0.9);
   if (realLight < 0.16 && light.biolumLit < 0.18) return;
 
@@ -1488,118 +1780,45 @@ function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light,
   ctx.globalCompositeOperation = 'screen';
 
   if (el.kind === 'kelp-fronds' || el.kind === 'cenote-roots') {
-    // Delicate edge-hugging backlit rim threads along outer organic stalks/strands (ZERO circle blobs!)
-    const sssPower = _clamp(light.backLit * 0.46 + light.sunLit * 0.30 + light.beamLit * 0.28, 0, 0.56);
-    if (sssPower > 0.09) {
-      const strands = el.subCount + 1;
-      ctx.lineCap = 'round';
-      for (let i = 0; i < strands; i++) {
-        const u = strands <= 1 ? 0 : i / (strands - 1) - 0.5;
-        const dx0 = u * wPx * 0.78;
-        const bx = sx + dx0;
-        const by = wallY(dx0);
-        const len = hPx * (0.62 + _hash01(el.seed + i * 11.3) * 0.34);
-        const tipX = bx + (u * 0.42 + el.lean * 0.85) * wPx + swayPx * 0.85;
-        const tipY = by + dir * len;
-        const midX = (bx + tipX) * 0.5 + swayPx * 0.35;
-        const midY = (by + tipY) * 0.5;
-        const sg = ctx.createLinearGradient(bx, by, tipX, tipY);
-        sg.addColorStop(0, `rgba(${sssRgb}, 0)`);
-        sg.addColorStop(0.55, `rgba(${sssRgb}, ${(sssPower * 0.45).toFixed(3)})`);
-        sg.addColorStop(1, `rgba(${sssRgb}, ${(sssPower * 0.68).toFixed(3)})`);
-        ctx.strokeStyle = sg;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.quadraticCurveTo(midX, midY, tipX, tipY);
-        ctx.stroke();
-      }
-    }
     if (light.biolumLit > 0.18) {
       for (let b = 0; b < 3; b++) {
         const bx = sx + ((b / 2) - 0.5) * wPx * 0.75 + swayPx * 0.5;
         const by = wallY(((b / 2) - 0.5) * wPx * 0.75) + dir * hPx * (0.36 + ((b * 37) % 10) * 0.05);
         const pulse = 0.45 + 0.55 * Math.sin(timeSec * 2.8 + b * 1.9 + el.phase);
-        ctx.fillStyle = `rgba(110, 242, 255, ${(light.biolumLit * pulse * 0.72).toFixed(3)})`;
+        ctx.fillStyle = `rgba(110, 242, 255, ${(light.biolumLit * pulse * 0.76 * vis).toFixed(3)})`;
         ctx.beginPath();
-        ctx.ellipse(bx, by, 2.0, 2.0, 0, 0, Math.PI * 2);
+        ctx.ellipse(bx, by, 2.2, 2.2, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   } else if (el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster') {
-    // Pinpoint crystalline diamond twinkle strictly when swept by torchlight or sunlight!
-    const glintA = _clamp((light.beamLit - 0.22) * 0.92 + light.sunLit * 0.34 + light.backLit * 0.28, 0, 0.84);
+    const glintA = _clamp((light.beamLit - 0.18) * 0.95 + light.sunLit * 0.36 + light.backLit * 0.34, 0, 0.92) * vis;
     if (glintA > 0.09) {
-      const twinkle = reduced ? 1 : 0.68 + 0.32 * Math.sin(timeSec * 4.4 + el.phase);
-      _drawStarGlint(ctx, sx + leanPx * 0.42, sy + dir * hPx * 0.92, Math.max(4.5, hPx * 0.085), rimRgb, glintA * twinkle);
-      if (glintA > 0.34) {
-        _drawStarGlint(ctx, sx - wPx * 0.22, wallY(-wPx * 0.22) + dir * hPx * 0.58, Math.max(3.0, hPx * 0.05), sssRgb, glintA * 0.62 * twinkle);
+      const twinkle = reduced ? 1 : 0.70 + 0.30 * Math.sin(timeSec * 4.4 + el.phase);
+      _drawStarGlint(ctx, sx + leanPx * 0.36, sy + dir * hPx * 0.94, Math.max(5.5, hPx * 0.095), rimRgb, glintA * twinkle);
+      if (glintA > 0.32) {
+        _drawStarGlint(ctx, sx - wPx * 0.20, wallY(-wPx * 0.20) + dir * hPx * 0.58, Math.max(3.6, hPx * 0.055), sssRgb, glintA * 0.65 * twinkle);
       }
     }
-  } else if (el.kind === 'limestone-overhang') {
-    // Crisp subtle backlit edge rim ONLY when the diver/torch/vent illuminates the organic rock lip
-    const rimA = _clamp(light.backLit * 0.42 + light.edgeOcc * 0.18 + light.ventLit * 0.28 + (light.beamLit - 0.28) * 0.30, 0, 0.46);
-    if (rimA > 0.09) {
-      const tipX = sx + leanPx * 0.4 + light.lightDirX * wPx * 0.28;
-      const tipY = sy + dir * hPx * 0.86;
-      const rGrad = ctx.createLinearGradient(tipX, tipY, sx - light.lightDirX * wPx * 0.6, sy);
-      rGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimA * 0.64).toFixed(3)})`);
-      rGrad.addColorStop(0.5, `rgba(${rimRgb}, ${(rimA * 0.20).toFixed(3)})`);
-      rGrad.addColorStop(1, `rgba(${rimRgb}, 0)`);
-      ctx.strokeStyle = rGrad;
-      ctx.lineWidth = Math.max(1.6, Math.min(3.2, hPx * 0.025));
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx - wPx * 0.48, wallY(-wPx * 0.48) + dir * hPx * 0.34);
-      ctx.quadraticCurveTo(sx + leanPx * 0.35, sy + dir * hPx * 0.94, sx + wPx * 0.48, wallY(wPx * 0.48) + dir * hPx * 0.34);
-      ctx.stroke();
-    }
-  } else if (el.kind === 'basalt-spire') {
-    // Crisp lit top-bevel highlight on the central basalt column + volcanic magma seam glow
-    const rimA = _clamp(light.backLit * 0.38 + light.ventLit * 0.46 + (light.beamLit - 0.24) * 0.34, 0, 0.52);
-    if (rimA > 0.09) {
-      const halfW = wPx * 0.26;
-      ctx.strokeStyle = `rgba(${rimRgb}, ${(rimA * 0.58).toFixed(3)})`;
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx - halfW, sy + dir * hPx * 0.94);
-      ctx.lineTo(sx + halfW, sy + dir * hPx * 0.94);
-      ctx.stroke();
-    }
   } else if (el.kind === 'wreck-girder') {
-    // Clean metallic flange specular along the lit girder edge
-    const rimA = _clamp(light.backLit * 0.36 + (light.beamLit - 0.22) * 0.40, 0, 0.48);
+    const rimA = _clamp(light.backLit * 0.48 + (light.beamLit - 0.18) * 0.46, 0, 0.66) * vis;
     if (rimA > 0.09) {
-      const bw = Math.max(14, wPx * 0.38);
+      const bw = Math.max(18, wPx * 0.42);
       const sideSign = light.lightDirX >= 0 ? 1 : -1;
-      const tipX = sx + leanPx * 1.15 + sideSign * bw * 0.44;
-      const tipY = sy + dir * hPx * 0.96;
+      const tipX = sx + leanPx * 1.1 + sideSign * bw * 0.44;
+      const tipY = sy + dir * hPx * 0.95;
       const baseX = sx + sideSign * bw * 0.68;
       const baseY = wallY(sideSign * bw * 0.68);
       const rGrad = ctx.createLinearGradient(tipX, tipY, baseX, baseY);
-      rGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimA * 0.70).toFixed(3)})`);
-      rGrad.addColorStop(0.65, `rgba(${rimRgb}, ${(rimA * 0.24).toFixed(3)})`);
+      rGrad.addColorStop(0, `rgba(${rimRgb}, ${(rimA * 0.85).toFixed(3)})`);
+      rGrad.addColorStop(0.65, `rgba(${rimRgb}, ${(rimA * 0.28).toFixed(3)})`);
       rGrad.addColorStop(1, `rgba(${rimRgb}, 0)`);
       ctx.strokeStyle = rGrad;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2.0;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(baseX, baseY);
       ctx.lineTo(tipX, tipY);
-      ctx.stroke();
-    }
-  } else if (el.kind === 'monolith-block') {
-    // Crisp carved lintel highlight along the horizontal monolith crest
-    const rimA = _clamp(light.backLit * 0.38 + light.sunLit * 0.28 + (light.beamLit - 0.24) * 0.34, 0, 0.48);
-    if (rimA > 0.09) {
-      const bw = wPx * 0.74;
-      ctx.strokeStyle = `rgba(${rimRgb}, ${(rimA * 0.56).toFixed(3)})`;
-      ctx.lineWidth = 1.8;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx - bw * 0.40, wallY(-bw * 0.40) + dir * hPx);
-      ctx.lineTo(sx + bw * 0.34, wallY(bw * 0.34) + dir * hPx);
       ctx.stroke();
     }
   }
@@ -1609,8 +1828,7 @@ function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light,
 
 export const foregroundDepthRendererMethods = {
   /**
-   * PASS 1 (Pre-Lighting): Draw living foreground formations IN FRONT of the diver and INSIDE
-   * the lighting pipeline so real cave darkness, sunlight shafts & ray-cast torch beams light them!
+   * Draw near-plane light-integrated foreground formations in front of the diver & volumetric lighting.
    */
   _drawForegroundDepthElements(
     ctx,
@@ -1638,8 +1856,8 @@ export const foregroundDepthRendererMethods = {
     const diverSx = diver ? viewCenterX + (diver.x - effCamX) * scale : -9999;
     const diverSy = diver ? viewCenterY + (diver.y - effCamY) * scale : -9999;
 
-    const innerClearR = Math.max(28, scale * 0.88);
-    const outerClearR = Math.max(54, scale * 1.68);
+    const innerClearR = Math.max(16, scale * 0.44);
+    const outerClearR = Math.max(30, scale * 0.84);
 
     const solveOpts = {
       weather: this._activeWeather || null,
@@ -1666,15 +1884,16 @@ export const foregroundDepthRendererMethods = {
       if (sx < -margin || sx > cw + margin || sy < -margin || sy > ch + margin) continue;
 
       const dir = el.side === 'ceiling' ? 1 : -1;
-      const coreY = sy + dir * hPx * 0.22;
+      // Anchor core-fade strictly at the buried wall-contact root so open-water edges stay 100% SOLID over the diver!
+      const coreY = sy + dir * Math.min(hPx * 0.22, scale * 0.34);
       const distCore = Math.hypot(sx - diverSx, coreY - diverSy);
       let proxFade = 1.0;
       if (distCore < outerClearR) {
         const u = _clamp((distCore - innerClearR) / Math.max(1, outerClearR - innerClearR), 0, 1);
-        proxFade = 0.36 + u * u * 0.64;
+        proxFade = 0.34 + u * u * 0.66;
       }
 
-      const baseAlpha = inCombat ? 0.30 : (el.depthLayer === 'mid' ? 0.98 : 0.92);
+      const baseAlpha = inCombat ? 0.30 : (el.depthLayer === 'mid' ? 0.98 : 0.95);
       const finalAlpha = baseAlpha * proxFade;
       if (finalAlpha < 0.04) continue;
 
@@ -1683,7 +1902,7 @@ export const foregroundDepthRendererMethods = {
       const swayPx = reduced
         ? 0
         : Math.sin(timeSec * (el.kind === 'wreck-chain' ? 1.05 : 1.42) + el.phase) *
-          (el.kind === 'cenote-roots' || el.kind === 'kelp-fronds' ? 0.26 * scale : 0.08 * scale);
+          (el.kind === 'cenote-roots' || el.kind === 'kelp-fronds' ? 0.28 * scale : 0.08 * scale);
 
       ctx.globalAlpha = finalAlpha;
       _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced, rockPattern);
@@ -1692,8 +1911,7 @@ export const foregroundDepthRendererMethods = {
   },
 
   /**
-   * PASS 2 (Post-Lighting): Subtle backlit edge-wrap, translucent subsurface highlights & diamond glints
-   * strictly where real light sources strike or the diver glides behind an edge.
+   * Post-lighting optical accents (crystal/icicle diamond glints, biolum spores, metallic specular).
    */
   _drawForegroundDepthLightingAccents(
     ctx,
@@ -1744,12 +1962,13 @@ export const foregroundDepthRendererMethods = {
 
       const dir = el.side === 'ceiling' ? 1 : -1;
       const light = computeForegroundElementLighting(el, this.level, solveOpts, _lightScratch);
+      if (light.lightVis < 0.06) continue;
       if (Math.max(light.beamLit, light.backLit, light.sunLit, light.ventLit, light.biolumLit) < 0.16) continue;
 
       const swayPx = reduced
         ? 0
         : Math.sin(timeSec * (el.kind === 'wreck-chain' ? 1.05 : 1.42) + el.phase) *
-          (el.kind === 'cenote-roots' || el.kind === 'kelp-fronds' ? 0.26 * scale : 0.08 * scale);
+          (el.kind === 'cenote-roots' || el.kind === 'kelp-fronds' ? 0.28 * scale : 0.08 * scale);
 
       ctx.globalAlpha = inCombat ? 0.35 : 0.90;
       _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced);

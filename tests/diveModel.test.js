@@ -9335,12 +9335,12 @@ test('v188 Home Screen Gear Workshop Move (Callsign-Only Row) & Boss/Lesser Enem
   assert.equal(idRowMatch[0].includes('<button'), false, '#menu-identity-row must contain only Callsign label and input');
   assert.ok(idRowMatch[0].includes('id="input-player-name"'), 'Diver Callsign input must remain in #menu-identity-row');
 
-  // 2. Gear Workshop (#btn-home-open-livery) with live mini diver thumbnail lives inside #home-menu-popover
+  // 2. Gear Workshop (#btn-home-open-livery) lives cleanly inside #home-menu-popover without redundant mini avatar
   const menuPopStart = html.indexOf('id="home-menu-popover"');
   const menuPopEnd = html.indexOf('id="pwa-update-banner"');
   const menuPopSlice = html.slice(menuPopStart, menuPopEnd);
   assert.ok(menuPopSlice.includes('id="btn-home-open-livery"'), 'Gear Workshop must live inside #home-menu-popover');
-  assert.ok(menuPopSlice.includes('id="home-avatar-canvas"'), 'Mini diver preview canvas should live inside Gear Workshop menu item');
+  assert.equal(menuPopSlice.includes('id="home-avatar-canvas"'), false, 'Menu should not render redundant diver avatar canvas');
 
   // 3. Simultaneous floating upgrade/hit callouts stagger vertically so they never overlap
   const { applyWeaponUpgrade } = await import('../public/js/game/secretLairs.js');
@@ -13022,4 +13022,70 @@ test('v249 Living light-integrated foreground depth elements: wallSlope anchorin
   assert.ok(farA >= 0.85, `Expected crisp far foreground alpha, got ${farA}`);
   assert.ok(edgeA >= 0.72, `Diver at outer edge should stay occluded behind edge (>=0.72), got ${edgeA}`);
   assert.ok(coreA < farA * 0.55, `Diver dead-center on anchor core must gently soften (<55% far), got ${coreA} vs ${farA}`);
+});
+
+test('v250 Post-lighting foreground occlusion, tunnel-anchored rock pillars & avatar-free menu', async () => {
+  const { readFileSync } = await import('node:fs');
+  const {
+    buildForegroundDepthElements,
+    foregroundDepthRendererMethods,
+  } = await import('../public/js/game/renderers/foregroundDepthRenderer.js');
+
+  // 1. renderer.js draws foreground depth elements AFTER volumetric beams & silt clouds so divers & beams pass behind them
+  const rendererSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  const siltIdx = rendererSrc.indexOf('this._drawSiltClouds(');
+  const fgIdx = rendererSrc.indexOf('this._drawForegroundDepthElements?.(');
+  assert.ok(siltIdx > 0 && fgIdx > siltIdx, 'Foreground depth elements must render after _drawSiltClouds and volumetric lighting');
+
+  // 2. Rock pillars spawn inside solid enclosed caves and NEVER overlap open surface basins
+  let pillarCount = 0;
+  for (const lvl of LEVELS) {
+    const els = buildForegroundDepthElements(lvl);
+    for (const el of els) {
+      if (el.kind !== 'rock-pillar') continue;
+      pillarCount++;
+      assert.ok(el.heightM >= 4.0, `Rock pillar heightM should span full tunnel, got ${el.heightM}`);
+      for (const b of lvl.openBasins || []) {
+        assert.ok(
+          el.x < (b.xMin ?? -1e9) - 3.5 || el.x > (b.xMax ?? 1e9) + 3.5,
+          `${lvl.id} rock-pillar at x=${el.x} must stay clear of openBasin [${b.xMin}, ${b.xMax}]`
+        );
+      }
+    }
+  }
+  assert.ok(pillarCount >= 10, `Expected corridor-crossing rock pillars across campaign caves, got ${pillarCount}`);
+
+  // 3. Diver gliding mid-corridor behind a rock pillar keeps it solid (>=0.90 alpha) for unmistakable 3D occlusion
+  const lvl1Els = buildForegroundDepthElements(LEVEL_1);
+  const pillar = lvl1Els.find((e) => e.kind === 'rock-pillar');
+  assert.ok(pillar, 'Expected at least one rock-pillar in LEVEL_1');
+  const alphas = [];
+  const mockCtx = {
+    globalCompositeOperation: 'source-over',
+    save() {}, restore() {}, beginPath() {}, closePath() {}, fill() {}, stroke() {}, clip() {},
+    moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
+    createLinearGradient() { return { addColorStop() {} }; },
+    createRadialGradient() { return { addColorStop() {} }; },
+    set globalAlpha(v) { alphas.push(v); },
+    get globalAlpha() { return alphas[alphas.length - 1] ?? 1; },
+  };
+  const host = { level: LEVEL_1, _reducedMotion: false, _activeWeather: null };
+  foregroundDepthRendererMethods._drawForegroundDepthElements.call(
+    host,
+    mockCtx,
+    1280,
+    800,
+    pillar.x,
+    pillar.y + pillar.heightM * 0.5,
+    640,
+    400,
+    40,
+    2.5,
+    { x: pillar.x, y: pillar.y + pillar.heightM * 0.5, torchOn: true, torchAngle: 0, angle: 0 }
+  );
+  assert.ok(alphas.length > 0 && alphas.some((a) => a >= 0.90), `Pillar mid-corridor occlusion must stay solid (>=0.90), got ${JSON.stringify(alphas)}`);
+
+  // 4. Home menu popover no longer contains #home-avatar-canvas
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('home-avatar-canvas'), false, 'home-avatar-canvas must be removed from index.html');
 });
