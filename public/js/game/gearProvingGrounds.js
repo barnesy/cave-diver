@@ -523,7 +523,7 @@ export function createProvingGroundsHudBar({
 
     barEl.innerHTML = `
       <div class="pg-bar-top">
-        <div class="pg-bar-title">🧪 <strong>GEAR PROVING GROUNDS</strong> <span id="pg-live-readout" class="pg-live-readout">Swim through the 6 lanes · Swap sets live!</span></div>
+        <div class="pg-bar-title">🧪 <strong>Gear Proving Grounds</strong> <span id="pg-live-readout" class="pg-live-readout">Swim through the 6 lanes · Swap sets live!</span></div>
         <div class="pg-bar-actions">
           <button type="button" class="btn tiny secondary" id="btn-pg-cycle-mode" title="Cycle Mode & Difficulty gear tuning live (Standard → Hardcore → Guided → Daily → Purist)">${modeSpec.icon} ${modeSpec.label}</button>
           <button type="button" class="btn tiny secondary" id="btn-pg-test-deco" title="Load a quick 6m decompression stop to test Deco Offgas & Steady-Trim">🫧 Test 6m Deco</button>

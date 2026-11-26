@@ -11549,7 +11549,7 @@ test('v215 Living Cavern Hydrology: Slipstream Riding, Wall Pull-and-Glide Bound
     { thermoclines: [], percolationZones: [], shiftingHatches: [], tidalCurrent: { enabled: true, vx: 0.8, vy: 0, strength: 0.8 }, hydrology: sess.hydrology },
     -10, 40, 0, 25, toX, toY, 24, 2.4, sess.diver
   );
-  assert.ok(drawnTexts.some((t) => t.includes('SLIPSTREAM')), 'Slipstream diegetic callout pill must render');
+  assert.equal(drawnTexts.some((t) => t.includes('SLIPSTREAM')), false, 'Slipstream uses pure velocity lines without floating text clutter around diver');
 
   // Pull-and-Glide pass
   r._drawDynamicHazards(
@@ -11572,7 +11572,7 @@ test('v215 Living Cavern Hydrology: Slipstream Riding, Wall Pull-and-Glide Bound
     },
     -10, 40, 0, 25, toX, toY, 24, 2.8, sess.diver
   );
-  assert.ok(drawnTexts.some((t) => t.includes('PULL-AND-GLIDE')), 'Pull-and-Glide diegetic callout pill must render');
+  assert.equal(drawnTexts.some((t) => t.includes('PULL-AND-GLIDE')), false, 'Pull-and-Glide uses pure visual shimmer without floating text clutter around diver');
   assert.ok(ops > 80, 'Rock-masked Flow Ribbons & boundary-layer shimmer must render cleanly');
 });
 
@@ -12402,8 +12402,8 @@ test('v228 Gear Loadout Inspector, Trim Impact Resolution & Avatar Slot Spotligh
       focusHighlight: { slot, color: '#34d399', kicker: 'PREVIEW', label: `Inspect ${slot}` },
     });
   }
-  assert.ok(calls.some((t) => t.includes('VISOR LENS · TEST VISOR')), 'Blueprint callout pin must render slot + item name during equip spotlight');
-  assert.ok(calls.some((t) => t.includes('PREVIEW · INSPECT TANK')), 'Blueprint callout pin must render during live hover/inspect spotlight');
+  assert.ok(calls.some((t) => t.toLowerCase().includes('visor lens · test visor')), 'Preview corner caption must render slot + item name during equip spotlight');
+  assert.ok(calls.some((t) => t.toLowerCase().includes('preview · inspect tank')), 'Preview corner caption must render during live hover/inspect spotlight');
 });
 
 test('v229 Salvage Doubloons Currency & Gear Color / Animated Coating Foundry', async () => {

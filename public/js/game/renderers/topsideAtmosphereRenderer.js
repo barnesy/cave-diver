@@ -232,3 +232,305 @@ export function drawTopsideAtmosphereExtras(renderer, ctx, visX0, visX1, toScree
   }
   ctx.restore();
 }
+
+/**
+ * Rich, living underwater cavern / shipwreck diorama rendered behind the Home & Gear Workshop
+ * screens even before cave chunks are baked (v240). Matches in-game biome palettes, volumetric
+ * sunbeams, sculpted walls/stalactites, schooling fish, swaying kelp, marine snow & bubbles.
+ */
+export function drawMenuBackdropDiorama(renderer, level, timeSec = 0) {
+  const ctx = renderer.ctx;
+  const cw = renderer.canvas.width;
+  const ch = renderer.canvas.height;
+  const theme = level?.theme || {};
+
+  const targetHexes = [
+    theme.waterSurface || '#67e8f9',
+    theme.waterShallow || '#06b6d4',
+    theme.waterMid || '#0e5a6f',
+    theme.waterDeep || '#072a47',
+    theme.waterAbyss || '#020914',
+  ];
+  const parseHex = (hex) => {
+    const s = String(hex || '#020b14').replace('#', '');
+    const full = s.length === 3 ? `${s[0]}${s[0]}${s[1]}${s[1]}${s[2]}${s[2]}` : s.padEnd(6, '0');
+    const n = parseInt(full.slice(0, 6), 16);
+    return Number.isFinite(n) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [2, 11, 20];
+  };
+  const dt = renderer._lastMenuBackdropSec ? Math.min(0.1, Math.max(0.004, timeSec - renderer._lastMenuBackdropSec)) : 0.016;
+  renderer._lastMenuBackdropSec = timeSec;
+
+  if (!renderer._menuBackdropRgb) {
+    renderer._menuBackdropRgb = targetHexes.map(parseHex);
+  } else {
+    const alpha = 1 - Math.exp(-dt * 4.2);
+    for (let i = 0; i < 5; i++) {
+      const tgt = parseHex(targetHexes[i]);
+      const cur = renderer._menuBackdropRgb[i];
+      cur[0] += (tgt[0] - cur[0]) * alpha;
+      cur[1] += (tgt[1] - cur[1]) * alpha;
+      cur[2] += (tgt[2] - cur[2]) * alpha;
+    }
+  }
+  const rgbStop = (i) => {
+    const c = renderer._menuBackdropRgb[i];
+    return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  };
+
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, rgbStop(0));
+  grad.addColorStop(0.22, rgbStop(1));
+  grad.addColorStop(0.54, rgbStop(2));
+  grad.addColorStop(0.82, rgbStop(3));
+  grad.addColorStop(1, rgbStop(4));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  const mdpr = renderer._cachedDpr || 1;
+  const isWreck = Boolean(level?.isWreck || level?.category === 'wreck');
+  const isIce = /ice|arctic|glacial|scoresby|kverk/i.test(`${level?.id || ''} ${level?.name || ''}`);
+  const tAnim = renderer._reducedMotion ? 0 : timeSec;
+
+  ctx.save();
+
+  // 1. Subtle refracted water surface caustic bands along top water column
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let c = 0; c < 4; c++) {
+    const cy = ch * (0.04 + c * 0.045) + Math.sin(tAnim * (0.45 + c * 0.1) + c * 1.9) * ch * 0.012;
+    const cg = ctx.createLinearGradient(0, cy - ch * 0.03, 0, cy + ch * 0.045);
+    cg.addColorStop(0, 'rgba(186, 230, 253, 0)');
+    cg.addColorStop(0.5, `rgba(186, 230, 253, ${(0.085 - c * 0.014).toFixed(3)})`);
+    cg.addColorStop(1, 'rgba(186, 230, 253, 0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    for (let x = 0; x <= cw; x += Math.max(48, cw / 14)) {
+      const wy = cy + Math.sin(x * 0.0045 + tAnim * 0.75 + c * 1.4) * ch * 0.014;
+      ctx.lineTo(x, wy);
+    }
+    ctx.lineTo(cw, cy + ch * 0.055);
+    ctx.lineTo(0, cy + ch * 0.055);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Helper: trace an organic rocky contour using multi-frequency harmonic curves (no sharp spikes)
+  const rockNoise = (t, seed) =>
+    Math.sin(t * 7.3 + seed) * 0.45 +
+    Math.sin(t * 15.1 + seed * 1.9) * 0.28 +
+    Math.sin(t * 29.7 + seed * 3.1) * 0.14 +
+    Math.cos(t * 4.2 + seed * 0.7) * 0.13;
+
+  // 2. Far misty cavern formations & distant canyon floor (asymmetric organic depth layer)
+  ctx.fillStyle = isIce ? 'rgba(10, 44, 72, 0.36)' : isWreck ? 'rgba(10, 22, 36, 0.38)' : 'rgba(4, 24, 40, 0.38)';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(cw, 0);
+  for (let i = 0; i <= 28; i++) {
+    const u = i / 28;
+    const x = cw * (1 - u);
+    const arch = Math.pow(Math.abs(u - 0.54) * 1.85, 1.7);
+    const baseDepth = ch * (0.045 + Math.min(0.32, arch * 0.22));
+    const y = baseDepth + rockNoise(u, 1.3) * ch * 0.032;
+    ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Distant organic canyon floor sloping gently from left to deep basin on right
+  ctx.fillStyle = isIce ? 'rgba(6, 26, 48, 0.46)' : 'rgba(2, 13, 25, 0.48)';
+  ctx.beginPath();
+  ctx.moveTo(0, ch);
+  for (let i = 0; i <= 28; i++) {
+    const u = i / 28;
+    const x = cw * u;
+    const valley = Math.sin(u * Math.PI) * ch * 0.14;
+    const y = ch * 0.76 + valley + rockNoise(u, 4.7) * ch * 0.034;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(cw, ch);
+  ctx.closePath();
+  ctx.fill();
+
+  // 3. Soft volumetric sunbeams streaming diagonally through the natural cenote skylight
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 6; i++) {
+    const baseX = cw * (0.18 + i * 0.13) + Math.sin(tAnim * 0.2 + i * 1.55) * cw * 0.028;
+    const topW = cw * (0.024 + (i % 3) * 0.013);
+    const botW = cw * (0.105 + (i % 3) * 0.034);
+    const shimmer = 0.075 + 0.038 * Math.sin(tAnim * 0.48 + i * 2.1);
+    const rayGrad = ctx.createLinearGradient(baseX, 0, baseX + cw * 0.07, ch * 0.9);
+    rayGrad.addColorStop(0, `rgba(224, 242, 254, ${shimmer.toFixed(3)})`);
+    rayGrad.addColorStop(0.55, `rgba(56, 189, 248, ${(shimmer * 0.4).toFixed(3)})`);
+    rayGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+    ctx.fillStyle = rayGrad;
+    ctx.beginPath();
+    ctx.moveTo(baseX - topW, 0);
+    ctx.lineTo(baseX + topW, 0);
+    ctx.lineTo(baseX + botW + cw * 0.07, ch * 0.94);
+    ctx.lineTo(baseX - botW * 0.38 + cw * 0.07, ch * 0.94);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 4. Living midground school of graceful fish silhouettes gliding through the sunlit column
+  ctx.save();
+  for (let f = 0; f < 10; f++) {
+    const dir = f % 3 === 0 ? -1 : 1;
+    const speed = (0.011 + (f % 4) * 0.004) * dir;
+    const fx = (((f * 0.183 + tAnim * speed) % 1.16) + 1.16) % 1.16 - 0.08;
+    const fy = 0.22 + (f % 5) * 0.12 + Math.sin(tAnim * 0.8 + f * 1.7) * 0.016;
+    const sx = fx * cw;
+    const sy = fy * ch;
+    const flen = (7.5 + (f % 4) * 3.0) * mdpr;
+    const tailWag = Math.sin(tAnim * (5.0 + (f % 3)) + f * 2.1) * flen * 0.22;
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (dir < 0) ctx.scale(-1, 1);
+    ctx.fillStyle = f % 2 === 0 ? 'rgba(148, 218, 245, 0.2)' : 'rgba(56, 189, 248, 0.14)';
+    ctx.beginPath();
+    ctx.moveTo(flen * 0.65, 0);
+    ctx.quadraticCurveTo(flen * 0.1, -flen * 0.34, -flen * 0.52, tailWag * 0.45);
+    ctx.lineTo(-flen * 0.92, -flen * 0.28 + tailWag);
+    ctx.lineTo(-flen * 0.72, tailWag * 0.5);
+    ctx.lineTo(-flen * 0.92, flen * 0.28 + tailWag);
+    ctx.lineTo(-flen * 0.52, tailWag * 0.45);
+    ctx.quadraticCurveTo(flen * 0.1, flen * 0.34, flen * 0.65, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 5. Organic asymmetric limestone rock ledges framing outer viewport margins (zero sharp spikes)
+  const wallGradL = ctx.createLinearGradient(0, 0, cw * 0.18, 0);
+  wallGradL.addColorStop(0, isIce ? 'rgba(5, 24, 42, 0.94)' : isWreck ? 'rgba(8, 16, 26, 0.94)' : 'rgba(2, 10, 20, 0.92)');
+  wallGradL.addColorStop(0.65, isIce ? 'rgba(10, 42, 68, 0.66)' : 'rgba(4, 18, 32, 0.62)');
+  wallGradL.addColorStop(1, 'rgba(4, 18, 32, 0)');
+  ctx.fillStyle = wallGradL;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for (let i = 0; i <= 24; i++) {
+    const u = i / 24;
+    const y = ch * u;
+    const cornerFlare = Math.pow(Math.max(0, 0.28 - u) / 0.28, 1.8) * cw * 0.11 + Math.pow(Math.max(0, u - 0.72) / 0.28, 1.8) * cw * 0.14;
+    const x = cw * 0.045 + cornerFlare + rockNoise(u, 2.6) * cw * 0.022;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(0, ch);
+  ctx.closePath();
+  ctx.fill();
+
+  const wallGradR = ctx.createLinearGradient(cw, 0, cw * 0.82, 0);
+  wallGradR.addColorStop(0, isIce ? 'rgba(5, 24, 42, 0.94)' : isWreck ? 'rgba(8, 16, 26, 0.94)' : 'rgba(2, 10, 20, 0.92)');
+  wallGradR.addColorStop(0.65, isIce ? 'rgba(10, 42, 68, 0.66)' : 'rgba(4, 18, 32, 0.62)');
+  wallGradR.addColorStop(1, 'rgba(4, 18, 32, 0)');
+  ctx.fillStyle = wallGradR;
+  ctx.beginPath();
+  ctx.moveTo(cw, 0);
+  for (let i = 0; i <= 24; i++) {
+    const u = i / 24;
+    const y = ch * u;
+    const cornerFlare = Math.pow(Math.max(0, 0.24 - u) / 0.24, 1.8) * cw * 0.09 + Math.pow(Math.max(0, u - 0.70) / 0.30, 1.8) * cw * 0.15;
+    const x = cw - (cw * 0.04 + cornerFlare + rockNoise(u, 6.1) * cw * 0.022);
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(cw, ch);
+  ctx.closePath();
+  ctx.fill();
+
+  if (isWreck) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(251, 146, 60, 0.11)';
+    ctx.lineWidth = Math.max(1.8, 2.2 * mdpr);
+    for (let r = 0; r < 4; r++) {
+      const rx = cw * (0.03 + r * 0.028);
+      ctx.beginPath();
+      ctx.moveTo(rx, ch * (0.9 - r * 0.035));
+      ctx.quadraticCurveTo(rx + cw * 0.018, ch * (0.72 - r * 0.03), rx - cw * 0.008, ch * (0.6 - r * 0.02));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 6. Delicate hanging cenote roots (upper corners) & gently swaying kelp fronds (lower corners)
+  ctx.save();
+  ctx.lineCap = 'round';
+  if (!isWreck && !isIce) {
+    const rootAnchors = [
+      { x: 0.055, len: 0.17, ph: 0.3 },
+      { x: 0.095, len: 0.11, ph: 1.5 },
+      { x: 0.915, len: 0.13, ph: 2.4 },
+      { x: 0.955, len: 0.19, ph: 0.9 },
+    ];
+    for (let r = 0; r < rootAnchors.length; r++) {
+      const ra = rootAnchors[r];
+      const rx = cw * ra.x;
+      const rlen = ch * ra.len;
+      const sway = Math.sin(tAnim * 0.75 + ra.ph) * cw * 0.008;
+      ctx.strokeStyle = 'rgba(12, 42, 46, 0.48)';
+      ctx.lineWidth = Math.max(1.2, 1.8 * mdpr);
+      ctx.beginPath();
+      ctx.moveTo(rx, 0);
+      ctx.quadraticCurveTo(rx + sway * 0.5, rlen * 0.52, rx + sway, rlen);
+      ctx.stroke();
+    }
+  }
+  const kelpAnchors = [
+    { x: 0.038, y: 1.0, h: 0.15, ph: 0.4 },
+    { x: 0.072, y: 1.0, h: 0.11, ph: 1.7 },
+    { x: 0.925, y: 1.0, h: 0.12, ph: 2.2 },
+    { x: 0.962, y: 1.0, h: 0.16, ph: 3.5 },
+  ];
+  for (let k = 0; k < kelpAnchors.length; k++) {
+    const ka = kelpAnchors[k];
+    const bx = cw * ka.x;
+    const by = ch * ka.y;
+    const kh = ch * ka.h;
+    const sway = Math.sin(tAnim * 0.95 + ka.ph) * cw * 0.012;
+    ctx.strokeStyle = isIce ? 'rgba(56, 189, 248, 0.2)' : 'rgba(13, 66, 76, 0.52)';
+    ctx.lineWidth = Math.max(1.8, 2.6 * mdpr);
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + sway * 0.45, by - kh * 0.55, bx + sway, by - kh);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 7. Drifting parallax marine snow & specular rising bubbles (zero-alloc)
+  if (!renderer._reducedMotion) {
+    for (let s = 0; s < 34; s++) {
+      const seed = (s + 3) * 1.6180339;
+      const sx = ((((seed * 11.7) % 1) + Math.sin(tAnim * 0.32 + s * 1.3) * 0.015 + 1) % 1) * cw;
+      const sy = ((((seed * 5.3) % 1) + tAnim * (0.004 + (s % 4) * 0.002)) % 1) * ch;
+      const sr = (0.7 + (s % 3) * 0.55) * mdpr;
+      ctx.fillStyle = `rgba(224, 242, 254, ${(0.12 + (s % 3) * 0.06).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.lineWidth = Math.max(1, mdpr * 0.8);
+    for (let i = 0; i < 22; i++) {
+      const seed = (i + 1) * 1.6180339;
+      const speed = 0.02 + (i % 7) * 0.0065;
+      const phase = (tAnim * speed + (seed % 1)) % 1;
+      const by = ch * (1.06 - phase * 1.12);
+      const bx = cw * (((seed * 7.31) % 1) + Math.sin(tAnim * (0.6 + (i % 4) * 0.25) + i * 2.3) * 0.015);
+      const r = (1.8 + (i % 5) * 1.15) * (0.65 + (1 - phase) * 0.45) * mdpr;
+      const fade = Math.sin(phase * Math.PI);
+      const alpha = fade * (0.14 + (i % 3) * 0.055);
+      ctx.fillStyle = `rgba(186, 230, 253, ${(alpha * 0.48).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(224, 242, 254, ${(alpha * 1.15).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(bx, by, r * 1.06, r * 0.94, Math.sin(tAnim + i) * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}

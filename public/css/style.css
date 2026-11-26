@@ -1,14 +1,7 @@
 @font-face {
-  font-family: 'Fredoka';
-  src: url('../fonts/fredoka-latin.woff2') format('woff2');
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Nunito';
-  src: url('../fonts/nunito-latin.woff2') format('woff2');
-  font-weight: 400 900;
+  font-family: 'Plus Jakarta Sans';
+  src: url('../fonts/plus-jakarta-sans-latin.woff2') format('woff2');
+  font-weight: 400 800;
   font-style: normal;
   font-display: swap;
 }
@@ -32,8 +25,8 @@
   --danger: #f87171;
   --cyan: #38bdf8;
   --purple: #c084fc;
-  --font-display: 'Fredoka', 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-  --font-ui: 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -6749,7 +6742,7 @@ button.mode-badge:hover {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 640 / 248;
+  aspect-ratio: 640 / 232;
 }
 .livery-section-label {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -13986,229 +13979,12 @@ summary,
 }
 
 /* ============================================================================
- * v238 FRAMELESS & SUBTLY FLOATY HOME SCREEN
- * Removes the outer home container border/box so every panel floats organically
- * over the deep-water backdrop with softer, rounder pill/squircle silhouettes.
- * ============================================================================ */
-@keyframes abyssalBuoyantFloat {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-2.5px);
-  }
-}
-@keyframes abyssalDivePulse {
-  0%, 100% {
-    box-shadow: 0 14px 36px rgba(2, 132, 199, 0.42), 0 0 26px rgba(56, 189, 248, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.34);
-  }
-  50% {
-    box-shadow: 0 18px 42px rgba(2, 132, 199, 0.54), 0 0 38px rgba(56, 189, 248, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  }
-}
-
-#screen-menu.overlay-screen {
-  background: radial-gradient(ellipse at 50% 22%, rgba(12, 60, 96, 0.48), rgba(2, 10, 22, 0.84) 74%);
-  backdrop-filter: blur(8px);
-}
-#screen-menu > .menu-card {
-  background: transparent;
-  backdrop-filter: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 16px 20px 22px;
-}
-#screen-menu > .menu-card::before,
-#screen-menu > .menu-card::after {
-  display: none !important;
-}
-#screen-menu .menu-brand-icon {
-  border-radius: 16px;
-  border: none;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
-}
-#screen-menu .home-menu-btn {
-  border-radius: 999px !important;
-  width: 42px;
-  height: 42px;
-  background: rgba(10, 28, 50, 0.56) !important;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(224, 242, 254, 0.14);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
-}
-#screen-menu .home-menu-btn:hover {
-  transform: translateY(-2px);
-  background: rgba(56, 189, 248, 0.2) !important;
-  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.24);
-}
-#screen-menu .home-menu-popover {
-  border: none !important;
-  border-radius: 22px;
-  background: linear-gradient(168deg, rgba(10, 26, 48, 0.92), rgba(4, 12, 24, 0.96));
-  backdrop-filter: blur(22px) saturate(140%);
-  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(224, 242, 254, 0.14);
-}
-#screen-menu .campaign-progress-pill {
-  border: none !important;
-  border-radius: 999px;
-  background: rgba(14, 165, 233, 0.18);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.18);
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
-}
-#screen-menu .campaign-progress-pill:hover {
-  transform: translateY(-1.5px);
-  background: rgba(56, 189, 248, 0.26);
-}
-#screen-menu .site-map-panel {
-  border: none;
-  border-radius: 24px;
-  background: radial-gradient(circle at 55% 40%, rgba(10, 38, 66, 0.78), rgba(3, 13, 27, 0.86));
-  backdrop-filter: blur(14px);
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(224, 242, 254, 0.12);
-  animation: abyssalBuoyantFloat 8s ease-in-out infinite;
-}
-#screen-menu .site-map-region-badge,
-#screen-menu .site-map-zoom-btn,
-#screen-menu .site-map-legend {
-  border-radius: 999px !important;
-}
-#screen-menu .level-cards {
-  gap: 8px;
-  padding: 2px 4px 6px 2px;
-}
-#screen-menu .level-card-btn {
-  border: none;
-  border-radius: 18px;
-  background: rgba(8, 24, 44, 0.56);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.08);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
-}
-#screen-menu .level-card-btn.is-wreck {
-  background: rgba(34, 20, 18, 0.56);
-}
-#screen-menu .level-card-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  background: rgba(56, 189, 248, 0.16);
-  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(186, 230, 253, 0.18);
-}
-#screen-menu .level-card-btn.is-wreck:hover:not(:disabled) {
-  background: rgba(249, 115, 22, 0.18);
-  box-shadow: 0 14px 30px rgba(234, 88, 12, 0.22), inset 0 1px 0 rgba(254, 215, 170, 0.18);
-}
-#screen-menu .level-card-btn.active {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.32), rgba(10, 56, 94, 0.52));
-  box-shadow: 0 14px 32px rgba(2, 132, 199, 0.3), inset 0 1px 0 rgba(186, 230, 253, 0.3);
-}
-#screen-menu .level-card-btn.is-wreck.active {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(124, 45, 18, 0.44));
-  box-shadow: 0 14px 32px rgba(234, 88, 12, 0.28), inset 0 1px 0 rgba(254, 215, 170, 0.28);
-}
-#screen-menu .first-play-welcome-strip {
-  border: none !important;
-  border-radius: 999px;
-  padding: 10px 18px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 78, 59, 0.4));
-  backdrop-filter: blur(14px);
-  box-shadow: 0 12px 30px rgba(6, 78, 59, 0.32), inset 0 1px 0 rgba(167, 243, 208, 0.24);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, background 0.18s ease;
-}
-#screen-menu .first-play-welcome-strip:hover {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 78, 59, 0.5));
-  box-shadow: 0 16px 36px rgba(16, 185, 129, 0.34), inset 0 1px 0 rgba(167, 243, 208, 0.34);
-}
-#screen-menu #btn-play-solo {
-  border-radius: 999px;
-  animation: abyssalDivePulse 4.6s ease-in-out infinite;
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, filter 0.2s ease;
-}
-#screen-menu #btn-play-solo:hover:not(:disabled) {
-  transform: translateY(-2.5px);
-  filter: brightness(1.06);
-}
-#screen-menu .home-core-btn {
-  border: none !important;
-  border-radius: 999px !important;
-  background: rgba(9, 25, 46, 0.58) !important;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(224, 242, 254, 0.12);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease, box-shadow 0.24s ease;
-}
-#screen-menu .home-core-btn:hover:not(:disabled) {
-  transform: translateY(-2.5px);
-  background: rgba(56, 189, 248, 0.18) !important;
-  box-shadow: 0 16px 32px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(186, 230, 253, 0.24);
-}
-#screen-menu .home-core-btn.has-new-gear {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(6, 78, 59, 0.38)) !important;
-  box-shadow: 0 10px 26px rgba(16, 185, 129, 0.22), inset 0 1px 0 rgba(167, 243, 208, 0.26);
-}
-#screen-menu .dive-coop-dock {
-  border: none !important;
-  border-radius: 22px;
-  background: rgba(7, 20, 38, 0.46);
-  backdrop-filter: blur(14px);
-  padding: 9px 15px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(224, 242, 254, 0.08);
-}
-#screen-menu .coop-dock-toggle {
-  border-radius: 999px !important;
-}
-#screen-menu .lan-room-box,
-#screen-menu .leaderboard-panel {
-  border: none !important;
-  border-radius: 24px;
-  background: linear-gradient(168deg, rgba(9, 24, 44, 0.8), rgba(4, 12, 24, 0.88));
-  backdrop-filter: blur(22px) saturate(135%);
-  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(224, 242, 254, 0.12);
-  padding: 18px 20px;
-}
-#screen-menu .pwa-update-banner,
-#screen-menu .challenge-banner {
-  border: none !important;
-  border-radius: 20px;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(224, 242, 254, 0.14);
-}
-
-/* Softer rounding on modal cards and buttons to match the floaty home page */
-.lb-stats-card {
-  border-radius: 26px;
-}
-.gear-slot-preview-wrap,
-.livery-preview-wrap {
-  border-radius: 20px;
-}
-.gear-slot-equipped-hero,
-.gear-slot-cmp-card,
-.livery-equipped-card {
-  border-radius: 18px;
-}
-
-@media (max-width: 560px) {
-  #screen-menu > .menu-card {
-    padding: 10px 10px 16px;
-  }
-  #screen-menu .first-play-welcome-strip {
-    border-radius: 20px;
-  }
-  #screen-menu .home-core-btn {
-    border-radius: 18px !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #screen-menu .site-map-panel,
-  #screen-menu #btn-play-solo {
-    animation: none;
-  }
-}
-
-/* ============================================================================
- * v239 BUBBLY UNDERWATER FLOAT — ROUNDED TYPE, LESS NOISE & WAVY BUOYANT UI
+ * v240 AAA UNDERWATER STUDIO UI & VIEW CHOREOGRAPHY
+ * - Plus Jakarta Sans clean humanist-geometric typography in calm Title Case
+ * - Living underwater cavern diorama visible crisply behind frameless Home UI
+ * - True native IN + OUT view transitions (@starting-style + allow-discrete)
+ * - Depth-of-field recession when modals open over Home or Workshop
+ * - Exact 1:1 unstretched diver preview & filter-free Gear Workshop stage
  * ============================================================================ */
 button,
 input,
@@ -14217,400 +13993,455 @@ textarea {
   font-family: var(--font-ui);
 }
 
+/* Title Case everywhere — never shout with uppercase titles */
 h1, h2, h3,
 .menu-title,
+.menu-eyebrow,
 .loader-title,
-.btn,
-.home-core-btn,
-.lvl-card-name,
-.lvl-card-depth,
-.campaign-progress-pill,
+.lb-stats-title,
+.lb-nav-title,
+.livery-section-label,
+.gear-slot-owned-heading,
+.home-menu-section-lbl,
+.lan-rooms-title,
+.dive-setup-title,
 .livery-equipped-name,
-.livery-cat-tab,
+.livery-equipped-slot,
+.livery-card-slot,
+.livery-card-name,
+.livery-welcome-kicker,
+.livery-arch-pill,
+.livery-insp-kicker,
+.livery-next-kicker,
+.livery-perf-label,
+.loot-disc-kicker,
+.lvl-next-badge,
+.lvl-arch-badge,
 .gear-slot-hero-name,
 .gear-slot-cmp-name,
-.first-play-welcome-strip .fpw-cta,
-.lb-stats-header h2,
-.dive-setup-title {
+.btn {
+  text-transform: none !important;
   font-family: var(--font-display);
-  letter-spacing: 0.015em;
 }
 
-/* Bubbly friendly titles & buttons */
+/* Reveal the real living underwater cavern crisply behind the frameless Home UI */
+#screen-menu.overlay-screen {
+  background: radial-gradient(ellipse at 50% 44%, rgba(2, 12, 24, 0.22) 0%, rgba(2, 9, 19, 0.48) 64%, rgba(1, 6, 14, 0.72) 100%);
+  backdrop-filter: none;
+  overflow-x: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    display 0.28s allow-discrete;
+}
+#screen-menu.overlay-screen[hidden] {
+  opacity: 0;
+  transform: scale(1.018);
+}
+@starting-style {
+  #screen-menu.overlay-screen:not([hidden]) {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+#screen-menu > .menu-card {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 18px 20px 22px;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.24s ease,
+    filter 0.28s ease;
+}
+#screen-menu > .menu-card::before,
+#screen-menu > .menu-card::after {
+  display: none !important;
+}
+
+/* Depth-of-field recession when a modal opens over the Home Screen */
+body:has(.lb-stats-modal:not([hidden])) #screen-menu > .menu-card {
+  transform: scale(0.976);
+  opacity: 0.34;
+  filter: blur(4px);
+  pointer-events: none;
+}
+/* Nested modal depth recession when Gear Slot Modal opens over Gear Workshop */
+body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card {
+  transform: scale(0.968);
+  opacity: 0.46;
+  filter: blur(2.5px);
+}
+
+/* True Animating IN and OUT for all Modals (native allow-discrete + @starting-style) */
+.lb-stats-modal {
+  background: radial-gradient(circle at 50% 35%, rgba(4, 18, 34, 0.56), rgba(1, 7, 16, 0.78));
+  backdrop-filter: blur(12px);
+  opacity: 1;
+  transition:
+    opacity 0.22s ease,
+    backdrop-filter 0.22s ease,
+    display 0.22s allow-discrete;
+}
+.lb-stats-modal[hidden] {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+}
+@starting-style {
+  .lb-stats-modal:not([hidden]) {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+.lb-stats-modal .lb-stats-card {
+  border-radius: 22px;
+  background: linear-gradient(168deg, rgba(8, 22, 40, 0.88), rgba(4, 11, 23, 0.94));
+  backdrop-filter: blur(24px) saturate(135%);
+  border: 1px solid rgba(224, 242, 254, 0.08);
+  box-shadow: 0 32px 84px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.22s ease,
+    filter 0.24s ease;
+}
+.lb-stats-modal[hidden] .lb-stats-card {
+  opacity: 0;
+  transform: translateY(12px) scale(0.975);
+}
+@starting-style {
+  .lb-stats-modal:not([hidden]) .lb-stats-card {
+    opacity: 0;
+    transform: translateY(16px) scale(0.972);
+  }
+}
+
+/* Popover smooth IN & OUT transitions */
+.home-menu-popover,
+.hud-menu-popover {
+  border: 1px solid rgba(224, 242, 254, 0.09) !important;
+  border-radius: 18px;
+  background: linear-gradient(168deg, rgba(8, 22, 42, 0.94), rgba(4, 11, 22, 0.97));
+  backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.66), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    display 0.18s allow-discrete;
+}
+.home-menu-popover[hidden],
+.hud-menu-popover[hidden] {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+}
+@starting-style {
+  .home-menu-popover:not([hidden]),
+  .hud-menu-popover:not([hidden]) {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+
+/* Refined AAA Home Screen — Calm Glass, Crisp Typography, Zero Wobble */
+#screen-menu .menu-brand-icon {
+  border-radius: 14px;
+  border: none;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
 #screen-menu .menu-eyebrow {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  opacity: 0.66;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(186, 230, 253, 0.78);
 }
 #screen-menu .menu-title {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.32rem, 2.4vw, 1.72rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #f8fafc;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+#screen-menu .home-menu-btn {
+  border-radius: 999px !important;
+  width: 40px;
+  height: 40px;
+  background: rgba(7, 20, 38, 0.62) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, box-shadow 0.2s ease;
+}
+#screen-menu .home-menu-btn:hover {
+  transform: translateY(-1.5px);
+  background: rgba(56, 189, 248, 0.2) !important;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.24);
 }
 #screen-menu .level-picker-head label {
-  font-family: var(--font-display);
-  font-weight: 500;
-  opacity: 0.78;
-}
-#screen-menu #btn-play-solo {
-  position: relative;
-  overflow: hidden;
-  font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.04rem;
-  letter-spacing: 0.045em;
+  font-size: 0.84rem;
+  color: rgba(226, 232, 240, 0.88);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
-#screen-menu .home-core-btn {
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 0.88rem;
+#screen-menu .campaign-progress-pill {
+  border: none !important;
+  border-radius: 999px;
+  background: rgba(7, 24, 44, 0.62);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(186, 230, 253, 0.18);
+  transition: transform 0.18s ease, background 0.16s ease;
 }
-#screen-menu .dive-coop-caption {
-  font-family: var(--font-display);
-  font-weight: 500;
-  opacity: 0.68;
+#screen-menu .campaign-progress-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(14, 165, 233, 0.26);
 }
-
-/* Less Text Noise — Site Cards & Map Overlays Float In & Out Smoothly */
+#screen-menu .site-map-panel {
+  border: 1px solid rgba(224, 242, 254, 0.08);
+  border-radius: 20px;
+  background: radial-gradient(circle at 55% 40%, rgba(8, 32, 56, 0.72), rgba(3, 12, 25, 0.82));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+}
 #screen-menu .site-map-coords {
   display: none;
 }
+#screen-menu .site-map-region-badge,
+#screen-menu .site-map-zoom-btn,
+#screen-menu .site-map-legend {
+  border-radius: 999px !important;
+}
 #screen-menu .site-map-overlay-bottom {
-  opacity: 0.46;
-  transform: translateY(3px);
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.52;
+  transition: opacity 0.22s ease;
 }
 #screen-menu .site-map-panel:hover .site-map-overlay-bottom {
   opacity: 0.96;
-  transform: translateY(0);
+}
+#screen-menu .level-cards {
+  gap: 7px;
+  padding: 2px 4px 4px 2px;
 }
 #screen-menu .level-card-btn {
+  border: 1px solid rgba(224, 242, 254, 0.05);
+  border-radius: 15px;
   padding: 10px 13px;
+  background: rgba(6, 18, 35, 0.62);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(224, 242, 254, 0.07);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, border-color 0.16s ease, box-shadow 0.2s ease;
+}
+#screen-menu .level-card-btn.is-wreck {
+  background: rgba(28, 17, 16, 0.62);
 }
 #screen-menu .level-card-btn .lvl-card-top {
-  opacity: 0.62;
-  transition: opacity 0.24s ease;
-}
-#screen-menu .level-card-btn:hover .lvl-card-top,
-#screen-menu .level-card-btn.active .lvl-card-top {
-  opacity: 0.96;
+  opacity: 0.66;
+  transition: opacity 0.18s ease;
 }
 #screen-menu .level-card-btn .lvl-card-name {
-  font-size: 0.94rem;
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-#screen-menu .level-card-btn .lvl-card-depth {
-  font-weight: 500;
-  opacity: 0.85;
-}
-/* Secondary site meta & build pills float in on select/hover and float away when idle */
 #screen-menu .level-card-btn .lvl-card-foot {
   max-height: 0;
   opacity: 0;
   margin-top: 0;
   overflow: hidden;
-  transform: translateY(5px);
+  transform: translateY(4px);
   transition:
-    max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.24s ease,
-    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    margin-top 0.26s ease;
+    max-height 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    margin-top 0.2s ease;
 }
 #screen-menu .level-card-btn.active .lvl-card-foot,
 #screen-menu .level-card-btn:hover .lvl-card-foot,
 #screen-menu .level-card-btn:focus-visible .lvl-card-foot,
 #screen-menu .level-card-btn.has-lead .lvl-card-foot {
-  max-height: 30px;
+  max-height: 28px;
   opacity: 1;
   margin-top: 5px;
   transform: translateY(0);
 }
-
-/* Underwater Caustic Ambient Drift across Open Water */
-@keyframes uwCausticDrift {
-  0%, 100% {
-    transform: translate3d(-2%, -1%, 0) scale(1);
-    opacity: 0.52;
-  }
-  50% {
-    transform: translate3d(2%, 1.5%, 0) scale(1.05);
-    opacity: 0.72;
-  }
+#screen-menu .level-card-btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  border-color: rgba(125, 211, 252, 0.22);
+  background: rgba(14, 52, 86, 0.62);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(186, 230, 253, 0.18);
 }
-#screen-menu.overlay-screen {
-  overflow-x: hidden;
+#screen-menu .level-card-btn:hover .lvl-card-top,
+#screen-menu .level-card-btn.active .lvl-card-top {
+  opacity: 0.96;
 }
-#screen-menu.overlay-screen::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 46% 28% at 28% 18%, rgba(56, 189, 248, 0.14), transparent 70%),
-    radial-gradient(ellipse 42% 30% at 74% 24%, rgba(45, 212, 191, 0.11), transparent 72%),
-    radial-gradient(ellipse 52% 26% at 50% 82%, rgba(14, 165, 233, 0.08), transparent 72%);
-  animation: uwCausticDrift 12s ease-in-out infinite;
+#screen-menu .level-card-btn.active {
+  border-color: rgba(56, 189, 248, 0.34);
+  background: linear-gradient(135deg, rgba(14, 132, 199, 0.34), rgba(8, 42, 74, 0.68));
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.26), inset 0 1px 0 rgba(186, 230, 253, 0.28);
 }
-#screen-menu > .menu-card {
-  position: relative;
-  z-index: 1;
+#screen-menu .level-card-btn.is-wreck.active {
+  border-color: rgba(251, 146, 60, 0.36);
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.32), rgba(74, 28, 14, 0.64));
+  box-shadow: 0 12px 28px rgba(234, 88, 12, 0.24), inset 0 1px 0 rgba(254, 215, 170, 0.28);
 }
 
-/* Buoyant Float-In & Wavy Underwater Keyframes */
-@keyframes uwFloatIn {
-  0% {
-    opacity: 0;
-    transform: translateY(18px) scale(0.97);
-    filter: blur(4px);
-  }
-  68% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.005);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-@keyframes uwPanelSwell {
-  0%, 100% {
-    transform: translate3d(0px, 0px, 0) rotate(0deg);
-  }
-  28% {
-    transform: translate3d(1.4px, -3.2px, 0) rotate(0.28deg);
-  }
-  62% {
-    transform: translate3d(-1.2px, -0.8px, 0) rotate(-0.24deg);
-  }
-  84% {
-    transform: translate3d(0.7px, 1.8px, 0) rotate(0.14deg);
-  }
-}
-@keyframes uwButtonWave {
-  0%, 100% {
-    transform: translate3d(0px, 0px, 0) rotate(0deg);
-  }
-  30% {
-    transform: translate3d(0.8px, -3.4px, 0) rotate(-0.42deg);
-  }
-  65% {
-    transform: translate3d(-0.9px, 1.4px, 0) rotate(0.36deg);
-  }
-  85% {
-    transform: translate3d(0.4px, -1.6px, 0) rotate(-0.18deg);
-  }
-}
-@keyframes uwCausticSheen {
-  0%, 62% {
-    transform: translateX(-140%) skewX(-22deg);
-    opacity: 0;
-  }
-  72% {
-    opacity: 0.42;
-  }
-  96% {
-    transform: translateX(260%) skewX(-22deg);
-    opacity: 0;
-  }
-  100% {
-    transform: translateX(260%) skewX(-22deg);
-    opacity: 0;
-  }
-}
-@keyframes uwModalFloatIn {
-  0% {
-    opacity: 0;
-    transform: translateY(22px) scale(0.955);
-    filter: blur(5px);
-  }
-  70% {
-    opacity: 1;
-    transform: translateY(-2.5px) scale(1.006);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-@keyframes uwPopoverFloatIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.96);
-    filter: blur(3px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-@keyframes uwCardFloatIn {
-  0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.97);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Staggered Home Entrance + Living Underwater Wave Motion */
-#screen-menu .menu-header {
-  animation: uwFloatIn 0.62s cubic-bezier(0.22, 1, 0.36, 1) 0.02s both;
-}
-#screen-menu .home-menu-btn {
-  animation: uwButtonWave 6.6s ease-in-out -1.8s infinite;
-}
-#screen-menu .home-menu-btn:hover {
-  animation-play-state: paused;
-  transform: translateY(-3px) scale(1.05);
-}
-#screen-menu .campaign-progress-pill {
-  animation: uwButtonWave 7.4s ease-in-out -0.6s infinite;
-}
-#screen-menu .campaign-progress-pill:hover {
-  animation-play-state: paused;
-  transform: translateY(-2.5px) scale(1.04);
-}
-#screen-menu .site-map-panel {
-  animation:
-    uwFloatIn 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.07s both,
-    uwPanelSwell 9.2s ease-in-out 0.75s infinite;
-  will-change: transform;
-}
-#screen-menu .level-cards {
-  animation: uwFloatIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.13s both;
-}
 #screen-menu .first-play-welcome-strip {
-  animation:
-    uwFloatIn 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.17s both,
-    uwButtonWave 7.8s ease-in-out 0.85s infinite;
+  border: 1px solid rgba(52, 211, 153, 0.22) !important;
+  border-radius: 14px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 56, 44, 0.56));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(167, 243, 208, 0.22);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, box-shadow 0.2s ease;
 }
 #screen-menu .first-play-welcome-strip:hover {
-  animation-play-state: paused;
-  transform: translateY(-3px) scale(1.01);
+  transform: translateY(-1.5px);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 66, 52, 0.64));
+  box-shadow: 0 14px 32px rgba(16, 185, 129, 0.24), inset 0 1px 0 rgba(167, 243, 208, 0.3);
 }
+
 #screen-menu #btn-play-solo {
-  animation:
-    uwFloatIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.21s both,
-    uwButtonWave 6.9s ease-in-out 0.9s infinite,
-    abyssalDivePulse 4.8s ease-in-out 0.9s infinite;
-}
-#screen-menu #btn-play-solo::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 38%;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
-  animation: uwCausticSheen 6.5s ease-in-out 1.2s infinite;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.015em;
+  box-shadow: 0 12px 32px rgba(2, 132, 199, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, filter 0.16s ease;
 }
 #screen-menu #btn-play-solo:hover:not(:disabled) {
-  animation-play-state: paused;
-  transform: translateY(-3.5px) scale(1.012);
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: 0 16px 38px rgba(2, 132, 199, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+#screen-menu #btn-play-solo:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
 }
 
-@keyframes uwModalSwell {
-  0%, 100% {
-    transform: translate3d(0px, 0px, 0);
-  }
-  50% {
-    transform: translate3d(0px, -2.5px, 0);
-  }
+#screen-menu .home-core-btn {
+  border: 1px solid rgba(224, 242, 254, 0.08) !important;
+  border-radius: 14px !important;
+  font-weight: 600;
+  font-size: 0.86rem;
+  background: rgba(7, 21, 40, 0.64) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(224, 242, 254, 0.11);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, border-color 0.16s ease, box-shadow 0.2s ease;
 }
-
-/* Core-4 Pills Ripple Out of Phase Like Buoys on an Underwater Swell */
-#screen-menu #menu-actions-core4 .home-core-btn:nth-child(1) {
-  animation:
-    uwFloatIn 0.66s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both,
-    uwButtonWave 7.2s ease-in-out 0.95s infinite;
+#screen-menu .home-core-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(125, 211, 252, 0.28) !important;
+  background: rgba(14, 62, 102, 0.56) !important;
+  box-shadow: 0 12px 26px rgba(2, 132, 199, 0.2), inset 0 1px 0 rgba(186, 230, 253, 0.22);
 }
-#screen-menu #menu-actions-core4 .home-core-btn:nth-child(2) {
-  animation:
-    uwFloatIn 0.66s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both,
-    uwButtonWave 7.2s ease-in-out 1.65s infinite;
+#screen-menu .home-core-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
 }
-#screen-menu #menu-actions-core4 .home-core-btn:nth-child(3) {
-  animation:
-    uwFloatIn 0.66s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both,
-    uwButtonWave 7.2s ease-in-out 2.35s infinite;
-}
-#screen-menu #menu-actions-core4 .home-core-btn:nth-child(4) {
-  animation:
-    uwFloatIn 0.66s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both,
-    uwButtonWave 7.2s ease-in-out 3.05s infinite;
-}
-#screen-menu #menu-actions-core4 .home-core-btn:hover:not(:disabled) {
-  animation-play-state: paused;
-  transform: translateY(-4px) scale(1.02);
+#screen-menu .home-core-btn.has-new-gear {
+  border-color: rgba(52, 211, 153, 0.32) !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(6, 62, 48, 0.56)) !important;
 }
 #screen-menu .dive-coop-dock {
-  animation: uwFloatIn 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.42s both;
+  border: 1px solid rgba(224, 242, 254, 0.06) !important;
+  border-radius: 15px;
+  background: rgba(5, 16, 32, 0.56);
+  backdrop-filter: blur(14px);
+  padding: 9px 14px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(224, 242, 254, 0.07);
+}
+#screen-menu .coop-dock-toggle {
+  border-radius: 999px !important;
+}
+#screen-menu .lan-room-box,
+#screen-menu .leaderboard-panel {
+  border: 1px solid rgba(224, 242, 254, 0.08) !important;
+  border-radius: 22px;
+  background: linear-gradient(168deg, rgba(8, 22, 40, 0.88), rgba(4, 11, 23, 0.94));
+  backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(224, 242, 254, 0.12);
+  padding: 18px 20px;
 }
 
-/* Smooth Float-In & Float-Out on Modals, Popovers, Cards & Toasts */
-.lb-stats-modal:not([hidden]) .lb-stats-card {
-  animation:
-    uwModalFloatIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both,
-    uwModalSwell 9.5s ease-in-out 0.55s infinite;
+/* Filter-Free AAA Gear Workshop Stage — Floating Quick Actions & 1:1 Unstretched Diver */
+.livery-preview-wrap {
+  position: sticky;
+  border-radius: 18px;
 }
-.home-menu-popover:not([hidden]),
-.hud-menu-popover:not([hidden]) {
-  animation: uwPopoverFloatIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+.livery-preview-overlay-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.livery-preview-overlay-actions .livery-tank-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(4, 14, 28, 0.64);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(224, 242, 254, 0.14);
+}
+.livery-preview-overlay-actions .livery-tank-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(14, 165, 233, 0.28);
+}
+.livery-preview-overlay-actions .livery-tank-pill.field-test {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.34), rgba(6, 182, 212, 0.34));
+}
+
+.gear-slot-preview-wrap {
+  border-radius: 18px;
+}
+.gear-slot-equipped-hero,
+.gear-slot-cmp-card,
+.livery-equipped-card {
+  border-radius: 16px;
 }
 .livery-equipped-card,
 .gear-slot-cmp-card {
-  animation: uwCardFloatIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition:
-    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.18s ease,
-    box-shadow 0.24s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, box-shadow 0.2s ease;
 }
 .livery-equipped-card:hover {
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-3px);
 }
 .gear-slot-cmp-card:hover {
-  transform: translateY(-2.5px) scale(1.008);
+  transform: translateY(-1.5px);
 }
+
+/* Smooth Toast IN & OUT */
 .game-toast {
-  font-family: var(--font-display);
   border-radius: 999px;
   padding: 9px 18px;
-  transform: translate(-50%, 22px) scale(0.96);
-  filter: blur(3px);
-  transition:
-    opacity 0.34s ease,
-    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.3s ease;
+  transform: translate(-50%, 16px) scale(0.97);
+  transition: opacity 0.24s ease, transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .game-toast.visible {
   transform: translate(-50%, 0) scale(1);
-  filter: blur(0);
+}
+
+@media (max-width: 560px) {
+  #screen-menu > .menu-card {
+    padding: 10px 10px 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #screen-menu.overlay-screen::before,
-  #screen-menu .menu-header,
-  #screen-menu .home-menu-btn,
-  #screen-menu .campaign-progress-pill,
-  #screen-menu .site-map-panel,
-  #screen-menu .level-cards,
-  #screen-menu .first-play-welcome-strip,
-  #screen-menu #btn-play-solo,
-  #screen-menu #btn-play-solo::after,
-  #screen-menu #menu-actions-core4 .home-core-btn,
-  #screen-menu .dive-coop-dock,
-  .lb-stats-modal:not([hidden]) .lb-stats-card,
-  .home-menu-popover:not([hidden]),
-  .hud-menu-popover:not([hidden]),
-  .livery-equipped-card,
-  .gear-slot-cmp-card {
-    animation: none !important;
+  #screen-menu.overlay-screen,
+  #screen-menu > .menu-card,
+  .lb-stats-modal,
+  .lb-stats-modal .lb-stats-card,
+  .home-menu-popover,
+  .hud-menu-popover,
+  .game-toast {
+    transition: none !important;
   }
 }

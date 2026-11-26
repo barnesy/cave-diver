@@ -1695,24 +1695,6 @@ export const lightingAndFxMethods = {
         }
       }
       ctx.restore();
-
-      // Compact diegetic callout pill above diver
-      const dragPct = Math.round((1 - (hydro.effectiveDragMult || 1)) * 100);
-      const pillTxt = isPull ? `🪨 PULL-AND-GLIDE · -${Math.max(20, dragPct)}% DRAG` : '🌊 SLIPSTREAM · -18% GAS';
-      ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-      const tw = ctx.measureText(pillTxt).width + 16;
-      const py = dy - Math.max(28, 1.15 * scale);
-      ctx.fillStyle = isPull ? 'rgba(8, 47, 73, 0.86)' : 'rgba(6, 78, 59, 0.86)';
-      ctx.strokeStyle = isPull ? 'rgba(103, 232, 249, 0.85)' : 'rgba(52, 211, 153, 0.88)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.roundRect?.(dx - tw * 0.5, py - 9.5, tw, 19, 9) ?? ctx.rect(dx - tw * 0.5, py - 9.5, tw, 19);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = isPull ? '#cffafe' : '#bbf7d0';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(pillTxt, dx, py);
     }
 
     // 5. World-Found Sunken Gear Caches with Diablo III Underwater Legendary Light Pillars (v216)
@@ -1824,42 +1806,6 @@ export const lightingAndFxMethods = {
           }
         }
       }
-
-      // Unmistakable Proximity Gear Cache Directional Indicator whenever diver approaches within 24m (+Relic Glow) (v218)
-      if (diver) {
-        const detectRange = 24 + rigGlowBonus;
-        for (let i = 0; i < worldCaches.length; i++) {
-          const gc = worldCaches[i];
-          if (!gc || gc.opened) continue;
-          const distM = Math.hypot(gc.x - diver.x, gc.y - diver.y);
-          if (distM > detectRange || distM < 4.5) continue;
-          const pal = TIER_RGB[gc.tier] || TIER_RGB.rare;
-          const ang = Math.atan2(gc.y - diver.y, gc.x - diver.x);
-          const dx = toScreenX(diver.x);
-          const dy = toScreenY(diver.y);
-          const orbR = Math.max(44, 1.95 * scale);
-          const bx = dx + Math.cos(ang) * orbR;
-          const by = dy + Math.sin(ang) * orbR;
-          const pulse = 0.55 + 0.45 * Math.sin(timeSec * 5.2 + i);
-          ctx.save();
-          ctx.fillStyle = 'rgba(6, 18, 34, 0.88)';
-          ctx.strokeStyle = pal.hex;
-          ctx.lineWidth = 1.4;
-          const txt = `${gc.icon || '📦'} ${Math.round(distM)}m`;
-          ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
-          const tw = ctx.measureText(txt).width + 12;
-          ctx.globalAlpha = 0.72 + pulse * 0.28;
-          ctx.beginPath();
-          ctx.roundRect?.(bx - tw * 0.5, by - 9, tw, 18, 9) ?? ctx.rect(bx - tw * 0.5, by - 9, tw, 18);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = pal.light;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(txt, bx, by);
-          ctx.restore();
-        }
-      }
     }
 
     // 5a.5. Waterproof Brass-Tube Treasure Maps with Skill-Targeted Sonar Beacons (v230)
@@ -1955,40 +1901,6 @@ export const lightingAndFxMethods = {
         const isLegendaryDrop = tc.opened && tc.drop?.tier === 'legendary';
         const isMythicDrop = tc.opened && tc.drop?.tier === 'mythic';
         const spectacleDur = isLegendaryDrop ? 6.2 : isMythicDrop ? 5.2 : 4.4;
-
-        // Always render directional Sonar Beacon pointer for Map-Revealed Vault Chests even when far offscreen!
-        if (!tc.opened && tc.beaconRevealed && diver) {
-          const distM = Math.hypot(tc.x - diver.x, tc.y - diver.y);
-          if (distM >= 4.2) {
-            const ang = Math.atan2(tc.y - diver.y, tc.x - diver.x);
-            const dx = toScreenX(diver.x);
-            const dy = toScreenY(diver.y);
-            const orbR = Math.max(54, 2.35 * scale);
-            const bx = dx + Math.cos(ang) * orbR;
-            const by = dy + Math.sin(ang) * orbR;
-            const bCol = tc.beamColor || '#facc15';
-            const bPulse = 0.5 + 0.5 * Math.sin(timeSec * 5.2 + i);
-            const linkedMap = (hazards.treasureMaps || []).find((m) => m.targetChestId === tc.id);
-            const skillTag = linkedMap ? `${linkedMap.skillIcon} ${linkedMap.skillShort}` : 'VAULT';
-            const txt = `🗺️ ${skillTag} · ${Math.round(distM)}m`;
-            ctx.save();
-            ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-            const tw = ctx.measureText(txt).width + 14;
-            ctx.globalAlpha = 0.8 + bPulse * 0.2;
-            ctx.fillStyle = 'rgba(8, 15, 28, 0.92)';
-            ctx.strokeStyle = bCol;
-            ctx.lineWidth = 1.6;
-            ctx.beginPath();
-            ctx.roundRect?.(bx - tw * 0.5, by - 10, tw, 20, 10) ?? ctx.rect(bx - tw * 0.5, by - 10, tw, 20);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = '#fef9c3';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(txt, bx, by);
-            ctx.restore();
-          }
-        }
 
         if (tc.x + 7 < visX0 || tc.x - 7 > visX1 || tc.y + 12 < visY0 || tc.y - 14 > visY1) continue;
 
@@ -2217,76 +2129,32 @@ export const lightingAndFxMethods = {
             ctx.fillText(label, sx, ly);
             ctx.restore();
           }
-          // Subtle directional proximity pill within 20m (+Relic Glow) if not already showing the stronger Map Beacon arrow
-          if (diver && !tc.beaconRevealed && distM <= 20 + rigGlowBonus && distM >= 4.5) {
-            const ang = Math.atan2(tc.y - diver.y, tc.x - diver.x);
-            const dx = toScreenX(diver.x);
-            const dy = toScreenY(diver.y);
-            const orbR = Math.max(44, 1.95 * scale);
-            const bx = dx + Math.cos(ang) * orbR;
-            const by = dy + Math.sin(ang) * orbR;
-            ctx.save();
-            ctx.fillStyle = 'rgba(26, 16, 4, 0.88)';
-            ctx.strokeStyle = pal.hex;
-            ctx.lineWidth = 1.35;
-            const txt = `🧰 ${Math.round(distM)}m`;
-            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
-            const tw = ctx.measureText(txt).width + 12;
-            ctx.globalAlpha = 0.72 + pulse * 0.28;
-            ctx.beginPath();
-            ctx.roundRect?.(bx - tw * 0.5, by - 9, tw, 18, 9) ?? ctx.rect(bx - tw * 0.5, by - 9, tw, 18);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = pal.light;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(txt, bx, by);
-            ctx.restore();
-          }
         }
       }
     }
 
-    // 5c. Diegetic Rechargeable Hydro-Shield Halo & Stealth Acoustic Cloak Ripple around Diver (v230)
-    if (diver) {
+    // 5c. Reactive Hydro-Shield Impact Flash only on hit (zero idle rings or floating labels around diver)
+    if (diver && diver.maxShield > 0 && (diver.shieldHitFlash || 0) > 0.05) {
       const dx = toScreenX(diver.x);
       const dy = toScreenY(diver.y);
-      if (diver.maxShield > 0 && ((diver.shield || 0) > 0.5 || (diver.shieldHitFlash || 0) > 0.02)) {
-        const shFrac = Math.max(0, Math.min(1, (diver.shield || 0) / diver.maxShield));
-        const flash = Math.max(0, Math.min(1, diver.shieldHitFlash || 0));
-        const baseAlpha = 0.14 + shFrac * 0.16 + flash * 0.52;
-        const shR = Math.max(18, 0.92 * scale);
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.strokeStyle = flash > 0.1 ? `rgba(125, 211, 252, ${Math.min(0.95, baseAlpha + 0.2).toFixed(3)})` : `rgba(56, 189, 248, ${baseAlpha.toFixed(3)})`;
-        ctx.lineWidth = Math.max(1.5, (0.065 + flash * 0.08) * scale);
-        ctx.beginPath();
-        ctx.arc(dx, dy, shR, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * Math.max(0.08, shFrac));
-        ctx.stroke();
-        if (flash > 0.05) {
-          const sg = ctx.createRadialGradient(dx, dy, shR * 0.4, dx, dy, shR * 1.25);
-          sg.addColorStop(0, `rgba(56, 189, 248, ${(flash * 0.35).toFixed(3)})`);
-          sg.addColorStop(1, 'rgba(56, 189, 248, 0)');
-          ctx.fillStyle = sg;
-          ctx.beginPath();
-          ctx.arc(dx, dy, shR * 1.25, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-      if ((diver.stealth || 0) >= 0.25) {
-        const cloakPulse = 0.5 + 0.5 * Math.sin(timeSec * 2.2);
-        const stR = Math.max(15, (0.78 + cloakPulse * 0.12) * scale);
-        ctx.save();
-        ctx.strokeStyle = `rgba(192, 132, 252, ${(0.12 + cloakPulse * 0.12).toFixed(3)})`;
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([4, 6]);
-        ctx.beginPath();
-        ctx.arc(dx, dy, stR, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-      }
+      const shFrac = Math.max(0, Math.min(1, (diver.shield || 0) / diver.maxShield));
+      const flash = Math.max(0, Math.min(1, diver.shieldHitFlash || 0));
+      const shR = Math.max(18, 0.92 * scale);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = `rgba(125, 211, 252, ${Math.min(0.92, flash * 0.88).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.6, (0.06 + flash * 0.08) * scale);
+      ctx.beginPath();
+      ctx.arc(dx, dy, shR, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * Math.max(0.08, shFrac));
+      ctx.stroke();
+      const sg = ctx.createRadialGradient(dx, dy, shR * 0.4, dx, dy, shR * 1.25);
+      sg.addColorStop(0, `rgba(56, 189, 248, ${(flash * 0.35).toFixed(3)})`);
+      sg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(dx, dy, shR * 1.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     // 6. Sunken Cartographer Set Capstone: Golden Diegetic Relic, Treasure Chest & Gear Cache Compass Arc (v216–v220)

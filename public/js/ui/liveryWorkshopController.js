@@ -198,9 +198,6 @@ export function createLiveryWorkshopController({
   const liverySavedSlotsEl = document.getElementById('livery-saved-slots');
   const btnLiveryTeamUniformEl = document.getElementById('btn-livery-team-uniform');
   const liveryCatTabsEl = document.getElementById('livery-cat-tabs');
-  const liveryEnvTabsEl = document.getElementById('livery-env-tabs');
-  const btnLiveryPrevCcrEl = document.getElementById('btn-livery-prev-ccr');
-  const btnLiveryPrevDpvEl = document.getElementById('btn-livery-prev-dpv');
   const btnLiveryBestEl = document.getElementById('btn-livery-best');
   const btnLiveryRandomEl = document.getElementById('btn-livery-random');
   const btnLiveryFieldTestEl = document.getElementById('btn-livery-field-test');
@@ -710,7 +707,7 @@ export function createLiveryWorkshopController({
     lootDiscoveryBannerEl.hidden = false;
     lootDiscoveryBannerEl.innerHTML = `
       <div class="loot-disc-top">
-        <span class="loot-disc-kicker">🧰 SUNKEN TREASURE CHEST · ${escapeHtml(drop.rarityLabel || tierMeta.badge)}</span>
+        <span class="loot-disc-kicker">🧰 Sunken Treasure Chest · ${escapeHtml(drop.rarityLabel || tierMeta.badge)}</span>
         <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.icon} ${tierMeta.badge}</span>
       </div>
       <div class="loot-disc-name">${drop.icon || '🪙'} ${escapeHtml(drop.name || 'Sunken Treasure')}</div>
@@ -760,7 +757,7 @@ export function createLiveryWorkshopController({
     lootDiscoveryBannerEl.hidden = false;
     lootDiscoveryBannerEl.innerHTML = `
       <div class="loot-disc-top">
-        <span class="loot-disc-kicker">🗺️ TREASURE MAP DECODED · SONAR BEACON LOCKED</span>
+        <span class="loot-disc-kicker">🗺️ Treasure Map Decoded · Sonar Beacon Locked</span>
         <span class="livery-tier-pill tier-legendary">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillShort)}</span>
       </div>
       <div class="loot-disc-name">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillLabel)} Gear Vault</div>
@@ -850,7 +847,7 @@ export function createLiveryWorkshopController({
       focusHighlight = {
         slot: hoveredGear.slot,
         color: isSame ? '#38bdf8' : tm.color,
-        kicker: isSame ? 'EQUIPPED' : hoveredGear.unlocked ? 'PREVIEW' : 'LOCKED PREVIEW',
+        kicker: isSame ? 'Equipped' : hoveredGear.unlocked ? 'Preview' : 'Locked Preview',
         label: hoveredGear.item.name,
       };
     } else if (!equipFxArg && pinnedInspect?.slot && pinnedInspect?.item) {
@@ -858,7 +855,7 @@ export function createLiveryWorkshopController({
       focusHighlight = {
         slot: pinnedInspect.slot,
         color: pinnedInspect.justEquipped ? '#34d399' : tm.color,
-        kicker: pinnedInspect.justEquipped ? 'EQUIPPED' : pinnedInspect.unlocked ? 'INSPECTING' : 'LOCKED PREVIEW',
+        kicker: pinnedInspect.justEquipped ? 'Equipped' : pinnedInspect.unlocked ? 'Inspecting' : 'Locked Preview',
         label: pinnedInspect.item.name,
       };
     } else if (!equipFxArg && lockedTryOn?.slot && lockedTryOn.slot !== 'all') {
@@ -866,7 +863,7 @@ export function createLiveryWorkshopController({
       focusHighlight = {
         slot: lockedTryOn.slot,
         color: '#facc15',
-        kicker: 'TRY-ON',
+        kicker: 'Try-On',
         label: lockedTryOn.name,
       };
     }
@@ -907,7 +904,7 @@ export function createLiveryWorkshopController({
             modalFocus = {
               slot: activeCompareSlot,
               color: tm.color,
-              kicker: 'EQUIPPED',
+              kicker: 'Equipped',
               label: eqSlotItem.name,
             };
           }
@@ -1174,16 +1171,16 @@ export function createLiveryWorkshopController({
         ? 'same'
         : impact?.verdict || 'tradeoff';
     const verdictText = justEquipped
-      ? '✓ EQUIPPED'
+      ? '✓ Equipped'
       : isEquippedNow
-        ? '✓ CURRENTLY EQUIPPED'
+        ? '✓ Currently Equipped'
         : impact?.isNormalized
-          ? '🧭 PURIST (COSMETIC)'
+          ? '🧭 Purist (Cosmetic)'
           : impact?.verdict === 'upgrade'
-            ? '▲ UPGRADE'
+            ? '▲ Upgrade'
             : impact?.verdict === 'downgrade'
-              ? '▼ LOWER STATS'
-              : '⇄ TRADE-OFF';
+              ? '▼ Lower Stats'
+              : '⇄ Trade-Off';
     const vsText = justEquipped && replacedName && replacedName !== item.name
       ? `Replaced <strong>${escapeHtml(replacedName)}</strong>`
       : !isEquippedNow && impact?.replacedItemName
@@ -1229,7 +1226,7 @@ export function createLiveryWorkshopController({
     liveryInspectorBarEl.dataset.state = verdictCls;
     liveryInspectorBarEl.innerHTML = `
       <div class="livery-insp-row">
-        <span class="livery-insp-kicker">${escapeHtml(slotLbl.toUpperCase())}</span>
+        <span class="livery-insp-kicker">${escapeHtml(slotLbl)}</span>
         <strong class="livery-insp-name">${escapeHtml(item.name)}</strong>
         <span class="livery-insp-verdict verdict-${verdictCls}">${verdictText}</span>
         ${vsText ? `<span class="livery-insp-vs">${vsText}</span>` : ''}
@@ -1575,7 +1572,7 @@ export function createLiveryWorkshopController({
       .join('');
     debriefGearUnlocksEl.innerHTML = `
       <div class="debrief-unlock-head">
-        <span>🎁 NEW GEAR UNLOCKED (${recentDiveUnlocks.length})</span>
+        <span>🎁 New Gear Unlocked (${recentDiveUnlocks.length})</span>
         <button type="button" class="btn tiny ghost" id="btn-debrief-open-workshop">🎨 Gear Workshop</button>
       </div>
       <div class="debrief-unlock-list">${pills}</div>
@@ -1660,7 +1657,7 @@ export function createLiveryWorkshopController({
         liveryWelcomeStageEl.innerHTML = `
           <div class="livery-welcome-head">
             <div>
-              <span class="livery-welcome-kicker">🎁 EXPEDITION WELCOME CRATE · 1 FREE SPECIALTY RELIC</span>
+              <span class="livery-welcome-kicker">🎁 Expedition Welcome Crate · 1 Free Specialty Relic</span>
               <div class="livery-welcome-sub">Choose your starting dive style to unlock a free Field-Tech Relic &amp; outfit your rig live in the Test Tank!</div>
             </div>
           </div>
@@ -1669,7 +1666,7 @@ export function createLiveryWorkshopController({
               (ch) => `<div class="livery-welcome-card arch-${ch.archetype}${previewChoiceId === ch.id ? ' previewing' : ''}">
                 <div class="lwc-top">
                   <span class="lwc-title">${ch.icon} <strong>${escapeHtml(ch.title)}</strong></span>
-                  <span class="livery-arch-pill arch-${ch.archetype}">${escapeHtml(ch.archetype.toUpperCase())}</span>
+                  <span class="livery-arch-pill arch-${ch.archetype}">${escapeHtml(ch.archetype.charAt(0).toUpperCase() + ch.archetype.slice(1))}</span>
                 </div>
                 <div class="lwc-gift">🎁 Free Relic: <strong>${escapeHtml(ch.giftName)}</strong></div>
                 <div class="lwc-stats">${escapeHtml(ch.giftHighlight)}</div>
@@ -1715,7 +1712,7 @@ export function createLiveryWorkshopController({
         liveryWelcomeStageEl.innerHTML = `
           <div class="livery-welcome-ready">
             <div class="lwr-copy">
-              <span class="livery-welcome-kicker">✨ FIRST DIVE OUTFITTED · ${ch.icon} ${escapeHtml(ch.title.toUpperCase())}</span>
+              <span class="livery-welcome-kicker">✨ First Dive Outfitted · ${ch.icon} ${escapeHtml(ch.title)}</span>
               <div class="lwr-detail">Equipped <strong>${escapeHtml(ch.giftName)}</strong> (${escapeHtml(ch.giftHighlight)}). Hunt glowing Gear Caches &amp; Sunken Brass Chests inside <strong>Cenote El Abismo</strong>!</div>
             </div>
             <div class="lwr-actions">
@@ -1767,20 +1764,6 @@ export function createLiveryWorkshopController({
         { lbl: '🛡️ Combat', val: viewPerf.combatMaxHpBonus > 0 || shieldMax > 0 || armorPct > 0 ? `${100 + viewPerf.combatMaxHpBonus} HP${shieldMax > 0 ? ` · +${shieldMax}S` : ''}` : '100 HP', active: viewPerf.combatMaxHpBonus > 0 || shieldMax > 0 || armorPct > 0, cls: 'c-rose' },
         { lbl: '🔦 Beam', val: beamPct > 0 || viewPerf.siltPierce > 0 ? `+${beamPct}%${viewPerf.siltPierce >= 0.2 ? ` · ${Math.round(viewPerf.siltPierce * 100)}%P` : ''}` : '—', active: beamPct > 0 || viewPerf.siltPierce > 0, cls: 'c-violet' },
       ];
-      const curModeSpec = WORKSHOP_TUNING_MODES.find((m) => m.id === workshopTuningMode) || WORKSHOP_TUNING_MODES[1];
-      const tuningOpenAttr = workshopTuningMode !== 'standard' ? ' open' : '';
-      const tuningStripHtml = `<details class="livery-disclosure livery-tuning-disclosure"${tuningOpenAttr}>
-        <summary class="livery-disclosure-sum subtle">
-          <span>${curModeSpec.icon} ${curModeSpec.label}</span>
-          <span class="livery-disclosure-caret">▾</span>
-        </summary>
-        <div class="livery-tuning-bar" role="radiogroup" aria-label="Preview stats by Mode and Difficulty">
-          ${WORKSHOP_TUNING_MODES.map(
-            (m) => `<button type="button" class="livery-tuning-pill${workshopTuningMode === m.id ? ' active' : ''}" data-tuning-mode="${m.id}">${m.icon} ${m.label}</button>`
-          ).join('')}
-          <span class="livery-tuning-badge" title="${escapeHtml(viewPerf.tuning?.summary || '')}">${escapeHtml(viewPerf.tuning?.badge || '')}</span>
-        </div>
-      </details>`;
       const deltaHtml = perfDiffs.length > 0
         ? `<div class="livery-perf-deltas${activeFlash ? ' is-equip-flash' : ''}">${activeFlash ? `<span class="livery-flash-tag">✓ ${escapeHtml(activeFlash.itemName)}</span>` : ''}${perfDiffs
             .slice(0, 5)
@@ -1819,16 +1802,7 @@ export function createLiveryWorkshopController({
         ${deltaHtml}
         ${setBonusHtml}
         ${powersHtml}
-        ${tuningStripHtml}
       `;
-      liveryPerfPanelEl.querySelectorAll('button[data-tuning-mode]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const mid = btn.getAttribute('data-tuning-mode');
-          if (!mid || mid === workshopTuningMode) return;
-          workshopTuningMode = mid;
-          renderLiveryWorkshopModal();
-        });
-      });
     }
 
     // v231 Clean Equipped-Only Workshop: hide undiscovered progression spoilers, ONLY surface newly earned unlocks banner if any!
@@ -1931,7 +1905,7 @@ export function createLiveryWorkshopController({
 
       const setStrip = visibleSets.length > 0
         ? `<div class="livery-set-row" aria-label="Gear Set Synergies">
-            <span class="livery-next-kicker">${synergyState.active ? '✦ SET ACTIVE · TAP ANY SET TO EQUIP OR TEST' : 'GEAR SETS · TAP TO EQUIP / TRY FULL SET'}</span>
+            <span class="livery-next-kicker">${synergyState.active ? '✦ Set Active · Tap any set to equip or test' : 'Gear Sets · Tap to equip or try full set'}</span>
             <div class="livery-set-chips">
               ${visibleSets
                 .map((st) => {
@@ -1963,7 +1937,7 @@ export function createLiveryWorkshopController({
         : '';
       const nextChips = nextList.length > 0
         ? `<div class="livery-next-row">
-            <span class="livery-next-kicker">NEXT LADDER GOALS</span>
+            <span class="livery-next-kicker">Next Ladder Goals</span>
             ${nextList
               .map((m) => {
                 const pct = Math.round((m.progress?.pct || 0) * 100);
@@ -2067,42 +2041,6 @@ export function createLiveryWorkshopController({
           if (entry) tryOnLockedItem(slot, field, entry.item);
         });
       });
-    }
-
-    liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
-      const on = btn.getAttribute('data-livery-env') === liveryPreviewEnv;
-      btn.classList.toggle('active', on);
-      btn.setAttribute('aria-checked', on ? 'true' : 'false');
-    });
-    let eqCcr = false;
-    let eqDpv = false;
-    let ccrUnlocked = false;
-    let dpvUnlocked = false;
-    try {
-      const eq = getEffectiveGearLoadout();
-      eqCcr = Boolean(eq?.ccr);
-      eqDpv = Boolean(eq?.dpv);
-      const { unlockedIds } = computeUnlockedGear(loadCareerLogbook(), LEVELS);
-      ccrUnlocked = unlockedIds.has('ccr');
-      dpvUnlocked = unlockedIds.has('dpv');
-    } catch {}
-    const showCcr = ccrUnlocked ? eqCcr : (liveryPreviewCcr !== null ? liveryPreviewCcr : eqCcr);
-    const showDpv = dpvUnlocked ? eqDpv : (liveryPreviewDpv !== null ? liveryPreviewDpv : eqDpv);
-    if (btnLiveryPrevCcrEl) {
-      btnLiveryPrevCcrEl.classList.toggle('active', showCcr);
-      btnLiveryPrevCcrEl.setAttribute('aria-pressed', showCcr ? 'true' : 'false');
-      btnLiveryPrevCcrEl.textContent = ccrUnlocked ? (showCcr ? '✓ CCR' : 'CCR') : '👁 CCR';
-      btnLiveryPrevCcrEl.title = ccrUnlocked
-        ? (showCcr ? 'CCR Rebreather equipped for dives (click to unequip)' : 'Equip CCR Rebreather for dives')
-        : 'Preview CCR Rebreather in Test Tank (locked — earn cert to equip in dives)';
-    }
-    if (btnLiveryPrevDpvEl) {
-      btnLiveryPrevDpvEl.classList.toggle('active', showDpv);
-      btnLiveryPrevDpvEl.setAttribute('aria-pressed', showDpv ? 'true' : 'false');
-      btnLiveryPrevDpvEl.textContent = dpvUnlocked ? (showDpv ? '✓ DPV' : 'DPV') : '👁 DPV';
-      btnLiveryPrevDpvEl.title = dpvUnlocked
-        ? (showDpv ? 'DPV Scooter equipped for dives (click to unequip)' : 'Equip DPV Scooter for dives')
-        : 'Preview DPV Scooter in Test Tank (locked — earn cert to equip in dives)';
     }
 
     if (liverySavedSlotsEl) {
@@ -2252,7 +2190,7 @@ export function createLiveryWorkshopController({
       if (activeMapLeads.length > 0) {
         liveryTreasureMapsSectionEl.hidden = false;
         liveryTreasureMapsSectionEl.innerHTML = `
-          <div class="livery-section-label">🗺️ TREASURE MAPS (${activeMapLeads.length})</div>
+          <div class="livery-section-label">🗺️ Treasure Maps (${activeMapLeads.length})</div>
           <div class="livery-map-leads-grid">
             ${activeMapLeads
               .map((lead) => {
@@ -2703,70 +2641,6 @@ export function createLiveryWorkshopController({
   });
   liveryWalletPillEl?.addEventListener('click', () => {
     setLiveryActiveTab('chroma');
-  });
-  liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
-    btn.addEventListener('click', () => {
-      const env = btn.getAttribute('data-livery-env');
-      if (!env) return;
-      liveryPreviewEnv = env;
-      renderLiveryWorkshopModal();
-    });
-  });
-  btnLiveryPrevCcrEl?.addEventListener('click', () => {
-    let ccrUnlocked = false;
-    try { ccrUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('ccr'); } catch {}
-    if (ccrUnlocked) {
-      const savedGearLoadout = getSavedGearLoadout();
-      savedGearLoadout.ccr = !savedGearLoadout.ccr;
-      liveryPreviewCcr = null;
-      triggerEquipAnimation('ccr', { name: savedGearLoadout.ccr ? 'CCR Rebreather' : 'Twin Backgas', tier: 'epic' });
-      saveGearLoadout();
-      renderTechGearDock();
-      syncLiveryUi();
-      renderLiveryWorkshopModal();
-      showToast(
-        savedGearLoadout.ccr
-          ? '♻️ CCR Rebreather equipped for your next dive!'
-          : '♻️ CCR Rebreather unequipped (switched to twin backgas).',
-        2.0
-      );
-      return;
-    }
-    const cur = liveryPreviewCcr !== null ? liveryPreviewCcr : false;
-    liveryPreviewCcr = !cur;
-    if (liveryPreviewCcr) triggerEquipAnimation('ccr', { name: 'CCR Preview', tier: 'epic' });
-    renderLiveryWorkshopModal();
-    if (liveryPreviewCcr) {
-      showToast('👁 Previewing CCR in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
-    }
-  });
-  btnLiveryPrevDpvEl?.addEventListener('click', () => {
-    let dpvUnlocked = false;
-    try { dpvUnlocked = computeUnlockedGear(loadCareerLogbook(), LEVELS).unlockedIds.has('dpv'); } catch {}
-    if (dpvUnlocked) {
-      const savedGearLoadout = getSavedGearLoadout();
-      savedGearLoadout.dpv = !savedGearLoadout.dpv;
-      liveryPreviewDpv = null;
-      triggerEquipAnimation('dpv', { name: savedGearLoadout.dpv ? 'DPV Scooter' : 'Free Swim', tier: 'rare' });
-      saveGearLoadout();
-      renderTechGearDock();
-      syncLiveryUi();
-      renderLiveryWorkshopModal();
-      showToast(
-        savedGearLoadout.dpv
-          ? '🚀 DPV Scooter equipped for your next dive!'
-          : '🚀 DPV Scooter unequipped.',
-        2.0
-      );
-      return;
-    }
-    const cur = liveryPreviewDpv !== null ? liveryPreviewDpv : false;
-    liveryPreviewDpv = !cur;
-    if (liveryPreviewDpv) triggerEquipAnimation('dpv', { name: 'DPV Preview', tier: 'rare' });
-    renderLiveryWorkshopModal();
-    if (liveryPreviewDpv) {
-      showToast('👁 Previewing DPV in Test Tank — unlock via Cert Ladder to equip in dives.', 2.4);
-    }
   });
   btnLiveryBestEl?.addEventListener('click', () => {
     lockedTryOn = null;

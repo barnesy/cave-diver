@@ -338,7 +338,7 @@ export function createSiteBrowserController({
     if (overlayLayer) {
       const emptyBanner =
         pins.length === 0
-          ? `<g><rect x="74" y="82" width="210" height="32" rx="10" fill="rgba(2, 11, 20, 0.88)" stroke="rgba(52, 211, 153, 0.55)" stroke-width="1" /><text x="179" y="101.5" text-anchor="middle" fill="#a7f3d0" font-size="9.5" font-weight="700" font-family="ui-monospace, monospace">ALL ${LEVELS.length} EXPEDITIONS CLEARED!</text></g>`
+          ? `<g><rect x="74" y="82" width="210" height="32" rx="10" fill="rgba(2, 11, 20, 0.88)" stroke="rgba(52, 211, 153, 0.55)" stroke-width="1" /><text x="179" y="101.5" text-anchor="middle" fill="#a7f3d0" font-size="9.5" font-weight="700" font-family="Plus Jakarta Sans, sans-serif">All ${LEVELS.length} Expeditions Cleared!</text></g>`
           : '';
       overlayLayer.innerHTML = `${routeLine}${pinMarkup}${emptyBanner}`;
     }
@@ -388,7 +388,7 @@ export function createSiteBrowserController({
       const badgesHtml = grade
         ? `${modePillHtml}<span class="lvl-grade-badge ${gradeCls}">${escapeHtml(grade)}</span>`
         : isNext
-          ? `<span class="lvl-next-badge">NEXT</span>`
+          ? `<span class="lvl-next-badge">Next</span>`
           : '';
       const timeStr = clearRec?.bestTimeSec > 0 ? ` · ${formatRunClock(clearRec.bestTimeSec)}` : '';
       const metaText =
@@ -415,7 +415,8 @@ export function createSiteBrowserController({
         : foundCache
           ? `<span class="lvl-cache-badge found" title="Discovered: ${escapeHtml(foundCache.itemName)}">✓ Gear</span>`
           : '';
-      const archPillHtml = `<span class="lvl-arch-badge arch-${recArch.id}" title="Recommended Build: ${escapeHtml(recArch.label)}">${recArch.icon} ${recArch.short}</span>`;
+      const archShort = recArch.short ? recArch.short.charAt(0).toUpperCase() + recArch.short.slice(1).toLowerCase() : '';
+      const archPillHtml = `<span class="lvl-arch-badge arch-${recArch.id}" title="Recommended Build: ${escapeHtml(recArch.label)}">${recArch.icon} ${archShort}</span>`;
       return `
       <button
         type="button"
@@ -475,14 +476,14 @@ export function createSiteBrowserController({
     const idx = LEVELS.findIndex((l) => l.id === level.id);
     const lvlNum = idx >= 0 ? idx + 1 : 1;
     btnPlaySolo.textContent = level.isProcedural
-      ? `DIVE · ∞ #${level.proceduralMeta?.seed || 'SUMP'}`
-      : `DIVE · LEVEL ${lvlNum}`;
+      ? `Dive · ∞ #${level.proceduralMeta?.seed || 'Sump'}`
+      : `Dive · Level ${lvlNum}`;
     const menuTitle = screenMenu.querySelector('.menu-title');
     const menuDesc = menuDescEl || screenMenu.querySelector('.menu-desc');
     const loaderTitle = screenLoader.querySelector('.loader-title');
     const loaderMetaSpan = screenLoader.querySelector('.loader-meta span');
     if (menuTitle) {
-      menuTitle.textContent = level.name.toUpperCase();
+      menuTitle.textContent = level.name;
       if (animate) retriggerAnim(menuTitle, 'anim-telemetry-swap');
     }
     if (menuDesc && level.description) {
@@ -491,8 +492,8 @@ export function createSiteBrowserController({
       requestAnimationFrame(syncMenuDescToggle);
       if (animate) retriggerAnim(menuDesc, 'anim-telemetry-swap');
     }
-    if (loaderTitle) loaderTitle.textContent = level.name.toUpperCase();
-    if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle.toUpperCase();
+    if (loaderTitle) loaderTitle.textContent = level.name;
+    if (loaderMetaSpan && level.subtitle) loaderMetaSpan.textContent = level.subtitle;
     renderLevelCards();
     if (animate) {
       retriggerAnim(siteMapRegionBadgeEl, 'anim-badge-lock');

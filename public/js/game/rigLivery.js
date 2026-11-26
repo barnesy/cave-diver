@@ -2617,10 +2617,10 @@ function _easeOutBack(t) {
 function _getSlotPreviewAnchor(slot, sx, sy, scale) {
   const u = scale * 0.55;
   if (slot === 'headgear') {
-    return { ax: sx + u * 0.52, ay: sy - u * 0.14, rx: u * 0.50, ry: u * 0.44, zoom: 1.62, shape: 'circle', label: 'HEADGEAR', dirX: 1, dirY: -1 };
+    return { ax: sx + u * 0.52, ay: sy - u * 0.14, rx: u * 0.50, ry: u * 0.44, zoom: 1.62, shape: 'circle', label: 'Headgear', dirX: 1, dirY: -1 };
   }
   if (slot === 'visor') {
-    return { ax: sx + u * 0.72, ay: sy - u * 0.02, rx: u * 0.34, ry: u * 0.32, zoom: 1.74, shape: 'circle', label: 'VISOR LENS', dirX: 1, dirY: -1 };
+    return { ax: sx + u * 0.72, ay: sy - u * 0.02, rx: u * 0.34, ry: u * 0.32, zoom: 1.74, shape: 'circle', label: 'Visor Lens', dirX: 1, dirY: -1 };
   }
   if (slot === 'tank' || slot === 'ccr') {
     return {
@@ -2630,16 +2630,16 @@ function _getSlotPreviewAnchor(slot, sx, sy, scale) {
       ry: u * 0.32,
       zoom: 1.50,
       shape: 'capsule',
-      label: slot === 'ccr' ? 'CCR LOOP' : 'TWIN TANKS',
+      label: slot === 'ccr' ? 'CCR Loop' : 'Twin Tanks',
       dirX: -1,
       dirY: -1,
     };
   }
   if (slot === 'torch') {
-    return { ax: sx + 0.58 * scale, ay: sy + 0.21 * scale, rx: u * 0.48, ry: u * 0.46, zoom: 1.58, shape: 'circle', label: 'PRIMARY TORCH', dirX: 1, dirY: 1 };
+    return { ax: sx + 0.58 * scale, ay: sy + 0.21 * scale, rx: u * 0.48, ry: u * 0.46, zoom: 1.58, shape: 'circle', label: 'Primary Torch', dirX: 1, dirY: 1 };
   }
   if (slot === 'patch') {
-    return { ax: sx - u * 0.02, ay: sy + u * 0.01, rx: u * 0.36, ry: u * 0.36, zoom: 1.72, shape: 'circle', label: 'SHOULDER PATCH', dirX: -1, dirY: 1 };
+    return { ax: sx - u * 0.02, ay: sy + u * 0.01, rx: u * 0.36, ry: u * 0.36, zoom: 1.72, shape: 'circle', label: 'Shoulder Patch', dirX: -1, dirY: 1 };
   }
   if (slot === 'trim') {
     return {
@@ -2650,24 +2650,24 @@ function _getSlotPreviewAnchor(slot, sx, sy, scale) {
       zoom: 1.32,
       shape: 'capsule',
       secondary: { ax: sx - 1.30 * scale, ay: sy - 0.14 * scale, r: u * 0.52 },
-      label: 'TRIM & FINS',
+      label: 'Trim & Fins',
       dirX: -1,
       dirY: 1,
     };
   }
   if (slot === 'suit') {
-    return { ax: sx - 0.26 * scale, ay: sy + 0.02 * scale, rx: scale * 0.68, ry: scale * 0.32, zoom: 1.26, shape: 'capsule', label: 'DRYSUIT', dirX: -1, dirY: 1 };
+    return { ax: sx - 0.26 * scale, ay: sy + 0.02 * scale, rx: scale * 0.68, ry: scale * 0.32, zoom: 1.26, shape: 'capsule', label: 'Drysuit', dirX: -1, dirY: 1 };
   }
   if (slot === 'dpv' || slot === 'scooter') {
-    return { ax: sx + u * 0.92, ay: sy + u * 0.16, rx: u * 0.68, ry: u * 0.52, zoom: 1.40, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
+    return { ax: sx + u * 0.92, ay: sy + u * 0.16, rx: u * 0.68, ry: u * 0.52, zoom: 1.40, shape: 'circle', label: 'DPV Scooter', dirX: 1, dirY: 1 };
   }
   if (slot === 'harpoon') {
-    return { ax: sx + 0.68 * scale, ay: sy + 0.16 * scale, rx: u * 0.68, ry: u * 0.42, zoom: 1.36, shape: 'capsule', label: 'HARPOON', dirX: 1, dirY: 1 };
+    return { ax: sx + 0.68 * scale, ay: sy + 0.16 * scale, rx: u * 0.68, ry: u * 0.42, zoom: 1.36, shape: 'capsule', label: 'Harpoon', dirX: 1, dirY: 1 };
   }
   if (slot === 'chroma') {
-    return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.88, ry: scale * 0.44, zoom: 1.18, shape: 'capsule', label: 'COLOR COAT', dirX: -1, dirY: -1 };
+    return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.88, ry: scale * 0.44, zoom: 1.18, shape: 'capsule', label: 'Color Coat', dirX: -1, dirY: -1 };
   }
-  return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, zoom: 1.0, shape: 'capsule', label: 'FULL RIG', dirX: 1, dirY: -1 };
+  return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, zoom: 1.0, shape: 'capsule', label: 'Full Rig', dirX: 1, dirY: -1 };
 }
 
 /**
@@ -3332,21 +3332,21 @@ export function drawLiveryPreview(
 
   // Top-left borderless frosted status caption in crisp screen space (never overlaps diver gear)
   if (previewLockedLabel) {
-    _drawPreviewCornerCaption(ctx, w, `🔒 TRY-ON PREVIEW · ${previewLockedLabel}`, '#facc15', '#fde047', 1);
+    _drawPreviewCornerCaption(ctx, w, `🔒 Try-On · ${previewLockedLabel}`, '#facc15', '#fde047', 1);
   } else if (equipFx && equipFx.itemName && equipFx.progress < 0.98) {
     const pillAlpha = Math.min(1, (1 - equipFx.progress) * 2.4);
     const slotAnchor = equipFx.slot && equipFx.slot !== 'all' ? _getSlotPreviewAnchor(equipFx.slot, sx, syBase, scale) : null;
-    const prefix = equipFx.isPreview ? '👁 PREVIEW' : slotAnchor ? `⚡ ${slotAnchor.label}` : '⚡ EQUIPPED';
-    _drawPreviewCornerCaption(ctx, w, `${prefix} · ${equipFx.itemName.toUpperCase()}`, equipFx.color || '#38bdf8', '#f8fafc', pillAlpha);
+    const prefix = equipFx.isPreview ? 'Preview' : slotAnchor ? slotAnchor.label : 'Equipped';
+    _drawPreviewCornerCaption(ctx, w, `${prefix} · ${equipFx.itemName}`, equipFx.color || '#38bdf8', '#f8fafc', pillAlpha);
   } else if (focusHighlight && focusHighlight.slot && focusHighlight.slot !== 'all') {
     const slotAnchor = _getSlotPreviewAnchor(focusHighlight.slot, sx, syBase, scale);
-    const kicker = (focusHighlight.kicker || slotAnchor.label).toUpperCase();
-    const label = focusHighlight.label ? focusHighlight.label.toUpperCase() : '';
+    const kicker = focusHighlight.kicker || slotAnchor.label;
+    const label = focusHighlight.label || '';
     const txt = label ? `${kicker} · ${label}` : kicker;
     _drawPreviewCornerCaption(ctx, w, txt, focusHighlight.color || '#38bdf8', '#f1f5f9', 0.96);
   } else if (pal.setSynergy) {
     const set = pal.setSynergy;
-    _drawPreviewCornerCaption(ctx, w, `${set.icon} SET SYNERGY · ${set.auraName.toUpperCase()}`, set.color, set.color, 0.96);
+    _drawPreviewCornerCaption(ctx, w, `${set.icon} ${set.auraName}`, set.color, set.color, 0.96);
   }
 
   // Corner optical & gear telemetry tag

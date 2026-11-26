@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=239',
+  mapRasterUrl: './assets/map-expedition.jpg?v=240',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -593,7 +593,7 @@ const {
   populateLevelSelect,
 } = siteBrowser;
 
-async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoad = false } = {}) {
+async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoad = false, silent = false } = {}) {
   const nextLevel = typeof levelId === 'object' && levelId?.id ? levelId : getLevelById(levelId);
 
   // Deduplicate identical in-flight load so rapid events (e.g. dive_preparing + dive_started) share one build
@@ -623,8 +623,10 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
   const mySeq = ++loadSeq;
   activeLevel = nextLevel;
   if (selectLevel) selectLevel.value = nextLevel.id;
-  syncMenuLevelLabels(nextLevel, { animate: true });
-  if (typeof syncGasPlanBadges === 'function') syncGasPlanBadges();
+  if (!silent) {
+    syncMenuLevelLabels(nextLevel, { animate: true });
+    if (typeof syncGasPlanBadges === 'function') syncGasPlanBadges();
+  }
 
   const isCached = renderer.isLevelCached(nextLevel.id);
   const mapPct = (rawPct) => {
@@ -634,10 +636,10 @@ async function ensureLevelLoaded(levelId, { showOverlay = true, keepOpenAfterLoa
   if (showOverlay && (!isCached || keepOpenAfterLoad)) {
     screenLoader.classList.remove('done');
   }
-  if (!isCached && inlineLoaderEl) {
+  if (!isCached && inlineLoaderEl && !silent) {
     inlineLoaderEl.hidden = false;
   }
-  setLoaderProgress(mapPct(isCached ? 95 : 8), `Loading ${nextLevel.name}...`);
+  if (!silent) setLoaderProgress(mapPct(isCached ? 95 : 8), `Loading ${nextLevel.name}...`);
 
   let lastStatusBroadcastAt = 0;
   let lastBroadcastPct = -1;
@@ -4669,11 +4671,13 @@ function renderRoomsList(rooms = lan.rooms) {
     .join('');
 }
 
+let menuBgBakeTimer = null;
 async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (lan.room && !lan.isHost()) {
     showToast('Host selects the expedition site in co-op.', 2.0);
     return;
   }
+  if (menuBgBakeTimer) { clearTimeout(menuBgBakeTimer); menuBgBakeTimer = null; }
   loadSeq += 1;
   inFlightLoad = null;
   const nextLevel = getLevelById(chosenId);
@@ -4693,9 +4697,12 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // Only restore immediately if already baked in cache; defer heavy SDF baking until player starts dive
+  // Restore immediately if cached; otherwise silently pre-bake after a brief debounce (v240)
   if (renderer.isLevelCached(nextLevel.id)) {
-    await ensureLevelLoaded(nextLevel.id, { showOverlay: false });
+    await ensureLevelLoaded(nextLevel.id, { showOverlay: false, silent: true });
+  } else if (mode === 'menu') {
+    const targetId = nextLevel.id;
+    menuBgBakeTimer = setTimeout(() => { menuBgBakeTimer = null; if (mode === 'menu' && activeLevel.id === targetId && !inFlightLoad) ensureLevelLoaded(targetId, { showOverlay: false, silent: true }).catch(() => {}); }, 260);
   }
 }
 
@@ -7083,11 +7090,11 @@ function stepSimulation(dt) {
     }
     return;
   }
-  if (ecosystem && renderer.ready && renderer.level?.id === activeLevel.id) {
+  if (ecosystem && renderer.ready && renderer.level) {
     _marineStepOpts.localSiltDensity = session?.localSiltDensity || 0;
     _marineStepOpts.stealthBonus = mode === 'diving' ? (session?.rigPerf?.stealth || 0) : 0;
     _marineStepOpts.ccrSilent = Boolean(mode === 'diving' && session?.diveState?.ccrEnabled && (session?.diveState?.ccrScrubberPct ?? 0) > 0.1);
-    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, activeLevel, _marineStepOpts);
+    stepMarineEcosystem(ecosystem, mode === 'diving' ? session?.diver : null, dt, activeTimeSec, renderer.level, _marineStepOpts);
   }
 
   if (celebrationParticles.length > 0) {
@@ -7773,25 +7780,12 @@ function frame(nowMs) {
       timeSec: session.simTimeSec,
       dt,
     });
-  } else if (renderer.ready && renderer.level?.id === activeLevel.id) {
-    menuPreviewDiver.x = activeLevel.spawn.x + 7 + Math.sin(nowMs * 0.0003) * 4;
-    menuPreviewDiver.y = Math.min(activeLevel.spawn.y + 6.5, 9);
-    menuPreviewDiver.livery = liveryWorkshop.getActiveRigLivery();
-    renderer.render({
-      diver: menuPreviewDiver,
-      diveState: MENU_PREVIEW_DIVE_STATE,
-      peerDiver: null,
-      checkpointsHit: EMPTY_SET,
-      nextCheckpoint: activeLevel.checkpoints[0],
-      siltClouds: EMPTY_ARR,
-      bubbles: EMPTY_ARR,
-      ecosystem,
-      weather: resolveEffectiveWeather(weatherPrefId, { level: activeLevel }),
-      timeSec: menuTimeSec,
-      dt,
-    });
   } else {
-    renderer.renderMenuBackdrop(activeLevel, menuTimeSec, resolveEffectiveWeather(weatherPrefId, { level: activeLevel }));
+    renderer.renderMenuScene({
+      level: activeLevel, diver: menuPreviewDiver, diveState: MENU_PREVIEW_DIVE_STATE, ecosystem,
+      weather: resolveEffectiveWeather(weatherPrefId, { level: renderer.level || activeLevel }),
+      timeSec: menuTimeSec, dt, livery: liveryWorkshop.getActiveRigLivery(),
+    });
   }
 
   if (liveryModalEl && !liveryModalEl.hidden) {
@@ -7984,6 +7978,9 @@ async function bootGame() {
 
   initGitHubAuth();
   requestAnimationFrame(frame);
+  if (!INITIAL_ROOM_CODE && !incomingChallenge && !incomingProc) {
+    setTimeout(() => { if (mode === 'menu' && !inFlightLoad) ensureLevelLoaded(activeLevel.id, { showOverlay: false, silent: true }).catch(() => {}); }, 80);
+  }
 }
 
 bootGame();

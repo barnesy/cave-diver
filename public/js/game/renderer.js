@@ -1,6 +1,6 @@
 import { evaluateCaveSDF } from './collision.js';
 import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
-import { drawTopsideAtmosphereExtras } from './renderers/topsideAtmosphereRenderer.js';
+import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama } from './renderers/topsideAtmosphereRenderer.js';
 import {
   CACHE_PX_PER_M,
   MOBILE_CACHE_PX_PER_M,
@@ -693,106 +693,37 @@ export class CaveRenderer {
   }
 
   /**
-   * Lightweight <0.5ms water-and-light menu backdrop rendered when no cave chunks have been baked yet.
+   * Living underwater cavern/wreck backdrop for Home & Menu screens (v240):
+   * renders the full-detail live in-game level when baked, falling back to diorama while baking.
    */
   renderMenuBackdrop(level, timeSec = 0, weather = null) {
     this._activeWeather = weather ? (typeof weather === 'string' ? getWeatherById(weather) : weather) : null;
     this.resize();
-    const ctx = this.ctx;
-    const cw = this.canvas.width;
-    const ch = this.canvas.height;
-    const theme = level?.theme || {};
-
-    // Smoothly cross-fade ocean backdrop palette when switching expedition sites
-    const targetHexes = [
-      theme.waterSurface || '#67e8f9',
-      theme.waterShallow || '#06b6d4',
-      theme.waterMid || '#0e5a6f',
-      theme.waterDeep || '#072a47',
-      theme.waterAbyss || '#020914',
-    ];
-    const parseHex = (hex) => {
-      const s = String(hex || '#020b14').replace('#', '');
-      const full = s.length === 3 ? `${s[0]}${s[0]}${s[1]}${s[1]}${s[2]}${s[2]}` : s.padEnd(6, '0');
-      const n = parseInt(full.slice(0, 6), 16);
-      return Number.isFinite(n) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [2, 11, 20];
-    };
-    const dt = this._lastMenuBackdropSec ? Math.min(0.1, Math.max(0.004, timeSec - this._lastMenuBackdropSec)) : 0.016;
-    this._lastMenuBackdropSec = timeSec;
-
-    if (!this._menuBackdropRgb) {
-      this._menuBackdropRgb = targetHexes.map(parseHex);
-    } else {
-      const alpha = 1 - Math.exp(-dt * 4.2);
-      for (let i = 0; i < 5; i++) {
-        const tgt = parseHex(targetHexes[i]);
-        const cur = this._menuBackdropRgb[i];
-        cur[0] += (tgt[0] - cur[0]) * alpha;
-        cur[1] += (tgt[1] - cur[1]) * alpha;
-        cur[2] += (tgt[2] - cur[2]) * alpha;
-      }
-    }
-    const rgbStop = (i) => {
-      const c = this._menuBackdropRgb[i];
-      return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
-    };
-
-    const grad = ctx.createLinearGradient(0, 0, 0, ch);
-    grad.addColorStop(0, rgbStop(0));
-    grad.addColorStop(0.22, rgbStop(1));
-    grad.addColorStop(0.54, rgbStop(2));
-    grad.addColorStop(0.82, rgbStop(3));
-    grad.addColorStop(1, rgbStop(4));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, cw, ch);
-
-    // Subtle animated sun shafts drifting behind menu card
-    ctx.save();
-    for (let i = 0; i < 5; i++) {
-      const baseX = cw * (0.12 + i * 0.2) + Math.sin(timeSec * 0.24 + i * 1.65) * cw * 0.045;
-      const topW = cw * (0.045 + (i % 2) * 0.02);
-      const botW = cw * (0.18 + (i % 3) * 0.045);
-      const shimmer = 0.13 + 0.06 * Math.sin(timeSec * 0.55 + i * 2.1);
-      const rayGrad = ctx.createLinearGradient(baseX, 0, baseX + cw * 0.04, ch * 0.82);
-      rayGrad.addColorStop(0, `rgba(186, 230, 253, ${shimmer.toFixed(3)})`);
-      rayGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
-      ctx.fillStyle = rayGrad;
-      ctx.beginPath();
-      ctx.moveTo(baseX - topW, 0);
-      ctx.lineTo(baseX + topW, 0);
-      ctx.lineTo(baseX + botW, ch * 0.84);
-      ctx.lineTo(baseX - botW * 0.42, ch * 0.84);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Ambient buoyant bokeh bubbles rising softly through the deep backdrop (zero-alloc)
-    if (!this._reducedMotion) {
-      const bubbleCount = 26;
-      const mdpr = this._cachedDpr || 1;
-      ctx.lineWidth = Math.max(1, mdpr * 0.8);
-      for (let i = 0; i < bubbleCount; i++) {
-        const seed = (i + 1) * 1.6180339;
-        const speed = 0.022 + (i % 7) * 0.0075;
-        const phase = (timeSec * speed + (seed % 1)) % 1;
-        const by = ch * (1.06 - phase * 1.12);
-        const bx = cw * (((seed * 7.31) % 1) + Math.sin(timeSec * (0.6 + (i % 4) * 0.25) + i * 2.3) * 0.018);
-        const r = (2.0 + (i % 5) * 1.35) * (0.65 + (1 - phase) * 0.45) * mdpr;
-        const fade = Math.sin(phase * Math.PI);
-        const alpha = fade * (0.14 + (i % 3) * 0.06);
-        ctx.fillStyle = `rgba(186, 230, 253, ${(alpha * 0.55).toFixed(3)})`;
-        ctx.strokeStyle = `rgba(224, 242, 254, ${(alpha * 1.25).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.ellipse(bx, by, r * 1.08, r * 0.92, Math.sin(timeSec + i) * 0.15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
+    drawMenuBackdropDiorama(this, level, timeSec);
     if (this._activeWeather && this._activeWeather.id !== 'clear-day') {
-      this._drawWeatherSkyAtmosphere(ctx, cw, ch * 0.44, timeSec);
-      this._drawWeatherPrecipitation(ctx, cw, ch, ch * 0.44, timeSec);
+      this._drawWeatherSkyAtmosphere(this.ctx, this.canvas.width, this.canvas.height * 0.44, timeSec);
+      this._drawWeatherPrecipitation(this.ctx, this.canvas.width, this.canvas.height, this.canvas.height * 0.44, timeSec);
     }
+  }
+
+  renderMenuScene({ level, diver, diveState, ecosystem, weather, timeSec, dt, livery }) {
+    if (this.ready && this.level && diver) {
+      const lvl = this.level;
+      const swayX = Math.sin(timeSec * 0.28) * 3.4;
+      const swayVx = Math.cos(timeSec * 0.28) * 0.95;
+      const swayY = Math.cos(timeSec * 0.36) * 0.9;
+      diver.x = lvl.spawn.x + 2.4 + swayX;
+      diver.y = Math.max(2.4, Math.min((lvl.spawn.y || 2.5) + 3.2 + swayY, 9.5));
+      diver.vx = swayVx;
+      diver.vy = -Math.sin(timeSec * 0.36) * 0.32;
+      diver.angle = swayVx >= 0 ? 0.12 : Math.PI - 0.12;
+      diver.livery = livery;
+      if (!this._menuEmptySet) this._menuEmptySet = new Set();
+      if (!this._menuEmptyArr) this._menuEmptyArr = [];
+      this.render({ diver, diveState, peerDiver: null, checkpointsHit: this._menuEmptySet, nextCheckpoint: lvl.checkpoints?.[0] || null, siltClouds: this._menuEmptyArr, bubbles: this._menuEmptyArr, ecosystem, weather, timeSec, dt });
+      return;
+    }
+    this.renderMenuBackdrop(level, timeSec, weather);
   }
 
   /**
@@ -2859,33 +2790,11 @@ export class CaveRenderer {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Glowing contact ring on the line + subtle diegetic label
+      // Glowing contact ring on the line (diegetic visual only, no floating text clutter)
       ctx.fillStyle = `rgba(254, 249, 195, ${(0.9 * pulse).toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(lx, ly, Math.max(3, 0.12 * scale), 0, Math.PI * 2);
       ctx.fill();
-
-      ctx.globalCompositeOperation = 'source-over';
-      const lblFontPx = Math.max(10, Math.min(12, Math.round(scale * 0.26)));
-      ctx.font = `800 ${lblFontPx}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      const lbl = '✋ HAND ON LINE';
-      const tw = ctx.measureText(lbl).width;
-      const padX = 8, pillH = lblFontPx + 8;
-      const pillW = tw + padX * 2;
-      const pillX = lx - pillW * 0.5;
-      const pillY = ly - Math.max(24, 0.72 * scale) - pillH * 0.5;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.78)';
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(pillX, pillY, pillW, pillH, pillH * 0.5);
-      else ctx.rect(pillX, pillY, pillW, pillH);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#fef08a';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(lbl, lx, pillY + pillH * 0.5 + 0.5);
     }
     ctx.restore();
   }

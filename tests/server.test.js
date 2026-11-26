@@ -31,7 +31,7 @@ test('LAN server serves app, reports LAN URLs, and relays 2-player room state', 
     const htmlRes = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(htmlRes.status, 200);
     const html = await htmlRes.text();
-    assert.ok(html.includes('CENOTE EL ABISMO'));
+    assert.ok(html.includes('Cenote El Abismo'));
 
     const joinRes = await fetch(`http://127.0.0.1:${port}/join/ABCD`);
     assert.equal(joinRes.status, 200);
