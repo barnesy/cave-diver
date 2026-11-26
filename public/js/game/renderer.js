@@ -1496,30 +1496,37 @@ export class CaveRenderer {
     ctx.globalCompositeOperation = 'screen';
     const cyanStamp = this.glowStamps.cyan;
     const warmStamp = this.glowStamps.warm;
+    const topY = toScreenY(0.15);
+    const botGradY = toScreenY(14.5);
     for (const { rays } of sunCurtains) {
-      for (let i = 0; i < rays.length - 1; i += 2) {
-        const a = rays[i];
-        const b = rays[i + 1];
-        const shimmer = 0.5 + 0.5 * Math.sin(timeSec * 2.1 + i * 1.15);
-        const topX = toScreenX((a.xTop + b.xTop) * 0.5);
-        const topY = toScreenY(0.15);
-        const botX = toScreenX((a.xBot + b.xBot) * 0.5);
-        const botY = toScreenY(Math.min((a.yBot + b.yBot) * 0.5, 14.5));
-        const g = ctx.createLinearGradient(topX, topY, botX, botY);
-        g.addColorStop(0, `rgba(103, 232, 249, ${(0.08 + shimmer * 0.12).toFixed(3)})`);
-        g.addColorStop(0.65, `rgba(45, 212, 191, ${(0.03 + shimmer * 0.05).toFixed(3)})`);
+      if (rays.length < 2) continue;
+      // Batch caustic shafts into 2 alternating shimmer phases (2 gradients + 2 fills instead of 20-30 per curtain!)
+      for (let phase = 0; phase < 2; phase++) {
+        const shimmer = 0.5 + 0.5 * Math.sin(timeSec * 2.1 + phase * Math.PI);
+        const g = ctx.createLinearGradient(0, topY, 0, botGradY);
+        g.addColorStop(0, `rgba(103, 232, 249, ${(0.08 + shimmer * 0.11).toFixed(3)})`);
+        g.addColorStop(0.65, `rgba(45, 212, 191, ${(0.03 + shimmer * 0.045).toFixed(3)})`);
         g.addColorStop(1, 'rgba(45, 212, 191, 0)');
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(toScreenX(a.xTop), topY);
-        ctx.lineTo(toScreenX(b.xTop), topY);
-        ctx.lineTo(toScreenX(b.xBot), toScreenY(b.yBot));
-        ctx.lineTo(toScreenX(a.xBot), toScreenY(a.yBot));
-        ctx.closePath();
+        for (let i = phase * 2; i < rays.length - 1; i += 4) {
+          const a = rays[i];
+          const b = rays[i + 1];
+          ctx.moveTo(toScreenX(a.xTop), topY);
+          ctx.lineTo(toScreenX(b.xTop), topY);
+          ctx.lineTo(toScreenX(b.xBot), toScreenY(b.yBot));
+          ctx.lineTo(toScreenX(a.xBot), toScreenY(a.yBot));
+          ctx.closePath();
+        }
         ctx.fill();
+      }
 
-        // Projected shimmering wall-hit sun caustic pools where daylight strikes rock ledges
-        if (cyanStamp && a.hitWall && a.yBot < 16.5) {
+      // Projected shimmering wall-hit sun caustic pools where daylight strikes rock ledges
+      if (cyanStamp) {
+        for (let i = 0; i < rays.length - 1; i += 2) {
+          const a = rays[i];
+          if (!a.hitWall || a.yBot >= 16.5) continue;
+          const shimmer = 0.5 + 0.5 * Math.sin(timeSec * 2.1 + i * 1.15);
           const depthAtten = Math.max(0, 1 - a.yBot / 16.5);
           const inc = Math.max(0.25, a.incidence || 0.5);
           const cAlpha = depthAtten * inc * (0.14 + shimmer * 0.2);
@@ -1529,9 +1536,9 @@ export class CaveRenderer {
             const rad = (0.75 + shimmer * 0.42) * scale;
             ctx.globalAlpha = Math.min(0.42, cAlpha);
             ctx.drawImage(a.yBot < 7.5 && warmStamp ? warmStamp : cyanStamp, wx - rad, wy - rad * 0.65, rad * 2, rad * 1.3);
-            ctx.globalAlpha = 1;
           }
         }
+        ctx.globalAlpha = 1;
       }
     }
     ctx.restore();
@@ -1597,34 +1604,40 @@ export class CaveRenderer {
       const sz = a.size * scale;
 
       if (a.kind === 'chara') {
-        // Sunlit freshwater Chara stonewort & cenote aquatic moss tufts
+        // Sunlit freshwater Chara stonewort & cenote aquatic moss tufts (batched into 1 path/stroke!)
         ctx.strokeStyle = a.color;
         ctx.lineWidth = Math.max(1.5, 0.048 * scale);
         ctx.lineCap = 'round';
+        ctx.beginPath();
         for (let b = -1; b <= 1; b++) {
-          ctx.beginPath();
           ctx.moveTo(b * 0.07 * scale, 0);
           ctx.quadraticCurveTo(b * 0.12 * scale + sway, -sz * 0.55, b * 0.14 * scale + sway * 1.4, -sz);
-          ctx.stroke();
         }
+        ctx.stroke();
       } else if (a.kind === 'sodastraw') {
-        // Hanging translucent calcite soda-straw stalactite needles & miniature curtain
+        // Hanging translucent calcite soda-straw stalactite needles (batched!)
+        ctx.fillStyle = a.color;
         for (let s = -1; s <= 1; s++) {
           const sh = sz * (s === 0 ? 1.05 : 0.65);
           const ox = s * 0.11 * scale;
-          ctx.fillStyle = a.color;
           ctx.fillRect(ox - 0.025 * scale, -sh, 0.05 * scale, sh);
-          ctx.fillStyle = a.accent;
-          ctx.beginPath();
-          ctx.arc(ox, -sh, 0.032 * scale, 0, Math.PI * 2);
-          ctx.fill();
         }
+        ctx.fillStyle = a.accent;
+        const tipR = 0.032 * scale;
+        ctx.beginPath();
+        for (let s = -1; s <= 1; s++) {
+          const sh = sz * (s === 0 ? 1.05 : 0.65);
+          const ox = s * 0.11 * scale;
+          ctx.moveTo(ox + tipR, -sh);
+          ctx.arc(ox, -sh, tipR, 0, Math.PI * 2);
+        }
+        ctx.fill();
       } else if (a.kind === 'biofilm') {
-        // Delicate pale amber/cream sulfur & iron-bacteria cave microbial filaments
+        // Delicate pale amber/cream sulfur & iron-bacteria cave microbial filaments (batched!)
         ctx.strokeStyle = a.color;
         ctx.lineWidth = Math.max(1.2, 0.03 * scale);
+        ctx.beginPath();
         for (let k = -1; k <= 1; k++) {
-          ctx.beginPath();
           ctx.moveTo(k * 0.06 * scale, 0);
           ctx.bezierCurveTo(
             k * 0.1 * scale + sway * 1.4,
@@ -1634,30 +1647,41 @@ export class CaveRenderer {
             k * 0.11 * scale + sway * 1.6,
             -sz * 0.95
           );
-          ctx.stroke();
-          ctx.fillStyle = a.accent;
-          ctx.beginPath();
-          ctx.arc(k * 0.11 * scale + sway * 1.6, -sz * 0.95, 0.03 * scale, 0, Math.PI * 2);
-          ctx.fill();
         }
+        ctx.stroke();
+        ctx.fillStyle = a.accent;
+        const dotR = 0.03 * scale;
+        ctx.beginPath();
+        for (let k = -1; k <= 1; k++) {
+          const tx = k * 0.11 * scale + sway * 1.6;
+          ctx.moveTo(tx + dotR, -sz * 0.95);
+          ctx.arc(tx, -sz * 0.95, dotR, 0, Math.PI * 2);
+        }
+        ctx.fill();
       } else if (a.kind === 'rusticle') {
-        // Hanging icicle-like iron-oxide rusticles dripping from sunken steel ceilings
+        // Hanging icicle-like iron-oxide rusticles dripping from sunken steel ceilings (batched!)
+        ctx.fillStyle = a.color;
+        ctx.beginPath();
         for (let s = -1; s <= 1; s++) {
           const sh = sz * (s === 0 ? 1.15 : 0.72);
           const ox = s * 0.14 * scale;
-          ctx.fillStyle = a.color;
-          ctx.beginPath();
           ctx.moveTo(ox - 0.065 * scale, 0);
           ctx.lineTo(ox + 0.065 * scale, 0);
           ctx.lineTo(ox + 0.015 * scale, -sh);
           ctx.lineTo(ox - 0.015 * scale, -sh);
           ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = a.accent;
-          ctx.beginPath();
-          ctx.arc(ox, -sh, 0.032 * scale, 0, Math.PI * 2);
-          ctx.fill();
         }
+        ctx.fill();
+        ctx.fillStyle = a.accent;
+        const rDot = 0.032 * scale;
+        ctx.beginPath();
+        for (let s = -1; s <= 1; s++) {
+          const sh = sz * (s === 0 ? 1.15 : 0.72);
+          const ox = s * 0.14 * scale;
+          ctx.moveTo(ox + rDot, -sh);
+          ctx.arc(ox, -sh, rDot, 0, Math.PI * 2);
+        }
+        ctx.fill();
       } else if (a.kind === 'seafan') {
         // Branching gorgonian sea fan corals & red sponges colonizing upper ship steel
         ctx.strokeStyle = a.color;

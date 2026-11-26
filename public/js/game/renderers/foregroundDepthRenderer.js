@@ -799,17 +799,79 @@ const _fgWallSampleCache = new WeakMap();
 const _fgSpriteCache = new WeakMap();
 let _fgReusableMatrix = null;
 
-function _buildSpriteCacheKey(el, light, rimPower, wallProfile, scale, extra = '') {
-  const qLit = Math.round(light.totalLight * 20);
-  const qSun = Math.round(light.sunLit * 12);
-  const qRim = Math.round(rimPower * 14);
-  const qDir = Math.round(light.lightDirX * 6);
-  const qR = Math.round(light.lightR / 24);
-  const qG = Math.round(light.lightG / 24);
-  const qB = Math.round(light.lightB / 24);
-  const qSc = Math.round(scale * 4);
+function _buildGeomCacheKey(el, wallProfile, _scale, extra = '') {
   const rev = wallProfile ? (wallProfile.cacheRev || 0) : 0;
-  const vBit = el?.biome === 'volcanic' ? Math.round(light.ventLit * 10) : 0;
+  return `${el?.kind || 'fg'}|${rev}|${extra}`;
+}
+
+function _blitDualLightEntry(mainCtx, entry, anchorX, anchorY, cw, ch, light, scale, shearX = 0) {
+  const scaleRatio = entry.bakedScale > 0 ? scale / entry.bakedScale : 1;
+  const drawLocalX = entry.localX * scaleRatio;
+  const drawLocalY = entry.localY * scaleRatio;
+  const drawW = entry.bw * scaleRatio;
+  const drawH = entry.bh * scaleRatio;
+
+  const dstX = Math.round(anchorX + drawLocalX);
+  const dstY = Math.round(anchorY + drawLocalY);
+  if (dstX + drawW <= -32 || dstX >= cw + 32 || dstY + drawH <= -32 || dstY >= ch + 32) return true;
+
+  const rawLit = _clamp((light.totalLight - 0.05) / 0.66, 0, 1);
+  const litBlend = entry.isPlant ? Math.pow(rawLit, 0.72) : Math.pow(rawLit, 0.85);
+  const hasShear = Math.abs(shearX) > 0.0005 && typeof mainCtx.transform === 'function';
+  const prevAlpha = mainCtx.globalAlpha;
+
+  if (hasShear) {
+    mainCtx.save();
+    mainCtx.translate(anchorX, anchorY);
+    mainCtx.transform(1, 0, shearX, 1, 0, 0);
+    if (litBlend >= 0.94 || !entry.darkCanvas) {
+      mainCtx.drawImage(entry.canvas, 0, 0, entry.sw, entry.sh, drawLocalX, drawLocalY, drawW, drawH);
+    } else if (litBlend <= 0.04) {
+      mainCtx.drawImage(entry.darkCanvas, 0, 0, entry.sw, entry.sh, drawLocalX, drawLocalY, drawW, drawH);
+    } else {
+      mainCtx.drawImage(entry.darkCanvas, 0, 0, entry.sw, entry.sh, drawLocalX, drawLocalY, drawW, drawH);
+      mainCtx.globalAlpha = prevAlpha * litBlend;
+      mainCtx.drawImage(entry.canvas, 0, 0, entry.sw, entry.sh, drawLocalX, drawLocalY, drawW, drawH);
+      mainCtx.globalAlpha = prevAlpha;
+    }
+    mainCtx.restore();
+  } else {
+    if (litBlend >= 0.94 || !entry.darkCanvas) {
+      mainCtx.drawImage(entry.canvas, 0, 0, entry.sw, entry.sh, dstX, dstY, drawW, drawH);
+    } else if (litBlend <= 0.04) {
+      mainCtx.drawImage(entry.darkCanvas, 0, 0, entry.sw, entry.sh, dstX, dstY, drawW, drawH);
+    } else {
+      mainCtx.drawImage(entry.darkCanvas, 0, 0, entry.sw, entry.sh, dstX, dstY, drawW, drawH);
+      mainCtx.globalAlpha = prevAlpha * litBlend;
+      mainCtx.drawImage(entry.canvas, 0, 0, entry.sw, entry.sh, dstX, dstY, drawW, drawH);
+      mainCtx.globalAlpha = prevAlpha;
+    }
+  }
+  return true;
+}
+
+function _tryBlitCachedFgSprite(mainCtx, el, sx, sy, cw, ch, light, wallProfile, scale, shearX = 0) {
+  if (typeof mainCtx.drawImage !== 'function') return false;
+  const entry = _fgSpriteCache.get(el);
+  if (!entry || !entry.ready) return false;
+  const rev = wallProfile ? (wallProfile.cacheRev || 0) : 0;
+  if (entry.wallRev !== rev) return false;
+  const ratio = entry.bakedScale > 0 ? scale / entry.bakedScale : 1;
+  if (ratio > 1.45 || ratio < 0.65) return false;
+  return _blitDualLightEntry(mainCtx, entry, sx, sy, cw, ch, light, scale, shearX);
+}
+
+function _buildSpriteCacheKey(el, light, rimPower, wallProfile, scale, extra = '') {
+  const qLit = Math.round(light.totalLight * 5);
+  const qSun = Math.round(light.sunLit * 3);
+  const qRim = Math.round(rimPower * 3);
+  const qDir = light.lightDirX >= 0 ? 1 : -1;
+  const qR = Math.round(light.lightR / 64);
+  const qG = Math.round(light.lightG / 64);
+  const qB = Math.round(light.lightB / 64);
+  const qSc = Math.max(12, Math.round(scale / 6) * 6);
+  const rev = wallProfile ? (wallProfile.cacheRev || 0) : 0;
+  const vBit = el?.biome === 'volcanic' ? Math.round(light.ventLit * 4) : 0;
   return `${el?.kind || 'fg'}|${rev}|${qSc}|${qLit}|${qSun}|${qRim}|${qDir}|${qR},${qG},${qB}|${vBit}|${extra}`;
 }
 
@@ -987,22 +1049,20 @@ function _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, alpha, bounds) {
  */
 function _applyRockWallFeather(sctx, renderCtx, shiftX, shiftY, bounds) {
   if (!renderCtx?.rockChunks?.length) return false;
-  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.25, shiftY * 0.25, 0.22, bounds);
-  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.52, shiftY * 0.52, 0.42, bounds);
-  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.78, shiftY * 0.78, 0.68, bounds);
+  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.30, shiftY * 0.30, 0.26, bounds);
+  _stampRockChunksMask(sctx, renderCtx, shiftX * 0.64, shiftY * 0.64, 0.56, bounds);
   _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, 1.0, bounds);
   return true;
 }
 
 /**
- * High-res 512px texture renderer with TWO ultra-fast paths (both 60 FPS):
- *   A. Cached Tight-Sprite Path (static rock overhangs, pillars, girders, crystals, icicles):
- *      - Caches a tightly-cropped element-local sprite in `_fgSpriteCache` keyed by quantized lighting & scale.
- *      - Cache hits (~95%+ of frames, since parallax=1.0 is world-locked!) execute ONE `mainCtx.drawImage()` (~0.02 ms!).
- *      - Cache misses paint atomic `pattern` fill + `source-atop` shade/overlay (ZERO 1px anti-aliased fringe!)
- *        + pixel-exact `rockChunks` `destination-out` feather (ZERO visible attachment point on any slope or curve!).
- *   B. Zero-Scratch Direct-Draw Path (swaying kelp fronds & mangrove roots):
- *      - Clips `mainCtx` once to the exact silhouette, paints full-res 512px texture + shade + overlay directly.
+ * High-res 512px texture renderer with TWO-STAGE 60 FPS Sprite Caching (v255):
+ *   - Stage 1 (`baseCanvas`, baked ONCE per element): atomic 512px pattern silhouette + optional extra tendrils
+ *     + pixel-exact `rockChunks` `destination-out` feather. NEVER re-runs when the diver swims or aims the torch!
+ *   - Stage 2 (`litCanvas`, re-shaded ONLY on coarse lighting tier shifts, max 1 re-shade/frame): copies `baseCanvas`
+ *     + `source-atop` cave shade/overlay (preserving the rock-masked alpha with ZERO re-masking or path tracing!).
+ *   - Optional root-anchored `shearX` lets cached `kelp-fronds` & `cenote-roots` sway organically in ONE `drawImage()`
+ *     with ZERO `mainCtx.clip()`, ZERO per-frame `CanvasPattern`, and ZERO wall-seam drift!
  */
 function _compositeHiResShape(
   mainCtx,
@@ -1013,6 +1073,7 @@ function _compositeHiResShape(
   {
     tracePath = null,
     drawShape = null,
+    drawBaseExtra = null,
     fillRule = 'nonzero',
     pattern,
     texOriginX,
@@ -1026,13 +1087,16 @@ function _compositeHiResShape(
     drawRockMask = null,
     cacheEl = null,
     cacheKey = '',
+    geomKey = '',
     anchorX = 0,
     anchorY = 0,
+    shearX = 0,
+    renderCtx = null,
   }
 ) {
   if (!pattern || typeof mainCtx.fillRect !== 'function') return false;
 
-  // Path A: Cached tight-bounds sprite (for static formations needing seamless pixel-exact rock welds)
+  // Path A: Zero-rebuild Dual-Light Cached Sprite (baked ONCE per element: darkCanvas + litCanvas, smooth real-time crossfade!)
   if (
     cacheEl &&
     cacheKey &&
@@ -1040,40 +1104,68 @@ function _compositeHiResShape(
     typeof document.createElement === 'function' &&
     typeof mainCtx.drawImage === 'function'
   ) {
-    const localX = Math.floor(bounds.x - anchorX);
-    const localY = Math.floor(bounds.y - anchorY);
-    const bw = Math.min(896, Math.ceil(bounds.w));
-    const bh = Math.min(896, Math.ceil(bounds.h));
-    if (bw <= 2 || bh <= 2) return false;
-
-    const dstX = Math.round(anchorX + localX);
-    const dstY = Math.round(anchorY + localY);
-    if (dstX + bw <= 0 || dstX >= cw || dstY + bh <= 0 || dstY >= ch) return false;
-
+    const liveScale = renderCtx?.scale || 24;
+    const wallRev = renderCtx?.wallProfile ? (renderCtx.wallProfile.cacheRev || 0) : 0;
+    const maxDim = renderCtx?.maxSpriteDim || 512;
     let entry = _fgSpriteCache.get(cacheEl);
-    if (
+
+    const scaleRatio = entry && entry.bakedScale > 0 ? liveScale / entry.bakedScale : 1;
+    const needsBake =
       !entry ||
-      entry.key !== cacheKey ||
-      entry.bw !== bw ||
-      entry.bh !== bh ||
-      entry.localX !== localX ||
-      entry.localY !== localY
-    ) {
+      !entry.ready ||
+      entry.wallRev !== wallRev ||
+      scaleRatio > 1.45 ||
+      scaleRatio < 0.65;
+
+    if (needsBake) {
+      const localX = Math.round(bounds.x - anchorX);
+      const localY = Math.round(bounds.y - anchorY);
+      const bw = Math.min(896, Math.ceil(bounds.w));
+      const bh = Math.min(896, Math.ceil(bounds.h));
+      if (bw <= 2 || bh <= 2) return false;
+
+      const bakeRatio = Math.min(1, maxDim / Math.max(bw, bh));
+      const sw = Math.max(2, Math.ceil(bw * bakeRatio));
+      const sh = Math.max(2, Math.ceil(bh * bakeRatio));
+      const capW = Math.min(maxDim, Math.max(64, Math.ceil(sw / 64) * 64));
+      const capH = Math.min(maxDim, Math.max(64, Math.ceil(sh / 64) * 64));
+
       if (!entry) {
         const canvas = document.createElement('canvas');
-        const capW = Math.min(896, Math.max(64, Math.ceil(bw / 64) * 64));
-        const capH = Math.min(896, Math.max(64, Math.ceil(bh / 64) * 64));
         canvas.width = capW;
         canvas.height = capH;
-        const sctx = canvas.getContext('2d');
-        if (!sctx) return false;
-        entry = { canvas, ctx: sctx, capW, capH, key: '', localX: 0, localY: 0, bw: 0, bh: 0 };
+        const litCtx = canvas.getContext('2d');
+        const darkCanvas = document.createElement('canvas');
+        darkCanvas.width = capW;
+        darkCanvas.height = capH;
+        const darkCtx = darkCanvas.getContext('2d');
+        if (!litCtx || !darkCtx) return false;
+        entry = {
+          canvas,
+          ctx: litCtx,
+          darkCanvas,
+          darkCtx,
+          capW,
+          capH,
+          wallRev: -1,
+          ready: false,
+          localX: 0,
+          localY: 0,
+          bw: 0,
+          bh: 0,
+          sw: 0,
+          sh: 0,
+          bakeRatio: 1,
+          bakedScale: liveScale,
+        };
         _fgSpriteCache.set(cacheEl, entry);
-      } else if (bw > entry.capW || bh > entry.capH) {
-        entry.capW = Math.min(896, Math.max(entry.capW, Math.ceil(bw / 64) * 64));
-        entry.capH = Math.min(896, Math.max(entry.capH, Math.ceil(bh / 64) * 64));
+      } else if (sw > entry.capW || sh > entry.capH) {
+        entry.capW = Math.min(maxDim, Math.max(entry.capW, capW));
+        entry.capH = Math.min(maxDim, Math.max(entry.capH, capH));
         entry.canvas.width = entry.capW;
         entry.canvas.height = entry.capH;
+        entry.darkCanvas.width = entry.capW;
+        entry.darkCanvas.height = entry.capH;
       }
 
       const sctx = entry.ctx;
@@ -1082,12 +1174,12 @@ function _compositeHiResShape(
       sctx.setTransform(1, 0, 0, 1, 0, 0);
       sctx.globalCompositeOperation = 'source-over';
       sctx.globalAlpha = 1;
-      sctx.clearRect(0, 0, bw, bh);
+      sctx.clearRect(0, 0, sw, sh);
 
       sctx.save();
-      sctx.translate(-offX, -offY);
+      sctx.setTransform(bakeRatio, 0, 0, bakeRatio, -offX * bakeRatio, -offY * bakeRatio);
 
-      // Pass 1: Atomic silhouette filled with world-locked 512px texture (NO clip double-AA!)
+      // Pass 1: Atomic silhouette filled with world-locked 512px texture (baked ONCE per element!)
       _applyPatternTransform(pattern, texOriginX, texOriginY, texScale);
       sctx.fillStyle = pattern;
       if (tracePath) {
@@ -1101,16 +1193,11 @@ function _compositeHiResShape(
       } else if (drawShape) {
         drawShape(sctx);
       }
-
-      // Pass 2: `source-atop` real-time cave shade + 3D bevel/detail overlays (ZERO 1px bright fringe!)
-      sctx.globalCompositeOperation = 'source-atop';
-      sctx.fillStyle = _computeDirectShadeRgba(light, isNearPlane, boost);
-      sctx.fillRect(offX - 2, offY - 2, bw + 4, bh + 4);
-      if (drawOverlay) {
-        drawOverlay(sctx);
+      if (drawBaseExtra) {
+        drawBaseExtra(sctx);
       }
 
-      // Pass 3: Pixel-exact `rockChunks` silhouette mask (`destination-out`) OR linear fallback (`destination-in`)
+      // Pass 2: Pixel-exact `rockChunks` silhouette mask OR linear fallback (baked ONCE!)
       let maskedByRock = false;
       if (drawRockMask) {
         sctx.globalCompositeOperation = 'destination-out';
@@ -1120,17 +1207,70 @@ function _compositeHiResShape(
         sctx.globalCompositeOperation = 'destination-in';
         drawAlphaMask(sctx);
       }
-
       sctx.restore();
-      entry.key = cacheKey;
+
+      // Copy rock-masked textured silhouette to `darkCanvas` and shade once for unlit cave ambient
+      const dctx = entry.darkCtx;
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.globalAlpha = 1;
+      dctx.clearRect(0, 0, sw, sh);
+      dctx.drawImage(entry.canvas, 0, 0, sw, sh, 0, 0, sw, sh);
+      dctx.globalCompositeOperation = 'source-atop';
+      dctx.fillStyle = _computeDirectShadeRgba(
+        {
+          totalLight: 0.08,
+          sunLit: 0,
+          beamLit: 0,
+          backLit: 0,
+          ventLit: 0,
+          lightR: 72,
+          lightG: 148,
+          lightB: 178,
+        },
+        isNearPlane,
+        boost * 0.78
+      );
+      dctx.fillRect(0, 0, sw, sh);
+
+      // Shade `canvas` once for full beam/sunlit clarity + bevel/vein/rim overlays (ZERO 1px fringe!)
+      sctx.save();
+      sctx.setTransform(bakeRatio, 0, 0, bakeRatio, -offX * bakeRatio, -offY * bakeRatio);
+      sctx.globalCompositeOperation = 'source-atop';
+      sctx.fillStyle = _computeDirectShadeRgba(
+        {
+          totalLight: Math.max(0.84, light.totalLight || 0),
+          sunLit: Math.max(0.28, light.sunLit || 0),
+          beamLit: Math.max(0.55, light.beamLit || 0),
+          backLit: light.backLit || 0,
+          ventLit: light.ventLit || 0,
+          lightR: Number.isFinite(light.lightR) ? light.lightR : 186,
+          lightG: Number.isFinite(light.lightG) ? light.lightG : 230,
+          lightB: Number.isFinite(light.lightB) ? light.lightB : 253,
+        },
+        isNearPlane,
+        boost
+      );
+      sctx.fillRect(offX - 2, offY - 2, bw + 4, bh + 4);
+      if (drawOverlay) {
+        drawOverlay(sctx);
+      }
+      sctx.restore();
+
+      entry.wallRev = wallRev;
+      entry.ready = true;
+      entry.isPlant = cacheEl.kind === 'kelp-fronds' || cacheEl.kind === 'cenote-roots' || cacheEl.kind === 'crystal-cluster' || cacheEl.kind === 'icicle-cluster';
       entry.localX = localX;
       entry.localY = localY;
       entry.bw = bw;
       entry.bh = bh;
+      entry.sw = sw;
+      entry.sh = sh;
+      entry.bakeRatio = bakeRatio;
+      entry.bakedScale = liveScale;
     }
 
-    mainCtx.drawImage(entry.canvas, 0, 0, entry.bw, entry.bh, dstX, dstY, entry.bw, entry.bh);
-    return true;
+    return _blitDualLightEntry(mainCtx, entry, anchorX, anchorY, cw, ch, light, liveScale, shearX);
   }
 
   // Path B: Direct-draw on mainCtx (for swaying organic kelp fronds & mangrove roots)
@@ -1551,6 +1691,7 @@ function _fillWallHuggingRock(
   let drewHiRes = false;
   if (renderCtx?.mats?.rock) {
     const cacheEl = renderCtx.el || null;
+    const geomKey = cacheEl ? _buildGeomCacheKey(cacheEl, renderCtx.wallProfile, renderCtx.scale || 24, 'rock') : '';
     const cacheKey = cacheEl ? _buildSpriteCacheKey(cacheEl, light, rimPower, renderCtx.wallProfile, renderCtx.scale || 24, 'rock') : '';
     const spriteBounds = { x: sx - backHalfW - 8, y: minY - 8, w: backHalfW * 2 + 16, h: maxY - minY + 16 };
     drewHiRes = _compositeHiResShape(
@@ -1573,8 +1714,10 @@ function _fillWallHuggingRock(
         boost: 0.68 + light.sunLit * 0.24,
         cacheEl,
         cacheKey,
+        geomKey,
         anchorX: sx,
         anchorY: sy,
+        renderCtx,
         drawOverlay: (c) => {
           // Wall-weld depth merge: gently darkens into rock root while staying 100% textured
           const backAlpha = _clamp(0.78 - light.sunLit * 0.38, 0.36, 0.78);
@@ -1789,7 +1932,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
       let drewPillarHiRes = false;
       if (renderCtx?.mats?.rock) {
-        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, `p${Math.round(span / 8)}`);
+        const pTag = `p${Math.round(span / 16)}`;
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, pTag);
+        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, pTag);
         const spriteBounds = { x: sx - colHalfBound, y: topY - 4, w: colHalfBound * 2, h: span + 8 };
         drewPillarHiRes = _compositeHiResShape(
           ctx,
@@ -1811,8 +1956,10 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             boost: 0.68 + light.sunLit * 0.24,
             cacheEl: el,
             cacheKey,
+            geomKey,
             anchorX: sx,
             anchorY: sy,
+            renderCtx,
             drawOverlay: (c) => {
               // Cylindrical 3D cross-lighting (shadowed side -> rim-lit flank)
               const cylGrad = c.createLinearGradient(sx - wPx * 0.7, focusY, sx + wPx * 0.7, focusY);
@@ -1927,20 +2074,17 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
     }
 
     case 'cenote-roots': {
-      // High-res gnarled wet mangrove bark root veil rooted into a grounded ceiling rock/soil root-bank collar
-      // (zero brown sticks poking into dark unlit rock above the ceiling, zero light leaking above the roots!)
+      // Cached two-stage gnarled wet mangrove bark root veil (`tex-fg-roots.jpg`) with pixel-exact `rockChunks`
+      // ceiling-seam masking and 0.04ms root-pinned affine sway (ZERO per-frame `mainCtx.clip()` or `screen` flushes!).
       const rootDark = _shadeNearRgb([30, 19, 12], light, isNearPlane, 0.90);
       const rootMid = _shadeNearRgb(pal.rustRgb, light, isNearPlane, 1.08);
       const leafCol = _shadeNearRgb(pal.mossRgb, light, isNearPlane, 1.05);
-
-      // Seal the ceiling joint tightly behind the root trunks with an extended rock-blended collar + tucked AO crevice
-      _drawWallWeldCollar(ctx, sx, wallY, wPx * 0.48, dir, 4, Math.max(30, hPx * 0.20), mergeRgb, 0.46, vis);
 
       const strands = el.subCount + 5;
       const trunkGeoms = [];
       let minX = sx - wPx;
       let maxX = sx + wPx;
-      let minY = sy - 22;
+      let minY = sy - 30;
       let maxY = sy + hPx + 24;
 
       for (let i = 0; i < strands; i++) {
@@ -1950,47 +2094,81 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const isFine = i % 3 !== 0;
         const dx0 = frac * wPx * 0.88;
         const bx = sx + dx0;
-        const by = wallY(dx0) - 8;
+        const by = wallY(dx0) - 22;
         const archOut = (frac * 0.28 + (_hash01(el.seed + i * 9.1) - 0.5) * 0.22) * wPx;
-        const len = hPx * (isFine ? 0.50 + _hash01(el.seed + i * 31) * 0.52 : 0.72 + _hash01(el.seed + i * 13) * 0.34);
-        const sw = swayPx * (isFine ? 1.35 : 0.65 + (i % 3) * 0.20);
+        const len = hPx * (isFine ? 0.50 + _hash01(el.seed + i * 31) * 0.52 : 0.72 + _hash01(el.seed + i * 13) * 0.34) + 14;
         const baseW = Math.max(isFine ? 1.1 : 4.2, wPx * (isFine ? 0.017 : 0.062 - Math.abs(u) * 0.015));
 
-        const c1x = bx + archOut * 0.55 + leanPx * 0.25 + sw * 0.26;
+        const c1x = bx + archOut * 0.55 + leanPx * 0.25;
         const c1y = by + len * 0.36;
-        const c2x = bx + archOut * 0.30 + leanPx * 0.65 + sw * 0.70 - Math.sign(frac || 1) * wPx * 0.06;
+        const c2x = bx + archOut * 0.30 + leanPx * 0.65 - Math.sign(frac || 1) * wPx * 0.06;
         const c2y = by + len * 0.72;
-        const tipX = bx + archOut * 0.45 + leanPx * 0.85 + sw;
+        const tipX = bx + archOut * 0.45 + leanPx * 0.85;
         const tipY = by + len;
-        if (bx - baseW - 20 < minX) minX = bx - baseW - 20;
-        if (tipX + 20 > maxX) maxX = tipX + 20;
-        if (by - 12 < minY) minY = by - 12;
+        if (bx - baseW - 22 < minX) minX = bx - baseW - 22;
+        if (tipX + 22 > maxX) maxX = tipX + 22;
+        if (by - 10 < minY) minY = by - 10;
         if (tipY + 24 > maxY) maxY = tipY + 24;
-        trunkGeoms.push({ i, isFine, bx, by, c1x, c1y, c2x, c2y, tipX, tipY, baseW, len, sw });
+        trunkGeoms.push({ i, isFine, bx, by, c1x, c1y, c2x, c2y, tipX, tipY, baseW, len });
       }
 
-      // Direct-draw main mangrove root trunks with full-res 512px wet gnarled bark texture (`tex-fg-roots.jpg`)!
       const { nx: rNx, ny: rNy } = _computeWallNormal(wallY, wPx * 0.48, dir);
+      const rBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      const rootShearX = reduced ? 0 : Math.sin(timeSec * 1.25 + el.phase) * 0.052;
       let drewRootsHiRes = false;
       if (renderCtx?.mats?.roots) {
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, 'roots');
+        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'roots');
         drewRootsHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          rBounds,
           {
             tracePath: (sctx) => {
               sctx.beginPath();
               for (const g of trunkGeoms) {
                 if (g.isFine) continue;
-                // Taper root top smoothly to a rooted pinch inside the ceiling rock seam (no flat rectangular top!)
                 sctx.moveTo(g.bx, g.by - 8);
                 sctx.quadraticCurveTo(g.bx - g.baseW * 0.92, g.by + 5, g.bx - g.baseW * 0.72, g.by + 14);
                 sctx.bezierCurveTo(g.c1x - g.baseW * 0.46, g.c1y, g.c2x - g.baseW * 0.22, g.c2y, g.tipX, g.tipY);
                 sctx.bezierCurveTo(g.c2x + g.baseW * 0.22, g.c2y, g.c1x + g.baseW * 0.46, g.c1y, g.bx + g.baseW * 0.72, g.by + 14);
                 sctx.quadraticCurveTo(g.bx + g.baseW * 0.92, g.by + 5, g.bx, g.by - 8);
                 sctx.closePath();
+              }
+            },
+            drawBaseExtra: (bctx) => {
+              bctx.lineCap = 'round';
+              // Fine root hairs & secondary forks baked ONCE into baseCanvas before rock-wall masking!
+              bctx.strokeStyle = 'rgba(116, 86, 56, 0.88)';
+              bctx.lineWidth = Math.max(1.2, wPx * 0.018);
+              bctx.beginPath();
+              for (const g of trunkGeoms) {
+                if (g.isFine) {
+                  bctx.moveTo(g.bx, g.by);
+                  bctx.bezierCurveTo(g.c1x, g.c1y, g.c2x, g.c2y, g.tipX, g.tipY);
+                } else {
+                  for (const fSign of [-1, 1]) {
+                    const fT = fSign < 0 ? 0.42 : 0.62;
+                    const inv = 1 - fT;
+                    const fx0 = inv * inv * inv * g.bx + 3 * inv * inv * fT * g.c1x + 3 * inv * fT * fT * g.c2x + fT * fT * fT * g.tipX;
+                    const fy0 = inv * inv * inv * g.by + 3 * inv * inv * fT * g.c1y + 3 * inv * fT * fT * g.c2y + fT * fT * fT * g.tipY;
+                    bctx.moveTo(fx0, fy0);
+                    bctx.quadraticCurveTo(fx0 + fSign * wPx * 0.11, fy0 + g.len * 0.13, fx0 + fSign * wPx * 0.18, fy0 + g.len * 0.30);
+                  }
+                }
+              }
+              bctx.stroke();
+              if (el.y < 18) {
+                bctx.fillStyle = 'rgba(84, 134, 62, 0.82)';
+                bctx.beginPath();
+                for (const g of trunkGeoms) {
+                  if (g.isFine) continue;
+                  bctx.moveTo(g.bx + g.baseW * 1.15, g.by + 24);
+                  bctx.ellipse(g.bx + leanPx * 0.08, g.by + 24, g.baseW * 1.15, g.baseW * 0.55, 0.35, 0, Math.PI * 2);
+                }
+                bctx.fill();
               }
             },
             pattern: renderCtx.mats.roots,
@@ -2000,106 +2178,76 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             light,
             isNearPlane,
             boost: 1.48,
+            cacheEl: el,
+            cacheKey,
+            geomKey,
+            anchorX: sx,
+            anchorY: sy,
+            shearX: rootShearX,
+            renderCtx,
             drawOverlay: (c) => {
-              // Wall-normal-aligned grounding shadow right where roots emerge deeply from sloped ceiling rock
-              const rg = c.createLinearGradient(sx - rNx * 14, sy - rNy * 14, sx + rNx * 36, sy + rNy * 36);
+              const rg = c.createLinearGradient(sx - rNx * 16, sy - rNy * 16, sx + rNx * 38, sy + rNy * 38);
               rg.addColorStop(0, `rgba(${mergeRgb}, 0.88)`);
               rg.addColorStop(0.45, `rgba(${mergeRgb}, 0.34)`);
               rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
               c.fillStyle = rg;
               c.fillRect(minX, minY, maxX - minX, maxY - minY);
+
+              if (rimPower > 0.08) {
+                const hlSign = light.lightDirX >= 0 ? 1 : -1;
+                c.strokeStyle = `rgba(${rimRgb}, ${(rimPower * 0.46).toFixed(3)})`;
+                c.lineWidth = Math.max(1.1, wPx * 0.015);
+                c.lineCap = 'round';
+                c.beginPath();
+                for (const g of trunkGeoms) {
+                  if (g.isFine) continue;
+                  c.moveTo(g.bx + hlSign * g.baseW * 0.38, g.by + 16);
+                  c.bezierCurveTo(g.c1x + hlSign * g.baseW * 0.22, g.c1y, g.c2x + hlSign * g.baseW * 0.12, g.c2y, g.tipX, g.tipY);
+                }
+                c.stroke();
+              }
+            },
+            drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -rNx * 14, -rNy * 14, rBounds),
+            drawAlphaMask: (c) => {
+              const mg = c.createLinearGradient(sx - rNx * 22, sy - rNy * 22, sx + rNx * 6, sy + rNy * 6);
+              mg.addColorStop(0, 'rgba(255, 255, 255, 0)');
+              mg.addColorStop(0.35, 'rgba(255, 255, 255, 0.5)');
+              mg.addColorStop(0.80, 'rgba(255, 255, 255, 1)');
+              mg.addColorStop(1, 'rgba(255, 255, 255, 1)');
+              c.fillStyle = mg;
+              c.fillRect(minX - 4, minY - 4, maxX - minX + 8, maxY - minY + 8);
             },
           }
         );
       }
 
-      ctx.lineCap = 'round';
-      for (const g of trunkGeoms) {
-        const { i, isFine, bx, by, c1x, c1y, c2x, c2y, tipX, tipY, baseW, len, sw } = g;
-        if (isFine) {
-          const hg = ctx.createLinearGradient(bx, by, tipX, tipY);
-          hg.addColorStop(0, `rgba(${rootDark}, ${(0.82 * vis).toFixed(3)})`);
-          hg.addColorStop(0.55, `rgba(${rootMid}, ${(0.70 * vis).toFixed(3)})`);
-          hg.addColorStop(1, `rgba(${rootMid}, 0)`);
-          ctx.strokeStyle = hg;
-          ctx.lineWidth = baseW;
-          ctx.beginPath();
-          ctx.moveTo(bx, by);
-          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
-          ctx.stroke();
-
-          if (rimPower > 0.12 && i % 2 === 0) {
-            const rg = ctx.createLinearGradient(tipX, tipY, bx, by);
-            rg.addColorStop(0, `rgba(${rimRgb}, 0)`);
-            rg.addColorStop(0.35, `rgba(${rimRgb}, ${(rimPower * 0.42 * vis).toFixed(3)})`);
-            rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.save();
-            ctx.globalCompositeOperation = 'screen';
-            ctx.strokeStyle = rg;
-            ctx.lineWidth = 0.9;
+      // Vector fallback ONLY for headless Node unit tests (no DOM canvas)
+      if (!drewRootsHiRes) {
+        _drawWallWeldCollar(ctx, sx, wallY, wPx * 0.48, dir, 4, Math.max(30, hPx * 0.20), mergeRgb, 0.46, vis);
+        ctx.lineCap = 'round';
+        for (const g of trunkGeoms) {
+          const { isFine, bx, by, c1x, c1y, c2x, c2y, tipX, tipY, baseW } = g;
+          if (isFine) {
+            ctx.strokeStyle = `rgba(${rootMid}, ${(0.72 * vis).toFixed(3)})`;
+            ctx.lineWidth = baseW;
             ctx.beginPath();
-            ctx.moveTo(bx + 0.8, by);
-            ctx.bezierCurveTo(c1x + 0.8, c1y, c2x + 0.8, c2y, tipX + 0.8, tipY);
+            ctx.moveTo(bx, by);
+            ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tipX, tipY);
             ctx.stroke();
-            ctx.restore();
-          }
-        } else {
-          if (!drewRootsHiRes) {
-            const tg = ctx.createLinearGradient(bx, by, tipX, tipY);
-            tg.addColorStop(0, `rgba(${rootDark}, ${(0.94 * vis).toFixed(3)})`);
-            tg.addColorStop(0.45, `rgba(${rootMid}, ${(0.90 * vis).toFixed(3)})`);
-            tg.addColorStop(0.84, `rgba(${rootDark}, ${(0.68 * vis).toFixed(3)})`);
-            tg.addColorStop(1, `rgba(${rootDark}, 0)`);
-            ctx.fillStyle = tg;
+          } else {
+            ctx.fillStyle = `rgba(${rootDark}, ${(0.92 * vis).toFixed(3)})`;
             ctx.beginPath();
             ctx.moveTo(bx - baseW * 0.75, by);
             ctx.bezierCurveTo(c1x - baseW * 0.40, c1y, c2x - baseW * 0.18, c2y, tipX, tipY);
             ctx.bezierCurveTo(c2x + baseW * 0.18, c2y, c1x + baseW * 0.40, c1y, bx + baseW * 0.75, by);
             ctx.closePath();
             ctx.fill();
-          }
-
-          if (rimPower > 0.08) {
-            const hlSign = light.lightDirX >= 0 ? 1 : -1;
-            const rg = ctx.createLinearGradient(tipX, tipY, bx, by);
-            rg.addColorStop(0, `rgba(${rimRgb}, 0)`);
-            rg.addColorStop(0.28, `rgba(${rimRgb}, ${(rimPower * 0.56 * vis).toFixed(3)})`);
-            rg.addColorStop(0.75, `rgba(${sssRgb}, ${(rimPower * 0.24 * vis).toFixed(3)})`);
-            rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.save();
-            ctx.globalCompositeOperation = 'screen';
-            ctx.strokeStyle = rg;
-            ctx.lineWidth = Math.max(1.0, baseW * 0.22);
-            ctx.beginPath();
-            ctx.moveTo(bx + hlSign * baseW * 0.42, by);
-            ctx.bezierCurveTo(c1x + hlSign * baseW * 0.24, c1y, c2x + hlSign * baseW * 0.12, c2y, tipX, tipY);
-            ctx.stroke();
-            ctx.restore();
-          }
-
-          for (const fSign of [-1, 1]) {
-            const fT = fSign < 0 ? 0.42 : 0.62;
-            const inv = 1 - fT;
-            const fx0 = inv * inv * inv * bx + 3 * inv * inv * fT * c1x + 3 * inv * fT * fT * c2x + fT * fT * fT * tipX;
-            const fy0 = inv * inv * inv * by + 3 * inv * inv * fT * c1y + 3 * inv * fT * fT * c2y + fT * fT * fT * tipY;
-            const fTipX = fx0 + fSign * wPx * 0.18 + sw * 0.9;
-            const fTipY = fy0 + len * 0.30;
-            const fg = ctx.createLinearGradient(fx0, fy0, fTipX, fTipY);
-            fg.addColorStop(0, `rgba(${rootMid}, ${(0.78 * vis).toFixed(3)})`);
-            fg.addColorStop(1, `rgba(${rootDark}, 0)`);
-            ctx.strokeStyle = fg;
-            ctx.lineWidth = Math.max(0.9, baseW * 0.26);
-            ctx.beginPath();
-            ctx.moveTo(fx0, fy0);
-            ctx.quadraticCurveTo(fx0 + fSign * wPx * 0.11, fy0 + len * 0.13, fTipX, fTipY);
-            ctx.stroke();
-          }
-
-          if (el.y < 18) {
-            ctx.fillStyle = `rgba(${leafCol}, ${(0.64 * vis).toFixed(3)})`;
-            ctx.beginPath();
-            ctx.ellipse(bx + leanPx * 0.08, by + 10, baseW * 1.15, baseW * 0.55, 0.35, 0, Math.PI * 2);
-            ctx.fill();
+            if (el.y < 18) {
+              ctx.fillStyle = `rgba(${leafCol}, ${(0.64 * vis).toFixed(3)})`;
+              ctx.beginPath();
+              ctx.ellipse(bx + leanPx * 0.08, by + 24, baseW * 1.15, baseW * 0.55, 0.35, 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
         }
       }
@@ -2107,20 +2255,18 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
     }
 
     case 'kelp-fronds': {
-      // High-res photorealistic undulating emerald kelp ribbons rooted into a textured seabed holdfast mound!
+      // Cached two-stage photorealistic undulating emerald kelp ribbons (`tex-fg-kelp.jpg`) with pixel-exact
+      // `rockChunks` seabed masking and 0.04ms root-pinned affine sway (eliminates +13.4ms/frame `mainCtx.clip()` stall!).
       const stalkDark = _shadeNearRgb(pal.floraDark, light, isNearPlane, 0.88);
       const bladeMid = _shadeNearRgb(pal.floraMid, light, isNearPlane, 1.06);
       const bladeLit = _shadeNearRgb(pal.mossRgb, light, isNearPlane, 1.22);
-
-      // Grounded extended seabed holdfast collar + tucked AO crevice sealing the floor seam
-      _drawWallWeldCollar(ctx, sx, wallY, wPx * 0.46, dir, 4, Math.max(30, hPx * 0.20), mergeRgb, 0.46, vis);
 
       const ribbons = el.subCount + 3;
       const bladeGeoms = [];
       let minX = sx - wPx;
       let maxX = sx + wPx;
       let minY = sy - hPx - 16;
-      let maxY = sy + 26;
+      let maxY = sy + 32;
 
       for (let i = 0; i < ribbons; i++) {
         const u = ribbons <= 1 ? 0 : i / (ribbons - 1) - 0.5;
@@ -2128,13 +2274,13 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const frac = _clamp(u + j, -0.48, 0.48);
         const dx0 = frac * wPx * 0.78;
         const bx = sx + dx0;
-        const by = wallY(dx0) + 10;
+        const by = wallY(dx0) + 24;
         const hMul = 0.56 + (1 - Math.abs(u) * 1.1) * 0.34 + _hash01(el.seed + i * 11.3) * 0.22;
-        const len = hPx * hMul;
+        const len = hPx * hMul + 14;
         const ribbonW = Math.max(5.5, wPx * (0.085 + _hash01(el.seed + i * 7.7) * 0.045));
-        const wavePh = el.phase + i * 1.45 + (reduced ? 0 : timeSec * 1.35);
+        // Static organic rest-pose S-curve baked into cached sprite; real-time current sway runs via root-pinned shearX!
+        const wavePh = el.phase + i * 1.45;
         const lean = (frac * 0.35 + el.lean * 0.8) * wPx;
-        const sw = swayPx * (0.75 + (i % 3) * 0.25);
 
         const segs = 7;
         const leftPts = [];
@@ -2144,7 +2290,7 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
           const taper = Math.sin(Math.pow(t, 0.72) * Math.PI * 0.94);
           const halfW = Math.max(0.8, ribbonW * (0.28 + 0.72 * taper));
           const wave = Math.sin(wavePh + t * 3.8) * ribbonW * (0.45 + t * 0.95);
-          const cx = bx + lean * t * t + sw * t * t + wave;
+          const cx = bx + lean * t * t + wave;
           const cy = by - len * t;
           const ruffle = Math.sin(t * 14.0 + i * 2.3) * ribbonW * 0.16 * taper;
           const lx = cx - halfW + ruffle;
@@ -2176,16 +2322,19 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         c.closePath();
       };
 
-      // Direct-draw all kelp blades with full-res 512px cellular emerald kelp texture (`tex-fg-kelp.jpg`)!
       const { nx: kNx, ny: kNy } = _computeWallNormal(wallY, wPx * 0.46, dir);
+      const kBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      const kelpShearX = reduced ? 0 : Math.sin(timeSec * 1.38 + el.phase) * 0.068;
       let drewKelpHiRes = false;
       if (renderCtx?.mats?.kelp) {
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, 'kelp');
+        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'kelp');
         drewKelpHiRes = _compositeHiResShape(
           ctx,
           null,
           renderCtx.cw,
           renderCtx.ch,
-          { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          kBounds,
           {
             tracePath: (sctx) => {
               sctx.beginPath();
@@ -2200,32 +2349,70 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             light,
             isNearPlane,
             boost: 1.48,
+            cacheEl: el,
+            cacheKey,
+            geomKey,
+            anchorX: sx,
+            anchorY: sy,
+            shearX: kelpShearX,
+            renderCtx,
             drawOverlay: (c) => {
-              // Wall-normal-aligned dark holdfast grounding gradient & sunlit tip lift + midrib veins
-              const vg = c.createLinearGradient(sx - kNx * 14, sy - kNy * 14, sx + kNx * hPx, sy + kNy * hPx);
-              vg.addColorStop(0, `rgba(${mergeRgb}, 0.96)`);
+              const vg = c.createLinearGradient(sx - kNx * 16, sy - kNy * 16, sx + kNx * hPx, sy + kNy * hPx);
+              vg.addColorStop(0, `rgba(${mergeRgb}, 0.94)`);
               vg.addColorStop(0.24, 'rgba(0, 0, 0, 0)');
-              vg.addColorStop(1, `rgba(${sssRgb}, ${(0.18 * lit).toFixed(3)})`);
+              vg.addColorStop(1, `rgba(${sssRgb}, ${(0.20 * lit).toFixed(3)})`);
               c.fillStyle = vg;
               c.fillRect(minX, minY, maxX - minX, maxY - minY);
 
+              // Batched midrib veins
+              c.strokeStyle = `rgba(${stalkDark}, 0.52)`;
+              c.lineWidth = Math.max(1.0, wPx * 0.012);
+              c.beginPath();
               for (const b of bladeGeoms) {
-                c.strokeStyle = `rgba(${stalkDark}, 0.52)`;
-                c.lineWidth = Math.max(1.0, b.ribbonW * 0.12);
-                c.beginPath();
                 c.moveTo(b.bx, b.by);
                 for (let s = 1; s <= b.segs; s++) {
                   c.lineTo((b.leftPts[s].x + b.rightPts[s].x) * 0.5, b.leftPts[s].y);
                 }
+              }
+              c.stroke();
+
+              // Batched translucent backlit leaf rim baked directly inside cached sprite (ZERO mainCtx 'screen' flushes!)
+              if (rimPower > 0.08) {
+                const useRight = light.lightDirX >= 0;
+                c.strokeStyle = `rgba(${sssRgb}, ${(rimPower * 0.52).toFixed(3)})`;
+                c.lineWidth = 1.4;
+                c.beginPath();
+                for (const b of bladeGeoms) {
+                  const edgePts = useRight ? b.rightPts : b.leftPts;
+                  c.moveTo(edgePts[1].x, edgePts[1].y);
+                  for (let s = 2; s < b.segs; s++) {
+                    const mx = (edgePts[s].x + edgePts[s + 1].x) * 0.5;
+                    const my = (edgePts[s].y + edgePts[s + 1].y) * 0.5;
+                    c.quadraticCurveTo(edgePts[s].x, edgePts[s].y, mx, my);
+                  }
+                  c.lineTo(edgePts[b.segs].x, edgePts[b.segs].y);
+                }
                 c.stroke();
               }
+            },
+            drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -kNx * 14, -kNy * 14, kBounds),
+            drawAlphaMask: (c) => {
+              const mg = c.createLinearGradient(sx - kNx * 22, sy - kNy * 22, sx + kNx * 6, sy + kNy * 6);
+              mg.addColorStop(0, 'rgba(255, 255, 255, 0)');
+              mg.addColorStop(0.35, 'rgba(255, 255, 255, 0.5)');
+              mg.addColorStop(0.80, 'rgba(255, 255, 255, 1)');
+              mg.addColorStop(1, 'rgba(255, 255, 255, 1)');
+              c.fillStyle = mg;
+              c.fillRect(minX - 4, minY - 4, maxX - minX + 8, maxY - minY + 8);
             },
           }
         );
       }
 
-      for (const b of bladeGeoms) {
-        if (!drewKelpHiRes) {
+      // Vector fallback ONLY for headless Node unit tests (no DOM canvas)
+      if (!drewKelpHiRes) {
+        _drawWallWeldCollar(ctx, sx, wallY, wPx * 0.46, dir, 4, Math.max(30, hPx * 0.20), mergeRgb, 0.46, vis);
+        for (const b of bladeGeoms) {
           const bg = ctx.createLinearGradient(b.bx, b.by, b.tip.x, b.tip.y);
           bg.addColorStop(0, `rgba(${stalkDark}, ${(0.97 * vis).toFixed(3)})`);
           bg.addColorStop(0.48, `rgba(${bladeMid}, ${(0.94 * vis).toFixed(3)})`);
@@ -2235,38 +2422,6 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
           ctx.beginPath();
           traceBladeSubpath(ctx, b);
           ctx.fill();
-
-          ctx.strokeStyle = `rgba(${stalkDark}, ${(0.55 * vis).toFixed(3)})`;
-          ctx.lineWidth = Math.max(1.0, b.ribbonW * 0.12);
-          ctx.beginPath();
-          ctx.moveTo(b.bx, b.by);
-          for (let s = 1; s <= b.segs; s++) {
-            ctx.lineTo((b.leftPts[s].x + b.rightPts[s].x) * 0.5, b.leftPts[s].y);
-          }
-          ctx.stroke();
-        }
-
-        // Translucent glowing backlit leaf edge strictly on the light-facing margin!
-        if (rimPower > 0.08) {
-          const edgePts = light.lightDirX >= 0 ? b.rightPts : b.leftPts;
-          const eg = ctx.createLinearGradient(b.tip.x, b.tip.y, b.bx, b.by);
-          eg.addColorStop(0, `rgba(${sssRgb}, ${(rimPower * 0.68 * vis).toFixed(3)})`);
-          eg.addColorStop(0.65, `rgba(${sssRgb}, ${(rimPower * 0.28 * vis).toFixed(3)})`);
-          eg.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = eg;
-          ctx.lineWidth = 1.35;
-          ctx.beginPath();
-          ctx.moveTo(edgePts[0].x, edgePts[0].y);
-          for (let s = 1; s < b.segs; s++) {
-            const mx = (edgePts[s].x + edgePts[s + 1].x) * 0.5;
-            const my = (edgePts[s].y + edgePts[s + 1].y) * 0.5;
-            ctx.quadraticCurveTo(edgePts[s].x, edgePts[s].y, mx, my);
-          }
-          ctx.lineTo(edgePts[b.segs].x, edgePts[b.segs].y);
-          ctx.stroke();
-          ctx.restore();
         }
       }
       break;
@@ -2391,7 +2546,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         const gSpan = Math.max(20, Math.abs(endY - sy) + buryG);
         const tAnchorSolid = _clamp((buryG - 14) / gSpan, 0.06, 0.24);
         const tOppSolid = _clamp(1 - (buryG - 14) / gSpan, 0.76, 0.94);
-        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, `g${spanToOpp ? 1 : 0}_${Math.round(waterLen / 8)}`);
+        const gTag = `g${spanToOpp ? 1 : 0}_${Math.round(waterLen / 16)}`;
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, gTag);
+        const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, gTag);
         const gBounds = { x: gMinX, y: gMinY, w: gMaxX - gMinX, h: gMaxY - gMinY };
         const gMidY = (sy + endLipY) * 0.5;
         drewSteelHiRes = _compositeHiResShape(
@@ -2412,8 +2569,10 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             boost: 1.24,
             cacheEl: el,
             cacheKey,
+            geomKey,
             anchorX: sx,
             anchorY: sy,
+            renderCtx,
             drawOverlay: (c) => {
               const sg = c.createLinearGradient(sx, yL, tipX, endY);
               sg.addColorStop(0, `rgba(${mergeRgb}, 0.84)`);
@@ -2685,6 +2844,7 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       const { nx: cNx, ny: cNy } = _computeWallNormal(wallY, wPx * 0.46, dir);
       let drewCrystalHiRes = false;
       if (renderCtx?.mats?.crystal) {
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, 'cry');
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'cry');
         const cBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         drewCrystalHiRes = _compositeHiResShape(
@@ -2709,8 +2869,10 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             boost: 1.62,
             cacheEl: el,
             cacheKey,
+            geomKey,
             anchorX: sx,
             anchorY: sy,
+            renderCtx,
             drawOverlay: (c) => {
               // Subtle mineral crevice shading right at the crystal-rock base
               const bg = c.createLinearGradient(sx - cNx * 12, sy - cNy * 12, sx + cNx * Math.min(30, hPx * 0.30), sy + cNy * Math.min(30, hPx * 0.30));
@@ -2754,6 +2916,19 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
                   c.fill();
                 }
               }
+
+              // Batched crisp crystal tip rim highlight inside cached sprite (ZERO mainCtx 'screen' flushes!)
+              if (rimPower > 0.06) {
+                c.strokeStyle = `rgba(${rimRgb}, ${(rimPower * 0.72).toFixed(3)})`;
+                c.lineWidth = 1.4;
+                c.beginPath();
+                for (const sp of spires) {
+                  c.moveTo(sp.lShX, sp.lShY);
+                  c.lineTo(sp.tipX, sp.tipY);
+                  c.lineTo(sp.rShX, sp.rShY);
+                }
+                c.stroke();
+              }
             },
             drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -cNx * 14, -cNy * 14, cBounds),
             drawAlphaMask: (c) => {
@@ -2769,8 +2944,8 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         );
       }
 
-      for (const sp of spires) {
-        if (!drewCrystalHiRes) {
+      if (!drewCrystalHiRes) {
+        for (const sp of spires) {
           const cg = ctx.createLinearGradient(sp.bx, sp.by, sp.tipX, sp.tipY);
           cg.addColorStop(0, `rgba(${mergeRgb}, ${(0.96 * vis).toFixed(3)})`);
           cg.addColorStop(0.20, `rgba(${baseShaded}, ${(0.95 * vis).toFixed(3)})`);
@@ -2780,18 +2955,6 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
           ctx.beginPath();
           traceSpireSubpath(ctx, sp);
           ctx.fill();
-        }
-        if (rimPower > 0.06) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * (sp.isHero ? 0.80 : 0.54) * vis).toFixed(3)})`;
-          ctx.lineWidth = sp.isHero ? 1.5 : 1.05;
-          ctx.beginPath();
-          ctx.moveTo(sp.lShX, sp.lShY);
-          ctx.lineTo(sp.tipX, sp.tipY);
-          ctx.lineTo(sp.rShX, sp.rShY);
-          ctx.stroke();
-          ctx.restore();
         }
       }
       break;
@@ -2804,8 +2967,6 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       const iceDark = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.88);
       const iceMid = _shadeNearRgb(pal.rockMid, light, isNearPlane, 1.05);
       const iceTip = _shadeNearRgb(pal.rockHighlight, light, isNearPlane, 1.22);
-
-      _drawWallWeldCollar(ctx, sx, wallY, halfW * 0.94, dir, Math.max(5, Math.min(7, hPx * 0.065)), Math.max(30, hPx * 0.24), mergeRgb, 0.50, vis);
 
       const spearGeoms = [];
       let minX = sx - halfW * 1.15;
@@ -2844,6 +3005,7 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       const { nx: iNx, ny: iNy } = _computeWallNormal(wallY, halfW, dir);
       let drewIceHiRes = false;
       if (renderCtx?.mats?.ice) {
+        const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, 'ice');
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, 'ice');
         const iBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         drewIceHiRes = _compositeHiResShape(
@@ -2868,14 +3030,29 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             boost: 1.54,
             cacheEl: el,
             cacheKey,
+            geomKey,
             anchorX: sx,
             anchorY: sy,
+            renderCtx,
             drawOverlay: (c) => {
               const ig = c.createLinearGradient(sx - iNx * 12, sy - iNy * 12, sx + iNx * Math.min(30, hPx * 0.30), sy + iNy * Math.min(30, hPx * 0.30));
               ig.addColorStop(0, `rgba(${mergeRgb}, 0.65)`);
               ig.addColorStop(1, 'rgba(0, 0, 0, 0)');
               c.fillStyle = ig;
               c.fillRect(minX, minY, maxX - minX, maxY - minY);
+
+              // Batched crisp glacial specular rim inside cached sprite (ZERO mainCtx 'screen' flushes!)
+              if (rimPower > 0.06) {
+                const hlSign = light.lightDirX >= 0 ? 1 : -1;
+                c.strokeStyle = `rgba(${rimRgb}, ${(rimPower * 0.72).toFixed(3)})`;
+                c.lineWidth = 1.35;
+                c.beginPath();
+                for (const g of spearGeoms) {
+                  c.moveTo(g.bx + hlSign * g.halfBase * 0.42, g.by + dir * 3);
+                  c.quadraticCurveTo(g.bx + hlSign * g.halfBase * 0.16, g.by + dir * g.len * 0.52, g.tipX, g.tipY);
+                }
+                c.stroke();
+              }
             },
             drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -iNx * 14, -iNy * 14, iBounds),
             drawAlphaMask: (c) => {
@@ -2891,8 +3068,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         );
       }
 
-      for (const g of spearGeoms) {
-        if (!drewIceHiRes) {
+      if (!drewIceHiRes) {
+        _drawWallWeldCollar(ctx, sx, wallY, halfW * 0.94, dir, Math.max(5, Math.min(7, hPx * 0.065)), Math.max(30, hPx * 0.24), mergeRgb, 0.50, vis);
+        for (const g of spearGeoms) {
           const ig = ctx.createLinearGradient(g.bx, g.by, g.tipX, g.tipY);
           ig.addColorStop(0, `rgba(${mergeRgb}, ${(0.95 * vis).toFixed(3)})`);
           ig.addColorStop(0.22, `rgba(${iceDark}, ${(0.92 * vis).toFixed(3)})`);
@@ -2902,18 +3080,6 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
           ctx.beginPath();
           traceIcicleSubpath(ctx, g);
           ctx.fill();
-        }
-        if (rimPower > 0.06) {
-          const hlSign = light.lightDirX >= 0 ? 1 : -1;
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.strokeStyle = `rgba(${rimRgb}, ${(rimPower * (g.isMain ? 0.78 : 0.54) * vis).toFixed(3)})`;
-          ctx.lineWidth = g.isMain ? 1.45 : 1.0;
-          ctx.beginPath();
-          ctx.moveTo(g.bx + hlSign * g.halfBase * 0.42, g.by + dir * 3);
-          ctx.quadraticCurveTo(g.bx + hlSign * g.halfBase * 0.16, g.by + dir * g.len * 0.52, g.tipX, g.tipY);
-          ctx.stroke();
-          ctx.restore();
         }
       }
       break;
@@ -3199,7 +3365,10 @@ export const foregroundDepthRendererMethods = {
         effCamY: 0,
         viewCenterX: 0,
         viewCenterY: 0,
+        maxSpriteDim: 512,
+        reShadesThisFrame: 0,
       });
+    const perfTier = this._perfBudget?.tier || 'high';
     renderCtx.mats = mats;
     renderCtx.cw = cw;
     renderCtx.ch = ch;
@@ -3211,6 +3380,8 @@ export const foregroundDepthRendererMethods = {
     renderCtx.effCamY = effCamY;
     renderCtx.viewCenterX = viewCenterX;
     renderCtx.viewCenterY = viewCenterY;
+    renderCtx.maxSpriteDim = perfTier === 'performance' ? 256 : (this._isCoarseMobile || perfTier === 'balanced' ? 384 : 512);
+    renderCtx.reShadesThisFrame = 0;
 
     // Share visible accent candidates with Pass 2 so _drawForegroundDepthLightingAccents does ZERO duplicate SDF probes!
     const accentCache = this._fgAccentCache || (this._fgAccentCache = { key: '', items: [], count: 0 });
@@ -3267,7 +3438,16 @@ export const foregroundDepthRendererMethods = {
       renderCtx.wallProfile = wallProfile;
 
       ctx.globalAlpha = finalAlpha;
-      _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced, rockPattern, wallProfile, renderCtx);
+      const fastShearX = reduced
+        ? 0
+        : el.kind === 'kelp-fronds'
+          ? Math.sin(timeSec * 1.38 + el.phase) * 0.068
+          : el.kind === 'cenote-roots'
+            ? Math.sin(timeSec * 1.25 + el.phase) * 0.052
+            : 0;
+      if (!_tryBlitCachedFgSprite(ctx, el, sx, sy, cw, ch, light, wallProfile, scale, fastShearX)) {
+        _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, timeSec, reduced, rockPattern, wallProfile, renderCtx);
+      }
 
       // Record accent-eligible visible elements for zero-cost Pass 2 reuse
       if (

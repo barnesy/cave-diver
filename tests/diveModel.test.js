@@ -13221,3 +13221,20 @@ test('v254 World-locked foreground attachments, pixel-exact rock-wall masking & 
     '_drawSiltClouds Pass 2 torch backscatter glare must clip to active ray-cast torch polygons'
   );
 });
+
+test('v255 Zero-rebuild dual-light foreground sprite cache (incl. kelp/roots shear), batched caustics & anchored life', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  // 1. foregroundDepthRenderer caches kelp-fronds & cenote-roots with dual-light darkCanvas/litCanvas + root-pinned shear (zero per-frame clip/rebuild!)
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('function _blitDualLightEntry('), 'Expected dual-light crossfade sprite blitter');
+  assert.ok(fgSrc.includes('function _tryBlitCachedFgSprite('), 'Expected zero-allocation fast-path cached sprite blit');
+  assert.ok(fgSrc.includes('const kelpShearX ='), 'Expected root-pinned affine sway for cached kelp-fronds');
+  assert.ok(fgSrc.includes('const rootShearX ='), 'Expected root-pinned affine sway for cached cenote-roots');
+  assert.ok(fgSrc.includes('renderCtx.maxSpriteDim ='), 'Expected adaptive mobile sprite dimension cap');
+
+  // 2. renderer.js batches shallow caustic shafts (2 gradients per curtain) & anchored flora paths
+  const renSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  assert.ok(renSrc.includes('for (let phase = 0; phase < 2; phase++)'), '_drawCaustics must batch sun shafts into 2 alternating shimmer gradients');
+  assert.ok(renSrc.includes('Sunlit freshwater Chara stonewort & cenote aquatic moss tufts (batched into 1 path/stroke!)'), '_drawAnchoredLife must batch chara tufts into a single path');
+});
