@@ -1351,6 +1351,7 @@ export function rollTreasureChestLoot({
   rigPerf = null,
   dryStreak = 0,
   hasDpv = false,
+  isFirstChestEver = false,
   rng = Math.random,
 } = {}) {
   const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
@@ -1374,7 +1375,10 @@ export function rollTreasureChestLoot({
   };
 
   let chosenGear = null;
-  if (roll < mythicP) {
+  if (isFirstChestEver && !CHEST_GEAR_DROPS.some((d) => Boolean(found[`${d.slot}:${d.itemId}`]))) {
+    // Make a new player's very first Sunken Treasure Chest unforgettable with a guaranteed Rare chest relic!
+    chosenGear = pickUnowned('rare');
+  } else if (roll < mythicP) {
     chosenGear = pickUnowned('mythic') || pickUnowned('epic') || pickUnowned('rare');
   } else if (roll < mythicP + epicP) {
     chosenGear = pickUnowned('epic') || pickUnowned('rare');

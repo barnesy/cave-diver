@@ -12168,3 +12168,52 @@ test('v221 Instant Mid-Dive Loot Upgrade Impact Evaluator (Upgrade, Trade-Off, D
   assert.equal(purist.isNormalized, true);
   assert.equal(purist.verdict, 'same');
 });
+
+test('v222 First-Play Magic: Welcome Relic Choices, Universal Found-Gear Unlock & Guaranteed First-Dive Chest Relic', async () => {
+  const { WELCOME_RELIC_CHOICES, computeUnlockedLiveries, sanitizeRigLivery } = await import('../public/js/game/rigLivery.js');
+  const { computeRigPerformanceProfile } = await import('../public/js/game/gearStats.js');
+  const { recordFoundWorldGear } = await import('../public/js/game/logbookModel.js');
+  const { openTreasureChest } = await import('../public/js/game/diveSession.js');
+
+  // 1. All 3 Welcome Relic choices exist, grant real stat improvements over Stock, and unlock cleanly via foundGear
+  assert.equal(WELCOME_RELIC_CHOICES.length, 3);
+  const stockPerf = computeRigPerformanceProfile({}, { difficulty: 'standard' });
+  for (const ch of WELCOME_RELIC_CHOICES) {
+    const emptyBook = createEmptyLogbook();
+    const claimed = recordFoundWorldGear(emptyBook, {
+      slot: ch.giftSlot,
+      itemId: ch.giftItemId,
+      siteId: 'welcome-crate',
+      siteName: 'Expedition Welcome Crate',
+    });
+    const unlocks = computeUnlockedLiveries(claimed.book);
+    const sanitized = sanitizeRigLivery(ch.fullRig, unlocks);
+    assert.equal(sanitized[ch.giftField], ch.giftItemId, `Claiming ${ch.id} must unlock and keep ${ch.giftItemId} equipped`);
+    const perf = computeRigPerformanceProfile(sanitized, { difficulty: 'standard' });
+    const hasRealBuff =
+      perf.bonusStartBar > stockPerf.bonusStartBar ||
+      perf.swimSpeedMult > stockPerf.swimSpeedMult ||
+      perf.siltStirMult < stockPerf.siltStirMult;
+    assert.equal(hasRealBuff, true, `Welcome kit ${ch.id} must give brand-new player noticeable dive buffs`);
+  }
+
+  // 2. First-Dive Treasure Chest guarantees a memorable Rare chest relic (without giving away Mythic chase items!)
+  const firstSess = createDiveSession(LEVEL_1, { diverName: 'NewDiver', difficulty: 'standard', isFirstDive: true });
+  assert.equal(firstSess.isFirstDive, true);
+  assert.ok(firstSess.treasureChests.length >= 1, 'Level 1 must spawn a discoverable treasure chest for Dive #1');
+  // Even with a terrible rng roll (0.99), the very first sunken chest ever guarantees a Rare Chest Relic!
+  const firstDrop = openTreasureChest(firstSess, firstSess.treasureChests[0], {}, { rng: () => 0.99 });
+  assert.equal(firstDrop.kind, 'gear', 'First-ever treasure chest must guarantee a gear drop');
+  assert.equal(firstDrop.tier, 'rare', 'First-ever treasure chest must award a Rare chest relic (keeping Mythic ultra-rare)');
+  assert.equal(firstSess._firstChestAwarded, true);
+
+  // 3. First-Dive Explorer Whisper fires cleanly once diver descends past 6.5m (staying quiet at surface!)
+  const toasts = [];
+  stepDiveSession(firstSess, { x: 0, y: 0 }, 0.05, { onToast: (m) => toasts.push(m) });
+  assert.equal(toasts.length, 0, 'Surface launch must stay quiet (no opening toast)');
+  const cp0 = LEVEL_1.checkpoints[0];
+  firstSess.diver.x = cp0.x;
+  firstSess.diver.y = Math.max(8, cp0.y);
+  stepDiveSession(firstSess, { x: 0, y: 0 }, 0.05, { onToast: (m) => toasts.push(m) });
+  assert.ok(toasts.some((m) => m.includes('Gear Caches') && m.includes('Brass Chests')), 'First dive past 6.5m must show friendly explorer tip');
+});

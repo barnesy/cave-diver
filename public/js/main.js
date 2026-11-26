@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=221',
+  mapRasterUrl: './assets/map-expedition.jpg?v=222',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2589,6 +2589,10 @@ btnHudGhostToggle?.addEventListener('click', toggleGhostOption);
 
 function openDiveGuideModal(launchAfter = false) {
   pendingGuideLaunch = Boolean(launchAfter);
+  const csRow = document.getElementById('dive-guide-callsign-row');
+  const csInp = document.getElementById('input-guide-callsign');
+  if (csRow) csRow.hidden = !pendingGuideLaunch || Boolean(getEnteredCallsign());
+  if (csInp && !csRow?.hidden) csInp.value = '';
   if (modalDiveGuide) modalDiveGuide.hidden = false;
   setHomeMenuOpen(false);
 }
@@ -2598,7 +2602,14 @@ function closeDiveGuideModal(startNow = false) {
   try { localStorage.setItem(BRIEFED_PREF_KEY, '1'); } catch {}
   const shouldLaunch = startNow && pendingGuideLaunch;
   pendingGuideLaunch = false;
-  if (shouldLaunch) launchOpenCoopDive();
+  if (shouldLaunch) {
+    const csVal = document.getElementById('input-guide-callsign')?.value?.trim();
+    if (!getEnteredCallsign() && playerNameInput) {
+      playerNameInput.value = csVal || 'Explorer';
+      playerNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    launchOpenCoopDive();
+  }
 }
 
 btnOpenGuide?.addEventListener('click', () => openDiveGuideModal(false));
@@ -3237,6 +3248,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     crewRoleId: activeCrewRoleId,
     modifiers: activeExpeditionModifiers,
     foundGear: loadCareerLogbook()?.foundGear || null,
+    isFirstDive: (loadCareerLogbook()?.totalDives || 0) === 0,
     isRescueDrill: isDrillLaunch,
   });
   const runMutMeta = session.mutatorId ? getDailyMutatorById(session.mutatorId) : null;

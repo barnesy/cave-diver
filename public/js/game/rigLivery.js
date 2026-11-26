@@ -1904,22 +1904,92 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   stats.bountiesClaimed = _countClaimedBounties(stats);
 
   const suits = new Set();
-  for (const s of SUIT_LIVERIES) if (s.isUnlocked(stats)) suits.add(s.id);
+  for (const s of SUIT_LIVERIES) if (s.isUnlocked(stats) || foundGearIds.has(`suit:${s.id}`)) suits.add(s.id);
   const torches = new Set();
-  for (const t of TORCH_OPTICS) if (t.isUnlocked(stats)) torches.add(t.id);
+  for (const t of TORCH_OPTICS) if (t.isUnlocked(stats) || foundGearIds.has(`torch:${t.id}`)) torches.add(t.id);
   const patches = new Set();
-  for (const p of MILESTONE_PATCHES) if (p.isUnlocked(stats)) patches.add(p.id);
+  for (const p of MILESTONE_PATCHES) if (p.isUnlocked(stats) || foundGearIds.has(`patch:${p.id}`)) patches.add(p.id);
   const headgears = new Set();
-  for (const h of HEADGEAR_STYLES) if (h.isUnlocked(stats)) headgears.add(h.id);
+  for (const h of HEADGEAR_STYLES) if (h.isUnlocked(stats) || foundGearIds.has(`headgear:${h.id}`)) headgears.add(h.id);
   const trims = new Set();
-  for (const tr of ACCENT_TRIMS) if (tr.isUnlocked(stats)) trims.add(tr.id);
+  for (const tr of ACCENT_TRIMS) if (tr.isUnlocked(stats) || foundGearIds.has(`trim:${tr.id}`)) trims.add(tr.id);
   const tanks = new Set();
-  for (const tk of TANK_FINISHES) if (tk.isUnlocked(stats)) tanks.add(tk.id);
+  for (const tk of TANK_FINISHES) if (tk.isUnlocked(stats) || foundGearIds.has(`tank:${tk.id}`)) tanks.add(tk.id);
   const visors = new Set();
-  for (const vs of VISOR_TINTS) if (vs.isUnlocked(stats)) visors.add(vs.id);
+  for (const vs of VISOR_TINTS) if (vs.isUnlocked(stats) || foundGearIds.has(`visor:${vs.id}`)) visors.add(vs.id);
 
   return { stats, suits, torches, patches, headgears, trims, tanks, visors };
 }
+
+/**
+ * Curated First-Play Expedition Welcome Crate choices (v222).
+ * Brand-new divers pick 1 free Specialty Relic to immediately unlock & outfit their starter rig before Dive #1.
+ */
+export const WELCOME_RELIC_CHOICES = Object.freeze([
+  Object.freeze({
+    id: 'deep-cobalt',
+    icon: '🌊',
+    archetype: 'deep',
+    title: 'Deep Explorer',
+    tagline: 'Extra gas reserve, icy cold insulation & warm cavern visibility.',
+    giftSlot: 'tank',
+    giftField: 'tankId',
+    giftItemId: 'anodized-cobalt',
+    giftName: 'Anodized Cobalt Twinset',
+    giftHighlight: '+10 Bar · +4% Swim · -6% Gas',
+    fullRig: Object.freeze({
+      suitId: 'arctic-cobalt',
+      trimId: 'tech-cyan',
+      headgearId: 'cave-hood',
+      visorId: 'amber-contrast',
+      tankId: 'anodized-cobalt',
+      torchId: 'warm-halogen',
+      patchId: 'cave-arrow',
+    }),
+  }),
+  Object.freeze({
+    id: 'speed-amber',
+    icon: '⚡',
+    archetype: 'speed',
+    title: 'Karst Speed-Glider',
+    tagline: 'Nimble fin thrust, crystal-clear silt cutting & bright beam reach.',
+    giftSlot: 'torch',
+    giftField: 'torchId',
+    giftItemId: 'amber-silt',
+    giftName: 'Amber Silt-Piercer Torch',
+    giftHighlight: '-15% Silt · +10% Beam',
+    fullRig: Object.freeze({
+      suitId: 'expedition-amber',
+      trimId: 'safety-orange',
+      headgearId: 'zissou-cap',
+      visorId: 'clear-cyan',
+      tankId: 'hivis-yellow',
+      torchId: 'amber-silt',
+      patchId: 'cave-arrow',
+    }),
+  }),
+  Object.freeze({
+    id: 'pathfinder-crimson',
+    icon: '🔱',
+    archetype: 'combat',
+    title: 'Bold Pathfinder',
+    tagline: 'Iconic Cousteau style with punchy propulsion & guardian readiness.',
+    giftSlot: 'trim',
+    giftField: 'trimId',
+    giftItemId: 'signal-crimson',
+    giftName: 'Crimson Flare Harness',
+    giftHighlight: '+6% Swim · +8% Spear · -10% Dash CD',
+    fullRig: Object.freeze({
+      suitId: 'zissou-classic',
+      trimId: 'signal-crimson',
+      headgearId: 'zissou-cap',
+      visorId: 'amber-contrast',
+      tankId: 'al80-silver',
+      torchId: 'tech-led',
+      patchId: 'cave-arrow',
+    }),
+  }),
+]);
 
 /**
  * Validate and clamp a livery selection against catalog (and optionally against unlocked sets).

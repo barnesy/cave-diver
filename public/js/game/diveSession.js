@@ -480,6 +480,7 @@ export function createDiveSession(
     modifiers = [],
     foundGear = null,
     isRescueDrill = false,
+    isFirstDive = false,
   } = {}
 ) {
   const cleanModifiers = sanitizeExpeditionModifiers(modifiers);
@@ -530,6 +531,9 @@ export function createDiveSession(
     worldGearCaches,
     treasureChests,
     foundGearMap: foundGear && typeof foundGear === 'object' ? { ...foundGear } : {},
+    isFirstDive: Boolean(isFirstDive),
+    _firstChestAwarded: false,
+    _firstDiveTipShown: false,
     chestBonusScore: 0,
     chestDryStreak: 0,
     difficulty: cleanDiff,
@@ -2216,14 +2220,17 @@ export function openTreasureChest(session, chest, callbacks = {}, { rng = Math.r
   if (!session || !chest || chest.opened) return null;
   chest.opened = true;
   chest.openedAt = session.simTimeSec || 0;
+  const isFirstChestEver = Boolean(session.isFirstDive && !session._firstChestAwarded);
   const drop = rollTreasureChestLoot({
     foundGearMap: session.foundGearMap,
     tuningCtx: session.rigTuningCtx,
     rigPerf: session.rigPerf,
     dryStreak: session.chestDryStreak || 0,
     hasDpv: Boolean(session.dpv?.equipped),
+    isFirstChestEver,
     rng,
   });
+  if (isFirstChestEver) session._firstChestAwarded = true;
   chest.drop = drop;
   chest.beamColor = drop.beamColor || '#facc15';
   if (drop.kind === 'gear') {
@@ -2466,18 +2473,6 @@ export function triggerWreckAction(session, callbacks = {}) {
     }
   }
 
-  // 3b. Priority 3b: Open a nearby discoverable Sunken Treasure Chest ([E] or mobile interact button)
-  if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {
-    for (let i = 0; i < session.treasureChests.length; i++) {
-      const tc = session.treasureChests[i];
-      if (!tc || tc.opened) continue;
-      if (Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8) {
-        const drop = openTreasureChest(session, tc, callbacks);
-        return { handled: true, kind: 'treasure-chest', targetId: tc.id, drop };
-      }
-    }
-  }
-
   // 3b. Priority 3b: Retrieve a player-clipped physical stage bottle (own or co-op buddy's)
   if (Array.isArray(session.droppedStages) && session.droppedStages.length > 0) {
     const res = retrieveStageTank(session, null, callbacks);
@@ -2561,6 +2556,18 @@ export function triggerWreckAction(session, callbacks = {}) {
       const bbRes = recoverBlackBox(session, callbacks);
       if (bbRes.ok) {
         return { handled: true, kind: 'recover-blackbox', targetId: bbRes.blackBox.id, points: bbRes.points };
+      }
+    }
+  }
+
+  // 5c. Priority 5c: Open a nearby discoverable Sunken Treasure Chest ([E] or mobile interact button)
+  if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {
+    for (let i = 0; i < session.treasureChests.length; i++) {
+      const tc = session.treasureChests[i];
+      if (!tc || tc.opened) continue;
+      if (Math.hypot(diver.x - tc.x, diver.y - tc.y) <= 3.8) {
+        const drop = openTreasureChest(session, tc, callbacks);
+        return { handled: true, kind: 'treasure-chest', targetId: tc.id, drop };
       }
     }
   }
@@ -4509,6 +4516,11 @@ function stepPhysiologyAndObjectives(session, dt, callbacks, ctx) {
         callbacks.onWorldGearFound?.(gc);
       }
     }
+  }
+  // First-Dive Explorer Whisper once diver descends past the quiet surface basin (v222)
+  if (session.isFirstDive && !session._firstDiveTipShown && diver.y >= 6.5 && !session.isProvingGrounds) {
+    session._firstDiveTipShown = true;
+    callbacks.onToast?.('✨ Explorer Tip: Watch for glowing Gear Caches & Sunken Brass Chests along the cavern shelves!', 4.4);
   }
   // v220: Direct close-contact swim-through pickup for discoverable Sunken Treasure Chests
   if (Array.isArray(session.treasureChests) && session.treasureChests.length > 0) {

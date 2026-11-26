@@ -10,6 +10,7 @@ import {
   TANK_FINISHES,
   VISOR_TINTS,
   OUTFITTER_PRESETS,
+  WELCOME_RELIC_CHOICES,
   DEFAULT_RIG_LIVERY,
   getSuitLivery,
   getGearTierMeta,
@@ -149,6 +150,9 @@ export function createLiveryWorkshopController({
   const liveryModalEl = document.getElementById('livery-modal');
   const liveryPreviewCanvasEl = document.getElementById('livery-preview-canvas');
   const liveryPreviewCtx = liveryPreviewCanvasEl?.getContext?.('2d') || null;
+  const liveryWelcomeStageEl = document.getElementById('livery-welcome-stage');
+  const firstPlayWelcomeStripEl = document.getElementById('first-play-welcome-strip');
+  const btnLiveryLaunchDiveEl = document.getElementById('btn-livery-launch-dive');
   const liveryPerfPanelEl = document.getElementById('livery-perf-panel');
   const liveryLadderRailEl = document.getElementById('livery-ladder-rail');
   const liveryPresetRowEl = document.getElementById('livery-preset-row');
@@ -212,13 +216,59 @@ export function createLiveryWorkshopController({
     return { difficulty: curDiff, modifiers: mods };
   }
 
-  // Kinetic equip-on-avatar animation state, multi-slot Try-On & Set Inspector state (v211–v217)
+  // Kinetic equip-on-avatar animation state, multi-slot Try-On, Equip Flash & Set Inspector state (v211–v222)
   let activeEquipFx = null;
   let justEquippedKey = '';
   let lockedTryOn = null; // { slot, field, id, patch?, name, hint, tier, isSet?, setId? } | null
+  let lastEquipFlash = null; // { itemName, diffs, expiresAt } | null
   let inspectedSetId = '';
   let recentDiveUnlocks = [];
   let savedPrevLevelBeforeProving = null;
+
+  function getWelcomeCrateState() {
+    let book = null;
+    try { book = loadCareerLogbook(); } catch {}
+    const totalDives = Number(book?.totalDives) || 0;
+    const sitesCleared = book?.cleared ? Object.keys(book.cleared).length : 0;
+    const foundGear = book?.foundGear && typeof book.foundGear === 'object' ? book.foundGear : {};
+    let claimedChoice = null;
+    for (const ch of WELCOME_RELIC_CHOICES) {
+      const rec = foundGear[`${ch.giftSlot}:${ch.giftItemId}`];
+      if (rec && rec.siteId === 'welcome-crate') {
+        claimedChoice = ch;
+        break;
+      }
+    }
+    const isNewDiver = totalDives === 0 && sitesCleared === 0;
+    return { isNewDiver, claimedChoice, totalDives, sitesCleared };
+  }
+
+  function claimWelcomeRelicChoice(choiceId) {
+    const ch = WELCOME_RELIC_CHOICES.find((c) => c.id === choiceId);
+    if (!ch) return false;
+    const st = getWelcomeCrateState();
+    if (st.claimedChoice) return false;
+    try {
+      const res = recordFoundWorldGear(loadCareerLogbook(), {
+        slot: ch.giftSlot,
+        itemId: ch.giftItemId,
+        siteId: 'welcome-crate',
+        siteName: 'Expedition Welcome Crate',
+      });
+      if (res?.book && typeof saveCareerLogbook === 'function') {
+        saveCareerLogbook(res.book);
+      }
+    } catch {}
+    markEntrySeen(`${ch.giftSlot}:${ch.giftItemId}`);
+    playGearUnlock?.('uncommon');
+    spawnConfetti?.();
+    updateActiveLiveryField(
+      { ...ch.fullRig },
+      { slot: ch.giftSlot, itemMeta: { id: ch.giftItemId, name: ch.giftName, tier: 'uncommon' }, silentAudio: true }
+    );
+    showToast?.(`🎁 Claimed ${ch.giftName} & outfitted your ${ch.title} starter rig! Ready for Dive #1!`, 3.8);
+    return true;
+  }
 
   function getDisplayedRigLivery() {
     if (!lockedTryOn) return activeRigLivery;
@@ -590,6 +640,10 @@ export function createLiveryWorkshopController({
       btnHomeOpenLiveryEl.classList.toggle('has-new-gear', unseenCount > 0);
       btnHomeOpenLiveryEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name}${unseenCount > 0 ? ` (${unseenCount} NEW unlocked!)` : ' (tap to customize)'}`;
     }
+    if (firstPlayWelcomeStripEl) {
+      const wc = getWelcomeCrateState();
+      firstPlayWelcomeStripEl.hidden = !(wc.isNewDiver && !wc.claimedChoice);
+    }
     renderHomeAvatarBadge();
     if (session?.diver && !session.isProvingGrounds) {
       session.diver.livery = { ...activeRigLivery };
@@ -655,8 +709,17 @@ export function createLiveryWorkshopController({
 
   function updateActiveLiveryField(patchObj, { slot = 'all', itemMeta = null, silentAudio = false } = {}) {
     lockedTryOn = null;
+    const prevTuningCtx = getWorkshopTuningCtx(workshopTuningMode);
+    const prevPerf = computeRigPerformanceProfile(activeRigLivery, prevTuningCtx);
     const unlocks = getCurrentLiveryUnlocks();
     activeRigLivery = sanitizeRigLivery({ ...activeRigLivery, ...patchObj }, unlocks);
+    const nextPerf = computeRigPerformanceProfile(activeRigLivery, prevTuningCtx);
+    const eqDiffs = diffRigPerformanceProfiles(prevPerf, nextPerf);
+    if (eqDiffs.length > 0 && itemMeta?.name) {
+      lastEquipFlash = { itemName: itemMeta.name, diffs: eqDiffs, expiresAt: performance.now() + 4800 };
+    } else {
+      lastEquipFlash = null;
+    }
     if (slot && itemMeta?.id) markEntrySeen(`${slot}:${itemMeta.id}`);
     triggerEquipAnimation(slot, itemMeta, { silentAudio });
     saveRigLivery();
@@ -898,12 +961,100 @@ export function createLiveryWorkshopController({
       liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} gear (${overallPct}%) · 🗺️ ${worldFoundCount}/${WORLD_GEAR_CACHES.length} caches · 🧰 ${chestFoundCount}/${CHEST_GEAR_DROPS.length} chest relics · ${unlocks.stats.sitesCleared} sites · ${Math.round(unlocks.stats.deepestM || 0)}m max depth.`;
     }
 
-    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas, Mode/Difficulty Tuned (v216–v219)
+    // First-Play Expedition Welcome Crate & Starter Outfitting Stage (v222)
+    const wcState = getWelcomeCrateState();
+    if (btnLiveryLaunchDiveEl) {
+      btnLiveryLaunchDiveEl.hidden = !wcState.isNewDiver;
+    }
+    if (liveryWelcomeStageEl) {
+      if (!wcState.isNewDiver) {
+        liveryWelcomeStageEl.hidden = true;
+        liveryWelcomeStageEl.innerHTML = '';
+      } else if (!wcState.claimedChoice) {
+        liveryWelcomeStageEl.hidden = false;
+        const previewChoiceId = lockedTryOn?.welcomeChoiceId || '';
+        liveryWelcomeStageEl.innerHTML = `
+          <div class="livery-welcome-head">
+            <div>
+              <span class="livery-welcome-kicker">🎁 EXPEDITION WELCOME CRATE · 1 FREE SPECIALTY RELIC</span>
+              <div class="livery-welcome-sub">Choose your starting dive style to unlock a free Field-Tech Relic &amp; outfit your rig live in the Test Tank!</div>
+            </div>
+          </div>
+          <div class="livery-welcome-grid">
+            ${WELCOME_RELIC_CHOICES.map(
+              (ch) => `<div class="livery-welcome-card arch-${ch.archetype}${previewChoiceId === ch.id ? ' previewing' : ''}">
+                <div class="lwc-top">
+                  <span class="lwc-title">${ch.icon} <strong>${escapeHtml(ch.title)}</strong></span>
+                  <span class="livery-arch-pill arch-${ch.archetype}">${escapeHtml(ch.archetype.toUpperCase())}</span>
+                </div>
+                <div class="lwc-gift">🎁 Free Relic: <strong>${escapeHtml(ch.giftName)}</strong></div>
+                <div class="lwc-stats">${escapeHtml(ch.giftHighlight)}</div>
+                <div class="lwc-desc">${escapeHtml(ch.tagline)}</div>
+                <div class="lwc-actions">
+                  <button type="button" class="btn tiny secondary" data-welcome-preview="${ch.id}" title="Preview this full kit live in the Test Tank">👁 Try</button>
+                  <button type="button" class="btn tiny primary upgrade-equip" data-welcome-claim="${ch.id}" title="Unlock permanently &amp; equip for Dive #1">🎁 Claim</button>
+                </div>
+              </div>`
+            ).join('')}
+          </div>
+        `;
+        liveryWelcomeStageEl.querySelectorAll('button[data-welcome-preview]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const cid = btn.getAttribute('data-welcome-preview');
+            const ch = WELCOME_RELIC_CHOICES.find((c) => c.id === cid);
+            if (!ch) return;
+            lockedTryOn = {
+              slot: ch.giftSlot,
+              field: ch.giftField,
+              id: ch.giftItemId,
+              patch: { ...ch.fullRig },
+              welcomeChoiceId: ch.id,
+              name: `${ch.icon} ${ch.title} Welcome Kit`,
+              hint: `Free Welcome Relic: ${ch.giftName}`,
+              tier: 'uncommon',
+            };
+            triggerEquipAnimation(ch.giftSlot, { name: ch.giftName, tier: 'uncommon' });
+            renderLiveryWorkshopModal();
+          });
+        });
+        liveryWelcomeStageEl.querySelectorAll('button[data-welcome-claim]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            claimWelcomeRelicChoice(btn.getAttribute('data-welcome-claim'));
+          });
+        });
+      } else {
+        // Brand-new diver already claimed their Welcome Relic -> celebratory Launch Ready banner!
+        const ch = wcState.claimedChoice;
+        liveryWelcomeStageEl.hidden = false;
+        liveryWelcomeStageEl.innerHTML = `
+          <div class="livery-welcome-ready">
+            <div class="lwr-copy">
+              <span class="livery-welcome-kicker">✨ FIRST DIVE OUTFITTED · ${ch.icon} ${escapeHtml(ch.title.toUpperCase())}</span>
+              <div class="lwr-detail">Equipped <strong>${escapeHtml(ch.giftName)}</strong> (${escapeHtml(ch.giftHighlight)}). Hunt glowing Gear Caches &amp; Sunken Brass Chests inside <strong>Cenote El Abismo</strong>!</div>
+            </div>
+            <div class="lwr-actions">
+              <button type="button" class="btn tiny primary upgrade-equip" id="btn-welcome-launch-dive">🤿 Launch Dive #1 →</button>
+              <button type="button" class="btn tiny secondary" id="btn-welcome-field-test">🧪 Test Rig</button>
+            </div>
+          </div>
+        `;
+        liveryWelcomeStageEl.querySelector('#btn-welcome-launch-dive')?.addEventListener('click', () => {
+          closeLiveryModal();
+          document.getElementById('btn-play-solo')?.click();
+        });
+        liveryWelcomeStageEl.querySelector('#btn-welcome-field-test')?.addEventListener('click', () => {
+          startFieldTestDive();
+        });
+      }
+    }
+
+    // Live Rig Performance Stat Sheet & Diablo III Try-On Compare Deltas, Mode/Difficulty Tuned (v216–v222)
     const previewRigForPerf = getDisplayedRigLivery();
     const wsTuningCtx = getWorkshopTuningCtx(workshopTuningMode);
     const basePerf = computeRigPerformanceProfile(activeRigLivery, wsTuningCtx);
     const viewPerf = lockedTryOn ? computeRigPerformanceProfile(previewRigForPerf, wsTuningCtx) : basePerf;
-    const perfDiffs = lockedTryOn ? diffRigPerformanceProfiles(basePerf, viewPerf) : [];
+    const activeFlash = !lockedTryOn && lastEquipFlash && performance.now() < lastEquipFlash.expiresAt ? lastEquipFlash : null;
+    const perfDiffs = lockedTryOn ? diffRigPerformanceProfiles(basePerf, viewPerf) : activeFlash ? activeFlash.diffs : [];
     if (liveryPerfPanelEl) {
       const swimPct = Math.round((viewPerf.swimSpeedMult - 1) * 100);
       const gasPct = Math.round((1 - viewPerf.gasBurnMult) * 100);
@@ -940,7 +1091,7 @@ export function createLiveryWorkshopController({
         : '';
 
       const deltaHtml = perfDiffs.length > 0
-        ? `<div class="livery-perf-deltas">${perfDiffs
+        ? `<div class="livery-perf-deltas${activeFlash ? ' is-equip-flash' : ''}">${activeFlash ? `<span class="livery-flash-tag">✓ ${escapeHtml(activeFlash.itemName)}:</span>` : ''}${perfDiffs
             .slice(0, 6)
             .map((d) => `<span class="livery-delta-chip ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`)
             .join('')}</div>`
@@ -1620,6 +1771,11 @@ export function createLiveryWorkshopController({
     );
   });
   menuLiveryPillEl?.addEventListener('click', () => openLiveryModal());
+  firstPlayWelcomeStripEl?.addEventListener('click', () => openLiveryModal('suit'));
+  btnLiveryLaunchDiveEl?.addEventListener('click', () => {
+    closeLiveryModal();
+    document.getElementById('btn-play-solo')?.click();
+  });
   btnLiveryCloseEl?.addEventListener('click', closeLiveryModal);
   btnLiveryDoneEl?.addEventListener('click', closeLiveryModal);
   liveryModalEl?.addEventListener('click', (e) => {
