@@ -721,6 +721,62 @@ function _drawAnimatedSuitFx(ctx, u, pal, timeSec) {
     ctx.beginPath();
     ctx.ellipse(-u * 0.22, u * 0.02, u * 0.66, u * 0.25, 0, Math.PI * 1.1, Math.PI * 1.9);
     ctx.stroke();
+  } else if (fx === 'aurora-ribbon') {
+    // Flowing green -> cyan -> violet glacial aurora ribbons along torso (v229)
+    const hue = 152 + Math.sin(timeSec * 1.8) * 52;
+    const wave = Math.sin(timeSec * 3.1) * u * 0.1;
+    ctx.strokeStyle = `hsla(${Math.round(hue)}, 92%, 68%, 0.72)`;
+    ctx.lineWidth = Math.max(1.4, u * 0.052);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.78, -u * 0.04 + wave);
+    ctx.bezierCurveTo(-u * 0.42, -u * 0.22 - wave, -u * 0.08, u * 0.2 + wave, u * 0.26, -u * 0.04 - wave * 0.6);
+    ctx.stroke();
+    ctx.strokeStyle = `hsla(${Math.round(hue + 56)}, 95%, 76%, 0.55)`;
+    ctx.lineWidth = Math.max(1.0, u * 0.032);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.74, u * 0.08 - wave * 0.7);
+    ctx.quadraticCurveTo(-u * 0.22, -u * 0.14 + wave, u * 0.22, u * 0.08);
+    ctx.stroke();
+  } else if (fx === 'prism-shift') {
+    // Live holographic spectrum sweep + pearlescent shimmer motes (v229 Exclusive)
+    const h1 = Math.round((timeSec * 110) % 360);
+    const h2 = (h1 + 120) % 360;
+    const sweep = ((timeSec * 0.75) % 1) * 1.44 - 0.92;
+    ctx.strokeStyle = `hsla(${h1}, 96%, 74%, 0.85)`;
+    ctx.lineWidth = Math.max(1.6, u * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(u * sweep, -u * 0.26);
+    ctx.lineTo(u * (sweep + 0.18), u * 0.26);
+    ctx.stroke();
+    ctx.strokeStyle = `hsla(${h2}, 96%, 76%, 0.68)`;
+    ctx.lineWidth = Math.max(1.2, u * 0.042);
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.22, u * 0.02, u * 0.68, u * 0.27, 0, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      const a = timeSec * 2.5 + (i * Math.PI) / 2;
+      ctx.fillStyle = `hsla(${(h1 + i * 75) % 360}, 98%, 78%, 0.88)`;
+      ctx.beginPath();
+      ctx.arc(-u * 0.22 + Math.cos(a) * u * 0.74, u * 0.02 + Math.sin(a) * u * 0.34, Math.max(1.2, u * 0.046), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'void-plasma') {
+    // Crackling ultraviolet & crimson plasma arcs (v229 Exclusive)
+    const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6.2);
+    ctx.strokeStyle = `rgba(244, 63, 94, ${(0.52 + pulse * 0.44).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.3, u * 0.048);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.78, u * 0.02);
+    ctx.lineTo(-u * 0.48, -u * (0.12 + pulse * 0.05));
+    ctx.lineTo(-u * 0.18, u * (0.11 + pulse * 0.04));
+    ctx.lineTo(u * 0.14, -u * 0.09);
+    ctx.lineTo(u * 0.28, u * 0.03);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(192, 132, 252, ${(0.42 + (1 - pulse) * 0.44).toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.1, u * 0.036);
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.22, u * 0.02, u * (0.72 + pulse * 0.05), u * (0.30 + pulse * 0.03), 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.restore();
 }

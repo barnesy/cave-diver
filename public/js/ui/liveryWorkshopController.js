@@ -1,6 +1,17 @@
 import { escapeHtml } from '../util/common.js';
 import { LEVELS } from '../levels/index.js';
-import { computeUnlockedGear, recordFoundWorldGear } from '../game/logbookModel.js';
+import {
+  computeUnlockedGear,
+  recordFoundWorldGear,
+  awardDoubloonsInLogbook,
+  purchaseGearChromaInLogbook,
+} from '../game/logbookModel.js';
+import {
+  GEAR_CHROMA_FINISHES,
+  CHROMA_TIERS,
+  getGearChroma,
+  isChromaExclusiveEligible,
+} from '../game/gearChroma.js';
 import {
   SUIT_LIVERIES,
   TORCH_OPTICS,
@@ -63,6 +74,7 @@ const SLOT_DISPLAY_NAMES = {
   tank: 'Twin Tanks',
   torch: 'Primary Torch',
   patch: 'Shoulder Patch',
+  chroma: 'Color Coat',
 };
 
 /**
@@ -183,6 +195,9 @@ export function createLiveryWorkshopController({
   const liveryTankGridEl = document.getElementById('livery-tank-grid');
   const liveryTorchGridEl = document.getElementById('livery-torch-grid');
   const liveryPatchGridEl = document.getElementById('livery-patch-grid');
+  const liveryChromaGridEl = document.getElementById('livery-chroma-grid');
+  const liveryChromaAnimGridEl = document.getElementById('livery-chroma-anim-grid');
+  const liveryWalletPillEl = document.getElementById('livery-wallet-pill');
   const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
   const debriefGearUnlocksEl = document.getElementById('debrief-gear-unlocks');
   const lootDiscoveryBannerEl = document.getElementById('loot-discovery-banner');
@@ -196,6 +211,7 @@ export function createLiveryWorkshopController({
     head: document.getElementById('livery-panel-head'),
     gear: document.getElementById('livery-panel-gear'),
     patch: document.getElementById('livery-panel-patch'),
+    chroma: document.getElementById('livery-panel-chroma'),
   };
 
   let activeLiveryTab = 'suit';
@@ -369,7 +385,7 @@ export function createLiveryWorkshopController({
     aiSquadTeamUniform = localStorage.getItem(SQUAD_UNIFORM_KEY) === '1';
   } catch {}
 
-  function triggerEquipAnimation(slot, itemOrMeta = null, { silentAudio = false } = {}) {
+  function triggerEquipAnimation(slot, itemOrMeta = null, { silentAudio = false, isPreview = false } = {}) {
     const tierId = itemOrMeta?.tier || 'common';
     const tierMeta = getGearTierMeta(tierId);
     activeEquipFx = {
@@ -378,6 +394,7 @@ export function createLiveryWorkshopController({
       color: tierMeta.color,
       tier: tierMeta.id,
       itemName: itemOrMeta?.name || '',
+      isPreview: Boolean(isPreview),
     };
     if (slot && itemOrMeta?.id) {
       justEquippedKey = `${slot}:${itemOrMeta.id}`;
@@ -533,7 +550,8 @@ export function createLiveryWorkshopController({
           siteId: sess?.level?.id || '',
           siteName: sess?.level?.name || '',
         });
-        if (res?.book) saveCareerLogbook(res.book);
+        const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), 50);
+        if (credited?.book) saveCareerLogbook(credited.book);
       } catch {}
     }
     syncLiveryUi();
@@ -593,7 +611,8 @@ export function createLiveryWorkshopController({
             siteId: sess?.level?.id || '',
             siteName: sess?.level?.name || '',
           });
-          if (res?.book) saveCareerLogbook(res.book);
+          const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), 65);
+          if (credited?.book) saveCareerLogbook(credited.book);
         } catch {}
       }
       syncLiveryUi();
@@ -638,6 +657,13 @@ export function createLiveryWorkshopController({
     }
 
     // Salvage treasure drop (Spare Pony Bottle, DPV Cell, Doubloons, or Abyssal Reliquary)
+    const chestCoins = drop.tier === 'mythic' ? 130 : drop.tier === 'epic' ? 90 : 55;
+    if (!sess?.isProvingGrounds && typeof saveCareerLogbook === 'function') {
+      try {
+        const credited = awardDoubloonsInLogbook(loadCareerLogbook(), chestCoins);
+        if (credited?.book) saveCareerLogbook(credited.book);
+      } catch {}
+    }
     playGearEquip?.('all', drop.tier || 'rare');
     if (!lootDiscoveryBannerEl) return;
     const tierMeta = getGearTierMeta(drop.tier || 'rare');
@@ -649,7 +675,7 @@ export function createLiveryWorkshopController({
         <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.icon} ${tierMeta.badge}</span>
       </div>
       <div class="loot-disc-name">${drop.icon || '🪙'} ${escapeHtml(drop.name || 'Sunken Treasure')}</div>
-      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)}</div>
+      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)} · <strong>+${chestCoins} 🪙 Doubloons</strong></div>
       <div class="loot-disc-actions">
         <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Continue Dive</button>
       </div>
@@ -770,6 +796,34 @@ export function createLiveryWorkshopController({
     }
   }
 
+  function purchaseAndApplyChroma(dyeId) {
+    const unlocks = getCurrentLiveryUnlocks();
+    const res = purchaseGearChromaInLogbook(loadCareerLogbook(), dyeId, unlocks.stats);
+    if (!res.ok) {
+      if (res.reason === 'exclusive-locked') {
+        showToast?.(`🔒 Exclusive Coating — ${res.chroma?.requirementHint || 'Complete career milestone first'}`, 3.0);
+      } else if (res.reason === 'insufficient-funds') {
+        const shortBy = Math.max(1, (res.cost || 0) - (res.book?.doubloons || 0));
+        showToast?.(`🪙 Need ${shortBy} more Salvage Doubloons — clear sites or open sunken chests!`, 3.0);
+      }
+      return false;
+    }
+    if (res.reason === 'purchased') {
+      if (typeof saveCareerLogbook === 'function') saveCareerLogbook(res.book);
+      scheduleGitHubStatsSync?.();
+      try { playGearUnlock?.(res.chroma.exclusive ? 'mythic' : res.chroma.animated ? 'epic' : 'rare'); } catch {}
+      if (res.chroma.animated || res.chroma.exclusive) {
+        try { spawnConfetti?.(); } catch {}
+      }
+      showToast?.(`🎨 Purchased & applied ${res.chroma.name} (-${res.cost} 🪙)!`, 3.2);
+    }
+    updateActiveLiveryField(
+      { dyeId: res.chroma.id },
+      { slot: 'chroma', itemMeta: { id: res.chroma.id, name: res.chroma.name, tier: res.chroma.exclusive ? 'mythic' : res.chroma.animated ? 'epic' : 'rare' }, silentAudio: res.reason === 'purchased' }
+    );
+    return true;
+  }
+
   function renderInspectorBar() {
     if (!liveryInspectorBarEl) return;
     const tuningCtx = getWorkshopTuningCtx(workshopTuningMode);
@@ -783,6 +837,25 @@ export function createLiveryWorkshopController({
     // Default calm summary of the current tab's equipped gear when nothing is hovered or inspected
     if (!activeTarget || !activeTarget.item) {
       const pal = resolveDiverLiveryPalette(activeRigLivery);
+      if (activeLiveryTab === 'chroma') {
+        const curChroma = getGearChroma(activeRigLivery.dyeId || 'none');
+        const book = loadCareerLogbook();
+        const bal = Math.max(0, Math.round(Number(book?.doubloons) || 0));
+        liveryInspectorBarEl.dataset.state = 'idle';
+        liveryInspectorBarEl.innerHTML = `
+          <div class="livery-insp-row">
+            <span class="livery-insp-kicker">ACTIVE COLOR COAT</span>
+            <strong class="livery-insp-name">${escapeHtml(curChroma.name)}</strong>
+            <span class="livery-insp-verdict verdict-same">🪙 ${bal} Doubloons</span>
+            <span class="livery-insp-hint">Hover or tap any finish to preview live on your diver</span>
+          </div>
+          <div class="livery-insp-deltas">
+            <span class="livery-insp-pill neutral">Cosmetic Coating · Keeps 100% of gear stats &amp; Set Bonuses</span>
+            ${curChroma.fxName ? `<span class="livery-insp-pill fx">✦ ${escapeHtml(curChroma.fxName)}</span>` : ''}
+          </div>
+        `;
+        return;
+      }
       const tabSlotMap = {
         suit: { slot: 'suit', item: pal.suit },
         head: { slot: 'headgear', item: pal.headgear },
@@ -802,6 +875,75 @@ export function createLiveryWorkshopController({
         </div>
         ${pills || pwr ? `<div class="livery-insp-deltas">${pills}${pwr}</div>` : ''}
       `;
+      return;
+    }
+
+    // Specialized clean inspector mode for Color Finishes & Animated Coatings (v229)
+    if (activeTarget.slot === 'chroma') {
+      const chroma = getGearChroma(activeTarget.item.id);
+      const tierMeta = CHROMA_TIERS[chroma.tier] || CHROMA_TIERS.standard;
+      const unlocks = getCurrentLiveryUnlocks();
+      const book = loadCareerLogbook();
+      const bal = Math.max(0, Math.round(Number(book?.doubloons) || 0));
+      const owned = unlocks.dyes?.has(chroma.id) || chroma.id === 'none';
+      const isEquippedNow = (activeRigLivery.dyeId || 'none') === chroma.id;
+      const eligible = isChromaExclusiveEligible(chroma, unlocks.stats);
+      const canAfford = bal >= chroma.cost;
+      const stateKey = isEquippedNow ? 'equipped' : owned ? 'same' : !eligible ? 'downgrade' : canAfford ? 'upgrade' : 'tradeoff';
+      const verdictTxt = isEquippedNow
+        ? '✓ ACTIVE'
+        : owned
+          ? 'OWNED'
+          : !eligible
+            ? '🔒 EXCLUSIVE LOCKED'
+            : `🪙 ${chroma.cost} DOUBLOONS`;
+
+      let actHtml = '';
+      if (!hoveredGear && pinnedInspect && !isEquippedNow) {
+        if (owned) {
+          actHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-apply-chroma">🎨 Apply</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Close preview">✕</button>`;
+        } else if (eligible && canAfford) {
+          actHtml = `<button type="button" class="btn tiny primary livery-insp-act" id="btn-insp-buy-chroma">🪙 Buy &amp; Apply (${chroma.cost})</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Revert preview">↺</button>`;
+        } else {
+          actHtml = `<button type="button" class="btn tiny secondary livery-insp-act" id="btn-insp-test-chroma">🧪 Test</button><button type="button" class="btn tiny ghost livery-insp-act" id="btn-insp-clear" aria-label="Revert preview">↺</button>`;
+        }
+      }
+
+      liveryInspectorBarEl.dataset.state = stateKey;
+      liveryInspectorBarEl.innerHTML = `
+        <div class="livery-insp-row">
+          <span class="livery-insp-kicker" style="color:${tierMeta.color}">${escapeHtml(tierMeta.label)}</span>
+          <strong class="livery-insp-name">${escapeHtml(chroma.name)}</strong>
+          <span class="livery-insp-verdict verdict-${stateKey}">${verdictTxt}</span>
+          ${!owned && !eligible && chroma.requirementHint ? `<span class="livery-insp-vs">${escapeHtml(chroma.requirementHint)}</span>` : ''}
+          ${!owned && eligible && !canAfford ? `<span class="livery-insp-vs">Need <strong>${chroma.cost - bal} 🪙</strong> more</span>` : ''}
+          ${actHtml ? `<span class="livery-insp-actions">${actHtml}</span>` : ''}
+        </div>
+        <div class="livery-insp-deltas">
+          <span class="livery-insp-pill neutral">Keeps 100% of gear stats &amp; Set Bonuses</span>
+          ${chroma.fxName ? `<span class="livery-insp-pill fx">✦ ${escapeHtml(chroma.fxName)}</span>` : `<span class="livery-insp-note">${escapeHtml(chroma.desc)}</span>`}
+        </div>
+      `;
+      liveryInspectorBarEl.querySelector('#btn-insp-apply-chroma')?.addEventListener('click', () => {
+        updateActiveLiveryField(
+          { dyeId: chroma.id },
+          { slot: 'chroma', itemMeta: { id: chroma.id, name: chroma.name, tier: chroma.exclusive ? 'mythic' : chroma.animated ? 'epic' : 'rare' } }
+        );
+      });
+      liveryInspectorBarEl.querySelector('#btn-insp-buy-chroma')?.addEventListener('click', () => {
+        purchaseAndApplyChroma(chroma.id);
+      });
+      liveryInspectorBarEl.querySelector('#btn-insp-test-chroma')?.addEventListener('click', () => {
+        startFieldTestDive({
+          trialLivery: { ...activeRigLivery, dyeId: chroma.id },
+          trialLabel: `🎨 ${chroma.name}`,
+        });
+      });
+      liveryInspectorBarEl.querySelector('#btn-insp-clear')?.addEventListener('click', () => {
+        pinnedInspect = null;
+        lockedTryOn = null;
+        renderLiveryWorkshopModal();
+      });
       return;
     }
 
@@ -930,7 +1072,7 @@ export function createLiveryWorkshopController({
     const prevTuningCtx = getWorkshopTuningCtx(workshopTuningMode);
     const prevLivery = { ...activeRigLivery };
     const prevPerf = computeRigPerformanceProfile(prevLivery, prevTuningCtx);
-    const preImpact = slot && slot !== 'all' && itemMeta?.id
+    const preImpact = slot && slot !== 'all' && slot !== 'chroma' && itemMeta?.id
       ? evaluateLootUpgradeImpact(prevLivery, slot, itemMeta.id, prevTuningCtx)
       : null;
     const unlocks = getCurrentLiveryUnlocks();
@@ -943,17 +1085,27 @@ export function createLiveryWorkshopController({
       lastEquipFlash = null;
     }
     if (slot && slot !== 'all' && itemMeta?.id) {
-      const entry = getGearItemBySlot(slot, itemMeta.id);
-      pinnedInspect = {
-        slot,
-        field: entry?.field || Object.keys(patchObj)[0] || '',
-        item: entry?.item || itemMeta,
-        unlocked: true,
-        justEquipped: true,
-        replacedName: preImpact?.replacedItemName || '',
-        impact: preImpact,
-      };
-      markEntrySeen(`${slot}:${itemMeta.id}`);
+      if (slot === 'chroma') {
+        pinnedInspect = {
+          slot: 'chroma',
+          field: 'dyeId',
+          item: getGearChroma(itemMeta.id),
+          unlocked: true,
+          justEquipped: true,
+        };
+      } else {
+        const entry = getGearItemBySlot(slot, itemMeta.id);
+        pinnedInspect = {
+          slot,
+          field: entry?.field || Object.keys(patchObj)[0] || '',
+          item: entry?.item || itemMeta,
+          unlocked: true,
+          justEquipped: true,
+          replacedName: preImpact?.replacedItemName || '',
+          impact: preImpact,
+        };
+        markEntrySeen(`${slot}:${itemMeta.id}`);
+      }
     } else {
       pinnedInspect = null;
     }
@@ -1947,6 +2099,104 @@ export function createLiveryWorkshopController({
       _bindGridHandlers(liveryPatchGridEl, visiblePatches, 'patch', 'patchId', unlocks.patches);
     }
 
+    // Salvage Doubloons Wallet & Gear Color / Animated Coating Foundry (v229)
+    const careerBook = loadCareerLogbook();
+    const doubloonsBal = Math.max(0, Math.round(Number(careerBook?.doubloons) || 0));
+    if (liveryWalletPillEl) {
+      liveryWalletPillEl.textContent = `🪙 ${doubloonsBal.toLocaleString()}`;
+    }
+    const activeDyeId = activeRigLivery.dyeId || 'none';
+    const renderChromaCard = (ch) => {
+      const owned = unlocks.dyes?.has(ch.id) || ch.id === 'none';
+      const selected = activeDyeId === ch.id;
+      const eligible = isChromaExclusiveEligible(ch, unlocks.stats);
+      const canAfford = doubloonsBal >= ch.cost;
+      const isInspected = Boolean(pinnedInspect && !pinnedInspect.justEquipped && pinnedInspect.slot === 'chroma' && pinnedInspect.item?.id === ch.id);
+      const [c0, c1, c2] = ch.swatch || ['#1e293b', '#0f172a', '#38bdf8'];
+      const chipStyle = `background: linear-gradient(135deg, ${c0} 0%, ${c1} 54%, ${c2} 100%);`;
+      const chipGlyph = ch.animated ? '✦' : (!owned && !eligible ? '🔒' : '');
+      const tierBadge = ch.tier === 'rare'
+        ? `<span class="livery-chroma-tier tier-rare">RARE</span>`
+        : ch.tier === 'animated'
+          ? `<span class="livery-chroma-tier tier-animated">✦ ANIMATED</span>`
+          : ch.tier === 'exclusive'
+            ? `<span class="livery-chroma-tier tier-exclusive">★ EXCLUSIVE</span>`
+            : '';
+      const priceTag = selected
+        ? `<span class="livery-chroma-price is-active">✓ Active</span>`
+        : owned
+          ? `<span class="livery-chroma-price is-owned">Owned</span>`
+          : !eligible
+            ? `<span class="livery-chroma-price is-locked">🔒 🪙 ${ch.cost}</span>`
+            : `<span class="livery-chroma-price${canAfford ? ' is-affordable' : ' is-short'}">🪙 ${ch.cost}</span>`;
+      const subLine = ch.fxName
+        ? `<span class="livery-power-badge">✦ ${escapeHtml(ch.fxName)}</span>`
+        : '';
+      const metaLine = !owned && !eligible && ch.requirementHint
+        ? `<span class="livery-swatch-meta">🔒 ${escapeHtml(ch.requirementHint)}</span>`
+        : `<span class="livery-swatch-meta">${escapeHtml(ch.desc)}</span>`;
+      return `<button type="button" class="livery-swatch-btn livery-chroma-card chroma-${ch.tier}${selected ? ' active' : ''}${owned ? '' : ' locked'}${isInspected ? ' inspecting' : ''}${ch.animated ? ' has-fx' : ''}" data-chroma-id="${ch.id}" data-owned="${owned ? '1' : '0'}" title="${escapeHtml(`${ch.name} — ${ch.desc}`)}" role="radio" aria-checked="${selected}">
+        <span class="livery-swatch-chip${ch.animated ? ' chroma-anim-chip' : ''}" style="${chipStyle}" aria-hidden="true">${chipGlyph}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-swatch-top">
+            <span class="livery-swatch-name">${escapeHtml(ch.name)}</span>
+            ${tierBadge}
+            ${priceTag}
+          </span>
+          ${subLine}
+          ${metaLine}
+        </span>
+      </button>`;
+    };
+    const bindChromaGrid = (gridEl) => {
+      if (!gridEl) return;
+      gridEl.onmouseleave = () => {
+        if (hoveredGear?.slot === 'chroma') {
+          hoveredGear = null;
+          renderInspectorBar();
+          renderLiveryPreviewFrame(performance.now() * 0.001);
+        }
+      };
+      gridEl.querySelectorAll('button[data-chroma-id]').forEach((btn) => {
+        const cid = btn.getAttribute('data-chroma-id');
+        const ch = getGearChroma(cid);
+        if (!ch) return;
+        const owned = unlocks.dyes?.has(ch.id) || ch.id === 'none';
+        const enterPrev = () => {
+          hoveredGear = { slot: 'chroma', field: 'dyeId', item: ch, unlocked: owned };
+          renderInspectorBar();
+          renderLiveryPreviewFrame(performance.now() * 0.001);
+        };
+        btn.addEventListener('mouseenter', enterPrev);
+        btn.addEventListener('focus', enterPrev);
+        btn.addEventListener('click', () => {
+          hoveredGear = null;
+          if (owned) {
+            updateActiveLiveryField(
+              { dyeId: ch.id },
+              { slot: 'chroma', itemMeta: { id: ch.id, name: ch.name, tier: ch.exclusive ? 'mythic' : ch.animated ? 'epic' : 'rare' } }
+            );
+          } else {
+            // Safe 2-step purchase: 1st tap previews live on diver & shows 🪙 Buy & Apply right in the Sticky Inspector!
+            lockedTryOn = null;
+            pinnedInspect = { slot: 'chroma', field: 'dyeId', item: ch, unlocked: false, justEquipped: false };
+            triggerEquipAnimation('chroma', { id: ch.id, name: ch.name, tier: ch.exclusive ? 'mythic' : ch.animated ? 'epic' : 'rare' }, { isPreview: true });
+            renderLiveryWorkshopModal();
+          }
+        });
+      });
+    };
+    const baseChromas = GEAR_CHROMA_FINISHES.filter((c) => !c.animated);
+    const animChromas = GEAR_CHROMA_FINISHES.filter((c) => c.animated);
+    if (liveryChromaGridEl) {
+      liveryChromaGridEl.innerHTML = baseChromas.map(renderChromaCard).join('');
+      bindChromaGrid(liveryChromaGridEl);
+    }
+    if (liveryChromaAnimGridEl) {
+      liveryChromaAnimGridEl.innerHTML = animChromas.map(renderChromaCard).join('');
+      bindChromaGrid(liveryChromaAnimGridEl);
+    }
+
     // Clear one-shot CSS equip-pop flag after render so only the freshly equipped card pops
     justEquippedKey = '';
 
@@ -2007,6 +2257,9 @@ export function createLiveryWorkshopController({
       const tid = btn.getAttribute('data-livery-tab');
       if (tid) setLiveryActiveTab(tid);
     });
+  });
+  liveryWalletPillEl?.addEventListener('click', () => {
+    setLiveryActiveTab('chroma');
   });
   liveryEnvTabsEl?.querySelectorAll?.('button[data-livery-env]')?.forEach?.((btn) => {
     btn.addEventListener('click', () => {

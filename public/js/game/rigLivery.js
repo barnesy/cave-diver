@@ -9,6 +9,11 @@ import {
   drawArticulatedDiverLeg,
   drawDiverArmAndTorch,
 } from './artSprites.js';
+import {
+  applyChromaToPalette,
+  isValidGearChromaId,
+  getGearChroma,
+} from './gearChroma.js';
 
 function _hasTrophyRelic(stats, relicId) {
   const ids = stats?.artifactIds;
@@ -1383,6 +1388,7 @@ const DEFAULT_MODULAR_IDS = Object.freeze({
   trimId: 'suit-default',
   tankId: 'al80-silver',
   visorId: 'clear-cyan',
+  dyeId: 'none',
 });
 
 const SUIT_BY_ID = new Map(SUIT_LIVERIES.map((s) => [s.id, s]));
@@ -1873,7 +1879,7 @@ export function resolveDiverLiveryPalette(livery = null) {
   const setSynergy = evaluateGearSetSynergy(livery).active;
   const wakeProfile = resolveGearWakeProfile(livery);
 
-  return {
+  const basePalette = {
     suit,
     torch,
     patch,
@@ -1905,6 +1911,7 @@ export function resolveDiverLiveryPalette(livery = null) {
     setSynergy,
     wakeProfile,
   };
+  return applyChromaToPalette(basePalette, livery?.dyeId);
 }
 
 /**
@@ -1979,8 +1986,14 @@ export function computeUnlockedLiveries(logbook = null, wreckLevelIds = null) {
   for (const tk of TANK_FINISHES) if (tk.isUnlocked(stats) || foundGearIds.has(`tank:${tk.id}`)) tanks.add(tk.id);
   const visors = new Set();
   for (const vs of VISOR_TINTS) if (vs.isUnlocked(stats) || foundGearIds.has(`visor:${vs.id}`)) visors.add(vs.id);
+  const dyes = new Set(['none']);
+  if (Array.isArray(logbook?.ownedDyes)) {
+    for (const did of logbook.ownedDyes) {
+      if (isValidGearChromaId(did)) dyes.add(did);
+    }
+  }
 
-  return { stats, suits, torches, patches, headgears, trims, tanks, visors };
+  return { stats, suits, torches, patches, headgears, trims, tanks, visors, dyes };
 }
 
 /**
@@ -2065,6 +2078,7 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   let trimId = typeof raw?.trimId === 'string' && TRIM_BY_ID.has(raw.trimId) ? raw.trimId : DEFAULT_MODULAR_IDS.trimId;
   let tankId = typeof raw?.tankId === 'string' && TANK_BY_ID.has(raw.tankId) ? raw.tankId : DEFAULT_MODULAR_IDS.tankId;
   let visorId = typeof raw?.visorId === 'string' && VISOR_BY_ID.has(raw.visorId) ? raw.visorId : DEFAULT_MODULAR_IDS.visorId;
+  let dyeId = typeof raw?.dyeId === 'string' && isValidGearChromaId(raw.dyeId) ? raw.dyeId : DEFAULT_MODULAR_IDS.dyeId;
 
   if (unlocked) {
     if (unlocked.suits && !unlocked.suits.has(suitId)) suitId = DEFAULT_RIG_LIVERY.suitId;
@@ -2074,6 +2088,7 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
     if (unlocked.trims && !unlocked.trims.has(trimId)) trimId = DEFAULT_MODULAR_IDS.trimId;
     if (unlocked.tanks && !unlocked.tanks.has(tankId)) tankId = DEFAULT_MODULAR_IDS.tankId;
     if (unlocked.visors && !unlocked.visors.has(visorId)) visorId = DEFAULT_MODULAR_IDS.visorId;
+    if (unlocked.dyes && !unlocked.dyes.has(dyeId)) dyeId = DEFAULT_MODULAR_IDS.dyeId;
   }
 
   const out = { suitId, torchId, patchId };
@@ -2081,6 +2096,7 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   if (trimId !== DEFAULT_MODULAR_IDS.trimId) out.trimId = trimId;
   if (tankId !== DEFAULT_MODULAR_IDS.tankId) out.tankId = tankId;
   if (visorId !== DEFAULT_MODULAR_IDS.visorId) out.visorId = visorId;
+  if (dyeId !== DEFAULT_MODULAR_IDS.dyeId) out.dyeId = dyeId;
   return out;
 }
 
@@ -2093,7 +2109,8 @@ export function isDefaultRigLivery(livery) {
     (livery.headgearId || DEFAULT_MODULAR_IDS.headgearId) === DEFAULT_MODULAR_IDS.headgearId &&
     (livery.trimId || DEFAULT_MODULAR_IDS.trimId) === DEFAULT_MODULAR_IDS.trimId &&
     (livery.tankId || DEFAULT_MODULAR_IDS.tankId) === DEFAULT_MODULAR_IDS.tankId &&
-    (livery.visorId || DEFAULT_MODULAR_IDS.visorId) === DEFAULT_MODULAR_IDS.visorId
+    (livery.visorId || DEFAULT_MODULAR_IDS.visorId) === DEFAULT_MODULAR_IDS.visorId &&
+    (livery.dyeId || DEFAULT_MODULAR_IDS.dyeId) === DEFAULT_MODULAR_IDS.dyeId
   );
 }
 
@@ -2179,6 +2196,9 @@ function _getSlotPreviewAnchor(slot, sx, sy, scale) {
   }
   if (slot === 'dpv') {
     return { ax: sx + u * 1.15, ay: sy + u * 0.24, rx: u * 0.62, ry: u * 0.48, shape: 'circle', label: 'DPV SCOOTER', dirX: 1, dirY: 1 };
+  }
+  if (slot === 'chroma') {
+    return { ax: sx - 0.16 * scale, ay: sy, rx: scale * 0.86, ry: scale * 0.42, shape: 'capsule', label: 'COLOR COAT', dirX: -1, dirY: -1 };
   }
   return { ax: sx - 0.12 * scale, ay: sy, rx: scale * 0.96, ry: scale * 0.48, shape: 'capsule', label: 'FULL RIG', dirX: 1, dirY: -1 };
 }
@@ -2367,8 +2387,8 @@ function _drawEquipOverlayFx(ctx, sx, sy, scale, equipFx, w = 0, h = 0, timeSec 
       ctx.stroke();
     }
 
-    // Full-body hydro-seal sweep wave for Drysuit, Trim, or Full Kit equip
-    if (slot === 'suit' || slot === 'trim' || slot === 'all') {
+    // Full-body hydro-seal sweep wave for Drysuit, Trim, Chroma Finish, or Full Kit equip
+    if (slot === 'suit' || slot === 'trim' || slot === 'chroma' || slot === 'all') {
       const sweepX = sx + 0.75 * scale - bt * (2.35 * scale);
       const waveGrad = ctx.createLinearGradient(sweepX - scale * 0.28, sy, sweepX + scale * 0.28, sy);
       waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
@@ -2832,7 +2852,7 @@ export function drawLiveryPreview(
     ctx.save();
     ctx.globalAlpha = pillAlpha;
     ctx.font = '800 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-    const txt = `⚡ EQUIPPED · ${equipFx.itemName.toUpperCase()}`;
+    const txt = `${equipFx.isPreview ? '👁 PREVIEW' : '⚡ EQUIPPED'} · ${equipFx.itemName.toUpperCase()}`;
     const tw = ctx.measureText(txt).width + 18;
     ctx.fillStyle = 'rgba(7, 22, 42, 0.88)';
     ctx.strokeStyle = equipFx.color || '#38bdf8';
@@ -2870,7 +2890,8 @@ export function drawLiveryPreview(
   ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
   ctx.textAlign = 'right';
-  const specSummary = `${suit.name} · ${headgear.name} · ${tank.name} · ${torch.shortLabel}${patch.id !== 'none' ? ` ${patch.icon}` : ''}`;
+  const chromaTag = pal.chroma && pal.chroma.id !== 'none' ? ` · 🎨 ${pal.chroma.name}` : '';
+  const specSummary = `${suit.name} · ${headgear.name} · ${tank.name} · ${torch.shortLabel}${patch.id !== 'none' ? ` ${patch.icon}` : ''}${chromaTag}`;
   ctx.fillText(specSummary, w - 12, h - 10);
   ctx.restore();
 }

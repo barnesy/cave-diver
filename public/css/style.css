@@ -12773,6 +12773,135 @@ summary,
   }
 }
 
+/* ========================================================================
+   v229: Salvage Doubloons Currency & Gear Color / Animated Coating Foundry
+   ======================================================================== */
+.livery-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.livery-wallet-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.48);
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.42), rgba(15, 23, 42, 0.88));
+  color: #fef08a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s ease, transform 0.12s ease, background 0.14s ease;
+}
+.livery-wallet-pill:hover {
+  border-color: rgba(253, 224, 71, 0.85);
+  background: linear-gradient(135deg, rgba(133, 77, 14, 0.56), rgba(15, 23, 42, 0.92));
+  transform: translateY(-1px);
+}
+#livery-cat-tabs.livery-cat-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  #livery-cat-tabs.livery-cat-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  #livery-cat-tabs.livery-cat-tabs .livery-cat-tab {
+    flex: 1 1 calc(33% - 5px);
+    font-size: 0.69rem;
+    padding: 6px 4px;
+  }
+}
+.livery-chroma-note {
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+.livery-chroma-tier {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.livery-chroma-tier.tier-rare {
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(12, 74, 110, 0.36);
+}
+.livery-chroma-tier.tier-animated {
+  color: #e9d5ff;
+  border-color: rgba(192, 132, 252, 0.48);
+  background: rgba(88, 28, 135, 0.36);
+}
+.livery-chroma-tier.tier-exclusive {
+  color: #fef08a;
+  border-color: rgba(250, 204, 21, 0.55);
+  background: rgba(113, 63, 18, 0.42);
+}
+.livery-chroma-price {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.livery-chroma-price.is-active {
+  color: #7dd3fc;
+  background: rgba(8, 47, 73, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+}
+.livery-chroma-price.is-owned {
+  color: #6ee7b7;
+  background: rgba(6, 78, 59, 0.36);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.livery-chroma-price.is-affordable {
+  color: #fef08a;
+  background: rgba(113, 63, 18, 0.45);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+}
+.livery-chroma-price.is-short {
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+.livery-chroma-price.is-locked {
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.28);
+  border: 1px solid rgba(248, 113, 113, 0.36);
+}
+.livery-chroma-card.chroma-exclusive {
+  border-color: rgba(250, 204, 21, 0.24);
+}
+.livery-chroma-card.chroma-animated {
+  border-color: rgba(192, 132, 252, 0.24);
+}
+.chroma-anim-chip {
+  animation: chromaChipPulse 2.8s ease-in-out infinite;
+}
+@keyframes chromaChipPulse {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.22) saturate(1.25); }
+}
+
+
 
 
 

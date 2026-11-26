@@ -12405,3 +12405,114 @@ test('v228 Gear Loadout Inspector, Trim Impact Resolution & Avatar Slot Spotligh
   assert.ok(calls.some((t) => t.includes('VISOR LENS · TEST VISOR')), 'Blueprint callout pin must render slot + item name during equip spotlight');
   assert.ok(calls.some((t) => t.includes('PREVIEW · INSPECT TANK')), 'Blueprint callout pin must render during live hover/inspect spotlight');
 });
+
+test('v229 Salvage Doubloons Currency & Gear Color / Animated Coating Foundry', async () => {
+  const {
+    STARTER_DOUBLOONS,
+    GEAR_CHROMA_FINISHES,
+    getGearChroma,
+    isChromaExclusiveEligible,
+  } = await import('../public/js/game/gearChroma.js');
+  const {
+    createEmptyLogbook,
+    normalizeCareerLogbook,
+    mergeCareerLogbooks,
+    recordDiveInLogbook,
+    awardDoubloonsInLogbook,
+    purchaseGearChromaInLogbook,
+  } = await import('../public/js/game/logbookModel.js');
+  const {
+    DEFAULT_RIG_LIVERY,
+    resolveDiverLiveryPalette,
+    computeUnlockedLiveries,
+    sanitizeRigLivery,
+    drawLiveryPreview,
+  } = await import('../public/js/game/rigLivery.js');
+  const { computeRigPerformanceProfile } = await import('../public/js/game/gearStats.js');
+
+  // 1. Catalog spans standard, rare, animated combos & exclusive coatings
+  assert.ok(GEAR_CHROMA_FINISHES.length >= 15, 'Should offer rich curated color & animated coating catalog');
+  for (const tier of ['default', 'standard', 'rare', 'animated', 'exclusive']) {
+    assert.ok(GEAR_CHROMA_FINISHES.some((c) => c.tier === tier), `Missing chroma tier ${tier}`);
+  }
+
+  // 2. Starter wallet, dive payout, chest bonus, legacy retroactive credit & cloud merge
+  const fresh = createEmptyLogbook();
+  assert.equal(fresh.doubloons, STARTER_DOUBLOONS);
+  const afterClear = recordDiveInLogbook(fresh, {
+    levelId: 'cenote-1',
+    success: true,
+    score: 2600,
+    grade: 'S',
+    maxDepthM: 52,
+    diveTimeSec: 120,
+    difficulty: 'standard',
+  });
+  assert.ok(afterClear.doubloons > fresh.doubloons + 200, `First S-grade clear should award substantial Doubloons (got ${afterClear.doubloons})`);
+  const afterChest = awardDoubloonsInLogbook(afterClear, 90).book;
+  assert.equal(afterChest.doubloons, afterClear.doubloons + 90);
+
+  // Legacy logbook without doubloons field receives fair retroactive career credit
+  const legacy = normalizeCareerLogbook({ totalDives: 5, cleared: { 'l1': { score: 1500, clears: 2 }, 'l2': { score: 1700, clears: 1 } } });
+  assert.ok(legacy.doubloons >= STARTER_DOUBLOONS + 350, `Legacy players must get fair retroactive Doubloons (got ${legacy.doubloons})`);
+
+  // 3. Purchase validation: blocks insufficient funds & unmet exclusive milestones, succeeds when eligible & funded
+  const tooExpensive = purchaseGearChromaInLogbook(fresh, 'anim-biolum-tide', { sitesCleared: 0 });
+  assert.equal(tooExpensive.ok, false);
+  assert.equal(tooExpensive.reason, 'insufficient-funds');
+
+  const funded = awardDoubloonsInLogbook(fresh, 2000).book;
+  const blockedExcl = purchaseGearChromaInLogbook(funded, 'excl-leviathan-void', { hardcoreClears: 0, bountiesClaimed: 0 });
+  assert.equal(blockedExcl.ok, false);
+  assert.equal(blockedExcl.reason, 'exclusive-locked');
+  assert.equal(isChromaExclusiveEligible(getGearChroma('excl-leviathan-void'), { hardcoreClears: 1 }), true);
+
+  const bought = purchaseGearChromaInLogbook(funded, 'excl-abyssal-prism', { bountiesClaimed: 1, deepestM: 125 });
+  assert.equal(bought.ok, true);
+  assert.equal(bought.reason, 'purchased');
+  assert.equal(bought.book.doubloons, funded.doubloons - 1150);
+  assert.ok(bought.book.ownedDyes.includes('excl-abyssal-prism'));
+
+  // Cloud merge preserves ownedDyes union & max wallet
+  const boughtOther = purchaseGearChromaInLogbook(funded, 'matte-graphite', {}).book;
+  const merged = mergeCareerLogbooks(bought.book, boughtOther);
+  assert.ok(merged.ownedDyes.includes('excl-abyssal-prism') && merged.ownedDyes.includes('matte-graphite'));
+
+  // 4. Purely cosmetic: transforms avatar palette & animated shaders while preserving 100% of gear stats
+  const unlocks = computeUnlockedLiveries(bought.book);
+  assert.ok(unlocks.dyes.has('excl-abyssal-prism'));
+  const coatedRig = sanitizeRigLivery({ ...DEFAULT_RIG_LIVERY, dyeId: 'excl-abyssal-prism' }, unlocks);
+  assert.equal(coatedRig.dyeId, 'excl-abyssal-prism');
+  const baseProf = computeRigPerformanceProfile(DEFAULT_RIG_LIVERY);
+  const coatedProf = computeRigPerformanceProfile(coatedRig);
+  assert.equal(coatedProf.swimSpeedMult, baseProf.swimSpeedMult);
+  assert.equal(coatedProf.gasBurnMult, baseProf.gasBurnMult);
+  assert.equal(coatedProf.bonusStartBar, baseProf.bonusStartBar);
+
+  const pal = resolveDiverLiveryPalette(coatedRig);
+  assert.equal(pal.suitFx, 'prism-shift');
+  assert.equal(pal.trimFx, 'selenite-prism');
+  assert.equal(pal.wakeProfile.prism, true);
+
+  // 5. All new animated coating shaders render cleanly in preview without errors
+  const grad = { addColorStop() {} };
+  const mockCtx = {
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, fill() {}, stroke() {}, fillRect() {}, rect() {},
+    roundRect() {}, arc() {}, ellipse() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {},
+    bezierCurveTo() {}, setLineDash() {},
+    createLinearGradient() { return grad; },
+    createRadialGradient() { return grad; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+    fillText() {},
+    globalAlpha: 1, globalCompositeOperation: 'source-over',
+    fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt', lineJoin: 'miter',
+    font: '', textAlign: 'left', textBaseline: 'alphabetic',
+  };
+  for (const dyeId of ['anim-aurora-frost', 'excl-abyssal-prism', 'excl-leviathan-void']) {
+    drawLiveryPreview(mockCtx, 640, 248, { ...DEFAULT_RIG_LIVERY, dyeId }, {
+      timeSec: 2.1,
+      equipFx: { slot: 'chroma', progress: 0.4, color: '#facc15', tier: 'mythic', itemName: dyeId },
+    });
+  }
+});

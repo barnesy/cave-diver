@@ -3,6 +3,15 @@
  * Pure helpers shared cleanly between browser UI and Node tests.
  */
 
+import {
+  STARTER_DOUBLOONS,
+  getGearChroma,
+  isValidGearChromaId,
+  isChromaExclusiveEligible,
+  computeDiveDoubloonPayout,
+  computeRetroactiveDoubloons,
+} from './gearChroma.js';
+
 const GRADE_RANK = { 'S+': 6, S: 5, A: 4, B: 3, C: 2, DNF: 1 };
 const DIFFICULTY_RANK = { guided: 1, standard: 2, hardcore: 3 };
 
@@ -41,6 +50,9 @@ export function createEmptyLogbook() {
     artifacts: {}, // artifactId -> { name, kind, siteId, siteName, lore, points, count, scale } (v168-v169 Trophy Museum Vault)
     pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
     foundGear: {}, // "slot:itemId" -> { foundAt, siteId, siteName } (v216 World-Found Sunken Gear Caches)
+    doubloons: STARTER_DOUBLOONS, // v229 Salvage Doubloons in-game currency for gear color finishes & animated coatings
+    lifetimeDoubloons: STARTER_DOUBLOONS,
+    ownedDyes: [], // purchased GEAR_CHROMA_FINISHES IDs
   };
 }
 
@@ -176,6 +188,19 @@ function normalizeBook(raw) {
         foundAt: Math.max(0, Math.round(Number(rec.foundAt) || Date.now())),
       };
     }
+  }
+  if (typeof raw.doubloons === 'number' && Number.isFinite(raw.doubloons)) {
+    base.doubloons = Math.max(0, Math.round(raw.doubloons));
+    base.lifetimeDoubloons = Math.max(base.doubloons, Math.round(Number(raw.lifetimeDoubloons) || base.doubloons));
+  } else {
+    const retro = computeRetroactiveDoubloons(base);
+    base.doubloons = retro;
+    base.lifetimeDoubloons = retro;
+  }
+  if (Array.isArray(raw.ownedDyes)) {
+    base.ownedDyes = Array.from(
+      new Set(raw.ownedDyes.filter((id) => typeof id === 'string' && id !== 'none' && isValidGearChromaId(id)))
+    ).slice(0, 48);
   }
   return base;
 }
@@ -390,6 +415,9 @@ export function mergeCareerLogbooks(rawA, rawB) {
   for (const gk of fgKeys) {
     out.foundGear[gk] = { ...(b.foundGear?.[gk] || {}), ...(a.foundGear?.[gk] || {}) };
   }
+  out.doubloons = Math.max(a.doubloons || 0, b.doubloons || 0);
+  out.lifetimeDoubloons = Math.max(out.doubloons, a.lifetimeDoubloons || 0, b.lifetimeDoubloons || 0);
+  out.ownedDyes = Array.from(new Set([...(a.ownedDyes || []), ...(b.ownedDyes || [])])).slice(0, 48);
 
   return out;
 }
@@ -491,6 +519,7 @@ export function recordDiveInLogbook(
     if (success && milestones.zeroSiltCaveClear) book.milestones.zeroSiltClears += 1;
   }
 
+  let isFirstClear = false;
   if (success && levelId) {
     book.deepestM = Math.max(book.deepestM, Math.round((Number(maxDepthM) || 0) * 10) / 10);
     const cleanScore = Math.max(0, Math.round(Number(score) || 0));
@@ -499,6 +528,7 @@ export function recordDiveInLogbook(
     if (cleanScore > book.bestScore) book.bestScore = cleanScore;
     const prev = book.cleared[levelId];
     if (!prev) {
+      isFirstClear = true;
       book.cleared[levelId] = {
         score: cleanScore,
         grade: grade || 'B',
@@ -520,7 +550,56 @@ export function recordDiveInLogbook(
       }
     }
   }
+  const payout = computeDiveDoubloonPayout({
+    success: Boolean(success && levelId),
+    isFirstClear,
+    grade: grade || 'B',
+    difficulty: normalizeDifficulty(difficulty) || 'standard',
+    maxDepthM,
+    diveTimeSec,
+  });
+  if (payout.total > 0) {
+    book.doubloons = Math.max(0, (book.doubloons || 0) + payout.total);
+    book.lifetimeDoubloons = Math.max(book.doubloons, (book.lifetimeDoubloons || 0) + payout.total);
+  }
   return book;
+}
+
+/**
+ * Award bonus Salvage Doubloons (e.g. from Sunken Treasure Chests, World Caches, or Bounties) (v229).
+ */
+export function awardDoubloonsInLogbook(rawBook, amount = 0) {
+  const book = normalizeBook(rawBook);
+  const add = Math.max(0, Math.round(Number(amount) || 0));
+  if (add > 0) {
+    book.doubloons = Math.max(0, (book.doubloons || 0) + add);
+    book.lifetimeDoubloons = Math.max(book.doubloons, (book.lifetimeDoubloons || 0) + add);
+  }
+  return { book, added: add };
+}
+
+/**
+ * Purchase a Gear Color Finish or Animated Coating with Salvage Doubloons (v229).
+ */
+export function purchaseGearChromaInLogbook(rawBook, dyeId, stats = null) {
+  const book = normalizeBook(rawBook);
+  if (!isValidGearChromaId(dyeId) || dyeId === 'none') {
+    return { ok: false, reason: 'invalid', book, chroma: null, cost: 0 };
+  }
+  const chroma = getGearChroma(dyeId);
+  if (book.ownedDyes.includes(chroma.id)) {
+    return { ok: true, reason: 'already-owned', book, chroma, cost: 0 };
+  }
+  if (!isChromaExclusiveEligible(chroma, stats)) {
+    return { ok: false, reason: 'exclusive-locked', book, chroma, cost: chroma.cost };
+  }
+  const cost = Math.max(0, Math.round(Number(chroma.cost) || 0));
+  if ((book.doubloons || 0) < cost) {
+    return { ok: false, reason: 'insufficient-funds', book, chroma, cost };
+  }
+  book.doubloons -= cost;
+  book.ownedDyes.push(chroma.id);
+  return { ok: true, reason: 'purchased', book, chroma, cost };
 }
 
 export function recordLoreDiscoveryInLogbook(rawBook, { kind, title, lore, siteName = '' } = {}) {
