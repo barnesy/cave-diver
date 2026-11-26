@@ -419,7 +419,7 @@ export function createSiteBrowserController({
       return `
       <button
         type="button"
-        class="level-card-btn ${isWreck ? 'is-wreck' : ''} ${isSelected ? 'active' : ''}"
+        class="level-card-btn ${isWreck ? 'is-wreck' : ''} ${isSelected ? 'active' : ''} ${siteLead ? 'has-lead' : ''}"
         data-level-id="${lvl.id}"
         role="option"
         aria-selected="${isSelected ? 'true' : 'false'}"

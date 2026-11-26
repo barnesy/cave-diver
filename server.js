@@ -69,6 +69,7 @@ const MIME_TYPES = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
 };
 
 function isVirtualInterface(name = '') {

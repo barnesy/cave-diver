@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=238',
+  mapRasterUrl: './assets/map-expedition.jpg?v=239',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -5006,7 +5006,7 @@ function setCoopDockExpanded(expanded) {
   lanSetupControls.classList.toggle('collapsed', !expanded);
   if (btnCoopDockToggle) {
     btnCoopDockToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    btnCoopDockToggle.textContent = expanded ? 'Hide ▴' : 'Join Code ▾';
+    btnCoopDockToggle.textContent = expanded ? 'Hide ▴' : 'Join ▾';
   }
 }
 btnCoopDockToggle?.addEventListener('click', () => {
