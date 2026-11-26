@@ -6725,7 +6725,7 @@ button.mode-badge:hover {
 /* Diver Gear Workshop & Custom Rig Livery Modal (v138) */
 .livery-modal-card {
   width: min(620px, calc(100vw - 24px));
-  max-height: min(90dvh, 780px);
+  max-height: min(92dvh, 820px);
 }
 .livery-preview-wrap {
   position: sticky;
@@ -6742,7 +6742,7 @@ button.mode-badge:hover {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 640 / 232;
+  aspect-ratio: 640 / 276;
 }
 .livery-section-label {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -13836,7 +13836,7 @@ summary,
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 580 / 164;
+  aspect-ratio: 580 / 204;
 }
 .gear-slot-scroll-body {
   flex: 1 1 auto;
