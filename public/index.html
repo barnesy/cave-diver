@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="225" />
+  <meta name="app-version" content="226" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=225" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=225" />
-  <link rel="stylesheet" href="./css/style.css?v=225" />
+  <link rel="icon" href="./icons/icon-192.png?v=226" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=226" />
+  <link rel="stylesheet" href="./css/style.css?v=226" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -23,7 +23,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=225" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=226" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">SYSTEM CHECK · PRE-DIVE SETUP</div>
       <h1 class="loader-title">CENOTE EL ABISMO</h1>
@@ -57,7 +57,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=225" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=226" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">TECHNO DIVE</div>
             <h1 class="menu-title">CENOTE EL ABISMO</h1>
@@ -79,120 +79,148 @@
               <span id="home-menu-update-dot" class="home-menu-update-dot" hidden></span>
             </button>
             <div id="home-menu-popover" class="home-menu-popover" role="menu" aria-label="Expedition Menu" hidden>
-              <div class="home-menu-section-lbl">ACCOUNT</div>
-              <div id="menu-identity-row" class="menu-name-row home-menu-callsign">
-                <label for="input-player-name">Diver Callsign <span id="callsign-count" class="callsign-count">0/16</span></label>
-                <input id="input-player-name" type="text" maxlength="16" placeholder="Enter callsign (max 16)" required autocomplete="off" />
-              </div>
-              <button
-                id="btn-github-account"
-                class="home-menu-item gh-account-pill gh-menu-account"
-                type="button"
-                role="menuitem"
-                title="Sign in with GitHub to sync stats via Private Gist &amp; submit issues"
-              >
-                <span class="gh-menu-account-left">
-                  <svg class="gh-mark-svg" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-                  </svg>
-                  <img id="gh-account-avatar" class="gh-account-avatar" alt="" hidden />
-                  <span id="gh-account-label" class="gh-account-label">GitHub</span>
-                </span>
-                <span class="gh-menu-account-right">
-                  <span id="gh-sync-dot" class="gh-sync-dot" hidden title="Cloud synced"></span>
-                  <span class="home-menu-chevron" aria-hidden="true">›</span>
-                </span>
-              </button>
-              <button
-                id="btn-open-reset-account"
-                class="home-menu-item danger-item"
-                type="button"
-                role="menuitem"
-                title="Erase career progress and start fresh like a new diver"
-              >
-                <span>🔄 Reset Career / Start Fresh</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <div class="home-menu-divider" role="separator"></div>
-              <div class="home-menu-section-lbl">EXPEDITIONS</div>
-              <button id="btn-open-leaderboard" class="home-menu-item" type="button" role="menuitem">
-                <span id="home-menu-lb-label">🏆 Leaderboard</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-open-logbook" class="home-menu-item" type="button" role="menuitem" title="View Career Certifications &amp; Site Mastery">
-                <span>🎖️ Diver Logbook</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-open-procedural" class="home-menu-item" type="button" role="menuitem" title="Generate an Infinite Seeded Cave Expedition (Uncharted Sump)">
-                <span>∞ Uncharted Sump</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-open-campaigns" class="home-menu-item" type="button" role="menuitem" title="Multi-Dive Expedition Campaigns with Repetitive Surface Intervals &amp; Patches">
-                <span>🗺️ Expedition Campaigns</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-open-drills" class="home-menu-item" type="button" role="menuitem" title="Timed Technical Rescue Drills (Silt-Out Line, Free-Flow Bailout, Buddy OOA &amp; Net Cut)">
-                <span>⚡ Rescue Drills</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-open-bounties" class="home-menu-item" type="button" role="menuitem" title="Dockside Wanted Bounty Posters — Deep-Water Folklore &amp; Rumored Waters">
-                <span>📜 Abyssal Bounties</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <div class="home-menu-divider" role="separator"></div>
-              <div class="home-menu-section-lbl">DIVE SETUP</div>
-              <button id="btn-home-open-setup" class="home-menu-item" type="button" role="menuitem" title="Configure Realism Mode, AI Dive Squad, Weather, Livery, Gas &amp; Drills">
-                <span>⚙️ Dive Setup &amp; Modifiers</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-home-open-livery" class="home-menu-item home-menu-livery-item" type="button" role="menuitem" title="Customize Drysuit Livery, Technical Torch Optics &amp; Milestone Patches">
+              <div class="home-menu-section-lbl">CORE</div>
+              <button id="btn-home-open-livery" class="home-menu-item home-menu-livery-item home-menu-priority" type="button" role="menuitem" title="Customize Drysuit Livery, Technical Torch Optics &amp; Milestone Patches">
                 <span class="home-menu-livery-label">🎨 Gear Workshop</span>
                 <span class="home-menu-livery-right">
                   <canvas id="home-avatar-canvas" class="home-menu-avatar-thumb" width="96" height="54" aria-hidden="true"></canvas>
                   <span class="home-menu-chevron" aria-hidden="true">›</span>
                 </span>
               </button>
-              <button id="btn-open-gas-planner" class="home-menu-item" type="button" role="menuitem" title="Blend Custom Trimix / Nitrox Bottom Gas (Dalton's Law MOD &amp; END)">
-                <span id="home-menu-gas-label">🧪 Gas Blender</span>
+              <button id="btn-open-logbook" class="home-menu-item home-menu-priority" type="button" role="menuitem" title="View Career Certifications &amp; Site Mastery">
+                <span>🎖️ Diver Logbook</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
               </button>
-              <button id="btn-open-challenge" class="home-menu-item" type="button" role="menuitem" title="Mix any Site + Mutator + Mode + Custom Gas &amp; Share a Challenge Link">
-                <span id="home-menu-sandbox-label">🎛️ Challenge Sandbox</span>
+              <button id="btn-open-leaderboard" class="home-menu-item home-menu-priority" type="button" role="menuitem">
+                <span id="home-menu-lb-label">🏆 Leaderboard</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
               </button>
-              <button id="btn-open-trench" class="home-menu-item" type="button" role="menuitem" title="Seeded Endless Extraction Descent — Extract &amp; Bank or Push Deeper for Higher Multipliers">
-                <span>🌊 Abyssal Trench</span>
+              <button id="btn-home-open-setup" class="home-menu-item home-menu-priority" type="button" role="menuitem" title="Configure Realism Mode, AI Dive Squad, Weather, Livery, Gas &amp; Drills">
+                <span>⚙️ Dive Setup &amp; Modifiers</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
               </button>
+
               <div class="home-menu-divider" role="separator"></div>
-              <div class="home-menu-section-lbl">PREFERENCES</div>
-              <button id="btn-menu-radio" class="home-menu-item radio-btn" type="button" role="menuitem" title="Cycle Chill Aquatic Radio">
-                📻 Music: Off
-              </button>
-              <button id="btn-open-audio-mixer" class="home-menu-item" type="button" role="menuitem" title="Spatial 3D Audio, Volume Sliders &amp; Mobile Haptics">
-                <span>🎛️ Audio &amp; Haptics</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-ghost-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Personal Best Ghost Diver">
-                👻 PB Ghost: On
-              </button>
-              <button id="btn-torch-stick-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Right Flashlight Aim Joystick">
-                🔦 Light Stick: On
-              </button>
-              <button id="btn-open-guide" class="home-menu-item" type="button" role="menuitem" title="Open Technical Dive Quick Guide">
-                📖 Dive Guide
-              </button>
-              <button id="btn-open-issue" class="home-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">
-                <span>🐛 Report Issue / Idea</span>
-                <span class="home-menu-chevron" aria-hidden="true">›</span>
-              </button>
-              <button id="btn-install-pwa" class="home-menu-item" type="button" role="menuitem" hidden>
-                📲 Install App
-              </button>
+              <details id="home-menu-more-modes" class="home-menu-disclosure">
+                <summary class="home-menu-disclosure-sum">
+                  <span>🧭 More Modes &amp; Tools</span>
+                  <span class="home-menu-disclosure-caret" aria-hidden="true">▾</span>
+                </summary>
+                <div class="home-menu-disclosure-body">
+                  <button
+                    id="btn-open-daily-calendar"
+                    class="home-menu-item home-daily-menu-item"
+                    type="button"
+                    role="menuitem"
+                    aria-haspopup="dialog"
+                    aria-controls="daily-calendar-modal"
+                    title="Open Daily Dive &amp; Archive Calendar"
+                  >
+                    <span class="home-daily-btn-label">📅 Daily Dive</span>
+                    <span class="home-menu-livery-right">
+                      <span id="home-daily-streak-badge" class="home-daily-streak-badge">🔥 0d</span>
+                      <span class="home-menu-chevron" aria-hidden="true">›</span>
+                    </span>
+                  </button>
+                  <button id="btn-open-trench" class="home-menu-item" type="button" role="menuitem" title="Seeded Endless Extraction Descent — Extract &amp; Bank or Push Deeper for Higher Multipliers">
+                    <span>🌊 Abyssal Trench</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-procedural" class="home-menu-item" type="button" role="menuitem" title="Generate an Infinite Seeded Cave Expedition (Uncharted Sump)">
+                    <span>∞ Uncharted Sump</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-campaigns" class="home-menu-item" type="button" role="menuitem" title="Multi-Dive Expedition Campaigns with Repetitive Surface Intervals &amp; Patches">
+                    <span>🗺️ Expedition Campaigns</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-drills" class="home-menu-item" type="button" role="menuitem" title="Timed Technical Rescue Drills (Silt-Out Line, Free-Flow Bailout, Buddy OOA &amp; Net Cut)">
+                    <span>⚡ Rescue Drills</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-bounties" class="home-menu-item" type="button" role="menuitem" title="Dockside Wanted Bounty Posters — Deep-Water Folklore &amp; Rumored Waters">
+                    <span>📜 Abyssal Bounties</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-gas-planner" class="home-menu-item" type="button" role="menuitem" title="Blend Custom Trimix / Nitrox Bottom Gas (Dalton's Law MOD &amp; END)">
+                    <span id="home-menu-gas-label">🧪 Gas Blender</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-open-challenge" class="home-menu-item" type="button" role="menuitem" title="Mix any Site + Mutator + Mode + Custom Gas &amp; Share a Challenge Link">
+                    <span id="home-menu-sandbox-label">🎛️ Challenge Sandbox</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </details>
+
+              <details id="home-menu-account-prefs" class="home-menu-disclosure">
+                <summary class="home-menu-disclosure-sum">
+                  <span>👤 Account &amp; Preferences</span>
+                  <span class="home-menu-disclosure-caret" aria-hidden="true">▾</span>
+                </summary>
+                <div class="home-menu-disclosure-body">
+                  <div id="menu-identity-row" class="menu-name-row home-menu-callsign">
+                    <label for="input-player-name">Diver Callsign <span id="callsign-count" class="callsign-count">0/16</span></label>
+                    <input id="input-player-name" type="text" maxlength="16" placeholder="Enter callsign (max 16)" required autocomplete="off" />
+                  </div>
+                  <button
+                    id="btn-github-account"
+                    class="home-menu-item gh-account-pill gh-menu-account"
+                    type="button"
+                    role="menuitem"
+                    title="Sign in with GitHub to sync stats via Private Gist &amp; submit issues"
+                  >
+                    <span class="gh-menu-account-left">
+                      <svg class="gh-mark-svg" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                      </svg>
+                      <img id="gh-account-avatar" class="gh-account-avatar" alt="" hidden />
+                      <span id="gh-account-label" class="gh-account-label">GitHub</span>
+                    </span>
+                    <span class="gh-menu-account-right">
+                      <span id="gh-sync-dot" class="gh-sync-dot" hidden title="Cloud synced"></span>
+                      <span class="home-menu-chevron" aria-hidden="true">›</span>
+                    </span>
+                  </button>
+                  <button id="btn-menu-radio" class="home-menu-item radio-btn" type="button" role="menuitem" title="Cycle Chill Aquatic Radio">
+                    📻 Music: Off
+                  </button>
+                  <button id="btn-open-audio-mixer" class="home-menu-item" type="button" role="menuitem" title="Spatial 3D Audio, Volume Sliders &amp; Mobile Haptics">
+                    <span>🎛️ Audio &amp; Haptics</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-ghost-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Personal Best Ghost Diver">
+                    👻 PB Ghost: On
+                  </button>
+                  <button id="btn-torch-stick-toggle" class="home-menu-item" type="button" role="menuitem" title="Toggle Right Flashlight Aim Joystick">
+                    🔦 Light Stick: On
+                  </button>
+                  <button id="btn-open-guide" class="home-menu-item" type="button" role="menuitem" title="Open Technical Dive Quick Guide">
+                    📖 Dive Guide
+                  </button>
+                  <button id="btn-open-issue" class="home-menu-item" type="button" role="menuitem" title="Report a Bug or Suggest a Feature on GitHub">
+                    <span>🐛 Report Issue / Idea</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button id="btn-install-pwa" class="home-menu-item" type="button" role="menuitem" hidden>
+                    📲 Install App
+                  </button>
+                  <button
+                    id="btn-open-reset-account"
+                    class="home-menu-item danger-item"
+                    type="button"
+                    role="menuitem"
+                    title="Erase career progress and start fresh like a new diver"
+                  >
+                    <span>🔄 Reset Career / Start Fresh</span>
+                    <span class="home-menu-chevron" aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </details>
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v225</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v226</button>
               </div>
             </div>
           </div>
@@ -261,32 +289,44 @@
         <div class="menu-actions menu-actions-primary">
           <button id="btn-play-solo" class="btn primary" type="button" disabled>DIVE · LEVEL 1</button>
         </div>
-        <div class="menu-actions menu-actions-secondary" aria-label="Dive Setup and Daily Dive">
+        <div id="menu-actions-core4" class="menu-actions menu-actions-secondary" aria-label="Gear Workshop, Logbook, Leaderboard, and Dive Setup">
+          <button
+            id="btn-home-quick-livery"
+            class="btn secondary home-action-btn home-core-btn"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="livery-modal"
+            title="Open Diver Gear Workshop (Suits, Relics, Sets &amp; Proving Grounds)"
+          >🎨 Gear Workshop</button>
+          <button
+            id="btn-home-quick-logbook"
+            class="btn secondary home-action-btn home-core-btn"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="modal-logbook"
+            title="Open Diver Logbook (Career Certifications, Site Mastery &amp; Field Guide)"
+          >🎖️ Logbook</button>
+          <button
+            id="btn-home-quick-leaderboard"
+            class="btn secondary home-action-btn home-core-btn"
+            type="button"
+            aria-controls="leaderboard-panel"
+            title="Open Expedition Leaderboard"
+          >🏆 Leaderboard</button>
           <button
             id="btn-setup-drawer"
-            class="btn secondary setup-drawer-toggle home-action-btn"
+            class="btn secondary setup-drawer-toggle home-action-btn home-core-btn"
             type="button"
             aria-haspopup="dialog"
             aria-expanded="false"
             aria-controls="dive-setup-modal"
-            title="Open Dive Setup Panel (Tech Gear, Realism Mode, AI Buddy, Gas Blender, Drills, Sandbox &amp; Endless Sump)"
+            title="Open Dive Setup &amp; Modifiers (Realism Mode, AI Squad, Tech Gear, Weather &amp; Gas)"
           >⚙️ Dive Setup</button>
-          <button
-            id="btn-open-daily-calendar"
-            class="btn secondary home-daily-btn home-action-btn"
-            type="button"
-            aria-haspopup="dialog"
-            aria-controls="daily-calendar-modal"
-            title="Open Daily Dive &amp; Archive Calendar"
-          >
-            <span class="home-daily-btn-label">📅 Daily Dive</span>
-            <span id="home-daily-streak-badge" class="home-daily-streak-badge">🔥 0d</span>
-          </button>
         </div>
 
         <div id="lan-setup-controls" class="dive-coop-dock collapsed">
           <div class="dive-coop-meta">
-            <span>Starts solo · Up to 4 co-divers can drop in</span>
+            <span class="dive-coop-caption">Co-op · Drop-in squad</span>
             <div class="dive-coop-meta-right">
               <span id="lan-conn-badge" class="lan-conn-badge">○ Connecting...</span>
               <button id="btn-coop-dock-toggle" class="coop-dock-toggle" type="button" aria-expanded="false" aria-controls="lan-coop-body">Join Code ▾</button>
@@ -1717,120 +1757,120 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/util/common.js": "./js/util/common.js?v=225",
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=225",
-        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=225",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=225",
-        "./js/game/audio.js": "./js/game/audio.js?v=225",
-        "./js/game/collision.js": "./js/game/collision.js?v=225",
-        "./js/game/input.js": "./js/game/input.js?v=225",
-        "./js/game/hud.js": "./js/game/hud.js?v=225",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=225",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=225",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=225",
-        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=225",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=225",
-        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=225",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=225",
-        "./js/game/weather.js": "./js/game/weather.js?v=225",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=225",
-        "./js/game/gearStats.js": "./js/game/gearStats.js?v=225",
-        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=225",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=225",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=225",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=225",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=225",
-        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=225",
-        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=225",
-        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=225",
-        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=225",
-        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=225",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=225",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=225",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=225",
-        "./js/ui/replayController.js": "./js/ui/replayController.js?v=225",
-        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=225",
-        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=225",
-        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=225",
-        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=225",
-        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=225",
-        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=225",
-        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=225",
-        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=225",
-        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=225",
-        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=225",
-        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=225",
-        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=225",
-        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=225",
-        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=225",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=225",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=225",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=225",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=225",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=225",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=225",
-        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=225",
-        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=225",
-        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=225",
-        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=225",
-        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=225",
-        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=225",
-        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=225",
-        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=225",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=225",
-        "./js/game/silt.js": "./js/game/silt.js?v=225",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=225",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=225",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=225",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=225",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=225",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=225",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=225",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=225",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=225",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=225",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=225",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=225",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=225",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=225",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=225",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=225",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=225",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=225",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=225",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=225",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=225",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=225",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=225",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=225",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=225",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=225",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=225",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=225",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=225",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=225",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=225",
-        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=225",
-        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=225",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=225",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=225",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=225",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=225",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=225",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=225",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=225",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=225",
-        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=225",
-        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=225",
-        "./js/levels/index.js": "./js/levels/index.js?v=225",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=225",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=225",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=225",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=225",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=225"
+        "./js/util/common.js": "./js/util/common.js?v=226",
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=226",
+        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=226",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=226",
+        "./js/game/audio.js": "./js/game/audio.js?v=226",
+        "./js/game/collision.js": "./js/game/collision.js?v=226",
+        "./js/game/input.js": "./js/game/input.js?v=226",
+        "./js/game/hud.js": "./js/game/hud.js?v=226",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=226",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=226",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=226",
+        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=226",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=226",
+        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=226",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=226",
+        "./js/game/weather.js": "./js/game/weather.js?v=226",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=226",
+        "./js/game/gearStats.js": "./js/game/gearStats.js?v=226",
+        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=226",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=226",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=226",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=226",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=226",
+        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=226",
+        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=226",
+        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=226",
+        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=226",
+        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=226",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=226",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=226",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=226",
+        "./js/ui/replayController.js": "./js/ui/replayController.js?v=226",
+        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=226",
+        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=226",
+        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=226",
+        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=226",
+        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=226",
+        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=226",
+        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=226",
+        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=226",
+        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=226",
+        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=226",
+        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=226",
+        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=226",
+        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=226",
+        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=226",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=226",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=226",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=226",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=226",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=226",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=226",
+        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=226",
+        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=226",
+        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=226",
+        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=226",
+        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=226",
+        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=226",
+        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=226",
+        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=226",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=226",
+        "./js/game/silt.js": "./js/game/silt.js?v=226",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=226",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=226",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=226",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=226",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=226",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=226",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=226",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=226",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=226",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=226",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=226",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=226",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=226",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=226",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=226",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=226",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=226",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=226",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=226",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=226",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=226",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=226",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=226",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=226",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=226",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=226",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=226",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=226",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=226",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=226",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=226",
+        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=226",
+        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=226",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=226",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=226",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=226",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=226",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=226",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=226",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=226",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=226",
+        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=226",
+        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=226",
+        "./js/levels/index.js": "./js/levels/index.js?v=226",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=226",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=226",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=226",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=226",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=226"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=225"></script>
+  <script type="module" src="./js/main.js?v=226"></script>
 </body>
 </html>

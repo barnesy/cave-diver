@@ -12318,3 +12318,40 @@ test('v224 Strategic Foreground Parallax Depth Elements across all 37 levels & 7
   const nearAlpha = alphas[0] ?? 1;
   assert.ok(nearAlpha < farPeak * 0.5, `Foreground element must auto-fade near diver (near=${nearAlpha.toFixed(2)}, far=${farPeak.toFixed(2)})`);
 });
+
+test('v226 Main Menu Core-4 Priority (Gear Workshop, Logbook, Leaderboard, Setup) & Collapsible Secondary Drawers', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  // 1. Main menu action bar prioritizes the Core 4 destinations
+  const core4Start = html.indexOf('id="menu-actions-core4"');
+  const core4End = html.indexOf('</div>', core4Start);
+  assert.ok(core4Start > 0 && core4End > core4Start, 'Core-4 action row must exist on Main Menu');
+  const core4Html = html.slice(core4Start, core4End);
+  for (const id of ['btn-home-quick-livery', 'btn-home-quick-logbook', 'btn-home-quick-leaderboard', 'btn-setup-drawer']) {
+    assert.ok(core4Html.includes(`id="${id}"`), `Core-4 row must include ${id}`);
+  }
+  assert.ok(!core4Html.includes('id="btn-open-daily-calendar"'), 'Secondary Daily Dive button should not clutter Core-4 row');
+
+  // 2. Hamburger menu places Core 4 ahead of collapsed secondary disclosures
+  const popStart = html.indexOf('id="home-menu-popover"');
+  const moreStart = html.indexOf('<details id="home-menu-more-modes"', popStart);
+  const moreEnd = html.indexOf('</details>', moreStart);
+  const acctStart = html.indexOf('<details id="home-menu-account-prefs"', moreEnd);
+  const acctEnd = html.indexOf('</details>', acctStart);
+  assert.ok(popStart > 0 && moreStart > popStart && acctStart > moreEnd, 'Collapsible secondary drawers must follow Core 4 in #home-menu-popover');
+  const coreSlice = html.slice(popStart, moreStart);
+  for (const id of ['btn-home-open-livery', 'btn-open-logbook', 'btn-open-leaderboard', 'btn-home-open-setup']) {
+    assert.ok(coreSlice.includes(`id="${id}"`), `Priority item ${id} must appear before secondary disclosures`);
+  }
+  const moreSlice = html.slice(moreStart, moreEnd);
+  assert.ok(!moreSlice.startsWith('<details id="home-menu-more-modes" open'), 'More Modes & Tools drawer must start collapsed');
+  for (const id of ['btn-open-daily-calendar', 'btn-open-trench', 'btn-open-procedural', 'btn-open-campaigns', 'btn-open-drills', 'btn-open-bounties', 'btn-open-gas-planner', 'btn-open-challenge']) {
+    assert.ok(moreSlice.includes(`id="${id}"`), `Secondary mode/tool ${id} must be tucked inside More Modes & Tools drawer`);
+  }
+  const acctSlice = html.slice(acctStart, acctEnd);
+  assert.ok(!acctSlice.startsWith('<details id="home-menu-account-prefs" open'), 'Account & Preferences drawer must start collapsed');
+  for (const id of ['input-player-name', 'btn-github-account', 'btn-menu-radio', 'btn-open-reset-account']) {
+    assert.ok(acctSlice.includes(`id="${id}"`), `Account/pref control ${id} must be tucked inside Account & Preferences drawer`);
+  }
+});

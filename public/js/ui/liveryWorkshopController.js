@@ -145,6 +145,7 @@ export function createLiveryWorkshopController({
 
   const menuLiveryPillEl = document.getElementById('menu-livery-pill');
   const btnHomeOpenLiveryEl = document.getElementById('btn-home-open-livery');
+  const btnHomeQuickLiveryEl = document.getElementById('btn-home-quick-livery');
   const homeAvatarCanvasEl = document.getElementById('home-avatar-canvas');
   const homeAvatarCtx = homeAvatarCanvasEl?.getContext?.('2d') || null;
   const liveryModalEl = document.getElementById('livery-modal');
@@ -658,6 +659,10 @@ export function createLiveryWorkshopController({
       btnHomeOpenLiveryEl.classList.toggle('custom', custom);
       btnHomeOpenLiveryEl.classList.toggle('has-new-gear', unseenCount > 0);
       btnHomeOpenLiveryEl.title = `Diver Gear: ${pal.suit.name} · ${pal.headgear.name} · ${pal.tank.name}${unseenCount > 0 ? ` (${unseenCount} NEW unlocked!)` : ' (tap to customize)'}`;
+    }
+    if (btnHomeQuickLiveryEl) {
+      btnHomeQuickLiveryEl.classList.toggle('has-new-gear', unseenCount > 0);
+      btnHomeQuickLiveryEl.textContent = unseenCount > 0 ? `🎨 Gear · ${unseenCount}` : '🎨 Gear Workshop';
     }
     if (firstPlayWelcomeStripEl) {
       const wc = getWelcomeCrateState();

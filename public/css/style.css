@@ -12416,6 +12416,131 @@ summary,
   border-color: rgba(148, 163, 184, 0.2);
 }
 
+/* ========================================================================
+   v226: Main Menu Core-4 Priority (Gear Workshop, Logbook, Leaderboard, Setup)
+   ======================================================================== */
+#screen-menu .menu-desc-wrap {
+  display: none !important;
+}
+#screen-menu #menu-actions-core4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+#screen-menu #menu-actions-core4 .home-core-btn {
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(10, 22, 38, 0.72);
+  color: #e2e8f0;
+}
+#screen-menu #menu-actions-core4 .home-core-btn:hover {
+  border-color: rgba(56, 189, 248, 0.56);
+  background: rgba(14, 34, 58, 0.86);
+  color: #f8fafc;
+}
+#screen-menu #btn-home-quick-livery.has-new-gear {
+  border-color: rgba(52, 211, 153, 0.62);
+  background: rgba(6, 52, 54, 0.62);
+  color: #a7f3d0;
+}
+#screen-menu #btn-setup-drawer.has-mods {
+  border-color: rgba(56, 189, 248, 0.56);
+  color: #bae6fd;
+}
+@media (max-width: 580px) {
+  #screen-menu #menu-actions-core4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  #screen-menu #menu-actions-core4 .home-core-btn {
+    font-size: 0.78rem;
+    padding: 8px 8px;
+  }
+}
+
+/* Reduced / whisper-quiet Co-op footer strip when collapsed */
+#screen-menu #lan-setup-controls.dive-coop-dock.collapsed {
+  opacity: 0.62;
+  padding-top: 8px;
+  margin-top: 6px;
+  border-top-color: rgba(148, 163, 184, 0.12);
+  transition: opacity 0.16s ease;
+}
+#screen-menu #lan-setup-controls.dive-coop-dock.collapsed:hover {
+  opacity: 0.96;
+}
+#screen-menu .dive-coop-caption {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+/* Streamlined Hamburger Menu: Core 4 Priority + Collapsible Secondary Drawers */
+.home-menu-popover .home-menu-item.home-menu-priority {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.home-menu-disclosure {
+  margin: 4px 0;
+  border-radius: 9px;
+  background: rgba(7, 17, 32, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+}
+.home-menu-disclosure-sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #94a3b8;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.home-menu-disclosure-sum::-webkit-details-marker {
+  display: none;
+}
+.home-menu-disclosure-sum:hover {
+  color: #e2e8f0;
+  background: rgba(56, 189, 248, 0.06);
+}
+.home-menu-disclosure-caret {
+  font-size: 0.72rem;
+  color: #64748b;
+  transition: transform 0.16s ease;
+}
+.home-menu-disclosure[open] > .home-menu-disclosure-sum {
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.home-menu-disclosure[open] > .home-menu-disclosure-sum .home-menu-disclosure-caret {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+.home-menu-disclosure-body {
+  padding: 4px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-menu-disclosure-body .home-menu-item {
+  font-size: 0.8rem;
+  padding: 7px 9px;
+}
+.home-menu-disclosure-body .home-daily-streak-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+}
+
+
 
 
 

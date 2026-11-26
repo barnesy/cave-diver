@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=225',
+  mapRasterUrl: './assets/map-expedition.jpg?v=226',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -4999,14 +4999,11 @@ function syncSetupDrawerSummary() {
   }
 }
 
-document.getElementById('btn-home-open-setup')?.addEventListener('click', () => {
-  setHomeMenuOpen(false);
-  openDiveSetupModal();
-});
-document.getElementById('btn-home-open-livery')?.addEventListener('click', () => {
-  setHomeMenuOpen(false);
-  openLiveryModal();
-});
+document.getElementById('btn-home-open-setup')?.addEventListener('click', () => { setHomeMenuOpen(false); openDiveSetupModal(); });
+document.getElementById('btn-home-open-livery')?.addEventListener('click', () => { setHomeMenuOpen(false); openLiveryModal(); });
+document.getElementById('btn-home-quick-livery')?.addEventListener('click', () => openLiveryModal());
+document.getElementById('btn-home-quick-logbook')?.addEventListener('click', () => btnOpenLogbook?.click());
+document.getElementById('btn-home-quick-leaderboard')?.addEventListener('click', () => btnOpenLeaderboard?.click());
 
 // Collapsible Co-op Join Dock on Home Screen (v143)
 const btnCoopDockToggle = document.getElementById('btn-coop-dock-toggle');
