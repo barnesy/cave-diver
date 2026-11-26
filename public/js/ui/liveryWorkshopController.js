@@ -213,7 +213,6 @@ export function createLiveryWorkshopController({
   const liveryUnlockSummaryEl = document.getElementById('livery-unlock-summary');
   const debriefGearUnlocksEl = document.getElementById('debrief-gear-unlocks');
   const lootDiscoveryBannerEl = document.getElementById('loot-discovery-banner');
-  const hudGearBuffsEl = document.getElementById('hud-gear-buffs');
   let lootBannerTimer = null;
   const btnLiveryCloseEl = document.getElementById('btn-livery-close');
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
@@ -454,43 +453,6 @@ export function createLiveryWorkshopController({
       hasDpv = Boolean(eq?.dpv || (activeRigLivery?.scooterId && activeRigLivery.scooterId !== 'none'));
     } catch {}
     drawMiniDiverAvatar(homeAvatarCtx, homeAvatarCanvasEl.width, homeAvatarCanvasEl.height, activeRigLivery, { hasCcr, hasDpv });
-  }
-
-  function renderHudGearBuffs(perf, session) {
-    if (!hudGearBuffsEl) return;
-    if (!perf || session?.isProvingGrounds) {
-      hudGearBuffsEl.hidden = true;
-      return;
-    }
-    if (perf.tuning?.isNormalized) {
-      hudGearBuffsEl.hidden = false;
-      hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-hybrid">🧭 PURIST</span><span class="hud-gb-list"><span>Normalized Baseline (0% Buffs)</span></span>`;
-      return;
-    }
-    const chips = [];
-    if (perf.bonusStartBar > 0) chips.push(`+${perf.bonusStartBar}b`);
-    if (perf.narcDepthBonusM > 0) chips.push(`+${perf.narcDepthBonusM}m Depth`);
-    if (perf.swimSpeedMult >= 1.05) chips.push(`+${Math.round((perf.swimSpeedMult - 1) * 100)}% Swim`);
-    if (perf.gasBurnMult <= 0.94) chips.push(`-${Math.round((1 - perf.gasBurnMult) * 100)}% Gas`);
-    if (perf.combatMaxHpBonus > 0) chips.push(`${100 + perf.combatMaxHpBonus} Boss HP`);
-    if (perf.coldResist >= 0.99) chips.push('Cold-Proof');
-    if (perf.siltGhost) chips.push('Silt-Ghost');
-    if (perf.hydroGhost) chips.push('Hydro-Ghost');
-    if (perf.relicCompass) chips.push('Relic Compass');
-    if (perf.apexOvercharge) chips.push('Hyper-Tip');
-    if (Array.isArray(perf.modifierSynergies)) {
-      for (const ms of perf.modifierSynergies) chips.push(`${ms.icon} ${ms.label}`);
-    }
-    if (chips.length === 0) {
-      hudGearBuffsEl.hidden = true;
-      return;
-    }
-    const arch = perf.dominantArchetype || GEAR_ARCHETYPES.hybrid;
-    const modeTag = perf.tuning && perf.tuning.modeTag !== 'standard'
-      ? `<span class="hud-gb-mode">${perf.tuning.icon} ${escapeHtml(perf.tuning.modeTag === 'trench' ? `TR.${perf.tuning.trenchChamber}` : perf.tuning.label.toUpperCase())}</span>`
-      : '';
-    hudGearBuffsEl.hidden = false;
-    hudGearBuffsEl.innerHTML = `<span class="hud-gb-arch arch-${arch.id}">${arch.icon} ${perf.isHybridMix ? 'HYBRID' : arch.short}</span>${modeTag}<span class="hud-gb-list">${chips.slice(0, 4).map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</span>`;
   }
 
   function hideLootDiscoveryBanner() {
@@ -848,7 +810,6 @@ export function createLiveryWorkshopController({
       session.diver.stealth = perf.stealth || 0;
       if (session.hazards) session.hazards.rigPerf = perf;
     }
-    renderHudGearBuffs(session?.rigPerf || perf, session);
     syncSetupDrawerSummary();
   }
 
@@ -2922,7 +2883,6 @@ export function createLiveryWorkshopController({
     onExitProvingGrounds: () => {
       provingHudBar.hide();
       hideLootDiscoveryBanner();
-      if (hudGearBuffsEl) hudGearBuffsEl.hidden = true;
       const prev = savedPrevLevelBeforeProving;
       savedPrevLevelBeforeProving = null;
       return prev;
