@@ -13861,7 +13861,53 @@ summary,
   background: radial-gradient(circle, color-mix(in srgb, var(--tm-col, #facc15) 16%, transparent), transparent 72%);
 }
 
-/* 6. Equipped vs. Owned Slot Modal — Floaty Art, Zero Nested Boxes */
+/* 6. Equipped vs. Owned Slot Modal — Pinned Live Diver Avatar, Floaty Art, Zero Nested Boxes */
+.gear-slot-modal-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+  max-height: min(90vh, 760px) !important;
+}
+.gear-slot-pinned-head {
+  flex-shrink: 0;
+}
+.gear-slot-preview-wrap {
+  flex-shrink: 0;
+  margin: 8px 0 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(3, 12, 24, 0.6), rgba(4, 15, 30, 0.86));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(224, 242, 254, 0.08);
+}
+#gear-slot-preview-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 580 / 164;
+}
+.gear-slot-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+}
+.gear-slot-scroll-body::-webkit-scrollbar {
+  width: 6px;
+}
+.gear-slot-scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gear-slot-scroll-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+}
+.gear-slot-owned-list {
+  max-height: none;
+  overflow-y: visible;
+  gap: 8px;
+}
 .gear-slot-equipped-hero {
   border: none !important;
   border-radius: 16px;

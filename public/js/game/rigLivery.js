@@ -2929,7 +2929,7 @@ function _drawArticulatedPreviewDiver(
   sy,
   scale,
   pal,
-  { hasCcr = false, hasDpv = false, timeSec = 0, sweepAng = 0, animateKick = true, equipFx = null, focusHighlight = null, canvasW = 0, canvasH = 0 } = {}
+  { hasCcr = false, hasDpv = false, hasSpeargun = false, timeSec = 0, sweepAng = 0, animateKick = true, equipFx = null, focusHighlight = null, canvasW = 0, canvasH = 0 } = {}
 ) {
   const u = scale * 0.55;
   const equipKickBoost = equipFx && equipFx.progress < 0.7 ? Math.sin(equipFx.progress * Math.PI) * 0.35 : 0;
@@ -3041,7 +3041,7 @@ function _drawArticulatedPreviewDiver(
     scale,
     false,
     pal,
-    { torchOn: true, timeSec }
+    { torchOn: true, hasSpeargun, timeSec }
   );
 
   // 6. Kinetic slot-targeted equip spotlight + persistent hover/inspect highlight (v211 / v228)
@@ -3121,7 +3121,7 @@ export function drawLiveryPreview(
   w,
   h,
   livery,
-  { hasCcr = false, hasDpv = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '' } = {}
+  { hasCcr = false, hasDpv = false, hasSpeargun = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '' } = {}
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
@@ -3285,6 +3285,7 @@ export function drawLiveryPreview(
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
+    hasSpeargun,
     timeSec,
     sweepAng,
     animateKick: true,
@@ -3371,7 +3372,7 @@ export function drawGearShowcasePreview(
   w,
   h,
   livery,
-  { tier = 'rare', hasCcr = false, hasDpv = false, timeSec = 0, equipFx = null, focusHighlight = null } = {}
+  { tier = 'rare', hasCcr = false, hasDpv = false, hasSpeargun = false, timeSec = 0, equipFx = null, focusHighlight = null } = {}
 ) {
   if (!ctx || !w || !h) return;
   const tierMeta = getGearTierMeta(tier);
@@ -3452,6 +3453,7 @@ export function drawGearShowcasePreview(
   _drawArticulatedPreviewDiver(ctx, sx, sy, scale, pal, {
     hasCcr,
     hasDpv,
+    hasSpeargun,
     timeSec,
     sweepAng,
     animateKick: true,

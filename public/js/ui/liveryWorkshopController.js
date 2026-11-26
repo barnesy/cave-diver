@@ -219,6 +219,8 @@ export function createLiveryWorkshopController({
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
   const btnLiveryDoneEl = document.getElementById('btn-livery-done');
   const gearSlotModalEl = document.getElementById('gear-slot-modal');
+  const gearSlotPreviewCanvasEl = document.getElementById('gear-slot-preview-canvas');
+  const gearSlotPreviewCtx = gearSlotPreviewCanvasEl?.getContext?.('2d') || null;
   const gearSlotModalTitleEl = document.getElementById('gear-slot-modal-title');
   const gearSlotModalSubEl = document.getElementById('gear-slot-modal-sub');
   const gearSlotEquippedHeroEl = document.getElementById('gear-slot-equipped-hero');
@@ -908,16 +910,32 @@ export function createLiveryWorkshopController({
       };
     }
 
+    const slotModalOpen = Boolean(gearSlotModalEl && !gearSlotModalEl.hidden && gearSlotPreviewCtx && gearSlotPreviewCanvasEl);
     try {
       drawLiveryPreview(liveryPreviewCtx, liveryPreviewCanvasEl.width, liveryPreviewCanvasEl.height, previewLivery, {
         hasCcr: showCcr,
         hasDpv: showDpv,
+        hasSpeargun: activeCompareSlot === 'harpoon' && slotModalOpen,
         envMode: liveryPreviewEnv,
         timeSec,
         equipFx: equipFxArg,
         focusHighlight,
         previewLockedLabel: lockedTryOn && !hoveredGear ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
       });
+      if (slotModalOpen) {
+        const modalHasDpv = activeCompareSlot === 'scooter'
+          ? Boolean(previewLivery?.scooterId && previewLivery.scooterId !== 'none')
+          : showDpv;
+        drawLiveryPreview(gearSlotPreviewCtx, gearSlotPreviewCanvasEl.width, gearSlotPreviewCanvasEl.height, previewLivery, {
+          hasCcr: showCcr,
+          hasDpv: modalHasDpv,
+          hasSpeargun: activeCompareSlot === 'harpoon',
+          envMode: liveryPreviewEnv,
+          timeSec,
+          equipFx: equipFxArg,
+          focusHighlight,
+        });
+      }
     } catch (err) {
       console.error('Livery preview render error:', err);
     }
@@ -2558,15 +2576,33 @@ export function createLiveryWorkshopController({
       }
     }
 
-    // Bind Equip, 2-step Sell & Buyback actions inside the modal
+    // Bind live hover preview on the pinned diver avatar + Equip, 2-step Sell & Buyback actions inside the modal
     const bindInModal = (root) => {
       if (!root) return;
+      root.querySelectorAll('.gear-slot-cmp-card[data-cmp-item-id]').forEach((card) => {
+        const id = card.getAttribute('data-cmp-item-id');
+        const item = cfg.list.find((x) => x.id === id);
+        if (!item) return;
+        const enterPrev = () => {
+          hoveredGear = { slot: cfg.slot, field: cfg.field, item, unlocked: true };
+          renderLiveryPreviewFrame(performance.now() * 0.001);
+        };
+        const leavePrev = () => {
+          if (hoveredGear?.item?.id === item.id) {
+            hoveredGear = null;
+            renderLiveryPreviewFrame(performance.now() * 0.001);
+          }
+        };
+        card.addEventListener('mouseenter', enterPrev);
+        card.addEventListener('mouseleave', leavePrev);
+      });
       root.querySelectorAll('button[data-slot-equip]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-slot-equip');
           const item = cfg.list.find((x) => x.id === id);
           if (!item) return;
           pendingSellKey = null;
+          hoveredGear = null;
           markEntrySeen(`${cfg.slot}:${item.id}`);
           updateActiveLiveryField({ [cfg.field]: item.id }, { slot: cfg.slot, itemMeta: item });
           renderGearSlotModal();
@@ -2605,15 +2641,19 @@ export function createLiveryWorkshopController({
     if (!gearSlotModalEl || !slot) return;
     activeCompareSlot = slot;
     pendingSellKey = null;
+    hoveredGear = null;
     renderGearSlotModal();
     gearSlotModalEl.hidden = false;
+    renderLiveryPreviewFrame(performance.now() * 0.001);
   }
 
   function closeGearSlotModal() {
     if (!gearSlotModalEl) return;
     activeCompareSlot = null;
     pendingSellKey = null;
+    hoveredGear = null;
     gearSlotModalEl.hidden = true;
+    renderLiveryPreviewFrame(performance.now() * 0.001);
   }
 
   btnGearSlotCloseEl?.addEventListener('click', closeGearSlotModal);

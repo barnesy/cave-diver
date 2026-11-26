@@ -235,7 +235,8 @@ export function createGearUnlockShowcase({
       drawGearShowcasePreview(ctx, canvasEl.width, canvasEl.height, buildPreviewLivery(entry), {
         tier: entry.item?.tier || 'uncommon',
         hasCcr,
-        hasDpv,
+        hasDpv: hasDpv || entry.slot === 'scooter',
+        hasSpeargun: entry.slot === 'harpoon',
         timeSec: nowMs * 0.001,
         equipFx: fxArg,
         focusHighlight: !fxArg && entry.slot
