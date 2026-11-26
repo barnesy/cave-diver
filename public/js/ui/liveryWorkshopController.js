@@ -7,7 +7,10 @@ import {
   purchaseGearChromaInLogbook,
   sellGearInLogbook,
   buybackGearInLogbook,
+  addTreasureMapLeadInLogbook,
+  completeTreasureMapLeadInLogbook,
 } from '../game/logbookModel.js';
+import { rollExpeditionTreasureMapLead } from '../game/treasureMaps.js';
 import {
   GEAR_CHROMA_FINISHES,
   CHROMA_TIERS,
@@ -105,6 +108,8 @@ export function createLiveryWorkshopController({
   spawnConfetti = null,
   launchProvingGrounds = null,
   exitProvingGrounds = null,
+  launchSiteDive = null,
+  refreshWorldMap = null,
   getDifficulty = null,
   getActiveModifiers = null,
 }) {
@@ -183,7 +188,6 @@ export function createLiveryWorkshopController({
   const btnLiveryLaunchDiveEl = document.getElementById('btn-livery-launch-dive');
   const liveryPerfPanelEl = document.getElementById('livery-perf-panel');
   const liveryLadderRailEl = document.getElementById('livery-ladder-rail');
-  const liveryPresetRowEl = document.getElementById('livery-preset-row');
   const liverySavedSlotsEl = document.getElementById('livery-saved-slots');
   const btnLiveryTeamUniformEl = document.getElementById('btn-livery-team-uniform');
   const liveryCatTabsEl = document.getElementById('livery-cat-tabs');
@@ -193,13 +197,9 @@ export function createLiveryWorkshopController({
   const btnLiveryBestEl = document.getElementById('btn-livery-best');
   const btnLiveryRandomEl = document.getElementById('btn-livery-random');
   const btnLiveryFieldTestEl = document.getElementById('btn-livery-field-test');
-  const liverySuitGridEl = document.getElementById('livery-suit-grid');
-  const liveryTrimGridEl = document.getElementById('livery-trim-grid');
-  const liveryHeadgearGridEl = document.getElementById('livery-headgear-grid');
-  const liveryVisorGridEl = document.getElementById('livery-visor-grid');
-  const liveryTankGridEl = document.getElementById('livery-tank-grid');
-  const liveryTorchGridEl = document.getElementById('livery-torch-grid');
-  const liveryPatchGridEl = document.getElementById('livery-patch-grid');
+  const liveryEquippedGridEl = document.getElementById('livery-equipped-grid');
+  const liveryTreasureMapsSectionEl = document.getElementById('livery-treasure-maps-section');
+  const liveryDiscoveryWhisperEl = document.getElementById('livery-discovery-whisper');
   const liveryChromaGridEl = document.getElementById('livery-chroma-grid');
   const liveryChromaAnimGridEl = document.getElementById('livery-chroma-anim-grid');
   const liveryWalletPillEl = document.getElementById('livery-wallet-pill');
@@ -211,15 +211,24 @@ export function createLiveryWorkshopController({
   const btnLiveryCloseEl = document.getElementById('btn-livery-close');
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
   const btnLiveryDoneEl = document.getElementById('btn-livery-done');
+  const gearSlotModalEl = document.getElementById('gear-slot-modal');
+  const gearSlotModalKickerEl = document.getElementById('gear-slot-modal-kicker');
+  const gearSlotModalTitleEl = document.getElementById('gear-slot-modal-title');
+  const gearSlotModalSubEl = document.getElementById('gear-slot-modal-sub');
+  const gearSlotEquippedHeroEl = document.getElementById('gear-slot-equipped-hero');
+  const gearSlotOwnedHeadingEl = document.getElementById('gear-slot-owned-heading');
+  const gearSlotOwnedListEl = document.getElementById('gear-slot-owned-list');
+  const gearSlotBuybackWrapEl = document.getElementById('gear-slot-buyback-wrap');
+  const gearSlotBuybackListEl = document.getElementById('gear-slot-buyback-list');
+  const btnGearSlotCloseEl = document.getElementById('btn-gear-slot-close');
+  const btnGearSlotDoneEl = document.getElementById('btn-gear-slot-done');
+  let activeCompareSlot = null;
   const liveryPanels = {
-    suit: document.getElementById('livery-panel-suit'),
-    head: document.getElementById('livery-panel-head'),
-    gear: document.getElementById('livery-panel-gear'),
-    patch: document.getElementById('livery-panel-patch'),
+    equipped: document.getElementById('livery-panel-equipped'),
     chroma: document.getElementById('livery-panel-chroma'),
   };
 
-  let activeLiveryTab = 'suit';
+  let activeLiveryTab = 'equipped';
   let liveryPreviewEnv = 'clear';
   let liveryPreviewCcr = null;
   let liveryPreviewDpv = null;
@@ -555,8 +564,13 @@ export function createLiveryWorkshopController({
           siteId: sess?.level?.id || '',
           siteName: sess?.level?.name || '',
         });
-        const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), 50);
+        const cleared = completeTreasureMapLeadInLogbook(res?.book || loadCareerLogbook(), {
+          levelId: sess?.level?.id || '',
+          gearKey: `${gc.slot}:${gc.itemId}`,
+        });
+        const credited = awardDoubloonsInLogbook(cleared?.book || res?.book || loadCareerLogbook(), 50);
         if (credited?.book) saveCareerLogbook(credited.book);
+        refreshWorldMap?.();
       } catch {}
     }
     syncLiveryUi();
@@ -606,10 +620,30 @@ export function createLiveryWorkshopController({
   function handleTreasureChestOpened(chest, drop) {
     if (!chest || !drop) return;
     const sess = getSession?.();
+    const _maybeGrantExpeditionMapLead = (bookIn) => {
+      if (!bookIn || sess?.isProvingGrounds) return { book: bookIn, newLead: null };
+      const curLeads = Array.isArray(bookIn.treasureMapLeads) ? bookIn.treasureMapLeads : [];
+      if (curLeads.length >= 3) return { book: bookIn, newLead: null };
+      // Guaranteed fresh map lead if player has 0 active maps; 50% chance otherwise
+      if (curLeads.length > 0 && Math.random() > 0.5) return { book: bookIn, newLead: null };
+      const lead = rollExpeditionTreasureMapLead({
+        levels: LEVELS,
+        currentLevelId: sess?.level?.id || '',
+        foundGearMap: bookIn.foundGear || {},
+        existingLeads: curLeads,
+        chestPool: CHEST_GEAR_DROPS,
+        worldCaches: WORLD_GEAR_CACHES,
+      });
+      if (!lead) return { book: bookIn, newLead: null };
+      const added = addTreasureMapLeadInLogbook(bookIn, lead);
+      return { book: added.book, newLead: added.added ? added.lead : null };
+    };
+
     if (drop.kind === 'gear') {
       playGearUnlock?.(drop.tier || 'rare');
       const bonusMult = Math.max(1, Number(sess?.rigPerf?.salvageBonusMult) || 1);
       const gearCoins = Math.round((drop.tier === 'legendary' ? 160 : drop.tier === 'mythic' ? 95 : 65) * bonusMult);
+      let chartedLead = null;
       if (typeof saveCareerLogbook === 'function') {
         try {
           const res = recordFoundWorldGear(loadCareerLogbook(), {
@@ -618,8 +652,16 @@ export function createLiveryWorkshopController({
             siteId: sess?.level?.id || '',
             siteName: sess?.level?.name || '',
           });
-          const credited = awardDoubloonsInLogbook(res?.book || loadCareerLogbook(), gearCoins);
-          if (credited?.book) saveCareerLogbook(credited.book);
+          const cleared = completeTreasureMapLeadInLogbook(res?.book || loadCareerLogbook(), {
+            levelId: sess?.level?.id || '',
+            leadId: chest.leadId || '',
+            skillId: chest.skillFocus || '',
+          });
+          const credited = awardDoubloonsInLogbook(cleared?.book || loadCareerLogbook(), gearCoins);
+          const mapped = _maybeGrantExpeditionMapLead(credited?.book || loadCareerLogbook());
+          chartedLead = mapped.newLead;
+          if (mapped.book) saveCareerLogbook(mapped.book);
+          refreshWorldMap?.();
         } catch {}
       }
       syncLiveryUi();
@@ -632,6 +674,9 @@ export function createLiveryWorkshopController({
       const arch = info.archetype || GEAR_ARCHETYPES.hybrid;
       const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
       const pwrHtml = info.power ? `<div class="loot-disc-power">⚡ <strong>${escapeHtml(info.power.name)}</strong> — ${escapeHtml(info.power.desc)}</div>` : '';
+      const mapLeadHtml = chartedLead
+        ? `<div class="loot-disc-power">🗺️ <strong>New Treasure Map Charted!</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} Lead marked on World Map (${escapeHtml(chartedLead.siteName)})</div>`
+        : '';
       const rarityBadge = drop.rarityLabel || `${tierMeta.badge} CHEST DROP`;
       const cmp = _buildLootImpactSection(drop.slot, drop.itemId, sess);
       lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
@@ -644,6 +689,7 @@ export function createLiveryWorkshopController({
         <div class="loot-disc-name">${drop.icon || '🧰'} ${escapeHtml(item.name)}</div>
         <div class="loot-disc-pills">${pillsHtml}<span class="livery-stat-pill">+${drop.points || 350} pts · +${drop.gasBonusBar || 10}b</span></div>
         ${pwrHtml}
+        ${mapLeadHtml}
         ${cmp.html}
         <div class="loot-disc-actions">
           ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
@@ -667,10 +713,19 @@ export function createLiveryWorkshopController({
     const bonusMult = Math.max(1, Number(sess?.rigPerf?.salvageBonusMult) || 1);
     const baseCoins = Number(drop.doubloonBonus) || (drop.tier === 'mythic' ? 130 : drop.tier === 'epic' ? 90 : 55);
     const chestCoins = Math.round(baseCoins * bonusMult);
+    let chartedLead = null;
     if (!sess?.isProvingGrounds && typeof saveCareerLogbook === 'function') {
       try {
-        const credited = awardDoubloonsInLogbook(loadCareerLogbook(), chestCoins);
-        if (credited?.book) saveCareerLogbook(credited.book);
+        const cleared = completeTreasureMapLeadInLogbook(loadCareerLogbook(), {
+          levelId: sess?.level?.id || '',
+          leadId: chest.leadId || '',
+          skillId: chest.skillFocus || '',
+        });
+        const credited = awardDoubloonsInLogbook(cleared?.book || loadCareerLogbook(), chestCoins);
+        const mapped = _maybeGrantExpeditionMapLead(credited?.book || loadCareerLogbook());
+        chartedLead = mapped.newLead;
+        if (mapped.book) saveCareerLogbook(mapped.book);
+        refreshWorldMap?.();
       } catch {}
     }
     playGearEquip?.('all', drop.tier || 'rare');
@@ -684,19 +739,46 @@ export function createLiveryWorkshopController({
         <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.icon} ${tierMeta.badge}</span>
       </div>
       <div class="loot-disc-name">${drop.icon || '🪙'} ${escapeHtml(drop.name || 'Sunken Treasure')}</div>
-      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)} · <strong>+${chestCoins} 🪙 Doubloons</strong></div>
+      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)} · <strong>+${chestCoins} 🪙 Doubloons</strong>${chartedLead ? `<br/>🗺️ <strong>Treasure Map Found:</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} Lead marked on World Map (${escapeHtml(chartedLead.siteName)})` : ''}</div>
       <div class="loot-disc-actions">
         <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Continue Dive</button>
       </div>
     `;
     lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
     if (lootBannerTimer) clearTimeout(lootBannerTimer);
-    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 4800);
+    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 5600);
   }
 
   function handleTreasureMapFound(map, beacon) {
-    if (!map || !beacon || !lootDiscoveryBannerEl) return;
+    if (!map || !beacon) return;
     const sess = getSession?.();
+    // Persist the Treasure Map lead in logbook so it appears on World Map & Gear Workshop until opened!
+    if (!sess?.isProvingGrounds && sess?.level?.id && typeof saveCareerLogbook === 'function') {
+      try {
+        const res = addTreasureMapLeadInLogbook(loadCareerLogbook(), {
+          id: `lead-vault-${sess.level.id}-${beacon.skillId}`,
+          kind: 'vault-chest',
+          levelId: sess.level.id,
+          siteName: sess.level.name || sess.level.id,
+          targetGearKey: '',
+          skillId: beacon.skillId,
+          skillLabel: beacon.skillLabel,
+          skillShort: beacon.skillShort,
+          skillIcon: beacon.skillIcon,
+          skillVerb: beacon.skillVerb,
+          color: beacon.color,
+          rgb: beacon.rgb,
+          hintSlot: 'suit',
+          hintSlotLabel: 'Vault Gear',
+          hintTier: 'legendary',
+          hintTitle: `${beacon.skillShort} Vault Relic`,
+          hintClue: `Vault Chest located in ${sess.level.name || sess.level.id} — track on Sonar`,
+        });
+        if (res?.book) saveCareerLogbook(res.book);
+        refreshWorldMap?.();
+      } catch {}
+    }
+    if (!lootDiscoveryBannerEl) return;
     const distM = sess?.diver ? Math.round(Math.hypot(beacon.x - sess.diver.x, beacon.y - sess.diver.y)) : 0;
     const depthM = Math.max(0, Math.round(beacon.y || 0));
     lootDiscoveryBannerEl.dataset.tier = 'legendary';
@@ -946,24 +1028,18 @@ export function createLiveryWorkshopController({
         `;
         return;
       }
-      const tabSlotMap = {
-        suit: { slot: 'suit', item: pal.suit },
-        head: { slot: 'headgear', item: pal.headgear },
-        gear: { slot: 'tank', item: pal.tank },
-        patch: { slot: 'patch', item: pal.patch },
-      };
-      const cur = tabSlotMap[activeLiveryTab] || tabSlotMap.suit;
-      const stats = cur.item ? getGearItemStats(cur.slot, cur.item) : null;
-      const pills = stats?.pills?.slice(0, 3).map((p) => `<span class="livery-insp-pill neutral">${escapeHtml(p)}</span>`).join('') || '';
-      const pwr = stats?.power ? `<span class="livery-insp-pill pwr">⚡ ${escapeHtml(stats.power.name)}</span>` : '';
+      const perfNow = computeRigPerformanceProfile(activeRigLivery, tuningCtx);
+      const actSetTxt = perfNow.activeSets?.length > 0
+        ? perfNow.activeSets.map((s) => `${s.icon} ${s.name}`).join(' · ')
+        : '';
       liveryInspectorBarEl.dataset.state = 'idle';
       liveryInspectorBarEl.innerHTML = `
         <div class="livery-insp-row">
-          <span class="livery-insp-kicker">EQUIPPED ${escapeHtml((SLOT_DISPLAY_NAMES[cur.slot] || cur.slot).toUpperCase())}</span>
-          <strong class="livery-insp-name">${escapeHtml(cur.item?.name || 'Standard Issue')}</strong>
-          <span class="livery-insp-hint">Hover or tap ℹ on any gear to preview on diver &amp; see loadout impact</span>
+          <span class="livery-insp-kicker">EQUIPPED RIG</span>
+          <strong class="livery-insp-name">${escapeHtml(pal.suit?.name || 'Standard Issue')}</strong>
+          <span class="livery-insp-hint">Tap any equipped slot below to compare against gear you own</span>
         </div>
-        ${pills || pwr ? `<div class="livery-insp-deltas">${pills}${pwr}</div>` : ''}
+        ${actSetTxt ? `<div class="livery-insp-deltas"><span class="livery-insp-pill pos is-set">✦ ${escapeHtml(actSetTxt)}</span></div>` : ''}
       `;
       return;
     }
@@ -1541,8 +1617,10 @@ export function createLiveryWorkshopController({
     const foundSet = unlocks.stats.foundGearIds || new Set();
     const worldFoundCount = WORLD_GEAR_CACHES.filter((c) => foundSet.has(`${c.slot}:${c.itemId}`)).length;
     const chestFoundCount = CHEST_GEAR_DROPS.filter((c) => foundSet.has(`${c.slot}:${c.itemId}`)).length;
+    const activeLeadsCount = Array.isArray(loadCareerLogbook()?.treasureMapLeads) ? loadCareerLogbook().treasureMapLeads.length : 0;
     if (liveryUnlockSummaryEl) {
-      liveryUnlockSummaryEl.textContent = `${totalUnlocked}/${totalItems} unlocked (${overallPct}%) · ${worldFoundCount}/${WORLD_GEAR_CACHES.length} caches · ${chestFoundCount}/${CHEST_GEAR_DROPS.length} chest relics`;
+      const leadNote = activeLeadsCount > 0 ? ` · 🗺️ ${activeLeadsCount} active Treasure Map${activeLeadsCount === 1 ? '' : 's'}` : '';
+      liveryUnlockSummaryEl.textContent = `${totalUnlocked} gear pieces owned${leadNote} · Tap any equipped slot to compare & swap`;
     }
 
     // First-Play Expedition Welcome Crate & Starter Outfitting Stage (v222)
@@ -1742,8 +1820,24 @@ export function createLiveryWorkshopController({
       });
     }
 
-    // Progression Ladder Rail: Next Closest Unlocks + Set Synergies + Set Loadout Inspector + Locked Try-On Revert
+    // v231 Clean Equipped-Only Workshop: hide undiscovered progression spoilers, ONLY surface newly earned unlocks banner if any!
     if (liveryLadderRailEl) {
+      const unseenNow = getUnseenEntries(unlocks);
+      if (unseenNow.length > 0) {
+        liveryLadderRailEl.hidden = false;
+        liveryLadderRailEl.innerHTML = `<button type="button" class="livery-unseen-banner" id="btn-livery-view-unseen">
+          <span>🎁 <strong>${unseenNow.length} New Gear Unlock${unseenNow.length > 1 ? 's' : ''}</strong> Ready to Inspect &amp; Equip!</span>
+          <span class="livery-unseen-cta">Open Card →</span>
+        </button>`;
+        liveryLadderRailEl.querySelector('#btn-livery-view-unseen')?.addEventListener('click', () => {
+          unlockShowcase.openShowcase(unseenNow);
+        });
+      } else {
+        liveryLadderRailEl.hidden = true;
+        liveryLadderRailEl.innerHTML = '';
+      }
+    }
+    if (false && liveryLadderRailEl) {
       const unseen = getUnseenEntries(unlocks);
       const nextList = getNextGearMilestones(unlocks, 2);
       const previewRig = getDisplayedRigLivery();
@@ -2000,49 +2094,6 @@ export function createLiveryWorkshopController({
         : 'Preview DPV Scooter in Test Tank (locked — earn cert to equip in dives)';
     }
 
-    if (liveryPresetRowEl) {
-      liveryPresetRowEl.innerHTML = OUTFITTER_PRESETS.map((pr) => {
-        const clamped = sanitizeRigLivery(pr.livery, unlocks);
-        const isMatch =
-          !lockedTryOn &&
-          clamped.suitId === activeRigLivery.suitId &&
-          clamped.torchId === activeRigLivery.torchId &&
-          (clamped.headgearId || 'zissou-cap') === pal.headgear.id &&
-          (clamped.trimId || 'suit-default') === pal.trimSpec.id &&
-          (clamped.tankId || 'al80-silver') === pal.tank.id &&
-          (clamped.visorId || 'clear-cyan') === pal.visor.id;
-        const suit = getSuitLivery(pr.livery.suitId);
-        const lockedParts =
-          (!unlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
-          (!unlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
-          (!unlocks.tanks.has(pr.livery.tankId) ? 1 : 0);
-        return `<button type="button" class="livery-preset-chip${isMatch ? ' active' : ''}" data-preset-id="${pr.id}" title="${escapeHtml(pr.name)}${lockedParts > 0 ? ' (applies unlocked items from this kit)' : ''}">
-        <span class="livery-preset-dot" style="background: linear-gradient(135deg, ${suit.suitTop}, ${suit.accent});" aria-hidden="true"></span>
-        <span>${pr.icon} ${escapeHtml(pr.name)}</span>
-      </button>`;
-      }).join('');
-      liveryPresetRowEl.querySelectorAll('button[data-preset-id]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const pid = btn.getAttribute('data-preset-id');
-          const pr = OUTFITTER_PRESETS.find((x) => x.id === pid);
-          if (!pr) return;
-          const curUnlocks = getCurrentLiveryUnlocks();
-          const lockedCount =
-            (!curUnlocks.suits.has(pr.livery.suitId) ? 1 : 0) +
-            (!curUnlocks.torches.has(pr.livery.torchId) ? 1 : 0) +
-            (!curUnlocks.patches.has(pr.livery.patchId) ? 1 : 0) +
-            (!curUnlocks.headgears.has(pr.livery.headgearId) ? 1 : 0) +
-            (!curUnlocks.trims.has(pr.livery.trimId) ? 1 : 0) +
-            (!curUnlocks.tanks.has(pr.livery.tankId) ? 1 : 0) +
-            (!curUnlocks.visors.has(pr.livery.visorId) ? 1 : 0);
-          updateActiveLiveryField(pr.livery, { slot: 'all', itemMeta: { name: pr.name, tier: 'rare' } });
-          if (lockedCount > 0) {
-            showToast(`🎨 Applied ${pr.name} (${lockedCount} locked piece${lockedCount > 1 ? 's' : ''} kept Standard Issue).`, 2.4);
-          }
-        });
-      });
-    }
-
     if (liverySavedSlotsEl) {
       liverySavedSlotsEl.innerHTML = SAVED_KIT_LABELS.map((label, idx) => {
         const saved = savedLiverySlots[idx] ? sanitizeRigLivery(savedLiverySlots[idx], unlocks) : null;
@@ -2085,144 +2136,203 @@ export function createLiveryWorkshopController({
       btnLiveryTeamUniformEl.textContent = aiSquadTeamUniform ? '🤝 Squad Uniform: Team Match' : '🤝 Squad Uniform: Solo';
     }
 
-    if (liverySuitGridEl) {
-      liverySuitGridEl.innerHTML = visibleSuits
-        .map((s) =>
-          _renderSwatchCard({
-            slot: 'suit',
-            field: 'suitId',
-            item: s,
-            unlocked: unlocks.suits.has(s.id),
-            selected: activeRigLivery.suitId === s.id,
-            chipStyle: `background: linear-gradient(135deg, ${s.suitTop} 0%, ${s.suitMid} 52%, ${s.accent} 53%, ${s.trim} 100%);`,
-            chipContent: unlocks.suits.has(s.id) ? (s.fx ? '✦' : '') : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: s.unlockHint,
-          })
-        )
+    const _slotConfigs = [
+      { slot: 'suit', field: 'suitId', setKey: 'suits', icon: '🤿', label: 'Drysuit', list: SUIT_LIVERIES, equipped: pal.suit },
+      { slot: 'trim', field: 'trimId', setKey: 'trims', icon: '⚡', label: 'Harness & Fins', list: ACCENT_TRIMS, equipped: pal.trimSpec },
+      { slot: 'headgear', field: 'headgearId', setKey: 'headgears', icon: '⛑️', label: 'Headgear', list: HEADGEAR_STYLES, equipped: pal.headgear },
+      { slot: 'visor', field: 'visorId', setKey: 'visors', icon: '🕶️', label: 'Mask Visor', list: VISOR_TINTS, equipped: pal.visor },
+      { slot: 'tank', field: 'tankId', setKey: 'tanks', icon: '🛢', label: 'Twin Tanks', list: TANK_FINISHES, equipped: pal.tank },
+      { slot: 'torch', field: 'torchId', setKey: 'torches', icon: '🔦', label: 'Primary Torch', list: TORCH_OPTICS, equipped: pal.torch },
+      { slot: 'patch', field: 'patchId', setKey: 'patches', icon: '🎖️', label: 'Expedition Crest', list: MILESTONE_PATCHES, equipped: pal.patch },
+    ];
+
+    const _chipForSlotItem = (slot, item) => {
+      if (!item) return { style: 'background: rgba(15, 23, 42, 0.9);', content: '' };
+      if (slot === 'suit') {
+        return {
+          style: `background: linear-gradient(135deg, ${item.suitTop} 0%, ${item.suitMid} 52%, ${item.accent} 53%, ${item.trim} 100%);`,
+          content: item.fx ? '✦' : '',
+        };
+      }
+      if (slot === 'trim') {
+        return {
+          style:
+            item.id === 'suit-default'
+              ? `background: linear-gradient(135deg, ${pal.suit.accent} 0%, ${pal.suit.trim} 100%);`
+              : `background: linear-gradient(135deg, ${item.swatchA} 0%, ${item.swatchB} 100%);`,
+          content: item.fx ? '✦' : '',
+        };
+      }
+      if (slot === 'headgear') {
+        return { style: 'background: rgba(15, 23, 42, 0.92);', content: escapeHtml(item.icon || '⛑️') };
+      }
+      if (slot === 'visor') {
+        return {
+          style: `background: linear-gradient(135deg, ${item.top} 0%, ${item.mid} 50%, ${item.bot} 100%);`,
+          content: item.fx ? '✦' : '',
+        };
+      }
+      if (slot === 'tank') {
+        return {
+          style: `background: linear-gradient(180deg, ${item.top} 0%, ${item.mid} 50%, ${item.bot} 100%);`,
+          content: item.fx ? '✦' : '',
+        };
+      }
+      if (slot === 'torch') {
+        return {
+          style: `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${item.swatch} 55%, #0f172a 100%);`,
+          content: item.fx ? '✦' : '',
+        };
+      }
+      return { style: 'background: rgba(15, 23, 42, 0.9);', content: escapeHtml(item.icon || '🎖️') };
+    };
+
+    const careerBook = loadCareerLogbook();
+
+    // v231 Ultra-Clean Equipped-Only Gear Grid: NEVER shows unequipped or undiscovered gear on main Workshop screen!
+    if (liveryEquippedGridEl) {
+      const slotCardsHtml = _slotConfigs
+        .map((cfg) => {
+          const item = cfg.equipped;
+          const tierMeta = getGearTierMeta(item?.tier);
+          const itemStats = getGearItemStats(cfg.slot, item);
+          const chip = _chipForSlotItem(cfg.slot, item);
+          const ownedSet = unlocks[cfg.setKey];
+          const ownedCount = ownedSet instanceof Set ? ownedSet.size : 1;
+          const altCount = Math.max(0, ownedCount - 1);
+          const soldCount = Array.from(unlocks.soldGear || []).filter((k) => k.startsWith(`${cfg.slot}:`)).length;
+          const hasUnseenInSlot = Array.from(ownedSet || []).some(
+            (id) => id !== item?.id && !seenUnlockKeys.has(`${cfg.slot}:${id}`) && getGearItemBySlot(cfg.slot, id)?.item?.tier !== 'common'
+          );
+          const swapLabel = altCount > 0
+            ? `${altCount} other owned · Swap ›`
+            : soldCount > 0
+              ? `${soldCount} sold · Buyback ›`
+              : 'Inspect ›';
+          const pillsHtml = itemStats.pills.length > 0
+            ? `<span class="livery-stat-pills">${itemStats.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</span>`
+            : `<span class="livery-swatch-meta">Standard Issue baseline</span>`;
+          const pwrHtml = itemStats.power
+            ? `<span class="livery-power-badge" title="${escapeHtml(itemStats.power.desc)}">⚡ ${escapeHtml(itemStats.power.name)}</span>`
+            : '';
+          const tierPill = tierMeta.rank >= 2
+            ? `<span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>`
+            : '';
+          return `<button type="button" class="livery-equipped-card tier-${tierMeta.id}${hasUnseenInSlot ? ' has-new-alt' : ''}" data-open-slot="${cfg.slot}" data-item-id="${escapeHtml(item?.id || '')}">
+            <span class="livery-swatch-chip" style="${chip.style}" aria-hidden="true">${chip.content}</span>
+            <span class="livery-swatch-copy">
+              <span class="livery-equipped-kicker">${cfg.icon} ${escapeHtml(cfg.label.toUpperCase())}${hasUnseenInSlot ? ' <span class="livery-new-badge">NEW</span>' : ''}</span>
+              <span class="livery-swatch-top">
+                <span class="livery-swatch-name">${escapeHtml(item?.name || 'Standard Issue')}</span>
+                ${tierPill}
+              </span>
+              ${pillsHtml}
+              ${pwrHtml}
+              <span class="livery-equipped-cta">${escapeHtml(swapLabel)}</span>
+            </span>
+          </button>`;
+        })
         .join('');
-      _bindGridHandlers(liverySuitGridEl, visibleSuits, 'suit', 'suitId', unlocks.suits);
+
+      const activeChroma = getGearChroma(activeRigLivery.dyeId || 'none');
+      const [c0, c1, c2] = activeChroma.swatch || ['#1e293b', '#0f172a', '#38bdf8'];
+      const chromaCardHtml = `<button type="button" class="livery-equipped-card livery-equipped-chroma-card" data-open-chroma="1">
+        <span class="livery-swatch-chip${activeChroma.animated ? ' chroma-anim-chip' : ''}" style="background: linear-gradient(135deg, ${c0} 0%, ${c1} 54%, ${c2} 100%);" aria-hidden="true">${activeChroma.animated ? '✦' : '🎨'}</span>
+        <span class="livery-swatch-copy">
+          <span class="livery-equipped-kicker">🎨 COLOR &amp; FX COATING</span>
+          <span class="livery-swatch-top">
+            <span class="livery-swatch-name">${escapeHtml(activeChroma.name)}</span>
+          </span>
+          <span class="livery-swatch-meta">${escapeHtml(activeChroma.fxName ? `✦ ${activeChroma.fxName} · Cosmetic` : 'Purely cosmetic · Keeps 100% stats')}</span>
+          <span class="livery-equipped-cta">Customize Colors &amp; FX ›</span>
+        </span>
+      </button>`;
+
+      liveryEquippedGridEl.innerHTML = `${slotCardsHtml}${chromaCardHtml}`;
+      liveryEquippedGridEl.querySelectorAll('button[data-open-slot]').forEach((btn) => {
+        const slot = btn.getAttribute('data-open-slot');
+        const cfg = _slotConfigs.find((c) => c.slot === slot);
+        if (!cfg) return;
+        btn.addEventListener('mouseenter', () => {
+          hoveredGear = { slot: cfg.slot, field: cfg.field, item: cfg.equipped, unlocked: true };
+          renderInspectorBar();
+          renderLiveryPreviewFrame(performance.now() * 0.001);
+        });
+        btn.addEventListener('mouseleave', () => {
+          hoveredGear = null;
+          renderInspectorBar();
+          renderLiveryPreviewFrame(performance.now() * 0.001);
+        });
+        btn.addEventListener('click', () => {
+          openGearSlotModal(slot);
+        });
+      });
+      liveryEquippedGridEl.querySelector('button[data-open-chroma]')?.addEventListener('click', () => {
+        setLiveryActiveTab('chroma');
+      });
     }
 
-    if (liveryTrimGridEl) {
-      liveryTrimGridEl.innerHTML = visibleTrims
-        .map((tr) =>
-          _renderSwatchCard({
-            slot: 'trim',
-            field: 'trimId',
-            item: tr,
-            unlocked: unlocks.trims.has(tr.id),
-            selected: pal.trimSpec.id === tr.id,
-            chipStyle:
-              tr.id === 'suit-default'
-                ? `background: linear-gradient(135deg, ${pal.suit.accent} 0%, ${pal.suit.trim} 100%);`
-                : `background: linear-gradient(135deg, ${tr.swatchA} 0%, ${tr.swatchB} 100%);`,
-            chipContent: unlocks.trims.has(tr.id) ? (tr.fx ? '✦' : '') : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: tr.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryTrimGridEl, visibleTrims, 'trim', 'trimId', unlocks.trims);
+    // v231 Active Treasure Map Leads: ONLY show undiscovered gear if you hold a Treasure Map to it, with 1-tap Dive Launch!
+    const activeMapLeads = Array.isArray(careerBook?.treasureMapLeads) ? careerBook.treasureMapLeads : [];
+    if (liveryTreasureMapsSectionEl) {
+      if (activeMapLeads.length > 0) {
+        liveryTreasureMapsSectionEl.hidden = false;
+        liveryTreasureMapsSectionEl.innerHTML = `
+          <div class="livery-section-label">🗺️ ACTIVE TREASURE MAPS (${activeMapLeads.length}) · MARKED ON WORLD MAP</div>
+          <div class="livery-map-leads-grid">
+            ${activeMapLeads
+              .map((lead) => {
+                const tierMeta = getGearTierMeta(lead.hintTier || 'rare');
+                return `<div class="livery-map-lead-card" style="--tm-col:${escapeHtml(lead.color || '#facc15')}">
+                  <div class="livery-map-lead-top">
+                    <span class="livery-map-lead-badge">${escapeHtml(lead.skillIcon || '🗺️')} ${escapeHtml(lead.skillLabel || 'SKILL BOOST')}</span>
+                    <span class="livery-tier-pill tier-${tierMeta.id}">${lead.hintTier === 'legendary' ? 'UP TO LEGENDARY' : tierMeta.badge}</span>
+                  </div>
+                  <div class="livery-map-lead-title">❓ ${escapeHtml(lead.hintTitle || `Uncharted ${lead.hintSlotLabel || 'Gear'}`)}</div>
+                  <div class="livery-map-lead-verb">${escapeHtml(lead.skillVerb || '')}</div>
+                  <div class="livery-map-lead-foot">
+                    <span class="livery-map-lead-site" title="${escapeHtml(lead.hintClue || '')}">📍 ${escapeHtml(lead.siteName || lead.levelId)}</span>
+                    <button type="button" class="btn tiny primary livery-map-dive-btn" data-map-dive-level="${escapeHtml(lead.levelId)}">🤿 Start Dive →</button>
+                  </div>
+                </div>`;
+              })
+              .join('')}
+          </div>
+        `;
+        liveryTreasureMapsSectionEl.querySelectorAll('button[data-map-dive-level]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-map-dive-level');
+            const targetLvl = LEVELS.find((l) => l.id === targetId);
+            if (!targetLvl) return;
+            closeGearSlotModal();
+            closeLiveryModal();
+            if (typeof launchSiteDive === 'function') {
+              launchSiteDive(targetLvl);
+            } else {
+              document.getElementById('btn-play-solo')?.click();
+            }
+          });
+        });
+      } else {
+        liveryTreasureMapsSectionEl.hidden = true;
+        liveryTreasureMapsSectionEl.innerHTML = '';
+      }
+    }
+    if (liveryDiscoveryWhisperEl) {
+      if (activeMapLeads.length === 0) {
+        liveryDiscoveryWhisperEl.hidden = false;
+        liveryDiscoveryWhisperEl.textContent = '🗺️ Undiscovered gear stays hidden until found — recover Treasure Maps on dives to reveal hinted leads & World Map markers.';
+      } else {
+        liveryDiscoveryWhisperEl.hidden = true;
+      }
     }
 
-    if (liveryHeadgearGridEl) {
-      liveryHeadgearGridEl.innerHTML = visibleHeadgears
-        .map((h) =>
-          _renderSwatchCard({
-            slot: 'headgear',
-            field: 'headgearId',
-            item: h,
-            unlocked: unlocks.headgears.has(h.id),
-            selected: pal.headgear.id === h.id,
-            chipStyle: 'background: rgba(15, 23, 42, 0.92);',
-            chipContent: unlocks.headgears.has(h.id) ? h.icon : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: h.specText || h.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryHeadgearGridEl, visibleHeadgears, 'headgear', 'headgearId', unlocks.headgears);
-    }
-
-    if (liveryVisorGridEl) {
-      liveryVisorGridEl.innerHTML = visibleVisors
-        .map((v) =>
-          _renderSwatchCard({
-            slot: 'visor',
-            field: 'visorId',
-            item: v,
-            unlocked: unlocks.visors.has(v.id),
-            selected: pal.visor.id === v.id,
-            chipStyle: `background: linear-gradient(135deg, ${v.top} 0%, ${v.mid} 50%, ${v.bot} 100%);`,
-            chipContent: unlocks.visors.has(v.id) ? (v.fx ? '✦' : '') : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: v.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryVisorGridEl, visibleVisors, 'visor', 'visorId', unlocks.visors);
-    }
-
-    if (liveryTankGridEl) {
-      liveryTankGridEl.innerHTML = visibleTanks
-        .map((tk) =>
-          _renderSwatchCard({
-            slot: 'tank',
-            field: 'tankId',
-            item: tk,
-            unlocked: unlocks.tanks.has(tk.id),
-            selected: pal.tank.id === tk.id,
-            chipStyle: `background: linear-gradient(180deg, ${tk.top} 0%, ${tk.mid} 50%, ${tk.bot} 100%);`,
-            chipContent: unlocks.tanks.has(tk.id) ? (tk.fx ? '✦' : '') : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: tk.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryTankGridEl, visibleTanks, 'tank', 'tankId', unlocks.tanks);
-    }
-
-    if (liveryTorchGridEl) {
-      liveryTorchGridEl.innerHTML = visibleTorches
-        .map((t) =>
-          _renderSwatchCard({
-            slot: 'torch',
-            field: 'torchId',
-            item: t,
-            unlocked: unlocks.torches.has(t.id),
-            selected: activeRigLivery.torchId === t.id,
-            chipStyle: `background: radial-gradient(circle at 35% 35%, #ffffff 0%, ${t.swatch} 55%, #0f172a 100%);`,
-            chipContent: unlocks.torches.has(t.id) ? (t.fx ? '✦' : '') : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: t.specText || t.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryTorchGridEl, visibleTorches, 'torch', 'torchId', unlocks.torches);
-    }
-
-    if (liveryPatchGridEl) {
-      liveryPatchGridEl.innerHTML = visiblePatches
-        .map((p) =>
-          _renderSwatchCard({
-            slot: 'patch',
-            field: 'patchId',
-            item: p,
-            unlocked: unlocks.patches.has(p.id),
-            selected: activeRigLivery.patchId === p.id,
-            chipStyle: 'background: rgba(15, 23, 42, 0.9);',
-            chipContent: unlocks.patches.has(p.id) ? escapeHtml(p.icon) : '🔒',
-            stats: unlocks.stats,
-            unlockedMeta: p.unlockHint,
-          })
-        )
-        .join('');
-      _bindGridHandlers(liveryPatchGridEl, visiblePatches, 'patch', 'patchId', unlocks.patches);
+    // Keep open Slot Comparison Modal synced whenever Workshop re-renders (e.g. after Equip/Sell/Buyback)
+    if (activeCompareSlot && gearSlotModalEl && !gearSlotModalEl.hidden) {
+      renderGearSlotModal();
     }
 
     // Salvage Doubloons Wallet & Gear Color / Animated Coating Foundry (v229)
-    const careerBook = loadCareerLogbook();
     const doubloonsBal = Math.max(0, Math.round(Number(careerBook?.doubloons) || 0));
     if (liveryWalletPillEl) {
       liveryWalletPillEl.textContent = `🪙 ${doubloonsBal.toLocaleString()}`;
@@ -2330,10 +2440,228 @@ export function createLiveryWorkshopController({
     if (modalCard) modalCard.scrollTop = prevScrollTop;
   }
 
+  function renderGearSlotModal() {
+    if (!gearSlotModalEl || !activeCompareSlot) return;
+    const unlocks = getCurrentLiveryUnlocks();
+    const pal = resolveDiverLiveryPalette(activeRigLivery);
+    const tuningCtx = getWorkshopTuningCtx(workshopTuningMode);
+    const slotDefs = {
+      suit: { slot: 'suit', field: 'suitId', setKey: 'suits', icon: '🤿', label: 'Drysuit', list: SUIT_LIVERIES, equipped: pal.suit },
+      trim: { slot: 'trim', field: 'trimId', setKey: 'trims', icon: '⚡', label: 'Harness & Fins', list: ACCENT_TRIMS, equipped: pal.trimSpec },
+      headgear: { slot: 'headgear', field: 'headgearId', setKey: 'headgears', icon: '⛑️', label: 'Headgear', list: HEADGEAR_STYLES, equipped: pal.headgear },
+      visor: { slot: 'visor', field: 'visorId', setKey: 'visors', icon: '🕶️', label: 'Mask Visor', list: VISOR_TINTS, equipped: pal.visor },
+      tank: { slot: 'tank', field: 'tankId', setKey: 'tanks', icon: '🛢', label: 'Twin Tanks', list: TANK_FINISHES, equipped: pal.tank },
+      torch: { slot: 'torch', field: 'torchId', setKey: 'torches', icon: '🔦', label: 'Primary Torch', list: TORCH_OPTICS, equipped: pal.torch },
+      patch: { slot: 'patch', field: 'patchId', setKey: 'patches', icon: '🎖️', label: 'Expedition Crest', list: MILESTONE_PATCHES, equipped: pal.patch },
+    };
+    const cfg = slotDefs[activeCompareSlot];
+    if (!cfg) return;
+
+    const eqItem = cfg.equipped;
+    const eqTier = getGearTierMeta(eqItem?.tier);
+    const eqStats = getGearItemStats(cfg.slot, eqItem);
+    const ownedSet = unlocks[cfg.setKey] instanceof Set ? unlocks[cfg.setKey] : new Set();
+    // Strictly ONLY gear the player owns for this slot (excluding currently equipped)!
+    const otherOwned = cfg.list
+      .filter((it) => ownedSet.has(it.id) && it.id !== eqItem?.id)
+      .sort((a, b) => (getGearTierMeta(b.tier).rank - getGearTierMeta(a.tier).rank) || ((b.ladderRank || 0) - (a.ladderRank || 0)));
+
+    // Any previously sold Milestone/Secret items for this slot (for Buyback!)
+    const soldForSlot = cfg.list.filter((it) => unlocks.soldGear?.has(`${cfg.slot}:${it.id}`));
+
+    if (gearSlotModalKickerEl) gearSlotModalKickerEl.textContent = `EQUIPPED VS. OWNED · ${cfg.label.toUpperCase()}`;
+    if (gearSlotModalTitleEl) gearSlotModalTitleEl.textContent = `${cfg.icon} ${cfg.label}`;
+    if (gearSlotModalSubEl) {
+      gearSlotModalSubEl.textContent =
+        otherOwned.length > 0
+          ? `Comparing ${eqItem?.name || 'Equipped'} against ${otherOwned.length} other owned ${cfg.label.toLowerCase()} option${otherOwned.length === 1 ? '' : 's'}.`
+          : `You currently own 1 ${cfg.label.toLowerCase()}. Discover more in dives, chests & Treasure Maps!`;
+    }
+
+    const eqKey = `${cfg.slot}:${eqItem?.id || ''}`;
+    const eqSellVal = isGearSellable(eqItem) ? getGearSellValue(eqItem?.tier) : 0;
+    const eqConfirm = pendingSellKey === eqKey;
+    const eqSellBtn = eqSellVal > 0
+      ? eqConfirm
+        ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(eqItem.id)}">⚠️ Confirm Sell (+${eqSellVal} 🪙)</button>`
+        : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(eqItem.id)}">🪙 Sell +${eqSellVal}</button>`
+      : '';
+
+    if (gearSlotEquippedHeroEl) {
+      const eqPills = eqStats.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+      gearSlotEquippedHeroEl.innerHTML = `
+        <div class="gear-slot-hero-top">
+          <div>
+            <span class="gear-slot-hero-badge">✓ CURRENTLY EQUIPPED</span>
+            <span class="livery-tier-pill tier-${eqTier.id}">${eqTier.badge}</span>
+          </div>
+          ${eqSellBtn}
+        </div>
+        <div class="gear-slot-hero-name">${escapeHtml(eqItem?.name || 'Standard Issue')}</div>
+        <div class="livery-stat-pills">${eqPills || '<span class="livery-swatch-meta">Baseline Expedition Spec</span>'}</div>
+        ${eqStats.power ? `<div class="gear-slot-hero-pwr">⚡ <strong>${escapeHtml(eqStats.power.name)}</strong> — ${escapeHtml(eqStats.power.desc)}</div>` : ''}
+      `;
+    }
+
+    if (gearSlotOwnedHeadingEl) {
+      gearSlotOwnedHeadingEl.textContent = `OTHER OWNED ${cfg.label.toUpperCase()} (${otherOwned.length})`;
+    }
+
+    if (gearSlotOwnedListEl) {
+      if (otherOwned.length === 0) {
+        gearSlotOwnedListEl.innerHTML = `<div class="gear-slot-empty">No other ${escapeHtml(cfg.label.toLowerCase())} owned yet. Explore dive sites, open Sunken Treasure Chests, or follow 🗺️ Treasure Maps to discover more!</div>`;
+      } else {
+        gearSlotOwnedListEl.innerHTML = otherOwned
+          .map((item) => {
+            const tierMeta = getGearTierMeta(item.tier);
+            const itemStats = getGearItemStats(cfg.slot, item);
+            const impact = evaluateLootUpgradeImpact(activeRigLivery, cfg.slot, item.id, tuningCtx);
+            const key = `${cfg.slot}:${item.id}`;
+            const sellVal = isGearSellable(item) ? getGearSellValue(item.tier) : 0;
+            const isConfirm = pendingSellKey === key;
+            const deltaChips = [];
+            if (impact && !impact.isNormalized) {
+              for (const sc of impact.setChanges || []) {
+                deltaChips.push(`<span class="livery-insp-pill ${sc.positive ? 'pos' : 'neg'} is-set">${sc.positive ? '✦' : '⚠'} ${escapeHtml(sc.text)}</span>`);
+              }
+              for (const gp of impact.gainedPowers || []) {
+                deltaChips.push(`<span class="livery-insp-pill pos is-pwr">+⚡ ${escapeHtml(gp.name)}</span>`);
+              }
+              for (const lp of impact.lostPowers || []) {
+                deltaChips.push(`<span class="livery-insp-pill neg is-pwr">-⚡ ${escapeHtml(lp.name)}</span>`);
+              }
+              for (const d of (impact.deltas || []).slice(0, 6)) {
+                deltaChips.push(`<span class="livery-insp-pill ${d.positive ? 'pos' : 'neg'}">${d.positive ? '▲' : '▼'} ${escapeHtml(d.text)}</span>`);
+              }
+            }
+            const verdictCls = impact?.verdict || 'tradeoff';
+            const verdictTxt = impact?.isNormalized
+              ? '🧭 PURIST'
+              : impact?.verdict === 'upgrade'
+                ? '▲ UPGRADE'
+                : impact?.verdict === 'downgrade'
+                  ? '▼ LOWER'
+                  : '⇄ SWAP';
+            const sellBtn = sellVal > 0
+              ? isConfirm
+                ? `<button type="button" class="btn tiny danger" data-slot-sell-confirm="${escapeHtml(item.id)}">⚠️ Confirm (+${sellVal} 🪙)</button>`
+                : `<button type="button" class="btn tiny ghost livery-sell-btn" data-slot-sell="${escapeHtml(item.id)}">🪙 Sell +${sellVal}</button>`
+              : '';
+            return `<div class="gear-slot-cmp-card tier-${tierMeta.id}" data-cmp-item-id="${escapeHtml(item.id)}">
+              <div class="gear-slot-cmp-head">
+                <div class="gear-slot-cmp-title-wrap">
+                  <strong class="gear-slot-cmp-name">${escapeHtml(item.name)}</strong>
+                  <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.badge}</span>
+                  <span class="livery-insp-verdict verdict-${verdictCls}">${verdictTxt}</span>
+                </div>
+                <div class="gear-slot-cmp-actions">
+                  <button type="button" class="btn tiny primary" data-slot-equip="${escapeHtml(item.id)}">⚡ Equip</button>
+                  ${sellBtn}
+                </div>
+              </div>
+              <div class="livery-stat-pills">${itemStats.pills.map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('')}</div>
+              ${itemStats.power ? `<div class="gear-slot-cmp-pwr">⚡ <strong>${escapeHtml(itemStats.power.name)}</strong> — ${escapeHtml(itemStats.power.desc)}</div>` : ''}
+              ${deltaChips.length > 0 ? `<div class="gear-slot-cmp-deltas"><span class="gear-slot-vs-lbl">vs. ${escapeHtml(eqItem?.name || 'Equipped')}:</span> ${deltaChips.join('')}</div>` : ''}
+            </div>`;
+          })
+          .join('');
+      }
+    }
+
+    if (gearSlotBuybackWrapEl && gearSlotBuybackListEl) {
+      if (soldForSlot.length > 0) {
+        const bal = Math.max(0, Math.round(Number(loadCareerLogbook()?.doubloons) || 0));
+        gearSlotBuybackWrapEl.hidden = false;
+        gearSlotBuybackListEl.innerHTML = soldForSlot
+          .map((item) => {
+            const cost = getGearBuybackCost(item.tier);
+            const canAfford = bal >= cost;
+            return `<div class="gear-slot-cmp-card is-buyback">
+              <div class="gear-slot-cmp-head">
+                <div class="gear-slot-cmp-title-wrap">
+                  <strong class="gear-slot-cmp-name">${escapeHtml(item.name)}</strong>
+                  <span class="livery-tier-pill tier-${getGearTierMeta(item.tier).id}">${getGearTierMeta(item.tier).badge}</span>
+                </div>
+                <button type="button" class="btn tiny ${canAfford ? 'primary' : 'secondary'}" data-slot-buyback="${escapeHtml(item.id)}" ${canAfford ? '' : 'disabled'}>🪙 Buy Back (${cost})</button>
+              </div>
+            </div>`;
+          })
+          .join('');
+      } else {
+        gearSlotBuybackWrapEl.hidden = true;
+        gearSlotBuybackListEl.innerHTML = '';
+      }
+    }
+
+    // Bind Equip, 2-step Sell & Buyback actions inside the modal
+    const bindInModal = (root) => {
+      if (!root) return;
+      root.querySelectorAll('button[data-slot-equip]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-slot-equip');
+          const item = cfg.list.find((x) => x.id === id);
+          if (!item) return;
+          pendingSellKey = null;
+          markEntrySeen(`${cfg.slot}:${item.id}`);
+          updateActiveLiveryField({ [cfg.field]: item.id }, { slot: cfg.slot, itemMeta: item });
+          renderGearSlotModal();
+        });
+      });
+      root.querySelectorAll('button[data-slot-sell]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-slot-sell');
+          pendingSellKey = `${cfg.slot}:${id}`;
+          renderGearSlotModal();
+        });
+      });
+      root.querySelectorAll('button[data-slot-sell-confirm]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-slot-sell-confirm');
+          const item = cfg.list.find((x) => x.id === id);
+          if (item) sellGearItem(cfg.slot, cfg.field, item);
+          renderGearSlotModal();
+        });
+      });
+      root.querySelectorAll('button[data-slot-buyback]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-slot-buyback');
+          const item = cfg.list.find((x) => x.id === id);
+          if (item) buybackSoldGearItem(cfg.slot, cfg.field, item);
+          renderGearSlotModal();
+        });
+      });
+    };
+    bindInModal(gearSlotEquippedHeroEl);
+    bindInModal(gearSlotOwnedListEl);
+    bindInModal(gearSlotBuybackListEl);
+  }
+
+  function openGearSlotModal(slot) {
+    if (!gearSlotModalEl || !slot) return;
+    activeCompareSlot = slot;
+    pendingSellKey = null;
+    renderGearSlotModal();
+    gearSlotModalEl.hidden = false;
+  }
+
+  function closeGearSlotModal() {
+    if (!gearSlotModalEl) return;
+    activeCompareSlot = null;
+    pendingSellKey = null;
+    gearSlotModalEl.hidden = true;
+  }
+
+  btnGearSlotCloseEl?.addEventListener('click', closeGearSlotModal);
+  btnGearSlotDoneEl?.addEventListener('click', closeGearSlotModal);
+  gearSlotModalEl?.addEventListener('click', (e) => {
+    if (e.target === gearSlotModalEl) closeGearSlotModal();
+  });
+
   function openLiveryModal(initialTab = null) {
     if (!liveryModalEl) return;
     closeDiveSetupModal();
     setHomeMenuOpen(false);
+    closeGearSlotModal();
     lockedTryOn = null;
     hoveredGear = null;
     pinnedInspect = null;
@@ -2345,6 +2673,8 @@ export function createLiveryWorkshopController({
     }
     if (initialTab && liveryPanels[initialTab]) {
       activeLiveryTab = initialTab;
+    } else {
+      activeLiveryTab = 'equipped';
     }
     renderLiveryWorkshopModal();
     liveryModalEl.hidden = false;
@@ -2352,6 +2682,7 @@ export function createLiveryWorkshopController({
 
   function closeLiveryModal() {
     if (!liveryModalEl) return;
+    closeGearSlotModal();
     lockedTryOn = null;
     hoveredGear = null;
     pinnedInspect = null;
@@ -2516,7 +2847,10 @@ export function createLiveryWorkshopController({
 
   return {
     liveryModalEl,
+    gearSlotModalEl,
     gearUnlockModalEl: unlockShowcase.modalEl,
+    openGearSlotModal,
+    closeGearSlotModal,
     getActiveRigLivery: () => activeRigLivery,
     setActiveRigLivery(next, { skipCloudSync = false } = {}) {
       activeRigLivery = next;

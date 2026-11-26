@@ -58,6 +58,7 @@ export function createEmptyLogbook() {
     pinnedArtifactId: '', // v169 showcased relic pinned to Expedition Postcard & Curator profile
     foundGear: {}, // "slot:itemId" -> { foundAt, siteId, siteName } (v216 World-Found Sunken Gear Caches)
     soldGear: {}, // "slot:itemId" -> { soldAt, value } (v230 Sold Milestone/Secret gear eligible for Workshop Buyback)
+    treasureMapLeads: [], // v231 Active Expedition Treasure Map Leads shown on World Map & Gear Workshop
     doubloons: STARTER_DOUBLOONS, // v229 Salvage Doubloons in-game currency for gear color finishes & animated coatings
     lifetimeDoubloons: STARTER_DOUBLOONS,
     ownedDyes: [], // purchased GEAR_CHROMA_FINISHES IDs
@@ -219,6 +220,36 @@ function normalizeBook(raw) {
     base.ownedDyes = Array.from(
       new Set(raw.ownedDyes.filter((id) => typeof id === 'string' && id !== 'none' && isValidGearChromaId(id)))
     ).slice(0, 48);
+  }
+  if (Array.isArray(raw.treasureMapLeads)) {
+    const seenLeadIds = new Set();
+    for (const rawLead of raw.treasureMapLeads.slice(0, 12)) {
+      if (!rawLead || typeof rawLead !== 'object' || !rawLead.levelId) continue;
+      const lid = String(rawLead.id || `lead-${rawLead.levelId}-${rawLead.skillId || 'gear'}`).slice(0, 80);
+      if (seenLeadIds.has(lid)) continue;
+      if (rawLead.targetGearKey && base.foundGear[rawLead.targetGearKey]) continue;
+      seenLeadIds.add(lid);
+      base.treasureMapLeads.push({
+        id: lid,
+        kind: rawLead.kind === 'world-cache' ? 'world-cache' : 'vault-chest',
+        levelId: String(rawLead.levelId).slice(0, 64),
+        siteName: String(rawLead.siteName || rawLead.levelId).slice(0, 72),
+        targetGearKey: typeof rawLead.targetGearKey === 'string' ? rawLead.targetGearKey.slice(0, 80) : '',
+        skillId: String(rawLead.skillId || 'speed').slice(0, 24),
+        skillLabel: String(rawLead.skillLabel || 'PROPULSION & SPEED').slice(0, 48),
+        skillShort: String(rawLead.skillShort || 'SPEED').slice(0, 20),
+        skillIcon: String(rawLead.skillIcon || '🗺️').slice(0, 8),
+        skillVerb: String(rawLead.skillVerb || '').slice(0, 120),
+        color: String(rawLead.color || '#facc15').slice(0, 24),
+        rgb: String(rawLead.rgb || '250, 204, 21').slice(0, 24),
+        hintSlot: String(rawLead.hintSlot || 'suit').slice(0, 20),
+        hintSlotLabel: String(rawLead.hintSlotLabel || 'Gear').slice(0, 32),
+        hintTier: String(rawLead.hintTier || 'rare').slice(0, 20),
+        hintTitle: String(rawLead.hintTitle || 'Uncharted Gear Vault').slice(0, 64),
+        hintClue: String(rawLead.hintClue || '').slice(0, 160),
+        foundAt: Math.max(0, Math.round(Number(rawLead.foundAt) || Date.now())),
+      });
+    }
   }
   return base;
 }
@@ -441,6 +472,13 @@ export function mergeCareerLogbooks(rawA, rawB) {
   out.doubloons = Math.max(a.doubloons || 0, b.doubloons || 0);
   out.lifetimeDoubloons = Math.max(out.doubloons, a.lifetimeDoubloons || 0, b.lifetimeDoubloons || 0);
   out.ownedDyes = Array.from(new Set([...(a.ownedDyes || []), ...(b.ownedDyes || [])])).slice(0, 48);
+  const leadMap = new Map();
+  for (const lead of [...(b.treasureMapLeads || []), ...(a.treasureMapLeads || [])]) {
+    if (!lead || !lead.id) continue;
+    if (lead.targetGearKey && out.foundGear[lead.targetGearKey]) continue;
+    leadMap.set(lead.id, { ...lead });
+  }
+  out.treasureMapLeads = Array.from(leadMap.values()).slice(0, 8);
 
   return out;
 }
@@ -703,6 +741,41 @@ export function buybackGearInLogbook(rawBook, slot, itemId) {
     cost,
     balance: book.doubloons,
   };
+}
+
+/**
+ * Add or update a persistent Expedition Treasure Map Lead in the Career Logbook (v231).
+ */
+export function addTreasureMapLeadInLogbook(rawBook, lead) {
+  const book = normalizeBook(rawBook);
+  if (!lead || !lead.levelId) return { book, added: false, lead: null };
+  const lid = String(lead.id || `lead-${lead.levelId}-${lead.skillId || 'gear'}`).slice(0, 80);
+  const cleanLead = { ...lead, id: lid, foundAt: Number(lead.foundAt) || Date.now() };
+  const idx = book.treasureMapLeads.findIndex((l) => l.id === lid || (l.levelId === cleanLead.levelId && l.skillId === cleanLead.skillId));
+  if (idx >= 0) {
+    book.treasureMapLeads[idx] = cleanLead;
+    return { book, added: false, lead: cleanLead };
+  }
+  if (book.treasureMapLeads.length >= 6) {
+    book.treasureMapLeads.shift();
+  }
+  book.treasureMapLeads.push(cleanLead);
+  return { book, added: true, lead: cleanLead };
+}
+
+/**
+ * Complete / remove matching Treasure Map Lead(s) once discovered on a dive (v231).
+ */
+export function completeTreasureMapLeadInLogbook(rawBook, { levelId = '', leadId = '', gearKey = '', skillId = '' } = {}) {
+  const book = normalizeBook(rawBook);
+  const before = book.treasureMapLeads.length;
+  book.treasureMapLeads = book.treasureMapLeads.filter((l) => {
+    if (leadId && l.id === leadId) return false;
+    if (gearKey && l.targetGearKey && l.targetGearKey === gearKey) return false;
+    if (levelId && l.levelId === levelId && (!skillId || l.skillId === skillId)) return false;
+    return true;
+  });
+  return { book, removed: before - book.treasureMapLeads.length };
 }
 
 export function recordLoreDiscoveryInLogbook(rawBook, { kind, title, lore, siteName = '' } = {}) {

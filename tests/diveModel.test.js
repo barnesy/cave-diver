@@ -12687,3 +12687,72 @@ test('v230 Treasure Maps + Sonar Beacons, Ultra-Rare Legendaries, Silt-Pierce / 
     timeSec: 4.2,
   });
 });
+
+test('v231 Persistent Expedition Treasure Map Leads, World Map Markers & Pre-Locked Sonar Beacons on Dive Splashdown', async () => {
+  const { rollExpeditionTreasureMapLead } = await import('../public/js/game/treasureMaps.js');
+  const {
+    createEmptyLogbook,
+    addTreasureMapLeadInLogbook,
+    completeTreasureMapLeadInLogbook,
+    mergeCareerLogbooks,
+  } = await import('../public/js/game/logbookModel.js');
+  const { CHEST_GEAR_DROPS, WORLD_GEAR_CACHES } = await import('../public/js/game/gearStats.js');
+  const { LEVELS } = await import('../public/js/levels/index.js');
+
+  // 1. Rolling a fresh Expedition Treasure Map Lead produces a valid site + clear skill hint
+  const lead = rollExpeditionTreasureMapLead({
+    levels: LEVELS,
+    currentLevelId: LEVEL_1.id,
+    foundGearMap: {},
+    existingLeads: [],
+    chestPool: CHEST_GEAR_DROPS,
+    worldCaches: WORLD_GEAR_CACHES,
+    rng: () => 0.1,
+  });
+  assert.ok(lead && lead.levelId && lead.levelId !== LEVEL_1.id, 'Must chart lead to a valid expedition site');
+  assert.ok(lead.skillId && lead.skillLabel && lead.skillIcon && lead.hintTitle);
+
+  // 2. Logbook persists, dedupes, cloud-merges & completes Treasure Map Leads cleanly
+  let book = createEmptyLogbook();
+  const addRes = addTreasureMapLeadInLogbook(book, lead);
+  assert.equal(addRes.added, true);
+  assert.equal(addRes.book.treasureMapLeads.length, 1);
+  const dupRes = addTreasureMapLeadInLogbook(addRes.book, lead);
+  assert.equal(dupRes.added, false);
+  assert.equal(dupRes.book.treasureMapLeads.length, 1);
+
+  const merged = mergeCareerLogbooks(addRes.book, createEmptyLogbook());
+  assert.equal(merged.treasureMapLeads.length, 1);
+  assert.equal(merged.treasureMapLeads[0].levelId, lead.levelId);
+
+  // 3. Starting a dive on a site with an active Treasure Map Lead immediately pre-locks its Sonar Beacon!
+  const vaultLead = {
+    id: `lead-vault-${LEVEL_1.id}-visibility`,
+    kind: 'vault-chest',
+    levelId: LEVEL_1.id,
+    siteName: LEVEL_1.name,
+    targetGearKey: '',
+    skillId: 'visibility',
+    skillLabel: 'SILT-PIERCING OPTICS',
+    skillShort: 'SILT LAMP',
+    skillIcon: '🔦',
+    skillVerb: 'Cuts Cave Silt & Extends Torch Reach',
+    color: '#fde047',
+    rgb: '253, 224, 71',
+    hintSlot: 'torch',
+    hintSlotLabel: 'Dive Torch',
+    hintTier: 'legendary',
+    hintTitle: 'SILT LAMP Vault Relic',
+    hintClue: 'Sealed Vault sighted in Cenote El Abismo',
+  };
+  const s = createDiveSession(LEVEL_1, { treasureMapLeads: [vaultLead] });
+  assert.equal(s.activeTreasureBeacons.length, 1, 'Dive with active Treasure Map Lead must pre-lock Sonar Beacon on splashdown');
+  assert.equal(s.activeTreasureBeacons[0].skillId, 'visibility');
+  const linkedChest = s.treasureChests.find((c) => c.beaconRevealed);
+  assert.ok(linkedChest && linkedChest.isMapVault && linkedChest.skillFocus === 'visibility');
+
+  // 4. Completing the lead removes it cleanly from the logbook
+  const doneRes = completeTreasureMapLeadInLogbook(addRes.book, { levelId: lead.levelId, leadId: lead.id });
+  assert.equal(doneRes.removed, 1);
+  assert.equal(doneRes.book.treasureMapLeads.length, 0);
+});

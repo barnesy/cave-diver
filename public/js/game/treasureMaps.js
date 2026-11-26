@@ -321,3 +321,129 @@ export function resolveTreasureBeaconOnChestOpen(session, chestId) {
   }
   return resolved;
 }
+
+const SLOT_LABELS_MAP = Object.freeze({
+  suit: 'Drysuit',
+  trim: 'Harness & Fins',
+  headgear: 'Headgear',
+  visor: 'Mask Visor',
+  tank: 'Tank System',
+  torch: 'Dive Torch',
+  patch: 'Expedition Crest',
+});
+
+const WORLD_SLOT_SKILL = Object.freeze({
+  suit: 'resistance',
+  trim: 'speed',
+  headgear: 'resistance',
+  visor: 'sonar',
+  tank: 'resistance',
+  torch: 'visibility',
+  patch: 'armor',
+});
+
+/**
+ * Roll a persistent Expedition Treasure Map Lead pointing to a specific dive site
+ * and an undiscovered piece of gear (either an unfound World Gear Cache or a
+ * Skill-Targeted Vault Chest) so players can see Treasure Markers on the World Map
+ * and launch straight into that dive from the Gear Workshop (v231).
+ */
+export function rollExpeditionTreasureMapLead({
+  levels = [],
+  currentLevelId = '',
+  foundGearMap = null,
+  existingLeads = [],
+  chestPool = [],
+  worldCaches = [],
+  rng = Math.random,
+} = {}) {
+  const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
+  const activeLeads = Array.isArray(existingLeads) ? existingLeads : [];
+  const activeLevelIds = new Set(activeLeads.map((l) => l.levelId));
+  const activeGearKeys = new Set(activeLeads.map((l) => l.targetGearKey).filter(Boolean));
+  const levelById = new Map((Array.isArray(levels) ? levels : []).map((l) => [l.id, l]));
+
+  // 1. Prefer an undiscovered World Gear Cache on a site that doesn't already have an active Treasure Map!
+  const unfoundWorld = (Array.isArray(worldCaches) ? worldCaches : []).filter((wc) => {
+    const gk = `${wc.slot}:${wc.itemId}`;
+    return (
+      !found[gk] &&
+      !activeGearKeys.has(gk) &&
+      !activeLevelIds.has(wc.levelId) &&
+      wc.levelId !== currentLevelId &&
+      levelById.has(wc.levelId)
+    );
+  });
+
+  if (unfoundWorld.length > 0 && (Number(rng()) || 0) < 0.55) {
+    const wc = unfoundWorld[Math.floor((Number(rng()) || 0) * unfoundWorld.length) % unfoundWorld.length];
+    const lvl = levelById.get(wc.levelId);
+    const skillId = WORLD_SLOT_SKILL[wc.slot] || 'sonar';
+    const skill = getTreasureSkillProfile(skillId);
+    const slotLabel = SLOT_LABELS_MAP[wc.slot] || 'Gear';
+    return {
+      id: `lead-wc-${wc.levelId}-${wc.slot}`,
+      kind: 'world-cache',
+      levelId: wc.levelId,
+      siteName: lvl?.name || wc.siteName || wc.levelId,
+      targetGearKey: `${wc.slot}:${wc.itemId}`,
+      skillId: skill.id,
+      skillLabel: skill.label,
+      skillShort: skill.short,
+      skillIcon: skill.icon,
+      skillVerb: skill.verb,
+      color: skill.color,
+      rgb: skill.rgb,
+      hintSlot: wc.slot,
+      hintSlotLabel: slotLabel,
+      hintTier: wc.tier || 'rare',
+      hintTitle: `Sunken ${slotLabel} Cache`,
+      hintClue: wc.clue || `Hidden cache reported inside ${lvl?.name || wc.siteName}`,
+      foundAt: Date.now(),
+    };
+  }
+
+  // 2. Otherwise chart a Skill-Targeted Vault Chest Lead on a real expedition site!
+  const candidateLevels = (Array.isArray(levels) ? levels : []).filter(
+    (l) => l && !l.isProvingGrounds && !l.isProcedural && !activeLevelIds.has(l.id) && l.id !== currentLevelId
+  );
+  const poolLevels = candidateLevels.length > 0
+    ? candidateLevels
+    : (Array.isArray(levels) ? levels : []).filter((l) => l && !l.isProvingGrounds && !activeLevelIds.has(l.id));
+  if (poolLevels.length === 0) return null;
+
+  const targetLvl = poolLevels[Math.floor((Number(rng()) || 0) * poolLevels.length) % poolLevels.length];
+  const usedSkills = activeLeads.map((l) => l.skillId).filter(Boolean);
+  const skillId = chooseTreasureMapSkill({ chestPool, foundGearMap: found, usedSkills, rng });
+  const skill = getTreasureSkillProfile(skillId);
+  const matchingDrops = (Array.isArray(chestPool) ? chestPool : []).filter(
+    (d) => d.skillId === skillId && !found[`${d.slot}:${d.itemId}`]
+  );
+  const sampleDrop = matchingDrops.length > 0
+    ? matchingDrops[Math.floor((Number(rng()) || 0) * matchingDrops.length) % matchingDrops.length]
+    : null;
+  const hintSlot = sampleDrop?.slot || 'suit';
+  const slotLabel = SLOT_LABELS_MAP[hintSlot] || 'Expedition Gear';
+  const hasLegChance = matchingDrops.some((d) => d.tier === 'legendary');
+
+  return {
+    id: `lead-vault-${targetLvl.id}-${skill.id}`,
+    kind: 'vault-chest',
+    levelId: targetLvl.id,
+    siteName: targetLvl.name || targetLvl.id,
+    targetGearKey: '',
+    skillId: skill.id,
+    skillLabel: skill.label,
+    skillShort: skill.short,
+    skillIcon: skill.icon,
+    skillVerb: skill.verb,
+    color: skill.color,
+    rgb: skill.rgb,
+    hintSlot,
+    hintSlotLabel: slotLabel,
+    hintTier: hasLegChance ? 'legendary' : (sampleDrop?.tier || 'epic'),
+    hintTitle: `${skill.short} Vault Relic`,
+    hintClue: `Sealed ${skill.label} Vault sighted in ${targetLvl.name} — Sonar Beacon ready on splashdown`,
+    foundAt: Date.now(),
+  };
+}

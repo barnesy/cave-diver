@@ -12945,3 +12945,276 @@ summary,
 
 
 
+
+/* v231 Clean Equipped-Only Gear Workshop, Slot Comparison Modal & World Map Treasure Markers */
+.livery-cat-tabs-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.livery-equipped-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 560px) {
+  .livery-equipped-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.livery-equipped-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.livery-equipped-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.72);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.22);
+}
+.livery-equipped-card.tier-mythic {
+  border-color: rgba(250, 204, 21, 0.65);
+}
+.livery-equipped-card.tier-legendary {
+  border-color: rgba(255, 149, 36, 0.85);
+  background: linear-gradient(145deg, rgba(154, 52, 18, 0.34), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 0 16px rgba(255, 149, 36, 0.22);
+}
+.livery-equipped-card.has-new-alt {
+  border-color: rgba(52, 211, 153, 0.72);
+}
+.livery-equipped-kicker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #7dd3fc;
+}
+.livery-equipped-cta {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #38bdf8;
+}
+.livery-equipped-chroma-card {
+  border-color: rgba(250, 204, 21, 0.36);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.92));
+}
+.livery-equipped-chroma-card .livery-equipped-kicker {
+  color: #fde68a;
+}
+.livery-equipped-chroma-card .livery-equipped-cta {
+  color: #facc15;
+}
+
+.livery-treasure-maps-section {
+  margin-top: 12px;
+}
+.livery-map-leads-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+.livery-map-lead-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--tm-col, #facc15) 62%, transparent);
+  background: linear-gradient(145deg, rgba(30, 27, 16, 0.78), rgba(10, 18, 34, 0.92));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--tm-col, #facc15) 16%, transparent);
+}
+.livery-map-lead-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.livery-map-lead-badge {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--tm-col, #fde047);
+}
+.livery-map-lead-title {
+  margin-top: 4px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #fef9c3;
+}
+.livery-map-lead-verb {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+.livery-map-lead-foot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.livery-map-lead-site {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #bae6fd;
+}
+.livery-discovery-whisper {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.55);
+  color: #94a3b8;
+  font-size: 0.7rem;
+  line-height: 1.38;
+}
+
+/* Equipped vs. Owned Slot Comparison Modal */
+.gear-slot-modal {
+  z-index: 120;
+}
+.gear-slot-modal-card {
+  max-width: 620px;
+  width: min(94vw, 620px);
+}
+.gear-slot-equipped-hero {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.48);
+  background: linear-gradient(145deg, rgba(12, 74, 110, 0.34), rgba(15, 23, 42, 0.92));
+  margin-bottom: 12px;
+}
+.gear-slot-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gear-slot-hero-badge {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #34d399;
+  margin-right: 6px;
+}
+.gear-slot-hero-name {
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #f8fafc;
+}
+.gear-slot-hero-pwr,
+.gear-slot-cmp-pwr {
+  margin-top: 5px;
+  font-size: 0.72rem;
+  color: #fef08a;
+  line-height: 1.35;
+}
+.gear-slot-owned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  max-height: 44vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.gear-slot-cmp-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.88);
+}
+.gear-slot-cmp-card.tier-mythic {
+  border-color: rgba(250, 204, 21, 0.6);
+}
+.gear-slot-cmp-card.tier-legendary {
+  border-color: rgba(255, 149, 36, 0.85);
+  background: linear-gradient(145deg, rgba(154, 52, 18, 0.34), rgba(15, 23, 42, 0.94));
+}
+.gear-slot-cmp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gear-slot-cmp-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.gear-slot-cmp-name {
+  font-size: 0.88rem;
+  color: #f8fafc;
+}
+.gear-slot-cmp-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gear-slot-cmp-deltas {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.gear-slot-vs-lbl {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  margin-right: 2px;
+}
+.gear-slot-empty {
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+  font-size: 0.76rem;
+  text-align: center;
+}
+.gear-slot-buyback-wrap {
+  margin-top: 12px;
+}
+
+/* World Map & Site Card Treasure Map Markers */
+@keyframes mapTreasurePulse {
+  0%, 100% { opacity: 0.92; stroke-width: 1.5; }
+  50% { opacity: 0.32; stroke-width: 2.6; }
+}
+.map-treasure-pulse {
+  animation: mapTreasurePulse 1.8s ease-in-out infinite;
+}
+.lvl-treasure-map-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #fef9c3;
+  background: rgba(120, 53, 15, 0.78);
+  border: 1px solid var(--tm-col, #facc15);
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.28);
+}

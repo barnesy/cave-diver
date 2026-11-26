@@ -570,7 +570,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=230',
+  mapRasterUrl: './assets/map-expedition.jpg?v=231',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -897,6 +897,7 @@ const hud = new DiveComputerHUD({
 // Centralized stack-ordered overlay/modal manager & focus restoration (v144 module)
 const modalManager = createModalManager([
   { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearUnlockModalEl?.hidden, close: () => liveryWorkshop.closeGearUnlockShowcase() },
+  { isOpen: () => typeof liveryWorkshop !== 'undefined' && !liveryWorkshop.gearSlotModalEl?.hidden, close: () => liveryWorkshop.closeGearSlotModal() },
   { isOpen: () => photoModeState.active, close: () => setPhotoModeActive(false) },
   { isOpen: () => typeof fgCardModalEl !== 'undefined' && fgCardModalEl && !fgCardModalEl.hidden, close: () => closeFieldGuideCardModal() },
   { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && !artifactInspectorModalEl?.hidden, close: () => closeArtifactInspector() },
@@ -2475,21 +2476,11 @@ const liveryWorkshop = createLiveryWorkshopController({
   spawnConfetti: () => spawnCelebrationConfetti(),
   launchProvingGrounds: async (pgLvl) => { const prev = activeLevel?.isProvingGrounds ? null : activeLevel; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(pgLvl, { showOverlay: true }); startDiveRun(false); return prev; },
   exitProvingGrounds: (prevLvl) => { abortActiveDiveToMenu(); if (prevLvl && !prevLvl.isProvingGrounds && activeLevel?.id !== prevLvl.id) ensureLevelLoaded(prevLvl, { showOverlay: false }); },
+  launchSiteDive: async (lvl) => { if (!lvl) return; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(lvl, { showOverlay: true }); startDiveRun(false); },
+  refreshWorldMap: () => siteBrowser?.renderLevelCards?.(),
   getDifficulty: () => activeDifficulty, getActiveModifiers: () => activeExpeditionModifiers,
 });
-const {
-  liveryModalEl,
-  getCurrentLiveryUnlocks,
-  saveLiverySlotsToStorage,
-  saveRigLivery,
-  reconcileActiveRigLiveryFromStorage,
-  renderHomeAvatarBadge,
-  syncLiveryUi,
-  renderLiveryPreviewFrame,
-  renderLiveryWorkshopModal,
-  openLiveryModal,
-  closeLiveryModal,
-} = liveryWorkshop;
+const { liveryModalEl, getCurrentLiveryUnlocks, saveLiverySlotsToStorage, saveRigLivery, reconcileActiveRigLiveryFromStorage, renderHomeAvatarBadge, syncLiveryUi, renderLiveryPreviewFrame, renderLiveryWorkshopModal, openLiveryModal, closeLiveryModal } = liveryWorkshop;
 syncLiveryUi();
 
 let activeGhostTrack = null;
@@ -3248,6 +3239,7 @@ function startDiveRun(multiplayer = false, restoredState = null) {
     crewRoleId: activeCrewRoleId,
     modifiers: activeExpeditionModifiers,
     foundGear: loadCareerLogbook()?.foundGear || null,
+    treasureMapLeads: loadCareerLogbook()?.treasureMapLeads || null,
     isFirstDive: !activeLevel.isProvingGrounds && (loadCareerLogbook()?.totalDives || 0) === 0,
     isRescueDrill: isDrillLaunch,
   });

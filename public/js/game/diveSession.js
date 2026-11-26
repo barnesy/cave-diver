@@ -485,6 +485,7 @@ export function createDiveSession(
     crewRoleId = 'balanced',
     modifiers = [],
     foundGear = null,
+    treasureMapLeads = null,
     isRescueDrill = false,
     isFirstDive = false,
   } = {}
@@ -534,10 +535,73 @@ export function createDiveSession(
         foundGearMap: foundGear,
         excludePoints: [...worldGearCaches, ...treasureChests],
       });
+  const activeTreasureBeacons = [];
+  // v231: If diver holds an active Expedition Treasure Map Lead for THIS site, lock its Sonar Beacon immediately on splashdown!
+  if (!isProvingGrounds && Array.isArray(treasureMapLeads) && treasureMapLeads.length > 0) {
+    for (const lead of treasureMapLeads) {
+      if (!lead || lead.levelId !== level.id) continue;
+      if (lead.kind === 'world-cache') {
+        const wc = worldGearCaches.find((c) => !c.opened && (!lead.targetGearKey || c.gearKey === lead.targetGearKey));
+        if (wc) {
+          wc.beaconRevealed = true;
+          wc.leadMeta = lead;
+          activeTreasureBeacons.push({
+            id: `beacon-${lead.id}`,
+            leadId: lead.id,
+            cacheId: wc.id,
+            chestId: '',
+            chestName: lead.hintTitle || wc.itemName || 'Sunken Gear Cache',
+            skillId: lead.skillId,
+            skillLabel: lead.skillLabel,
+            skillShort: lead.skillShort,
+            skillIcon: lead.skillIcon,
+            skillVerb: lead.skillVerb,
+            color: lead.color || '#facc15',
+            rgb: lead.rgb || '250, 204, 21',
+            x: wc.x,
+            y: wc.y,
+            claimedAt: 0,
+            completed: false,
+          });
+        }
+      } else {
+        const tc =
+          treasureChests.find((c) => !c.opened && !c.beaconRevealed && c.isMapVault) ||
+          treasureChests.find((c) => !c.opened && !c.beaconRevealed);
+        if (tc) {
+          tc.isMapVault = true;
+          tc.chestTier = 'vault';
+          tc.skillFocus = lead.skillId;
+          tc.beaconRevealed = true;
+          tc.leadId = lead.id;
+          tc.name = `${lead.skillShort || 'VAULT'} Vault Chest`;
+          tc.beamColor = lead.color || '#facc15';
+          activeTreasureBeacons.push({
+            id: `beacon-${lead.id}`,
+            leadId: lead.id,
+            chestId: tc.id,
+            chestName: tc.name,
+            skillId: lead.skillId,
+            skillLabel: lead.skillLabel,
+            skillShort: lead.skillShort,
+            skillIcon: lead.skillIcon,
+            skillVerb: lead.skillVerb,
+            color: lead.color || '#facc15',
+            rgb: lead.rgb || '250, 204, 21',
+            x: tc.x,
+            y: tc.y,
+            claimedAt: 0,
+            completed: false,
+          });
+        }
+      }
+    }
+  }
   const hazards = createDynamicHazards(level);
   hazards.worldGearCaches = worldGearCaches;
   hazards.treasureChests = treasureChests;
   hazards.treasureMaps = treasureMaps;
+  hazards.activeTreasureBeacons = activeTreasureBeacons;
   hazards.rigPerf = rigPerf;
 
   return {
@@ -548,7 +612,7 @@ export function createDiveSession(
     worldGearCaches,
     treasureChests,
     treasureMaps,
-    activeTreasureBeacons: [],
+    activeTreasureBeacons,
     foundGearMap: foundGear && typeof foundGear === 'object' ? { ...foundGear } : {},
     isFirstDive: !isProvingGrounds && Boolean(isFirstDive),
     _firstChestAwarded: false,

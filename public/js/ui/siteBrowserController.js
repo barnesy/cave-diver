@@ -252,6 +252,13 @@ export function createSiteBrowserController({
       ? `<polyline points="${routePts}" fill="none" vector-effect="non-scaling-stroke" stroke="rgba(56, 189, 248, 0.28)" stroke-width="1" stroke-dasharray="3,3" />`
       : '';
 
+    const activeLeadsByLevel = new Map();
+    for (const lead of Array.isArray(book?.treasureMapLeads) ? book.treasureMapLeads : []) {
+      if (!lead?.levelId) continue;
+      if (!activeLeadsByLevel.has(lead.levelId)) activeLeadsByLevel.set(lead.levelId, []);
+      activeLeadsByLevel.get(lead.levelId).push(lead);
+    }
+
     const pinMarkup = pins
       .map(({ lvl, idx, slot, x, y }) => {
         const isSelected = lvl.id === activeLevel.id;
@@ -260,12 +267,21 @@ export function createSiteBrowserController({
         const clearRec = book.cleared?.[lvl.id] || null;
         const best = Math.max(getSavedBestScore(lvl.id), clearRec?.score || 0);
         const gradeTag = clearRec?.grade || '';
-        const pinColor = isWreck ? '#fb923c' : isUnlined ? '#fbbf24' : '#38bdf8';
-        const r = (isSelected ? 5.2 : 3.4) * k;
+        const siteLeads = activeLeadsByLevel.get(lvl.id) || [];
+        const topLead = siteLeads[0] || null;
+        const pinColor = topLead ? (topLead.color || '#facc15') : isWreck ? '#fb923c' : isUnlined ? '#fbbf24' : '#38bdf8';
+        const r = (isSelected ? 5.2 : topLead ? 4.2 : 3.4) * k;
 
         const halo = isSelected
           ? `<circle class="map-pin-sonar" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(7.5 * k).toFixed(2)}" vector-effect="non-scaling-stroke" />
            <circle class="map-pin-halo" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" />`
+          : '';
+        const treasureMarker = topLead
+          ? `<g class="map-pin-treasure" data-treasure-level="${lvl.id}">
+              <circle class="map-treasure-pulse" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(8.6 * k).toFixed(2)}" fill="none" stroke="${escapeHtml(topLead.color || '#facc15')}" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+              <polygon points="${x.toFixed(2)},${(y - 12.2 * k).toFixed(2)} ${(x + 4.4 * k).toFixed(2)},${(y - 7.8 * k).toFixed(2)} ${x.toFixed(2)},${(y - 3.4 * k).toFixed(2)} ${(x - 4.4 * k).toFixed(2)},${(y - 7.8 * k).toFixed(2)}" fill="${escapeHtml(topLead.color || '#facc15')}" stroke="#020b14" stroke-width="1.2" vector-effect="non-scaling-stroke" />
+              <text x="${x.toFixed(2)}" y="${(y - 13.6 * k).toFixed(2)}" text-anchor="middle" font-size="${(8.6 * k).toFixed(2)}" fill="#fef08a" stroke="#020b14" stroke-width="${(2.6 * k).toFixed(2)}" paint-order="stroke" font-weight="800" font-family="ui-monospace, monospace">🗺️${escapeHtml(topLead.skillIcon || '')}</text>
+            </g>`
           : '';
         const crosshair = isSelected
           ? `<g stroke="rgba(224,242,254,0.62)" vector-effect="non-scaling-stroke" stroke-width="1">
@@ -302,10 +318,12 @@ export function createSiteBrowserController({
           ).toFixed(2)}" font-weight="700" font-family="ui-monospace, monospace">${escapeHtml(labelText)}</text>`;
         }
 
+        const leadTip = topLead ? ` · 🗺️ Treasure Map: ${topLead.skillIcon} ${topLead.skillLabel} (${topLead.hintTitle})` : '';
         return `
-        <g class="map-pin-btn ${isSelected ? 'active' : ''} ${locked ? 'locked' : ''}" data-level-id="${lvl.id}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" tabindex="0">
-          <title>L${idx + 1}: ${escapeHtml(lvl.name)} (${escapeHtml(slot?.region || '')} · ${getLevelMaxDepthM(lvl)}m)</title>
+        <g class="map-pin-btn ${isSelected ? 'active' : ''} ${topLead ? 'has-treasure-map' : ''} ${locked ? 'locked' : ''}" data-level-id="${lvl.id}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" tabindex="0">
+          <title>L${idx + 1}: ${escapeHtml(lvl.name)} (${escapeHtml(slot?.region || '')} · ${getLevelMaxDepthM(lvl)}m)${escapeHtml(leadTip)}</title>
           ${halo}
+          ${treasureMarker}
           ${crosshair}
           <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(9.0 * k).toFixed(2)}" fill="transparent" />
           ${ring}
@@ -389,10 +407,11 @@ export function createSiteBrowserController({
       const tierTag = lvl.reelMetersPerDiver > 0 ? `${prefix}L${idx + 1} · T${meta.tier}` : `${prefix}L${idx + 1}`;
       const recArch = getRecommendedArchetypeForLevel(lvl);
       const siteCaches = getWorldGearCachesForSite(lvl.id, book.foundGear);
-      const unfoundCache = siteCaches.find((c) => !c.found) || null;
-      const foundCache = !unfoundCache && siteCaches.length > 0 ? siteCaches[0] : null;
-      const cacheBadgeHtml = unfoundCache
-        ? `<span class="lvl-cache-badge unfound" title="Hidden World Gear Cache: ${escapeHtml(unfoundCache.clue)}">📦 Gear Cache</span>`
+      const foundCache = siteCaches.find((c) => c.found) || null;
+      const siteLead = (Array.isArray(book.treasureMapLeads) ? book.treasureMapLeads : []).find((l) => l.levelId === lvl.id) || null;
+      // v231: Never spoil undiscovered caches — only show Treasure Map markers for sites you hold a Treasure Map for (or already-found gear)!
+      const cacheBadgeHtml = siteLead
+        ? `<span class="lvl-treasure-map-badge" style="--tm-col:${escapeHtml(siteLead.color || '#facc15')}" title="🗺️ Treasure Map: ${escapeHtml(siteLead.skillLabel)} — ${escapeHtml(siteLead.hintClue)}">🗺️ ${escapeHtml(siteLead.skillIcon || '')} ${escapeHtml(siteLead.skillShort || 'Map')}</span>`
         : foundCache
           ? `<span class="lvl-cache-badge found" title="Discovered: ${escapeHtml(foundCache.itemName)}">✓ Gear</span>`
           : '';

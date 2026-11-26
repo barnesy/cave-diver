@@ -897,54 +897,61 @@ export function drawSonarMinimap(ctx, width, height, state) {
     }
   }
 
-  // 8a.5. Live Pulsing Treasure Map Gear Beacons on Player's Sonar Scope (v230)
+  // 8a.5. Live Pulsing Treasure Map Gear Beacons on Player's Sonar Scope (v230 / v231)
   const mapChests = Array.isArray(hazards?.treasureChests) ? hazards.treasureChests : null;
+  const mapCaches = Array.isArray(hazards?.worldGearCaches) ? hazards.worldGearCaches : null;
   const mapsList = Array.isArray(hazards?.treasureMaps) ? hazards.treasureMaps : null;
-  if (mapChests && mapChests.length > 0) {
-    for (let i = 0; i < mapChests.length; i++) {
-      const tc = mapChests[i];
+  const beaconTargets = [];
+  if (mapChests) {
+    for (const tc of mapChests) {
       if (!tc || tc.opened || !tc.beaconRevealed) continue;
-      const linkedMap = mapsList?.find((m) => m.targetChestId === tc.id) || null;
-      const col = linkedMap?.color || tc.beamColor || '#facc15';
-      const rgb = linkedMap?.rgb || '250, 204, 21';
-      const rawX = toX(tc.x);
-      const rawY = toY(tc.y);
-      const pad = 10;
-      const clampedX = Math.max(pad, Math.min(width - pad, rawX));
-      const clampedY = Math.max(pad, Math.min(height - pad, rawY));
-      const isOffEdge = Math.abs(rawX - clampedX) > 1 || Math.abs(rawY - clampedY) > 1;
-      const ringP = (timeSec * 0.95 + i * 0.37) % 1;
-
-      ctx.save();
-      // Expanding sonar homing ring
-      ctx.strokeStyle = `rgba(${rgb}, ${((1 - ringP) * 0.95).toFixed(2)})`;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(clampedX, clampedY, 4 + ringP * 11, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Bright skill-colored diamond beacon core
-      ctx.fillStyle = col;
-      ctx.strokeStyle = '#08111f';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(clampedX, clampedY - 5);
-      ctx.lineTo(clampedX + 5, clampedY);
-      ctx.lineTo(clampedX, clampedY + 5);
-      ctx.lineTo(clampedX - 5, clampedY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Compact Skill Tag on the Sonar Scope so player never forgets what skill this beacon drops!
-      const tag = `${linkedMap?.skillIcon || '🗺️'}${linkedMap?.skillShort || 'GEAR'}${isOffEdge ? '↗' : ''}`;
-      ctx.font = '800 8px ui-monospace, SFMono-Regular, Menlo, monospace';
-      ctx.textAlign = clampedX > width * 0.65 ? 'right' : 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#fef9c3';
-      ctx.fillText(tag, clampedX + (clampedX > width * 0.65 ? -7 : 7), clampedY);
-      ctx.restore();
+      const linkedMap = mapsList?.find((m) => m.targetChestId === tc.id) || hazards?.activeTreasureBeacons?.find((b) => b.chestId === tc.id) || null;
+      beaconTargets.push({ x: tc.x, y: tc.y, col: linkedMap?.color || tc.beamColor || '#facc15', rgb: linkedMap?.rgb || '250, 204, 21', icon: linkedMap?.skillIcon || '🗺️', short: linkedMap?.skillShort || 'GEAR' });
     }
+  }
+  if (mapCaches) {
+    for (const gc of mapCaches) {
+      if (!gc || gc.opened || !gc.beaconRevealed) continue;
+      const lm = gc.leadMeta || null;
+      beaconTargets.push({ x: gc.x, y: gc.y, col: lm?.color || '#facc15', rgb: lm?.rgb || '250, 204, 21', icon: lm?.skillIcon || gc.icon || '🗺️', short: lm?.skillShort || 'CACHE' });
+    }
+  }
+  for (let i = 0; i < beaconTargets.length; i++) {
+    const bt = beaconTargets[i];
+    const rawX = toX(bt.x);
+    const rawY = toY(bt.y);
+    const pad = 10;
+    const clampedX = Math.max(pad, Math.min(width - pad, rawX));
+    const clampedY = Math.max(pad, Math.min(height - pad, rawY));
+    const isOffEdge = Math.abs(rawX - clampedX) > 1 || Math.abs(rawY - clampedY) > 1;
+    const ringP = (timeSec * 0.95 + i * 0.37) % 1;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(${bt.rgb}, ${((1 - ringP) * 0.95).toFixed(2)})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(clampedX, clampedY, 4 + ringP * 11, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = bt.col;
+    ctx.strokeStyle = '#08111f';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(clampedX, clampedY - 5);
+    ctx.lineTo(clampedX + 5, clampedY);
+    ctx.lineTo(clampedX, clampedY + 5);
+    ctx.lineTo(clampedX - 5, clampedY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const tag = `${bt.icon}${bt.short}${isOffEdge ? '↗' : ''}`;
+    ctx.font = '800 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = clampedX > width * 0.65 ? 'right' : 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fef9c3';
+    ctx.fillText(tag, clampedX + (clampedX > width * 0.65 ? -7 : 7), clampedY);
+    ctx.restore();
   }
 
   // 8b. Secret Sonar-Only Lair Cartography (strictly hidden until sonar-revealed or breached!)
