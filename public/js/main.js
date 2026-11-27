@@ -38,6 +38,7 @@ import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { createBountiesController } from './ui/bountiesController.js';
 import { resolveBountyBoardState } from './game/bossBounties.js';
 import { createTrenchController } from './ui/trenchController.js';
+import { applyTrenchPerkToSession } from './game/abyssalTrench.js';
 import { createDailyChallengeController } from './ui/dailyChallengeController.js';
 import { createPhotoStudioController } from './ui/photoStudioController.js';
 import { createCoopInviteController } from './ui/coopInviteController.js';
@@ -560,7 +561,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=263',
+  mapRasterUrl: './assets/map-expedition.jpg?v=264',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1263,7 +1264,7 @@ btnCamera?.addEventListener('click', (e) => {
   handleCameraSnap();
 });
 
-// Freeze-Frame Underwater Photo Mode Studio (v139 / v263 modular controller)
+// Freeze-Frame Underwater Photo Mode Studio (v139 / v264 modular controller)
 function renderCurrentFrameForPhoto(photoMode) {
   if (!session) return;
   const nextCheckpoint = session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
@@ -1608,9 +1609,12 @@ function fireSpeargunAction({ aimAngle = null, isTap = false } = {}) {
       : Number.isFinite(_lastPointerWorldAngle)
         ? _lastPointerWorldAngle
         : (session.diver?.torchAngle ?? session.diver?.angle ?? 0);
-  // Apply gentle ±8.5° aim magnetism when aiming with the touch right-stick for buttery mobile boss fights! (v192)
-  const usingTouchAim = Number.isFinite(aimAngle) || Boolean(torchAim.active);
-  const resolvedAngle = usingTouchAim ? computeTouchAimMagnetAngle(session, rawAngle) : rawAngle;
+  // Apply gentle ±8.5°–11° aim magnetism when aiming via touch stick or gamepad right-stick (v192 / v264)
+  const usingStickAim = Number.isFinite(aimAngle) || Boolean(torchAim.active) || Boolean(input?.gamepadActive);
+  const chargeFactor = Math.max(0, Math.min(1, (lair.chargeSec || 0) / Math.max(0.1, SPEARGUN_MAX_CHARGE_SEC)));
+  const resolvedAngle = usingStickAim
+    ? computeTouchAimMagnetAngle(session, rawAngle, 0.15, { chargeFactor })
+    : rawAngle;
   session.diver.torchAngle = resolvedAngle;
   const res = fireSpeargun(
     session,
@@ -2510,7 +2514,7 @@ const trenchCtrl = createTrenchController({
   },
   setHomeMenuOpen: (v) => setHomeMenuOpen(v),
   closeDiveSetupModal: () => closeDiveSetupModal(),
-  launchTrenchLevel: async (trenchLvl) => {
+  launchTrenchLevel: async (trenchLvl, trenchRun) => {
     activeDailyChallenge = null;
     activeRescueDrill = null;
     if (lan.room) {
@@ -2519,6 +2523,13 @@ const trenchCtrl = createTrenchController({
     }
     await ensureLevelLoaded(trenchLvl, { showOverlay: true });
     startDiveRun(false);
+    if (session && trenchRun) {
+      const appliedPerk = applyTrenchPerkToSession(session, trenchRun);
+      if (appliedPerk) {
+        lastGearHudKey = '';
+        syncTechGearHud(session);
+      }
+    }
     trenchCtrl.syncHudPill();
   },
   finishTrenchToDebrief: (summary, ctx) => {
@@ -3289,6 +3300,15 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
       debriefReplay.stop();
     }
     if (debriefHighlightPillsEl) {
+      if ((diveState.maxDepthM || 0) >= 12) {
+        recordDiveHighlight(session, {
+          kind: 'depth',
+          icon: '⬇️',
+          label: `Peak ${diveState.maxDepthM.toFixed(1)}m`,
+          tSec: Math.round((session.simTimeSec || diveState.diveTimeSec || 0) * 0.5),
+          depthM: diveState.maxDepthM,
+        });
+      }
       if (success) {
         recordDiveHighlight(session, {
           kind: 'extract',
@@ -3299,16 +3319,17 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         });
       }
       const hlList = Array.isArray(session?.highlights) ? session.highlights : [];
-      if (hasReplay && hlList.length > 0) {
+      if (hlList.length > 0) {
         debriefHighlightPillsEl.hidden = false;
         debriefHighlightPillsEl.innerHTML = '';
         for (const hl of hlList) {
           const pill = document.createElement('button');
           pill.type = 'button';
           pill.className = 'highlight-pill';
-          pill.innerHTML = `<span>${hl.icon} ${hl.label}</span> <span class="hl-time">${formatReplayTime(hl.tSec)}</span>`;
+          pill.innerHTML = `<span>${hl.icon} ${escapeHtml(hl.label)}</span> <span class="hl-time">${formatReplayTime(hl.tSec)}</span>`;
           pill.addEventListener('click', () => {
-            debriefReplay.seekToTime(hl.tSec);
+            if (hasReplay) debriefReplay.seekToTime(hl.tSec);
+            activeDebriefChartCtrl?.setTime?.(hl.tSec);
             debriefHighlightPillsEl.querySelectorAll('.highlight-pill.active').forEach((p) => p.classList.remove('active'));
             pill.classList.add('active');
           });
@@ -6211,6 +6232,12 @@ const sessionStepCallbacks = {
     audio.playBossDefeat?.();
     if (session?.secretLair?.spec?.boss) {
       const b = session.secretLair.spec.boss;
+      recordDiveHighlight(session, {
+        kind: 'boss',
+        icon: b.icon || '🏆',
+        label: `${b.name} Vanquished`,
+        depthM: session.diver?.y,
+      });
       spawnCelebrationConfetti();
       try {
         const siteId = session.level?.id || 'cenote-el-abismo';

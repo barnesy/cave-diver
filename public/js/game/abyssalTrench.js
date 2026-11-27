@@ -16,6 +16,81 @@ import {
 
 export const TRENCH_BEST_STORAGE_KEY = 'caveDiverTrenchBest_v1';
 
+/**
+ * Transfer-Bell Chamber Perks (v264): pick 1 tactical risk-reward upgrade before descending deeper.
+ */
+export const TRENCH_CHAMBER_PERKS = Object.freeze([
+  Object.freeze({
+    id: 'risk-multiplier',
+    icon: '🔥',
+    name: 'High-Stakes Core',
+    shortDesc: '+0.25× permanent run multiplier',
+    accent: '#fb7185',
+    multiplierBonus: 0.25,
+  }),
+  Object.freeze({
+    id: 'reserve-stage',
+    icon: '⛽',
+    name: 'Reserve Gas Manifold',
+    shortDesc: '+40 bar pressurized gas next chamber',
+    accent: '#38bdf8',
+    gasBonusBar: 40,
+  }),
+  Object.freeze({
+    id: 'dpv-overcharge',
+    icon: '⚡',
+    name: 'DPV & Sonar Overcharge',
+    shortDesc: 'Full DPV battery + 30% faster Sonar',
+    accent: '#fde047',
+    dpvOvercharge: true,
+  }),
+]);
+
+export function getTrenchPerkById(perkId) {
+  return TRENCH_CHAMBER_PERKS.find((p) => p.id === perkId) || TRENCH_CHAMBER_PERKS[0];
+}
+
+export function applyTrenchPerkToRun(runState, perkId) {
+  if (!runState) return null;
+  const perk = getTrenchPerkById(perkId);
+  runState.pendingPerkId = perk.id;
+  if (perk.multiplierBonus) {
+    runState.multiplierBonus = Math.round(((runState.multiplierBonus || 0) + perk.multiplierBonus) * 100) / 100;
+  }
+  if (!Array.isArray(runState.perksHistory)) runState.perksHistory = [];
+  runState.perksHistory.push({ chamber: (runState.chamber || 1) + 1, perkId: perk.id, name: perk.name });
+  return perk;
+}
+
+export function applyTrenchPerkToSession(session, runState) {
+  if (!session || !runState?.pendingPerkId) return null;
+  const perk = getTrenchPerkById(runState.pendingPerkId);
+  if (perk.gasBonusBar && session.diveState?.tanks) {
+    for (const tank of Object.values(session.diveState.tanks)) {
+      if (!tank || !Number.isFinite(tank.bar)) continue;
+      const cap = Math.max(240, (tank.maxBar || 200) + perk.gasBonusBar);
+      tank.maxBar = cap;
+      tank.bar = Math.min(cap, tank.bar + perk.gasBonusBar);
+      if (Number.isFinite(tank.litersRemaining) && Number.isFinite(tank.volumeLiters)) {
+        tank.litersRemaining = tank.bar * tank.volumeLiters;
+      }
+    }
+  }
+  if (perk.dpvOvercharge) {
+    if (session.dpv) {
+      session.dpv.equipped = true;
+      session.dpv.batteryPct = 100;
+    }
+    if (session.sonar) {
+      session.sonar.equipped = true;
+      session.sonar.cooldownMult = Math.min(session.sonar.cooldownMult || 1, 0.7);
+    }
+  }
+  session.activeTrenchPerk = perk;
+  runState.pendingPerkId = '';
+  return perk;
+}
+
 export const TRENCH_BIOME_LADDER = Object.freeze([
   Object.freeze({
     chamber: 1,
@@ -154,6 +229,9 @@ export function createTrenchRunState(seedRaw) {
     maxDepthM: 0,
     totalTimeSec: 0,
     multiplier: 1.0,
+    multiplierBonus: 0,
+    pendingPerkId: '',
+    perksHistory: [],
     extracted: false,
     lost: false,
     history: [],
@@ -172,21 +250,22 @@ export function recordTrenchChamberClear(runState, {
 } = {}) {
   if (!runState) return null;
   const meta = getTrenchChamberMeta(runState.chamber);
+  const effectiveMultiplier = Math.round((meta.multiplier + (runState.multiplierBonus || 0)) * 100) / 100;
   const cleanBase = Math.max(250, Math.round(Number(baseScore) || 600));
   const relicBonus = Math.max(0, Math.round(Number(relics) || 0)) * 85;
   const healthBonus = Math.round(Math.max(0, Math.min(100, Number(healthPct) || 0)) * 1.5);
-  const chamberPoints = Math.round((cleanBase + relicBonus + healthBonus) * meta.multiplier);
+  const chamberPoints = Math.round((cleanBase + relicBonus + healthBonus) * effectiveMultiplier);
 
   runState.chambersCleared += 1;
   runState.bankedScore += chamberPoints;
   runState.totalRelics += Math.max(0, Math.round(Number(relics) || 0));
   runState.maxDepthM = Math.max(runState.maxDepthM, Number(maxDepthM) || 0);
   runState.totalTimeSec += Math.max(0, Number(elapsedSec) || 0);
-  runState.multiplier = meta.multiplier;
+  runState.multiplier = effectiveMultiplier;
   runState.history.push({
     chamber: meta.chamber,
     name: meta.name,
-    multiplier: meta.multiplier,
+    multiplier: effectiveMultiplier,
     chamberPoints,
     relics: Math.max(0, Math.round(Number(relics) || 0)),
     maxDepthM: Number((Number(maxDepthM) || 0).toFixed(1)),
@@ -200,7 +279,7 @@ export function recordTrenchChamberClear(runState, {
     bankedScore: runState.bankedScore,
     nextChamber: nextMeta.chamber,
     nextName: nextMeta.name,
-    nextMultiplier: nextMeta.multiplier,
+    nextMultiplier: Math.round((nextMeta.multiplier + (runState.multiplierBonus || 0)) * 100) / 100,
     nextDepthBand: nextMeta.depthBand,
     nextGasHint: nextMeta.gasHint,
   };

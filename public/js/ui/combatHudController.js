@@ -41,6 +41,7 @@ export function createCombatHudController({
   let lastDashKey = '';
   let lastUpgradesKey = '';
   let lastHintFaded = false;
+  let lastInputHintKey = '';
 
   function reset() {
     lastMode = false;
@@ -50,6 +51,7 @@ export function createCombatHudController({
     lastDashKey = '';
     lastUpgradesKey = '';
     lastHintFaded = false;
+    lastInputHintKey = '';
   }
 
   function sync(sess) {
@@ -165,6 +167,25 @@ export function createCombatHudController({
     if (hintFaded !== lastHintFaded) {
       lastHintFaded = hintFaded;
       combatHintPillEl?.classList.toggle('faded', hintFaded);
+    }
+
+    // Dynamic Gamepad / Touch / Keyboard Combat Prompt Glyphs (v264)
+    const inp = getInput?.();
+    const inputMode = inp?.lastInputMode || 'keyboard';
+    const gpStyle = inp?.gamepadStyle || 'xbox';
+    const hintKey = `${inputMode}:${gpStyle}`;
+    if (combatHintPillEl && hintKey !== lastInputHintKey) {
+      lastInputHintKey = hintKey;
+      if (inputMode === 'gamepad') {
+        combatHintPillEl.textContent =
+          gpStyle === 'playstation'
+            ? 'R-STICK / R2 FIRE · L1 / ○ HYDRO-DASH · SHOOT CRYSTALS & STALACTITES'
+            : 'R-STICK / RT FIRE · LB / B HYDRO-DASH · SHOOT CRYSTALS & STALACTITES';
+      } else if (inputMode === 'touch') {
+        combatHintPillEl.textContent = 'HOLD AIM STICK TO FIRE · TAP DASH · SHOOT CRYSTALS & STALACTITES';
+      } else {
+        combatHintPillEl.textContent = 'HOLD AIM TO FIRE · [SHIFT] HYDRO-DASH · SHOOT CRYSTALS & STALACTITES';
+      }
     }
 
     return { active, armed };

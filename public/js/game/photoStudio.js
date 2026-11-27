@@ -216,27 +216,30 @@ export function applyPhotoViewportOverlay(ctx, width, height, photoMode) {
   }
 
   // 5. Rule-of-thirds composition grid + focus reticle (live preview only, never baked into PNG)
-  if (!photoMode.hideOverlayForCapture && photoMode.showGrid) {
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.26)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(width / 3, 0);
-    ctx.lineTo(width / 3, height);
-    ctx.moveTo((width * 2) / 3, 0);
-    ctx.lineTo((width * 2) / 3, height);
-    ctx.moveTo(0, height / 3);
-    ctx.lineTo(width, height / 3);
-    ctx.moveTo(0, (height * 2) / 3);
-    ctx.lineTo(width, (height * 2) / 3);
-    ctx.stroke();
+  const hasLock = Boolean(!photoMode.hideOverlayForCapture && photoMode.compositionLock?.label);
+  if (!photoMode.hideOverlayForCapture && (photoMode.showGrid || hasLock)) {
+    if (photoMode.showGrid) {
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.26)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(width / 3, 0);
+      ctx.lineTo(width / 3, height);
+      ctx.moveTo((width * 2) / 3, 0);
+      ctx.lineTo((width * 2) / 3, height);
+      ctx.moveTo(0, height / 3);
+      ctx.lineTo(width, height / 3);
+      ctx.moveTo(0, (height * 2) / 3);
+      ctx.lineTo(width, (height * 2) / 3);
+      ctx.stroke();
+    }
 
-    // Subtle center focus brackets
-    const bLen = Math.min(width, height) * 0.025;
+    // Center focus brackets (turn golden when framing a rare specimen, boss, or iconic landmark!)
+    const bLen = Math.min(width, height) * (hasLock ? 0.032 : 0.025);
     const cx = width * 0.5;
     const cy = height * 0.5;
-    const gap = bLen * 1.4;
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
-    ctx.lineWidth = 1.5;
+    const gap = bLen * 1.45;
+    ctx.strokeStyle = hasLock ? 'rgba(250, 204, 21, 0.92)' : 'rgba(56, 189, 248, 0.55)';
+    ctx.lineWidth = hasLock ? 2.2 : 1.5;
     ctx.beginPath();
     ctx.moveTo(cx - gap, cy - gap + bLen);
     ctx.lineTo(cx - gap, cy - gap);
@@ -251,6 +254,26 @@ export function applyPhotoViewportOverlay(ctx, width, height, photoMode) {
     ctx.lineTo(cx + gap, cy + gap);
     ctx.lineTo(cx + gap, cy + gap - bLen);
     ctx.stroke();
+
+    if (hasLock) {
+      const lock = photoMode.compositionLock;
+      const pillText = `✦ FOCUS LOCK · ${String(lock.label).toUpperCase()} (+${lock.bonusPts || 150})`;
+      ctx.font = '800 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const tw = ctx.measureText?.(pillText)?.width ?? pillText.length * 7.4;
+      const pw = Math.min(width - 36, tw + 26);
+      const ph = 26;
+      const px = (width - pw) * 0.5;
+      const py = Math.max(58, Math.round(height * 0.085));
+      ctx.fillStyle = 'rgba(4, 14, 28, 0.86)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.84)';
+      ctx.lineWidth = 1.5;
+      fillRoundedRect(ctx, px, py, pw, ph, 13);
+      strokeRoundedRect(ctx, px, py, pw, ph, 13);
+      ctx.fillStyle = '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pillText, width * 0.5, py + ph * 0.5 + 0.5, pw - 14);
+    }
   }
   ctx.restore();
 }
@@ -491,7 +514,7 @@ export function renderFieldGuideCollectorCard(
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Outer museum card border
+  // 2. Outer museum card border + gold Field Guide specimen corner ticks (v264)
   const pad = 26;
   ctx.strokeStyle = pal.accent;
   ctx.lineWidth = 2.5;
@@ -499,6 +522,15 @@ export function renderFieldGuideCollectorCard(
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
   ctx.lineWidth = 1;
   strokeRoundedRect(ctx, pad + 8, pad + 8, width - (pad + 8) * 2, height - (pad + 8) * 2, 16);
+  const tick = 16;
+  ctx.strokeStyle = pal.accent;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(pad + 14, pad + 14 + tick); ctx.lineTo(pad + 14, pad + 14); ctx.lineTo(pad + 14 + tick, pad + 14);
+  ctx.moveTo(width - pad - 14 - tick, pad + 14); ctx.lineTo(width - pad - 14, pad + 14); ctx.lineTo(width - pad - 14, pad + 14 + tick);
+  ctx.moveTo(pad + 14, height - pad - 14 - tick); ctx.lineTo(pad + 14, height - pad - 14); ctx.lineTo(pad + 14 + tick, height - pad - 14);
+  ctx.moveTo(width - pad - 14 - tick, height - pad - 14); ctx.lineTo(width - pad - 14, height - pad - 14); ctx.lineTo(width - pad - 14, height - pad - 14 - tick);
+  ctx.stroke();
 
   // 3. Top Header Kicker & Rarity Pill
   ctx.textAlign = 'left';
@@ -664,11 +696,27 @@ export function detectPhotoCompositionSubject({
   camY = 0,
   ecosystem = null,
   stories = null,
+  secretLair = null,
   maxDistM = 13.5,
 } = {}) {
   const cx = Number.isFinite(camX) ? camX : (diver?.x || 0);
   const cy = Number.isFinite(camY) ? camY : (diver?.y || 0);
   const candidates = [];
+
+  // 0. Active Secret Lair Abyssal Guardian Boss (highest priority photo subject!)
+  if (secretLair?.boss && !secretLair.boss.defeated) {
+    const b = secretLair.boss;
+    const d = Math.hypot(b.x - cx, b.y - cy);
+    if (d <= maxDistM * 1.45) {
+      candidates.push({
+        kind: `boss-${b.kind || 'guardian'}`,
+        label: b.name || 'Abyssal Guardian',
+        bonusPts: 260,
+        dist: d,
+        priority: 12,
+      });
+    }
+  }
 
   // 1. Sunken A6M Zero Fighter inside Fujikawa Maru Hold #2
   if (Array.isArray(level?.wreckProps)) {
@@ -711,6 +759,26 @@ export function detectPhotoCompositionSubject({
           priority: m.behavior === 'escort' ? 11 : 8,
         });
       }
+    }
+  }
+
+  // 3b. Notable Marine Wildlife (Turtles, Jellyfish, Remipedes, Rare Fauna)
+  const notableList = [
+    ...(Array.isArray(ecosystem?.turtles) ? ecosystem.turtles.map((t) => ({ ...t, _label: 'Cenote Slider Turtle', _kind: 'turtle', _pts: 175 })) : []),
+    ...(Array.isArray(ecosystem?.jellyfish) ? ecosystem.jellyfish.map((j) => ({ ...j, _label: 'Bioluminescent Jellyfish', _kind: 'jellyfish', _pts: 165 })) : []),
+    ...(Array.isArray(ecosystem?.remipedes) ? ecosystem.remipedes.map((r) => ({ ...r, _label: 'Blind Cave Remipede', _kind: 'remipede', _pts: 190 })) : []),
+  ];
+  for (const cr of notableList) {
+    if (!Number.isFinite(cr.x) || !Number.isFinite(cr.y)) continue;
+    const d = Math.hypot(cr.x - cx, cr.y - cy);
+    if (d <= maxDistM * 0.72) {
+      candidates.push({
+        kind: `wildlife-${cr._kind}`,
+        label: cr._label,
+        bonusPts: cr._pts,
+        dist: d,
+        priority: 7,
+      });
     }
   }
 

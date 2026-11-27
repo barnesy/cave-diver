@@ -10,11 +10,13 @@
 import { escapeHtml } from '../util/common.js';
 import {
   TRENCH_BIOME_LADDER,
+  TRENCH_CHAMBER_PERKS,
   normalizeTrenchSeed,
   generateTrenchSeed,
   getTrenchChamberMeta,
   createTrenchChamberLevel,
   createTrenchRunState,
+  applyTrenchPerkToRun,
   recordTrenchChamberClear,
   finalizeTrenchRun,
   buildTrenchShareUrl,
@@ -49,6 +51,7 @@ export function createTrenchController({
   const choiceTitleEl = document.getElementById('trench-choice-title');
   const choiceSubEl = document.getElementById('trench-choice-sub');
   const choiceStatsEl = document.getElementById('trench-choice-stats');
+  const perkRowEl = document.getElementById('trench-perk-row');
   const btnExtract = document.getElementById('btn-trench-extract');
   const btnDescend = document.getElementById('btn-trench-descend');
   const btnDescendSubEl = document.getElementById('trench-descend-sub');
@@ -56,6 +59,7 @@ export function createTrenchController({
   let currentSeed = generateTrenchSeed();
   let activeRun = null;
   let pendingClearContext = null;
+  let selectedPerkId = TRENCH_CHAMBER_PERKS[0].id;
 
   function renderRecords() {
     if (!recordsEl) return;
@@ -89,10 +93,35 @@ export function createTrenchController({
       return;
     }
     const meta = getTrenchChamberMeta(activeRun.chamber);
-    hudPillEl.textContent = `🌊 CH ${meta.chamber} · ${meta.multiplier.toFixed(1)}× · ${activeRun.seed}`;
+    const effMult = meta.multiplier + (activeRun.multiplierBonus || 0);
+    hudPillEl.textContent = `🌊 CH ${meta.chamber} · ${effMult.toFixed(2).replace(/\.00$/, '.0')}× · ${activeRun.seed}`;
     hudPillEl.title = `Abyssal Trench · ${meta.name} · Banked: ${activeRun.bankedScore.toLocaleString()} pts`;
     hudPillEl.hidden = false;
   }
+
+  function renderPerkChoices() {
+    if (!perkRowEl) return;
+    perkRowEl.innerHTML = TRENCH_CHAMBER_PERKS.map((perk) => {
+      const sel = perk.id === selectedPerkId;
+      return `
+        <button type="button" class="trench-perk-btn${sel ? ' selected' : ''}" data-trench-perk="${escapeHtml(perk.id)}" style="--perk-accent:${perk.accent}" aria-pressed="${sel ? 'true' : 'false'}">
+          <span class="trench-perk-ico">${perk.icon}</span>
+          <span class="trench-perk-copy">
+            <strong>${escapeHtml(perk.name)}</strong>
+            <span>${escapeHtml(perk.shortDesc)}</span>
+          </span>
+        </button>`;
+    }).join('');
+  }
+
+  perkRowEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('[data-trench-perk]');
+    if (!btn) return;
+    selectedPerkId = btn.getAttribute('data-trench-perk') || TRENCH_CHAMBER_PERKS[0].id;
+    renderPerkChoices();
+    playUiToggle?.();
+    triggerHaptic('tap');
+  });
 
   function openTrenchModal(prefillSeed = null) {
     if (!modalEl) return;
@@ -158,8 +187,10 @@ export function createTrenchController({
       `;
     }
     if (btnDescendSubEl) {
-      btnDescendSubEl.textContent = `CH ${clearInfo.nextChamber}: ${clearInfo.nextName} (${clearInfo.nextDepthBand}) · ${clearInfo.nextMultiplier.toFixed(1)}× Mult`;
+      btnDescendSubEl.textContent = `CH ${clearInfo.nextChamber}: ${clearInfo.nextName} (${clearInfo.nextDepthBand}) · ${clearInfo.nextMultiplier.toFixed(2).replace(/\.00$/, '.0')}× Mult`;
     }
+    selectedPerkId = TRENCH_CHAMBER_PERKS[0].id;
+    renderPerkChoices();
     if (choiceOverlayEl) choiceOverlayEl.hidden = false;
     return true;
   }
@@ -231,11 +262,16 @@ export function createTrenchController({
   btnDescend?.addEventListener('click', () => {
     if (!activeRun?.active) return;
     hideChoiceOverlay();
+    const chosenPerk = applyTrenchPerkToRun(activeRun, selectedPerkId);
     activeRun.chamber += 1;
     const nextLvl = createTrenchChamberLevel(activeRun.seed, activeRun.chamber);
     syncHudPill();
     triggerHaptic('dash');
-    showToast?.(`⬇️ Descending to Trench Chamber ${activeRun.chamber} (${nextLvl.trenchMultiplier.toFixed(1)}×)!`, 2.8);
+    const effMult = (nextLvl.trenchMultiplier || 1) + (activeRun.multiplierBonus || 0);
+    showToast?.(
+      `⬇️ Trench CH ${activeRun.chamber} (${effMult.toFixed(2).replace(/\.00$/, '.0')}×) · ${chosenPerk.icon} ${chosenPerk.name}`,
+      3.0
+    );
     launchTrenchLevel?.(nextLvl, activeRun);
   });
 

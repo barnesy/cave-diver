@@ -1259,6 +1259,10 @@ export class DiveComputerHUD {
     this.elSelfName = document.getElementById('dc-self-name');
     this.elModeBadge = document.getElementById('dc-mode-badge');
     this.elDailyBadge = document.getElementById('dc-daily-badge');
+    this.elDrillPace = document.getElementById('hud-drill-pace');
+    this.elDrillPaceTitle = document.getElementById('hud-drill-pace-title');
+    this.elDrillPaceDelta = document.getElementById('hud-drill-pace-delta');
+    this.elDrillPaceFill = document.getElementById('hud-drill-pace-fill');
     this.elMinimapWrap = document.getElementById('hud-minimap-wrap');
     this.elMinimapSonarView = document.getElementById('hud-minimap-sonar-view');
     this.elMinimapCanvas = document.getElementById('hud-minimap-canvas');
@@ -1518,11 +1522,24 @@ export class DiveComputerHUD {
     setText(this.elMaxDepth, `MAX ${diveState.maxDepthM.toFixed(1)}m`);
     if (rescueDrillMeta?.parTimeSec > 0) {
       const pace = computeDrillPaceStatus(rescueDrillMeta.parTimeSec, diveState.diveTimeSec);
-      setText(this.elTime, `${formatClock(diveState.diveTimeSec)} · ${pace.label}`);
+      setText(this.elTime, formatClock(diveState.diveTimeSec));
       if (this.elTime?.style) this.elTime.style.color = pace.color;
+      if (this.elDrillPace) {
+        setHidden(this.elDrillPace, false);
+        setText(this.elDrillPaceTitle, `${rescueDrillMeta.icon || '⚡'} ${rescueDrillMeta.name || 'RESCUE DRILL'}`);
+        setText(this.elDrillPaceDelta, `${formatClock(diveState.diveTimeSec)} · ${pace.label}`);
+        if (this.elDrillPaceDelta?.style) this.elDrillPaceDelta.style.color = pace.color;
+        const pct = Math.max(0, Math.min(100, (diveState.diveTimeSec / Math.max(1, rescueDrillMeta.parTimeSec)) * 100));
+        if (this.elDrillPaceFill?.style) {
+          this.elDrillPaceFill.style.width = `${pct.toFixed(1)}%`;
+          this.elDrillPaceFill.style.background = pace.color;
+        }
+        setClass(this.elDrillPace, `hud-drill-pace band-${pace.band}`);
+      }
     } else {
       setText(this.elTime, formatClock(diveState.diveTimeSec));
       if (this.elTime?.style && this.elTime.style.color) this.elTime.style.color = '';
+      setHidden(this.elDrillPace, true);
     }
     if (this.elTemp && hazards && Number.isFinite(hazards.waterTempC)) {
       const inCold = Boolean(hazards.inThermocline || (hazards.thermoclineColdFactor || 0) > 0.2);

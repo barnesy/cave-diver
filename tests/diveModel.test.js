@@ -13512,3 +13512,98 @@ test('v263 4-Pillar Upgrade: Modular main.js (<7500L), Bounty Hunt Jump & Victor
     'Field Guide Plate frame must render specimen plate header'
   );
 });
+
+test('v264 4-Pillar Upgrade: Trench Perks & Drill Pace Bar, Field Guide Focus Lock & Highlights, Gamepad/Touch Ergonomics, Boss Modular Split', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  // 1. Abyssal Trench Transfer-Bell Perks & Rescue Drill Live Pace Bar
+  const {
+    TRENCH_CHAMBER_PERKS,
+    createTrenchRunState,
+    applyTrenchPerkToRun,
+    applyTrenchPerkToSession,
+    recordTrenchChamberClear,
+  } = await import('../public/js/game/abyssalTrench.js');
+  assert.equal(TRENCH_CHAMBER_PERKS.length, 3, 'Expected 3 Transfer-Bell risk-reward perks');
+  const run = createTrenchRunState('TRN264');
+  const pRisk = applyTrenchPerkToRun(run, 'risk-multiplier');
+  assert.equal(pRisk.id, 'risk-multiplier');
+  assert.equal(run.multiplierBonus, 0.25);
+  const clear1 = recordTrenchChamberClear(run, { baseScore: 1000, relics: 0, maxDepthM: 42, healthPct: 100 });
+  assert.equal(clear1.nextMultiplier, 1.75, 'Permanent +0.25x bonus must carry into next chamber multiplier (1.5 + 0.25)');
+
+  applyTrenchPerkToRun(run, 'reserve-stage');
+  const mockSess = {
+    diveState: { tanks: { EAN32: { bar: 200, maxBar: 200, volumeLiters: 11, litersRemaining: 2200 } } },
+    dpv: { equipped: false, batteryPct: 40 },
+    sonar: { equipped: false, cooldownMult: 1 },
+  };
+  applyTrenchPerkToSession(mockSess, run);
+  assert.equal(mockSess.diveState.tanks.EAN32.bar, 240, 'Reserve Gas perk must add +40 bar');
+  applyTrenchPerkToRun(run, 'dpv-overcharge');
+  applyTrenchPerkToSession(mockSess, run);
+  assert.equal(mockSess.dpv.equipped, true);
+  assert.equal(mockSess.dpv.batteryPct, 100);
+  assert.ok(mockSess.sonar.cooldownMult <= 0.7);
+
+  const htmlSrc = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(htmlSrc.includes('id="trench-perk-row"'), 'Transfer Bell overlay must expose #trench-perk-row');
+  assert.ok(htmlSrc.includes('id="hud-drill-pace"'), 'HUD must expose #hud-drill-pace live pace timer bar');
+
+  // 2. Photo Studio Golden Focus Lock (Boss + Wildlife) & Post-Dive Highlight Strip
+  const { detectPhotoCompositionSubject, applyPhotoViewportOverlay } = await import('../public/js/game/photoStudio.js');
+  const bossLock = detectPhotoCompositionSubject({
+    camX: 50,
+    camY: 40,
+    secretLair: { boss: { kind: 'cave-kraken', name: "XIBALBA'S MAW", x: 52, y: 40, defeated: false } },
+  });
+  assert.ok(bossLock && bossLock.bonusPts === 260, 'Photo Studio must lock onto active Boss Guardian');
+  const turtleLock = detectPhotoCompositionSubject({
+    camX: 10,
+    camY: 12,
+    ecosystem: { turtles: [{ x: 12, y: 12 }] },
+  });
+  assert.ok(turtleLock && turtleLock.kind === 'wildlife-turtle', 'Photo Studio must lock onto notable wildlife');
+  const overlayOps = [];
+  const ovCtx = new Proxy(
+    {
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '', globalCompositeOperation: 'source-over',
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    {
+      get(t, p) { return p in t ? t[p] : (...a) => { overlayOps.push([p, a[0]]); }; },
+    }
+  );
+  applyPhotoViewportOverlay(ovCtx, 1280, 720, { active: true, filterId: 'natural', frameId: 'field-guide', showGrid: false, compositionLock: bossLock });
+  assert.ok(overlayOps.some(([op, arg]) => op === 'fillText' && String(arg).includes('FOCUS LOCK')), 'Viewport overlay must render golden FOCUS LOCK pill');
+
+  // 3. Gamepad/Touch Ergonomics: Dynamic Input Mode + Charged Pillar Aim Magnetism
+  const { computeTouchAimMagnetAngle } = await import('../public/js/game/secretLairs.js');
+  const aimSess = {
+    diver: { x: 0, y: 0 },
+    secretLair: {
+      combatMode: true,
+      pillars: [{ x: 10, y: 1.2, cooldownSec: 0 }],
+      minions: [],
+      bossHazards: [],
+      stalactites: [],
+    },
+  };
+  const pulled = computeTouchAimMagnetAngle(aimSess, 0, 0.15, { chargeFactor: 0.8 });
+  const targetAng = Math.atan2(1.2, 10);
+  assert.ok(Math.abs(pulled - targetAng) < 0.02, 'Charged stick aim magnetism must pull smoothly onto ready Resonance Crystal pillars');
+  const combatHudSrc = readFileSync(new URL('../public/js/ui/combatHudController.js', import.meta.url), 'utf8');
+  assert.ok(combatHudSrc.includes('R-STICK / R2 FIRE') && combatHudSrc.includes('R-STICK / RT FIRE'), 'Combat HUD must render dynamic PlayStation & Xbox gamepad glyphs');
+
+  // 4. Boss Engine & Renderer Modular Cleanup
+  const slSrc = readFileSync(new URL('../public/js/game/secretLairs.js', import.meta.url), 'utf8');
+  const brSrc = readFileSync(new URL('../public/js/game/renderers/bossAndLairRenderer.js', import.meta.url), 'utf8');
+  const swSrc = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.ok(slSrc.split(/\r?\n/).length < 4100, `Expected secretLairs.js < 4100 lines after bossSpecs extraction`);
+  assert.ok(brSrc.split(/\r?\n/).length < 3600, `Expected bossAndLairRenderer.js < 3600 lines after bossGuardiansRenderer extraction`);
+  assert.ok(htmlSrc.includes('./js/game/bossSpecs.js') && swSrc.includes('./js/game/bossSpecs.js'), 'bossSpecs.js must be registered in index.html & sw.js');
+  assert.ok(
+    htmlSrc.includes('./js/game/renderers/bossGuardiansRenderer.js') && swSrc.includes('./js/game/renderers/bossGuardiansRenderer.js'),
+    'bossGuardiansRenderer.js must be registered in index.html & sw.js'
+  );
+});

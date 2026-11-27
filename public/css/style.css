@@ -15159,6 +15159,143 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   flex-wrap: wrap;
 }
 
+/* v264: Abyssal Trench Transfer-Bell Chamber Perks & Rescue Drill Live Pace Bar */
+.trench-perk-head {
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  text-align: left;
+}
+.trench-perk-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+@media (max-width: 640px) {
+  .trench-perk-row {
+    grid-template-columns: 1fr;
+  }
+}
+.trench-perk-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(148, 163, 184, 0.24);
+  background: rgba(8, 20, 38, 0.84);
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.trench-perk-btn:hover {
+  border-color: color-mix(in srgb, var(--perk-accent, #38bdf8) 65%, transparent);
+  transform: translateY(-1px);
+}
+.trench-perk-btn.selected {
+  border-color: var(--perk-accent, #38bdf8);
+  background: color-mix(in srgb, var(--perk-accent, #38bdf8) 18%, rgba(8, 20, 38, 0.94));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--perk-accent, #38bdf8) 45%, transparent);
+}
+.trench-perk-ico {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.trench-perk-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.trench-perk-copy strong {
+  font-size: 0.76rem;
+  color: #f8fafc;
+}
+.trench-perk-copy span {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+.hud-drill-pace {
+  margin-top: 4px;
+  width: min(296px, 76vw);
+  padding: 6px 10px 7px;
+  border-radius: 10px;
+  background: rgba(6, 15, 28, 0.88);
+  border: 1px solid rgba(250, 204, 21, 0.42);
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.45);
+}
+.hud-drill-pace.band-par {
+  border-color: rgba(74, 222, 128, 0.46);
+}
+.hud-drill-pace.band-behind {
+  border-color: rgba(251, 113, 133, 0.56);
+}
+.hud-drill-pace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  margin-bottom: 5px;
+}
+.hud-drill-pace-head strong {
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+#hud-drill-pace-delta {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 800;
+}
+.hud-drill-pace-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  overflow: hidden;
+}
+.hud-drill-pace-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 160ms linear;
+}
+.hud-drill-pace-mark.gold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 82%;
+  width: 2px;
+  background: rgba(254, 240, 138, 0.92);
+}
+
+/* v264: Gamepad & Mobile Touch Combat Ergonomics (44px+ hit targets & crisp active press feedback) */
+@media (pointer: coarse), (max-width: 720px) {
+  #btn-combat-pause {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #btn-combat-scooter {
+    min-height: 40px;
+    padding-inline: 11px;
+  }
+  #btn-combat-dash:active,
+  #btn-combat-scooter:active,
+  #btn-combat-pause:active {
+    transform: scale(0.94);
+  }
+}
+
 /* Popover elastic bubble IN & OUT transitions */
 .home-menu-popover,
 .hud-menu-popover {

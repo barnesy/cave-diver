@@ -96,6 +96,9 @@ export class InputController {
     this.onSpectateCycle = onSpectateCycle;
     this.torchStickHeld = false;
     this.spearKeyHeld = false;
+    this.gamepadActive = false;
+    this.gamepadStyle = 'xbox'; // 'xbox' | 'playstation'
+    this.lastInputMode = 'keyboard'; // 'keyboard' | 'touch' | 'gamepad'
     this._prevGpButtons = [];
     this._gpRewindHeld = false;
     this._touchRewindHeld = false;
@@ -105,6 +108,15 @@ export class InputController {
     this._bindTorchStick();
   }
 
+  _setInputMode(nextMode) {
+    if (this.lastInputMode === nextMode) return;
+    this.lastInputMode = nextMode;
+    this.gamepadActive = nextMode === 'gamepad';
+    if (typeof document !== 'undefined' && document.body?.dataset) {
+      document.body.dataset.inputMode = nextMode;
+    }
+  }
+
   _bindKeyboard() {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     window.addEventListener('keydown', (e) => {
@@ -112,6 +124,7 @@ export class InputController {
       const tag = e.target?.tagName;
       if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && !e.target?.closest?.('[hidden]')) return;
       const code = e.code;
+      this._setInputMode('keyboard');
       this.keys.add(code);
       if (code === 'Digit1' && !e.repeat) this.onGasSelect?.('EAN32');
       if (code === 'Digit2' && !e.repeat) this.onGasSelect?.('TMX1455');
@@ -237,6 +250,7 @@ export class InputController {
 
     this.stickBaseEl.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      this._setInputMode('touch');
       if (this.activePointerId !== null) return;
       this.activePointerId = e.pointerId;
       try { this.stickBaseEl.setPointerCapture(e.pointerId); } catch {}
@@ -463,14 +477,34 @@ export class InputController {
     if (!gp) {
       this._gpRewindHeld = false;
       this._gpTorchVec.active = false;
+      this.gpSpearHeld = false;
       this._prevGpButtons.length = 0;
       return { x: 0, y: 0 };
     }
 
+    const gpId = String(gp.id || '');
+    this.gamepadStyle = /dualsense|dualshock|playstation|wireless controller|054c/i.test(gpId) ? 'playstation' : 'xbox';
+
     const pressed = (idx) => Boolean(gp.buttons?.[idx]?.pressed);
     const justPressed = (idx) => pressed(idx) && !this._prevGpButtons[idx];
+    const justReleased = (idx) => !pressed(idx) && Boolean(this._prevGpButtons[idx]);
+
+    // Update right stick aim BEFORE evaluating gpSpearHeld so same-frame aim & fire stay in lockstep (v264)
+    const rx = gp.axes?.[2] || 0;
+    const ry = gp.axes?.[3] || 0;
+    const rMag = Math.hypot(rx, ry);
+    if (rMag > 0.22) {
+      this._gpTorchVec.x = rx / rMag;
+      this._gpTorchVec.y = ry / rMag;
+      this._gpTorchVec.active = true;
+      this._setInputMode('gamepad');
+    } else {
+      this._gpTorchVec.active = false;
+    }
 
     // Standard Gamepad mapping (Xbox / PS / Backbone / Steam Deck)
+    const anyBtnPressed = gp.buttons?.some?.((b) => b?.pressed);
+    if (anyBtnPressed) this._setInputMode('gamepad');
     if (justPressed(0)) {
       // A / Cross: contextual Wreck Action if available, else Recommended Gas Switch
       if (!this.onWreckAction?.()) this.onRecommendedGasSwitch?.();
@@ -486,6 +520,9 @@ export class InputController {
     if (justPressed(7)) {
       // RT / R2 -> Fire Speargun in Combat Mode, else DPV Scooter Toggle
       if (!this.combatModeActive || !this.onSpearPressStart?.()) this.onDpvToggle?.();
+    }
+    if (justReleased(7) && this.combatModeActive) {
+      this.onSpearRelease?.();
     }
     this.gpSpearHeld = Boolean(this.combatModeActive && (pressed(7) || this._gpTorchVec.active));
     if (justPressed(8) || justPressed(11)) this.onSonarPing?.(); // Select/View or R3 -> Sonar Ping
@@ -512,6 +549,7 @@ export class InputController {
       gx = 0;
       gy = 0;
     } else {
+      this._setInputMode('gamepad');
       const scaled = Math.pow(Math.min(1, (rawMag - 0.14) / 0.86), 1.35);
       gx = (gx / rawMag) * scaled;
       gy = (gy / rawMag) * scaled;
@@ -523,18 +561,6 @@ export class InputController {
 
     const ltVal = gp.buttons?.[6]?.value ?? (pressed(6) ? 1 : 0);
     const precision = ltVal > 0.35 ? 0.45 : 1.0;
-
-    // Right stick (axes 2, 3) temporarily overrides flashlight aim direction
-    const rx = gp.axes?.[2] || 0;
-    const ry = gp.axes?.[3] || 0;
-    const rMag = Math.hypot(rx, ry);
-    if (rMag > 0.22) {
-      this._gpTorchVec.x = rx / rMag;
-      this._gpTorchVec.y = ry / rMag;
-      this._gpTorchVec.active = true;
-    } else {
-      this._gpTorchVec.active = false;
-    }
 
     return { x: gx * precision, y: gy * precision };
   }

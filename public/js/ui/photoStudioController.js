@@ -46,8 +46,29 @@ export function createPhotoStudioController({
   const btnPhotoSave = document.getElementById('btn-photo-save');
   const photoFilterPillsEl = document.getElementById('photo-filter-pills');
 
+  function refreshCompositionLock() {
+    const session = getSession();
+    if (!photoModeState.active || !session) {
+      photoModeState.compositionLock = null;
+      return null;
+    }
+    const camX = (renderer?.camX || session.diver?.x || 0) + (photoModeState.panX || 0);
+    const camY = (renderer?.camY || session.diver?.y || 0) + (photoModeState.panY || 0);
+    photoModeState.compositionLock = detectPhotoCompositionSubject({
+      level: session.level,
+      diver: session.diver,
+      camX,
+      camY,
+      ecosystem: getEcosystem(),
+      stories: session.stories,
+      secretLair: session.secretLair,
+    });
+    return photoModeState.compositionLock;
+  }
+
   function syncPhotoStudioUi() {
     clampPhotoModeState(photoModeState);
+    refreshCompositionLock();
     if (photoZoomRangeEl) photoZoomRangeEl.value = String(Math.round(photoModeState.zoom * 100));
     if (photoZoomValEl) photoZoomValEl.textContent = `${photoModeState.zoom.toFixed(2)}×`;
     if (btnPhotoGrid) btnPhotoGrid.classList.toggle('active', photoModeState.showGrid);
@@ -132,6 +153,7 @@ export function createPhotoStudioController({
         camY: renderer.camY,
         ecosystem,
         stories: session.stories,
+        secretLair: session.secretLair,
       });
       if (comp) {
         if (!session._photoCompKinds) session._photoCompKinds = new Set();

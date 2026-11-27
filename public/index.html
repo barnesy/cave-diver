@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="263" />
+  <meta name="app-version" content="264" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=263" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=263" />
-  <link rel="stylesheet" href="./css/style.css?v=263" />
+  <link rel="icon" href="./icons/icon-192.png?v=264" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=264" />
+  <link rel="stylesheet" href="./css/style.css?v=264" />
   <link rel="preload" as="image" href="./assets/sky-yucatan.jpg" />
   <link rel="preload" as="image" href="./assets/tex-limestone-wall.jpg" />
   <link rel="preload" as="image" href="./assets/tex-cave-backwall.jpg" />
@@ -27,7 +27,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=263" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=264" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">System Check · Pre-Dive Setup</div>
       <h1 class="loader-title">Cenote El Abismo</h1>
@@ -61,7 +61,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=263" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=264" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">Techno Dive</div>
             <h1 class="menu-title">Cenote El Abismo</h1>
@@ -221,7 +221,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v263</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v264</button>
               </div>
             </div>
           </div>
@@ -493,6 +493,16 @@
             <span id="hud-drill-pill" class="gear-hud-pill drill status-strip-pill" hidden title="Emergency Failure Drills Active">⚡ DRILLS</span>
             <span id="hud-trench-pill" class="gear-hud-pill trench status-strip-pill" hidden title="Abyssal Trench Endless Descent">🌊 CH 1 · 1.0×</span>
           </div>
+          <div id="hud-drill-pace" class="hud-drill-pace" hidden role="status" aria-label="Rescue Drill Pace Timer">
+            <div class="hud-drill-pace-head">
+              <strong id="hud-drill-pace-title">⚡ RESCUE DRILL</strong>
+              <span id="hud-drill-pace-delta">-45s S+</span>
+            </div>
+            <div class="hud-drill-pace-track">
+              <div id="hud-drill-pace-fill" class="hud-drill-pace-fill" style="width: 0%"></div>
+              <span class="hud-drill-pace-mark gold" title="S+ Gold Target (82% Par)"></span>
+            </div>
+          </div>
           <div id="coop-wait-banner" class="coop-wait-banner" hidden role="status" aria-live="polite">
             <div class="coop-wait-info">
               <strong id="coop-wait-title">SURFACED SAFE</strong>
@@ -755,6 +765,8 @@
           <h2 id="trench-choice-title" class="trench-choice-title">AIR-BELL REACHED · CHAMBER 1 CLEARED</h2>
           <p id="trench-choice-sub" class="trench-choice-sub">Sunlit Karst Sink · Seed TRN7K4</p>
           <div id="trench-choice-stats" class="trench-choice-stats"></div>
+          <div class="trench-perk-head">TRANSFER BELL PERK · PICK 1 FOR NEXT CHAMBER</div>
+          <div id="trench-perk-row" class="trench-perk-row" role="group" aria-label="Transfer Bell Chamber Perk"></div>
           <div class="trench-choice-actions">
             <button id="btn-trench-extract" class="btn secondary trench-extract-btn" type="button">
               <strong>🏦 Extract &amp; Bank Score</strong>
@@ -1778,126 +1790,128 @@
   <script type="importmap">
     {
       "imports": {
-        "./js/util/common.js": "./js/util/common.js?v=263",
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=263",
-        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=263",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=263",
-        "./js/game/audio.js": "./js/game/audio.js?v=263",
-        "./js/game/collision.js": "./js/game/collision.js?v=263",
-        "./js/game/input.js": "./js/game/input.js?v=263",
-        "./js/game/hud.js": "./js/game/hud.js?v=263",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=263",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=263",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=263",
-        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=263",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=263",
-        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=263",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=263",
-        "./js/game/weather.js": "./js/game/weather.js?v=263",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=263",
-        "./js/game/gearStats.js": "./js/game/gearStats.js?v=263",
-        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=263",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=263",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=263",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=263",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=263",
-        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=263",
-        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=263",
-        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=263",
-        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=263",
-        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=263",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=263",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=263",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=263",
-        "./js/ui/replayController.js": "./js/ui/replayController.js?v=263",
-        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=263",
-        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=263",
-        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=263",
-        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=263",
-        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=263",
-        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=263",
-        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=263",
-        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=263",
-        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=263",
-        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=263",
-        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=263",
-        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=263",
-        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=263",
-        "./js/ui/dailyChallengeController.js": "./js/ui/dailyChallengeController.js?v=263",
-        "./js/ui/photoStudioController.js": "./js/ui/photoStudioController.js?v=263",
-        "./js/ui/coopInviteController.js": "./js/ui/coopInviteController.js?v=263",
-        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=263",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=263",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=263",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=263",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=263",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=263",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=263",
-        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=263",
-        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=263",
-        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=263",
-        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=263",
-        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=263",
-        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=263",
-        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=263",
-        "./js/game/renderers/underwaterJuiceRenderer.js": "./js/game/renderers/underwaterJuiceRenderer.js?v=263",
-        "./js/game/renderers/foregroundDepthRenderer.js": "./js/game/renderers/foregroundDepthRenderer.js?v=263",
-        "./js/game/renderers/diverAndSquadRenderer.js": "./js/game/renderers/diverAndSquadRenderer.js?v=263",
-        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=263",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=263",
-        "./js/game/silt.js": "./js/game/silt.js?v=263",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=263",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=263",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=263",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=263",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=263",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=263",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=263",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=263",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=263",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=263",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=263",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=263",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=263",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=263",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=263",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=263",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=263",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=263",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=263",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=263",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=263",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=263",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=263",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=263",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=263",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=263",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=263",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=263",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=263",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=263",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=263",
-        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=263",
-        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=263",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=263",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=263",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=263",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=263",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=263",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=263",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=263",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=263",
-        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=263",
-        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=263",
-        "./js/levels/index.js": "./js/levels/index.js?v=263",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=263",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=263",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=263",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=263",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=263"
+        "./js/util/common.js": "./js/util/common.js?v=264",
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=264",
+        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=264",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=264",
+        "./js/game/audio.js": "./js/game/audio.js?v=264",
+        "./js/game/collision.js": "./js/game/collision.js?v=264",
+        "./js/game/input.js": "./js/game/input.js?v=264",
+        "./js/game/hud.js": "./js/game/hud.js?v=264",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=264",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=264",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=264",
+        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=264",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=264",
+        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=264",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=264",
+        "./js/game/weather.js": "./js/game/weather.js?v=264",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=264",
+        "./js/game/gearStats.js": "./js/game/gearStats.js?v=264",
+        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=264",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=264",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=264",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=264",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=264",
+        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=264",
+        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=264",
+        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=264",
+        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=264",
+        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=264",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=264",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=264",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=264",
+        "./js/ui/replayController.js": "./js/ui/replayController.js?v=264",
+        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=264",
+        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=264",
+        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=264",
+        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=264",
+        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=264",
+        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=264",
+        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=264",
+        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=264",
+        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=264",
+        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=264",
+        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=264",
+        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=264",
+        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=264",
+        "./js/ui/dailyChallengeController.js": "./js/ui/dailyChallengeController.js?v=264",
+        "./js/ui/photoStudioController.js": "./js/ui/photoStudioController.js?v=264",
+        "./js/ui/coopInviteController.js": "./js/ui/coopInviteController.js?v=264",
+        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=264",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=264",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=264",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=264",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=264",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=264",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=264",
+        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=264",
+        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=264",
+        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=264",
+        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=264",
+        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=264",
+        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=264",
+        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=264",
+        "./js/game/renderers/bossGuardiansRenderer.js": "./js/game/renderers/bossGuardiansRenderer.js?v=264",
+        "./js/game/renderers/underwaterJuiceRenderer.js": "./js/game/renderers/underwaterJuiceRenderer.js?v=264",
+        "./js/game/renderers/foregroundDepthRenderer.js": "./js/game/renderers/foregroundDepthRenderer.js?v=264",
+        "./js/game/renderers/diverAndSquadRenderer.js": "./js/game/renderers/diverAndSquadRenderer.js?v=264",
+        "./js/game/bossSpecs.js": "./js/game/bossSpecs.js?v=264",
+        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=264",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=264",
+        "./js/game/silt.js": "./js/game/silt.js?v=264",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=264",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=264",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=264",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=264",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=264",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=264",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=264",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=264",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=264",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=264",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=264",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=264",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=264",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=264",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=264",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=264",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=264",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=264",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=264",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=264",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=264",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=264",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=264",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=264",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=264",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=264",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=264",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=264",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=264",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=264",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=264",
+        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=264",
+        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=264",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=264",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=264",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=264",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=264",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=264",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=264",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=264",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=264",
+        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=264",
+        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=264",
+        "./js/levels/index.js": "./js/levels/index.js?v=264",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=264",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=264",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=264",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=264",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=264"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=263"></script>
+  <script type="module" src="./js/main.js?v=264"></script>
 </body>
 </html>
