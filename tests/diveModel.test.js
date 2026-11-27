@@ -13670,3 +13670,53 @@ test('v265 Boss Pantheon Expansion: Glacier Crab & Solar Lobster Swaps + Electri
   assert.ok(getSecretCosmeticsForTrophy('plura-nessie-scale').length >= 1, 'Loch Ness trophy must unlock mythic cosmetic');
   assert.equal(BOSS_BOUNTIES.length, 14);
 });
+
+test('v266 Kawaii Anime Boss Pass: All 14 Guardians render shared glossy eyes, blush & mouths across idle/angry/stunned/dormant states', async () => {
+  const { bossGuardiansMethods } = await import('../public/js/game/renderers/bossGuardiansRenderer.js');
+  const { bossAndLairMethods } = await import('../public/js/game/renderers/bossAndLairRenderer.js');
+  const { resolveBountyBoardState } = await import('../public/js/game/bossBounties.js');
+  assert.equal(typeof bossGuardiansMethods._drawKawaiiAnimeEye, 'function');
+  assert.equal(typeof bossGuardiansMethods._drawKawaiiBlush, 'function');
+  assert.equal(typeof bossGuardiansMethods._drawKawaiiMouth, 'function');
+  assert.equal(typeof bossGuardiansMethods._drawKawaiiShine, 'function');
+
+  const states = [
+    { aiState: 'idle', phase: 1, hitFlash: 0 },
+    { aiState: 'lunge_dash', phase: 3, hitFlash: 0 },
+    { aiState: 'stunned', phase: 2, hitFlash: 0 },
+    { aiState: 'dormant', phase: 1, hitFlash: 0 },
+    { aiState: 'idle', phase: 2, hitFlash: 0.25 },
+  ];
+  const board = resolveBountyBoardState(createEmptyLogbook());
+  assert.equal(board.bounties.length, 14);
+  for (const entry of board.bounties) {
+    for (const st of states) {
+      let ops = 0;
+      const mockCtx = new Proxy(
+        {
+          canvas: { width: 400, height: 200 },
+          fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: '', lineJoin: '', globalAlpha: 1, font: '', textAlign: '',
+          createRadialGradient: () => ({ addColorStop() {} }),
+          createLinearGradient: () => ({ addColorStop() {} }),
+        },
+        { get(t, p) { return p in t ? t[p] : () => { ops++; }; } }
+      );
+      const boss = {
+        kind: entry.bossKind,
+        x: 0,
+        y: 0,
+        radius: 4.5,
+        phase: st.phase,
+        aiState: st.aiState,
+        hitFlash: st.hitFlash,
+        defeated: false,
+        defeatAnimSec: 0,
+        weakAngle: 0.4,
+        facing: -1,
+        anim: { facing: -1, pitch: 0, scaleX: 1, scaleY: 1, squashX: 1, squashY: 1, swimCycle: 1.5, earFlap: 1.2, cheekPuff: 0, mouthOpen: st.aiState === 'lunge_dash' ? 0.6 : 0, dizzyAngle: 2.1, hurtSec: st.hitFlash },
+      };
+      bossAndLairMethods._drawSecretLairBoss.call(bossAndLairMethods, mockCtx, boss, (x) => 200 + x * 12, (y) => 100 + y * 12, 12, 2.4);
+      assert.ok(ops > 35, `Expected expressive anime drawing ops for ${entry.bossKind} (${st.aiState}), got ${ops}`);
+    }
+  }
+});

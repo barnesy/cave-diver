@@ -87,6 +87,210 @@ export const bossGuardiansMethods = {
   },
 
   /**
+   * Shared Glossy Kawaii Anime Eye matching the Octopus/Kraken boss aesthetic (v266).
+   * Supports dormant (`u`), hurt/KO (`> <`), stunned (`@_@` spiral), and sparkling glossy iris + double catchlights.
+   */
+  _drawKawaiiAnimeEye(ctx, cx, cy, rx, ry, scale, opts = {}) {
+    const {
+      irisTop = '#67e8f9',
+      irisBot = '#0284c7',
+      outline = '#09071a',
+      isStunned = false,
+      isHurt = false,
+      isDormant = false,
+      isAngry = false,
+      side = 0, // 0 = left/near, 1 = right/far
+      timeSec = 0,
+      lash = true,
+    } = opts;
+    const rxE = Math.max(2.2, rx);
+    const ryE = Math.max(2.2, ry);
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (isDormant) {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.0, 0.085 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(0, 0, rxE * 0.82, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+    } else if (isHurt) {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.2, 0.095 * scale);
+      ctx.lineCap = 'round';
+      const sgn = side === 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(-sgn * rxE * 0.65, -ryE * 0.45);
+      ctx.lineTo(sgn * rxE * 0.55, 0);
+      ctx.lineTo(-sgn * rxE * 0.65, ryE * 0.45);
+      ctx.stroke();
+    } else if (isStunned) {
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rxE, ryE * 0.92, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.rotate((side === 0 ? 1 : -1) * (timeSec * 5.2));
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+      ctx.beginPath();
+      for (let k = 0; k <= 20; k++) {
+        const ang = k * 0.58;
+        const rad = (k / 20) * rxE * 0.76;
+        if (k === 0) ctx.moveTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+        else ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+      }
+      ctx.stroke();
+    } else {
+      // Deep glossy obsidian oval base
+      ctx.fillStyle = '#09071a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rxE, ryE, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Rich glowing lower anime iris crescent gradient
+      const ig = ctx.createRadialGradient(0, ryE * 0.36, rxE * 0.08, 0, ryE * 0.26, ryE * 0.88);
+      ig.addColorStop(0, irisTop);
+      ig.addColorStop(0.58, irisBot);
+      ig.addColorStop(1, 'rgba(9, 7, 26, 0)');
+      ctx.fillStyle = ig;
+      ctx.beginPath();
+      ctx.ellipse(0, ryE * 0.22, rxE * 0.82, ryE * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Glossy upper-left anime catchlight oval + lower-right star sparkle
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(-rxE * 0.26, -ryE * 0.30, Math.max(1.5, rxE * 0.36), Math.max(1.5, ryE * 0.30), -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(rxE * 0.30, ryE * 0.32, Math.max(1.2, rxE * 0.17), 0, Math.PI * 2);
+      ctx.fill();
+      // Crisp upper anime lash arc
+      if (lash) {
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.ellipse(0, -ryE * 0.06, rxE * 1.06, ryE * 1.02, 0, Math.PI * 1.08, Math.PI * 1.92);
+        ctx.stroke();
+      }
+      // Cute determined angled anime brow when angry (never harsh!)
+      if (isAngry) {
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+        ctx.lineCap = 'round';
+        const tilt = side === 0 ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(-rxE * 0.95, -ryE * (0.95 + tilt * 0.16));
+        ctx.lineTo(rxE * 0.95, -ryE * (0.95 - tilt * 0.18));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Shared Rosy Anime Blush Cheek with diagonal white hatch marks `///` (v266).
+   */
+  _drawKawaiiBlush(ctx, cx, cy, rx, ry, scale, color = 'rgba(251, 113, 133, 0.62)') {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(2, rx), Math.max(1.5, ry), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.58)';
+    ctx.lineWidth = Math.max(1.0, 0.032 * scale);
+    ctx.lineCap = 'round';
+    for (let h = -1; h <= 1; h++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + h * rx * 0.34 - rx * 0.12, cy + ry * 0.44);
+      ctx.lineTo(cx + h * rx * 0.34 + rx * 0.14, cy - ry * 0.44);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Shared Expressive Anime Mouth (`:3` cat smile, `:O` roar with tiny tongue, `~` dizzy) (v266).
+   */
+  _drawKawaiiMouth(ctx, cx, cy, size, scale, opts = {}) {
+    const {
+      outline = '#09071a',
+      isOpen = false,
+      isStunned = false,
+      fangs = false,
+      glowColor = '#fda4af',
+    } = opts;
+    ctx.save();
+    if (isOpen) {
+      const mrX = Math.max(2.2, size * 1.15);
+      const mrY = Math.max(2.2, size * 1.18);
+      ctx.fillStyle = '#881337';
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, mrX, mrY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + mrY * 0.40, mrX * 0.58, mrY * 0.36, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (isStunned) {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.7, 0.072 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - size * 1.1, cy);
+      ctx.quadraticCurveTo(cx - size * 0.35, cy - size * 0.55, cx, cy);
+      ctx.quadraticCurveTo(cx + size * 0.45, cy + size * 0.55, cx + size * 1.1, cy);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.7, 0.072 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(cx - size * 0.56, cy - size * 0.08, Math.max(1.5, size * 0.58), 0.15, Math.PI - 0.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + size * 0.56, cy - size * 0.08, Math.max(1.5, size * 0.58), 0.1, Math.PI - 0.15);
+      ctx.stroke();
+      if (fangs) {
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.0, 0.04 * scale);
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + sgn * size * 0.85, cy + size * 0.16);
+          ctx.lineTo(cx + sgn * size * 1.05, cy + size * 0.68);
+          ctx.lineTo(cx + sgn * size * 0.58, cy + size * 0.32);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  },
+
+  /**
+   * Shared Glossy Anime Jelly-Bean Specular Highlight + Tiny Sparkle Dot (v266).
+   */
+  _drawKawaiiShine(ctx, cx, cy, rx, ry, rot = -0.35) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.36)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(2, rx), Math.max(1.4, ry), rot, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
+    ctx.beginPath();
+    ctx.arc(cx + rx * 1.15, cy - ry * 0.45, Math.max(1.4, ry * 0.42), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  },
+
+  /**
    * IRON LEVIATHAN MK-IV — Armored WWII Deep-Sea Mech-Anglerfish Guardian (SS Thistlegorm) (v189).
    */
   _drawIronLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
@@ -204,90 +408,76 @@ export const bossGuardiansMethods = {
       ctx.stroke();
     }
 
-    // 5. Upper & Lower Armored Mandible Jaws with Interlocking Steel Fangs
-    // Upper fang ridge
-    ctx.fillStyle = '#e2e8f0';
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
-    for (let t = 0; t < 4; t++) {
-      const tx = r * (0.58 + t * 0.13);
-      ctx.beginPath();
-      ctx.moveTo(tx, r * 0.06);
-      ctx.lineTo(tx + r * 0.055, r * 0.24);
-      ctx.lineTo(tx + r * 0.11, r * 0.06);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-    // Articulated lower steel jaw
+    // 5. Glossy Chibi Dome Highlight + Cute Cheeky Underbite Jaw with Stubby Baby Steel Fanglets!
+    this._drawKawaiiShine(ctx, -r * 0.22, -r * 0.48, r * 0.30, r * 0.13, -0.28);
+
+    // Cute rounded lower brass chin with tiny stubby baby fangs (Kirby-mech cute!)
     ctx.save();
-    ctx.translate(r * 0.56, r * 0.28);
-    ctx.rotate(jawOpen);
-    ctx.fillStyle = '#1e293b';
+    ctx.translate(r * 0.56, r * 0.30);
+    ctx.rotate(jawOpen * 0.55);
+    ctx.fillStyle = '#334155';
     ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(2, 0.08 * scale);
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.22, 0);
-    ctx.lineTo(r * 0.62, r * 0.04);
-    ctx.lineTo(r * 0.48, r * 0.36);
-    ctx.lineTo(-r * 0.28, r * 0.26);
+    ctx.moveTo(-r * 0.18, 0);
+    ctx.quadraticCurveTo(r * 0.26, -r * 0.04, r * 0.52, r * 0.04);
+    ctx.quadraticCurveTo(r * 0.44, r * 0.32, r * 0.12, r * 0.32);
+    ctx.quadraticCurveTo(-r * 0.18, r * 0.28, -r * 0.18, 0);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // Interlocking lower steel teeth
-    ctx.fillStyle = '#f8fafc';
-    for (let t = 0; t < 4; t++) {
-      const tx = -r * 0.04 + t * r * 0.155;
+    // Cute tiny rounded baby teeth peeking up!
+    ctx.fillStyle = '#ffffff';
+    for (let t = 0; t < 3; t++) {
+      const tx = r * (0.04 + t * 0.14);
       ctx.beginPath();
-      ctx.moveTo(tx, 0);
-      ctx.lineTo(tx + r * 0.06, -r * 0.2);
-      ctx.lineTo(tx + r * 0.12, 0);
-      ctx.closePath();
+      ctx.arc(tx, -r * 0.02, r * 0.055, Math.PI, 0);
       ctx.fill();
       ctx.stroke();
     }
     ctx.restore();
 
-    // 6. Expressive Armored Brow + Searchlight Porthole Eye with White Catchlights
-    const ex = r * 0.44;
-    const ey = -r * 0.22;
-    const er = r * 0.24;
+    // 6. GIANT Sparkling Anime Porthole Eyes (3/4 chibi pair!) + Rosy Blush + Cute `:3` Grin
+    // Brass eyeglass rim behind near eye
     ctx.fillStyle = brass;
     ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
     ctx.beginPath();
-    ctx.arc(ex, ey, er * 1.18, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.34, -r * 0.14, r * 0.28, r * 0.31, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    const eyeG = ctx.createRadialGradient(ex, ey, er * 0.1, ex, ey, er);
-    eyeG.addColorStop(0, '#ffffff');
-    eyeG.addColorStop(0.5, isStunned ? '#94a3b8' : glowCol);
-    eyeG.addColorStop(1, '#7c2d12');
-    ctx.fillStyle = eyeG;
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    // Dark vertical pupil & glossy catchlight
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.ellipse(ex + er * 0.15, ey, er * 0.22, er * 0.58, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(ex - er * 0.26, ey - er * 0.28, er * 0.26, 0, Math.PI * 2);
-    ctx.fill();
-    // Fierce angled iron brow hood over searchlight eye
-    ctx.fillStyle = '#334155';
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
-    ctx.beginPath();
-    ctx.moveTo(ex - er * 1.25, ey - er * 0.95);
-    ctx.lineTo(ex + er * 1.25, ey - er * 0.28);
-    ctx.lineTo(ex + er * 1.05, ey - er * 0.95);
-    ctx.lineTo(ex - er * 0.9, ey - er * 1.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    this._drawKawaiiAnimeEye(ctx, r * 0.34, -r * 0.14, r * 0.22, r * 0.26, scale, {
+      irisTop: '#fef08a',
+      irisBot: glowCol,
+      outline: '#041021',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    // Far-side 3/4 eye peeking adorably near snout!
+    this._drawKawaiiAnimeEye(ctx, r * 0.80, -r * 0.16, r * 0.14, r * 0.19, scale, {
+      irisTop: '#fef08a',
+      irisBot: glowCol,
+      outline: '#041021',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.18, r * 0.16, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.65)');
+    this._drawKawaiiBlush(ctx, r * 0.88, r * 0.12, r * 0.10, r * 0.065, scale, 'rgba(251, 113, 133, 0.58)');
+    this._drawKawaiiMouth(ctx, r * 0.58, r * 0.14, r * 0.11, scale, {
+      outline: '#fef08a',
+      isOpen: isAngry,
+      isStunned,
+      fangs: !isAngry,
+      glowColor: '#fde047',
+    });
 
     // 7. Spinning Side Hydro-Turbine Fin
     ctx.save();
@@ -611,48 +801,44 @@ export const bossGuardiansMethods = {
     ctx.arc(r * 0.52, -r * 0.74, r * 0.11, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4. Regal Side-Profile Anime Eye with Sweeping Eyelash, Golden Iris & Cheek Constellation Marks
-    const ex = r * 0.46;
-    const ey = -r * 0.12;
-    const er = r * 0.24;
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
-    ctx.beginPath();
-    ctx.ellipse(ex, ey, er * 1.24, er * 0.86, -0.1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    const irisG = ctx.createLinearGradient(ex, ey - er, ex, ey + er);
-    irisG.addColorStop(0, isStunned ? '#94a3b8' : '#fef08a');
-    irisG.addColorStop(1, '#f59e0b');
-    ctx.fillStyle = irisG;
-    ctx.beginPath();
-    ctx.arc(ex + er * 0.12, ey, er * 0.66, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.ellipse(ex + er * 0.18, ey, er * 0.24, er * 0.46, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(ex - er * 0.18, ey - er * 0.24, er * 0.26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(ex + er * 0.32, ey + er * 0.24, er * 0.11, 0, Math.PI * 2);
-    ctx.fill();
-    // Sweeping royal upper eyelash wing
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(ex - er * 1.32, ey - er * 0.25);
-    ctx.quadraticCurveTo(ex, ey - er * 1.12, ex + er * 1.24, ey - er * 0.18);
-    ctx.stroke();
+    // 4. GIANT Sparkling Royal Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Cute Royal `:3` Smile!
+    this._drawKawaiiShine(ctx, -r * 0.10, -r * 0.34, r * 0.28, r * 0.11, -0.18);
+    const isEmpressAngry = boss.phase >= 3 || boss.aiState === 'beam_sweep' || boss.aiState === 'lunge_dash';
+    this._drawKawaiiAnimeEye(ctx, r * 0.30, -r * 0.06, r * 0.20, r * 0.24, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#c084fc',
+      outline: '#041021',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isEmpressAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.78, -r * 0.08, r * 0.15, r * 0.20, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#c084fc',
+      outline: '#041021',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isEmpressAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.14, r * 0.18, r * 0.15, r * 0.085, scale, 'rgba(244, 114, 182, 0.65)');
+    this._drawKawaiiBlush(ctx, r * 0.86, r * 0.14, r * 0.10, r * 0.065, scale, 'rgba(244, 114, 182, 0.55)');
+    this._drawKawaiiMouth(ctx, r * 0.56, r * 0.16, r * 0.11, scale, {
+      outline: '#041021',
+      isOpen: isEmpressAngry,
+      isStunned,
+      glowColor: '#f472b6',
+    });
     // Glowing cheek constellation jewels
     ctx.fillStyle = glyphCol;
-    for (let j = 0; j < 3; j++) {
+    for (let j = 0; j < 2; j++) {
       ctx.beginPath();
-      ctx.arc(r * (0.28 - j * 0.18), r * (0.16 + j * 0.04), Math.max(1.8, r * (0.065 - j * 0.012)), 0, Math.PI * 2);
+      ctx.arc(r * (-0.12 - j * 0.18), r * (0.14 + j * 0.04), Math.max(1.8, r * (0.065 - j * 0.014)), 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -940,24 +1126,30 @@ export const bossGuardiansMethods = {
     }
     ctx.stroke();
 
-    // 3. Armored Basalt Hood Plate & Soft Cephalopod Aperture Body
-    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#7c2d12';
+    // 3. Cute Chubby Terracotta Cephalopod Face Peeking from Spiral Shell + Cozy Volcanic Cap!
+    this._drawKawaiiShine(ctx, shellCx - shellR * 0.26, shellCy - shellR * 0.56, shellR * 0.34, shellR * 0.14, -0.45);
+    const faceG = ctx.createRadialGradient(r * 0.44, -r * 0.12, r * 0.08, r * 0.48, r * 0.06, r * 0.64);
+    faceG.addColorStop(0, hitF > 0 ? '#ffffff' : '#fdba74');
+    faceG.addColorStop(0.58, hitF > 0 ? '#fed7aa' : '#ea580c');
+    faceG.addColorStop(1, '#7c2d12');
+    ctx.fillStyle = faceG;
     ctx.strokeStyle = '#041021';
     ctx.lineWidth = Math.max(2.4, 0.1 * scale);
     ctx.beginPath();
-    ctx.ellipse(r * 0.46, r * 0.08, r * 0.5, r * 0.58, -0.1, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.48, r * 0.06, r * 0.56, r * 0.62, -0.06, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Heavy Volcanic Basalt Hood Crest
-    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#44403c';
+    // Cute jaunty volcanic basalt beret cap perched above forehead (keeps face wide open & adorable!)
+    ctx.fillStyle = hitF > 0 ? '#ffffff' : '#57534e';
     ctx.beginPath();
-    ctx.moveTo(r * 0.02, -r * 0.66);
-    ctx.quadraticCurveTo(r * 0.72, -r * 0.78, r * 1.05, -r * 0.24);
-    ctx.quadraticCurveTo(r * 0.64, -r * 0.14, r * 0.08, -r * 0.28);
+    ctx.moveTo(r * 0.02, -r * 0.54);
+    ctx.quadraticCurveTo(r * 0.52, -r * 0.88, r * 0.96, -r * 0.46);
+    ctx.quadraticCurveTo(r * 0.52, -r * 0.34, r * 0.06, -r * 0.40);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+    this._drawKawaiiShine(ctx, r * 0.42, -r * 0.60, r * 0.20, r * 0.07, -0.1);
 
     // 4. Glowing Superheated Magma Valve Weakpoint
     const wx = Math.cos(boss.weakAngle || 0) * r * 0.82 * facing;
@@ -970,46 +1162,38 @@ export const bossGuardiansMethods = {
     ctx.fill();
     ctx.stroke();
 
-    // 5. Single Fierce Molten-Amber Side-Profile Anime Eye beneath Basalt Hood
-    const ex = r * 0.56;
-    const ey = -r * 0.06;
-    const er = r * 0.26;
-    ctx.fillStyle = '#fef9c3';
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(2, 0.08 * scale);
-    ctx.beginPath();
-    ctx.ellipse(ex, ey, er * 1.1, er * 0.9, 0.05, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (isStunned) {
-      ctx.strokeStyle = '#041021';
-      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.5, ey - er * 0.45);
-      ctx.lineTo(ex + er * 0.5, ey + er * 0.45);
-      ctx.moveTo(ex + er * 0.5, ey - er * 0.45);
-      ctx.lineTo(ex - er * 0.5, ey + er * 0.45);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = '#ea580c';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.08, ey, er * 0.65, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#041021';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.14, ey, er * 0.34, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex - er * 0.15, ey - er * 0.22, er * 0.23, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(2.6, 0.105 * scale);
-    ctx.beginPath();
-    ctx.moveTo(ex - er * 1.1, ey - er * 0.68);
-    ctx.lineTo(ex + er * 1.15, ey - er * 0.36);
-    ctx.stroke();
+    // 5. GIANT Sparkling Molten-Gold Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Cute `:3` Smile!
+    const isNautAngry = boss.phase >= 3 || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    this._drawKawaiiAnimeEye(ctx, r * 0.42, -r * 0.04, r * 0.20, r * 0.24, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#f97316',
+      outline: '#041021',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isNautAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.84, -r * 0.06, r * 0.14, r * 0.20, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#f97316',
+      outline: '#041021',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isNautAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.26, r * 0.22, r * 0.14, r * 0.08, scale, 'rgba(251, 113, 133, 0.72)');
+    this._drawKawaiiBlush(ctx, r * 0.90, r * 0.18, r * 0.09, r * 0.06, scale, 'rgba(251, 113, 133, 0.62)');
+    this._drawKawaiiMouth(ctx, r * 0.65, r * 0.20, r * 0.11, scale, {
+      outline: '#041021',
+      isOpen: isNautAngry,
+      isStunned,
+      glowColor: '#fde047',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1095,49 +1279,24 @@ export const bossGuardiansMethods = {
       ctx.stroke();
     }
 
-    // 3. Faceted Angular Crystal Basilisk Head + Luminous Fangs
-    const headG = ctx.createLinearGradient(-r * 0.5, -r * 0.75, r * 0.9, r * 0.55);
+    // 3. Plump Chibi Pastel-Amethyst Crystal-Axolotl Head + Glossy Specular Shine!
+    const headG = ctx.createRadialGradient(r * 0.15, -r * 0.28, r * 0.08, r * 0.08, 0, r * 1.05);
     headG.addColorStop(0, crystalLit);
-    headG.addColorStop(0.5, crystalMid);
-    headG.addColorStop(1, '#3b0764');
+    headG.addColorStop(0.55, crystalMid);
+    headG.addColorStop(1, '#4c1d95');
     ctx.fillStyle = headG;
-    ctx.lineWidth = Math.max(2.6, 0.11 * scale);
+    ctx.strokeStyle = '#1e1b4b';
+    ctx.lineWidth = Math.max(2.4, 0.10 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.62, -r * 0.32);
-    ctx.lineTo(-r * 0.1, -r * 0.78);
-    ctx.lineTo(r * 0.64, -r * 0.54);
-    ctx.lineTo(r * 1.05, -r * 0.04);
-    ctx.lineTo(r * 0.68, r * 0.44);
-    ctx.lineTo(-r * 0.12, r * 0.58);
-    ctx.lineTo(-r * 0.62, r * 0.32);
-    ctx.closePath();
+    ctx.ellipse(r * 0.18, -r * 0.02, r * 0.86, r * 0.68, -0.05, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-
-    // Inner iridescent prism plane highlight
-    ctx.fillStyle = 'rgba(224, 242, 254, 0.34)';
+    // Soft pastel lavender cheek belly + glossy anime jelly-bean forehead shine
+    ctx.fillStyle = 'rgba(245, 208, 254, 0.30)';
     ctx.beginPath();
-    ctx.moveTo(-r * 0.08, -r * 0.72);
-    ctx.lineTo(r * 0.58, -r * 0.5);
-    ctx.lineTo(r * 0.2, -r * 0.08);
-    ctx.lineTo(-r * 0.42, -r * 0.2);
-    ctx.closePath();
+    ctx.ellipse(r * 0.32, r * 0.26, r * 0.48, r * 0.24, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Translucent crystal fangs
-    ctx.fillStyle = '#e0f2fe';
-    ctx.lineWidth = Math.max(1.4, 0.06 * scale);
-    for (let f = 0; f < 3; f++) {
-      const fx = r * (0.44 + f * 0.16);
-      const fy = r * (0.36 - f * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(fx - r * 0.05, fy);
-      ctx.lineTo(fx + r * 0.02, fy + r * 0.18);
-      ctx.lineTo(fx + r * 0.08, fy - r * 0.03);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
+    this._drawKawaiiShine(ctx, -r * 0.08, -r * 0.36, r * 0.26, r * 0.11, -0.28);
 
     // 4. Orbiting Selenite Heart Weakpoint
     const wx = Math.cos(boss.weakAngle || 0) * r * 0.84 * facing;
@@ -1156,45 +1315,39 @@ export const bossGuardiansMethods = {
     ctx.fill();
     ctx.stroke();
 
-    // 5. Single Fierce Faceted Amethyst-Cyan Anime Eye
-    const ex = r * 0.34;
-    const ey = -r * 0.14;
-    const er = r * 0.26;
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#1e1b4b';
-    ctx.lineWidth = Math.max(2, 0.08 * scale);
-    ctx.beginPath();
-    ctx.ellipse(ex, ey, er * 1.12, er * 0.86, -0.12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (isStunned) {
-      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.48, ey - er * 0.45);
-      ctx.lineTo(ex + er * 0.48, ey + er * 0.45);
-      ctx.moveTo(ex + er * 0.48, ey - er * 0.45);
-      ctx.lineTo(ex - er * 0.48, ey + er * 0.45);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = crystalCyan;
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.08, ey, er * 0.65, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#1e1b4b';
-      ctx.beginPath();
-      ctx.ellipse(ex + er * 0.12, ey, er * 0.18, er * 0.46, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex - er * 0.16, ey - er * 0.22, er * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#1e1b4b';
-    ctx.lineWidth = Math.max(2.5, 0.1 * scale);
-    ctx.beginPath();
-    ctx.moveTo(ex - er * 1.2, ey - er * 0.58);
-    ctx.lineTo(ex + er * 1.15, ey - er * 0.34);
-    ctx.stroke();
+    // 5. GIANT Sparkling Amethyst-Cyan Chibi Anime Eyes (3/4 pair!) + Rosy Blush + `:3` Fang Smile!
+    const isBasAngry = boss.phase >= 3 || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    this._drawKawaiiAnimeEye(ctx, r * 0.26, -r * 0.06, r * 0.21, r * 0.25, scale, {
+      irisTop: '#e0f2fe',
+      irisBot: crystalCyan,
+      outline: '#1e1b4b',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isBasAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.76, -r * 0.08, r * 0.15, r * 0.21, scale, {
+      irisTop: '#e0f2fe',
+      irisBot: crystalCyan,
+      outline: '#1e1b4b',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isBasAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.08, r * 0.22, r * 0.16, r * 0.09, scale, 'rgba(244, 114, 182, 0.68)');
+    this._drawKawaiiBlush(ctx, r * 0.84, r * 0.18, r * 0.10, r * 0.07, scale, 'rgba(244, 114, 182, 0.58)');
+    this._drawKawaiiMouth(ctx, r * 0.54, r * 0.20, r * 0.11, scale, {
+      outline: '#1e1b4b',
+      isOpen: isBasAngry,
+      isStunned,
+      fangs: !isBasAngry,
+      glowColor: '#f472b6',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1269,44 +1422,50 @@ export const bossGuardiansMethods = {
     ctx.arc(r * 0.26, -r * 1.56, r * 0.11, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3. Sleek Armored Type-VIIC U-Boat Pressure Hull Body
-    const hullG = ctx.createLinearGradient(0, -r * 0.72, 0, r * 0.72);
-    hullG.addColorStop(0, hullTop);
-    hullG.addColorStop(0.52, hullMid);
+    // 3. Plump Chibi Miyazaki/Kirby Ghost-Submarine Pressure Hull!
+    const hullG = ctx.createRadialGradient(r * 0.15, -r * 0.34, r * 0.1, 0, 0, r * 1.38);
+    hullG.addColorStop(0, hitF > 0 ? '#ffffff' : '#5eead4');
+    hullG.addColorStop(0.32, hullTop);
+    hullG.addColorStop(0.75, hullMid);
     hullG.addColorStop(1, hullDark);
     ctx.fillStyle = hullG;
     ctx.strokeStyle = '#041021';
-    ctx.lineWidth = Math.max(2.8, 0.12 * scale);
+    ctx.lineWidth = Math.max(2.6, 0.11 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 1.24, -r * 0.24);
-    ctx.quadraticCurveTo(-r * 0.35, -r * 0.72, r * 0.68, -r * 0.52);
-    ctx.quadraticCurveTo(r * 1.26, -r * 0.22, r * 1.18, r * 0.14);
-    ctx.quadraticCurveTo(r * 0.88, r * 0.62, -r * 0.3, r * 0.66);
-    ctx.quadraticCurveTo(-r * 0.95, r * 0.56, -r * 1.24, r * 0.22);
-    ctx.closePath();
+    ctx.ellipse(0, 0.04 * r, r * 1.20, r * 0.76, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    // Soft mint-teal belly sheen & glossy anime jelly-bean hull highlight
+    ctx.fillStyle = 'rgba(204, 251, 241, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(r * 0.16, r * 0.38, r * 0.72, r * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    this._drawKawaiiShine(ctx, -r * 0.32, -r * 0.36, r * 0.34, r * 0.12, -0.22);
 
-    // Spectral glowing flood-vent ribs along the side of the submarine hull
+    // Cute glowing spectral gill-porthole buttons along flank
     const pulse = 0.6 + 0.4 * Math.sin(timeSec * 5.8);
     ctx.fillStyle = ghostGlow;
-    ctx.globalAlpha = 0.72 + pulse * 0.24;
-    for (let v = 0; v < 5; v++) {
-      const vx = -r * (0.72 - v * 0.26);
-      ctx.fillRect(vx - r * 0.05, -r * 0.22, r * 0.1, r * 0.34);
+    ctx.globalAlpha = 0.78 + pulse * 0.2;
+    for (let v = 0; v < 3; v++) {
+      const vx = -r * (0.34 + v * 0.26);
+      ctx.beginPath();
+      ctx.arc(vx, r * 0.04, r * 0.095, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
 
-    // Armored Torpedo-Tube Bow Jaws + Glowing Muzzle Bays
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = ghostGlow;
-    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
-    for (let t = 0; t < 2; t++) {
-      ctx.beginPath();
-      ctx.arc(r * (0.96 - t * 0.12), r * (0.18 + t * 0.18), r * 0.14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
+    // Cute stubby fluttering pectoral dive-fin
+    ctx.save();
+    ctx.translate(r * 0.02, r * 0.42);
+    ctx.rotate(Math.sin(timeSec * 5.2) * 0.28);
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.32, r * 0.14, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
 
     // 4. Spectral Reactor Core Weakpoint
     const wx = Math.cos(boss.weakAngle || 0) * r * 0.82 * facing;
@@ -1319,44 +1478,46 @@ export const bossGuardiansMethods = {
     ctx.fill();
     ctx.stroke();
 
-    // 5. Glowing Spectral Emerald Sonar Porthole Anime Eye
-    const ex = r * 0.48;
-    const ey = -r * 0.12;
-    const er = r * 0.27;
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    // 5. GIANT Sparkling Spectral-Mint Chibi Anime Porthole Eyes (3/4 pair!) + Rosy Blush + Cute `:3` Smile!
+    const isSubAngry = boss.phase >= 3 || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    // Steel porthole bezel around near eye
+    ctx.fillStyle = '#64748b';
+    ctx.strokeStyle = '#041021';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
     ctx.beginPath();
-    ctx.arc(ex, ey, er * 1.12, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.36, -r * 0.06, r * 0.26, r * 0.29, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (isStunned) {
-      ctx.strokeStyle = ghostGlow;
-      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.5, ey - er * 0.45);
-      ctx.lineTo(ex + er * 0.5, ey + er * 0.45);
-      ctx.moveTo(ex + er * 0.5, ey - er * 0.45);
-      ctx.lineTo(ex - er * 0.5, ey + er * 0.45);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = ghostGlow;
-      ctx.beginPath();
-      ctx.arc(ex, ey, er * 0.78, 0, Math.PI * 2);
-      ctx.fill();
-      // Rotating sonar sweep line inside eye
-      const sweep = timeSec * 4.5;
-      ctx.strokeStyle = '#041021';
-      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex + Math.cos(sweep) * er * 0.74, ey + Math.sin(sweep) * er * 0.74);
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex - er * 0.22, ey - er * 0.22, er * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    this._drawKawaiiAnimeEye(ctx, r * 0.36, -r * 0.06, r * 0.21, r * 0.25, scale, {
+      irisTop: '#ccfbf1',
+      irisBot: ghostGlow,
+      outline: '#041021',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isSubAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.88, -r * 0.08, r * 0.15, r * 0.20, scale, {
+      irisTop: '#ccfbf1',
+      irisBot: ghostGlow,
+      outline: '#041021',
+      isStunned,
+      isHurt: hitF > 0 || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: isSubAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.18, r * 0.22, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.65)');
+    this._drawKawaiiBlush(ctx, r * 0.96, r * 0.18, r * 0.10, r * 0.065, scale, 'rgba(251, 113, 133, 0.56)');
+    this._drawKawaiiMouth(ctx, r * 0.64, r * 0.22, r * 0.12, scale, {
+      outline: ghostGlow,
+      isOpen: isSubAngry,
+      isStunned,
+      glowColor: '#5eead4',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1399,108 +1560,105 @@ export const bossGuardiansMethods = {
     ctx.stroke();
     ctx.restore();
 
-    // 2. Floating Carved Megalithic Shoulder Pauldrons
-    const armLift = (st === 'slam_windup' || st === 'lunge_windup') ? -0.28 * r : Math.sin(timeSec * 3.0) * 0.08 * r;
+    // 2. Cute Floating Rounded Sun-Golem Mitten Hands
+    const armLift = (st === 'slam_windup' || st === 'lunge_windup') ? -0.28 * r : Math.sin(timeSec * 3.0) * 0.12 * r;
     for (const side of [-1, 1]) {
       ctx.save();
-      ctx.translate(side * r * 0.88, -r * 0.12 + armLift * (side > 0 ? 1 : 0.6));
+      ctx.translate(side * r * 0.96, r * 0.04 + armLift * (side > 0 ? 1 : -0.7));
       ctx.rotate(side * 0.22);
-      ctx.fillStyle = flash ? '#ffffff' : '#0f4c5c';
+      ctx.fillStyle = flash ? '#ffffff' : '#0d9488';
       ctx.strokeStyle = '#1c1917';
       ctx.lineWidth = Math.max(2.0, 0.08 * scale);
       ctx.beginPath();
-      ctx.moveTo(-r * 0.32, -r * 0.34);
-      ctx.lineTo(r * 0.32, -r * 0.26);
-      ctx.lineTo(r * 0.24, r * 0.36);
-      ctx.lineTo(-r * 0.28, r * 0.28);
-      ctx.closePath();
+      ctx.ellipse(0, 0, r * 0.28, r * 0.34, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
-      ctx.strokeRect(-r * 0.2, -r * 0.18, r * 0.4, r * 0.36);
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = Math.max(1.6, 0.06 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = runeGlow;
       ctx.beginPath();
-      ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
+      ctx.arc(0, 0, r * 0.08, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    // 3. Monolithic Octagonal Orichalcum Torso & Sun-Crest Crown
-    ctx.fillStyle = flash ? '#fef9c3' : '#b45309';
+    // 3. Plump Rounded Chibi Orichalcum Sun-Golem Body & Bouncy Sun-Crown!
+    const colG = ctx.createRadialGradient(-r * 0.20, -r * 0.32, r * 0.1, 0, 0, r * 1.12);
+    colG.addColorStop(0, flash ? '#ffffff' : '#fde047');
+    colG.addColorStop(0.45, flash ? '#fef9c3' : '#d97706');
+    colG.addColorStop(1, '#78350f');
+    ctx.fillStyle = colG;
     ctx.strokeStyle = '#1c1917';
     ctx.lineWidth = Math.max(2.4, 0.095 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.68, -r * 0.56);
-    ctx.lineTo(0, -r * 0.96);
-    ctx.lineTo(r * 0.68, -r * 0.56);
-    ctx.lineTo(r * 0.78, r * 0.24);
-    ctx.lineTo(r * 0.36, r * 0.86);
-    ctx.lineTo(-r * 0.36, r * 0.86);
-    ctx.lineTo(-r * 0.78, r * 0.24);
-    ctx.closePath();
+    ctx.ellipse(0, 0.02 * r, r * 0.84, r * 0.86, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Inner verdigris turquoise inlaid chest plate
-    ctx.fillStyle = flash ? '#ffffff' : '#0e7490';
+    // Rounded inlaid turquoise-teal face shield
+    ctx.fillStyle = flash ? '#ffffff' : '#0d9488';
     ctx.strokeStyle = '#fde047';
     ctx.lineWidth = Math.max(1.8, 0.07 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.46, -r * 0.36);
-    ctx.lineTo(0, -r * 0.68);
-    ctx.lineTo(r * 0.46, -r * 0.36);
-    ctx.lineTo(r * 0.42, r * 0.48);
-    ctx.lineTo(-r * 0.42, r * 0.48);
-    ctx.closePath();
+    ctx.ellipse(r * 0.06, 0.04 * r, r * 0.62, r * 0.62, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    this._drawKawaiiShine(ctx, -r * 0.24, -r * 0.44, r * 0.24, r * 0.10, -0.35);
 
-    // Crown sun-crest spires
+    // Cute bouncy golden sun-crest crown spires on top
     ctx.fillStyle = '#fde047';
-    ctx.strokeStyle = '#1c1917';
+    ctx.strokeStyle = '#451a03';
     ctx.lineWidth = Math.max(1.6, 0.065 * scale);
     for (let k = -1; k <= 1; k++) {
       ctx.beginPath();
-      ctx.moveTo(k * r * 0.28 - r * 0.1, -r * 0.74);
+      ctx.moveTo(k * r * 0.28 - r * 0.10, -r * 0.76);
       ctx.lineTo(k * r * 0.34, -r * (k === 0 ? 1.24 : 1.06));
-      ctx.lineTo(k * r * 0.28 + r * 0.1, -r * 0.74);
+      ctx.lineTo(k * r * 0.28 + r * 0.10, -r * 0.76);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(k * r * 0.34, -r * (k === 0 ? 1.24 : 1.06), Math.max(1.8, 0.06 * r), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fde047';
     }
 
-    // 4. Radiant Solar-Core Cyclops Eye
-    const ex = r * 0.14;
-    const ey = -r * 0.06;
-    const er = r * 0.32;
-    ctx.fillStyle = '#1c1917';
-    ctx.strokeStyle = '#fde047';
-    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    if (isStunned || boss.defeated) {
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.48, ey - er * 0.48);
-      ctx.lineTo(ex + er * 0.48, ey + er * 0.48);
-      ctx.moveTo(ex + er * 0.48, ey - er * 0.48);
-      ctx.lineTo(ex - er * 0.48, ey + er * 0.48);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = runeGlow;
-      ctx.beginPath();
-      ctx.arc(ex, ey, er * 0.72, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.16, ey - er * 0.14, er * 0.26, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 4. GIANT Sparkling Twin Turquoise-Gold Chibi Anime Eyes + Rosy Blush + Cute `:3` Rune Smile!
+    const isColAngry = boss.phase >= 3 || st === 'slam_windup' || st === 'beam_sweep' || st === 'lunge_dash';
+    this._drawKawaiiAnimeEye(ctx, -r * 0.16, -r * 0.04, r * 0.19, r * 0.23, scale, {
+      irisTop: '#fef9c3',
+      irisBot: runeGlow,
+      outline: '#1c1917',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: st === 'dormant',
+      isAngry: isColAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.32, -r * 0.04, r * 0.17, r * 0.22, scale, {
+      irisTop: '#fef9c3',
+      irisBot: runeGlow,
+      outline: '#1c1917',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: st === 'dormant',
+      isAngry: isColAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, -r * 0.32, r * 0.22, r * 0.13, r * 0.08, scale, 'rgba(251, 113, 133, 0.68)');
+    this._drawKawaiiBlush(ctx, r * 0.44, r * 0.22, r * 0.12, r * 0.075, scale, 'rgba(251, 113, 133, 0.65)');
+    this._drawKawaiiMouth(ctx, r * 0.08, r * 0.24, r * 0.11, scale, {
+      outline: '#fde047',
+      isOpen: isColAngry,
+      isStunned,
+      glowColor: '#fef08a',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1544,36 +1702,38 @@ export const bossGuardiansMethods = {
       ctx.fillRect(segX - segR * 0.25, segY - segR * 0.16, segR * 0.5, segR * 0.32);
     }
 
-    // 2. Heavy Riveted Iron Head Chassis
-    ctx.fillStyle = flash ? '#fef08a' : '#475569';
+    // 2. Plump Rounded Chibi Iron-Mole Head Chassis + Glossy Dome Shine
+    const drillHeadG = ctx.createRadialGradient(-r * 0.12, -r * 0.30, r * 0.1, -r * 0.04, 0, r * 0.92);
+    drillHeadG.addColorStop(0, flash ? '#ffffff' : '#94a3b8');
+    drillHeadG.addColorStop(0.55, flash ? '#fef08a' : '#475569');
+    drillHeadG.addColorStop(1, '#1e293b');
+    ctx.fillStyle = drillHeadG;
     ctx.strokeStyle = '#020617';
     ctx.lineWidth = Math.max(2.4, 0.095 * scale);
     ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') {
-      ctx.roundRect(-r * 0.65, -r * 0.72, r * 1.24, r * 1.44, r * 0.28);
-    } else {
-      ctx.rect(-r * 0.65, -r * 0.72, r * 1.24, r * 1.44);
-    }
+    ctx.ellipse(-r * 0.04, 0, r * 0.72, r * 0.76, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    this._drawKawaiiShine(ctx, -r * 0.24, -r * 0.44, r * 0.24, r * 0.10, -0.32);
+
+    // Cute golden mining collar band
+    ctx.fillStyle = '#fbbf24';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.60, 0, r * 0.13, r * 0.54, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Hazard-stripe mining collar band
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(r * 0.28, -r * 0.64, r * 0.24, r * 1.28);
-    ctx.fillStyle = '#0f172a';
-    for (let k = -2; k <= 2; k++) {
-      ctx.fillRect(r * 0.28, k * r * 0.25 - r * 0.06, r * 0.24, r * 0.1);
-    }
-
-    // 3. Spinning Helical Tungsten Carbide Bore-Head Nose Cone
+    // 3. Shiny Spinning Candy-Striped Tungsten Bore-Head Nose Cone
     const drillSpin = (timeSec * (st === 'lunge_dash' ? 24 : 11)) % 1;
-    ctx.fillStyle = flash ? '#ffffff' : '#94a3b8';
+    ctx.fillStyle = flash ? '#ffffff' : '#cbd5e1';
     ctx.strokeStyle = '#020617';
     ctx.lineWidth = Math.max(2.2, 0.085 * scale);
     ctx.beginPath();
-    ctx.moveTo(r * 0.54, -r * 0.58);
-    ctx.lineTo(r * 1.56, 0);
-    ctx.lineTo(r * 0.54, r * 0.58);
+    ctx.moveTo(r * 0.62, -r * 0.48);
+    ctx.quadraticCurveTo(r * 1.18, -r * 0.26, r * 1.48, 0);
+    ctx.quadraticCurveTo(r * 1.18, r * 0.26, r * 0.62, r * 0.48);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1582,45 +1742,46 @@ export const bossGuardiansMethods = {
     ctx.lineWidth = Math.max(1.8, 0.075 * scale);
     for (let f = 0; f < 4; f++) {
       const u = ((f / 4) + drillSpin) % 1;
-      const fx = r * (0.58 + u * 0.88);
-      const halfH = r * 0.52 * (1 - u);
+      const fx = r * (0.64 + u * 0.76);
+      const halfH = r * 0.42 * (1 - u);
       ctx.beginPath();
-      ctx.moveTo(fx - r * 0.08, -halfH);
-      ctx.lineTo(fx + r * 0.08, halfH);
+      ctx.moveTo(fx - r * 0.07, -halfH);
+      ctx.lineTo(fx + r * 0.07, halfH);
       ctx.stroke();
     }
 
-    // 4. Industrial Miner's Headlamp Optical Sensor Eye
-    const ex = -r * 0.06;
-    const ey = -r * 0.14;
-    const er = r * 0.3;
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = '#fb923c';
-    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    if (isStunned || boss.defeated) {
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = Math.max(2.4, 0.095 * scale);
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.45, ey - er * 0.45);
-      ctx.lineTo(ex + er * 0.45, ey + er * 0.45);
-      ctx.moveTo(ex + er * 0.45, ey - er * 0.45);
-      ctx.lineTo(ex - er * 0.45, ey + er * 0.45);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = furnaceCol;
-      ctx.beginPath();
-      ctx.arc(ex, ey, er * 0.72, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fffbeb';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.16, ey - er * 0.16, er * 0.26, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 4. GIANT Sparkling Miner-Headlamp Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Cute `:3` Smile!
+    const isDrillAngry = boss.phase >= 3 || st === 'lunge_dash' || st === 'lunge_windup';
+    this._drawKawaiiAnimeEye(ctx, -r * 0.18, -r * 0.08, r * 0.20, r * 0.24, scale, {
+      irisTop: '#fef9c3',
+      irisBot: furnaceCol,
+      outline: '#020617',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: st === 'dormant',
+      isAngry: isDrillAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.30, -r * 0.10, r * 0.15, r * 0.20, scale, {
+      irisTop: '#fef9c3',
+      irisBot: furnaceCol,
+      outline: '#020617',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: st === 'dormant',
+      isAngry: isDrillAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, -r * 0.34, r * 0.20, r * 0.14, r * 0.08, scale, 'rgba(251, 113, 133, 0.68)');
+    this._drawKawaiiBlush(ctx, r * 0.36, r * 0.18, r * 0.10, r * 0.065, scale, 'rgba(251, 113, 133, 0.58)');
+    this._drawKawaiiMouth(ctx, r * 0.08, r * 0.22, r * 0.11, scale, {
+      outline: '#fde047',
+      isOpen: isDrillAngry,
+      isStunned,
+      glowColor: '#fb923c',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1704,26 +1865,27 @@ export const bossGuardiansMethods = {
     ctx.lineTo(-r * 0.12, -r * 1.18);
     ctx.stroke();
 
-    // Jade Dragon Snout & Jaw
-    ctx.fillStyle = flash ? '#ffffff' : jadeLight;
+    // Plump Chibi Jade Dragon Head & Glossy Forehead Shine!
+    const dragHeadG = ctx.createRadialGradient(r * 0.18, -r * 0.26, r * 0.08, r * 0.20, 0, r * 0.94);
+    dragHeadG.addColorStop(0, flash ? '#ffffff' : '#99f6e4');
+    dragHeadG.addColorStop(0.52, flash ? '#ffffff' : jadeLight);
+    dragHeadG.addColorStop(1, jadeMain);
+    ctx.fillStyle = dragHeadG;
     ctx.strokeStyle = '#022c22';
     ctx.lineWidth = Math.max(2.2, 0.088 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.42, -r * 0.48);
-    ctx.quadraticCurveTo(r * 0.45, -r * 0.62, r * 1.02, -r * 0.12);
-    ctx.lineTo(r * 0.88, r * 0.32);
-    ctx.quadraticCurveTo(r * 0.2, r * 0.56, -r * 0.42, r * 0.38);
-    ctx.closePath();
+    ctx.ellipse(r * 0.26, -r * 0.02, r * 0.76, r * 0.58, -0.05, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    this._drawKawaiiShine(ctx, r * 0.02, -r * 0.34, r * 0.22, r * 0.09, -0.25);
 
     // Flowing Golden Dragon Whiskers
     ctx.strokeStyle = '#fde047';
-    ctx.lineWidth = Math.max(1.4, 0.055 * scale);
-    const wWave = Math.sin(timeSec * 4.4) * r * 0.24;
+    ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+    const wWave = Math.sin(timeSec * 4.4) * r * 0.22;
     ctx.beginPath();
-    ctx.moveTo(r * 0.82, r * 0.12);
-    ctx.quadraticCurveTo(r * 1.24, r * 0.28 + wWave, r * 1.56, r * 0.06 - wWave);
+    ctx.moveTo(r * 0.84, r * 0.12);
+    ctx.quadraticCurveTo(r * 1.24, r * 0.28 + wWave, r * 1.54, r * 0.06 - wWave);
     ctx.stroke();
 
     // Luminous Floating Ryūjin Dragon Pearl ahead of snout
@@ -1741,27 +1903,38 @@ export const bossGuardiansMethods = {
     ctx.fill();
     ctx.stroke();
 
-    // Expressive Fierce Golden Eye
-    const ex = r * 0.26;
-    const ey = -r * 0.16;
-    const er = r * 0.23;
-    ctx.fillStyle = isAngry ? '#fef08a' : '#fffbeb';
-    ctx.strokeStyle = '#022c22';
-    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
-    ctx.beginPath();
-    ctx.ellipse(ex, ey, er, er * (isAngry ? 0.68 : 0.86), 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (!isStunned && !boss.defeated) {
-      ctx.fillStyle = isAngry ? '#dc2626' : '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(ex + er * 0.22, ey, er * 0.3, er * 0.62, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.34, ey - er * 0.22, er * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // GIANT Sparkling Golden-Jade Chibi Dragon Eyes (3/4 pair!) + Rosy Blush + Cute `:3` Smile!
+    this._drawKawaiiAnimeEye(ctx, r * 0.26, -r * 0.06, r * 0.20, r * 0.24, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#f59e0b',
+      outline: '#022c22',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.76, -r * 0.08, r * 0.14, r * 0.19, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#f59e0b',
+      outline: '#022c22',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.08, r * 0.20, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.68)');
+    this._drawKawaiiBlush(ctx, r * 0.84, r * 0.16, r * 0.09, r * 0.065, scale, 'rgba(251, 113, 133, 0.58)');
+    this._drawKawaiiMouth(ctx, r * 0.54, r * 0.20, r * 0.10, scale, {
+      outline: '#022c22',
+      isOpen: isAngry,
+      isStunned,
+      fangs: !isAngry,
+      glowColor: '#fda4af',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -1805,77 +1978,116 @@ export const bossGuardiansMethods = {
     ctx.lineTo(-r * 1.56, propSpin);
     ctx.stroke();
 
-    // 3. Armored Dreadnought Main Hull & Ram Bow
-    ctx.fillStyle = flash ? '#ffffff' : '#334155';
+    // 3. Plump Chibi Ghost-Battleship Hull & Rounded Cozy Bow!
+    const shipG = ctx.createRadialGradient(r * 0.2, -r * 0.25, r * 0.1, 0, r * 0.05, r * 1.6);
+    shipG.addColorStop(0, flash ? '#ffffff' : '#64748b');
+    shipG.addColorStop(0.55, flash ? '#e2e8f0' : '#334155');
+    shipG.addColorStop(1, '#0f172a');
+    ctx.fillStyle = shipG;
     ctx.strokeStyle = '#020617';
-    ctx.lineWidth = Math.max(2.3, 0.09 * scale);
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
     ctx.beginPath();
-    ctx.moveTo(r * 1.58, 0.08 * r);
-    ctx.lineTo(r * 1.15, -r * 0.44);
-    ctx.lineTo(-r * 1.25, -r * 0.4);
-    ctx.lineTo(-r * 1.52, 0.1 * r);
-    ctx.lineTo(-r * 1.28, r * 0.56);
-    ctx.lineTo(r * 1.05, r * 0.56);
+    ctx.moveTo(r * 1.48, r * 0.04);
+    ctx.quadraticCurveTo(r * 1.32, -r * 0.48, r * 0.62, -r * 0.44);
+    ctx.lineTo(-r * 1.05, -r * 0.42);
+    ctx.quadraticCurveTo(-r * 1.52, -r * 0.28, -r * 1.48, r * 0.16);
+    ctx.quadraticCurveTo(-r * 1.38, r * 0.64, -r * 0.72, r * 0.62);
+    ctx.lineTo(r * 0.88, r * 0.62);
+    ctx.quadraticCurveTo(r * 1.48, r * 0.52, r * 1.48, r * 0.04);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Glowing Spectral Emerald Armor Belt & Portholes
+    // Glowing Spectral Emerald Armor Belt & Cute Portholes
     ctx.fillStyle = ghostGlow;
-    ctx.fillRect(-r * 1.18, r * 0.08, r * 2.24, r * 0.14);
-    for (let p = -3; p <= 2; p++) {
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.48, r * 0.28, r * 0.76, r * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    for (let p = -3; p <= -1; p++) {
       ctx.beginPath();
-      ctx.arc(p * r * 0.34, -r * 0.14, r * 0.085, 0, Math.PI * 2);
+      ctx.arc(p * r * 0.34, -r * 0.06, r * 0.085, 0, Math.PI * 2);
       ctx.fill();
     }
+    this._drawKawaiiShine(ctx, -r * 0.48, -r * 0.24, r * 0.36, r * 0.09, -0.08);
 
-    // 4. Armored Bridge Citadel & Twin 12-Inch Gun Turrets
-    ctx.fillStyle = flash ? '#e2e8f0' : '#475569';
+    // 4. Cozy Rounded Bridge Cabin, Cute Mini Turrets & Jaunty Glowing Admiral's Crown-Hat!
+    ctx.fillStyle = flash ? '#ffffff' : '#475569';
     ctx.strokeStyle = '#020617';
     ctx.lineWidth = Math.max(2.0, 0.08 * scale);
-    ctx.fillRect(-r * 0.36, -r * 1.02, r * 0.74, r * 0.62);
-    ctx.strokeRect(-r * 0.36, -r * 1.02, r * 0.74, r * 0.62);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.08, -r * 0.68, r * 0.44, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    this._drawKawaiiShine(ctx, -r * 0.22, -r * 0.84, r * 0.16, r * 0.07, -0.25);
 
-    // Fore & Aft Twin-Barrel 12-inch Turrets
-    for (const tx of [r * 0.68, -r * 0.78]) {
+    // Jaunty Bouncy Golden Admiral's Cap perched atop the bridge!
+    ctx.save();
+    ctx.translate(-r * 0.04, -r * 1.02 + Math.sin(timeSec * 3.4) * 0.04 * r);
+    ctx.rotate(0.12);
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.08, r * 0.36, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.08, r * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Cute mini twin-barrel chibi turrets fore & aft
+    for (const tx of [r * 0.64, -r * 0.82]) {
       const dir = tx > 0 ? 1 : -1;
       ctx.fillStyle = '#64748b';
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
       ctx.beginPath();
-      ctx.arc(tx, -r * 0.46, r * 0.28, Math.PI, 0);
+      ctx.arc(tx, -r * 0.44, r * 0.22, Math.PI, 0);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(tx, -r * 0.56);
-      ctx.lineTo(tx + dir * r * 0.58, -r * 0.68);
-      ctx.moveTo(tx, -r * 0.48);
-      ctx.lineTo(tx + dir * r * 0.56, -r * 0.58);
+      ctx.moveTo(tx, -r * 0.54);
+      ctx.lineTo(tx + dir * r * 0.42, -r * 0.64);
       ctx.stroke();
     }
 
-    // 5. Spectral Bridge Searchlight Optic Eye
-    const ex = r * 0.16;
-    const ey = -r * 0.74;
-    const er = r * 0.22;
-    ctx.fillStyle = '#020617';
-    ctx.strokeStyle = ghostGlow;
-    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (!isStunned && !boss.defeated) {
-      ctx.fillStyle = isAngry ? '#f43f5e' : ghostGlow;
-      ctx.beginPath();
-      ctx.arc(ex, ey, er * 0.68, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ecfdf5';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.2, ey - er * 0.18, er * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 5. GIANT Sparkling Seafoam-Emerald Chibi Anime Eyes on the Bow (3/4 pair!) + Rosy Blush + Cute `:3` Smile!
+    this._drawKawaiiAnimeEye(ctx, r * 0.48, -r * 0.04, r * 0.21, r * 0.25, scale, {
+      irisTop: '#a7f3d0',
+      irisBot: ghostGlow,
+      outline: '#020617',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 1.04, -r * 0.06, r * 0.15, r * 0.20, scale, {
+      irisTop: '#a7f3d0',
+      irisBot: ghostGlow,
+      outline: '#020617',
+      isStunned,
+      isHurt: flash || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.30, r * 0.24, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.65)');
+    this._drawKawaiiBlush(ctx, r * 1.12, r * 0.20, r * 0.10, r * 0.065, scale, 'rgba(251, 113, 133, 0.55)');
+    this._drawKawaiiMouth(ctx, r * 0.78, r * 0.24, r * 0.12, scale, {
+      outline: ghostGlow,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#6ee7b7',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -2015,93 +2227,74 @@ export const bossGuardiansMethods = {
       ctx.restore();
     }
 
-    // 4. Armored Hexagonal King Crab Carapace with Crystalline Ice Spikes
-    const bodyGrad = ctx.createRadialGradient(-r * 0.22, -r * 0.32, r * 0.1, 0, 0, r * 1.15);
+    // 4. Plump Squishy Mochi-Chibi King Crab Carapace + Glossy Ice Shine + Bouncy Frost Crown!
+    const bodyGrad = ctx.createRadialGradient(-r * 0.22, -r * 0.34, r * 0.1, 0, 0, r * 1.15);
     bodyGrad.addColorStop(0, shellHi);
-    bodyGrad.addColorStop(0.52, shellMid);
+    bodyGrad.addColorStop(0.55, shellMid);
     bodyGrad.addColorStop(1, shellDark);
     ctx.fillStyle = bodyGrad;
     ctx.strokeStyle = outline;
     ctx.lineWidth = Math.max(2.6, 0.10 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.96, r * 0.06);
-    ctx.lineTo(-r * 0.72, -r * 0.56);
-    ctx.lineTo(-r * 0.28, -r * 0.74);
-    ctx.lineTo(0, -r * 0.88); // Central glacial crown spire
-    ctx.lineTo(r * 0.28, -r * 0.74);
-    ctx.lineTo(r * 0.72, -r * 0.56);
-    ctx.lineTo(r * 0.96, r * 0.06);
-    ctx.quadraticCurveTo(r * 0.72, r * 0.68, 0, r * 0.64);
-    ctx.quadraticCurveTo(-r * 0.72, r * 0.68, -r * 0.96, r * 0.06);
+    ctx.ellipse(0, 0.04 * r, r * 0.96, r * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Soft pastel icy belly patch + glossy anime jelly-bean dome shine!
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.38)';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.38, r * 0.56, r * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    this._drawKawaiiShine(ctx, -r * 0.34, -r * 0.38, r * 0.26, r * 0.11, -0.35);
+
+    // Cute Bouncy Crystalline Ice King Crown perched atop the crab dome!
+    ctx.save();
+    ctx.translate(0, -r * 0.70 + Math.sin(timeSec * 3.5) * 0.04 * r);
+    const cw = r * 0.36;
+    const ch = r * 0.26;
+    ctx.fillStyle = '#e0f2fe';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-cw, ch * 0.35);
+    ctx.lineTo(-cw * 0.85, -ch * 0.70);
+    ctx.lineTo(-cw * 0.28, -ch * 0.10);
+    ctx.lineTo(0, -ch);
+    ctx.lineTo(cw * 0.28, -ch * 0.10);
+    ctx.lineTo(cw * 0.85, -ch * 0.70);
+    ctx.lineTo(cw, ch * 0.35);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-
-    // Faceted crystal armor chevrons across shell
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.55)';
-    ctx.lineWidth = Math.max(1.5, 0.055 * scale);
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.58, -r * 0.18);
-    ctx.lineTo(0, -r * 0.44);
-    ctx.lineTo(r * 0.58, -r * 0.18);
-    ctx.moveTo(-r * 0.42, r * 0.24);
-    ctx.lineTo(0, r * 0.04);
-    ctx.lineTo(r * 0.42, r * 0.24);
-    ctx.stroke();
-
-    // Pale underside belly plate
-    ctx.fillStyle = 'rgba(224, 242, 254, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.36, r * 0.48, r * 0.20, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 5. Stalked Glowing Arctic Crab Eyes + Fierce Brow Plate
-    const blink = anim.blink || 0;
-    for (const side of [-1, 1]) {
-      const ex = side * r * 0.34;
-      const ey = -r * 0.46;
-      const er = r * 0.18;
-      // Eye stalk
-      ctx.strokeStyle = outline;
-      ctx.lineWidth = Math.max(3.5, 0.15 * r);
-      ctx.beginPath();
-      ctx.moveTo(side * r * 0.26, -r * 0.22);
-      ctx.lineTo(ex, ey);
-      ctx.stroke();
-      ctx.strokeStyle = shellHi;
-      ctx.lineWidth = Math.max(1.8, 0.08 * r);
-      ctx.stroke();
-
-      // Eye socket
-      ctx.fillStyle = '#020617';
-      ctx.strokeStyle = outline;
-      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
-      ctx.beginPath();
-      ctx.ellipse(ex, ey, er, Math.max(1.5, er * (1 - blink * 0.85)), 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      if (!isStunned && !boss.defeated && blink < 0.7) {
-        ctx.fillStyle = isAngry ? '#fde047' : glowCol;
-        ctx.beginPath();
-        ctx.arc(ex, ey, er * 0.62, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(ex - er * 0.22, ey - er * 0.22, er * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Serrated crab mouthplates (bubbling during roar)
-    ctx.fillStyle = '#082f49';
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.08, r * 0.22, r * (isAngry ? 0.14 : 0.08), 0, 0, Math.PI * 2);
-    ctx.fill();
     ctx.fillStyle = glowCol;
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.08, r * 0.14, r * (isAngry ? 0.08 : 0.04), 0, 0, Math.PI * 2);
-    ctx.fill();
+    for (const [gx, gy] of [[-cw * 0.85, -ch * 0.75], [0, -ch * 1.05], [cw * 0.85, -ch * 0.75]]) {
+      ctx.beginPath();
+      ctx.arc(gx, gy, Math.max(1.8, 0.06 * r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 5. GIANT Sparkling Kawaii Anime Crab Eyes + Rosy Frost-Pink Blush + Adorable `:3` Smile!
+    for (const side of [-1, 1]) {
+      this._drawKawaiiAnimeEye(ctx, side * r * 0.34, -r * 0.10, r * 0.21, r * 0.25, scale, {
+        irisTop: '#e0f2fe',
+        irisBot: glowCol,
+        outline,
+        isStunned,
+        isHurt: isHurt || boss.defeated,
+        isDormant: boss.aiState === 'dormant',
+        isAngry,
+        side: side < 0 ? 0 : 1,
+        timeSec,
+      });
+      this._drawKawaiiBlush(ctx, side * r * 0.56, r * 0.16, r * 0.16, r * 0.09, scale, 'rgba(251, 113, 133, 0.65)');
+    }
+    this._drawKawaiiMouth(ctx, 0, r * 0.18, r * 0.13, scale, {
+      outline,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#fda4af',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -2300,27 +2493,38 @@ export const bossGuardiansMethods = {
       ctx.restore();
     }
 
-    // 7. Expressive Stalked Golden Lobster Eye
-    const ex = r * 0.56;
-    const ey = -r * 0.28;
-    const er = r * 0.16;
-    ctx.fillStyle = '#020617';
-    ctx.strokeStyle = outline;
-    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (!isStunned && !boss.defeated) {
-      ctx.fillStyle = isAngry ? '#ffffff' : goldAccent;
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.12, ey, er * 0.62, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.28, ey - er * 0.22, er * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 7. Glossy Carapace Highlight + GIANT Sparkling Golden-Amber Chibi Lobster Eyes (3/4 pair!) + Blush + `:3` Smile!
+    this._drawKawaiiShine(ctx, -r * 0.06, -r * 0.34, r * 0.24, r * 0.09, -0.18);
+    this._drawKawaiiAnimeEye(ctx, r * 0.34, -r * 0.20, r * 0.19, r * 0.23, scale, {
+      irisTop: '#fef9c3',
+      irisBot: goldAccent,
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.72, -r * 0.18, r * 0.14, r * 0.18, scale, {
+      irisTop: '#fef9c3',
+      irisBot: goldAccent,
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.16, r * 0.06, r * 0.14, r * 0.08, scale, 'rgba(254, 202, 202, 0.72)');
+    this._drawKawaiiBlush(ctx, r * 0.78, r * 0.04, r * 0.09, r * 0.06, scale, 'rgba(254, 202, 202, 0.62)');
+    this._drawKawaiiMouth(ctx, r * 0.54, r * 0.08, r * 0.10, scale, {
+      outline,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#fef08a',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -2446,35 +2650,50 @@ export const bossGuardiansMethods = {
       ctx.stroke();
     }
 
-    // 5. Electric Eel Head Details: Glowing Storm-Yellow Eye & Crackling Jaw
-    const ex = head.x + r * 0.02;
-    const ey = head.y - r * 0.14;
-    const er = r * 0.16;
-    ctx.fillStyle = '#020617';
-    ctx.strokeStyle = voltCyan;
-    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    // 5. Cute Plump Chibi Electric-Eel Head Overlay + GIANT Sparkling Storm-Gold Anime Eyes + Pikachu Blush + `:3` Grin!
+    const eelHeadG = ctx.createRadialGradient(head.x - r * 0.06, head.y - r * 0.18, r * 0.06, head.x + r * 0.02, head.y, r * 0.60);
+    eelHeadG.addColorStop(0, isHurt ? '#ffffff' : '#3b82f6');
+    eelHeadG.addColorStop(0.58, bodyMid);
+    eelHeadG.addColorStop(1, '#f59e0b');
+    ctx.fillStyle = eelHeadG;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
     ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.ellipse(head.x + r * 0.02, head.y + r * 0.02, r * 0.54, r * 0.44, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (!isStunned && !boss.defeated) {
-      ctx.fillStyle = voltGold;
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.1, ey, er * 0.64, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.26, ey - er * 0.20, er * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    this._drawKawaiiShine(ctx, head.x - r * 0.12, head.y - r * 0.24, r * 0.18, r * 0.075, -0.25);
 
-    // Glowing jaw grin line
-    ctx.strokeStyle = isAngry ? voltGold : voltCyan;
-    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
-    ctx.beginPath();
-    ctx.moveTo(head.x + r * 0.32, head.y + r * 0.12);
-    ctx.quadraticCurveTo(head.x + r * 0.10, head.y + r * 0.22, head.x - r * 0.10, head.y + r * 0.12);
-    ctx.stroke();
+    this._drawKawaiiAnimeEye(ctx, head.x - r * 0.02, head.y - r * 0.06, r * 0.18, r * 0.22, scale, {
+      irisTop: '#fef9c3',
+      irisBot: voltGold,
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, head.x + r * 0.38, head.y - r * 0.08, r * 0.13, r * 0.18, scale, {
+      irisTop: '#fef9c3',
+      irisBot: voltGold,
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, head.x - r * 0.16, head.y + r * 0.18, r * 0.14, r * 0.085, scale, 'rgba(251, 113, 133, 0.78)');
+    this._drawKawaiiBlush(ctx, head.x + r * 0.44, head.y + r * 0.14, r * 0.09, r * 0.065, scale, 'rgba(251, 113, 133, 0.68)');
+    this._drawKawaiiMouth(ctx, head.x + r * 0.20, head.y + r * 0.18, r * 0.10, scale, {
+      outline: voltGold,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#fde047',
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
@@ -2603,46 +2822,64 @@ export const bossGuardiansMethods = {
     ctx.bezierCurveTo(r * 0.74, -r * 0.02, r * 0.64, -r * 0.68, hx + r * 0.04, hy + r * 0.06);
     ctx.stroke();
 
-    // Sculpted Plesiosaur Head with Rounded Snout & Cute Crest
+    // Plump Adorable Studio-Ghibli Chibi Plesiosaur Head + Glossy Shine + GIANT Sparkling Anime Eyes!
+    this._drawKawaiiShine(ctx, -r * 0.24, -r * 0.18, r * 0.24, r * 0.09, -0.22);
     ctx.save();
     ctx.translate(hx, hy);
     ctx.rotate(Math.sin(timeSec * 2.2) * 0.06 + (isAngry ? -0.14 : 0));
-    ctx.fillStyle = hideTop;
+    const nessHeadG = ctx.createRadialGradient(r * 0.06, -r * 0.14, r * 0.05, r * 0.16, 0, r * 0.56);
+    nessHeadG.addColorStop(0, isHurt ? '#ffffff' : '#6ee7b7');
+    nessHeadG.addColorStop(0.55, hideTop);
+    nessHeadG.addColorStop(1, hideMid);
+    ctx.fillStyle = nessHeadG;
     ctx.strokeStyle = outline;
-    ctx.lineWidth = Math.max(2.0, 0.085 * scale);
+    ctx.lineWidth = Math.max(2.1, 0.088 * scale);
     ctx.beginPath();
-    ctx.ellipse(r * 0.14, 0, r * 0.34, r * 0.20, 0.08, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.18, -r * 0.02, r * 0.48, r * 0.36, 0.04, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    this._drawKawaiiShine(ctx, r * 0.02, -r * 0.22, r * 0.16, r * 0.065, -0.22);
 
-    // Small mystic highland ear/crest horn behind crown
+    // Cute twin mystic highland ear-frills behind crown!
     ctx.fillStyle = finGlow;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
     ctx.beginPath();
-    ctx.moveTo(-r * 0.08, -r * 0.14);
-    ctx.lineTo(-r * 0.24, -r * 0.32);
-    ctx.lineTo(r * 0.04, -r * 0.16);
-    ctx.closePath();
+    ctx.ellipse(-r * 0.16, -r * 0.26, r * 0.16, r * 0.09, -0.65, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Expressive Emerald-Gold Plesiosaur Eye
-    const ex = r * 0.14;
-    const ey = -r * 0.05;
-    const er = r * 0.11;
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.arc(ex, ey, er, 0, Math.PI * 2);
-    ctx.fill();
-    if (!isStunned && !boss.defeated) {
-      ctx.fillStyle = isAngry ? '#fde047' : '#6ee7b7';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.14, ey, er * 0.65, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(ex + er * 0.26, ey - er * 0.24, er * 0.26, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // GIANT Sparkling Emerald-Gold Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Sweet `:3` Smile!
+    this._drawKawaiiAnimeEye(ctx, r * 0.10, -r * 0.04, r * 0.16, r * 0.20, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#34d399',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.44, -r * 0.06, r * 0.12, r * 0.16, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#34d399',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, -r * 0.04, r * 0.15, r * 0.12, r * 0.07, scale, 'rgba(251, 113, 133, 0.70)');
+    this._drawKawaiiBlush(ctx, r * 0.49, r * 0.12, r * 0.08, r * 0.055, scale, 'rgba(251, 113, 133, 0.62)');
+    this._drawKawaiiMouth(ctx, r * 0.28, r * 0.15, r * 0.09, scale, {
+      outline,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#fda4af',
+    });
     ctx.restore();
 
     // 6. Front Rowing Paddle Flippers (near side)
