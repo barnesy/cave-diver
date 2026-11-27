@@ -13313,3 +13313,60 @@ test('v257 Mobile 60 FPS Wave 3 (Levels 7 & 8): OffscreenCanvas lightmap cap, op
   const surfSrc = readFileSync(new URL('../public/js/game/renderers/surfaceRenderer.js', import.meta.url), 'utf8');
   assert.ok(surfSrc.includes('_getGroundShadowStamp('), 'Expected cached radial ground contact shadow stamp');
 });
+
+test('v260 Offscreen Boss Edge Chevron & Secret Lair Emissive Render across Level 6 bosses (no ReferenceError)', async () => {
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { LEVELS } = await import('../public/js/levels/index.js');
+  const { breachSecretLairVeil, claimSecretLairWeapon } = await import('../public/js/game/secretLairs.js');
+
+  const grad = { addColorStop() {} };
+  const noopCtx = new Proxy(
+    {
+      createLinearGradient: () => grad,
+      createRadialGradient: () => grad,
+      measureText: (s) => ({ width: String(s || '').length * 7 }),
+    },
+    {
+      get(t, p) {
+        if (p in t) return t[p];
+        return () => {};
+      },
+    }
+  );
+
+  for (const levelId of ['ojamo-iron-mine', 'orda-crystal-maze', 'cenote-el-abismo']) {
+    const level = LEVELS.find((l) => l.id === levelId);
+    assert.ok(level, `Missing level ${levelId}`);
+    const s = createDiveSession(level, { mode: 'standard' });
+    breachSecretLairVeil(s, {});
+    s.diver.x = s.secretLair.spec.armory.x;
+    s.diver.y = s.secretLair.spec.armory.y;
+    claimSecretLairWeapon(s, {});
+    const r = Object.create(CaveRenderer.prototype);
+    r.level = level;
+    r.glowStamps = { warm: null, cyan: null, magenta: null };
+    r._cachedDpr = 2;
+
+    // Position boss strictly offscreen (bx > cw) across awakening, windup, and stunned states
+    const boss = s.secretLair.boss;
+    s.secretLair.arenaEntered = true;
+    boss.active = true;
+    for (const aiState of ['awakening', 'lunge_windup', 'stunned', 'idle']) {
+      boss.aiState = aiState;
+      boss.phase = aiState === 'idle' ? 3 : 1;
+      assert.doesNotThrow(() => {
+        r._drawSecretLairEmissive(
+          noopCtx,
+          682,
+          1477,
+          s.secretLair,
+          s.diver,
+          (wx) => 900 + (wx - boss.x) * 24,
+          (wy) => 400 + (wy - boss.y) * 24,
+          24,
+          1.5
+        );
+      }, `Offscreen boss chevron must not throw on ${levelId} (${aiState})`);
+    }
+  }
+});

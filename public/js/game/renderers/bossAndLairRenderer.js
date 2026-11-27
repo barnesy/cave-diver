@@ -4350,7 +4350,7 @@ export const bossAndLairMethods = {
           ctx.translate(ex, ey);
           ctx.rotate(ang);
           ctx.globalAlpha = pulse;
-          ctx.fillStyle = isWindup ? '#fb7185' : pal.accent;
+          ctx.fillStyle = isWindup ? '#fb7185' : boss.aiState === 'stunned' ? '#fde047' : boss.phase === 3 ? '#f472b6' : '#38bdf8';
           ctx.strokeStyle = 'rgba(2, 6, 23, 0.9)';
           ctx.lineWidth = 2.2 * dpr;
           ctx.beginPath();
