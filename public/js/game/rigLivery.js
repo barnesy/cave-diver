@@ -3295,7 +3295,7 @@ export function drawLiveryPreview(
   w,
   h,
   livery,
-  { hasCcr = false, hasDpv = false, hasSpeargun = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '', diverScaleMult = 1.0 } = {}
+  { hasCcr = false, hasDpv = false, hasSpeargun = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '', diverScaleMult = 1.0, transparentBg = false } = {}
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
@@ -3304,32 +3304,36 @@ export function drawLiveryPreview(
   const isNight = envMode === 'night';
 
   ctx.save();
-  // Aquatic test-tank backdrop tuned by selected environment mode
-  const bg = ctx.createLinearGradient(0, 0, w, h);
-  if (isNight) {
-    bg.addColorStop(0, '#020617');
-    bg.addColorStop(0.55, '#07142b');
-    bg.addColorStop(1, '#01040c');
-  } else if (isSilt) {
-    bg.addColorStop(0, '#141914');
-    bg.addColorStop(0.55, '#1e251a');
-    bg.addColorStop(1, '#0d120e');
+  if (transparentBg) {
+    ctx.clearRect(0, 0, w, h);
   } else {
-    bg.addColorStop(0, '#041224');
-    bg.addColorStop(0.55, '#07223a');
-    bg.addColorStop(1, '#020914');
-  }
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
+    // Aquatic test-tank backdrop tuned by selected environment mode
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    if (isNight) {
+      bg.addColorStop(0, '#020617');
+      bg.addColorStop(0.55, '#07142b');
+      bg.addColorStop(1, '#01040c');
+    } else if (isSilt) {
+      bg.addColorStop(0, '#141914');
+      bg.addColorStop(0.55, '#1e251a');
+      bg.addColorStop(1, '#0d120e');
+    } else {
+      bg.addColorStop(0, '#041224');
+      bg.addColorStop(0.55, '#07223a');
+      bg.addColorStop(1, '#020914');
+    }
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
 
-  // Subtle depth-grid ruler ticks along back glass wall
-  ctx.strokeStyle = isNight ? 'rgba(56, 189, 248, 0.08)' : 'rgba(148, 163, 184, 0.08)';
-  ctx.lineWidth = 1;
-  for (let gx = 48; gx < w; gx += 48) {
-    ctx.beginPath();
-    ctx.moveTo(gx, 0);
-    ctx.lineTo(gx, h);
-    ctx.stroke();
+    // Subtle depth-grid ruler ticks along back glass wall
+    ctx.strokeStyle = isNight ? 'rgba(56, 189, 248, 0.08)' : 'rgba(148, 163, 184, 0.08)';
+    ctx.lineWidth = 1;
+    for (let gx = 48; gx < w; gx += 48) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, h);
+      ctx.stroke();
+    }
   }
 
   // Drifting aquatic particles (clear dust, warm silt clouds, or glowing cyan biolum motes)

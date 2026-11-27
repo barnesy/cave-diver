@@ -104,6 +104,7 @@ function renderDiverCanvasHiDpi(canvas, livery, timeSec = 0.55, diverScaleMult =
     envMode: 'clear',
     timeSec,
     diverScaleMult,
+    transparentBg: true,
   });
 }
 
