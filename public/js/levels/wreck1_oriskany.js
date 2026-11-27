@@ -27,7 +27,7 @@ export const WRECK_ORISKANY = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp5',
   ascentSwitchDepthM: 22.0,
-  bounds: { xMin: -54, xMax: 126, yMin: -6, yMax: 74 },
+  bounds: { xMin: -54, xMax: 295, yMin: -6, yMax: 84 },
   spawn: { x: 10.0, y: 2.0 },
   exitZone: { x: 10.0, y: 1.8, radius: 6.8, name: 'Charter Boat Stern Ladder' },
   haloclineY: 28.0,
@@ -102,6 +102,13 @@ export const WRECK_ORISKANY = {
     { ax: 68, ay: 52.0, bx: 80, by: 52.0, ra: 3.5, rb: 3.6 },
     { ax: 78, ay: 61.0, bx: 80, by: 52.0, ra: 2.9, rb: 3.5 },
     { ax: 80, ay: 52.0, bx: 80, by: 39.5, ra: 3.8, rb: 4.4 },
+
+    // Secret Lair (Sonar-Breachable): Great White Sovereign Abyssal Trench (v267)
+    { ax: 78, ay: 61.0, bx: 118, by: 61.5, ra: 2.5, rb: 3.8, secretLair: true },
+    { ax: 118, ay: 61.5, bx: 146, by: 61.5, ra: 5.2, rb: 4.5, secretLair: true }, // Armory chamber (x=132, y=61.5)
+    { ax: 146, ay: 61.5, bx: 214, by: 61.0, ra: 4.5, rb: 5.0, secretLair: true }, // Reef-shark gauntlet
+    { ax: 214, ay: 61.0, bx: 246, by: 61.0, ra: 14.5, rb: 15.5, secretLair: true }, // Great White Arena
+    { ax: 246, ay: 61.0, bx: 274, by: 61.0, ra: 15.5, rb: 13.0, secretLair: true },
   ],
 
   guideline: [

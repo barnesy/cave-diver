@@ -24,7 +24,7 @@ export const WRECK_FUJIKAWA = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp5',
   ascentSwitchDepthM: 18.0,
-  bounds: { xMin: -44, xMax: 126, yMin: -6, yMax: 46 },
+  bounds: { xMin: -44, xMax: 295, yMin: -6, yMax: 60 },
   spawn: { x: 10.0, y: 2.0 },
   exitZone: { x: 10.0, y: 1.8, radius: 6.8, name: 'Chuuk Lagoon Outrigger Dive Platform' },
   haloclineY: 20.0,
@@ -98,6 +98,13 @@ export const WRECK_FUJIKAWA = {
     { ax: 74, ay: 33.0, bx: 88, by: 32.0, ra: 3.0, rb: 2.6 },
     // Aft Escape Hatchway back up to Coral-Draped Stern Deck (33m -> 16.5m)
     { ax: 74, ay: 33.0, bx: 74, by: 16.5, ra: 3.6, rb: 4.4 },
+
+    // Secret Lair (Sonar-Breachable): Giant Tridacna Clam Pearl Grotto (v267)
+    { ax: 88, ay: 32.0, bx: 122, by: 36.5, ra: 2.5, rb: 3.8, secretLair: true },
+    { ax: 122, ay: 36.5, bx: 150, by: 37.5, ra: 5.2, rb: 4.5, secretLair: true }, // Armory chamber (x=136, y=37.0)
+    { ax: 150, ay: 37.5, bx: 214, by: 38.0, ra: 4.5, rb: 5.0, secretLair: true }, // Coral pearl gauntlet
+    { ax: 214, ay: 38.0, bx: 248, by: 38.5, ra: 13.5, rb: 14.5, secretLair: true }, // Giant Clam Pearl Lagoon
+    { ax: 248, ay: 38.5, bx: 274, by: 38.5, ra: 14.5, rb: 12.0, secretLair: true },
   ],
 
   guideline: [

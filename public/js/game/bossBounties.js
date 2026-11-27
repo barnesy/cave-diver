@@ -277,6 +277,63 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueName: 'LOCH NESS LEVIATHAN',
     trueTitle: 'Ancient Highland Plesiosaur of the Deep',
   }),
+  Object.freeze({
+    id: 'bounty-great-white',
+    contractCode: 'BOUNTY #15',
+    threatClass: 'CLASS IV · APEX',
+    accentColor: '#38bdf8',
+    silhouetteKind: 'shark',
+    bossKind: 'great-white',
+    previewScale: 10.0,
+    previewOffsetY: 4,
+    codename: 'THE APEX PHANTOM',
+    watersRumor: 'Gulf Aircraft Carrier Reef',
+    tale: 'Charter skippers anchored over the sunken flattop speak of a massive silver-backed silhouette circling beneath the hangar steel. Ping your active sonar along the lowest engine bulkhead — a torn hull seam opens into a prowling abyssal trench.',
+    bountyPts: 3250,
+    levelId: 'uss-oriskany-carrier',
+    trophyRelicId: 'oriskany-apex-tooth',
+    trophyName: 'Fossil Megalodon Apex Fang',
+    trueName: 'GREAT WHITE SOVEREIGN',
+    trueTitle: 'Apex Gulf Carrier-Reef Great White Shark',
+  }),
+  Object.freeze({
+    id: 'bounty-orca-whale',
+    contractCode: 'BOUNTY #16',
+    threatClass: 'CLASS V · SOVEREIGN',
+    accentColor: '#67e8f9',
+    silhouetteKind: 'orca',
+    bossKind: 'orca-whale',
+    previewScale: 9.8,
+    previewOffsetY: 4,
+    codename: 'THE ARCTIC ORCA',
+    watersRumor: 'Icelandic Aurora Rift',
+    tale: 'Geothermal divers exploring the northern tectonic chasm hear melodic pod-calls reverberating through solid black basalt beneath the northern lights. Sweep your active sonar past the deepest rift vault — an aurora cathedral awaits.',
+    bountyPts: 3550,
+    levelId: 'silfra-katla-aurora-abyss',
+    trophyRelicId: 'silfra-orca-fluke',
+    trophyName: 'Aurora Orca Fluke Charm',
+    trueName: 'AURORA ORCA MATRIARCH',
+    trueTitle: 'Sovereign Subglacial Killer Whale of the Rift',
+  }),
+  Object.freeze({
+    id: 'bounty-giant-clam',
+    contractCode: 'BOUNTY #17',
+    threatClass: 'CLASS IV · NACRE',
+    accentColor: '#f472b6',
+    silhouetteKind: 'clam',
+    bossKind: 'giant-clam',
+    previewScale: 10.2,
+    previewOffsetY: 6,
+    codename: 'THE PEARL MONARCH',
+    watersRumor: 'Micronesian Coral Lagoon Wreck',
+    tale: 'Lagoon wreck guides whisper of an iridescent pink-and-teal luminescence pulsing behind the coral-blanketed stern holds of the sunken aircraft ferry. Sound your active sonar near the aft bulkhead to unveil a shimmering pearl grotto.',
+    bountyPts: 3200,
+    levelId: 'fujikawa-maru-chuuk',
+    trophyRelicId: 'chuuk-imperial-pearl',
+    trophyName: 'Imperial Tridacna Moon-Pearl',
+    trueName: 'TRIDACNA PEARL EMPEROR',
+    trueTitle: 'Iridescent Giant Clam Monarch of Chuuk Lagoon',
+  }),
 ]);
 
 /**
@@ -447,6 +504,27 @@ export function getBossSilhouetteSvg(kind = 'kraken', accent = '#38bdf8') {
         <path d="M16 32 L76 26 L106 36 L76 46 L16 42 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.4"/>
         <path d="M78 27 L84 45 M86 29 L91 43 M94 32 L98 40" stroke="${glow}" stroke-opacity="0.8" stroke-width="1.6"/>
         <circle cx="64" cy="35" r="2.8" fill="${glow}"/>
+      `;
+      break;
+    case 'shark':
+      shape = `
+        <path d="M16 38 Q38 22, 74 26 L84 12 L92 28 Q106 32, 108 38 Q94 48, 66 48 L56 58 L50 48 Q30 48, 16 38 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
+        <path d="M16 38 L6 24 L12 38 L6 52 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.3"/>
+        <circle cx="88" cy="35" r="2.6" fill="${glow}"/>
+      `;
+      break;
+    case 'orca':
+      shape = `
+        <path d="M18 40 Q36 22, 76 24 L82 10 L90 26 Q106 30, 108 40 Q94 50, 64 49 L52 58 L48 48 Q28 48, 18 40 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
+        <ellipse cx="86" cy="34" rx="7" ry="3.5" fill="${glow}" fill-opacity="0.45"/>
+        <path d="M18 40 L6 28 L12 40 L6 52 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.3"/>
+      `;
+      break;
+    case 'clam':
+      shape = `
+        <path d="M24 44 C24 22, 42 16, 60 16 C78 16, 96 22, 96 44 Q78 36, 60 40 Q42 36, 24 44 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
+        <path d="M24 46 Q42 60, 60 58 Q78 60, 96 46 Q78 50, 60 48 Q42 50, 24 46 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.4"/>
+        <circle cx="60" cy="40" r="7" fill="${glow}" fill-opacity="0.72"/>
       `;
       break;
     case 'empress':

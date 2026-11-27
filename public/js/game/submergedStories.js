@@ -614,18 +614,26 @@ export function createSubmergedStories(level) {
   let pelagicShadow = null;
   if (allowPelagicShadow) {
     const pXMin = isWreck
-      ? (b.xMin ?? -20) - 8
+      ? openBasin
+        ? openBasin.xMin - 8
+        : Number.isFinite(level.wreckHullXMin)
+          ? level.wreckHullXMin - 24
+          : (b.xMin ?? -20) - 8
       : openBasin
         ? openBasin.xMin + 2.5
         : (level.spawn?.x ?? 0) - 10;
     const pXMax = isWreck
-      ? (b.xMax ?? 120) + 8
+      ? openBasin
+        ? openBasin.xMax + 8
+        : Number.isFinite(level.wreckHullXMax)
+          ? level.wreckHullXMax + 24
+          : (b.xMax ?? 120) + 8
       : openBasin
         ? openBasin.xMax - 2.5
         : (level.spawn?.x ?? 0) + 10;
     const span = Math.max(12, pXMax - pXMin);
     const glideSpeed = isWreck ? 2.1 : 1.45; // Graceful, realistic pelagic glide speed (m/s)
-    const crossingDurationSec = Math.max(14, Math.min(72, span / glideSpeed));
+    const crossingDurationSec = Math.max(14, Math.min(96, span / glideSpeed));
     const periodSec = Math.round(crossingDurationSec + (isWreck ? 24 : 20));
     if (span >= 14 || isWreck) {
       pelagicShadow = {

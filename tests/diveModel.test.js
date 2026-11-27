@@ -10036,7 +10036,7 @@ test('v195 Tactical AI Wingman Combat, Hydro-Dash Slipstream, Reactive Marine Li
   const { DiveAudio } = await import('../public/js/game/audio.js');
 
   // 1. Complete 14-Guardian Hidden Pantheon (includes Bimini, Ojamo, Yonaguni, SMS Markgraf, Lagoa Eel & Plura Loch Ness)
-  assert.equal(Object.keys(SECRET_LAIRS).length, 14, 'Must have 14 100%-hidden Secret Lairs across the campaign');
+  assert.equal(Object.keys(SECRET_LAIRS).length, 17, 'Must have 17 100%-hidden Secret Lairs across the campaign');
   for (const id of ['bimini-road-megalith', 'ojamo-iron-mine']) {
     const lvl = LEVELS.find((l) => l.id === id);
     assert.ok(lvl, `Campaign level ${id} must exist`);
@@ -10491,7 +10491,7 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
 
   // 1. All 14 Secret Boss Lairs have a corresponding Wanted Bounty Contract
   const lairList = Object.values(SECRET_LAIRS);
-  assert.equal(BOSS_BOUNTIES.length, 14, 'Must have 14 Wanted Bounty Contracts covering the 14-Guardian Pantheon');
+  assert.equal(BOSS_BOUNTIES.length, 17, 'Must have 17 Wanted Bounty Contracts covering the 17-Guardian Pantheon');
   assert.equal(BOSS_BOUNTIES.length, lairList.length);
   const bountyRelics = new Set(BOSS_BOUNTIES.map((b) => b.trophyRelicId));
   for (const lair of lairList) {
@@ -10501,7 +10501,7 @@ test('v199 Abyssal Wanted Bounty Cards: 10 Boss Contracts, Spoiler-Free Rumors/C
   // 2. Unclaimed bounties keep exact depths, checkpoints, coordinates & secret cosmetics strictly non-specific/redacted
   const freshState = resolveBountyBoardState(createEmptyLogbook());
   assert.equal(freshState.claimedCount, 0);
-  assert.equal(freshState.totalCount, 14);
+  assert.equal(freshState.totalCount, 17);
   for (const b of freshState.bounties) {
     assert.equal(b.claimed, false);
     assert.equal(b.displayName, b.codename);
@@ -10610,7 +10610,7 @@ test('v201 37-Site Atlas, 12-Guardian Pantheon (Yonaguni & SMS Markgraf), Intera
   assert.deepEqual(BOUNTY_MILESTONES.map((m) => m.threshold), [3, 6, 12]);
   let book = createEmptyLogbook();
   const allLairs = Object.entries(SECRET_LAIRS);
-  assert.equal(allLairs.length, 14);
+  assert.equal(allLairs.length, 17);
   for (let i = 0; i < 3; i++) {
     const [lvlId, spec] = allLairs[i];
     book = recordArtifactInLogbook(book, { id: `${lvlId}:${spec.boss.trophyRelicId}`, name: spec.boss.trophyName, points: 2500 }).book;
@@ -13668,7 +13668,7 @@ test('v265 Boss Pantheon Expansion: Glacier Crab & Solar Lobster Swaps + Electri
   }
   assert.ok(getSecretCosmeticsForTrophy('lagoa-voltaic-cell').length >= 1, 'Electric Eel trophy must unlock mythic cosmetic');
   assert.ok(getSecretCosmeticsForTrophy('plura-nessie-scale').length >= 1, 'Loch Ness trophy must unlock mythic cosmetic');
-  assert.equal(BOSS_BOUNTIES.length, 14);
+  assert.equal(BOSS_BOUNTIES.length, 17);
 });
 
 test('v266 Kawaii Anime Boss Pass: All 14 Guardians render shared glossy eyes, blush & mouths across idle/angry/stunned/dormant states', async () => {
@@ -13688,7 +13688,7 @@ test('v266 Kawaii Anime Boss Pass: All 14 Guardians render shared glossy eyes, b
     { aiState: 'idle', phase: 2, hitFlash: 0.25 },
   ];
   const board = resolveBountyBoardState(createEmptyLogbook());
-  assert.equal(board.bounties.length, 14);
+  assert.equal(board.bounties.length, 17);
   for (const entry of board.bounties) {
     for (const st of states) {
       let ops = 0;
@@ -13718,5 +13718,59 @@ test('v266 Kawaii Anime Boss Pass: All 14 Guardians render shared glossy eyes, b
       bossAndLairMethods._drawSecretLairBoss.call(bossAndLairMethods, mockCtx, boss, (x) => 200 + x * 12, (y) => 100 + y * 12, 12, 2.4);
       assert.ok(ops > 35, `Expected expressive anime drawing ops for ${entry.bossKind} (${st.aiState}), got ${ops}`);
     }
+  }
+});
+
+test('v267 Ocean Legends Expansion: Great White Shark, Aurora Orca & Giant Clam Secret Lairs, SDF Open Water, Hazards & Mythic Suits', async () => {
+  const { LEVELS, validateLevel } = await import('../public/js/levels/index.js');
+  const { evaluateCaveSDF } = await import('../public/js/game/collision.js');
+  const { getSecretLairForLevel, createSecretLairState, spawnBossSignatureHazard } = await import('../public/js/game/secretLairs.js');
+  const { BOSS_BOUNTIES, resolveBountyBoardState, getBossSilhouetteSvg } = await import('../public/js/game/bossBounties.js');
+  const { renderAnimatedBossPortrait } = await import('../public/js/ui/bountiesController.js');
+  const { getSecretCosmeticsForTrophy } = await import('../public/js/game/rigLivery.js');
+
+  const newTargets = [
+    { levelId: 'uss-oriskany-carrier', bossKind: 'great-white', trophyId: 'oriskany-apex-tooth' },
+    { levelId: 'silfra-katla-aurora-abyss', bossKind: 'orca-whale', trophyId: 'silfra-orca-fluke' },
+    { levelId: 'fujikawa-maru-chuuk', bossKind: 'giant-clam', trophyId: 'chuuk-imperial-pearl' },
+  ];
+  assert.equal(BOSS_BOUNTIES.length, 17);
+  const board = resolveBountyBoardState(createEmptyLogbook());
+
+  for (const { levelId, bossKind, trophyId } of newTargets) {
+    const lvl = LEVELS.find((l) => l.id === levelId);
+    assert.ok(lvl, `Campaign site ${levelId} must exist`);
+    assert.equal(validateLevel(lvl).valid, true, `${levelId} must validate cleanly`);
+    const spec = getSecretLairForLevel(levelId);
+    assert.ok(spec && spec.veil.silent === true && spec.boss.kind === bossKind, `${levelId} must host ${bossKind}`);
+    assert.ok(evaluateCaveSDF(lvl, spec.armory.x, spec.armory.y) < -1.0, `${levelId} armory open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.cx, spec.arena.cy) < -4.0, `${levelId} arena center open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.boss.x, spec.boss.y) < -3.0, `${levelId} boss spawn open water`);
+    assert.ok(evaluateCaveSDF(lvl, spec.arena.exitUpdraft.destX, spec.arena.exitUpdraft.destY) < -1.0, `${levelId} updraft dest open water`);
+    for (const pad of spec.arena.pickupPads) {
+      assert.ok(evaluateCaveSDF(lvl, pad.x, pad.y) < -1.0, `${levelId} pickup pad ${pad.id} open water`);
+    }
+    const lair = createSecretLairState(lvl);
+    lair.boss.active = true;
+    const hz = spawnBossSignatureHazard({ level: lvl, secretLair: lair }, lair, lair.boss, { x: spec.arena.cx - 8, y: spec.arena.cy });
+    assert.ok(hz, `${levelId} (${bossKind}) must spawn its signature hazard`);
+
+    const entry = board.bounties.find((b) => b.bossKind === bossKind);
+    assert.ok(entry, `Missing bounty card for ${bossKind}`);
+    const svg = getBossSilhouetteSvg(entry.silhouetteKind, entry.accentColor);
+    assert.ok(svg.includes('<svg') && svg.includes('</svg>'), `SVG silhouette valid for ${bossKind}`);
+    let ops = 0;
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: 400, height: 200 },
+        fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: '', lineJoin: '', globalAlpha: 1, font: '', textAlign: '',
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+      },
+      { get(t, p) { return p in t ? t[p] : () => { ops++; }; } }
+    );
+    assert.equal(renderAnimatedBossPortrait(mockCtx, entry, 1.8, 0, { pingAgeSec: 0.35 }), true);
+    assert.ok(ops > 50, `Expected rich kawaii anime drawing ops for ${bossKind}, got ${ops}`);
+    assert.ok(getSecretCosmeticsForTrophy(trophyId).length >= 1, `${bossKind} trophy must unlock mythic drysuit`);
   }
 });

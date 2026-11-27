@@ -3395,6 +3395,101 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('oriskany-apex-tooth') || nameLower.includes('megalodon apex fang')) {
+    // Gleaming Ivory-Gold Fossil Great White Apex Tooth Relic (Great White Sovereign Trophy, v267)
+    ctx.save();
+    // Root gum crest
+    ctx.fillStyle = '#475569';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.56, r * 0.66, r * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Gleaming curved triangular shark tooth blade
+    const tg = _safeLinGrad(ctx, -r * 0.5, -r * 0.5, r * 0.5, r * 0.85, [[0, '#ffffff'], [0.5, '#e2e8f0'], [1, '#38bdf8']], '#f8fafc');
+    ctx.fillStyle = tg;
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.56, -r * 0.48);
+    ctx.quadraticCurveTo(-r * 0.26, r * 0.28, r * 0.08, r * 0.88);
+    ctx.quadraticCurveTo(r * 0.46, r * 0.20, r * 0.56, -r * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Gold collar band & sparkle highlight
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.2, lw * 0.8);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.48, -r * 0.42);
+    ctx.lineTo(r * 0.48, -r * 0.42);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-r * 0.14, -r * 0.08, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('silfra-orca-fluke') || nameLower.includes('aurora orca fluke')) {
+    // Crisp Obsidian-and-Snow Stylized Orca Tail Fluke Charm with Aurora Rim (Aurora Orca Trophy, v267)
+    ctx.save();
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#67e8f9';
+    ctx.lineWidth = Math.max(1.4, lw * 0.95);
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.72);
+    ctx.quadraticCurveTo(-r * 0.18, r * 0.12, -r * 0.86, -r * 0.44);
+    ctx.quadraticCurveTo(-r * 0.36, -r * 0.62, 0, -r * 0.16);
+    ctx.quadraticCurveTo(r * 0.36, -r * 0.62, r * 0.86, -r * 0.44);
+    ctx.quadraticCurveTo(r * 0.18, r * 0.12, 0, r * 0.72);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Iconic snow-white inner fluke saddle patches
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.32, -r * 0.22, r * 0.22, r * 0.11, 0.45, 0, Math.PI * 2);
+    ctx.ellipse(r * 0.32, -r * 0.22, r * 0.22, r * 0.11, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('chuuk-imperial-pearl') || nameLower.includes('tridacna moon-pearl')) {
+    // Iridescent Giant Moon-Pearl nestled inside a Scalloped Pink-Teal Clam Shell (Giant Clam Trophy, v267)
+    ctx.save();
+    // Scalloped coral-teal shell cradle
+    const shg = _safeLinGrad(ctx, -r, -r * 0.4, r, r, [[0, '#f472b6'], [0.55, '#14b8a6'], [1, '#0f766e']], '#f472b6');
+    ctx.fillStyle = shg;
+    ctx.strokeStyle = '#4c0519';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, r * 0.08, r * 0.84, 0, Math.PI);
+    ctx.quadraticCurveTo(-r * 0.42, -r * 0.26, 0, -r * 0.18);
+    ctx.quadraticCurveTo(r * 0.42, -r * 0.26, r * 0.84, r * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Giant glowing iridescent pearl orb
+    const pg = _safeLinGrad(ctx, -r * 0.4, -r * 0.6, r * 0.4, r * 0.4, [[0, '#ffffff'], [0.55, '#fbcfe8'], [1, '#67e8f9']], '#ffffff');
+    ctx.fillStyle = pg;
+    ctx.strokeStyle = '#9d174d';
+    ctx.lineWidth = Math.max(1.2, lw * 0.78);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.12, r * 0.50, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-r * 0.16, -r * 0.28, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
   if (itemIdLower.includes('strytan-magma-pearl') || nameLower.includes('heart of the thermal spire')) {
     // Spiral Basalt-and-Molten-Magma Nautilus Pearl Relic (Hydrothermal Nautilus Trophy, v193)
     const mg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#f97316'], [1, '#292524']], '#f97316');

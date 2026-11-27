@@ -3099,17 +3099,17 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           const spread = boss.phase === 3 ? 0.23 : 0.27;
           const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' || boss.kind === 'spectral-dreadnought')
             ? 'slag'
-            : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness')
+            : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel' || boss.kind === 'giant-clam')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
             ? (boss.kind === 'spectral-dreadnought' ? '#34d399' : (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c'))
             : projKind === 'frost'
-              ? (boss.kind === 'loch-ness' ? '#34d399' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))
+              ? (boss.kind === 'loch-ness' ? '#34d399' : (boss.kind === 'orca-whale' ? '#bae6fd' : (boss.kind === 'great-white' ? '#38bdf8' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))))
               : projKind === 'prism'
-                ? (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))
+                ? (boss.kind === 'giant-clam' ? '#f472b6' : (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3930,23 +3930,54 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return lastNode;
   }
 
-  if (boss.kind === 'loch-ness') {
+  if (boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale') {
+    const waveCol = boss.kind === 'great-white' ? '#38bdf8' : boss.kind === 'orca-whale' ? '#67e8f9' : '#34d399';
     const ring = {
-      id: `loch_wave_${++lair._hazardSeq}`,
+      id: `${boss.kind}_wave_${++lair._hazardSeq}`,
       kind: 'frost-ring',
       x: boss.x,
       y: boss.y,
       radius: 2.8,
-      maxRadius: 18.0,
-      expandSpeed: boss.phase >= 3 ? 7.8 : 6.4,
+      maxRadius: boss.kind === 'orca-whale' ? 19.5 : 18.0,
+      expandSpeed: boss.phase >= 3 ? 8.4 : 6.8,
       age: 0,
       hitLocal: false,
       shatteredByLocal: false,
     };
     lair.bossHazards.push(ring);
-    addShockwave(lair, boss.x, boss.y, 6.2, '#34d399', 0.45);
+    addShockwave(lair, boss.x, boss.y, 6.4, waveCol, 0.45);
     callbacks.onCrystalChime?.(1);
     return ring;
+  }
+
+  if (boss.kind === 'giant-clam') {
+    const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
+    const toSpawn = Math.min(boss.phase >= 3 ? 2 : 1, 3 - existingOrbs);
+    let lastPearl = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const startAng = Math.random() * Math.PI * 2 + k * Math.PI;
+      const pearl = {
+        id: `nacre_pearl_${++lair._hazardSeq}`,
+        kind: 'star-orb',
+        x: ar.cx + Math.cos(startAng) * 10.5,
+        y: ar.cy + Math.sin(startAng) * 5.8,
+        radius: 1.05,
+        hp: 2,
+        orbitAngle: startAng,
+        orbitSpeed: (k % 2 === 0 ? 1 : -1) * (boss.phase >= 3 ? 0.92 : 0.68),
+        orbitRx: 10.5,
+        orbitRy: 5.8,
+        fireCd: 1.35 + k * 0.42,
+        life: 12.5,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(pearl);
+      addShockwave(lair, pearl.x, pearl.y, 3.8, '#f472b6', 0.38);
+      lastPearl = pearl;
+    }
+    callbacks.onCrystalChime?.(2);
+    return lastPearl;
   }
   return null;
 }

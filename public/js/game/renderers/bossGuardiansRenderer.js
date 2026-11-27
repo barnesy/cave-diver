@@ -34,6 +34,12 @@ export const bossGuardiansMethods = {
       this._drawElectricEelBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'loch-ness') {
       this._drawLochNessBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'great-white') {
+      this._drawGreatWhiteBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'orca-whale') {
+      this._drawOrcaWhaleBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'giant-clam') {
+      this._drawGiantClamBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -2909,6 +2915,539 @@ export const bossGuardiansMethods = {
       ctx.stroke();
       ctx.restore();
     }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * GREAT WHITE SOVEREIGN — Plump Chibi Pelagic Great White Shark Guardian (USS Oriskany Carrier Reef) (v267).
+   */
+  _drawGreatWhiteBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.4) * 0.14 * r;
+    const tailWag = Math.sin(timeSec * (isAngry ? 7.8 : 3.8)) * 0.22;
+    const outline = '#0f172a';
+    const backHi = isHurt ? '#ffffff' : boss.phase >= 3 ? '#64748b' : '#94a3b8';
+    const backMid = isHurt ? '#e2e8f0' : boss.phase >= 3 ? '#334155' : '#475569';
+    const backDeep = isHurt ? '#cbd5e1' : '#1e293b';
+    const bellyWhite = '#f8fafc';
+    const auraCol = boss.phase >= 3 ? 'rgba(251, 113, 133, 0.28)' : 'rgba(56, 189, 248, 0.28)';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 2.2) * 0.04);
+
+    // 1. Soft Pelagic Cyan Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.9);
+    aura.addColorStop(0, auraCol);
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Sweeping Crescent Great White Tail Fin (wagging!)
+    ctx.save();
+    ctx.translate(-r * 0.96, 0);
+    ctx.rotate(tailWag);
+    ctx.fillStyle = backMid;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.12, -r * 0.18);
+    ctx.quadraticCurveTo(-r * 0.42, -r * 0.34, -r * 0.86, -r * 0.78);
+    ctx.quadraticCurveTo(-r * 0.56, -r * 0.08, -r * 0.48, 0);
+    ctx.quadraticCurveTo(-r * 0.56, r * 0.12, -r * 0.76, r * 0.62);
+    ctx.quadraticCurveTo(-r * 0.36, r * 0.30, r * 0.12, r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Far-Side Pectoral Fin peeking cleanly behind chest
+    ctx.fillStyle = backDeep;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.42, r * 0.30);
+    ctx.quadraticCurveTo(r * 0.66, r * 0.72, r * 0.22, r * 0.76);
+    ctx.quadraticCurveTo(r * 0.14, r * 0.48, r * 0.26, r * 0.32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Iconic Tall Swept Great White Dorsal Fin!
+    ctx.fillStyle = backMid;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.34, -r * 0.46);
+    ctx.quadraticCurveTo(-r * 0.16, -r * 1.18, r * 0.08, -r * 1.24);
+    ctx.quadraticCurveTo(r * 0.02, -r * 0.78, r * 0.28, -r * 0.44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 5. Plump Chibi Torpedo Great White Body (Steel-Blue Back + Crisp Snow-White Countershading Belly!)
+    const traceSharkBody = () => {
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.06, 0);
+      ctx.bezierCurveTo(-r * 0.68, -r * 0.72, r * 0.52, -r * 0.76, r * 1.18, -r * 0.06);
+      ctx.quadraticCurveTo(r * 1.28, r * 0.14, r * 1.04, r * 0.36);
+      ctx.bezierCurveTo(r * 0.48, r * 0.68, -r * 0.58, r * 0.58, -r * 1.06, 0);
+      ctx.closePath();
+    };
+    ctx.save();
+    traceSharkBody();
+    const bg = ctx.createLinearGradient(0, -r * 0.72, 0, r * 0.62);
+    bg.addColorStop(0, backHi);
+    bg.addColorStop(0.55, backMid);
+    bg.addColorStop(1, backDeep);
+    ctx.fillStyle = bg;
+    ctx.fill();
+
+    // Clip to body for crisp countershaded snow-white shark belly!
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = bellyWhite;
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.10, r * 0.14);
+    ctx.bezierCurveTo(-r * 0.40, r * 0.08, r * 0.38, r * 0.14, r * 1.25, r * 0.06);
+    ctx.lineTo(r * 1.25, r * 0.85);
+    ctx.lineTo(-r * 1.10, r * 0.85);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Re-trace body path before outer stroke (Canvas save/restore does not restore paths)
+    traceSharkBody();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.5, 0.10 * scale);
+    ctx.stroke();
+    ctx.restore();
+
+    // Glossy anime jelly-bean dome shine along back!
+    this._drawKawaiiShine(ctx, r * 0.10, -r * 0.42, r * 0.34, r * 0.11, -0.14);
+
+    // Three cute curved gill slits behind the cheek
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    ctx.lineCap = 'round';
+    for (let g = 0; g < 3; g++) {
+      const gx = -r * (0.04 + g * 0.12);
+      ctx.beginPath();
+      ctx.arc(gx, r * 0.04, r * 0.16, -0.75, 0.75);
+      ctx.stroke();
+    }
+
+    // 6. Sweeping Near-Side Pectoral Fin (flapping playfully!)
+    ctx.save();
+    ctx.translate(r * 0.04, r * 0.24);
+    ctx.rotate(Math.sin(timeSec * 3.6) * 0.14);
+    ctx.fillStyle = backMid;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.0, 0.085 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.18, -r * 0.06);
+    ctx.quadraticCurveTo(-r * 0.04, r * 0.62, -r * 0.44, r * 0.62);
+    ctx.quadraticCurveTo(-r * 0.26, r * 0.24, -r * 0.18, -r * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 7. GIANT Sparkling Pelagic-Cyan Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Cheeky Baby-Fang Shark Grin!
+    this._drawKawaiiAnimeEye(ctx, r * 0.42, -r * 0.12, r * 0.20, r * 0.24, scale, {
+      irisTop: '#bae6fd',
+      irisBot: '#0284c7',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.90, -r * 0.12, r * 0.14, r * 0.19, scale, {
+      irisTop: '#bae6fd',
+      irisBot: '#0284c7',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.24, r * 0.15, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.68)');
+    this._drawKawaiiBlush(ctx, r * 0.96, r * 0.12, r * 0.10, r * 0.065, scale, 'rgba(251, 113, 133, 0.58)');
+    this._drawKawaiiMouth(ctx, r * 0.68, r * 0.22, r * 0.14, scale, {
+      outline,
+      isOpen: isAngry,
+      isStunned,
+      fangs: !isAngry,
+      glowColor: '#fda4af',
+    });
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * AURORA ORCA MATRIARCH — Plump Chibi Subglacial Killer Whale Guardian (Silfra & Katla Aurora Abyss) (v267).
+   */
+  _drawOrcaWhaleBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.2) * 0.15 * r;
+    const flukeSweep = Math.sin(timeSec * (isAngry ? 6.8 : 3.2)) * 0.22;
+    const outline = '#020617';
+    const orcaHi = isHurt ? '#ffffff' : '#334155';
+    const orcaDark = isHurt ? '#cbd5e1' : '#090d16';
+    const snowWhite = '#f8fafc';
+    const auroraCol = boss.phase >= 3 ? '#f472b6' : '#67e8f9';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 2.0) * 0.045);
+
+    // 1. Shimmering Northern Aurora Halo
+    const aura = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.95);
+    aura.addColorStop(0, 'rgba(103, 232, 249, 0.28)');
+    aura.addColorStop(0.55, 'rgba(52, 211, 153, 0.14)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.95, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Broad Sweeping Orca Horizontal Tail Fluke
+    ctx.save();
+    ctx.translate(-r * 0.98, r * 0.04);
+    ctx.rotate(flukeSweep);
+    ctx.fillStyle = orcaDark;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.14, -r * 0.16);
+    ctx.quadraticCurveTo(-r * 0.42, -r * 0.44, -r * 0.86, -r * 0.56);
+    ctx.quadraticCurveTo(-r * 0.62, -r * 0.08, -r * 0.48, 0);
+    ctx.quadraticCurveTo(-r * 0.62, r * 0.12, -r * 0.82, r * 0.54);
+    ctx.quadraticCurveTo(-r * 0.36, r * 0.40, r * 0.14, r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Tall Stately Orca Dorsal Fin with Aurora Rim Shimmer!
+    ctx.fillStyle = orcaDark;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.32, -r * 0.48);
+    ctx.quadraticCurveTo(-r * 0.18, -r * 1.28, r * 0.02, -r * 1.32);
+    ctx.quadraticCurveTo(r * 0.08, -r * 0.82, r * 0.22, -r * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Subtle aurora teal rim along dorsal leading edge
+    ctx.strokeStyle = auroraCol;
+    ctx.lineWidth = Math.max(1.4, 0.05 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, -r * 0.56);
+    ctx.quadraticCurveTo(-r * 0.14, -r * 1.12, 0, -r * 1.22);
+    ctx.stroke();
+
+    // 4. Plump Chibi Rounded Orca Body (Glossy Obsidian + Iconic Snow-White Saddle, Belly & Eye Patch!)
+    const traceOrcaBody = () => {
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.06, r * 0.04);
+      ctx.bezierCurveTo(-r * 0.72, -r * 0.76, r * 0.62, -r * 0.82, r * 1.18, -r * 0.08);
+      ctx.quadraticCurveTo(r * 1.26, r * 0.26, r * 0.94, r * 0.48);
+      ctx.bezierCurveTo(r * 0.40, r * 0.72, -r * 0.60, r * 0.56, -r * 1.06, r * 0.04);
+      ctx.closePath();
+    };
+    ctx.save();
+    traceOrcaBody();
+    const bg = ctx.createRadialGradient(r * 0.15, -r * 0.36, r * 0.1, 0, 0, r * 1.4);
+    bg.addColorStop(0, orcaHi);
+    bg.addColorStop(0.55, orcaDark);
+    bg.addColorStop(1, '#020617');
+    ctx.fillStyle = bg;
+    ctx.fill();
+
+    // Clip to body for unmistakable crisp white orca markings!
+    ctx.save();
+    ctx.clip();
+    // Snow-white chin, belly & swooping rear flank lobe
+    ctx.fillStyle = snowWhite;
+    ctx.beginPath();
+    ctx.moveTo(r * 1.26, r * 0.18);
+    ctx.quadraticCurveTo(r * 0.62, r * 0.14, r * 0.18, r * 0.24);
+    ctx.quadraticCurveTo(-r * 0.24, r * 0.18, -r * 0.56, -r * 0.04);
+    ctx.quadraticCurveTo(-r * 0.76, r * 0.16, -r * 0.48, r * 0.44);
+    ctx.lineTo(r * 1.26, r * 0.78);
+    ctx.closePath();
+    ctx.fill();
+    // Classic soft grey dorsal saddle patch behind dorsal fin
+    ctx.fillStyle = 'rgba(203, 213, 225, 0.38)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.34, -r * 0.36, r * 0.26, r * 0.14, -0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Re-trace body path before outer stroke (Canvas save/restore does not restore paths)
+    traceOrcaBody();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.5, 0.10 * scale);
+    ctx.stroke();
+    ctx.restore();
+
+    // Iconic Bold Snow-White Orca Oval Eye-Patch!
+    ctx.fillStyle = snowWhite;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.12, -r * 0.24, r * 0.28, r * 0.14, -0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glossy anime jelly-bean forehead dome shine!
+    this._drawKawaiiShine(ctx, r * 0.32, -r * 0.48, r * 0.30, r * 0.11, -0.18);
+
+    // 5. Cute Rounded Paddle Pectoral Fin
+    ctx.save();
+    ctx.translate(r * 0.08, r * 0.28);
+    ctx.rotate(Math.sin(timeSec * 3.2) * 0.16);
+    ctx.fillStyle = orcaDark;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.0, 0.085 * scale);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.10, r * 0.24, r * 0.22, r * 0.38, 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 6. GIANT Sparkling Aurora-Cyan Chibi Anime Eyes (3/4 pair!) + Rosy Blush + Sweet `:3` Whale Smile!
+    this._drawKawaiiAnimeEye(ctx, r * 0.50, -r * 0.08, r * 0.20, r * 0.24, scale, {
+      irisTop: '#ccfbf1',
+      irisBot: auroraCol,
+      outline: '#0f172a',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.96, -r * 0.09, r * 0.14, r * 0.19, scale, {
+      irisTop: '#ccfbf1',
+      irisBot: auroraCol,
+      outline: '#0f172a',
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.32, r * 0.18, r * 0.15, r * 0.085, scale, 'rgba(251, 113, 133, 0.72)');
+    this._drawKawaiiBlush(ctx, r * 1.02, r * 0.15, r * 0.09, r * 0.065, scale, 'rgba(251, 113, 133, 0.62)');
+    this._drawKawaiiMouth(ctx, r * 0.74, r * 0.22, r * 0.12, scale, {
+      outline: '#0f172a',
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#fda4af',
+    });
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * TRIDACNA PEARL EMPEROR — Iridescent Giant Clam Boss with Glowing Kawaii Moon-Pearl Face (Fujikawa Maru — Chuuk Lagoon) (v267).
+   */
+  _drawGiantClamBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.1) * 0.12 * r;
+    const jawLift = isAngry
+      ? 0.24 + Math.abs(Math.sin(timeSec * 6.5)) * 0.16
+      : 0.12 + Math.sin(timeSec * 2.4) * 0.06;
+    const outline = '#4c0519';
+    const shellHi = isHurt ? '#ffffff' : boss.phase >= 3 ? '#fecdd3' : '#fbcfe8';
+    const shellMid = isHurt ? '#fdf2f8' : boss.phase >= 3 ? '#ec4899' : '#f472b6';
+    const shellDark = isHurt ? '#f9a8d4' : '#9d174d';
+    const mantleTeal = boss.phase >= 3 ? '#fde047' : '#2dd4bf';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(anim.squashX || 1, anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 1.8) * 0.035);
+
+    // 1. Shimmering Nacre Pearl Rainbow Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.9);
+    aura.addColorStop(0, 'rgba(244, 114, 182, 0.34)');
+    aura.addColorStop(0.55, 'rgba(45, 212, 191, 0.18)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Scalloped Upper Clam Shell Lid (hinged open to reveal glowing pearl & cute face!)
+    ctx.save();
+    ctx.translate(0, -r * (0.14 + jawLift * 0.45));
+    const topG = ctx.createRadialGradient(-r * 0.2, -r * 0.55, r * 0.1, 0, -r * 0.2, r * 1.25);
+    topG.addColorStop(0, shellHi);
+    topG.addColorStop(0.55, shellMid);
+    topG.addColorStop(1, shellDark);
+    ctx.fillStyle = topG;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.6, 0.10 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.18, r * 0.18);
+    ctx.bezierCurveTo(-r * 1.12, -r * 0.92, r * 1.12, -r * 0.92, r * 1.18, r * 0.18);
+    // Scalloped wavy upper rim
+    for (let s = 4; s >= -4; s--) {
+      const rxS = (s / 4) * r * 1.12;
+      const ryS = r * (0.14 + (Math.abs(s) % 2 === 0 ? 0.10 : -0.06));
+      ctx.lineTo(rxS, ryS);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Radiating Fluted Clam Shell Ribs
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+    for (let rib = -3; rib <= 3; rib++) {
+      ctx.beginPath();
+      ctx.moveTo(rib * r * 0.12, -r * 0.64);
+      ctx.quadraticCurveTo(rib * r * 0.28, -r * 0.28, rib * r * 0.34, r * 0.10);
+      ctx.stroke();
+    }
+    this._drawKawaiiShine(ctx, -r * 0.36, -r * 0.48, r * 0.28, r * 0.11, -0.35);
+
+    // Jaunty Bouncy Golden Ocean Crown perched atop the upper shell!
+    ctx.save();
+    ctx.translate(0, -r * 0.72 + Math.sin(timeSec * 3.4) * 0.04 * r);
+    const cw = r * 0.36;
+    const ch = r * 0.24;
+    ctx.fillStyle = '#fde047';
+    ctx.strokeStyle = '#713f12';
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-cw, ch * 0.35);
+    ctx.lineTo(-cw * 0.85, -ch * 0.70);
+    ctx.lineTo(-cw * 0.28, -ch * 0.10);
+    ctx.lineTo(0, -ch);
+    ctx.lineTo(cw * 0.28, -ch * 0.10);
+    ctx.lineTo(cw * 0.85, -ch * 0.70);
+    ctx.lineTo(cw, ch * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+
+    // 3. Lush Iridescent Ruffled Tridacna Velvet Mantle Interior
+    ctx.fillStyle = '#134e4a';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.085 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.10, r * 1.06, r * (0.48 + jawLift * 0.35), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing turquoise-magenta scalloped mantle frills around the opening
+    ctx.fillStyle = mantleTeal;
+    for (let f = -4; f <= 4; f++) {
+      const fx = f * r * 0.24;
+      const fy = r * (0.14 + Math.sin(timeSec * 4.2 + f * 1.1) * 0.06);
+      ctx.beginPath();
+      ctx.arc(fx, fy, r * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4. GIANT Luminous Iridescent Moon-Pearl Core (The Clam's Adorable Kawaii Face!)
+    const pearlR = r * 0.62;
+    const pearlY = r * 0.06;
+    const pg = ctx.createRadialGradient(-pearlR * 0.28, pearlY - pearlR * 0.32, pearlR * 0.08, 0, pearlY, pearlR * 1.08);
+    pg.addColorStop(0, '#ffffff');
+    pg.addColorStop(0.55, isHurt ? '#ffffff' : '#fdf2f8');
+    pg.addColorStop(0.85, '#fbcfe8');
+    pg.addColorStop(1, '#67e8f9');
+    ctx.fillStyle = pg;
+    ctx.strokeStyle = '#9d174d';
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.arc(0, pearlY, pearlR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    this._drawKawaiiShine(ctx, -pearlR * 0.32, pearlY - pearlR * 0.44, pearlR * 0.34, pearlR * 0.16, -0.45);
+
+    // GIANT Sparkling Starlight-Pink Anime Eyes + Rosy Blush + Adorable `:3` Smile on the Pearl!
+    for (const side of [-1, 1]) {
+      this._drawKawaiiAnimeEye(ctx, side * r * 0.25, pearlY - r * 0.06, r * 0.17, r * 0.21, scale, {
+        irisTop: '#fef08a',
+        irisBot: '#ec4899',
+        outline: '#4c0519',
+        isStunned,
+        isHurt: isHurt || boss.defeated,
+        isDormant: boss.aiState === 'dormant',
+        isAngry,
+        side: side < 0 ? 0 : 1,
+        timeSec,
+      });
+      this._drawKawaiiBlush(ctx, side * r * 0.40, pearlY + r * 0.15, r * 0.13, r * 0.075, scale, 'rgba(244, 114, 182, 0.72)');
+    }
+    this._drawKawaiiMouth(ctx, 0, pearlY + r * 0.16, r * 0.11, scale, {
+      outline: '#4c0519',
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#f472b6',
+    });
+
+    // 5. Scalloped Lower Clam Shell Cradle
+    ctx.save();
+    ctx.translate(0, r * (0.28 + jawLift * 0.20));
+    const botG = ctx.createLinearGradient(0, 0, 0, r * 0.65);
+    botG.addColorStop(0, shellMid);
+    botG.addColorStop(1, shellDark);
+    ctx.fillStyle = botG;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.6, 0.10 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.18, 0);
+    for (let s = -4; s <= 4; s++) {
+      const rxS = (s / 4) * r * 1.12;
+      const ryS = r * (Math.abs(s) % 2 === 0 ? 0.10 : -0.05);
+      ctx.lineTo(rxS, ryS);
+    }
+    ctx.bezierCurveTo(r * 1.02, r * 0.68, -r * 1.02, r * 0.68, -r * 1.18, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);

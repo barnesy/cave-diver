@@ -16,7 +16,7 @@ export const LEVEL_14 = {
   turnaroundCheckpointId: 'cp7',
   ascentSwitchCheckpointId: 'cp1',
   ascentSwitchDepthM: 26.0,
-  bounds: { xMin: -52, xMax: 320, yMin: -6, yMax: 138 },
+  bounds: { xMin: -52, xMax: 440, yMin: -6, yMax: 150 },
   spawn: { x: -6.0, y: 1.8 },
   exitZone: { x: -6.0, y: 1.8, radius: 7.0, name: 'Aurora Glacial Pool' },
   haloclineY: 48.0,
@@ -93,6 +93,13 @@ export const LEVEL_14 = {
     { ax: 134, ay: 102.0, bx: 140, by: 82.0, ra: 3.0, rb: 2.2 }, // Dome Skylight Crypt
     { ax: 158, ay: 116.0, bx: 164, by: 96.0, ra: 2.8, rb: 2.1 }, // Magma Dyke Gallery
     { ax: 182, ay: 125.0, bx: 188, by: 106.0, ra: 3.0, rb: 2.2 }, // Upper Transponder Alcove
+
+    // Secret Lair (Sonar-Breachable): Aurora Orca Matriarch Rift Sanctuary (v267)
+    { ax: 204, ay: 127.5, bx: 248, by: 126.0, ra: 3.0, rb: 4.2, secretLair: true },
+    { ax: 248, ay: 126.0, bx: 276, by: 125.0, ra: 5.6, rb: 4.8, secretLair: true }, // Armory chamber (x=262, y=125.5)
+    { ax: 276, ay: 125.0, bx: 344, by: 124.0, ra: 4.8, rb: 5.2, secretLair: true }, // Glacial echo gauntlet
+    { ax: 344, ay: 124.0, bx: 378, by: 124.0, ra: 15.0, rb: 16.0, secretLair: true }, // Aurora Orca Cathedral
+    { ax: 378, ay: 124.0, bx: 406, by: 124.0, ra: 16.0, rb: 13.5, secretLair: true },
   ],
   guideline: [],
 
