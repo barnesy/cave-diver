@@ -293,9 +293,9 @@ export const bossAndLairMethods = {
       ctx.fill();
       if (!lair.weaponEquipped) {
         ctx.save();
-        ctx.translate(-0.72 * scale, -0.14 * scale + Math.sin(timeSec * 2.8) * 0.05 * scale);
+        ctx.translate(-0.54 * scale, -0.14 * scale + Math.sin(timeSec * 2.8) * 0.05 * scale);
         ctx.rotate(-0.1);
-        drawDetailedSpeargun(ctx, scale * 1.38, {
+        drawDetailedSpeargun(ctx, scale * 1.02, {
           torchOn: true,
           lensColor: '#fef08a',
           glowStamps: this.glowStamps,
@@ -4962,9 +4962,9 @@ export const bossAndLairMethods = {
     const hyperEvery = overLv >= 2 ? 2 : overLv === 1 ? 3 : 5;
     if (lair.combatMode && lair.weaponEquipped && !lair.bossDefeated && diver && (lair.shotCounter || 0) % hyperEvery === hyperEvery - 1) {
       const aim = diver.torchAngle ?? diver.angle ?? 0;
-      const hx = toScreenX((diver.body?.hand?.x ?? diver.x) + Math.cos(aim) * 1.05);
-      const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.05);
-      const hr = (0.38 + 0.08 * Math.sin(timeSec * 14)) * scale;
+      const hx = toScreenX((diver.body?.hand?.x ?? diver.x) + Math.cos(aim) * 1.12);
+      const hy = toScreenY((diver.body?.hand?.y ?? diver.y) + Math.sin(aim) * 1.12);
+      const hr = (0.32 + 0.07 * Math.sin(timeSec * 14)) * scale;
       ctx.save();
       if (warmStamp) {
         ctx.globalCompositeOperation = 'lighter';

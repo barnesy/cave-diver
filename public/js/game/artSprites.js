@@ -1868,7 +1868,7 @@ export function drawDiverArmAndTorch(
   ctx.rotate(torchAng);
   if (opts?.hasSpeargun) {
     if (Math.cos(torchAng) < 0) ctx.scale(1, -1);
-    drawDetailedSpeargun(ctx, scale * 1.18, {
+    drawDetailedSpeargun(ctx, scale * 0.86, {
       torchOn,
       lensColor,
       glowStamps,
