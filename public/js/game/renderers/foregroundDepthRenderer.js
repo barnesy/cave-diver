@@ -651,7 +651,14 @@ export function computeForegroundElementLighting(el, level, opts = {}, out = nul
     }
   }
 
-  let biolumLit = (level?.theme?.bioluminescent || weather?.forceBiolum) ? 0.34 : 0;
+  const isOrganicOrCrystal =
+    el.kind === 'kelp-fronds' ||
+    el.kind === 'cenote-roots' ||
+    el.kind === 'crystal-cluster' ||
+    el.kind === 'icicle-cluster';
+  let biolumLit = (level?.theme?.bioluminescent || weather?.forceBiolum)
+    ? (isOrganicOrCrystal ? 0.30 : 0.11)
+    : 0;
   if (secretLair?.veilBreached && secretLair.spec?.arena) {
     const ar = secretLair.spec.arena;
     const dn = Math.hypot((wx - ar.cx) / (ar.rx * 1.3), (wy - ar.cy) / (ar.ry * 1.35));

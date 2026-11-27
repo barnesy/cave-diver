@@ -167,16 +167,16 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
     ctx.closePath();
     ctx.fill();
 
-    // Characteristic dark chevron stripes along upper flank
+    // Characteristic dark chevron stripes along upper flank (batched single stroke)
     ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
     ctx.lineWidth = Math.max(1, sz * 0.055);
+    ctx.beginPath();
     for (let k = -3; k <= 2; k++) {
       const bx = k * sz * 0.26;
-      ctx.beginPath();
       ctx.moveTo(bx, -sz * 0.16);
       ctx.lineTo(bx - sz * 0.08, 0.04 * sz);
-      ctx.stroke();
     }
+    ctx.stroke();
     ctx.fillStyle = '#fef08a';
     ctx.beginPath();
     ctx.arc(sz * 0.88, -sz * 0.05, Math.max(1.2, sz * 0.065), 0, Math.PI * 2);
@@ -305,16 +305,16 @@ export function drawStyledFish(ctx, f, sx, sy, scale, timeSec) {
   ctx.stroke();
 
   if (f.kind === 'cichlid') {
-    // Mayan cichlid dark vertical bars + dark tail ocellus spot
+    // Mayan cichlid dark vertical bars (batched single stroke) + dark tail ocellus spot
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.42)';
     ctx.lineWidth = Math.max(1, sz * 0.11);
+    ctx.beginPath();
     for (let b = -2; b <= 1; b++) {
       const bx = b * sz * 0.22;
-      ctx.beginPath();
       ctx.moveTo(bx, -sz * 0.36);
       ctx.lineTo(bx, sz * 0.34);
-      ctx.stroke();
     }
+    ctx.stroke();
     ctx.fillStyle = '#fde047';
     ctx.beginPath();
     ctx.arc(-sz * 0.62, -sz * 0.05, Math.max(1.5, sz * 0.15), 0, Math.PI * 2);
@@ -1924,18 +1924,18 @@ export function drawStyledJellyfish(ctx, j, sx, sy, scale, timeSec) {
   ctx.save();
   ctx.translate(sx, sy);
 
-  // Trailing gossamer tentacles
+  // Trailing gossamer tentacles (batched single stroke)
   ctx.strokeStyle = 'rgba(224, 242, 254, 0.34)';
   ctx.lineWidth = Math.max(1, r * 0.06);
+  ctx.beginPath();
   for (let t = -2; t <= 2; t++) {
     const ox = t * rx * 0.32;
     const len = r * (1.55 + (t % 2 === 0 ? 0.45 : 0.15));
     const sway = Math.sin(timeSec * 2.1 + t + (j.phase || 0)) * r * 0.35;
-    ctx.beginPath();
     ctx.moveTo(ox, ry * 0.2);
     ctx.quadraticCurveTo(ox + sway, len * 0.55, ox - sway * 0.7, len);
-    ctx.stroke();
   }
+  ctx.stroke();
 
   // Translucent bioluminescent bell with cel-shaded crown glow & delicate ink rim (v192)
   const bellG = ctx.createRadialGradient(-rx * 0.2, -ry * 0.45, r * 0.08, 0, -ry * 0.1, rx * 1.1);

@@ -13299,7 +13299,8 @@ test('v257 Mobile 60 FPS Wave 3 (Levels 7 & 8): OffscreenCanvas lightmap cap, op
   assert.ok(renSrc.includes("typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1)"), 'Expected OffscreenCanvas backing store for lightCanvas');
   assert.ok(renSrc.includes('const maxLightPx = this._isCoarseMobile ? 68000 : 120000;'), 'Expected lightmap pixel-area cap');
   assert.ok(renSrc.includes('this._sunCurtainSiltCache'), 'Expected silt-aware sun-curtain raycast cache');
-  assert.ok(renSrc.includes('this._ascentCoachMeasureCache') && renSrc.includes('this._peerEdgeTextWCache'), 'Expected cached text-width measurement in HUD overlays');
+  const squadSrc = readFileSync(new URL('../public/js/game/renderers/diverAndSquadRenderer.js', import.meta.url), 'utf8');
+  assert.ok(renSrc.includes('this._ascentCoachMeasureCache') && squadSrc.includes('this._peerEdgeTextWCache'), 'Expected cached text-width measurement in HUD overlays');
 
   // 4. lightingAndFxRenderer.js batches Tyndall shafts, uses mobile ray budgets, and batches flow/thermocline hazards
   const fxSrc = readFileSync(new URL('../public/js/game/renderers/lightingAndFxRenderer.js', import.meta.url), 'utf8');
@@ -13369,4 +13370,46 @@ test('v260 Offscreen Boss Edge Chevron & Secret Lair Emissive Render across Leve
       }, `Offscreen boss chevron must not throw on ${levelId} (${aiState})`);
     }
   }
+});
+
+test('v261 Modular diverAndSquadRenderer extraction (<4000L renderer.js), Sites 9-37 biolum contrast & batched swimmers, compact speargun & clean Workshop preview', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { CaveRenderer } = await import('../public/js/game/renderer.js');
+  const { diverAndSquadRendererMethods } = await import('../public/js/game/renderers/diverAndSquadRenderer.js');
+
+  // 1. renderer.js stays cleanly modularized (<4000L) and retains full prototype parity for all extracted diver/squad methods
+  const renLines = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8').split(/\r?\n/).length;
+  assert.ok(renLines < 4000, `renderer.js should stay < 4000 lines after diverAndSquadRenderer extraction (currently ${renLines})`);
+  for (const fn of [
+    '_drawBuddyRescueTethers',
+    '_drawBuddyLocatePing',
+    '_drawRecoveryTarget',
+    '_drawLimbSegment',
+    '_drawArticulatedLeg',
+    '_drawCameraFlash',
+    '_drawSonarPulse',
+    '_drawDiver',
+    '_drawDiverSignals',
+    '_drawPeerEdgeIndicators',
+  ]) {
+    assert.equal(typeof diverAndSquadRendererMethods[fn], 'function', `diverAndSquadRendererMethods must export ${fn}`);
+    assert.equal(typeof CaveRenderer.prototype[fn], 'function', `CaveRenderer.prototype must retain ${fn}`);
+  }
+
+  // 2. index.html importmap and sw.js precache both include diverAndSquadRenderer.js
+  const htmlSrc = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const swSrc = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.ok(htmlSrc.includes('./js/game/renderers/diverAndSquadRenderer.js'), 'index.html importmap must include diverAndSquadRenderer.js');
+  assert.ok(swSrc.includes('./js/game/renderers/diverAndSquadRenderer.js'), 'sw.js precache must include diverAndSquadRenderer.js');
+
+  // 3. Sites 9-37 visual & perf sweep: bioluminescent rock overhangs stay dark in unlit water, fish/jellyfish batch stripes/tentacles
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('isOrganicOrCrystal ? 0.30 : 0.11'), 'Unlit solid rock overhangs on bioluminescent levels must not glow bright tan');
+  const artSrc = readFileSync(new URL('../public/js/game/artSprites.js', import.meta.url), 'utf8');
+  assert.ok(artSrc.includes('drawDetailedSpeargun(ctx, scale * 0.86,'), 'Held speargun must stay compact at scale * 0.86');
+  assert.ok(artSrc.includes('Trailing gossamer tentacles (batched single stroke)'), 'Jellyfish tentacles must batch into a single stroke');
+
+  // 4. Gear Workshop preview omits bottom-right specSummary text
+  const livSrc = readFileSync(new URL('../public/js/game/rigLivery.js', import.meta.url), 'utf8');
+  assert.ok(!livSrc.includes('const specSummary ='), 'Gear Workshop avatar preview must omit bottom specSummary caption');
 });
