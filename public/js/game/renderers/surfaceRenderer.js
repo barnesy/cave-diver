@@ -393,18 +393,48 @@ export const surfaceRendererMethods = {
     return SURFACE_SOIL_PALETTES[style] || SURFACE_SOIL_PALETTES.yucatan;
   },
 
-  _drawGroundContactShadow(ctx, x, y, width, scale, slopeRad = 0) {
-    ctx.save();
-    ctx.translate(x, y + 0.03 * scale);
-    if (slopeRad) ctx.rotate(slopeRad * 0.72);
-    const grad = ctx.createRadialGradient(0, 0, width * 0.1, 0, 0, width);
+  _getGroundShadowStamp() {
+    if (this._groundShadowStamp) return this._groundShadowStamp;
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 32;
+    const gctx = c.getContext('2d');
+    if (!gctx) return null;
+    gctx.save();
+    gctx.translate(32, 16);
+    gctx.scale(1, 0.5);
+    const grad = gctx.createRadialGradient(0, 0, 3.2, 0, 0, 32);
     grad.addColorStop(0, 'rgba(8, 12, 8, 0.56)');
     grad.addColorStop(0.65, 'rgba(8, 12, 8, 0.24)');
     grad.addColorStop(1, 'rgba(8, 12, 8, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, width, 0.18 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
+    gctx.fillStyle = grad;
+    gctx.beginPath();
+    gctx.arc(0, 0, 32, 0, Math.PI * 2);
+    gctx.fill();
+    gctx.restore();
+    this._groundShadowStamp = c;
+    return c;
+  },
+
+  _drawGroundContactShadow(ctx, x, y, width, scale, slopeRad = 0) {
+    const stamp = this._getGroundShadowStamp?.() || null;
+    ctx.save();
+    ctx.translate(x, y + 0.03 * scale);
+    if (slopeRad) ctx.rotate(slopeRad * 0.72);
+    if (stamp) {
+      const h = 0.18 * scale;
+      ctx.drawImage(stamp, -width, -h, width * 2, h * 2);
+    } else {
+      const grad = ctx.createRadialGradient(0, 0, width * 0.1, 0, 0, width);
+      grad.addColorStop(0, 'rgba(8, 12, 8, 0.56)');
+      grad.addColorStop(0.65, 'rgba(8, 12, 8, 0.24)');
+      grad.addColorStop(1, 'rgba(8, 12, 8, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, width, 0.18 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   },
 

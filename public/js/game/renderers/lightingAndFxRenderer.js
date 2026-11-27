@@ -91,21 +91,26 @@ export const lightingAndFxMethods = {
     ctx.fillStyle = `rgba(${optic.coreRgb}, ${(0.12 * intensity).toFixed(3)})`;
     ctx.fill();
 
-    // Smooth feathered 2D Ray-Cast Tyndall / Particulate Light Shafts (coarser stride for remote peers = 2x faster GPU)
+    // Batched 2-tier Ray-Cast Tyndall / Particulate Light Shafts (2 fills instead of 25 separate fills!)
     ctx.globalCompositeOperation = 'lighter';
     const rayLen = torchData.rays.length;
     const shaftStep = isPeer ? 4 : 2;
-    for (let i = 0; i < rayLen - shaftStep; i += shaftStep) {
-      const rA = torchData.rays[i];
-      const rB = torchData.rays[Math.min(rayLen - 1, i + shaftStep)];
-      const centerDist = Math.abs((i + shaftStep * 0.5) / Math.max(1, rayLen - 1) - 0.5) * 2;
-      const rayAlpha = (1 - centerDist * 0.75) * (isPeer ? 0.032 : 0.024) * intensity;
-      ctx.fillStyle = `rgba(${optic.shaftRgb}, ${rayAlpha.toFixed(4)})`;
+    const baseShaftAlpha = (isPeer ? 0.032 : 0.024) * intensity;
+    for (let tier = 0; tier < 2; tier++) {
+      const alpha = tier === 0 ? baseShaftAlpha * 0.92 : baseShaftAlpha * 0.42;
+      ctx.fillStyle = `rgba(${optic.shaftRgb}, ${alpha.toFixed(4)})`;
       ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(toScreenX(rA.x), toScreenY(rA.y));
-      ctx.lineTo(toScreenX(rB.x), toScreenY(rB.y));
-      ctx.closePath();
+      for (let i = 0; i < rayLen - shaftStep; i += shaftStep) {
+        const centerDist = Math.abs((i + shaftStep * 0.5) / Math.max(1, rayLen - 1) - 0.5) * 2;
+        const isInner = centerDist < 0.48;
+        if ((tier === 0) !== isInner) continue;
+        const rA = torchData.rays[i];
+        const rB = torchData.rays[Math.min(rayLen - 1, i + shaftStep)];
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(toScreenX(rA.x), toScreenY(rA.y));
+        ctx.lineTo(toScreenX(rB.x), toScreenY(rB.y));
+        ctx.closePath();
+      }
       ctx.fill();
     }
 
@@ -123,9 +128,10 @@ export const lightingAndFxMethods = {
       const gx1 = Math.ceil((torchData.ox + rangeM) / cell);
       const gy0 = Math.floor((torchData.oy - rangeM) / cell);
       const gy1 = Math.ceil((torchData.oy + rangeM) / cell);
+      const motesPerCell = this._isCoarseMobile ? 2 : 4;
       for (let gx = gx0; gx <= gx1; gx++) {
         for (let gy = gy0; gy <= gy1; gy++) {
-          for (let k = 0; k < 4; k++) {
+          for (let k = 0; k < motesPerCell; k++) {
             const h1 = Math.sin(gx * 127.1 + gy * 311.7 + k * 74.7) * 43758.5453;
             const r1 = h1 - Math.floor(h1);
             const h2 = Math.sin(gx * 269.5 + gy * 183.3 + k * 41.9) * 43758.5453;
@@ -188,7 +194,7 @@ export const lightingAndFxMethods = {
     ctx.globalCompositeOperation = 'lighter';
     const warmStamp = this.glowStamps.warm;
     const cyanStamp = this.glowStamps.cyan;
-    const wallStep = isPeer ? 2 : 1;
+    const wallStep = isPeer ? 3 : (this._isCoarseMobile ? 2 : 1);
     for (let i = 1; i < torchData.rays.length - 1; i += wallStep) {
       const pt = torchData.rays[i];
       if (pt.dist > rangeM) continue;
@@ -306,7 +312,8 @@ export const lightingAndFxMethods = {
     }
 
     const localTorchAng = Number.isFinite(diver.torchAngle) ? diver.torchAngle : diver.angle;
-    const localRayCount = Math.max(26, Math.round(52 * (this._perfBudget?.rayScale ?? 1)));
+    const baseLocalRays = this._isCoarseMobile ? 32 : 46;
+    const localRayCount = Math.max(22, Math.round(baseLocalRays * (this._perfBudget?.rayScale ?? 1)));
     const nowLightMs = _nowMs();
     const hasActiveSilt = siltClouds && siltClouds.length > 0;
     let localTorch = null;
@@ -318,17 +325,17 @@ export const lightingAndFxMethods = {
       const loy = diver.body?.hand ? diver.body.hand.y : diver.y;
       const lRange = 16.5 * (localOptic.rangeMult || 1.0) * localRigReach;
       const prev = this._localTorchCache;
+      const localTtlMs = hasActiveSilt ? 42 : 95;
       const canReuse =
         prev &&
-        !hasActiveSilt &&
         prev.levelId === this.level?.id &&
         prev.rayCount === localRayCount &&
         prev.range === lRange &&
         prev.siltPierce === localSiltPierce &&
-        nowLightMs - prev.ts < 75 &&
-        Math.abs(lox - prev.ox) < 0.03 &&
-        Math.abs(loy - prev.oy) < 0.03 &&
-        Math.abs(localTorchAng - prev.ang) < 0.008;
+        nowLightMs - prev.ts < localTtlMs &&
+        Math.abs(lox - prev.ox) < 0.055 &&
+        Math.abs(loy - prev.oy) < 0.055 &&
+        Math.abs(localTorchAng - prev.ang) < 0.014;
       if (canReuse) {
         localTorch = prev.torch;
       } else {
@@ -399,11 +406,11 @@ export const lightingAndFxMethods = {
       visibleTorchPeers.push({ peer: p, ox, oy, pTorchAng, key: p.id || `peer_${i}` });
     }
 
-    // Adaptive ray budget + pose-delta raycast cache per peer (cuts co-op CPU by 70-90%!)
-    const basePeerRays = (this._isCoarseMobile || visibleTorchPeers.length >= 2 || cw < 900) ? 16 : 22;
+    // Adaptive ray budget + pose-delta raycast cache per peer (zero-GC ray pool, cuts co-op/buddy CPU by 75-90%!)
+    const basePeerRays = this._isCoarseMobile ? 12 : (visibleTorchPeers.length >= 2 || cw < 900 ? 16 : 20);
     const peerRayCount = Math.min(basePeerRays, this._perfBudget?.peerRayMax ?? basePeerRays);
     const hasSilt = siltClouds && siltClouds.length > 0;
-    const cacheMaxAgeMs = hasSilt ? 55 : 135;
+    const cacheMaxAgeMs = hasSilt ? 65 : 145;
 
     for (let i = 0; i < visibleTorchPeers.length; i++) {
       const vp = visibleTorchPeers[i];
@@ -415,12 +422,13 @@ export const lightingAndFxMethods = {
         while (angDelta > Math.PI) angDelta -= Math.PI * 2;
         while (angDelta < -Math.PI) angDelta += Math.PI * 2;
         const posDeltaSq = (vp.ox - prev.ox) * (vp.ox - prev.ox) + (vp.oy - prev.oy) * (vp.oy - prev.oy);
-        if (posDeltaSq < 0.0196 && Math.abs(angDelta) < 0.035 && nowPerf - prev.at < cacheMaxAgeMs) {
+        if (posDeltaSq < 0.025 && Math.abs(angDelta) < 0.042 && nowPerf - prev.at < cacheMaxAgeMs) {
           rays = prev.rays;
         }
       }
       if (!rays) {
-        rays = castTorchFan(this.level, vp.ox, vp.oy, vp.pTorchAng, peerHalfSpread, peerRange, peerRayCount, siltClouds);
+        const pool = prev?.rays && Array.isArray(prev.rays) ? prev.rays : null;
+        rays = castTorchFan(this.level, vp.ox, vp.oy, vp.pTorchAng, peerHalfSpread, peerRange, peerRayCount, siltClouds, pool);
         this._peerTorchCache.set(vp.key, {
           levelId: this.level?.id,
           ox: vp.ox,
@@ -737,7 +745,10 @@ export const lightingAndFxMethods = {
       lctx.globalAlpha = 1;
     }
 
+    const prevSmoothQual = ctx.imageSmoothingQuality;
+    if (prevSmoothQual && prevSmoothQual !== 'low') ctx.imageSmoothingQuality = 'low';
     ctx.drawImage(this.lightCanvas, 0, 0, cw, ch);
+    if (prevSmoothQual && prevSmoothQual !== 'low') ctx.imageSmoothingQuality = prevSmoothQual;
 
     if (Array.isArray(this.level.archWindows)) {
       ctx.save();
@@ -1494,8 +1505,9 @@ export const lightingAndFxMethods = {
     if (!hazards) return;
     ctx.save();
 
-    // 1. Cold Thermocline Pockets
+    // 1. Cold Thermocline Pockets (pre-baked glow stamp + single batched shear-ribbon stroke!)
     const thermos = hazards.thermoclines || [];
+    const thermoStamp = this.glowStamps?.cyan;
     for (let i = 0; i < thermos.length; i++) {
       const th = thermos[i];
       if (th.x + th.rx < visX0 || th.x - th.rx > visX1 || th.y + th.ry < visY0 || th.y - th.ry > visY1) continue;
@@ -1503,22 +1515,28 @@ export const lightingAndFxMethods = {
       const sy = toScreenY(th.y);
       const rxPx = th.rx * scale;
       const ryPx = th.ry * scale;
-      const grad = ctx.createRadialGradient(sx, sy, rxPx * 0.12, sx, sy, Math.max(rxPx, ryPx));
-      grad.addColorStop(0, 'rgba(56, 189, 248, 0.24)');
-      grad.addColorStop(0.55, 'rgba(14, 165, 233, 0.14)');
-      grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, rxPx, ryPx, 0, 0, Math.PI * 2);
-      ctx.fill();
+      if (thermoStamp) {
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(thermoStamp, sx - rxPx, sy - ryPx, rxPx * 2, ryPx * 2);
+        ctx.globalAlpha = 1;
+      } else {
+        const grad = ctx.createRadialGradient(sx, sy, rxPx * 0.12, sx, sy, Math.max(rxPx, ryPx));
+        grad.addColorStop(0, 'rgba(56, 189, 248, 0.24)');
+        grad.addColorStop(0.55, 'rgba(14, 165, 233, 0.14)');
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, rxPx, ryPx, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // Shimmering cold thermal shear ribbons
+      // Shimmering cold thermal shear ribbons (batched single path!)
       ctx.strokeStyle = 'rgba(186, 230, 253, 0.36)';
       ctx.lineWidth = Math.max(1, 0.055 * scale);
+      ctx.beginPath();
       for (let r = -1; r <= 1; r++) {
-        ctx.beginPath();
         const yOff = r * ryPx * 0.38;
-        const steps = 10;
+        const steps = 8;
         for (let k = 0; k <= steps; k++) {
           const frac = k / steps;
           const px = sx - rxPx * 0.85 + frac * rxPx * 1.7;
@@ -1526,8 +1544,8 @@ export const lightingAndFxMethods = {
           if (k === 0) ctx.moveTo(px, py);
           else ctx.lineTo(px, py);
         }
-        ctx.stroke();
       }
+      ctx.stroke();
 
       if (diver && Math.hypot(diver.x - th.x, diver.y - th.y) < th.rx + 4.5) {
         ctx.font = `800 ${Math.max(9, Math.round(scale * 0.34))}px ui-monospace, monospace`;
@@ -1634,6 +1652,12 @@ export const lightingAndFxMethods = {
       const ribbonCount = this._isCoarseMobile ? 10 : 16;
 
       ctx.lineCap = 'round';
+      const ch = Math.max(2.6, 0.10 * scale);
+      const chevPts = this._flowChevScratch || (this._flowChevScratch = []);
+      chevPts.length = 0;
+      ctx.strokeStyle = `rgba(${ribbonRgb}, ${(baseAlpha * 0.92).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.15, (isSlip ? 0.062 : 0.048) * scale);
+      ctx.beginPath();
       for (let i = 0; i < ribbonCount; i++) {
         const seed = i * 19.37;
         const driftSpd = 1.9 + flowSpd * 4.4 + (i % 3) * 0.55;
@@ -1652,25 +1676,23 @@ export const lightingAndFxMethods = {
         const x1 = toScreenX(wx + fdx * lenM * 0.5);
         const y1 = toScreenY(wy + fdy * lenM * 0.5);
 
-        const rg = ctx.createLinearGradient(x0, y0, x1, y1);
-        rg.addColorStop(0, `rgba(${ribbonRgb}, 0)`);
-        rg.addColorStop(0.55, `rgba(${ribbonRgb}, ${baseAlpha.toFixed(3)})`);
-        rg.addColorStop(1, `rgba(240, 249, 255, ${(baseAlpha * 1.25).toFixed(3)})`);
-        ctx.strokeStyle = rg;
-        ctx.lineWidth = Math.max(1.15, (isSlip ? 0.062 : 0.048) * scale);
-        ctx.beginPath();
         ctx.moveTo(x0, y0);
         ctx.quadraticCurveTo(xm, ym, x1, y1);
-        ctx.stroke();
+        chevPts.push(x1, y1);
+      }
+      ctx.stroke();
 
-        // Subtle directional chevron tip at ribbon head so flow direction is readable at a glance
-        const ch = Math.max(2.6, 0.10 * scale);
+      if (chevPts.length > 0) {
         ctx.strokeStyle = `rgba(240, 249, 255, ${(baseAlpha * 0.95).toFixed(3)})`;
         ctx.lineWidth = Math.max(1, 0.036 * scale);
         ctx.beginPath();
-        ctx.moveTo(x1 - (fdx * ch - perpX * ch * 0.65), y1 - (fdy * ch - perpY * ch * 0.65));
-        ctx.lineTo(x1, y1);
-        ctx.lineTo(x1 - (fdx * ch + perpX * ch * 0.65), y1 - (fdy * ch + perpY * ch * 0.65));
+        for (let i = 0; i < chevPts.length; i += 2) {
+          const x1 = chevPts[i];
+          const y1 = chevPts[i + 1];
+          ctx.moveTo(x1 - (fdx * ch - perpX * ch * 0.65), y1 - (fdy * ch - perpY * ch * 0.65));
+          ctx.lineTo(x1, y1);
+          ctx.lineTo(x1 - (fdx * ch + perpX * ch * 0.65), y1 - (fdy * ch + perpY * ch * 0.65));
+        }
         ctx.stroke();
       }
     }

@@ -120,7 +120,8 @@ export class CaveRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false });
     this.level = level;
 
-    this.lightCanvas = document.createElement('canvas');
+    this.lightCanvas =
+      typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
     this.lightCtx = this.lightCanvas.getContext('2d');
 
     this.glowStamps = createGlowStamps();
@@ -304,6 +305,7 @@ export class CaveRenderer {
     this.rockChunks = entry.rockChunks;
     this._peerTorchCache?.clear();
     this._sunCurtainCache.clear();
+    this._sunCurtainSiltCache?.clear();
     this._basinEdgeCache.clear();
     this._waterMeniscusCache.clear();
     this._ventCeilingCache.clear();
@@ -669,14 +671,21 @@ export class CaveRenderer {
     }
     this._needsResize = false;
     const dprCap = this._perfBudget?.dprCap ?? (this._isCoarseMobile ? 1.75 : 2);
-    const lightScale = this._perfBudget?.lightmapScale ?? 0.35;
+    const lightScale = this._perfBudget?.lightmapScale ?? (this._isCoarseMobile ? 0.25 : 0.30);
     const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, dprCap);
     const w = this.canvas.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1280) || 1280;
     const h = this.canvas.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 720) || 720;
     const targetW = Math.max(1, Math.floor(w * dpr));
     const targetH = Math.max(1, Math.floor(h * dpr));
-    const targetLW = Math.max(1, Math.floor(targetW * lightScale));
-    const targetLH = Math.max(1, Math.floor(targetH * lightScale));
+    let targetLW = Math.max(1, Math.floor(targetW * lightScale));
+    let targetLH = Math.max(1, Math.floor(targetH * lightScale));
+    // Cap lightmap pixel area so ultra-high-DPI phones & 4K monitors keep ~1ms OffscreenCanvas blits (v257)
+    const maxLightPx = this._isCoarseMobile ? 68000 : 120000;
+    if (targetLW * targetLH > maxLightPx) {
+      const k = Math.sqrt(maxLightPx / (targetLW * targetLH));
+      targetLW = Math.max(1, Math.floor(targetLW * k));
+      targetLH = Math.max(1, Math.floor(targetLH * k));
+    }
     if (
       this.canvas.width !== targetW ||
       this.canvas.height !== targetH ||
@@ -1389,6 +1398,13 @@ export class CaveRenderer {
       }
 
       let curtains = !hasSurfaceSilt ? this._sunCurtainCache.get(bIdx) : null;
+      if (!curtains && hasSurfaceSilt) {
+        const sc = this._sunCurtainSiltCache?.get(bIdx);
+        const nowSc = _nowMs();
+        if (sc && nowSc - sc.at < 120) {
+          curtains = sc.curtains;
+        }
+      }
       if (!curtains) {
         curtains = castSunCurtain(
           this.level,
@@ -1397,10 +1413,13 @@ export class CaveRenderer {
           basin.sunAngle ?? (Math.PI * 0.5 - 0.14),
           20,
           hasSurfaceSilt ? siltClouds : [],
-          22
+          this._isCoarseMobile ? 16 : 22
         );
         if (!hasSurfaceSilt) {
           this._sunCurtainCache.set(bIdx, curtains);
+        } else {
+          if (!this._sunCurtainSiltCache) this._sunCurtainSiltCache = new Map();
+          this._sunCurtainSiltCache.set(bIdx, { at: _nowMs(), curtains });
         }
       }
       for (const c of curtains) {
@@ -1446,7 +1465,7 @@ export class CaveRenderer {
         sy1 - sy0
       );
 
-      // Distinct angled crepuscular god-ray shafts + sunlit motes inside open-water cavern/wreck shafts (v119 / v193 zero-loop-grad)
+      // Batched 2-phase angled crepuscular god-ray shafts (2 fills instead of 7 per basin!)
       const shaftCount = Math.max(3, Math.min(7, Math.round(spanW / 3.1)));
       const tiltPx = (this.level.isWreck ? 4.8 : 3.2) * scale;
       ctx.globalCompositeOperation = 'screen';
@@ -1456,22 +1475,24 @@ export class CaveRenderer {
       sharedShaftGrad.addColorStop(0.82, 'rgba(56, 189, 248, 0.03)');
       sharedShaftGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = sharedShaftGrad;
-      for (let sIdx = 0; sIdx < shaftCount; sIdx++) {
-        const frac = (sIdx + 0.5) / shaftCount;
-        const wave = Math.sin(timeSec * 0.85 + sIdx * 1.45) * 0.68;
-        const shimmer = 0.45 + 0.55 * Math.sin(timeSec * 1.4 + sIdx * 2.1);
-        const topWorldX = leftX + spanW * frac + wave * 0.45;
-        const halfTop = Math.max(0.38, (spanW / shaftCount) * 0.22) * scale;
-        const halfBot = halfTop * 2.35;
-        const tx = toScreenX(topWorldX);
-        const bx = tx + tiltPx + wave * 0.72 * scale;
+      for (let phase = 0; phase < 2; phase++) {
+        const shimmer = 0.45 + 0.55 * Math.sin(timeSec * 1.4 + phase * Math.PI);
         ctx.globalAlpha = 0.48 + shimmer * 0.52;
         ctx.beginPath();
-        ctx.moveTo(tx - halfTop, sy0);
-        ctx.lineTo(tx + halfTop, sy0);
-        ctx.lineTo(bx + halfBot, sy1);
-        ctx.lineTo(bx - halfBot, sy1);
-        ctx.closePath();
+        for (let sIdx = phase; sIdx < shaftCount; sIdx += 2) {
+          const frac = (sIdx + 0.5) / shaftCount;
+          const wave = Math.sin(timeSec * 0.85 + sIdx * 1.45) * 0.68;
+          const topWorldX = leftX + spanW * frac + wave * 0.45;
+          const halfTop = Math.max(0.38, (spanW / shaftCount) * 0.22) * scale;
+          const halfBot = halfTop * 2.35;
+          const tx = toScreenX(topWorldX);
+          const bx = tx + tiltPx + wave * 0.72 * scale;
+          ctx.moveTo(tx - halfTop, sy0);
+          ctx.lineTo(tx + halfTop, sy0);
+          ctx.lineTo(bx + halfBot, sy1);
+          ctx.lineTo(bx - halfBot, sy1);
+          ctx.closePath();
+        }
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -2689,10 +2710,13 @@ export class CaveRenderer {
       const label = (gasCoach && step === gasCoach && !isDanger && step.gasName)
         ? `Switch ${step.gasName}${step.hotkey ? ` [${step.hotkey}]` : ''}`
         : (step.shortLabel || (isStop ? `■ ${step.title}` : `▲ ${step.title}`));
-      ctx.font = `700 ${Math.max(9.5, Math.round((isDanger ? 0.29 : 0.26) * scale))}px ui-monospace, monospace`;
-      const padX = 8;
-      const textW = ctx.measureText(label).width;
-      const boxW = textW + padX * 2;
+      const fontStr = `700 ${Math.max(9.5, Math.round((isDanger ? 0.29 : 0.26) * scale))}px ui-monospace, monospace`;
+      ctx.font = fontStr;
+      const mKey = `${fontStr}|${label}`;
+      const textW = this._ascentCoachMeasureCache?.key === mKey
+        ? this._ascentCoachMeasureCache.w
+        : (this._ascentCoachMeasureCache = { key: mKey, w: ctx.measureText(label).width }).w;
+      const boxW = textW + 16;
       const boxH = Math.max(18, 0.52 * scale);
 
       ctx.fillStyle = isDanger
@@ -4858,15 +4882,13 @@ export class CaveRenderer {
     const arrowSz = Math.round(8 * dpr);
     const pillH = Math.round(20 * dpr);
     const placedPills = [];
-    ctx.save();
-    ctx.font = `800 ${fontPx}px ui-monospace, monospace`;
-    ctx.textBaseline = 'middle';
+    let ctxSaved = false;
+    const textWCache = this._peerEdgeTextWCache || (this._peerEdgeTextWCache = new Map());
     for (let i = 0; i < peers.length; i++) {
       const p = peers[i];
-      const px = toScreenX(p.x);
-      const py = toScreenY(p.y);
-      const onScreen = px >= marginX && px <= cw - marginX && py >= topSafe && py <= ch - botSafe;
-      if (onScreen) continue;
+      const px = toScreenX(p.x), py = toScreenY(p.y);
+      if (px >= marginX && px <= cw - marginX && py >= topSafe && py <= ch - botSafe) continue;
+      if (!ctxSaved) { ctx.save(); ctx.font = `800 ${fontPx}px ui-monospace, monospace`; ctx.textBaseline = 'middle'; ctxSaved = true; }
 
       const distM = Math.round(Math.hypot(p.x - diver.x, p.y - diver.y));
       const dDepth = Math.round((p.y || 0) - (diver.y || 0));
@@ -4905,7 +4927,9 @@ export class CaveRenderer {
       const label = cond === 'NOMINAL'
         ? `${p.name || 'Buddy'} ${distM}m${depthTag}${activeSig}`
         : `${p.name || 'Buddy'} ${cond} ${distM}m${depthTag}${activeSig}`;
-      const textW = ctx.measureText(label).width;
+      const mKey = `${fontPx}|${label}`;
+      let textW = textWCache.get(mKey);
+      if (textW === undefined) { if (textWCache.size > 64) textWCache.clear(); textW = ctx.measureText(label).width; textWCache.set(mKey, textW); }
       const pillPadX = Math.round(7 * dpr);
       const pillW = Math.min(cw - marginX * 2, textW + pillPadX * 2);
       const onRight = rx > cw * 0.5;
@@ -4948,7 +4972,7 @@ export class CaveRenderer {
       ctx.fillStyle = col;
       ctx.fillText(label, pillX + pillW * 0.5, ry + 0.5, pillW - pillPadX * 1.4);
     }
-    ctx.restore();
+    if (ctxSaved) ctx.restore();
   }
 
 }

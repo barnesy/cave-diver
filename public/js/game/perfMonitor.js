@@ -14,7 +14,7 @@ export const PERF_TIERS = Object.freeze({
     peerRayMax: 22,
     siltTendrilLimit: 24,
     siltSkipSmallBelow: 0,
-    lightmapScale: 0.35,
+    lightmapScale: 0.30,
     dprCap: 2.0,
     bioStride: 1,
     bossParticleScale: 1.0,
@@ -26,7 +26,7 @@ export const PERF_TIERS = Object.freeze({
     peerRayMax: 16,
     siltTendrilLimit: 12,
     siltSkipSmallBelow: 0.14,
-    lightmapScale: 0.31,
+    lightmapScale: 0.22,
     dprCap: 1.5,
     bioStride: 2,
     bossParticleScale: 0.72,
@@ -38,7 +38,7 @@ export const PERF_TIERS = Object.freeze({
     peerRayMax: 12,
     siltTendrilLimit: 0,
     siltSkipSmallBelow: 0.24,
-    lightmapScale: 0.26,
+    lightmapScale: 0.18,
     dprCap: 1.25,
     bioStride: 3,
     bossParticleScale: 0.48,
@@ -70,7 +70,8 @@ export function createPerfMonitor({ isMobile = false, initialTier = 'high' } = {
   const mobileHighBudget = Object.freeze({
     ...PERF_TIERS.high,
     dprCap: 1.75,
-    peerRayMax: 18,
+    lightmapScale: 0.25,
+    peerRayMax: 14,
   });
 
   function getBudget() {

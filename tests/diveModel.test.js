@@ -13272,3 +13272,44 @@ test('v256 4-Pillar Polish: Mobile 60 FPS Wave 2, Biome Soundscape & Glints, AI 
   assert.ok(bossRenSrc.includes('Offscreen Boss & Telegraph Edge Chevron'), 'Expected mobile-portrait offscreen boss telegraph chevron');
   assert.ok(bossRenSrc.includes('★ STUNNED 1.65×'), 'Expected high-contrast stunned weak-point callout');
 });
+
+test('v257 Mobile 60 FPS Wave 3 (Levels 7 & 8): OffscreenCanvas lightmap cap, open-water fast SDF raymarch, batched shafts/ribbons & shadow stamp', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createBoxSDFEvaluator, evaluateCaveSDF } = await import('../public/js/game/collision.js');
+  const { LEVELS } = await import('../public/js/levels/index.js');
+
+  // 1. Box SDF evaluator exposes conservative open-water fast path `evalFast` while exact `fn(x, y)` remains bit-identical
+  const l7 = LEVELS.find((l) => l.id === 'fontaine-de-vaucluse');
+  const l8 = LEVELS.find((l) => l.id === 'scoresby-sund-iceberg');
+  assert.ok(l7 && l8, 'Expected Level 7 (Fontaine de Vaucluse) and Level 8 (Scoresby Sund Iceberg)');
+  const evalL7 = createBoxSDFEvaluator(l7, l7.spawn.x - 20, l7.spawn.x + 30, l7.spawn.y - 5, l7.spawn.y + 35);
+  assert.equal(typeof evalL7.evalFast, 'function', 'createBoxSDFEvaluator must expose evalFast for open-water ray marching');
+  const exactSpawn = evalL7(l7.spawn.x, l7.spawn.y + 2);
+  const globalSpawn = evaluateCaveSDF(l7, l7.spawn.x, l7.spawn.y + 2);
+  assert.ok(Math.abs(exactSpawn - globalSpawn) < 1e-6, 'Exact box SDF must remain identical to global SDF');
+  const fastSpawn = evalL7.evalFast(l7.spawn.x, l7.spawn.y + 2);
+  assert.ok(fastSpawn <= 0 && fastSpawn >= exactSpawn - 1e-6, 'evalFast must remain conservative (never overshoot into solid rock)');
+
+  // 2. lighting.js uses fast open-water march + 2-sample forward-difference wall normals
+  const lightModSrc = readFileSync(new URL('../public/js/game/lighting.js', import.meta.url), 'utf8');
+  assert.ok(lightModSrc.includes('sdfFn?.evalFast || evalSdf'), 'castLightRay must use fast open-water SDF evaluator during march');
+
+  // 3. renderer.js uses OffscreenCanvas lightmap with pixel-area cap, 120ms silt sun-curtain cache, batched sunbeams & cached text widths
+  const renSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  assert.ok(renSrc.includes("typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1)"), 'Expected OffscreenCanvas backing store for lightCanvas');
+  assert.ok(renSrc.includes('const maxLightPx = this._isCoarseMobile ? 68000 : 120000;'), 'Expected lightmap pixel-area cap');
+  assert.ok(renSrc.includes('this._sunCurtainSiltCache'), 'Expected silt-aware sun-curtain raycast cache');
+  assert.ok(renSrc.includes('this._ascentCoachMeasureCache') && renSrc.includes('this._peerEdgeTextWCache'), 'Expected cached text-width measurement in HUD overlays');
+
+  // 4. lightingAndFxRenderer.js batches Tyndall shafts, uses mobile ray budgets, and batches flow/thermocline hazards
+  const fxSrc = readFileSync(new URL('../public/js/game/renderers/lightingAndFxRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fxSrc.includes('const baseLocalRays = this._isCoarseMobile ? 32 : 46;'), 'Expected mobile-tuned local torch ray budget');
+  assert.ok(fxSrc.includes('Batched 2-tier Ray-Cast Tyndall / Particulate Light Shafts'), 'Expected 2-tier batched volumetric Tyndall shafts');
+  assert.ok(fxSrc.includes("ctx.imageSmoothingQuality = 'low'"), 'Expected fast bilinear low smoothing quality for lightmap blit');
+
+  // 5. foregroundDepthRenderer.js throttles off-viewport margin sprite bakes & surfaceRenderer.js uses cached ground shadow stamp
+  const fgSrc = readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('renderCtx.bakesThisFrame'), 'Expected per-frame off-viewport sprite pre-bake throttle');
+  const surfSrc = readFileSync(new URL('../public/js/game/renderers/surfaceRenderer.js', import.meta.url), 'utf8');
+  assert.ok(surfSrc.includes('_getGroundShadowStamp('), 'Expected cached radial ground contact shadow stamp');
+});

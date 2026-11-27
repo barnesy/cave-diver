@@ -93,7 +93,7 @@ function getPreparedGeometry(level) {
 /**
  * Shared tapered capsule + karst sinkhole SDF evaluator given prefiltered segment & basin arrays.
  */
-function evalPreparedSDF(segs, basins, level, x, y) {
+function evalPreparedSDF(segs, basins, level, x, y, fastOpenWater = false) {
   const kSeg = 1.35;
   let d = Infinity;
 
@@ -134,6 +134,11 @@ function evalPreparedSDF(segs, basins, level, x, y) {
 
   const waterlineCalm = 0.45 + 0.55 * clamp(Math.abs(y) / 1.4, 0, 1);
   const roughness = (level.roughness ?? 0.38) * waterlineCalm;
+  // Conservative zero-trig fast-path for open-water ray-marching: |rockDisplacement| <= 1.80 * roughness!
+  if (fastOpenWater) {
+    const maxDisp = 1.8 * roughness;
+    if (d < -(maxDisp + 0.12)) return d + maxDisp;
+  }
   return d + rockDisplacement(x, y, roughness);
 }
 
@@ -150,7 +155,8 @@ export function createChunkSDFEvaluator(level, cx0, cx1, marginM = 8.0) {
     const half = b.rimHalf + b.flareAdd + Math.abs(b.lipTilt) + 3.0;
     return b.cx + half >= loX && b.cx - half <= hiX;
   });
-  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y, false);
+  fn.evalFast = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y, true);
   fn.hasGeometry = localSegs.length > 0 || localBasins.length > 0;
   return fn;
 }
@@ -184,7 +190,8 @@ export function createBoxSDFEvaluator(level, xMin, xMax, yMin, yMax, marginM = 4
       localBasins.push(b);
     }
   }
-  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y);
+  const fn = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y, false);
+  fn.evalFast = (x, y) => evalPreparedSDF(localSegs, localBasins, level, x, y, true);
   fn.hasGeometry = localSegs.length > 0 || localBasins.length > 0;
   return fn;
 }

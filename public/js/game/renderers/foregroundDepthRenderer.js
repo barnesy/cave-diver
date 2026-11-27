@@ -1049,6 +1049,11 @@ function _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, alpha, bounds) {
  */
 function _applyRockWallFeather(sctx, renderCtx, shiftX, shiftY, bounds) {
   if (!renderCtx?.rockChunks?.length) return false;
+  if (renderCtx.isMobile) {
+    _stampRockChunksMask(sctx, renderCtx, shiftX * 0.44, shiftY * 0.44, 0.42, bounds);
+    _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, 1.0, bounds);
+    return true;
+  }
   _stampRockChunksMask(sctx, renderCtx, shiftX * 0.30, shiftY * 0.30, 0.26, bounds);
   _stampRockChunksMask(sctx, renderCtx, shiftX * 0.64, shiftY * 0.64, 0.56, bounds);
   _stampRockChunksMask(sctx, renderCtx, shiftX, shiftY, 1.0, bounds);
@@ -1118,6 +1123,12 @@ function _compositeHiResShape(
       scaleRatio < 0.65;
 
     if (needsBake) {
+      // Spread off-viewport margin bakes to max 1 per frame so fast swimming NEVER hits multi-sprite spikes!
+      const isOffscreenMargin = anchorX < -24 || anchorX > cw + 24 || anchorY < -24 || anchorY > ch + 24;
+      if (isOffscreenMargin && renderCtx && (renderCtx.bakesThisFrame || 0) >= 1) {
+        return true;
+      }
+      if (renderCtx) renderCtx.bakesThisFrame = (renderCtx.bakesThisFrame || 0) + 1;
       const localX = Math.round(bounds.x - anchorX);
       const localY = Math.round(bounds.y - anchorY);
       const bw = Math.min(896, Math.ceil(bounds.w));
@@ -3396,7 +3407,9 @@ export const foregroundDepthRendererMethods = {
         viewCenterX: 0,
         viewCenterY: 0,
         maxSpriteDim: 512,
+        isMobile: false,
         reShadesThisFrame: 0,
+        bakesThisFrame: 0,
       });
     const perfTier = this._perfBudget?.tier || 'high';
     renderCtx.mats = mats;
@@ -3410,8 +3423,10 @@ export const foregroundDepthRendererMethods = {
     renderCtx.effCamY = effCamY;
     renderCtx.viewCenterX = viewCenterX;
     renderCtx.viewCenterY = viewCenterY;
-    renderCtx.maxSpriteDim = perfTier === 'performance' ? 256 : (this._isCoarseMobile || perfTier === 'balanced' ? 384 : 512);
+    renderCtx.isMobile = Boolean(this._isCoarseMobile);
+    renderCtx.maxSpriteDim = perfTier === 'performance' ? 256 : (this._isCoarseMobile ? 320 : perfTier === 'balanced' ? 384 : 512);
     renderCtx.reShadesThisFrame = 0;
+    renderCtx.bakesThisFrame = 0;
 
     // Share visible accent candidates with Pass 2 so _drawForegroundDepthLightingAccents does ZERO duplicate SDF probes!
     const accentCache = this._fgAccentCache || (this._fgAccentCache = { key: '', items: [], count: 0 });
