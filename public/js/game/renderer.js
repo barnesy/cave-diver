@@ -838,14 +838,17 @@ export class CaveRenderer {
     this._restrictionZoom = Number.isFinite(this._restrictionZoom)
       ? this._restrictionZoom + (targetRestrictZoom - this._restrictionZoom) * Math.min(1, (dt || 0.016) * 2.6)
       : 1.0;
-    // Dynamic Arena Camera Zoom-Out (v180): smoothly frames the massive Sunken Sanctum cathedral & Kraken!
+    // Dynamic Arena Camera Zoom-Out (v180 / v262): smoothly frames both diver & boss on portrait phones and desktop!
     const inBossArena = Boolean(
       secretLair?.veilBreached &&
       secretLair.spec?.arena &&
       Math.hypot((diver?.x || 0) - secretLair.spec.arena.cx, (diver?.y || 0) - secretLair.spec.arena.cy) <=
         (secretLair.spec.arena.rx || 26) + 5
     );
-    const targetArenaZoom = !isPhotoMode && inBossArena ? (cw < ch ? 0.64 : 0.72) : 1.0;
+    const bossActiveInArena = Boolean(inBossArena && secretLair?.boss?.active && !secretLair.boss.defeated);
+    const targetArenaZoom = !isPhotoMode && inBossArena
+      ? (cw < ch ? (bossActiveInArena ? 0.56 : 0.64) : 0.72)
+      : 1.0;
     this._arenaZoom = Number.isFinite(this._arenaZoom)
       ? this._arenaZoom + (targetArenaZoom - this._arenaZoom) * Math.min(1, (dt || 0.016) * 2.2)
       : targetArenaZoom;
@@ -877,10 +880,19 @@ export class CaveRenderer {
         ? Math.sin((1 - timeSec / 1.5) * Math.PI) * 0.42
         : 0;
       let lookY = camAnchor.y + Math.sin(camAnchor.angle || 0) * (isManualPeek ? 0.6 : 1.3) + peekY + velLeadY + plungeDrop;
-      // Dramatic Awakening pan: smoothly frame both diver and *XIBALBA'S MAW* as sconces ignite! (v182)
+      // Dramatic Awakening & Active Combat Boss-Framing Bias (v182 / v262): keeps diver & boss framed together on portrait phones!
       if (secretLair?.boss?.aiState === 'awakening' && !this._reducedMotion) {
         lookX = lookX * 0.66 + secretLair.boss.x * 0.34;
         lookY = lookY * 0.66 + secretLair.boss.y * 0.34;
+      } else if (bossActiveInArena && inCombatMode && Number.isFinite(secretLair.boss.x)) {
+        const halfViewW = (cw / Math.max(1, scale)) * 0.5;
+        const halfViewH = (ch / Math.max(1, scale)) * 0.5;
+        const maxLeadX = Math.max(2.0, halfViewW * 0.48);
+        const maxLeadY = Math.max(1.8, halfViewH * 0.38);
+        const bossBiasX = Math.max(-maxLeadX, Math.min(maxLeadX, (secretLair.boss.x - camAnchor.x) * (cw < ch ? 0.36 : 0.26)));
+        const bossBiasY = Math.max(-maxLeadY, Math.min(maxLeadY, (secretLair.boss.y - camAnchor.y) * 0.22));
+        lookX = camAnchor.x + bossBiasX + peekX * 0.45 + velLeadX;
+        lookY = camAnchor.y + bossBiasY + peekY * 0.45 + velLeadY;
       }
       const camAlpha = computeCameraDampingAlpha(dt, inCombatMode ? 5.6 : isManualPeek ? 3.5 : 6.4);
       this.camX += (lookX - this.camX) * camAlpha;
@@ -906,8 +918,8 @@ export class CaveRenderer {
     }
 
     const viewCenterX = cw * 0.5;
-    // On narrow portrait phones, shift framing slightly higher so the diver sits centered above the bottom dock
-    const viewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? ch * 0.39 : ch * 0.46);
+    // On narrow portrait phones, shift framing slightly higher above the bottom dock — centered cleanly in boss arenas (v262)
+    const viewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? (bossActiveInArena ? ch * 0.48 : ch * 0.39) : ch * 0.46);
 
     const effCamX = this.camX + narcX;
     const effCamY = this.camY + narcY;

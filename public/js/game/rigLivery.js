@@ -3063,9 +3063,11 @@ export function _drawArticulatedPreviewDiver(
   }
 
   // Return exact world-space torch lens tip & regulator mouthpiece coords for beam & bubbles
+  const lensFwd = (hasSpeargun ? 0.847 : 0.18) * scale;
+  const lensDown = (hasSpeargun ? 0.116 : 0) * scale;
   return {
-    torchTipX: hx + Math.cos(sweepAng) * (0.18 * scale),
-    torchTipY: hy + Math.sin(sweepAng) * (0.18 * scale),
+    torchTipX: hx + Math.cos(sweepAng) * lensFwd - Math.sin(sweepAng) * lensDown,
+    torchTipY: hy + Math.sin(sweepAng) * lensFwd + Math.cos(sweepAng) * lensDown,
     mouthX: sx + u * 0.68,
     mouthY: sy + u * 0.12,
   };
@@ -3206,8 +3208,10 @@ export function drawLiveryPreview(
   const breath = Math.sin(timeSec * 1.7) * 0.02;
   const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
   const hyPre = sy + (hasDpv ? 0.16 : 0.21 + breath) * scale;
-  const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
-  const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+  const lensFwd = (hasSpeargun ? 0.847 : 0.18) * scale;
+  const lensDown = (hasSpeargun ? 0.116 : 0) * scale;
+  const torchX = hxPre + Math.cos(sweepAng) * lensFwd - Math.sin(sweepAng) * lensDown;
+  const torchY = hyPre + Math.sin(sweepAng) * lensFwd + Math.cos(sweepAng) * lensDown;
 
   // Smooth camera zoom & focus pan onto selected / equipped gear slot (v236)
   const activeSlot = equipFx?.slot || focusHighlight?.slot || null;
@@ -3421,8 +3425,10 @@ export function drawGearShowcasePreview(
   const sweepAng = Math.sin(timeSec * 1.25) * 0.08;
   const hxPre = sx + (hasDpv ? 0.44 : 0.48) * scale;
   const hyPre = sy + (hasDpv ? 0.16 : 0.21) * scale;
-  const torchX = hxPre + Math.cos(sweepAng) * (0.18 * scale);
-  const torchY = hyPre + Math.sin(sweepAng) * (0.18 * scale);
+  const lensFwd = (hasSpeargun ? 0.847 : 0.18) * scale;
+  const lensDown = (hasSpeargun ? 0.116 : 0) * scale;
+  const torchX = hxPre + Math.cos(sweepAng) * lensFwd - Math.sin(sweepAng) * lensDown;
+  const torchY = hyPre + Math.sin(sweepAng) * lensFwd + Math.cos(sweepAng) * lensDown;
 
   const activeSlot = equipFx?.slot || focusHighlight?.slot || null;
   const rawTarget = _resolvePreviewCameraTarget(activeSlot, sx, syBase, scale, w, h, equipFx);

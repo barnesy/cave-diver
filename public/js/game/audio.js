@@ -1996,9 +1996,16 @@ export class DiveAudio {
     this.playTone(base, 0.78, 'sawtooth', 0.075, 0, { bus: 'sfx' });
     this.playTone(base * 1.48, 0.65, 'triangle', 0.055, 0.11, { bus: 'sfx' });
     this.playTone(base * 0.78, 0.92, 'sine', 0.072, 0.24, { bus: 'sfx' });
+    // Phase II / Phase III harmonic escalation brass stinger (v262)
+    if (phase >= 2) {
+      const root = phase >= 3 ? 220 : 174.6;
+      this.playTone(root, 0.28, 'sawtooth', 0.048, 0.04, { bus: 'sfx' });
+      this.playTone(root * 1.498, 0.38, 'triangle', 0.052, 0.12, { bus: 'sfx' });
+      this.playTone(root * (phase >= 3 ? 2.0 : 1.78), 0.46, 'triangle', 0.044, 0.20, { bus: 'sfx' });
+    }
     // Subtle cavern echo repeat
     this.playTone(base * 0.92, 0.55, 'sine', 0.032, 0.52, { bus: 'ambience' });
-    this.vibrate?.([35, 30, 50]);
+    this.vibrate?.(phase >= 3 ? [45, 25, 65, 25, 55] : [35, 30, 50]);
   }
 
   /** Heavy underwater tentacle slam shock boom (v182). */

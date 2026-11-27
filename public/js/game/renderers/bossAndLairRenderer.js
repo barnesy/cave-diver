@@ -5079,51 +5079,66 @@ export const bossAndLairMethods = {
       ctx.restore();
     }
 
-    // 8b. Cinematic Awakening / Phase-Shift Title Banner (fades gracefully above center!)
+    // 8b. Cinematic Awakening / Phase-Shift Cut-In Banner + Edge Flash (responsive on portrait phones, v204 / v262)
+    if (boss && (boss.phaseShiftSec || 0) > 0 && !this._reducedMotion) {
+      const pFrac = Math.max(0, Math.min(1, boss.phaseShiftSec / 0.9));
+      const pRgb = boss.phase >= 3 ? '244, 63, 94' : '192, 132, 252';
+      ctx.save();
+      ctx.strokeStyle = `rgba(${pRgb}, ${(pFrac * 0.58).toFixed(3)})`;
+      ctx.lineWidth = Math.max(8, 22 * dpr * pFrac);
+      ctx.strokeRect(0, 0, cw, ch);
+      ctx.restore();
+    }
     if ((lair.titleBannerSec || 0) > 0 && lair.titleBannerText) {
       const maxS = Math.max(0.5, lair.titleBannerMaxSec || 3.0);
       const rem = lair.titleBannerSec;
-      const inA = Math.min(1, (maxS - rem) / 0.35);
-      const outA = Math.min(1, rem / 0.6);
+      const elapsed = Math.max(0, maxS - rem);
+      const inA = Math.min(1, elapsed / 0.28);
+      const outA = Math.min(1, rem / 0.55);
       const bannerA = Math.min(inA, outA);
-      const cy = Math.round(ch * 0.23);
+      const popScale = this._reducedMotion ? 1 : (elapsed < 0.28 ? 0.88 + 0.16 * Math.sin((elapsed / 0.28) * Math.PI * 0.65) : 1);
+      const cy = Math.round(ch * (cw < ch ? 0.20 : 0.23));
+      const maxTextW = Math.max(180 * dpr, cw - 36 * dpr);
       ctx.save();
       ctx.globalAlpha = bannerA;
-      // Sleek cinematic letterbox backdrop & hairline accent beneath Boss Title Card (v204)
+      // Sleek cinematic letterbox backdrop & hairline accent beneath Boss Title Card (v204 / v262)
       const stripH = (lair.titleBannerSub ? 56 : 38) * dpr;
-      const stripW = Math.min(cw * 0.78, 520 * dpr);
+      const stripW = Math.min(cw * 0.92, 540 * dpr);
       const bgGrad = ctx.createLinearGradient(cw * 0.5 - stripW * 0.5, cy, cw * 0.5 + stripW * 0.5, cy);
       bgGrad.addColorStop(0, 'rgba(2, 6, 23, 0)');
-      bgGrad.addColorStop(0.22, 'rgba(2, 6, 23, 0.72)');
-      bgGrad.addColorStop(0.78, 'rgba(2, 6, 23, 0.72)');
+      bgGrad.addColorStop(0.18, 'rgba(2, 6, 23, 0.78)');
+      bgGrad.addColorStop(0.82, 'rgba(2, 6, 23, 0.78)');
       bgGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
       ctx.fillStyle = bgGrad;
       ctx.fillRect(cw * 0.5 - stripW * 0.5, cy - stripH * 0.44, stripW, stripH);
       const accentCol = lair.titleBannerColor || '#38bdf8';
       ctx.strokeStyle = accentCol;
-      ctx.lineWidth = Math.max(1, 1.4 * dpr);
-      ctx.globalAlpha = bannerA * 0.62;
+      ctx.lineWidth = Math.max(1, 1.5 * dpr);
+      ctx.globalAlpha = bannerA * 0.68;
       ctx.beginPath();
-      ctx.moveTo(cw * 0.5 - stripW * 0.34, cy - stripH * 0.44);
-      ctx.lineTo(cw * 0.5 + stripW * 0.34, cy - stripH * 0.44);
-      ctx.moveTo(cw * 0.5 - stripW * 0.34, cy + stripH * 0.56);
-      ctx.lineTo(cw * 0.5 + stripW * 0.34, cy + stripH * 0.56);
+      ctx.moveTo(cw * 0.5 - stripW * 0.38, cy - stripH * 0.44);
+      ctx.lineTo(cw * 0.5 + stripW * 0.38, cy - stripH * 0.44);
+      ctx.moveTo(cw * 0.5 - stripW * 0.38, cy + stripH * 0.56);
+      ctx.lineTo(cw * 0.5 + stripW * 0.38, cy + stripH * 0.56);
       ctx.stroke();
       ctx.globalAlpha = bannerA;
+      ctx.translate(cw * 0.5, cy);
+      ctx.scale(popScale, popScale);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `900 ${Math.round(24 * dpr)}px ui-monospace, monospace`;
+      const titlePx = Math.round((cw < ch ? 19 : 24) * dpr);
+      ctx.font = `900 ${titlePx}px ui-monospace, monospace`;
       ctx.strokeStyle = 'rgba(2, 6, 23, 0.95)';
-      ctx.lineWidth = 5 * dpr;
-      ctx.strokeText(lair.titleBannerText, cw * 0.5, cy);
+      ctx.lineWidth = 4.6 * dpr;
+      ctx.strokeText(lair.titleBannerText, 0, 0, maxTextW);
       ctx.fillStyle = accentCol;
-      ctx.fillText(lair.titleBannerText, cw * 0.5, cy);
+      ctx.fillText(lair.titleBannerText, 0, 0, maxTextW);
       if (lair.titleBannerSub) {
-        ctx.font = `700 ${Math.round(11 * dpr)}px ui-monospace, monospace`;
-        ctx.lineWidth = 3.2 * dpr;
-        ctx.strokeText(lair.titleBannerSub, cw * 0.5, cy + 20 * dpr);
+        ctx.font = `700 ${Math.round((cw < ch ? 10 : 11) * dpr)}px ui-monospace, monospace`;
+        ctx.lineWidth = 3.0 * dpr;
+        ctx.strokeText(lair.titleBannerSub, 0, 20 * dpr, maxTextW);
         ctx.fillStyle = '#e2e8f0';
-        ctx.fillText(lair.titleBannerSub, cw * 0.5, cy + 20 * dpr);
+        ctx.fillText(lair.titleBannerSub, 0, 20 * dpr, maxTextW);
       }
       ctx.restore();
     }

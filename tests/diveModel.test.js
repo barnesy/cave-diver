@@ -13413,3 +13413,30 @@ test('v261 Modular diverAndSquadRenderer extraction (<4000L renderer.js), Sites 
   const livSrc = readFileSync(new URL('../public/js/game/rigLivery.js', import.meta.url), 'utf8');
   assert.ok(!livSrc.includes('const specSummary ='), 'Gear Workshop avatar preview must omit bottom specSummary caption');
 });
+
+test('v262 Playtest Polish: Portrait Boss Arena Framing, Sticky Mobile Onboarding CTA, Zero Workshop Overflow, Aligned Harpoon Beam & Phase Stinger', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  // 1. Mobile portrait boss arena camera zoom-out, centered viewCenterY & clamped boss-framing bias
+  const renSrc = readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  assert.ok(renSrc.includes('const bossActiveInArena ='), 'Expected bossActiveInArena camera framing state in renderer.js');
+  assert.ok(renSrc.includes('bossActiveInArena ? 0.56 : 0.64'), 'Expected wider 0.56 portrait arena zoom during active boss combat');
+  assert.ok(renSrc.includes('bossActiveInArena ? ch * 0.48 : ch * 0.39'), 'Expected centered portrait boss arena framing');
+
+  // 2. Sticky mobile onboarding footer in index.html & style.css + zero horizontal scrollbar in Workshop
+  const htmlSrc = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const cssSrc = readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.ok(htmlSrc.includes('<div class="dive-guide-footer">'), 'Expected sticky dive-guide-footer wrapping Callsign + Dive CTA');
+  assert.ok(cssSrc.includes('.dive-guide-footer {\n  position: sticky;') || cssSrc.includes('.dive-guide-footer {\r\n  position: sticky;'), 'Expected sticky positioning on .dive-guide-footer');
+  assert.ok(cssSrc.includes('#livery-modal .lb-stats-card,') && cssSrc.includes('overflow-x: hidden;'), 'Expected horizontal overflow guard on Gear Workshop modal');
+
+  // 3. Harpoon flashlight beam origin aligned to underslung bezel (0.847 fwd, 0.116 down) in rigLivery.js
+  const livSrc = readFileSync(new URL('../public/js/game/rigLivery.js', import.meta.url), 'utf8');
+  assert.ok(livSrc.includes('const lensFwd = (hasSpeargun ? 0.847 : 0.18) * scale;'), 'Harpoon beam origin must align with mounted flashlight bezel');
+
+  // 4. Boss phase-transition chromatic edge pulse + responsive maxTextW banner + brass escalation stinger
+  const bossRenSrc = readFileSync(new URL('../public/js/game/renderers/bossAndLairRenderer.js', import.meta.url), 'utf8');
+  assert.ok(bossRenSrc.includes('boss.phaseShiftSec') && bossRenSrc.includes('maxTextW'), 'Expected phase-shift edge pulse and responsive portrait banner width');
+  const audioSrc = readFileSync(new URL('../public/js/game/audio.js', import.meta.url), 'utf8');
+  assert.ok(audioSrc.includes('Phase II / Phase III harmonic escalation brass stinger'), 'Expected phase escalation brass stinger in playBossRoar');
+});
