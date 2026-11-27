@@ -3295,7 +3295,7 @@ export function drawLiveryPreview(
   w,
   h,
   livery,
-  { hasCcr = false, hasDpv = false, hasSpeargun = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '' } = {}
+  { hasCcr = false, hasDpv = false, hasSpeargun = false, envMode = 'clear', timeSec = 0, equipFx = null, focusHighlight = null, previewLockedLabel = '', diverScaleMult = 1.0 } = {}
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
@@ -3360,7 +3360,8 @@ export function drawLiveryPreview(
   const recoilY = equipFx && equipFx.progress < 1 ? Math.sin(equipFx.progress * Math.PI * 2.2) * (1 - equipFx.progress) * 4.5 : 0;
 
   // Frame the full articulated in-game diver (fin tips to outstretched torch hand) cleanly inside tank
-  const scale = Math.min(w * 0.215, h * 0.56);
+  const clampedScaleMult = Math.max(0.45, Math.min(1.4, Number(diverScaleMult) || 1.0));
+  const scale = Math.min(w * 0.215, h * 0.56) * clampedScaleMult;
   const sx = w * 0.445;
   const syBase = h * 0.54;
   const sy = syBase + Math.sin(timeSec * 1.8) * 3.4 + recoilY;

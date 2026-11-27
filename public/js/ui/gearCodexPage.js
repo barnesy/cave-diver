@@ -81,13 +81,13 @@ function formatDeltaBadge(delta, suffix = '%') {
   return `<span class="codex-meter-delta ${delta > 0 ? 'up' : 'down'}">${sign}${delta}${suffix}</span>`;
 }
 
-function renderDiverCanvasHiDpi(canvas, livery, timeSec = 0.55) {
+function renderDiverCanvasHiDpi(canvas, livery, timeSec = 0.55, diverScaleMult = 1.0) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const rect = canvas.getBoundingClientRect();
-  const cssW = Math.max(140, Math.round(rect.width || 220));
-  const cssH = Math.max(76, Math.round(rect.height || Math.round(cssW * (10 / 19))));
+  const cssW = Math.max(120, Math.round(rect.width || 220));
+  const cssH = Math.max(96, Math.round(rect.height || Math.round(cssW * 0.68)));
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const bufW = Math.round(cssW * dpr);
   const bufH = Math.round(cssH * dpr);
@@ -103,6 +103,7 @@ function renderDiverCanvasHiDpi(canvas, livery, timeSec = 0.55) {
     hasSpeargun,
     envMode: 'clear',
     timeSec,
+    diverScaleMult,
   });
 }
 
@@ -205,16 +206,31 @@ function initGearCodexPage() {
     return `🧪 Custom Mix (${nonDefault})`;
   }
 
-  function renderSetCardDivers() {
-    if (!contentEl) return;
-    const canvases = contentEl.querySelectorAll('.codex-set-diver-canvas[data-set-id]');
-    canvases.forEach((canvas, idx) => {
-      const setId = canvas.getAttribute('data-set-id');
-      const setLivery = setFullLiveryById.get(setId);
-      if (setLivery) {
-        renderDiverCanvasHiDpi(canvas, setLivery, 0.45 + idx * 0.35);
+  let activeSetCanvases = [];
+
+  function refreshSetCanvasList() {
+    if (!contentEl) {
+      activeSetCanvases = [];
+      return;
+    }
+    activeSetCanvases = [...contentEl.querySelectorAll('.codex-set-diver-canvas[data-set-id]')].map((canvas, idx) => ({
+      canvas,
+      setLivery: setFullLiveryById.get(canvas.getAttribute('data-set-id')) || null,
+      phaseOffset: idx * 0.85,
+    }));
+  }
+
+  function renderSetCardDivers(timeSec = 0.45, onlyVisible = false) {
+    const vh = window.innerHeight || 900;
+    for (let i = 0; i < activeSetCanvases.length; i++) {
+      const item = activeSetCanvases[i];
+      if (!item.setLivery || !item.canvas.isConnected) continue;
+      if (onlyVisible) {
+        const r = item.canvas.getBoundingClientRect();
+        if (r.bottom < -40 || r.top > vh + 40) continue;
       }
-    });
+      renderDiverCanvasHiDpi(item.canvas, item.setLivery, timeSec + item.phaseOffset, 0.84);
+    }
   }
 
   function renderSetCardHtml(s) {
@@ -350,9 +366,12 @@ function initGearCodexPage() {
         return;
       }
       contentEl.innerHTML = `<div class="codex-sets-list">${filtered.map(renderSetCardHtml).join('')}</div>`;
-      renderSetCardDivers();
+      refreshSetCanvasList();
+      renderSetCardDivers(0.45, false);
       return;
     }
+
+    activeSetCanvases = [];
 
     const filtered = filterCodexItems(codexData.legendaries, {
       query: state.query,
@@ -642,17 +661,21 @@ function initGearCodexPage() {
   renderMainContent();
   renderPreviewPanel(false);
 
-  // Live 60 FPS animated Diver Rig Preview loop (1:1 unstretched aspect ratio synced to rendered CSS box + DPR)
-  if (previewCanvas) {
-    const startMs = performance.now();
-    const tick = (now) => {
-      if (!document.hidden) {
-        renderDiverCanvasHiDpi(previewCanvas, previewLivery, (now - startMs) * 0.001);
+  // Live 60 FPS animation loop for BOTH the top Live Mixer diver AND all visible Armor Set card divers!
+  const startMs = performance.now();
+  const tick = (now) => {
+    if (!document.hidden) {
+      const t = (now - startMs) * 0.001;
+      if (previewCanvas) {
+        renderDiverCanvasHiDpi(previewCanvas, previewLivery, t, 0.72);
       }
-      requestAnimationFrame(tick);
-    };
+      if (state.tab === 'sets' && activeSetCanvases.length) {
+        renderSetCardDivers(t, true);
+      }
+    }
     requestAnimationFrame(tick);
-  }
+  };
+  requestAnimationFrame(tick);
 }
 
 if (typeof document !== 'undefined') {
