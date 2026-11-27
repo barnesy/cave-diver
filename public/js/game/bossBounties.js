@@ -334,6 +334,25 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueName: 'TRIDACNA PEARL EMPEROR',
     trueTitle: 'Iridescent Giant Clam Monarch of Chuuk Lagoon',
   }),
+  Object.freeze({
+    id: 'bounty-piranha-trio',
+    contractCode: 'BOUNTY #18',
+    threatClass: 'CLASS III · JUNGLE',
+    accentColor: '#fb7185',
+    silhouetteKind: 'piranha',
+    bossKind: 'piranha-trio',
+    previewScale: 10.6,
+    previewOffsetY: 3,
+    codename: 'THE CHOMP TRIO',
+    watersRumor: 'Tulum Jungle Sinkholes',
+    tale: 'Cenote guides whisper of three scarlet-bellied shadows darting in perfect triangle formation beneath the drifting forest mist. Sweep your active sonar past the sunken limestone overhangs — triple synchronized snaps guard their hidden grotto.',
+    bountyPts: 3300,
+    levelId: 'cenote-angelita-river',
+    trophyRelicId: 'angelita-piranha-crest',
+    trophyName: 'Tri-Fang Piranha Crest',
+    trueName: 'CRIMSON PIRANHA TRIO',
+    trueTitle: 'Synchronized Triple-Fang Jungle Cenote Pack',
+  }),
 ]);
 
 /**
@@ -525,6 +544,18 @@ export function getBossSilhouetteSvg(kind = 'kraken', accent = '#38bdf8') {
         <path d="M24 44 C24 22, 42 16, 60 16 C78 16, 96 22, 96 44 Q78 36, 60 40 Q42 36, 24 44 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
         <path d="M24 46 Q42 60, 60 58 Q78 60, 96 46 Q78 50, 60 48 Q42 50, 24 46 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.4"/>
         <circle cx="60" cy="40" r="7" fill="${glow}" fill-opacity="0.72"/>
+      `;
+      break;
+    case 'piranha':
+      shape = `
+        <g fill="#07111f" stroke="${glow}" stroke-opacity="0.68" stroke-width="1.3">
+          <path d="M62 36 Q74 22, 94 28 Q102 36, 94 44 Q74 50, 62 36 L52 28 L55 36 L52 44 Z"/>
+          <path d="M26 22 Q36 12, 52 17 Q58 22, 52 27 Q36 32, 26 22 L18 16 L20 22 L18 28 Z"/>
+          <path d="M26 50 Q36 40, 52 45 Q58 50, 52 55 Q36 60, 26 50 L18 44 L20 50 L18 56 Z"/>
+        </g>
+        <circle cx="88" cy="34" r="2.4" fill="${glow}"/>
+        <circle cx="48" cy="20" r="2.0" fill="${glow}"/>
+        <circle cx="48" cy="48" r="2.0" fill="${glow}"/>
       `;
       break;
     case 'empress':

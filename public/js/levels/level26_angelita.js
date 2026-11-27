@@ -17,9 +17,9 @@ export const LEVEL_26 = {
     'Drop through sunlit jungle water into Tulum\'s legendary Cenote Angelita. Glide over the eerie glowing 30m Hydrogen Sulfide cloud river draped around sunken mahogany trunks, plunge through the misty layer on TMX 14/55 into crystal-clear 58m saltwater limestone overhangs, and ascend cleanly to your 6m O2 deco stop.',
   bounds: {
     xMin: -34,
-    xMax: 146,
+    xMax: 300,
     yMin: -6,
-    yMax: 68,
+    yMax: 76,
   },
   roughness: 0.28,
   spawn: { x: 14, y: 2.0 },
@@ -78,6 +78,13 @@ export const LEVEL_26 = {
     { ax: 96, ay: 30.0, bx: 102, by: 18.0, ra: 4.4, rb: 4.4 },
     { ax: 102, ay: 18.0, bx: 102, by: 6.2, ra: 4.4, rb: 5.0 },
     { ax: 102, ay: 6.2, bx: 102, by: 0.8, ra: 5.4, rb: 5.6 },
+    // Hidden East Sub-Cloud Cenote Tunnel -> Crimson Piranha Trio Secret Lair (v268)
+    { ax: 88, ay: 48.0, bx: 120, by: 48.0, ra: 3.6, rb: 3.4, secretLair: true },
+    { ax: 120, ay: 48.0, bx: 156, by: 50.0, ra: 3.4, rb: 3.8, secretLair: true },
+    { ax: 156, ay: 50.0, bx: 184, by: 50.0, ra: 4.6, rb: 4.8, secretLair: true },
+    { ax: 184, ay: 50.0, bx: 214, by: 50.0, ra: 4.2, rb: 4.4, secretLair: true },
+    { ax: 214, ay: 50.0, bx: 230, by: 50.0, ra: 4.6, rb: 10.5, secretLair: true },
+    { ax: 230, ay: 50.0, bx: 270, by: 50.0, ra: 14.0, rb: 14.0, secretLair: true },
   ],
 
   guideline: [

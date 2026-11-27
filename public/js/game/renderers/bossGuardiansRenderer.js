@@ -40,6 +40,8 @@ export const bossGuardiansMethods = {
       this._drawOrcaWhaleBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'giant-clam') {
       this._drawGiantClamBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'piranha-trio') {
+      this._drawPiranhaTrioBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -3448,6 +3450,343 @@ export const bossGuardiansMethods = {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * CRIMSON PIRANHA TRIO — Three Synchronized Kawaii Anime Chibi Piranha Fish Boss Pack
+   * (Cenote Angelita H2S River — Tulum, Mexico) (v268).
+   */
+  _drawPiranhaTrioBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.8) * 0.14 * r;
+    const outline = '#1e1b4b';
+    const frenzySpeed = isAngry ? 1.85 : 1.0;
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+
+    // 1. Soft Crimson-Emerald Cenote Pack Aura + Swirling Frenzy Wake Ribbons
+    const aura = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.95);
+    aura.addColorStop(0, isAngry ? 'rgba(251, 113, 133, 0.34)' : 'rgba(45, 212, 191, 0.24)');
+    aura.addColorStop(0.55, 'rgba(244, 63, 94, 0.14)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.95, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Swirling translucent water-vortex ribbons connecting the 3 fish
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let w = 0; w < 3; w++) {
+      const a0 = timeSec * (1.8 * frenzySpeed) + (w * Math.PI * 2) / 3;
+      ctx.strokeStyle = w === 0 ? 'rgba(251, 113, 133, 0.32)' : w === 1 ? 'rgba(253, 224, 71, 0.28)' : 'rgba(94, 234, 212, 0.28)';
+      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * (0.98 + w * 0.09), a0, a0 + 1.05);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Helper to draw one super-cute chibi anime Piranha!
+    const drawPiranha = (px, py, fr, cfg) => {
+      const wag = Math.sin(timeSec * (10.5 * frenzySpeed) + cfg.phase) * 0.34;
+      const finFlap = Math.sin(timeSec * (8.2 * frenzySpeed) + cfg.phase) * 0.22;
+      const chomp = isAngry ? 0.55 + 0.45 * Math.abs(Math.sin(timeSec * 12.0 + cfg.phase)) : 0;
+      const tilt = Math.sin(timeSec * (3.2 * frenzySpeed) + cfg.phase) * 0.09;
+      const backHi = isHurt ? '#ffffff' : cfg.backHi;
+      const backMid = isHurt ? '#f1f5f9' : cfg.backMid;
+      const bellyHi = isHurt ? '#fff1f2' : cfg.bellyHi;
+      const bellyMid = isHurt ? '#fecdd3' : cfg.bellyMid;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(tilt);
+
+      // A. Rapidly Wagging Forked Piranha Tail Fin
+      ctx.save();
+      ctx.translate(-fr * 0.88, 0);
+      ctx.rotate(wag);
+      ctx.fillStyle = bellyMid;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.moveTo(fr * 0.08, -fr * 0.16);
+      ctx.quadraticCurveTo(-fr * 0.34, -fr * 0.36, -fr * 0.64, -fr * 0.56);
+      ctx.quadraticCurveTo(-fr * 0.42, -fr * 0.06, -fr * 0.36, 0);
+      ctx.quadraticCurveTo(-fr * 0.42, fr * 0.08, -fr * 0.64, fr * 0.56);
+      ctx.quadraticCurveTo(-fr * 0.34, fr * 0.36, fr * 0.08, fr * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // B. Cute Serrated Chibi Mohawk Dorsal Fin & Lower Anal Fin
+      ctx.fillStyle = backHi;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.7, 0.07 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-fr * 0.48, -fr * 0.54);
+      ctx.quadraticCurveTo(-fr * 0.34, -fr * 1.06, -fr * 0.12, -fr * 0.84);
+      ctx.quadraticCurveTo(fr * 0.02, -fr * 1.12, fr * 0.16, -fr * 0.82);
+      ctx.quadraticCurveTo(fr * 0.28, -fr * 0.96, fr * 0.36, -fr * 0.54);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Lower Crimson/Gold Anal Fin
+      ctx.fillStyle = bellyMid;
+      ctx.beginPath();
+      ctx.moveTo(-fr * 0.56, fr * 0.44);
+      ctx.quadraticCurveTo(-fr * 0.34, fr * 0.96, fr * 0.02, fr * 0.72);
+      ctx.lineTo(fr * 0.12, fr * 0.52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // C. Plump Chibi Diamond-Oval Piranha Body with Bulldog Underbite Jaw!
+      const tracePiranhaBody = () => {
+        ctx.beginPath();
+        ctx.moveTo(-fr * 0.92, 0);
+        ctx.bezierCurveTo(-fr * 0.68, -fr * 0.84, fr * 0.46, -fr * 0.92, fr * 0.96, -fr * 0.14);
+        // Cute stout piranha snout & plump protruding chin!
+        ctx.quadraticCurveTo(fr * 1.12, fr * 0.18, fr * 0.88, fr * 0.46);
+        ctx.bezierCurveTo(fr * 0.42, fr * 0.88, -fr * 0.64, fr * 0.78, -fr * 0.92, 0);
+        ctx.closePath();
+      };
+
+      ctx.save();
+      tracePiranhaBody();
+      const bodyG = ctx.createLinearGradient(0, -fr * 0.82, 0, fr * 0.78);
+      bodyG.addColorStop(0, backHi);
+      bodyG.addColorStop(0.54, backMid);
+      bodyG.addColorStop(1, bellyMid);
+      ctx.fillStyle = bodyG;
+      ctx.fill();
+
+      // Clip inside body for iconic glowing red/gold/pink piranha belly & glittering flank speckles!
+      ctx.save();
+      ctx.clip();
+      const bellyG = ctx.createLinearGradient(0, fr * 0.02, 0, fr * 0.85);
+      bellyG.addColorStop(0, bellyHi);
+      bellyG.addColorStop(1, bellyMid);
+      ctx.fillStyle = bellyG;
+      ctx.beginPath();
+      ctx.moveTo(-fr * 1.0, fr * 0.16);
+      ctx.bezierCurveTo(-fr * 0.34, fr * 0.02, fr * 0.34, fr * 0.10, fr * 1.16, -fr * 0.04);
+      ctx.lineTo(fr * 1.16, fr * 1.0);
+      ctx.lineTo(-fr * 1.0, fr * 1.0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cute glittery iridescent piranha scale flecks
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      for (const [sxDot, syDot, srDot] of [[-0.28, -0.22, 0.07], [-0.08, -0.34, 0.06], [-0.42, 0.04, 0.055]]) {
+        ctx.beginPath();
+        ctx.arc(fr * sxDot, fr * syDot, Math.max(1.2, fr * srDot), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Re-trace body contour before crisp anime outline stroke!
+      tracePiranhaBody();
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.1, 0.085 * scale);
+      ctx.stroke();
+      ctx.restore();
+
+      // Glossy jelly-bean anime shine along forehead dome!
+      this._drawKawaiiShine(ctx, fr * 0.02, -fr * 0.50, fr * 0.28, fr * 0.10, -0.18);
+
+      // D. Jaunty Mini Golden Crown on the Alpha Leader!
+      if (cfg.hasCrown) {
+        ctx.save();
+        ctx.translate(fr * 0.18, -fr * 0.78 + Math.sin(timeSec * 4.5) * 0.04 * fr);
+        ctx.rotate(0.16);
+        const cw = fr * 0.34;
+        const ch = fr * 0.26;
+        ctx.fillStyle = '#fde047';
+        ctx.strokeStyle = '#713f12';
+        ctx.lineWidth = Math.max(1.3, 0.055 * scale);
+        ctx.beginPath();
+        ctx.moveTo(-cw, ch * 0.45);
+        ctx.lineTo(-cw * 0.85, -ch * 0.65);
+        ctx.lineTo(-cw * 0.30, -ch * 0.05);
+        ctx.lineTo(0, -ch * 0.90);
+        ctx.lineTo(cw * 0.30, -ch * 0.05);
+        ctx.lineTo(cw * 0.85, -ch * 0.65);
+        ctx.lineTo(cw, ch * 0.45);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.arc(0, ch * 0.08, Math.max(1.5, cw * 0.16), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // E. Fluttering Near-Side Pectoral Fin
+      ctx.save();
+      ctx.translate(-fr * 0.08, fr * 0.26);
+      ctx.rotate(finFlap);
+      ctx.fillStyle = bellyHi;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.5, 0.065 * scale);
+      ctx.beginPath();
+      ctx.ellipse(-fr * 0.16, fr * 0.16, fr * 0.24, fr * 0.15, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // F. GIANT Sparkling Chibi Anime Eyes (3/4 Pair!) + Rosy Blush!
+      this._drawKawaiiAnimeEye(ctx, fr * 0.30, -fr * 0.14, fr * 0.24, fr * 0.28, scale * (fr / Math.max(1, r)), {
+        irisTop: cfg.irisTop,
+        irisBot: cfg.irisBot,
+        outline,
+        isStunned,
+        isHurt: isHurt || boss.defeated,
+        isDormant: boss.aiState === 'dormant',
+        isAngry,
+        side: 0,
+        timeSec,
+      });
+      this._drawKawaiiAnimeEye(ctx, fr * 0.78, -fr * 0.15, fr * 0.16, fr * 0.22, scale * (fr / Math.max(1, r)), {
+        irisTop: cfg.irisTop,
+        irisBot: cfg.irisBot,
+        outline,
+        isStunned,
+        isHurt: isHurt || boss.defeated,
+        isDormant: boss.aiState === 'dormant',
+        isAngry,
+        side: 1,
+        timeSec,
+      });
+      this._drawKawaiiBlush(ctx, fr * 0.08, fr * 0.14, fr * 0.16, fr * 0.09, scale, 'rgba(255, 228, 230, 0.65)');
+      this._drawKawaiiBlush(ctx, fr * 0.86, fr * 0.10, fr * 0.10, fr * 0.07, scale, 'rgba(255, 228, 230, 0.55)');
+
+      // G. Iconic Kawaii Piranha Underbite Mouth with Tiny Snow-White Zig-Zag Baby Fangs!
+      ctx.save();
+      const mx = fr * 0.62;
+      const my = fr * 0.28;
+      if (isStunned) {
+        this._drawKawaiiMouth(ctx, mx, my, fr * 0.16, scale, { outline, isStunned: true });
+      } else if (isAngry) {
+        // Snapping open chomp mouth with 3 cute white triangle fangs!
+        const openH = fr * (0.14 + chomp * 0.12);
+        ctx.fillStyle = '#4c0519';
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+        ctx.beginPath();
+        ctx.ellipse(mx, my, fr * 0.28, openH, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Cute pink tongue
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.ellipse(mx, my + openH * 0.35, fr * 0.16, openH * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Snowy-white zig-zag piranha teeth!
+        ctx.fillStyle = '#ffffff';
+        for (let t = -1; t <= 1; t++) {
+          const tx = mx + t * fr * 0.12;
+          // Upper baby fang
+          ctx.beginPath();
+          ctx.moveTo(tx - fr * 0.05, my - openH * 0.72);
+          ctx.lineTo(tx, my - openH * 0.05);
+          ctx.lineTo(tx + fr * 0.05, my - openH * 0.72);
+          ctx.closePath();
+          ctx.fill();
+          // Lower underbite fang
+          ctx.beginPath();
+          ctx.moveTo(tx - fr * 0.05, my + openH * 0.75);
+          ctx.lineTo(tx, my + openH * 0.12);
+          ctx.lineTo(tx + fr * 0.05, my + openH * 0.75);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        // Cheeky happy piranha underbite grin with 3 cute upward baby-fangs!
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.7, 0.065 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(mx - fr * 0.24, my - fr * 0.02);
+        ctx.quadraticCurveTo(mx + fr * 0.02, my + fr * 0.14, mx + fr * 0.26, my - fr * 0.06);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.0, 0.04 * scale);
+        for (const [fx, fy, fh] of [[-0.12, 0.04, 0.12], [0.02, 0.07, 0.14], [0.15, 0.03, 0.11]]) {
+          ctx.beginPath();
+          ctx.moveTo(mx + fr * (fx - 0.05), my + fr * fy);
+          ctx.lineTo(mx + fr * fx, my + fr * (fy - fh));
+          ctx.lineTo(mx + fr * (fx + 0.05), my + fr * fy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      ctx.restore();
+    };
+
+    // 2. Render the 3 Coordinated Piranha Fish in Dynamic Orbiting Delta Pack Formation!
+    const spread = isStunned ? 1.15 : isAngry ? 0.94 : 1.02;
+    const bob1 = Math.sin(timeSec * (3.6 * frenzySpeed) + 1.4) * r * 0.12;
+    const bob2 = Math.sin(timeSec * (3.9 * frenzySpeed) + 3.6) * r * 0.12;
+    const bob3 = Math.sin(timeSec * (3.3 * frenzySpeed)) * r * 0.10;
+    const surge1 = Math.cos(timeSec * (2.6 * frenzySpeed) + 0.8) * r * 0.08;
+    const surge2 = Math.cos(timeSec * (2.8 * frenzySpeed) + 2.9) * r * 0.08;
+    const surge3 = Math.cos(timeSec * (2.4 * frenzySpeed)) * r * 0.06;
+
+    // Wingman 1 (Top-Left — Sunburst Gold-Bellied Piranha)
+    drawPiranha(-r * 0.56 * spread + surge1, -r * 0.62 * spread + bob1, r * 0.56, {
+      backHi: '#38bdf8',
+      backMid: '#0284c7',
+      bellyHi: '#fef08a',
+      bellyMid: '#f59e0b',
+      irisTop: '#fef9c3',
+      irisBot: '#ea580c',
+      phase: 1.5,
+      hasCrown: false,
+    });
+
+    // Wingman 2 (Bottom-Left — Berry Magenta-Bellied Piranha)
+    drawPiranha(-r * 0.50 * spread + surge2, r * 0.62 * spread + bob2, r * 0.56, {
+      backHi: '#a78bfa',
+      backMid: '#6d28d9',
+      bellyHi: '#fbcfe8',
+      bellyMid: '#db2777',
+      irisTop: '#fce7f3',
+      irisBot: '#be185d',
+      phase: 3.7,
+      hasCrown: false,
+    });
+
+    // Alpha Leader (Front-Right — Classic Emerald & Ruby Crimson-Bellied Piranha with Mini Crown!)
+    drawPiranha(r * 0.58 * spread + surge3, r * 0.02 + bob3, r * 0.68, {
+      backHi: '#2dd4bf',
+      backMid: '#0f766e',
+      bellyHi: '#fda4af',
+      bellyMid: '#e11d48',
+      irisTop: '#fde68a',
+      irisBot: '#e11d48',
+      phase: 0.0,
+      hasCrown: true,
+    });
 
     ctx.restore();
     this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);

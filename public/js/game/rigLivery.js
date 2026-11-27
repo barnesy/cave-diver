@@ -44,6 +44,7 @@ const ALL_BOSS_TROPHY_IDS = Object.freeze([
   'oriskany-apex-tooth',
   'silfra-orca-fluke',
   'chuuk-imperial-pearl',
+  'angelita-piranha-crest',
 ]);
 
 function _countClaimedBounties(stats) {
@@ -498,6 +499,25 @@ export const SUIT_LIVERIES = Object.freeze([
     stageBand: '#f472b6',
     unlockHint: '✦ Guardian Relic · Tridacna Pearl Emperor',
     isUnlocked: (stats) => _hasTrophyRelic(stats, 'chuuk-imperial-pearl'),
+  },
+  {
+    id: 'secret-piranha-frenzy-suit',
+    name: 'Crimson Frenzy',
+    tier: 'mythic',
+    ladderRank: 95,
+    fx: { id: 'frenzy-shimmer', name: 'Tri-Fang Frenzy Aura', desc: 'Iridescent emerald-and-scarlet cenote scales flash with synchronized crimson bursts.' },
+    secret: true,
+    trophyRelicId: 'angelita-piranha-crest',
+    suitTop: '#0d9488',
+    suitMid: '#e11d48',
+    suitBot: '#881337',
+    accent: '#fde047',
+    trim: '#fb7185',
+    finColor: '#9f1239',
+    finTip: '#2dd4bf',
+    stageBand: '#fb7185',
+    unlockHint: '✦ Guardian Relic · Crimson Piranha Trio',
+    isUnlocked: (stats) => _hasTrophyRelic(stats, 'angelita-piranha-crest'),
   },
   {
     id: 'secret-empress-sovereign',

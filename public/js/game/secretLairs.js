@@ -3101,7 +3101,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             ? 'slag'
             : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel' || boss.kind === 'giant-clam')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel' || boss.kind === 'giant-clam' || boss.kind === 'piranha-trio')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
@@ -3109,7 +3109,7 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
             : projKind === 'frost'
               ? (boss.kind === 'loch-ness' ? '#34d399' : (boss.kind === 'orca-whale' ? '#bae6fd' : (boss.kind === 'great-white' ? '#38bdf8' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))))
               : projKind === 'prism'
-                ? (boss.kind === 'giant-clam' ? '#f472b6' : (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))))
+                ? (boss.kind === 'piranha-trio' ? '#fb7185' : (boss.kind === 'giant-clam' ? '#f472b6' : (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3950,34 +3950,38 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return ring;
   }
 
-  if (boss.kind === 'giant-clam') {
+  if (boss.kind === 'giant-clam' || boss.kind === 'piranha-trio') {
+    const isTrio = boss.kind === 'piranha-trio';
     const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
-    const toSpawn = Math.min(boss.phase >= 3 ? 2 : 1, 3 - existingOrbs);
-    let lastPearl = null;
+    const toSpawn = Math.min(isTrio ? (boss.phase >= 3 ? 3 : 2) : (boss.phase >= 3 ? 2 : 1), 3 - existingOrbs);
+    const colors = isTrio ? ['#fb7185', '#fde047', '#f472b6'] : ['#f472b6'];
+    let lastOrb = null;
     for (let k = 0; k < toSpawn; k++) {
-      const startAng = Math.random() * Math.PI * 2 + k * Math.PI;
-      const pearl = {
-        id: `nacre_pearl_${++lair._hazardSeq}`,
+      const startAng = Math.random() * Math.PI * 2 + (isTrio ? (k * Math.PI * 2) / 3 : k * Math.PI);
+      const rx = isTrio ? 9.8 : 10.5;
+      const ry = isTrio ? 5.4 : 5.8;
+      const orb = {
+        id: `${isTrio ? 'piranha_orb' : 'nacre_pearl'}_${++lair._hazardSeq}`,
         kind: 'star-orb',
-        x: ar.cx + Math.cos(startAng) * 10.5,
-        y: ar.cy + Math.sin(startAng) * 5.8,
-        radius: 1.05,
+        x: ar.cx + Math.cos(startAng) * rx,
+        y: ar.cy + Math.sin(startAng) * ry,
+        radius: isTrio ? 0.96 : 1.05,
         hp: 2,
         orbitAngle: startAng,
-        orbitSpeed: (k % 2 === 0 ? 1 : -1) * (boss.phase >= 3 ? 0.92 : 0.68),
-        orbitRx: 10.5,
-        orbitRy: 5.8,
-        fireCd: 1.35 + k * 0.42,
-        life: 12.5,
+        orbitSpeed: (k % 2 === 0 ? 1 : -1) * (isTrio ? (boss.phase >= 3 ? 1.12 : 0.84) : (boss.phase >= 3 ? 0.92 : 0.68)),
+        orbitRx: rx,
+        orbitRy: ry,
+        fireCd: (isTrio ? 1.2 : 1.35) + k * 0.38,
+        life: isTrio ? 11.5 : 12.5,
         age: 0,
         hitFlash: 0,
       };
-      lair.bossHazards.push(pearl);
-      addShockwave(lair, pearl.x, pearl.y, 3.8, '#f472b6', 0.38);
-      lastPearl = pearl;
+      lair.bossHazards.push(orb);
+      addShockwave(lair, orb.x, orb.y, 3.7, colors[k % colors.length], 0.36);
+      lastOrb = orb;
     }
     callbacks.onCrystalChime?.(2);
-    return lastPearl;
+    return lastOrb;
   }
   return null;
 }

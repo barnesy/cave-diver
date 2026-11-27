@@ -3490,6 +3490,56 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('angelita-piranha-crest') || nameLower.includes('tri-fang piranha')) {
+    // Three Cute Colored Piranha Fish Swirling Inside a Golden Jungle Crest (Piranha Trio Trophy, v268)
+    ctx.save();
+    // Outer crimson-gold jungle ring
+    const rg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fde047'], [0.5, '#fb7185'], [1, '#0d9488']], '#fb7185');
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = Math.max(1.8, lw * 1.15);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.80, 0, Math.PI * 2);
+    ctx.stroke();
+    // 3 tiny chibi piranhas circling in triangle formation (Ruby, Gold, Berry)
+    const trioColors = [
+      { ang: -Math.PI * 0.5, back: '#2dd4bf', belly: '#f43f5e' },
+      { ang: Math.PI * 0.17, back: '#38bdf8', belly: '#facc15' },
+      { ang: Math.PI * 0.83, back: '#a78bfa', belly: '#f472b6' },
+    ];
+    for (const f of trioColors) {
+      ctx.save();
+      const fx = Math.cos(f.ang) * r * 0.42;
+      const fy = Math.sin(f.ang) * r * 0.42;
+      ctx.translate(fx, fy);
+      ctx.rotate(f.ang + Math.PI * 0.5);
+      // Tiny tail
+      ctx.fillStyle = f.belly;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.16, 0);
+      ctx.lineTo(-r * 0.32, -r * 0.14);
+      ctx.lineTo(-r * 0.32, r * 0.14);
+      ctx.closePath();
+      ctx.fill();
+      // Plump mini piranha body
+      const fg = _safeLinGrad(ctx, 0, -r * 0.2, 0, r * 0.2, [[0, f.back], [0.55, f.belly], [1, f.belly]], f.belly);
+      ctx.fillStyle = fg;
+      ctx.strokeStyle = '#1e1b4b';
+      ctx.lineWidth = Math.max(1.0, lw * 0.6);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.22, r * 0.17, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Cute sparkle eye
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(r * 0.08, -r * 0.03, Math.max(1.2, r * 0.06), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
   if (itemIdLower.includes('strytan-magma-pearl') || nameLower.includes('heart of the thermal spire')) {
     // Spiral Basalt-and-Molten-Magma Nautilus Pearl Relic (Hydrothermal Nautilus Trophy, v193)
     const mg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#f97316'], [1, '#292524']], '#f97316');
