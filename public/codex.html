@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#040b18" />
-  <meta name="description" content="Explore all Armor Sets and Ultra-Rare Legendaries in Cave Diver with a live diver rig preview." />
-  <title>Cave Diver — Sets &amp; Legendaries Codex</title>
-  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=273" />
-  <link rel="stylesheet" href="./codex.css?v=273" />
+  <meta name="description" content="Mix Armor Sets and Legendaries in Cave Diver to preview live stat effects, set bonuses, and diver appearance." />
+  <title>Cave Diver — Sets &amp; Legendaries Mixer</title>
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=274" />
+  <link rel="stylesheet" href="./codex.css?v=274" />
 </head>
 <body>
   <header class="codex-topbar">
@@ -18,17 +18,18 @@
         </a>
         <h1 class="codex-title">📖 Sets &amp; Legendaries</h1>
       </div>
-      <div class="codex-summary" aria-label="Collection Progress">
-        <span id="codex-sum-sets" class="codex-progress-chip sets">Sets 0/8</span>
-        <span id="codex-sum-legendaries" class="codex-progress-chip legendaries">Legendaries 0/9</span>
+      <div class="codex-quick-presets" aria-label="Quick Rig Presets">
+        <button id="btn-codex-all-legendary" class="codex-btn gold" type="button" title="Equip all 9 Legendaries in preview">🔥 All 9 Legendaries</button>
+        <button id="btn-codex-reset-preview" class="codex-btn ghost" type="button" title="Load your saved dive rig">↺ My Rig</button>
+        <button id="btn-codex-clear-mix" class="codex-btn ghost" type="button" title="Reset all slots to stock baseline">✕ Clear</button>
       </div>
     </div>
   </header>
 
   <main class="codex-shell">
-    <section class="codex-main-col" aria-label="Sets and Legendaries Explorer">
+    <section class="codex-main-col" aria-label="Mix Armor Sets and Legendaries">
       <div class="codex-toolbar">
-        <div class="codex-tabs" role="tablist" aria-label="Codex Sections">
+        <div class="codex-tabs" role="tablist" aria-label="Gear Categories">
           <button type="button" role="tab" class="codex-tab active" data-tab="sets" aria-selected="true">
             ✨ Armor Sets <span id="tab-count-sets" class="codex-tab-count">8</span>
           </button>
@@ -38,11 +39,11 @@
         </div>
 
         <div class="codex-toolbar-right">
-          <label class="codex-search-wrap" aria-label="Search sets, pieces, powers, or stats">
+          <label class="codex-search-wrap" aria-label="Filter sets, pieces, or stats">
             <span class="codex-search-icon" aria-hidden="true">🔎</span>
-            <input id="codex-search" class="codex-search-input" type="search" placeholder="Search sets, pieces, powers..." autocomplete="off" />
+            <input id="codex-search" class="codex-search-input" type="search" placeholder="Filter by stat, slot, name..." autocomplete="off" />
           </label>
-          <button id="btn-codex-owned-toggle" type="button" class="codex-owned-toggle" aria-pressed="false" title="Show only items you have unlocked">
+          <button id="btn-codex-owned-toggle" type="button" class="codex-owned-toggle" aria-pressed="false" title="Show only unlocked gear">
             ✓ Owned
           </button>
         </div>
@@ -51,12 +52,7 @@
       <div id="codex-content" aria-live="polite"></div>
     </section>
 
-    <aside class="codex-preview-sidebar" aria-label="Live Diver Rig Preview">
-      <div class="codex-preview-head">
-        <h2 class="codex-preview-title">Live Preview</h2>
-        <button id="btn-codex-all-legendary" class="codex-btn gold" type="button" title="Preview all 9 Ultra-Rare Legendaries equipped together">🔥 All 9 Legendaries</button>
-      </div>
-
+    <aside class="codex-preview-sidebar" aria-label="Live Build &amp; Stat Effects">
       <div class="codex-preview-stage">
         <canvas id="codex-preview-canvas" width="760" height="400" aria-label="Animated diver rig preview"></canvas>
         <div class="codex-preview-caption">
@@ -65,19 +61,16 @@
       </div>
 
       <div class="codex-preview-body">
-        <div id="codex-preview-bonus" class="codex-preview-bonus"></div>
-        <div id="codex-preview-perf" class="codex-perf-grid" aria-label="Preview Rig Stats"></div>
-        <div id="codex-preview-slots" class="codex-equipped-slots" aria-label="Previewed Gear Pieces"></div>
-        <div class="codex-preview-actions">
-          <button id="btn-codex-equip-rig" class="codex-btn primary" type="button" hidden>⚡ Equip Owned to My Rig</button>
-          <button id="btn-codex-reset-preview" class="codex-btn ghost" type="button">↺ Reset to My Rig</button>
-        </div>
+        <div id="codex-preview-synergies" class="codex-synergies-row" aria-label="Active Set Bonuses and Powers"></div>
+        <div id="codex-preview-bars" class="codex-stat-bars" aria-label="Live Mixed Rig Stat Meters"></div>
+        <div id="codex-preview-slots" class="codex-equipped-slots" aria-label="Active Mixed Gear Slots"></div>
+        <button id="btn-codex-equip-rig" class="codex-btn primary codex-equip-cta" type="button" hidden>⚡ Equip Owned to My Rig</button>
       </div>
     </aside>
   </main>
 
   <div id="codex-toast" class="codex-toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="./js/ui/gearCodexPage.js?v=273"></script>
+  <script type="module" src="./js/ui/gearCodexPage.js?v=274"></script>
 </body>
 </html>
