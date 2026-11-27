@@ -508,16 +508,27 @@ function initGearCodexPage() {
   renderMainContent();
   renderPreviewPanel();
 
-  // Live 60 FPS animated Diver Rig Preview loop
+  // Live 60 FPS animated Diver Rig Preview loop (1:1 unstretched aspect ratio synced to rendered CSS box + DPR)
   if (previewCanvas) {
     const ctx = previewCanvas.getContext('2d');
     const startMs = performance.now();
     const tick = (now) => {
       if (!document.hidden && ctx) {
+        const rect = previewCanvas.getBoundingClientRect();
+        const cssW = Math.max(180, Math.round(rect.width || 368));
+        const cssH = Math.max(120, Math.round(rect.height || 194));
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const bufW = Math.round(cssW * dpr);
+        const bufH = Math.round(cssH * dpr);
+        if (previewCanvas.width !== bufW || previewCanvas.height !== bufH) {
+          previewCanvas.width = bufW;
+          previewCanvas.height = bufH;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const t = (now - startMs) * 0.001;
         const hasDpv = Boolean(previewLivery.scooterId && previewLivery.scooterId !== 'standard-dpv');
         const hasSpeargun = Boolean(previewLivery.harpoonId && previewLivery.harpoonId !== 'standard-harpoon');
-        drawLiveryPreview(ctx, previewCanvas.width, previewCanvas.height, previewLivery, {
+        drawLiveryPreview(ctx, cssW, cssH, previewLivery, {
           hasDpv,
           hasSpeargun,
           envMode: 'clear',
