@@ -3321,6 +3321,80 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('lagoa-voltaic-cell') || nameLower.includes('voltaic abyssal organ')) {
+    // High-Voltage Bio-Electric Capacitor Orb & Lightning Core (Voltaic Emperor Eel Trophy, v265)
+    ctx.save();
+    const vg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#38bdf8'], [1, '#1e3a8a']], '#fde047');
+    ctx.fillStyle = vg;
+    ctx.strokeStyle = '#090d24';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.84, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Orbiting voltaic arc ring
+    ctx.rotate(timeSec * 0.9);
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.2, lw * 0.78);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.96, r * 0.38, 0.45, 0, Math.PI * 2);
+    ctx.stroke();
+    // Crisp high-voltage lightning bolt core
+    ctx.rotate(-timeSec * 0.9);
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#713f12';
+    ctx.lineWidth = Math.max(1.0, lw * 0.55);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.14, -r * 0.56);
+    ctx.lineTo(-r * 0.30, r * 0.04);
+    ctx.lineTo(r * 0.02, r * 0.04);
+    ctx.lineTo(-r * 0.14, r * 0.56);
+    ctx.lineTo(r * 0.32, -r * 0.06);
+    ctx.lineTo(0, -r * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('plura-nessie-scale') || nameLower.includes('highland plesiosaur crest')) {
+    // Iridescent Highland Emerald Plesiosaur Crest Scale Relic (Loch Ness Leviathan Trophy, v265)
+    ctx.save();
+    const ng = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#a7f3d0'], [0.48, '#10b981'], [1, '#064e3b']], '#10b981');
+    ctx.fillStyle = ng;
+    ctx.strokeStyle = '#022c22';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.92);
+    ctx.bezierCurveTo(r * 0.82, -r * 0.44, r * 0.88, r * 0.42, 0, r * 0.88);
+    ctx.bezierCurveTo(-r * 0.88, r * 0.42, -r * 0.82, -r * 0.44, 0, -r * 0.92);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Radiant Highland filigree ribs
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = Math.max(1.2, lw * 0.72);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.66);
+    ctx.lineTo(0, r * 0.64);
+    ctx.moveTo(0, -r * 0.24);
+    ctx.lineTo(r * 0.40, r * 0.06);
+    ctx.moveTo(0, -r * 0.24);
+    ctx.lineTo(-r * 0.40, r * 0.06);
+    ctx.moveTo(0, r * 0.14);
+    ctx.lineTo(r * 0.34, r * 0.38);
+    ctx.moveTo(0, r * 0.14);
+    ctx.lineTo(-r * 0.34, r * 0.38);
+    ctx.stroke();
+    ctx.fillStyle = '#ecfdf5';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.32, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
   if (itemIdLower.includes('strytan-magma-pearl') || nameLower.includes('heart of the thermal spire')) {
     // Spiral Basalt-and-Molten-Magma Nautilus Pearl Relic (Hydrothermal Nautilus Trophy, v193)
     const mg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#f97316'], [1, '#292524']], '#f97316');

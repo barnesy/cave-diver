@@ -23,7 +23,7 @@ export const LEVEL_19 = {
   turnaroundCheckpointId: 'cp5',
   ascentSwitchCheckpointId: 'cp1',
   ascentSwitchDepthM: 26.0,
-  bounds: { xMin: -50, xMax: 340, yMin: -6, yMax: 182 },
+  bounds: { xMin: -50, xMax: 470, yMin: -6, yMax: 196 },
   spawn: { x: 0.0, y: 1.8 },
   exitZone: { x: 0.0, y: 1.8, radius: 7.4, name: 'Lagoa Cerrado Sinkhole' },
   haloclineY: 56.0,
@@ -93,6 +93,13 @@ export const LEVEL_19 = {
     { ax: 98, ay: 108.0, bx: 100, by: 134.0, ra: 2.4, rb: 2.0 },
     { ax: 162, ay: 144.0, bx: 168, by: 116.0, ra: 2.5, rb: 2.0 },
     { ax: 194, ay: 162.0, bx: 198, by: 134.0, ra: 2.5, rb: 2.0 },
+
+    // SECRET SONAR-ONLY VOLTAIC ABYSS SANCTUM (100% hidden until Sonar breaches false dolomite veil at x=243.5, y=172!)
+    { ax: 236, ay: 172.0, bx: 270, by: 172.0, ra: 2.3, rb: 3.8, secretLair: true },
+    { ax: 270, ay: 172.0, bx: 294, by: 172.0, ra: 5.4, rb: 4.4, secretLair: true }, // Armory chamber (x=280, y=172.0)
+    { ax: 294, ay: 172.0, bx: 368, by: 171.0, ra: 4.5, rb: 4.8, secretLair: true }, // Voltaic Conduit Gauntlet
+    { ax: 368, ay: 171.0, bx: 398, by: 170.0, ra: 14.5, rb: 15.5, secretLair: true }, // Massive Electric Eel Sanctum
+    { ax: 398, ay: 170.0, bx: 422, by: 170.0, ra: 15.5, rb: 13.0, secretLair: true },
   ],
   guideline: [],
 

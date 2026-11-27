@@ -50,23 +50,23 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueTitle: 'Submerged WWII Angler-Mech Engine Sentinel',
   }),
   Object.freeze({
-    id: 'bounty-glacier-wyrm',
+    id: 'bounty-glacier-crab',
     contractCode: 'BOUNTY #03',
     threatClass: 'CLASS III · ARCTIC',
     accentColor: '#7dd3fc',
-    silhouetteKind: 'frost',
-    bossKind: 'frost-wyrm',
+    silhouetteKind: 'crab',
+    bossKind: 'frost-crab',
     previewScale: 8.6,
-    previewOffsetY: 2,
-    codename: 'THE GLACIER WYRM',
+    previewOffsetY: 4,
+    codename: 'THE GLACIER CRAB',
     watersRumor: 'East Greenland Drift Ice',
-    tale: 'Kayakers along the northern icebergs tell of singing turquoise walls that rattle hydrophones in a single chime. Listen for hollow crystalline echoes where the submerged glacier shelves drop into cobalt dark.',
+    tale: 'Kayakers along the northern icebergs tell of thunderous snapping claws rattling hydrophones beneath turquoise shelves. Listen for hollow crystalline echoes where the submerged glacier drops into cobalt dark.',
     bountyPts: 3000,
     levelId: 'scoresby-sund-iceberg',
     trophyRelicId: 'scoresby-frost-heart',
     trophyName: 'Heart of Borealis',
-    trueName: 'BOREALIS WYRM',
-    trueTitle: 'Crystalline Glacial Fjord Leviathan',
+    trueName: 'BOREALIS KING CRAB',
+    trueTitle: 'Colossal Glacial Arctic King Crab',
   }),
   Object.freeze({
     id: 'bounty-selenite-fang',
@@ -88,23 +88,23 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueTitle: 'Iridescent Ural Selenite Mirror Wyrm',
   }),
   Object.freeze({
-    id: 'bounty-solar-serpent',
+    id: 'bounty-solar-lobster',
     contractCode: 'BOUNTY #05',
     threatClass: 'CLASS III · PELAGIC',
-    accentColor: '#facc15',
-    silhouetteKind: 'solar',
-    bossKind: 'solar-leviathan',
-    previewScale: 8.8,
-    previewOffsetY: 2,
-    codename: 'THE SOLAR SERPENT',
+    accentColor: '#fb7185',
+    silhouetteKind: 'lobster',
+    bossKind: 'solar-lobster',
+    previewScale: 8.4,
+    previewOffsetY: 3,
+    codename: 'THE SOLAR LOBSTER',
     watersRumor: 'Sinai Reef Drop-Off',
-    tale: 'Free-divers hovering above the desert sinkhole’s outer arch claim golden caustics flare from below long after dusk. Ping the shadowed coral flank where open-ocean blue swallows the reef shaft.',
+    tale: 'Free-divers hovering above the desert sinkhole’s outer arch claim fiery crimson claws and golden antennae flare from below long after dusk. Ping the shadowed coral flank where open-ocean blue swallows the reef shaft.',
     bountyPts: 2800,
     levelId: 'blue-hole-dahab-arch',
     trophyRelicId: 'bluehole-solar-prism',
     trophyName: 'Solar Reef Prism',
-    trueName: 'SOLAR LEVIATHAN',
-    trueTitle: 'Radiant Red Sea Caustic Reef Serpent',
+    trueName: 'SOLAR REEF LOBSTER',
+    trueTitle: 'Colossal Radiant Red Sea Reef Lobster',
   }),
   Object.freeze({
     id: 'bounty-chimney-titan',
@@ -239,6 +239,44 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueName: 'SCAPA DREADNOUGHT',
     trueTitle: 'Spectral WWI Armored Battleship Leviathan',
   }),
+  Object.freeze({
+    id: 'bounty-voltaic-eel',
+    contractCode: 'BOUNTY #13',
+    threatClass: 'CLASS IV · VOLTAIC',
+    accentColor: '#fde047',
+    silhouetteKind: 'eel',
+    bossKind: 'electric-eel',
+    previewScale: 10.4,
+    previewOffsetY: 4,
+    codename: 'THE VOLTAIC EEL',
+    watersRumor: 'Brazilian Cerrado Sinkhole',
+    tale: 'Expedition teams dropping into the crystal jungle sinkhole report dive computers flickering and blue sparks arcing across submerged dolomite walls. Sound the deepest dark conduit with active sonar — a crackling cavern hums beyond the stone.',
+    bountyPts: 3300,
+    levelId: 'lagoa-misteriosa-abyss',
+    trophyRelicId: 'lagoa-voltaic-cell',
+    trophyName: 'Voltaic Abyssal Organ',
+    trueName: 'VOLTAIC EMPEROR EEL',
+    trueTitle: 'High-Voltage Brazilian Sinkhole Electric Eel',
+  }),
+  Object.freeze({
+    id: 'bounty-loch-ness',
+    contractCode: 'BOUNTY #14',
+    threatClass: 'CLASS III · HIGHLAND',
+    accentColor: '#34d399',
+    silhouetteKind: 'nessie',
+    bossKind: 'loch-ness',
+    previewScale: 10.0,
+    previewOffsetY: 16,
+    codename: 'THE LOCH NESS PHANTOM',
+    watersRumor: 'Northern Glacial Marble Waters',
+    tale: 'Old northern cave divers whisper of a graceful long-necked silhouette gliding beneath glacial marble vaults, leaving swirling emerald wakes in silence. Sweep your active sonar along the deepest cold sump — an ancient highland loch hides behind a pale marble seam.',
+    bountyPts: 3150,
+    levelId: 'plura-marble-sump',
+    trophyRelicId: 'plura-nessie-scale',
+    trophyName: 'Highland Plesiosaur Crest',
+    trueName: 'LOCH NESS LEVIATHAN',
+    trueTitle: 'Ancient Highland Plesiosaur of the Deep',
+  }),
 ]);
 
 /**
@@ -334,11 +372,35 @@ export function getBossSilhouetteSvg(kind = 'kraken', accent = '#38bdf8') {
         <circle cx="72" cy="31" r="3" fill="${glow}"/>
       `;
       break;
+    case 'crab':
     case 'frost':
       shape = `
-        <path d="M16 48 Q34 18, 56 36 T98 28 L108 36 L95 44 Q74 56, 54 44 T18 58 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.3"/>
-        <path d="M36 27 L41 16 L46 29 M58 34 L64 20 L69 33 M80 28 L87 16 L90 29" fill="#07111f" stroke="${glow}" stroke-opacity="0.75" stroke-width="1.2"/>
-        <circle cx="95" cy="34" r="2.5" fill="${glow}"/>
+        <ellipse cx="60" cy="40" rx="22" ry="15" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
+        <path d="M40 34 C24 22, 16 14, 26 10 C33 8, 38 16, 34 22 C40 20, 44 26, 44 32 M80 34 C96 22, 104 14, 94 10 C87 8, 82 16, 86 22 C80 20, 76 26, 76 32" fill="#07111f" stroke="${glow}" stroke-width="1.5"/>
+        <path d="M38 42 L20 48 M40 48 L24 58 M82 42 L100 48 M80 48 L96 58" stroke="${glow}" stroke-opacity="0.7" stroke-width="2.1" stroke-linecap="round"/>
+        <circle cx="52" cy="34" r="2.6" fill="${glow}"/><circle cx="68" cy="34" r="2.6" fill="${glow}"/>
+      `;
+      break;
+    case 'lobster':
+      shape = `
+        <path d="M20 42 C34 30, 56 28, 76 34 C86 36, 94 40, 100 44 L88 52 C70 50, 46 50, 26 48 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.4"/>
+        <path d="M74 34 C88 18, 104 16, 106 24 C107 30, 96 32, 92 28 M72 44 C88 54, 104 54, 106 46 C107 41, 96 40, 92 44" fill="#07111f" stroke="${glow}" stroke-width="1.6"/>
+        <path d="M84 32 Q100 10, 114 8 M84 36 Q102 18, 114 20" fill="none" stroke="${glow}" stroke-opacity="0.75" stroke-width="1.2"/>
+        <circle cx="80" cy="37" r="2.6" fill="${glow}"/>
+      `;
+      break;
+    case 'eel':
+      shape = `
+        <path d="M12 44 Q32 18, 54 38 T98 30 L108 36 L96 42 Q76 54, 54 44 T14 54 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.7" stroke-width="1.4"/>
+        <polyline points="26,34 34,24 40,34 50,22 58,34 70,22 78,32" fill="none" stroke="${glow}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="95" cy="35" r="2.7" fill="${glow}"/>
+      `;
+      break;
+    case 'nessie':
+      shape = `
+        <path d="M16 50 Q32 34, 48 48 Q62 32, 74 44 C80 34, 82 18, 92 14 C100 12, 106 16, 102 22 C96 24, 92 22, 88 26 C84 34, 86 48, 76 54 L20 56 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.7" stroke-width="1.4"/>
+        <path d="M44 52 L36 64 L52 56 M68 52 L64 65 L78 56" fill="#07111f" stroke="${glow}" stroke-opacity="0.65" stroke-width="1.3"/>
+        <circle cx="96" cy="17" r="2.4" fill="${glow}"/>
       `;
       break;
     case 'crystal':

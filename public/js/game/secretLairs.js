@@ -3099,17 +3099,17 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           const spread = boss.phase === 3 ? 0.23 : 0.27;
           const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' || boss.kind === 'spectral-dreadnought')
             ? 'slag'
-            : (boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat')
+            : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
             ? (boss.kind === 'spectral-dreadnought' ? '#34d399' : (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c'))
             : projKind === 'frost'
-              ? (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9')
+              ? (boss.kind === 'loch-ness' ? '#34d399' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))
               : projKind === 'prism'
-                ? (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))
+                ? (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3614,7 +3614,7 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return spawned[0] || null;
   }
 
-  if (boss.kind === 'frost-wyrm') {
+  if (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm') {
     const ring = {
       id: `frost_${++lair._hazardSeq}`,
       kind: 'frost-ring',
@@ -3692,7 +3692,7 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return lastVent;
   }
 
-  if (boss.kind === 'solar-leviathan') {
+  if (boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan') {
     const existingLances = lair.bossHazards.filter((h) => h.kind === 'sun-lance').length;
     const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingLances);
     let lastLance = null;
@@ -3898,6 +3898,55 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     }
     callbacks.onCrystalChime?.(1);
     return lastMine;
+  }
+
+  if (boss.kind === 'electric-eel') {
+    const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
+    const toSpawn = Math.min(boss.phase >= 2 ? 2 : 1, 3 - existingOrbs);
+    let lastNode = null;
+    for (let k = 0; k < toSpawn; k++) {
+      const startAng = Math.random() * Math.PI * 2 + k * Math.PI;
+      const node = {
+        id: `volt_${++lair._hazardSeq}`,
+        kind: 'star-orb',
+        x: ar.cx + Math.cos(startAng) * 11.5,
+        y: ar.cy + Math.sin(startAng) * 6.0,
+        radius: 1.1,
+        hp: 2,
+        orbitAngle: startAng,
+        orbitSpeed: (k % 2 === 0 ? 1 : -1) * (boss.phase >= 3 ? 1.05 : 0.78),
+        orbitRx: 11.5,
+        orbitRy: 6.0,
+        fireCd: 1.25 + k * 0.4,
+        life: 13.0,
+        age: 0,
+        hitFlash: 0,
+      };
+      lair.bossHazards.push(node);
+      addShockwave(lair, node.x, node.y, 4.0, '#fde047', 0.36);
+      lastNode = node;
+    }
+    callbacks.onCrystalChime?.(2);
+    return lastNode;
+  }
+
+  if (boss.kind === 'loch-ness') {
+    const ring = {
+      id: `loch_wave_${++lair._hazardSeq}`,
+      kind: 'frost-ring',
+      x: boss.x,
+      y: boss.y,
+      radius: 2.8,
+      maxRadius: 18.0,
+      expandSpeed: boss.phase >= 3 ? 7.8 : 6.4,
+      age: 0,
+      hitLocal: false,
+      shatteredByLocal: false,
+    };
+    lair.bossHazards.push(ring);
+    addShockwave(lair, boss.x, boss.y, 6.2, '#34d399', 0.45);
+    callbacks.onCrystalChime?.(1);
+    return ring;
   }
   return null;
 }

@@ -4,18 +4,18 @@
  */
 export const bossGuardiansMethods = {
   /**
-   * Dispatch boss rendering across all 10 unique biome Secret Lair Guardians (v189–v195).
+   * Dispatch boss rendering across all 14 unique biome Secret Lair Guardians (v189–v265).
    */
   _drawSecretLairBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
     const t = Number.isFinite(timeSec) ? timeSec : 0;
     if (boss.kind === 'iron-leviathan') {
       this._drawIronLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, t);
-    } else if (boss.kind === 'frost-wyrm') {
-      this._drawFrostWyrmBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm') {
+      this._drawFrostCrabBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'abyssal-empress') {
       this._drawAbyssalEmpressBoss(ctx, boss, toScreenX, toScreenY, scale, t);
-    } else if (boss.kind === 'solar-leviathan') {
-      this._drawSolarLeviathanBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan') {
+      this._drawSolarLobsterBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'thermal-nautilus') {
       this._drawThermalNautilusBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'crystal-basilisk') {
@@ -30,6 +30,10 @@ export const bossGuardiansMethods = {
       this._drawCoralDragonBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'spectral-dreadnought') {
       this._drawSpectralDreadnoughtBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'electric-eel') {
+      this._drawElectricEelBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'loch-ness') {
+      this._drawLochNessBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -1871,6 +1875,802 @@ export const bossGuardiansMethods = {
       ctx.beginPath();
       ctx.arc(ex + er * 0.2, ey - er * 0.18, er * 0.24, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * BOREALIS KING CRAB — Colossal Glacial Arctic King Crab Guardian (Scoresby Sund) (v265).
+   */
+  _drawFrostCrabBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.5) * 0.14 * r;
+    const snapAmt = (isAngry ? 0.42 : 0.16) + 0.14 * Math.abs(Math.sin(timeSec * (isAngry ? 7.5 : 2.8)));
+    const outline = '#082f49';
+    const shellHi = isHurt ? '#ffffff' : boss.phase >= 3 ? '#fda4af' : '#bae6fd';
+    const shellMid = isHurt ? '#e0f2fe' : boss.phase >= 3 ? '#e11d48' : boss.phase === 2 ? '#0284c7' : '#0ea5e9';
+    const shellDark = isHurt ? '#bae6fd' : boss.phase >= 3 ? '#881337' : '#0c4a6e';
+    const glowCol = boss.phase >= 3 ? '#fb7185' : boss.phase === 2 ? '#c084fc' : '#67e8f9';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(anim.squashX || 1, anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 1.9) * 0.05);
+
+    // 1. Soft Glacial Halo
+    const aura = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.85);
+    aura.addColorStop(0, boss.phase >= 3 ? 'rgba(251, 113, 133, 0.34)' : 'rgba(103, 232, 249, 0.32)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Six Articulated Jointed Crab Legs (3 per side)
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const gait = Math.sin(timeSec * (isAngry ? 7.0 : 3.4) + i * 1.3 + (side > 0 ? Math.PI : 0)) * 0.14;
+        const bx = side * r * (0.72 + i * 0.05);
+        const by = r * (-0.02 + i * 0.24);
+        const kx = side * r * (1.28 + i * 0.08);
+        const ky = r * (-0.12 + i * 0.28 + gait);
+        const tx = side * r * (1.58 - i * 0.06);
+        const ty = r * (0.36 + i * 0.30 + gait * 1.3);
+
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(4.5, 0.24 * r);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(kx, ky);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+
+        ctx.strokeStyle = shellMid;
+        ctx.lineWidth = Math.max(2.6, 0.14 * r);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(kx, ky);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+
+        ctx.fillStyle = shellHi;
+        ctx.beginPath();
+        ctx.arc(kx, ky, r * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 3. Twin Colossal Snapping Glacier Pincer Claws
+    for (const side of [-1, 1]) {
+      ctx.save();
+      const armWave = Math.sin(timeSec * (isAngry ? 6.2 : 2.6) + side) * 0.10;
+      const shoulderX = side * r * 0.64;
+      const shoulderY = -r * 0.22;
+      const elbowX = side * r * 1.16;
+      const elbowY = -r * 0.56 + armWave * r;
+      const clawX = side * r * 0.94;
+      const clawY = -r * 0.96 + armWave * r * 1.2;
+
+      // Upper pincer arm
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(5.5, 0.30 * r);
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, shoulderY);
+      ctx.quadraticCurveTo(elbowX, elbowY, clawX, clawY);
+      ctx.stroke();
+      ctx.strokeStyle = shellMid;
+      ctx.lineWidth = Math.max(3.2, 0.18 * r);
+      ctx.stroke();
+
+      // Massive snapping claw head (outer shell + articulating inner thumb)
+      ctx.translate(clawX, clawY);
+      ctx.scale(side, 1);
+      ctx.rotate(-0.42 + armWave * 0.7);
+      const cg = ctx.createLinearGradient(-r * 0.2, -r * 0.4, r * 0.4, r * 0.3);
+      cg.addColorStop(0, shellHi);
+      cg.addColorStop(0.5, shellMid);
+      cg.addColorStop(1, shellDark);
+
+      // Outer massive curved crusher claw (iconic crab crescent!)
+      ctx.save();
+      ctx.rotate(-snapAmt * 0.42);
+      ctx.fillStyle = cg;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.moveTo(0, r * 0.06);
+      ctx.bezierCurveTo(-r * 0.46, -r * 0.08, -r * 0.50, -r * 0.66, -r * 0.04, -r * 0.74);
+      ctx.quadraticCurveTo(-r * 0.14, -r * 0.44, r * 0.02, -r * 0.24);
+      ctx.quadraticCurveTo(r * 0.16, -r * 0.10, 0, r * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Inner serrated snapping thumb jaw (creates bold V-notch crab pincer!)
+      ctx.save();
+      ctx.rotate(snapAmt * 0.50);
+      ctx.fillStyle = shellHi;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.02, 0);
+      ctx.bezierCurveTo(r * 0.36, -r * 0.06, r * 0.42, -r * 0.48, r * 0.14, -r * 0.62);
+      ctx.quadraticCurveTo(r * 0.16, -r * 0.32, -r * 0.04, -r * 0.14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.restore();
+    }
+
+    // 4. Armored Hexagonal King Crab Carapace with Crystalline Ice Spikes
+    const bodyGrad = ctx.createRadialGradient(-r * 0.22, -r * 0.32, r * 0.1, 0, 0, r * 1.15);
+    bodyGrad.addColorStop(0, shellHi);
+    bodyGrad.addColorStop(0.52, shellMid);
+    bodyGrad.addColorStop(1, shellDark);
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.6, 0.10 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.96, r * 0.06);
+    ctx.lineTo(-r * 0.72, -r * 0.56);
+    ctx.lineTo(-r * 0.28, -r * 0.74);
+    ctx.lineTo(0, -r * 0.88); // Central glacial crown spire
+    ctx.lineTo(r * 0.28, -r * 0.74);
+    ctx.lineTo(r * 0.72, -r * 0.56);
+    ctx.lineTo(r * 0.96, r * 0.06);
+    ctx.quadraticCurveTo(r * 0.72, r * 0.68, 0, r * 0.64);
+    ctx.quadraticCurveTo(-r * 0.72, r * 0.68, -r * 0.96, r * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Faceted crystal armor chevrons across shell
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.55)';
+    ctx.lineWidth = Math.max(1.5, 0.055 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.58, -r * 0.18);
+    ctx.lineTo(0, -r * 0.44);
+    ctx.lineTo(r * 0.58, -r * 0.18);
+    ctx.moveTo(-r * 0.42, r * 0.24);
+    ctx.lineTo(0, r * 0.04);
+    ctx.lineTo(r * 0.42, r * 0.24);
+    ctx.stroke();
+
+    // Pale underside belly plate
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.36, r * 0.48, r * 0.20, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 5. Stalked Glowing Arctic Crab Eyes + Fierce Brow Plate
+    const blink = anim.blink || 0;
+    for (const side of [-1, 1]) {
+      const ex = side * r * 0.34;
+      const ey = -r * 0.46;
+      const er = r * 0.18;
+      // Eye stalk
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(3.5, 0.15 * r);
+      ctx.beginPath();
+      ctx.moveTo(side * r * 0.26, -r * 0.22);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.strokeStyle = shellHi;
+      ctx.lineWidth = Math.max(1.8, 0.08 * r);
+      ctx.stroke();
+
+      // Eye socket
+      ctx.fillStyle = '#020617';
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.065 * scale);
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, er, Math.max(1.5, er * (1 - blink * 0.85)), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      if (!isStunned && !boss.defeated && blink < 0.7) {
+        ctx.fillStyle = isAngry ? '#fde047' : glowCol;
+        ctx.beginPath();
+        ctx.arc(ex, ey, er * 0.62, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ex - er * 0.22, ey - er * 0.22, er * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Serrated crab mouthplates (bubbling during roar)
+    ctx.fillStyle = '#082f49';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.08, r * 0.22, r * (isAngry ? 0.14 : 0.08), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = glowCol;
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.08, r * 0.14, r * (isAngry ? 0.08 : 0.04), 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * SOLAR REEF LOBSTER — Colossal Radiant Red Sea Reef Lobster Guardian (Blue Hole & The Arch) (v265).
+   */
+  _drawSolarLobsterBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.4) * 0.15 * r;
+    const snap = (isAngry ? 0.40 : 0.14) + 0.14 * Math.abs(Math.sin(timeSec * (isAngry ? 7.2 : 2.7)));
+    const outline = '#450a0a';
+    const shellHi = isHurt ? '#ffffff' : '#fde047';
+    const shellRed = isHurt ? '#fecaca' : boss.phase >= 3 ? '#f43f5e' : '#ef4444';
+    const shellDeep = isHurt ? '#fca5a5' : boss.phase >= 3 ? '#881337' : '#991b1b';
+    const goldAccent = '#facc15';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 2.1) * 0.045);
+
+    // 1. Radiant Caustic Solar Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.85);
+    aura.addColorStop(0, 'rgba(250, 204, 21, 0.34)');
+    aura.addColorStop(0.55, 'rgba(239, 68, 68, 0.18)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Long Sweeping Golden Lobster Antennae
+    ctx.strokeStyle = goldAccent;
+    ctx.lineCap = 'round';
+    for (let a = 0; a < 2; a++) {
+      const wave = Math.sin(timeSec * 3.6 + a * 1.4) * 0.22 * r;
+      ctx.lineWidth = Math.max(1.8, (0.075 - a * 0.015) * scale);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.78, -r * (0.24 - a * 0.10));
+      ctx.bezierCurveTo(r * 1.35, -r * (0.78 - a * 0.18) + wave, r * 1.85, -r * (0.95 - a * 0.25) - wave, r * 2.18, -r * (0.58 - a * 0.22) + wave);
+      ctx.stroke();
+    }
+
+    // 3. Segmented Overlapping Lobster Abdomen & Fanning Tail Telson
+    const tailWag = Math.sin(timeSec * (isAngry ? 6.5 : 3.2)) * 0.18;
+    ctx.save();
+    ctx.translate(-r * 0.42, r * 0.04);
+    ctx.rotate(tailWag);
+    for (let seg = 0; seg < 4; seg++) {
+      const sxSeg = -seg * r * 0.24;
+      const sySeg = seg * r * 0.05;
+      const sw = r * (0.34 - seg * 0.045);
+      const sh = r * (0.38 - seg * 0.055);
+      const sg = ctx.createLinearGradient(sxSeg, sySeg - sh, sxSeg, sySeg + sh);
+      sg.addColorStop(0, shellHi);
+      sg.addColorStop(0.35, shellRed);
+      sg.addColorStop(1, shellDeep);
+      ctx.fillStyle = sg;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.ellipse(sxSeg, sySeg, sw, sh, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Gold plate trim
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.65)';
+      ctx.lineWidth = Math.max(1.1, 0.04 * scale);
+      ctx.beginPath();
+      ctx.arc(sxSeg, sySeg, sh * 0.72, -1.2, 1.2);
+      ctx.stroke();
+    }
+    // Broad 3-blade Tail Fan
+    const fx = -r * 1.06;
+    const fy = r * 0.20;
+    for (let blade = -1; blade <= 1; blade++) {
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(blade * 0.42 + tailWag * 0.4);
+      ctx.fillStyle = blade === 0 ? goldAccent : shellRed;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.28, 0, r * 0.34, r * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 4. Four Animated Walking Legs underneath the Thorax
+    ctx.lineCap = 'round';
+    for (let leg = 0; leg < 4; leg++) {
+      const kick = Math.sin(timeSec * (isAngry ? 7.0 : 3.6) + leg * 1.1) * 0.14 * r;
+      const lx = r * (0.38 - leg * 0.24);
+      const ly = r * 0.32;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(3.6, 0.16 * r);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(lx + r * 0.12, ly + r * 0.32 + kick);
+      ctx.lineTo(lx - r * 0.06, ly + r * 0.56 + kick * 1.2);
+      ctx.stroke();
+      ctx.strokeStyle = shellRed;
+      ctx.lineWidth = Math.max(2.0, 0.09 * r);
+      ctx.stroke();
+    }
+
+    // 5. Armored Lobster Carapace (Cephalothorax)
+    const cg = ctx.createLinearGradient(0, -r * 0.6, 0, r * 0.5);
+    cg.addColorStop(0, shellHi);
+    cg.addColorStop(0.32, shellRed);
+    cg.addColorStop(1, shellDeep);
+    ctx.fillStyle = cg;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.52, -r * 0.36);
+    ctx.bezierCurveTo(r * 0.15, -r * 0.62, r * 0.72, -r * 0.44, r * 0.96, -r * 0.12); // Sharp rostrum horn
+    ctx.quadraticCurveTo(r * 0.76, r * 0.42, -r * 0.46, r * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Radiant dorsal crest highlight
+    ctx.strokeStyle = goldAccent;
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.38, -r * 0.28);
+    ctx.quadraticCurveTo(r * 0.22, -r * 0.46, r * 0.78, -r * 0.16);
+    ctx.stroke();
+
+    // 6. Colossal Forward Crusher & Ripper Lobster Claws
+    for (let c = 0; c < 2; c++) {
+      ctx.save();
+      const isTop = c === 0;
+      const cy = isTop ? -r * 0.26 : r * 0.24;
+      const cx = r * (isTop ? 0.88 : 0.96);
+      const bob = Math.sin(timeSec * 3.4 + c * 2.0) * 0.08 * r;
+      ctx.translate(cx, cy + bob);
+      ctx.rotate((isTop ? -0.22 : 0.24) + bob * 0.01);
+
+      // Claw arm link
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(4.8, 0.24 * r);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.36, isTop ? r * 0.18 : -r * 0.12);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+      ctx.strokeStyle = shellRed;
+      ctx.lineWidth = Math.max(2.6, 0.13 * r);
+      ctx.stroke();
+
+      // Main massive palm + upper pincer blade
+      const clGrad = ctx.createLinearGradient(0, -r * 0.3, r * 0.9, r * 0.3);
+      clGrad.addColorStop(0, shellRed);
+      clGrad.addColorStop(0.7, shellHi);
+      clGrad.addColorStop(1, '#ffffff');
+      ctx.save();
+      ctx.rotate(-snap * 0.38);
+      ctx.fillStyle = clGrad;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.08, 0);
+      ctx.bezierCurveTo(r * 0.22, -r * 0.40, r * 0.78, -r * 0.34, r * 0.96, -r * 0.04);
+      ctx.quadraticCurveTo(r * 0.48, -r * 0.02, -r * 0.08, r * 0.08);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Articulating lower serrated claw blade
+      ctx.save();
+      ctx.rotate(snap * 0.42);
+      ctx.fillStyle = shellDeep;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.05, r * 0.06);
+      ctx.quadraticCurveTo(r * 0.48, r * 0.34, r * 0.84, r * 0.10);
+      ctx.quadraticCurveTo(r * 0.42, r * 0.04, -r * 0.05, r * 0.02);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.restore();
+    }
+
+    // 7. Expressive Stalked Golden Lobster Eye
+    const ex = r * 0.56;
+    const ey = -r * 0.28;
+    const er = r * 0.16;
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (!isStunned && !boss.defeated) {
+      ctx.fillStyle = isAngry ? '#ffffff' : goldAccent;
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.12, ey, er * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.28, ey - er * 0.22, er * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * VOLTAIC EMPEROR EEL — High-Voltage Brazilian Sinkhole Electric Eel Guardian (Lagoa Misteriosa) (v265).
+   */
+  _drawElectricEelBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.8) * 0.14 * r;
+    const outline = '#090d24';
+    const bodyDark = isHurt ? '#e0f2fe' : '#1e293b';
+    const bodyMid = isHurt ? '#ffffff' : boss.phase >= 3 ? '#1e1b4b' : '#1e3a8a';
+    const voltGold = boss.phase >= 3 ? '#fb7185' : '#fde047';
+    const voltCyan = '#38bdf8';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+
+    // 1. Bio-Electric Plasma Halo
+    const aura = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.95);
+    aura.addColorStop(0, boss.phase >= 3 ? 'rgba(251, 113, 133, 0.34)' : 'rgba(250, 204, 21, 0.32)');
+    aura.addColorStop(0.5, 'rgba(56, 189, 248, 0.18)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.95, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Sinuous Electric Eel Spine Points (11 smooth undulating segments from tail to head)
+    const segCount = 11;
+    const pts = [];
+    const freq = isAngry ? 6.8 : 3.8;
+    for (let i = 0; i < segCount; i++) {
+      const u = i / (segCount - 1); // 0 = tail tip, 1 = head
+      const px = (-1.65 + u * 2.65) * r;
+      const amp = (1 - u * 0.65) * 0.42 * r;
+      const py = Math.sin(timeSec * freq - u * 4.8) * amp;
+      const thick = (0.10 + Math.sin(u * Math.PI * 0.85) * 0.34 + u * 0.08) * r;
+      pts.push({ x: px, y: py, t: thick });
+    }
+
+    // Continuous Translucent Rippling Ventral Ribbon Fin along underside
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.38)';
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.72)';
+    ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+    ctx.beginPath();
+    for (let i = 0; i < segCount - 1; i++) {
+      const p = pts[i];
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y + p.t * 0.7);
+    }
+    for (let i = segCount - 2; i >= 0; i--) {
+      const p = pts[i];
+      const ripple = Math.sin(timeSec * 9.5 + i * 1.2) * 0.10 * r;
+      ctx.lineTo(p.x, p.y + p.t * 1.48 + ripple);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Sculpted Eel Torso Outline & Gradient Fill
+    ctx.beginPath();
+    for (let i = 0; i < segCount; i++) {
+      const p = pts[i];
+      if (i === 0) ctx.moveTo(p.x, p.y - p.t * 0.5);
+      else ctx.lineTo(p.x, p.y - p.t);
+    }
+    const head = pts[segCount - 1];
+    ctx.quadraticCurveTo(head.x + r * 0.44, head.y - r * 0.14, head.x + r * 0.34, head.y + r * 0.24);
+    for (let i = segCount - 1; i >= 0; i--) {
+      const p = pts[i];
+      ctx.lineTo(p.x, p.y + p.t * 0.92);
+    }
+    ctx.closePath();
+    const bg = ctx.createLinearGradient(0, -r * 0.6, 0, r * 0.6);
+    bg.addColorStop(0, bodyDark);
+    bg.addColorStop(0.55, bodyMid);
+    bg.addColorStop(1, '#f59e0b'); // Iconic electric-eel golden-orange throat/belly!
+    ctx.fillStyle = bg;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.fill();
+    ctx.stroke();
+
+    // 3. Pulsing Bio-Electric Lateral Organ Cells along the flank
+    for (let i = 2; i < segCount - 1; i++) {
+      const p = pts[i];
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * (isAngry ? 14 : 6.5) - i * 0.9);
+      ctx.fillStyle = i % 2 === 0 ? voltGold : voltCyan;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, p.t * 0.48, p.t * 0.20, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 4. Live Crackling Jagged Lightning Arcs along dorsal spine & tail!
+    const arcCount = isAngry ? 3 : 2;
+    for (let a = 0; a < arcCount; a++) {
+      ctx.strokeStyle = a === 0 ? voltGold : a === 1 ? '#7dd3fc' : '#ffffff';
+      ctx.lineWidth = Math.max(1.5, (a === 0 ? 0.085 : 0.055) * scale);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < segCount; i++) {
+        const p = pts[i];
+        const jit = Math.sin(timeSec * 31 + i * 7.3 + a * 4.1) * (isAngry ? 0.36 : 0.24) * r;
+        const ax = p.x;
+        const ay = p.y - p.t * (0.98 + a * 0.24) + jit;
+        if (i === 0) ctx.moveTo(ax, ay);
+        else ctx.lineTo(ax, ay);
+      }
+      ctx.stroke();
+    }
+
+    // 5. Electric Eel Head Details: Glowing Storm-Yellow Eye & Crackling Jaw
+    const ex = head.x + r * 0.02;
+    const ey = head.y - r * 0.14;
+    const er = r * 0.16;
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = voltCyan;
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (!isStunned && !boss.defeated) {
+      ctx.fillStyle = voltGold;
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.1, ey, er * 0.64, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.26, ey - er * 0.20, er * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Glowing jaw grin line
+    ctx.strokeStyle = isAngry ? voltGold : voltCyan;
+    ctx.lineWidth = Math.max(1.6, 0.065 * scale);
+    ctx.beginPath();
+    ctx.moveTo(head.x + r * 0.32, head.y + r * 0.12);
+    ctx.quadraticCurveTo(head.x + r * 0.10, head.y + r * 0.22, head.x - r * 0.10, head.y + r * 0.12);
+    ctx.stroke();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * LOCH NESS LEVIATHAN — Ancient Highland Plesiosaur Guardian (Plura Marble Sump) (v265).
+   */
+  _drawLochNessBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.1) * 0.16 * r;
+    const strokePhase = timeSec * (isAngry ? 5.6 : 2.6);
+    const outline = '#022c22';
+    const hideTop = isHurt ? '#ffffff' : boss.phase >= 3 ? '#0f766e' : '#059669';
+    const hideMid = isHurt ? '#d1fae5' : boss.phase >= 3 ? '#134e4a' : '#047857';
+    const hideBelly = '#a7f3d0';
+    const finGlow = boss.phase >= 3 ? '#fde047' : '#34d399';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+
+    // 1. Misty Highland Emerald Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.9);
+    aura.addColorStop(0, 'rgba(52, 211, 153, 0.30)');
+    aura.addColorStop(0.6, 'rgba(13, 148, 136, 0.14)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Back Paddle Flippers (far side)
+    for (let f = 0; f < 2; f++) {
+      ctx.save();
+      const fx = f === 0 ? r * 0.18 : -r * 0.44;
+      const fy = r * 0.24;
+      const flap = Math.sin(strokePhase + f * 1.5 + 0.8) * 0.38;
+      ctx.translate(fx, fy);
+      ctx.rotate(0.45 + flap);
+      ctx.fillStyle = '#064e3b';
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.12, r * 0.34, r * 0.18, r * 0.44, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 3. Long Tapering Aquatic Tail
+    const tailWave = Math.sin(timeSec * (isAngry ? 5.2 : 2.5)) * 0.24 * r;
+    ctx.fillStyle = hideMid;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.2, 0.09 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.56, -r * 0.16);
+    ctx.quadraticCurveTo(-r * 1.25, -r * 0.32 + tailWave * 0.6, -r * 1.82, -r * 0.06 + tailWave);
+    ctx.quadraticCurveTo(-r * 1.22, r * 0.28 + tailWave * 0.5, -r * 0.52, r * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Iconic Domed Plesiosaur Body + Mossy Highland Dorsal Crest Spines
+    const bodyGrad = ctx.createLinearGradient(0, -r * 0.65, 0, r * 0.48);
+    bodyGrad.addColorStop(0, hideTop);
+    bodyGrad.addColorStop(0.65, hideMid);
+    bodyGrad.addColorStop(1, hideBelly);
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.5, 0.10 * scale);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.12, r * 0.06, r * 0.72, r * 0.48, -0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing Loch-Kelp Dorsal Ridge Plates along the arched back
+    ctx.fillStyle = finGlow;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+    for (let s = 0; s < 4; s++) {
+      const sxSp = (-0.54 + s * 0.24) * r;
+      const sySp = -r * (0.32 + Math.sin((s / 3) * Math.PI) * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(sxSp - r * 0.09, sySp + r * 0.08);
+      ctx.quadraticCurveTo(sxSp, sySp - r * 0.22, sxSp + r * 0.10, sySp + r * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Subtle Bioluminescent Highland Mist Spots along Flank
+    ctx.fillStyle = 'rgba(167, 243, 208, 0.45)';
+    for (let sp = 0; sp < 3; sp++) {
+      ctx.beginPath();
+      ctx.arc((-0.44 + sp * 0.28) * r, (0.04 - (sp % 2) * 0.10) * r, r * (0.085 - sp * 0.01), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Graceful S-Curved Loch Ness Neck & Sculpted Plesiosaur Head
+    const neckSway = Math.sin(timeSec * (isAngry ? 4.8 : 2.2)) * 0.12 * r;
+    const hx = r * 0.92 + neckSway * 0.35;
+    const hy = -r * 0.86 + neckSway * 0.45;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(6.2, 0.40 * r);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.36, -r * 0.04);
+    ctx.bezierCurveTo(r * 0.68, -r * 0.10, r * 0.56, -r * 0.74, hx, hy);
+    ctx.stroke();
+    ctx.strokeStyle = hideTop;
+    ctx.lineWidth = Math.max(4.0, 0.28 * r);
+    ctx.stroke();
+    // Pale cream-mint throat stripe up the front of the S-neck
+    ctx.strokeStyle = hideBelly;
+    ctx.lineWidth = Math.max(1.8, 0.09 * r);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.42, r * 0.06);
+    ctx.bezierCurveTo(r * 0.74, -r * 0.02, r * 0.64, -r * 0.68, hx + r * 0.04, hy + r * 0.06);
+    ctx.stroke();
+
+    // Sculpted Plesiosaur Head with Rounded Snout & Cute Crest
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(Math.sin(timeSec * 2.2) * 0.06 + (isAngry ? -0.14 : 0));
+    ctx.fillStyle = hideTop;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.0, 0.085 * scale);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.14, 0, r * 0.34, r * 0.20, 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Small mystic highland ear/crest horn behind crown
+    ctx.fillStyle = finGlow;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.08, -r * 0.14);
+    ctx.lineTo(-r * 0.24, -r * 0.32);
+    ctx.lineTo(r * 0.04, -r * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Expressive Emerald-Gold Plesiosaur Eye
+    const ex = r * 0.14;
+    const ey = -r * 0.05;
+    const er = r * 0.11;
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    if (!isStunned && !boss.defeated) {
+      ctx.fillStyle = isAngry ? '#fde047' : '#6ee7b7';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.14, ey, er * 0.65, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.26, ey - er * 0.24, er * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 6. Front Rowing Paddle Flippers (near side)
+    for (let f = 0; f < 2; f++) {
+      ctx.save();
+      const fx = f === 0 ? r * 0.26 : -r * 0.36;
+      const fy = r * 0.26;
+      const flap = Math.sin(strokePhase + f * 1.5) * 0.42;
+      ctx.translate(fx, fy);
+      ctx.rotate(0.28 + flap);
+      const fg = ctx.createLinearGradient(0, 0, 0, r * 0.65);
+      fg.addColorStop(0, hideTop);
+      fg.addColorStop(1, '#065f46');
+      ctx.fillStyle = fg;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.06, r * 0.34, r * 0.20, r * 0.46, 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Luminous flipper trim rib
+      ctx.strokeStyle = 'rgba(167, 243, 208, 0.55)';
+      ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.04, r * 0.10);
+      ctx.lineTo(-r * 0.12, r * 0.62);
+      ctx.stroke();
+      ctx.restore();
     }
 
     ctx.restore();

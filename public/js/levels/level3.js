@@ -13,9 +13,9 @@ export const LEVEL_3 = {
     "Navigate Norway's glacial marble labyrinth down to 66m. The main gold guideline marks the true route while four unlined dead-end siphons conceal giant Arctic crystals and fossils.",
   bounds: {
     xMin: -44,
-    xMax: 380,
+    xMax: 410,
     yMin: -6,
-    yMax: 76,
+    yMax: 96,
   },
   roughness: 0.40,
   spawn: { x: 14, y: 2.0 },
@@ -105,6 +105,13 @@ export const LEVEL_3 = {
     // Dead End D: East Fault Cul-de-Sac (36.5m -> 58m deep squeeze pocket)
     { ax: 226, ay: 36.5, bx: 238, by: 52.0, ra: 2.3, rb: 1.85 },
     { ax: 238, ay: 52.0, bx: 254, by: 58.0, ra: 1.85, rb: 2.9 },
+
+    // SECRET SONAR-ONLY HIGHLAND LOCH SANCTUM (100% hidden until Sonar breaches false marble veil at x=185.5, y=68.5!)
+    { ax: 178, ay: 65.5, bx: 214, by: 72.0, ra: 2.3, rb: 3.8, secretLair: true },
+    { ax: 214, ay: 72.0, bx: 238, by: 73.5, ra: 5.4, rb: 4.4, secretLair: true }, // Armory chamber (x=224, y=73.0)
+    { ax: 238, ay: 73.5, bx: 320, by: 74.0, ra: 4.5, rb: 4.8, secretLair: true }, // Misty Highland Gauntlet
+    { ax: 320, ay: 74.0, bx: 352, by: 74.0, ra: 14.5, rb: 15.5, secretLair: true }, // Colossal Loch Ness Cathedral
+    { ax: 352, ay: 74.0, bx: 376, by: 74.0, ra: 15.5, rb: 13.0, secretLair: true },
   ],
   // Main gold guideline strictly follows the true exit route (no lines down dead ends)
   guideline: [
