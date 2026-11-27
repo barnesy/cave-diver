@@ -874,6 +874,7 @@ export function createLiveryWorkshopController({
         equipFx: equipFxArg,
         focusHighlight,
         previewLockedLabel: lockedTryOn && !hoveredGear ? `${lockedTryOn.name} (${lockedTryOn.hint})` : '',
+        transparentBg: liveryPreviewEnv === 'clear',
       });
       if (slotModalOpen) {
         const modalHasDpv = activeCompareSlot === 'scooter'
@@ -912,6 +913,7 @@ export function createLiveryWorkshopController({
           timeSec,
           equipFx: equipFxArg,
           focusHighlight: modalFocus,
+          transparentBg: liveryPreviewEnv === 'clear',
         });
       }
     } catch (err) {

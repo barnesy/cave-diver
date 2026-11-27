@@ -15892,6 +15892,294 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
   }
 }
 
+/* ─── v279: BORDERLESS GRAPHICS-FIRST UI & FRAMELESS LOADING SCREEN ─── */
+
+/* 1. Frameless Loading Screen: floating emblem & sleek filament progress bar directly over the ocean canvas */
+.loader-screen {
+  background: radial-gradient(circle at 50% 42%, rgba(4, 26, 46, 0.54) 0%, rgba(2, 13, 25, 0.82) 62%, rgba(2, 9, 18, 0.92) 100%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.loader-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 20px 18px;
+}
+.loader-emblem {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+}
+.loader-emblem-pulse {
+  inset: -14px;
+  border: none !important;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.36) 0%, rgba(45, 212, 191, 0.1) 48%, transparent 72%);
+}
+.loader-emblem-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  box-shadow: 0 14px 38px rgba(2, 132, 199, 0.42);
+}
+.loader-title {
+  font-size: 1.62rem;
+  text-shadow: 0 4px 24px rgba(2, 11, 20, 0.72);
+}
+.loader-step {
+  color: rgba(226, 232, 240, 0.84);
+  text-shadow: 0 2px 12px rgba(2, 11, 20, 0.76);
+}
+.loader-bar-track {
+  height: 5px;
+  background: rgba(148, 163, 184, 0.18);
+  border: none !important;
+  box-shadow: none;
+}
+.loader-coop-sync {
+  border-top: none !important;
+}
+.loader-callsign-gate input {
+  border: none !important;
+  background: rgba(8, 22, 42, 0.72);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
+}
+.loader-callsign-gate input:focus {
+  background: rgba(12, 32, 58, 0.88);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.42);
+}
+
+/* 2. Graphics-First Borderless Home Screen: let the live rendered cenote & cave breathe */
+#screen-menu.overlay-screen {
+  background: radial-gradient(circle at 50% 34%, rgba(4, 22, 40, 0.28), rgba(2, 11, 20, 0.64));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+#screen-menu .site-map-panel {
+  border: none !important;
+  background: radial-gradient(circle at 55% 40%, rgba(6, 28, 50, 0.52), rgba(3, 12, 24, 0.62));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+}
+#screen-menu .site-map-region-badge,
+#screen-menu .site-map-zoom-btn,
+#screen-menu .site-map-legend {
+  border: none !important;
+  background: rgba(4, 16, 32, 0.6);
+}
+#screen-menu .level-card-btn {
+  border: none !important;
+  background: rgba(5, 17, 34, 0.54);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+#screen-menu .level-card-btn.is-wreck {
+  background: rgba(28, 16, 15, 0.56);
+}
+#screen-menu .level-card-btn:hover:not(:disabled) {
+  border: none !important;
+  background: rgba(14, 52, 86, 0.62);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+#screen-menu .level-card-btn.active {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(14, 132, 199, 0.42), rgba(7, 36, 66, 0.66));
+  box-shadow: 0 10px 26px rgba(2, 132, 199, 0.26);
+}
+#screen-menu .level-card-btn.is-wreck.active {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.4), rgba(66, 24, 12, 0.64));
+  box-shadow: 0 10px 26px rgba(234, 88, 12, 0.24);
+}
+#screen-menu .first-play-welcome-strip {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.26), rgba(6, 56, 44, 0.52));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+#screen-menu .home-core-btn {
+  border: none !important;
+  background: rgba(6, 20, 38, 0.52) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+#screen-menu .home-core-btn:hover:not(:disabled) {
+  border: none !important;
+  background: rgba(14, 66, 108, 0.56) !important;
+  box-shadow: 0 12px 26px rgba(2, 132, 199, 0.22);
+}
+#screen-menu .home-core-btn.has-new-gear {
+  border: none !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 62, 48, 0.58)) !important;
+}
+#screen-menu .dive-coop-dock,
+#screen-menu .coop-dock-toggle {
+  border: none !important;
+  background: rgba(5, 16, 32, 0.44);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+#screen-menu .home-menu-btn {
+  border: none !important;
+  background: rgba(6, 18, 36, 0.54) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+.home-menu-popover,
+.hud-menu-popover,
+.hud-kit-popover {
+  border: none !important;
+  background: linear-gradient(168deg, rgba(7, 20, 38, 0.94), rgba(3, 10, 22, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.62);
+}
+.home-menu-item,
+.home-menu-item:hover,
+.home-menu-item.active,
+.home-menu-disclosure,
+.home-menu-disclosure-sum,
+.home-menu-popover .home-menu-callsign,
+.home-menu-ver-row .btn {
+  border: none !important;
+}
+.home-menu-divider {
+  background: rgba(148, 163, 184, 0.08);
+}
+#screen-menu .lan-room-box,
+#screen-menu .leaderboard-panel {
+  border: none !important;
+  background: linear-gradient(168deg, rgba(7, 20, 38, 0.84), rgba(3, 10, 22, 0.9));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.52);
+}
+
+/* 3. Borderless Modals, Floating Portraits, Workshop Diver Stage & Buttons */
+.btn.secondary,
+.btn.ghost {
+  border: none;
+  background: rgba(14, 34, 58, 0.62);
+}
+.btn.ghost:hover {
+  background: rgba(24, 52, 86, 0.78);
+}
+.game-toast {
+  border: none !important;
+  background: rgba(6, 18, 34, 0.9);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.52);
+}
+.lb-stats-modal .lb-stats-card,
+.debrief-card,
+.gear-sets-modal-card {
+  border: none !important;
+}
+.lb-stats-modal .lb-stats-card > .lb-stats-head,
+#livery-modal .livery-modal-card > .lb-stats-head,
+#gear-slot-modal .gear-slot-modal-card > .lb-stats-head,
+#modal-logbook .logbook-card > .lb-stats-head,
+#bounties-modal .bounties-card > .lb-stats-head,
+#gear-sets-modal .gear-sets-modal-card > .lb-stats-head,
+#leaderboard-panel .lb-nav-bar {
+  border-bottom: none !important;
+}
+#livery-modal .livery-preview-wrap,
+#gear-slot-modal .gear-slot-preview-wrap {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+#livery-canvas,
+#gear-slot-preview-canvas {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 5%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 5%, #000 88%, transparent 100%);
+}
+.livery-preview-overlay-left .livery-tank-pill,
+.livery-preview-overlay-actions .livery-tank-pill {
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+#bounties-modal .bounty-portrait {
+  border: none !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46) !important;
+}
+#bounties-modal .bounty-portrait.claimed {
+  box-shadow: 0 18px 42px rgba(16, 185, 129, 0.28) !important;
+}
+#modal-logbook .vault-diorama-wrap {
+  border: none !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.46) !important;
+}
+.gear-sets-card,
+.gear-sets-active-pill,
+.gear-sets-power-row,
+.gear-sets-piece-chip,
+.gear-sets-empty,
+.trench-perk-btn {
+  border: none !important;
+}
+
+/* 4. Borderless Minimalist In-Game HUD: keep gameplay graphics front-and-center */
+#screen-hud .hud-top-bar {
+  border-color: transparent !important;
+  background: linear-gradient(180deg, rgba(4, 14, 28, 0.56), rgba(4, 14, 28, 0.38));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+#screen-hud .hud-util-btns .util-btn {
+  border-color: transparent !important;
+  background: rgba(8, 22, 42, 0.5);
+  box-shadow: none;
+}
+#screen-hud .hud-util-btns .util-btn:hover {
+  background: rgba(14, 116, 144, 0.42);
+}
+#screen-hud .dc-team-panel,
+#screen-hud .mate-card,
+#screen-hud .dive-telemetry,
+#screen-hud .hud-self-health,
+#screen-hud .dc-gas-rack,
+#screen-hud .hud-gear-dock,
+#screen-hud .hud-minimap-wrap,
+#screen-hud .hud-drill-pace,
+#screen-hud .hud-combat-bar,
+#screen-hud .hud-boss-bar {
+  border-color: transparent !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+#screen-hud .dive-telemetry,
+#screen-hud .hud-self-health,
+#screen-hud .dc-gas-rack,
+#screen-hud .hud-gear-dock {
+  background: rgba(4, 14, 28, 0.52);
+}
+#screen-hud .dc-tank-btn,
+#screen-hud .gear-dock-btn,
+#screen-hud .btn-gas-compact,
+#screen-hud .dc-gas-pill,
+#screen-hud .depth-gauge {
+  border-color: transparent !important;
+}
+#screen-hud .dc-tank-btn.active {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.52), rgba(8, 34, 62, 0.72));
+  box-shadow: inset 0 -2px 0 rgba(56, 189, 248, 0.85);
+}
+#screen-hud .self-health-card,
+#screen-hud .dc-ekg-row,
+#screen-hud .mate-ekg-row,
+#screen-hud .dc-cell,
+#screen-hud .gear-hud-btn,
+#screen-hud .kit-toggle-btn,
+#screen-hud .self-tag,
+#screen-hud .hud-mode-badge,
+#screen-hud .daily-hud-badge,
+#screen-hud .gear-hud-pill,
+#screen-hud .hud-sonar-ping-btn,
+#screen-hud .hud-minimap-zoom,
+#screen-hud .tacmap-close-btn,
+#screen-hud .sonar-ping-chip,
+#screen-hud .hud-minimap-sonar-view,
+#screen-hud .hud-pause-card,
+#screen-hud .comm-btn {
+  border-color: transparent !important;
+  box-shadow: none;
+}
+#screen-hud .sonar-ping-chip.active {
+  background: rgba(56, 189, 248, 0.24);
+}
+#screen-hud .hud-minimap-wrap::before,
+#screen-hud .hud-minimap-wrap::after {
+  display: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
   #screen-menu.overlay-screen,
   #screen-menu > .menu-card,
