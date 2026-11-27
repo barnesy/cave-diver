@@ -149,6 +149,7 @@ function initGearCodexPage() {
   const ownedToggleBtn = document.getElementById('btn-codex-owned-toggle');
   const contentEl = document.getElementById('codex-content');
 
+  const previewSidebar = document.getElementById('codex-preview-sidebar');
   const previewCanvas = document.getElementById('codex-preview-canvas');
   const previewLabelEl = document.getElementById('codex-preview-label');
   const previewSynergiesEl = document.getElementById('codex-preview-synergies');
@@ -649,11 +650,57 @@ function initGearCodexPage() {
     }
   });
 
+  // Sticky full-width Hero -> Compact Dock transition on scroll with zero layout shift
+  let isCompactHero = false;
+  let expandedHeroHeight = 0;
+
+  function updateHeroCollapseCompensation() {
+    if (!previewSidebar) return;
+    if (!isCompactHero) {
+      expandedHeroHeight = Math.round(previewSidebar.offsetHeight);
+      previewSidebar.style.setProperty('--hero-collapse-pad', '0px');
+    } else if (expandedHeroHeight > 0) {
+      const curH = Math.round(previewSidebar.offsetHeight);
+      const delta = Math.max(0, expandedHeroHeight - curH);
+      previewSidebar.style.setProperty('--hero-collapse-pad', `${delta}px`);
+    }
+  }
+
+  function syncHeroCompactState() {
+    if (!previewSidebar) return;
+    const y = window.scrollY || document.documentElement.scrollTop || 0;
+    const enterThreshold = 110;
+    const exitThreshold = 28;
+    const nextCompact = isCompactHero ? y > exitThreshold : y > enterThreshold;
+    if (nextCompact === isCompactHero) return;
+
+    if (nextCompact) {
+      expandedHeroHeight = Math.round(previewSidebar.offsetHeight);
+      isCompactHero = true;
+      previewSidebar.classList.add('is-compact');
+      updateHeroCollapseCompensation();
+    } else {
+      isCompactHero = false;
+      previewSidebar.classList.remove('is-compact');
+      updateHeroCollapseCompensation();
+    }
+  }
+
+  if (previewSidebar && typeof ResizeObserver !== 'undefined') {
+    const heroResizeObserver = new ResizeObserver(() => {
+      updateHeroCollapseCompensation();
+    });
+    heroResizeObserver.observe(previewSidebar);
+  }
+
+  window.addEventListener('scroll', syncHeroCompactState, { passive: true });
+
   // Re-sync per-set diver canvases cleanly on viewport resize
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
+      if (!isCompactHero) updateHeroCollapseCompensation();
       if (state.tab === 'sets') renderSetCardDivers();
     }, 90);
   });
@@ -661,6 +708,8 @@ function initGearCodexPage() {
   // Initial render
   renderMainContent();
   renderPreviewPanel(false);
+  updateHeroCollapseCompensation();
+  syncHeroCompactState();
 
   // Live 60 FPS animation loop for BOTH the top Live Mixer diver AND all visible Armor Set card divers!
   const startMs = performance.now();
@@ -668,7 +717,8 @@ function initGearCodexPage() {
     if (!document.hidden) {
       const t = (now - startMs) * 0.001;
       if (previewCanvas) {
-        renderDiverCanvasHiDpi(previewCanvas, previewLivery, t, 0.72);
+        const heroDiverScale = isCompactHero ? 0.74 : 0.84;
+        renderDiverCanvasHiDpi(previewCanvas, previewLivery, t, heroDiverScale);
       }
       if (state.tab === 'sets' && activeSetCanvases.length) {
         renderSetCardDivers(t, true);

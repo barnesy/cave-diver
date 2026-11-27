@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#040b18" />
   <meta name="description" content="Mix Armor Sets and Legendaries in Cave Diver to preview live stat effects, set bonuses, and outfitted divers." />
   <title>Cave Diver — Sets &amp; Legendaries Mixer</title>
-  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=277" />
-  <link rel="stylesheet" href="./codex.css?v=277" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=278" />
+  <link rel="stylesheet" href="./codex.css?v=278" />
 </head>
 <body>
   <header class="codex-topbar">
@@ -27,6 +27,24 @@
   </header>
 
   <main class="codex-shell">
+    <aside id="codex-preview-sidebar" class="codex-preview-sidebar" aria-label="Live Build &amp; Stat Effects">
+      <div class="codex-preview-top">
+        <div class="codex-preview-stage">
+          <canvas id="codex-preview-canvas" width="960" height="360" aria-label="Animated diver rig preview"></canvas>
+          <div class="codex-preview-caption">
+            <span id="codex-preview-label" class="codex-preview-label">Your Dive Rig</span>
+          </div>
+        </div>
+        <div id="codex-preview-bars" class="codex-stat-bars" aria-label="Live Mixed Rig Stat Meters"></div>
+      </div>
+
+      <div class="codex-preview-bottom">
+        <div id="codex-preview-synergies" class="codex-synergies-row" aria-label="Active Set Bonuses and Powers"></div>
+        <div id="codex-preview-slots" class="codex-equipped-slots" aria-label="Active Mixed Gear Slots"></div>
+        <button id="btn-codex-equip-rig" class="codex-btn primary codex-equip-cta" type="button" hidden>⚡ Equip Owned to My Rig</button>
+      </div>
+    </aside>
+
     <section class="codex-main-col" aria-label="Mix Armor Sets and Legendaries">
       <div class="codex-toolbar">
         <div class="codex-tabs" role="tablist" aria-label="Gear Categories">
@@ -51,28 +69,10 @@
 
       <div id="codex-content" aria-live="polite"></div>
     </section>
-
-    <aside id="codex-preview-sidebar" class="codex-preview-sidebar" aria-label="Live Build &amp; Stat Effects">
-      <div class="codex-preview-top">
-        <div class="codex-preview-stage">
-          <canvas id="codex-preview-canvas" width="760" height="400" aria-label="Animated diver rig preview"></canvas>
-          <div class="codex-preview-caption">
-            <span id="codex-preview-label" class="codex-preview-label">Your Dive Rig</span>
-          </div>
-        </div>
-        <div id="codex-preview-bars" class="codex-stat-bars" aria-label="Live Mixed Rig Stat Meters"></div>
-      </div>
-
-      <div class="codex-preview-bottom">
-        <div id="codex-preview-synergies" class="codex-synergies-row" aria-label="Active Set Bonuses and Powers"></div>
-        <div id="codex-preview-slots" class="codex-equipped-slots" aria-label="Active Mixed Gear Slots"></div>
-        <button id="btn-codex-equip-rig" class="codex-btn primary codex-equip-cta" type="button" hidden>⚡ Equip Owned to My Rig</button>
-      </div>
-    </aside>
   </main>
 
   <div id="codex-toast" class="codex-toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="./js/ui/gearCodexPage.js?v=277"></script>
+  <script type="module" src="./js/ui/gearCodexPage.js?v=278"></script>
 </body>
 </html>
