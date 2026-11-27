@@ -3137,7 +3137,7 @@ export function drawLiveryPreview(
 ) {
   if (!ctx || !w || !h) return;
   const pal = resolveDiverLiveryPalette(livery);
-  const { suit, torch, patch, headgear, tank } = pal;
+  const { torch } = pal;
   const isSilt = envMode === 'silt';
   const isNight = envMode === 'night';
 
@@ -3348,14 +3348,6 @@ export function drawLiveryPreview(
     const set = pal.setSynergy;
     _drawPreviewCornerCaption(ctx, w, `${set.icon} ${set.auraName}`, set.color, set.color, 0.96);
   }
-
-  // Corner optical & gear telemetry tag
-  ctx.font = '700 10.5px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(203, 213, 225, 0.74)';
-  ctx.textAlign = 'right';
-  const chromaTag = pal.chroma && pal.chroma.id !== 'none' ? ` · 🎨 ${pal.chroma.name}` : '';
-  const specSummary = `${suit.name} · ${headgear.name} · ${tank.name} · ${torch.shortLabel}${patch.id !== 'none' ? ` ${patch.icon}` : ''}${chromaTag}`;
-  ctx.fillText(specSummary, w - 12, h - 10);
   ctx.restore();
 }
 
