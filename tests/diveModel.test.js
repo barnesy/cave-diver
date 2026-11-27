@@ -8487,17 +8487,20 @@ test('v172 Monolith Debt Paydown: Modular Renderers, Decomposed stepDiveSession,
     assert.ok(sessionSrc.includes(phaseFn), `diveSession.js missing phase function ${phaseFn}`);
   }
 
-  // 3. Every getElementById(...) across ALL extracted public/js/ui/*.js controllers must exist in index.html
+  // 3. Every getElementById(...) across ALL extracted public/js/ui/*.js controllers must exist in its HTML page
   const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+  const codexHtml = fs.readFileSync(path.join(pubDir, 'codex.html'), 'utf8');
+  const codexHtmlIds = new Set([...codexHtml.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
   const uiDir = path.join(pubDir, 'js/ui');
   const uiFiles = fs.readdirSync(uiDir).filter((f) => f.endsWith('.js'));
   assert.ok(uiFiles.length >= 10, `Expected >=10 modular UI controller files, got ${uiFiles.length}`);
   const missingUiIds = [];
   for (const f of uiFiles) {
     const src = fs.readFileSync(path.join(uiDir, f), 'utf8');
+    const pageIds = f === 'gearCodexPage.js' ? codexHtmlIds : htmlIds;
     for (const m of src.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)) {
       const id = m[1];
-      if (!htmlIds.has(id) && !src.includes(`id="${id}"`) && !src.includes(`id='${id}'`)) {
+      if (!pageIds.has(id) && !src.includes(`id="${id}"`) && !src.includes(`id='${id}'`)) {
         missingUiIds.push(`${f}:${id}`);
       }
     }
@@ -13882,4 +13885,55 @@ test('v269 Grumpy Sea Turtle & Scarlet Lionfish Queen: 20-Boss Pantheon, SDF Ope
     assert.ok(ops > 90, `Expected rich kawaii anime drawing ops for ${bossKind}, got ${ops}`);
     assert.ok(getSecretCosmeticsForTrophy(trophyId).length >= 1, `${bossKind} trophy must unlock mythic drysuit`);
   }
+});
+
+test('v270 Sets & Legendaries Codex Model: 8 Armor Sets, 9 Legendaries, 27 Mythics, Filters & Preview Rig Builders', async () => {
+  const {
+    buildGearCodexData,
+    filterCodexSets,
+    filterCodexItems,
+    applyCodexItemToLivery,
+    applyCodexSetToLivery,
+    buildAllLegendaryPreviewRig,
+  } = await import('../public/js/game/gearCodexModel.js');
+  const { DEFAULT_RIG_LIVERY, computeUnlockedLiveries } = await import('../public/js/game/rigLivery.js');
+
+  const unlocked = computeUnlockedLiveries(createEmptyLogbook(), new Set());
+  const data = buildGearCodexData(unlocked);
+
+  assert.equal(data.sets.length, 8, 'Codex must expose all 8 Armor Sets');
+  assert.equal(data.legendaries.length, 9, 'Codex must expose all 9 Ultra-Rare Legendaries');
+  assert.equal(data.mythics.length, 27, 'Codex must expose all 27 Mythic Relics & Guardian Drysuits');
+  assert.equal(data.summary.totalSets, 8);
+  assert.equal(data.summary.totalLegendaries, 9);
+  assert.equal(data.summary.totalMythics, 27);
+
+  for (const s of data.sets) {
+    assert.ok(s.pieces.length >= 2, `Set ${s.id} must have >= 2 pieces`);
+    assert.ok(s.tierFull && s.tierFull.label, `Set ${s.id} must have full-set tier bonus`);
+    assert.ok(Object.keys(s.previewPatch).length >= 2, `Set ${s.id} must build a valid preview patch`);
+  }
+  for (const leg of data.legendaries) {
+    assert.ok(leg.power && leg.power.name, `Legendary ${leg.item.id} must have unique power`);
+    assert.ok(leg.statPills.length >= 2, `Legendary ${leg.item.id} must have formatted stat pills`);
+  }
+
+  // Filtering checks
+  assert.ok(filterCodexSets(data.sets, { query: 'dreadnought' }).some((s) => s.id === 'dreadnought-mk4'));
+  assert.equal(filterCodexItems(data.legendaries, { slot: 'harpoon' }).length, 1);
+  assert.ok(filterCodexItems(data.mythics, { origin: 'boss' }).length >= 18);
+
+  // Preview rig builders
+  const dreadSet = data.sets.find((s) => s.id === 'dreadnought-mk4');
+  const setRig = applyCodexSetToLivery(DEFAULT_RIG_LIVERY, dreadSet);
+  assert.equal(setRig.headgearId, 'secret-dreadnought-helm');
+  assert.equal(setRig.tankId, 'secret-dreadnought-brass');
+
+  const itemRig = applyCodexItemToLivery(DEFAULT_RIG_LIVERY, 'harpoon', 'legendary-poseidon-trident');
+  assert.equal(itemRig.harpoonId, 'legendary-poseidon-trident');
+
+  const dreamRig = buildAllLegendaryPreviewRig(data);
+  assert.equal(dreamRig.suitId, 'legendary-aegis-exosuit');
+  assert.equal(dreamRig.harpoonId, 'legendary-poseidon-trident');
+  assert.equal(dreamRig.scooterId, 'legendary-valkyrie-dpv');
 });

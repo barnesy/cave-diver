@@ -219,7 +219,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  let filePath = path.normalize(path.join(PUBLIC_DIR, urlPath === '/' ? 'index.html' : urlPath));
+  const resolvedPath = urlPath === '/' ? 'index.html' : (urlPath === '/codex' || urlPath === '/codex/') ? 'codex.html' : urlPath;
+  let filePath = path.normalize(path.join(PUBLIC_DIR, resolvedPath));
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     res.end('Forbidden');
