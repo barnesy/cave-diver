@@ -4489,9 +4489,10 @@ button.mode-badge:hover {
   position: sticky;
   bottom: 0;
   z-index: 6;
-  margin: 10px -2px -2px;
-  padding: 12px 2px 4px;
-  background: linear-gradient(180deg, rgba(6, 15, 30, 0), rgba(6, 15, 30, 0.96) 24%, rgba(6, 15, 30, 0.99));
+  margin: 12px -4px -2px;
+  padding: 10px 4px 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(6, 15, 30, 0.97);
 }
 .dive-guide-footer .dive-guide-callsign-row {
   margin-top: 0;
@@ -15128,13 +15129,34 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
 #bounties-modal .bounty-pts.claimed {
   color: #6ee7b7;
 }
-#bounties-modal .bounty-waters {
+#bounties-modal .bounty-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 2px;
+}
+#bounties-modal .bounty-waters {
+  padding: 0;
   font-size: 0.76rem;
   font-weight: 500;
   color: rgba(148, 163, 184, 0.84);
   background: transparent !important;
   border: none !important;
+  min-width: 0;
+}
+#bounties-modal .bounty-hunt-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.debrief-bounty-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 /* Popover elastic bubble IN & OUT transitions */

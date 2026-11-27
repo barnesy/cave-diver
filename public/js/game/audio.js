@@ -1384,6 +1384,10 @@ export class DiveAudio {
         };
         osc.start(t);
         osc.stop(t + 1.75);
+      } else if (depthM > 14 && roll < 0.78) {
+        // Eerie deep-hull metallic rivet ping + trapped-air bubble percolation (v263)
+        this._ambienceTimer = 6.4 + Math.random() * 5.8;
+        this.playWreckHullRivetPing(ambPan);
       } else {
         // Gentle low ocean swell sub-thrum (spatialized onto ambienceBus)
         this._ambienceTimer = 6.5 + Math.random() * 6.0;
@@ -1830,6 +1834,46 @@ export class DiveAudio {
     // Cenote / Karst resonant drop & shimmer
     this.playTone(620, 0.08, 'sine', 0.014, 0, { pan, bus: 'ambience' });
     this.playTone(840, 0.12, 'sine', 0.011, 0.06, { pan: pan * 0.6, bus: 'ambience' });
+  }
+
+  /**
+   * Distant sunken-shipwreck metallic rivet ping & trapped-air hull bubble percolation (v263).
+   */
+  playWreckHullRivetPing(pan = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime;
+    // Soft damped steel plate ping
+    const ping = this.ctx.createOscillator();
+    const filt = this.ctx.createBiquadFilter();
+    const g = this.ctx.createGain();
+    const f0 = 260 + Math.random() * 140;
+    ping.type = 'triangle';
+    ping.frequency.setValueAtTime(f0, t);
+    ping.frequency.exponentialRampToValueAtTime(f0 * 0.86, t + 0.85);
+    filt.type = 'bandpass';
+    filt.frequency.value = f0 * 1.1;
+    filt.Q.value = 6.5;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.018, t + 0.018);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    ping.connect(filt);
+    filt.connect(g);
+    const p1 = this._connectSpatial(g, { pan, bus: 'ambience' });
+    ping.onended = () => {
+      try { ping.disconnect(); } catch {}
+      try { filt.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+      try { p1?.disconnect(); } catch {}
+    };
+    ping.start(t);
+    ping.stop(t + 0.95);
+
+    // Subtle rising trapped-air bubble trickle (3 soft sine blips)
+    for (let i = 0; i < 3; i++) {
+      const delay = 0.24 + i * 0.14 + Math.random() * 0.05;
+      const bf = 420 + i * 115 + Math.random() * 60;
+      this.playTone(bf, 0.085, 'sine', 0.0085, delay, { pan: pan * 0.85, bus: 'ambience' });
+    }
   }
 
   /**

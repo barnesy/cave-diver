@@ -847,6 +847,87 @@ export const wreckAndInteractivesMethods = {
       }
     }
 
+    // 7. Living Shipwreck Atmosphere: Trapped-Air Hull Bubble Streams & Drifting Rust Motes (v263, zero-alloc batched)
+    this._drawWreckHullAtmosphere(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec);
+
+    ctx.restore();
+  },
+
+  _drawWreckHullAtmosphere(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {
+    const level = this.level;
+    if (!level?.isWreck) return;
+    const xMin = Number.isFinite(level.wreckHullXMin) ? level.wreckHullXMin : -12;
+    const xMax = Number.isFinite(level.wreckHullXMax) ? level.wreckHullXMax : 96;
+    const deckY = Number.isFinite(level.wreckDeckY) ? level.wreckDeckY : 20;
+    const keelY = Number.isFinite(level.wreckKeelY) ? level.wreckKeelY : deckY + 26;
+    const spanX = Math.max(12, xMax - xMin);
+    const spanY = Math.max(8, keelY - deckY);
+
+    // 1. Trapped-air bubble streams slowly escaping rusted hull plate seams (7 deterministic vents)
+    const streamCount = 7;
+    const bubblesPerStream = 5;
+    ctx.save();
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.36)';
+    ctx.beginPath();
+    const specPts = [];
+    for (let s = 0; s < streamCount; s++) {
+      const u = (s + 0.45) / streamCount;
+      const vx = xMin + u * spanX;
+      if (vx < visX0 - 4 || vx > visX1 + 4) continue;
+      const baseY = deckY + 2.5 + ((s * 37) % 100) * 0.0072 * spanY;
+      const riseH = 7.5 + (s % 3) * 3.4;
+      if (baseY < visY0 - 2 || baseY - riseH > visY1 + 2) continue;
+      const speed = 0.22 + (s % 3) * 0.055;
+      for (let b = 0; b < bubblesPerStream; b++) {
+        const phase = (timeSec * speed + s * 0.31 + b / bubblesPerStream) % 1;
+        const wy = baseY - phase * riseH;
+        if (wy < visY0 - 1 || wy > visY1 + 1) continue;
+        const wobble = Math.sin(timeSec * 2.4 + s * 1.9 + b * 1.3 + phase * 6.2) * (0.16 + phase * 0.28);
+        const sx = toScreenX(vx + wobble);
+        const sy = toScreenY(wy);
+        const r = Math.max(1.1, (0.045 + (1 - phase) * 0.032 + (b % 2) * 0.015) * scale);
+        ctx.moveTo(sx + r, sy);
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        if (r >= 1.6) specPts.push(sx - r * 0.32, sy - r * 0.32, r * 0.32);
+      }
+    }
+    ctx.fill();
+    if (specPts.length > 0) {
+      ctx.fillStyle = 'rgba(240, 249, 255, 0.68)';
+      ctx.beginPath();
+      for (let i = 0; i < specPts.length; i += 3) {
+        const x = specPts[i];
+        const y = specPts[i + 1];
+        const r = specPts[i + 2];
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+
+    // 2. Drifting oxidized rust-flake & weathered hull paint motes (2 batched passes)
+    const moteCount = 18;
+    const rustFill = 'rgba(180, 92, 36, 0.34)';
+    const flakeFill = 'rgba(148, 163, 184, 0.26)';
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.fillStyle = pass === 0 ? rustFill : flakeFill;
+      ctx.beginPath();
+      for (let m = pass; m < moteCount; m += 2) {
+        const seedX = ((m * 19.37) % 1) * spanX;
+        const driftX = (seedX + timeSec * (0.14 + (m % 4) * 0.05) + Math.sin(timeSec * 0.7 + m) * 0.65) % spanX;
+        const wx = xMin + (driftX < 0 ? driftX + spanX : driftX);
+        if (wx < visX0 - 2 || wx > visX1 + 2) continue;
+        const seedY = ((m * 0.6180339) % 1) * spanY;
+        const sinkY = (seedY + timeSec * (0.09 + (m % 3) * 0.035)) % spanY;
+        const wy = deckY + sinkY;
+        if (wy < visY0 - 2 || wy > visY1 + 2) continue;
+        const sx = toScreenX(wx);
+        const sy = toScreenY(wy);
+        const rw = Math.max(1.2, (0.042 + (m % 3) * 0.018) * scale);
+        ctx.rect(sx - rw * 0.5, sy - rw * 0.35, rw, rw * 0.7);
+      }
+      ctx.fill();
+    }
     ctx.restore();
   },
 

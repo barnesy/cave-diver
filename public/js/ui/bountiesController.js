@@ -193,6 +193,7 @@ export function createBountiesController({
   setHomeMenuOpen,
   onBountyPing,
   onOpenOutfitter,
+  onHuntBounty,
   els = {},
 } = {}) {
   const { btnOpenBounties, bountiesModal, btnBountiesClose, bountiesGrid, bountiesSubEl, bountiesMilestonesEl } = els;
@@ -203,6 +204,7 @@ export function createBountiesController({
   let activeCanvases = [];
   let visibleCanvases = new Set();
   let portraitObserver = null;
+  let lastBountiesById = new Map();
   const pingStartById = new Map();
 
   function stopBountyAnimation() {
@@ -312,6 +314,12 @@ export function createBountiesController({
           ? `<span class="bounty-stamp claimed">✓ Claimed</span>`
           : `<span class="bounty-stamp wanted">Wanted</span>`;
 
+        const siteCleared = Boolean(book?.sites?.[b.levelId]?.clears > 0);
+        const huntLabel = b.claimed ? '⚔ Re-Hunt' : siteCleared ? '⚔ Hunt Site' : '🧭 Chart Waters';
+        const huntTitle = b.claimed
+          ? 'Jump to this guardian’s site to re-hunt'
+          : 'Jump to these rumored waters on the expedition map';
+
         return `
         <article class="bounty-card${b.claimed ? ' claimed' : ''}" style="--bounty-accent:${b.accentColor};" data-bounty-id="${escapeHtml(b.id)}" tabindex="0" role="button" title="${escapeHtml(b.tale)}">
           <div class="bounty-portrait${b.claimed ? ' claimed' : ''}">
@@ -322,13 +330,17 @@ export function createBountiesController({
             <h3 class="bounty-name">${escapeHtml(cleanName)}</h3>
             ${rightMeta}
           </div>
-          <div class="bounty-waters">${escapeHtml(b.watersRumor)}</div>
+          <div class="bounty-footer-row">
+            <div class="bounty-waters">${escapeHtml(b.watersRumor)}</div>
+            ${onHuntBounty ? `<button type="button" class="btn tiny ${b.claimed ? 'ghost' : 'primary'} bounty-hunt-btn" data-bounty-hunt="${escapeHtml(b.id)}" title="${escapeHtml(huntTitle)}">${huntLabel}</button>` : ''}
+          </div>
         </article>`;
       })
       .join('');
 
     activeCanvases = [];
     const byId = new Map(bounties.map((b) => [b.id, b]));
+    lastBountiesById = byId;
     const nowSec = performance.now() * 0.001;
     bountiesGrid.querySelectorAll('canvas[data-bounty-idx]').forEach((canvas, idx) => {
       const bounty = byId.get(canvas.getAttribute('data-bounty-idx'));
@@ -380,6 +392,16 @@ export function createBountiesController({
   }
 
   bountiesGrid?.addEventListener('click', (e) => {
+    const huntBtn = e.target.closest?.('[data-bounty-hunt]');
+    if (huntBtn && onHuntBounty) {
+      e.stopPropagation();
+      const bounty = lastBountiesById.get(huntBtn.getAttribute('data-bounty-hunt'));
+      if (bounty) {
+        closeBountiesModal();
+        onHuntBounty(bounty);
+      }
+      return;
+    }
     const card = e.target.closest?.('.bounty-card[data-bounty-id]');
     if (!card) return;
     triggerBountyPing(card.getAttribute('data-bounty-id'));

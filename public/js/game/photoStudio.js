@@ -54,10 +54,31 @@ export const PHOTO_FILTERS = Object.freeze([
     desaturate: true,
     contrastBoost: 0.18,
   },
+  {
+    id: 'kelp-emerald',
+    name: 'Cenote Emerald',
+    shortName: 'Emerald',
+    tintCss: 'rgba(16, 185, 129, 0.18)',
+    blendMode: 'soft-light',
+    vignetteAlpha: 0.34,
+    desaturate: false,
+    contrastBoost: 0.12,
+  },
+  {
+    id: 'wreck-sepia',
+    name: 'Archival Wreck',
+    shortName: 'Archival',
+    tintCss: 'rgba(180, 118, 62, 0.24)',
+    blendMode: 'color',
+    vignetteAlpha: 0.5,
+    desaturate: true,
+    contrastBoost: 0.16,
+  },
 ]);
 
 export const PHOTO_FRAMES = Object.freeze([
   { id: 'telemetry', name: 'Dive Stamp', shortName: 'Stamp' },
+  { id: 'field-guide', name: 'Field Guide Plate', shortName: 'Plate' },
   { id: 'cinema', name: '2.35:1 Cinema', shortName: 'Cinema' },
   { id: 'clean', name: 'Borderless', shortName: 'Clean' },
 ]);
@@ -175,12 +196,23 @@ export function applyPhotoViewportOverlay(ctx, width, height, photoMode) {
     ctx.fillRect(0, 0, width, height);
   }
 
-  // 4. Cinema 2.35:1 matte preview (suppressed only if hideOverlayForCapture is handled by snapshot frame)
+  // 4. Frame preview (Cinema 2.35:1 matte or Field Guide specimen corner brackets)
   if (!photoMode.hideOverlayForCapture && frame.id === 'cinema') {
     const barH = Math.round(height * 0.11);
     ctx.fillStyle = 'rgba(2, 6, 23, 0.92)';
     ctx.fillRect(0, 0, width, barH);
     ctx.fillRect(0, height - barH, width, barH);
+  } else if (!photoMode.hideOverlayForCapture && frame.id === 'field-guide') {
+    const pad = Math.round(Math.min(width, height) * 0.036);
+    const corner = Math.round(Math.min(width, height) * 0.045);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + corner); ctx.lineTo(pad, pad); ctx.lineTo(pad + corner, pad);
+    ctx.moveTo(width - pad - corner, pad); ctx.lineTo(width - pad, pad); ctx.lineTo(width - pad, pad + corner);
+    ctx.moveTo(pad, height - pad - corner); ctx.lineTo(pad, height - pad); ctx.lineTo(pad + corner, height - pad);
+    ctx.moveTo(width - pad - corner, height - pad); ctx.lineTo(width - pad, height - pad); ctx.lineTo(width - pad, height - pad - corner);
+    ctx.stroke();
   }
 
   // 5. Rule-of-thirds composition grid + focus reticle (live preview only, never baked into PNG)
@@ -335,6 +367,54 @@ export function renderPhotoSnapshot(
     dstCtx.fillStyle = '#64748b';
     dstCtx.font = '700 12px ui-monospace, SFMono-Regular, Menlo, monospace';
     dstCtx.fillText(`TECHNO DIVE ${version}  ·  ${dateLabel}`, width - 28, height - barH + 48);
+  } else if (frame.id === 'field-guide') {
+    // Field Guide Specimen Plate framing (archival museum plate border + taxonomic footer, v263)
+    const pad = 18;
+    const footerH = 62;
+    dstCtx.strokeStyle = 'rgba(250, 204, 21, 0.62)';
+    dstCtx.lineWidth = 2;
+    strokeRoundedRect(dstCtx, pad, pad, width - pad * 2, height - pad * 2, 10);
+
+    // Specimen plate footer band
+    dstCtx.fillStyle = 'rgba(3, 10, 22, 0.92)';
+    dstCtx.fillRect(pad + 1, height - pad - footerH, width - pad * 2 - 2, footerH - 1);
+    dstCtx.strokeStyle = 'rgba(250, 204, 21, 0.42)';
+    dstCtx.lineWidth = 1;
+    dstCtx.beginPath();
+    dstCtx.moveTo(pad + 10, height - pad - footerH);
+    dstCtx.lineTo(width - pad - 10, height - pad - footerH);
+    dstCtx.stroke();
+
+    // Specimen corner ticks inside top frame
+    const tick = 18;
+    dstCtx.strokeStyle = '#fde047';
+    dstCtx.lineWidth = 2.4;
+    dstCtx.beginPath();
+    dstCtx.moveTo(pad + 8, pad + 8 + tick); dstCtx.lineTo(pad + 8, pad + 8); dstCtx.lineTo(pad + 8 + tick, pad + 8);
+    dstCtx.moveTo(width - pad - 8 - tick, pad + 8); dstCtx.lineTo(width - pad - 8, pad + 8); dstCtx.lineTo(width - pad - 8, pad + 8 + tick);
+    dstCtx.stroke();
+
+    dstCtx.textAlign = 'left';
+    dstCtx.textBaseline = 'middle';
+    dstCtx.fillStyle = '#fef08a';
+    dstCtx.font = '800 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    dstCtx.fillText('MARINE FIELD GUIDE · SPECIMEN PLATE', pad + 18, height - pad - footerH + 18);
+    dstCtx.fillStyle = '#f8fafc';
+    dstCtx.font = '800 19px system-ui, -apple-system, sans-serif';
+    dstCtx.fillText(String(siteName || 'Expedition Site'), pad + 18, height - pad - 20);
+
+    dstCtx.textAlign = 'right';
+    dstCtx.fillStyle = '#7dd3fc';
+    dstCtx.font = '700 13px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const plateMeta = [
+      `${Math.round((Number(depthM) || 0) * 10) / 10}M`,
+      gasLabel,
+      filter.shortName.toUpperCase(),
+    ].filter(Boolean).join(' · ');
+    dstCtx.fillText(plateMeta, width - pad - 18, height - pad - footerH + 20);
+    dstCtx.fillStyle = '#94a3b8';
+    dstCtx.font = '700 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    dstCtx.fillText(`${String(diverName || 'Diver').toUpperCase()} · ${dateLabel}`, width - pad - 18, height - pad - 18);
   }
 
   dstCtx.restore();

@@ -36,7 +36,11 @@ import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralC
 import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { createBountiesController } from './ui/bountiesController.js';
+import { resolveBountyBoardState } from './game/bossBounties.js';
 import { createTrenchController } from './ui/trenchController.js';
+import { createDailyChallengeController } from './ui/dailyChallengeController.js';
+import { createPhotoStudioController } from './ui/photoStudioController.js';
+import { createCoopInviteController } from './ui/coopInviteController.js';
 import { createAudioMixerController, initPwaSupport } from './ui/pwaAndAudioController.js';
 import { triggerHaptic } from './ui/touchFeedback.js';
 import { applyRescueDrillScenario, evaluateRescueDrillResult } from './game/rescueDrills.js';
@@ -167,17 +171,6 @@ import {
   summarizeSquadStagingCoverage,
 } from './game/rigLivery.js';
 import { getCollectibleLoreNote } from './game/submergedStories.js';
-import {
-  PHOTO_FILTERS,
-  PHOTO_FRAMES,
-  createPhotoModeState,
-  clampPhotoModeState,
-  getPhotoFrame,
-  renderPhotoSnapshot,
-  detectPhotoCompositionSubject,
-  stampExpeditionPostcardOverlay,
-} from './game/photoStudio.js';
-import { formatLatLng } from './game/worldMapData.js';
 import { InputController } from './game/input.js';
 import { DiveAudio, computeSpatialMix } from './game/audio.js';
 import { LanClient } from './net/lanClient.js';
@@ -357,7 +350,6 @@ let lastFrameMs = 0;
 let toastTimer = 0;
 let loadSeq = 0;
 let inFlightLoad = null; // { seq, levelId, promise }
-let cachedLanUrls = [];
 let spectatingPeer = false;
 let spectatePeerIdx = 0;
 let divePaused = false;
@@ -376,8 +368,6 @@ let lastHostPromoMs = 0;
 let copyInviteFeedbackTimer = 0;
 let knownRoomCode = '';
 let knownRoomMemberIds = new Set();
-let notifyPromptedOnce = false;
-let notifyAlertsMuted = false;
 let lbMode = 'solo';
 let lbFilterLevelId = activeLevel.id; // 'overall' | level.id
 
@@ -570,7 +560,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=262',
+  mapRasterUrl: './assets/map-expedition.jpg?v=263',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1273,283 +1263,94 @@ btnCamera?.addEventListener('click', (e) => {
   handleCameraSnap();
 });
 
-// Freeze-Frame Underwater Photo Mode Studio (v139)
-const photoModeState = createPhotoModeState();
-const photoStudioOverlayEl = document.getElementById('photo-studio-overlay');
-const btnPausePhotoMode = document.getElementById('btn-pause-photo-mode');
-const btnPhotoExit = document.getElementById('btn-photo-exit');
-const photoZoomRangeEl = document.getElementById('photo-zoom-range');
-const photoZoomValEl = document.getElementById('photo-zoom-val');
-const btnPhotoCenter = document.getElementById('btn-photo-center');
-const btnPhotoGrid = document.getElementById('btn-photo-grid');
-const btnPhotoFrame = document.getElementById('btn-photo-frame');
-const btnPhotoSave = document.getElementById('btn-photo-save');
-const photoFilterPillsEl = document.getElementById('photo-filter-pills');
-
-function syncPhotoStudioUi() {
-  clampPhotoModeState(photoModeState);
-  if (photoZoomRangeEl) photoZoomRangeEl.value = String(Math.round(photoModeState.zoom * 100));
-  if (photoZoomValEl) photoZoomValEl.textContent = `${photoModeState.zoom.toFixed(2)}×`;
-  if (btnPhotoGrid) btnPhotoGrid.classList.toggle('active', photoModeState.showGrid);
-  if (btnPhotoFrame) {
-    const fr = getPhotoFrame(photoModeState.frameId);
-    btnPhotoFrame.textContent = `🖼 ${fr.shortName}`;
-  }
-  if (photoFilterPillsEl) {
-    photoFilterPillsEl.querySelectorAll('button[data-photo-filter]').forEach((btn) => {
-      const active = btn.getAttribute('data-photo-filter') === photoModeState.filterId;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-checked', active ? 'true' : 'false');
-    });
-  }
-}
-
-if (photoFilterPillsEl) {
-  photoFilterPillsEl.innerHTML = PHOTO_FILTERS.map(
-    (f) => `<button type="button" class="photo-filter-pill${f.id === photoModeState.filterId ? ' active' : ''}" data-photo-filter="${f.id}" role="radio" aria-checked="${f.id === photoModeState.filterId}">${escapeHtml(f.shortName)}</button>`
-  ).join('');
-  photoFilterPillsEl.querySelectorAll('button[data-photo-filter]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const fid = btn.getAttribute('data-photo-filter');
-      if (!fid) return;
-      photoModeState.filterId = fid;
-      syncPhotoStudioUi();
-    });
+// Freeze-Frame Underwater Photo Mode Studio (v139 / v263 modular controller)
+function renderCurrentFrameForPhoto(photoMode) {
+  if (!session) return;
+  const nextCheckpoint = session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
+  renderer.render({
+    diver: session.diver,
+    diveState: session.diveState,
+    peers: getActivePeers(),
+    checkpointsHit: session.checkpointsHit,
+    nextCheckpoint,
+    playerLines: _framePlayerLines,
+    collectedIds: session.collectedIds,
+    bodyRecovered: Boolean(session.bodyRecovered),
+    carryingBody: Boolean(session.carryingBody),
+    collectBursts: session.collectBursts,
+    celebrationParticles,
+    siltClouds: session.siltClouds,
+    localSiltDensity: session.localSiltDensity,
+    bubbles: session.bubbles,
+    ecosystem,
+    wreckState: {
+      clippedToShotLine: session.clippedToShotLine,
+      cutSnagIds: session.cutSnagIds,
+      activeSnagIndex: session.activeSnagIndex,
+      openedHatchIds: session.openedHatchIds,
+      equalizedHatchIds: session.equalizedHatchIds,
+      crankingHatchId: session.crankingHatchId,
+      crankingHatchProgress: session.crankingHatchProgress,
+      claimedStageIds: session.claimedStageIds,
+      placedMarkerIds: session.placedMarkerIds,
+    },
+    encounters: session.encounters || null,
+    hazards: session.hazards || null,
+    blackBox: session.blackBox || null,
+    lineCookies: session.lineCookies || null,
+    surveyPins: session.surveyPins || null,
+    powerRelays: session.powerRelays || null,
+    smb: session.smb || null,
+    salvage: session.salvage || null,
+    mechFx: session.mechFx || null,
+    stories: session.stories || null,
+    secretLair: session.secretLair || null,
+    cameraShake: session.cameraShake || 0,
+    cameraKickX: session.cameraKickX || 0,
+    cameraKickY: session.cameraKickY || 0,
+    biolumWake: session.biolumWake || null,
+    dashSlipstreams: session.dashSlipstreams || null,
+    reelingActive: Boolean(session.reelingActive),
+    bioWake: session.bioWake || null,
+    surfaceRipples: session.surfaceRipples || null,
+    worldBeacons: session.worldBeacons || null,
+    syncedSonarPings: session.syncedSonarPings || null,
+    droppedStages: session.droppedStages || null,
+    weather: session.weather || null,
+    photoMode,
+    endedState: session.endedState || '',
+    difficulty: session.difficulty || activeDifficulty,
+    mutatorId: session.mutatorId || '',
+    expeditionModifiers: session.modifiers || null,
+    compactHud: Boolean(compactHudEnabled),
+    spaceClearanceM: session.spaceClearanceM ?? 4.0,
+    breathState: session.breath?.state || 'hold',
+    squeezeDust: session.squeezeDust || null,
+    handOnLinePt: session.handOnLinePt || null,
+    timeSec: session.simTimeSec,
+    dt: 0,
   });
 }
 
-function setPhotoModeActive(nextActive) {
-  const want = Boolean(nextActive);
-  if (want) {
-    if (mode !== 'diving' || !session || session.endedState) return false;
-    if (isMultiplayer && lan.getPeers().length > 0) {
-      showToast('📸 Photo Mode freezes time — available on solo dives!', 2.2);
-      return false;
-    }
-    photoModeState.active = true;
-    photoModeState.panX = 0;
-    photoModeState.panY = 0;
-    photoModeState.zoom = 1.0;
-    photoModeState.hideOverlayForCapture = false;
-    divePaused = true;
-    input?.resetAll?.();
-    audio.resetEnvironmentFilter();
-    if (hudPauseOverlay) hudPauseOverlay.hidden = true;
-    if (screenHud) screenHud.hidden = true;
-    if (photoStudioOverlayEl) photoStudioOverlayEl.hidden = false;
-    syncPhotoStudioUi();
-    return true;
-  }
-  if (!photoModeState.active) return false;
-  photoModeState.active = false;
-  photoModeState.hideOverlayForCapture = false;
-  divePaused = false;
-  if (photoStudioOverlayEl) photoStudioOverlayEl.hidden = true;
-  if (screenHud && mode === 'diving') screenHud.hidden = false;
-  return true;
-}
-
-function savePhotoStudioSnapshot() {
-  if (!photoModeState.active || !session || !canvas) return false;
-  const wasGrid = photoModeState.showGrid;
-  const prevHide = photoModeState.hideOverlayForCapture;
-  // Render a clean borderless/gridless frame onto the game canvas before compositing the styled PNG
-  photoModeState.showGrid = false;
-  photoModeState.hideOverlayForCapture = true;
-  try {
-    const nextCheckpoint = session.level.checkpoints.find((cp) => !session.checkpointsHit.has(cp.id)) || null;
-    renderer.render({
-      diver: session.diver,
-      diveState: session.diveState,
-      peers: getActivePeers(),
-      checkpointsHit: session.checkpointsHit,
-      nextCheckpoint,
-      playerLines: _framePlayerLines,
-      collectedIds: session.collectedIds,
-      bodyRecovered: Boolean(session.bodyRecovered),
-      carryingBody: Boolean(session.carryingBody),
-      collectBursts: session.collectBursts,
-      celebrationParticles,
-      siltClouds: session.siltClouds,
-      localSiltDensity: session.localSiltDensity,
-      bubbles: session.bubbles,
-      ecosystem,
-      wreckState: {
-        clippedToShotLine: session.clippedToShotLine,
-        cutSnagIds: session.cutSnagIds,
-        activeSnagIndex: session.activeSnagIndex,
-        openedHatchIds: session.openedHatchIds,
-        equalizedHatchIds: session.equalizedHatchIds,
-        crankingHatchId: session.crankingHatchId,
-        crankingHatchProgress: session.crankingHatchProgress,
-        claimedStageIds: session.claimedStageIds,
-        placedMarkerIds: session.placedMarkerIds,
-      },
-      encounters: session.encounters || null,
-      hazards: session.hazards || null,
-      blackBox: session.blackBox || null,
-      lineCookies: session.lineCookies || null,
-      surveyPins: session.surveyPins || null,
-      powerRelays: session.powerRelays || null,
-      smb: session.smb || null,
-      salvage: session.salvage || null,
-      mechFx: session.mechFx || null,
-      stories: session.stories || null,
-      secretLair: session.secretLair || null,
-      cameraShake: session.cameraShake || 0,
-      cameraKickX: session.cameraKickX || 0,
-      cameraKickY: session.cameraKickY || 0,
-      biolumWake: session.biolumWake || null,
-      dashSlipstreams: session.dashSlipstreams || null,
-      reelingActive: Boolean(session.reelingActive),
-      bioWake: session.bioWake || null,
-      surfaceRipples: session.surfaceRipples || null,
-      worldBeacons: session.worldBeacons || null,
-      syncedSonarPings: session.syncedSonarPings || null,
-      droppedStages: session.droppedStages || null,
-      weather: session.weather || null,
-      photoMode: photoModeState,
-      endedState: session.endedState || '',
-      difficulty: session.difficulty || activeDifficulty,
-      mutatorId: session.mutatorId || '',
-      expeditionModifiers: session.modifiers || null,
-      compactHud: Boolean(compactHudEnabled),
-      spaceClearanceM: session.spaceClearanceM ?? 4.0,
-      breathState: session.breath?.state || 'hold',
-      squeezeDust: session.squeezeDust || null,
-      handOnLinePt: session.handOnLinePt || null,
-      timeSec: session.simTimeSec,
-      dt: 0,
-    });
-    const outCanvas = document.createElement('canvas');
-    outCanvas.width = 1200;
-    outCanvas.height = 675;
-    const outCtx = outCanvas.getContext('2d');
-    const verMeta = document.querySelector('meta[name="app-version"]')?.content || '197';
-    // Smart Photo Composition Detection & GPS Expedition Postcard Stamp (v197)
-    const comp = detectPhotoCompositionSubject({
-      level: session.level,
-      diver: session.diver,
-      camX: renderer.camX,
-      camY: renderer.camY,
-      ecosystem,
-      stories: session.stories,
-    });
-    if (comp) {
-      if (!session._photoCompKinds) session._photoCompKinds = new Set();
-      if (!session._photoCompKinds.has(comp.kind)) {
-        session._photoCompKinds.add(comp.kind);
-        session.photoCompositionBonus = (session.photoCompositionBonus || 0) + comp.bonusPts;
-      }
-    }
-    const sitePlanSlot = CAMPAIGN_PLAN.find((s) => s.id === session.level?.id);
-    const gpsLabel =
-      sitePlanSlot && Number.isFinite(sitePlanSlot.lat) && Number.isFinite(sitePlanSlot.lng)
-        ? formatLatLng(sitePlanSlot.lat, sitePlanSlot.lng)
-        : '';
-    const siteName = session.level?.name || 'Expedition Site';
-    const depthM = session.diveState?.depthM || session.diver?.y || 0;
-    const diverName = session.diverName || getEnteredCallsign() || 'Diver';
-    renderPhotoSnapshot(outCtx, canvas, {
-      width: 1200,
-      height: 675,
-      filterId: photoModeState.filterId,
-      frameId: photoModeState.frameId,
-      siteName,
-      depthM,
-      gasLabel: getActiveGasName(session.diveState?.activeGasId || 'EAN32'),
-      diverName,
-      weatherLabel: session.weather?.label || '',
-      version: `v${verMeta}`,
-    });
-    if (photoModeState.frameId !== 'clean') {
-      stampExpeditionPostcardOverlay(outCtx, 1200, 675, {
-        siteName,
-        depthM,
-        diverName,
-        gpsLabel,
-        subjectLabel: comp?.label || '',
-        topOffset: photoModeState.frameId === 'cinema' ? Math.round(675 * 0.11) + 14 : undefined,
-      });
-    }
-    const dataUrl = outCanvas.toDataURL('image/png');
-    const slug = String(session.level?.id || 'dive').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `techno-dive-photo-${slug}-${Math.round(depthM)}m.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    audio.playCameraShutter(true, false);
-    showToast(comp ? `${comp.badge} · Postcard saved!` : '📸 High-res Expedition Postcard saved as PNG!', 2.6);
-  } catch {
-    showToast('Could not export photograph on this browser.', 2.0);
-  } finally {
-    photoModeState.showGrid = wasGrid;
-    photoModeState.hideOverlayForCapture = prevHide;
-  }
-  return true;
-}
-
-btnPausePhotoMode?.addEventListener('click', () => setPhotoModeActive(true));
-btnPhotoExit?.addEventListener('click', () => setPhotoModeActive(false));
-photoZoomRangeEl?.addEventListener('input', () => {
-  photoModeState.zoom = (Number(photoZoomRangeEl.value) || 100) / 100;
-  syncPhotoStudioUi();
+const photoStudioController = createPhotoStudioController({
+  canvas,
+  renderer,
+  hudPauseOverlay,
+  screenHud,
+  input,
+  audio,
+  lan,
+  getMode: () => mode,
+  getSession: () => session,
+  getEcosystem: () => ecosystem,
+  getIsMultiplayer: () => isMultiplayer,
+  setDivePaused: (v) => { divePaused = Boolean(v); },
+  renderCurrentFrameForPhoto,
+  getActiveGasName,
+  getEnteredCallsign,
+  showToast,
 });
-btnPhotoCenter?.addEventListener('click', () => {
-  photoModeState.panX = 0;
-  photoModeState.panY = 0;
-  photoModeState.zoom = 1.0;
-  syncPhotoStudioUi();
-});
-btnPhotoGrid?.addEventListener('click', () => {
-  photoModeState.showGrid = !photoModeState.showGrid;
-  syncPhotoStudioUi();
-});
-btnPhotoFrame?.addEventListener('click', () => {
-  const idx = PHOTO_FRAMES.findIndex((f) => f.id === photoModeState.frameId);
-  photoModeState.frameId = PHOTO_FRAMES[(idx + 1) % PHOTO_FRAMES.length].id;
-  syncPhotoStudioUi();
-});
-btnPhotoSave?.addEventListener('click', () => savePhotoStudioSnapshot());
-
-// Canvas pointer drag-pan & scroll-wheel zoom while Photo Mode Studio is active
-let photoDragPointerId = null;
-let photoDragLastX = 0;
-let photoDragLastY = 0;
-canvas?.addEventListener('pointerdown', (e) => {
-  if (!photoModeState.active) return;
-  photoDragPointerId = e.pointerId;
-  photoDragLastX = e.clientX;
-  photoDragLastY = e.clientY;
-  try { canvas.setPointerCapture?.(e.pointerId); } catch {}
-});
-canvas?.addEventListener('pointermove', (e) => {
-  if (!photoModeState.active || photoDragPointerId !== e.pointerId) return;
-  const dx = e.clientX - photoDragLastX;
-  const dy = e.clientY - photoDragLastY;
-  photoDragLastX = e.clientX;
-  photoDragLastY = e.clientY;
-  const pxPerM = Math.max(12, (renderer.pxPerM || 28) * photoModeState.zoom);
-  photoModeState.panX -= dx / pxPerM;
-  photoModeState.panY -= dy / pxPerM;
-  clampPhotoModeState(photoModeState);
-});
-const endPhotoDrag = (e) => {
-  if (photoDragPointerId === e.pointerId) {
-    photoDragPointerId = null;
-    try { canvas?.releasePointerCapture?.(e.pointerId); } catch {}
-  }
-};
-canvas?.addEventListener('pointerup', endPhotoDrag);
-canvas?.addEventListener('pointercancel', endPhotoDrag);
-canvas?.addEventListener('wheel', (e) => {
-  if (!photoModeState.active) return;
-  e.preventDefault();
-  photoModeState.zoom += e.deltaY < 0 ? 0.1 : -0.1;
-  syncPhotoStudioUi();
-}, { passive: false });
+const { photoModeState, syncPhotoStudioUi, setPhotoModeActive, savePhotoStudioSnapshot } = photoStudioController;
 hudMinimapWrapEl?.addEventListener('click', (e) => {
   if (e.target?.closest?.('button') || e.target === hudMinimapCanvasEl || e.target?.closest?.('#hud-sonar-ping-bar')) return;
   e.stopPropagation();
@@ -1574,14 +1375,6 @@ const btnHudDpv = document.getElementById('btn-hud-dpv');
 const hudCcrPill = document.getElementById('hud-ccr-pill');
 const hudTrimPill = document.getElementById('hud-trim-pill');
 const debriefGearBadgeEl = document.getElementById('debrief-gear-badge');
-const dailyChallengeCardEl = document.getElementById('daily-challenge-card');
-const dailyDateLabelEl = document.getElementById('daily-date-label');
-const dailyStreakPillEl = document.getElementById('daily-streak-pill');
-const dailySiteTitleEl = document.getElementById('daily-site-title');
-const dailyMutatorBadgeEl = document.getElementById('daily-mutator-badge');
-const dailyMutatorDescEl = document.getElementById('daily-mutator-desc');
-const btnPlayDaily = document.getElementById('btn-play-daily');
-const homeDailyStreakBadgeEl = document.getElementById('home-daily-streak-badge');
 const debriefDailyBadgeEl = document.getElementById('debrief-daily-badge');
 let activeDailyChallenge = null;
 let savedGearLoadout = { sonar: false, dpv: false, ccr: false };
@@ -1613,206 +1406,21 @@ function getEffectiveGearLoadout() {
   return sanitizeGearLoadout(savedGearLoadout, unlockedIds);
 }
 
-function getDailyGeneratedExpedition(dateOrKey = new Date()) {
-  const cfg = getDailyGeneratedConfig(dateOrKey);
-  const level = getLevelById(cfg.levelId);
-  const mutator = getDailyMutatorForDate(cfg.dateKey);
-  return {
-    dateKey: cfg.dateKey,
-    seed: cfg.seed,
-    tier: cfg.tier,
-    biome: cfg.biome,
-    biomeSpec: cfg.biomeSpec,
-    tierSpec: cfg.tierSpec,
-    unlined: cfg.unlined,
-    level,
-    levelId: level.id,
-    mutator,
-    mutatorId: mutator.id,
-  };
-}
-
-function renderDailyChallengeCard() {
-  if (!dailyChallengeCardEl) return;
-  const daily = getDailyGeneratedExpedition();
-  const book = loadCareerLogbook();
-  const status = getDailyStatus(book, daily.dateKey);
-  dailyChallengeCardEl.classList.toggle('cleared', status.clearedToday);
-  if (dailyDateLabelEl) {
-    dailyDateLabelEl.textContent = daily.dateKey;
-  }
-  if (dailyStreakPillEl) {
-    const streakLabel = `🔥 ${status.activeStreak}d Streak`;
-    dailyStreakPillEl.textContent = status.clearedToday ? `✓ Cleared · ${streakLabel}` : streakLabel;
-    dailyStreakPillEl.title =
-      status.bestStreak > 0
-        ? `Best Streak: ${status.bestStreak}d · Total Daily Clears: ${status.totalClears}`
-        : 'Clear today’s daily generated sump to start your streak!';
-  }
-  if (dailySiteTitleEl && daily.level) {
-    const lineTag = daily.unlined ? ' · 🧵 Unlined' : '';
-    dailySiteTitleEl.textContent = `∞ ${daily.level.name} · ${daily.level.proceduralMeta?.targetDepthM || getLevelMaxDepthM(daily.level)}m${lineTag}`;
-  }
-  if (dailyMutatorBadgeEl && daily.mutator) {
-    dailyMutatorBadgeEl.textContent = `${daily.mutator.icon} ${daily.mutator.name}`;
-  }
-  if (dailyMutatorDescEl && daily.mutator) {
-    dailyMutatorDescEl.textContent = daily.mutator.shortDesc || daily.mutator.summary || '';
-  }
-  if (btnPlayDaily) {
-    btnPlayDaily.textContent = status.clearedToday ? '↻ REPLAY DAILY' : '▶ PLAY DAILY';
-  }
-  if (homeDailyStreakBadgeEl) {
-    homeDailyStreakBadgeEl.textContent = status.clearedToday
-      ? `✓ 🔥 ${status.activeStreak}d`
-      : `🔥 ${status.activeStreak}d`;
-  }
-  if (btnOpenDailyCalendar) {
-    btnOpenDailyCalendar.classList.toggle('cleared', status.clearedToday);
-    btnOpenDailyCalendar.title = status.clearedToday
-      ? `Daily Dive cleared today (${status.activeStreak}d streak) — open archive calendar or replay`
-      : `Open Today’s Daily Dive (${daily.dateKey}) & Archive Calendar`;
-  }
-}
-
-// ─── Daily Generated Sump Calendar Modal (v131) ───
-const dailyCalModalEl = document.getElementById('daily-calendar-modal');
-const btnOpenDailyCalendar = document.getElementById('btn-open-daily-calendar');
-const btnDailyCalClose = document.getElementById('btn-daily-cal-close');
-const btnDailyCalPrev = document.getElementById('btn-daily-cal-prev');
-const btnDailyCalNext = document.getElementById('btn-daily-cal-next');
-const dailyCalMonthLabelEl = document.getElementById('daily-cal-month-label');
-const dailyCalStatsEl = document.getElementById('daily-cal-stats');
-const dailyCalGridEl = document.getElementById('daily-cal-grid');
-const dailyCalSelTitleEl = document.getElementById('daily-cal-sel-title');
-const dailyCalSelBadgeEl = document.getElementById('daily-cal-sel-badge');
-const dailyCalSelMetaEl = document.getElementById('daily-cal-sel-meta');
-const dailyCalSelRecordEl = document.getElementById('daily-cal-sel-record');
-const btnDailyCalLaunch = document.getElementById('btn-daily-cal-launch');
-
-let dailyCalYear = new Date().getUTCFullYear();
-let dailyCalMonth0 = new Date().getUTCMonth();
-let dailyCalSelectedKey = getUtcDateKey();
-
-function renderDailyCalendarModal() {
-  if (!dailyCalModalEl || !dailyCalGridEl) return;
-  const book = loadCareerLogbook();
-  const todayKey = getUtcDateKey();
-  const cal = buildDailyCalendarMonth(book, dailyCalYear, dailyCalMonth0, todayKey);
-  const status = getDailyStatus(book, todayKey);
-
-  if (dailyCalMonthLabelEl) dailyCalMonthLabelEl.textContent = cal.monthLabel;
-  if (dailyCalStatsEl) {
-    dailyCalStatsEl.textContent =
-      `🔥 ${status.activeStreak}d Streak · 🏆 Best ${status.bestStreak}d · ✅ ${cal.clearedInMonth}/${cal.availableInMonth} this month (${status.totalClears} total)`;
-  }
-  if (btnDailyCalNext) {
-    const todayY = Number(todayKey.slice(0, 4));
-    const todayM0 = Number(todayKey.slice(5, 7)) - 1;
-    btnDailyCalNext.disabled = cal.year > todayY || (cal.year === todayY && cal.month0 >= todayM0);
-  }
-
-  let html = '';
-  for (let s = 0; s < cal.firstWeekday; s++) {
-    html += '<div class="daily-cal-spacer" aria-hidden="true"></div>';
-  }
-  for (const cell of cal.days) {
-    const classes = ['daily-cal-cell'];
-    if (cell.cleared) classes.push('cleared');
-    if (cell.isToday) classes.push('today');
-    if (cell.isFuture) classes.push('future');
-    if (cell.dateKey === dailyCalSelectedKey) classes.push('selected');
-    const sub = cell.isFuture ? '🔒' : cell.cleared ? (cell.grade || '✓') : cell.isToday ? 'NOW' : '·';
-    html +=
-      `<button type="button" class="${classes.join(' ')}" data-cal-date="${cell.dateKey}"` +
-      (cell.isFuture ? ' disabled' : '') +
-      ` aria-label="${cell.dateKey}${cell.cleared ? ' cleared' : ''}">` +
-      `<span>${cell.day}</span><span class="daily-cal-cell-sub">${sub}</span></button>`;
-  }
-  dailyCalGridEl.innerHTML = html;
-
-  // Render preview for selected day
-  const selKey = dailyCalSelectedKey <= todayKey ? dailyCalSelectedKey : todayKey;
-  dailyCalSelectedKey = selKey;
-  const daily = getDailyGeneratedExpedition(selKey);
-  const rec = book.daily?.records?.[selKey] || null;
-  const depthM = daily.level?.proceduralMeta?.targetDepthM || getLevelMaxDepthM(daily.level);
-  const isTodaySel = selKey === todayKey;
-  if (dailyCalSelTitleEl) {
-    dailyCalSelTitleEl.textContent = `${isTodaySel ? 'Today · ' : ''}${selKey} · ${daily.level.name}`;
-  }
-  if (dailyCalSelBadgeEl && daily.mutator) {
-    dailyCalSelBadgeEl.textContent = `${daily.mutator.icon} ${daily.mutator.name}`;
-  }
-  if (dailyCalSelMetaEl) {
-    const gasName = daily.level.gasOverrides?.TMX1455?.name || 'TMX 14/55';
-    dailyCalSelMetaEl.textContent =
-      `Seed #${daily.seed} · ${daily.biomeSpec.label} · ${depthM}m (${gasName})${daily.unlined ? ' · 🧵 Unlined Reel' : ' · Fixed Line'} — ${daily.mutator.summary || ''}`;
-  }
-  if (dailyCalSelRecordEl) {
-    dailyCalSelRecordEl.textContent = rec
-      ? `✅ Cleared · Grade ${rec.grade} · Best Score ${rec.score.toLocaleString()} · Time ${formatRunClock(rec.timeSec || 0)}`
-      : isTodaySel
-        ? 'Not cleared yet — clear today to grow your streak!'
-        : 'Archive Expedition — dive anytime to earn its calendar checkmark!';
-  }
-  if (btnDailyCalLaunch) {
-    btnDailyCalLaunch.textContent = rec
-      ? `↻ Replay ${selKey}`
-      : isTodaySel
-        ? '▶ Dive Today’s Daily Sump'
-        : `▶ Dive Archive (${selKey})`;
-  }
-}
-
-function openDailyCalendarModal() {
-  if (!dailyCalModalEl) return;
-  setHomeMenuOpen(false);
-  const todayKey = getUtcDateKey();
-  dailyCalYear = Number(todayKey.slice(0, 4));
-  dailyCalMonth0 = Number(todayKey.slice(5, 7)) - 1;
-  dailyCalSelectedKey = todayKey;
-  renderDailyChallengeCard();
-  renderDailyCalendarModal();
-  dailyCalModalEl.hidden = false;
-}
-
-function closeDailyCalendarModal() {
-  if (dailyCalModalEl) dailyCalModalEl.hidden = true;
-}
-
-btnOpenDailyCalendar?.addEventListener('click', openDailyCalendarModal);
-btnDailyCalClose?.addEventListener('click', closeDailyCalendarModal);
-dailyCalModalEl?.addEventListener('click', (e) => {
-  if (e.target === dailyCalModalEl) closeDailyCalendarModal();
+const dailyChallengeController = createDailyChallengeController({
+  loadCareerLogbook,
+  formatRunClock,
+  setHomeMenuOpen,
+  launchDailyChallenge: (daily) => launchDailyChallenge(daily),
 });
-btnDailyCalPrev?.addEventListener('click', () => {
-  dailyCalMonth0 -= 1;
-  if (dailyCalMonth0 < 0) {
-    dailyCalMonth0 = 11;
-    dailyCalYear -= 1;
-  }
-  renderDailyCalendarModal();
-});
-btnDailyCalNext?.addEventListener('click', () => {
-  dailyCalMonth0 += 1;
-  if (dailyCalMonth0 > 11) {
-    dailyCalMonth0 = 0;
-    dailyCalYear += 1;
-  }
-  renderDailyCalendarModal();
-});
-dailyCalGridEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-cal-date]');
-  if (!btn || btn.disabled) return;
-  dailyCalSelectedKey = btn.dataset.calDate;
-  renderDailyCalendarModal();
-});
-btnDailyCalLaunch?.addEventListener('click', () => {
-  const daily = getDailyGeneratedExpedition(dailyCalSelectedKey);
-  closeDailyCalendarModal();
-  launchDailyChallenge(daily);
-});
+const {
+  dailyCalModalEl,
+  btnPlayDaily,
+  getDailyGeneratedExpedition,
+  renderDailyChallengeCard,
+  renderDailyCalendarModal,
+  openDailyCalendarModal,
+  closeDailyCalendarModal,
+} = dailyChallengeController;
 
 function renderTechGearDock() {
   if (!gearDockGridEl) return;
@@ -2871,6 +2479,18 @@ const bountiesCtrl = createBountiesController({
     } catch {}
   },
   onOpenOutfitter: () => openLiveryModal(),
+  onHuntBounty: (bounty) => {
+    if (!bounty?.levelId) return;
+    setActiveMenuTab('solo');
+    selectAndLoadLevel(bounty.levelId, { focusMap: true });
+    showToast(
+      bounty.claimed
+        ? `⚔ Re-Hunt charted for ${bounty.displayName} — tap DIVE when ready!`
+        : `🧭 Charted ${bounty.watersRumor} — sweep active sonar deep inside!`,
+      3.8
+    );
+    document.getElementById('btn-play-solo')?.focus?.();
+  },
   els: {
     btnOpenBounties: document.getElementById('btn-open-bounties'),
     bountiesModal,
@@ -3543,6 +3163,11 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         .map((c) => (typeof c === 'string' ? `✨ ${c}` : `${c?.icon || '✨'} ${c?.name || ''}`.trim()))
         .filter(Boolean)
         .join(' · ');
+      const boardState = resolveBountyBoardState(loadCareerLogbook());
+      const nextMs = (boardState.milestones || []).find((m) => !m.unlocked) || null;
+      const msSummary = nextMs
+        ? `Next Milestone: ${nextMs.icon} ${nextMs.rewardLabel} (${boardState.claimedCount}/${nextMs.threshold})`
+        : `👑 All ${boardState.totalCount} Abyssal Bounties Claimed!`;
       debriefBossBannerEl.innerHTML =
         `<div class="debrief-boss-head">` +
           `<div class="debrief-boss-title"><span>${b.icon || '🐙'}</span><span>${escapeHtml(b.name)} VANQUISHED</span></div>` +
@@ -3551,12 +3176,18 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
         `<div class="debrief-bounty-claim-row">` +
           `<span class="debrief-bounty-badge">✓ BOUNTY CLAIMED</span>` +
           `<span class="debrief-bounty-reward">${unlockedNames ? `Unlocked: ${escapeHtml(unlockedNames)}` : `Trophy: ${escapeHtml(b.trophyName)}`}</span>` +
-          `<button type="button" class="btn tiny primary" id="btn-debrief-boss-equip">🎨 Equip in Workshop</button>` +
+          `<div class="debrief-bounty-actions">` +
+            `<button type="button" class="btn tiny primary" id="btn-debrief-boss-equip">🎨 Workshop</button>` +
+            `<button type="button" class="btn tiny ghost" id="btn-debrief-boss-bounties">📜 Bounties (${boardState.claimedCount}/${boardState.totalCount})</button>` +
+          `</div>` +
         `</div>` +
-        `<div class="debrief-boss-relic">🏆 Trophy Relic Claimed: ${escapeHtml(b.trophyName)}</div>` +
+        `<div class="debrief-boss-relic">🏆 Trophy Relic Claimed: ${escapeHtml(b.trophyName)} · ${escapeHtml(msSummary)}</div>` +
         `<div class="debrief-boss-stats">${chips.map((c) => `<span class="debrief-boss-chip">${c}</span>`).join('')}</div>`;
       debriefBossBannerEl.querySelector('#btn-debrief-boss-equip')?.addEventListener('click', () => {
         openLiveryModal();
+      });
+      debriefBossBannerEl.querySelector('#btn-debrief-boss-bounties')?.addEventListener('click', () => {
+        bountiesCtrl.openBountiesModal();
       });
       debriefBossBannerEl.hidden = false;
     } else {
@@ -4380,248 +4011,36 @@ function buildPlayerStatePayload(sess, overrides = {}) {
 }
 
 // --- Menu & LAN Lobby Wiring ---
-function isLoopbackHost(hostname) {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
-}
-
-function getAppBasePath() {
-  return location.pathname
-    .replace(/\/index\.html$/, '')
-    .replace(/\/join\/.*$/, '')
-    .replace(/\/+$/, '');
-}
-
-function getLanJoinBaseUrl() {
-  const basePath = getAppBasePath();
-  if (!isLoopbackHost(location.hostname)) {
-    return `${location.origin}${basePath}`;
-  }
-  const lanIp = cachedLanUrls.find((u) => !u.includes('127.0.0.1') && !u.includes('localhost'));
-  const root = lanIp || cachedLanUrls[0] || location.origin;
-  return `${root}${basePath}`;
-}
-
-function buildRoomInviteUrl(code) {
-  if (!code) return '';
-  const params = new URLSearchParams();
-  params.set('room', code);
-  const currentParams = new URLSearchParams(location.search);
-  const forcedTransport = currentParams.get('transport');
-  if (forcedTransport) params.set('transport', forcedTransport);
-  return `${getLanJoinBaseUrl()}/?${params.toString()}`;
-}
-
-function syncBrowserRoomUrl(code) {
-  try {
-    const nextUrl = new URL(location.href);
-    const joinMatch = nextUrl.pathname.match(/^(.*)\/join\/[A-Za-z0-9]{1,8}\/?$/);
-    if (joinMatch) {
-      nextUrl.pathname = `${joinMatch[1] || ''}/`;
-    }
-    if (code) {
-      nextUrl.searchParams.set('room', code);
-    } else {
-      nextUrl.searchParams.delete('room');
-      nextUrl.searchParams.delete('join');
-    }
-    if (nextUrl.toString() !== location.href) {
-      history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-    }
-  } catch {
-    // ignore history restriction
-  }
-}
-
-function syncRoomInviteUi(room) {
-  const code = room?.code || '';
-  const inviteUrl = buildRoomInviteUrl(code);
-  const maxP = room?.maxPlayers || 4;
-  const hasOpenSlots = Boolean(code && Array.isArray(room?.players) && room.players.length < maxP);
-  const showInSoloDive = !code && mode === 'diving' && Boolean(session);
-  if (lanInviteUrlInput) {
-    lanInviteUrlInput.value = inviteUrl;
-  }
-  if (btnShareInvite) {
-    btnShareInvite.hidden = !(code && typeof navigator.share === 'function');
-  }
-  if (btnHudInvite) {
-    btnHudInvite.hidden = !(hasOpenSlots || showInSoloDive);
-    if (!copyInviteFeedbackTimer) {
-      btnHudInvite.textContent = code ? `🔗 ${code}` : '🔗 Invite';
-    }
-    if (hasOpenSlots) {
-      btnHudInvite.title = `Copy drop-in link (${room.players.length}/${maxP} divers · Room ${code})`;
-    } else if (showInSoloDive) {
-      btnHudInvite.title = 'Open Co-op Room & copy drop-in invite link for friends';
-    }
-  }
-  if (btnHudShare) {
-    btnHudShare.hidden = !((hasOpenSlots || showInSoloDive) && typeof navigator.share === 'function');
-    if (showInSoloDive) {
-      btnHudShare.title = 'Open Co-op Room & share invite link';
-    }
-  }
-  syncNotifyToggleUi();
-}
-
-function syncNotifyToggleUi() {
-  if (!btnNotifyToggle) return;
-  if (!('Notification' in window)) {
-    btnNotifyToggle.hidden = true;
-    return;
-  }
-  btnNotifyToggle.hidden = false;
-  const perm = Notification.permission;
-  if (perm === 'denied') {
-    btnNotifyToggle.textContent = '🔕 Blocked';
-    btnNotifyToggle.title = 'Notifications blocked in browser site settings';
-  } else if (perm === 'granted') {
-    btnNotifyToggle.textContent = notifyAlertsMuted ? '🔕 Muted' : '🔔 Alerts';
-    btnNotifyToggle.title = notifyAlertsMuted
-      ? 'Tap to unmute join notifications'
-      : 'You will get a notification when a diver joins while app is in background';
-  } else {
-    btnNotifyToggle.textContent = '🔔 Alerts';
-    btnNotifyToggle.title = 'Enable notification when a diver joins';
-  }
-}
-
-async function requestDiverNotificationPermission({ userTriggered = false } = {}) {
-  if (!('Notification' in window)) return 'unsupported';
-  if (Notification.permission === 'granted') {
-    syncNotifyToggleUi();
-    return 'granted';
-  }
-  if (Notification.permission === 'denied') {
-    syncNotifyToggleUi();
-    if (userTriggered) {
-      showToast('Notifications are blocked in your browser site settings.', 3.4);
-    }
-    return 'denied';
-  }
-  if (!userTriggered && notifyPromptedOnce) return Notification.permission;
-  notifyPromptedOnce = true;
-  try {
-    const res = await Notification.requestPermission();
-    syncNotifyToggleUi();
-    if (userTriggered && res === 'granted') {
-      showToast('Join alerts enabled — you will be notified when a buddy enters!', 3.0);
-    }
-    return res;
-  } catch {
-    return Notification.permission;
-  }
-}
-
-async function showJoinOsNotification(room, joiners, siteNum, siteLevel) {
-  if (!('Notification' in window) || Notification.permission !== 'granted' || notifyAlertsMuted) return;
-  if (!document.hidden && document.hasFocus()) return;
-  const names = joiners.map((p) => p.name || 'Buddy Diver').join(', ');
-  const maxP = room.maxPlayers || 2;
-  const title = `${names} joined Room ${room.code}`;
-  const options = {
-    body: `L${siteNum}: ${siteLevel.name} (${room.players.length}/${maxP} divers)`,
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
-    tag: `cave-diver-join-${room.code}`,
-    renotify: true,
-    data: { url: buildRoomInviteUrl(room.code) },
-  };
-  try {
-    if (navigator.serviceWorker?.controller) {
-      const reg = await navigator.serviceWorker.ready;
-      if (reg?.showNotification) {
-        await reg.showNotification(title, options);
-        return;
-      }
-    }
-  } catch {
-    // Fallback to foreground Notification constructor below
-  }
-  try {
-    const n = new Notification(title, options);
-    n.onclick = () => {
-      try { window.focus(); } catch {}
-      n.close();
-    };
-  } catch {
-    // Some mobile browsers require ServiceWorkerRegistration.showNotification
-  }
-}
-
-async function fetchLanUrls() {
-  const transport = lan.getTransportMode();
-  if (transport === 'p2p') {
-    if (lan.room) syncRoomInviteUi(lan.room);
-    return;
-  }
-  try {
-    const res = await fetch('./api/lan-info');
-    if (!res.ok) throw new Error('no lan-info');
-    const info = await res.json();
-    cachedLanUrls = Array.isArray(info.urls) ? info.urls : [];
-    if (lan.room) syncRoomInviteUi(lan.room);
-  } catch {
-    cachedLanUrls = [];
-  }
-}
-
-async function copyText(text, toastLabel, { selectEl = null } = {}) {
-  let copied = false;
-  if (window.isSecureContext && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      copied = true;
-    } catch {
-      copied = false;
-    }
-  }
-  if (!copied && selectEl) {
-    try {
-      selectEl.focus();
-      selectEl.select();
-      selectEl.setSelectionRange?.(0, text.length);
-      copied = Boolean(document.execCommand?.('copy'));
-    } catch {
-      copied = false;
-    }
-  }
-  if (!copied) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.top = '0';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    ta.setSelectionRange(0, text.length);
-    try {
-      copied = Boolean(document.execCommand?.('copy'));
-    } catch {
-      copied = false;
-    }
-    ta.remove();
-  }
-  if (copied) {
-    showToast(toastLabel, 2.4);
-  } else {
-    if (selectEl) {
-      selectEl.focus();
-      selectEl.select();
-      selectEl.setSelectionRange?.(0, text.length);
-    }
-    showToast(`Select & copy invite link: ${text}`, 4.0);
-  }
-  return copied;
-}
-
-function setLanConnectionBadge(state, text) {
-  if (!lanConnBadge) return;
-  lanConnBadge.className = `lan-conn-badge ${state}`;
-  lanConnBadge.textContent = text;
-}
+const coopInviteController = createCoopInviteController({
+  lan,
+  lanInviteUrlInput,
+  btnShareInvite,
+  btnHudInvite,
+  btnHudShare,
+  btnNotifyToggle,
+  lanConnBadge,
+  lanRoomsSection,
+  lanRoomsList,
+  getMode: () => mode,
+  getSession: () => session,
+  getCopyInviteFeedbackTimer: () => copyInviteFeedbackTimer,
+  setCoopDockExpanded: (expanded) => {
+    if (typeof setCoopDockExpanded === 'function') setCoopDockExpanded(expanded);
+  },
+  showToast,
+});
+const {
+  buildRoomInviteUrl,
+  syncBrowserRoomUrl,
+  syncRoomInviteUi,
+  syncNotifyToggleUi,
+  requestDiverNotificationPermission,
+  showJoinOsNotification,
+  fetchLanUrls,
+  copyText,
+  setLanConnectionBadge,
+  renderRoomsList,
+} = coopInviteController;
 
 function resetLobbyUiState(statusText = '') {
   lanRoomBox.hidden = true;
@@ -4640,47 +4059,6 @@ function resetLobbyUiState(statusText = '') {
     lanStatus.hidden = !statusText;
   }
   renderLevelCards();
-}
-
-function renderRoomsList(rooms = lan.rooms) {
-  if (!lanRoomsSection || !lanRoomsList) return;
-  if (lan.room || !Array.isArray(rooms) || rooms.length === 0) {
-    lanRoomsSection.hidden = true;
-    lanRoomsList.innerHTML = '';
-    return;
-  }
-  lanRoomsSection.hidden = false;
-  if (typeof setCoopDockExpanded === 'function') setCoopDockExpanded(true);
-  lanRoomsList.innerHTML = rooms
-    .map((r) => {
-      const lvl = getLevelById(r.levelId);
-      const lvlIdx = LEVELS.findIndex((l) => l.id === lvl.id) + 1;
-      const full = r.playerCount >= r.maxPlayers;
-      const busy = full;
-      const stateText = full
-        ? 'Full'
-        : r.started
-          ? `In Dive · ${r.playerCount}/${r.maxPlayers} Divers`
-          : `${r.playerCount}/${r.maxPlayers} Divers`;
-      const safeCode = escapeHtml(r.code);
-      return `
-        <div class="lan-room-row">
-          <div class="lan-room-row-info">
-            <span><strong>${safeCode}</strong> · Host: ${escapeHtml(r.hostName)}</span>
-            <span class="lan-room-row-sub">L${lvlIdx}: ${escapeHtml(lvl.name)} · ${stateText}</span>
-          </div>
-          <button
-            type="button"
-            class="btn tiny ${busy ? 'ghost' : 'primary'}"
-            data-join-code="${safeCode}"
-            ${busy ? 'disabled' : ''}
-          >
-            ${full ? 'Full' : r.started ? 'Drop In' : 'Join'}
-          </button>
-        </div>
-      `;
-    })
-    .join('');
 }
 
 let menuBgBakeTimer = null;
@@ -5611,9 +4989,8 @@ btnHudShare?.addEventListener('click', shareCurrentInviteLink);
 btnNotifyToggle?.addEventListener('click', async () => {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') {
-    notifyAlertsMuted = !notifyAlertsMuted;
-    syncNotifyToggleUi();
-    showToast(notifyAlertsMuted ? 'Join notifications muted.' : 'Join notifications active!', 2.2);
+    const muted = coopInviteController.toggleNotifyAlertsMuted();
+    showToast(muted ? 'Join notifications muted.' : 'Join notifications active!', 2.2);
     return;
   }
   await requestDiverNotificationPermission({ userTriggered: true });
@@ -6840,7 +6217,9 @@ const sessionStepCallbacks = {
         const artifactKey = siteId && !String(b.trophyRelicId || '').includes(':')
           ? `${siteId}:${b.trophyRelicId}`
           : b.trophyRelicId;
-        const lbRes = recordArtifactInLogbook(loadCareerLogbook(), {
+        const prevBook = loadCareerLogbook();
+        const beforeBoard = resolveBountyBoardState(prevBook);
+        const lbRes = recordArtifactInLogbook(prevBook, {
           id: artifactKey,
           name: b.trophyName,
           kind: 'relic',
@@ -6852,10 +6231,26 @@ const sessionStepCallbacks = {
           bestClearSec: Math.max(1, Math.round(session.secretLair.bossFightElapsedSec || 0)),
           bossName: b.name,
         });
+        const nextBook = lbRes?.book || prevBook;
         if (lbRes?.book) saveCareerLogbook(lbRes.book);
+        const afterBoard = resolveBountyBoardState(nextBook);
+        if (session.secretLair) {
+          session.secretLair.titleBannerSub =
+            `🏆 ${b.trophyName} · ${afterBoard.claimedCount}/${afterBoard.totalCount} BOUNTIES · RIDE UPDRAFT TO SURFACE`;
+        }
         if (lbRes?.isNew) {
-          const secretCosmetics = getSecretCosmeticsForTrophy(b.trophyRelicId);
-          if (secretCosmetics.length > 0) {
+          const secretCosmetics = (getSecretCosmeticsForTrophy(b.trophyRelicId) || [])
+            .map((c) => (typeof c === 'string' ? c : `${c?.icon || '✨'} ${c?.name || ''}`.trim()))
+            .filter(Boolean);
+          const newlyHitMilestone = (afterBoard.milestones || []).find(
+            (m) => m.unlocked && !(beforeBoard.milestones || []).some((bm) => bm.id === m.id && bm.unlocked)
+          );
+          if (newlyHitMilestone) {
+            showToast(
+              `🎖️ BOUNTY MILESTONE (${afterBoard.claimedCount}/${afterBoard.totalCount}): ${newlyHitMilestone.icon} ${newlyHitMilestone.rewardLabel} unlocked!`,
+              5.4
+            );
+          } else if (secretCosmetics.length > 0) {
             showToast(`✦ Gear Workshop unlocked: ${secretCosmetics.join(' & ')}`, 4.8);
           }
         }

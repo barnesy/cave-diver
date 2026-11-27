@@ -2911,9 +2911,17 @@ export function applyBossDamage(
       session.timeScale = 0.28;
       session._slowMoTimer = 0.58;
     }
-    addShockwave(lair, boss.x, boss.y, 32, '#67e8f9', 1.15);
-    addSparkBurst(lair, boss.x, boss.y, '#67e8f9', 32, `🏆 ${lair.spec.boss.trophyName}!`, true);
-    showTitleBanner(lair, `${boss.name} VANQUISHED`, 'SWIM INTO THE THERMAL UPDRAFT TO SURFACE', '#34d399', 4.2);
+    addShockwave(lair, boss.x, boss.y, 34, '#67e8f9', 1.25);
+    addShockwave(lair, boss.x, boss.y, 22, '#fde047', 0.92);
+    addSparkBurst(lair, boss.x, boss.y, '#67e8f9', 36, `🏆 ${lair.spec.boss.trophyName}!`, true);
+    addSparkBurst(lair, boss.x, boss.y, '#fde047', 22, '', true);
+    showTitleBanner(
+      lair,
+      `${boss.name} VANQUISHED`,
+      `🏆 ${lair.spec.boss.trophyName} · RIDE THE UPDRAFT TO SURFACE`,
+      '#34d399',
+      4.6
+    );
     callbacks.onBossDefeat?.(boss, lair);
     callbacks.onToast?.(
       `🏆 VICTORY! ${boss.name} defeated (+${lair.spec.boss.bonusPoints} pts)! Swim into the glowing Updraft to surface!`,

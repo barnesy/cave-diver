@@ -5498,8 +5498,8 @@ test('v139 Underwater Photo Mode Studio & Marine Field Guide Collector Cards', a
     filterAndSortFieldGuide,
   } = await import('../public/js/game/photoStudio.js');
 
-  assert.equal(PHOTO_FILTERS.length, 5);
-  assert.equal(PHOTO_FRAMES.length, 3);
+  assert.equal(PHOTO_FILTERS.length, 7);
+  assert.equal(PHOTO_FRAMES.length, 4);
 
   // 1. State creation & bounds clamping
   const pm = createPhotoModeState();
@@ -13439,4 +13439,76 @@ test('v262 Playtest Polish: Portrait Boss Arena Framing, Sticky Mobile Onboardin
   assert.ok(bossRenSrc.includes('boss.phaseShiftSec') && bossRenSrc.includes('maxTextW'), 'Expected phase-shift edge pulse and responsive portrait banner width');
   const audioSrc = readFileSync(new URL('../public/js/game/audio.js', import.meta.url), 'utf8');
   assert.ok(audioSrc.includes('Phase II / Phase III harmonic escalation brass stinger'), 'Expected phase escalation brass stinger in playBossRoar');
+});
+
+test('v263 4-Pillar Upgrade: Modular main.js (<7500L), Bounty Hunt Jump & Victory Milestones, Shipwreck Atmosphere & Photo Studio Field Guide Plate', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  // 1. main.js slimmed below 7500 lines & 3 extracted UI controllers registered in index.html + sw.js
+  const mainSrc = readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  const mainLines = mainSrc.split(/\r?\n/).length;
+  assert.ok(mainLines < 7500, `Expected main.js < 7500 lines after UI controller extraction, got ${mainLines}`);
+  const htmlSrc = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const swSrc = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  for (const mod of ['dailyChallengeController.js', 'photoStudioController.js', 'coopInviteController.js']) {
+    assert.ok(htmlSrc.includes(`./js/ui/${mod}`), `index.html importmap must register ${mod}`);
+    assert.ok(swSrc.includes(`./js/ui/${mod}`), `sw.js precache must register ${mod}`);
+  }
+
+  // 2. Abyssal Bounties quick-jump button + Boss Victory milestone progress in secretLairs & main.js
+  const bountyCtrlSrc = readFileSync(new URL('../public/js/ui/bountiesController.js', import.meta.url), 'utf8');
+  assert.ok(bountyCtrlSrc.includes('data-bounty-hunt=') && bountyCtrlSrc.includes('onHuntBounty'), 'bountiesController must render quick-jump Hunt/Chart Waters button');
+  assert.ok(mainSrc.includes('onHuntBounty:') && mainSrc.includes('btn-debrief-boss-bounties'), 'main.js must wire onHuntBounty quick-jump and debrief Bounties button');
+  assert.ok(mainSrc.includes('BOUNTY MILESTONE'), 'main.js must celebrate Bounty Hunter Milestone unlocks on boss defeat');
+
+  // 3. Shipwreck living atmosphere (trapped-air hull bubble streams + rust motes + rivet ping audio)
+  const wreckRenSrc = readFileSync(new URL('../public/js/game/renderers/wreckAndInteractivesRenderer.js', import.meta.url), 'utf8');
+  assert.ok(wreckRenSrc.includes('_drawWreckHullAtmosphere('), 'wreckAndInteractivesRenderer must draw trapped-air hull bubble streams & rust motes');
+  const { wreckAndInteractivesMethods } = await import('../public/js/game/renderers/wreckAndInteractivesRenderer.js');
+  const wreckOps = [];
+  const fakeCtx = new Proxy(
+    { fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1 },
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        return (...args) => { wreckOps.push(prop); return undefined; };
+      },
+    }
+  );
+  wreckAndInteractivesMethods._drawWreckHullAtmosphere.call(
+    { level: { isWreck: true, wreckHullXMin: -10, wreckHullXMax: 80, wreckDeckY: 18, wreckKeelY: 42 } },
+    fakeCtx, -20, 90, 0, 50, (x) => x * 16, (y) => y * 16, 16, 4.2
+  );
+  assert.ok(wreckOps.includes('arc') && wreckOps.includes('rect') && wreckOps.includes('fill'), 'Shipwreck atmosphere must draw batched bubbles (arc) and rust motes (rect)');
+  const { DiveAudio } = await import('../public/js/game/audio.js');
+  assert.equal(typeof DiveAudio.prototype.playWreckHullRivetPing, 'function', 'DiveAudio must expose playWreckHullRivetPing');
+
+  // 4. Photo Studio expanded presets (Cenote Emerald, Archival Wreck) & Field Guide Plate frame
+  const { PHOTO_FILTERS, PHOTO_FRAMES, renderPhotoSnapshot, applyPhotoViewportOverlay } = await import('../public/js/game/photoStudio.js');
+  assert.ok(PHOTO_FILTERS.some((f) => f.id === 'kelp-emerald'), 'Expected Cenote Emerald filter');
+  assert.ok(PHOTO_FILTERS.some((f) => f.id === 'wreck-sepia'), 'Expected Archival Wreck filter');
+  assert.ok(PHOTO_FRAMES.some((f) => f.id === 'field-guide'), 'Expected Field Guide Plate frame');
+  const snapOps = [];
+  const snapCtx = new Proxy(
+    {
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '', globalCompositeOperation: 'source-over',
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    },
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        return (...args) => { snapOps.push([prop, args[0]]); return undefined; };
+      },
+    }
+  );
+  applyPhotoViewportOverlay(snapCtx, 1280, 720, { active: true, filterId: 'wreck-sepia', frameId: 'field-guide', showGrid: false });
+  assert.equal(
+    renderPhotoSnapshot(snapCtx, { width: 1280, height: 720 }, { filterId: 'kelp-emerald', frameId: 'field-guide', siteName: 'SS Thistlegorm', depthM: 28.4 }),
+    true
+  );
+  assert.ok(
+    snapOps.some(([op, arg]) => op === 'fillText' && String(arg).includes('MARINE FIELD GUIDE')),
+    'Field Guide Plate frame must render specimen plate header'
+  );
 });
