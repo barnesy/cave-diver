@@ -18,9 +18,9 @@ export const LEVEL_23 = {
     'Plunge into Bermuda\'s crystalline aragonite sea-caverns with NO fixed line. Anchor your 225m reel [G], burst through twin turquoise Sargasso sea-wall arches, recover the Lost Bermuda Telemetry Buoy at 98m on hypoxic TMX 11/65, and clear deco in the eastern coral lagoon.',
   bounds: {
     xMin: -40,
-    xMax: 356,
+    xMax: 448,
     yMin: -6,
-    yMax: 112,
+    yMax: 124,
   },
   roughness: 0.38,
   spawn: { x: 14, y: 2.0 },
@@ -113,6 +113,13 @@ export const LEVEL_23 = {
     { ax: 214, ay: 98.0, bx: 184, by: 101.0, ra: 2.5, rb: 3.0 },
     // Dead End 6: East Reef Chimney Coral Alcove
     { ax: 274, ay: 54.0, bx: 304, by: 48.0, ra: 2.3, rb: 2.8 },
+    // Hidden East Sargasso Shelf Tunnel -> Old Ironbrow Grumpy Sea Turtle Secret Lair (v269)
+    { ax: 236, ay: 102.0, bx: 274, by: 102.0, ra: 3.8, rb: 3.4, secretLair: true },
+    { ax: 274, ay: 102.0, bx: 308, by: 100.0, ra: 3.5, rb: 4.0, secretLair: true },
+    { ax: 308, ay: 100.0, bx: 334, by: 100.0, ra: 4.6, rb: 4.8, secretLair: true },
+    { ax: 334, ay: 100.0, bx: 364, by: 100.0, ra: 4.2, rb: 4.4, secretLair: true },
+    { ax: 364, ay: 100.0, bx: 380, by: 100.0, ra: 4.6, rb: 10.5, secretLair: true },
+    { ax: 380, ay: 100.0, bx: 420, by: 100.0, ra: 14.0, rb: 14.0, secretLair: true },
   ],
 
   guideline: [],

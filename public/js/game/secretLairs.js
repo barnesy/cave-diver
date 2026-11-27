@@ -3099,17 +3099,17 @@ export function stepSecretLairEncounter(session, dt, { peers = [], isAuthority =
           const spread = boss.phase === 3 ? 0.23 : 0.27;
           const projKind = (boss.kind === 'iron-leviathan' || boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' || boss.kind === 'spectral-dreadnought')
             ? 'slag'
-            : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale')
+            : (boss.kind === 'frost-crab' || boss.kind === 'frost-wyrm' || boss.kind === 'phantom-uboat' || boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale' || boss.kind === 'grumpy-turtle')
               ? 'frost'
-              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel' || boss.kind === 'giant-clam' || boss.kind === 'piranha-trio')
+              : (boss.kind === 'abyssal-empress' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'crystal-basilisk' || boss.kind === 'orichalcum-colossus' || boss.kind === 'coral-dragon' || boss.kind === 'electric-eel' || boss.kind === 'giant-clam' || boss.kind === 'piranha-trio' || boss.kind === 'venom-lionfish')
                 ? 'prism'
                 : 'ink';
           const projCol = projKind === 'slag'
             ? (boss.kind === 'spectral-dreadnought' ? '#34d399' : (boss.kind === 'thermal-nautilus' || boss.kind === 'drill-wyrm' ? '#f97316' : '#fb923c'))
             : projKind === 'frost'
-              ? (boss.kind === 'loch-ness' ? '#34d399' : (boss.kind === 'orca-whale' ? '#bae6fd' : (boss.kind === 'great-white' ? '#38bdf8' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))))
+              ? (boss.kind === 'loch-ness' || boss.kind === 'grumpy-turtle' ? '#34d399' : (boss.kind === 'orca-whale' ? '#bae6fd' : (boss.kind === 'great-white' ? '#38bdf8' : (boss.kind === 'phantom-uboat' ? '#5eead4' : '#67e8f9'))))
               : projKind === 'prism'
-                ? (boss.kind === 'piranha-trio' ? '#fb7185' : (boss.kind === 'giant-clam' ? '#f472b6' : (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6')))))
+                ? (boss.kind === 'venom-lionfish' ? '#e879f9' : (boss.kind === 'piranha-trio' ? '#fb7185' : (boss.kind === 'giant-clam' ? '#f472b6' : (boss.kind === 'coral-dragon' ? '#2dd4bf' : (boss.kind === 'electric-eel' || boss.kind === 'solar-lobster' || boss.kind === 'solar-leviathan' || boss.kind === 'orichalcum-colossus' ? '#fde047' : boss.kind === 'crystal-basilisk' ? '#e879f9' : (boss.phase >= 3 ? '#fde047' : '#f472b6'))))))
                 : (boss.phase === 3 ? '#fb7185' : '#c084fc');
           for (let k = 0; k < count; k++) {
             const a = baseAng + (k - (count - 1) * 0.5) * spread;
@@ -3930,8 +3930,8 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return lastNode;
   }
 
-  if (boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale') {
-    const waveCol = boss.kind === 'great-white' ? '#38bdf8' : boss.kind === 'orca-whale' ? '#67e8f9' : '#34d399';
+  if (boss.kind === 'loch-ness' || boss.kind === 'great-white' || boss.kind === 'orca-whale' || boss.kind === 'grumpy-turtle') {
+    const waveCol = boss.kind === 'great-white' ? '#38bdf8' : boss.kind === 'orca-whale' ? '#67e8f9' : boss.kind === 'grumpy-turtle' ? '#fbbf24' : '#34d399';
     const ring = {
       id: `${boss.kind}_wave_${++lair._hazardSeq}`,
       kind: 'frost-ring',
@@ -3950,11 +3950,12 @@ export function spawnBossSignatureHazard(session, lair, boss, primaryTarget = nu
     return ring;
   }
 
-  if (boss.kind === 'giant-clam' || boss.kind === 'piranha-trio') {
+  if (boss.kind === 'giant-clam' || boss.kind === 'piranha-trio' || boss.kind === 'venom-lionfish') {
     const isTrio = boss.kind === 'piranha-trio';
+    const isLion = boss.kind === 'venom-lionfish';
     const existingOrbs = lair.bossHazards.filter((h) => h.kind === 'star-orb').length;
-    const toSpawn = Math.min(isTrio ? (boss.phase >= 3 ? 3 : 2) : (boss.phase >= 3 ? 2 : 1), 3 - existingOrbs);
-    const colors = isTrio ? ['#fb7185', '#fde047', '#f472b6'] : ['#f472b6'];
+    const toSpawn = Math.min((isTrio || isLion) ? (boss.phase >= 3 ? 3 : 2) : (boss.phase >= 3 ? 2 : 1), 3 - existingOrbs);
+    const colors = isLion ? ['#e11d48', '#e879f9', '#fffbeb'] : isTrio ? ['#fb7185', '#fde047', '#f472b6'] : ['#f472b6'];
     let lastOrb = null;
     for (let k = 0; k < toSpawn; k++) {
       const startAng = Math.random() * Math.PI * 2 + (isTrio ? (k * Math.PI * 2) / 3 : k * Math.PI);

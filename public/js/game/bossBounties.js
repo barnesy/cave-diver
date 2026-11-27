@@ -353,6 +353,44 @@ export const BOSS_BOUNTIES = Object.freeze([
     trueName: 'CRIMSON PIRANHA TRIO',
     trueTitle: 'Synchronized Triple-Fang Jungle Cenote Pack',
   }),
+  Object.freeze({
+    id: 'bounty-grumpy-turtle',
+    contractCode: 'BOUNTY #19',
+    threatClass: 'CLASS IV · SARGASSO',
+    accentColor: '#34d399',
+    silhouetteKind: 'turtle',
+    bossKind: 'grumpy-turtle',
+    previewScale: 9.8,
+    previewOffsetY: 3,
+    codename: 'THE GRUMPY SHELL',
+    watersRumor: 'Bermuda Sargasso Drop-Off',
+    tale: 'Old island captains tell of a cantankerous ancient green sea turtle who despises noisy bubbles and guards a hidden coral terrace beyond the turquoise sea-wall arches. Sweep your active sonar along the deepest limestone shelf — if you hear a grumpy huff, step lively.',
+    bountyPts: 3500,
+    levelId: 'bermuda-devils-wall',
+    trophyRelicId: 'bermuda-ironbrow-scute',
+    trophyName: 'Ancient Ironbrow Scute Crest',
+    trueName: 'OLD IRONBROW TURTLE',
+    trueTitle: 'Cantankerous Ancient Sargasso Sea Turtle Sovereign',
+  }),
+  Object.freeze({
+    id: 'bounty-venom-lionfish',
+    contractCode: 'BOUNTY #20',
+    threatClass: 'CLASS III · VENOM',
+    accentColor: '#fb7185',
+    silhouetteKind: 'lionfish',
+    bossKind: 'venom-lionfish',
+    previewScale: 9.6,
+    previewOffsetY: 3,
+    codename: 'THE PLUMED VENOM',
+    watersRumor: 'Cyprus Capsized Ferry Wreck',
+    tale: 'Mediterranean wreck guides warn of a dazzling crimson-and-ivory feathered silhouette fanning venomous plumes behind the deepest sealed cargo alleys of the capsized ferry. Ping your active sonar along the aft iron bulkhead to uncover her sunken ballroom.',
+    bountyPts: 3350,
+    levelId: 'ms-zenobia-ferry',
+    trophyRelicId: 'zenobia-lionfish-plume',
+    trophyName: 'Scarlet Lionfish Venom Plume',
+    trueName: 'SCARLET LIONFISH QUEEN',
+    trueTitle: 'Plumed Crimson-Zebra Venom Lionfish Sovereign',
+  }),
 ]);
 
 /**
@@ -556,6 +594,29 @@ export function getBossSilhouetteSvg(kind = 'kraken', accent = '#38bdf8') {
         <circle cx="88" cy="34" r="2.4" fill="${glow}"/>
         <circle cx="48" cy="20" r="2.0" fill="${glow}"/>
         <circle cx="48" cy="48" r="2.0" fill="${glow}"/>
+      `;
+      break;
+    case 'turtle':
+      shape = `
+        <path d="M24 44 C26 20, 74 18, 82 42 Q54 50, 24 44 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.68" stroke-width="1.4"/>
+        <ellipse cx="94" cy="38" rx="11" ry="9" fill="#07111f" stroke="${glow}" stroke-opacity="0.68" stroke-width="1.4"/>
+        <path d="M64 46 Q72 62, 52 60 Q48 52, 54 46 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.3"/>
+        <path d="M28 44 Q18 54, 14 48 Q18 42, 24 42 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.3"/>
+        <line x1="90" y1="33" x2="99" y2="36" stroke="${glow}" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="95" cy="38" r="2.2" fill="${glow}"/>
+      `;
+      break;
+    case 'lionfish':
+      shape = `
+        <g stroke="${glow}" stroke-opacity="0.72" stroke-width="1.5" stroke-linecap="round">
+          <line x1="56" y1="32" x2="36" y2="10"/><line x1="60" y1="30" x2="54" y2="8"/>
+          <line x1="66" y1="30" x2="72" y2="9"/><line x1="72" y1="32" x2="88" y2="14"/>
+          <line x1="54" y1="42" x2="32" y2="60"/><line x1="62" y1="44" x2="52" y2="64"/>
+          <line x1="70" y1="44" x2="78" y2="62"/>
+        </g>
+        <path d="M24 38 L10 26 L16 38 L10 50 Z" fill="#07111f" stroke="${glow}" stroke-opacity="0.6" stroke-width="1.2"/>
+        <ellipse cx="60" cy="38" rx="28" ry="13" fill="#07111f" stroke="${glow}" stroke-opacity="0.68" stroke-width="1.4"/>
+        <circle cx="78" cy="35" r="2.5" fill="${glow}"/>
       `;
       break;
     case 'empress':

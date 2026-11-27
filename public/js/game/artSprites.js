@@ -3540,6 +3540,83 @@ export function drawStyledArtifact(ctx, item, sx, sy, r, timeSec, { index = 0, i
     ctx.restore();
     return;
   }
+  if (itemIdLower.includes('bermuda-ironbrow-scute') || nameLower.includes('ironbrow scute')) {
+    // Hexagonal Emerald-Jade & Warm-Gold Sea Turtle Shell Crest (Grumpy Sea Turtle Trophy, v269)
+    ctx.save();
+    const sg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#6ee7b7'], [0.5, '#059669'], [1, '#064e3b']], '#10b981');
+    ctx.fillStyle = sg;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = Math.max(2.0, lw * 1.15);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3 - Math.PI / 6;
+      const hx = Math.cos(a) * r * 0.78;
+      const hy = Math.sin(a) * r * 0.84;
+      if (i === 0) ctx.moveTo(hx, hy);
+      else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Inner golden tortoise scute polygon
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = Math.max(1.2, lw * 0.7);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3 - Math.PI / 6;
+      const hx = Math.cos(a) * r * 0.40;
+      const hy = Math.sin(a) * r * 0.44;
+      if (i === 0) ctx.moveTo(hx, hy);
+      else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    // Cute furrowed grumpy brow gleam in center!
+    ctx.strokeStyle = '#022c22';
+    ctx.lineWidth = Math.max(1.6, lw * 0.9);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, -r * 0.08);
+    ctx.lineTo(-r * 0.04, r * 0.04);
+    ctx.moveTo(r * 0.24, -r * 0.08);
+    ctx.lineTo(r * 0.04, r * 0.04);
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  if (itemIdLower.includes('zenobia-lionfish-plume') || nameLower.includes('lionfish venom plume')) {
+    // Fanning Scarlet-and-Ivory Feathered Lionfish Plume Crest with Violet Glow Tips (Lionfish Trophy, v269)
+    ctx.save();
+    for (let i = -2; i <= 2; i++) {
+      const ang = i * 0.34 - Math.PI * 0.5;
+      ctx.save();
+      ctx.rotate(ang + Math.PI * 0.5);
+      const pg = _safeLinGrad(ctx, 0, r * 0.45, 0, -r * 0.82, [[0, '#881337'], [0.4, '#fb7185'], [0.75, '#fffbeb'], [1, '#e879f9']], '#fb7185');
+      ctx.fillStyle = pg;
+      ctx.strokeStyle = '#4c0519';
+      ctx.lineWidth = Math.max(1.1, lw * 0.65);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.09, r * 0.42);
+      ctx.quadraticCurveTo(-r * 0.14, -r * 0.25, 0, -r * 0.84);
+      ctx.quadraticCurveTo(r * 0.14, -r * 0.25, r * 0.09, r * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    // Glowing ivory-crimson clasp gem at base
+    ctx.fillStyle = '#fde047';
+    ctx.strokeStyle = '#713f12';
+    ctx.lineWidth = Math.max(1.2, lw * 0.7);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.38, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
   if (itemIdLower.includes('strytan-magma-pearl') || nameLower.includes('heart of the thermal spire')) {
     // Spiral Basalt-and-Molten-Magma Nautilus Pearl Relic (Hydrothermal Nautilus Trophy, v193)
     const mg = _safeLinGrad(ctx, -r, -r, r, r, [[0, '#fef08a'], [0.45, '#f97316'], [1, '#292524']], '#f97316');

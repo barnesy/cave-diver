@@ -42,6 +42,10 @@ export const bossGuardiansMethods = {
       this._drawGiantClamBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else if (boss.kind === 'piranha-trio') {
       this._drawPiranhaTrioBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'grumpy-turtle') {
+      this._drawGrumpyTurtleBoss(ctx, boss, toScreenX, toScreenY, scale, t);
+    } else if (boss.kind === 'venom-lionfish') {
+      this._drawLionfishBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     } else {
       this._drawCaveKrakenBoss(ctx, boss, toScreenX, toScreenY, scale, t);
     }
@@ -3786,6 +3790,545 @@ export const bossGuardiansMethods = {
       irisBot: '#e11d48',
       phase: 0.0,
       hasCrown: true,
+    });
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * OLD IRONBROW TURTLE — Expressive Kawaii Anime Grumpy Sea Turtle Boss
+   * (Bermuda Crystal Arch & Abyss, Sargasso Sea) (v269).
+   */
+  _drawGrumpyTurtleBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.1) * 0.13 * r;
+    const flipperBeat = Math.sin(timeSec * (isAngry ? 5.6 : 2.6));
+    const outline = '#022c22';
+    const skinHi = isHurt ? '#ffffff' : '#a7f3d0';
+    const skinMid = isHurt ? '#d1fae5' : '#34d399';
+    const skinDark = isHurt ? '#6ee7b7' : '#059669';
+    const shellHi = isHurt ? '#ffffff' : '#10b981';
+    const shellMid = isHurt ? '#d1fae5' : '#047857';
+    const shellDark = isHurt ? '#6ee7b7' : '#064e3b';
+    const rimGold = '#fde68a';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 1.8) * 0.04);
+
+    // 1. Soft Sargasso Emerald-Gold Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.9);
+    aura.addColorStop(0, isAngry ? 'rgba(251, 191, 36, 0.30)' : 'rgba(52, 211, 153, 0.24)');
+    aura.addColorStop(0.55, 'rgba(16, 185, 129, 0.12)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Stubby Little Wiggling Tail + Rear Steering Flipper
+    ctx.fillStyle = skinDark;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.88, r * 0.20);
+    ctx.quadraticCurveTo(-r * 1.18, r * 0.28 + flipperBeat * r * 0.08, -r * 1.12, r * 0.40);
+    ctx.quadraticCurveTo(-r * 0.94, r * 0.42, -r * 0.78, r * 0.34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Rear Paddle Flipper
+    ctx.save();
+    ctx.translate(-r * 0.74, r * 0.38);
+    ctx.rotate(-0.25 - flipperBeat * 0.18);
+    ctx.fillStyle = skinMid;
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.14, r * 0.14, r * 0.28, r * 0.15, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Far-Side Front Rowing Flipper peeking under chest
+    ctx.save();
+    ctx.translate(r * 0.42, r * 0.34);
+    ctx.rotate(0.32 - flipperBeat * 0.22);
+    ctx.fillStyle = skinDark;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.12, r * 0.26, r * 0.22, r * 0.42, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Cream-Amber Belly Plastron tucked cleanly under shell
+    ctx.fillStyle = rimGold;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.10, r * 0.32, r * 0.76, r * 0.24, 0.04, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Plump Domed Emerald-Jade & Warm-Gold Tortoiseshell Carapace!
+    const traceShell = () => {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.96, r * 0.24);
+      ctx.bezierCurveTo(-r * 0.94, -r * 0.84, r * 0.52, -r * 0.92, r * 0.70, r * 0.18);
+      ctx.quadraticCurveTo(r * 0.0, r * 0.44, -r * 0.96, r * 0.24);
+      ctx.closePath();
+    };
+    ctx.save();
+    traceShell();
+    const shG = ctx.createRadialGradient(-r * 0.22, -r * 0.38, r * 0.12, -r * 0.12, -r * 0.08, r * 1.1);
+    shG.addColorStop(0, shellHi);
+    shG.addColorStop(0.55, shellMid);
+    shG.addColorStop(1, shellDark);
+    ctx.fillStyle = shG;
+    ctx.fill();
+
+    // Clip hexagonal amber-rimmed scute plates & scalloped rim inside carapace!
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(253, 230, 138, 0.78)';
+    ctx.lineWidth = Math.max(1.8, 0.07 * scale);
+    const drawHex = (hx, hy, hr) => {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        const px = hx + Math.cos(a) * hr;
+        const py = hy + Math.sin(a) * hr * 0.85;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.16)';
+      ctx.fill();
+      ctx.stroke();
+    };
+    drawHex(-r * 0.14, -r * 0.24, r * 0.30);
+    drawHex(-r * 0.62, -r * 0.08, r * 0.26);
+    drawHex(r * 0.32, -r * 0.12, r * 0.26);
+    drawHex(-r * 0.38, r * 0.16, r * 0.24);
+    drawHex(r * 0.10, r * 0.16, r * 0.24);
+    // Warm amber shell rim along lower skirt
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(-r * 1.1, r * 0.20, r * 2.0, r * 0.28);
+    ctx.restore();
+
+    // Re-trace carapace contour before crisp outline stroke!
+    traceShell();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.5, 0.10 * scale);
+    ctx.stroke();
+    ctx.restore();
+
+    // Glossy anime dome shine on shell
+    this._drawKawaiiShine(ctx, -r * 0.30, -r * 0.42, r * 0.28, r * 0.10, -0.32);
+
+    // Slightly Crooked Jaunty Golden Crown perched atop the grumpy shell!
+    ctx.save();
+    ctx.translate(-r * 0.14, -r * 0.66 + Math.sin(timeSec * 3.0) * 0.025 * r);
+    ctx.rotate(-0.18);
+    const cw = r * 0.28;
+    const ch = r * 0.20;
+    ctx.fillStyle = '#fde047';
+    ctx.strokeStyle = '#713f12';
+    ctx.lineWidth = Math.max(1.5, 0.06 * scale);
+    ctx.beginPath();
+    ctx.moveTo(-cw, ch * 0.45);
+    ctx.lineTo(-cw * 0.85, -ch * 0.65);
+    ctx.lineTo(-cw * 0.28, -ch * 0.05);
+    ctx.lineTo(0, -ch * 0.85);
+    ctx.lineTo(cw * 0.28, -ch * 0.05);
+    ctx.lineTo(cw * 0.85, -ch * 0.65);
+    ctx.lineTo(cw, ch * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 5. Sweeping Near-Side Front Sea-Turtle Flipper (with cute olive-gold spots!)
+    ctx.save();
+    ctx.translate(r * 0.12, r * 0.34);
+    ctx.rotate(-0.20 + flipperBeat * 0.26);
+    const flG = ctx.createLinearGradient(0, -r * 0.1, 0, r * 0.65);
+    flG.addColorStop(0, skinHi);
+    flG.addColorStop(0.6, skinMid);
+    flG.addColorStop(1, skinDark);
+    ctx.fillStyle = flG;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.1, 0.085 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.18, -r * 0.08);
+    ctx.bezierCurveTo(r * 0.26, r * 0.56, -r * 0.28, r * 0.72, -r * 0.44, r * 0.56);
+    ctx.bezierCurveTo(-r * 0.34, r * 0.24, -r * 0.22, -r * 0.02, r * 0.18, -r * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(253, 230, 138, 0.55)';
+    for (const [dx, dy, dr] of [[-0.08, 0.22, 0.075], [-0.22, 0.38, 0.06], [0.04, 0.36, 0.055]]) {
+      ctx.beginPath();
+      ctx.arc(r * dx, r * dy, r * dr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 6. Plump Chibi Grumpy Sea-Turtle Head!
+    ctx.save();
+    ctx.translate(r * 0.84, -r * 0.04 + Math.sin(timeSec * 2.4) * 0.04 * r);
+    const headG = ctx.createRadialGradient(r * 0.05, -r * 0.18, r * 0.06, 0, 0, r * 0.54);
+    headG.addColorStop(0, skinHi);
+    headG.addColorStop(0.6, skinMid);
+    headG.addColorStop(1, skinDark);
+    ctx.fillStyle = headG;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.3, 0.095 * scale);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.46, r * 0.39, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glossy forehead shine
+    this._drawKawaiiShine(ctx, -r * 0.08, -r * 0.22, r * 0.16, r * 0.065, -0.22);
+
+    // GIANT Sparkling Amber-Emerald Anime Eyes (3/4 Pair!)
+    this._drawKawaiiAnimeEye(ctx, r * 0.02, -r * 0.02, r * 0.16, r * 0.19, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#d97706',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: false,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.35, -r * 0.03, r * 0.11, r * 0.15, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#d97706',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry: false,
+      side: 1,
+      timeSec,
+    });
+
+    // SIGNATURE GRUMPY HALF-CLOSED EYELIDS + THICK FURROWED ANIME EYEBROWS (`\ /`)!
+    if (!isStunned && boss.aiState !== 'dormant') {
+      // Half-lidded grumpy upper eyelid wedges covering top 34% of eyes!
+      ctx.fillStyle = skinMid;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.16, -r * 0.24);
+      ctx.lineTo(r * 0.20, -r * 0.24);
+      ctx.lineTo(r * 0.20, -r * 0.04);
+      ctx.lineTo(-r * 0.16, -r * 0.11);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(r * 0.23, -r * 0.22);
+      ctx.lineTo(r * 0.48, -r * 0.22);
+      ctx.lineTo(r * 0.48, -r * 0.10);
+      ctx.lineTo(r * 0.23, -r * 0.04);
+      ctx.closePath();
+      ctx.fill();
+
+      // Thick expressive furrowed grumpy anime eyebrows!
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(2.6, 0.105 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.16, -r * 0.18);
+      ctx.lineTo(r * 0.20, -r * 0.05);
+      ctx.moveTo(r * 0.46, -r * 0.16);
+      ctx.lineTo(r * 0.24, -r * 0.05);
+      ctx.stroke();
+    }
+
+    // Puffed Rosy Grumpy Cheeks!
+    this._drawKawaiiBlush(ctx, -r * 0.12, r * 0.14, r * 0.12, r * 0.07, scale, 'rgba(251, 113, 133, 0.72)');
+    this._drawKawaiiBlush(ctx, r * 0.36, r * 0.12, r * 0.08, r * 0.055, scale, 'rgba(251, 113, 133, 0.62)');
+
+    // Adorable Pouting Grumpy Turtle Beak-Frown (`︵` when idle, grumpy huff open when angry)!
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.0, 0.08 * scale);
+    ctx.lineCap = 'round';
+    if (isStunned) {
+      this._drawKawaiiMouth(ctx, r * 0.20, r * 0.19, r * 0.11, scale, { outline, isStunned: true });
+    } else if (isAngry) {
+      ctx.fillStyle = '#881337';
+      ctx.beginPath();
+      ctx.ellipse(r * 0.22, r * 0.20, r * 0.14, r * 0.10, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fb7185';
+      ctx.beginPath();
+      ctx.ellipse(r * 0.22, r * 0.24, r * 0.08, r * 0.045, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Classic grumpy downturned turtle pout (`︵`) + tiny chin crease!
+      ctx.beginPath();
+      ctx.moveTo(r * 0.04, r * 0.22);
+      ctx.quadraticCurveTo(r * 0.20, r * 0.11, r * 0.36, r * 0.21);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1.2, 0.045 * scale);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.14, r * 0.26);
+      ctx.quadraticCurveTo(r * 0.20, r * 0.29, r * 0.26, r * 0.26);
+      ctx.stroke();
+    }
+
+    // Iconic Pulsing Anime Grumpy Temple Pop-Vein (`💢`)!
+    if (!isStunned && boss.aiState !== 'dormant') {
+      const pulse = 0.88 + 0.18 * Math.sin(timeSec * (isAngry ? 10.0 : 4.2));
+      ctx.save();
+      ctx.translate(-r * 0.24, -r * 0.34);
+      ctx.scale(pulse, pulse);
+      ctx.strokeStyle = isAngry ? '#f43f5e' : '#fb7185';
+      ctx.lineWidth = Math.max(1.8, 0.072 * scale);
+      ctx.lineCap = 'round';
+      const vR = r * 0.10;
+      for (const [sxV, syV] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        ctx.beginPath();
+        ctx.moveTo(sxV * vR * 1.15, syV * vR * 0.35);
+        ctx.quadraticCurveTo(sxV * vR * 0.35, syV * vR * 0.35, sxV * vR * 0.35, syV * vR * 1.15);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+
+    ctx.restore();
+    this._drawBossStatusEmotes(ctx, boss, sx, sy, r, floatBobY, scale, timeSec);
+  },
+
+  /**
+   * SCARLET LIONFISH QUEEN — Flamboyant Kawaii Anime Plumed Red Lionfish Boss
+   * (MS Zenobia RO-RO Ferry Wreck, Larnaca Bay, Cyprus) (v269).
+   */
+  _drawLionfishBoss(ctx, boss, toScreenX, toScreenY, scale, timeSec) {
+    const sx = toScreenX(boss.x);
+    const sy = toScreenY(boss.y);
+    const r = boss.radius * scale;
+    const anim = boss.anim || {};
+    const facing = (anim.facing ?? -1) < 0 ? -1 : 1;
+    const isStunned = boss.aiState === 'stunned';
+    const isHurt = boss.hitFlash > 0;
+    const isAngry = boss.phase >= 3 || boss.aiState.includes('windup') || boss.aiState === 'lunge_dash' || boss.aiState === 'beam_sweep';
+    const floatBobY = Math.sin(timeSec * 2.3) * 0.14 * r;
+    const waveSpeed = isAngry ? 6.4 : 3.2;
+    const outline = '#4c0519';
+    const creamHi = isHurt ? '#ffffff' : '#fffbeb';
+    const creamMid = isHurt ? '#fef3c7' : '#fde68a';
+    const stripeRed = isHurt ? '#fda4af' : '#e11d48';
+    const stripeDark = isHurt ? '#fb7185' : '#881337';
+    const venomTip = boss.phase >= 3 ? '#fde047' : '#e879f9';
+
+    ctx.save();
+    ctx.translate(sx, sy + floatBobY);
+    ctx.scale(facing * (anim.squashX || 1), anim.squashY || 1);
+    ctx.rotate(Math.sin(timeSec * 2.0) * 0.045);
+
+    // 1. Shimmering Crimson-Violet Venom Aura
+    const aura = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 2.0);
+    aura.addColorStop(0, 'rgba(244, 63, 94, 0.28)');
+    aura.addColorStop(0.55, 'rgba(232, 121, 249, 0.15)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Helper: Draw a lush banded crimson-and-ivory Lionfish Feather-Spine Plume!
+    const drawPlumeRay = (ox, oy, angle, len, width, phase) => {
+      const sway = Math.sin(timeSec * waveSpeed + phase) * 0.14;
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(angle + sway);
+      const pg = ctx.createLinearGradient(0, 0, len, 0);
+      pg.addColorStop(0, stripeDark);
+      pg.addColorStop(0.28, creamHi);
+      pg.addColorStop(0.56, stripeRed);
+      pg.addColorStop(0.82, creamHi);
+      pg.addColorStop(1, venomTip);
+      ctx.fillStyle = pg;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.4, 0.058 * scale);
+      ctx.beginPath();
+      ctx.moveTo(0, -width * 0.45);
+      ctx.quadraticCurveTo(len * 0.55, -width * 1.15, len, 0);
+      ctx.quadraticCurveTo(len * 0.55, width * 0.72, 0, width * 0.45);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Glowing venomous sparkle bead at spine tip!
+      ctx.fillStyle = venomTip;
+      ctx.beginPath();
+      ctx.arc(len * 0.96, 0, Math.max(1.8, 0.065 * r), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    // 2. Dazzling Back Fan of 7 Towering Dorsal Feather-Plumes + 4 Sweeping Ventral Plumes!
+    for (let i = 0; i < 7; i++) {
+      const u = i / 6;
+      const ox = -r * 0.46 + u * r * 0.88;
+      const oy = -r * 0.34 - Math.sin(u * Math.PI) * r * 0.12;
+      const ang = -Math.PI * 0.82 + u * Math.PI * 0.44;
+      const len = r * (0.86 + Math.sin(u * Math.PI) * 0.32);
+      drawPlumeRay(ox, oy, ang, len, r * 0.13, i * 0.65);
+    }
+    for (let i = 0; i < 4; i++) {
+      const u = i / 3;
+      const ox = -r * 0.46 + u * r * 0.72;
+      const oy = r * 0.34;
+      const ang = Math.PI * 0.80 - u * Math.PI * 0.32;
+      const len = r * (0.68 + Math.sin(u * Math.PI) * 0.20);
+      drawPlumeRay(ox, oy, ang, len, r * 0.12, i * 0.8 + 2.0);
+    }
+
+    // 3. Delicate Translucent Polka-Dot Spotted Fan Tail Fin!
+    ctx.save();
+    ctx.translate(-r * 0.84, 0);
+    ctx.rotate(Math.sin(timeSec * (waveSpeed * 1.1)) * 0.20);
+    ctx.fillStyle = 'rgba(255, 251, 235, 0.72)';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(1.8, 0.075 * scale);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.10, -r * 0.16);
+    ctx.quadraticCurveTo(-r * 0.34, -r * 0.56, -r * 0.64, -r * 0.44);
+    ctx.quadraticCurveTo(-r * 0.74, 0, -r * 0.64, r * 0.44);
+    ctx.quadraticCurveTo(-r * 0.34, r * 0.56, r * 0.10, r * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = stripeRed;
+    for (const [dx, dy] of [[-0.24, -0.18], [-0.44, -0.24], [-0.36, 0.0], [-0.52, 0.08], [-0.26, 0.20], [-0.46, 0.26]]) {
+      ctx.beginPath();
+      ctx.arc(r * dx, r * dy, Math.max(1.6, r * 0.055), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 4. Plump Chibi Zebra-Striped Lionfish Body (Ivory-Cream + Bold Crimson-Garnet Vertical Bands!)
+    const traceLionBody = () => {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.88, 0);
+      ctx.bezierCurveTo(-r * 0.62, -r * 0.66, r * 0.48, -r * 0.72, r * 0.96, -r * 0.06);
+      ctx.quadraticCurveTo(r * 1.04, r * 0.18, r * 0.82, r * 0.40);
+      ctx.bezierCurveTo(r * 0.34, r * 0.68, -r * 0.58, r * 0.58, -r * 0.88, 0);
+      ctx.closePath();
+    };
+    ctx.save();
+    traceLionBody();
+    const bodyG = ctx.createLinearGradient(0, -r * 0.65, 0, r * 0.62);
+    bodyG.addColorStop(0, creamHi);
+    bodyG.addColorStop(0.65, creamMid);
+    bodyG.addColorStop(1, '#fed7aa');
+    ctx.fillStyle = bodyG;
+    ctx.fill();
+
+    // Clip crisp alternating scarlet & burgundy vertical zebra lionfish stripes!
+    ctx.save();
+    ctx.clip();
+    const stripes = [
+      { x: -0.62, w: 0.15, col: stripeDark },
+      { x: -0.34, w: 0.17, col: stripeRed },
+      { x: -0.04, w: 0.17, col: stripeDark },
+      { x: 0.26, w: 0.15, col: stripeRed },
+      { x: 0.56, w: 0.11, col: stripeDark },
+    ];
+    for (const st of stripes) {
+      ctx.fillStyle = st.col;
+      ctx.beginPath();
+      ctx.moveTo(r * (st.x - st.w * 0.5), -r * 0.85);
+      ctx.quadraticCurveTo(r * (st.x + st.w * 0.3), 0, r * (st.x - st.w * 0.35), r * 0.85);
+      ctx.lineTo(r * (st.x + st.w * 0.65), r * 0.85);
+      ctx.quadraticCurveTo(r * (st.x + st.w * 1.15), 0, r * (st.x + st.w * 0.55), -r * 0.85);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Re-trace body contour before crisp anime outline stroke!
+    traceLionBody();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = Math.max(2.4, 0.095 * scale);
+    ctx.stroke();
+    ctx.restore();
+
+    // Glossy anime jelly-bean forehead shine!
+    this._drawKawaiiShine(ctx, r * 0.12, -r * 0.36, r * 0.26, r * 0.09, -0.15);
+
+    // 5. Regal Sweeping Supraorbital "Crown-Ribbon" Frills above eyes!
+    for (const [fx, fy, fa] of [[0.34, -0.44, -0.65], [0.68, -0.38, -0.25]]) {
+      const frillSway = Math.sin(timeSec * waveSpeed + fx * 3) * 0.16;
+      ctx.save();
+      ctx.translate(r * fx, r * fy);
+      ctx.rotate(fa + frillSway);
+      ctx.fillStyle = stripeRed;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.4, 0.055 * scale);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-r * 0.10, -r * 0.30, r * 0.06, -r * 0.44);
+      ctx.quadraticCurveTo(r * 0.16, -r * 0.22, r * 0.08, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(r * 0.05, -r * 0.42, Math.max(1.6, r * 0.05), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 6. Lush Near-Side Wing-Like Feathered Pectoral Plume Fan (3 sweeping rays!)
+    for (let p = 0; p < 3; p++) {
+      const ang = Math.PI * 0.72 + p * 0.26;
+      drawPlumeRay(r * 0.04, r * 0.16, ang, r * (0.78 - p * 0.08), r * 0.11, p * 0.7 + 4.0);
+    }
+
+    // 7. GIANT Sparkling Amber-Ruby Kawaii Anime Eyes (3/4 Pair!) + Rosy Blush + Sassy `:3` Mouth!
+    this._drawKawaiiAnimeEye(ctx, r * 0.36, -r * 0.08, r * 0.19, r * 0.23, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#e11d48',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 0,
+      timeSec,
+    });
+    this._drawKawaiiAnimeEye(ctx, r * 0.78, -r * 0.09, r * 0.13, r * 0.18, scale, {
+      irisTop: '#fef08a',
+      irisBot: '#e11d48',
+      outline,
+      isStunned,
+      isHurt: isHurt || boss.defeated,
+      isDormant: boss.aiState === 'dormant',
+      isAngry,
+      side: 1,
+      timeSec,
+    });
+    this._drawKawaiiBlush(ctx, r * 0.18, r * 0.16, r * 0.14, r * 0.08, scale, 'rgba(244, 114, 182, 0.76)');
+    this._drawKawaiiBlush(ctx, r * 0.84, r * 0.14, r * 0.09, r * 0.06, scale, 'rgba(244, 114, 182, 0.64)');
+    this._drawKawaiiMouth(ctx, r * 0.58, r * 0.20, r * 0.12, scale, {
+      outline,
+      isOpen: isAngry,
+      isStunned,
+      glowColor: '#f472b6',
     });
 
     ctx.restore();

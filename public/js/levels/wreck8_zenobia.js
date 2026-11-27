@@ -24,7 +24,7 @@ export const WRECK_ZENOBIA = {
   turnaroundCheckpointId: 'cp4',
   ascentSwitchCheckpointId: 'cp5',
   ascentSwitchDepthM: 22.0,
-  bounds: { xMin: -46, xMax: 136, yMin: -6, yMax: 58 },
+  bounds: { xMin: -46, xMax: 300, yMin: -6, yMax: 66 },
   spawn: { x: 12.0, y: 2.0 },
   exitZone: { x: 12.0, y: 1.8, radius: 6.8, name: 'Larnaca Dive Boat Stern Line' },
   haloclineY: 26.0,
@@ -95,6 +95,13 @@ export const WRECK_ZENOBIA = {
     { ax: 84, ay: 46.0, bx: 98, by: 45.0, ra: 3.0, rb: 2.7 },
     // Stern Loading Ramp Exit back up to Open Mediterranean Water (46m -> 25m)
     { ax: 84, ay: 46.0, bx: 86, by: 25.0, ra: 3.8, rb: 4.6 },
+    // Hidden Aft Engine Bulkhead Tunnel -> Scarlet Lionfish Queen Secret Lair (v269)
+    { ax: 98, ay: 45.0, bx: 132, by: 45.0, ra: 3.4, rb: 3.4, secretLair: true },
+    { ax: 132, ay: 45.0, bx: 164, by: 46.5, ra: 3.5, rb: 4.0, secretLair: true },
+    { ax: 164, ay: 46.5, bx: 190, by: 46.5, ra: 4.6, rb: 4.8, secretLair: true },
+    { ax: 190, ay: 46.5, bx: 218, by: 46.5, ra: 4.2, rb: 4.4, secretLair: true },
+    { ax: 218, ay: 46.5, bx: 234, by: 46.5, ra: 4.6, rb: 10.5, secretLair: true },
+    { ax: 234, ay: 46.5, bx: 274, by: 46.5, ra: 14.0, rb: 14.0, secretLair: true },
   ],
 
   guideline: [
