@@ -1729,7 +1729,7 @@ function _fillWallHuggingRock(
         texScale: 0.62,
         light,
         isNearPlane,
-        boost: 0.68 + light.sunLit * 0.24,
+        boost: 0.46 + light.sunLit * 0.26,
         cacheEl,
         cacheKey,
         geomKey,
@@ -1737,12 +1737,17 @@ function _fillWallHuggingRock(
         anchorY: sy,
         renderCtx,
         drawOverlay: (c) => {
-          // Wall-weld depth merge: gently darkens into rock root while staying 100% textured
-          const backAlpha = _clamp(0.78 - light.sunLit * 0.38, 0.36, 0.78);
+          // Cool underwater cave ambient match so deep overhangs never pop bright tan over dark rock
+          const deepVeil = _clamp(0.42 - light.sunLit * 0.34, 0.04, 0.42);
+          c.fillStyle = `rgba(5, 13, 26, ${deepVeil.toFixed(3)})`;
+          c.fillRect(sx - backHalfW - 10, minY - 10, backHalfW * 2 + 20, maxY - minY + 20);
+
+          // Wall-weld depth merge: darkens smoothly into solid cave rock at the attachment seam
+          const backAlpha = _clamp(0.92 - light.sunLit * 0.38, 0.46, 0.92);
           const depthTint = c.createLinearGradient(gX0, gY0, gX1, gY1);
           depthTint.addColorStop(0, 'rgba(0, 0, 0, 0)');
-          depthTint.addColorStop(tLip * 0.75, `rgba(${mergeRgb}, 0.16)`);
-          depthTint.addColorStop(tLip, `rgba(${mergeRgb}, 0.44)`);
+          depthTint.addColorStop(tLip * 0.72, `rgba(${mergeRgb}, 0.24)`);
+          depthTint.addColorStop(tLip, `rgba(${mergeRgb}, 0.62)`);
           depthTint.addColorStop(tSolidInRock, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
           depthTint.addColorStop(1, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
           c.fillStyle = depthTint;
@@ -1773,7 +1778,7 @@ function _fillWallHuggingRock(
             c.fillRect(sx - backHalfW - 10, minY - 10, backHalfW * 2 + 20, maxY - minY + 20);
           }
         },
-        drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -nx * 18, -ny * 18, spriteBounds),
+        drawRockMask: (c) => _applyRockWallFeather(c, renderCtx, -nx * 9, -ny * 9, spriteBounds),
         drawAlphaMask: (c) => {
           const maskGrad = c.createLinearGradient(gX0, gY0, gX1, gY1);
           maskGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
@@ -1856,51 +1861,120 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
   switch (el.kind) {
     case 'rock-pillar': {
-      // Sculpted near-camera cave column locked pixel-tight to LIVE ceiling & floor SDF contours!
-      // Extends past the extreme ceiling/floor bounds across its entire flared width, then trims
-      // pixel-exact inside solid rock via `rockChunks` so ZERO horizontal cap or gap can EVER show!
+      // Organic karst speleothem column (fused stalactite + stalagmite flowstone formation)
+      // Asymmetric pinch height, meandering geological spine, multi-octave jagged limestone shelves,
+      // companion shoulder dripstones, and deep underwater cave shading that melts into the cave walls.
       const topLip = sy;
       const botLip = wallProfile && Number.isFinite(wallProfile.oppSy) ? wallProfile.oppSy : sy + hPx;
       const topMinY = wallProfile && Number.isFinite(wallProfile.minWallSy) ? Math.min(topLip, wallProfile.minWallSy) : topLip;
       const botMaxY = wallProfile && Number.isFinite(wallProfile.maxOppSy) ? Math.max(botLip, wallProfile.maxOppSy) : botLip;
       const waterSpan = Math.max(40, botLip - topLip);
-      const bury = Math.max(54, Math.min(92, waterSpan * 0.30));
+      const bury = Math.max(44, Math.min(78, waterSpan * 0.25));
       const topY = topMinY - bury;
       const botY = botMaxY + bury;
       const span = Math.max(64, botY - topY);
       const midY = (topLip + botLip) * 0.5;
-      const steps = 12;
+
+      // Seeded geological asymmetry so NO two pillars share a symmetric silhouette!
+      const s0 = el.seed;
+      const pinchU = 0.28 + _hash01(s0 + 3.1) * 0.44; // off-center narrow join
+      const spinePhase = _hash01(s0 + 7.4) * Math.PI * 2;
+      const spineDrift = (_hash01(s0 + 11.2) - 0.5) * wPx * 0.62;
+      const topSpreadL = 0.85 + _hash01(s0 + 5.7) * 1.15;
+      const topSpreadR = 0.85 + _hash01(s0 + 9.3) * 1.15;
+      const botSpreadL = 0.90 + _hash01(s0 + 13.1) * 1.20;
+      const botSpreadR = 0.90 + _hash01(s0 + 17.9) * 1.20;
+      const waistScale = 0.34 + _hash01(s0 + 21.5) * 0.16;
+
+      // Localized karst rock shelves / flowstone bosses at different heights on each side
+      const shelfUL1 = 0.18 + _hash01(s0 + 27.3) * 0.28;
+      const shelfUL2 = 0.54 + _hash01(s0 + 31.7) * 0.28;
+      const shelfUR1 = 0.22 + _hash01(s0 + 37.1) * 0.28;
+      const shelfUR2 = 0.52 + _hash01(s0 + 43.9) * 0.28;
+      const shelfAmpL1 = (0.18 + _hash01(s0 + 47.2) * 0.26) * wPx;
+      const shelfAmpL2 = (0.16 + _hash01(s0 + 53.8) * 0.24) * wPx;
+      const shelfAmpR1 = (0.18 + _hash01(s0 + 59.4) * 0.26) * wPx;
+      const shelfAmpR2 = (0.16 + _hash01(s0 + 61.6) * 0.24) * wPx;
+
+      // Companion shoulder dripstone spur on ceiling and/or floor flank
+      const topSpurSide = _hash01(s0 + 71.3) < 0.5 ? -1 : 1;
+      const botSpurSide = -topSpurSide;
+
+      const steps = 32;
       const leftPts = [];
       const rightPts = [];
+      const spinePts = [];
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const py = topY + span * t;
-        // Normalized position across the open-water span (0 at ceiling lip, 1 at floor lip)
         const uWater = _clamp((py - topLip) / waterSpan, -0.55, 1.55);
-        const flare = Math.pow(Math.min(1.52, Math.abs(uWater - 0.5) * 2), 2.10);
-        const halfW = wPx * (0.34 + flare * 1.18);
-        const curveX = Math.sin(_clamp(uWater, 0, 1) * Math.PI) * leanPx * 1.35;
-        const nL = Math.sin(t * 9.5 + el.seed * 1.3) * wPx * 0.075;
-        const nR = Math.cos(t * 8.2 + el.seed * 2.1) * wPx * 0.075;
-        leftPts.push({ x: sx + curveX - halfW + nL, y: py });
-        rightPts.push({ x: sx + curveX + halfW + nR, y: py });
+        const uClamped = _clamp(uWater, 0, 1);
+
+        // Meandering organic rock spine (ceiling & floor formations rarely grow plumb-aligned)
+        const curveX =
+          Math.sin(uClamped * Math.PI) * leanPx * 1.65 +
+          Math.sin(uClamped * Math.PI * 2.0 + spinePhase) * wPx * 0.20 +
+          (uClamped - 0.5) * spineDrift;
+
+        // Asymmetric ceiling drapery vs floor stalagmite flare around off-center pinchU
+        const abovePinch = uWater < pinchU;
+        const distFromPinch = abovePinch
+          ? _clamp((pinchU - uWater) / Math.max(0.24, pinchU), 0, 1.48)
+          : _clamp((uWater - pinchU) / Math.max(0.24, 1 - pinchU), 0, 1.48);
+        const flareCurveL = Math.pow(distFromPinch, abovePinch ? 1.95 : 2.25);
+        const flareCurveR = Math.pow(distFromPinch, abovePinch ? 2.25 : 1.90);
+
+        const baseHalfL = wPx * (waistScale + flareCurveL * (abovePinch ? topSpreadL : botSpreadL));
+        const baseHalfR = wPx * (waistScale + flareCurveR * (abovePinch ? topSpreadR : botSpreadR));
+
+        // 3-octave jagged karst limestone contours + calcified flowstone collars (independent L/R!)
+        const rockNoiseL =
+          (Math.sin(uWater * 7.8 + s0 * 1.3) * 0.19 +
+            Math.sin(uWater * 16.4 + s0 * 2.7) * 0.11 +
+            Math.cos(uWater * 31.3 + s0 * 4.1) * 0.055) *
+          wPx;
+        const rockNoiseR =
+          (Math.cos(uWater * 7.1 + s0 * 2.1) * 0.19 +
+            Math.sin(uWater * 17.8 + s0 * 3.5) * 0.11 +
+            Math.sin(uWater * 33.1 + s0 * 1.9) * 0.055) *
+          wPx;
+
+        // Stepped karst ledges & bulging dripstone knots
+        const bossL =
+          Math.exp(-Math.pow((uWater - shelfUL1) / 0.11, 2)) * shelfAmpL1 +
+          Math.exp(-Math.pow((uWater - shelfUL2) / 0.12, 2)) * shelfAmpL2;
+        const bossR =
+          Math.exp(-Math.pow((uWater - shelfUR1) / 0.11, 2)) * shelfAmpR1 +
+          Math.exp(-Math.pow((uWater - shelfUR2) / 0.12, 2)) * shelfAmpR2;
+
+        // Shoulder karst crag jutting near ceiling/floor transitions
+        const topSpur = Math.exp(-Math.pow((uWater - 0.10) / 0.09, 2)) * wPx * 0.34;
+        const botSpur = Math.exp(-Math.pow((uWater - 0.90) / 0.09, 2)) * wPx * 0.32;
+
+        const halfL = Math.max(wPx * 0.20, baseHalfL + rockNoiseL + bossL + (topSpurSide < 0 ? topSpur : 0) + (botSpurSide < 0 ? botSpur : 0));
+        const halfR = Math.max(wPx * 0.20, baseHalfR + rockNoiseR + bossR + (topSpurSide > 0 ? topSpur : 0) + (botSpurSide > 0 ? botSpur : 0));
+
+        spinePts.push({ x: sx + curveX, y: py });
+        leftPts.push({ x: sx + curveX - halfL, y: py });
+        rightPts.push({ x: sx + curveX + halfR, y: py });
       }
 
+      // Tight-corner karst path tracing (preserves craggy limestone rock facets instead of rubbery curves)
       const traceLeft = (c) => {
         c.moveTo(leftPts[0].x, leftPts[0].y);
         for (let i = 1; i < steps; i++) {
-          const mx = (leftPts[i].x + leftPts[i + 1].x) * 0.5;
-          const my = (leftPts[i].y + leftPts[i + 1].y) * 0.5;
-          c.quadraticCurveTo(leftPts[i].x, leftPts[i].y, mx, my);
+          const p0 = leftPts[i];
+          const p1 = leftPts[i + 1];
+          c.quadraticCurveTo(p0.x, p0.y, p0.x * 0.35 + p1.x * 0.65, p0.y * 0.35 + p1.y * 0.65);
         }
         c.lineTo(leftPts[steps].x, leftPts[steps].y);
       };
       const traceRight = (c) => {
         c.moveTo(rightPts[0].x, rightPts[0].y);
         for (let i = 1; i < steps; i++) {
-          const mx = (rightPts[i].x + rightPts[i + 1].x) * 0.5;
-          const my = (rightPts[i].y + rightPts[i + 1].y) * 0.5;
-          c.quadraticCurveTo(rightPts[i].x, rightPts[i].y, mx, my);
+          const p0 = rightPts[i];
+          const p1 = rightPts[i + 1];
+          c.quadraticCurveTo(p0.x, p0.y, p0.x * 0.35 + p1.x * 0.65, p0.y * 0.35 + p1.y * 0.65);
         }
         c.lineTo(rightPts[steps].x, rightPts[steps].y);
       };
@@ -1908,9 +1982,9 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         traceLeft(c);
         c.lineTo(rightPts[steps].x, rightPts[steps].y);
         for (let i = steps - 1; i >= 1; i--) {
-          const mx = (rightPts[i].x + rightPts[i - 1].x) * 0.5;
-          const my = (rightPts[i].y + rightPts[i - 1].y) * 0.5;
-          c.quadraticCurveTo(rightPts[i].x, rightPts[i].y, mx, my);
+          const p0 = rightPts[i];
+          const p1 = rightPts[i - 1];
+          c.quadraticCurveTo(p0.x, p0.y, p0.x * 0.35 + p1.x * 0.65, p0.y * 0.35 + p1.y * 0.65);
         }
         c.lineTo(rightPts[0].x, rightPts[0].y);
         c.closePath();
@@ -1919,21 +1993,21 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       // 1. Soft depth drop-shadow behind both flanks strictly across open water
       const tTopLip = _clamp((topLip - topY) / span, 0.08, 0.38);
       const tBotLip = _clamp((botLip - topY) / span, 0.62, 0.92);
-      const tTopSolid = _clamp(tTopLip * 0.60, 0.05, tTopLip - 0.02);
-      const tBotSolid = _clamp(1 - (1 - tBotLip) * 0.60, tBotLip + 0.02, 0.95);
-      const tTopMid = _clamp(0.04 + (tTopSolid - 0.04) * 0.48, 0.05, tTopSolid - 0.01);
-      const tBotMid = _clamp(tBotSolid + (0.96 - tBotSolid) * 0.52, tBotSolid + 0.01, 0.95);
+      const tTopSolid = _clamp(tTopLip * 0.68, 0.05, tTopLip - 0.02);
+      const tBotSolid = _clamp(1 - (1 - tBotLip) * 0.68, tBotLip + 0.02, 0.95);
+      const tTopMid = _clamp(0.04 + (tTopSolid - 0.04) * 0.50, 0.05, tTopSolid - 0.01);
+      const tBotMid = _clamp(tBotSolid + (0.96 - tBotSolid) * 0.50, tBotSolid + 0.01, 0.95);
 
       ctx.save();
       const shadowGrad = ctx.createLinearGradient(sx, topY, sx, botY);
       shadowGrad.addColorStop(0, 'rgba(2, 6, 14, 0)');
       shadowGrad.addColorStop(tTopLip, 'rgba(2, 6, 14, 0)');
-      shadowGrad.addColorStop(Math.min(0.48, tTopLip + 0.08), `rgba(2, 6, 14, ${(0.34 * vis).toFixed(3)})`);
-      shadowGrad.addColorStop(Math.max(0.52, tBotLip - 0.08), `rgba(2, 6, 14, ${(0.34 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(Math.min(0.48, tTopLip + 0.08), `rgba(2, 6, 14, ${(0.32 * vis).toFixed(3)})`);
+      shadowGrad.addColorStop(Math.max(0.52, tBotLip - 0.08), `rgba(2, 6, 14, ${(0.32 * vis).toFixed(3)})`);
       shadowGrad.addColorStop(tBotLip, 'rgba(2, 6, 14, 0)');
       shadowGrad.addColorStop(1, 'rgba(2, 6, 14, 0)');
       ctx.strokeStyle = shadowGrad;
-      ctx.lineWidth = isNearPlane ? 14 : 8;
+      ctx.lineWidth = isNearPlane ? 12 : 7;
       ctx.lineCap = 'butt';
       ctx.beginPath();
       traceLeft(ctx);
@@ -1941,16 +2015,16 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
       ctx.stroke();
       ctx.restore();
 
-      // 2. High-Res 512px Photorealistic Rock Pillar — Cached Tight-Sprite + Pixel-Exact `rockChunks` Ceiling/Floor Mask!
-      const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.98);
-      const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.78);
+      // 2. High-Res 512px Organic Karst Column — Cached Tight-Sprite + Tight `rockChunks` Ceiling/Floor Mask!
+      const rockMidShaded = _shadeNearRgb(pal.rockMid, light, isNearPlane, 0.78);
+      const rockDarkShaded = _shadeNearRgb(pal.rockDark, light, isNearPlane, 0.64);
       const litRight = light.lightDirX >= 0;
       const focusY = topLip + waterSpan * _clamp(0.50 + light.lightDirY * 0.22, 0.28, 0.72);
-      const colHalfBound = wPx * 2.40 + Math.abs(leanPx) * 1.4;
+      const colHalfBound = wPx * 3.25 + Math.abs(leanPx) * 1.8;
 
       let drewPillarHiRes = false;
       if (renderCtx?.mats?.rock) {
-        const pTag = `p${Math.round(span / 16)}`;
+        const pTag = `p3_${Math.round(span / 16)}`;
         const geomKey = _buildGeomCacheKey(el, wallProfile, renderCtx.scale || 24, pTag);
         const cacheKey = _buildSpriteCacheKey(el, light, rimPower, wallProfile, renderCtx.scale || 24, pTag);
         const spriteBounds = { x: sx - colHalfBound, y: topY - 4, w: colHalfBound * 2, h: span + 8 };
@@ -1968,10 +2042,10 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             pattern: renderCtx.mats.rock,
             texOriginX: renderCtx.texOriginX,
             texOriginY: renderCtx.texOriginY,
-            texScale: 0.62,
+            texScale: 0.56,
             light,
             isNearPlane,
-            boost: 0.68 + light.sunLit * 0.24,
+            boost: 0.40 + light.sunLit * 0.26,
             cacheEl: el,
             cacheKey,
             geomKey,
@@ -1979,23 +2053,28 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
             anchorY: sy,
             renderCtx,
             drawOverlay: (c) => {
-              // Cylindrical 3D cross-lighting (shadowed side -> rim-lit flank)
-              const cylGrad = c.createLinearGradient(sx - wPx * 0.7, focusY, sx + wPx * 0.7, focusY);
-              cylGrad.addColorStop(0, litRight ? 'rgba(2, 6, 14, 0.56)' : `rgba(${rimRgb}, ${(0.22 * rimPower).toFixed(3)})`);
-              cylGrad.addColorStop(0.5, 'rgba(2, 6, 14, 0.20)');
-              cylGrad.addColorStop(1, litRight ? `rgba(${rimRgb}, ${(0.22 * rimPower).toFixed(3)})` : 'rgba(2, 6, 14, 0.56)');
+              // Cool deep-cave atmospheric grade so the column matches the dark slate-navy cave rock around it
+              const deepVeil = _clamp(0.46 - light.sunLit * 0.36, 0.06, 0.46);
+              c.fillStyle = `rgba(5, 13, 28, ${deepVeil.toFixed(3)})`;
+              c.fillRect(sx - colHalfBound, topY - 4, colHalfBound * 2, span + 8);
+
+              // Deep sculpted cylindrical 3D cross-lighting (shadowed cave side -> softly rim-lit flank)
+              const cylGrad = c.createLinearGradient(sx - wPx * 0.95, focusY, sx + wPx * 0.95, focusY);
+              cylGrad.addColorStop(0, litRight ? 'rgba(2, 6, 16, 0.78)' : `rgba(${rimRgb}, ${(0.12 * rimPower).toFixed(3)})`);
+              cylGrad.addColorStop(0.48, 'rgba(3, 9, 20, 0.24)');
+              cylGrad.addColorStop(1, litRight ? `rgba(${rimRgb}, ${(0.12 * rimPower).toFixed(3)})` : 'rgba(2, 6, 16, 0.78)');
               c.fillStyle = cylGrad;
               c.fillRect(sx - colHalfBound, topY - 4, colHalfBound * 2, span + 8);
 
-              // Top & bottom root depth shading into ceiling & floor rock
-              const backAlpha = _clamp(0.92 - light.sunLit * 0.44, 0.44, 0.92);
+              // Seamless dark cave root weld into ceiling & floor so ZERO sharp cutoff shows against black walls
+              const rootAlpha = _clamp(0.98 - light.sunLit * 0.44, 0.48, 0.98);
               const rootTint = c.createLinearGradient(sx, topY, sx, botY);
-              rootTint.addColorStop(0, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
-              rootTint.addColorStop(tTopLip, `rgba(${mergeRgb}, ${(backAlpha * 0.85).toFixed(3)})`);
-              rootTint.addColorStop(Math.min(0.49, tTopLip + 0.14), 'rgba(0, 0, 0, 0)');
-              rootTint.addColorStop(Math.max(0.51, tBotLip - 0.14), 'rgba(0, 0, 0, 0)');
-              rootTint.addColorStop(tBotLip, `rgba(${mergeRgb}, ${(backAlpha * 0.85).toFixed(3)})`);
-              rootTint.addColorStop(1, `rgba(${mergeRgb}, ${backAlpha.toFixed(3)})`);
+              rootTint.addColorStop(0, `rgba(4, 10, 22, ${rootAlpha.toFixed(3)})`);
+              rootTint.addColorStop(Math.min(0.42, tTopLip + 0.04), `rgba(4, 10, 22, ${(rootAlpha * 0.94).toFixed(3)})`);
+              rootTint.addColorStop(Math.min(0.48, tTopLip + 0.20), 'rgba(0, 0, 0, 0)');
+              rootTint.addColorStop(Math.max(0.52, tBotLip - 0.20), 'rgba(0, 0, 0, 0)');
+              rootTint.addColorStop(Math.max(0.58, tBotLip - 0.04), `rgba(4, 10, 22, ${(rootAlpha * 0.94).toFixed(3)})`);
+              rootTint.addColorStop(1, `rgba(4, 10, 22, ${rootAlpha.toFixed(3)})`);
               c.fillStyle = rootTint;
               c.fillRect(sx - colHalfBound, topY - 4, colHalfBound * 2, span + 8);
 
@@ -2010,26 +2089,27 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
                 c.lineWidth = 1.8;
                 c.lineCap = 'round';
                 c.beginPath();
-                c.moveTo(sx - wPx * 0.08, topLip + 6);
-                c.quadraticCurveTo(sx + leanPx * 0.8, topLip + waterSpan * 0.5, sx + wPx * 0.06, botLip - 6);
+                for (let i = 5; i <= steps - 5; i++) {
+                  if (i === 5) c.moveTo(spinePts[i].x, spinePts[i].y);
+                  else c.lineTo(spinePts[i].x, spinePts[i].y);
+                }
                 c.stroke();
               }
             },
             drawRockMask: (c) => {
               if (!renderCtx?.rockChunks?.length) return false;
-              // Top half: trim pixel-exact 6..26px inside the REAL sloped/curved ceiling rock
+              // Trim tight (8px) inside REAL curved ceiling & floor rock so ZERO bright pillar leaks over dark walls!
               c.save();
               c.beginPath();
               c.rect(spriteBounds.x - 4, spriteBounds.y - 4, spriteBounds.w + 8, midY - spriteBounds.y + 4);
               c.clip();
-              _applyRockWallFeather(c, renderCtx, 0, -26, spriteBounds);
+              _applyRockWallFeather(c, renderCtx, 0, -8, spriteBounds);
               c.restore();
-              // Bottom half: trim pixel-exact 6..26px inside the REAL sloped/curved floor rock
               c.save();
               c.beginPath();
               c.rect(spriteBounds.x - 4, midY, spriteBounds.w + 8, spriteBounds.y + spriteBounds.h - midY + 8);
               c.clip();
-              _applyRockWallFeather(c, renderCtx, 0, 26, spriteBounds);
+              _applyRockWallFeather(c, renderCtx, 0, 8, spriteBounds);
               c.restore();
               return true;
             },
@@ -2065,22 +2145,22 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
         ctx.fill();
       }
 
-      // 4. Crisp localized directional backlit Fresnel rim along the light-facing vertical edge (strictly inside water span!)
-      if (rimPower > 0.07) {
+      // 4. Subtle organic directional backlit Fresnel rim strictly along the sculpted rock contour inside water span
+      if (rimPower > 0.12) {
         const focusX = sx + (litRight ? wPx * 0.36 : -wPx * 0.36);
-        const rad = Math.min(waterSpan * 0.44, Math.max(46, waterSpan * 0.42));
-        let rimStroke = `rgba(${rimRgb}, ${(rimPower * 0.65 * vis).toFixed(3)})`;
+        const rad = Math.min(waterSpan * 0.38, Math.max(40, waterSpan * 0.36));
+        let rimStroke = `rgba(${rimRgb}, ${(rimPower * 0.38 * vis).toFixed(3)})`;
         if (typeof ctx.createRadialGradient === 'function') {
           const rg = ctx.createRadialGradient(focusX, focusY, 3, focusX, focusY, rad);
-          rg.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.92 * vis).toFixed(3)})`);
-          rg.addColorStop(0.55, `rgba(${rimRgb}, ${(rimPower * 0.36 * vis).toFixed(3)})`);
+          rg.addColorStop(0, `rgba(${rimRgb}, ${(rimPower * 0.54 * vis).toFixed(3)})`);
+          rg.addColorStop(0.55, `rgba(${rimRgb}, ${(rimPower * 0.18 * vis).toFixed(3)})`);
           rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
           rimStroke = rg;
         }
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
         ctx.strokeStyle = rimStroke;
-        ctx.lineWidth = Math.max(1.8, Math.min(3.2, wPx * 0.05));
+        ctx.lineWidth = Math.max(1.2, Math.min(2.2, wPx * 0.036));
         ctx.lineCap = 'butt';
         ctx.beginPath();
         if (litRight) traceRight(ctx);
@@ -3190,19 +3270,22 @@ function _drawBaseFormation(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light, 
 
     case 'limestone-overhang':
     default: {
-      // Strictly monotonic organic karst limestone overhang ridge with extended flared wings locked to the live SDF wall contour!
-      const halfW = wPx * 0.62;
-      const ridgeSteps = 10;
+      // Strictly monotonic organic karst limestone overhang ridge with craggy multi-octave rock ledges!
+      const halfW = wPx * 0.64;
+      const ridgeSteps = 18;
+      const peakShift = (_hash01(el.seed + 5.1) - 0.5) * 0.28;
       const pts = [];
       for (let i = 0; i <= ridgeSteps; i++) {
         const u = i / ridgeSteps; // 0 -> 1 strictly increasing X!
         const dx = (u - 0.5) * halfW * 2;
-        const env = Math.pow(Math.sin(u * Math.PI), 1.28);
+        const uSkew = _clamp(u + peakShift * Math.sin(u * Math.PI), 0, 1);
+        const env = Math.pow(Math.sin(uSkew * Math.PI), 1.32);
         const lobe =
-          0.66 +
-          0.26 * Math.sin(u * Math.PI * 2.4 + el.seed * 0.7) +
-          0.14 * Math.sin(u * Math.PI * 5.2 + el.seed * 1.9);
-        const h = i === 0 || i === ridgeSteps ? 0 : hPx * env * _clamp(lobe, 0.28, 1.08);
+          0.62 +
+          0.26 * Math.sin(u * Math.PI * 2.7 + el.seed * 0.7) +
+          0.16 * Math.sin(u * Math.PI * 6.3 + el.seed * 1.9) +
+          0.09 * Math.cos(u * Math.PI * 11.4 + el.seed * 3.1);
+        const h = i === 0 || i === ridgeSteps ? 0 : hPx * env * _clamp(lobe, 0.22, 1.12);
         pts.push({ x: sx + dx, y: wallY(dx) + dir * h });
       }
 
@@ -3281,10 +3364,10 @@ function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light,
         _drawStarGlint(ctx, sx - wPx * 0.20 + beamShift * 0.6, wallY(-wPx * 0.20) + dir * hPx * 0.56, Math.max(3.6, hPx * 0.058), sssRgb, glintA * 0.68 * twinkle);
       }
     }
-  } else if (el.kind === 'wreck-girder' || el.kind === 'rock-pillar') {
+  } else if (el.kind === 'wreck-girder') {
     const rimA = _clamp(light.backLit * 0.48 + (light.beamLit - 0.18) * 0.50, 0, 0.68) * vis;
     if (rimA > 0.09) {
-      const bw = Math.max(18, wPx * (el.kind === 'rock-pillar' ? 0.36 : 0.42));
+      const bw = Math.max(18, wPx * 0.42);
       const sideSign = light.lightDirX >= 0 ? 1 : -1;
       const tipX = sx + leanPx * 0.9 + sideSign * bw * 0.44;
       const tipY = sy + dir * hPx * 0.86;
@@ -3295,7 +3378,7 @@ function _drawLightingAccent(ctx, el, sx, sy, wPx, hPx, dir, pal, swayPx, light,
       rGrad.addColorStop(0.65, `rgba(${rimRgb}, ${(rimA * 0.28).toFixed(3)})`);
       rGrad.addColorStop(1, `rgba(${rimRgb}, 0)`);
       ctx.strokeStyle = rGrad;
-      ctx.lineWidth = el.kind === 'rock-pillar' ? 2.2 : 2.0;
+      ctx.lineWidth = 2.0;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(baseX, baseY);
@@ -3503,7 +3586,7 @@ export const foregroundDepthRendererMethods = {
 
       // Record accent-eligible visible elements for zero-cost Pass 2 reuse
       if (
-        (el.kind === 'kelp-fronds' || el.kind === 'cenote-roots' || el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster' || el.kind === 'wreck-girder' || el.kind === 'rock-pillar') &&
+        (el.kind === 'kelp-fronds' || el.kind === 'cenote-roots' || el.kind === 'crystal-cluster' || el.kind === 'icicle-cluster' || el.kind === 'wreck-girder') &&
         light.lightVis >= 0.06 &&
         Math.max(light.beamLit, light.backLit, light.sunLit, light.ventLit, light.biolumLit) >= 0.16
       ) {

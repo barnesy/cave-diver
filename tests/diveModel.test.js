@@ -13958,3 +13958,12 @@ test('v271 Codex Promoted to Top Section of Home Menu & Simplified Sets/Legendar
   assert.ok(codexHtml.includes('id="btn-codex-owned-toggle"'), 'Codex must include compact Owned-only toggle');
   assert.ok(codexHtml.includes('id="codex-preview-canvas"'), 'Codex must keep Live Rig Preview canvas');
 });
+
+test('v272 Organic Foreground Rock Pillars: Asymmetric Karst Contours, Deep-Cave Blending & Zero Straight Needle Rim', async () => {
+  const fs = await import('node:fs');
+  const fgSrc = fs.readFileSync(new URL('../public/js/game/renderers/foregroundDepthRenderer.js', import.meta.url), 'utf8');
+  assert.ok(fgSrc.includes('const pinchU ='), 'rock-pillar must use seeded asymmetric pinch elevation');
+  assert.ok(fgSrc.includes('const steps = 32;'), 'rock-pillar must use high-resolution 32-step organic karst contour');
+  assert.ok(!fgSrc.includes("el.kind === 'wreck-girder' || el.kind === 'rock-pillar'"), 'rock-pillar must not draw the straight wreck-girder needle rim line');
+  assert.ok(fgSrc.includes('_applyRockWallFeather(c, renderCtx, 0, -8, spriteBounds)'), 'rock-pillar rock mask must feather tightly at the ceiling/floor lip');
+});
