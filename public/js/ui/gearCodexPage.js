@@ -70,7 +70,6 @@ function extractStatSnapshot(perf) {
     armor: Math.round((perf.armorDR || 0) * 100),
     shield: Math.round(perf.shieldMax || 0),
     sonar: Math.round(((perf.sonarRangeMult || 1) - 1) * 100),
-    siltPierce: Math.round((perf.siltPierce || 0) * 100),
     depth: Math.round(perf.narcDepthBonusM || 0),
     bar: Math.round(perf.bonusStartBar || 0),
   };
@@ -80,6 +79,31 @@ function formatDeltaBadge(delta, suffix = '%') {
   if (!delta) return '';
   const sign = delta > 0 ? '+' : '';
   return `<span class="codex-meter-delta ${delta > 0 ? 'up' : 'down'}">${sign}${delta}${suffix}</span>`;
+}
+
+function renderDiverCanvasHiDpi(canvas, livery, timeSec = 0.55) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(140, Math.round(rect.width || 220));
+  const cssH = Math.max(76, Math.round(rect.height || Math.round(cssW * (10 / 19))));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const bufW = Math.round(cssW * dpr);
+  const bufH = Math.round(cssH * dpr);
+  if (canvas.width !== bufW || canvas.height !== bufH) {
+    canvas.width = bufW;
+    canvas.height = bufH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const hasDpv = Boolean(livery.scooterId && livery.scooterId !== 'standard-dpv');
+  const hasSpeargun = Boolean(livery.harpoonId && livery.harpoonId !== 'standard-harpoon');
+  drawLiveryPreview(ctx, cssW, cssH, livery, {
+    hasDpv,
+    hasSpeargun,
+    envMode: 'clear',
+    timeSec,
+  });
 }
 
 function initGearCodexPage() {
@@ -134,6 +158,12 @@ function initGearCodexPage() {
   const btnClearMix = document.getElementById('btn-codex-clear-mix');
   const toastEl = document.getElementById('codex-toast');
 
+  // Precompute complete outfitted rig for every Armor Set card
+  const setFullLiveryById = new Map();
+  for (const s of codexData.sets) {
+    setFullLiveryById.set(s.id, applyCodexSetToLivery(DEFAULT_RIG_LIVERY, s));
+  }
+
   let toastTimer = null;
   function showToast(msg) {
     if (!toastEl) return;
@@ -166,13 +196,25 @@ function initGearCodexPage() {
         if (codexData.byKey.get(`${sl}:${id}`)?.tier?.id === 'legendary') legCount++;
       }
     }
-    if (nonDefault === 0) return '📦 Stock Baseline Rig';
+    if (nonDefault === 0) return '📦 Stock Baseline';
     if (legCount === codexData.legendaries.length) return '🔥 All 9 Legendaries';
-    if (activeSets.length >= 2) return `✨ Hybrid Mix · ${activeSets.map((s) => s.icon).join(' + ')}`;
-    if (activeSets.length === 1 && legCount > 0) return `${activeSets[0].icon} ${activeSets[0].name} + ${legCount} 🔥`;
-    if (activeSets.length === 1) return `${activeSets[0].icon} ${activeSets[0].name}`;
+    if (activeSets.length >= 2) return `✨ Hybrid · ${activeSets.map((s) => s.icon || '✨').join('+')}`;
+    if (activeSets.length === 1 && legCount > 0) return `${activeSets[0].icon || '✨'} ${activeSets[0].name} + ${legCount}🔥`;
+    if (activeSets.length === 1) return `${activeSets[0].icon || '✨'} ${activeSets[0].name}`;
     if (legCount > 0) return `🔥 ${legCount} Legendary Mix`;
-    return `🧪 Custom Mix (${nonDefault} Pieces)`;
+    return `🧪 Custom Mix (${nonDefault})`;
+  }
+
+  function renderSetCardDivers() {
+    if (!contentEl) return;
+    const canvases = contentEl.querySelectorAll('.codex-set-diver-canvas[data-set-id]');
+    canvases.forEach((canvas, idx) => {
+      const setId = canvas.getAttribute('data-set-id');
+      const setLivery = setFullLiveryById.get(setId);
+      if (setLivery) {
+        renderDiverCanvasHiDpi(canvas, setLivery, 0.45 + idx * 0.35);
+      }
+    });
   }
 
   function renderSetCardHtml(s) {
@@ -185,7 +227,7 @@ function initGearCodexPage() {
       .map((p) => {
         const entry = p.entry;
         const inMix = p.ids.includes(previewLivery[p.field]);
-        const art = renderGearArtworkSvg(entry.slot, entry.item, { size: 36 });
+        const art = renderGearArtworkSvg(entry.slot, entry.item, { size: 34 });
         const topStats = (entry.statPills || []).slice(0, 2).join(' · ');
         return `
           <button type="button" class="codex-piece-tile${inMix ? ' in-mix' : ''}" data-action="toggle-item" data-slot="${escapeHtml(entry.slot)}" data-id="${escapeHtml(entry.item.id)}" title="${escapeHtml(entry.item.name)} — Click to ${inMix ? 'remove from' : 'add to'} mix">
@@ -203,7 +245,6 @@ function initGearCodexPage() {
       })
       .join('');
 
-    // Ultra-concise stat-pill bonus rows (ZERO paragraphs!)
     const t2Prefix = s.tier2?.label?.match(/^\(\d+\)/)?.[0] || '';
     const tfPrefix = s.tierFull?.label?.match(/^\(\d+\)/)?.[0] || '';
     const hasTwoTiers = Boolean(
@@ -239,18 +280,25 @@ function initGearCodexPage() {
 
     return `
       <article class="codex-set-card${activeCount > 0 ? ' has-active' : ''}" style="--set-rgb: ${escapeHtml(s.rgb)}" data-set-id="${escapeHtml(s.id)}">
-        <div class="codex-set-head">
-          <div class="codex-set-title-block">
-            <div class="codex-set-emblem" aria-hidden="true">${escapeHtml(s.icon)}</div>
-            <h3 class="codex-set-name">${escapeHtml(s.name)}</h3>
-            <span class="codex-set-count-pill${activeCount >= 2 ? ' lit' : ''}">${activeCount}/${totalCount}</span>
+        <div class="codex-set-hero">
+          <div class="codex-set-diver-box" data-action="toggle-set" data-set-id="${escapeHtml(s.id)}" title="Click to ${isApplied ? 'remove' : 'mix'} full ${escapeHtml(s.name)}">
+            <canvas class="codex-set-diver-canvas" data-set-id="${escapeHtml(s.id)}" width="440" height="232" aria-label="Diver outfitted in ${escapeHtml(s.name)}"></canvas>
           </div>
-          <button type="button" class="codex-btn ${isApplied ? 'active-mix' : 'primary'}" data-action="toggle-set" data-set-id="${escapeHtml(s.id)}">
-            ${isApplied ? '✓ In Mix' : '+ Mix Set'}
-          </button>
+          <div class="codex-set-hero-right">
+            <div class="codex-set-head">
+              <div class="codex-set-title-block">
+                <div class="codex-set-emblem" aria-hidden="true">${escapeHtml(s.icon)}</div>
+                <h3 class="codex-set-name">${escapeHtml(s.name)}</h3>
+                <span class="codex-set-count-pill${activeCount >= 2 ? ' lit' : ''}">${activeCount}/${totalCount}</span>
+              </div>
+              <button type="button" class="codex-btn ${isApplied ? 'active-mix' : 'primary'}" data-action="toggle-set" data-set-id="${escapeHtml(s.id)}">
+                ${isApplied ? '✓ In Mix' : '+ Mix Set'}
+              </button>
+            </div>
+            <div class="codex-set-tiers">${tiersHtml}</div>
+          </div>
         </div>
 
-        <div class="codex-set-tiers">${tiersHtml}</div>
         <div class="codex-set-pieces">${piecesHtml}</div>
       </article>
     `;
@@ -302,6 +350,7 @@ function initGearCodexPage() {
         return;
       }
       contentEl.innerHTML = `<div class="codex-sets-list">${filtered.map(renderSetCardHtml).join('')}</div>`;
+      renderSetCardDivers();
       return;
     }
 
@@ -340,14 +389,14 @@ function initGearCodexPage() {
       }
       previewSynergiesEl.innerHTML = chips.length
         ? chips.join('')
-        : '<span class="codex-synergy-empty">Click sets or pieces to compare mixed stats live.</span>';
+        : '<span class="codex-synergy-empty">Tap any set or piece below to mix stats live.</span>';
     }
 
     // 7 Animated Visual Stat Bars with live +/- deltas
     if (previewBarsEl) {
       const meters = [
         {
-          lbl: 'Swim Speed',
+          lbl: 'Speed',
           val: `${curSnap.speed >= 0 ? '+' : ''}${curSnap.speed}%`,
           delta: formatDeltaBadge(d('speed'), '%'),
           pct: Math.min(100, Math.max(0, (curSnap.speed / 45) * 100)),
@@ -355,7 +404,7 @@ function initGearCodexPage() {
           tone: '',
         },
         {
-          lbl: 'Gas Savings',
+          lbl: 'Gas Save',
           val: `${curSnap.gasSave >= 0 ? '+' : ''}${curSnap.gasSave}%`,
           delta: formatDeltaBadge(d('gasSave'), '%'),
           pct: Math.min(100, Math.max(0, (curSnap.gasSave / 42) * 100)),
@@ -363,7 +412,7 @@ function initGearCodexPage() {
           tone: 'emerald',
         },
         {
-          lbl: 'Cold Resist',
+          lbl: 'Cold',
           val: curSnap.cold >= 100 ? 'IMMUNE' : `${curSnap.cold}%`,
           delta: formatDeltaBadge(d('cold'), '%'),
           pct: Math.min(100, Math.max(0, curSnap.cold)),
@@ -371,7 +420,7 @@ function initGearCodexPage() {
           tone: '',
         },
         {
-          lbl: 'Spear Power',
+          lbl: 'Spear',
           val: `+${curSnap.spear}%`,
           delta: formatDeltaBadge(d('spear'), '%'),
           pct: Math.min(100, Math.max(0, (curSnap.spear / 75) * 100)),
@@ -379,23 +428,23 @@ function initGearCodexPage() {
           tone: 'amber',
         },
         {
-          lbl: 'Boss HP · Armor',
-          val: `${curSnap.hp} HP · ${curSnap.armor}% DR`,
-          delta: formatDeltaBadge(d('hp'), ' HP') || formatDeltaBadge(d('armor'), '% DR'),
+          lbl: 'HP · DR',
+          val: `${curSnap.hp} · ${curSnap.armor}%`,
+          delta: formatDeltaBadge(d('hp'), ' HP') || formatDeltaBadge(d('armor'), '%'),
           pct: Math.min(100, Math.max(0, ((curSnap.hp - 100) / 90) * 55 + (curSnap.armor / 60) * 45)),
           boost: curSnap.hp > 100 || curSnap.armor > 0,
           tone: 'amber',
         },
         {
-          lbl: 'Hydro-Shield · Sonar',
-          val: `${curSnap.shield} Sh · +${curSnap.sonar}%`,
+          lbl: 'Sh · Sonar',
+          val: `${curSnap.shield} · +${curSnap.sonar}%`,
           delta: formatDeltaBadge(d('shield'), ' Sh') || formatDeltaBadge(d('sonar'), '%'),
           pct: Math.min(100, Math.max(0, (curSnap.shield / 80) * 55 + (curSnap.sonar / 80) * 45)),
           boost: curSnap.shield > 0 || curSnap.sonar > 0,
           tone: 'violet',
         },
         {
-          lbl: 'Depth · Reserve',
+          lbl: 'Depth · Bar',
           val: `+${curSnap.depth}m · +${curSnap.bar}b`,
           delta: formatDeltaBadge(d('depth'), 'm') || formatDeltaBadge(d('bar'), 'b'),
           pct: Math.min(100, Math.max(0, (curSnap.depth / 28) * 50 + (curSnap.bar / 50) * 50)),
@@ -508,7 +557,6 @@ function initGearCodexPage() {
         for (const p of s.pieces) next[p.field] = DEFAULT_RIG_LIVERY[p.field];
         commitMixUpdate(next, `Removed ${s.name}`);
       } else {
-        // Layer this set onto the current mix so sets + legendaries can be freely combined!
         const next = applyCodexSetToLivery(previewLivery, s);
         commitMixUpdate(next, `+ Mixed ${s.name}`);
       }
@@ -581,36 +629,25 @@ function initGearCodexPage() {
     }
   });
 
+  // Re-sync per-set diver canvases cleanly on viewport resize
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (state.tab === 'sets') renderSetCardDivers();
+    }, 90);
+  });
+
   // Initial render
   renderMainContent();
   renderPreviewPanel(false);
 
   // Live 60 FPS animated Diver Rig Preview loop (1:1 unstretched aspect ratio synced to rendered CSS box + DPR)
   if (previewCanvas) {
-    const ctx = previewCanvas.getContext('2d');
     const startMs = performance.now();
     const tick = (now) => {
-      if (!document.hidden && ctx) {
-        const rect = previewCanvas.getBoundingClientRect();
-        const cssW = Math.max(180, Math.round(rect.width || 392));
-        const cssH = Math.max(120, Math.round(rect.height || 206));
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const bufW = Math.round(cssW * dpr);
-        const bufH = Math.round(cssH * dpr);
-        if (previewCanvas.width !== bufW || previewCanvas.height !== bufH) {
-          previewCanvas.width = bufW;
-          previewCanvas.height = bufH;
-        }
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const t = (now - startMs) * 0.001;
-        const hasDpv = Boolean(previewLivery.scooterId && previewLivery.scooterId !== 'standard-dpv');
-        const hasSpeargun = Boolean(previewLivery.harpoonId && previewLivery.harpoonId !== 'standard-harpoon');
-        drawLiveryPreview(ctx, cssW, cssH, previewLivery, {
-          hasDpv,
-          hasSpeargun,
-          envMode: 'clear',
-          timeSec: t,
-        });
+      if (!document.hidden) {
+        renderDiverCanvasHiDpi(previewCanvas, previewLivery, (now - startMs) * 0.001);
       }
       requestAnimationFrame(tick);
     };
