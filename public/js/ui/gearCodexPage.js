@@ -8,10 +8,7 @@ import {
   evaluateGearSetSynergy,
   sanitizeRigLivery,
 } from '../game/rigLivery.js';
-import {
-  GEAR_ARCHETYPES,
-  computeRigPerformanceProfile,
-} from '../game/gearStats.js';
+import { computeRigPerformanceProfile } from '../game/gearStats.js';
 import {
   CODEX_SLOT_META,
   CODEX_SLOT_ORDER,
@@ -61,6 +58,18 @@ function saveLivery(livery) {
   }
 }
 
+function shortOriginLabel(origin) {
+  if (!origin) return '';
+  if (origin.bounty?.watersRumor) return origin.bounty.watersRumor;
+  if (origin.cache?.siteName) return origin.cache.siteName;
+  if (origin.category === 'legendary') {
+    const raw = String(origin.detail || '');
+    const cleaned = raw.replace(/^[^·]*·\s*/i, '').trim();
+    return cleaned || 'Treasure Chests & Maps';
+  }
+  return origin.label || '';
+}
+
 function initGearCodexPage() {
   const book = loadSavedLogbook();
   const unlocked = computeUnlockedLiveries(book, WRECK_LEVEL_ID_SET);
@@ -68,20 +77,16 @@ function initGearCodexPage() {
 
   let savedLivery = loadSavedLivery();
   let previewLivery = sanitizeRigLivery(savedLivery);
-  let previewTitle = 'Your Saved Dive Rig';
+  let previewTitle = 'Your Dive Rig';
+  let activePreviewKey = ''; // 'set:<id>' | 'item:<slot>:<id>' | 'all-legendary' | ''
 
   const params = new URLSearchParams(window.location.search || '');
-  const initialTab = ['sets', 'legendaries', 'mythics'].includes(params.get('tab'))
-    ? params.get('tab')
-    : 'sets';
+  const initialTab = params.get('tab') === 'legendaries' ? 'legendaries' : 'sets';
 
   const state = {
     tab: initialTab,
     query: params.get('q') || '',
-    archetype: 'all',
-    slot: 'all',
-    origin: 'all',
-    ownership: 'all',
+    ownedOnly: false,
   };
 
   // Optional deep-link auto-preview (?set=... or ?item=...)
@@ -91,6 +96,7 @@ function initGearCodexPage() {
     if (matchSet) {
       previewLivery = applyCodexSetToLivery(previewLivery, matchSet);
       previewTitle = `${matchSet.icon} ${matchSet.name}`;
+      activePreviewKey = `set:${matchSet.id}`;
     }
   }
   const deepItemId = params.get('item');
@@ -99,30 +105,28 @@ function initGearCodexPage() {
     if (matchItem) {
       previewLivery = applyCodexItemToLivery(previewLivery, matchItem.slot, matchItem.item.id);
       previewTitle = `${matchItem.slotIcon} ${matchItem.item.name}`;
+      activePreviewKey = `item:${matchItem.key}`;
+      if (matchItem.tier.id === 'legendary') state.tab = 'legendaries';
     }
   }
 
   // DOM refs
   const sumSetsEl = document.getElementById('codex-sum-sets');
-  const sumLegsEl = document.getElementById('codex-sum-legendaries');
-  const sumMythsEl = document.getElementById('codex-sum-mythics');
-  const tabCountSetsEl = document.getElementById('tab-count-sets');
-  const tabCountLegsEl = document.getElementById('tab-count-legendaries');
-  const tabCountMythsEl = document.getElementById('tab-count-mythics');
+  const sumLegEl = document.getElementById('codex-sum-legendaries');
+  const tabCountSets = document.getElementById('tab-count-sets');
+  const tabCountLeg = document.getElementById('tab-count-legendaries');
   const searchInput = document.getElementById('codex-search');
-  const subfiltersEl = document.getElementById('codex-subfilters');
-  const ownershipEl = document.getElementById('codex-ownership-filters');
-  const resultsMetaEl = document.getElementById('codex-results-meta');
+  const ownedToggleBtn = document.getElementById('btn-codex-owned-toggle');
   const contentEl = document.getElementById('codex-content');
+
   const previewCanvas = document.getElementById('codex-preview-canvas');
   const previewLabelEl = document.getElementById('codex-preview-label');
-  const previewSetsEl = document.getElementById('codex-preview-sets');
+  const previewBonusEl = document.getElementById('codex-preview-bonus');
   const previewPerfEl = document.getElementById('codex-preview-perf');
   const previewSlotsEl = document.getElementById('codex-preview-slots');
+  const btnAllLegendary = document.getElementById('btn-codex-all-legendary');
   const btnEquipRig = document.getElementById('btn-codex-equip-rig');
   const btnResetPreview = document.getElementById('btn-codex-reset-preview');
-  const btnStockPreview = document.getElementById('btn-codex-stock-preview');
-  const btnAllLegendary = document.getElementById('btn-codex-all-legendary');
   const toastEl = document.getElementById('codex-toast');
 
   let toastTimer = null;
@@ -131,168 +135,145 @@ function initGearCodexPage() {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
   }
 
-  // Populate summary header
-  const { summary } = codexData;
-  if (sumSetsEl) sumSetsEl.textContent = `✨ Sets: ${summary.completedSets} / ${summary.totalSets}`;
-  if (sumLegsEl) sumLegsEl.textContent = `🔥 Legendaries: ${summary.ownedLegendaries} / ${summary.totalLegendaries}`;
-  if (sumMythsEl) sumMythsEl.textContent = `✦ Mythics: ${summary.ownedMythics} / ${summary.totalMythics}`;
-  if (tabCountSetsEl) tabCountSetsEl.textContent = String(summary.totalSets);
-  if (tabCountLegsEl) tabCountLegsEl.textContent = String(summary.totalLegendaries);
-  if (tabCountMythsEl) tabCountMythsEl.textContent = String(summary.totalMythics);
+  // Header progress chips
+  if (sumSetsEl) sumSetsEl.textContent = `Sets ${codexData.summary.completedSets}/${codexData.summary.totalSets}`;
+  if (sumLegEl) sumLegEl.textContent = `Legendaries ${codexData.summary.ownedLegendaries}/${codexData.summary.totalLegendaries}`;
+  if (tabCountSets) tabCountSets.textContent = String(codexData.sets.length);
+  if (tabCountLeg) tabCountLeg.textContent = String(codexData.legendaries.length);
   if (searchInput && state.query) searchInput.value = state.query;
 
-  function renderSubfilters() {
-    if (!subfiltersEl) return;
-    if (state.tab === 'sets') {
-      const archs = [
-        { id: 'all', label: 'All Roles' },
-        ...Object.values(GEAR_ARCHETYPES).map((a) => ({ id: a.id, label: `${a.icon} ${a.label}` })),
-      ];
-      subfiltersEl.innerHTML = archs
-        .map(
-          (a) =>
-            `<button type="button" class="codex-chip${state.archetype === a.id ? ' active' : ''}" data-arch="${escapeHtml(a.id)}">${escapeHtml(a.label)}</button>`
-        )
-        .join('');
-    } else if (state.tab === 'legendaries') {
-      const slots = [
-        { id: 'all', label: 'All Slots' },
-        ...CODEX_SLOT_ORDER.map((sl) => ({ id: sl, label: `${CODEX_SLOT_META[sl].icon} ${CODEX_SLOT_META[sl].label}` })),
-      ];
-      subfiltersEl.innerHTML = slots
-        .map(
-          (s) =>
-            `<button type="button" class="codex-chip${state.slot === s.id ? ' active' : ''}" data-slot="${escapeHtml(s.id)}">${escapeHtml(s.label)}</button>`
-        )
-        .join('');
-    } else {
-      const origins = [
-        { id: 'all', label: 'All Sources' },
-        { id: 'boss', label: '🏆 Boss Guardians' },
-        { id: 'world', label: '🗺️ World Caches' },
-        { id: 'chest', label: '🧰 Chest Drops' },
-        { id: 'milestone', label: '🎖️ Milestones' },
-      ];
-      subfiltersEl.innerHTML = origins
-        .map(
-          (o) =>
-            `<button type="button" class="codex-chip${state.origin === o.id ? ' active' : ''}" data-origin="${escapeHtml(o.id)}">${escapeHtml(o.label)}</button>`
-        )
-        .join('');
-    }
-  }
-
   function renderSetCardHtml(s) {
-    const ownedBadge = s.completed
-      ? `<span class="codex-badge owned">✓ Complete (${s.ownedCount}/${s.totalCount})</span>`
-      : `<span class="codex-badge locked">${s.ownedCount}/${s.totalCount} Owned</span>`;
+    const isPreviewing = activePreviewKey === `set:${s.id}`;
+    const totalCount = s.pieces.length;
+    const ownedText = s.complete
+      ? `<span class="owned-accent">✓ Complete (${s.ownedCount}/${totalCount})</span>`
+      : `${s.ownedCount}/${totalCount} Owned`;
+
     const piecesHtml = s.pieces
       .map((p) => {
         const entry = p.entry;
-        if (!entry) return '';
-        const art = renderGearArtworkSvg(entry.slot, entry.item, { size: 52 });
+        const art = renderGearArtworkSvg(entry.slot, entry.item, { size: 42 });
+        const origin = shortOriginLabel(entry.origin);
         return `
-          <div class="codex-piece-mini${p.owned ? ' owned' : ''}" data-action="preview-item" data-slot="${escapeHtml(entry.slot)}" data-id="${escapeHtml(entry.item.id)}" title="Click to preview ${escapeHtml(entry.item.name)}">
+          <button type="button" class="codex-piece-tile${p.owned ? ' owned' : ''}" data-action="preview-item" data-slot="${escapeHtml(entry.slot)}" data-id="${escapeHtml(entry.item.id)}" title="Preview ${escapeHtml(entry.item.name)}">
             <div class="codex-piece-art">${art}</div>
             <div class="codex-piece-info">
-              <div class="codex-piece-slot">${escapeHtml(entry.slotIcon)} ${escapeHtml(entry.slotLabel)} · ${p.owned ? '✓ Owned' : '🔒'}</div>
+              <div class="codex-piece-slot">${escapeHtml(entry.slotLabel)}${p.owned ? ' <span class="codex-owned-dot">✓</span>' : ''}</div>
               <div class="codex-piece-name">${escapeHtml(entry.item.name)}</div>
-              <div class="codex-piece-origin">${escapeHtml(entry.origin.icon)} ${escapeHtml(entry.origin.label)}</div>
+              ${origin ? `<div class="codex-piece-origin">${escapeHtml(origin)}</div>` : ''}
             </div>
-          </div>
+          </button>
         `;
       })
       .join('');
 
-    const showSeparateTier2 = s.tier2 && s.tierFull && s.tier2.label !== s.tierFull.label;
+    // Deduplicate bonuses for 2-piece sets where tier2 and tierFull share the same (2) threshold
+    const t2Prefix = s.tier2?.label?.match(/^\(\d+\)/)?.[0] || '';
+    const tfPrefix = s.tierFull?.label?.match(/^\(\d+\)/)?.[0] || '';
+    const hasTwoTiers = Boolean(
+      s.tier2 &&
+      s.tierFull &&
+      s.tier2.label !== s.tierFull.label &&
+      (!t2Prefix || !tfPrefix || t2Prefix !== tfPrefix)
+    );
+
+    let bonusesHtml = '';
+    if (hasTwoTiers) {
+      const samePower = s.tier2.power?.name && s.tier2.power.name === s.tierFull.power?.name;
+      bonusesHtml = `
+        <div class="codex-bonus-box">
+          <div class="codex-bonus-head">${escapeHtml(s.tier2.label)}</div>
+          <div class="codex-bonus-desc">${escapeHtml(s.tier2.desc)}</div>
+          ${s.tier2.power && !samePower ? `<div class="codex-bonus-power">⚡ ${escapeHtml(s.tier2.power.name)}: ${escapeHtml(s.tier2.power.desc)}</div>` : ''}
+        </div>
+        <div class="codex-bonus-box capstone">
+          <div class="codex-bonus-head">★ ${escapeHtml(s.tierFull.label)}</div>
+          <div class="codex-bonus-desc">${escapeHtml(s.tierFull.desc)}</div>
+          ${s.tierFull.power ? `<div class="codex-bonus-power">⚡ ${escapeHtml(s.tierFull.power.name)}: ${escapeHtml(s.tierFull.power.desc)}</div>` : ''}
+        </div>
+      `;
+    } else if (s.tierFull || s.tier2) {
+      const mainBonus = s.tierFull || s.tier2;
+      const extraDesc =
+        s.tier2 && s.tierFull && s.tier2.desc && s.tier2.desc !== s.tierFull.desc
+          ? `${s.tier2.desc} · ${s.tierFull.desc}`
+          : mainBonus.desc;
+      const power = s.tierFull?.power || s.tier2?.power;
+      bonusesHtml = `
+        <div class="codex-bonus-box capstone">
+          <div class="codex-bonus-head">★ ${escapeHtml(mainBonus.label)}</div>
+          <div class="codex-bonus-desc">${escapeHtml(extraDesc)}</div>
+          ${power ? `<div class="codex-bonus-power">⚡ ${escapeHtml(power.name)}: ${escapeHtml(power.desc)}</div>` : ''}
+        </div>
+      `;
+    }
+
     return `
-      <article class="codex-set-card" style="--set-rgb: ${escapeHtml(s.rgb)}" data-set-id="${escapeHtml(s.id)}">
+      <article class="codex-set-card${isPreviewing ? ' is-previewing' : ''}" style="--set-rgb: ${escapeHtml(s.rgb)}" data-set-id="${escapeHtml(s.id)}">
         <div class="codex-set-head">
           <div class="codex-set-title-block">
             <div class="codex-set-emblem" aria-hidden="true">${escapeHtml(s.icon)}</div>
             <div>
               <h3 class="codex-set-name">${escapeHtml(s.name)}</h3>
-              <div class="codex-set-badges">
-                <span class="codex-badge" style="border-color:${escapeHtml(s.tier.color)};color:${escapeHtml(s.tier.color)}">${escapeHtml(s.tier.icon)} ${escapeHtml(s.tier.badge)}</span>
-                <span class="codex-badge">${escapeHtml(s.archetype.icon)} ${escapeHtml(s.archetype.label)}</span>
-                ${ownedBadge}
+              <div class="codex-set-meta">
+                <span>${escapeHtml(s.archetype.icon)} ${escapeHtml(s.archetype.label)}</span>
+                <span>·</span>
+                <span>${ownedText}</span>
               </div>
             </div>
           </div>
-          <div class="codex-set-actions">
-            <button type="button" class="codex-btn primary" data-action="preview-set" data-set-id="${escapeHtml(s.id)}">👁 Preview Full Set</button>
-          </div>
+          <button type="button" class="codex-btn ${isPreviewing ? 'active-preview' : 'primary'}" data-action="preview-set" data-set-id="${escapeHtml(s.id)}">
+            ${isPreviewing ? '✓ Previewing' : '👁 Preview Set'}
+          </button>
         </div>
-        ${s.auraName ? `<div class="codex-set-aura"><strong>✦ ${escapeHtml(s.auraName)}:</strong> ${escapeHtml(s.auraDesc)}</div>` : ''}
-        <div class="codex-set-bonuses">
-          ${showSeparateTier2 ? `
-            <div class="codex-bonus-box">
-              <div class="codex-bonus-head">${escapeHtml(s.tier2.label)}</div>
-              <div class="codex-bonus-desc">${escapeHtml(s.tier2.desc)}</div>
-              ${s.tier2.power ? `<div class="codex-bonus-power">⚡ ${escapeHtml(s.tier2.power.name)}: ${escapeHtml(s.tier2.power.desc)}</div>` : ''}
-            </div>
-          ` : ''}
-          ${s.tierFull ? `
-            <div class="codex-bonus-box capstone">
-              <div class="codex-bonus-head">★ ${escapeHtml(s.tierFull.label)}</div>
-              <div class="codex-bonus-desc">${escapeHtml(s.tierFull.desc)}</div>
-              ${s.tierFull.power ? `<div class="codex-bonus-power">⚡ ${escapeHtml(s.tierFull.power.name)}: ${escapeHtml(s.tierFull.power.desc)}</div>` : ''}
-            </div>
-          ` : ''}
-        </div>
+
+        <div class="codex-set-bonuses">${bonusesHtml}</div>
+        ${s.auraName ? `<p class="codex-set-aura-line"><strong>✦ ${escapeHtml(s.auraName)}</strong> — ${escapeHtml(s.auraDesc)}</p>` : ''}
         <div class="codex-set-pieces">${piecesHtml}</div>
       </article>
     `;
   }
 
-  function renderItemCardHtml(e) {
-    const art = renderGearArtworkSvg(e.slot, e.item, { size: 70 });
+  function renderLegendaryCardHtml(e) {
+    const isPreviewing = activePreviewKey === `item:${e.key}` || activePreviewKey === 'all-legendary';
+    const art = renderGearArtworkSvg(e.slot, e.item, { size: 58 });
     const statPillsHtml = (e.statPills || [])
       .map((p) => `<span class="codex-pill">${escapeHtml(p)}</span>`)
       .join('');
-    const setTagsHtml = (e.memberSets || [])
-      .map((ms) => `<span class="codex-badge" style="border-color:${escapeHtml(ms.color)};color:${escapeHtml(ms.color)}">${escapeHtml(ms.icon)} ${escapeHtml(ms.name)}</span>`)
-      .join('');
-    const ownBadge = e.owned
-      ? '<span class="codex-badge owned">✓ Owned</span>'
-      : '<span class="codex-badge locked">🔒 Undiscovered</span>';
+    const sourceText = shortOriginLabel(e.origin);
 
     return `
-      <article class="codex-item-card" data-tier="${escapeHtml(e.tier.id)}" data-item-key="${escapeHtml(e.key)}">
+      <article class="codex-item-card${isPreviewing ? ' is-previewing' : ''}" data-tier="legendary" data-action="preview-item" data-slot="${escapeHtml(e.slot)}" data-id="${escapeHtml(e.item.id)}">
         <div class="codex-item-top">
           <div class="codex-item-art">${art}</div>
-          <div class="codex-item-head-meta">
-            <div class="codex-item-kicker">
+          <div class="codex-item-head">
+            <div class="codex-item-slot-row">
               <span class="codex-item-slot">${escapeHtml(e.slotIcon)} ${escapeHtml(e.slotLabel)}</span>
-              ${ownBadge}
+              ${e.owned ? '<span class="codex-owned-pill">✓ Owned</span>' : ''}
             </div>
             <h3 class="codex-item-name">${escapeHtml(e.item.name)}</h3>
-            <div class="codex-set-badges">
-              <span class="codex-badge" style="border-color:${escapeHtml(e.tier.color)};color:${escapeHtml(e.tier.color)}">${escapeHtml(e.tier.icon)} ${escapeHtml(e.tier.badge)}</span>
-              ${setTagsHtml}
-            </div>
           </div>
         </div>
+
         ${statPillsHtml ? `<div class="codex-stat-pills">${statPillsHtml}</div>` : ''}
+
         ${e.power ? `
           <div class="codex-power-box">
             <div class="codex-power-name">⚡ ${escapeHtml(e.power.name)}</div>
             <div class="codex-power-desc">${escapeHtml(e.power.desc)}</div>
           </div>
         ` : ''}
-        ${e.fx ? `<div class="codex-fx-note">✨ <strong>${escapeHtml(e.fx.name)}</strong> — ${escapeHtml(e.fx.desc)}</div>` : ''}
-        <div class="codex-origin-row">
-          <strong>${escapeHtml(e.origin.icon)} ${escapeHtml(e.origin.label)}</strong><br/>
-          ${escapeHtml(e.origin.detail)}
-        </div>
+
         <div class="codex-item-footer">
-          <button type="button" class="codex-btn primary" data-action="preview-item" data-slot="${escapeHtml(e.slot)}" data-id="${escapeHtml(e.item.id)}">👁 Preview</button>
-          ${e.owned
-            ? `<button type="button" class="codex-btn" data-action="equip-item" data-slot="${escapeHtml(e.slot)}" data-id="${escapeHtml(e.item.id)}">⚡ Equip</button>`
-            : ''}
+          <span class="codex-item-source" title="${escapeHtml(e.origin.detail)}">🗺️ ${escapeHtml(sourceText)}</span>
+          <div class="codex-item-btns">
+            ${e.owned
+              ? `<button type="button" class="codex-btn primary" data-action="equip-item" data-slot="${escapeHtml(e.slot)}" data-id="${escapeHtml(e.item.id)}">⚡ Equip</button>`
+              : `<button type="button" class="codex-btn ${isPreviewing ? 'active-preview' : ''}" data-action="preview-item" data-slot="${escapeHtml(e.slot)}" data-id="${escapeHtml(e.item.id)}">${isPreviewing ? '✓ Live' : '👁 Preview'}</button>`}
+          </div>
         </div>
       </article>
     `;
@@ -300,39 +281,30 @@ function initGearCodexPage() {
 
   function renderMainContent() {
     if (!contentEl) return;
+    const ownership = state.ownedOnly ? 'owned' : 'all';
+
     if (state.tab === 'sets') {
       const filtered = filterCodexSets(codexData.sets, {
         query: state.query,
-        archetype: state.archetype,
-        ownership: state.ownership,
+        ownership,
       });
-      if (resultsMetaEl) {
-        resultsMetaEl.textContent = `Showing ${filtered.length} of ${codexData.sets.length} Armor Sets`;
-      }
       if (!filtered.length) {
-        contentEl.innerHTML = '<div class="codex-empty-state">No Armor Sets match your filters. Try clearing search or switching ownership filters.</div>';
+        contentEl.innerHTML = '<div class="codex-empty-state">No Armor Sets match your search or filter.</div>';
         return;
       }
-      contentEl.innerHTML = `<div class="codex-sets-grid">${filtered.map(renderSetCardHtml).join('')}</div>`;
+      contentEl.innerHTML = `<div class="codex-sets-list">${filtered.map(renderSetCardHtml).join('')}</div>`;
       return;
     }
 
-    const pool = state.tab === 'legendaries' ? codexData.legendaries : codexData.mythics;
-    const filtered = filterCodexItems(pool, {
+    const filtered = filterCodexItems(codexData.legendaries, {
       query: state.query,
-      slot: state.tab === 'legendaries' ? state.slot : 'all',
-      origin: state.tab === 'mythics' ? state.origin : 'all',
-      ownership: state.ownership,
+      ownership,
     });
-    const label = state.tab === 'legendaries' ? 'Ultra-Rare Legendaries' : 'Mythic Relics & Guardian Drysuits';
-    if (resultsMetaEl) {
-      resultsMetaEl.textContent = `Showing ${filtered.length} of ${pool.length} ${label}`;
-    }
     if (!filtered.length) {
-      contentEl.innerHTML = `<div class="codex-empty-state">No ${escapeHtml(label)} match your filters.</div>`;
+      contentEl.innerHTML = '<div class="codex-empty-state">No Legendaries match your search or filter.</div>';
       return;
     }
-    contentEl.innerHTML = `<div class="codex-items-grid">${filtered.map(renderItemCardHtml).join('')}</div>`;
+    contentEl.innerHTML = `<div class="codex-items-grid">${filtered.map(renderLegendaryCardHtml).join('')}</div>`;
   }
 
   function renderPreviewPanel() {
@@ -341,26 +313,21 @@ function initGearCodexPage() {
     const perf = computeRigPerformanceProfile(previewLivery);
     const activeSets = evaluateGearSetSynergy(previewLivery) || [];
 
-    if (previewSetsEl) {
+    if (previewBonusEl) {
+      previewBonusEl.className = 'codex-preview-bonus';
       if (activeSets.length) {
-        previewSetsEl.innerHTML = activeSets
-          .map(
-            (s) =>
-              `<div class="codex-active-set-chip">${escapeHtml(s.icon)} <strong>${escapeHtml(s.name)}</strong> (${s.count}/${s.required}) — ${escapeHtml(s.auraName || 'Set Bonus Active')}</div>`
-          )
-          .join('');
-      } else if (perf.powers && perf.powers.length) {
-        const topPowers = perf.powers
-          .slice(0, 3)
-          .map((p) => `<div class="codex-active-set-chip">⚡ <strong>${escapeHtml(p.name)}</strong></div>`);
-        if (perf.powers.length > 3) {
-          topPowers.push(
-            `<div class="codex-active-set-chip">🔥 <strong>+${perf.powers.length - 3} more active gear powers</strong> (${perf.powers.length} total)</div>`
-          );
-        }
-        previewSetsEl.innerHTML = topPowers.join('');
+        const s = activeSets[0];
+        const extra = activeSets.length > 1 ? ` (+${activeSets.length - 1} more)` : '';
+        previewBonusEl.textContent = `${s.icon} ${s.name} (${s.count}/${s.required}) — ${s.auraName || 'Set Bonus Active'}${extra}`;
+      } else if (perf.powers && perf.powers.length === 1) {
+        previewBonusEl.classList.add('is-legendary');
+        previewBonusEl.textContent = `⚡ ${perf.powers[0].name}`;
+      } else if (perf.powers && perf.powers.length > 1) {
+        previewBonusEl.classList.add('is-legendary');
+        previewBonusEl.textContent = `🔥 ${perf.powers.length} Active Powers · ${perf.powers[0].name} +${perf.powers.length - 1} more`;
       } else {
-        previewSetsEl.innerHTML = '<div class="codex-active-set-chip">Click any Set or Legendary to preview its full build live!</div>';
+        previewBonusEl.classList.add('is-muted');
+        previewBonusEl.textContent = 'Select any Set or Legendary to preview it live.';
       }
     }
 
@@ -375,12 +342,12 @@ function initGearCodexPage() {
       const depthBonus = Math.round(perf.narcDepthBonusM || 0);
 
       const cells = [
-        { lbl: 'Swim Speed', val: speedPct >= 0 ? `+${speedPct}%` : `${speedPct}%`, boost: speedPct > 0 },
-        { lbl: 'Gas Savings', val: `${gasSavePct >= 0 ? '+' : ''}${gasSavePct}%`, boost: gasSavePct > 0 },
-        { lbl: 'Cold Resist', val: coldPct >= 100 ? 'COLD-PROOF' : `${coldPct}%`, boost: coldPct > 0 },
-        { lbl: 'Depth / Reserve', val: `+${depthBonus}m · +${Math.round(perf.bonusStartBar || 0)}b`, boost: depthBonus > 0 || (perf.bonusStartBar || 0) > 0 },
-        { lbl: 'Boss HP / Armor', val: `${bossHp} HP · ${armorPct}% DR`, boost: bossHp > 100 || armorPct > 0 },
-        { lbl: 'Sonar / Shield', val: `+${sonarPct}% · ${shield} Sh`, boost: sonarPct > 0 || shield > 0 },
+        { lbl: 'Speed', val: speedPct >= 0 ? `+${speedPct}%` : `${speedPct}%`, boost: speedPct > 0 },
+        { lbl: 'Gas Save', val: `${gasSavePct >= 0 ? '+' : ''}${gasSavePct}%`, boost: gasSavePct > 0 },
+        { lbl: 'Cold', val: coldPct >= 100 ? 'IMMUNE' : `${coldPct}%`, boost: coldPct > 0 },
+        { lbl: 'Depth/Bar', val: `+${depthBonus}m · +${Math.round(perf.bonusStartBar || 0)}b`, boost: depthBonus > 0 || (perf.bonusStartBar || 0) > 0 },
+        { lbl: 'HP / DR', val: `${bossHp} · ${armorPct}%`, boost: bossHp > 100 || armorPct > 0 },
+        { lbl: 'Sonar/Sh', val: `+${sonarPct}% · ${shield}`, boost: sonarPct > 0 || shield > 0 },
       ];
       previewPerfEl.innerHTML = cells
         .map(
@@ -404,7 +371,7 @@ function initGearCodexPage() {
         if (!entry || !entry.item) continue;
         const isDefault = id === DEFAULT_RIG_LIVERY[meta.field];
         const isOwned = unlocked[meta.setKey]?.has?.(id);
-        if (isOwned && id !== savedLivery[meta.field]) ownedSlotsToApply++;
+        if (!isDefault && isOwned && id !== savedLivery[meta.field]) ownedSlotsToApply++;
         if (!isDefault) {
           const isHighlight = entry.tier?.id === 'legendary' || entry.tier?.id === 'mythic';
           tags.push(
@@ -414,16 +381,15 @@ function initGearCodexPage() {
       }
       previewSlotsEl.innerHTML = tags.length
         ? tags.join('')
-        : '<span class="codex-slot-tag">📦 Standard Issue Expedition Rig</span>';
+        : '<span class="codex-slot-tag">📦 Standard Issue Rig</span>';
     }
 
     if (btnEquipRig) {
       if (ownedSlotsToApply > 0) {
-        btnEquipRig.disabled = false;
-        btnEquipRig.textContent = `⚡ Equip ${ownedSlotsToApply} Owned Piece${ownedSlotsToApply > 1 ? 's' : ''} to My Rig`;
+        btnEquipRig.hidden = false;
+        btnEquipRig.textContent = `⚡ Equip ${ownedSlotsToApply} Owned`;
       } else {
-        btnEquipRig.disabled = true;
-        btnEquipRig.textContent = '🔒 Preview Only (Unlock Pieces to Equip)';
+        btnEquipRig.hidden = true;
       }
     }
   }
@@ -440,7 +406,6 @@ function initGearCodexPage() {
         b.classList.toggle('active', active);
         b.setAttribute('aria-selected', active ? 'true' : 'false');
       });
-      renderSubfilters();
       renderMainContent();
     });
   });
@@ -451,40 +416,30 @@ function initGearCodexPage() {
     renderMainContent();
   });
 
-  // Subfilter clicks
-  subfiltersEl?.addEventListener('click', (e) => {
-    const btn = e.target?.closest?.('.codex-chip');
-    if (!btn) return;
-    if (btn.dataset.arch) state.archetype = btn.dataset.arch;
-    if (btn.dataset.slot) state.slot = btn.dataset.slot;
-    if (btn.dataset.origin) state.origin = btn.dataset.origin;
-    renderSubfilters();
+  // Owned-only toggle
+  ownedToggleBtn?.addEventListener('click', () => {
+    state.ownedOnly = !state.ownedOnly;
+    ownedToggleBtn.classList.toggle('active', state.ownedOnly);
+    ownedToggleBtn.setAttribute('aria-pressed', state.ownedOnly ? 'true' : 'false');
     renderMainContent();
   });
 
-  // Ownership filter clicks
-  ownershipEl?.addEventListener('click', (e) => {
-    const btn = e.target?.closest?.('.codex-chip');
-    if (!btn || !btn.dataset.own) return;
-    state.ownership = btn.dataset.own;
-    ownershipEl.querySelectorAll('.codex-chip').forEach((b) => {
-      b.classList.toggle('active', b.dataset.own === state.ownership);
-    });
-    renderMainContent();
-  });
-
-  // Card action delegation
+  // Card & piece click delegation
   contentEl?.addEventListener('click', (e) => {
-    const el = e.target?.closest?.('[data-action]');
+    const btn = e.target?.closest?.('button[data-action]');
+    const el = btn || e.target?.closest?.('[data-action]');
     if (!el) return;
     const action = el.dataset.action;
+
     if (action === 'preview-set') {
       const s = codexData.sets.find((x) => x.id === el.dataset.setId);
       if (!s) return;
-      previewLivery = applyCodexSetToLivery(previewLivery, s);
+      previewLivery = applyCodexSetToLivery(DEFAULT_RIG_LIVERY, s);
       previewTitle = `${s.icon} ${s.name}`;
+      activePreviewKey = `set:${s.id}`;
+      renderMainContent();
       renderPreviewPanel();
-      showToast(`👁 Previewing full ${s.name} set`);
+      showToast(`👁 Previewing ${s.name}`);
     } else if (action === 'preview-item') {
       const slot = el.dataset.slot;
       const id = el.dataset.id;
@@ -492,6 +447,8 @@ function initGearCodexPage() {
       if (!entry) return;
       previewLivery = applyCodexItemToLivery(previewLivery, slot, id);
       previewTitle = `${entry.slotIcon} ${entry.item.name}`;
+      activePreviewKey = `item:${entry.key}`;
+      renderMainContent();
       renderPreviewPanel();
       showToast(`👁 Previewing ${entry.item.name}`);
     } else if (action === 'equip-item') {
@@ -501,32 +458,31 @@ function initGearCodexPage() {
       if (!entry || !entry.owned) return;
       savedLivery = applyCodexItemToLivery(savedLivery, slot, id);
       previewLivery = applyCodexItemToLivery(previewLivery, slot, id);
+      activePreviewKey = `item:${entry.key}`;
       saveLivery(savedLivery);
+      renderMainContent();
       renderPreviewPanel();
-      showToast(`⚡ Equipped ${entry.item.name} on your Dive Rig!`);
+      showToast(`⚡ Equipped ${entry.item.name}!`);
     }
   });
 
-  // Preview control buttons
+  // Preview toolbar buttons
   btnAllLegendary?.addEventListener('click', () => {
     previewLivery = buildAllLegendaryPreviewRig(codexData);
-    previewTitle = '🔥 Full 9-Slot Legendary Dream Rig';
+    previewTitle = '🔥 All 9 Legendaries';
+    activePreviewKey = 'all-legendary';
+    renderMainContent();
     renderPreviewPanel();
-    showToast('🔥 Previewing all 9 Ultra-Rare Legendaries!');
+    showToast('🔥 Previewing all 9 Legendaries!');
   });
 
   btnResetPreview?.addEventListener('click', () => {
     previewLivery = sanitizeRigLivery(savedLivery);
-    previewTitle = 'Your Saved Dive Rig';
+    previewTitle = 'Your Dive Rig';
+    activePreviewKey = '';
+    renderMainContent();
     renderPreviewPanel();
     showToast('↺ Restored your saved dive rig');
-  });
-
-  btnStockPreview?.addEventListener('click', () => {
-    previewLivery = sanitizeRigLivery(DEFAULT_RIG_LIVERY);
-    previewTitle = '📦 Standard Issue Rig';
-    renderPreviewPanel();
-    showToast('📦 Previewing stock baseline rig');
   });
 
   btnEquipRig?.addEventListener('click', () => {
@@ -535,7 +491,7 @@ function initGearCodexPage() {
     for (const sl of CODEX_SLOT_ORDER) {
       const meta = CODEX_SLOT_META[sl];
       const id = previewLivery[meta.field];
-      if (unlocked[meta.setKey]?.has?.(id) && id !== savedLivery[meta.field]) {
+      if (id !== DEFAULT_RIG_LIVERY[meta.field] && unlocked[meta.setKey]?.has?.(id) && id !== savedLivery[meta.field]) {
         next[meta.field] = id;
         applied++;
       }
@@ -544,12 +500,11 @@ function initGearCodexPage() {
       savedLivery = sanitizeRigLivery(next);
       saveLivery(savedLivery);
       renderPreviewPanel();
-      showToast(`⚡ Equipped ${applied} owned gear piece${applied > 1 ? 's' : ''} to your Dive Rig!`);
+      showToast(`⚡ Equipped ${applied} owned piece${applied > 1 ? 's' : ''} to your rig!`);
     }
   });
 
   // Initial render
-  renderSubfilters();
   renderMainContent();
   renderPreviewPanel();
 

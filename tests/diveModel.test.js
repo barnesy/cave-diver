@@ -13937,3 +13937,24 @@ test('v270 Sets & Legendaries Codex Model: 8 Armor Sets, 9 Legendaries, 27 Mythi
   assert.equal(dreamRig.harpoonId, 'legendary-poseidon-trident');
   assert.equal(dreamRig.scooterId, 'legendary-valkyrie-dpv');
 });
+
+test('v271 Codex Promoted to Top Section of Home Menu & Simplified Sets/Legendaries UI', async () => {
+  const fs = await import('node:fs');
+  const indexHtml = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const codexHtml = fs.readFileSync(new URL('../public/codex.html', import.meta.url), 'utf8');
+
+  // 1. Codex link lives in the top priority Menu section ahead of More Modes drawer
+  const popStart = indexHtml.indexOf('id="home-menu-popover"');
+  const moreStart = indexHtml.indexOf('<details id="home-menu-more-modes"', popStart);
+  const moreEnd = indexHtml.indexOf('</details>', moreStart);
+  const topSlice = indexHtml.slice(popStart, moreStart);
+  const moreSlice = indexHtml.slice(moreStart, moreEnd);
+  assert.ok(topSlice.includes('id="btn-open-codex"'), '#btn-open-codex must appear in the top section of #home-menu-popover');
+  assert.ok(!moreSlice.includes('id="btn-open-codex"'), '#btn-open-codex must not be buried inside More Modes drawer');
+
+  // 2. Simplified Codex page focuses cleanly on Armor Sets & Legendaries
+  assert.ok(codexHtml.includes('data-tab="sets"') && codexHtml.includes('data-tab="legendaries"'), 'Codex must expose Sets and Legendaries tabs');
+  assert.ok(!codexHtml.includes('data-tab="mythics"'), 'Simplified Codex must remove the extra Mythics tab clutter');
+  assert.ok(codexHtml.includes('id="btn-codex-owned-toggle"'), 'Codex must include compact Owned-only toggle');
+  assert.ok(codexHtml.includes('id="codex-preview-canvas"'), 'Codex must keep Live Rig Preview canvas');
+});
