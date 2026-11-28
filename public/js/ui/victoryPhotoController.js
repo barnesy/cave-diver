@@ -13,6 +13,7 @@ import {
   drawPartyDiveBoatEnhancements,
 } from '../game/renderers/topsidePropsRenderer.js';
 import { resolveDiverLiveryPalette } from '../game/rigLivery.js';
+import { getHyperRealSprite } from '../game/hyperRealSprites.js';
 
 export const VICTORY_DANCE_MOVES = Object.freeze([
   { id: 'twerk', icon: '🍑', label: 'Twerk' },
@@ -134,18 +135,26 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
 
   // 3. Biome Surface Hangout / Party Boat Backdrop
   if (biome === 'wreck') {
-    // Party boat hull silhouette behind victory deck
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    ctx.moveTo(w * 0.08, waterY + 8);
-    ctx.lineTo(w * 0.92, waterY + 8);
-    ctx.lineTo(w * 0.86, waterY - h * 0.14);
-    ctx.lineTo(w * 0.14, waterY - h * 0.14);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#0284c7';
-    ctx.fillRect(w * 0.14, waterY - h * 0.06, w * 0.72, h * 0.045);
-    drawPartyDiveBoatEnhancements(ctx, w * 0.5, waterY + 4, w * 0.76, h * 0.3, scale * 0.65, timeSec, hypeEnergy);
+    const boatImg = getHyperRealSprite('dive-boat');
+    if (boatImg) {
+      const bw = w * 0.72;
+      const bh = bw * ((boatImg.naturalHeight || boatImg.height) / Math.max(1, boatImg.naturalWidth || boatImg.width));
+      ctx.drawImage(boatImg, w * 0.5 - bw * 0.5, waterY - bh * 0.78, bw, bh);
+      drawPartyDiveBoatEnhancements(ctx, w * 0.5, waterY + 4, bw, bh, scale * 0.65, timeSec, hypeEnergy, { isPhotoBoat: true });
+    } else {
+      // Party boat hull silhouette behind victory deck
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.08, waterY + 8);
+      ctx.lineTo(w * 0.92, waterY + 8);
+      ctx.lineTo(w * 0.86, waterY - h * 0.14);
+      ctx.lineTo(w * 0.14, waterY - h * 0.14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(w * 0.14, waterY - h * 0.06, w * 0.72, h * 0.045);
+      drawPartyDiveBoatEnhancements(ctx, w * 0.5, waterY + 4, w * 0.76, h * 0.3, scale * 0.65, timeSec, hypeEnergy);
+    }
   } else {
     drawBiomeSurfaceHangout(ctx, state?.level, w * 0.2, waterY + 2, scale * 0.78, timeSec, { facing: 1 });
   }

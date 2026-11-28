@@ -8,6 +8,7 @@ import { wreckAndInteractivesMethods } from './wreckAndInteractivesRenderer.js';
 import { drawDetailedSpeargun } from '../artSprites.js';
 import { BOSS_WEAPON_UPGRADES } from '../secretLairs.js';
 import { bossGuardiansMethods } from './bossGuardiansRenderer.js';
+import { getHyperRealSprite } from '../hyperRealSprites.js';
 
 function getPhasePalette(phase) {
   if (phase >= 3) {
@@ -3059,19 +3060,24 @@ export const bossAndLairMethods = {
           ctx.globalCompositeOperation = 'source-over';
           ctx.globalAlpha = 1;
         }
-        ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#334155';
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = Math.max(2.2, 0.085 * scale);
-        ctx.beginPath();
-        if (typeof ctx.roundRect === 'function') {
-          ctx.roundRect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44, gr * 0.16);
+        const gateImg = getHyperRealSprite('blast-gate-leaf');
+        if (gateImg && !(hz.hitFlash > 0)) {
+          ctx.drawImage(gateImg, -gr * 0.96, -gr * 0.78, gr * 1.92, gr * 1.56);
         } else {
-          ctx.rect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44);
+          ctx.fillStyle = hz.hitFlash > 0 ? '#ffffff' : '#334155';
+          ctx.strokeStyle = '#020617';
+          ctx.lineWidth = Math.max(2.2, 0.085 * scale);
+          ctx.beginPath();
+          if (typeof ctx.roundRect === 'function') {
+            ctx.roundRect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44, gr * 0.16);
+          } else {
+            ctx.rect(-gr * 0.92, -gr * 0.72, gr * 1.84, gr * 1.44);
+          }
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(-gr * 0.78, gr * 0.25, gr * 1.56, gr * 0.28);
         }
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(-gr * 0.78, gr * 0.25, gr * 1.56, gr * 0.28);
         if (!hz.dropping) {
           const pulse = 0.6 + 0.4 * Math.sin(timeSec * 10);
           ctx.fillStyle = `rgba(249, 115, 22, ${pulse.toFixed(2)})`;

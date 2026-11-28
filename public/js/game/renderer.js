@@ -2,6 +2,7 @@ import { evaluateCaveSDF } from './collision.js';
 import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
 import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama, preloadDefaultMenuBackdrop } from './renderers/topsideAtmosphereRenderer.js';
 import { syncTopsideHypeFromDive } from './renderers/topsidePropsRenderer.js';
+import { preloadHyperRealSprites } from './hyperRealSprites.js';
 import {
   CACHE_PX_PER_M,
   MOBILE_CACHE_PX_PER_M,
@@ -430,6 +431,7 @@ export class CaveRenderer {
   }
 
   _preloadLevelSurfaceProps(level = this.level) {
+    preloadHyperRealSprites();
     const style = level?.theme?.surfaceStyle || (level?.isWreck ? 'open-ocean-wreck' : 'yucatan');
     const keys = SURFACE_STYLE_PROPS[style] || SURFACE_STYLE_PROPS.yucatan;
     return Promise.all(

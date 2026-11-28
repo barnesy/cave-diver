@@ -3,6 +3,7 @@ import { isHatchPressurized } from '../salvagePhysics.js';
 import { computeSurgeWave } from '../diveSession.js';
 import { drawShipwreckTopsideCrowd } from './topsidePeopleRenderer.js';
 import { drawRiggedSalvageCradle } from './chestAndSalvageRenderer.js';
+import { getHyperRealSprite } from '../hyperRealSprites.js';
 
 export const wreckAndInteractivesMethods = {
   _drawWreckSurfaceBoat(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
@@ -1261,6 +1262,10 @@ export const wreckAndInteractivesMethods = {
       ctx.save();
       ctx.translate(sx + jx, sy + jy);
 
+      // High-res hyper-real circular vault bulkhead door plate & spinning brass handwheel (v295)
+      const plateImg = getHyperRealSprite('vault-door-plate');
+      const wheelImg = getHyperRealSprite('vault-handwheel');
+
       // Outer bolted bulkhead coaming flange (always anchored to hull)
       ctx.strokeStyle = isOpen ? 'rgba(52, 211, 153, 0.58)' : 'rgba(71, 85, 105, 0.92)';
       ctx.lineWidth = Math.max(2.6, 0.17 * scale);
@@ -1268,19 +1273,21 @@ export const wreckAndInteractivesMethods = {
       ctx.arc(0, 0, sr * 0.97, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Heavy cast-iron twin hinge knuckles bolted on the right coaming
-      ctx.fillStyle = '#334155';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = Math.max(1.1, 0.045 * scale);
-      for (const hy of [-sr * 0.42, sr * 0.42]) {
-        ctx.fillRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
-        ctx.strokeRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
-        // Brass hinge pin
-        ctx.fillStyle = '#d97706';
-        ctx.beginPath();
-        ctx.arc(sr * 0.96, hy, Math.max(1.5, 0.055 * scale), 0, Math.PI * 2);
-        ctx.fill();
+      // Heavy cast-iron twin hinge knuckles bolted on the right coaming (built into plateImg when sealed)
+      if (!plateImg || isOpen) {
         ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = Math.max(1.1, 0.045 * scale);
+        for (const hy of [-sr * 0.42, sr * 0.42]) {
+          ctx.fillRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
+          ctx.strokeRect(sr * 0.84, hy - sr * 0.11, sr * 0.24, sr * 0.22);
+          // Brass hinge pin
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(sr * 0.96, hy, Math.max(1.5, 0.055 * scale), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#334155';
+        }
       }
 
       if (isOpen) {
@@ -1299,26 +1306,48 @@ export const wreckAndInteractivesMethods = {
         ctx.scale(doorScaleX, 1);
         ctx.translate(-sr * 0.88, 0);
 
-        const openDoorGrad = ctx.createLinearGradient(-sr, -sr, sr, sr);
-        openDoorGrad.addColorStop(0, '#475569');
-        openDoorGrad.addColorStop(0.5, '#1e293b');
-        openDoorGrad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = openDoorGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, sr * 0.88, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = Math.max(1.8, 0.09 * scale);
-        ctx.stroke();
+        if (plateImg) {
+          const pw = sr * 2.12;
+          const ph = pw * ((plateImg.naturalHeight || plateImg.height) / Math.max(1, plateImg.naturalWidth || plateImg.width));
+          ctx.drawImage(plateImg, -pw * 0.47, -ph * 0.5, pw, ph);
+          if (wheelImg) {
+            const ws = sr * 1.05;
+            ctx.drawImage(wheelImg, -ws * 0.5, -ws * 0.5, ws, ws);
+          }
+        } else {
+          const openDoorGrad = ctx.createLinearGradient(-sr, -sr, sr, sr);
+          openDoorGrad.addColorStop(0, '#475569');
+          openDoorGrad.addColorStop(0.5, '#1e293b');
+          openDoorGrad.addColorStop(1, '#0f172a');
+          ctx.fillStyle = openDoorGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.88, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = Math.max(1.8, 0.09 * scale);
+          ctx.stroke();
 
-        // Retracted brass wheel rim silhouette visible on the swung door
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.72)';
-        ctx.lineWidth = Math.max(1.5, 0.08 * scale);
-        ctx.beginPath();
-        ctx.arc(0, 0, sr * 0.42, 0, Math.PI * 2);
-        ctx.stroke();
+          // Retracted brass wheel rim silhouette visible on the swung door
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.72)';
+          ctx.lineWidth = Math.max(1.5, 0.08 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.42, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.restore();
       } else {
+        if (plateImg) {
+          const pw = sr * 2.16;
+          const ph = pw * ((plateImg.naturalHeight || plateImg.height) / Math.max(1, plateImg.naturalWidth || plateImg.width));
+          ctx.drawImage(plateImg, -pw * 0.47, -ph * 0.5, pw, ph);
+
+          // Active status rim glow (amber sealed / cyan cranking / red pressurized)
+          ctx.strokeStyle = isCranking ? '#38bdf8' : pressurized && !equalized ? '#f87171' : 'rgba(245, 158, 11, 0.85)';
+          ctx.lineWidth = Math.max(2.0, 0.11 * scale);
+          ctx.beginPath();
+          ctx.arc(0, 0, sr * 0.92, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
         // Sealed heavy naval steel door plate with radial metallic bevel shading
         const plateGrad = ctx.createRadialGradient(-sr * 0.28, -sr * 0.28, sr * 0.08, 0, 0, sr * 0.96);
         plateGrad.addColorStop(0, '#475569');
@@ -1351,6 +1380,23 @@ export const wreckAndInteractivesMethods = {
         ctx.arc(0, 0, sr * 0.62, 0, Math.PI * 2);
         ctx.stroke();
 
+        // 10 Forged Perimeter Rivets with metallic top glint
+        for (let b = 0; b < 10; b++) {
+          const ba = (b / 10) * Math.PI * 2;
+          const bx = Math.cos(ba) * sr * 0.76;
+          const by = Math.sin(ba) * sr * 0.76;
+          const br = Math.max(1.5, 0.06 * scale);
+          ctx.fillStyle = '#64748b';
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(bx - br * 0.28, by - br * 0.28, br * 0.36, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        }
+
         // 4 Mechanical Locking Dogs (perimeter steel wedges that retract inward as wheel cranks!)
         const dogRetract = isCranking ? crankProg : 0;
         for (let d = 0; d < 4; d++) {
@@ -1368,27 +1414,20 @@ export const wreckAndInteractivesMethods = {
           ctx.restore();
         }
 
-        // 10 Forged Perimeter Rivets with metallic top glint
-        for (let b = 0; b < 10; b++) {
-          const ba = (b / 10) * Math.PI * 2;
-          const bx = Math.cos(ba) * sr * 0.76;
-          const by = Math.sin(ba) * sr * 0.76;
-          const br = Math.max(1.5, 0.06 * scale);
-          ctx.fillStyle = '#64748b';
-          ctx.beginPath();
-          ctx.arc(bx, by, br, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#e2e8f0';
-          ctx.beginPath();
-          ctx.arc(bx - br * 0.28, by - br * 0.28, br * 0.36, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Central Brass Dogging Handwheel (tapered spokes + knurled rim + hex center nut)
+        // Central Brass Dogging Handwheel (spins smoothly on crank!)
         ctx.save();
         const wheelRot = isCranking ? crankProg * Math.PI * 5 : Math.sin(timeSec * 0.9 + h) * 0.05;
         ctx.rotate(wheelRot);
 
+        if (wheelImg) {
+          // Soft cast shadow behind hyper-real brass wheel
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.38)';
+          ctx.beginPath();
+          ctx.arc(0.05 * scale, 0.06 * scale, sr * 0.52, 0, Math.PI * 2);
+          ctx.fill();
+          const ws = sr * 1.12;
+          ctx.drawImage(wheelImg, -ws * 0.5, -ws * 0.5, ws, ws);
+        } else {
         // Soft cast shadow behind wheel
         ctx.strokeStyle = 'rgba(2, 6, 23, 0.45)';
         ctx.lineWidth = Math.max(2.6, 0.14 * scale);
@@ -1430,6 +1469,7 @@ export const wreckAndInteractivesMethods = {
         ctx.beginPath();
         ctx.arc(0, 0, 0.095 * scale, 0, Math.PI * 2);
         ctx.fill();
+        }
         ctx.restore();
 
         // Outer radial cranking progress ring

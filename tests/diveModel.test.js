@@ -14369,3 +14369,25 @@ test('v294 3D cave-embedded chests, rigged lift-bag salvage cradle & co-op chest
   ]);
   assert.ok(ops > 60, `Expected rich v294 chest & salvage draw ops, got ${ops}`);
 });
+
+test('v295 hyper-real sprite cutouts for chests, vault doors & topside environment exist and are pre-cached in SW', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { HYPER_REAL_SPRITE_PATHS, HYPER_REAL_UMBRELLA_KEYS, getHyperRealSprite } = await import('../public/js/game/hyperRealSprites.js');
+  const swText = fs.readFileSync(path.resolve('public/sw.js'), 'utf8');
+
+  const keys = Object.keys(HYPER_REAL_SPRITE_PATHS);
+  assert.ok(keys.length >= 25, `Expected >=25 hyper-real sprite keys, got ${keys.length}`);
+  assert.equal(HYPER_REAL_UMBRELLA_KEYS.length, 3);
+
+  for (const key of keys) {
+    const rel = HYPER_REAL_SPRITE_PATHS[key].replace(/^\.\//, '');
+    const abs = path.resolve('public', rel);
+    assert.ok(fs.existsSync(abs), `Missing hyper-real sprite asset on disk: ${abs}`);
+    assert.ok(fs.statSync(abs).size > 2000, `Sprite asset unexpectedly small: ${abs}`);
+    assert.ok(swText.includes(rel), `Sprite asset missing from public/sw.js precache: ${rel}`);
+  }
+  assert.ok(swText.includes('js/game/hyperRealSprites.js'), 'hyperRealSprites.js must be precached in public/sw.js');
+  // In headless Node (no DOM Image), getHyperRealSprite cleanly returns null so procedural fallbacks work
+  assert.equal(getHyperRealSprite('chest-brass-closed'), null);
+});

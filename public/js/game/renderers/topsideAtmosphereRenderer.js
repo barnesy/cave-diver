@@ -1,6 +1,7 @@
 import { evaluateCaveSDF } from '../collision.js';
 import { resolveDiverLiveryPalette, _drawArticulatedPreviewDiver } from '../rigLivery.js';
 import { drawAllSiteTopsidePeople, drawDefaultBackdropTopsidePeople } from './topsidePeopleRenderer.js';
+import { preloadHyperRealSprites } from '../hyperRealSprites.js';
 
 const _topsideLevelMetaCache = new WeakMap();
 
@@ -260,6 +261,14 @@ const _defaultBgAssets = {
 export function preloadDefaultMenuBackdrop() {
   if (_defaultBgAssets.started || typeof Image === 'undefined') return;
   _defaultBgAssets.started = true;
+  preloadHyperRealSprites([
+    'umbrella-coral',
+    'umbrella-teal',
+    'umbrella-gold',
+    'party-cooler-boombox',
+    'scuba-gear-rack',
+    'tiki-gazebo',
+  ]);
   for (const [key, src] of Object.entries(_DEFAULT_BG_URLS)) {
     try {
       const img = new Image();

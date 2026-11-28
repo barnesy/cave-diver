@@ -1,8 +1,10 @@
 /**
- * Biome-Specific Surface Hangouts, Live Crowd Hype Reactions & Cannonballers (v284).
- * Pure canvas rendering & lightweight bounded state — zero per-frame allocations
- * on hot paths so the Mobile 4x CPU < 15.0 ms performance guard stays rock-solid.
+ * Biome-Specific Surface Hangouts, Live Crowd Hype Reactions & Cannonballers (v295).
+ * Hyper-real transparent WebP environment structures layered with lightweight live animations
+ * (Edison string lights, flickering tiki flame, rope swing, thermal steam, fluttering bunting)
+ * and zero per-frame allocations on hot paths.
  */
+import { getHyperRealSprite } from '../hyperRealSprites.js';
 
 const CONFETTI_COLORS = Object.freeze([
   '#f43f5e',
@@ -437,6 +439,16 @@ export function drawCenotePalapaAndSwing(ctx, sx, sy, scale, timeSec = 0, opts =
   ctx.save();
   ctx.translate(sx, sy);
 
+  const gazeboImg = getHyperRealSprite('tiki-gazebo');
+  if (gazeboImg) {
+    const gw = s * 3.85;
+    const gh = gw * ((gazeboImg.naturalHeight || gazeboImg.height) / Math.max(1, gazeboImg.naturalWidth || gazeboImg.width));
+    ctx.fillStyle = 'rgba(8, 18, 28, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.04, gw * 0.48, s * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(gazeboImg, -gw * 0.5, -gh + s * 0.08, gw, gh);
+  } else {
   // Wooden deck floor
   const deckW = s * 3.1;
   ctx.fillStyle = '#78350f';
@@ -468,6 +480,7 @@ export function drawCenotePalapaAndSwing(ctx, sx, sy, scale, timeSec = 0, opts =
   ctx.quadraticCurveTo(0, -s * 2.95, s * 1.52, -s * 2.02);
   ctx.closePath();
   ctx.fill();
+  }
 
   // Warm Edison string bulbs under eaves
   if (!compact) {
@@ -534,6 +547,15 @@ export function drawPolarResearchBase(ctx, sx, sy, scale, timeSec = 0, opts = {}
   ctx.save();
   ctx.translate(sx, sy);
 
+  const domeImg = getHyperRealSprite('research-dome');
+  const snowcatImg = getHyperRealSprite('snowcat');
+  const tubImg = getHyperRealSprite('cedar-hottub');
+
+  if (domeImg) {
+    const dw = s * 3.15;
+    const dh = dw * ((domeImg.naturalHeight || domeImg.height) / Math.max(1, domeImg.naturalWidth || domeImg.width));
+    ctx.drawImage(domeImg, -dw * 0.5, -dh + s * 0.08, dw, dh);
+  } else {
   // Geodesic orange expedition dome tent
   ctx.fillStyle = '#ea580c';
   ctx.beginPath();
@@ -560,48 +582,65 @@ export function drawPolarResearchBase(ctx, sx, sy, scale, timeSec = 0, opts = {}
   ctx.strokeStyle = '#7c2d12';
   ctx.lineWidth = Math.max(1, s * 0.04);
   ctx.stroke();
+  }
 
   if (!compact) {
-    // Radio/weather mast with blinking safety beacon
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = Math.max(1.2, s * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(s * 0.95, -s * 0.95);
-    ctx.lineTo(s * 0.95, -s * 2.15);
-    ctx.stroke();
+    // Blinking safety beacon on weather mast
+    if (!domeImg) {
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(1.2, s * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.95, -s * 0.95);
+      ctx.lineTo(s * 0.95, -s * 2.15);
+      ctx.stroke();
+    }
     const blink = 0.45 + 0.55 * Math.sin(timeSec * 5.2);
+    const mastTopX = domeImg ? s * 1.18 : s * 0.95;
+    const mastTopY = domeImg ? -s * 2.94 : -s * 2.18;
     ctx.fillStyle = `rgba(56, 189, 248, ${blink.toFixed(2)})`;
     ctx.beginPath();
-    ctx.arc(s * 0.95, -s * 2.18, Math.max(2, s * 0.1), 0, Math.PI * 2);
+    ctx.arc(mastTopX, mastTopY, Math.max(2, s * 0.085), 0, Math.PI * 2);
     ctx.fill();
 
     // Compact tracked polar snowcat to the left
-    const cx = -s * 2.35;
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.roundRect(cx - s * 0.72, -s * 0.32, s * 1.44, s * 0.34, s * 0.14);
-    ctx.fill();
-    ctx.fillStyle = '#f97316';
-    ctx.beginPath();
-    ctx.roundRect(cx - s * 0.62, -s * 0.94, s * 1.18, s * 0.66, s * 0.12);
-    ctx.fill();
-    ctx.fillStyle = '#bae6fd';
-    ctx.fillRect(cx + s * 0.08, -s * 0.84, s * 0.38, s * 0.3);
+    const cx = -s * 2.45;
+    if (snowcatImg) {
+      const sw = s * 1.85;
+      const sh = sw * ((snowcatImg.naturalHeight || snowcatImg.height) / Math.max(1, snowcatImg.naturalWidth || snowcatImg.width));
+      ctx.drawImage(snowcatImg, cx - sw * 0.5, -sh + s * 0.05, sw, sh);
+    } else {
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(cx - s * 0.72, -s * 0.32, s * 1.44, s * 0.34, s * 0.14);
+      ctx.fill();
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.roundRect(cx - s * 0.62, -s * 0.94, s * 1.18, s * 0.66, s * 0.12);
+      ctx.fill();
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(cx + s * 0.08, -s * 0.84, s * 0.38, s * 0.3);
+    }
 
     // Steaming cedar hot-tub warming barrel to the right!
-    const bx = s * 2.1;
-    ctx.fillStyle = '#92400e';
-    ctx.beginPath();
-    ctx.roundRect(bx - s * 0.52, -s * 0.68, s * 1.04, s * 0.68, s * 0.1);
-    ctx.fill();
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = Math.max(1, s * 0.045);
-    ctx.beginPath();
-    ctx.moveTo(bx - s * 0.52, -s * 0.22);
-    ctx.lineTo(bx + s * 0.52, -s * 0.22);
-    ctx.moveTo(bx - s * 0.52, -s * 0.48);
-    ctx.lineTo(bx + s * 0.52, -s * 0.48);
-    ctx.stroke();
+    const bx = s * 2.18;
+    if (tubImg) {
+      const tw = s * 1.16;
+      const th = tw * ((tubImg.naturalHeight || tubImg.height) / Math.max(1, tubImg.naturalWidth || tubImg.width));
+      ctx.drawImage(tubImg, bx - tw * 0.5, -th + s * 0.04, tw, th);
+    } else {
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.roundRect(bx - s * 0.52, -s * 0.68, s * 1.04, s * 0.68, s * 0.1);
+      ctx.fill();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(1, s * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(bx - s * 0.52, -s * 0.22);
+      ctx.lineTo(bx + s * 0.52, -s * 0.22);
+      ctx.moveTo(bx - s * 0.52, -s * 0.48);
+      ctx.lineTo(bx + s * 0.52, -s * 0.48);
+      ctx.stroke();
+    }
     // Rising thermal steam wisps
     for (let i = 0; i < 3; i++) {
       const ph = ((timeSec * 0.65 + i * 0.33) % 1);
@@ -625,6 +664,12 @@ export function drawGeothermalOutpost(ctx, sx, sy, scale, timeSec = 0, opts = {}
   ctx.save();
   ctx.translate(sx, sy);
 
+  const geoImg = getHyperRealSprite('geo-awning');
+  if (geoImg) {
+    const gw = s * 3.55;
+    const gh = gw * ((geoImg.naturalHeight || geoImg.height) / Math.max(1, geoImg.naturalWidth || geoImg.width));
+    ctx.drawImage(geoImg, -gw * 0.5, -gh + s * 0.06, gw, gh);
+  } else {
   // Basalt stone pad & awning frame
   ctx.fillStyle = '#334155';
   ctx.fillRect(-s * 1.55, -s * 0.14, s * 3.1, s * 0.16);
@@ -646,9 +691,18 @@ export function drawGeothermalOutpost(ctx, sx, sy, scale, timeSec = 0, opts = {}
   ctx.lineTo(-s * 1.55, -s * 1.82);
   ctx.closePath();
   ctx.fill();
+  }
 
   if (!compact) {
-    // Glowing amber lanterns
+    // Glowing amber lanterns (soft pulse centered directly inside the photo lanterns!)
+    if (geoImg) {
+      const glow = 0.5 + 0.35 * Math.sin(timeSec * 3.8);
+      ctx.fillStyle = `rgba(254, 240, 138, ${glow.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(-s * 0.55, -s * 1.24, Math.max(2, s * 0.085), 0, Math.PI * 2);
+      ctx.arc(s * 0.56, -s * 1.24, Math.max(2, s * 0.085), 0, Math.PI * 2);
+      ctx.fill();
+    } else {
     for (let i = 0; i < 3; i++) {
       const lx = -s * 0.8 + i * s * 0.8;
       const ly = -s * 1.62 + i * s * 0.08;
@@ -660,6 +714,7 @@ export function drawGeothermalOutpost(ctx, sx, sy, scale, timeSec = 0, opts = {}
       ctx.beginPath();
       ctx.arc(lx, ly, Math.max(1.1, s * 0.055), 0, Math.PI * 2);
       ctx.fill();
+    }
     }
     // Gentle volcanic steam wisp beside outcrop
     const ph = (timeSec * 0.55) % 1;
@@ -680,6 +735,16 @@ export function drawQuarryExpeditionRig(ctx, sx, sy, scale, timeSec = 0, opts = 
   ctx.save();
   ctx.translate(sx, sy);
 
+  const vanImg = getHyperRealSprite('dive-van');
+  if (vanImg) {
+    const vw = s * 3.45;
+    const vh = vw * ((vanImg.naturalHeight || vanImg.height) / Math.max(1, vanImg.naturalWidth || vanImg.width));
+    ctx.fillStyle = 'rgba(8, 18, 28, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.02, vw * 0.44, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(vanImg, -vw * 0.5, -vh + s * 0.05, vw, vh);
+  } else {
   // Retro coastal dive van silhouette
   ctx.fillStyle = '#0284c7';
   ctx.beginPath();
@@ -713,28 +778,31 @@ export function drawQuarryExpeditionRig(ctx, sx, sy, scale, timeSec = 0, opts = 
   ctx.arc(-s * 0.85, -s * 0.24, s * 0.12, 0, Math.PI * 2);
   ctx.arc(s * 0.85, -s * 0.24, s * 0.12, 0, Math.PI * 2);
   ctx.fill();
+  }
 
   if (!compact) {
-    // Festive pennant bunting mast
+    // Festive pennant bunting mast draped cleanly above the van & surfboard roof rack
+    const mastH = vanImg ? s * 2.48 : s * 2.05;
+    const buntY = vanImg ? -s * 2.4 : -s * 1.98;
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = Math.max(1.1, s * 0.045);
     ctx.beginPath();
-    ctx.moveTo(s * 1.65, 0);
-    ctx.lineTo(s * 1.65, -s * 2.05);
-    ctx.moveTo(-s * 1.65, 0);
-    ctx.lineTo(-s * 1.65, -s * 2.05);
+    ctx.moveTo(s * 1.82, 0);
+    ctx.lineTo(s * 1.82, -mastH);
+    ctx.moveTo(-s * 1.82, 0);
+    ctx.lineTo(-s * 1.82, -mastH);
     ctx.stroke();
 
     const flagCols = ['#f43f5e', '#facc15', '#38bdf8', '#4ade80', '#c084fc'];
     for (let i = 0; i < 5; i++) {
       const fx = -s * 1.32 + i * s * 0.66;
-      const sag = Math.sin(((i + 0.5) / 5) * Math.PI) * s * 0.28;
+      const sag = Math.sin(((i + 0.5) / 5) * Math.PI) * s * 0.24;
       const flutter = Math.sin(timeSec * 5 + i) * s * 0.04;
       ctx.fillStyle = flagCols[i];
       ctx.beginPath();
-      ctx.moveTo(fx - s * 0.16, -s * 1.98 + sag);
-      ctx.lineTo(fx + s * 0.16, -s * 1.98 + sag);
-      ctx.lineTo(fx + flutter, -s * 1.66 + sag);
+      ctx.moveTo(fx - s * 0.15, buntY + sag);
+      ctx.lineTo(fx + s * 0.15, buntY + sag);
+      ctx.lineTo(fx + flutter, buntY + s * 0.30 + sag);
       ctx.closePath();
       ctx.fill();
     }

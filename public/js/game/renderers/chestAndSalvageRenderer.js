@@ -11,6 +11,7 @@
  */
 
 import { drawStyledArtifact } from '../artSprites.js';
+import { getHyperRealSprite } from '../hyperRealSprites.js';
 
 const TIER_PALETTES = Object.freeze({
   uncommon: { rgb: '52, 211, 153', hex: '#34d399', light: '#d1fae5', trim: '#10b981' },
@@ -220,7 +221,57 @@ export function drawEmbeddedChest3D(ctx, tc, sx, sy, scale, timeSec, diver, rigG
     ctx.restore();
   }
 
-  // 2. 3D Cave-Embedded Chest Body (Wood/Grotto/Vault materials)
+  // 2. High-Res Hyper-Real 3D Cave-Embedded Chest Sprite (with seamless open transition + fallback!)
+  const chestKind = tc.isMapVault ? 'vault' : tc.chestTier === 'grotto' ? 'grotto' : 'brass';
+  const closedImg = getHyperRealSprite(`chest-${chestKind}-closed`);
+  const openImg = getHyperRealSprite(`chest-${chestKind}-open`);
+
+  if (closedImg && openImg) {
+    const sprW = cw * 1.44;
+    const closedH = sprW * ((closedImg.naturalHeight || closedImg.height) / Math.max(1, closedImg.naturalWidth || closedImg.width));
+    const openH = sprW * ((openImg.naturalHeight || openImg.height) / Math.max(1, openImg.naturalWidth || openImg.width));
+    const baseLineY = botY + ch * 0.08;
+
+    // Subtle open-pop spring bounce as the lid bursts open
+    const springPulse = tc.opened && openedAge < 0.65 ? Math.sin(clamp(openedAge / 0.65, 0, 1) * Math.PI) : 0;
+    const popScaleX = 1 + springPulse * 0.07;
+    const popScaleY = 1 + springPulse * 0.11;
+
+    ctx.save();
+    ctx.translate(0, baseLineY);
+    ctx.scale(popScaleX, popScaleY);
+    ctx.translate(0, -baseLineY);
+
+    if (!tc.opened) {
+      ctx.drawImage(closedImg, -sprW * 0.5, baseLineY - closedH, sprW, closedH);
+    } else if (openFrac < 0.44) {
+      const blend = clamp((openFrac - 0.12) / 0.32, 0, 1);
+      ctx.globalAlpha = 1 - blend * 0.72;
+      ctx.drawImage(closedImg, -sprW * 0.5, baseLineY - closedH, sprW, closedH);
+      ctx.globalAlpha = blend;
+      ctx.drawImage(openImg, -sprW * 0.5, baseLineY - openH, sprW, openH);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.drawImage(openImg, -sprW * 0.5, baseLineY - openH, sprW, openH);
+    }
+
+    // Subtle warm/rarity interior shimmer over the open chest mouth
+    if (tc.opened) {
+      const innerA = openedAge < spectacleDur ? (0.55 * flareAlpha + 0.12) : (0.18 + pulse * 0.1);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(${pal.rgb}, ${innerA.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(0, baseLineY - openH * 0.44, sprW * 0.28, openH * 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // Cave Rock & Sediment Embed Collar gripping the base (welds sprite physically into cave wall!)
+    drawRockEmbedCollar(ctx, cw * 1.06, ch, timeSec, tc.glintPhase || idx);
+  } else {
+  // Procedural 3D fallback when sprites are still decoding or in headless Node tests
   const woodFront = tc.isMapVault ? '#5c2108' : tc.chestTier === 'grotto' ? '#1e3a5f' : '#5b3416';
   const woodSide = tc.isMapVault ? '#3b1305' : tc.chestTier === 'grotto' ? '#0f233d' : '#381f0c';
   const woodLid = tc.isMapVault ? '#7c2d12' : tc.chestTier === 'grotto' ? '#254d7a' : '#73441e';
@@ -371,6 +422,7 @@ export function drawEmbeddedChest3D(ctx, tc, sx, sy, scale, timeSec, diver, rigG
 
   // 2e. Cave Rock & Sediment Embed Collar gripping the base (drawn OVER lower bottom edge!)
   drawRockEmbedCollar(ctx, cw, ch, timeSec, tc.glintPhase || idx);
+  }
 
   // Subtle sweeping glint when closed
   if (!tc.opened && cw >= 14) {
@@ -537,6 +589,44 @@ export function drawEmbeddedGearCache3D(ctx, gc, sx, sy, scale, timeSec, diver, 
     ctx.restore();
   }
 
+  const cacheClosedImg = getHyperRealSprite('gearcache-closed');
+  const cacheOpenImg = getHyperRealSprite('gearcache-open');
+
+  if (cacheClosedImg && cacheOpenImg) {
+    const sprW = cw * 1.46;
+    const closedH = sprW * ((cacheClosedImg.naturalHeight || cacheClosedImg.height) / Math.max(1, cacheClosedImg.naturalWidth || cacheClosedImg.width));
+    const openH = sprW * ((cacheOpenImg.naturalHeight || cacheOpenImg.height) / Math.max(1, cacheOpenImg.naturalWidth || cacheOpenImg.width));
+    const baseLineY = botY + ch * 0.08;
+    const springPulse = gc.opened && openedAge < 0.58 ? Math.sin(clamp(openedAge / 0.58, 0, 1) * Math.PI) : 0;
+
+    ctx.save();
+    ctx.translate(0, baseLineY);
+    ctx.scale(1 + springPulse * 0.06, 1 + springPulse * 0.1);
+    ctx.translate(0, -baseLineY);
+    if (!gc.opened) {
+      ctx.drawImage(cacheClosedImg, -sprW * 0.5, baseLineY - closedH, sprW, closedH);
+    } else if (openFrac < 0.42) {
+      const blend = clamp((openFrac - 0.1) / 0.32, 0, 1);
+      ctx.globalAlpha = 1 - blend * 0.72;
+      ctx.drawImage(cacheClosedImg, -sprW * 0.5, baseLineY - closedH, sprW, closedH);
+      ctx.globalAlpha = blend;
+      ctx.drawImage(cacheOpenImg, -sprW * 0.5, baseLineY - openH, sprW, openH);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.drawImage(cacheOpenImg, -sprW * 0.5, baseLineY - openH, sprW, openH);
+    }
+    // Rarity LED glow accent on case front / interior
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(${pal.rgb}, ${(0.48 + pulse * 0.28).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(0, baseLineY - (gc.opened ? openH * 0.42 : closedH * 0.36), sprW * 0.22, ch * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+
+    drawRockEmbedCollar(ctx, cw * 1.06, ch, timeSec, idx + 3);
+  } else {
   // Open interior padded foam & glowing gear bay
   if (openFrac > 0.04) {
     ctx.fillStyle = '#020617';
@@ -619,6 +709,7 @@ export function drawEmbeddedGearCache3D(ctx, gc, sx, sy, scale, timeSec, diver, 
   ctx.fill();
 
   drawRockEmbedCollar(ctx, cw, ch, timeSec, idx + 3);
+  }
   ctx.restore();
 
   // Rising gear icon medallion on open!

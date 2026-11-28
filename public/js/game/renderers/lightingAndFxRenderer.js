@@ -4,6 +4,7 @@ import { computeStormLightningFlash } from '../weather.js';
 import { getTorchOptic } from '../rigLivery.js';
 import { sampleSiltDensity } from '../silt.js';
 import { drawEmbeddedChest3D, drawEmbeddedGearCache3D } from './chestAndSalvageRenderer.js';
+import { getHyperRealSprite } from '../hyperRealSprites.js';
 
 const _nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
@@ -1607,14 +1608,28 @@ export const lightingAndFxMethods = {
       const leafSpan = rPx * 0.82 * (1 - open * 0.86);
       const frameW = Math.max(4, 0.24 * scale);
 
-      // Steel bulkhead / karst gate leaves closing from top & bottom
-      ctx.fillStyle = h.isWreckHatch ? '#334155' : '#475569';
-      ctx.strokeStyle = h.isWreckHatch ? '#94a3b8' : '#7dd3fc';
-      ctx.lineWidth = Math.max(1.2, 0.06 * scale);
-      ctx.fillRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
-      ctx.strokeRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
-      ctx.fillRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
-      ctx.strokeRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
+      // High-res hyper-real armored steel bulkhead / vault blast-gate leaves closing from top & bottom (v295)
+      const blastLeafImg = getHyperRealSprite('blast-gate-leaf');
+      const leafH = Math.max(4, leafSpan);
+      if (blastLeafImg) {
+        const lw = Math.max(frameW * 1.45, 0.42 * scale);
+        // Top sliding armored vault door slab (hazard stripe along bottom closing edge)
+        ctx.drawImage(blastLeafImg, sx - lw * 0.5, sy - rPx, lw, leafH);
+        // Bottom sliding armored vault door slab (flipped so hazard stripe meets the closing jaw!)
+        ctx.save();
+        ctx.translate(sx, sy + rPx - leafH * 0.5);
+        ctx.scale(1, -1);
+        ctx.drawImage(blastLeafImg, -lw * 0.5, -leafH * 0.5, lw, leafH);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = h.isWreckHatch ? '#334155' : '#475569';
+        ctx.strokeStyle = h.isWreckHatch ? '#94a3b8' : '#7dd3fc';
+        ctx.lineWidth = Math.max(1.2, 0.06 * scale);
+        ctx.fillRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
+        ctx.strokeRect(sx - frameW * 0.5, sy - rPx, frameW, Math.max(3, leafSpan));
+        ctx.fillRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
+        ctx.strokeRect(sx - frameW * 0.5, sy + rPx - Math.max(3, leafSpan), frameW, Math.max(3, leafSpan));
+      }
 
       // Status timing beacon (Green = wide open window, Amber = closing, Red = slamming/surging)
       const beaconCol = open >= 0.55 ? '#4ade80' : open >= 0.3 ? '#fbbf24' : '#f87171';

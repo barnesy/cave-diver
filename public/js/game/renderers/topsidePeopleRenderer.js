@@ -17,6 +17,7 @@ import {
   drawTopsideHypeOverlay,
   getTopsideHypeEnergy,
 } from './topsidePropsRenderer.js';
+import { getHyperRealSprite, HYPER_REAL_UMBRELLA_KEYS } from '../hyperRealSprites.js';
 
 const SKIN_TONES = Object.freeze([
   '#f4cca4',
@@ -1477,6 +1478,698 @@ function drawSideBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, fillCol, sha
   }
 }
 
+const _hipEdge = { leftX: 0, rightX: 0, y: 0, cx: 0, halfW: 0 };
+const _sideHipEdge = { frontX: 0, backX: 0, y: 0 };
+
+/**
+ * Evaluate exact left/right hip silhouette points along `traceCurvyTorso`'s lower cubic Bezier
+ * from waistY (t=0) to lowHipY (t=1) so swimwear waistbands & hip ties lock 100% flush to skin!
+ */
+function evalFrontHipEdgeAtT(t, chestX, hipX, waistY, hipY, prof, s, gbx = 0, gby = 0) {
+  const tc = clamp(t, 0, 1);
+  const mt = 1 - tc;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const tc2 = tc * tc;
+  const tc3 = tc2 * tc;
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.0, -0.16, 0.18);
+  const waW = prof.waist * 0.94 * s;
+  const hiW = prof.hip * (1 - gStretch * 0.24) * s;
+  const midWaistX = (chestX + hipX) * 0.5;
+  const hipCx = hipX + gbx * 0.58;
+  const lowHipY = hipY + 0.11 * s + gby * 0.55;
+
+  const rx0 = midWaistX + waW;
+  const rx1 = hipCx + hiW * 0.96;
+  const rx2 = hipCx + hiW * 0.94;
+  const rx3 = hipCx + hiW * 0.56;
+  _hipEdge.rightX = mt3 * rx0 + 3 * mt2 * tc * rx1 + 3 * mt * tc2 * rx2 + tc3 * rx3;
+
+  const lx0 = midWaistX - waW;
+  const lx1 = hipCx - hiW * 0.96;
+  const lx2 = hipCx - hiW * 0.94;
+  const lx3 = hipCx - hiW * 0.56;
+  _hipEdge.leftX = mt3 * lx0 + 3 * mt2 * tc * lx1 + 3 * mt * tc2 * lx2 + tc3 * lx3;
+
+  const y0 = waistY;
+  const y1 = waistY + (hipY - waistY) * 0.44 + gby * 0.28;
+  const y2 = hipY + 0.01 * s + gby * 0.5;
+  const y3 = lowHipY;
+  _hipEdge.y = mt3 * y0 + 3 * mt2 * tc * y1 + 3 * mt * tc2 * y2 + tc3 * y3;
+  _hipEdge.cx = (_hipEdge.leftX + _hipEdge.rightX) * 0.5;
+  _hipEdge.halfW = (_hipEdge.rightX - _hipEdge.leftX) * 0.5;
+  return _hipEdge;
+}
+
+/**
+ * Evaluate exact front (+x) and back (-x) hip/glute boundaries along `traceSideCurvyTorso`'s
+ * lower cubic Beziers from waistY (t=0) to lowHipY (t=1) so side-view bottoms fit skin-tight!
+ */
+function evalSideHipEdgeAtT(t, chestX, hipX, waistY, hipY, prof, s, gbx = 0, gby = 0) {
+  const tc = clamp(t, 0, 1);
+  const mt = 1 - tc;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const tc2 = tc * tc;
+  const tc3 = tc2 * tc;
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.0, -0.18, 0.2);
+  const midX = (chestX + hipX) * 0.5;
+  const frontWaist = prof.waist * 0.62 * s;
+  const backWaist = prof.waist * 0.52 * s;
+  const frontHip = prof.hip * 0.52 * s;
+  const backGlute = prof.hip * (0.76 - gStretch * 0.18) * (0.7 + (prof.gluteScale || 1) * 0.3) * s;
+  const lowHipY = hipY + 0.13 * s + gby * 0.65;
+
+  const fx0 = midX + frontWaist;
+  const fx1 = hipX + frontHip * 1.02;
+  const fx2 = hipX + frontHip * 0.96;
+  const fx3 = hipX + frontHip * 0.62;
+  _sideHipEdge.frontX = mt3 * fx0 + 3 * mt2 * tc * fx1 + 3 * mt * tc2 * fx2 + tc3 * fx3;
+
+  const bx0 = midX - backWaist;
+  const bx1 = hipX - backGlute * 0.96 + gbx * 0.45;
+  const bx2 = hipX - backGlute * 1.14 + gbx * 0.68;
+  const bx3 = hipX - backGlute * 0.68 + gbx * 0.55;
+  _sideHipEdge.backX = mt3 * bx0 + 3 * mt2 * tc * bx1 + 3 * mt * tc2 * bx2 + tc3 * bx3;
+
+  const y0 = waistY;
+  const y1 = waistY + (hipY - waistY) * 0.45;
+  const y2 = hipY + 0.03 * s;
+  const y3 = lowHipY;
+  _sideHipEdge.y = mt3 * y0 + 3 * mt2 * tc * y1 + 3 * mt * tc2 * y2 + tc3 * y3;
+  return _sideHipEdge;
+}
+
+/**
+ * Draw body-locked, clip-fitted female swimwear bottoms (v295) across Front, Back, and Side views!
+ * Clips fabric strictly to the exact anatomical body + glute silhouette so edges NEVER overhang,
+ * while rendering authentic hip-crest elastic compression, leg-pivot contours & fabric tension lines.
+ */
+function drawFittedFemaleBottoms(
+  ctx,
+  view,
+  chestX,
+  hipX,
+  shoulderY,
+  waistY,
+  hipY,
+  lHipX,
+  rHipX,
+  lKneeX,
+  rKneeX,
+  prof,
+  s,
+  bbx,
+  bby,
+  gbx,
+  gby,
+  gTilt,
+  shTilt,
+  swim,
+  skin,
+  topStyle,
+  isOnePiece = false
+) {
+  const hasSideTies = !isOnePiece && (topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross');
+
+  if (view === 'side') {
+    const gs = prof.gluteScale || 1.0;
+    const stretch = clamp((gby / Math.max(1, s)) * 2.4, -0.16, 0.18);
+    const glRx = prof.hip * 0.50 * (0.72 + gs * 0.28) * (1 - stretch * 0.22) * s;
+    const glRy = 0.130 * (0.72 + gs * 0.28) * (1 + stretch) * s;
+    const glCx = hipX - prof.hip * 0.24 * s + gbx * 0.68;
+    const glCy = hipY + 0.025 * s + gby * 0.68;
+
+    const eTop = evalSideHipEdgeAtT(0.38, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+    const topFrontX = eTop.frontX;
+    const topBackX = eTop.backX;
+    const topY = eTop.y;
+    const eMid = evalSideHipEdgeAtT(0.62, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+    const midFrontX = eMid.frontX;
+    const midBackX = Math.min(eMid.backX, glCx - glRx * 0.96);
+    const midY = eMid.y;
+    const lowHipY = hipY + 0.13 * s + gby * 0.65;
+
+    // Leg-socket pivot flex so the high-cut French leg arch responds cleanly when the front thigh lifts!
+    const frontLegLift = clamp((rKneeX - rHipX) / Math.max(1, s), -0.35, 0.45);
+    const hipApexX = midFrontX * 0.45 + midBackX * 0.55;
+    const hipApexY = topY + (midY - topY) * 0.22 - frontLegLift * 0.025 * s;
+    const frontWaistY = topY + 0.040 * s;
+    const backWaistY = topY - 0.015 * s;
+    const strapH = isOnePiece ? 0.095 * s : 0.075 * s;
+    // Front groin-pelvis point sits cleanly on the front pelvic edge (bare outer thigh rises uninterrupted beneath the arch!)
+    const frontPelvisX = midFrontX + 0.06 * s;
+    const frontPelvisY = midY + 0.065 * s;
+    const gluteTuckX = glCx - glRx * 0.32;
+    const gluteTuckY = glCy + glRy * 0.88;
+
+    // 1. Clip fabric strictly inside the exact side torso + glute silhouette (ZERO overhang ever!)
+    ctx.save();
+    traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, bbx, bby, gbx, gby);
+    ctx.ellipse(glCx, glCy, glRx, glRy, -0.14 + gbx / (s * 2.4), 0, Math.PI * 2);
+    ctx.clip?.();
+
+    if (!isOnePiece) {
+      // Soft skin-compression shadow directly above the elastic waistband
+      if (s >= 18) {
+        ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
+        ctx.lineWidth = Math.max(0.9, 0.022 * s);
+        ctx.beginPath();
+        ctx.moveTo(topBackX - 0.12 * s, backWaistY - 0.012 * s);
+        ctx.quadraticCurveTo(hipApexX, hipApexY - 0.024 * s, topFrontX + 0.10 * s, frontWaistY - 0.012 * s);
+        ctx.stroke();
+      }
+
+      // True side-profile high-cut saddle bikini bottom: top waist -> short front pelvis -> smooth arched leg opening -> full round glute cup!
+      ctx.fillStyle = swim.primary;
+      ctx.beginPath();
+      ctx.moveTo(topBackX - 0.20 * s, backWaistY);
+      ctx.quadraticCurveTo(hipApexX, hipApexY - 0.014 * s, topFrontX + 0.16 * s, frontWaistY);
+      // Short front pelvic edge down to front groin crease
+      ctx.lineTo(frontPelvisX, frontPelvisY);
+      // Smooth continuous high-cut leg-opening arch sweeping UP over the hip joint and DOWN under the lower cheek!
+      ctx.bezierCurveTo(
+        midFrontX - 0.02 * s, hipApexY + strapH * 1.15,
+        hipApexX + 0.04 * s, hipApexY + strapH * 0.88,
+        hipApexX - 0.03 * s, hipApexY + strapH * 0.96
+      );
+      ctx.quadraticCurveTo(glCx + glRx * 0.22, glCy + glRy * 0.64, gluteTuckX, gluteTuckY);
+      ctx.quadraticCurveTo(glCx - glRx * 1.15, glCy + glRy * 0.50, glCx - glRx * 1.18, glCy - glRy * 0.25);
+      ctx.lineTo(topBackX - 0.20 * s, backWaistY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Elastic waistband contrast trim locked flush along the top contour
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.95, 0.025 * s);
+      ctx.beginPath();
+      ctx.moveTo(topBackX - 0.12 * s, backWaistY + 0.005 * s);
+      ctx.quadraticCurveTo(hipApexX, hipApexY - 0.008 * s, topFrontX + 0.08 * s, frontWaistY + 0.005 * s);
+      ctx.stroke();
+    } else {
+      // Carve clean, continuous open-bottom high-cut French-leg arch into side one-piece exposing bare upper thigh!
+      ctx.fillStyle = skin || '#e0a878';
+      ctx.beginPath();
+      ctx.moveTo(frontPelvisX + 0.04 * s, frontPelvisY + 0.02 * s);
+      ctx.bezierCurveTo(
+        midFrontX - 0.02 * s, hipApexY + strapH * 1.15,
+        hipApexX + 0.04 * s, hipApexY + strapH * 0.88,
+        hipApexX - 0.03 * s, hipApexY + strapH * 0.96
+      );
+      ctx.quadraticCurveTo(glCx + glRx * 0.22, glCy + glRy * 0.64, gluteTuckX + 0.04 * s, gluteTuckY + 0.04 * s);
+      ctx.lineTo(frontPelvisX + 0.04 * s, lowHipY + 0.18 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Subtle taut fabric highlight curving over the round glute dome
+    if (s >= 18) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.beginPath();
+      ctx.ellipse(glCx - glRx * 0.18, glCy - glRy * 0.20, glRx * 0.40, glRy * 0.24, -0.28, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Crisp elastic leg-opening seam + skin-compression shadow curving seamlessly around hip & under cheek!
+    if (s >= 16) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.26)';
+      ctx.lineWidth = Math.max(0.85, 0.020 * s);
+      ctx.beginPath();
+      ctx.moveTo(frontPelvisX, frontPelvisY);
+      ctx.bezierCurveTo(
+        midFrontX - 0.02 * s, hipApexY + strapH * 1.15,
+        hipApexX + 0.04 * s, hipApexY + strapH * 0.88,
+        hipApexX - 0.03 * s, hipApexY + strapH * 0.96
+      );
+      ctx.quadraticCurveTo(glCx + glRx * 0.22, glCy + glRy * 0.64, gluteTuckX, gluteTuckY);
+      ctx.stroke();
+    }
+
+    // Subtle curved fabric tension lines radiating smoothly from the taut lateral hip-crest strap across the glute!
+    if (s >= 20) {
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.16)';
+      ctx.lineWidth = Math.max(0.7, 0.013 * s);
+      ctx.beginPath();
+      ctx.moveTo(hipApexX - 0.01 * s, hipApexY + strapH * 0.35);
+      ctx.quadraticCurveTo(glCx + glRx * 0.14, glCy - glRy * 0.24, glCx - glRx * 0.56, glCy - glRy * 0.14);
+      ctx.moveTo(hipApexX - 0.01 * s, hipApexY + strapH * 0.68);
+      ctx.quadraticCurveTo(glCx + glRx * 0.06, glCy - glRy * 0.02, glCx - glRx * 0.50, glCy + glRy * 0.16);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Side-tie knot & slim ribbons seated strictly ON the lateral hip-crest tension point!
+    if (hasSideTies && s >= 18) {
+      ctx.fillStyle = swim.accent;
+      ctx.beginPath();
+      ctx.arc(hipApexX, hipApexY + strapH * 0.16, Math.max(1.2, 0.022 * s), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.8, 0.016 * s);
+      ctx.beginPath();
+      ctx.moveTo(hipApexX, hipApexY + strapH * 0.16);
+      ctx.lineTo(hipApexX - 0.026 * s, hipApexY + strapH * 0.16 + 0.068 * s);
+      ctx.moveTo(hipApexX, hipApexY + strapH * 0.16);
+      ctx.lineTo(hipApexX + 0.024 * s, hipApexY + strapH * 0.16 + 0.062 * s);
+      ctx.stroke();
+    }
+    return;
+  }
+
+  // FRONT & BACK VIEWS: evaluate exact hip-crest anchors on `traceCurvyTorso`!
+  const eCrest = evalFrontHipEdgeAtT(0.44, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+  const lxCrest = eCrest.leftX;
+  const rxCrest = eCrest.rightX;
+  const yCrest = eCrest.y;
+  const cxCrest = eCrest.cx;
+  const hwCrest = eCrest.halfW;
+  const eLow = evalFrontHipEdgeAtT(0.95, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+  const crotchY = eLow.y + 0.042 * s;
+  const cxBot = eLow.cx;
+
+  // Subtle leg-stride flex on left/right inguinal leg openings
+  const lLegPull = clamp((lKneeX - lHipX) / Math.max(1, s), -0.35, 0.35) * 0.03 * s;
+  const rLegPull = clamp((rKneeX - rHipX) / Math.max(1, s), -0.35, 0.35) * 0.03 * s;
+
+  if (view === 'back') {
+    const gs = prof.gluteScale || 1.0;
+    const stretch = clamp((gby / Math.max(1, s)) * 2.4, -0.18, 0.20);
+    const glRx = prof.hip * 0.44 * Math.min(1.05, 0.72 + gs * 0.28) * (1 - stretch * 0.24) * s;
+    const glRy = 0.126 * Math.min(1.08, 0.68 + gs * 0.32) * (1 + stretch) * s;
+    const glCx = hipX + gbx * 0.80;
+    const glCy = hipY + 0.024 * s + gby * 0.80;
+    const sep = prof.hip * 0.34 * s;
+    const bhx = glCx;
+    const bhy = hipY + gby * 0.80;
+
+    // Clip strictly to exact torso + bouncing glutes union so fabric hugs cheeks with ZERO overhang!
+    ctx.save();
+    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, 0, 0, gbx, gby, shTilt);
+    ctx.ellipse(glCx - sep, glCy + gTilt, glRx, glRy, 0.12 + gbx / (s * 2.3), 0, Math.PI * 2);
+    ctx.ellipse(glCx + sep, glCy - gTilt, glRx, glRy, -0.12 + gbx / (s * 2.3), 0, Math.PI * 2);
+    ctx.clip?.();
+
+    if (!isOnePiece) {
+      // Soft skin-compression shadow directly above the high-hip elastic waistband
+      if (s >= 18) {
+        ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+        ctx.lineWidth = Math.max(0.9, 0.024 * s);
+        ctx.beginPath();
+        ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.012 * s);
+        ctx.quadraticCurveTo(bhx, yCrest + 0.095 * s, rxCrest + 0.04 * s, yCrest - 0.012 * s);
+        ctx.stroke();
+      }
+      // Cheeky Brazilian scrunch-cut V-bottom locked directly to exact hip-crest anchors!
+      ctx.fillStyle = swim.primary;
+      ctx.beginPath();
+      ctx.moveTo(lxCrest - 0.04 * s, yCrest);
+      ctx.quadraticCurveTo(bhx, yCrest + 0.105 * s, rxCrest + 0.04 * s, yCrest);
+      ctx.quadraticCurveTo(rxCrest - hwCrest * 0.42 + rLegPull, bhy + 0.032 * s - gTilt * 0.4, bhx, crotchY);
+      ctx.quadraticCurveTo(lxCrest + hwCrest * 0.42 + lLegPull, bhy + 0.032 * s + gTilt * 0.4, lxCrest - 0.04 * s, yCrest);
+      ctx.closePath();
+      ctx.fill();
+
+      // Accent elastic waistband trim flush along the high-hip V curve
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.95, 0.025 * s);
+      ctx.beginPath();
+      ctx.moveTo(lxCrest - 0.02 * s, yCrest + 0.008 * s);
+      ctx.quadraticCurveTo(bhx, yCrest + 0.112 * s, rxCrest + 0.02 * s, yCrest + 0.008 * s);
+      ctx.stroke();
+    }
+
+    // Cheek-cupping elastic leg seams + compression shadow against lower bare cheeks
+    if (s >= 16) {
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.28)';
+      ctx.lineWidth = Math.max(0.85, 0.020 * s);
+      ctx.beginPath();
+      ctx.moveTo(lxCrest, yCrest + 0.02 * s);
+      ctx.quadraticCurveTo(lxCrest + hwCrest * 0.42 + lLegPull, bhy + 0.036 * s + gTilt * 0.4, bhx, crotchY);
+      ctx.moveTo(rxCrest, yCrest + 0.02 * s);
+      ctx.quadraticCurveTo(rxCrest - hwCrest * 0.42 + rLegPull, bhy + 0.036 * s - gTilt * 0.4, bhx, crotchY);
+      ctx.stroke();
+
+      // Center ruched scrunch-seam down the gluteal cleft + 3 delicate radial tension gather chevrons!
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.28)';
+      ctx.lineWidth = Math.max(0.8, 0.019 * s);
+      ctx.beginPath();
+      ctx.moveTo(bhx, yCrest + 0.085 * s);
+      ctx.lineTo(bhx, crotchY - 0.01 * s);
+      ctx.stroke();
+
+      if (s >= 20) {
+        // Soft curved elastic tension gathers hugging the rounded cheeks outward from the center scrunch
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.13)';
+        ctx.lineWidth = Math.max(0.65, 0.012 * s);
+        for (let g = 0; g < 2; g++) {
+          const gy = yCrest + (0.115 + g * 0.044) * s;
+          const span = hwCrest * (0.44 - g * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(bhx - 0.01 * s, gy);
+          ctx.quadraticCurveTo(bhx - span * 0.55, gy - 0.026 * s, bhx - span, gy - 0.042 * s);
+          ctx.moveTo(bhx + 0.01 * s, gy);
+          ctx.quadraticCurveTo(bhx + span * 0.55, gy - 0.026 * s, bhx + span, gy - 0.042 * s);
+          ctx.stroke();
+        }
+        // Subtle taut upper-cheek sheen
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.ellipse(bhx - sep * 0.72, bhy - 0.03 * s + gTilt * 0.5, hwCrest * 0.24, 0.030 * s, -0.25, 0, Math.PI * 2);
+        ctx.ellipse(bhx + sep * 0.72, bhy - 0.03 * s - gTilt * 0.5, hwCrest * 0.24, 0.030 * s, 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // Side-tie knots seated cleanly at exact outer hip-crest anchors
+    if (hasSideTies && s >= 19) {
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.8, 0.018 * s);
+      ctx.beginPath();
+      ctx.moveTo(lxCrest, yCrest + 0.005 * s);
+      ctx.lineTo(lxCrest - 0.045 * s, yCrest + 0.075 * s);
+      ctx.moveTo(rxCrest, yCrest + 0.005 * s);
+      ctx.lineTo(rxCrest + 0.045 * s, yCrest + 0.075 * s);
+      ctx.stroke();
+      ctx.fillStyle = swim.accent;
+      ctx.beginPath();
+      ctx.arc(lxCrest, yCrest + 0.005 * s, 0.020 * s, 0, Math.PI * 2);
+      ctx.arc(rxCrest, yCrest + 0.005 * s, 0.020 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return;
+  }
+
+  // FRONT VIEW: clip strictly to exact `traceCurvyTorso` boundary!
+  ctx.save();
+  traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, bbx, bby, gbx, gby, shTilt);
+  ctx.clip?.();
+
+  if (!isOnePiece) {
+    // Soft skin-compression indentation shadow right above the elastic waistband
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.9, 0.024 * s);
+      ctx.beginPath();
+      ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.012 * s);
+      ctx.quadraticCurveTo(cxCrest, yCrest + 0.088 * s, rxCrest + 0.04 * s, yCrest - 0.012 * s);
+      ctx.stroke();
+    }
+
+    // Sleek high-cut French-leg V bikini bottom locked 100% flush to exact hip-crest anchors!
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.moveTo(lxCrest - 0.04 * s, yCrest);
+    ctx.quadraticCurveTo(cxCrest, yCrest + 0.098 * s, rxCrest + 0.04 * s, yCrest);
+    ctx.quadraticCurveTo(rxCrest - hwCrest * 0.44 + rLegPull, hipY + 0.048 * s + gby * 0.45, cxBot, crotchY);
+    ctx.quadraticCurveTo(lxCrest + hwCrest * 0.44 + lLegPull, hipY + 0.048 * s + gby * 0.45, lxCrest - 0.04 * s, yCrest);
+    ctx.closePath();
+    ctx.fill();
+
+    // Accent contrast elastic waistband hugging exact hip curve
+    ctx.strokeStyle = swim.accent;
+    ctx.lineWidth = Math.max(0.95, 0.025 * s);
+    ctx.beginPath();
+    ctx.moveTo(lxCrest - 0.02 * s, yCrest + 0.008 * s);
+    ctx.quadraticCurveTo(cxCrest, yCrest + 0.105 * s, rxCrest + 0.02 * s, yCrest + 0.008 * s);
+    ctx.stroke();
+  }
+
+  // Elastic high-cut leg opening compression shadows & subtle diagonal hip-strap tension creases!
+  if (s >= 17) {
+    ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
+    ctx.lineWidth = Math.max(0.8, 0.019 * s);
+    ctx.beginPath();
+    ctx.moveTo(lxCrest, yCrest + 0.024 * s);
+    ctx.quadraticCurveTo(lxCrest + hwCrest * 0.44 + lLegPull, hipY + 0.052 * s + gby * 0.45, cxBot - 0.012 * s, crotchY);
+    ctx.moveTo(rxCrest, yCrest + 0.024 * s);
+    ctx.quadraticCurveTo(rxCrest - hwCrest * 0.44 + rLegPull, hipY + 0.052 * s + gby * 0.45, cxBot + 0.012 * s, crotchY);
+    ctx.stroke();
+
+    if (s >= 20) {
+      // Delicate radial tension pull creases fanning inward from both taut hip-crest anchor points!
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.18)';
+      ctx.lineWidth = Math.max(0.7, 0.014 * s);
+      ctx.beginPath();
+      ctx.moveTo(lxCrest + 0.015 * s, yCrest + 0.02 * s);
+      ctx.quadraticCurveTo(cxCrest - hwCrest * 0.42, yCrest + 0.095 * s, cxCrest - hwCrest * 0.16, yCrest + 0.125 * s);
+      ctx.moveTo(rxCrest - 0.015 * s, yCrest + 0.02 * s);
+      ctx.quadraticCurveTo(cxCrest + hwCrest * 0.42, yCrest + 0.095 * s, cxCrest + hwCrest * 0.16, yCrest + 0.125 * s);
+      ctx.stroke();
+
+      // Soft central taut fabric highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.13)';
+      ctx.beginPath();
+      ctx.ellipse(cxCrest, yCrest + 0.125 * s, hwCrest * 0.26, 0.026 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // Delicate side-tie bows/strings anchored cleanly at exact outer iliac hip-crest points!
+  if (hasSideTies && s >= 19) {
+    ctx.strokeStyle = swim.accent;
+    ctx.lineWidth = Math.max(0.85, 0.019 * s);
+    ctx.beginPath();
+    ctx.moveTo(lxCrest, yCrest + 0.005 * s);
+    ctx.lineTo(lxCrest - 0.055 * s, yCrest + 0.088 * s);
+    ctx.moveTo(rxCrest, yCrest + 0.005 * s);
+    ctx.lineTo(rxCrest + 0.055 * s, yCrest + 0.088 * s);
+    ctx.stroke();
+    ctx.fillStyle = swim.accent;
+    ctx.beginPath();
+    ctx.arc(lxCrest, yCrest + 0.005 * s, 0.021 * s, 0, Math.PI * 2);
+    ctx.arc(rxCrest, yCrest + 0.005 * s, 0.021 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Draw one articulated boardshorts leg sleeve strictly aligned along the 2-bone IK thigh vector
+ * (hx, hy) -> (kx, ky), with a curved tubular cuff hem, inner shadow, outer stripe & hip stride creases!
+ */
+function drawShortsLegSleeve(ctx, hx, hy, kx, ky, topHalfW, hemHalfW, lenFrac, fillCol, accentCol, sideStripeDir, s, isDarkRear = false) {
+  const dx = kx - hx;
+  const dy = ky - hy;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // Rightward normal (+x when pointing straight down)
+  const nx = uy;
+  const ny = -ux;
+
+  const startOff = -0.04 * s;
+  const endOff = Math.max(0.18 * s, len * lenFrac);
+  const sx0 = hx + ux * startOff;
+  const sy0 = hy + uy * startOff;
+  const ex = hx + ux * endOff;
+  const ey = hy + uy * endOff;
+
+  // Inner cuff opening shadow peeking slightly past the hem where bare thigh emerges
+  ctx.fillStyle = 'rgba(10, 18, 32, 0.30)';
+  ctx.beginPath();
+  ctx.moveTo(ex - nx * (hemHalfW * 0.88), ey - ny * (hemHalfW * 0.88));
+  ctx.quadraticCurveTo(ex + ux * 0.036 * s, ey + uy * 0.036 * s, ex + nx * (hemHalfW * 0.88), ey + ny * (hemHalfW * 0.88));
+  ctx.quadraticCurveTo(ex - ux * 0.015 * s, ey - uy * 0.015 * s, ex - nx * (hemHalfW * 0.88), ey - ny * (hemHalfW * 0.88));
+  ctx.closePath();
+  ctx.fill();
+
+  // Main pivoted shorts leg fabric polygon with natural curved hem
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.moveTo(sx0 - nx * topHalfW, sy0 - ny * topHalfW);
+  ctx.lineTo(sx0 + nx * topHalfW, sy0 + ny * topHalfW);
+  ctx.lineTo(ex + nx * hemHalfW, ey + ny * hemHalfW);
+  ctx.quadraticCurveTo(ex + ux * 0.022 * s, ey + uy * 0.022 * s, ex - nx * hemHalfW, ey - ny * hemHalfW);
+  ctx.closePath();
+  ctx.fill();
+
+  // Depth shading on rear/far leg in side view so scissoring legs read unmistakably in 3D!
+  if (isDarkRear) {
+    ctx.fillStyle = 'rgba(10, 18, 32, 0.24)';
+    ctx.fill();
+  }
+
+  // Athletic contrast side stripe running strictly along the pivoted seam (lateral center when sideStripeDir === 2)!
+  if (sideStripeDir !== 0 && !isDarkRear) {
+    const sw = Math.max(1.2, 0.032 * s);
+    ctx.strokeStyle = accentCol;
+    ctx.lineWidth = sw;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    if (sideStripeDir === 2) {
+      ctx.moveTo(sx0, sy0);
+      ctx.lineTo(ex, ey);
+    } else {
+      const edgeSign = sideStripeDir > 0 ? 1 : -1;
+      const tOut = topHalfW - sw * 0.55;
+      const hOut = hemHalfW - sw * 0.55;
+      ctx.moveTo(sx0 + nx * (tOut * edgeSign), sy0 + ny * (tOut * edgeSign));
+      ctx.lineTo(ex + nx * (hOut * edgeSign), ey + ny * (hOut * edgeSign));
+    }
+    ctx.stroke();
+  }
+
+  // Subtle diagonal hip-flex tension crease when thigh pivots away from vertical!
+  const swingAmt = Math.abs(ux);
+  if (s >= 18 && swingAmt > 0.08 && !isDarkRear) {
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+    ctx.lineWidth = Math.max(0.75, 0.016 * s);
+    const midOff = endOff * 0.42;
+    const mx = hx + ux * midOff;
+    const my = hy + uy * midOff;
+    ctx.beginPath();
+    ctx.moveTo(mx - nx * (topHalfW * 0.55), my - ny * (topHalfW * 0.55));
+    ctx.quadraticCurveTo(mx + ux * 0.025 * s, my + uy * 0.025 * s, mx + nx * (hemHalfW * 0.48), my + ny * (hemHalfW * 0.48));
+    ctx.stroke();
+  }
+
+  // Crisp stitched hem seam near cuff
+  if (s >= 18) {
+    ctx.strokeStyle = isDarkRear ? 'rgba(15, 23, 42, 0.30)' : 'rgba(15, 23, 42, 0.22)';
+    ctx.lineWidth = Math.max(0.75, 0.015 * s);
+    const hxOff = endOff - 0.022 * s;
+    const cmx = hx + ux * hxOff;
+    const cmy = hy + uy * hxOff;
+    ctx.beginPath();
+    ctx.moveTo(cmx - nx * (hemHalfW * 0.94), cmy - ny * (hemHalfW * 0.94));
+    ctx.quadraticCurveTo(cmx + ux * 0.018 * s, cmy + uy * 0.018 * s, cmx + nx * (hemHalfW * 0.94), cmy + ny * (hemHalfW * 0.94));
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draw articulated, body-fitted men's boardshorts & swim trunks (v295) across Front, Back, and Side!
+ * Pelvis yoke clips strictly to the exact male torso silhouette, while both boardshorts legs
+ * pivot & scissor dynamically along the actual 2-bone IK thigh axes `(lHip -> lKnee)` and `(rHip -> rKnee)`.
+ */
+function drawArticulatedMaleShorts(
+  ctx,
+  view,
+  chestX,
+  hipX,
+  shoulderY,
+  waistY,
+  hipY,
+  lHipX,
+  rHipX,
+  legHipY,
+  lKneeX,
+  lKneeY,
+  rKneeX,
+  rKneeY,
+  prof,
+  s,
+  shTilt,
+  swim
+) {
+  const isBriefs = swim.style === 'swim-briefs';
+  const topY = hipY - 0.115 * s;
+
+  if (view === 'side') {
+    if (isBriefs) {
+      ctx.save();
+      traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX);
+      ctx.clip?.();
+      ctx.fillStyle = swim.primary;
+      ctx.fillRect(hipX - prof.hip * 1.3 * s, topY, prof.hip * 2.6 * s + (prof.belly || 0) * s, 0.28 * s);
+      ctx.fillStyle = swim.accent;
+      ctx.fillRect(hipX - prof.hip * 1.3 * s, topY, prof.hip * 2.6 * s + (prof.belly || 0) * s, 0.036 * s);
+      ctx.restore();
+      return;
+    }
+
+    const thighHalfW = prof.thigh * 0.62 * s;
+    const hemHalfW = thighHalfW * 0.94;
+    // 1. Rear/far shorts leg pivoting cleanly with back thigh (shaded for 3D depth)
+    drawShortsLegSleeve(ctx, lHipX, legHipY, lKneeX, lKneeY, thighHalfW * 0.96, hemHalfW * 0.96, 0.56, swim.primary, swim.accent, 0, s, true);
+
+    // 2. Body-clipped pelvis yoke & fitted waistband hugging exact waist/belly/glute contour
+    ctx.save();
+    traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX);
+    ctx.clip?.();
+    ctx.fillStyle = swim.primary;
+    ctx.fillRect(hipX - prof.hip * 1.4 * s, topY, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.32 * s);
+    // Contrast waistband flush along exact torso width
+    ctx.fillStyle = swim.accent;
+    ctx.fillRect(hipX - prof.hip * 1.4 * s, topY, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.040 * s);
+    // Subtle skin compression line directly above waistband
+    if (s >= 18) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.20)';
+      ctx.fillRect(hipX - prof.hip * 1.4 * s, topY + 0.040 * s, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.012 * s);
+    }
+    ctx.restore();
+
+    // 3. Front/near shorts leg pivoting live along the forward thigh axis (with lateral center side stripe!)
+    drawShortsLegSleeve(ctx, rHipX, legHipY, rKneeX, rKneeY, thighHalfW, hemHalfW, 0.57, swim.primary, swim.accent, 2, s, false);
+    return;
+  }
+
+  // FRONT & BACK VIEWS
+  if (isBriefs) {
+    ctx.save();
+    traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt);
+    ctx.clip?.();
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.moveTo(hipX - prof.hip * 1.12 * s, topY);
+    ctx.quadraticCurveTo(hipX, topY + 0.045 * s, hipX + prof.hip * 1.12 * s, topY);
+    ctx.quadraticCurveTo(hipX + prof.hip * 0.44 * s, hipY + 0.095 * s, hipX, hipY + 0.18 * s);
+    ctx.quadraticCurveTo(hipX - prof.hip * 0.44 * s, hipY + 0.095 * s, hipX - prof.hip * 1.12 * s, topY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = swim.accent;
+    ctx.fillRect(hipX - prof.hip * 1.12 * s, topY, prof.hip * 2.24 * s, 0.036 * s);
+    ctx.restore();
+    return;
+  }
+
+  const thighHalfW = prof.thigh * 0.60 * s;
+  const hemHalfW = thighHalfW * 0.94;
+  // 1. Both boardshorts legs pivot independently with the left & right 2-bone IK thighs!
+  drawShortsLegSleeve(ctx, lHipX, legHipY, lKneeX, lKneeY, thighHalfW, hemHalfW, 0.56, swim.primary, swim.accent, -1, s, false);
+  drawShortsLegSleeve(ctx, rHipX, legHipY, rKneeX, rKneeY, thighHalfW, hemHalfW, 0.56, swim.primary, swim.accent, 1, s, false);
+
+  // 2. Body-clipped pelvis yoke bridging waistband cleanly into both pivoted legs (zero bare crotch gap!)
+  ctx.save();
+  traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt);
+  ctx.clip?.();
+  ctx.fillStyle = swim.primary;
+  ctx.fillRect(hipX - prof.hip * 1.25 * s, topY, prof.hip * 2.5 * s, 0.32 * s);
+  // Contrast fitted waistband flush with torso edges
+  ctx.fillStyle = swim.accent;
+  ctx.fillRect(hipX - prof.hip * 1.25 * s, topY, prof.hip * 2.5 * s, 0.038 * s);
+  if (s >= 18) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
+    ctx.fillRect(hipX - prof.hip * 1.25 * s, topY + 0.038 * s, prof.hip * 2.5 * s, 0.011 * s);
+  }
+  ctx.restore();
+
+  // 3. Tailored fly stitch + drawstrings (Front) OR back pocket welt + seat seam (Back)
+  if (s >= 18) {
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
+    ctx.lineWidth = Math.max(0.8, 0.016 * s);
+    ctx.beginPath();
+    ctx.moveTo(hipX, topY + 0.042 * s);
+    ctx.lineTo(hipX, hipY + 0.11 * s);
+    ctx.stroke();
+    if (view === 'front' && s >= 20) {
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = Math.max(0.9, 0.018 * s);
+      ctx.beginPath();
+      ctx.moveTo(hipX, topY + 0.02 * s);
+      ctx.lineTo(hipX - 0.032 * s, topY + 0.105 * s);
+      ctx.moveTo(hipX, topY + 0.02 * s);
+      ctx.lineTo(hipX + 0.032 * s, topY + 0.105 * s);
+      ctx.stroke();
+    } else if (view === 'back' && s >= 20) {
+      // Back right boardshort pocket welt with accent flap
+      ctx.fillStyle = swim.accent;
+      ctx.fillRect(hipX + prof.hip * 0.22 * s, hipY - 0.03 * s, prof.hip * 0.44 * s, 0.026 * s);
+    }
+  }
+}
+
 /**
  * Draw a sculpted filled anatomical leg polygon (v290):
  * Seamless hip-to-thigh flare -> slim knee -> shapely gastrocnemius calf curve -> slender ankle
@@ -1679,16 +2372,33 @@ export function drawFestiveStringLights(ctx, x0, y0, x1, y1, scale, timeSec, sag
 }
 
 /**
- * Draw a colorful striped beach umbrella planted at (x, groundY).
+ * Draw a hyper-real resort striped beach umbrella planted at (x, groundY) (v295).
  */
 export function drawBeachUmbrella(ctx, x, groundY, scale, seed = 0, tilt = 0.09) {
+  const umbKey = HYPER_REAL_UMBRELLA_KEYS[Math.abs(seed) % HYPER_REAL_UMBRELLA_KEYS.length];
+  const umbImg = getHyperRealSprite(umbKey);
+
+  ctx.save();
+  ctx.translate(x, groundY);
+  if (umbImg) {
+    // Ground contact shadow beneath pole
+    ctx.fillStyle = 'rgba(8, 18, 28, 0.30)';
+    ctx.beginPath();
+    ctx.ellipse(tilt * 0.45 * scale, 0.03 * scale, 0.72 * scale, 0.09 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(tilt);
+    const uh = 2.48 * scale;
+    const uw = uh * ((umbImg.naturalWidth || umbImg.width) / Math.max(1, umbImg.naturalHeight || umbImg.height));
+    ctx.drawImage(umbImg, -uw * 0.5, -uh + 0.08 * scale, uw, uh);
+    ctx.restore();
+    return;
+  }
+
   const pal = UMBRELLA_PALETTES[Math.abs(seed) % UMBRELLA_PALETTES.length];
   const poleH = 1.95 * scale;
   const canopyW = 1.15 * scale;
   const canopyH = 0.44 * scale;
 
-  ctx.save();
-  ctx.translate(x, groundY);
   ctx.rotate(tilt);
 
   ctx.strokeStyle = '#e2e8f0';
@@ -1726,17 +2436,39 @@ export function drawPartyGearProps(ctx, x, groundY, scale, timeSec, mode = 'part
   ctx.save();
   ctx.translate(x, groundY);
   if (mode === 'party') {
+    const partyImg = getHyperRealSprite('party-cooler-boombox');
     ctx.fillStyle = 'rgba(8, 18, 28, 0.34)';
     ctx.beginPath();
-    ctx.ellipse(0.12 * scale, 0.02 * scale, 0.68 * scale, 0.1 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0.06 * scale, 0.02 * scale, 0.72 * scale, 0.1 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    const beat = Math.abs(Math.sin(timeSec * 6.8));
+    if (partyImg) {
+      const pw = 1.48 * scale;
+      const ph = pw * ((partyImg.naturalHeight || partyImg.height) / Math.max(1, partyImg.naturalWidth || partyImg.width));
+      ctx.drawImage(partyImg, -pw * 0.48, -ph + 0.04 * scale, pw, ph);
+      // Subtle beat-synced speaker LED pulse over the boombox woofers
+      if (beat > 0.35) {
+        ctx.fillStyle = `rgba(56, 189, 248, ${(beat * 0.36).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(pw * 0.16, -ph * 0.42, (0.06 + beat * 0.025) * scale, 0, Math.PI * 2);
+        ctx.arc(pw * 0.37, -ph * 0.42, (0.06 + beat * 0.025) * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const notePhase = (timeSec * 0.8) % 1;
+      const ny = -ph - 0.12 * scale - notePhase * 0.98 * scale;
+      const nx = pw * 0.24 + Math.sin(timeSec * 3.5) * 0.18 * scale;
+      const na = Math.sin(notePhase * Math.PI) * 0.92;
+      drawMusicNote(ctx, nx, ny, Math.max(4.5, 0.26 * scale), '#fde047', na);
+      ctx.restore();
+      return;
+    }
 
     ctx.fillStyle = '#ef4444';
     ctx.fillRect(-0.52 * scale, -0.38 * scale, 0.56 * scale, 0.38 * scale);
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(-0.55 * scale, -0.45 * scale, 0.62 * scale, 0.1 * scale);
 
-    const beat = Math.abs(Math.sin(timeSec * 6.8));
     const bx = 0.14 * scale;
     const by = -0.34 * scale;
     const bw = 0.54 * scale;
@@ -1764,10 +2496,19 @@ export function drawPartyGearProps(ctx, x, groundY, scale, timeSec, mode = 'part
     const na = Math.sin(notePhase * Math.PI) * 0.92;
     drawMusicNote(ctx, nx, ny, Math.max(4.5, 0.26 * scale), '#fde047', na);
   } else {
+    const rackImg = getHyperRealSprite('scuba-gear-rack');
     ctx.fillStyle = 'rgba(8, 18, 28, 0.34)';
     ctx.beginPath();
-    ctx.ellipse(0, 0.02 * scale, 0.65 * scale, 0.09 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0.08 * scale, 0.02 * scale, 0.72 * scale, 0.09 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    if (rackImg) {
+      const rw = 1.54 * scale;
+      const rh = rw * ((rackImg.naturalHeight || rackImg.height) / Math.max(1, rackImg.naturalWidth || rackImg.width));
+      ctx.drawImage(rackImg, -rw * 0.46, -rh + 0.05 * scale, rw, rh);
+      ctx.restore();
+      return;
+    }
 
     const tankCols = ['#eab308', '#cbd5e1'];
     for (let i = 0; i < 2; i++) {
@@ -3156,14 +3897,12 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           ctx.arc(chestShiftX + prof.bust * 0.60 * s, shoulderY + (waistY - shoulderY) * 0.44, Math.max(1.0, 0.013 * s), 0, Math.PI * 2);
           ctx.fill();
         }
-        // Male swim bottoms (boardshorts or lifeguard briefs)
-        const shortsH = swim.style === 'swim-briefs' ? 0.22 * s : 0.34 * s;
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.roundRect(hipShiftX - prof.hip * 0.76 * s, hipY - 0.1 * s, prof.hip * 1.46 * s + (prof.belly || 0) * 0.4 * s, shortsH, 0.06 * s);
-        ctx.fill();
-        ctx.fillStyle = swim.accent;
-        ctx.fillRect(hipShiftX - prof.hip * 0.72 * s, hipY + (shortsH * 0.42) - 0.04 * s, prof.hip * 1.38 * s, 0.055 * s);
+        // Articulated leg-pivoting male boardshorts / trunks (v295 — follows 2-bone IK thigh pivots!)
+        drawArticulatedMaleShorts(
+          ctx, 'side', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
+          prof, s, shTilt, swim
+        );
       }
     } else if (isBackView) {
       if (isGearReady || isGearTank) {
@@ -3201,14 +3940,12 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           ctx.fillStyle = swim.accent;
           ctx.fillRect(chestShiftX - prof.bust * 0.85 * s, shoulderY + 0.16 * s, prof.bust * 1.7 * s, 0.06 * s);
         }
-        // Boardshorts / trunks back view
-        const shortsH = swim.style === 'swim-briefs' ? 0.22 * s : 0.34 * s;
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.roundRect(hipShiftX - prof.hip * 1.02 * s, hipY - 0.11 * s, prof.hip * 2.04 * s, shortsH, 0.06 * s);
-        ctx.fill();
-        ctx.fillStyle = swim.accent;
-        ctx.fillRect(hipShiftX - prof.hip * 1.0 * s, hipY + shortsH * 0.35 - 0.04 * s, prof.hip * 2.0 * s, 0.055 * s);
+        // Articulated leg-pivoting boardshorts / trunks back view (v295)
+        drawArticulatedMaleShorts(
+          ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
+          prof, s, shTilt, swim
+        );
       }
     } else {
       // MALE FRONT VIEW
@@ -3278,42 +4015,12 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           drawMaleChestDetails(ctx, chestShiftX, shoulderY, waistY, prof, s);
         }
 
-        // Tailored mid-thigh boardshorts (with contrast waistband & white drawstring ties!) OR sleek briefs
-        if (swim.style === 'swim-briefs') {
-          ctx.fillStyle = swim.primary;
-          ctx.beginPath();
-          ctx.moveTo(hipShiftX - prof.hip * 0.96 * s, hipY - 0.11 * s);
-          ctx.quadraticCurveTo(hipShiftX, hipY - 0.06 * s, hipShiftX + prof.hip * 0.96 * s, hipY - 0.11 * s);
-          ctx.quadraticCurveTo(hipShiftX + prof.hip * 0.42 * s, hipY + 0.10 * s, hipShiftX, hipY + 0.18 * s);
-          ctx.quadraticCurveTo(hipShiftX - prof.hip * 0.42 * s, hipY + 0.10 * s, hipShiftX - prof.hip * 0.96 * s, hipY - 0.11 * s);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = swim.accent;
-          ctx.fillRect(hipShiftX - prof.hip * 0.94 * s, hipY - 0.11 * s, prof.hip * 1.88 * s, 0.036 * s);
-        } else {
-          const bw = prof.hip * 0.98 * s;
-          ctx.fillStyle = swim.primary;
-          ctx.beginPath();
-          ctx.roundRect(hipShiftX - bw, hipY - 0.11 * s, bw * 2, 0.22 * s, 0.045 * s);
-          ctx.roundRect(hipShiftX - bw, hipY + 0.04 * s, bw * 0.90, 0.23 * s, 0.035 * s);
-          ctx.roundRect(hipShiftX + bw * 0.10, hipY + 0.04 * s, bw * 0.90, 0.23 * s, 0.035 * s);
-          ctx.fill();
-          ctx.fillStyle = swim.accent;
-          ctx.fillRect(hipShiftX - bw + 0.02 * s, hipY - 0.11 * s, bw * 2 - 0.04 * s, 0.038 * s);
-          ctx.fillRect(hipShiftX - bw, hipY + 0.08 * s, 0.038 * s, 0.15 * s);
-          ctx.fillRect(hipShiftX + bw - 0.038 * s, hipY + 0.08 * s, 0.038 * s, 0.15 * s);
-          if (s >= 22) {
-            // Crisp white drawstring laces at waistband center
-            ctx.strokeStyle = '#f8fafc';
-            ctx.lineWidth = Math.max(0.9, 0.018 * s);
-            ctx.beginPath();
-            ctx.moveTo(hipShiftX, hipY - 0.09 * s);
-            ctx.lineTo(hipShiftX - 0.032 * s, hipY - 0.01 * s);
-            ctx.moveTo(hipShiftX, hipY - 0.09 * s);
-            ctx.lineTo(hipShiftX + 0.032 * s, hipY - 0.01 * s);
-            ctx.stroke();
-          }
-        }
+        // Articulated leg-pivoting mid-thigh boardshorts & swim briefs (v295 — follows both thigh pivots!)
+        drawArticulatedMaleShorts(
+          ctx, 'front', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
+          prof, s, shTilt, swim
+        );
       }
     }
   } else if (isSideView) {
@@ -3348,55 +4055,31 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
       traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
       ctx.fill();
       if (!isOnePiece) {
-        // High-cut French-leg side bikini bottom sweeping gracefully up over the hip crest!
+        // Body-locked high-cut French-leg side bikini bottom with hip-crest elastic tension & glute wrap (v295)
         drawSideBouncingGlutes(ctx, hipShiftX, hipY + 0.005 * s, prof, s, gbx, gby, skin, skinShade);
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.moveTo(hipShiftX - prof.hip * 0.80 * s + gbx * 0.65, hipY - 0.11 * s + gby * 0.45);
-        ctx.quadraticCurveTo(hipShiftX + gbx * 0.2, hipY - 0.06 * s + gby * 0.35, hipShiftX + prof.hip * 0.52 * s, hipY - 0.10 * s);
-        ctx.quadraticCurveTo(hipShiftX + prof.hip * 0.36 * s, hipY + 0.09 * s, hipShiftX - prof.hip * 0.08 * s + gbx * 0.3, hipY + 0.16 * s + gby * 0.55);
-        ctx.quadraticCurveTo(hipShiftX - prof.hip * 0.72 * s + gbx * 0.65, hipY + 0.11 * s + gby * 0.65, hipShiftX - prof.hip * 0.80 * s + gbx * 0.65, hipY - 0.11 * s + gby * 0.45);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = swim.accent;
-        ctx.lineWidth = Math.max(0.95, 0.025 * s);
-        ctx.beginPath();
-        ctx.moveTo(hipShiftX - prof.hip * 0.74 * s + gbx * 0.6, hipY - 0.10 * s + gby * 0.45);
-        ctx.quadraticCurveTo(hipShiftX, hipY - 0.06 * s + gby * 0.35, hipShiftX + prof.hip * 0.50 * s, hipY - 0.095 * s);
-        ctx.stroke();
-
+        drawFittedFemaleBottoms(
+          ctx, 'side', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, bbx, bby, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, false
+        );
         drawSideBouncingBust(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, swim.primary, swim.accent, skin, topStyle, bustScale, false);
       } else {
-        // Side-profile designer high-cut monokini one-piece following EXACT traceSideCurvyTorso ribcage cubic Beziers!
-        const fhx = hipShiftX + gbx * 0.52;
-        const fhy = hipY + gby * 0.48;
+        // Side-profile designer high-cut monokini one-piece clipped strictly to exact side torso + glutes!
         const midX = (chestShiftX + hipShiftX) * 0.5;
-        const frontChest = prof.bust * 0.68 * s;
-        const backSh = prof.sh * 0.52 * s;
         const frontWaist = prof.waist * 0.62 * s;
         const backWaist = prof.waist * 0.52 * s;
-        const buY = shoulderY + (waistY - shoulderY) * 0.44;
+        ctx.save();
+        traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+        ctx.clip?.();
         ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.moveTo(chestShiftX - backSh + 0.006 * s, shoulderY + 0.035 * s);
-        ctx.lineTo(chestShiftX + frontChest * 0.72, shoulderY + 0.035 * s);
-        ctx.bezierCurveTo(
-          chestShiftX + frontChest * 1.04, buY - 0.02 * s,
-          midX + frontWaist * 1.02, waistY - 0.05 * s,
-          midX + frontWaist, waistY
-        );
-        ctx.quadraticCurveTo(fhx + prof.hip * 0.56 * s, waistY + (fhy - waistY) * 0.45, fhx + prof.hip * 0.50 * s, fhy - 0.10 * s);
-        ctx.quadraticCurveTo(fhx + prof.hip * 0.12 * s, fhy - 0.04 * s, fhx - prof.hip * 0.04 * s, fhy + 0.15 * s);
-        ctx.quadraticCurveTo(fhx - prof.hip * 0.70 * s, fhy + 0.10 * s, fhx - prof.hip * 0.76 * s, fhy - 0.10 * s);
-        ctx.quadraticCurveTo(fhx - prof.hip * 0.72 * s, waistY + (fhy - waistY) * 0.45, midX - backWaist, waistY);
-        ctx.bezierCurveTo(
-          midX - backWaist * 0.96, waistY - 0.05 * s,
-          chestShiftX - backSh * 1.04, buY - 0.02 * s,
-          chestShiftX - backSh + 0.006 * s, shoulderY + 0.035 * s
-        );
-        ctx.closePath();
-        ctx.fill();
+        ctx.fillRect(hipShiftX - prof.hip * 1.6 * s, shoulderY + 0.03 * s, prof.hip * 3.2 * s, (hipY - shoulderY) + 0.34 * s);
+        ctx.restore();
         drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, swim.primary, null, true);
+        drawFittedFemaleBottoms(
+          ctx, 'side', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, bbx, bby, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, true
+        );
         drawSideBouncingBust(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, swim.primary, swim.accent, skin, topStyle, bustScale, false);
         ctx.strokeStyle = swim.accent;
         ctx.lineWidth = Math.max(1.2, 0.040 * s);
@@ -3486,48 +4169,30 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           ctx.fill();
         }
         drawBouncingGlutes(ctx, hipShiftX, hipY + 0.015 * s, prof, s, gbx, gby, gTilt, skin, skinShade, false);
-        const bhx = hipShiftX + gbx * 0.80;
-        const bhy = hipY + gby * 0.80;
-        // Glove-tight cheeky Brazilian scrunch-cut V-bottom locked cleanly onto the bouncing glutes!
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.moveTo(bhx - prof.hip * 0.84 * s, bhy - 0.125 * s);
-        ctx.quadraticCurveTo(bhx, bhy - 0.01 * s, bhx + prof.hip * 0.84 * s, bhy - 0.125 * s);
-        ctx.quadraticCurveTo(bhx + prof.hip * 0.30 * s, bhy + 0.03 * s, bhx, bhy + 0.14 * s);
-        ctx.quadraticCurveTo(bhx - prof.hip * 0.30 * s, bhy + 0.03 * s, bhx - prof.hip * 0.84 * s, bhy - 0.125 * s);
-        ctx.closePath();
-        ctx.fill();
-        // Subtle center scrunch-seam contour following the gluteal cleft!
-        if (s >= 16) {
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
-          ctx.lineWidth = Math.max(0.8, 0.019 * s);
-          ctx.beginPath();
-          ctx.moveTo(bhx, bhy - 0.04 * s);
-          ctx.lineTo(bhx, bhy + 0.12 * s);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = swim.accent;
-        ctx.lineWidth = Math.max(0.95, 0.025 * s);
-        ctx.beginPath();
-        ctx.moveTo(bhx - prof.hip * 0.82 * s, bhy - 0.115 * s);
-        ctx.quadraticCurveTo(bhx, bhy, bhx + prof.hip * 0.82 * s, bhy - 0.115 * s);
-        ctx.stroke();
+        drawFittedFemaleBottoms(
+          ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, 0, 0, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, false
+        );
       } else {
-        // Tight scooped-back cheeky high-cut monokini one-piece locked cleanly onto the bouncing glutes!
+        // Tight scooped-back cheeky high-cut monokini one-piece clipped strictly onto torso & glutes (v295)!
         const bhx = hipShiftX + gbx * 0.80;
         const bhy = hipY + gby * 0.80;
         const midX = (chestShiftX + hipShiftX) * 0.5;
         const waW = prof.waist * 0.94 * s;
         // Exposed rounded lower butt cheeks beneath the cheeky high-cut back!
         drawBouncingGlutes(ctx, hipShiftX, hipY + 0.015 * s, prof, s, gbx, gby, gTilt, skin, skinShade, false);
+        ctx.save();
+        traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby, shTilt);
+        ctx.clip?.();
+        const eCrest = evalFrontHipEdgeAtT(0.44, chestShiftX, hipShiftX, waistY, hipY, prof, s, gbx, gby);
         ctx.fillStyle = swim.primary;
         ctx.beginPath();
-        ctx.moveTo(chestShiftX - prof.sh * 0.88 * s, shoulderY + 0.06 * s - shTilt);
-        ctx.lineTo(chestShiftX + prof.sh * 0.88 * s, shoulderY + 0.06 * s + shTilt);
-        ctx.quadraticCurveTo(midX + waW * 1.02, waistY, bhx + prof.hip * 0.86 * s, bhy - 0.11 * s);
-        ctx.quadraticCurveTo(bhx + prof.hip * 0.34 * s, bhy + 0.05 * s, bhx, bhy + 0.15 * s);
-        ctx.quadraticCurveTo(bhx - prof.hip * 0.34 * s, bhy + 0.05 * s, bhx - prof.hip * 0.86 * s, bhy - 0.11 * s);
-        ctx.quadraticCurveTo(midX - waW * 1.02, waistY, chestShiftX - prof.sh * 0.88 * s, shoulderY + 0.06 * s - shTilt);
+        ctx.moveTo(chestShiftX - prof.sh * 1.05 * s, shoulderY + 0.055 * s - shTilt);
+        ctx.lineTo(chestShiftX + prof.sh * 1.05 * s, shoulderY + 0.055 * s + shTilt);
+        ctx.lineTo(eCrest.rightX + 0.06 * s, eCrest.y);
+        ctx.quadraticCurveTo(eCrest.rightX - eCrest.halfW * 0.42, bhy + 0.036 * s - gTilt * 0.4, bhx, hipY + 0.155 * s + gby * 0.6);
+        ctx.quadraticCurveTo(eCrest.leftX + eCrest.halfW * 0.42, bhy + 0.036 * s + gTilt * 0.4, eCrest.leftX - 0.06 * s, eCrest.y);
         ctx.closePath();
         ctx.fill();
         // Low-back scoop skin cutout
@@ -3535,15 +4200,12 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.beginPath();
         ctx.ellipse(chestShiftX, shoulderY + 0.17 * s, prof.bust * 0.48 * s, 0.15 * s, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Tight-fabric center gluteal cleft & upper-cheek sheen so butt definition pops clearly!
-        if (s >= 16) {
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.28)';
-          ctx.lineWidth = Math.max(0.85, 0.02 * s);
-          ctx.beginPath();
-          ctx.moveTo(bhx, bhy - 0.05 * s);
-          ctx.lineTo(bhx, bhy + 0.13 * s);
-          ctx.stroke();
-        }
+        ctx.restore();
+        drawFittedFemaleBottoms(
+          ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, 0, 0, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, true
+        );
         ctx.strokeStyle = swim.accent;
         ctx.lineWidth = Math.max(1.2, 0.042 * s);
         ctx.beginPath();
@@ -3592,85 +4254,37 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
 
       if (!isOnePiece) {
         drawFemaleTorsoLandmarks(ctx, chestShiftX, hipShiftX, shoulderY, waistY, hipY, prof, s, skinShade, true);
-        const fhx = hipShiftX + gbx * 0.58;
-        const fhy = hipY + gby * 0.52;
-        const hasSideTies = topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross';
-        // Sleek high-cut French-leg V bikini bottom rising gracefully up over the iliac hip crests!
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.moveTo(fhx - prof.hip * 0.90 * s, fhy - 0.125 * s);
-        ctx.quadraticCurveTo(fhx, fhy - 0.015 * s, fhx + prof.hip * 0.90 * s, fhy - 0.125 * s);
-        ctx.quadraticCurveTo(fhx + prof.hip * 0.34 * s, fhy + 0.06 * s, fhx, fhy + 0.165 * s);
-        ctx.quadraticCurveTo(fhx - prof.hip * 0.34 * s, fhy + 0.06 * s, fhx - prof.hip * 0.90 * s, fhy - 0.125 * s);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = swim.accent;
-        ctx.lineWidth = Math.max(0.95, 0.026 * s);
-        ctx.beginPath();
-        ctx.moveTo(fhx - prof.hip * 0.88 * s, fhy - 0.115 * s);
-        ctx.quadraticCurveTo(fhx, fhy - 0.005 * s, fhx + prof.hip * 0.88 * s, fhy - 0.115 * s);
-        ctx.stroke();
-        if (hasSideTies && s >= 20) {
-          // Delicate fluttering bikini side-tie knots & slim string tails!
-          ctx.strokeStyle = swim.accent;
-          ctx.lineWidth = Math.max(0.85, 0.02 * s);
-          ctx.beginPath();
-          ctx.moveTo(fhx - prof.hip * 0.90 * s, fhy - 0.12 * s);
-          ctx.lineTo(fhx - prof.hip * 1.04 * s, fhy - 0.02 * s);
-          ctx.moveTo(fhx + prof.hip * 0.90 * s, fhy - 0.12 * s);
-          ctx.lineTo(fhx + prof.hip * 1.04 * s, fhy - 0.02 * s);
-          ctx.stroke();
-          ctx.fillStyle = swim.accent;
-          ctx.beginPath();
-          ctx.arc(fhx - prof.hip * 0.90 * s, fhy - 0.12 * s, 0.022 * s, 0, Math.PI * 2);
-          ctx.arc(fhx + prof.hip * 0.90 * s, fhy - 0.12 * s, 0.022 * s, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Tight-fit front hip/thigh-crease definition along the high-cut V leg arches!
-        if (s >= 20) {
-          ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-          ctx.lineWidth = Math.max(0.8, 0.018 * s);
-          ctx.beginPath();
-          ctx.moveTo(fhx - prof.hip * 0.86 * s, fhy - 0.09 * s);
-          ctx.quadraticCurveTo(fhx - prof.hip * 0.36 * s, fhy + 0.07 * s, fhx - 0.02 * s, fhy + 0.16 * s);
-          ctx.moveTo(fhx + prof.hip * 0.86 * s, fhy - 0.09 * s);
-          ctx.quadraticCurveTo(fhx + prof.hip * 0.36 * s, fhy + 0.07 * s, fhx + 0.02 * s, fhy + 0.16 * s);
-          ctx.stroke();
-        }
-
+        drawFittedFemaleBottoms(
+          ctx, 'front', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, bbx, bby, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, false
+        );
         drawBouncingBust(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent, skin, topStyle, bustScale, false, shTilt);
       } else {
-        // Designer high-cut French-leg deep-V plunge monokini one-piece traced cleanly locked to torso ribcage!
+        // Designer high-cut French-leg deep-V plunge monokini one-piece clipped strictly to exact torso!
         const fhx = hipShiftX + gbx * 0.58;
         const fhy = hipY + gby * 0.52;
         const midX = (chestShiftX + hipShiftX) * 0.5;
-        const ribCx = chestShiftX + (hipShiftX - chestShiftX) * 0.18 + clamp(bbx * 0.22, -0.020 * s, 0.020 * s);
-        const shW = prof.sh * 0.88 * s;
         const waW = prof.waist * 0.94 * s;
+        ctx.save();
+        traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby, shTilt);
+        ctx.clip?.();
+        const eCrest = evalFrontHipEdgeAtT(0.44, chestShiftX, hipShiftX, waistY, hipY, prof, s, gbx, gby);
         ctx.fillStyle = swim.primary;
         ctx.beginPath();
-        ctx.moveTo(chestShiftX - shW, shoulderY + 0.05 * s - shTilt);
-        ctx.quadraticCurveTo(chestShiftX, shoulderY + 0.02 * s, chestShiftX + shW, shoulderY + 0.05 * s + shTilt);
-        ctx.bezierCurveTo(ribCx + prof.bust * 1.02 * s, shoulderY + (waistY - shoulderY) * 0.45, midX + waW * 1.02, waistY - 0.04 * s, midX + waW, waistY);
-        // High-cut French-leg iliac hip flare flush with traceCurvyTorso outer hip contour (zero skin slivers!)
-        ctx.quadraticCurveTo(fhx + prof.hip * 0.88 * s, waistY + (fhy - waistY) * 0.52, fhx + prof.hip * 0.93 * s, fhy - 0.115 * s);
-        ctx.quadraticCurveTo(fhx + prof.hip * 0.30 * s, fhy + 0.05 * s, fhx, fhy + 0.165 * s);
-        ctx.quadraticCurveTo(fhx - prof.hip * 0.30 * s, fhy + 0.05 * s, fhx - prof.hip * 0.93 * s, fhy - 0.115 * s);
-        ctx.quadraticCurveTo(fhx - prof.hip * 0.88 * s, waistY + (fhy - waistY) * 0.52, midX - waW, waistY);
-        ctx.bezierCurveTo(midX - waW * 1.02, waistY - 0.04 * s, ribCx - prof.bust * 1.02 * s, shoulderY + (waistY - shoulderY) * 0.45, chestShiftX - shW, shoulderY + 0.05 * s - shTilt);
+        ctx.moveTo(chestShiftX - prof.sh * 1.05 * s, shoulderY + 0.045 * s - shTilt);
+        ctx.lineTo(chestShiftX + prof.sh * 1.05 * s, shoulderY + 0.045 * s + shTilt);
+        ctx.lineTo(eCrest.rightX + 0.06 * s, eCrest.y);
+        ctx.quadraticCurveTo(eCrest.rightX - eCrest.halfW * 0.44, fhy + 0.048 * s, fhx, hipY + 0.155 * s + gby * 0.55);
+        ctx.quadraticCurveTo(eCrest.leftX + eCrest.halfW * 0.44, fhy + 0.048 * s, eCrest.leftX - 0.06 * s, eCrest.y);
         ctx.closePath();
         ctx.fill();
-        if (s >= 20) {
-          ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-          ctx.lineWidth = Math.max(0.8, 0.018 * s);
-          ctx.beginPath();
-          ctx.moveTo(fhx - prof.hip * 0.91 * s, fhy - 0.105 * s);
-          ctx.quadraticCurveTo(fhx - prof.hip * 0.32 * s, fhy + 0.06 * s, fhx - 0.02 * s, fhy + 0.165 * s);
-          ctx.moveTo(fhx + prof.hip * 0.91 * s, fhy - 0.105 * s);
-          ctx.quadraticCurveTo(fhx + prof.hip * 0.32 * s, fhy + 0.06 * s, fhx + 0.02 * s, fhy + 0.165 * s);
-          ctx.stroke();
-        }
+        ctx.restore();
+        drawFittedFemaleBottoms(
+          ctx, 'front', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
+          lHipX, rHipX, lKneeX, rKneeX, prof, s, bbx, bby, gbx, gby, gTilt, shTilt,
+          swim, skin, topStyle, true
+        );
         drawFemaleTorsoLandmarks(ctx, chestShiftX, hipShiftX, shoulderY, waistY, hipY, prof, s, skinShade, false);
         // Curved sleek waist trim sitting cleanly BELOW the deep-V plunge (zero weird overlap!)
         ctx.strokeStyle = swim.accent;
@@ -3793,14 +4407,21 @@ function drawCompanionPartyRaft(ctx, wx, toScreenX, toScreenY, scale, timeSec, s
     facing: 1,
   });
 
-  ctx.fillStyle = seed % 2 === 0 ? '#facc15' : '#38bdf8';
-  ctx.beginPath();
-  ctx.roundRect(-2.3 * scale, -0.44 * scale, 4.6 * scale, 0.56 * scale, 0.28 * scale);
-  ctx.fill();
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(-1.95 * scale, -0.22 * scale, 3.9 * scale, 0.09 * scale);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.fillRect(-1.8 * scale, -0.4 * scale, 3.6 * scale, 0.08 * scale);
+  const raftImg = getHyperRealSprite('party-raft');
+  if (raftImg) {
+    const rw = 5.0 * scale;
+    const rh = rw * ((raftImg.naturalHeight || raftImg.height) / Math.max(1, raftImg.naturalWidth || raftImg.width));
+    ctx.drawImage(raftImg, -rw * 0.5, deckY - rh * 0.42, rw, rh);
+  } else {
+    ctx.fillStyle = seed % 2 === 0 ? '#facc15' : '#38bdf8';
+    ctx.beginPath();
+    ctx.roundRect(-2.3 * scale, -0.44 * scale, 4.6 * scale, 0.56 * scale, 0.28 * scale);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-1.95 * scale, -0.22 * scale, 3.9 * scale, 0.09 * scale);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.fillRect(-1.8 * scale, -0.4 * scale, 3.6 * scale, 0.08 * scale);
+  }
   ctx.restore();
 }
 
