@@ -3323,27 +3323,31 @@ export function drawPartyGearProps(ctx, x, groundY, scale, timeSec, mode = 'part
 /**
  * Draw bare anatomical neck & trapezius base BEFORE torso/swimwear so halter/wrap/collar straps
  * wrap cleanly OVER the neck skin (while head & hair draw AFTER swimwear so hair drapes over straps!).
+ * Anchors the neck base strictly to `baseX` (the torso spine centerline) and curves smoothly up to
+ * `hx` (the tilting head center) with generous top/bottom overlap so the head NEVER disconnects on any dance (v306)!
  */
-function drawTopsideNeck(ctx, hx, headY, shoulderY, s, isMale, isBackView, skin, skinShade, isGearReady) {
+function drawTopsideNeck(ctx, hx, headY, shoulderY, s, isMale, isBackView, skin, skinShade, isGearReady, baseX = hx) {
   if (isGearReady) return;
   const hRy = isMale ? 0.158 * s : 0.150 * s;
-  const neckTopW = isMale ? 0.098 * s : 0.072 * s;
-  const neckBaseW = isMale ? 0.145 * s : 0.108 * s;
-  const ny0 = headY + hRy * 0.65;
-  const ny1 = Math.max(ny0 + 0.05 * s, shoulderY + 0.03 * s);
+  const neckTopW = isMale ? 0.102 * s : 0.076 * s;
+  const neckBaseW = isMale ? 0.152 * s : 0.118 * s;
+  const ny0 = headY + hRy * 0.55;
+  const ny1 = Math.max(ny0 + 0.06 * s, shoulderY + 0.058 * s);
+  const midX = (hx + baseX) * 0.5;
+  const midY = (ny0 + ny1) * 0.54;
   ctx.fillStyle = skin;
   ctx.beginPath();
   ctx.moveTo(hx - neckTopW * 0.5, ny0);
   ctx.lineTo(hx + neckTopW * 0.5, ny0);
-  ctx.quadraticCurveTo(hx + neckTopW * 0.55, (ny0 + ny1) * 0.55, hx + neckBaseW * 0.62, ny1);
-  ctx.lineTo(hx - neckBaseW * 0.62, ny1);
-  ctx.quadraticCurveTo(hx - neckTopW * 0.55, (ny0 + ny1) * 0.55, hx - neckTopW * 0.5, ny0);
+  ctx.quadraticCurveTo(midX + neckTopW * 0.56, midY, baseX + neckBaseW * 0.68, ny1);
+  ctx.lineTo(baseX - neckBaseW * 0.68, ny1);
+  ctx.quadraticCurveTo(midX - neckTopW * 0.56, midY, hx - neckTopW * 0.5, ny0);
   ctx.closePath();
   ctx.fill();
   if (!isBackView && s >= 20) {
     ctx.fillStyle = skinShade;
     ctx.beginPath();
-    ctx.ellipse(hx, headY + hRy * 0.96, neckTopW * 0.48, 0.024 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(hx, headY + hRy * 0.94, neckTopW * 0.46, 0.022 * s, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -4917,11 +4921,14 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.fill();
   }
 
-  // 7.5-head editorial beach proportions (long sculpted legs, defined high waist, graceful neck)
+  // 7.5-head editorial beach proportions (long sculpted legs, defined high waist, spine-locked head & neck!)
+  // Clamp headTiltX & lock headY directly to shoulderY so the head NEVER drifts or disconnects on any dance (v306)!
+  headTiltX = clamp(headTiltX, -0.042 * s, 0.042 * s);
+  headNodY = clamp(headNodY, -0.014 * s, 0.028 * s);
   const hipY = -0.82 * s + bounceY + squatDrop;
   const waistY = -1.10 * s + bounceY + squatDrop * 0.88;
   const shoulderY = -1.41 * s + bounceY + squatDrop * 0.78;
-  const headY = -1.61 * s + bounceY + squatDrop * 0.72 + headNodY;
+  const headY = shoulderY - 0.195 * s + headNodY;
 
   // Real-time independent damped spring-damper physics for female bust & co-ed glutes (v300 subtly refined!)
   const hypePulse = hypeEnergy > 0.04 ? Math.sin(timeSec * 12.0 + ph) * (1.85 * hypeEnergy) : 0;
@@ -5030,9 +5037,9 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.fillRect(tankX + tankW * 0.32, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.11 * s);
   }
 
-  // 4b-0. Draw bare neck skin BEFORE torso & swimwear so all halter/wrap/collar straps wrap cleanly OVER neck skin!
+  // 4b-0. Draw bare neck skin anchored to spine centerline `chestShiftX` -> head `neckX` BEFORE torso & swimwear!
   const neckX = chestShiftX + headTiltX;
-  drawTopsideNeck(ctx, neckX, headY, shoulderY, s, isMale, isBackView, skin, skinShade, isGearReady);
+  drawTopsideNeck(ctx, neckX, headY, shoulderY, s, isMale, isBackView, skin, skinShade, isGearReady, chestShiftX);
 
   // 4b. Anatomically Accurate Co-Ed Torso & Swimwear/Gear by View ('front' | 'back' | 'side')
   if (isMale) {

@@ -14817,3 +14817,26 @@ test('v304 thinner front bust edge contours & visible back-view side-boob + top 
   assert.ok(strokeOps >= 90, `Expected refined front & back bust/top contour strokes, got ${strokeOps}`);
   assert.ok(ops > 350, `Expected rich v304 front & back contour render ops, got ${ops}`);
 });
+
+test('v306 spine-anchored neck & head lock across all 18 dances in Front, Side, and Back', async () => {
+  const { POPULAR_DANCE_MOVES, drawTopsidePerson } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  let ops = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+  for (const mv of POPULAR_DANCE_MOVES) {
+    for (const vw of ['front', 'side', 'back']) {
+      drawTopsidePerson(mockCtx, 200, 340, 140, 0.35, {
+        id: 99700 + mv.length + vw.length,
+        gender: 'female', bodyType: 'hourglass', role: 'party-dance', danceMove: mv,
+        view: vw, topStyle: 'triangle-halter', hairStyle: 'top-knot', seed: 3, facing: 1,
+      });
+    }
+  }
+  assert.ok(ops > 1000, `Expected all 18 dances x 3 views to render cleanly with locked neck, got ${ops}`);
+});
