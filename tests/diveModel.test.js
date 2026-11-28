@@ -13992,9 +13992,10 @@ test('v280 Codex Test-in-Water + Saved Mixes, Live Home Biome Preview, Calm Imme
   assert.ok(rendererJs.includes('this._viewCenterYFrac') && rendererJs.includes('Batched sunlit surface caustic shimmer ribbon'), 'renderer.js must smooth viewCenterY transitions and batch surface shimmer');
 });
 
-test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting-Up Divers across All Biomes, Wrecks & Menu Backdrop', async () => {
+test('v281-v282 Living Topside & Background Crowds: Curvy Body Types, 8 Popular Dance Moves & Suiting-Up Divers across All Biomes, Wrecks & Menu Backdrop', async () => {
   const fs = await import('node:fs');
   const {
+    POPULAR_DANCE_MOVES,
     drawTopsidePerson,
     drawShipwreckTopsideCrowd,
     drawAllSiteTopsidePeople,
@@ -14009,9 +14010,11 @@ test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting
   assert.ok(topsideAtmo.includes('drawAllSiteTopsidePeople') && topsideAtmo.includes('drawDefaultBackdropTopsidePeople'), 'topsideAtmosphereRenderer must wire site & default backdrop crowds');
   assert.ok(wreckRend.includes('drawShipwreckTopsideCrowd'), 'wreckAndInteractivesRenderer must wire boat & party-raft crowds');
   assert.ok(swJs.includes('topsidePeopleRenderer.js') && indexHtml.includes('topsidePeopleRenderer.js'), 'PWA shell & importmap must include topsidePeopleRenderer.js');
+  assert.ok(Array.isArray(POPULAR_DANCE_MOVES) && POPULAR_DANCE_MOVES.length >= 8, 'Must include at least 8 popular dance moves');
 
-  // Smoke-render all 8 roles, shipwreck crowd, cenote crowd, polar crowd, and default backdrop on a mock 2D canvas context
+  // Smoke-render all 8 roles, all 8 popular dance moves, shipwreck crowd, cenote crowd, polar crowd, and default backdrop
   let drawOps = 0;
+  let bezierOps = 0;
   const noop = () => { drawOps++; };
   const mockCtx = {
     canvas: { width: 1280, height: 720 },
@@ -14025,6 +14028,7 @@ test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting
     moveTo: noop,
     lineTo: noop,
     quadraticCurveTo: noop,
+    bezierCurveTo: () => { drawOps++; bezierOps++; },
     arc: noop,
     ellipse: noop,
     rect: noop,
@@ -14044,6 +14048,9 @@ test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting
   for (const role of ['party-dance', 'party-toast', 'party-lounge', 'party-float', 'gear-zip', 'gear-fins', 'gear-tank', 'gear-ready']) {
     drawTopsidePerson(mockCtx, 320, 180, 24, 1.5, { role, seed: 2, facing: 1 });
   }
+  for (let i = 0; i < POPULAR_DANCE_MOVES.length; i++) {
+    drawTopsidePerson(mockCtx, 360, 180, 24, 2.3, { role: 'party-dance', danceMove: POPULAR_DANCE_MOVES[i], seed: i, facing: i % 2 ? -1 : 1 });
+  }
   drawShipwreckTopsideCrowd(mockCtx, 0, -25, 25, (x) => 640 + x * 24, (y) => 240 + y * 24, 24, 2.1, { bw: 290, bh: 130 });
   drawDefaultBackdropTopsidePeople(mockCtx, 1280, 720, 1.8);
 
@@ -14057,5 +14064,5 @@ test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting
   });
   drawAllSiteTopsidePeople(mockRenderer(cenote), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
   drawAllSiteTopsidePeople(mockRenderer(polar), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
-  assert.ok(drawOps > 400, `Expected rich canvas draw calls for topside crowds, got ${drawOps}`);
+  assert.ok(drawOps > 500 && bezierOps > 80, `Expected curvy bezier silhouettes & rich draw calls, got drawOps=${drawOps}, bezierOps=${bezierOps}`);
 });
