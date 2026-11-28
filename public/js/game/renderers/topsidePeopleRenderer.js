@@ -260,16 +260,16 @@ function traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX
     midWaistX + waW, waistY
   );
   ctx.bezierCurveTo(
-    hipCx + hiW * 1.18, waistY + (hipY - waistY) * 0.42 + gby * 0.35,
-    hipCx + hiW * 1.12, hipY + 0.02 * s + gby * 0.75,
-    hipCx + hiW * 0.68, lowHipY
+    hipCx + hiW * 1.06, waistY + (hipY - waistY) * 0.44 + gby * 0.35,
+    hipCx + hiW * 1.04, hipY + 0.02 * s + gby * 0.72,
+    hipCx + hiW * 0.66, lowHipY
   );
   // Soft hip base curve
-  ctx.quadraticCurveTo(hipCx, lowHipY + 0.075 * s, hipCx - hiW * 0.68, lowHipY);
+  ctx.quadraticCurveTo(hipCx, lowHipY + 0.065 * s, hipCx - hiW * 0.66, lowHipY);
   // Left rounded hip -> cinched waist -> left bust -> shoulder
   ctx.bezierCurveTo(
-    hipCx - hiW * 1.12, hipY + 0.02 * s + gby * 0.75,
-    hipCx - hiW * 1.18, waistY + (hipY - waistY) * 0.42 + gby * 0.35,
+    hipCx - hiW * 1.04, hipY + 0.02 * s + gby * 0.72,
+    hipCx - hiW * 1.06, waistY + (hipY - waistY) * 0.44 + gby * 0.35,
     midWaistX - waW, waistY
   );
   ctx.bezierCurveTo(
@@ -281,29 +281,61 @@ function traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX
 }
 
 /**
- * Draw sculpted, independently bouncing bust curves with volume-conserving squash & stretch
- * and slight alternating left/right roll lag (`±bTilt`).
+ * Draw sculpted, fuller, independently bouncing twin bust cups with clear center separation,
+ * volume-conserving squash & stretch, underbust contour, and alternating left/right roll lag (`±bTilt`).
  */
 function drawBouncingBust(ctx, chestX, shoulderY, prof, s, bbx, bby, bTilt, fillCol, rimCol = null) {
   const stretch = clamp((bby / Math.max(1, s)) * 3.1, -0.24, 0.28);
-  const rx = prof.bust * 0.56 * (1 - stretch * 0.38) * s;
-  const ry = 0.098 * (1 + stretch) * s;
+  const rx = prof.bust * 0.66 * (1 - stretch * 0.34) * s;
+  const ry = 0.128 * (1 + stretch) * s;
   const cx = chestX + bbx;
-  const cy = shoulderY + 0.175 * s + bby;
-  const sep = prof.bust * 0.44 * s;
+  const cy = shoulderY + 0.185 * s + bby;
+  const sep = prof.bust * 0.56 * s;
+  const lx = cx - sep;
+  const ly = cy + bTilt;
+  const rxPos = cx + sep;
+  const ryPos = cy - bTilt;
+  const rotL = -0.12 - bbx / (s * 1.9);
+  const rotR = 0.12 - bbx / (s * 1.9);
 
+  // Subtle underbust shadow beneath each cup so bust pops cleanly even on solid one-pieces & wetsuits
+  if (s >= 14) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(lx, ly + ry * 0.22, rx * 0.94, ry * 0.88, rotL, 0, Math.PI * 2);
+    ctx.ellipse(rxPos, ryPos + ry * 0.22, rx * 0.94, ry * 0.88, rotR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Distinct left & right sculpted bust cups with crisp separation outline
   ctx.fillStyle = fillCol;
   ctx.beginPath();
-  ctx.ellipse(cx - sep, cy + bTilt, rx, ry, -0.14 - bbx / (s * 1.8), 0, Math.PI * 2);
-  ctx.ellipse(cx + sep, cy - bTilt, rx, ry, 0.14 - bbx / (s * 1.8), 0, Math.PI * 2);
+  ctx.ellipse(lx, ly, rx, ry, rotL, 0, Math.PI * 2);
   ctx.fill();
-  if (rimCol && s >= 28) {
-    ctx.strokeStyle = rimCol;
-    ctx.lineWidth = Math.max(0.9, 0.026 * s);
+  ctx.beginPath();
+  ctx.ellipse(rxPos, ryPos, rx, ry, rotR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crisp inner cleavage & underbust contour lines so two distinct boobs ALWAYS read cleanly
+  if (s >= 14) {
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.32)';
+    ctx.lineWidth = Math.max(0.85, 0.024 * s);
     ctx.beginPath();
-    ctx.ellipse(cx - sep, cy + bTilt - ry * 0.25, rx * 0.62, ry * 0.32, -0.14, Math.PI * 1.1, Math.PI * 1.9);
-    ctx.moveTo(cx + sep + rx * 0.62 * Math.cos(Math.PI * 1.1), cy - bTilt - ry * 0.25 + ry * 0.32 * Math.sin(Math.PI * 1.1));
-    ctx.ellipse(cx + sep, cy - bTilt - ry * 0.25, rx * 0.62, ry * 0.32, 0.14, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.ellipse(lx, ly, rx, ry, rotL, -0.35, Math.PI * 0.95);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(rxPos, ryPos, rx, ry, rotR, Math.PI * 0.05, Math.PI * 1.35);
+    ctx.stroke();
+  }
+
+  if (rimCol && s >= 18) {
+    ctx.strokeStyle = rimCol;
+    ctx.lineWidth = Math.max(0.9, 0.025 * s);
+    ctx.beginPath();
+    ctx.ellipse(lx, ly - ry * 0.24, rx * 0.58, ry * 0.3, -0.12, Math.PI * 1.12, Math.PI * 1.88);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(rxPos, ryPos - ry * 0.24, rx * 0.58, ry * 0.3, 0.12, Math.PI * 1.12, Math.PI * 1.88);
     ctx.stroke();
   }
 }
@@ -408,24 +440,48 @@ function traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, 
 }
 
 /**
- * Draw sculpted forward-projecting side-profile bust (+x) with independent spring-mass bounce.
+ * Draw sculpted, fuller forward-projecting 3/4 side-profile bust (+x) with subtle far-cup peek,
+ * underbust contour shadow, and independent spring-mass bounce.
  */
 function drawSideBouncingBust(ctx, chestX, shoulderY, prof, s, bbx, bby, fillCol, rimCol = null) {
   const stretch = clamp((bby / Math.max(1, s)) * 3.1, -0.24, 0.28);
-  const rx = prof.bust * 0.58 * (1 - stretch * 0.34) * s;
-  const ry = 0.105 * (1 + stretch) * s;
-  const cx = chestX + prof.bust * 0.48 * s + bbx;
-  const cy = shoulderY + 0.175 * s + bby;
+  const rx = prof.bust * 0.74 * (1 - stretch * 0.32) * s;
+  const ry = 0.132 * (1 + stretch) * s;
+  const cx = chestX + prof.bust * 0.5 * s + bbx;
+  const cy = shoulderY + 0.185 * s + bby;
+  const rot = 0.16 + bby / (s * 1.8);
 
+  // Subtle far-side cup peeking forward/higher for authentic 3/4 depth (never looks like one flat bump!)
   ctx.fillStyle = fillCol;
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0.18 + bby / (s * 1.8), 0, Math.PI * 2);
+  ctx.ellipse(cx + rx * 0.28, cy - ry * 0.14, rx * 0.78, ry * 0.86, rot, 0, Math.PI * 2);
   ctx.fill();
-  if (rimCol && s >= 26) {
-    ctx.strokeStyle = rimCol;
-    ctx.lineWidth = Math.max(0.9, 0.026 * s);
+  if (s >= 14) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.2)';
     ctx.beginPath();
-    ctx.ellipse(cx + rx * 0.08, cy - ry * 0.22, rx * 0.62, ry * 0.34, 0.15, Math.PI * 1.15, Math.PI * 1.92);
+    ctx.ellipse(cx + rx * 0.24, cy - ry * 0.08, rx * 0.76, ry * 0.84, rot, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Near-side fuller sculpted bust cup
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crisp underbust & outer cup contour
+  if (s >= 14) {
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.3)';
+    ctx.lineWidth = Math.max(0.85, 0.024 * s);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, rot, -0.25, Math.PI * 0.92);
+    ctx.stroke();
+  }
+  if (rimCol && s >= 18) {
+    ctx.strokeStyle = rimCol;
+    ctx.lineWidth = Math.max(0.9, 0.025 * s);
+    ctx.beginPath();
+    ctx.ellipse(cx + rx * 0.08, cy - ry * 0.22, rx * 0.6, ry * 0.32, 0.15, Math.PI * 1.15, Math.PI * 1.92);
     ctx.stroke();
   }
 }
@@ -786,11 +842,21 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.closePath();
     ctx.fill();
 
-    // Contoured bikini bottom & top
+    // Contoured bikini bottom & fuller twin-cup top
     ctx.fillStyle = swim.primary;
     ctx.beginPath();
-    ctx.ellipse(0.02 * s, -0.22 * s, 0.17 * s, 0.12 * s, -0.18, 0, Math.PI * 2);
-    ctx.ellipse(-0.36 * s, -0.42 * s, 0.12 * s, 0.1 * s, -0.35, 0, Math.PI * 2);
+    ctx.ellipse(0.02 * s, -0.22 * s, 0.18 * s, 0.125 * s, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-0.3 * s, -0.46 * s, 0.115 * s, 0.105 * s, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(-0.31 * s, -0.45 * s, 0.11 * s, 0.1 * s, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.ellipse(-0.37 * s, -0.43 * s, 0.135 * s, 0.115 * s, -0.35, 0, Math.PI * 2);
     ctx.fill();
 
     // Propping arm + drink arm
@@ -870,14 +936,15 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     traceCurvyTorso(ctx, -0.78 * s, -0.42 * s, -0.22 * s, prof, s * 0.92, 0.02 * s, -0.04 * s);
     ctx.fill();
     if (isFullSuit) {
+      drawSideBouncingBust(ctx, 0.02 * s, -0.78 * s, prof, s * 0.92, 0, 0, topCol, wet.trim);
       ctx.fillStyle = wet.trim;
-      ctx.fillRect(-0.02 * s, -0.68 * s, 0.18 * s, 0.1 * s);
+      ctx.fillRect(-0.02 * s, -0.68 * s, 0.16 * s, 0.09 * s);
     } else {
       ctx.fillStyle = swim.primary;
       ctx.beginPath();
-      ctx.ellipse(0.05 * s, -0.6 * s, 0.14 * s, 0.09 * s, 0.1, 0, Math.PI * 2);
       ctx.ellipse(-0.04 * s, -0.2 * s, 0.22 * s, 0.13 * s, 0, 0, Math.PI * 2);
       ctx.fill();
+      drawSideBouncingBust(ctx, 0.02 * s, -0.78 * s, prof, s * 0.92, 0, 0, swim.primary, swim.accent);
     }
 
     // Arms reaching down to pull fin strap
@@ -1343,20 +1410,22 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.fillStyle = swim.accent;
         ctx.fillRect(hipShiftX + gbx * 0.5 - prof.hip * 0.92 * s, hipY + 0.04 * s, prof.hip * 1.84 * s, 0.06 * s);
       } else if (swim.style === 'bikini') {
-        // Sleek front high-cut V bikini bottom (clean front hip anatomy — NO back cheeks!)
+        // Sleek front high-cut V bikini bottom locked cleanly to hipCx (clean front hip anatomy — NO back cheeks!)
+        const fhx = hipShiftX + gbx * 0.82;
+        const fhy = hipY + gby * 0.65;
         ctx.fillStyle = swim.primary;
         ctx.beginPath();
-        ctx.moveTo(hipShiftX + gbx * 0.55 - prof.hip * 1.0 * s, hipY - 0.09 * s);
-        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55, hipY - 0.01 * s, hipShiftX + gbx * 0.55 + prof.hip * 1.0 * s, hipY - 0.09 * s);
-        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55 + prof.hip * 0.45 * s, hipY + 0.12 * s, hipShiftX + gbx * 0.55, hipY + 0.2 * s);
-        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55 - prof.hip * 0.45 * s, hipY + 0.12 * s, hipShiftX + gbx * 0.55 - prof.hip * 1.0 * s, hipY - 0.09 * s);
+        ctx.moveTo(fhx - prof.hip * 0.98 * s, fhy - 0.09 * s);
+        ctx.quadraticCurveTo(fhx, fhy - 0.01 * s, fhx + prof.hip * 0.98 * s, fhy - 0.09 * s);
+        ctx.quadraticCurveTo(fhx + prof.hip * 0.46 * s, fhy + 0.12 * s, fhx, fhy + 0.2 * s);
+        ctx.quadraticCurveTo(fhx - prof.hip * 0.46 * s, fhy + 0.12 * s, fhx - prof.hip * 0.98 * s, fhy - 0.09 * s);
         ctx.closePath();
         ctx.fill();
         ctx.strokeStyle = swim.accent;
         ctx.lineWidth = Math.max(1, 0.032 * s);
         ctx.beginPath();
-        ctx.moveTo(hipShiftX + gbx * 0.55 - prof.hip * 0.95 * s, hipY - 0.08 * s);
-        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55, hipY, hipShiftX + gbx * 0.55 + prof.hip * 0.95 * s, hipY - 0.08 * s);
+        ctx.moveTo(fhx - prof.hip * 0.94 * s, fhy - 0.08 * s);
+        ctx.quadraticCurveTo(fhx, fhy, fhx + prof.hip * 0.94 * s, fhy - 0.08 * s);
         ctx.stroke();
 
         // Halter neck straps + independently bouncing front bikini bust!
@@ -1381,10 +1450,11 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     }
   }
 
-  // 4c. Arms & Expressive Dance Choreography / Gear Actions
+  // 4c. Arms & Expressive Dance Choreography / Gear Actions (narrower shoulder anchor on side profiles!)
   const armCol = isGearReady || isGearTank ? wet.suit : skin;
-  const shL = chestShiftX - prof.bust * 0.85 * s;
-  const shR = chestShiftX + prof.bust * 0.85 * s;
+  const shHalf = isSideView ? prof.bust * 0.36 * s : prof.bust * 0.85 * s;
+  const shL = chestShiftX - shHalf;
+  const shR = chestShiftX + shHalf;
   const shArmY = shoulderY + 0.08 * s;
 
   ctx.strokeStyle = armCol;
@@ -1574,16 +1644,37 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.stroke();
   }
 
-  // 4d. View-Aware Head, Flowing Bouncy Hair, Sunglasses / Sun Hat / Scuba Dive Mask
+  // 4d. View-Aware Head, Clean Neck, Flowing Bouncy Hair (ZERO chin-beard!), Sunglasses / Sun Hat / Dive Mask
   const hx = chestShiftX + headTiltX;
   const hairBounce = isDance ? Math.sin(timeSec * 6.4 + ph) * 0.06 * s : Math.sin(timeSec * 3.2 + ph) * 0.03 * s;
 
-  // Back-side framing hair behind head for front view
+  // Front-view flowing side hair behind the OUTER shoulders only (leaves chin & neck 100% clean skin — never looks like a beard!)
   if (isFrontView && !isGearReady) {
     ctx.fillStyle = hair;
-    ctx.beginPath();
-    ctx.ellipse(hx, headY + 0.09 * s + hairBounce * 0.35, 0.23 * s, 0.21 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if ((seed % 3) === 0) {
+      // Twin long beach-wave locks sweeping down outside the left & right jaw/shoulders
+      ctx.beginPath();
+      ctx.ellipse(hx - 0.185 * s, headY + 0.14 * s + hairBounce * 0.4, 0.085 * s, 0.2 * s, 0.14, 0, Math.PI * 2);
+      ctx.ellipse(hx + 0.185 * s, headY + 0.14 * s + hairBounce * 0.4, 0.085 * s, 0.2 * s, -0.14, 0, Math.PI * 2);
+      ctx.fill();
+    } else if ((seed % 3) === 1) {
+      // High bouncy side-swept ponytail peeking cleanly above shoulder
+      ctx.beginPath();
+      ctx.ellipse(hx + 0.19 * s, headY - 0.08 * s + hairBounce * 0.65, 0.085 * s, 0.14 * s, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Cute high twin puffs / beach space-buns above ears!
+      ctx.beginPath();
+      ctx.arc(hx - 0.155 * s, headY - 0.13 * s + hairBounce * 0.35, 0.095 * s, 0, Math.PI * 2);
+      ctx.arc(hx + 0.155 * s, headY - 0.13 * s + hairBounce * 0.35, 0.095 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Crisp skin neck connecting head to shoulders (prevents any hair shadow under the chin!)
+  if (!isGearReady) {
+    ctx.fillStyle = skin;
+    ctx.fillRect(hx - 0.055 * s, headY + 0.09 * s, 0.11 * s, Math.max(0.06 * s, shoulderY - headY - 0.04 * s));
   }
 
   ctx.fillStyle = skin;
@@ -1621,15 +1712,17 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
       ctx.ellipse(hx, headY + 0.19 * s + hairBounce * 0.5, 0.2 * s, 0.24 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if ((seed % 3) === 1) {
-      // High bouncy dancer ponytail swinging left/right on beat!
+      // High bouncy dancer ponytail swinging left/right on beat with matching hair tie band!
       const sway = Math.sin(timeSec * 6.4 + ph) * 0.07 * s;
       ctx.beginPath();
       ctx.ellipse(hx + sway, headY + 0.08 * s + hairBounce, 0.11 * s, 0.2 * s, -sway * 0.04, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = swim.accent;
+      ctx.strokeStyle = swim.primary;
+      ctx.lineWidth = Math.max(1.2, 0.036 * s);
       ctx.beginPath();
-      ctx.arc(hx, headY - 0.09 * s, 0.045 * s, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(hx - 0.055 * s, headY - 0.02 * s);
+      ctx.lineTo(hx + 0.055 * s, headY - 0.02 * s);
+      ctx.stroke();
     } else {
       // Twin bouncy curls / space buns from behind!
       ctx.beginPath();
