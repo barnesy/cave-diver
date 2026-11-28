@@ -1806,79 +1806,88 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
 
     const bw = boatGeom?.bw || 12.2 * scale;
     const bh = boatGeom?.bh || 5.4 * scale;
-    const aftDeckY = boatGeom ? -bh * 0.28 : -0.82 * scale;
-    const roofY = boatGeom ? -bh * 0.56 : -2.38 * scale;
-    const bowDeckY = boatGeom ? -bh * 0.34 : -0.92 * scale;
-    const sternPlatY = boatGeom ? -bh * 0.04 : -0.12 * scale;
+    // Pixel-locked deck anchors for surf-dive-boat.webp (560x261, hullDraftY = 0.23 * bh)
+    // Every foot & prop sits directly on the hull/roof surface with ZERO floating!
+    const aftDeckY = boatGeom ? -bh * 0.175 : -0.82 * scale;
+    const roofY = boatGeom ? -bh * 0.47 : -2.36 * scale;
+    const bowInnerY = boatGeom ? -bh * 0.275 : -0.92 * scale;
+    const bowOuterY = boatGeom ? -bh * 0.245 : -0.88 * scale;
+    const sternPlatY = boatGeom ? -bh * 0.025 : -0.12 * scale;
 
-    drawPartyDiveBoatEnhancements(ctx, 0, 0, bw, bh, scale, timeSec, hypeEnergy);
-    drawFestiveStringLights(ctx, -bw * 0.06, -bh * 0.8, -bw * 0.42, -bh * 0.44, scale, timeSec, 0.32);
-    drawFestiveStringLights(ctx, -bw * 0.04, -bh * 0.8, bw * 0.44, -bh * 0.36, scale, timeSec, 0.28);
+    drawPartyDiveBoatEnhancements(ctx, 0, 0, bw, bh, scale, timeSec, hypeEnergy, { isPhotoBoat: Boolean(boatGeom) });
 
-    // Stern swim platform: Curvy diver pulling on fins
-    drawTopsidePerson(ctx, -bw * 0.44, sternPlatY, scale * 0.9, timeSec, {
+    // Stern swim platform: Curvy diver seated squarely on transom pulling on fins
+    drawTopsidePerson(ctx, -bw * 0.455, sternPlatY, scale * 0.88, timeSec, {
       role: 'gear-fins',
       seed: 1,
       facing: -1,
       hypeEnergy,
     });
 
-    // Aft dive deck (by silver tanks): Divers suiting up + curvy salsa dancer!
-    drawTopsidePerson(ctx, -bw * 0.34, aftDeckY, scale * 0.92, timeSec, {
+    // Aft dive deck (feet planted right on white gunwale deck beside the silver tanks!)
+    drawTopsidePerson(ctx, -bw * 0.36, aftDeckY, scale * 0.9, timeSec, {
       role: 'gear-zip',
+      view: 'back',
       seed: 2,
       facing: 1,
       hypeEnergy,
     });
-    drawTopsidePerson(ctx, -bw * 0.26, aftDeckY, scale * 0.9, timeSec, {
+    drawTopsidePerson(ctx, -bw * 0.25, aftDeckY, scale * 0.88, timeSec, {
       role: 'party-dance',
       danceMove: 'salsa',
+      view: 'side',
       seed: 6,
       facing: 1,
       hypeEnergy,
     });
-    drawTopsidePerson(ctx, -bw * 0.17, aftDeckY, scale * 0.92, timeSec, {
+    drawTopsidePerson(ctx, -bw * 0.14, aftDeckY, scale * 0.9, timeSec, {
       role: 'gear-tank',
+      view: 'side',
       seed: 4,
       facing: -1,
       hypeEnergy,
     });
 
-    // Upper cabin sun-deck: Curvy dance squad busting out Floss, Twerk & Disco!
-    drawPartyGearProps(ctx, bw * 0.04, roofY, scale * 0.78, timeSec, 'party');
-    drawTopsidePerson(ctx, -bw * 0.06, roofY, scale * 0.88, timeSec, {
+    // Upper cabin sun-deck roof (feet planted strictly within flat roof span [-0.03*bw .. +0.15*bw]!)
+    drawPartyGearProps(ctx, bw * 0.05, roofY, scale * 0.72, timeSec, 'party');
+    drawTopsidePerson(ctx, -bw * 0.025, roofY, scale * 0.84, timeSec, {
       role: 'party-dance',
       danceMove: 'floss',
+      view: 'front',
       seed: 0,
       facing: 1,
       hypeEnergy,
     });
-    drawTopsidePerson(ctx, bw * 0.03, roofY, scale * 0.88, timeSec, {
+    drawTopsidePerson(ctx, bw * 0.055, roofY, scale * 0.84, timeSec, {
       role: 'party-dance',
       danceMove: 'twerk',
+      view: 'back',
       seed: 1,
       facing: 1,
       hypeEnergy,
     });
-    drawTopsidePerson(ctx, bw * 0.13, roofY, scale * 0.88, timeSec, {
+    drawTopsidePerson(ctx, bw * 0.125, roofY, scale * 0.84, timeSec, {
       role: 'party-dance',
       danceMove: 'disco',
+      view: 'side',
       seed: 3,
       facing: -1,
       hypeEnergy,
     });
 
-    // Foredeck / Bow: Dab & YMCA dancers partying on the bow!
-    drawTopsidePerson(ctx, bw * 0.28, bowDeckY, scale * 0.86, timeSec, {
+    // Foredeck / Bow: Dab & YMCA dancers planted solidly on the forward bow deck slope!
+    drawTopsidePerson(ctx, bw * 0.285, bowInnerY, scale * 0.84, timeSec, {
       role: 'party-dance',
       danceMove: 'dab',
+      view: 'front',
       seed: 5,
       facing: 1,
       hypeEnergy,
     });
-    drawTopsidePerson(ctx, bw * 0.37, bowDeckY, scale * 0.86, timeSec, {
+    drawTopsidePerson(ctx, bw * 0.37, bowOuterY, scale * 0.84, timeSec, {
       role: 'party-dance',
       danceMove: 'ymca',
+      view: 'side',
       seed: 2,
       facing: -1,
       hypeEnergy,
@@ -1886,8 +1895,8 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
 
     ctx.restore();
 
-    // Animated stern cannonballer leaping off the party boat!
-    drawTopsideCannonballer(ctx, bx - bw * 0.46, by - bh * 0.18, surfY, -1, scale, timeSec, 7, hypeEnergy);
+    // Animated stern cannonballer leaping right off the stern swim platform!
+    drawTopsideCannonballer(ctx, bx - bw * 0.46, by + sternPlatY - scale * 0.12, surfY, -1, scale, timeSec, 7, hypeEnergy);
   }
 
   const leftRaftX = boatX - 11.4;

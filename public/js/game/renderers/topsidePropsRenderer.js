@@ -744,32 +744,99 @@ export function drawQuarryExpeditionRig(ctx, sx, sy, scale, timeSec = 0, opts = 
 
 /**
  * BIOME HANGOUT 5: Shipwreck / Open-Ocean Party Dive Boat Enhancements
- * Adds warm deck string lights, beat-pulsing twin speakers, and red/white diver-down flag.
+ * Adds warm deck string lights & beat-pulsing twin speakers anchored directly to the boat geometry.
+ * Pass `opts.isPhotoBoat = true` when drawing on `surf-dive-boat.webp` (which already includes a stern dive flag).
  */
-export function drawPartyDiveBoatEnhancements(ctx, cx, surfY, bw, bh, scale, timeSec = 0, hypeEnergy = 0) {
+export function drawPartyDiveBoatEnhancements(ctx, cx, surfY, bw, bh, scale, timeSec = 0, hypeEnergy = 0, opts = null) {
   if (!Number.isFinite(cx) || !Number.isFinite(surfY)) return;
-  const deckY = surfY - bh * 0.66;
+  const isPhotoBoat = Boolean(opts?.isPhotoBoat);
   const s = scale;
   const beat = Math.pow(0.5 + 0.5 * Math.sin(timeSec * (116 / 60) * Math.PI * 2), 2);
   ctx.save();
 
-  // 1. Warm party deck string lights arching from bow rail to cabin canopy to stern!
   const bulbCols = ['#fef08a', '#fb7185', '#38bdf8', '#4ade80', '#facc15', '#f472b6'];
+
+  if (isPhotoBoat) {
+    // Pixel-locked to surf-dive-boat.webp (radar mast top -> aft rail & bow rail, speaker seated on cabin roof!)
+    const mastX = cx - bw * 0.055;
+    const mastY = surfY - bh * 0.69;
+    const aftX = cx - bw * 0.39;
+    const aftY = surfY - bh * 0.21;
+    const bowX = cx + bw * 0.43;
+    const bowY = surfY - bh * 0.28;
+
+    // 1. Subtle glowing party string lights draped from radar mast to aft & bow rails
+    const spans = [
+      [mastX, mastY, aftX, aftY, 5],
+      [mastX, mastY, bowX, bowY, 6],
+    ];
+    for (let sp = 0; sp < spans.length; sp++) {
+      const [x0, y0, x1, y1, count] = spans[sp];
+      const mx = (x0 + x1) * 0.5;
+      const my = (y0 + y1) * 0.5 + bh * 0.08;
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.48)';
+      ctx.lineWidth = Math.max(1, s * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(mx, my, x1, y1);
+      ctx.stroke();
+      for (let i = 0; i < count; i++) {
+        const t = (i + 0.5) / count;
+        const bx = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * mx + t * t * x1;
+        const by = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * my + t * t * y1;
+        const glow = 0.68 + 0.32 * Math.sin(timeSec * 5 + i * 1.1 + sp);
+        ctx.fillStyle = bulbCols[(i + sp * 3) % bulbCols.length];
+        ctx.globalAlpha = glow;
+        ctx.beginPath();
+        ctx.arc(bx, by + s * 0.035, Math.max(1.7, s * (0.065 + hypeEnergy * 0.02)), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 2. Beat-pulsing deck speaker seated squarely on the cabin roof edge (zero floating!)
+    const spx = cx + bw * 0.165;
+    const roofBaseY = surfY - bh * 0.475;
+    const spH = s * 0.46;
+    const spy = roofBaseY - spH;
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.roundRect(spx - s * 0.19, spy, s * 0.38, spH, s * 0.055);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(spx, spy + spH * 0.32, s * (0.075 + beat * 0.02), 0, Math.PI * 2);
+    ctx.arc(spx, spy + spH * 0.72, s * (0.1 + beat * 0.028), 0, Math.PI * 2);
+    ctx.fill();
+    if (beat > 0.55 || hypeEnergy > 0.2) {
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.25 + beat * 0.45).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.1, s * 0.036);
+      ctx.beginPath();
+      ctx.arc(spx, spy + spH * 0.45, s * (0.3 + beat * 0.18), -Math.PI * 0.8, -Math.PI * 0.2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  // Victory Photo / Procedural Boat Deck Enhancements (anchored directly to deckY)
+  const deckY = surfY - bh * 0.28;
   const x0 = cx - bw * 0.44;
   const x1 = cx + bw * 0.44;
-  const yTop = deckY - bh * 0.92;
+  const yTop = deckY - bh * 0.72;
   ctx.strokeStyle = 'rgba(15, 23, 42, 0.52)';
   ctx.lineWidth = Math.max(1, s * 0.032);
   ctx.beginPath();
-  ctx.moveTo(x0, deckY - bh * 0.35);
-  ctx.quadraticCurveTo(cx, yTop - bh * 0.18, x1, deckY - bh * 0.35);
+  ctx.moveTo(x0, deckY - bh * 0.22);
+  ctx.quadraticCurveTo(cx, yTop, x1, deckY - bh * 0.22);
   ctx.stroke();
 
   const count = 7;
   for (let i = 0; i < count; i++) {
     const t = (i + 0.5) / count;
     const bx = x0 + (x1 - x0) * t;
-    const by = (1 - t) * (1 - t) * (deckY - bh * 0.35) + 2 * (1 - t) * t * (yTop - bh * 0.18) + t * t * (deckY - bh * 0.35);
+    const by = (1 - t) * (1 - t) * (deckY - bh * 0.22) + 2 * (1 - t) * t * yTop + t * t * (deckY - bh * 0.22);
     const glow = 0.68 + 0.32 * Math.sin(timeSec * 5 + i * 1.1);
     ctx.fillStyle = bulbCols[i % bulbCols.length];
     ctx.globalAlpha = glow;
@@ -779,7 +846,7 @@ export function drawPartyDiveBoatEnhancements(ctx, cx, surfY, bw, bh, scale, tim
   }
   ctx.globalAlpha = 1;
 
-  // 2. Beat-pulsing deck speaker stack on stern rail
+  // Beat-pulsing speaker seated on deck
   const spx = cx + bw * 0.27;
   const spy = deckY - s * 0.52;
   ctx.fillStyle = '#0f172a';
@@ -791,8 +858,6 @@ export function drawPartyDiveBoatEnhancements(ctx, cx, surfY, bw, bh, scale, tim
   ctx.arc(spx, spy + s * 0.16, s * (0.09 + beat * 0.025), 0, Math.PI * 2);
   ctx.arc(spx, spy + s * 0.38, s * (0.12 + beat * 0.032), 0, Math.PI * 2);
   ctx.fill();
-
-  // Pulsing soundwave arc when beat hits
   if (beat > 0.55 || hypeEnergy > 0.2) {
     ctx.strokeStyle = `rgba(56, 189, 248, ${(0.25 + beat * 0.45).toFixed(2)})`;
     ctx.lineWidth = Math.max(1.1, s * 0.04);
@@ -801,9 +866,9 @@ export function drawPartyDiveBoatEnhancements(ctx, cx, surfY, bw, bh, scale, tim
     ctx.stroke();
   }
 
-  // 3. Red-and-white Diver-Down flag flying at stern mast
+  // Red-and-white Diver-Down flag flying at stern mast
   const fx = cx - bw * 0.42;
-  const fy = deckY - bh * 1.18;
+  const fy = deckY - bh * 0.88;
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = Math.max(1.2, s * 0.045);
   ctx.beginPath();
