@@ -1117,10 +1117,10 @@ function drawBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, gTilt, fillCol, 
     ctx.fill();
   }
 
-  // Soft, natural center gluteal cleft & delicate lower cheek folds (no heavy dark circles!)
+  // Delicate hairline center gluteal cleft & lower cheek folds (matching bust hairline contour weight!)
   if (s >= 15) {
-    ctx.strokeStyle = isFabric ? 'rgba(15, 23, 42, 0.24)' : 'rgba(72, 28, 14, 0.26)';
-    ctx.lineWidth = Math.max(0.8, 0.020 * s);
+    ctx.strokeStyle = isFabric ? 'rgba(15, 23, 42, 0.20)' : 'rgba(72, 28, 14, 0.22)';
+    ctx.lineWidth = Math.max(0.55, 0.010 * s);
     ctx.beginPath();
     ctx.moveTo(cx, cy - ry * 0.52);
     ctx.lineTo(cx, cy + ry * 0.82);
@@ -1765,9 +1765,9 @@ function drawSideBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, fillCol, sha
     ctx.fill();
   }
   if (s >= 16) {
-    // Crisp infragluteal lower-butt tuck crease where round glute meets back of thigh!
-    ctx.strokeStyle = isFabric ? 'rgba(15, 23, 42, 0.24)' : 'rgba(72, 28, 14, 0.26)';
-    ctx.lineWidth = Math.max(0.85, 0.020 * s);
+    // Hairline infragluteal lower-butt tuck crease where round glute meets back of thigh!
+    ctx.strokeStyle = isFabric ? 'rgba(15, 23, 42, 0.20)' : 'rgba(72, 28, 14, 0.22)';
+    ctx.lineWidth = Math.max(0.55, 0.010 * s);
     ctx.beginPath();
     ctx.arc(cx, cy + ry * 0.04, rx * 0.88, Math.PI * 0.42, Math.PI * 0.96);
     ctx.stroke();
@@ -2335,15 +2335,15 @@ function drawFittedFemaleBottoms(
     };
 
     if (!isOnePiece) {
-      // Soft skin-compression shadow directly above the V-cinched elastic waistband
+      // Hairline skin-compression shadow directly above the V-cinched elastic waistband
       if (s >= 18) {
-        ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
-        ctx.lineWidth = Math.max(0.9, 0.020 * s);
+        ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
+        ctx.lineWidth = Math.max(0.55, 0.010 * s);
         ctx.beginPath();
-        ctx.moveTo(farBackX, backWaistY - 0.010 * s);
-        ctx.lineTo(topBackX, backWaistY - 0.010 * s);
-        ctx.quadraticCurveTo(cinchX - 0.055 * s, cinchY - 0.004 * s, cinchX, cinchY - 0.010 * s);
-        ctx.quadraticCurveTo(cinchX + 0.065 * s, cinchY + 0.006 * s, topFrontX + 0.10 * s, frontWaistY - 0.010 * s);
+        ctx.moveTo(farBackX, backWaistY - 0.008 * s);
+        ctx.lineTo(topBackX, backWaistY - 0.008 * s);
+        ctx.quadraticCurveTo(cinchX - 0.055 * s, cinchY - 0.003 * s, cinchX, cinchY - 0.008 * s);
+        ctx.quadraticCurveTo(cinchX + 0.065 * s, cinchY + 0.006 * s, topFrontX + 0.10 * s, frontWaistY - 0.008 * s);
         ctx.stroke();
       }
     }
@@ -2364,9 +2364,9 @@ function drawFittedFemaleBottoms(
       ctx.fill();
 
       if (s >= 20) {
-        // Delicate taut fabric gather lines radiating forward & backward FROM the side cinch point!
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.16)';
-        ctx.lineWidth = Math.max(0.7, 0.013 * s);
+        // Delicate hairline fabric gather lines radiating forward & backward FROM the side cinch point!
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.14)';
+        ctx.lineWidth = Math.max(0.5, 0.009 * s);
         ctx.beginPath();
         ctx.moveTo(cinchX, cinchY + cinchH * 0.45);
         ctx.quadraticCurveTo(glCx + glRx * 0.04, glCy - glRy * 0.62, glCx - glRx * 0.72, glCy - glRy * 0.36);
@@ -2389,10 +2389,10 @@ function drawFittedFemaleBottoms(
       ctx.stroke();
     }
 
-    // Crisp elastic leg-opening & Brazilian cheek-arch seam + skin-compression shadow directly under edge!
+    // Hairline elastic leg-opening & Brazilian cheek-arch contour seam directly under edge!
     if (s >= 16) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.28)';
-      ctx.lineWidth = Math.max(0.85, 0.019 * s);
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
       ctx.moveTo(frontPelvisX, frontPelvisY);
       traceLegAndCheekOpening();
@@ -2453,13 +2453,13 @@ function drawFittedFemaleBottoms(
     ctx.clip?.();
 
     if (!isOnePiece) {
-      // Soft skin-compression shadow directly above the high-hip elastic waistband
+      // Hairline skin-compression shadow directly above the high-hip elastic waistband
       if (s >= 18) {
-        ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-        ctx.lineWidth = Math.max(0.9, 0.024 * s);
+        ctx.strokeStyle = 'rgba(72, 28, 14, 0.19)';
+        ctx.lineWidth = Math.max(0.55, 0.010 * s);
         ctx.beginPath();
-        ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.012 * s);
-        ctx.quadraticCurveTo(bhx, yCrest + 0.095 * s, rxCrest + 0.04 * s, yCrest - 0.012 * s);
+        ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.008 * s);
+        ctx.quadraticCurveTo(bhx, yCrest + 0.098 * s, rxCrest + 0.04 * s, yCrest - 0.008 * s);
         ctx.stroke();
       }
       // Cheeky Brazilian scrunch-cut V-bottom locked directly to exact hip-crest anchors!
@@ -2474,17 +2474,17 @@ function drawFittedFemaleBottoms(
 
       // Accent elastic waistband trim flush along the high-hip V curve
       ctx.strokeStyle = swim.accent;
-      ctx.lineWidth = Math.max(0.95, 0.025 * s);
+      ctx.lineWidth = Math.max(0.85, 0.019 * s);
       ctx.beginPath();
       ctx.moveTo(lxCrest - 0.02 * s, yCrest + 0.008 * s);
       ctx.quadraticCurveTo(bhx, yCrest + 0.112 * s, rxCrest + 0.02 * s, yCrest + 0.008 * s);
       ctx.stroke();
     }
 
-    // Cheek-cupping elastic leg seams + compression shadow against lower bare cheeks
+    // Hairline cheek-cupping elastic leg seams + delicate center scrunch seam!
     if (s >= 16) {
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.28)';
-      ctx.lineWidth = Math.max(0.85, 0.020 * s);
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
       ctx.moveTo(lxCrest, yCrest + 0.02 * s);
       ctx.quadraticCurveTo(lxCrest + hwCrest * 0.42 + lLegPull, bhy + 0.036 * s + gTilt * 0.4, bhx, crotchY);
@@ -2492,18 +2492,18 @@ function drawFittedFemaleBottoms(
       ctx.quadraticCurveTo(rxCrest - hwCrest * 0.42 + rLegPull, bhy + 0.036 * s - gTilt * 0.4, bhx, crotchY);
       ctx.stroke();
 
-      // Center ruched scrunch-seam clamped strictly inside the bottom V fabric (zero 1px overhang at crotch!)
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
-      ctx.lineWidth = Math.max(0.75, 0.016 * s);
+      // Center ruched scrunch-seam clamped strictly inside the bottom V fabric (hairline weight!)
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
       ctx.moveTo(bhx, yCrest + 0.112 * s);
       ctx.lineTo(bhx, crotchY - 0.030 * s);
       ctx.stroke();
 
       if (s >= 20) {
-        // Soft curved elastic tension gathers hugging the rounded cheeks outward from the center scrunch
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.13)';
-        ctx.lineWidth = Math.max(0.65, 0.012 * s);
+        // Soft curved hairline elastic tension gathers hugging the rounded cheeks outward from the center scrunch
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.12)';
+        ctx.lineWidth = Math.max(0.5, 0.0085 * s);
         for (let g = 0; g < 2; g++) {
           const gy = yCrest + (0.115 + g * 0.044) * s;
           const span = hwCrest * (0.44 - g * 0.12);
@@ -2549,13 +2549,13 @@ function drawFittedFemaleBottoms(
   ctx.clip?.();
 
   if (!isOnePiece) {
-    // Soft skin-compression indentation shadow right above the elastic waistband
+    // Hairline skin-compression indentation shadow right above the elastic waistband
     if (s >= 18) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-      ctx.lineWidth = Math.max(0.9, 0.024 * s);
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.19)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
-      ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.012 * s);
-      ctx.quadraticCurveTo(cxCrest, yCrest + 0.088 * s, rxCrest + 0.04 * s, yCrest - 0.012 * s);
+      ctx.moveTo(lxCrest - 0.04 * s, yCrest - 0.008 * s);
+      ctx.quadraticCurveTo(cxCrest, yCrest + 0.091 * s, rxCrest + 0.04 * s, yCrest - 0.008 * s);
       ctx.stroke();
     }
 
@@ -2571,17 +2571,17 @@ function drawFittedFemaleBottoms(
 
     // Accent contrast elastic waistband hugging exact hip curve
     ctx.strokeStyle = swim.accent;
-    ctx.lineWidth = Math.max(0.95, 0.025 * s);
+    ctx.lineWidth = Math.max(0.85, 0.019 * s);
     ctx.beginPath();
     ctx.moveTo(lxCrest - 0.02 * s, yCrest + 0.008 * s);
     ctx.quadraticCurveTo(cxCrest, yCrest + 0.105 * s, rxCrest + 0.02 * s, yCrest + 0.008 * s);
     ctx.stroke();
   }
 
-  // Elastic high-cut leg opening compression shadows & subtle diagonal hip-strap tension creases!
+  // Hairline high-cut leg opening contour shadows & subtle diagonal hip-strap tension creases!
   if (s >= 17) {
-    ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
-    ctx.lineWidth = Math.max(0.8, 0.019 * s);
+    ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
+    ctx.lineWidth = Math.max(0.55, 0.010 * s);
     ctx.beginPath();
     ctx.moveTo(lxCrest, yCrest + 0.024 * s);
     ctx.quadraticCurveTo(lxCrest + hwCrest * 0.44 + lLegPull, hipY + 0.052 * s + gby * 0.45, cxBot - 0.012 * s, crotchY);
@@ -2590,9 +2590,9 @@ function drawFittedFemaleBottoms(
     ctx.stroke();
 
     if (s >= 20) {
-      // Delicate radial tension pull creases fanning inward from both taut hip-crest anchor points!
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.18)';
-      ctx.lineWidth = Math.max(0.7, 0.014 * s);
+      // Delicate hairline tension pull creases fanning inward from both taut hip-crest anchor points!
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.14)';
+      ctx.lineWidth = Math.max(0.5, 0.009 * s);
       ctx.beginPath();
       ctx.moveTo(lxCrest + 0.015 * s, yCrest + 0.02 * s);
       ctx.quadraticCurveTo(cxCrest - hwCrest * 0.42, yCrest + 0.095 * s, cxCrest - hwCrest * 0.16, yCrest + 0.125 * s);
@@ -2776,8 +2776,8 @@ function drawArticulatedMaleShorts(
         ctx.beginPath();
         ctx.ellipse(glCx - glRx * 0.20, glCy - glRy * 0.24, glRx * 0.36, glRy * 0.22, -0.26, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.26)';
-        ctx.lineWidth = Math.max(0.85, 0.019 * s);
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
+        ctx.lineWidth = Math.max(0.55, 0.010 * s);
         ctx.beginPath();
         ctx.arc(glCx, glCy + glRy * 0.06, glRx * 0.88, Math.PI * 0.42, Math.PI * 0.96);
         ctx.stroke();
@@ -2805,8 +2805,8 @@ function drawArticulatedMaleShorts(
       ctx.beginPath();
       ctx.ellipse(glCx - glRx * 0.18, glCy - glRy * 0.22, glRx * 0.36, glRy * 0.22, -0.26, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
-      ctx.lineWidth = Math.max(0.85, 0.019 * s);
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
       ctx.arc(glCx, glCy + glRy * 0.06, glRx * 0.88, Math.PI * 0.44, Math.PI * 0.96);
       ctx.stroke();
@@ -2856,8 +2856,8 @@ function drawArticulatedMaleShorts(
       ctx.ellipse(glCx - glSep - glRx * 0.06, glCy + gTilt - glRy * 0.22, glRx * 0.44, glRy * 0.20, -0.18, 0, Math.PI * 2);
       ctx.ellipse(glCx + glSep + glRx * 0.06, glCy - gTilt - glRy * 0.22, glRx * 0.44, glRy * 0.20, 0.18, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.26)';
-      ctx.lineWidth = Math.max(0.8, 0.019 * s);
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
       ctx.moveTo(glCx, glCy - glRy * 0.45);
       ctx.lineTo(glCx, glCy + glRy * 0.78);
@@ -2894,8 +2894,8 @@ function drawArticulatedMaleShorts(
     ctx.ellipse(glCx - glSep - glRx * 0.08, glCy + gTilt - glRy * 0.24, glRx * 0.38, glRy * 0.24, -0.18, 0, Math.PI * 2);
     ctx.ellipse(glCx + glSep + glRx * 0.08, glCy - gTilt - glRy * 0.24, glRx * 0.38, glRy * 0.24, 0.18, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
-    ctx.lineWidth = Math.max(0.8, 0.018 * s);
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.19)';
+    ctx.lineWidth = Math.max(0.55, 0.010 * s);
     ctx.beginPath();
     ctx.arc(glCx - glSep, glCy + gTilt + glRy * 0.06, glRx * 0.80, 0.36, Math.PI * 0.84);
     ctx.stroke();
