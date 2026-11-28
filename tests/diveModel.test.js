@@ -13992,10 +13992,12 @@ test('v280 Codex Test-in-Water + Saved Mixes, Live Home Biome Preview, Calm Imme
   assert.ok(rendererJs.includes('this._viewCenterYFrac') && rendererJs.includes('Batched sunlit surface caustic shimmer ribbon'), 'renderer.js must smooth viewCenterY transitions and batch surface shimmer');
 });
 
-test('v281-v282 Living Topside & Background Crowds: Curvy Body Types, 8 Popular Dance Moves & Suiting-Up Divers across All Biomes, Wrecks & Menu Backdrop', async () => {
+test('v281-v283 Living Topside & Background Crowds: Curvy Body Types, Independent Spring-Mass Bounce Physics, 8 Popular Dance Moves & Suiting-Up Divers', async () => {
   const fs = await import('node:fs');
   const {
     POPULAR_DANCE_MOVES,
+    stepBounceSpring,
+    computeCharacterBounceState,
     drawTopsidePerson,
     drawShipwreckTopsideCrowd,
     drawAllSiteTopsidePeople,
@@ -14065,4 +14067,45 @@ test('v281-v282 Living Topside & Background Crowds: Curvy Body Types, 8 Popular 
   drawAllSiteTopsidePeople(mockRenderer(cenote), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
   drawAllSiteTopsidePeople(mockRenderer(polar), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
   assert.ok(drawOps > 500 && bezierOps > 80, `Expected curvy bezier silhouettes & rich draw calls, got drawOps=${drawOps}, bezierOps=${bezierOps}`);
+
+  // Independent spring-mass bounce physics verification (v283):
+  // 1. Hip-only drop drives glutes independently without moving stationary bust
+  let t = 10.0;
+  computeCharacterBounceState('test-hip-only', 0, -1.36, 0, -0.78, t, 1, 0);
+  let maxGluteY = 0;
+  let maxBustY = 0;
+  for (let i = 1; i <= 14; i++) {
+    t += 0.016;
+    const hipDrop = i <= 5 ? i * 0.035 : 0.175;
+    const st = computeCharacterBounceState('test-hip-only', 0, -1.36, 0, -0.78 + hipDrop, t, 1, 0);
+    maxGluteY = Math.max(maxGluteY, Math.abs(st.glute.y));
+    maxBustY = Math.max(maxBustY, Math.abs(st.bust.y));
+  }
+  assert.ok(maxGluteY > 0.008 && maxBustY < 0.0005, `Expected independent glute bounce (${maxGluteY}) with stationary bust (${maxBustY})`);
+
+  // 2. Chest-only bounce drives bust independently without moving stationary glutes
+  let t2 = 20.0;
+  computeCharacterBounceState('test-chest-only', 0, -1.36, 0, -0.78, t2, 2, 0);
+  let maxBust2 = 0;
+  let maxGlute2 = 0;
+  for (let i = 1; i <= 14; i++) {
+    t2 += 0.016;
+    const chestDrop = i <= 5 ? i * 0.032 : 0.16;
+    const st = computeCharacterBounceState('test-chest-only', 0, -1.36 + chestDrop, 0, -0.78, t2, 2, 0);
+    maxBust2 = Math.max(maxBust2, Math.abs(st.bust.y));
+    maxGlute2 = Math.max(maxGlute2, Math.abs(st.glute.y));
+  }
+  assert.ok(maxBust2 > 0.006 && maxGlute2 < 0.0005, `Expected independent bust bounce (${maxBust2}) with stationary glutes (${maxGlute2})`);
+
+  // 3. Underdamped spring overshoots past zero and settles smoothly back to rest
+  const sp = { x: 0, y: 0, vx: 0, vy: 0 };
+  stepBounceSpring(sp, 0, -24, 0.02, 14, 0.2, 0.7, 0.8, 0.11, 0.11);
+  let sawPos = false;
+  let sawNeg = false;
+  for (let i = 0; i < 160; i++) {
+    stepBounceSpring(sp, 0, 0, 0.016, 14, 0.2, 0.7, 0.8, 0.11, 0.11);
+    if (sp.y > 0.001) sawPos = true;
+    if (sp.y < -0.001) sawNeg = true;
+  }
+  assert.ok(sawPos && sawNeg && Math.abs(sp.y) < 0.002, `Expected damped oscillation with overshoot & settle, got sawPos=${sawPos} sawNeg=${sawNeg} finalY=${sp.y}`);
 });

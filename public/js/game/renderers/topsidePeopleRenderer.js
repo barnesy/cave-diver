@@ -86,6 +86,10 @@ export const POPULAR_DANCE_MOVES = Object.freeze([
   'ymca',         // Festival jump cycling Y - M - C - A arms!
 ]);
 
+// Bounded per-character secondary-motion spring-damper state pool (zero GC churn, auto-pruned)
+const _bouncePool = new Map();
+const MAX_BOUNCE_STATES = 160;
+
 /**
  * Draw a tiny vector musical note (zero fillText cost) floating near dancers / boombox.
  */
@@ -106,48 +110,224 @@ function drawMusicNote(ctx, x, y, s, color, alpha) {
   ctx.restore();
 }
 
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+/**
+ * Integrate one 2D underdamped spring-mass oscillator driven by anchor acceleration:
+ *   x'' = -k * x - c * x' - gain * driveAccel
+ * Uses semi-implicit Euler (with 2x sub-stepping for large dt) for rock-solid stability.
+ */
+export function stepBounceSpring(state, driveAx, driveAy, dt, omega, zeta, gainX, gainY, maxX, maxY) {
+  const k = omega * omega;
+  const c = 2 * zeta * omega;
+  const steps = dt > 0.018 ? 2 : 1;
+  const h = dt / steps;
+  let x = state.x;
+  let y = state.y;
+  let vx = state.vx;
+  let vy = state.vy;
+  for (let i = 0; i < steps; i++) {
+    const ax = -k * x - c * vx - gainX * driveAx;
+    const ay = -k * y - c * vy - gainY * driveAy;
+    vx += ax * h;
+    vy += ay * h;
+    x += vx * h;
+    y += vy * h;
+  }
+  if (x > maxX) { x = maxX; if (vx > 0) vx *= -0.35; }
+  else if (x < -maxX) { x = -maxX; if (vx < 0) vx *= -0.35; }
+  if (y > maxY) { y = maxY; if (vy > 0) vy *= -0.35; }
+  else if (y < -maxY) { y = -maxY; if (vy < 0) vy *= -0.35; }
+  state.x = x;
+  state.y = y;
+  state.vx = vx;
+  state.vy = vy;
+  return state;
+}
+
+/**
+ * Compute & integrate independent real-time damped spring physics for a character's
+ * bust (driven by chest/shoulder acceleration) and glutes (driven by hip/pelvis acceleration),
+ * plus subtle independent left/right roll tilt from lateral & stride twist.
+ * All coordinates are in world meters (scale-invariant).
+ */
+export function computeCharacterBounceState(charKey, chestX, chestY, hipX, hipY, timeSec, seed = 0, extraPulse = 0) {
+  let st = _bouncePool.get(charKey);
+  if (!st) {
+    if (_bouncePool.size >= MAX_BOUNCE_STATES) {
+      const oldest = _bouncePool.keys().next().value;
+      if (oldest !== undefined) _bouncePool.delete(oldest);
+    }
+    st = {
+      t: timeSec,
+      pCx: chestX, pCy: chestY, pCvx: 0, pCvy: 0,
+      pHx: hipX, pHy: hipY, pHvx: 0, pHvy: 0,
+      bust: { x: 0, y: 0, vx: 0, vy: 0 },
+      glute: { x: 0, y: 0, vx: 0, vy: 0 },
+      bTilt: 0, bTiltV: 0,
+      gTilt: 0, gTiltV: 0,
+    };
+    _bouncePool.set(charKey, st);
+    return st;
+  }
+
+  const rawDt = timeSec - st.t;
+  // Reset cleanly on static frame, rewind, or long tab sleep
+  if (rawDt <= 0.0001 || rawDt > 0.25) {
+    st.t = timeSec;
+    st.pCx = chestX; st.pCy = chestY; st.pCvx = 0; st.pCvy = 0;
+    st.pHx = hipX; st.pHy = hipY; st.pHvx = 0; st.pHvy = 0;
+    if (rawDt <= 0 || timeSec === 0) {
+      st.bust.x = st.bust.y = st.bust.vx = st.bust.vy = 0;
+      st.glute.x = st.glute.y = st.glute.vx = st.glute.vy = 0;
+      st.bTilt = st.bTiltV = st.gTilt = st.gTiltV = 0;
+    }
+    return st;
+  }
+
+  const dt = Math.min(0.045, rawDt);
+  // Instantaneous anchor velocities & accelerations (clamped for spike safety)
+  const cvx = (chestX - st.pCx) / dt;
+  const cvy = (chestY - st.pCy) / dt;
+  const cax = clamp((cvx - st.pCvx) / dt, -26, 26);
+  const cay = clamp((cvy - st.pCvy) / dt, -30, 30);
+
+  const hvx = (hipX - st.pHx) / dt;
+  const hvy = (hipY - st.pHy) / dt;
+  const hax = clamp((hvx - st.pHvx) / dt, -32, 32);
+  const hay = clamp((hvy - st.pHvy) / dt, -36, 36);
+
+  st.t = timeSec;
+  st.pCx = chestX; st.pCy = chestY; st.pCvx = cvx; st.pCvy = cvy;
+  st.pHx = hipX; st.pHy = hipY; st.pHvx = hvx; st.pHvy = hvy;
+
+  // Distinct natural frequencies so bust & glutes bounce genuinely independently!
+  const omegaBust = 16.2 - (seed % 3) * 1.05;
+  const omegaGlute = 12.6 - (seed % 3) * 0.85;
+
+  // Bust spring: responsive to chest bounce + slight coupling from vertical impact
+  stepBounceSpring(st.bust, cax, cay + extraPulse * 3.5, dt, omegaBust, 0.21, 0.58, 0.72, 0.085, 0.095);
+  // Glute spring: heavier lower-frequency follow-through driven by hip drops, pops & whips
+  stepBounceSpring(st.glute, hax, hay + extraPulse * 6.5, dt, omegaGlute, 0.19, 0.76, 0.84, 0.115, 0.115);
+
+  // Subtle independent left/right asymmetry springs (rocking / alternating steps!)
+  const bTiltA = -omegaBust * omegaBust * 0.85 * st.bTilt - 2 * 0.24 * omegaBust * st.bTiltV - cax * 0.16;
+  st.bTiltV += bTiltA * dt;
+  st.bTilt = clamp(st.bTilt + st.bTiltV * dt, -0.055, 0.055);
+
+  const gTiltA = -omegaGlute * omegaGlute * 0.8 * st.gTilt - 2 * 0.22 * omegaGlute * st.gTiltV - hax * 0.22;
+  st.gTiltV += gTiltA * dt;
+  st.gTilt = clamp(st.gTilt + st.gTiltV * dt, -0.068, 0.068);
+
+  return st;
+}
+
 /**
  * Trace a smooth, sculpted curvy hourglass torso path from shoulders to lower hips.
- * Supports hip shift (`hipX`) and upper torso shift (`chestX`) so dancers pop & roll their hips!
+ * Supports independent spring-driven bust (`bbx, bby`) and glute/hip (`gbx, gby`) bounce
+ * with subtle volume-conserving squash & stretch!
  */
-function traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0) {
+function traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0, bbx = 0, bby = 0, gbx = 0, gby = 0) {
+  const bStretch = clamp((bby / Math.max(1, s)) * 2.4, -0.18, 0.22);
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.6, -0.2, 0.24);
   const shW = prof.bust * 0.86 * s;
-  const buW = prof.bust * s;
+  const buW = prof.bust * (1 - bStretch * 0.32) * s;
   const waW = prof.waist * s;
-  const hiW = prof.hip * s;
-  const buY = shoulderY + (waistY - shoulderY) * 0.42;
-  const lowHipY = hipY + 0.14 * s;
+  const hiW = prof.hip * (1 - gStretch * 0.34) * s;
+  const buY = shoulderY + (waistY - shoulderY) * 0.42 + bby * 0.7;
+  const lowHipY = hipY + 0.14 * s + gby * 0.85;
   const midWaistX = (chestX + hipX) * 0.5;
+  const bustCx = chestX + bbx * 0.75;
+  const hipCx = hipX + gbx * 0.85;
 
   ctx.beginPath();
   // Rounded shoulders across top
   ctx.moveTo(chestX - shW, shoulderY);
   ctx.quadraticCurveTo(chestX, shoulderY - 0.06 * s, chestX + shW, shoulderY);
-  // Right bust -> cinched waist -> full rounded right hip
+  // Right bust (with independent bounce) -> cinched waist -> full rounded right hip (with independent bounce)
   ctx.bezierCurveTo(
-    chestX + buW * 1.18, buY - 0.02 * s,
+    bustCx + buW * 1.2, buY - 0.02 * s,
     midWaistX + waW * 1.02, waistY - 0.06 * s,
     midWaistX + waW, waistY
   );
   ctx.bezierCurveTo(
-    hipX + hiW * 1.15, waistY + (hipY - waistY) * 0.42,
-    hipX + hiW * 1.08, hipY + 0.02 * s,
-    hipX + hiW * 0.68, lowHipY
+    hipCx + hiW * 1.18, waistY + (hipY - waistY) * 0.42 + gby * 0.35,
+    hipCx + hiW * 1.12, hipY + 0.02 * s + gby * 0.75,
+    hipCx + hiW * 0.68, lowHipY
   );
   // Soft hip base curve
-  ctx.quadraticCurveTo(hipX, lowHipY + 0.07 * s, hipX - hiW * 0.68, lowHipY);
+  ctx.quadraticCurveTo(hipCx, lowHipY + 0.075 * s, hipCx - hiW * 0.68, lowHipY);
   // Left rounded hip -> cinched waist -> left bust -> shoulder
   ctx.bezierCurveTo(
-    hipX - hiW * 1.08, hipY + 0.02 * s,
-    hipX - hiW * 1.15, waistY + (hipY - waistY) * 0.42,
+    hipCx - hiW * 1.12, hipY + 0.02 * s + gby * 0.75,
+    hipCx - hiW * 1.18, waistY + (hipY - waistY) * 0.42 + gby * 0.35,
     midWaistX - waW, waistY
   );
   ctx.bezierCurveTo(
     midWaistX - waW * 1.02, waistY - 0.06 * s,
-    chestX - buW * 1.18, buY - 0.02 * s,
+    bustCx - buW * 1.2, buY - 0.02 * s,
     chestX - shW, shoulderY
   );
   ctx.closePath();
+}
+
+/**
+ * Draw sculpted, independently bouncing bust curves with volume-conserving squash & stretch
+ * and slight alternating left/right roll lag (`±bTilt`).
+ */
+function drawBouncingBust(ctx, chestX, shoulderY, prof, s, bbx, bby, bTilt, fillCol, rimCol = null) {
+  const stretch = clamp((bby / Math.max(1, s)) * 3.1, -0.24, 0.28);
+  const rx = prof.bust * 0.56 * (1 - stretch * 0.38) * s;
+  const ry = 0.098 * (1 + stretch) * s;
+  const cx = chestX + bbx;
+  const cy = shoulderY + 0.175 * s + bby;
+  const sep = prof.bust * 0.44 * s;
+
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.ellipse(cx - sep, cy + bTilt, rx, ry, -0.14 - bbx / (s * 1.8), 0, Math.PI * 2);
+  ctx.ellipse(cx + sep, cy - bTilt, rx, ry, 0.14 - bbx / (s * 1.8), 0, Math.PI * 2);
+  ctx.fill();
+  if (rimCol && s >= 28) {
+    ctx.strokeStyle = rimCol;
+    ctx.lineWidth = Math.max(0.9, 0.026 * s);
+    ctx.beginPath();
+    ctx.ellipse(cx - sep, cy + bTilt - ry * 0.25, rx * 0.62, ry * 0.32, -0.14, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.moveTo(cx + sep + rx * 0.62 * Math.cos(Math.PI * 1.1), cy - bTilt - ry * 0.25 + ry * 0.32 * Math.sin(Math.PI * 1.1));
+    ctx.ellipse(cx + sep, cy - bTilt - ry * 0.25, rx * 0.62, ry * 0.32, 0.14, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draw sculpted, independently bouncing glute / lower-hip lobes with volume-conserving
+ * squash & stretch and alternating left/right hip-drop bounce (`±gTilt`).
+ */
+function drawBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, gTilt, fillCol, shadeCol = null) {
+  const stretch = clamp((gby / Math.max(1, s)) * 3.2, -0.24, 0.28);
+  const rx = prof.hip * 0.62 * (1 - stretch * 0.36) * s;
+  const ry = 0.145 * (1 + stretch) * s;
+  const cx = hipX + gbx;
+  const cy = hipY + 0.055 * s + gby;
+  const sep = prof.hip * 0.44 * s;
+
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.ellipse(cx - sep, cy + gTilt, rx, ry, 0.16 + gbx / (s * 2.1), 0, Math.PI * 2);
+  ctx.ellipse(cx + sep, cy - gTilt, rx, ry, -0.16 + gbx / (s * 2.1), 0, Math.PI * 2);
+  ctx.fill();
+  if (shadeCol && s >= 28) {
+    ctx.strokeStyle = shadeCol;
+    ctx.lineWidth = Math.max(0.9, 0.028 * s);
+    ctx.beginPath();
+    ctx.arc(cx - sep, cy + gTilt, rx * 0.82, 0.35, Math.PI - 0.25);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + sep, cy - gTilt, rx * 0.82, 0.25, Math.PI - 0.35);
+    ctx.stroke();
+  }
 }
 
 /**
@@ -369,6 +549,8 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const prof = BODY_PROFILES[seed % BODY_PROFILES.length];
   const ph = seed * 1.73;
   const hScale = 0.93 + (seed % 3) * 0.065;
+  const moveCode = spec.danceMove ? (spec.danceMove.charCodeAt(0) & 15) : 0;
+  const charKey = spec.id || (((seed & 255) << 10) | ((role.charCodeAt(0) & 15) << 6) | (moveCode << 2) | (facing > 0 ? 1 : 0));
 
   ctx.save();
   ctx.translate(x, y);
@@ -379,8 +561,13 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   // 1. Floating in a colorful pool ring on the water surface
   if (role === 'party-float') {
     const fc = FLOAT_COLORS[seed % FLOAT_COLORS.length];
-    const bob = Math.sin(timeSec * 2.2 + ph) * 0.06 * s;
+    const bobM = Math.sin(timeSec * 2.2 + ph) * 0.06;
+    const bob = bobM * s;
     const waveArm = Math.sin(timeSec * 3.8 + ph) * 0.25;
+    const fBounce = computeCharacterBounceState(charKey, 0, bobM, 0, bobM, timeSec, seed, 0);
+    const fBbx = fBounce.bust.x * s;
+    const fBby = fBounce.bust.y * s;
+    const fBtilt = fBounce.bTilt * s;
     ctx.translate(0, bob);
 
     ctx.fillStyle = 'rgba(4, 24, 38, 0.34)';
@@ -395,16 +582,11 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.ellipse(0, -0.02 * s, 0.5 * s, 0.16 * s, 0, Math.PI, Math.PI * 2);
     ctx.stroke();
 
-    // Curvy upper torso emerging from ring
+    // Curvy upper torso emerging from ring with wave-driven independent bust bounce
     ctx.fillStyle = skin;
-    traceCurvyTorso(ctx, -0.54 * s, -0.3 * s, -0.14 * s, prof, s * 0.92, 0, 0);
+    traceCurvyTorso(ctx, -0.54 * s, -0.3 * s, -0.14 * s, prof, s * 0.92, 0, 0, fBbx, fBby, 0, 0);
     ctx.fill();
-    // Contoured bikini / swimsuit top
-    ctx.fillStyle = swim.primary;
-    ctx.beginPath();
-    ctx.ellipse(-0.09 * s, -0.4 * s, 0.11 * s, 0.08 * s, -0.12, 0, Math.PI * 2);
-    ctx.ellipse(0.09 * s, -0.4 * s, 0.11 * s, 0.08 * s, 0.12, 0, Math.PI * 2);
-    ctx.fill();
+    drawBouncingBust(ctx, 0, -0.56 * s, prof, s * 0.94, fBbx, fBby, fBtilt, swim.primary, swim.accent);
 
     // Head + flowing wavy hair + sunglasses
     ctx.fillStyle = skin;
@@ -730,10 +912,37 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const shoulderY = -1.36 * s + bounceY + squatDrop * 0.78;
   const headY = -1.56 * s + bounceY + squatDrop * 0.72;
 
+  // Real-time independent damped spring-damper physics for bust & glutes (v283)!
+  const extraPulse = isDance
+    ? (danceMove === 'twerk'
+        ? Math.sin(timeSec * 10.2 + ph) * 2.2
+        : danceMove === 'ymca' || danceMove === 'running-man'
+          ? Math.sin(timeSec * 7.6 + ph) * 1.45
+          : Math.sin(timeSec * 6.0 + ph) * 0.85)
+    : isToast
+      ? Math.sin(timeSec * 3.8 + ph) * 0.45
+      : 0;
+  const bounceSt = computeCharacterBounceState(
+    charKey,
+    chestShiftX / s,
+    shoulderY / s,
+    hipShiftX / s,
+    hipY / s,
+    timeSec,
+    seed,
+    extraPulse
+  );
+  const bbx = bounceSt.bust.x * s;
+  const bby = bounceSt.bust.y * s;
+  const bTilt = bounceSt.bTilt * s;
+  const gbx = bounceSt.glute.x * s;
+  const gby = bounceSt.glute.y * s;
+  const gTilt = bounceSt.gTilt * s;
+
   // 4a. Curvy Legs (sculpted fuller thighs tapering down to calves!)
   const legColor = isGear ? wet.suit : skin;
-  drawCurvyLeg(ctx, hipShiftX - prof.hip * 0.56 * s, hipY + 0.06 * s, lKneeX, lKneeY, lFootX, lFootY, prof, s, legColor);
-  drawCurvyLeg(ctx, hipShiftX + prof.hip * 0.56 * s, hipY + 0.06 * s, rKneeX, rKneeY, rFootX, rFootY, prof, s, legColor);
+  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 - prof.hip * 0.56 * s, hipY + 0.06 * s + gby * 0.35, lKneeX, lKneeY, lFootX, lFootY, prof, s, legColor);
+  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 + prof.hip * 0.56 * s, hipY + 0.06 * s + gby * 0.35, rKneeX, rKneeY, rFootX, rFootY, prof, s, legColor);
 
   // Dive booties / fins for geared divers
   if (isGearReady) {
@@ -759,17 +968,14 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.fillRect(-0.3 * s + chestShiftX, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.11 * s);
   }
 
-  // 4b. Curvy Sculpted Torso + Contoured Bathing Suit / Wetsuit!
+  // 4b. Curvy Sculpted Torso + Independent Spring-Bounce Bust & Glutes!
   if (isGearReady || isGearTank) {
-    // Full curvy contoured neoprene wetsuit
+    // Full curvy contoured neoprene wetsuit with independent spring-bounce glutes & bust
     ctx.fillStyle = wet.suit;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
     ctx.fill();
-    // Bright athletic side/chest accent stripes
-    ctx.fillStyle = wet.trim;
-    ctx.beginPath();
-    ctx.ellipse(chestShiftX, shoulderY + 0.16 * s, prof.bust * 0.85 * s, 0.07 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
+    drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, wet.suit, wet.trim);
     // BCD harness straps
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = Math.max(1.2, 0.05 * s);
@@ -780,74 +986,70 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.lineTo(hipShiftX + 0.1 * s, hipY + 0.02 * s);
     ctx.stroke();
   } else if (isGearZip) {
-    // Curvy diver half-in wetsuit: sculpted bare upper torso + bright bikini/sport top + neoprene pulled to hips!
+    // Curvy diver half-in wetsuit: bare upper torso + bouncing bikini/sport top + neoprene hugging bouncing glutes!
     ctx.fillStyle = skin;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
     ctx.fill();
-    // Bright bikini / rashguard top peeking above wetsuit
-    ctx.fillStyle = swim.primary;
-    ctx.beginPath();
-    ctx.ellipse(chestShiftX - 0.095 * s, shoulderY + 0.16 * s, prof.bust * 0.5 * s, 0.082 * s, -0.08, 0, Math.PI * 2);
-    ctx.ellipse(chestShiftX + 0.095 * s, shoulderY + 0.16 * s, prof.bust * 0.5 * s, 0.082 * s, 0.08, 0, Math.PI * 2);
-    ctx.fill();
+    drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
     // Wetsuit lower half hugging curvy hips & zipping upward
     const zipUp = 0.07 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
     ctx.fillStyle = wet.suit;
     ctx.beginPath();
     ctx.moveTo((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
     ctx.lineTo((chestShiftX + hipShiftX) * 0.5 + prof.waist * 1.08 * s, waistY - zipUp);
-    ctx.bezierCurveTo(hipShiftX + prof.hip * 1.15 * s, hipY - 0.08 * s, hipShiftX + prof.hip * 1.08 * s, hipY + 0.06 * s, hipShiftX + prof.hip * 0.72 * s, hipY + 0.16 * s);
-    ctx.quadraticCurveTo(hipShiftX, hipY + 0.22 * s, hipShiftX - prof.hip * 0.72 * s, hipY + 0.16 * s);
-    ctx.bezierCurveTo(hipShiftX - prof.hip * 1.08 * s, hipY + 0.06 * s, hipShiftX - prof.hip * 1.15 * s, hipY - 0.08 * s, (chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
+    ctx.bezierCurveTo(hipShiftX + gbx + prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, hipShiftX + gbx + prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx + prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
+    ctx.quadraticCurveTo(hipShiftX + gbx, hipY + 0.22 * s + gby, hipShiftX + gbx - prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
+    ctx.bezierCurveTo(hipShiftX + gbx - prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx - prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, (chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
     ctx.closePath();
     ctx.fill();
+    drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
     ctx.fillStyle = wet.trim;
     ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.06 * s, waistY - zipUp, prof.waist * 2.12 * s, 0.055 * s);
   } else {
-    // Curvy bathing-suit partygoers!
+    // Curvy bathing-suit partygoers with independent spring-bounce bust & glutes!
     ctx.fillStyle = skin;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
     ctx.fill();
 
     if (swim.style === 'trunks') {
-      // Curvy boardshorts + bright crop rashguard / tank option
+      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.22)');
       ctx.fillStyle = swim.primary;
       ctx.beginPath();
-      ctx.moveTo(hipShiftX - prof.hip * 0.92 * s, hipY - 0.12 * s);
-      ctx.lineTo(hipShiftX + prof.hip * 0.92 * s, hipY - 0.12 * s);
-      ctx.lineTo(hipShiftX + prof.hip * 0.96 * s, hipY + 0.2 * s);
-      ctx.lineTo(hipShiftX - prof.hip * 0.96 * s, hipY + 0.2 * s);
+      ctx.moveTo(hipShiftX + gbx * 0.7 - prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
+      ctx.lineTo(hipShiftX + gbx * 0.7 + prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
+      ctx.lineTo(hipShiftX + gbx + prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
+      ctx.lineTo(hipShiftX + gbx - prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = swim.accent;
-      ctx.fillRect(hipShiftX - prof.hip * 0.92 * s, hipY + 0.04 * s, prof.hip * 1.84 * s, 0.06 * s);
+      ctx.fillRect(hipShiftX + gbx * 0.85 - prof.hip * 0.92 * s, hipY + 0.04 * s + gby * 0.75, prof.hip * 1.84 * s, 0.06 * s);
     } else if (swim.style === 'bikini') {
-      // Contoured vibrant bikini top + high-cut V bikini bottom hugging the curves!
+      // Bouncing contoured glutes (skin lower curve + vibrant high-cut bikini bottom riding the bounce!)
+      drawBouncingGlutes(ctx, hipShiftX, hipY + 0.02 * s, prof, s, gbx, gby, gTilt, skin, 'rgba(92, 48, 24, 0.22)');
       ctx.fillStyle = swim.primary;
       ctx.beginPath();
-      ctx.ellipse(chestShiftX - 0.1 * s, shoulderY + 0.16 * s, prof.bust * 0.52 * s, 0.088 * s, -0.1, 0, Math.PI * 2);
-      ctx.ellipse(chestShiftX + 0.1 * s, shoulderY + 0.16 * s, prof.bust * 0.52 * s, 0.088 * s, 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      // High-cut V bikini bottom following rounded hip curve
-      ctx.beginPath();
-      ctx.moveTo(hipShiftX - prof.hip * 0.98 * s, hipY - 0.09 * s);
-      ctx.quadraticCurveTo(hipShiftX, hipY - 0.02 * s, hipShiftX + prof.hip * 0.98 * s, hipY - 0.09 * s);
-      ctx.quadraticCurveTo(hipShiftX + prof.hip * 0.72 * s, hipY + 0.12 * s, hipShiftX, hipY + 0.19 * s);
-      ctx.quadraticCurveTo(hipShiftX - prof.hip * 0.72 * s, hipY + 0.12 * s, hipShiftX - prof.hip * 0.98 * s, hipY - 0.09 * s);
+      ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
+      ctx.quadraticCurveTo(hipShiftX + gbx, hipY - 0.01 * s + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
+      ctx.quadraticCurveTo(hipShiftX + gbx + prof.hip * 0.76 * s, hipY + 0.13 * s + gby, hipShiftX + gbx, hipY + 0.2 * s + gby);
+      ctx.quadraticCurveTo(hipShiftX + gbx - prof.hip * 0.76 * s, hipY + 0.13 * s + gby, hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
       ctx.closePath();
       ctx.fill();
-      // Accent trim tie/stripe
       ctx.strokeStyle = swim.accent;
       ctx.lineWidth = Math.max(1, 0.032 * s);
       ctx.beginPath();
-      ctx.moveTo(hipShiftX - prof.hip * 0.94 * s, hipY - 0.08 * s);
-      ctx.quadraticCurveTo(hipShiftX, hipY - 0.01 * s, hipShiftX + prof.hip * 0.94 * s, hipY - 0.08 * s);
+      ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
+      ctx.quadraticCurveTo(hipShiftX + gbx, hipY + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
       ctx.stroke();
+
+      // Independently bouncing bikini bust!
+      drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
     } else {
-      // Sculpted hourglass cutout one-piece swimsuit!
+      // Sculpted hourglass cutout one-piece swimsuit with independent bouncing bust & glutes!
       ctx.fillStyle = swim.primary;
-      traceCurvyTorso(ctx, shoulderY + 0.07 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+      traceCurvyTorso(ctx, shoulderY + 0.07 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
       ctx.fill();
+      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.2)');
+      drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
       // Cinched accent waist belt highlighting hourglass silhouette
       ctx.fillStyle = swim.accent;
       ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.02 * s, waistY - 0.035 * s, prof.waist * 2.04 * s, 0.065 * s);
@@ -978,7 +1180,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     }
 
     // Floating musical notes rising above dancers!
-    if ((seed % 2) === 0) {
+    if ((seed % 2) === 0 && s >= 24) {
       const np = (timeSec * 0.72 + seed * 0.31) % 1;
       drawMusicNote(
         ctx,
@@ -1305,7 +1507,8 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
     return;
   }
 
-  const isCompactPerf = Boolean(renderer.isMobilePerf || ctx.canvas.width <= 540);
+  const dpr = renderer._cachedDpr || 1;
+  const isCompactPerf = Boolean(renderer.isMobilePerf || (ctx.canvas.width / dpr) <= 540);
   const inVis = (wx) => wx + 1.6 >= visX0 && wx - 1.6 <= visX1;
   const getGroundY = (wx) =>
     typeof renderer._getHorizonGroundY === 'function' ? renderer._getHorizonGroundY(level, wx) : -3.4;
@@ -1340,28 +1543,36 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
     // 1. WATERLINE STAGING DOCK: Suiting-up divers + curvy dock dancer!
     const dockEdgeY = toScreenY(-0.52);
     if (isEntry) {
-      drawTopsidePerson(ctx, toScreenX(waterLeft + 1.65), dockEdgeY, scale * 0.94, timeSec, {
-        role: 'gear-fins',
-        seed: baseSeed + 1,
-        facing: 1,
-      });
-      drawTopsidePerson(ctx, toScreenX(waterLeft + 0.45), dockEdgeY, scale * 0.96, timeSec, {
-        role: 'gear-ready',
-        seed: baseSeed + 2,
-        facing: 1,
-      });
+      if (inVis(waterLeft + 1.65)) {
+        drawTopsidePerson(ctx, toScreenX(waterLeft + 1.65), dockEdgeY, scale * 0.94, timeSec, {
+          role: 'gear-fins',
+          seed: baseSeed + 1,
+          facing: 1,
+        });
+      }
+      if (!isCompactPerf && inVis(waterLeft + 0.45)) {
+        drawTopsidePerson(ctx, toScreenX(waterLeft + 0.45), dockEdgeY, scale * 0.96, timeSec, {
+          role: 'gear-ready',
+          seed: baseSeed + 2,
+          facing: 1,
+        });
+      }
     } else {
-      drawTopsidePerson(ctx, toScreenX(waterRight - 1.75), dockEdgeY, scale * 0.94, timeSec, {
-        role: 'gear-fins',
-        seed: baseSeed + 3,
-        facing: -1,
-      });
-      drawTopsidePerson(ctx, toScreenX(waterRight - 0.72), dockEdgeY, scale * 0.96, timeSec, {
-        role: 'party-dance',
-        danceMove: 'disco',
-        seed: baseSeed + 4,
-        facing: -1,
-      });
+      if (inVis(waterRight - 1.75)) {
+        drawTopsidePerson(ctx, toScreenX(waterRight - 1.75), dockEdgeY, scale * 0.94, timeSec, {
+          role: 'gear-fins',
+          seed: baseSeed + 3,
+          facing: -1,
+        });
+      }
+      if (!isCompactPerf && inVis(waterRight - 0.72)) {
+        drawTopsidePerson(ctx, toScreenX(waterRight - 0.72), dockEdgeY, scale * 0.96, timeSec, {
+          role: 'party-dance',
+          danceMove: 'disco',
+          seed: baseSeed + 4,
+          facing: -1,
+        });
+      }
     }
 
     // 2. LEFT CLIFF-TOP RIM: Beach Dance Floor + Dive Prep Hub!
@@ -1383,14 +1594,13 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         drawPartyGearProps(ctx, toScreenX(boomX), toScreenY(getGroundY(boomX)), scale, timeSec, 'party');
         const rackX = topLeftX - 1.2;
         drawPartyGearProps(ctx, toScreenX(rackX), toScreenY(getGroundY(rackX)), scale, timeSec, 'gear');
+        const umbX = topLeftX - 5.2;
+        drawBeachUmbrella(ctx, toScreenX(umbX), toScreenY(getGroundY(umbX)), scale, baseSeed, -0.09);
       }
-
-      const umbX = topLeftX - 5.2;
-      drawBeachUmbrella(ctx, toScreenX(umbX), toScreenY(getGroundY(umbX)), scale, baseSeed, -0.09);
 
       // Curvy dance squad busting out Floss, Twerk & Salsa beside the palapa!
       const p1x = topLeftX - 4.7;
-      if (inVis(p1x)) {
+      if (!isCompactPerf && inVis(p1x)) {
         drawTopsidePerson(ctx, toScreenX(p1x), toScreenY(getGroundY(p1x)), scale, timeSec, {
           role: 'party-dance',
           danceMove: 'floss',
@@ -1463,27 +1673,26 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           timeSec,
           0.5
         );
+        const rUmbX = topRightX + 5.1;
+        if (inVis(rUmbX)) drawBeachUmbrella(ctx, toScreenX(rUmbX), toScreenY(getGroundY(rUmbX)), scale, baseSeed + 2, 0.1);
+        const lngX = topRightX + 5.55;
+        if (inVis(lngX)) {
+          drawTopsidePerson(ctx, toScreenX(lngX), toScreenY(getGroundY(lngX)), scale * 0.96, timeSec, {
+            role: 'party-lounge',
+            seed: baseSeed + 4,
+            facing: -1,
+          });
+        }
+        const rd1 = topRightX + 0.8;
+        if (inVis(rd1)) {
+          drawTopsidePerson(ctx, toScreenX(rd1), toScreenY(getGroundY(rd1)), scale, timeSec, {
+            role: 'gear-zip',
+            seed: baseSeed + 7,
+            facing: -1,
+          });
+        }
       }
 
-      const rUmbX = topRightX + 5.1;
-      if (inVis(rUmbX)) drawBeachUmbrella(ctx, toScreenX(rUmbX), toScreenY(getGroundY(rUmbX)), scale, baseSeed + 2, 0.1);
-      const lngX = topRightX + 5.55;
-      if (inVis(lngX)) {
-        drawTopsidePerson(ctx, toScreenX(lngX), toScreenY(getGroundY(lngX)), scale * 0.96, timeSec, {
-          role: 'party-lounge',
-          seed: baseSeed + 4,
-          facing: -1,
-        });
-      }
-
-      const rd1 = topRightX + 0.8;
-      if (inVis(rd1)) {
-        drawTopsidePerson(ctx, toScreenX(rd1), toScreenY(getGroundY(rd1)), scale, timeSec, {
-          role: 'gear-zip',
-          seed: baseSeed + 7,
-          facing: -1,
-        });
-      }
       const rp1 = topRightX + 1.75;
       if (inVis(rp1)) {
         drawTopsidePerson(ctx, toScreenX(rp1), toScreenY(getGroundY(rp1)), scale, timeSec, {
@@ -1493,16 +1702,16 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           facing: 1,
         });
       }
-      const rp2 = topRightX + 2.65;
-      if (inVis(rp2)) {
-        drawTopsidePerson(ctx, toScreenX(rp2), toScreenY(getGroundY(rp2)), scale, timeSec, {
-          role: 'party-dance',
-          danceMove: 'dab',
-          seed: baseSeed + 2,
-          facing: -1,
-        });
-      }
       if (!isCompactPerf) {
+        const rp2 = topRightX + 2.65;
+        if (inVis(rp2)) {
+          drawTopsidePerson(ctx, toScreenX(rp2), toScreenY(getGroundY(rp2)), scale, timeSec, {
+            role: 'party-dance',
+            danceMove: 'dab',
+            seed: baseSeed + 2,
+            facing: -1,
+          });
+        }
         const rp3 = topRightX + 3.55;
         if (inVis(rp3)) {
           drawTopsidePerson(ctx, toScreenX(rp3), toScreenY(getGroundY(rp3)), scale, timeSec, {
