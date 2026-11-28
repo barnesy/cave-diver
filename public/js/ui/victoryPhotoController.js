@@ -37,27 +37,19 @@ const CONFETTI_COLS = Object.freeze(['#f43f5e', '#facc15', '#38bdf8', '#4ade80',
 
 function _liveryToTopsideSpec(livery, fallbackSeed = 0) {
   const pal = resolveDiverLiveryPalette(livery || null);
-  const cut = pal.suitCut || 'drysuit';
-  const isSwim = cut === 'bikini' || cut === 'cutout';
-  const isHalf = cut === 'halfzip';
-  const customSwim = {
-    primary: isHalf ? (pal.accent || '#fb7185') : (pal.suitMid || '#fb7185'),
-    accent: pal.trim || '#fef08a',
-    style: cut === 'cutout' ? 'onepiece' : 'bikini',
-  };
-  const customWet = {
-    suit: pal.suitMid || '#1e293b',
-    trim: pal.trim || '#38bdf8',
-    tank: pal.tankFinish?.mid || '#eab308',
-    fin: pal.finColor || '#38bdf8',
-  };
   return {
-    role: isSwim ? 'party-dance' : isHalf ? 'party-dance' : 'party-dance',
-    isFullSuit: !isSwim && !isHalf,
-    customSwim: isSwim || isHalf ? customSwim : { primary: pal.suitMid || '#1e293b', accent: pal.trim || '#38bdf8', style: 'onepiece' },
-    customWet,
-    skin: pal.skinTone || '#e8b68c',
-    bodyType: pal.bodyType || 'curvy',
+    role: 'party-dance',
+    customSwim: {
+      primary: pal.accent || '#fb7185',
+      accent: pal.trim || '#fef08a',
+      style: fallbackSeed % 2 === 0 ? 'bikini' : 'onepiece',
+    },
+    customWet: {
+      suit: pal.suitMid || '#1e293b',
+      trim: pal.trim || '#38bdf8',
+      tank: pal.tankFinish?.mid || '#eab308',
+      fin: pal.finColor || '#38bdf8',
+    },
     seed: fallbackSeed,
   };
 }
@@ -217,8 +209,6 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
       hypeEnergy,
       customSwim: spec.customSwim,
       customWet: spec.customWet,
-      skin: spec.skin,
-      bodyType: spec.bodyType,
     });
     // Crisp nameplate under hero/squad member
     ctx.font = '800 10px ui-sans-serif, system-ui, sans-serif';

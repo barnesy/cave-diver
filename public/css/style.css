@@ -7994,11 +7994,6 @@ summary,
   -webkit-backdrop-filter: blur(6px);
   transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
 }
-.livery-tank-pill.active {
-  border-color: rgba(56, 189, 248, 0.78);
-  background: rgba(14, 116, 144, 0.55);
-  color: #f0f9ff;
-}
 .livery-tank-pill.accent {
   border-color: rgba(250, 204, 21, 0.52);
   color: #fef08a;

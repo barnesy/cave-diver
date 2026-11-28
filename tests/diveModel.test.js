@@ -14110,7 +14110,7 @@ test('v281-v283 Living Topside & Background Crowds: Curvy Body Types, Independen
   assert.ok(sawPos && sawNeg && Math.abs(sp.y) < 0.002, `Expected damped oscillation with overshoot & settle, got sawPos=${sawPos} sawNeg=${sawNeg} finalY=${sp.y}`);
 });
 
-test('v284 Topside Live Hype & Surface Audio Ducking, Playable Curvy & Resort Swimsuits, Biome Hangouts & Victory Photo', async () => {
+test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangouts & Victory Photo (zero avatar unlocks)', async () => {
   const {
     classifyTopsideBiome,
     syncTopsideHypeFromDive,
@@ -14122,19 +14122,11 @@ test('v284 Topside Live Hype & Surface Audio Ducking, Playable Curvy & Resort Sw
     drawPartyDiveBoatEnhancements,
   } = await import('../public/js/game/renderers/topsidePropsRenderer.js');
   const { computeSurfacePartyAudioMix } = await import('../public/js/game/audio.js');
-  const {
-    SUIT_LIVERIES,
-    DEFAULT_RIG_LIVERY,
-    sanitizeRigLivery,
-    isDefaultRigLivery,
-    resolveDiverLiveryPalette,
-  } = await import('../public/js/game/rigLivery.js');
-  const { renderGearArtworkSvg } = await import('../public/js/ui/gearArtwork.js');
-  const { drawStyledDiverRig, computeDiverUnderwaterBounce } = await import('../public/js/game/artSprites.js');
+  const { SUIT_LIVERIES, DEFAULT_RIG_LIVERY, isDefaultRigLivery } = await import('../public/js/game/rigLivery.js');
   const { renderVictoryPhotoFrame, VICTORY_DANCE_MOVES } = await import('../public/js/ui/victoryPhotoController.js');
   const { LEVELS } = await import('../public/js/levels/index.js');
 
-  // 1. Live crowd hype & surface-to-underwater low-pass party audio ducking
+  // 1. Live crowd hype & surface-to-underwater low-pass party audio ducking (built-in, zero unlocks)
   const host = {};
   const cenote = LEVELS.find((l) => l.id === 'cenote-el-abismo') || LEVELS[0];
   const wreck = LEVELS.find((l) => l.isWreck) || LEVELS[0];
@@ -14167,31 +14159,11 @@ test('v284 Topside Live Hype & Surface Audio Ducking, Playable Curvy & Resort Sw
   assert.ok(surfMix.active && surfMix.cutoffHz >= 2000 && surfMix.gain > midMix.gain && midMix.cutoffHz < surfMix.cutoffHz && midMix.cutoffHz > 160 && !deepMix.active && deepMix.gain === 0,
     `Expected smooth surface-to-underwater lowpass ducking: ${JSON.stringify({ surfMix, midMix, deepMix })}`);
 
-  // 2. Playable Curvy body toggle + 4 unlocked Resort Swimsuit / Half-Zip skins + underwater bounce
-  const resortIds = ['resort-bikini-coral', 'resort-bikini-lagoon', 'resort-cutout-neon', 'halfzip-wetsuit-reef'];
-  for (const id of resortIds) {
-    const suit = SUIT_LIVERIES.find((s) => s.id === id);
-    assert.ok(suit && suit.isUnlocked({}), `Expected unlocked resort skin ${id}`);
-    const san = sanitizeRigLivery({ suitId: id });
-    assert.equal(san.suitId, id);
-    const pal = resolveDiverLiveryPalette(san);
-    assert.equal(pal.bodyType, 'curvy');
-    assert.ok(['bikini', 'cutout', 'halfzip'].includes(pal.suitCut));
-    const svg = renderGearArtworkSvg('suit', suit, { size: 72 });
-    assert.ok(svg.includes('<svg') && svg.includes('linearGradient'));
-  }
+  // 2. Playable diver avatar & Workshop stay pure technical diving gear (no swimwear/body toggle on avatar)
   assert.equal(isDefaultRigLivery(DEFAULT_RIG_LIVERY), true);
-  const curvyDrysuit = sanitizeRigLivery({ suitId: 'zissou-classic', bodyType: 'curvy' });
-  assert.equal(curvyDrysuit.bodyType, 'curvy');
-  assert.equal(isDefaultRigLivery(curvyDrysuit), false);
-  assert.equal(resolveDiverLiveryPalette(curvyDrysuit).bodyType, 'curvy');
+  assert.equal(SUIT_LIVERIES.some((s) => String(s.id).startsWith('resort-') || String(s.id).startsWith('halfzip-')), false);
 
-  // Underwater spring bounce responds independently for bust & glutes
-  computeDiverUnderwaterBounce('u-test', 0, 0, 1.0);
-  const ub = computeDiverUnderwaterBounce('u-test', 1.8, -3.2, 1.05);
-  assert.ok(Number.isFinite(ub.bust.y) && Number.isFinite(ub.glute.y));
-
-  // 3. Mock canvas draw verification for Biome Hangouts, Cannonballer, Curvy Underwater Rig & Victory Photo
+  // 3. Mock canvas draw verification for Biome Hangouts, Cannonballer, Hype Overlay & Victory Photo
   let ops = 0;
   const mockCtx = {
     canvas: { width: 640, height: 236 },
@@ -14214,11 +14186,6 @@ test('v284 Topside Live Hype & Surface Audio Ducking, Playable Curvy & Resort Sw
   }
   drawTopsideHypeOverlay(host, mockCtx, (x) => 320 + x * 20, (y) => 180 + y * 20, 22, 22.4);
 
-  for (const id of [...resortIds, 'zissou-classic']) {
-    const pal = resolveDiverLiveryPalette({ suitId: id, bodyType: 'curvy' });
-    drawStyledDiverRig(mockCtx, 22, 40, false, 1, { liveryPalette: pal, timeSec: 2.5, vx: 1.5, vy: -1.2, bounceKey: id });
-  }
-
   assert.equal(VICTORY_DANCE_MOVES.length, 8);
   for (const mv of VICTORY_DANCE_MOVES) {
     renderVictoryPhotoFrame(mockCtx, 640, 236, {
@@ -14226,13 +14193,13 @@ test('v284 Topside Live Hype & Surface Audio Ducking, Playable Curvy & Resort Sw
       score: 18420,
       grade: 'S',
       diverName: 'Chris',
-      livery: { suitId: 'resort-bikini-coral', bodyType: 'curvy' },
-      squad: [{ name: 'Maya', livery: { suitId: 'halfzip-wetsuit-reef', bodyType: 'curvy' } }],
+      livery: DEFAULT_RIG_LIVERY,
+      squad: [{ name: 'Maya', livery: { suitId: 'arctic-cobalt' } }],
       boss: { name: 'Cenote Kraken', icon: '🐙' },
       lootCount: 4,
       danceMove: mv.id,
       burstAt: 0,
     }, 1.4);
   }
-  assert.ok(ops > 600, `Expected rich v284 render operations across all 4 pillars, got ${ops}`);
+  assert.ok(ops > 600, `Expected rich v284-v285 render operations across topside hangouts, hype & victory photo, got ${ops}`);
 });

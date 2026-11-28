@@ -2,54 +2,6 @@
  * High-Fidelity Procedural Art & Pre-Baked Glow Stamps
  * Stylized Yucatan Cenote / Life Aquatic / Finding Dory aesthetic.
  */
-import { stepBounceSpring } from './renderers/topsidePeopleRenderer.js';
-
-const _diverBouncePool = new Map();
-const MAX_DIVER_BOUNCE_STATES = 24;
-
-/**
- * Independent underwater spring-mass secondary-motion solver for playable & AI curvy divers (v284).
- * Uses separate natural frequencies & hydrodynamic damping for bust (faster) and glutes (deeper),
- * driven by vertical swim/buoyancy acceleration and fin-kick sway.
- */
-export function computeDiverUnderwaterBounce(key, vx = 0, vy = 0, timeSec = 0) {
-  const k = key || 'self';
-  let st = _diverBouncePool.get(k);
-  if (!st) {
-    if (_diverBouncePool.size >= MAX_DIVER_BOUNCE_STATES) {
-      const oldest = _diverBouncePool.keys().next().value;
-      _diverBouncePool.delete(oldest);
-    }
-    st = {
-      t: timeSec,
-      prevVx: vx,
-      prevVy: vy,
-      bust: { x: 0, y: 0, vx: 0, vy: 0 },
-      glute: { x: 0, y: 0, vx: 0, vy: 0 },
-    };
-    _diverBouncePool.set(k, st);
-    return st;
-  }
-  const dt = timeSec - st.t;
-  if (dt <= 0.0005 || dt > 0.25) {
-    st.t = timeSec;
-    st.prevVx = vx;
-    st.prevVy = vy;
-    return st;
-  }
-  const ax = Math.max(-24, Math.min(24, (vx - st.prevVx) / dt));
-  const ay = Math.max(-24, Math.min(24, (vy - st.prevVy) / dt));
-  st.t = timeSec;
-  st.prevVx = vx;
-  st.prevVy = vy;
-
-  // Natural hydrodynamic swim kick sway + real velocity-change inertia
-  const kickWave = Math.sin(timeSec * 5.8) * 1.35 + Math.cos(timeSec * 3.1) * 0.55;
-  const hipWave = Math.sin(timeSec * 5.8 - 0.85) * 1.65;
-  stepBounceSpring(st.bust, -ax * 0.35, -ay * 0.65 + kickWave, dt, 11.8, 0.27, 0.09, 0.13, 0.095, 0.115);
-  stepBounceSpring(st.glute, -ax * 0.32, -ay * 0.58 + hipWave, dt, 9.2, 0.25, 0.085, 0.14, 0.095, 0.125);
-  return st;
-}
 
 function makeGlowStamp(colorInner, colorMid, size = 64) {
   const c = document.createElement('canvas');
@@ -848,124 +800,23 @@ export function drawStyledDiverRig(ctx, u, scale, isPeer, rollScale, gearOpts = 
   const equipFx = gearOpts?.equipFx || null;
   const equipT = equipFx && equipFx.progress >= 0 && equipFx.progress < 1 ? equipFx.progress : 1;
 
-  // Sculpted torso shell with shading (supports custom drysuit, curvy body type, bikinis & half-zip wetsuits! v284)
-  const suitCut = pal?.suitCut || 'drysuit';
-  const isCurvyBody = pal?.bodyType === 'curvy' || suitCut !== 'drysuit';
-  const skinTone = pal?.skinTone || '#e8b68c';
-  let suitFillStyle = suitGrad;
+  // Sculpted drysuit torso shell with shading (supports custom livery drysuit colorway)
   if (pal?.suitTop && pal?.suitMid && pal?.suitBot) {
     const customSuitGrad = ctx.createLinearGradient?.(0, -u * 0.4, 0, u * 0.45);
     if (customSuitGrad && typeof customSuitGrad.addColorStop === 'function') {
       customSuitGrad.addColorStop(0, pal.suitTop);
       customSuitGrad.addColorStop(0.55, pal.suitMid);
       customSuitGrad.addColorStop(1, pal.suitBot);
-      suitFillStyle = customSuitGrad;
+      ctx.fillStyle = customSuitGrad;
     } else {
-      suitFillStyle = pal.suitMid;
-    }
-  }
-
-  if (isCurvyBody) {
-    const bKey = gearOpts?.bounceKey || (isPeer ? 'peer' : 'self');
-    const bSt = computeDiverUnderwaterBounce(bKey, Number(gearOpts?.vx) || 0, Number(gearOpts?.vy) || 0, timeSec);
-    const bbx = bSt.bust.x * u;
-    const bby = bSt.bust.y * u;
-    const gbx = bSt.glute.x * u;
-    const gby = bSt.glute.y * u;
-
-    // 1. Hourglass side-profile swimmer torso (tapered waist, fuller hips & chest)
-    ctx.fillStyle = suitCut === 'bikini' || suitCut === 'cutout' ? skinTone : suitFillStyle;
-    ctx.beginPath();
-    ctx.moveTo(u * 0.44, -u * 0.2);
-    // Dorsal spine curving smoothly into sculpted posterior hip/glute arch
-    ctx.bezierCurveTo(u * 0.08, -u * 0.25, -u * 0.28, -u * 0.16, -u * 0.56 + gbx * 0.35, -u * 0.27 + gby * 0.4);
-    ctx.bezierCurveTo(-u * 0.88 + gbx * 0.6, -u * 0.34 + gby * 0.7, -u * 1.0 + gbx * 0.5, u * 0.16 + gby * 0.4, -u * 0.68, u * 0.26);
-    // Ventral waist taper rising into sculpted chest/bust
-    ctx.bezierCurveTo(-u * 0.42, u * 0.24, -u * 0.18, u * 0.19, u * 0.12 + bbx * 0.4, u * 0.32 + bby * 0.5);
-    ctx.bezierCurveTo(u * 0.36 + bbx * 0.4, u * 0.34 + bby * 0.5, u * 0.52, u * 0.16, u * 0.44, -u * 0.2);
-    ctx.closePath();
-    ctx.fill();
-
-    // For half-zip wetsuit: expose warm bare shoulders/upper chest above unzipped waist collar
-    if (suitCut === 'halfzip') {
-      ctx.fillStyle = skinTone;
-      ctx.beginPath();
-      ctx.ellipse(u * 0.16, u * 0.02, u * 0.34, u * 0.25, -0.08, 0, Math.PI * 2);
-      ctx.fill();
-      // Folded neoprene wetsuit waist collar cuff
-      ctx.fillStyle = pal?.suitTop || '#1e3a5f';
-      ctx.strokeStyle = trim;
-      ctx.lineWidth = Math.max(1, u * 0.036);
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.28, -u * 0.22, u * 0.18, u * 0.46, u * 0.06);
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // 2. Independently bouncing sculpted glutes (volume-conserving squash & stretch)
-    const gStretch = Math.max(0.86, Math.min(1.16, 1 + bSt.glute.y * 0.85));
-    const gluteCol = suitCut === 'bikini' || suitCut === 'cutout' ? suitFillStyle : (suitCut === 'halfzip' ? suitFillStyle : suitFillStyle);
-    ctx.fillStyle = gluteCol;
-    ctx.beginPath();
-    ctx.ellipse(
-      -u * 0.72 + gbx * 0.85,
-      -u * 0.07 + gby * 0.95,
-      (u * 0.28) / Math.sqrt(gStretch),
-      u * 0.25 * gStretch,
-      -0.18,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    if (suitCut === 'bikini' || suitCut === 'cutout') {
-      // Cheeky swimsuit bottom trim piping
-      ctx.strokeStyle = trim;
-      ctx.lineWidth = Math.max(1, u * 0.038);
-      ctx.beginPath();
-      ctx.moveTo(-u * 0.54, -u * 0.23 + gby * 0.45);
-      ctx.quadraticCurveTo(-u * 0.62, u * 0.02, -u * 0.56, u * 0.25);
-      ctx.stroke();
-    }
-
-    // 3. Independently bouncing sculpted bust (higher natural frequency + squash/stretch!)
-    const bStretch = Math.max(0.86, Math.min(1.16, 1 + bSt.bust.y * 0.9));
-    const bustCol = suitCut === 'halfzip' ? accent : suitFillStyle;
-    ctx.fillStyle = bustCol;
-    ctx.beginPath();
-    ctx.ellipse(
-      u * 0.16 + bbx * 0.9,
-      u * 0.22 + bby * 0.95,
-      (u * 0.22) / Math.sqrt(bStretch),
-      u * 0.185 * bStretch,
-      0.16,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    if (suitCut === 'bikini' || suitCut === 'cutout' || suitCut === 'halfzip') {
-      // Swimwear halter strap & top trim highlight
-      ctx.strokeStyle = trim;
-      ctx.lineWidth = Math.max(1, u * 0.038);
-      ctx.beginPath();
-      ctx.moveTo(u * 0.36, -u * 0.08);
-      ctx.lineTo(u * 0.18 + bbx * 0.7, u * 0.18 + bby * 0.7);
-      ctx.moveTo(u * 0.14 + bbx * 0.6, u * 0.34 + bby * 0.7);
-      ctx.lineTo(u * 0.02, -u * 0.2);
-      ctx.stroke();
-    }
-    if (suitCut === 'cutout') {
-      // Sleek monokini center bridge connecting chest to hips
-      ctx.fillStyle = suitFillStyle;
-      ctx.beginPath();
-      ctx.roundRect(-u * 0.54, u * 0.08, u * 0.64, u * 0.14, u * 0.06);
-      ctx.fill();
+      ctx.fillStyle = pal.suitMid;
     }
   } else {
-    ctx.fillStyle = suitFillStyle;
-    ctx.beginPath();
-    ctx.ellipse(-u * 0.22, u * 0.02, u * 0.72, u * 0.31, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = suitGrad;
   }
+  ctx.beginPath();
+  ctx.ellipse(-u * 0.22, u * 0.02, u * 0.72, u * 0.31, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // Animated Special Drysuit FX (Mythic / Epic living effects)
   _drawAnimatedSuitFx(ctx, u, pal, timeSec);
@@ -1579,12 +1430,9 @@ export function drawArticulatedDiverLeg(
   liveryPalette = null,
   timeSec = 0
 ) {
-  const isBareLeg = liveryPalette?.suitCut === 'bikini' || liveryPalette?.suitCut === 'cutout';
-  const suitColor = isBareLeg
-    ? (isBackLeg ? '#c79266' : (liveryPalette?.skinTone || '#e8b68c'))
-    : liveryPalette
-      ? (isBackLeg ? liveryPalette.suitBot : liveryPalette.suitMid)
-      : (isBackLeg ? '#09111e' : '#111c2d');
+  const suitColor = liveryPalette
+    ? (isBackLeg ? liveryPalette.suitBot : liveryPalette.suitMid)
+    : (isBackLeg ? '#09111e' : '#111c2d');
   const finBladeColor = liveryPalette
     ? liveryPalette.finColor
     : isPeer
@@ -1611,8 +1459,8 @@ export function drawArticulatedDiverLeg(
   drawDiverLimbSegment(ctx, px, py, kx, ky, 0.21 * scale, suitColor);
   drawDiverLimbSegment(ctx, kx, ky, ax, ay, 0.16 * scale, suitColor);
 
-  // Subtle Kevlar knee pad cap (drysuits & wetsuits only; bare skin legs stay clean!)
-  if (scale >= 14 && !isBareLeg) {
+  // Subtle Kevlar knee pad cap
+  if (scale >= 14) {
     ctx.fillStyle = liveryPalette?.suitTop || '#1e293b';
     ctx.beginPath();
     ctx.arc(kx, ky, Math.max(1.4, 0.085 * scale), 0, Math.PI * 2);
@@ -1984,9 +1832,8 @@ export function drawDiverArmAndTorch(
 ) {
   const torchOn = opts?.torchOn !== false;
   const glowStamps = opts?.glowStamps || null;
-  const isBareArm = liveryPalette?.suitCut === 'bikini' || liveryPalette?.suitCut === 'cutout' || liveryPalette?.suitCut === 'halfzip';
-  const upperColor = isBareArm ? (liveryPalette?.skinTone || '#e8b68c') : (liveryPalette?.suitTop || '#1e293b');
-  const foreColor = isBareArm ? (liveryPalette?.skinTone || '#e8b68c') : (liveryPalette?.suitMid || '#0f172a');
+  const upperColor = liveryPalette?.suitTop || '#1e293b';
+  const foreColor = liveryPalette?.suitMid || '#0f172a';
   const trimColor = liveryPalette?.trim || (isPeer ? '#fdba74' : '#22d3ee');
   const lensColor = liveryPalette?.torch?.swatch || '#fef08a';
 
