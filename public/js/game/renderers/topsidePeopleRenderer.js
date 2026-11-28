@@ -604,19 +604,30 @@ function drawBouncingBust(
     ctx.ellipse(rxPos, ryPos, rX, rY, rotR, 0, Math.PI * 2);
   };
 
-  // Helper: sculpted tight-fit cleavage Y-curve + subtle warm sunlit upper-bust highlight
+  // Helper: razor-thin, delicate anatomical cleavage & upper-edge contour + soft upper-bust sheen (v304)!
   const drawCleavageContour = (yTop, yBot, showTopSheen = true) => {
     if (s < 15) return;
-    ctx.strokeStyle = 'rgba(72, 28, 14, 0.30)';
-    ctx.lineWidth = Math.max(0.8, 0.019 * s);
+    ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+    ctx.lineWidth = Math.max(0.55, 0.0095 * s);
     ctx.beginPath();
     ctx.moveTo(cx - rx * 0.24, yTop);
     ctx.quadraticCurveTo(cx - 0.008 * s, (yTop + yBot) * 0.52, cx, yBot);
     ctx.moveTo(cx + rx * 0.24, yTop);
     ctx.quadraticCurveTo(cx + 0.008 * s, (yTop + yBot) * 0.52, cx, yBot);
     ctx.stroke();
+    // Whisper-thin delicate lateral breast-edge body contour framing the outer upper domes
+    if (s >= 20) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.16)';
+      ctx.lineWidth = Math.max(0.5, 0.0085 * s);
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, rx * 0.99, ry * 0.99, rotL, Math.PI * 0.72, Math.PI * 1.38);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(rxPos, ryPos, rx * 0.99, ry * 0.99, rotR, -Math.PI * 0.38, Math.PI * 0.28);
+      ctx.stroke();
+    }
     if (showTopSheen && s >= 22) {
-      ctx.fillStyle = 'rgba(255, 246, 236, 0.22)';
+      ctx.fillStyle = 'rgba(255, 246, 236, 0.20)';
       ctx.beginPath();
       ctx.ellipse(lx - rx * 0.1, ly - ry * 0.42, rx * 0.42, ry * 0.22, -0.15, 0, Math.PI * 2);
       ctx.ellipse(rxPos + rx * 0.1, ryPos - ry * 0.42, rx * 0.42, ry * 0.22, 0.15, 0, Math.PI * 2);
@@ -624,13 +635,13 @@ function drawBouncingBust(
     }
   };
 
-  // Helper: sleek tight-fit lower underbust support arc hugging strictly beneath each breast
-  const drawUnderbustArc = (col, alpha = 0.22, arcRx = rx) => {
+  // Helper: razor-thin, delicate lower underbust contour arc hugging strictly beneath each breast (v304)!
+  const drawUnderbustArc = (col, alpha = 0.18, arcRx = rx) => {
     if (s < 15) return;
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * 0.80;
     ctx.strokeStyle = col;
-    ctx.lineWidth = Math.max(0.85, 0.020 * s);
+    ctx.lineWidth = Math.max(0.55, 0.010 * s);
     ctx.beginPath();
     ctx.ellipse(lx, ly, arcRx * 0.96, ry * 0.96, rotL, 0.24, Math.PI * 0.80);
     ctx.stroke();
@@ -856,8 +867,8 @@ function drawBouncingBust(
       ctx.stroke();
     }
     if (s >= 18) {
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.14)';
-      ctx.lineWidth = Math.max(0.75, 0.016 * s);
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.12)';
+      ctx.lineWidth = Math.max(0.55, 0.0095 * s);
       ctx.beginPath();
       ctx.moveTo(cx, cy - ry * 0.28);
       ctx.lineTo(cx, cy + ry * 0.36);
@@ -880,8 +891,8 @@ function drawBouncingBust(
     ctx.closePath();
     ctx.fill();
     if (s >= 16) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.18)';
+      ctx.lineWidth = Math.max(0.55, 0.0095 * s);
       ctx.beginPath();
       ctx.moveTo(outL, outerDropL + bandThick * 0.34);
       ctx.bezierCurveTo(lx - rx * 0.48, cupBotL + bandThick * 0.38, lx + rx * 0.44, cupBotL + bandThick * 0.34, cx, centerBridgeY + bandThick * 0.34);
@@ -960,8 +971,8 @@ function drawBouncingBust(
     ctx.closePath();
     ctx.fill();
     if (s >= 16) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
-      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.18)';
+      ctx.lineWidth = Math.max(0.55, 0.0095 * s);
       ctx.beginPath();
       ctx.moveTo(outL, dropL + bandW * 0.50);
       ctx.bezierCurveTo(lx - rx * 0.44, cupBotL + bandW * 0.52, lx + rx * 0.42, cupBotL + bandW * 0.48, cx, midY + bandW * 0.50);
@@ -1775,10 +1786,12 @@ function getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby,
   const hLag = clamp(bbx * 0.20, -0.013 * s, 0.013 * s);
   const torsoH = Math.max(0.18 * s, waistY - shoulderY);
   const ribCx = chestX + (hipX - chestX) * 0.18 + hLag;
-  const buY = shoulderY + torsoH * 0.50 + vBounce;
-  const sideRx = prof.bust * (0.145 + 0.072 * cs) * s;
-  const sideRy = torsoH * (0.155 + 0.042 * cs);
-  const outOff = prof.bust * (0.60 + 0.055 * cs) * s;
+  const buY = shoulderY + torsoH * 0.49 + vBounce;
+  // Project gently past the tapered lateral ribcage wall (`~0.88 * prof.bust`) so the rounded outer breast
+  // + fitted swimsuit cup cradle silhouette is unmistakably visible when viewed from the back (v304)!
+  const sideRx = prof.bust * (0.195 + 0.085 * cs) * s;
+  const sideRy = torsoH * (0.185 + 0.048 * cs);
+  const outOff = prof.bust * (0.76 + 0.068 * cs) * s;
   _backBoobGeom.ribCx = ribCx;
   _backBoobGeom.buY = buY;
   _backBoobGeom.sideRx = sideRx;
@@ -1792,7 +1805,7 @@ function getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby,
 }
 
 /**
- * Draw natural lateral side-boob skin contours + lower-outer swimsuit cradle in Female Back View (v299)!
+ * Draw natural lateral side-boob skin contours + lower-outer swimsuit cradle in Female Back View (v304)!
  * Rendered BEFORE Pass-1 arms so ALL arms (both forward-reaching Pass-1 arms and side/overhead Pass-2 arms)
  * are ALWAYS anatomically in front of the front-chest side-boobs when the dancer faces away!
  */
@@ -1805,43 +1818,62 @@ function drawBackViewSideBoob(ctx, chestX, hipX, shoulderY, waistY, prof, s, bbx
   for (const side of [-1, 1]) {
     const bx = side < 0 ? g.lx : g.rx;
     const by = side < 0 ? g.ly : g.ry;
-    const rot = side * 0.20;
+    const rot = side * 0.18;
 
-    // 1. Bare rounded outer side-boob peeking past the ribcage
+    // 1. Bare rounded outer side-boob peeking gracefully past the lateral ribcage
     ctx.fillStyle = skin;
     ctx.beginPath();
     ctx.ellipse(bx, by, g.sideRx, g.sideRy, rot, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Fitted lower-outer swimsuit cup cradle clipped strictly onto the side-boob so it visibly lifts & holds it up!
+    // 2. Fitted lower-outer swimsuit cup cradle clipped strictly onto the peeking side-boob so the top visibly lifts & hugs it!
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(bx, by, g.sideRx * 1.02, g.sideRy * 1.02, rot, 0, Math.PI * 2);
     ctx.clip?.();
-    const topFrac = isCrop ? -0.32 : isBandeau ? -0.30 : isOnePiece ? 0.08 : -0.10;
+    const topFrac = isCrop ? -0.34 : isBandeau ? -0.28 : isOnePiece ? 0.04 : -0.06;
     const cradleTopY = by + g.sideRy * topFrac;
     ctx.fillStyle = swim.primary;
-    ctx.fillRect(bx - g.sideRx * 1.3, cradleTopY, g.sideRx * 2.6, g.sideRy * 1.8);
-    if (!isOnePiece && !isCrop && swim.accent && s >= 16) {
-      ctx.fillStyle = swim.accent;
-      ctx.fillRect(bx - g.sideRx * 1.3, by + g.sideRy * 0.78, g.sideRx * 2.6, Math.max(1.0, 0.013 * s));
-    }
-    if (s >= 18) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
-      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+    ctx.fillRect(bx - g.sideRx * 1.35, cradleTopY, g.sideRx * 2.7, g.sideRy * 1.85);
+    // Matching contrast underband / trim hugging the curved bottom edge of the peeking cup!
+    if (!isOnePiece && swim.accent && s >= 15) {
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.75, 0.013 * s);
       ctx.beginPath();
-      ctx.moveTo(bx - g.sideRx * 1.2, cradleTopY);
-      ctx.lineTo(bx + g.sideRx * 1.2, cradleTopY);
+      ctx.ellipse(bx, by, g.sideRx * 0.94, g.sideRy * 0.92, rot, side > 0 ? 0.10 : Math.PI * 0.42, side > 0 ? Math.PI * 0.58 : Math.PI * 0.90);
+      ctx.stroke();
+      if (isBandeau) {
+        // Matching bandeau top trim across the peeking outer edge
+        ctx.beginPath();
+        ctx.moveTo(bx - g.sideRx * 1.25, cradleTopY + 0.004 * s);
+        ctx.lineTo(bx + g.sideRx * 1.25, cradleTopY + 0.004 * s);
+        ctx.stroke();
+      }
+    }
+    // Delicate thin seam where the top fabric grips the bare upper-outer side-boob
+    if (s >= 16) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
+      ctx.beginPath();
+      ctx.moveTo(bx - g.sideRx * 1.25, cradleTopY);
+      ctx.lineTo(bx + g.sideRx * 1.25, cradleTopY);
       ctx.stroke();
     }
     ctx.restore();
 
-    // 3. Soft warm contour shading along the exposed upper-outer side-boob curve
-    if (s >= 16) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
-      ctx.lineWidth = Math.max(0.7, 0.014 * s);
+    // 3. Crisp thin outer contour outline tracing BOTH the bare upper-outer breast curve AND the fitted cup curve!
+    if (s >= 15) {
+      // Delicate skin-edge contour on the exposed upper-outer breast swell
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
-      ctx.arc(bx, by, g.sideRx * 0.94, side > 0 ? -Math.PI * 0.30 : Math.PI * 0.78, side > 0 ? Math.PI * 0.22 : Math.PI * 1.30);
+      ctx.ellipse(bx, by, g.sideRx * 0.98, g.sideRy * 0.98, rot, side > 0 ? -Math.PI * 0.44 : Math.PI * 0.96, side > 0 ? Math.PI * 0.04 : Math.PI * 1.44);
+      ctx.stroke();
+      // Crisp thin swimsuit-cup contour outline wrapping the lower-outer lifted breast silhouette
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.26)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
+      ctx.beginPath();
+      ctx.ellipse(bx, by, g.sideRx * 0.98, g.sideRy * 0.98, rot, side > 0 ? -Math.PI * 0.02 : Math.PI * 0.42, side > 0 ? Math.PI * 0.58 : Math.PI * 1.02);
       ctx.stroke();
     }
   }
@@ -1981,15 +2013,15 @@ function drawFittedFemaleBackTop(
     const centerTopY = bandCenterY - (isBandeau ? 0.046 : 0.015) * s;
     const centerBotY = bandCenterY + (isBandeau ? 0.046 : 0.024) * s;
 
-    // 1. Soft warm skin-compression shadow directly above & below the taut band gripping skin & boobs!
+    // 1. Hairline warm skin-compression shadow directly above & below the taut band (matches Front/Back hairline contour weight!)
     if (s >= 18) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
-      ctx.lineWidth = Math.max(0.8, 0.017 * s);
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
+      ctx.lineWidth = Math.max(0.55, 0.010 * s);
       ctx.beginPath();
-      ctx.moveTo(outerL, wingTopY_L - 0.008 * s);
-      ctx.quadraticCurveTo(ribCx, centerTopY - 0.008 * s, outerR, wingTopY_R - 0.008 * s);
-      ctx.moveTo(outerL, wingBotY_L + 0.006 * s);
-      ctx.quadraticCurveTo(ribCx, centerBotY + 0.008 * s, outerR, wingBotY_R + 0.006 * s);
+      ctx.moveTo(outerL, wingTopY_L - 0.006 * s);
+      ctx.quadraticCurveTo(ribCx, centerTopY - 0.006 * s, outerR, wingTopY_R - 0.006 * s);
+      ctx.moveTo(outerL, wingBotY_L + 0.005 * s);
+      ctx.quadraticCurveTo(ribCx, centerBotY + 0.006 * s, outerR, wingBotY_R + 0.005 * s);
       ctx.stroke();
     }
 

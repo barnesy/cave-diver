@@ -14792,3 +14792,28 @@ test('v303 unified side-view chest & all 6 bathing suit tops (arm-up and arm-for
   assert.ok(clipOps >= 36, `Expected unified torso+bust side clips across all 6 tops, got ${clipOps}`);
   assert.ok(ops > 500, `Expected rich v303 side-view top render ops, got ${ops}`);
 });
+
+test('v304 thinner front bust edge contours & visible back-view side-boob + top contour outlines', async () => {
+  const { FEMALE_TOP_STYLES, drawTopsidePerson } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  let ops = 0;
+  let strokeOps = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; strokeOps++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+  for (const vw of ['front', 'back']) {
+    for (const st of FEMALE_TOP_STYLES) {
+      drawTopsidePerson(mockCtx, 200, 340, 220, 0.35, {
+        id: 99600 + st.length + vw.length,
+        gender: 'female', bodyType: 'hourglass', role: 'party-dance', danceMove: 'kpop-hip-sway',
+        view: vw, topStyle: st, hairStyle: 'top-knot', seed: 3, facing: 1,
+      });
+    }
+  }
+  assert.ok(strokeOps >= 90, `Expected refined front & back bust/top contour strokes, got ${strokeOps}`);
+  assert.ok(ops > 350, `Expected rich v304 front & back contour render ops, got ${ops}`);
+});
