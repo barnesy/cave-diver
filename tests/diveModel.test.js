@@ -14677,3 +14677,36 @@ test('v300 trimmer bust, thin underwire, proportional twerk arms & 4-beat level-
   assert.equal(drawPlayerAvatarDiveLaunch(mockCtx, 70, 165, 255, 285, 1, 56, 3.0, { forcedElapsed: 3.0 }), false);
   assert.ok(ops > 180, `Expected rich v300 twerk & dive-launch render operations, got ${ops}`);
 });
+
+test('v301 neck-under-straps layering, torso-clipped trims, and male resort/rashguard polish across all views', async () => {
+  const { drawTopsidePerson, FEMALE_TOP_STYLES } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  let ops = 0;
+  let clipOps = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    clip() { clipOps++; },
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+  for (const vw of ['front', 'side', 'back']) {
+    for (const st of FEMALE_TOP_STYLES) {
+      drawTopsidePerson(mockCtx, 200, 340, 160, 0.42, {
+        id: 99100 + st.length + vw.length,
+        gender: 'female', bodyType: 'hourglass', role: 'party-dance', danceMove: 'kpop-hip-sway',
+        view: vw, topStyle: st, seed: 3, facing: 1,
+      });
+    }
+    for (const ms of ['boardshorts', 'resort-shirt', 'rashguard', 'swim-briefs']) {
+      drawTopsidePerson(mockCtx, 200, 340, 160, 0.55, {
+        id: 99200 + ms.length + vw.length,
+        gender: 'male', bodyType: 'athletic-m', role: 'party-dance', danceMove: 'shuffle',
+        view: vw, customSwim: { primary: '#0ea5e9', accent: '#fde047', style: ms }, seed: 2, facing: 1,
+      });
+    }
+  }
+  assert.ok(clipOps >= 40, `Expected torso-clipped trims across all 30 views, got ${clipOps}`);
+  assert.ok(ops > 600, `Expected rich v301 render ops across all 30 views, got ${ops}`);
+});

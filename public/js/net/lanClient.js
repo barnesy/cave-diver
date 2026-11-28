@@ -41,7 +41,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now ? per
 let trysteroModulePromise = null;
 function loadTrystero() {
   if (!trysteroModulePromise) {
-    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=300');
+    trysteroModulePromise = import('../vendor/trystero-nostr.min.js?v=301');
   }
   return trysteroModulePromise;
 }
@@ -2162,9 +2162,9 @@ export class LanClient {
       const vx = Number.isFinite(p.vx) ? p.vx : 0;
       const vy = Number.isFinite(p.vy) ? p.vy : 0;
 
-      // Velocity dead-reckoning between network packets (full lead up to 140ms, tapers to 0 by 300ms)
+      // Velocity dead-reckoning between network packets (full lead up to 140ms, tapers to 0 by 301ms)
       const ageMs = p._lastRxMs ? Math.max(0, now - p._lastRxMs) : 0;
-      if (!p.surfaced && p.alive !== false && ageMs < 300) {
+      if (!p.surfaced && p.alive !== false && ageMs < 301) {
         const extFactor = ageMs <= 140 ? 1 : Math.max(0, 1 - (ageMs - 140) / 160);
         const nextTx = p.targetX + vx * extFactor * safeDt;
         const nextTy = p.targetY + vy * extFactor * safeDt;
