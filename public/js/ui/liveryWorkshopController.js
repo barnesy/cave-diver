@@ -117,6 +117,7 @@ export function createLiveryWorkshopController({
   refreshWorldMap = null,
   getDifficulty = null,
   getActiveModifiers = null,
+  onLiveEquipMidDive = null,
 }) {
   function getCurrentLiveryUnlocks() {
     let book = null;
@@ -209,6 +210,7 @@ export function createLiveryWorkshopController({
   const debriefGearUnlocksEl = document.getElementById('debrief-gear-unlocks');
   const lootDiscoveryBannerEl = document.getElementById('loot-discovery-banner');
   let lootBannerTimer = null;
+  let lootRevealTimer = null;
   const btnLiveryCloseEl = document.getElementById('btn-livery-close');
   const btnLiveryResetEl = document.getElementById('btn-livery-reset');
   const btnLiveryDoneEl = document.getElementById('btn-livery-done');
@@ -448,6 +450,7 @@ export function createLiveryWorkshopController({
   }
 
   function hideLootDiscoveryBanner() {
+    if (lootRevealTimer) { clearTimeout(lootRevealTimer); lootRevealTimer = null; }
     if (lootBannerTimer) { clearTimeout(lootBannerTimer); lootBannerTimer = null; }
     if (lootDiscoveryBannerEl) {
       lootDiscoveryBannerEl.hidden = true;
@@ -541,44 +544,51 @@ export function createLiveryWorkshopController({
     const item = entry?.item || { id: gc.itemId, name: gc.itemName || gc.name || gc.itemId, tier: gc.tier || 'rare' };
     const info = getGearItemStats(gc.slot, item);
     const tierMeta = getGearTierMeta(item.tier || gc.tier || 'rare');
-    const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+    const pillsHtml = info.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
     const pwrHtml = info.power ? `<span class="livery-power-badge" title="${escapeHtml(info.power.desc)}">⚡ ${escapeHtml(info.power.name)}</span>` : '';
-    const artHtml = renderGearArtworkSvg(gc.slot, item, { size: 54 });
+    const artHtml = renderGearArtworkSvg(gc.slot, item, { size: 48 });
     const cmp = _buildLootImpactSection(gc.slot, gc.itemId, sess);
-    lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
-    lootDiscoveryBannerEl.hidden = false;
-    lootDiscoveryBannerEl.innerHTML = `
-      <div class="loot-disc-hero">
-        <div class="loot-disc-art">${artHtml}</div>
-        <div class="loot-disc-info">
-          <div class="loot-disc-top">
-            <span class="loot-disc-kicker">${tierMeta.icon} ${isDemo ? 'DEMO CACHE' : tierMeta.badge}</span>
+    const showCardNow = () => {
+      if (!lootDiscoveryBannerEl) return;
+      lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
+      lootDiscoveryBannerEl.hidden = false;
+      lootDiscoveryBannerEl.innerHTML = `
+        <div class="loot-disc-hero">
+          <div class="loot-disc-art">${artHtml}</div>
+          <div class="loot-disc-info">
+            <div class="loot-disc-top">
+              <span class="loot-disc-kicker">${tierMeta.icon} ${isDemo ? 'DEMO CASE' : tierMeta.badge}</span>
+              <button type="button" class="loot-disc-x" id="btn-loot-dismiss" aria-label="Dismiss">✕</button>
+            </div>
+            <div class="loot-disc-name">${escapeHtml(item.name)}</div>
+            <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
           </div>
-          <div class="loot-disc-name">${escapeHtml(item.name)}</div>
-          <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
         </div>
-      </div>
-      ${cmp.html}
-      <div class="loot-disc-actions">
-        ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
-        <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
-      </div>
-    `;
-    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
-    lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
-      if (entry?.field && entry?.item) {
-        if (!isDemo) {
-          updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
-        } else if (sess) {
-          applyTrialLiveryToSession(sess, { ...(sess.diver?.livery || activeRigLivery), [entry.field]: entry.item.id });
-          playGearEquip?.(entry.slot, tierMeta.id);
+        ${cmp.html}
+        <div class="loot-disc-actions">
+          ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
+        </div>
+        <div class="loot-disc-timer"><span style="animation-duration:9.5s"></span></div>
+      `;
+      lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+      lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
+        if (entry?.field && entry?.item) {
+          if (!isDemo) {
+            updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
+            onLiveEquipMidDive?.(activeRigLivery);
+          } else if (sess) {
+            applyTrialLiveryToSession(sess, { ...(sess.diver?.livery || activeRigLivery), [entry.field]: entry.item.id });
+            playGearEquip?.(entry.slot, tierMeta.id);
+          }
+          showToast?.(`⚡ Equipped ${entry.item.name}`, 2.2, { critical: true });
         }
-        showToast?.(`⚡ Equipped ${entry.item.name} live mid-dive!`, 2.6);
-      }
-      hideLootDiscoveryBanner();
-    });
-    if (lootBannerTimer) clearTimeout(lootBannerTimer);
-    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 11500);
+        hideLootDiscoveryBanner();
+      });
+      if (lootBannerTimer) clearTimeout(lootBannerTimer);
+      lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 9500);
+    };
+    if (lootRevealTimer) clearTimeout(lootRevealTimer);
+    lootRevealTimer = setTimeout(showCardNow, 620);
   }
 
   function handleTreasureChestOpened(chest, drop) {
@@ -635,48 +645,55 @@ export function createLiveryWorkshopController({
       const item = entry?.item || { id: drop.itemId, name: drop.name || drop.itemId, tier: drop.tier || 'rare' };
       const info = drop.statsInfo || getGearItemStats(drop.slot, item);
       const tierMeta = getGearTierMeta(item.tier || drop.tier || 'rare');
-      const pillsHtml = info.pills.slice(0, 4).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
+      const pillsHtml = info.pills.slice(0, 3).map((p) => `<span class="livery-stat-pill">${escapeHtml(p)}</span>`).join('');
       const pwrHtml = info.power ? `<span class="livery-power-badge" title="${escapeHtml(info.power.desc)}">⚡ ${escapeHtml(info.power.name)}</span>` : '';
       const mapLeadHtml = chartedLead
-        ? `<div class="loot-disc-power">🗺️ <strong>Map Found:</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} → ${escapeHtml(chartedLead.siteName)}</div>`
+        ? `<div class="loot-disc-power">🗺️ Map: ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.siteName)}</div>`
         : '';
-      const artHtml = renderGearArtworkSvg(drop.slot, item, { size: 54 });
+      const artHtml = renderGearArtworkSvg(drop.slot, item, { size: 48 });
       const cmp = _buildLootImpactSection(drop.slot, drop.itemId, sess);
-      lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
-      lootDiscoveryBannerEl.hidden = false;
-      lootDiscoveryBannerEl.innerHTML = `
-        <div class="loot-disc-hero">
-          <div class="loot-disc-art">${artHtml}</div>
-          <div class="loot-disc-info">
-            <div class="loot-disc-top">
-              <span class="loot-disc-kicker">🧰 ${tierMeta.icon} ${tierMeta.badge}</span>
-              <span class="livery-stat-pill">+${drop.gasBonusBar || 10}b · +${gearCoins} 🪙</span>
+      const showChestCardNow = () => {
+        if (!lootDiscoveryBannerEl) return;
+        lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
+        lootDiscoveryBannerEl.hidden = false;
+        lootDiscoveryBannerEl.innerHTML = `
+          <div class="loot-disc-hero">
+            <div class="loot-disc-art">${artHtml}</div>
+            <div class="loot-disc-info">
+              <div class="loot-disc-top">
+                <span class="loot-disc-kicker">🧰 ${tierMeta.icon} ${tierMeta.badge} · +${gearCoins}🪙</span>
+                <button type="button" class="loot-disc-x" id="btn-loot-dismiss" aria-label="Dismiss">✕</button>
+              </div>
+              <div class="loot-disc-name">${escapeHtml(item.name)}</div>
+              <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
             </div>
-            <div class="loot-disc-name">${escapeHtml(item.name)}</div>
-            <div class="loot-disc-pills">${pillsHtml}${pwrHtml}</div>
           </div>
-        </div>
-        ${mapLeadHtml}
-        ${cmp.html}
-        <div class="loot-disc-actions">
-          ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
-          <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Keep Swimming</button>
-        </div>
-      `;
-      lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
-      lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
-        if (entry?.field && entry?.item) {
-          updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
-          showToast?.(`⚡ Equipped ${entry.item.name} live mid-dive!`, 2.6);
-        }
-        hideLootDiscoveryBanner();
-      });
-      if (lootBannerTimer) clearTimeout(lootBannerTimer);
-      lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 11800);
+          ${mapLeadHtml}
+          ${cmp.html}
+          <div class="loot-disc-actions">
+            ${entry?.field && cmp.showEquip ? `<button type="button" class="btn tiny ${cmp.equipCls}" id="btn-loot-equip-now">${escapeHtml(cmp.equipLabel)}</button>` : ''}
+          </div>
+          <div class="loot-disc-timer"><span style="animation-duration:10s"></span></div>
+        `;
+        lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
+        lootDiscoveryBannerEl.querySelector('#btn-loot-equip-now')?.addEventListener('click', () => {
+          if (entry?.field && entry?.item) {
+            updateActiveLiveryField({ [entry.field]: entry.item.id }, { slot: entry.slot, itemMeta: entry.item });
+            onLiveEquipMidDive?.(activeRigLivery);
+            showToast?.(`⚡ Equipped ${entry.item.name}`, 2.2, { critical: true });
+          }
+          hideLootDiscoveryBanner();
+        });
+        if (lootBannerTimer) clearTimeout(lootBannerTimer);
+        lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 10000);
+      };
+      // Delay card slide-in cleanly so the 3D chest lid opening + volumetric light spectacle shines first!
+      if (lootRevealTimer) clearTimeout(lootRevealTimer);
+      lootRevealTimer = setTimeout(showChestCardNow, 620);
       return;
     }
 
-    // Salvage treasure drop (Spare Pony Bottle, DPV Cell, Doubloons, or Abyssal Reliquary)
+    // Salvage treasure drop (non-equippable): keep viewport 100% unobstructed — quiet edge whisper only!
     const bonusMult = Math.max(1, Number(sess?.rigPerf?.salvageBonusMult) || 1);
     const baseCoins = Number(drop.doubloonBonus) || (drop.tier === 'mythic' ? 130 : drop.tier === 'epic' ? 90 : 55);
     const chestCoins = Math.round(baseCoins * bonusMult);
@@ -696,24 +713,8 @@ export function createLiveryWorkshopController({
       } catch {}
     }
     playGearEquip?.('all', drop.tier || 'rare');
-    if (!lootDiscoveryBannerEl) return;
-    const tierMeta = getGearTierMeta(drop.tier || 'rare');
-    lootDiscoveryBannerEl.dataset.tier = tierMeta.id;
-    lootDiscoveryBannerEl.hidden = false;
-    lootDiscoveryBannerEl.innerHTML = `
-      <div class="loot-disc-top">
-        <span class="loot-disc-kicker">🧰 Sunken Treasure Chest · ${escapeHtml(drop.rarityLabel || tierMeta.badge)}</span>
-        <span class="livery-tier-pill tier-${tierMeta.id}">${tierMeta.icon} ${tierMeta.badge}</span>
-      </div>
-      <div class="loot-disc-name">${drop.icon || '🪙'} ${escapeHtml(drop.name || 'Sunken Treasure')}</div>
-      <div class="loot-disc-detail">${escapeHtml(drop.detail || `+${drop.points || 300} Salvage pts`)} · <strong>+${chestCoins} 🪙 Doubloons</strong>${chartedLead ? `<br/>🗺️ <strong>Treasure Map Found:</strong> ${escapeHtml(chartedLead.skillIcon)} ${escapeHtml(chartedLead.skillShort)} Lead marked on World Map (${escapeHtml(chartedLead.siteName)})` : ''}</div>
-      <div class="loot-disc-actions">
-        <button type="button" class="btn tiny ghost" id="btn-loot-dismiss">Continue Dive</button>
-      </div>
-    `;
-    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
-    if (lootBannerTimer) clearTimeout(lootBannerTimer);
-    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 5600);
+    const mapNote = chartedLead ? ` · 🗺️ ${chartedLead.siteName}` : '';
+    showToast?.(`${drop.icon || '🪙'} ${drop.name || 'Salvage'} +${chestCoins}🪙${mapNote}`, 2.6, { critical: true });
   }
 
   function handleTreasureMapFound(map, beacon) {
@@ -745,25 +746,9 @@ export function createLiveryWorkshopController({
         refreshWorldMap?.();
       } catch {}
     }
-    if (!lootDiscoveryBannerEl) return;
+    // Non-blocking edge whisper instead of center modal — Vault beacon is now live on the Sonar Scope!
     const distM = sess?.diver ? Math.round(Math.hypot(beacon.x - sess.diver.x, beacon.y - sess.diver.y)) : 0;
-    const depthM = Math.max(0, Math.round(beacon.y || 0));
-    lootDiscoveryBannerEl.dataset.tier = 'legendary';
-    lootDiscoveryBannerEl.hidden = false;
-    lootDiscoveryBannerEl.innerHTML = `
-      <div class="loot-disc-top">
-        <span class="loot-disc-kicker">🗺️ Treasure Map Decoded · Sonar Beacon Locked</span>
-        <span class="livery-tier-pill tier-legendary">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillShort)}</span>
-      </div>
-      <div class="loot-disc-name">${escapeHtml(beacon.skillIcon)} ${escapeHtml(beacon.skillLabel)} Gear Vault</div>
-      <div class="loot-disc-detail"><strong>Boosts:</strong> ${escapeHtml(beacon.skillVerb)} · Track pulsing <strong>${escapeHtml(beacon.skillIcon)}</strong> beacon on your Sonar (${distM}m away · ${depthM}m depth)</div>
-      <div class="loot-disc-actions">
-        <button type="button" class="btn tiny primary" id="btn-loot-dismiss">📡 Track on Sonar</button>
-      </div>
-    `;
-    lootDiscoveryBannerEl.querySelector('#btn-loot-dismiss')?.addEventListener('click', hideLootDiscoveryBanner);
-    if (lootBannerTimer) clearTimeout(lootBannerTimer);
-    lootBannerTimer = setTimeout(hideLootDiscoveryBanner, 7500);
+    showToast?.(`🗺️ ${beacon.skillIcon} ${beacon.skillShort} Vault marked on Sonar (${distM}m)`, 2.8, { critical: true });
   }
 
   function syncLiveryUi() {

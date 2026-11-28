@@ -954,7 +954,11 @@ export class P2pRoomCoordinator {
 
       case 'wreck_action': {
         const actionKind =
-          msg.actionKind === 'hatch' || msg.actionKind === 'snag' || msg.actionKind === 'marker'
+          msg.actionKind === 'hatch' ||
+          msg.actionKind === 'snag' ||
+          msg.actionKind === 'marker' ||
+          msg.actionKind === 'chest' ||
+          msg.actionKind === 'cache'
             ? msg.actionKind
             : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';

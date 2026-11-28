@@ -1156,7 +1156,11 @@ wss.on('connection', (ws) => {
         const room = rooms.get(client.roomCode);
         if (!room) return;
         const actionKind =
-          msg.actionKind === 'hatch' || msg.actionKind === 'snag' || msg.actionKind === 'marker'
+          msg.actionKind === 'hatch' ||
+          msg.actionKind === 'snag' ||
+          msg.actionKind === 'marker' ||
+          msg.actionKind === 'chest' ||
+          msg.actionKind === 'cache'
             ? msg.actionKind
             : '';
         const targetId = typeof msg.targetId === 'string' ? msg.targetId.slice(0, 48) : '';

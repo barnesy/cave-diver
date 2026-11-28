@@ -1715,11 +1715,14 @@ export class DiveComputerHUD {
       };
     }
     if (this.elGasCallout) {
-      if (calloutPrompt) {
+      // v294 Noise Reduction: only pop upper-center gas callout for true urgent danger (PPO2/hypoxia/emergency);
+      // routine advisory switches highlight cleanly on the tank button & objective strip without cluttering the dive!
+      const isUrgentCallout = Boolean(calloutPrompt && calloutPrompt.severity === 'danger');
+      if (isUrgentCallout) {
         this._gasCalloutTargetId = calloutPrompt.targetGas;
         setHidden(this.elGasCallout, false);
-        setClass(this.elGasCallout, `hud-gas-callout ${calloutPrompt.severity === 'danger' ? 'danger' : 'warn'}`);
-        setText(this.elGasCalloutTitle, `${calloutPrompt.severity === 'danger' ? '⛔' : '■'} ${calloutPrompt.title}`);
+        setClass(this.elGasCallout, 'hud-gas-callout danger');
+        setText(this.elGasCalloutTitle, `⛔ ${calloutPrompt.title}`);
         setText(this.elGasCalloutDetail, calloutPrompt.detail);
         setText(
           this.elGasCalloutCta,
@@ -2114,6 +2117,7 @@ export class DiveComputerHUD {
               encounters,
               buddyPing,
               droppedStages,
+              hazards,
               secretLair,
               syncedSonarPings,
               difficulty: cleanDiff,

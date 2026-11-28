@@ -1855,6 +1855,22 @@ export function recordPeerDepthProfiles(session, peers, simTimeSec = 0) {
 export function applyPeerWreckAction(session, msg, callbacks = {}) {
   if (!session || !msg || !msg.actionKind || !msg.targetId) return false;
   const by = msg.by || 'Buddy';
+  if (msg.actionKind === 'chest') {
+    const chest = Array.isArray(session.treasureChests) ? session.treasureChests.find((c) => c && c.id === msg.targetId) : null;
+    if (!chest || chest.opened) return false;
+    chest.opened = true;
+    chest.openedAt = session.simTimeSec || 0;
+    callbacks.onToast?.(`🧰 ${by} opened ${chest.name || 'Sunken Chest'}!`, 2.4, { critical: true });
+    return true;
+  }
+  if (msg.actionKind === 'cache') {
+    const gc = Array.isArray(session.worldGearCaches) ? session.worldGearCaches.find((c) => c && c.id === msg.targetId) : null;
+    if (!gc || gc.opened) return false;
+    gc.opened = true;
+    gc.openedAt = session.simTimeSec || 0;
+    callbacks.onToast?.(`📦 ${by} unlocked ${gc.itemName || 'Gear Cache'}!`, 2.4, { critical: true });
+    return true;
+  }
   if (msg.actionKind === 'relay') {
     const relay = Array.isArray(session.powerRelays) ? session.powerRelays.find((r) => r && r.id === msg.targetId) : null;
     if (!relay || relay.active) return false;

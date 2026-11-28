@@ -14307,3 +14307,65 @@ test('v289 co-ed topside cast, 8 varied body types, 6 female top styles, 14 danc
   const studioHtml = fs.readFileSync(path.resolve('public/topside-studio.html'), 'utf8');
   assert.ok(studioHtml.includes('topsidePeopleRenderer.js') && studioHtml.includes('air-guitar') && studioHtml.includes('plunge-onepiece'));
 });
+
+test('v294 3D cave-embedded chests, rigged lift-bag salvage cradle & co-op chest open sync', async () => {
+  const { createTreasureChestsForLevel, createWorldGearCachesForLevel } = await import('../public/js/game/gearStats.js');
+  const { drawEmbeddedChest3D, drawEmbeddedGearCache3D, drawRiggedSalvageCradle } = await import('../public/js/game/renderers/chestAndSalvageRenderer.js');
+  const { applyPeerWreckAction } = await import('../public/js/game/diveSession.js');
+
+  const level = LEVEL_1;
+  const chests = createTreasureChestsForLevel(level, { seed: 4242 });
+  const caches = createWorldGearCachesForLevel(level, {});
+  assert.ok(chests.length >= 1, 'Expected at least 1 chest in Level 1');
+  for (const c of chests) {
+    assert.ok(Number.isFinite(c.wallAngle), 'Chest should store wallAngle');
+    assert.ok(Number.isFinite(c.wallNx) && Number.isFinite(c.wallNy), 'Chest should store wall normal');
+    assert.ok(evaluateCaveSDF(level, c.x, c.y) < -0.25, `Embedded chest (${c.x},${c.y}) must remain navigable`);
+  }
+  for (const gc of caches) {
+    assert.ok(Number.isFinite(gc.wallAngle), 'Gear cache should store wallAngle');
+    assert.ok(evaluateCaveSDF(level, gc.x, gc.y) < -0.25, `Embedded gear cache (${gc.x},${gc.y}) must remain navigable`);
+  }
+
+  // Co-op peer chest & cache sync triggers open animation cleanly
+  const mockSession = { simTimeSec: 12.5, treasureChests: chests, worldGearCaches: caches };
+  let toastMsg = '';
+  const openedChest = applyPeerWreckAction(
+    mockSession,
+    { actionKind: 'chest', targetId: chests[0].id, by: 'Buddy' },
+    { onToast: (t) => { toastMsg = t; } }
+  );
+  assert.equal(openedChest, true);
+  assert.equal(chests[0].opened, true);
+  assert.equal(chests[0].openedAt, 12.5);
+  assert.ok(toastMsg.includes('Buddy'), 'Expected peer chest open whisper');
+  // Duplicate event is idempotent
+  assert.equal(applyPeerWreckAction(mockSession, { actionKind: 'chest', targetId: chests[0].id, by: 'Buddy' }), false);
+
+  // Render 3D embedded chest (closed, opening, open), Pelican gear case & rigged salvage cradle without error
+  let ops = 0;
+  const mockGrad = { addColorStop() {} };
+  const mockCtx = {
+    canvas: { width: 800, height: 600 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() { ops++; },
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+    createLinearGradient() { return mockGrad; },
+    createRadialGradient() { return mockGrad; },
+  };
+  const diver = { x: chests[0].x, y: chests[0].y };
+  drawEmbeddedChest3D(mockCtx, { ...chests[0], opened: false }, 200, 200, 48, 10, diver);
+  drawEmbeddedChest3D(mockCtx, { ...chests[0], opened: true, openedAt: 9.8, drop: { kind: 'gear', tier: 'legendary', icon: '👑', name: 'Solaris' } }, 200, 200, 48, 10, diver);
+  drawEmbeddedChest3D(mockCtx, { ...chests[0], opened: true, openedAt: 2.0, drop: { kind: 'gear', tier: 'epic', icon: '🔦', name: 'Beam' } }, 200, 200, 48, 10, diver);
+  if (caches[0]) {
+    drawEmbeddedGearCache3D(mockCtx, { ...caches[0], opened: false }, 300, 200, 48, 10, diver);
+    drawEmbeddedGearCache3D(mockCtx, { ...caches[0], opened: true, openedAt: 9.4 }, 300, 200, 48, 10, diver);
+  }
+  drawRiggedSalvageCradle(mockCtx, 400, 300, 0.12, 48, 10, 18, [
+    { id: 'r1', name: 'Maya Jade Mask', kind: 'relic' },
+    { id: 'r2', name: 'Bronze Astrolabe', kind: 'artifact' },
+  ]);
+  assert.ok(ops > 60, `Expected rich v294 chest & salvage draw ops, got ${ops}`);
+});

@@ -3,6 +3,7 @@ import { evaluateCaveSDF } from '../collision.js';
 import { computeStormLightningFlash } from '../weather.js';
 import { getTorchOptic } from '../rigLivery.js';
 import { sampleSiltDensity } from '../silt.js';
+import { drawEmbeddedChest3D, drawEmbeddedGearCache3D } from './chestAndSalvageRenderer.js';
 
 const _nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
@@ -1773,114 +1774,15 @@ export const lightingAndFxMethods = {
       ctx.restore();
     }
 
-    // 5. World-Found Sunken Gear Caches with Diablo III Underwater Legendary Light Pillars (v216)
-    const TIER_RGB = {
-      uncommon: { rgb: '52, 211, 153', hex: '#34d399', light: '#d1fae5' },
-      rare: { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' },
-      epic: { rgb: '192, 132, 252', hex: '#c084fc', light: '#f3e8ff' },
-      mythic: { rgb: '250, 204, 21', hex: '#facc15', light: '#fef9c3' },
-      legendary: { rgb: '255, 149, 36', hex: '#ff9524', light: '#ffedd5' },
-    };
+    // 5. 3D Cave-Embedded Armored Expedition Gear Caches (v294 — stays visibly open after looting!)
     const rigGlowBonus = hazards.rigPerf?.relicGlowBonusM || 0;
     const worldCaches = Array.isArray(hazards.worldGearCaches) ? hazards.worldGearCaches : null;
     if (worldCaches && worldCaches.length > 0) {
       for (let i = 0; i < worldCaches.length; i++) {
         const gc = worldCaches[i];
         if (!gc) continue;
-        const openedAge = gc.opened ? Math.max(0, timeSec - (gc.openedAt || 0)) : 0;
-        if (gc.opened && openedAge > 4.2) continue;
-        if (gc.x + 4 < visX0 || gc.x - 4 > visX1 || gc.y + 8 < visY0 || gc.y - 10 > visY1) continue;
-
-        const pal = TIER_RGB[gc.tier] || TIER_RGB.rare;
-        const bobY = Math.sin(timeSec * 2.2 + i * 1.7) * 0.16;
-        const sx = toScreenX(gc.x);
-        const sy = toScreenY(gc.y + bobY);
-        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 4.4 + i);
-        const flareAlpha = gc.opened ? Math.max(0, 1 - openedAge / 4.2) : 1;
-
-        // Diablo III Iconic Underwater Rarity Light Pillar rising cleanly through the water column!
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        const pillarH = (gc.opened ? 9.5 + openedAge * 2.2 : 5.4 + pulse * 1.4) * scale;
-        const pillarW = (gc.opened ? 0.55 + (1 - flareAlpha) * 0.5 : 0.34 + pulse * 0.08) * scale;
-        const pg = ctx.createLinearGradient(sx, sy, sx, sy - pillarH);
-        pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.58 * flareAlpha).toFixed(3)})`);
-        pg.addColorStop(0.45, `rgba(${pal.rgb}, ${(0.24 * flareAlpha).toFixed(3)})`);
-        pg.addColorStop(1, `rgba(${pal.rgb}, 0)`);
-        ctx.fillStyle = pg;
-        ctx.beginPath();
-        ctx.moveTo(sx - pillarW, sy);
-        ctx.lineTo(sx - pillarW * 0.32, sy - pillarH);
-        ctx.lineTo(sx + pillarW * 0.32, sy - pillarH);
-        ctx.lineTo(sx + pillarW, sy);
-        ctx.closePath();
-        ctx.fill();
-
-        // Radial loot aura bloom around the sunken case
-        const auraR = (gc.opened ? 2.4 : 1.35 + pulse * 0.32) * scale;
-        const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
-        ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.62 * flareAlpha).toFixed(3)})`);
-        ag.addColorStop(0.5, `rgba(${pal.rgb}, ${(0.20 * flareAlpha).toFixed(3)})`);
-        ag.addColorStop(1, `rgba(${pal.rgb}, 0)`);
-        ctx.fillStyle = ag;
-        ctx.beginPath();
-        ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Celebratory expanding discovery shockwave ring when cache is opened (v218)
-        if (gc.opened && openedAge < 1.8) {
-          const prog = openedAge / 1.8;
-          const ringR = (0.8 + prog * 6.5) * scale;
-          ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.9).toFixed(3)})`;
-          ctx.lineWidth = Math.max(2, (1 - prog) * 0.14 * scale);
-          ctx.beginPath();
-          ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        // Waterproof Expedition Pelican Gear Crate silhouette
-        if (!gc.opened) {
-          const bw = Math.max(11, 0.72 * scale);
-          const bh = Math.max(8, 0.48 * scale);
-          ctx.save();
-          ctx.fillStyle = '#0f172a';
-          ctx.strokeStyle = pal.hex;
-          ctx.lineWidth = Math.max(1.5, 0.06 * scale);
-          ctx.beginPath();
-          ctx.roundRect?.(sx - bw * 0.5, sy - bh * 0.5, bw, bh, Math.max(2.5, 0.1 * scale)) ??
-            ctx.rect(sx - bw * 0.5, sy - bh * 0.5, bw, bh);
-          ctx.fill();
-          ctx.stroke();
-          // Central clasp + rarity glow strip
-          ctx.fillStyle = pal.hex;
-          ctx.fillRect(sx - bw * 0.42, sy - bh * 0.08, bw * 0.84, Math.max(1.5, bh * 0.16));
-          ctx.fillStyle = pal.light;
-          ctx.beginPath();
-          ctx.arc(sx, sy, Math.max(2, 0.09 * scale), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-
-          // Proximity label when diver is within discovery range
-          const distM = diver ? Math.hypot(diver.x - gc.x, diver.y - gc.y) : 99;
-          if (distM <= 14 + rigGlowBonus) {
-            const label = `${gc.icon || '📦'} GEAR CACHE · ${String(gc.tier || 'rare').toUpperCase()}`;
-            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
-            const tw = ctx.measureText(label).width + 12;
-            const ly = sy - bh * 0.5 - 12;
-            ctx.fillStyle = 'rgba(7, 18, 34, 0.88)';
-            ctx.strokeStyle = pal.hex;
-            ctx.lineWidth = 1.1;
-            ctx.beginPath();
-            ctx.roundRect?.(sx - tw * 0.5, ly - 8, tw, 16, 7) ?? ctx.rect(sx - tw * 0.5, ly - 8, tw, 16);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = pal.light;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, sx, ly);
-          }
-        }
+        if (gc.x + 5 < visX0 || gc.x - 5 > visX1 || gc.y + 9 < visY0 || gc.y - 10 > visY1) continue;
+        drawEmbeddedGearCache3D(ctx, gc, toScreenX(gc.x), toScreenY(gc.y), scale, timeSec, diver, rigGlowBonus, i);
       }
     }
 
@@ -1967,245 +1869,14 @@ export const lightingAndFxMethods = {
       }
     }
 
-    // 5b. Discoverable Sunken Brass, Deep Grotto & Map-Marked Vault Chests with Spectacular Opening Moment (v220 / v230)
+    // 5b. 3D Cave-Embedded Brass, Deep Grotto & Map-Vault Treasure Chests with Multi-Stage Opening Spectacle (v294)
     const treasureChests = Array.isArray(hazards.treasureChests) ? hazards.treasureChests : null;
     if (treasureChests && treasureChests.length > 0) {
       for (let i = 0; i < treasureChests.length; i++) {
         const tc = treasureChests[i];
         if (!tc) continue;
-        const openedAge = tc.opened ? Math.max(0, timeSec - (tc.openedAt || 0)) : 0;
-        const isLegendaryDrop = tc.opened && tc.drop?.tier === 'legendary';
-        const isMythicDrop = tc.opened && tc.drop?.tier === 'mythic';
-        const spectacleDur = isLegendaryDrop ? 6.2 : isMythicDrop ? 5.2 : 4.4;
-
         if (tc.x + 7 < visX0 || tc.x - 7 > visX1 || tc.y + 12 < visY0 || tc.y - 14 > visY1) continue;
-
-        const pal = tc.opened
-          ? (TIER_RGB[tc.drop?.tier] || TIER_RGB.mythic)
-          : tc.isMapVault
-            ? { rgb: '255, 180, 48', hex: tc.beamColor || '#ff9524', light: '#fef3c7' }
-            : tc.chestTier === 'grotto'
-              ? { rgb: '56, 189, 248', hex: '#38bdf8', light: '#e0f2fe' }
-              : { rgb: '245, 158, 11', hex: '#f59e0b', light: '#fef3c7' };
-        const sx = toScreenX(tc.x);
-        const sy = toScreenY(tc.y);
-        const pulse = 0.5 + 0.5 * Math.sin(timeSec * 3.8 + (tc.glintPhase || i));
-        const flareAlpha = tc.opened ? Math.max(0, 1 - openedAge / spectacleDur) : 0.88;
-
-        // Spectacular Underwater Opening Spectacle: Volumetric God-Ray Fan + Twin Shockwaves + Prismatic Rune Rings + Rising Embers!
-        if (!tc.opened || openedAge < spectacleDur) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          const tierScale = isLegendaryDrop ? 1.65 : isMythicDrop ? 1.32 : tc.opened ? 1.08 : (tc.isMapVault ? 1.25 : 1.0);
-          const pillarH = (tc.opened ? (10.5 + openedAge * 2.8) * tierScale : (3.4 + pulse * 1.2) * tierScale) * scale;
-          const pillarW = (tc.opened ? (0.72 + (1 - flareAlpha) * 0.62) * tierScale : (0.3 + pulse * 0.09) * tierScale) * scale;
-          const pg = ctx.createLinearGradient(sx, sy, sx, sy - pillarH);
-          pg.addColorStop(0, `rgba(${pal.rgb}, ${(0.68 * flareAlpha).toFixed(3)})`);
-          pg.addColorStop(0.45, `rgba(${pal.rgb}, ${(0.28 * flareAlpha).toFixed(3)})`);
-          pg.addColorStop(1, `rgba(${pal.rgb}, 0)`);
-          ctx.fillStyle = pg;
-          ctx.beginPath();
-          ctx.moveTo(sx - pillarW, sy);
-          ctx.lineTo(sx - pillarW * 0.24, sy - pillarH);
-          ctx.lineTo(sx + pillarW * 0.24, sy - pillarH);
-          ctx.lineTo(sx + pillarW, sy);
-          ctx.closePath();
-          ctx.fill();
-
-          // Twin angled god-ray fan when chest bursts open!
-          if (tc.opened && openedAge < spectacleDur * 0.88) {
-            const fanAngles = isLegendaryDrop ? [-0.46, -0.22, 0.22, 0.46] : [-0.32, 0.32];
-            for (let fi = 0; fi < fanAngles.length; fi++) {
-              ctx.save();
-              ctx.translate(sx, sy - 0.1 * scale);
-              ctx.rotate(fanAngles[fi] + Math.sin(timeSec * 2.4 + fi) * 0.05);
-              ctx.fillStyle = pg;
-              ctx.globalAlpha = (isLegendaryDrop ? 0.56 : 0.36) * flareAlpha;
-              ctx.beginPath();
-              ctx.moveTo(-pillarW * 0.42, 0);
-              ctx.lineTo(-pillarW * 0.12, -pillarH * 0.78);
-              ctx.lineTo(pillarW * 0.12, -pillarH * 0.78);
-              ctx.lineTo(pillarW * 0.42, 0);
-              ctx.closePath();
-              ctx.fill();
-              ctx.restore();
-            }
-          }
-
-          const auraR = (tc.opened ? 2.8 * tierScale : (1.2 + pulse * 0.32) * tierScale) * scale;
-          const ag = ctx.createRadialGradient(sx, sy, 0.08 * scale, sx, sy, auraR);
-          ag.addColorStop(0, `rgba(${pal.rgb}, ${(0.68 * flareAlpha).toFixed(3)})`);
-          ag.addColorStop(0.55, `rgba(${pal.rgb}, ${(0.22 * flareAlpha).toFixed(3)})`);
-          ag.addColorStop(1, `rgba(${pal.rgb}, 0)`);
-          ctx.fillStyle = ag;
-          ctx.beginPath();
-          ctx.arc(sx, sy, auraR, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Expanding shockwave ring(s) on chest burst!
-          if (tc.opened && openedAge < 2.2) {
-            const prog = openedAge / 2.2;
-            const ringR = (0.7 + prog * (isLegendaryDrop ? 10.5 : isMythicDrop ? 8.2 : 6.8)) * scale;
-            ctx.strokeStyle = `rgba(${pal.rgb}, ${((1 - prog) * 0.95).toFixed(3)})`;
-            ctx.lineWidth = Math.max(2.2, (1 - prog) * (isLegendaryDrop ? 0.24 : 0.16) * scale);
-            ctx.beginPath();
-            ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Second delayed harmonic ring for Mythic & Legendary drops!
-            if ((isLegendaryDrop || isMythicDrop) && openedAge > 0.28 && openedAge < 2.4) {
-              const p2 = Math.min(1, (openedAge - 0.28) / 2.1);
-              const r2 = (0.5 + p2 * (isLegendaryDrop ? 8.8 : 6.4)) * scale;
-              ctx.strokeStyle = isLegendaryDrop
-                ? `rgba(254, 240, 138, ${((1 - p2) * 0.92).toFixed(3)})`
-                : `rgba(${pal.rgb}, ${((1 - p2) * 0.78).toFixed(3)})`;
-              ctx.lineWidth = Math.max(1.8, (1 - p2) * 0.14 * scale);
-              ctx.beginPath();
-              ctx.arc(sx, sy, r2, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-          }
-
-          // Rising glowing gold/rarity motes & orbiting rune ring for opened chests!
-          if (tc.opened && openedAge < spectacleDur) {
-            const moteCount = isLegendaryDrop ? 16 : isMythicDrop ? 12 : 7;
-            for (let mi = 0; mi < moteCount; mi++) {
-              const mp = (openedAge * 0.55 + mi / moteCount) % 1;
-              const mx = sx + Math.sin(timeSec * 3.1 + mi * 2.1) * (0.45 + mp * 1.45) * scale;
-              const my = sy - (0.3 + mp * (isLegendaryDrop ? 6.2 : 4.2)) * scale;
-              const mr = Math.max(1.6, (1 - mp) * (isLegendaryDrop ? 4.2 : 3.0));
-              ctx.fillStyle = mi % 2 === 0 ? pal.light : pal.hex;
-              ctx.globalAlpha = (1 - mp) * flareAlpha * 0.92;
-              ctx.beginPath();
-              ctx.arc(mx, my, mr, 0, Math.PI * 2);
-              ctx.fill();
-            }
-            if (isLegendaryDrop || isMythicDrop) {
-              const holoY = sy - Math.min(2.6, 0.7 + openedAge * 1.05) * scale;
-              ctx.save();
-              ctx.translate(sx, holoY);
-              ctx.rotate(timeSec * (isLegendaryDrop ? 1.8 : 1.1));
-              ctx.strokeStyle = `rgba(${pal.rgb}, ${(0.82 * flareAlpha).toFixed(3)})`;
-              ctx.lineWidth = Math.max(1.6, 0.065 * scale);
-              ctx.setLineDash([6, 5]);
-              ctx.beginPath();
-              ctx.arc(0, 0, (isLegendaryDrop ? 1.18 : 0.95) * scale, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.restore();
-            }
-          }
-          ctx.restore();
-        }
-
-        // Ornate brass-bound sunken treasure chest silhouette (Vault chests gleam with wider crown trim!)
-        const sizeMult = tc.isMapVault ? 1.16 : 1.0;
-        const cw = Math.max(13, 0.86 * scale * sizeMult);
-        const ch = Math.max(9, 0.56 * scale * sizeMult);
-        ctx.save();
-        // Chest lower wooden body
-        ctx.fillStyle = tc.opened ? '#2e1d0f' : tc.isMapVault ? '#451a03' : '#4a2c12';
-        ctx.strokeStyle = tc.opened ? '#b45309' : pal.hex;
-        ctx.lineWidth = Math.max(1.4, 0.065 * scale);
-        ctx.beginPath();
-        ctx.roundRect?.(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66, Math.max(2, 0.08 * scale)) ??
-          ctx.rect(sx - cw * 0.5, sy - ch * 0.16, cw, ch * 0.66);
-        ctx.fill();
-        ctx.stroke();
-
-        // Arched lid (springs open smoothly!)
-        ctx.save();
-        if (tc.opened) {
-          const lidAngle = -Math.min(0.78, 0.15 + openedAge * 2.4);
-          ctx.translate(sx - cw * 0.46, sy - ch * 0.18);
-          ctx.rotate(lidAngle);
-          ctx.translate(-(sx - cw * 0.46), -(sy - ch * 0.18));
-        }
-        ctx.fillStyle = tc.opened ? '#3b2412' : tc.isMapVault ? '#7c2d12' : '#653b16';
-        ctx.beginPath();
-        ctx.ellipse(sx, sy - ch * 0.18, cw * 0.5, ch * 0.34, 0, Math.PI, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-
-        // Twin vertical brass straps
-        ctx.fillStyle = tc.opened ? '#d97706' : tc.isMapVault ? '#fde047' : '#fcd34d';
-        const strapW = Math.max(1.5, cw * 0.1);
-        ctx.fillRect(sx - cw * 0.32, sy - ch * 0.42, strapW, ch * 0.9);
-        ctx.fillRect(sx + cw * 0.22, sy - ch * 0.42, strapW, ch * 0.9);
-
-        // Glowing keyhole clasp when closed; bright relic core glow when opened
-        ctx.fillStyle = tc.opened ? pal.light : '#fef08a';
-        ctx.beginPath();
-        ctx.arc(sx, sy - ch * 0.08, Math.max(2.1, 0.095 * scale), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Floating Holographic Gear Relic & Rarity Callout rising out of the opened chest! (v230)
-        if (tc.opened && tc.drop && openedAge < spectacleDur) {
-          const rise = Math.min(1, openedAge / 0.75);
-          const easeRise = 1 - Math.pow(1 - rise, 3);
-          const holoY = sy - (0.65 + easeRise * 2.0 + Math.sin(timeSec * 3.5) * 0.12) * scale;
-          const fadeOut = openedAge > spectacleDur - 1.1 ? Math.max(0, (spectacleDur - openedAge) / 1.1) : 1;
-          ctx.save();
-          ctx.globalAlpha = fadeOut;
-          // Holographic medallion disc
-          const discR = Math.max(13, (isLegendaryDrop ? 0.58 : 0.46) * scale);
-          ctx.fillStyle = 'rgba(8, 14, 26, 0.9)';
-          ctx.strokeStyle = pal.hex;
-          ctx.lineWidth = isLegendaryDrop ? 2.4 : 1.8;
-          ctx.beginPath();
-          ctx.arc(sx, holoY, discR, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.font = `${Math.round(discR * 1.12)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(tc.drop.icon || '🧰', sx, holoY + 1);
-
-          // Crisp rarity + item name callout banner above hologram
-          const topTxt =
-            tc.drop.kind === 'gear'
-              ? `${isLegendaryDrop ? '🔥 LEGENDARY · ' : `${(tc.drop.tier || 'rare').toUpperCase()} · `}${tc.drop.name}`
-              : `${tc.drop.icon || '🪙'} ${tc.drop.name}`;
-          ctx.font = '800 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-          const tw = ctx.measureText(topTxt).width + 14;
-          const ly = holoY - discR - 13;
-          ctx.fillStyle = isLegendaryDrop ? 'rgba(67, 20, 7, 0.94)' : 'rgba(10, 16, 28, 0.92)';
-          ctx.strokeStyle = pal.hex;
-          ctx.lineWidth = isLegendaryDrop ? 1.6 : 1.2;
-          ctx.beginPath();
-          ctx.roundRect?.(sx - tw * 0.5, ly - 9, tw, 18, 8) ?? ctx.rect(sx - tw * 0.5, ly - 9, tw, 18);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = pal.light;
-          ctx.fillText(topTxt, sx, ly);
-          ctx.restore();
-        }
-
-        if (!tc.opened) {
-          const distM = diver ? Math.hypot(diver.x - tc.x, diver.y - tc.y) : 99;
-          if (distM <= 13 + rigGlowBonus || tc.beaconRevealed) {
-            const label = tc.isMapVault ? `👑 ${tc.name.toUpperCase()}` : tc.chestTier === 'grotto' ? '💠 GROTTO RELIC CHEST' : '🧰 TREASURE CHEST';
-            ctx.save();
-            ctx.font = '800 9px ui-monospace, SFMono-Regular, Menlo, monospace';
-            const tw = ctx.measureText(label).width + 12;
-            const ly = sy - ch * 0.65 - 12;
-            ctx.fillStyle = 'rgba(20, 12, 4, 0.9)';
-            ctx.strokeStyle = pal.hex;
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.roundRect?.(sx - tw * 0.5, ly - 8, tw, 16, 7) ?? ctx.rect(sx - tw * 0.5, ly - 8, tw, 16);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = pal.light;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, sx, ly);
-            ctx.restore();
-          }
-        }
+        drawEmbeddedChest3D(ctx, tc, toScreenX(tc.x), toScreenY(tc.y), scale, timeSec, diver, rigGlowBonus, i);
       }
     }
 

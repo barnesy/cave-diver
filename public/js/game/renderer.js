@@ -1186,7 +1186,7 @@ export class CaveRenderer {
       muzzleFlash: secretLair?.muzzleFlashSec || 0,
     });
     if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
-      this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx);
+      this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx, collectedIds, carryingBody);
     }
 
     // 10. Volumetric Ray-Cast Darkness + Entrance/Exit Sunlight + 2D Torch Scattering + Dynamic Boss Arena Lighting

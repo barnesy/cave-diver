@@ -476,17 +476,19 @@ const nextUiTick = () =>
 const toastQueue = [];
 function showToast(text, duration = 2.6, { critical = false } = {}) {
   if (!gameToastEl || !text) return;
-  // v186: Keep live underwater diving calm & uncluttered — suppress noisy top-middle update/artifact alerts!
   if (mode === 'diving' && !critical) return;
+  const inDive = mode === 'diving';
+  gameToastEl.classList.toggle('dive-whisper', inDive);
+  if (inDive) {
+    toastQueue.length = 0;
+    gameToastEl.textContent = text;
+    gameToastEl.classList.add('visible');
+    toastTimer = Math.min(duration, critical ? 2.6 : 2.3);
+    return;
+  }
   if (toastTimer > 0 && gameToastEl.classList.contains('visible')) {
-    if (gameToastEl.textContent === text) {
-      toastTimer = Math.max(toastTimer, duration);
-      return;
-    }
-    if (toastQueue.length > 0 && toastQueue[toastQueue.length - 1].text === text) {
-      toastQueue[toastQueue.length - 1].duration = Math.max(toastQueue[toastQueue.length - 1].duration, duration);
-      return;
-    }
+    if (gameToastEl.textContent === text) { toastTimer = Math.max(toastTimer, duration); return; }
+    if (toastQueue.length > 0 && toastQueue[toastQueue.length - 1].text === text) { toastQueue[toastQueue.length - 1].duration = Math.max(toastQueue[toastQueue.length - 1].duration, duration); return; }
     if (toastQueue.length >= 3) toastQueue.shift();
     toastQueue.push({ text, duration });
     return;
@@ -564,7 +566,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=293',
+  mapRasterUrl: './assets/map-expedition.jpg?v=294',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -1117,7 +1119,7 @@ const sonarPingCtrl = createSonarPingController({
     if (isMultiplayer && lan?.sendSonarPing) lan.sendSonarPing({ id: ping.id, kind: ping.kind, x: ping.x, y: ping.y });
     audio.playSonarPing?.();
     triggerHaptic('sonar');
-    showToast(formatSonarPingCallout(ping), 2.5, { critical: true });
+    showToast(formatSonarPingCallout(ping), 2.0, { critical: true });
     if (Array.isArray(s.aiSquad) && s.aiSquad.length > 0 && (!isMultiplayer || lan.getPeers().length === 0)) {
       const leadAi = s.aiSquad.find((ai) => ai && ai.alive !== false) || s.aiSquad[0];
       if (leadAi) {
@@ -1133,7 +1135,7 @@ const sonarPingCtrl = createSonarPingController({
     audio.playSonarPing?.();
     audio.playSignal?.(pan);
     triggerHaptic('sonar');
-    showToast(formatSonarPingCallout(ping), 3.0, { critical: true });
+    showToast(formatSonarPingCallout(ping), 2.2, { critical: true });
   },
 });
 
@@ -2108,6 +2110,7 @@ const liveryWorkshop = createLiveryWorkshopController({
   launchSiteDive: async (lvl) => { if (!lvl) return; if (lan.room) { lan.leaveRoom(); resetLobbyUiState(); } await ensureLevelLoaded(lvl, { showOverlay: true }); startDiveRun(false); },
   refreshWorldMap: () => siteBrowser?.renderLevelCards?.(),
   getDifficulty: () => activeDifficulty, getActiveModifiers: () => activeExpeditionModifiers,
+  onLiveEquipMidDive: (liv) => { if (isMultiplayer && lan?.setPlayerStatus) lan.setPlayerStatus({ livery: liv }); },
 });
 const { liveryModalEl, getCurrentLiveryUnlocks, saveLiverySlotsToStorage, saveRigLivery, reconcileActiveRigLiveryFromStorage, renderHomeAvatarBadge, syncLiveryUi, renderLiveryPreviewFrame, renderLiveryWorkshopModal, openLiveryModal, closeLiveryModal } = liveryWorkshop;
 syncLiveryUi();
@@ -4114,7 +4117,7 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // v293 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
+  // v294 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
   const triggerBiomeSwapPulse = () => {
     if (!canvas) return;
     canvas.classList.remove('biome-swap');
@@ -6115,11 +6118,11 @@ lan.on('peer_buddy_rescue', (msg) => {
     session.rescuedBy = msg.rescuerId || 'peer';
     session.diver.rescuedBy = session.rescuedBy;
     audio.playRecovery();
-    showToast(`🛟 ${msg.rescuerName || 'Buddy'} clipped a rescue tow onto you!`, 3.6);
+    showToast(`🛟 ${msg.rescuerName || 'Buddy'} clipped a rescue tow onto you!`, 2.6, { critical: true });
   } else if (msg.status === 'extracted') {
-    showToast(`🏆 ${msg.rescuerName || 'Buddy'} rescued ${msg.rescuedName || 'teammate'} safely to the surface!`, 3.4);
+    showToast(`🏆 ${msg.rescuerName || 'Buddy'} rescued ${msg.rescuedName || 'teammate'}!`, 2.6, { critical: true });
   } else {
-    showToast(`🛟 ${msg.rescuerName || 'Buddy'} is towing ${msg.rescuedName || 'teammate'} toward the surface!`, 3.2);
+    showToast(`🛟 ${msg.rescuerName || 'Buddy'} towing ${msg.rescuedName || 'teammate'}`, 2.3, { critical: true });
   }
 });
 
@@ -6136,7 +6139,7 @@ lan.on('peer_gas_share', (msg) => {
     });
     audio.playGasShare();
     const gName = getActiveGasName(msg.gasId);
-    showToast(`🎁 ${msg.fromName || 'Buddy'} shared +${Math.round(added)} bar ${gName}!`, 3.0);
+    showToast(`🎁 ${msg.fromName || 'Buddy'} shared +${Math.round(added)}b ${gName}`, 2.4, { critical: true });
   }
 });
 
@@ -6152,7 +6155,7 @@ lan.on('peer_left', (peerId) => {
     }
   }
   if (mode === 'diving' && Date.now() - lastHostPromoMs > 800) {
-    showToast('Buddy diver left the dive.', 2.8);
+    showToast('Buddy diver left the dive.', 2.2, { critical: true });
   }
 });
 
@@ -6358,10 +6361,12 @@ const sessionStepCallbacks = {
   },
   onWorldGearFound: (gc) => {
     triggerHaptic('pickup');
+    if (isMultiplayer && gc?.id) lan.sendWreckAction('cache', gc.id);
     liveryWorkshop?.handleWorldGearFound?.(gc);
   },
   onTreasureChestOpened: (chest, drop) => {
     triggerHaptic(drop?.kind === 'gear' ? 'pickup' : 'light');
+    if (isMultiplayer && chest?.id) lan.sendWreckAction('chest', chest.id);
     liveryWorkshop?.handleTreasureChestOpened?.(chest, drop);
   },
   onTreasureMapFound: (map, beacon) => {
@@ -6905,7 +6910,7 @@ function stepSimulation(dt) {
     dt,
   });
 
-  // v293 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
+  // v294 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
   const isCalmNominalCruise =
     !compactHudEnabled &&
     !session.endedState &&
@@ -6925,7 +6930,7 @@ function stepSimulation(dt) {
   screenHud?.classList.toggle('hud-calm-cruise', hudCalmCruiseSec >= 2.6);
 
   if (result.blockedExitDecoDepthM > 0) {
-    showToast(`Hold at ${result.blockedExitDecoDepthM}m to clear deco stop before surfacing!`, 2.0);
+    showToast(`Hold at ${result.blockedExitDecoDepthM}m to clear deco stop!`, 2.0, { critical: true });
   }
 
   if (result.outcome && !session.endedState) {
@@ -7466,7 +7471,7 @@ async function bootGame() {
   initGitHubAuth();
   requestAnimationFrame(frame);
 
-  // v293 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
+  // v294 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
   try {
     const qs = new URLSearchParams(location.search || '');
     if (qs.get('codexTrial') === '1' && !INITIAL_ROOM_CODE) {

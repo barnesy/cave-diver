@@ -2,6 +2,7 @@ import { evaluateCaveSDF } from '../collision.js';
 import { isHatchPressurized } from '../salvagePhysics.js';
 import { computeSurgeWave } from '../diveSession.js';
 import { drawShipwreckTopsideCrowd } from './topsidePeopleRenderer.js';
+import { drawRiggedSalvageCradle } from './chestAndSalvageRenderer.js';
 
 export const wreckAndInteractivesMethods = {
   _drawWreckSurfaceBoat(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
@@ -1544,13 +1545,15 @@ export const wreckAndInteractivesMethods = {
    * Multi-gore ripstop canopy, SOLAS tape, top spring dump valve + pull-cord lanyard,
    * stainless bolt-snap hardware, pressurized inflator shimmer plume & slung salvage load mesh.
    */
-  _drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx = null) {
+  _drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx = null, collectedIds = null, carryingBody = false) {
     if (!diver || !salvage) return;
     const anim = Math.max(0, Math.min(1, salvage.inflateAnim || (salvage.liftBagActive ? 1 : 0)));
     if (anim <= 0.02) return;
 
-    const anchorX = toScreenX(diver.x);
-    const anchorY = toScreenY(diver.y);
+    // Anchor to diver's hip/pelvis harness D-ring so lift-bag & salvage cradle never cover the face/chest!
+    const pelvis = diver.body?.pelvis;
+    const anchorX = toScreenX(pelvis ? pelvis.x : diver.x);
+    const anchorY = toScreenY(pelvis ? pelvis.y : diver.y);
     const swayX = Math.max(-0.58, Math.min(0.58, -(diver.vx || 0) * 0.16)) + Math.sin(timeSec * 2.4) * 0.085;
     const strapLen = (1.18 + anim * 0.7) * scale;
     const bagX = anchorX + swayX * scale;
@@ -1613,28 +1616,27 @@ export const wreckAndInteractivesMethods = {
     ctx.arc(bagX, bridleY, Math.max(2, 0.08 * scale), 0, Math.PI * 2);
     ctx.fill();
 
-    // Heavy Salvage Load Mesh Sling visibly suspended beneath the carabiner when carrying >= 6kg!
-    if ((salvage.payloadKg || 0) >= 6) {
-      const slingX = anchorX + swayX * 0.22 * scale;
-      const slingY = anchorY + 0.28 * scale;
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.82)';
-      ctx.lineWidth = Math.max(1.1, 0.042 * scale);
-      ctx.beginPath();
-      ctx.moveTo(anchorX, anchorY - 0.08 * scale);
-      ctx.lineTo(slingX, slingY);
-      ctx.stroke();
-      const loadR = Math.min(0.32, 0.16 + ((salvage.payloadKg || 6) / 30) * 0.15) * scale;
-      const loadGrad = ctx.createRadialGradient(slingX - loadR * 0.3, slingY - loadR * 0.25, loadR * 0.1, slingX, slingY, loadR);
-      loadGrad.addColorStop(0, '#fcd34d');
-      loadGrad.addColorStop(0.55, '#b45309');
-      loadGrad.addColorStop(1, '#451a03');
-      ctx.fillStyle = loadGrad;
-      ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = Math.max(1, 0.038 * scale);
-      ctx.beginPath();
-      ctx.arc(slingX, slingY + loadR * 0.45, loadR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+    // Authentic 3D rigged expedition salvage basket displaying actual collected artifacts (skip if ONLY towing body/probe!)
+    let collectedItems = null;
+    if (collectedIds && collectedIds.size > 0 && Array.isArray(this.level?.collectibles)) {
+      collectedItems = [];
+      for (let i = 0; i < this.level.collectibles.length; i++) {
+        const it = this.level.collectibles[i];
+        if (it && collectedIds.has(it.id)) collectedItems.push(it);
+      }
+    }
+    const showSalvageCradle = (collectedItems && collectedItems.length > 0) || (!carryingBody && (salvage.payloadKg || 0) >= 6);
+    if (showSalvageCradle) {
+      drawRiggedSalvageCradle(
+        ctx,
+        anchorX,
+        anchorY + 0.08 * scale,
+        swayX,
+        scale,
+        timeSec,
+        salvage.payloadKg || 6,
+        collectedItems
+      );
     }
 
     // 3. Multi-Gore Safety-Orange Commercial Ripstop Parachute Canopy

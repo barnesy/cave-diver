@@ -1,4 +1,4 @@
-import { evaluateCaveSDF } from './collision.js';
+import { evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import {
   DEFAULT_RIG_LIVERY,
   GEAR_SET_SYNERGIES,
@@ -1448,6 +1448,61 @@ const TIER_BEAM_COLORS = {
  * Deterministically spawn hidden World-Found Sunken Gear Caches for a dive site (v216).
  * Always verifies navigable open water via evaluateCaveSDF so crates are 100% reachable.
  */
+/**
+ * Snap a chest or gear cache cleanly into a nearby cave wall/ledge using the real SDF gradient
+ * so it sits physically embedded in the side/floor of the cave while remaining 100% navigable.
+ */
+function snapChestToCaveWall(level, ox, oy) {
+  const dirs = [
+    [0.58, 0.81],
+    [-0.58, 0.81],
+    [0, 1],
+    [0.92, 0.38],
+    [-0.92, 0.38],
+    [1, 0],
+    [-1, 0],
+  ];
+  let bestHit = null;
+  const nOut = { nx: 0, ny: -1 };
+  for (let di = 0; di < dirs.length; di++) {
+    const [dx, dy] = dirs[di];
+    for (let dist = 0.35; dist <= 5.8; dist += 0.28) {
+      const px = ox + dx * dist;
+      const py = oy + dy * dist;
+      const sdf = evaluateCaveSDF(level, px, py);
+      if (sdf >= 0) {
+        // Back off slightly onto rock surface and read outward wall normal
+        const hx = ox + dx * Math.max(0.1, dist - 0.14);
+        const hy = oy + dy * Math.max(0.1, dist - 0.14);
+        evaluateCaveNormal(level, hx, hy, nOut);
+        // SDF gradient points into rock -> flip for outward water-facing normal
+        const nx = -nOut.nx;
+        const ny = -nOut.ny;
+        // Avoid awkward upside-down ceiling attachments
+        if (ny > 0.45) break;
+        const ex = hx + nx * 0.80;
+        const ey = hy + ny * 0.80;
+        if (evaluateCaveSDF(level, ex, ey) < -0.66) {
+          if (!bestHit || dist < bestHit.dist) {
+            bestHit = {
+              x: ex,
+              y: ey,
+              wallNx: nx,
+              wallNy: ny,
+              wallAngle: Math.max(-1.05, Math.min(1.05, Math.atan2(ny, nx) + Math.PI * 0.5)),
+              dist,
+              embedded: true,
+            };
+          }
+        }
+        break;
+      }
+    }
+  }
+  if (bestHit) return bestHit;
+  return { x: ox, y: oy, wallNx: 0, wallNy: -1, wallAngle: 0, embedded: false };
+}
+
 export function createWorldGearCachesForLevel(level, foundGearMap = null) {
   if (!level) return [];
   const found = foundGearMap && typeof foundGearMap === 'object' ? foundGearMap : {};
@@ -1499,6 +1554,7 @@ export function createWorldGearCachesForLevel(level, foundGearMap = null) {
       bestY = cp.y;
     }
 
+    const snap = snapChestToCaveWall(level, bestX, bestY);
     caches.push({
       id: def.id,
       gearKey,
@@ -1509,8 +1565,12 @@ export function createWorldGearCachesForLevel(level, foundGearMap = null) {
       tier: def.tier,
       icon: def.icon,
       clue: def.clue,
-      x: Math.round(bestX * 100) / 100,
-      y: Math.round(bestY * 100) / 100,
+      x: Math.round(snap.x * 100) / 100,
+      y: Math.round(snap.y * 100) / 100,
+      wallNx: Math.round(snap.wallNx * 1000) / 1000,
+      wallNy: Math.round(snap.wallNy * 1000) / 1000,
+      wallAngle: Math.round(snap.wallAngle * 1000) / 1000,
+      embedded: snap.embedded,
       opened: alreadyFound,
       alreadyOwned: alreadyFound,
       openAnim: alreadyFound ? 1 : 0,
@@ -1827,6 +1887,7 @@ export function createTreasureChestsForLevel(level, { seed = null, excludePoints
     }
     if (!best) continue;
 
+    const snap = snapChestToCaveWall(level, best.x, best.y);
     const chestTier = i === 0 ? 'brass' : 'grotto';
     chests.push({
       id: `chest-${level.id || 's'}-${i + 1}`,
@@ -1836,8 +1897,12 @@ export function createTreasureChestsForLevel(level, { seed = null, excludePoints
       skillFocus: null,
       linkedMapId: null,
       beaconRevealed: false,
-      x: Math.round(best.x * 100) / 100,
-      y: Math.round(best.y * 100) / 100,
+      x: Math.round(snap.x * 100) / 100,
+      y: Math.round(snap.y * 100) / 100,
+      wallNx: Math.round(snap.wallNx * 1000) / 1000,
+      wallNy: Math.round(snap.wallNy * 1000) / 1000,
+      wallAngle: Math.round(snap.wallAngle * 1000) / 1000,
+      embedded: snap.embedded,
       opened: false,
       openAnim: 0,
       drop: null,
