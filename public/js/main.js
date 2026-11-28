@@ -37,6 +37,7 @@ import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { createBountiesController } from './ui/bountiesController.js';
 import { createVictoryPhotoController } from './ui/victoryPhotoController.js';
+import { createAvatarCreatorController } from './ui/avatarCreatorController.js'; import { triggerAvatarSiteJump } from './game/playerAvatar.js';
 import { getTopsideHypeEnergy, consumeTopsideCheerSound } from './game/renderers/topsidePropsRenderer.js';
 import { resolveBountyBoardState } from './game/bossBounties.js';
 import { createTrenchController } from './ui/trenchController.js';
@@ -566,7 +567,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=295',
+  mapRasterUrl: './assets/map-expedition.jpg?v=296',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -913,6 +914,7 @@ const modalManager = createModalManager([
   { isOpen: () => typeof artifactInspectorModalEl !== 'undefined' && !artifactInspectorModalEl?.hidden, close: () => closeArtifactInspector() },
   { isOpen: () => typeof replayModal !== 'undefined' && !replayModal?.hidden, close: () => closeReplayModal() },
   { isOpen: () => typeof lbStatsModalEl !== 'undefined' && !lbStatsModalEl?.hidden, close: () => closeLeaderboardStatsModal() },
+  { isOpen: () => typeof avatarCreatorCtrl !== 'undefined' && avatarCreatorCtrl?.isOpen?.(), close: () => avatarCreatorCtrl?.closeAvatarCreator?.() },
   { isOpen: () => typeof liveryModalEl !== 'undefined' && !liveryModalEl?.hidden, close: () => closeLiveryModal() },
   { isOpen: () => typeof gasPlannerModal !== 'undefined' && !gasPlannerModal?.hidden, close: () => closeGasPlannerModal() },
   { isOpen: () => typeof challengeModal !== 'undefined' && !challengeModal?.hidden, close: () => closeChallengeModal() },
@@ -2481,6 +2483,7 @@ const { drillsModal, openDrillsModal, closeDrillsModal } = rescueDrillsCtrl;
 
 const bountiesModal = document.getElementById('bounties-modal');
 const victoryPhotoCtrl = createVictoryPhotoController({ showToast });
+const avatarCreatorCtrl = createAvatarCreatorController({ setHomeMenuOpen: (v) => setHomeMenuOpen(v), showToast, getActiveLevelId: () => activeLevel?.id });
 const bountiesCtrl = createBountiesController({
   loadCareerLogbook,
   setHomeMenuOpen: (v) => setHomeMenuOpen(v),
@@ -4117,12 +4120,13 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // v295 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
+  // v296 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
   const triggerBiomeSwapPulse = () => {
     if (!canvas) return;
     canvas.classList.remove('biome-swap');
     void canvas.offsetWidth;
     canvas.classList.add('biome-swap');
+    triggerAvatarSiteJump(nextLevel.id);
   };
   if (renderer.isLevelCached(nextLevel.id)) {
     await ensureLevelLoaded(nextLevel.id, { showOverlay: false, silent: true });
@@ -6910,7 +6914,7 @@ function stepSimulation(dt) {
     dt,
   });
 
-  // v295 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
+  // v296 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
   const isCalmNominalCruise =
     !compactHudEnabled &&
     !session.endedState &&
@@ -7471,7 +7475,7 @@ async function bootGame() {
   initGitHubAuth();
   requestAnimationFrame(frame);
 
-  // v295 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
+  // v296 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
   try {
     const qs = new URLSearchParams(location.search || '');
     if (qs.get('codexTrial') === '1' && !INITIAL_ROOM_CODE) {

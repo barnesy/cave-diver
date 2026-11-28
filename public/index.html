@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Techno Dive" />
   <meta name="theme-color" content="#020b14" />
-  <meta name="app-version" content="295" />
+  <meta name="app-version" content="296" />
   <title>Techno Dive · Technical Cave &amp; Wreck Simulation</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" href="./icons/icon-192.png?v=295" type="image/png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=295" />
-  <link rel="stylesheet" href="./css/style.css?v=295" />
+  <link rel="icon" href="./icons/icon-192.png?v=296" type="image/png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png?v=296" />
+  <link rel="stylesheet" href="./css/style.css?v=296" />
   <link rel="preload" as="image" href="./assets/sky-yucatan.jpg" />
   <link rel="preload" as="image" href="./assets/tex-limestone-wall.jpg" />
   <link rel="preload" as="image" href="./assets/tex-cave-backwall.jpg" />
@@ -27,7 +27,7 @@
     <div class="loader-card">
       <div class="loader-emblem" aria-hidden="true">
         <div class="loader-emblem-pulse"></div>
-        <img src="./icons/icon-192.png?v=295" alt="" class="loader-emblem-icon" />
+        <img src="./icons/icon-192.png?v=296" alt="" class="loader-emblem-icon" />
       </div>
       <div class="menu-eyebrow">System Check · Pre-Dive Setup</div>
       <h1 class="loader-title">Cenote El Abismo</h1>
@@ -61,7 +61,7 @@
     <div class="menu-card">
       <div class="menu-header">
         <div class="menu-brand">
-          <img src="./icons/icon-192.png?v=295" alt="Techno Dive logo" class="menu-brand-icon" />
+          <img src="./icons/icon-192.png?v=296" alt="Techno Dive logo" class="menu-brand-icon" />
           <div>
             <div class="menu-eyebrow">Techno Dive</div>
             <h1 class="menu-title">Cenote El Abismo</h1>
@@ -84,6 +84,10 @@
             </button>
             <div id="home-menu-popover" class="home-menu-popover" role="menu" aria-label="Expedition Menu" hidden>
               <div class="home-menu-section-lbl">Menu</div>
+              <button id="btn-home-open-avatar" class="home-menu-item home-menu-priority" type="button" role="menuitem" title="Customize your Male/Female Diver Avatar &amp; Bathing Suit">
+                <span>👤 My Diver Avatar</span>
+                <span class="home-menu-chevron" aria-hidden="true">›</span>
+              </button>
               <button id="btn-home-open-livery" class="home-menu-item home-menu-livery-item home-menu-priority" type="button" role="menuitem" title="Customize Drysuit Livery, Technical Torch Optics &amp; Milestone Patches">
                 <span class="home-menu-livery-label">🎨 Gear Workshop</span>
                 <span class="home-menu-chevron" aria-hidden="true">›</span>
@@ -225,7 +229,7 @@
               <div class="home-menu-divider" role="separator"></div>
               <div class="home-menu-ver-row">
                 <span class="home-menu-ver-lbl">Version</span>
-                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v295</button>
+                <button id="btn-pwa-update" class="btn tiny ghost pwa-version-btn" type="button" role="menuitem" title="Check for app updates">v296</button>
               </div>
             </div>
           </div>
@@ -287,6 +291,13 @@
       </div>
 
       <div id="solo-panel" class="menu-tab-panel" role="tabpanel" aria-label="Expedition Launch">
+        <button id="first-play-avatar-strip" class="first-play-avatar-strip" type="button" hidden>
+          <span class="fpa-left">
+            <canvas id="first-play-avatar-mini" class="fpa-mini-canvas" width="38" height="44" aria-hidden="true"></canvas>
+            <span class="fpa-copy"><strong>Create Your Diver</strong><small>Pick Male / Female &amp; Bathing Suit</small></span>
+          </span>
+          <span class="fpw-cta">Customize →</span>
+        </button>
         <button id="first-play-welcome-strip" class="first-play-welcome-strip" type="button" hidden>
           <span class="fpw-copy">🎁 Free <strong>Welcome Relic</strong></span>
           <span class="fpw-cta">Claim →</span>
@@ -1804,132 +1815,196 @@
     </div>
   </div>
 
+  <div id="avatar-creator-modal" class="lb-stats-modal" hidden role="dialog" aria-modal="true" aria-labelledby="avatar-creator-title">
+    <div class="lb-stats-card avatar-creator-card">
+      <div class="lb-stats-head">
+        <div>
+          <div class="lb-stats-kicker">TOPSIDE DIVER PERSONA · APPEARS AT EVERY DOCK, JUMP-IN &amp; VICTORY DANCE</div>
+          <h2 id="avatar-creator-title" class="lb-stats-title">👤 Create Your Diver Avatar</h2>
+        </div>
+        <button id="btn-avatar-creator-close" class="btn tiny ghost" type="button" aria-label="Close Avatar Creator">✕</button>
+      </div>
+      <div class="avatar-creator-layout">
+        <div class="avatar-preview-col">
+          <div class="avatar-preview-stage">
+            <canvas id="avatar-creator-canvas" width="320" height="250" aria-label="Live Diver Avatar Preview"></canvas>
+          </div>
+          <div class="avatar-preview-bar">
+            <div class="av-seg-group" role="group" aria-label="Preview Angle">
+              <button type="button" class="av-seg active" data-avatar-view="front" aria-pressed="true">Front</button>
+              <button type="button" class="av-seg" data-avatar-view="side" aria-pressed="false">Side</button>
+              <button type="button" class="av-seg" data-avatar-view="back" aria-pressed="false">Back</button>
+            </div>
+            <button id="btn-avatar-test-jump" class="btn tiny secondary" type="button" title="Preview your diver running off the dock and jumping into the water!">💦 Test Jump-In</button>
+          </div>
+        </div>
+        <div class="avatar-controls-col">
+          <div class="av-field">
+            <div class="av-label">Diver</div>
+            <div class="av-gender-row">
+              <button type="button" class="av-gender-btn active" data-avatar-gender="female" aria-pressed="true">♀ Female</button>
+              <button type="button" class="av-gender-btn" data-avatar-gender="male" aria-pressed="false">♂ Male</button>
+            </div>
+          </div>
+          <div class="av-field">
+            <div class="av-label">Body Shape</div>
+            <div id="avatar-body-pills" class="av-pill-row"></div>
+          </div>
+          <div class="av-field av-field-pair">
+            <div>
+              <div class="av-label">Skin Tone</div>
+              <div id="avatar-skin-swatches" class="av-swatch-row"></div>
+            </div>
+            <div>
+              <div class="av-label">Hair Color</div>
+              <div id="avatar-hair-swatches" class="av-swatch-row"></div>
+            </div>
+          </div>
+          <div id="avatar-top-section" class="av-field">
+            <div class="av-label">Bathing Suit Style</div>
+            <div id="avatar-top-pills" class="av-pill-row"></div>
+          </div>
+          <div class="av-field">
+            <div id="avatar-swim-label" class="av-label">Bathing Suit Color</div>
+            <div id="avatar-swim-swatches" class="av-swim-grid"></div>
+          </div>
+          <div class="av-actions">
+            <button id="btn-avatar-creator-save" class="btn primary" type="button">✨ Save My Diver &amp; Jump In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
-        "./js/util/common.js": "./js/util/common.js?v=295",
-        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=295",
-        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=295",
-        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=295",
-        "./js/game/audio.js": "./js/game/audio.js?v=295",
-        "./js/game/collision.js": "./js/game/collision.js?v=295",
-        "./js/game/input.js": "./js/game/input.js?v=295",
-        "./js/game/hud.js": "./js/game/hud.js?v=295",
-        "./js/game/diverBody.js": "./js/game/diverBody.js?v=295",
-        "./js/game/diveSession.js": "./js/game/diveSession.js?v=295",
-        "./js/game/diveCard.js": "./js/game/diveCard.js?v=295",
-        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=295",
-        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=295",
-        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=295",
-        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=295",
-        "./js/game/weather.js": "./js/game/weather.js?v=295",
-        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=295",
-        "./js/game/gearStats.js": "./js/game/gearStats.js?v=295",
-        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=295",
-        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=295",
-        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=295",
-        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=295",
-        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=295",
-        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=295",
-        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=295",
-        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=295",
-        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=295",
-        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=295",
-        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=295",
-        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=295",
-        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=295",
-        "./js/ui/replayController.js": "./js/ui/replayController.js?v=295",
-        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=295",
-        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=295",
-        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=295",
-        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=295",
-        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=295",
-        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=295",
-        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=295",
-        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=295",
-        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=295",
-        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=295",
-        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=295",
-        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=295",
-        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=295",
-        "./js/ui/dailyChallengeController.js": "./js/ui/dailyChallengeController.js?v=295",
-        "./js/ui/photoStudioController.js": "./js/ui/photoStudioController.js?v=295",
-        "./js/ui/coopInviteController.js": "./js/ui/coopInviteController.js?v=295",
-        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=295",
-        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=295",
-        "./js/game/scoring.js": "./js/game/scoring.js?v=295",
-        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=295",
-        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=295",
-        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=295",
-        "./js/game/renderer.js": "./js/game/renderer.js?v=295",
-        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=295",
-        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=295",
-        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=295",
-        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=295",
-        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=295",
-        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=295",
-        "./js/game/renderers/topsidePeopleRenderer.js": "./js/game/renderers/topsidePeopleRenderer.js?v=295",
-        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=295",
-        "./js/game/renderers/bossGuardiansRenderer.js": "./js/game/renderers/bossGuardiansRenderer.js?v=295",
-        "./js/game/renderers/underwaterJuiceRenderer.js": "./js/game/renderers/underwaterJuiceRenderer.js?v=295",
-        "./js/game/renderers/foregroundDepthRenderer.js": "./js/game/renderers/foregroundDepthRenderer.js?v=295",
-        "./js/game/renderers/diverAndSquadRenderer.js": "./js/game/renderers/diverAndSquadRenderer.js?v=295",
-        "./js/game/bossSpecs.js": "./js/game/bossSpecs.js?v=295",
-        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=295",
-        "./js/game/artSprites.js": "./js/game/artSprites.js?v=295",
-        "./js/game/silt.js": "./js/game/silt.js?v=295",
-        "./js/game/lighting.js": "./js/game/lighting.js?v=295",
-        "./js/game/marineLife.js": "./js/game/marineLife.js?v=295",
-        "./js/levels/themes.js": "./js/levels/themes.js?v=295",
-        "./js/levels/campaign.js": "./js/levels/campaign.js?v=295",
-        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=295",
-        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=295",
-        "./js/levels/level1.js": "./js/levels/level1.js?v=295",
-        "./js/levels/level2.js": "./js/levels/level2.js?v=295",
-        "./js/levels/level3.js": "./js/levels/level3.js?v=295",
-        "./js/levels/level4.js": "./js/levels/level4.js?v=295",
-        "./js/levels/level5.js": "./js/levels/level5.js?v=295",
-        "./js/levels/level6.js": "./js/levels/level6.js?v=295",
-        "./js/levels/level7.js": "./js/levels/level7.js?v=295",
-        "./js/levels/level8.js": "./js/levels/level8.js?v=295",
-        "./js/levels/level9.js": "./js/levels/level9.js?v=295",
-        "./js/levels/level10.js": "./js/levels/level10.js?v=295",
-        "./js/levels/level11.js": "./js/levels/level11.js?v=295",
-        "./js/levels/level12.js": "./js/levels/level12.js?v=295",
-        "./js/levels/level13.js": "./js/levels/level13.js?v=295",
-        "./js/levels/level14.js": "./js/levels/level14.js?v=295",
-        "./js/levels/level15.js": "./js/levels/level15.js?v=295",
-        "./js/levels/level16.js": "./js/levels/level16.js?v=295",
-        "./js/levels/level17.js": "./js/levels/level17.js?v=295",
-        "./js/levels/level18.js": "./js/levels/level18.js?v=295",
-        "./js/levels/level19.js": "./js/levels/level19.js?v=295",
-        "./js/levels/level20.js": "./js/levels/level20.js?v=295",
-        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=295",
-        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=295",
-        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=295",
-        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=295",
-        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=295",
-        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=295",
-        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=295",
-        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=295",
-        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=295",
-        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=295",
-        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=295",
-        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=295",
-        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=295",
-        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=295",
-        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=295",
-        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=295",
-        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=295",
-        "./js/levels/index.js": "./js/levels/index.js?v=295",
-        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=295",
-        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=295",
-        "./js/net/githubClient.js": "./js/net/githubClient.js?v=295",
-        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=295",
-        "./js/net/lanClient.js": "./js/net/lanClient.js?v=295"
+        "./js/util/common.js": "./js/util/common.js?v=296",
+        "./js/physics/diveModel.js": "./js/physics/diveModel.js?v=296",
+        "./js/game/abyssalTrench.js": "./js/game/abyssalTrench.js?v=296",
+        "./js/game/aquaticRadio.js": "./js/game/aquaticRadio.js?v=296",
+        "./js/game/audio.js": "./js/game/audio.js?v=296",
+        "./js/game/collision.js": "./js/game/collision.js?v=296",
+        "./js/game/input.js": "./js/game/input.js?v=296",
+        "./js/game/hud.js": "./js/game/hud.js?v=296",
+        "./js/game/diverBody.js": "./js/game/diverBody.js?v=296",
+        "./js/game/diveSession.js": "./js/game/diveSession.js?v=296",
+        "./js/game/diveCard.js": "./js/game/diveCard.js?v=296",
+        "./js/game/surveySlate.js": "./js/game/surveySlate.js?v=296",
+        "./js/game/diveSignals.js": "./js/game/diveSignals.js?v=296",
+        "./js/game/sonarPings.js": "./js/game/sonarPings.js?v=296",
+        "./js/game/aiBuddy.js": "./js/game/aiBuddy.js?v=296",
+        "./js/game/weather.js": "./js/game/weather.js?v=296",
+        "./js/game/rigLivery.js": "./js/game/rigLivery.js?v=296",
+        "./js/game/gearStats.js": "./js/game/gearStats.js?v=296",
+        "./js/game/gearProvingGrounds.js": "./js/game/gearProvingGrounds.js?v=296",
+        "./js/game/photoStudio.js": "./js/game/photoStudio.js?v=296",
+        "./js/game/dynamicHazards.js": "./js/game/dynamicHazards.js?v=296",
+        "./js/game/salvagePhysics.js": "./js/game/salvagePhysics.js?v=296",
+        "./js/game/mechanicalFx.js": "./js/game/mechanicalFx.js?v=296",
+        "./js/game/submergedStories.js": "./js/game/submergedStories.js?v=296",
+        "./js/game/expeditionContracts.js": "./js/game/expeditionContracts.js?v=296",
+        "./js/game/expeditionCampaigns.js": "./js/game/expeditionCampaigns.js?v=296",
+        "./js/game/rescueDrills.js": "./js/game/rescueDrills.js?v=296",
+        "./js/game/bossBounties.js": "./js/game/bossBounties.js?v=296",
+        "./js/game/perfMonitor.js": "./js/game/perfMonitor.js?v=296",
+        "./js/game/hyperRealSprites.js": "./js/game/hyperRealSprites.js?v=296",
+        "./js/game/playerAvatar.js": "./js/game/playerAvatar.js?v=296",
+        "./js/ui/avatarCreatorController.js": "./js/ui/avatarCreatorController.js?v=296",
+        "./js/ui/modalManager.js": "./js/ui/modalManager.js?v=296",
+        "./js/ui/debriefChart.js": "./js/ui/debriefChart.js?v=296",
+        "./js/ui/replayController.js": "./js/ui/replayController.js?v=296",
+        "./js/ui/gasPlannerController.js": "./js/ui/gasPlannerController.js?v=296",
+        "./js/ui/leaderboardController.js": "./js/ui/leaderboardController.js?v=296",
+        "./js/ui/siteBrowserController.js": "./js/ui/siteBrowserController.js?v=296",
+        "./js/ui/liveryWorkshopController.js": "./js/ui/liveryWorkshopController.js?v=296",
+        "./js/ui/gearUnlockShowcase.js": "./js/ui/gearUnlockShowcase.js?v=296",
+        "./js/ui/pwaAndAudioController.js": "./js/ui/pwaAndAudioController.js?v=296",
+        "./js/ui/trophyGalleryRenderer.js": "./js/ui/trophyGalleryRenderer.js?v=296",
+        "./js/ui/logbookModalController.js": "./js/ui/logbookModalController.js?v=296",
+        "./js/ui/sandboxAndProceduralController.js": "./js/ui/sandboxAndProceduralController.js?v=296",
+        "./js/ui/githubSyncController.js": "./js/ui/githubSyncController.js?v=296",
+        "./js/ui/rescueDrillsController.js": "./js/ui/rescueDrillsController.js?v=296",
+        "./js/ui/bountiesController.js": "./js/ui/bountiesController.js?v=296",
+        "./js/ui/trenchController.js": "./js/ui/trenchController.js?v=296",
+        "./js/ui/dailyChallengeController.js": "./js/ui/dailyChallengeController.js?v=296",
+        "./js/ui/photoStudioController.js": "./js/ui/photoStudioController.js?v=296",
+        "./js/ui/coopInviteController.js": "./js/ui/coopInviteController.js?v=296",
+        "./js/ui/touchFeedback.js": "./js/ui/touchFeedback.js?v=296",
+        "./js/game/challengeLink.js": "./js/game/challengeLink.js?v=296",
+        "./js/game/scoring.js": "./js/game/scoring.js?v=296",
+        "./js/game/leaderboardModel.js": "./js/game/leaderboardModel.js?v=296",
+        "./js/game/logbookModel.js": "./js/game/logbookModel.js?v=296",
+        "./js/game/worldMapData.js": "./js/game/worldMapData.js?v=296",
+        "./js/game/renderer.js": "./js/game/renderer.js?v=296",
+        "./js/game/renderers/chunkBaker.js": "./js/game/renderers/chunkBaker.js?v=296",
+        "./js/game/renderers/surfaceRenderer.js": "./js/game/renderers/surfaceRenderer.js?v=296",
+        "./js/game/renderers/wreckAndInteractivesRenderer.js": "./js/game/renderers/wreckAndInteractivesRenderer.js?v=296",
+        "./js/game/renderers/lightingAndFxRenderer.js": "./js/game/renderers/lightingAndFxRenderer.js?v=296",
+        "./js/game/renderers/submergedStoriesRenderer.js": "./js/game/renderers/submergedStoriesRenderer.js?v=296",
+        "./js/game/renderers/topsideAtmosphereRenderer.js": "./js/game/renderers/topsideAtmosphereRenderer.js?v=296",
+        "./js/game/renderers/topsidePeopleRenderer.js": "./js/game/renderers/topsidePeopleRenderer.js?v=296",
+        "./js/game/renderers/bossAndLairRenderer.js": "./js/game/renderers/bossAndLairRenderer.js?v=296",
+        "./js/game/renderers/bossGuardiansRenderer.js": "./js/game/renderers/bossGuardiansRenderer.js?v=296",
+        "./js/game/renderers/underwaterJuiceRenderer.js": "./js/game/renderers/underwaterJuiceRenderer.js?v=296",
+        "./js/game/renderers/foregroundDepthRenderer.js": "./js/game/renderers/foregroundDepthRenderer.js?v=296",
+        "./js/game/renderers/diverAndSquadRenderer.js": "./js/game/renderers/diverAndSquadRenderer.js?v=296",
+        "./js/game/bossSpecs.js": "./js/game/bossSpecs.js?v=296",
+        "./js/game/secretLairs.js": "./js/game/secretLairs.js?v=296",
+        "./js/game/artSprites.js": "./js/game/artSprites.js?v=296",
+        "./js/game/silt.js": "./js/game/silt.js?v=296",
+        "./js/game/lighting.js": "./js/game/lighting.js?v=296",
+        "./js/game/marineLife.js": "./js/game/marineLife.js?v=296",
+        "./js/levels/themes.js": "./js/levels/themes.js?v=296",
+        "./js/levels/campaign.js": "./js/levels/campaign.js?v=296",
+        "./js/levels/caveInteractives.js": "./js/levels/caveInteractives.js?v=296",
+        "./js/levels/proceduralLevel.js": "./js/levels/proceduralLevel.js?v=296",
+        "./js/levels/level1.js": "./js/levels/level1.js?v=296",
+        "./js/levels/level2.js": "./js/levels/level2.js?v=296",
+        "./js/levels/level3.js": "./js/levels/level3.js?v=296",
+        "./js/levels/level4.js": "./js/levels/level4.js?v=296",
+        "./js/levels/level5.js": "./js/levels/level5.js?v=296",
+        "./js/levels/level6.js": "./js/levels/level6.js?v=296",
+        "./js/levels/level7.js": "./js/levels/level7.js?v=296",
+        "./js/levels/level8.js": "./js/levels/level8.js?v=296",
+        "./js/levels/level9.js": "./js/levels/level9.js?v=296",
+        "./js/levels/level10.js": "./js/levels/level10.js?v=296",
+        "./js/levels/level11.js": "./js/levels/level11.js?v=296",
+        "./js/levels/level12.js": "./js/levels/level12.js?v=296",
+        "./js/levels/level13.js": "./js/levels/level13.js?v=296",
+        "./js/levels/level14.js": "./js/levels/level14.js?v=296",
+        "./js/levels/level15.js": "./js/levels/level15.js?v=296",
+        "./js/levels/level16.js": "./js/levels/level16.js?v=296",
+        "./js/levels/level17.js": "./js/levels/level17.js?v=296",
+        "./js/levels/level18.js": "./js/levels/level18.js?v=296",
+        "./js/levels/level19.js": "./js/levels/level19.js?v=296",
+        "./js/levels/level20.js": "./js/levels/level20.js?v=296",
+        "./js/levels/level21_ojamo.js": "./js/levels/level21_ojamo.js?v=296",
+        "./js/levels/level22_scoresby.js": "./js/levels/level22_scoresby.js?v=296",
+        "./js/levels/level23_bermuda.js": "./js/levels/level23_bermuda.js?v=296",
+        "./js/levels/level24_bimini.js": "./js/levels/level24_bimini.js?v=296",
+        "./js/levels/level25_krubera.js": "./js/levels/level25_krubera.js?v=296",
+        "./js/levels/level26_angelita.js": "./js/levels/level26_angelita.js?v=296",
+        "./js/levels/level27_yonaguni.js": "./js/levels/level27_yonaguni.js?v=296",
+        "./js/levels/wreck1_oriskany.js": "./js/levels/wreck1_oriskany.js?v=296",
+        "./js/levels/wreck2_andrea_doria.js": "./js/levels/wreck2_andrea_doria.js?v=296",
+        "./js/levels/wreck3_britannic.js": "./js/levels/wreck3_britannic.js?v=296",
+        "./js/levels/wreck4_hms_victoria.js": "./js/levels/wreck4_hms_victoria.js?v=296",
+        "./js/levels/wreck5_edmund_fitzgerald.js": "./js/levels/wreck5_edmund_fitzgerald.js?v=296",
+        "./js/levels/wreck6_thistlegorm.js": "./js/levels/wreck6_thistlegorm.js?v=296",
+        "./js/levels/wreck7_u1206.js": "./js/levels/wreck7_u1206.js?v=296",
+        "./js/levels/wreck8_zenobia.js": "./js/levels/wreck8_zenobia.js?v=296",
+        "./js/levels/wreck9_fujikawa.js": "./js/levels/wreck9_fujikawa.js?v=296",
+        "./js/levels/wreck10_markgraf.js": "./js/levels/wreck10_markgraf.js?v=296",
+        "./js/levels/index.js": "./js/levels/index.js?v=296",
+        "./js/vendor/trystero-nostr.min.js": "./js/vendor/trystero-nostr.min.js?v=296",
+        "./js/net/leaderboardClient.js": "./js/net/leaderboardClient.js?v=296",
+        "./js/net/githubClient.js": "./js/net/githubClient.js?v=296",
+        "./js/net/p2pRoomHost.js": "./js/net/p2pRoomHost.js?v=296",
+        "./js/net/lanClient.js": "./js/net/lanClient.js?v=296"
       }
     }
   </script>
-  <script type="module" src="./js/main.js?v=295"></script>
+  <script type="module" src="./js/main.js?v=296"></script>
 </body>
 </html>

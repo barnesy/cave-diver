@@ -14391,3 +14391,60 @@ test('v295 hyper-real sprite cutouts for chests, vault doors & topside environme
   // In headless Node (no DOM Image), getHyperRealSprite cleanly returns null so procedural fallbacks work
   assert.equal(getHyperRealSprite('chest-brass-closed'), null);
 });
+
+test('v296 player avatar creator model, site jump-in animation & roaming victory dance stage', async () => {
+  const {
+    normalizePlayerAvatar,
+    buildTopsideSpecFromAvatar,
+    triggerAvatarSiteJump,
+    getAvatarSiteJumpState,
+  } = await import('../public/js/game/playerAvatar.js');
+  const { drawPlayerAvatarSiteJump } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  const { renderVictoryPhotoFrame } = await import('../public/js/ui/victoryPhotoController.js');
+
+  const fAv = normalizePlayerAvatar({ gender: 'female', bodyType: 'hourglass', topStyle: 'plunge-onepiece', skinIdx: 2, hairIdx: 3, swimIdx: 4, configured: true });
+  const fSpec = buildTopsideSpecFromAvatar(fAv);
+  assert.equal(fSpec.gender, 'female');
+  assert.equal(fSpec.customSwim.style, 'onepiece');
+  assert.ok(fSpec.customSkin?.skin && fSpec.customHair);
+
+  const mAv = normalizePlayerAvatar({ gender: 'male', bodyType: 'muscular', swimIdx: 2, configured: true });
+  const mSpec = buildTopsideSpecFromAvatar(mAv);
+  assert.equal(mSpec.gender, 'male');
+  assert.equal(mSpec.customSwim.style, 'resort-shirt');
+
+  const seq = triggerAvatarSiteJump('cenote-el-abismo');
+  assert.ok(seq >= 1);
+  const st = getAvatarSiteJumpState();
+  assert.equal(st.active, true);
+  assert.equal(st.levelId, 'cenote-el-abismo');
+
+  let ops = 0;
+  const grad = { addColorStop() {} };
+  const mockCtx = {
+    canvas: { width: 640, height: 320 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() { ops++; },
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+    createLinearGradient() { return grad; },
+    createRadialGradient() { return grad; },
+  };
+  for (const elapsed of [0.35, 1.25, 2.05, 3.0]) {
+    const ok = drawPlayerAvatarSiteJump(mockCtx, 100, 180, 180, 210, 1, 44, 5.0, { forcedElapsed: elapsed, avatar: fAv });
+    assert.equal(ok, true, `Expected jump stage at ${elapsed}s to render`);
+  }
+  assert.ok(ops > 80, `Expected rich 4-stage jump-in draw ops, got ${ops}`);
+
+  // Verify victory stage dancers roam left-right & front-back across timestamps
+  const xs1 = [];
+  const xs2 = [];
+  const trackCtx = (arr) => ({
+    ...mockCtx,
+    ellipse(x) { arr.push(Math.round(x)); },
+  });
+  renderVictoryPhotoFrame(trackCtx(xs1), 640, 320, { level: LEVEL_1, score: 9200, grade: 'S', avatar: mAv }, 0.2, 'disco');
+  renderVictoryPhotoFrame(trackCtx(xs2), 640, 320, { level: LEVEL_1, score: 9200, grade: 'S', avatar: mAv }, 2.4, 'disco');
+  assert.notDeepEqual(xs1, xs2, 'Expected victory stage dancers to roam dynamically over time');
+});

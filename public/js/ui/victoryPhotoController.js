@@ -14,6 +14,7 @@ import {
 } from '../game/renderers/topsidePropsRenderer.js';
 import { resolveDiverLiveryPalette } from '../game/rigLivery.js';
 import { getHyperRealSprite } from '../game/hyperRealSprites.js';
+import { buildTopsideSpecFromAvatar } from '../game/playerAvatar.js';
 
 export const VICTORY_DANCE_MOVES = Object.freeze([
   { id: 'twerk', icon: '🍑', label: 'Twerk' },
@@ -179,28 +180,9 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
     ctx.stroke();
   }
 
-  // 5. Flanking Cheering Co-Ed Topside Party Crowd (varied front, back & side profiles + depth stagger!)
-  const crowdSlots = [
-    { x: w * 0.1, yOff: -4, move: danceMove, gender: 'female', view: danceMove === 'twerk' ? 'back' : 'front', seed: 2, facing: 1 },
-    { x: w * 0.2, yOff: 3, move: 'shuffle', gender: 'male', view: 'side', seed: 5, facing: 1 },
-    { x: w * 0.8, yOff: -3, move: 'hula', gender: 'female', view: 'front', seed: 3, facing: -1 },
-    { x: w * 0.9, yOff: 4, move: danceMove, gender: 'male', view: danceMove === 'twerk' || danceMove === 'moonwalk' ? 'side' : 'front', seed: 1, facing: -1 },
-  ];
-  for (let i = 0; i < crowdSlots.length; i++) {
-    const cs = crowdSlots[i];
-    drawTopsidePerson(ctx, cs.x, pierY - 2 + cs.yOff, scale * (0.86 + (cs.yOff > 0 ? 0.04 : 0)), timeSec, {
-      id: 9000 + i,
-      role: 'party-dance',
-      danceMove: cs.move,
-      gender: cs.gender,
-      view: cs.view,
-      seed: cs.seed,
-      facing: cs.facing,
-      hypeEnergy,
-    });
-  }
-
-  // 6. Hero Diver + Squad / Co-op Buddies Center-Stage (varied natural views by move!)
+  // 5 & 6. Dynamic Roaming Stage Choreography (v296):
+  // Every dancer grooves smoothly left-to-right & weaves gently front-to-back with real perspective
+  // depth scaling, velocity-based facing turns, moving foot shadows & Y-sorted painter's order!
   const squad = Array.isArray(state?.squad) ? state.squad.slice(0, 3) : [];
   const heroRoster = [
     { name: state?.diverName || 'You', livery: state?.livery || null, isHero: true, seed: 0 },
@@ -211,37 +193,132 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
       seed: idx + 4,
     })),
   ];
-  const spacing = Math.min(scale * 2.1, (w * 0.46) / Math.max(1, heroRoster.length));
+  const spacing = Math.min(scale * 2.1, (w * 0.44) / Math.max(1, heroRoster.length));
   const startX = w * 0.5 - ((heroRoster.length - 1) * spacing) * 0.5;
+  const minStageX = w * 0.08;
+  const maxStageX = w * 0.92;
+  const stageActors = [];
+
+  // Flanking cheering crowd dancers with lively left-right & front-back roaming orbits
+  const crowdSlots = [
+    { baseX: w * 0.13, roamX: w * 0.075, roamZ: 9.5, spdX: 0.72, spdZ: 0.55, ph: 0.4, move: danceMove, gender: 'female', seed: 2 },
+    { baseX: w * 0.25, roamX: w * 0.085, roamZ: 10.5, spdX: 0.64, spdZ: 0.48, ph: 2.1, move: 'shuffle', gender: 'male', seed: 5 },
+    { baseX: w * 0.76, roamX: w * 0.085, roamZ: 10.0, spdX: 0.68, spdZ: 0.52, ph: 3.7, move: 'hula', gender: 'female', seed: 3 },
+    { baseX: w * 0.87, roamX: w * 0.075, roamZ: 9.0, spdX: 0.76, spdZ: 0.58, ph: 5.0, move: danceMove, gender: 'male', seed: 1 },
+  ];
+  for (let i = 0; i < crowdSlots.length; i++) {
+    const cs = crowdSlots[i];
+    const tX = timeSec * cs.spdX + cs.ph;
+    const tZ = timeSec * cs.spdZ + cs.ph * 1.4;
+    const dx = Math.sin(tX) * cs.roamX + Math.sin(tX * 0.5 + 1.1) * cs.roamX * 0.22;
+    const vx = Math.cos(tX) * cs.spdX * cs.roamX;
+    const dz = Math.sin(tZ); // -1 (upstage/back) .. +1 (downstage/front)
+    const xPos = Math.max(minStageX, Math.min(maxStageX, cs.baseX + dx));
+    const yPos = pierY + dz * cs.roamZ;
+    const depthScale = 0.86 + (dz + 1) * 0.055; // 0.86x back-stage -> 0.97x front-stage
+    const facing = Math.abs(vx) > 4 ? (vx >= 0 ? 1 : -1) : (xPos < w * 0.5 ? 1 : -1);
+    const view =
+      cs.move === 'twerk'
+        ? (i % 2 === 0 ? 'back' : 'side')
+        : cs.move === 'moonwalk' || cs.move === 'running-man' || Math.abs(vx) > 22
+          ? 'side'
+          : 'front';
+    stageActors.push({
+      x: xPos,
+      y: yPos,
+      scale: scale * depthScale,
+      name: '',
+      isHero: false,
+      spec: {
+        id: 9000 + i,
+        role: 'party-dance',
+        danceMove: cs.move,
+        gender: cs.gender,
+        view,
+        seed: cs.seed,
+        facing,
+        hypeEnergy,
+      },
+    });
+  }
+
+  // Hero Diver (using saved Custom Player Avatar!) + Squad grooving center-stage left/right & front/back!
   for (let i = 0; i < heroRoster.length; i++) {
     const member = heroRoster[i];
-    const mx = startX + i * spacing;
-    const spec = _liveryToTopsideSpec(member.livery, member.seed);
+    const baseMx = startX + i * spacing;
+    const roamX = member.isHero ? Math.min(w * 0.095, 58) : Math.min(w * 0.07, 42);
+    const roamZ = member.isHero ? 9.5 : 8.5;
+    const spdX = member.isHero ? 0.62 : 0.70 + i * 0.06;
+    const spdZ = member.isHero ? 0.46 : 0.54 + i * 0.05;
+    const ph = i * 1.85 + 0.6;
+    const dx = Math.sin(timeSec * spdX + ph) * roamX;
+    const vx = Math.cos(timeSec * spdX + ph) * spdX * roamX;
+    const dz = Math.sin(timeSec * spdZ + ph * 1.3);
+    const mx = Math.max(minStageX, Math.min(maxStageX, baseMx + dx));
+    const my = pierY + 2 + dz * roamZ;
+    const depthMult = 0.96 + (dz + 1) * 0.055; // smooth perspective scale as they step forward/back!
+    const facing = Math.abs(vx) > 5 ? (vx >= 0 ? 1 : -1) : (i % 2 === 0 ? 1 : -1);
     const memberView =
       danceMove === 'twerk'
         ? (i % 2 === 0 ? 'back' : 'side')
         : danceMove === 'running-man' || danceMove === 'body-roll' || danceMove === 'moonwalk'
           ? 'side'
-          : danceMove === 'macarena'
-            ? 'front'
-            : (i === 0 ? 'front' : i === 1 ? 'side' : 'front');
-    const yStagger = i === 1 ? -4 : i === 2 ? 3 : 2;
-    drawTopsidePerson(ctx, mx, pierY + yStagger, scale * (member.isHero ? 1.12 : 0.98), timeSec, {
-      id: 9200 + i,
-      role: 'party-dance',
-      danceMove,
-      view: memberView,
-      seed: member.seed,
-      facing: i % 2 === 0 ? 1 : -1,
-      hypeEnergy,
-      customSwim: spec.customSwim,
-      customWet: spec.customWet,
+          : Math.abs(vx) > 20 && dz < 0.2
+            ? 'side'
+            : 'front';
+
+    let spec;
+    if (member.isHero) {
+      spec = buildTopsideSpecFromAvatar(state?.avatar || null, {
+        id: 9200 + i,
+        role: 'party-dance',
+        danceMove,
+        view: memberView,
+        seed: 11,
+        facing,
+        hypeEnergy,
+      });
+    } else {
+      const livSpec = _liveryToTopsideSpec(member.livery, member.seed);
+      spec = {
+        id: 9200 + i,
+        role: 'party-dance',
+        danceMove,
+        view: memberView,
+        seed: member.seed,
+        facing,
+        hypeEnergy,
+        customSwim: livSpec.customSwim,
+        customWet: livSpec.customWet,
+      };
+    }
+
+    stageActors.push({
+      x: mx,
+      y: my,
+      scale: scale * (member.isHero ? 1.08 : 0.95) * depthMult,
+      name: member.name,
+      isHero: member.isHero,
+      spec,
     });
-    // Crisp nameplate under hero/squad member
-    ctx.font = '800 10px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = member.isHero ? '#fef08a' : '#e2e8f0';
-    ctx.fillText(String(member.name || '').slice(0, 12), mx, Math.min(h - 6, pierY + 18));
+  }
+
+  // True 3D painter's sort by foot Y so dancers stepping downstage overlap cleanly in front of upstage dancers!
+  stageActors.sort((a, b) => a.y - b.y);
+  for (let i = 0; i < stageActors.length; i++) {
+    const act = stageActors[i];
+    // Grounded moving shadow oval on wooden pier boards
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(act.x, act.y + 2, act.scale * 0.34, Math.max(2.5, act.scale * 0.085), 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawTopsidePerson(ctx, act.x, act.y, act.scale, timeSec, act.spec);
+    if (act.name) {
+      ctx.font = '800 10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = act.isHero ? '#fef08a' : '#e2e8f0';
+      ctx.fillText(String(act.name).slice(0, 12), act.x, Math.min(h - 4, act.y + 16));
+    }
   }
 
   // 7. Boss Trophy / Treasure Haul Pedestal right beside hero!
