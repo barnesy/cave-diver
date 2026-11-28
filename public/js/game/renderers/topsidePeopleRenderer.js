@@ -1277,40 +1277,9 @@ function drawSideBouncingBust(
     ctx.fill();
   }
 
-  // 1. Torso-hugging back strap / curved back panel STRICTLY INSIDE `evalSideTorsoAtT`'s curved back edge!
-  const backInset = 0.010 * s;
-  if (!isWetsuit && topStyle === 'sporty-crop') {
-    const rSh = evalSideTorsoAtT(0.05, chestX, hipX, shoulderY, waistY, prof, s);
-    ctx.fillStyle = fillCol;
-    ctx.beginPath();
-    ctx.moveTo(rSh.backX + backInset, rSh.y);
-    ctx.lineTo(rSh.frontX - 0.02 * s, rSh.y);
-    ctx.quadraticCurveTo(midBackX + (midFrontX - midBackX) * 0.52, (rSh.y + baseY) * 0.56, baseFrontX + 0.02 * s, baseY + 0.008 * s);
-    ctx.lineTo(baseBackX + backInset, baseY + 0.008 * s);
-    ctx.quadraticCurveTo(midBackX + backInset, (rSh.y + baseY) * 0.5, rSh.backX + backInset, rSh.y);
-    ctx.closePath();
-    ctx.fill();
-  } else if (!isWetsuit && topStyle === 'bandeau') {
-    ctx.fillStyle = fillCol;
-    ctx.beginPath();
-    ctx.moveTo(cutBackX + backInset, cutY + 0.014 * s);
-    ctx.lineTo(cutFrontX + 0.02 * s, cutY + 0.014 * s);
-    ctx.lineTo(baseFrontX + 0.02 * s, baseY - 0.004 * s);
-    ctx.lineTo(baseBackX + backInset, baseY - 0.004 * s);
-    ctx.quadraticCurveTo(midBackX + backInset, (cutY + baseY) * 0.5, cutBackX + backInset, cutY + 0.014 * s);
-    ctx.closePath();
-    ctx.fill();
-  } else if (!isWetsuit && (topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross' || topStyle === 'balconette')) {
-    // Horizontal bikini back band anchored strictly inside exact curved back edge -> outer cup base!
-    ctx.strokeStyle = fillCol;
-    ctx.lineWidth = Math.max(1.0, 0.026 * s);
-    ctx.beginPath();
-    ctx.moveTo(baseBackX + backInset * 1.3, baseY - 0.018 * s);
-    ctx.lineTo(baseFrontX + cupSpan * 0.24, baseY - 0.018 * s);
-    ctx.stroke();
-  }
-
-  // 2. Full anatomical skin teardrop welded seamlessly onto curved ribcage wall
+  // 1. Full anatomical skin teardrop welded seamlessly onto curved ribcage wall FIRST
+  // (Drawn BEFORE the continuous underbust/back band so the band wraps cleanly OVER the ribcage & underbust
+  // with ZERO arm gap, while Pass 2's near arm animates naturally OVER the continuous strap!)
   const showUpperSkin = !isWetsuit && topStyle !== 'sporty-crop';
   if (showUpperSkin) {
     ctx.fillStyle = skinCol;
@@ -1326,8 +1295,93 @@ function drawSideBouncingBust(
     }
   }
 
+  // 2. Continuous body-hugging back band & supportive underbust cradle (v298)!
+  // Clipped strictly to `traceSideCurvyTorso ∪ traceTeardrop()` so the back edge wraps 100% flush around the
+  // curved spine/back (ZERO edge gap!) and sweeps unbroken underneath the near arm straight into the cup cradle!
+  const backFarX = Math.min(baseBackX, cutBackX, topBackX) - 0.12 * s;
+  const hipYEst = waistY + (waistY - shoulderY) * 0.92;
+  ctx.save();
+  traceSideCurvyTorso(ctx, shoulderY, waistY, hipYEst, prof, s, chestX, hipX, bbx, bby, 0, 0);
+  ctx.moveTo(topX, topY);
+  ctx.bezierCurveTo(topFrontX + cupSpan * 0.34, topY + dropH * 0.14, apexX, apexY - dropH * 0.28, apexX, apexY);
+  ctx.bezierCurveTo(apexX, apexY + dropH * 0.34, baseFrontX + cupSpan * 0.42, baseY + 0.018 * s, baseX, baseY);
+  ctx.quadraticCurveTo(midFrontX - 0.045 * s, (topY + baseY) * 0.5, topX, topY);
+  ctx.closePath();
+  ctx.clip?.();
+
+  if (!isWetsuit && topStyle === 'sporty-crop') {
+    const rSh = evalSideTorsoAtT(0.04, chestX, hipX, shoulderY, waistY, prof, s);
+    ctx.fillStyle = fillCol;
+    ctx.beginPath();
+    ctx.moveTo(backFarX, rSh.y);
+    ctx.lineTo(rSh.frontX + 0.02 * s, rSh.y);
+    ctx.lineTo(baseFrontX + cupSpan * 0.32, baseY + 0.012 * s);
+    ctx.lineTo(backFarX, baseY + 0.012 * s);
+    ctx.closePath();
+    ctx.fill();
+  } else if (!isWetsuit && topStyle === 'bandeau') {
+    ctx.fillStyle = fillCol;
+    ctx.beginPath();
+    ctx.moveTo(backFarX, cutY + 0.012 * s);
+    ctx.lineTo(cutFrontX + cupSpan * 0.26, cutY + 0.014 * s);
+    ctx.lineTo(baseFrontX + cupSpan * 0.34, baseY + 0.008 * s);
+    ctx.lineTo(backFarX, baseY + 0.002 * s);
+    ctx.closePath();
+    ctx.fill();
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.75, 0.016 * s);
+      ctx.beginPath();
+      ctx.moveTo(backFarX, baseY + 0.006 * s);
+      ctx.quadraticCurveTo((baseBackX + baseFrontX) * 0.5, baseY + 0.012 * s, baseFrontX + cupSpan * 0.24, baseY + 0.012 * s);
+      ctx.stroke();
+    }
+  } else if (!isWetsuit && (topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross' || topStyle === 'balconette')) {
+    // Sculpted taut elastic back-to-underbust support band: wraps 100% flush around curved back -> runs
+    // unbroken under the arm -> flares gently into the lower outer cup wing to lift & cradle the breast!
+    const bandBackY = baseY - 0.018 * s;
+    const bandTopBack = bandBackY - (topStyle === 'balconette' ? 0.028 : 0.018) * s;
+    const bandBotBack = bandBackY + (topStyle === 'balconette' ? 0.020 : 0.015) * s;
+    const ribMidX = (baseBackX + baseFrontX) * 0.5;
+    const cradleEndX = baseFrontX + cupSpan * 0.44;
+    const cradleTopY = baseY - (topStyle === 'balconette' ? 0.044 : 0.028) * s;
+    const cradleBotY = baseY + 0.012 * s;
+
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(backFarX, bandTopBack - 0.004 * s);
+      ctx.quadraticCurveTo(ribMidX, bandTopBack, baseFrontX + cupSpan * 0.24, cradleTopY - 0.004 * s);
+      ctx.moveTo(backFarX, bandBotBack + 0.004 * s);
+      ctx.quadraticCurveTo(ribMidX, bandBotBack + 0.010 * s, cradleEndX, cradleBotY + 0.004 * s);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = fillCol;
+    ctx.beginPath();
+    ctx.moveTo(backFarX, bandTopBack);
+    ctx.quadraticCurveTo(ribMidX, bandTopBack + 0.004 * s, baseFrontX + cupSpan * 0.28, cradleTopY);
+    ctx.lineTo(cradleEndX, cradleBotY);
+    ctx.quadraticCurveTo(ribMidX, bandBotBack + 0.004 * s, backFarX, bandBotBack);
+    ctx.closePath();
+    ctx.fill();
+
+    if (rimCol && s >= 16) {
+      ctx.strokeStyle = rimCol;
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(backFarX, bandBotBack - 0.002 * s);
+      ctx.quadraticCurveTo(ribMidX, bandBotBack + 0.002 * s, baseFrontX + cupSpan * 0.36, cradleBotY - 0.002 * s);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  const backInset = 0.008 * s;
+
   // 3. Tight fitted swimsuit cup CLIPPED STRICTLY onto the moving teardrop breast (zero independent drift!)
-  // Sculpted open-side cup contours reveal natural lateral side-boob skin along the ribcage/armhole!
+  // Anchors DIRECTLY into the continuous underbust band so it visibly lifts & holds the breast while
+  // revealing a sleek natural crescent of upper/outer lateral side-boob!
   ctx.save();
   traceTeardrop();
   if (typeof ctx.clip === 'function') ctx.clip();
@@ -1335,43 +1389,45 @@ function drawSideBouncingBust(
   if (isWetsuit) {
     ctx.fillRect(topX - 0.1 * s, topY - 0.1 * s, (apexX - topX) + 0.25 * s, dropH + 0.25 * s);
   } else if (topStyle === 'sporty-crop') {
-    // Athletic low-cut armhole revealing a clean crescent of lateral side-boob!
-    const sideBackX = midFrontX + cupSpan * 0.24;
+    // Athletic low-cut armhole revealing a clean crescent of upper-lateral side-boob, locked seamlessly into underband!
+    const sideBackX = midFrontX + cupSpan * 0.18;
     ctx.beginPath();
     ctx.moveTo(topFrontX + cupSpan * 0.08, topY - 0.02 * s);
     ctx.lineTo(apexX + 0.10 * s, topY - 0.02 * s);
     ctx.lineTo(apexX + 0.10 * s, baseY + 0.08 * s);
     ctx.lineTo(baseX - 0.06 * s, baseY + 0.08 * s);
-    ctx.quadraticCurveTo(sideBackX, (topY + baseY) * 0.54, topFrontX + cupSpan * 0.08, topY - 0.02 * s);
+    ctx.quadraticCurveTo(sideBackX, (topY + baseY) * 0.56, topFrontX + cupSpan * 0.08, topY - 0.02 * s);
     ctx.closePath();
     ctx.fill();
   } else if (topStyle === 'plunge-onepiece') {
-    // Low-cut open-side monokini armhole revealing a sleek curved side-boob contour!
-    const armCutX = midFrontX + cupSpan * 0.34;
+    // Low-cut open-side monokini armhole sweeping continuously from the underarm wing into the lower cup cradle!
+    const armCutX = midFrontX + cupSpan * 0.28;
     ctx.beginPath();
-    ctx.moveTo(topFrontX + cupSpan * 0.24, topY + dropH * 0.08);
-    ctx.quadraticCurveTo(midFrontX + cupSpan * 0.56, topY + dropH * 0.24, apexX + 0.06 * s, apexY - dropH * 0.18);
+    ctx.moveTo(topFrontX + cupSpan * 0.20, topY + dropH * 0.08);
+    ctx.quadraticCurveTo(midFrontX + cupSpan * 0.54, topY + dropH * 0.24, apexX + 0.06 * s, apexY - dropH * 0.18);
     ctx.lineTo(apexX + 0.10 * s, baseY + 0.08 * s);
-    ctx.lineTo(baseFrontX + cupSpan * 0.14, baseY + 0.08 * s);
-    ctx.quadraticCurveTo(armCutX, (topY + baseY) * 0.56, topFrontX + cupSpan * 0.24, topY + dropH * 0.08);
+    ctx.lineTo(baseX - 0.04 * s, baseY + 0.08 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY - 0.028 * s);
+    ctx.quadraticCurveTo(armCutX, (topY + baseY) * 0.58, topFrontX + cupSpan * 0.20, topY + dropH * 0.08);
     ctx.closePath();
     ctx.fill();
     if (s >= 16) {
       ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
       ctx.lineWidth = Math.max(0.75, 0.017 * s);
       ctx.beginPath();
-      ctx.moveTo(topFrontX + cupSpan * 0.24, topY + dropH * 0.08);
-      ctx.quadraticCurveTo(armCutX, (topY + baseY) * 0.56, baseFrontX + cupSpan * 0.14, baseY + 0.01 * s);
+      ctx.moveTo(topFrontX + cupSpan * 0.20, topY + dropH * 0.08);
+      ctx.quadraticCurveTo(armCutX, (topY + baseY) * 0.58, baseX, baseY - 0.022 * s);
       ctx.stroke();
     }
   } else if (topStyle === 'balconette') {
-    const wingX = midFrontX + cupSpan * 0.24;
+    const wingX = midFrontX + cupSpan * 0.16;
     ctx.beginPath();
     ctx.moveTo(wingX, cutY + 0.008 * s);
-    ctx.quadraticCurveTo(midFrontX + cupSpan * 0.54, cutY - 0.008 * s, apexX + 0.06 * s, apexY - dropH * 0.14);
+    ctx.quadraticCurveTo(midFrontX + cupSpan * 0.52, cutY - 0.008 * s, apexX + 0.06 * s, apexY - dropH * 0.14);
     ctx.lineTo(apexX + 0.10 * s, baseY + 0.08 * s);
-    ctx.lineTo(baseFrontX + cupSpan * 0.10, baseY + 0.08 * s);
-    ctx.quadraticCurveTo(wingX - 0.01 * s, (cutY + baseY) * 0.55, wingX, cutY + 0.008 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY + 0.08 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY - 0.036 * s);
+    ctx.quadraticCurveTo(wingX - 0.01 * s, (cutY + baseY) * 0.58, wingX, cutY + 0.008 * s);
     ctx.closePath();
     ctx.fill();
     if (rimCol && s >= 15) {
@@ -1379,31 +1435,32 @@ function drawSideBouncingBust(
       ctx.lineWidth = Math.max(0.85, 0.022 * s);
       ctx.beginPath();
       ctx.moveTo(wingX, cutY + 0.008 * s);
-      ctx.quadraticCurveTo(midFrontX + cupSpan * 0.54, cutY - 0.008 * s, apexX + 0.04 * s, apexY - dropH * 0.14);
+      ctx.quadraticCurveTo(midFrontX + cupSpan * 0.52, cutY - 0.008 * s, apexX + 0.04 * s, apexY - dropH * 0.14);
       ctx.stroke();
     }
   } else if (topStyle === 'bandeau') {
-    const wingX = midFrontX + cupSpan * 0.22;
+    const wingX = midFrontX + cupSpan * 0.14;
     ctx.beginPath();
-    ctx.moveTo(wingX, cutY + 0.012 * s);
+    ctx.moveTo(baseX - 0.04 * s, cutY + 0.012 * s);
     ctx.lineTo(apexX + 0.06 * s, apexY - dropH * 0.20);
     ctx.lineTo(apexX + 0.10 * s, baseY + 0.08 * s);
-    ctx.lineTo(baseFrontX + cupSpan * 0.10, baseY + 0.08 * s);
-    ctx.quadraticCurveTo(wingX - 0.01 * s, (cutY + baseY) * 0.55, wingX, cutY + 0.012 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY + 0.08 * s);
     ctx.closePath();
     ctx.fill();
   } else {
-    // Triangle-halter & wrap-crisscross: diagonal outer triangle seam curves cleanly forward,
-    // leaving a natural, unmistakable lateral side-boob skin curve down to the underbust strap!
-    const peakX = topFrontX + cupSpan * 0.34;
-    const peakY = topY + dropH * 0.16;
-    const outerBaseX = baseFrontX + cupSpan * 0.22;
-    const outerMidX = midFrontX + cupSpan * 0.38;
+    // Triangle-halter & wrap-crisscross: diagonal outer triangle seam sweeps cleanly from halter peak
+    // straight into the continuous underbust support band (ZERO gap!), leaving natural upper/outer side-boob!
+    const peakX = topFrontX + cupSpan * 0.30;
+    const peakY = topY + dropH * 0.15;
+    const outerBaseX = baseFrontX + cupSpan * 0.06;
+    const outerMidX = midFrontX + cupSpan * 0.30;
     ctx.beginPath();
     ctx.moveTo(peakX, peakY);
     ctx.lineTo(apexX + 0.08 * s, apexY - dropH * 0.22);
     ctx.lineTo(apexX + 0.10 * s, baseY + 0.08 * s);
-    ctx.lineTo(outerBaseX, baseY + 0.08 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY + 0.08 * s);
+    ctx.lineTo(baseX - 0.04 * s, baseY - 0.024 * s);
+    ctx.lineTo(outerBaseX, baseY - 0.020 * s);
     ctx.quadraticCurveTo(outerMidX, (peakY + baseY) * 0.56, peakX, peakY);
     ctx.closePath();
     ctx.fill();
@@ -1412,16 +1469,16 @@ function drawSideBouncingBust(
       ctx.lineWidth = Math.max(0.8, 0.020 * s);
       ctx.beginPath();
       ctx.moveTo(peakX, peakY);
-      ctx.quadraticCurveTo(outerMidX, (peakY + baseY) * 0.56, outerBaseX, baseY);
+      ctx.quadraticCurveTo(outerMidX, (peakY + baseY) * 0.56, outerBaseX, baseY - 0.016 * s);
       ctx.stroke();
     }
     if (s >= 18) {
-      // Soft skin-compression shadow along the lateral cup edge against the exposed side-boob!
+      // Soft skin-compression shadow along the taut diagonal cup edge gripping the side-boob!
       ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
       ctx.lineWidth = Math.max(0.75, 0.016 * s);
       ctx.beginPath();
       ctx.moveTo(peakX - 0.008 * s, peakY + 0.008 * s);
-      ctx.quadraticCurveTo(outerMidX - 0.014 * s, (peakY + baseY) * 0.56, outerBaseX - 0.010 * s, baseY);
+      ctx.quadraticCurveTo(outerMidX - 0.014 * s, (peakY + baseY) * 0.56, outerBaseX - 0.010 * s, baseY - 0.016 * s);
       ctx.stroke();
     }
   }
@@ -1457,7 +1514,7 @@ function drawSideBouncingBust(
     ctx.lineWidth = Math.max(0.95, 0.022 * s);
     ctx.beginPath();
     ctx.moveTo(chestX + 0.02 * s, shoulderY + 0.014 * s);
-    ctx.lineTo(topFrontX + cupSpan * 0.24, topY + dropH * 0.14);
+    ctx.lineTo(topFrontX + cupSpan * 0.30, topY + dropH * 0.15);
     ctx.stroke();
   } else if (!isWetsuit && topStyle === 'bandeau') {
     if (rimCol && s >= 15) {
@@ -1537,49 +1594,291 @@ function drawSideBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, fillCol, sha
   }
 }
 
+const _backBoobGeom = { ribCx: 0, buY: 0, sideRx: 0, sideRy: 0, outOff: 0, lx: 0, ly: 0, rx: 0, ry: 0 };
+
 /**
- * Draw natural lateral side-boob contours peeking subtly past the outer ribcage in Female Back View (v296)!
- * Drawn behind the back torso so ONLY the smooth outer rounded curves protrude naturally beyond the lats,
- * synced with spring-mass bust bounce (`bbx, bby, bTilt`) and `prof.cupScale * bustScale`.
+ * Shared exact outer side-boob ellipse geometry for Female Back View so bare outer breast curves
+ * AND body-hugging back swimwear straps/cradles lock together with 0.0px mismatch across every bounce frame!
  */
-function drawBackViewSideBoob(ctx, chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale = 1.0) {
+function getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, bustScale = 1.0) {
   const cs = Math.min(1.45, (prof.cupScale || 1.0) * (bustScale || 1.0));
   const vBounce = clamp(bby * 0.45, -0.024 * s, 0.028 * s);
   const hLag = clamp(bbx * 0.24, -0.015 * s, 0.015 * s);
   const torsoH = Math.max(0.18 * s, waistY - shoulderY);
   const ribCx = chestX + (hipX - chestX) * 0.18 + hLag;
-  // Sit naturally below the armpit/shoulder joint so outer breast curves peek tastefully past the ribcage!
-  const buY = shoulderY + torsoH * 0.49 + vBounce;
-  const sideRx = prof.bust * (0.18 + 0.09 * cs) * s;
-  const sideRy = torsoH * (0.18 + 0.05 * cs);
+  const buY = shoulderY + torsoH * 0.50 + vBounce;
+  const sideRx = prof.bust * (0.19 + 0.09 * cs) * s;
+  const sideRy = torsoH * (0.19 + 0.05 * cs);
   const outOff = prof.bust * (0.64 + 0.07 * cs) * s;
+  _backBoobGeom.ribCx = ribCx;
+  _backBoobGeom.buY = buY;
+  _backBoobGeom.sideRx = sideRx;
+  _backBoobGeom.sideRy = sideRy;
+  _backBoobGeom.outOff = outOff;
+  _backBoobGeom.lx = ribCx - outOff;
+  _backBoobGeom.ly = buY - bTilt * 0.4;
+  _backBoobGeom.rx = ribCx + outOff;
+  _backBoobGeom.ry = buY + bTilt * 0.4;
+  return _backBoobGeom;
+}
 
-  // Exposed rounded outer breast curves peeking subtly past left & right ribcage edges!
+/**
+ * Draw natural lateral side-boob skin contours peeking past the outer ribcage in Female Back View!
+ * Drawn behind the back torso so ONLY the smooth outer rounded breast curves protrude beyond the lats.
+ */
+function drawBackViewSideBoob(ctx, chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale = 1.0) {
+  const g = getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, bustScale);
   for (const side of [-1, 1]) {
-    const bx = ribCx + side * outOff;
-    const by = buY + side * bTilt * 0.4;
+    const bx = side < 0 ? g.lx : g.rx;
+    const by = side < 0 ? g.ly : g.ry;
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(bx, by, sideRx, sideRy, side * 0.20, 0, Math.PI * 2);
+    ctx.ellipse(bx, by, g.sideRx, g.sideRy, side * 0.20, 0, Math.PI * 2);
     ctx.fill();
 
-    // Soft warm contour shading along outer lower side-boob + delicate cup edge wrap
+    // Soft warm contour shading along the exposed upper-outer side-boob curve
     if (s >= 16) {
-      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
       ctx.lineWidth = Math.max(0.7, 0.014 * s);
       ctx.beginPath();
-      ctx.arc(bx, by, sideRx * 0.94, side > 0 ? -Math.PI * 0.24 : Math.PI * 0.76, side > 0 ? Math.PI * 0.44 : Math.PI * 1.24);
+      ctx.arc(bx, by, g.sideRx * 0.94, side > 0 ? -Math.PI * 0.30 : Math.PI * 0.78, side > 0 ? Math.PI * 0.22 : Math.PI * 1.30);
       ctx.stroke();
-
-      if (topStyle !== 'sporty-crop') {
-        ctx.strokeStyle = swim.primary;
-        ctx.lineWidth = Math.max(0.95, 0.022 * s);
-        ctx.beginPath();
-        ctx.arc(bx, by + sideRy * 0.06, sideRx * 0.96, side > 0 ? 0.12 : Math.PI - 0.50, side > 0 ? 0.50 : Math.PI - 0.12);
-        ctx.stroke();
-      }
     }
   }
+}
+
+/**
+ * Draw body-hugging Female Back View swimsuit top (v298)!
+ * Clips strictly to the exact union of `traceCurvyTorso` + left/right side-boob ellipses (ZERO overhanging
+ * flat stick ends!), curving snugly around the ribcage & cradling the LOWER-OUTER curve of both side-boobs
+ * so it visibly fits onto the body and holds the breasts up!
+ */
+function drawFittedFemaleBackTop(
+  ctx,
+  chestX,
+  hipX,
+  shoulderY,
+  waistY,
+  hipY,
+  prof,
+  s,
+  bbx,
+  bby,
+  bTilt,
+  gbx,
+  gby,
+  gTilt,
+  shTilt,
+  swim,
+  skin,
+  topStyle,
+  bustScale = 1.0,
+  isOnePiece = false
+) {
+  const g = getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, bustScale);
+  const { ribCx, buY, sideRx, sideRy, lx, ly, rx, ry } = g;
+  const outerL = lx - sideRx - 0.06 * s;
+  const outerR = rx + sideRx + 0.06 * s;
+  const cradleY_L = ly + sideRy * 0.24;
+  const cradleY_R = ry + sideRy * 0.24;
+  const bandCenterY = buY + sideRy * 0.44;
+
+  // Helper to clip strictly to torso + both outer side-boobs so fabric wraps tightly around both body & boobs!
+  const clipBackBodyAndBust = () => {
+    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, 0, 0, gbx, gby, shTilt);
+    ctx.moveTo(lx + sideRx * Math.cos(-0.20), ly + sideRx * Math.sin(-0.20));
+    ctx.ellipse(lx, ly, sideRx, sideRy, -0.20, 0, Math.PI * 2);
+    ctx.moveTo(rx + sideRx * Math.cos(0.20), ry + sideRx * Math.sin(0.20));
+    ctx.ellipse(rx, ry, sideRx, sideRy, 0.20, 0, Math.PI * 2);
+    ctx.clip?.();
+  };
+
+  if (isOnePiece) {
+    // Tight scooped-back cheeky high-cut monokini hugging both the ribcage & outer lower breast cradles!
+    // Shaped armhole edges curve inward over shoulder blades & sweep outward under both side-boobs
+    // (exposing smooth upper-outer side-boob cleanly with ZERO polka-dot holes!).
+    const bhx = hipX + gbx * 0.80;
+    const bhy = hipY + gby * 0.80;
+    const eCrest = evalFrontHipEdgeAtT(0.44, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+    const strapOut = prof.sh * 0.72 * s;
+
+    ctx.save();
+    clipBackBodyAndBust();
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.moveTo(chestX - strapOut, shoulderY + 0.02 * s - shTilt);
+    ctx.lineTo(chestX + strapOut, shoulderY + 0.02 * s + shTilt);
+    // Right sculpted open armhole sweeping smoothly down & out to cradle the lower-outer right side-boob!
+    ctx.quadraticCurveTo(chestX + prof.bust * 0.66 * s, ry - sideRy * 0.12, outerR, ry + sideRy * 0.14);
+    ctx.lineTo(outerR, ry + sideRy * 1.18);
+    ctx.lineTo(eCrest.rightX + 0.06 * s, eCrest.y);
+    ctx.quadraticCurveTo(eCrest.rightX - eCrest.halfW * 0.42, bhy + 0.036 * s - gTilt * 0.4, bhx, hipY + 0.155 * s + gby * 0.6);
+    ctx.quadraticCurveTo(eCrest.leftX + eCrest.halfW * 0.42, bhy + 0.036 * s + gTilt * 0.4, eCrest.leftX - 0.06 * s, eCrest.y);
+    ctx.lineTo(outerL, ly + sideRy * 1.18);
+    ctx.lineTo(outerL, ly + sideRy * 0.14);
+    // Left sculpted open armhole sweeping smoothly up from the lower-outer left side-boob cradle to left shoulder!
+    ctx.quadraticCurveTo(chestX - prof.bust * 0.66 * s, ly - sideRy * 0.12, chestX - strapOut, shoulderY + 0.02 * s - shTilt);
+    ctx.closePath();
+    ctx.fill();
+
+    // Low-back oval scoop skin cutout
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(chestX, shoulderY + 0.17 * s, prof.bust * 0.48 * s, 0.15 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Crisp elastic armhole & scoop-back edge shadows gripping the skin & boobs
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.ellipse(chestX, shoulderY + 0.17 * s, prof.bust * 0.48 * s, 0.15 * s, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(chestX + strapOut, shoulderY + 0.02 * s + shTilt);
+      ctx.quadraticCurveTo(chestX + prof.bust * 0.66 * s, ry - sideRy * 0.12, outerR, ry + sideRy * 0.14);
+      ctx.moveTo(chestX - strapOut, shoulderY + 0.02 * s - shTilt);
+      ctx.quadraticCurveTo(chestX - prof.bust * 0.66 * s, ly - sideRy * 0.12, outerL, ly + sideRy * 0.14);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  ctx.save();
+  clipBackBodyAndBust();
+
+  if (topStyle === 'sporty-crop') {
+    // Sculpted racerback athletic crop hugging shoulders, ribcage & full outer side-boob cradles (zero cutout glitches!)
+    const botY = Math.max(buY + sideRy * 1.06, shoulderY + 0.29 * s);
+    const neckHalf = prof.sh * 0.46 * s;
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.moveTo(chestX - neckHalf, shoulderY + 0.01 * s - shTilt * 0.4);
+    ctx.lineTo(chestX + neckHalf, shoulderY + 0.01 * s + shTilt * 0.4);
+    // Smooth contoured racerback armhole sweeping out into full right side-boob cradle!
+    ctx.quadraticCurveTo(chestX + prof.bust * 0.52 * s, ry - sideRy * 0.20, outerR, ry - sideRy * 0.06);
+    ctx.lineTo(outerR, botY);
+    ctx.lineTo(outerL, botY);
+    ctx.lineTo(outerL, ly - sideRy * 0.06);
+    ctx.quadraticCurveTo(chestX - prof.bust * 0.52 * s, ly - sideRy * 0.20, chestX - neckHalf, shoulderY + 0.01 * s - shTilt * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    // Curved supportive contrast underband gripping ribcage
+    ctx.fillStyle = swim.accent;
+    ctx.beginPath();
+    ctx.moveTo(outerL, botY - 0.036 * s);
+    ctx.quadraticCurveTo(ribCx, botY - 0.020 * s, outerR, botY - 0.036 * s);
+    ctx.lineTo(outerR, botY + 0.004 * s);
+    ctx.quadraticCurveTo(ribCx, botY + 0.018 * s, outerL, botY + 0.004 * s);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Contoured supportive bikini back band: sweeps UP around lower-outer curve of BOTH side-boobs (holding them up!),
+    // tapers sleekly inward around the ribcage, and dips gently into a cinched center-back clasp/tie!
+    const isBandeau = topStyle === 'bandeau';
+    const wingTopY_L = ly - sideRy * (isBandeau ? 0.32 : 0.14);
+    const wingTopY_R = ry - sideRy * (isBandeau ? 0.32 : 0.14);
+    const wingBotY_L = ly + sideRy * 1.14;
+    const wingBotY_R = ry + sideRy * 1.14;
+    const centerTopY = bandCenterY - (isBandeau ? 0.046 : 0.015) * s;
+    const centerBotY = bandCenterY + (isBandeau ? 0.046 : 0.024) * s;
+
+    // 1. Soft warm skin-compression shadow directly above & below the taut band gripping skin & boobs!
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
+      ctx.lineWidth = Math.max(0.8, 0.017 * s);
+      ctx.beginPath();
+      ctx.moveTo(outerL, wingTopY_L - 0.008 * s);
+      ctx.quadraticCurveTo(ribCx, centerTopY - 0.008 * s, outerR, wingTopY_R - 0.008 * s);
+      ctx.moveTo(outerL, wingBotY_L + 0.006 * s);
+      ctx.quadraticCurveTo(ribCx, centerBotY + 0.008 * s, outerR, wingBotY_R + 0.006 * s);
+      ctx.stroke();
+    }
+
+    // 2. Sculpted contoured back band + flared outer side-boob support cradles!
+    ctx.fillStyle = swim.primary;
+    ctx.beginPath();
+    ctx.moveTo(outerL, wingTopY_L);
+    ctx.bezierCurveTo(
+      lx + sideRx * 0.65, cradleY_L - (isBandeau ? 0.025 : 0.004) * s,
+      ribCx - prof.bust * 0.34 * s, centerTopY - 0.004 * s,
+      ribCx, centerTopY
+    );
+    ctx.bezierCurveTo(
+      ribCx + prof.bust * 0.34 * s, centerTopY - 0.004 * s,
+      rx - sideRx * 0.65, cradleY_R - (isBandeau ? 0.025 : 0.004) * s,
+      outerR, wingTopY_R
+    );
+    ctx.lineTo(outerR, wingBotY_R);
+    ctx.bezierCurveTo(
+      rx - sideRx * 0.55, ry + sideRy * 0.80,
+      ribCx + prof.bust * 0.34 * s, centerBotY + 0.004 * s,
+      ribCx, centerBotY
+    );
+    ctx.bezierCurveTo(
+      ribCx - prof.bust * 0.34 * s, centerBotY + 0.004 * s,
+      lx + sideRx * 0.55, ly + sideRy * 0.80,
+      outerL, wingBotY_L
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Subtle accent elastic binding + taut horizontal fabric tension creases pulling toward the center clasp!
+    if (s >= 18) {
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(outerL, wingBotY_L - 0.006 * s);
+      ctx.quadraticCurveTo(ribCx, centerBotY - 0.004 * s, outerR, wingBotY_R - 0.006 * s);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.16)';
+      ctx.lineWidth = Math.max(0.65, 0.012 * s);
+      ctx.beginPath();
+      ctx.moveTo(ribCx - prof.bust * 0.52 * s, bandCenterY - 0.004 * s);
+      ctx.quadraticCurveTo(ribCx, bandCenterY + 0.004 * s, ribCx + prof.bust * 0.52 * s, bandCenterY - 0.004 * s);
+      ctx.stroke();
+    }
+
+    // 4. Contoured lifting straps pulling upward from the band over shoulders / around halter neck!
+    if (topStyle === 'balconette') {
+      ctx.strokeStyle = swim.primary;
+      ctx.lineWidth = Math.max(1.0, 0.024 * s);
+      ctx.beginPath();
+      ctx.moveTo(chestX - prof.sh * 0.56 * s, shoulderY + 0.01 * s - shTilt);
+      ctx.quadraticCurveTo(ribCx - prof.bust * 0.54 * s, (shoulderY + bandCenterY) * 0.5, ribCx - prof.bust * 0.48 * s, centerTopY + 0.006 * s);
+      ctx.moveTo(chestX + prof.sh * 0.56 * s, shoulderY + 0.01 * s + shTilt);
+      ctx.quadraticCurveTo(ribCx + prof.bust * 0.54 * s, (shoulderY + bandCenterY) * 0.5, ribCx + prof.bust * 0.48 * s, centerTopY + 0.006 * s);
+      ctx.stroke();
+    } else if (topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross') {
+      // Halter neck strings converging cleanly behind the nape!
+      ctx.strokeStyle = swim.accent || swim.primary;
+      ctx.lineWidth = Math.max(0.9, 0.020 * s);
+      ctx.beginPath();
+      ctx.moveTo(chestX - prof.sh * 0.34 * s, shoulderY - 0.01 * s - shTilt * 0.4);
+      ctx.quadraticCurveTo(chestX - 0.04 * s, shoulderY + 0.03 * s, chestX, shoulderY + 0.025 * s);
+      ctx.quadraticCurveTo(chestX + 0.04 * s, shoulderY + 0.03 * s, chestX + prof.sh * 0.34 * s, shoulderY - 0.01 * s + shTilt * 0.4);
+      ctx.stroke();
+    }
+
+    // 5. Center-back tie knot & slim hanging ribbons (or sleek clasp) right at the cinched spine dip!
+    ctx.fillStyle = swim.accent;
+    ctx.beginPath();
+    ctx.arc(ribCx, bandCenterY, Math.max(1.2, 0.025 * s), 0, Math.PI * 2);
+    ctx.fill();
+    if ((topStyle === 'triangle-halter' || topStyle === 'wrap-crisscross') && s >= 18) {
+      ctx.strokeStyle = swim.accent;
+      ctx.lineWidth = Math.max(0.8, 0.016 * s);
+      ctx.beginPath();
+      ctx.moveTo(ribCx, bandCenterY);
+      ctx.lineTo(ribCx - 0.028 * s, bandCenterY + 0.072 * s);
+      ctx.moveTo(ribCx, bandCenterY);
+      ctx.lineTo(ribCx + 0.028 * s, bandCenterY + 0.072 * s);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 const _hipEdge = { leftX: 0, rightX: 0, y: 0, cx: 0, halfW: 0 };
@@ -4353,48 +4652,17 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
       ctx.lineTo(hipShiftX + gbx * 0.4, hipY + 0.02 * s + gby * 0.4);
       ctx.stroke();
     } else {
-      // Natural side-boob curves peeking cleanly past left & right ribcage edges in Back View (v296)!
+      // Natural side-boob curves peeking cleanly past left & right ribcage edges in Back View!
       drawBackViewSideBoob(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale);
       ctx.fillStyle = skin;
       traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby, shTilt);
       ctx.fill();
       if (!isOnePiece) {
-        if (topStyle === 'sporty-crop') {
-          const topHalf = prof.bust * 0.78 * s;
-          const botHalf = prof.waist * 0.98 * s;
-          ctx.fillStyle = swim.primary;
-          ctx.beginPath();
-          ctx.moveTo(chestShiftX - topHalf, shoulderY + 0.05 * s - shTilt);
-          ctx.lineTo(chestShiftX + topHalf, shoulderY + 0.05 * s + shTilt);
-          ctx.lineTo(chestShiftX + botHalf, shoulderY + 0.30 * s);
-          ctx.lineTo(chestShiftX - botHalf, shoulderY + 0.30 * s);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = swim.accent;
-          ctx.fillRect(chestShiftX - botHalf, shoulderY + 0.265 * s, botHalf * 2, 0.040 * s);
-        } else {
-          // Back strap anchored cleanly across the ribcage & meeting the outer side-boob contour!
-          const strapW = prof.bust * (0.82 + 0.04 * Math.min(1.45, (prof.cupScale || 1) * (bustScale || 1))) * s;
-          ctx.strokeStyle = swim.primary;
-          ctx.lineWidth = Math.max(1.3, (topStyle === 'bandeau' ? 0.082 : 0.042) * s);
-          ctx.beginPath();
-          ctx.moveTo(chestShiftX - strapW, shoulderY + 0.19 * s);
-          ctx.lineTo(chestShiftX + strapW, shoulderY + 0.19 * s);
-          ctx.stroke();
-          if (topStyle === 'balconette' || topStyle === 'wrap-crisscross') {
-            ctx.lineWidth = Math.max(1, 0.025 * s);
-            ctx.beginPath();
-            ctx.moveTo(chestShiftX - prof.sh * 0.56 * s, shoulderY + 0.032 * s - shTilt);
-            ctx.lineTo(chestShiftX - prof.bust * 0.48 * s, shoulderY + 0.19 * s);
-            ctx.moveTo(chestShiftX + prof.sh * 0.56 * s, shoulderY + 0.032 * s + shTilt);
-            ctx.lineTo(chestShiftX + prof.bust * 0.48 * s, shoulderY + 0.19 * s);
-            ctx.stroke();
-          }
-          ctx.fillStyle = swim.accent;
-          ctx.beginPath();
-          ctx.arc(chestShiftX, shoulderY + 0.19 * s, 0.032 * s, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Body- & boob-hugging contoured back top clipping cleanly across torso + lower-outer side-boob cradles (v298)!
+        drawFittedFemaleBackTop(
+          ctx, chestShiftX, hipShiftX, shoulderY, waistY, hipY, prof, s,
+          bbx, bby, bTilt, gbx, gby, gTilt, shTilt, swim, skin, topStyle, bustScale, false
+        );
         drawBouncingGlutes(ctx, hipShiftX, hipY + 0.015 * s, prof, s, gbx, gby, gTilt, skin, skinShade, false);
         drawFittedFemaleBottoms(
           ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
@@ -4402,32 +4670,15 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           swim, skin, topStyle, false
         );
       } else {
-        // Tight scooped-back cheeky high-cut monokini one-piece clipped strictly onto torso & glutes (v295)!
-        const bhx = hipShiftX + gbx * 0.80;
-        const bhy = hipY + gby * 0.80;
+        // Tight scooped-back cheeky high-cut monokini hugging both torso & lower-outer side-boob cradles (v298)!
         const midX = (chestShiftX + hipShiftX) * 0.5;
         const waW = prof.waist * 0.94 * s;
         // Exposed rounded lower butt cheeks beneath the cheeky high-cut back!
         drawBouncingGlutes(ctx, hipShiftX, hipY + 0.015 * s, prof, s, gbx, gby, gTilt, skin, skinShade, false);
-        ctx.save();
-        traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby, shTilt);
-        ctx.clip?.();
-        const eCrest = evalFrontHipEdgeAtT(0.44, chestShiftX, hipShiftX, waistY, hipY, prof, s, gbx, gby);
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.moveTo(chestShiftX - prof.sh * 1.05 * s, shoulderY + 0.055 * s - shTilt);
-        ctx.lineTo(chestShiftX + prof.sh * 1.05 * s, shoulderY + 0.055 * s + shTilt);
-        ctx.lineTo(eCrest.rightX + 0.06 * s, eCrest.y);
-        ctx.quadraticCurveTo(eCrest.rightX - eCrest.halfW * 0.42, bhy + 0.036 * s - gTilt * 0.4, bhx, hipY + 0.155 * s + gby * 0.6);
-        ctx.quadraticCurveTo(eCrest.leftX + eCrest.halfW * 0.42, bhy + 0.036 * s + gTilt * 0.4, eCrest.leftX - 0.06 * s, eCrest.y);
-        ctx.closePath();
-        ctx.fill();
-        // Low-back scoop skin cutout
-        ctx.fillStyle = skin;
-        ctx.beginPath();
-        ctx.ellipse(chestShiftX, shoulderY + 0.17 * s, prof.bust * 0.48 * s, 0.15 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        drawFittedFemaleBackTop(
+          ctx, chestShiftX, hipShiftX, shoulderY, waistY, hipY, prof, s,
+          bbx, bby, bTilt, gbx, gby, gTilt, shTilt, swim, skin, topStyle, bustScale, true
+        );
         drawFittedFemaleBottoms(
           ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
           lHipX, rHipX, lKneeX, rKneeX, prof, s, 0, 0, gbx, gby, gTilt, shTilt,

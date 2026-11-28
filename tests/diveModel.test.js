@@ -14524,3 +14524,36 @@ test('v297 Brazilian side-cinch bottoms, sculpted thighs/arms & male glute jiggl
     assert.ok(fEll.length > 0, `Expected side-view ${style} female render to draw cleanly`);
   }
 });
+
+test('v298 continuous body- & boob-hugging female tops across all 6 styles in side disco & back views', async () => {
+  const { FEMALE_TOP_STYLES, drawTopsidePerson } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  assert.equal(FEMALE_TOP_STYLES.length, 6);
+  let fills = 0;
+  let clips = 0;
+  const mockCtx = {
+    canvas: { width: 400, height: 400 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    clip() { clips++; },
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { fills++; }, strokeRect() {},
+    fill() { fills++; }, stroke() {}, setLineDash() {},
+  };
+  for (let i = 0; i < FEMALE_TOP_STYLES.length; i++) {
+    const topStyle = FEMALE_TOP_STYLES[i];
+    for (const view of ['side', 'back']) {
+      drawTopsidePerson(mockCtx, 200, 340, 140, 0.35 + i * 0.2, {
+        id: 99800 + i * 2 + (view === 'back' ? 1 : 0),
+        gender: 'female',
+        bodyType: i % 2 ? 'voluptuous' : 'hourglass',
+        role: 'party-dance',
+        danceMove: 'disco',
+        view,
+        topStyle,
+        seed: i + 1,
+        facing: 1,
+      });
+    }
+  }
+  assert.ok(clips >= 24, `Expected body/bust clip passes across all 6 styles in side & back views, got ${clips}`);
+  assert.ok(fills >= 120, `Expected rich fitted swimwear draw ops, got ${fills}`);
+});

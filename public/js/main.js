@@ -567,7 +567,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=297',
+  mapRasterUrl: './assets/map-expedition.jpg?v=298',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -4120,7 +4120,7 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // v297 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
+  // v298 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
   const triggerBiomeSwapPulse = () => {
     if (!canvas) return;
     canvas.classList.remove('biome-swap');
@@ -6914,7 +6914,7 @@ function stepSimulation(dt) {
     dt,
   });
 
-  // v297 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
+  // v298 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
   const isCalmNominalCruise =
     !compactHudEnabled &&
     !session.endedState &&
@@ -7475,7 +7475,7 @@ async function bootGame() {
   initGitHubAuth();
   requestAnimationFrame(frame);
 
-  // v297 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
+  // v298 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
   try {
     const qs = new URLSearchParams(location.search || '');
     if (qs.get('codexTrial') === '1' && !INITIAL_ROOM_CODE) {
