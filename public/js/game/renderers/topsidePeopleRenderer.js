@@ -105,20 +105,20 @@ const FLOAT_COLORS = Object.freeze([
  * All widths are half-widths in world-meter units (base height ~1.68m * hScale).
  */
 export const FEMALE_BODY_PROFILES = Object.freeze([
-  { id: 'petite',     gender: 'female', hScale: 0.91, sh: 0.188, bust: 0.20,  waist: 0.112, hip: 0.238, thigh: 0.120, calf: 0.072, arm: 0.072, cupScale: 0.92, gluteScale: 0.88, belly: 0 },
-  { id: 'athletic-f', gender: 'female', hScale: 1.00, sh: 0.218, bust: 0.218, waist: 0.132, hip: 0.252, thigh: 0.134, calf: 0.080, arm: 0.082, cupScale: 1.00, gluteScale: 0.94, belly: 0 },
-  { id: 'hourglass',  gender: 'female', hScale: 0.98, sh: 0.208, bust: 0.238, waist: 0.118, hip: 0.284, thigh: 0.144, calf: 0.082, arm: 0.078, cupScale: 1.12, gluteScale: 1.06, belly: 0 },
-  { id: 'voluptuous', gender: 'female', hScale: 1.04, sh: 0.224, bust: 0.256, waist: 0.148, hip: 0.308, thigh: 0.156, calf: 0.090, arm: 0.088, cupScale: 1.20, gluteScale: 1.14, belly: 0.02 },
+  { id: 'petite',     gender: 'female', hScale: 0.91, sh: 0.188, bust: 0.20,  waist: 0.112, hip: 0.238, thigh: 0.140, calf: 0.084, arm: 0.086, cupScale: 0.92, gluteScale: 0.88, belly: 0 },
+  { id: 'athletic-f', gender: 'female', hScale: 1.00, sh: 0.218, bust: 0.218, waist: 0.132, hip: 0.252, thigh: 0.158, calf: 0.094, arm: 0.098, cupScale: 1.00, gluteScale: 0.94, belly: 0 },
+  { id: 'hourglass',  gender: 'female', hScale: 0.98, sh: 0.208, bust: 0.238, waist: 0.118, hip: 0.284, thigh: 0.172, calf: 0.098, arm: 0.094, cupScale: 1.12, gluteScale: 1.06, belly: 0 },
+  { id: 'voluptuous', gender: 'female', hScale: 1.04, sh: 0.224, bust: 0.256, waist: 0.148, hip: 0.308, thigh: 0.188, calf: 0.108, arm: 0.106, cupScale: 1.20, gluteScale: 1.14, belly: 0.02 },
 ]);
 
 /**
  * 4 distinct male body presets (lean surfer -> athletic diver -> muscular lifeguard -> sturdy dad-bod captain).
  */
 export const MALE_BODY_PROFILES = Object.freeze([
-  { id: 'lean-surfer', gender: 'male', hScale: 1.05, sh: 0.242, bust: 0.202, waist: 0.154, hip: 0.182, thigh: 0.120, calf: 0.078, arm: 0.082, cupScale: 0, gluteScale: 0.56, belly: 0 },
-  { id: 'athletic-m',  gender: 'male', hScale: 1.08, sh: 0.284, bust: 0.234, waist: 0.168, hip: 0.198, thigh: 0.136, calf: 0.086, arm: 0.096, cupScale: 0, gluteScale: 0.62, belly: 0 },
-  { id: 'muscular',    gender: 'male', hScale: 1.12, sh: 0.324, bust: 0.268, waist: 0.182, hip: 0.212, thigh: 0.152, calf: 0.095, arm: 0.114, cupScale: 0, gluteScale: 0.68, belly: 0 },
-  { id: 'dad-bod',     gender: 'male', hScale: 1.04, sh: 0.274, bust: 0.256, waist: 0.248, hip: 0.238, thigh: 0.146, calf: 0.092, arm: 0.102, cupScale: 0, gluteScale: 0.72, belly: 0.12 },
+  { id: 'lean-surfer', gender: 'male', hScale: 1.05, sh: 0.242, bust: 0.202, waist: 0.154, hip: 0.182, thigh: 0.142, calf: 0.092, arm: 0.098, cupScale: 0, gluteScale: 0.78, belly: 0 },
+  { id: 'athletic-m',  gender: 'male', hScale: 1.08, sh: 0.284, bust: 0.234, waist: 0.168, hip: 0.198, thigh: 0.162, calf: 0.102, arm: 0.116, cupScale: 0, gluteScale: 0.86, belly: 0 },
+  { id: 'muscular',    gender: 'male', hScale: 1.12, sh: 0.324, bust: 0.268, waist: 0.182, hip: 0.212, thigh: 0.180, calf: 0.112, arm: 0.136, cupScale: 0, gluteScale: 0.94, belly: 0 },
+  { id: 'dad-bod',     gender: 'male', hScale: 1.04, sh: 0.274, bust: 0.256, waist: 0.248, hip: 0.238, thigh: 0.172, calf: 0.108, arm: 0.122, cupScale: 0, gluteScale: 0.92, belly: 0.12 },
 ]);
 
 const PROFILE_BY_ID = Object.freeze(
@@ -482,14 +482,16 @@ function drawFemaleTorsoLandmarks(ctx, chestX, hipX, shoulderY, waistY, hipY, pr
 /**
  * Trace a masculine front/back torso (broad shoulders, athletic V-taper OR warm relaxed dad-bod!).
  */
-function traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0, shTilt = 0) {
+function traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0, shTilt = 0, gbx = 0, gby = 0) {
+  const gStretch = clamp((gby / Math.max(1, s)) * 1.8, -0.14, 0.16);
   const shW = prof.sh * s;
   const chW = prof.bust * s;
   const waW = prof.waist * s;
-  const hiW = prof.hip * s;
+  const hiW = prof.hip * (1 - gStretch * 0.20) * s;
   const chY = shoulderY + (waistY - shoulderY) * 0.38;
-  const lowHipY = hipY + 0.13 * s;
+  const lowHipY = hipY + 0.13 * s + gby * 0.45;
   const midX = (chestX + hipX) * 0.5;
+  const hipCx = hipX + gbx * 0.48;
   const isDadBod = prof.belly > 0.05;
 
   ctx.beginPath();
@@ -497,21 +499,21 @@ function traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX 
   ctx.moveTo(chestX - shW, shoulderY + 0.02 * s - shTilt);
   ctx.quadraticCurveTo(chestX - shW * 0.45, shoulderY - 0.055 * s - shTilt * 0.5, chestX, shoulderY - 0.055 * s);
   ctx.quadraticCurveTo(chestX + shW * 0.45, shoulderY - 0.055 * s + shTilt * 0.5, chestX + shW, shoulderY + 0.02 * s + shTilt);
-  // Right lats -> waist (tapered V or relaxed dad-bod curve) -> trim hip
+  // Right lats -> waist (tapered V or relaxed dad-bod curve) -> trim hip with live glute bounce
   ctx.bezierCurveTo(
     chestX + chW * 1.08, chY,
     midX + waW * (isDadBod ? 1.08 : 1.01), waistY - 0.04 * s,
     midX + waW, waistY
   );
   ctx.bezierCurveTo(
-    hipX + hiW * (isDadBod ? 1.06 : 1.0), waistY + (hipY - waistY) * 0.5,
-    hipX + hiW * 0.96, hipY + 0.03 * s,
-    hipX + hiW * 0.72, lowHipY
+    hipCx + hiW * (isDadBod ? 1.06 : 1.0), waistY + (hipY - waistY) * 0.5 + gby * 0.22,
+    hipCx + hiW * 0.96, hipY + 0.03 * s + gby * 0.42,
+    hipCx + hiW * 0.72, lowHipY
   );
-  ctx.quadraticCurveTo(hipX, lowHipY + 0.045 * s, hipX - hiW * 0.72, lowHipY);
+  ctx.quadraticCurveTo(hipCx, lowHipY + 0.045 * s, hipCx - hiW * 0.72, lowHipY);
   ctx.bezierCurveTo(
-    hipX - hiW * 0.96, hipY + 0.03 * s,
-    hipX - hiW * (isDadBod ? 1.06 : 1.0), waistY + (hipY - waistY) * 0.5,
+    hipCx - hiW * 0.96, hipY + 0.03 * s + gby * 0.42,
+    hipCx - hiW * (isDadBod ? 1.06 : 1.0), waistY + (hipY - waistY) * 0.5 + gby * 0.22,
     midX - waW, waistY
   );
   ctx.bezierCurveTo(
@@ -1126,7 +1128,8 @@ function traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, 
  * Trace a true side-profile masculine torso (facing +x):
  * Broad upper chest (+x), optional warm dad-bod belly curve (+x), broad lats & compact glute (-x).
  */
-function traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0) {
+function traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0, gbx = 0, gby = 0) {
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.0, -0.18, 0.20);
   const midX = (chestX + hipX) * 0.5;
   const frontChest = prof.bust * 0.76 * s;
   const backSh = prof.sh * 0.54 * s;
@@ -1134,9 +1137,10 @@ function traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, h
   const frontWaist = prof.waist * 0.64 * s + bellyOut;
   const backWaist = prof.waist * 0.52 * s;
   const frontHip = prof.hip * 0.58 * s + bellyOut * 0.45;
-  const backGlute = prof.hip * 0.68 * s;
+  const gs = prof.gluteScale || 0.85;
+  const backGlute = prof.hip * (0.74 - gStretch * 0.18) * (0.72 + gs * 0.28) * s;
   const chY = shoulderY + (waistY - shoulderY) * 0.38;
-  const lowHipY = hipY + 0.13 * s;
+  const lowHipY = hipY + 0.13 * s + gby * 0.62;
 
   ctx.beginPath();
   ctx.moveTo(chestX - backSh, shoulderY + 0.01 * s);
@@ -1152,10 +1156,10 @@ function traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, h
     hipX + frontHip * 0.96, hipY + 0.03 * s,
     hipX + frontHip * 0.68, lowHipY
   );
-  ctx.quadraticCurveTo(hipX - backGlute * 0.08, lowHipY + 0.045 * s, hipX - backGlute * 0.66, lowHipY - 0.01 * s);
+  ctx.quadraticCurveTo(hipX - backGlute * 0.10 + gbx * 0.32, lowHipY + 0.048 * s, hipX - backGlute * 0.68 + gbx * 0.55, lowHipY - 0.01 * s);
   ctx.bezierCurveTo(
-    hipX - backGlute * 1.06, hipY + 0.02 * s,
-    hipX - backGlute * 0.92, waistY + (hipY - waistY) * 0.45,
+    hipX - backGlute * 1.16 + gbx * 0.72, hipY + 0.02 * s + gby * 0.64,
+    hipX - backGlute * 0.98 + gbx * 0.46, waistY + (hipY - waistY) * 0.44 + gby * 0.28,
     midX - backWaist, waistY
   );
   ctx.bezierCurveTo(
@@ -1701,7 +1705,7 @@ function drawFittedFemaleBottoms(
     const glCy = hipY + 0.025 * s + gby * 0.68;
     const glRot = -0.14 + gbx / (s * 2.4);
 
-    const eTop = evalSideHipEdgeAtT(0.38, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
+    const eTop = evalSideHipEdgeAtT(0.36, chestX, hipX, waistY, hipY, prof, s, gbx, gby);
     const topFrontX = eTop.frontX;
     const topBackX = eTop.backX;
     const topY = eTop.y;
@@ -1710,20 +1714,22 @@ function drawFittedFemaleBottoms(
     const midBackX = Math.min(eMid.backX, glCx - glRx * 0.96);
     const midY = eMid.y;
 
-    // Leg-socket pivot flex so the high-cut French leg arch responds cleanly when the front thigh lifts!
+    // Leg-socket pivot flex + HIGH-HIP CINCH POINT right at the top side of the hip bone (v297)!
     const frontLegLift = clamp((rKneeX - rHipX) / Math.max(1, s), -0.35, 0.45);
-    const hipApexX = midFrontX * 0.46 + midBackX * 0.54;
-    const hipApexY = topY + (midY - topY) * 0.22 - frontLegLift * 0.025 * s;
-    const frontWaistY = topY + 0.040 * s;
-    const backWaistY = topY - 0.015 * s;
-    const strapH = isOnePiece ? 0.088 * s : 0.072 * s;
-    // Front groin-pelvis point sits cleanly on the front pelvic edge; rear cheek seam follows the rounded
-    // butt cheek smoothly past its fullest apex down to the lower-rear curve (matching Back View cheeky fit!).
+    const cinchX = midFrontX * 0.48 + midBackX * 0.52;
+    const cinchY = topY - 0.044 * s - frontLegLift * 0.025 * s;
+    const cinchH = isOnePiece ? 0.044 * s : 0.022 * s;
+    const cinchBotY = cinchY + cinchH;
+    // Waistband sweeps UP into the high-hip cinch point from both lower back & front pelvis!
+    const frontWaistY = topY + 0.068 * s;
+    const backWaistY = topY + 0.016 * s;
+
+    // Front groin anchor + Brazilian / almost-thong concave curve sweeping the OTHER way (scooping UP/IN
+    // from the high-hip cinch across the upper butt cheek, exposing the full rounded side & lower cheek!).
     const frontPelvisX = midFrontX + 0.06 * s;
-    const frontPelvisY = midY + 0.088 * s;
-    const apexArchY = hipApexY + strapH * 0.90;
+    const frontPelvisY = midY + 0.098 * s;
     const cheekEdgeX = Math.min(eMid.backX, glCx - glRx) - 0.02 * s;
-    const cheekEdgeY = glCy + glRy * (isOnePiece ? 0.62 : 0.54);
+    const cheekEdgeY = glCy + glRy * (isOnePiece ? 0.14 : 0.02);
     const farBackX = cheekEdgeX - 0.34 * s;
     const farFrontX = Math.max(topFrontX, frontPelvisX) + 0.24 * s;
 
@@ -1735,16 +1741,16 @@ function drawFittedFemaleBottoms(
     ctx.clip?.();
 
     const traceLegAndCheekOpening = () => {
-      // C1-continuous high-cut French leg arch UP from front groin to lateral hip crest (zero pinch/kink!),
-      // then sweeping smoothly down around the rounded butt cheek just like Back View!
-      ctx.bezierCurveTo(
-        midFrontX - 0.01 * s, apexArchY + 0.032 * s,
-        hipApexX + 0.062 * s, apexArchY,
-        hipApexX, apexArchY
+      // High-cut front arch curving CONCAVE UPWARD into the narrow side cinch point...
+      ctx.quadraticCurveTo(
+        midFrontX - 0.015 * s, cinchBotY + (frontPelvisY - cinchBotY) * 0.24,
+        cinchX, cinchBotY
       );
+      // ...then sweeping the OTHER WAY (sleek concave upward/inward Brazilian / almost-thong arch!)
+      // hugging the upper-back glute shelf so the entire sculpted rounded side & lower butt cheek shows!
       ctx.bezierCurveTo(
-        hipApexX - 0.062 * s, apexArchY,
-        glCx - glRx * 0.26, cheekEdgeY - 0.028 * s,
+        cinchX - 0.060 * s, cinchBotY + (isOnePiece ? 0.004 : 0.012) * s,
+        glCx - glRx * 0.48, glCy - glRy * (isOnePiece ? 0.52 : 0.64),
         cheekEdgeX, cheekEdgeY
       );
     };
@@ -1752,9 +1758,11 @@ function drawFittedFemaleBottoms(
     const traceSideGarmentPath = () => {
       ctx.beginPath();
       if (!isOnePiece) {
-        ctx.moveTo(farBackX, backWaistY - 0.01 * s);
+        ctx.moveTo(farBackX, backWaistY);
         ctx.lineTo(topBackX, backWaistY);
-        ctx.quadraticCurveTo(hipApexX, hipApexY - 0.014 * s, topFrontX + 0.16 * s, frontWaistY);
+        // Back waistband rises into a sharp high-hip cinch peak, then slopes cleanly down to front belly!
+        ctx.quadraticCurveTo(cinchX - 0.055 * s, cinchY + 0.008 * s, cinchX, cinchY);
+        ctx.quadraticCurveTo(cinchX + 0.065 * s, cinchY + 0.016 * s, topFrontX + 0.16 * s, frontWaistY);
         ctx.lineTo(frontPelvisX, frontPelvisY);
       } else {
         ctx.moveTo(farBackX, shoulderY + 0.03 * s);
@@ -1768,61 +1776,64 @@ function drawFittedFemaleBottoms(
     };
 
     if (!isOnePiece) {
-      // Soft skin-compression shadow directly above the elastic waistband
+      // Soft skin-compression shadow directly above the V-cinched elastic waistband
       if (s >= 18) {
         ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
-        ctx.lineWidth = Math.max(0.9, 0.022 * s);
+        ctx.lineWidth = Math.max(0.9, 0.020 * s);
         ctx.beginPath();
-        ctx.moveTo(farBackX, backWaistY - 0.012 * s);
-        ctx.lineTo(topBackX, backWaistY - 0.012 * s);
-        ctx.quadraticCurveTo(hipApexX, hipApexY - 0.024 * s, topFrontX + 0.10 * s, frontWaistY - 0.012 * s);
+        ctx.moveTo(farBackX, backWaistY - 0.010 * s);
+        ctx.lineTo(topBackX, backWaistY - 0.010 * s);
+        ctx.quadraticCurveTo(cinchX - 0.055 * s, cinchY - 0.004 * s, cinchX, cinchY - 0.010 * s);
+        ctx.quadraticCurveTo(cinchX + 0.065 * s, cinchY + 0.006 * s, topFrontX + 0.10 * s, frontWaistY - 0.010 * s);
         ctx.stroke();
       }
     }
 
-    // Fill swimsuit fabric cleanly (bikini bottom OR unified one-piece bodice + cheeky leg cut)
+    // Fill swimsuit fabric cleanly (Brazilian high-hip cinched bikini OR high-cut one-piece!)
     ctx.fillStyle = swim.primary;
     traceSideGarmentPath();
     ctx.fill();
 
-    // Clip fabric highlight & curved tension lines strictly INSIDE the garment (ZERO bleed onto bare cheek!)
+    // Clip fabric highlight & taut cinch tension lines strictly INSIDE the garment (ZERO bleed onto bare cheek!)
     if (s >= 18) {
       ctx.save();
       traceSideGarmentPath();
       ctx.clip?.();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.beginPath();
-      ctx.ellipse(glCx - glRx * 0.26, glCy - glRy * 0.22, glRx * 0.34, glRy * 0.18, -0.26, 0, Math.PI * 2);
+      ctx.ellipse(glCx - glRx * 0.24, glCy - glRy * 0.50, glRx * 0.34, glRy * 0.16, -0.22, 0, Math.PI * 2);
       ctx.fill();
 
       if (s >= 20) {
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.15)';
+        // Delicate taut fabric gather lines radiating forward & backward FROM the side cinch point!
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.16)';
         ctx.lineWidth = Math.max(0.7, 0.013 * s);
         ctx.beginPath();
-        ctx.moveTo(hipApexX - 0.01 * s, hipApexY + strapH * 0.28);
-        ctx.quadraticCurveTo(glCx + glRx * 0.04, glCy - glRy * 0.26, glCx - glRx * 0.68, glCy - glRy * 0.12);
-        ctx.moveTo(hipApexX - 0.01 * s, hipApexY + strapH * 0.60);
-        ctx.quadraticCurveTo(glCx - glRx * 0.04, glCy - glRy * 0.04, glCx - glRx * 0.64, glCy + glRy * 0.18);
+        ctx.moveTo(cinchX, cinchY + cinchH * 0.45);
+        ctx.quadraticCurveTo(glCx + glRx * 0.04, glCy - glRy * 0.62, glCx - glRx * 0.72, glCy - glRy * 0.36);
+        ctx.moveTo(cinchX, cinchY + cinchH * 0.55);
+        ctx.quadraticCurveTo(midFrontX * 0.68 + cinchX * 0.32, frontWaistY + 0.01 * s, frontPelvisX - 0.02 * s, frontPelvisY - 0.04 * s);
         ctx.stroke();
       }
       ctx.restore();
     }
 
     if (!isOnePiece) {
-      // Elastic waistband contrast trim locked flush along the top contour
+      // Elastic waistband contrast trim converging sharply into the high-hip cinch point
       ctx.strokeStyle = swim.accent;
-      ctx.lineWidth = Math.max(0.95, 0.025 * s);
+      ctx.lineWidth = Math.max(0.95, 0.024 * s);
       ctx.beginPath();
       ctx.moveTo(farBackX, backWaistY + 0.005 * s);
       ctx.lineTo(topBackX, backWaistY + 0.005 * s);
-      ctx.quadraticCurveTo(hipApexX, hipApexY - 0.008 * s, topFrontX + 0.08 * s, frontWaistY + 0.005 * s);
+      ctx.quadraticCurveTo(cinchX - 0.055 * s, cinchY + 0.012 * s, cinchX, cinchY + 0.005 * s);
+      ctx.quadraticCurveTo(cinchX + 0.065 * s, cinchY + 0.020 * s, topFrontX + 0.08 * s, frontWaistY + 0.005 * s);
       ctx.stroke();
     }
 
-    // Crisp elastic leg-opening & cheek-hugging seam + skin-compression shadow directly under fabric edge!
+    // Crisp elastic leg-opening & Brazilian cheek-arch seam + skin-compression shadow directly under edge!
     if (s >= 16) {
       ctx.strokeStyle = 'rgba(72, 28, 14, 0.28)';
-      ctx.lineWidth = Math.max(0.85, 0.020 * s);
+      ctx.lineWidth = Math.max(0.85, 0.019 * s);
       ctx.beginPath();
       ctx.moveTo(frontPelvisX, frontPelvisY);
       traceLegAndCheekOpening();
@@ -1830,19 +1841,20 @@ function drawFittedFemaleBottoms(
     }
     ctx.restore();
 
-    // Side-tie knot & slim ribbons seated strictly ON the lateral hip-crest tension point!
+    // Side-tie knot & slim ribbons seated right ON the high-hip cinch point!
     if (hasSideTies && s >= 18) {
+      const knotY = cinchY + cinchH * 0.48;
       ctx.fillStyle = swim.accent;
       ctx.beginPath();
-      ctx.arc(hipApexX, hipApexY + strapH * 0.16, Math.max(1.2, 0.022 * s), 0, Math.PI * 2);
+      ctx.arc(cinchX, knotY, Math.max(1.25, 0.023 * s), 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = swim.accent;
       ctx.lineWidth = Math.max(0.8, 0.016 * s);
       ctx.beginPath();
-      ctx.moveTo(hipApexX, hipApexY + strapH * 0.16);
-      ctx.lineTo(hipApexX - 0.026 * s, hipApexY + strapH * 0.16 + 0.068 * s);
-      ctx.moveTo(hipApexX, hipApexY + strapH * 0.16);
-      ctx.lineTo(hipApexX + 0.024 * s, hipApexY + strapH * 0.16 + 0.062 * s);
+      ctx.moveTo(cinchX, knotY);
+      ctx.lineTo(cinchX - 0.028 * s, knotY + 0.072 * s);
+      ctx.moveTo(cinchX, knotY);
+      ctx.lineTo(cinchX + 0.026 * s, knotY + 0.066 * s);
       ctx.stroke();
     }
     return;
@@ -2173,42 +2185,79 @@ function drawArticulatedMaleShorts(
   prof,
   s,
   shTilt,
-  swim
+  swim,
+  gbx = 0,
+  gby = 0,
+  gTilt = 0
 ) {
   const isBriefs = swim.style === 'swim-briefs';
   const topY = hipY - 0.115 * s;
+  const gs = prof.gluteScale || 0.85;
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.4, -0.16, 0.18);
 
   if (view === 'side') {
+    const glRx = prof.hip * 0.48 * (0.72 + gs * 0.28) * (1 - gStretch * 0.22) * s;
+    const glRy = 0.122 * (0.72 + gs * 0.28) * (1 + gStretch) * s;
+    const glCx = hipX - prof.hip * 0.28 * s + gbx * 0.82;
+    const glCy = hipY + 0.025 * s + gby * 0.82;
+    const glRot = -0.12 + gbx / (s * 2.2);
+
     if (isBriefs) {
       ctx.save();
-      traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX);
+      traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, gbx, gby);
+      ctx.moveTo(glCx + glRx * Math.cos(glRot), glCy + glRx * Math.sin(glRot));
+      ctx.ellipse(glCx, glCy, glRx, glRy, glRot, 0, Math.PI * 2);
       ctx.clip?.();
       ctx.fillStyle = swim.primary;
-      ctx.fillRect(hipX - prof.hip * 1.3 * s, topY, prof.hip * 2.6 * s + (prof.belly || 0) * s, 0.28 * s);
+      ctx.fillRect(hipX - prof.hip * 1.5 * s, topY, prof.hip * 3.0 * s + (prof.belly || 0) * s, 0.30 * s);
       ctx.fillStyle = swim.accent;
-      ctx.fillRect(hipX - prof.hip * 1.3 * s, topY, prof.hip * 2.6 * s + (prof.belly || 0) * s, 0.036 * s);
+      ctx.fillRect(hipX - prof.hip * 1.5 * s, topY, prof.hip * 3.0 * s + (prof.belly || 0) * s, 0.036 * s);
+      if (s >= 18) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.beginPath();
+        ctx.ellipse(glCx - glRx * 0.20, glCy - glRy * 0.24, glRx * 0.36, glRy * 0.22, -0.26, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.26)';
+        ctx.lineWidth = Math.max(0.85, 0.019 * s);
+        ctx.beginPath();
+        ctx.arc(glCx, glCy + glRy * 0.06, glRx * 0.88, Math.PI * 0.42, Math.PI * 0.96);
+        ctx.stroke();
+      }
       ctx.restore();
       return;
     }
 
-    const thighHalfW = prof.thigh * 0.62 * s;
-    const hemHalfW = thighHalfW * 0.94;
+    const thighHalfW = prof.thigh * 0.72 * s;
+    const hemHalfW = thighHalfW * 0.92;
     // 1. Rear/far shorts leg pivoting cleanly with back thigh (shaded for 3D depth)
     drawShortsLegSleeve(ctx, lHipX, legHipY, lKneeX, lKneeY, thighHalfW * 0.96, hemHalfW * 0.96, 0.56, swim.primary, swim.accent, 0, s, true);
 
-    // 2. Body-clipped pelvis yoke & fitted waistband hugging exact waist/belly/glute contour
+    // 2. Body-clipped pelvis yoke + jiggling side glute contour hugging exact waist/belly/glute!
     ctx.save();
-    traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX);
+    traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, gbx, gby);
+    ctx.moveTo(glCx + glRx * Math.cos(glRot), glCy + glRx * Math.sin(glRot));
+    ctx.ellipse(glCx, glCy, glRx, glRy, glRot, 0, Math.PI * 2);
     ctx.clip?.();
     ctx.fillStyle = swim.primary;
-    ctx.fillRect(hipX - prof.hip * 1.4 * s, topY, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.32 * s);
+    ctx.fillRect(hipX - prof.hip * 1.55 * s, topY, prof.hip * 3.1 * s + (prof.belly || 0) * s, 0.34 * s);
+    // Jiggling side-glute crest highlight & under-cheek seat crease!
+    if (s >= 18) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.beginPath();
+      ctx.ellipse(glCx - glRx * 0.18, glCy - glRy * 0.22, glRx * 0.36, glRy * 0.22, -0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
+      ctx.lineWidth = Math.max(0.85, 0.019 * s);
+      ctx.beginPath();
+      ctx.arc(glCx, glCy + glRy * 0.06, glRx * 0.88, Math.PI * 0.44, Math.PI * 0.96);
+      ctx.stroke();
+    }
     // Contrast waistband flush along exact torso width
     ctx.fillStyle = swim.accent;
-    ctx.fillRect(hipX - prof.hip * 1.4 * s, topY, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.040 * s);
-    // Subtle skin compression line directly above waistband
+    ctx.fillRect(hipX - prof.hip * 1.55 * s, topY, prof.hip * 3.1 * s + (prof.belly || 0) * s, 0.040 * s);
     if (s >= 18) {
       ctx.fillStyle = 'rgba(15, 23, 42, 0.20)';
-      ctx.fillRect(hipX - prof.hip * 1.4 * s, topY + 0.040 * s, prof.hip * 2.8 * s + (prof.belly || 0) * s, 0.012 * s);
+      ctx.fillRect(hipX - prof.hip * 1.55 * s, topY + 0.040 * s, prof.hip * 3.1 * s + (prof.belly || 0) * s, 0.012 * s);
     }
     ctx.restore();
 
@@ -2218,52 +2267,100 @@ function drawArticulatedMaleShorts(
   }
 
   // FRONT & BACK VIEWS
+  const glCx = hipX + gbx * 0.82;
+  const glCy = hipY + 0.025 * s + gby * 0.82;
+  const glRx = prof.hip * 0.44 * (0.72 + gs * 0.28) * (1 - gStretch * 0.22) * s;
+  const glRy = 0.118 * (0.72 + gs * 0.28) * (1 + gStretch) * s;
+  const glSep = prof.hip * 0.36 * s;
+
   if (isBriefs) {
     ctx.save();
-    traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt);
+    traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt, gbx, gby);
+    if (view === 'back') {
+      ctx.moveTo(glCx - glSep + glRx, glCy + gTilt);
+      ctx.ellipse(glCx - glSep, glCy + gTilt, glRx, glRy, 0.10 + gbx / (s * 2.3), 0, Math.PI * 2);
+      ctx.moveTo(glCx + glSep + glRx, glCy - gTilt);
+      ctx.ellipse(glCx + glSep, glCy - gTilt, glRx, glRy, -0.10 + gbx / (s * 2.3), 0, Math.PI * 2);
+    }
     ctx.clip?.();
     ctx.fillStyle = swim.primary;
     ctx.beginPath();
-    ctx.moveTo(hipX - prof.hip * 1.12 * s, topY);
-    ctx.quadraticCurveTo(hipX, topY + 0.045 * s, hipX + prof.hip * 1.12 * s, topY);
-    ctx.quadraticCurveTo(hipX + prof.hip * 0.44 * s, hipY + 0.095 * s, hipX, hipY + 0.18 * s);
-    ctx.quadraticCurveTo(hipX - prof.hip * 0.44 * s, hipY + 0.095 * s, hipX - prof.hip * 1.12 * s, topY);
+    ctx.moveTo(hipX - prof.hip * 1.18 * s, topY);
+    ctx.quadraticCurveTo(hipX, topY + 0.045 * s, hipX + prof.hip * 1.18 * s, topY);
+    ctx.quadraticCurveTo(hipX + prof.hip * 0.46 * s, hipY + 0.095 * s, glCx, hipY + 0.18 * s + gby * 0.45);
+    ctx.quadraticCurveTo(hipX - prof.hip * 0.46 * s, hipY + 0.095 * s, hipX - prof.hip * 1.18 * s, topY);
     ctx.closePath();
     ctx.fill();
+    if (view === 'back' && s >= 16) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.beginPath();
+      ctx.ellipse(glCx - glSep - glRx * 0.10, glCy + gTilt - glRy * 0.22, glRx * 0.36, glRy * 0.22, -0.2, 0, Math.PI * 2);
+      ctx.ellipse(glCx + glSep + glRx * 0.10, glCy - gTilt - glRy * 0.22, glRx * 0.36, glRy * 0.22, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.26)';
+      ctx.lineWidth = Math.max(0.8, 0.019 * s);
+      ctx.beginPath();
+      ctx.moveTo(glCx, glCy - glRy * 0.45);
+      ctx.lineTo(glCx, glCy + glRy * 0.78);
+      ctx.stroke();
+    }
     ctx.fillStyle = swim.accent;
-    ctx.fillRect(hipX - prof.hip * 1.12 * s, topY, prof.hip * 2.24 * s, 0.036 * s);
+    ctx.fillRect(hipX - prof.hip * 1.18 * s, topY, prof.hip * 2.36 * s, 0.036 * s);
     ctx.restore();
     return;
   }
 
-  const thighHalfW = prof.thigh * 0.60 * s;
-  const hemHalfW = thighHalfW * 0.94;
+  const thighHalfW = prof.thigh * 0.70 * s;
+  const hemHalfW = thighHalfW * 0.92;
   // 1. Both boardshorts legs pivot independently with the left & right 2-bone IK thighs!
   drawShortsLegSleeve(ctx, lHipX, legHipY, lKneeX, lKneeY, thighHalfW, hemHalfW, 0.56, swim.primary, swim.accent, -1, s, false);
   drawShortsLegSleeve(ctx, rHipX, legHipY, rKneeX, rKneeY, thighHalfW, hemHalfW, 0.56, swim.primary, swim.accent, 1, s, false);
 
-  // 2. Body-clipped pelvis yoke bridging waistband cleanly into both pivoted legs (zero bare crotch gap!)
+  // 2. Body-clipped pelvis yoke bridging waistband cleanly into both pivoted legs (+ jiggling back cheeks!)
   ctx.save();
-  traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt);
+  traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, shTilt, gbx, gby);
+  if (view === 'back') {
+    ctx.moveTo(glCx - glSep + glRx, glCy + gTilt);
+    ctx.ellipse(glCx - glSep, glCy + gTilt, glRx, glRy, 0.10 + gbx / (s * 2.3), 0, Math.PI * 2);
+    ctx.moveTo(glCx + glSep + glRx, glCy - gTilt);
+    ctx.ellipse(glCx + glSep, glCy - gTilt, glRx, glRy, -0.10 + gbx / (s * 2.3), 0, Math.PI * 2);
+  }
   ctx.clip?.();
   ctx.fillStyle = swim.primary;
-  ctx.fillRect(hipX - prof.hip * 1.25 * s, topY, prof.hip * 2.5 * s, 0.32 * s);
+  ctx.fillRect(hipX - prof.hip * 1.35 * s, topY, prof.hip * 2.7 * s, 0.34 * s);
+  // Sculpted counter-bouncing male glute cheek highlights & lower-cheek folds in Back View!
+  if (view === 'back' && s >= 16) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.beginPath();
+    ctx.ellipse(glCx - glSep - glRx * 0.08, glCy + gTilt - glRy * 0.24, glRx * 0.38, glRy * 0.24, -0.18, 0, Math.PI * 2);
+    ctx.ellipse(glCx + glSep + glRx * 0.08, glCy - gTilt - glRy * 0.24, glRx * 0.38, glRy * 0.24, 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+    ctx.lineWidth = Math.max(0.8, 0.018 * s);
+    ctx.beginPath();
+    ctx.arc(glCx - glSep, glCy + gTilt + glRy * 0.06, glRx * 0.80, 0.36, Math.PI * 0.84);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(glCx + glSep, glCy - gTilt + glRy * 0.06, glRx * 0.80, Math.PI * 0.16, Math.PI - 0.36);
+    ctx.stroke();
+  }
   // Contrast fitted waistband flush with torso edges
   ctx.fillStyle = swim.accent;
-  ctx.fillRect(hipX - prof.hip * 1.25 * s, topY, prof.hip * 2.5 * s, 0.038 * s);
+  ctx.fillRect(hipX - prof.hip * 1.35 * s, topY, prof.hip * 2.7 * s, 0.038 * s);
   if (s >= 18) {
     ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
-    ctx.fillRect(hipX - prof.hip * 1.25 * s, topY + 0.038 * s, prof.hip * 2.5 * s, 0.011 * s);
+    ctx.fillRect(hipX - prof.hip * 1.35 * s, topY + 0.038 * s, prof.hip * 2.7 * s, 0.011 * s);
   }
   ctx.restore();
 
-  // 3. Tailored fly stitch + drawstrings (Front) OR back pocket welt + seat seam (Back)
+  // 3. Tailored fly stitch + drawstrings (Front) OR dynamic bouncing seat seam + pocket welt (Back)
   if (s >= 18) {
+    const seamX = view === 'back' ? glCx : hipX;
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
     ctx.lineWidth = Math.max(0.8, 0.016 * s);
     ctx.beginPath();
-    ctx.moveTo(hipX, topY + 0.042 * s);
-    ctx.lineTo(hipX, hipY + 0.11 * s);
+    ctx.moveTo(seamX, topY + 0.042 * s);
+    ctx.lineTo(seamX, hipY + 0.115 * s + (view === 'back' ? gby * 0.65 : 0));
     ctx.stroke();
     if (view === 'front' && s >= 20) {
       ctx.strokeStyle = '#f8fafc';
@@ -2275,23 +2372,23 @@ function drawArticulatedMaleShorts(
       ctx.lineTo(hipX + 0.032 * s, topY + 0.105 * s);
       ctx.stroke();
     } else if (view === 'back' && s >= 20) {
-      // Back right boardshort pocket welt with accent flap
+      // Back right boardshort pocket welt riding live on the jiggling right cheek!
       ctx.fillStyle = swim.accent;
-      ctx.fillRect(hipX + prof.hip * 0.22 * s, hipY - 0.03 * s, prof.hip * 0.44 * s, 0.026 * s);
+      ctx.fillRect(glCx + prof.hip * 0.20 * s, hipY - 0.03 * s + gby * 0.72 - gTilt * 0.65, prof.hip * 0.44 * s, 0.026 * s);
     }
   }
 }
 
 /**
- * Draw a sculpted filled anatomical leg polygon (v290):
- * Seamless hip-to-thigh flare -> slim knee -> shapely gastrocnemius calf curve -> slender ankle
- * + sleek arched foot! Zero tube-stroke seams & single-fill performance.
+ * Draw a sculpted, anatomically full filled leg polygon (v297):
+ * Thick upper-thigh root blending seamlessly into hip/glute -> defined quadriceps & hamstring sweep ->
+ * smooth anatomical knee -> sculpted gastrocnemius calf curve -> slender ankle + arched foot!
  */
 function drawArticulatedLeg(ctx, hx, hy, kx, ky, fx, fy, prof, s, color, drawBareFoot = true, footDir = 1, isSide = false) {
   const tdx = kx - hx;
   const tdy = ky - hy;
   const tLen = Math.hypot(tdx, tdy) || 1;
-  // Rightward normal (+x for downward leg)
+  // Rightward normal (+x for downward leg: in Side View facing +x, +normal is FRONT quad/shin, -normal is BACK hamstring/calf)
   const tnx = tdy / tLen;
   const tny = -tdx / tLen;
 
@@ -2301,23 +2398,18 @@ function drawArticulatedLeg(ctx, hx, hy, kx, ky, fx, fy, prof, s, color, drawBar
   const snx = sdy / sLen;
   const sny = -sdx / sLen;
 
-  // Determine which side is "outer/back" curve vs "inner/front"
+  // Determine outer/back vs inner/front anatomical profile widths (seamless hip-socket root -> lush full thigh!)
   const outerSign = isSide ? -1 : (footDir >= 0 ? 1 : -1);
-  const wHipOut = prof.thigh * 0.55 * s;
-  const wHipIn = prof.thigh * 0.47 * s;
-  const wThighOut = prof.thigh * 0.59 * s;
-  const wThighIn = prof.thigh * 0.45 * s;
-  const wKnee = prof.calf * 0.54 * s;
-  const wCalfOut = prof.calf * (isSide ? 0.58 : 0.55) * s;
-  const wCalfIn = prof.calf * (isSide ? 0.38 : 0.43) * s;
-  const wAnkle = prof.calf * 0.26 * s;
+  const wHipOut = prof.thigh * (isSide ? 0.68 : 0.64) * s;
+  const wHipIn = prof.thigh * (isSide ? 0.56 : 0.58) * s;
+  const wThighOut = prof.thigh * (isSide ? 0.68 : 0.76) * s;
+  const wThighIn = prof.thigh * (isSide ? 0.72 : 0.60) * s;
+  const wKnee = prof.calf * 0.60 * s;
+  const wCalfOut = prof.calf * (isSide ? 0.72 : 0.66) * s;
+  const wCalfIn = prof.calf * (isSide ? 0.40 : 0.50) * s;
+  const wAnkle = prof.calf * 0.29 * s;
 
-  const mThighX = hx + tdx * 0.38;
-  const mThighY = hy + tdy * 0.38;
-  const mShinX = kx + sdx * 0.34;
-  const mShinY = ky + sdy * 0.34;
-
-  // Side A = +normal, Side B = -normal
+  // Side A = +normal (Front in Side View, Outer-Right in Front View); Side B = -normal (Back in Side View)
   const aHip = outerSign > 0 ? wHipOut : wHipIn;
   const bHip = outerSign > 0 ? wHipIn : wHipOut;
   const aThigh = outerSign > 0 ? wThighOut : wThighIn;
@@ -2325,55 +2417,64 @@ function drawArticulatedLeg(ctx, hx, hy, kx, ky, fx, fy, prof, s, color, drawBar
   const aCalf = outerSign > 0 ? wCalfOut : wCalfIn;
   const bCalf = outerSign > 0 ? wCalfIn : wCalfOut;
 
-  // Normalized blended knee normal + smooth knee wrap points (zero sharp inner-knee pinch on deep bends!)
+  // Anatomical thigh belly peaks at ~33% (outer/quad) and ~30% (inner/hamstring) down thigh; calf peaks at ~32% down shin!
+  const mThighAX = hx + tdx * (isSide ? 0.36 : 0.33);
+  const mThighAY = hy + tdy * (isSide ? 0.36 : 0.33);
+  const mThighBX = hx + tdx * (isSide ? 0.30 : 0.31);
+  const mThighBY = hy + tdy * (isSide ? 0.30 : 0.31);
+
+  // Normalized blended knee normal + smooth rounded knee wrap (zero sharp inner-knee pinch on deep bends!)
   let knx = tnx + snx;
   let kny = tny + sny;
   const kNorm = Math.hypot(knx, kny) || 1;
   knx /= kNorm;
   kny /= kNorm;
 
-  const wKneeA = outerSign > 0 ? wKnee * 1.02 : wKnee * 0.94;
-  const wKneeB = outerSign > 0 ? wKnee * 0.94 : wKnee * 1.02;
+  const wKneeA = isSide ? wKnee * 1.02 : (outerSign > 0 ? wKnee * 1.04 : wKnee * 0.94);
+  const wKneeB = isSide ? wKnee * 0.88 : (outerSign > 0 ? wKnee * 0.94 : wKnee * 1.04);
   const tKneeInX = hx + tdx * 0.78;
   const tKneeInY = hy + tdy * 0.78;
-  const sKneeOutX = kx + sdx * 0.22;
-  const sKneeOutY = ky + sdy * 0.22;
-  const mCalfX = kx + sdx * 0.44;
-  const mCalfY = ky + sdy * 0.44;
+  const sKneeOutX = kx + sdx * 0.20;
+  const sKneeOutY = ky + sdy * 0.20;
+  const mCalfAX = kx + sdx * (isSide ? 0.38 : 0.35);
+  const mCalfAY = ky + sdy * (isSide ? 0.38 : 0.35);
+  const mCalfBX = kx + sdx * (isSide ? 0.32 : 0.35);
+  const mCalfBY = ky + sdy * (isSide ? 0.32 : 0.35);
 
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(hx + tnx * aHip, hy + tny * aHip);
-  // Thigh Side A -> smooth rounded knee wrap -> shapely calf -> slender ankle
-  ctx.quadraticCurveTo(mThighX + tnx * aThigh, mThighY + tny * aThigh, tKneeInX + tnx * (aThigh * 0.28 + wKneeA * 0.72), tKneeInY + tny * (aThigh * 0.28 + wKneeA * 0.72));
-  ctx.quadraticCurveTo(kx + knx * wKneeA, ky + kny * wKneeA, sKneeOutX + snx * (aCalf * 0.28 + wKneeA * 0.72), sKneeOutY + sny * (aCalf * 0.28 + wKneeA * 0.72));
-  ctx.quadraticCurveTo(mCalfX + snx * aCalf, mCalfY + sny * aCalf, fx + snx * wAnkle, fy + sny * wAnkle);
+  // Thigh Side A (sculpted quad/outer sweep) -> smooth rounded knee -> shapely calf -> slender ankle
+  ctx.quadraticCurveTo(mThighAX + tnx * aThigh, mThighAY + tny * aThigh, tKneeInX + tnx * (aThigh * 0.30 + wKneeA * 0.70), tKneeInY + tny * (aThigh * 0.30 + wKneeA * 0.70));
+  ctx.quadraticCurveTo(kx + knx * wKneeA, ky + kny * wKneeA, sKneeOutX + snx * (aCalf * 0.30 + wKneeA * 0.70), sKneeOutY + sny * (aCalf * 0.30 + wKneeA * 0.70));
+  ctx.quadraticCurveTo(mCalfAX + snx * aCalf, mCalfAY + sny * aCalf, fx + snx * wAnkle, fy + sny * wAnkle);
   // Rounded ankle base across to Side B
-  ctx.quadraticCurveTo(fx, fy + wAnkle * 0.9, fx - snx * wAnkle, fy - sny * wAnkle);
-  // Ankle -> Calf Side B -> smooth rounded knee wrap -> Thigh Side B -> Hip
-  ctx.quadraticCurveTo(mCalfX - snx * bCalf, mCalfY - sny * bCalf, sKneeOutX - snx * (bCalf * 0.28 + wKneeB * 0.72), sKneeOutY - sny * (bCalf * 0.28 + wKneeB * 0.72));
-  ctx.quadraticCurveTo(kx - knx * wKneeB, ky - kny * wKneeB, tKneeInX - tnx * (bThigh * 0.28 + wKneeB * 0.72), tKneeInY - tny * (bThigh * 0.28 + wKneeB * 0.72));
-  ctx.quadraticCurveTo(mThighX - tnx * bThigh, mThighY - tny * bThigh, hx - tnx * bHip, hy - tny * bHip);
-  ctx.quadraticCurveTo(hx, hy - prof.thigh * 0.34 * s, hx + tnx * aHip, hy + tny * aHip);
+  ctx.quadraticCurveTo(fx, fy + wAnkle * 0.92, fx - snx * wAnkle, fy - sny * wAnkle);
+  // Ankle -> Calf Side B (pronounced gastrocnemius curve) -> smooth knee hollow -> Thigh Side B (hamstring/adductor) -> Hip
+  ctx.quadraticCurveTo(mCalfBX - snx * bCalf, mCalfBY - sny * bCalf, sKneeOutX - snx * (bCalf * 0.30 + wKneeB * 0.70), sKneeOutY - sny * (bCalf * 0.30 + wKneeB * 0.70));
+  ctx.quadraticCurveTo(kx - knx * wKneeB, ky - kny * wKneeB, tKneeInX - tnx * (bThigh * 0.30 + wKneeB * 0.70), tKneeInY - tny * (bThigh * 0.30 + wKneeB * 0.70));
+  ctx.quadraticCurveTo(mThighBX - tnx * bThigh, mThighBY - tny * bThigh, hx - tnx * bHip, hy - tny * bHip);
+  ctx.quadraticCurveTo(hx, hy - prof.thigh * 0.42 * s, hx + tnx * aHip, hy + tny * aHip);
   ctx.closePath();
   ctx.fill();
 
   // Sleek arched barefoot silhouette grounded cleanly on the deck
   if (drawBareFoot) {
     const dir = footDir >= 0 ? 1 : -1;
-    const fLen = isSide ? 0.13 * s : 0.088 * s;
+    const fLen = isSide ? 0.135 * s : 0.092 * s;
     ctx.beginPath();
-    ctx.moveTo(fx - dir * 0.025 * s, fy - 0.005 * s);
-    ctx.quadraticCurveTo(fx + dir * fLen * 0.52, fy - 0.015 * s, fx + dir * fLen, fy + 0.032 * s);
-    ctx.quadraticCurveTo(fx + dir * fLen * 0.45, fy + 0.048 * s, fx - dir * 0.03 * s, fy + 0.038 * s);
+    ctx.moveTo(fx - dir * 0.026 * s, fy - 0.006 * s);
+    ctx.quadraticCurveTo(fx + dir * fLen * 0.52, fy - 0.016 * s, fx + dir * fLen, fy + 0.032 * s);
+    ctx.quadraticCurveTo(fx + dir * fLen * 0.45, fy + 0.050 * s, fx - dir * 0.032 * s, fy + 0.040 * s);
     ctx.closePath();
     ctx.fill();
   }
 }
 
 /**
- * Draw a sculpted tapered filled 2-segment arm (v290):
- * Rounded deltoid shoulder -> naturally tapered upper arm -> slim elbow -> graceful wrist + slender oval hand!
+ * Draw a thicker, anatomically sculpted 2-segment arm (v297):
+ * Full rounded deltoid shoulder cap -> natural bicep/tricep upper-arm curve -> smooth rounded elbow ->
+ * anatomical curved forearm muscle belly tapering to a refined wrist + proportioned hand!
  */
 function drawArticulatedArm(ctx, sx, sy, ex, ey, hx, hy, armW, s, upperCol, forearmCol = upperCol, handCol = forearmCol) {
   const udx = ex - sx;
@@ -2388,38 +2489,47 @@ function drawArticulatedArm(ctx, sx, sy, ex, ey, hx, hy, armW, s, upperCol, fore
   const fnx = fdy / fLen;
   const fny = -fdx / fLen;
 
-  const rSh = armW * 0.52 * s;
-  const rElb = armW * 0.36 * s;
-  const rWri = armW * 0.24 * s;
+  const rDeltoid = armW * 0.62 * s;
+  const rBicep = armW * 0.56 * s;
+  const rTricep = armW * 0.54 * s;
+  const rElb = armW * 0.42 * s;
+  const rForeBelly = armW * 0.46 * s;
+  const rWri = armW * 0.27 * s;
 
-  // Sculpted tapered upper arm polygon
+  const uMidX = sx + udx * 0.44;
+  const uMidY = sy + udy * 0.44;
+  const fBellyX = ex + fdx * 0.28;
+  const fBellyY = ey + fdy * 0.28;
+
+  // Sculpted anatomical upper arm (rounded deltoid cap -> curved bicep/tricep -> rounded elbow)
   ctx.fillStyle = upperCol;
   ctx.beginPath();
-  ctx.moveTo(sx + unx * rSh, sy + uny * rSh);
-  ctx.quadraticCurveTo((sx + ex) * 0.5 + unx * (rSh * 0.92), (sy + ey) * 0.5 + uny * (rSh * 0.92), ex + unx * rElb, ey + uny * rElb);
+  ctx.moveTo(sx + unx * rDeltoid, sy + uny * rDeltoid);
+  ctx.quadraticCurveTo(uMidX + unx * rBicep, uMidY + uny * rBicep, ex + unx * rElb, ey + uny * rElb);
   ctx.arc(ex, ey, rElb, Math.atan2(uny, unx), Math.atan2(-uny, -unx), false);
-  ctx.quadraticCurveTo((sx + ex) * 0.5 - unx * (rSh * 0.88), (sy + ey) * 0.5 - uny * (rSh * 0.88), sx - unx * rSh, sy - uny * rSh);
-  ctx.arc(sx, sy, rSh, Math.atan2(-uny, -unx), Math.atan2(uny, unx), false);
+  ctx.quadraticCurveTo(uMidX - unx * rTricep, uMidY - uny * rTricep, sx - unx * rDeltoid, sy - uny * rDeltoid);
+  ctx.arc(sx, sy, rDeltoid, Math.atan2(-uny, -unx), Math.atan2(uny, unx), false);
   ctx.closePath();
   ctx.fill();
 
-  // Sculpted tapered forearm polygon
+  // Sculpted anatomical forearm (full brachioradialis/flexor curve tapering smoothly into slim wrist!)
   ctx.fillStyle = forearmCol;
   ctx.beginPath();
   ctx.moveTo(ex + fnx * rElb, ey + fny * rElb);
-  ctx.lineTo(hx + fnx * rWri, hy + fny * rWri);
-  ctx.lineTo(hx - fnx * rWri, hy - fny * rWri);
-  ctx.lineTo(ex - fnx * rElb, ey - fny * rElb);
+  ctx.quadraticCurveTo(fBellyX + fnx * rForeBelly, fBellyY + fny * rForeBelly, hx + fnx * rWri, hy + fny * rWri);
+  ctx.arc(hx, hy, rWri, Math.atan2(fny, fnx), Math.atan2(-fny, -fnx), false);
+  ctx.quadraticCurveTo(fBellyX - fnx * (rForeBelly * 0.94), fBellyY - fny * (rForeBelly * 0.94), ex - fnx * rElb, ey - fny * rElb);
+  ctx.arc(ex, ey, rElb, Math.atan2(-fny, -fnx), Math.atan2(fny, fnx), false);
   ctx.closePath();
   ctx.fill();
 
-  // Refined slender oval hand aligned naturally with forearm direction
+  // Proportioned sculpted hand aligned naturally with forearm direction
   const ang = Math.atan2(fdy, fdx);
   const handLen = armW * 0.68 * s;
-  const handWid = armW * 0.32 * s;
+  const handWid = armW * 0.34 * s;
   ctx.fillStyle = handCol;
   ctx.beginPath();
-  ctx.ellipse(hx + (fdx / fLen) * handLen * 0.48, hy + (fdy / fLen) * handLen * 0.48, handLen, handWid, ang, 0, Math.PI * 2);
+  ctx.ellipse(hx + (fdx / fLen) * handLen * 0.46, hy + (fdy / fLen) * handLen * 0.46, handLen, handWid, ang, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -3858,16 +3968,16 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const shoulderY = -1.41 * s + bounceY + squatDrop * 0.78;
   const headY = -1.61 * s + bounceY + squatDrop * 0.72 + headNodY;
 
-  // Real-time independent damped spring-damper physics for female bust & glutes!
+  // Real-time independent damped spring-damper physics for female bust & co-ed glutes (v297 — men's butts jiggle too!)
   const hypePulse = hypeEnergy > 0.04 ? Math.sin(timeSec * 12.0 + ph) * (2.4 * hypeEnergy) : 0;
-  const extraPulse = isMale ? 0 : ((isDance
+  const extraPulse = ((isDance
     ? (danceMove === 'twerk'
         ? Math.sin(timeSec * 9.8 + ph) * 2.1
-        : danceMove === 'ymca' || danceMove === 'running-man' || danceMove === 'shuffle'
-          ? Math.sin(timeSec * 7.6 + ph) * 1.4
-          : Math.sin(timeSec * 5.8 + ph) * 0.8)
+        : danceMove === 'ymca' || danceMove === 'running-man' || danceMove === 'shuffle' || danceMove === 'moonwalk'
+          ? Math.sin(timeSec * 7.6 + ph) * 1.45
+          : Math.sin(timeSec * 5.8 + ph) * 0.9)
     : isToast
-      ? Math.sin(timeSec * 3.4 + ph) * 0.4
+      ? Math.sin(timeSec * 3.4 + ph) * 0.45
       : 0) + hypePulse);
   const bounceSt = computeCharacterBounceState(
     charKey,
@@ -3882,14 +3992,14 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const bbx = isMale ? 0 : bounceSt.bust.x * s;
   const bby = isMale ? 0 : bounceSt.bust.y * s;
   const bTilt = isMale ? 0 : bounceSt.bTilt * s;
-  const gbx = isMale ? 0 : bounceSt.glute.x * s;
-  const gby = isMale ? 0 : bounceSt.glute.y * s;
-  const gTilt = isMale ? 0 : bounceSt.gTilt * s;
+  const gbx = bounceSt.glute.x * s * (isMale ? 0.94 : 1.0);
+  const gby = bounceSt.glute.y * s * (isMale ? 0.96 : 1.0);
+  const gTilt = bounceSt.gTilt * s * (isMale ? 0.92 : 1.0);
 
   // 4a. Grounded 2-Bone IK Sculpted Legs (warm depth shading on rear leg in side view!)
   const legColor = isGear ? wet.suit : skin;
   const rearLegColor = (isSideView && !isGear) ? skinShade : legColor;
-  const hipLegOff = isSideView ? prof.hip * 0.16 * s : prof.hip * 0.50 * s;
+  const hipLegOff = isSideView ? prof.hip * 0.11 * s : prof.hip * 0.44 * s;
   const lHipX = hipShiftX + gbx * 0.25 - hipLegOff;
   const rHipX = hipShiftX + gbx * 0.25 + hipLegOff;
   const legHipY = hipY + 0.04 * s + gby * 0.25;
@@ -3962,8 +4072,9 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     if (isSideView) {
       if (isGearReady || isGearTank) {
         ctx.fillStyle = wet.suit;
-        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, gbx, gby);
         ctx.fill();
+        drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, wet.suit, 'rgba(15, 23, 42, 0.24)', true);
         ctx.strokeStyle = '#0f172a';
         ctx.lineWidth = Math.max(1.2, 0.05 * s);
         ctx.beginPath();
@@ -3972,7 +4083,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.stroke();
       } else if (isGearZip) {
         ctx.fillStyle = swim.style === 'rashguard' ? swim.primary : skin;
-        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, gbx, gby);
         ctx.fill();
         if (swim.style !== 'rashguard' && s >= 18) {
           ctx.fillStyle = 'rgba(104, 48, 28, 0.48)';
@@ -3985,13 +4096,14 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.beginPath();
         ctx.roundRect(hipShiftX - prof.hip * 0.78 * s, waistY - zipUp, prof.hip * 1.48 * s, hipY - waistY + 0.22 * s + zipUp, 0.08 * s);
         ctx.fill();
+        drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, wet.suit, 'rgba(15, 23, 42, 0.24)', true);
         ctx.fillStyle = wet.trim;
         ctx.fillRect(hipShiftX - prof.hip * 0.72 * s, waistY - zipUp, prof.hip * 1.36 * s, 0.05 * s);
       } else {
         const isShirt = swim.style === 'resort-shirt';
         const isRash = swim.style === 'rashguard';
         ctx.fillStyle = isRash ? swim.primary : skin;
-        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX);
+        traceSideMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, gbx, gby);
         ctx.fill();
         if (isShirt) {
           // Breezy open Hawaiian resort shirt draped over back & shoulders!
@@ -4011,18 +4123,19 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           ctx.arc(chestShiftX + prof.bust * 0.60 * s, shoulderY + (waistY - shoulderY) * 0.44, Math.max(1.0, 0.013 * s), 0, Math.PI * 2);
           ctx.fill();
         }
-        // Articulated leg-pivoting male boardshorts / trunks (v295 — follows 2-bone IK thigh pivots!)
+        // Articulated leg-pivoting male boardshorts / trunks with live glute jiggle (v297)!
         drawArticulatedMaleShorts(
           ctx, 'side', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
           lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
-          prof, s, shTilt, swim
+          prof, s, shTilt, swim, gbx, gby, gTilt
         );
       }
     } else if (isBackView) {
       if (isGearReady || isGearTank) {
         ctx.fillStyle = wet.suit;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
+        drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.28)', true);
         ctx.fillStyle = wet.tank;
         ctx.beginPath();
         ctx.roundRect(chestShiftX - 0.12 * s, shoulderY + 0.02 * s + tankLift, 0.24 * s, 0.58 * s, 0.08 * s);
@@ -4031,13 +4144,14 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.fillRect(chestShiftX - 0.04 * s, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.1 * s);
       } else if (isGearZip) {
         ctx.fillStyle = swim.style === 'rashguard' ? swim.primary : skin;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
         const zipUp = 0.065 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
         ctx.fillStyle = wet.suit;
         ctx.beginPath();
         ctx.roundRect(hipShiftX - prof.hip * 1.04 * s, waistY - zipUp, prof.hip * 2.08 * s, hipY - waistY + 0.22 * s + zipUp, 0.08 * s);
         ctx.fill();
+        drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.28)', true);
         ctx.strokeStyle = wet.trim;
         ctx.lineWidth = Math.max(1.1, 0.036 * s);
         ctx.beginPath();
@@ -4048,24 +4162,24 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         const isShirt = swim.style === 'resort-shirt';
         const isRash = swim.style === 'rashguard';
         ctx.fillStyle = (isShirt || isRash) ? swim.primary : skin;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
         if (isShirt || isRash) {
           ctx.fillStyle = swim.accent;
           ctx.fillRect(chestShiftX - prof.bust * 0.85 * s, shoulderY + 0.16 * s, prof.bust * 1.7 * s, 0.06 * s);
         }
-        // Articulated leg-pivoting boardshorts / trunks back view (v295)
+        // Articulated leg-pivoting boardshorts / trunks back view with live glute jiggle (v297)!
         drawArticulatedMaleShorts(
           ctx, 'back', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
           lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
-          prof, s, shTilt, swim
+          prof, s, shTilt, swim, gbx, gby, gTilt
         );
       }
     } else {
       // MALE FRONT VIEW
       if (isGearReady || isGearTank) {
         ctx.fillStyle = wet.suit;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
         ctx.fillStyle = wet.trim;
         ctx.fillRect(chestShiftX - prof.bust * 0.72 * s, shoulderY + 0.13 * s, prof.bust * 1.44 * s, 0.06 * s);
@@ -4079,7 +4193,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         ctx.stroke();
       } else if (isGearZip) {
         ctx.fillStyle = swim.style === 'rashguard' ? swim.primary : skin;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
         if (swim.style !== 'rashguard') drawMaleChestDetails(ctx, chestShiftX, shoulderY, waistY, prof, s);
         const zipUp = 0.065 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
@@ -4093,7 +4207,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
         const isShirt = swim.style === 'resort-shirt';
         const isRash = swim.style === 'rashguard';
         ctx.fillStyle = isRash ? swim.primary : skin;
-        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt);
+        traceMaleTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, shTilt, gbx, gby);
         ctx.fill();
         if (isShirt) {
           // Tailored open unbuttoned Hawaiian resort shirt hugging torso taper cleanly!
@@ -4129,11 +4243,11 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           drawMaleChestDetails(ctx, chestShiftX, shoulderY, waistY, prof, s);
         }
 
-        // Articulated leg-pivoting mid-thigh boardshorts & swim briefs (v295 — follows both thigh pivots!)
+        // Articulated leg-pivoting mid-thigh boardshorts & swim briefs (v297 — follows both thigh pivots & bounce!)
         drawArticulatedMaleShorts(
           ctx, 'front', chestShiftX, hipShiftX, shoulderY, waistY, hipY,
           lHipX, rHipX, legHipY, lKneeX, lKneeY, rKneeX, rKneeY,
-          prof, s, shTilt, swim
+          prof, s, shTilt, swim, gbx, gby, gTilt
         );
       }
     }

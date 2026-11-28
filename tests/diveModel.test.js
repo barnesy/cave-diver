@@ -14448,3 +14448,79 @@ test('v296 player avatar creator model, site jump-in animation & roaming victory
   renderVictoryPhotoFrame(trackCtx(xs2), 640, 320, { level: LEVEL_1, score: 9200, grade: 'S', avatar: mAv }, 2.4, 'disco');
   assert.notDeepEqual(xs1, xs2, 'Expected victory stage dancers to roam dynamically over time');
 });
+
+test('v297 Brazilian side-cinch bottoms, sculpted thighs/arms & male glute jiggle physics', async () => {
+  const {
+    FEMALE_BODY_PROFILES,
+    MALE_BODY_PROFILES,
+    drawTopsidePerson,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+
+  // 1. Thicker anatomical thighs & arms + fuller male gluteScale across all 8 presets
+  for (const p of FEMALE_BODY_PROFILES) {
+    assert.ok(p.thigh >= 0.14 && p.arm >= 0.086, `Expected fuller female thigh/arm for ${p.id}`);
+  }
+  for (const p of MALE_BODY_PROFILES) {
+    assert.ok(p.thigh >= 0.142 && p.arm >= 0.098 && p.gluteScale >= 0.78, `Expected fuller male limbs & glutes for ${p.id}`);
+  }
+
+  // 2. Step a dancing male across sequential frames and verify live glute jiggle shifts rendered glute ellipses!
+  const makeRecCtx = (ellipses) => ({
+    canvas: { width: 400, height: 400 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, rect() {}, roundRect() {}, fillRect() {}, strokeRect() {}, fill() {}, stroke() {}, setLineDash() {},
+    ellipse(x, y, rx, ry) { ellipses.push([Math.round(x * 10), Math.round(y * 10), Math.round(rx * 10), Math.round(ry * 10)]); },
+  });
+
+  const mSide1 = [];
+  const mSide2 = [];
+  for (let i = 0; i < 6; i++) {
+    drawTopsidePerson(makeRecCtx(i === 2 ? mSide1 : i === 5 ? mSide2 : []), 200, 340, 120, 1.0 + i * 0.04, {
+      id: 99701,
+      gender: 'male',
+      bodyType: 'muscular',
+      role: 'party-dance',
+      danceMove: 'twerk',
+      view: 'side',
+      seed: 1,
+      facing: 1,
+    });
+  }
+  assert.ok(mSide1.length > 0 && mSide2.length > 0);
+  assert.notDeepEqual(mSide1, mSide2, 'Expected male side-view glutes to animate/jiggle across frames');
+
+  const mBack1 = [];
+  const mBack2 = [];
+  for (let i = 0; i < 6; i++) {
+    drawTopsidePerson(makeRecCtx(i === 2 ? mBack1 : i === 5 ? mBack2 : []), 200, 340, 120, 2.0 + i * 0.04, {
+      id: 99702,
+      gender: 'male',
+      bodyType: 'athletic-m',
+      role: 'party-dance',
+      danceMove: 'twerk',
+      view: 'back',
+      seed: 4,
+      facing: 1,
+    });
+  }
+  assert.ok(mBack1.length > 0 && mBack2.length > 0);
+  assert.notDeepEqual(mBack1, mBack2, 'Expected male back-view twin glutes to animate/jiggle across frames');
+
+  // 3. Female side Brazilian cinch bikini & one-piece render cleanly across multiple body shapes
+  for (const style of ['triangle-halter', 'plunge-onepiece']) {
+    const fEll = [];
+    drawTopsidePerson(makeRecCtx(fEll), 200, 340, 120, 3.2, {
+      id: 99703,
+      gender: 'female',
+      bodyType: 'voluptuous',
+      role: 'party-dance',
+      danceMove: 'salsa',
+      view: 'side',
+      topStyle: style,
+      seed: 2,
+      facing: 1,
+    });
+    assert.ok(fEll.length > 0, `Expected side-view ${style} female render to draw cleanly`);
+  }
+});
