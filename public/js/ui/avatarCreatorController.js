@@ -37,6 +37,7 @@ export function createAvatarCreatorController({
   const closeBtn = document.getElementById('btn-avatar-creator-close');
   const saveBtn = document.getElementById('btn-avatar-creator-save');
   const jumpTestBtn = document.getElementById('btn-avatar-test-jump');
+  const cycleDanceBtn = document.getElementById('btn-avatar-cycle-dance');
   const previewCanvas = document.getElementById('avatar-creator-canvas');
   const viewBtns = Array.from(document.querySelectorAll('[data-avatar-view]'));
   const genderBtns = Array.from(document.querySelectorAll('[data-avatar-gender]'));
@@ -52,8 +53,19 @@ export function createAvatarCreatorController({
   const firstPlayMiniCanvas = document.getElementById('first-play-avatar-mini');
   const menuOpenBtn = document.getElementById('btn-home-open-avatar');
 
+  const PREVIEW_DANCES = [
+    { id: 'kpop-hip-sway', label: '✨ K-Pop Sway' },
+    { id: 'kpop-point', label: '💜 K-Pop Point' },
+    { id: 'tiktok-wave', label: '🌊 TikTok Wave' },
+    { id: 'tiktok-hip-dip', label: '🔥 Hip Dip' },
+    { id: 'salsa', label: '💃 Salsa' },
+    { id: 'disco', label: '🕺 Disco' },
+    { id: 'twerk', label: '🍑 Twerk' },
+  ];
+
   let draft = loadPlayerAvatar();
   let previewView = 'front';
+  let previewDanceIdx = 0;
   let previewJumpStartedAt = -99;
   let rafId = 0;
 
@@ -155,16 +167,26 @@ export function createAvatarCreatorController({
       const w = previewCanvas.width;
       const h = previewCanvas.height;
       const t = nowMs * 0.001;
-      const waterY = Math.round(h * 0.74);
-      const dockY = Math.round(h * 0.71);
+      const waterY = Math.round(h * 0.78);
+      const dockY = Math.round(h * 0.74);
 
       // Sunlit tropical sky & shimmering turquoise water backdrop
       const sky = ctx.createLinearGradient(0, 0, 0, waterY);
       sky.addColorStop(0, '#0284c7');
-      sky.addColorStop(0.65, '#38bdf8');
+      sky.addColorStop(0.62, '#38bdf8');
       sky.addColorStop(1, '#bae6fd');
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, w, waterY);
+
+      // Warm golden sun halo in upper right sky
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.20)';
+      ctx.beginPath();
+      ctx.arc(w * 0.82, h * 0.17, Math.min(w, h) * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(w * 0.82, h * 0.17, Math.min(w, h) * 0.068, 0, Math.PI * 2);
+      ctx.fill();
 
       const sea = ctx.createLinearGradient(0, waterY, 0, h);
       sea.addColorStop(0, '#06b6d4');
@@ -173,55 +195,52 @@ export function createAvatarCreatorController({
       ctx.fillRect(0, waterY, w, h - waterY);
 
       // Gentle sunlit water ripples
-      ctx.strokeStyle = 'rgba(224, 242, 254, 0.35)';
-      ctx.lineWidth = 1.4;
-      for (let i = 0; i < 4; i++) {
-        const rx = ((i * 86 + Math.sin(t * 2 + i) * 14) % w + w) % w;
-        const ry = waterY + 12 + i * 14;
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.38)';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 5; i++) {
+        const rx = ((i * 98 + Math.sin(t * 1.9 + i) * 16) % w + w) % w;
+        const ry = waterY + 12 + i * 16;
         ctx.beginPath();
-        ctx.moveTo(rx - 22, ry);
-        ctx.lineTo(rx + 22, ry);
+        ctx.moveTo(rx - 26, ry);
+        ctx.lineTo(rx + 26, ry);
         ctx.stroke();
       }
 
-      // Wooden sunlit launch dock on the left-center
-      const dockEndX = Math.round(w * 0.62);
+      // Wooden sunlit launch dock on the left-center (plenty of clear water on the right for the fluid dive!)
+      const dockEndX = Math.round(w * 0.56);
       ctx.fillStyle = '#5c2d0c';
-      ctx.fillRect(28, dockY, 10, h - dockY);
-      ctx.fillRect(dockEndX - 18, dockY, 10, h - dockY);
+      ctx.fillRect(36, dockY, 12, h - dockY);
+      ctx.fillRect(dockEndX - 22, dockY, 12, h - dockY);
       ctx.fillStyle = '#92400e';
-      ctx.fillRect(0, dockY - 6, dockEndX, 11);
+      ctx.fillRect(0, dockY - 7, dockEndX, 13);
       ctx.fillStyle = '#b45309';
-      ctx.fillRect(0, dockY - 6, dockEndX, 3.5);
+      ctx.fillRect(0, dockY - 7, dockEndX, 4);
 
       // Hyper-real beach umbrella planted at far left of dock
-      drawBeachUmbrella(ctx, 42, dockY - 4, 44, 0, -0.08);
+      drawBeachUmbrella(ctx, 56, dockY - 5, 58, 0, -0.08);
 
-      // Either play the live Jump-In preview OR groove live on the sunlit dock!
+      // Either play the fluid 4.0s Jump-In choreography OR showcase the larger dancing avatar!
       const jumpElapsed = t - previewJumpStartedAt;
-      const jumping = jumpElapsed >= 0 && jumpElapsed < 3.65;
+      const jumping = jumpElapsed >= 0 && jumpElapsed < 4.0;
       if (jumping) {
-        drawPlayerAvatarSiteJump(ctx, 74, dockEndX - 6, dockY - 5, waterY + 4, 1, 56, t, {
+        drawPlayerAvatarSiteJump(ctx, 82, dockEndX - 8, dockY - 6, waterY + 4, 1, 62, t, {
           forcedElapsed: jumpElapsed,
           avatar: draft,
         });
       } else {
-        const px = Math.round(dockEndX * 0.56);
-        const py = dockY - 5;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
-        ctx.beginPath();
-        ctx.ellipse(px, py + 2, 26, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const px = Math.round(dockEndX * 0.58);
+        const py = dockY - 6;
+        const danceMove = PREVIEW_DANCES[previewDanceIdx % PREVIEW_DANCES.length]?.id || 'kpop-hip-sway';
         const spec = buildTopsideSpecFromAvatar(draft, {
           id: 888099,
           role: 'party-dance',
-          danceMove: previewView === 'side' ? 'disco' : previewView === 'back' ? 'hula' : 'shuffle',
+          danceMove,
           view: previewView,
           seed: 11,
           facing: 1,
-          hypeEnergy: 0.4,
+          hypeEnergy: 0.35,
         });
-        drawTopsidePerson(ctx, px, py, 74, t, spec);
+        drawTopsidePerson(ctx, px, py, Math.round(h * 0.275), t, spec);
       }
     }
     rafId = requestAnimationFrame(renderPreviewFrame);
@@ -315,6 +334,12 @@ export function createAvatarCreatorController({
     if (!b) return;
     draft = normalizePlayerAvatar({ ...draft, swimIdx: Number(b.getAttribute('data-av-swim')) });
     renderControls();
+  });
+
+  cycleDanceBtn?.addEventListener('click', () => {
+    previewJumpStartedAt = -99;
+    previewDanceIdx = (previewDanceIdx + 1) % PREVIEW_DANCES.length;
+    cycleDanceBtn.textContent = PREVIEW_DANCES[previewDanceIdx].label;
   });
 
   jumpTestBtn?.addEventListener('click', () => {

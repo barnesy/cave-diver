@@ -17,16 +17,20 @@ import { getHyperRealSprite } from '../game/hyperRealSprites.js';
 import { buildTopsideSpecFromAvatar } from '../game/playerAvatar.js';
 
 export const VICTORY_DANCE_MOVES = Object.freeze([
+  { id: 'kpop-hip-sway', icon: '✨', label: 'K-Pop Sway' },
+  { id: 'kpop-point', icon: '💜', label: 'K-Pop Point' },
+  { id: 'tiktok-wave', icon: '🌊', label: 'TikTok Wave' },
+  { id: 'tiktok-hip-dip', icon: '🔥', label: 'Hip Dip' },
   { id: 'twerk', icon: '🍑', label: 'Twerk' },
   { id: 'floss', icon: '⚡', label: 'Floss' },
   { id: 'disco', icon: '🕺', label: 'Disco' },
   { id: 'salsa', icon: '💃', label: 'Salsa' },
   { id: 'dab', icon: '😎', label: 'Dab' },
   { id: 'running-man', icon: '👟', label: 'Run Man' },
-  { id: 'body-roll', icon: '🌊', label: 'Body Roll' },
+  { id: 'body-roll', icon: '🌀', label: 'Body Roll' },
   { id: 'ymca', icon: '🙌', label: 'YMCA' },
   { id: 'moonwalk', icon: '🌙', label: 'Moonwalk' },
-  { id: 'shuffle', icon: '🔥', label: 'Shuffle' },
+  { id: 'shuffle', icon: '⚡', label: 'Shuffle' },
   { id: 'robot', icon: '🤖', label: 'Robot' },
   { id: 'hula', icon: '🌺', label: 'Hula' },
   { id: 'macarena', icon: '🎵', label: 'Macarena' },

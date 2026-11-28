@@ -143,23 +143,27 @@ export const FEMALE_TOP_STYLES = Object.freeze([
 export const FEMALE_BUST_SIZES = Object.freeze([0.80, 0.95, 1.10, 1.24, 1.36]);
 
 /**
- * 14 unmistakable, lively popular dance moves that co-ed characters perform & cycle through!
+ * 18 unmistakable, lively popular dance moves (including modern K-Pop & TikTok fluid dances!).
  */
 export const POPULAR_DANCE_MOVES = Object.freeze([
-  'floss',        // Iconic alternating hip pop + fast opposite arm swings
-  'twerk',        // Curvy low squat booty-pop / hip drop bounce
-  'dab',          // Signature diagonal arm shoot + elbow face dip
-  'disco',        // Saturday Night Fever diagonal sky-point + hip sway
-  'salsa',        // Lush figure-8 hip sway + graceful overhead arm
-  'running-man',  // High-knee shuffle stomp + grounded slide & pumping elbows
-  'body-roll',    // Undulating head-shoulder-waist-hip wave + sweeping hands
-  'ymca',         // Festival jump cycling Y - M - C - A arms!
-  'moonwalk',     // Smooth side-profile heel-pop & backward gliding stride!
-  'shuffle',      // Energetic Melbourne shuffle heel-toe scissor steps + crisp arm bounce!
-  'robot',        // Snappy quantized mechanical 90-degree pose locks with micro-snap!
-  'hula',         // Tropical island figure-8 hip sway + synchronized flowing wave hands!
-  'macarena',     // Classic 6-beat cycle: hands out -> cross -> head -> hips -> hop!
-  'air-guitar',   // Rock-out power stance, headbanging groove & shredding hands!
+  'kpop-hip-sway',  // Silky K-Pop S-line hip roll, shoulder pop & graceful hair-flip / heart-frame hands
+  'kpop-point',     // Crisp K-Pop double hip-pop, fluid waist wave & diagonal point + overhead wrist sweep
+  'tiktok-wave',    // Viral TikTok hypnotic head -> chest -> waist -> hip -> knee full-body S-wave
+  'tiktok-hip-dip', // Viral TikTok syncopated hip drop, shoulder shimmy & sweeping overhead arm flow
+  'floss',          // Iconic alternating hip pop + fast opposite arm swings
+  'twerk',          // Curvy low squat booty-pop / hip drop bounce
+  'dab',            // Signature diagonal arm shoot + elbow face dip
+  'disco',          // Saturday Night Fever diagonal sky-point + hip sway
+  'salsa',          // Lush figure-8 hip sway + graceful overhead arm
+  'running-man',    // High-knee shuffle stomp + grounded slide & pumping elbows
+  'body-roll',      // Undulating head-shoulder-waist-hip wave + sweeping hands
+  'ymca',           // Festival jump cycling Y - M - C - A arms!
+  'moonwalk',       // Smooth side-profile heel-pop & backward gliding stride!
+  'shuffle',        // Energetic Melbourne shuffle heel-toe scissor steps + crisp arm bounce!
+  'robot',          // Snappy quantized mechanical 90-degree pose locks with micro-snap!
+  'hula',           // Tropical island figure-8 hip sway + synchronized flowing wave hands!
+  'macarena',       // Classic 6-beat cycle: hands out -> cross -> head -> hips -> hop!
+  'air-guitar',     // Rock-out power stance, headbanging groove & shredding hands!
 ]);
 
 // Bounded per-character secondary-motion spring-damper state pool (zero GC churn, auto-pruned)
@@ -770,29 +774,44 @@ function drawBouncingBust(
     ctx.fill();
     ctx.restore();
 
-    // Taut center bandeau gather & contrast clasp holding twin cups tightly together
+    // Taut contoured center bandeau bridge lifting smoothly into the sternum (zero flat boxy bottom!)
     ctx.fillStyle = fillCol;
-    ctx.fillRect(cx - sep * 0.45, cy - ry * 0.02, sep * 0.90, ry * 0.72);
+    ctx.beginPath();
+    ctx.moveTo(cx - sep * 0.56, cy - ry * 0.04);
+    ctx.lineTo(cx + sep * 0.56, cy - ry * 0.04);
+    ctx.lineTo(cx + sep * 0.56, ryPos + ry * 0.72);
+    ctx.quadraticCurveTo(cx, cy + ry * 0.52, cx - sep * 0.56, ly + ry * 0.72);
+    ctx.closePath();
+    ctx.fill();
     drawUnderbustArc('#0f172a', 0.22);
     drawFabricApex(lx - rx * 0.10, ly + ry * 0.14);
     drawFabricApex(rxPos + rx * 0.10, ryPos + ry * 0.14);
     ctx.fillStyle = rimCol || '#fef08a';
     ctx.beginPath();
-    ctx.roundRect(cx - 0.020 * s, cy - ry * 0.04, 0.040 * s, ry * 0.76, 0.016 * s);
+    ctx.roundRect(cx - 0.020 * s, cy - ry * 0.04, 0.040 * s, ry * 0.64, 0.016 * s);
     ctx.fill();
   } else if (topStyle === 'sporty-crop') {
-    // Glove-tight fitted athletic crop stretching from sloping shoulders over exact twin breasts!
+    // Glove-tight fitted athletic crop with a contoured double-scallop underbust hem hugging BOTH breasts (v299)!
     const topY = shoulderY + 0.082 * s;
-    const hemY = Math.min(waistY - 0.012 * s, cy + ry * 0.98);
     const shIn = prof.sh * 0.58 * s;
-    const hemHalf = sep + rx * 0.46;
+    const outL = lx - rx * 0.88;
+    const outR = rxPos + rx * 0.88;
+    const outerDropL = ly + ry * 0.64;
+    const outerDropR = ryPos + ry * 0.64;
+    const cupBotL = Math.min(waistY - 0.008 * s, ly + ry * 1.04);
+    const cupBotR = Math.min(waistY - 0.008 * s, ryPos + ry * 1.04);
+    const centerBridgeY = cy + ry * 0.72;
+    const bandThick = 0.036 * s;
+
     ctx.fillStyle = fillCol;
     ctx.beginPath();
     ctx.moveTo(chestX - shIn, shoulderY + 0.020 * s - shTilt);
     ctx.quadraticCurveTo(chestX, topY + 0.045 * s, chestX + shIn, shoulderY + 0.020 * s + shTilt);
-    ctx.bezierCurveTo(rxPos + rx * 1.04, ryPos - ry * 0.14, rxPos + rx * 1.00, ryPos + ry * 0.74, cx + hemHalf, hemY);
-    ctx.lineTo(cx - hemHalf, hemY);
-    ctx.bezierCurveTo(lx - rx * 1.00, ly + ry * 0.74, lx - rx * 1.04, ly - ry * 0.14, chestX - shIn, shoulderY + 0.020 * s - shTilt);
+    ctx.bezierCurveTo(rxPos + rx * 1.04, ryPos - ry * 0.14, rxPos + rx * 1.02, ryPos + ry * 0.36, outR, outerDropR);
+    // Double-scallop contoured bottom hem hugging tightly under right breast -> lifting at sternum -> under left breast!
+    ctx.bezierCurveTo(rxPos + rx * 0.48, cupBotR + 0.014 * s, rxPos - rx * 0.44, cupBotR + 0.012 * s, cx, centerBridgeY);
+    ctx.bezierCurveTo(lx + rx * 0.44, cupBotL + 0.012 * s, lx - rx * 0.48, cupBotL + 0.014 * s, outL, outerDropL);
+    ctx.bezierCurveTo(lx - rx * 1.02, ly + ry * 0.36, lx - rx * 1.04, ly - ry * 0.14, chestX - shIn, shoulderY + 0.020 * s - shTilt);
     ctx.closePath();
     ctx.fill();
     drawUnderbustArc('#0f172a', 0.24);
@@ -811,8 +830,26 @@ function drawBouncingBust(
       ctx.ellipse(rxPos + rx * 0.1, ryPos - ry * 0.28, rx * 0.42, ry * 0.19, 0.14, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Contoured elastic underband hugging the exact twin rounded bottoms of both boobs (ZERO straight horizontal bar!)
     ctx.fillStyle = rimCol || '#ffffff';
-    ctx.fillRect(cx - hemHalf, hemY - 0.038 * s, hemHalf * 2, 0.038 * s);
+    ctx.beginPath();
+    ctx.moveTo(outL, outerDropL - bandThick * 0.72);
+    ctx.bezierCurveTo(lx - rx * 0.48, cupBotL - bandThick * 0.68, lx + rx * 0.44, cupBotL - bandThick * 0.72, cx, centerBridgeY - bandThick * 0.72);
+    ctx.bezierCurveTo(rxPos - rx * 0.44, cupBotR - bandThick * 0.72, rxPos + rx * 0.48, cupBotR - bandThick * 0.68, outR, outerDropR - bandThick * 0.72);
+    ctx.lineTo(outR, outerDropR + bandThick * 0.28);
+    ctx.bezierCurveTo(rxPos + rx * 0.48, cupBotR + bandThick * 0.32, rxPos - rx * 0.44, cupBotR + bandThick * 0.28, cx, centerBridgeY + bandThick * 0.28);
+    ctx.bezierCurveTo(lx + rx * 0.44, cupBotL + bandThick * 0.28, lx - rx * 0.48, cupBotL + bandThick * 0.32, outL, outerDropL + bandThick * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    if (s >= 16) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(outL, outerDropL + bandThick * 0.34);
+      ctx.bezierCurveTo(lx - rx * 0.48, cupBotL + bandThick * 0.38, lx + rx * 0.44, cupBotL + bandThick * 0.34, cx, centerBridgeY + bandThick * 0.34);
+      ctx.bezierCurveTo(rxPos - rx * 0.44, cupBotR + bandThick * 0.34, rxPos + rx * 0.48, cupBotR + bandThick * 0.38, outR, outerDropR + bandThick * 0.34);
+      ctx.stroke();
+    }
   } else if (topStyle === 'wrap-crisscross') {
     // Taut elastic criss-cross halter neck straps stretching from collar directly into moving cup peaks
     ctx.strokeStyle = fillCol;
@@ -859,12 +896,35 @@ function drawBouncingBust(
     drawFabricApex(lx - rx * 0.16, ly + ry * 0.18);
     drawFabricApex(rxPos + rx * 0.16, ryPos + ry * 0.18);
 
-    // Flush underband supporting directly beneath the twin wrap cups
-    const bandHalf = sep + rx * 0.56;
+    // Contoured double-scallop underband hugging the exact rounded bottom of BOTH wrap cups (ZERO flat bar!)
+    const outL = lx - rx * 0.84;
+    const outR = rxPos + rx * 0.84;
+    const dropL = ly + ry * 0.60;
+    const dropR = ryPos + ry * 0.60;
+    const cupBotL = Math.min(waistY - 0.008 * s, ly + ry * 1.03);
+    const cupBotR = Math.min(waistY - 0.008 * s, ryPos + ry * 1.03);
+    const midY = cy + ry * 0.68;
+    const bandW = 0.030 * s;
+
     ctx.fillStyle = rimCol || fillCol;
     ctx.beginPath();
-    ctx.roundRect(cx - bandHalf, cy + ry * 0.68, bandHalf * 2, 0.036 * s, 0.018 * s);
+    ctx.moveTo(outL, dropL - bandW * 0.55);
+    ctx.bezierCurveTo(lx - rx * 0.44, cupBotL - bandW * 0.58, lx + rx * 0.42, cupBotL - bandW * 0.60, cx, midY - bandW * 0.58);
+    ctx.bezierCurveTo(rxPos - rx * 0.42, cupBotR - bandW * 0.60, rxPos + rx * 0.44, cupBotR - bandW * 0.58, outR, dropR - bandW * 0.55);
+    ctx.lineTo(outR, dropR + bandW * 0.45);
+    ctx.bezierCurveTo(rxPos + rx * 0.44, cupBotR + bandW * 0.45, rxPos - rx * 0.42, cupBotR + bandW * 0.42, cx, midY + bandW * 0.45);
+    ctx.bezierCurveTo(lx + rx * 0.42, cupBotL + bandW * 0.42, lx - rx * 0.44, cupBotL + bandW * 0.45, outL, dropL + bandW * 0.45);
+    ctx.closePath();
     ctx.fill();
+    if (s >= 16) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.22)';
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(outL, dropL + bandW * 0.50);
+      ctx.bezierCurveTo(lx - rx * 0.44, cupBotL + bandW * 0.52, lx + rx * 0.42, cupBotL + bandW * 0.48, cx, midY + bandW * 0.50);
+      ctx.bezierCurveTo(rxPos - rx * 0.42, cupBotR + bandW * 0.48, rxPos + rx * 0.44, cupBotR + bandW * 0.52, outR, dropR + bandW * 0.50);
+      ctx.stroke();
+    }
   } else {
     // 'triangle-halter': Taut elastic halter strings + tight sculpted triangle cups CLIPPED onto breasts!
     ctx.strokeStyle = rimCol || fillCol;
@@ -911,12 +971,15 @@ function drawBouncingBust(
     drawFabricApex(lx - rx * 0.10, ly + ry * 0.18);
     drawFabricApex(rxPos + rx * 0.10, ryPos + ry * 0.18);
 
-    // Flush underbust tie string clamped strictly along the bottom of the twin cups!
+    // Contoured double-scallop underbust string hugging tightly beneath BOTH triangle cups!
+    const outL = lx - rx * 0.76;
+    const outR = rxPos + rx * 0.76;
     ctx.strokeStyle = rimCol || fillCol;
     ctx.lineWidth = Math.max(0.95, 0.024 * s);
     ctx.beginPath();
-    ctx.moveTo(lx - rx * 0.68, ly + ry * 0.78);
-    ctx.quadraticCurveTo(cx, cy + ry * 0.70, rxPos + rx * 0.68, ryPos + ry * 0.78);
+    ctx.moveTo(outL, ly + ry * 0.64);
+    ctx.bezierCurveTo(lx - rx * 0.36, ly + ry * 1.02, lx + rx * 0.38, ly + ry * 1.00, cx, cy + ry * 0.72);
+    ctx.bezierCurveTo(rxPos - rx * 0.38, ryPos + ry * 1.00, rxPos + rx * 0.36, ryPos + ry * 1.02, outR, ryPos + ry * 0.64);
     ctx.stroke();
     ctx.fillStyle = rimCol || fillCol;
     ctx.beginPath();
@@ -1025,7 +1088,9 @@ export function resolveTopsidePersonView(spec = {}) {
   const move = spec.danceMove || '';
   const seed = Math.abs(spec.seed || 0);
   if (move === 'twerk') return seed % 3 === 0 ? 'side' : 'back';
-  if (move === 'running-man' || move === 'body-roll' || move === 'moonwalk') return 'side';
+  if (move === 'running-man' || move === 'body-roll' || move === 'moonwalk' || move === 'tiktok-wave') return seed % 3 === 0 ? 'front' : 'side';
+  if (move === 'kpop-hip-sway' || move === 'tiktok-hip-dip') return seed % 3 === 0 ? 'back' : 'front';
+  if (move === 'kpop-point') return seed % 3 === 0 ? 'side' : 'front';
   if (move === 'macarena') return 'front';
   if (move === 'air-guitar' || move === 'hula' || move === 'shuffle' || move === 'robot') {
     return seed % 3 === 0 ? 'side' : 'front';
@@ -1623,20 +1688,51 @@ function getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby,
 }
 
 /**
- * Draw natural lateral side-boob skin contours peeking past the outer ribcage in Female Back View!
- * Drawn behind the back torso so ONLY the smooth outer rounded breast curves protrude beyond the lats.
+ * Draw natural lateral side-boob skin contours + lower-outer swimsuit cradle in Female Back View (v299)!
+ * Rendered BEFORE Pass-1 arms so ALL arms (both forward-reaching Pass-1 arms and side/overhead Pass-2 arms)
+ * are ALWAYS anatomically in front of the front-chest side-boobs when the dancer faces away!
  */
 function drawBackViewSideBoob(ctx, chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale = 1.0) {
   const g = getBackSideBoobGeom(chestX, hipX, shoulderY, waistY, prof, s, bbx, bby, bTilt, bustScale);
+  const isBandeau = topStyle === 'bandeau';
+  const isCrop = topStyle === 'sporty-crop';
+  const isOnePiece = topStyle === 'plunge-onepiece';
+
   for (const side of [-1, 1]) {
     const bx = side < 0 ? g.lx : g.rx;
     const by = side < 0 ? g.ly : g.ry;
+    const rot = side * 0.20;
+
+    // 1. Bare rounded outer side-boob peeking past the ribcage
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(bx, by, g.sideRx, g.sideRy, side * 0.20, 0, Math.PI * 2);
+    ctx.ellipse(bx, by, g.sideRx, g.sideRy, rot, 0, Math.PI * 2);
     ctx.fill();
 
-    // Soft warm contour shading along the exposed upper-outer side-boob curve
+    // 2. Fitted lower-outer swimsuit cup cradle clipped strictly onto the side-boob so it visibly lifts & holds it up!
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(bx, by, g.sideRx * 1.02, g.sideRy * 1.02, rot, 0, Math.PI * 2);
+    ctx.clip?.();
+    const topFrac = isCrop ? -0.32 : isBandeau ? -0.30 : isOnePiece ? 0.08 : -0.10;
+    const cradleTopY = by + g.sideRy * topFrac;
+    ctx.fillStyle = swim.primary;
+    ctx.fillRect(bx - g.sideRx * 1.3, cradleTopY, g.sideRx * 2.6, g.sideRy * 1.8);
+    if (!isOnePiece && !isCrop && swim.accent && s >= 16) {
+      ctx.fillStyle = swim.accent;
+      ctx.fillRect(bx - g.sideRx * 1.3, by + g.sideRy * 0.72, g.sideRx * 2.6, Math.max(1.2, 0.022 * s));
+    }
+    if (s >= 18) {
+      ctx.strokeStyle = 'rgba(72, 28, 14, 0.24)';
+      ctx.lineWidth = Math.max(0.75, 0.015 * s);
+      ctx.beginPath();
+      ctx.moveTo(bx - g.sideRx * 1.2, cradleTopY);
+      ctx.lineTo(bx + g.sideRx * 1.2, cradleTopY);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. Soft warm contour shading along the exposed upper-outer side-boob curve
     if (s >= 16) {
       ctx.strokeStyle = 'rgba(72, 28, 14, 0.20)';
       ctx.lineWidth = Math.max(0.7, 0.014 * s);
@@ -1648,10 +1744,9 @@ function drawBackViewSideBoob(ctx, chestX, hipX, shoulderY, waistY, prof, s, bbx
 }
 
 /**
- * Draw body-hugging Female Back View swimsuit top (v298)!
- * Clips strictly to the exact union of `traceCurvyTorso` + left/right side-boob ellipses (ZERO overhanging
- * flat stick ends!), curving snugly around the ribcage & cradling the LOWER-OUTER curve of both side-boobs
- * so it visibly fits onto the body and holds the breasts up!
+ * Draw body-hugging Female Back View swimsuit top (v299)!
+ * Clips strictly to `traceCurvyTorso` so the contoured back band joins the outer side-boob cradles
+ * seamlessly at the ribcage edge while NEVER painting over forward-reaching Pass-1 arms!
  */
 function drawFittedFemaleBackTop(
   ctx,
@@ -1683,13 +1778,9 @@ function drawFittedFemaleBackTop(
   const cradleY_R = ry + sideRy * 0.24;
   const bandCenterY = buY + sideRy * 0.44;
 
-  // Helper to clip strictly to torso + both outer side-boobs so fabric wraps tightly around both body & boobs!
+  // Clip strictly to the back torso so forward-reaching Pass-1 arms stay cleanly in front of the side-boobs!
   const clipBackBodyAndBust = () => {
     traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX, hipX, 0, 0, gbx, gby, shTilt);
-    ctx.moveTo(lx + sideRx * Math.cos(-0.20), ly + sideRx * Math.sin(-0.20));
-    ctx.ellipse(lx, ly, sideRx, sideRy, -0.20, 0, Math.PI * 2);
-    ctx.moveTo(rx + sideRx * Math.cos(0.20), ry + sideRx * Math.sin(0.20));
-    ctx.ellipse(rx, ry, sideRx, sideRy, 0.20, 0, Math.PI * 2);
     ctx.clip?.();
   };
 
@@ -3554,7 +3645,62 @@ function computePersonArmPose(
   _armPose.hasToast = false;
 
   if (isDance) {
-    if (danceMove === 'floss') {
+    if (danceMove === 'kpop-hip-sway') {
+      // Silky K-Pop S-line choreo: one hand glides sensuously along hip curve while the other sweeps overhead hair-flip / frame!
+      const sw = Math.sin(timeSec * 4.4 + ph);
+      const sw2 = Math.cos(timeSec * 4.4 + ph);
+      const wave = Math.sin(timeSec * 8.8 + ph - 0.4) * 0.06 * s;
+      _armPose.lx1 = shL - (isSideView ? 0.14 : 0.24) * s + sw * 0.05 * s;
+      _armPose.ly1 = waistY - 0.04 * s + sw2 * 0.04 * s;
+      _armPose.lx2 = hipShiftX - (isSideView ? 0.04 : prof.hip * 0.94) * s + sw * 0.06 * s;
+      _armPose.ly2 = hipY - 0.06 * s + wave;
+      _armPose.rx1 = shR + (isSideView ? 0.12 : 0.28) * s + sw * 0.06 * s;
+      _armPose.ry1 = headY - 0.04 * s - sw2 * 0.08 * s;
+      _armPose.rx2 = chestShiftX + (isSideView ? 0.10 : 0.14) * s - sw * 0.10 * s;
+      _armPose.ry2 = headY - 0.24 * s + wave;
+    } else if (danceMove === 'kpop-point') {
+      // Crisp K-Pop point-choreo: alternating diagonal finger-point & silky curved overhead wrist-roll!
+      const cyc = Math.sin(timeSec * 4.8 + ph);
+      const alt = cyc >= 0 ? 1 : -1;
+      const snap = Math.sin(Math.min(1, Math.abs(cyc) * 1.4) * Math.PI * 0.5);
+      const wrist = Math.cos(timeSec * 9.6 + ph) * 0.05 * s;
+      if (alt > 0) {
+        _armPose.lx1 = shL - 0.22 * s; _armPose.ly1 = waistY + 0.02 * s;
+        _armPose.lx2 = hipShiftX - prof.hip * 0.92 * s; _armPose.ly2 = hipY - 0.04 * s;
+        _armPose.rx1 = shR + (0.24 + snap * 0.14) * s; _armPose.ry1 = shRY - (0.10 + snap * 0.16) * s;
+        _armPose.rx2 = shR + (0.40 + snap * 0.16) * s; _armPose.ry2 = shRY - (0.26 + snap * 0.22) * s + wrist;
+      } else {
+        _armPose.lx1 = shL - (0.24 + snap * 0.14) * s; _armPose.ly1 = shLY - (0.10 + snap * 0.16) * s;
+        _armPose.lx2 = shL - (0.40 + snap * 0.16) * s; _armPose.ly2 = shLY - (0.26 + snap * 0.22) * s + wrist;
+        _armPose.rx1 = shR + 0.22 * s; _armPose.ry1 = waistY + 0.02 * s;
+        _armPose.rx2 = hipShiftX + prof.hip * 0.92 * s; _armPose.ry2 = hipY - 0.04 * s;
+      }
+    } else if (danceMove === 'tiktok-wave') {
+      // Viral TikTok silky body-wave: fluid hands glide along collarbone -> waist -> outer hips in hypnotic ripple!
+      const wA = Math.sin(timeSec * 4.2 + ph);
+      const wB = Math.cos(timeSec * 4.2 + ph);
+      const glide = 0.5 + 0.5 * wA;
+      _armPose.lx1 = shL - (isSideView ? -0.10 : 0.26) * s - wB * 0.05 * s;
+      _armPose.ly1 = shLY + (0.04 + glide * 0.18) * s;
+      _armPose.lx2 = (isSideView ? chestShiftX + 0.16 * s : chestShiftX - prof.bust * 0.68 * s) + wB * 0.06 * s;
+      _armPose.ly2 = shoulderY + (0.16 + glide * 0.34) * s;
+      _armPose.rx1 = shR + (isSideView ? -0.14 : 0.26) * s + wB * 0.05 * s;
+      _armPose.ry1 = shRY + (0.22 - glide * 0.18) * s;
+      _armPose.rx2 = (isSideView ? hipShiftX - 0.06 * s : hipShiftX + prof.hip * 0.86 * s) - wB * 0.06 * s;
+      _armPose.ry2 = waistY + (0.26 - glide * 0.32) * s;
+    } else if (danceMove === 'tiktok-hip-dip') {
+      // Viral TikTok Hip-Dip & Shoulder Shimmy: flowing crossed chest-sweep opening into wide silky overhead arcs!
+      const open = 0.5 + 0.5 * Math.sin(timeSec * 4.6 + ph);
+      const shim = Math.sin(timeSec * 13.8 + ph) * 0.045 * s;
+      _armPose.lx1 = shL - (0.16 + open * 0.16) * s;
+      _armPose.ly1 = shLY + (0.12 - open * 0.26) * s + shim;
+      _armPose.lx2 = shL - (0.04 + open * 0.34) * s;
+      _armPose.ly2 = shLY + (0.10 - open * 0.50) * s - shim;
+      _armPose.rx1 = shR + (0.16 + open * 0.16) * s;
+      _armPose.ry1 = shRY + (0.12 - open * 0.26) * s - shim;
+      _armPose.rx2 = shR + (0.04 + open * 0.34) * s;
+      _armPose.ry2 = shRY + (0.10 - open * 0.50) * s + shim;
+    } else if (danceMove === 'floss') {
       const swing = -grooveWave(timeSec * 8.2 + ph) * 0.42 * s;
       _armPose.lx1 = shL + swing * 0.62; _armPose.ly1 = waistY + 0.05 * s;
       _armPose.lx2 = hipShiftX + swing * 1.12 - 0.06 * s; _armPose.ly2 = hipY + 0.12 * s;
@@ -4070,7 +4216,67 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     const medCos = Math.cos(timeSec * 5.6 + ph);
     const slow = grooveWave(timeSec * 3.3 + ph);
 
-    if (danceMove === 'floss') {
+    if (danceMove === 'kpop-hip-sway') {
+      // Silky K-Pop S-line figure-8 hip roll + opposite shoulder isolation + sultry knee dip & heel pop!
+      const sw = Math.sin(timeSec * 4.4 + ph);
+      const sw2 = Math.cos(timeSec * 4.4 + ph);
+      const pop = beatBounce(timeSec * 4.4 + ph);
+      hipShiftX = sw * 0.22 * s;
+      chestShiftX = -Math.sin(timeSec * 4.4 + ph - 0.45) * 0.095 * s;
+      shTilt = -sw * 0.068 * s;
+      squatDrop = 0.075 * s + (0.5 - 0.5 * Math.cos(timeSec * 8.8 + ph)) * 0.055 * s;
+      bounceY = -pop * 0.035 * s;
+      headTiltX = Math.sin(timeSec * 4.4 + ph - 0.75) * 0.065 * s;
+      headNodY = sw2 * 0.022 * s;
+      const liftL = Math.max(0, sw);
+      const liftR = Math.max(0, -sw);
+      lFootX = -0.18 * s - liftL * 0.05 * s;
+      rFootX = 0.18 * s + liftR * 0.05 * s;
+      lFootY = -0.04 * s - liftL * liftL * 0.075 * s;
+      rFootY = -0.04 * s - liftR * liftR * 0.075 * s;
+    } else if (danceMove === 'kpop-point') {
+      // Rhythmic K-Pop double hip-pop + fluid waist counter-sway + cheeky alternating heel-pop!
+      const beat = Math.sin(timeSec * 4.8 + ph);
+      const dbl = Math.sin(timeSec * 9.6 + ph);
+      hipShiftX = (beat * 0.16 + dbl * 0.055) * s;
+      chestShiftX = -beat * 0.075 * s;
+      shTilt = -beat * 0.055 * s;
+      squatDrop = 0.06 * s + Math.abs(dbl) * 0.045 * s;
+      bounceY = -beatBounce(timeSec * 9.6 + ph) * 0.05 * s;
+      headTiltX = beat * 0.055 * s;
+      const pL = Math.max(0, beat);
+      const pR = Math.max(0, -beat);
+      lFootX = -0.20 * s;
+      rFootX = 0.20 * s;
+      lFootY = -0.04 * s - pL * 0.08 * s;
+      rFootY = -0.04 * s - pR * 0.08 * s;
+    } else if (danceMove === 'tiktok-wave') {
+      // Viral TikTok hypnotic fluid full-body S-wave rippling smoothly head -> chest -> waist -> hips -> knees!
+      const w = timeSec * 4.2 + ph;
+      headTiltX = Math.sin(w + 0.85) * 0.095 * s;
+      headNodY = Math.cos(w + 0.85) * 0.028 * s;
+      chestShiftX = Math.sin(w + 0.15) * 0.155 * s;
+      shTilt = Math.cos(w + 0.15) * 0.052 * s;
+      hipShiftX = Math.sin(w - 0.95) * 0.21 * s;
+      squatDrop = 0.065 * s + (0.5 + 0.5 * Math.cos(w - 0.55)) * 0.115 * s;
+      lFootX = -0.20 * s;
+      rFootX = 0.20 * s;
+    } else if (danceMove === 'tiktok-hip-dip') {
+      // Viral TikTok syncopated hip dip + quick shoulder shimmy + fluid low-knee groove!
+      const cyc = Math.sin(timeSec * 4.6 + ph);
+      const dip = Math.pow(Math.abs(cyc), 1.4);
+      const shim = Math.sin(timeSec * 13.8 + ph);
+      hipShiftX = cyc * 0.22 * s;
+      chestShiftX = -cyc * 0.07 * s + shim * 0.025 * s;
+      shTilt = -cyc * 0.055 * s + shim * 0.032 * s;
+      squatDrop = 0.05 * s + dip * 0.15 * s;
+      headTiltX = cyc * 0.05 * s;
+      lFootX = -0.24 * s;
+      rFootX = 0.24 * s;
+      lFootY = -0.04 * s - Math.max(0, cyc) * 0.065 * s;
+      rFootY = -0.04 * s - Math.max(0, -cyc) * 0.065 * s;
+      useWideKnees = true;
+    } else if (danceMove === 'floss') {
       hipShiftX = fast * 0.19 * s;
       chestShiftX = -fast * 0.045 * s;
       shTilt = -fast * 0.032 * s;
@@ -4270,11 +4476,13 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   // Real-time independent damped spring-damper physics for female bust & co-ed glutes (v297 — men's butts jiggle too!)
   const hypePulse = hypeEnergy > 0.04 ? Math.sin(timeSec * 12.0 + ph) * (2.4 * hypeEnergy) : 0;
   const extraPulse = ((isDance
-    ? (danceMove === 'twerk'
+    ? (danceMove === 'twerk' || danceMove === 'tiktok-hip-dip'
         ? Math.sin(timeSec * 9.8 + ph) * 2.1
-        : danceMove === 'ymca' || danceMove === 'running-man' || danceMove === 'shuffle' || danceMove === 'moonwalk'
-          ? Math.sin(timeSec * 7.6 + ph) * 1.45
-          : Math.sin(timeSec * 5.8 + ph) * 0.9)
+        : danceMove === 'kpop-hip-sway' || danceMove === 'kpop-point' || danceMove === 'tiktok-wave'
+          ? Math.sin(timeSec * 8.8 + ph) * 1.65
+          : danceMove === 'ymca' || danceMove === 'running-man' || danceMove === 'shuffle' || danceMove === 'moonwalk'
+            ? Math.sin(timeSec * 7.6 + ph) * 1.45
+            : Math.sin(timeSec * 5.8 + ph) * 0.9)
     : isToast
       ? Math.sin(timeSec * 3.4 + ph) * 0.45
       : 0) + hypePulse);
@@ -4333,7 +4541,13 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.fillRect(legRfx - 0.07 * s, rFootY - 0.03 * s, 0.16 * s, 0.085 * s);
   }
 
-  // Compute 2-pass depth-sorted arm pose BEFORE torso so far/back-layer arms tuck naturally behind torso & bust!
+  // In Female Back View, side-boobs sit on the FRONT of the chest (furthest from camera!), so draw them
+  // BEFORE Pass-1 arms — guaranteeing ALL arms are ALWAYS in front of the boobs when facing away (v299)!
+  if (!isMale && isBackView && !isGear) {
+    drawBackViewSideBoob(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale);
+  }
+
+  // Compute 2-pass depth-sorted arm pose BEFORE torso so far/back-layer arms tuck naturally behind torso!
   const hasSleeves = isGearReady || isGearTank;
   const hasShortSleeve = isMale && !isGear && (swim.style === 'rashguard' || swim.style === 'resort-shirt');
   const upperArmCol = hasSleeves ? wet.suit : (hasShortSleeve ? swim.primary : skin);
@@ -4652,8 +4866,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
       ctx.lineTo(hipShiftX + gbx * 0.4, hipY + 0.02 * s + gby * 0.4);
       ctx.stroke();
     } else {
-      // Natural side-boob curves peeking cleanly past left & right ribcage edges in Back View!
-      drawBackViewSideBoob(ctx, chestShiftX, hipShiftX, shoulderY, waistY, prof, s, bbx, bby, bTilt, skin, skinShade, swim, topStyle, bustScale);
+      // Side-boobs already drawn behind Pass-1 arms above so all arms sit cleanly in front of boobs!
       ctx.fillStyle = skin;
       traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby, shTilt);
       ctx.fill();
@@ -4934,175 +5147,325 @@ export function drawAvatarYouBadge(ctx, x, headTopY, scale, label = 'YOU') {
 }
 
 /**
- * Draw the player's custom avatar running out onto the dock/boat stern and jumping into the water! (v296)
- * 4-stage choreographed sequence (3.65s):
- *   1. Run out along dock/deck (0.00 -> 0.85s)
- *   2. Springboard parabolic dive leap over water (0.85 -> 1.68s)
- *   3. Big joyful turquoise/white splash plume + foam rings + "SPLASH!" pill (1.68 -> 2.48s)
- *   4. Surface pop-up grinning & waving in custom bathing suit & hair (2.48 -> 3.65s)
+ * Draw the player's custom avatar running out onto the dock/boat stern and performing a fluid,
+ * butter-smooth 5-phase springboard dive into the water! (v299 — 4.00s):
+ *   1. Quintic acceleration sprint along dock with forward lean (0.00 -> 0.72s)
+ *   2. Coiled springboard anticipation dip & explosive upward push-off (0.72 -> 0.96s)
+ *   3. Continuous ballistic swan-dive parabola with velocity-tangent pitch & sparkling flight ribbon (0.96 -> 1.92s)
+ *   4. Waterline-clipped smooth entry submersion + multi-layered splash surge & ballistic gravity droplets (1.92 -> 2.70s)
+ *   5. Damped-spring buoyant resurface, smiling wave with 2-segment articulated arm & gentle ripples (2.70 -> 4.00s)
  */
 export function drawPlayerAvatarSiteJump(ctx, startX, edgeX, deckY, surfY, dir, scale, timeSec, opts = {}) {
+  const totalDur = 4.0;
   const jump = opts.forcedElapsed !== undefined
-    ? { active: opts.forcedElapsed >= 0 && opts.forcedElapsed < 3.65, elapsed: opts.forcedElapsed }
+    ? { active: opts.forcedElapsed >= 0 && opts.forcedElapsed < totalDur, elapsed: opts.forcedElapsed }
     : getAvatarSiteJumpState();
   if (!jump.active || !Number.isFinite(edgeX) || !Number.isFinite(surfY) || scale < 8) return false;
 
   const elapsed = jump.elapsed;
+  const smoother = (u) => {
+    const c = clamp(u, 0, 1);
+    return c * c * c * (c * (c * 6 - 15) + 10);
+  };
   const avSpec = buildTopsideSpecFromAvatar(opts.avatar || null, {
     id: 777001,
     seed: 11,
     facing: dir,
-    hypeEnergy: 0.95,
+    hypeEnergy: 0.75,
   });
   const skinCol = avSpec.customSkin?.skin || '#e0a878';
+  const skinShade = avSpec.customSkin?.shade || '#bd7f50';
   const hairCol = avSpec.customHair || '#3b2414';
   const suitCol = avSpec.customSwim?.primary || '#fb7185';
   const accentCol = avSpec.customSwim?.accent || '#fef08a';
 
-  const runDur = 0.85;
-  const leapDur = 0.83;
-  const splashDur = 0.80;
-  const waveDur = 1.17;
-  const reachX = dir * scale * 2.65;
+  const tSprintEnd = 0.72;
+  const tCoilEnd = 0.96;
+  const tAirEnd = 1.92;
+  const tSubmergeEnd = 2.18;
+  const tSplashEnd = 2.74;
+  const reachX = dir * scale * 2.55;
   const splashX = edgeX + reachX;
+  const peakLift = scale * 1.56;
+
+  // True smooth quadratic ballistic parabola helper for u in [0..1.25] (extends seamlessly below waterline!)
+  const evalArcPos = (u) => ({
+    x: edgeX + reachX * u,
+    y: deckY * (1 - u) + surfY * u - 4 * peakLift * u * (1 - u),
+  });
+  const evalArcPitch = (u) => {
+    // Continuous smooth swan-dive rotation: upward launch (-0.28) -> graceful peak arch (+0.52) -> streamlined entry (+2.28)
+    const p = smoother(clamp(u, 0, 1.15) / 1.15);
+    return dir * (-0.28 + p * 2.58);
+  };
 
   ctx.save();
-  if (elapsed < runDur) {
-    // Stage 1: Energetic sprint out along the dock / boat deck toward the jump edge!
-    const t = elapsed / runDur;
-    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const px = startX + (edgeX - startX) * ease;
-    drawTopsidePerson(ctx, px, deckY, scale * 0.98, timeSec * 1.45, {
+  if (elapsed < tSprintEnd) {
+    // Phase 1: Silky quintic acceleration sprint along the dock toward the jump edge!
+    const u = elapsed / tSprintEnd;
+    const ease = smoother(u);
+    const px = startX + (edgeX - dir * scale * 0.10 - startX) * ease;
+    const lean = dir * (0.04 + 0.09 * Math.sin(u * Math.PI));
+    ctx.save();
+    ctx.translate(px, deckY);
+    ctx.rotate(lean);
+    drawTopsidePerson(ctx, 0, 0, scale * 0.98, elapsed * 1.65, {
       ...avSpec,
       role: 'party-dance',
       danceMove: 'running-man',
       view: 'side',
       facing: dir,
     });
-    drawAvatarYouBadge(ctx, px, deckY - scale * 1.92, scale, 'YOU');
-  } else if (elapsed < runDur + leapDur) {
-    // Stage 2: Graceful springboard dive leap arc out over the water!
-    const t = (elapsed - runDur) / leapDur;
-    const px = edgeX + reachX * t;
-    const baseY = deckY + (surfY - deckY) * (t * t);
-    const peakLift = scale * 1.68;
-    const arcY = baseY - Math.sin(t * Math.PI) * peakLift;
-    const divePitch = dir * (-0.35 + t * 2.45);
+    ctx.restore();
+    drawAvatarYouBadge(ctx, px, deckY - scale * 1.94, scale, 'YOU');
+  } else if (elapsed < tCoilEnd) {
+    // Phase 2: Coiled springboard anticipation dip & explosive launch uncoil right on the dock edge!
+    const u = (elapsed - tSprintEnd) / (tCoilEnd - tSprintEnd);
+    const coil = Math.sin(u * Math.PI); // 0 -> 1 crouch peak -> 0 launch uncoil
+    const launchLift = u > 0.65 ? smoother((u - 0.65) / 0.35) * scale * 0.22 : 0;
+    const px = edgeX - dir * scale * 0.10 * (1 - smoother(u));
+    const py = deckY - launchLift;
+    const squashY = 1 - coil * 0.13 + (u > 0.65 ? (u - 0.65) * 0.22 : 0);
+    const stretchX = 1 / Math.sqrt(Math.max(0.7, squashY));
+    const tilt = dir * (0.14 * coil - 0.28 * smoother(Math.max(0, (u - 0.55) / 0.45)));
 
-    // Trailing joyful air-sparkle droplets behind leap
-    if (scale >= 12) {
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.72)';
-      for (let d = 1; d <= 3; d++) {
-        const dt = Math.max(0, t - d * 0.08);
-        const tx = edgeX + reachX * dt;
-        const ty = deckY + (surfY - deckY) * (dt * dt) - Math.sin(dt * Math.PI) * peakLift - scale * 0.55;
+    // Subtle wooden dock flex ripple under planted feet
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(tilt);
+    ctx.scale(stretchX, squashY);
+    drawTopsidePerson(ctx, 0, 0, scale * 0.98, 0.25 + u * 0.4, {
+      ...avSpec,
+      role: 'party-dance',
+      danceMove: 'tiktok-wave',
+      view: 'side',
+      facing: dir,
+      noShadow: launchLift > 2,
+    });
+    ctx.restore();
+    drawAvatarYouBadge(ctx, px, py - scale * 1.90, scale, 'YOU');
+  } else if (elapsed < tSubmergeEnd) {
+    // Phase 3 & 4a: Continuous ballistic swan-dive parabola + smooth waterline-clipped entry submersion!
+    const airDur = tAirEnd - tCoilEnd;
+    const u = (elapsed - tCoilEnd) / airDur; // 0 at launch -> 1.0 at waterline touch -> ~1.27 fully submerged
+    const pos = evalArcPos(u);
+    const pitch = evalArcPitch(u);
+
+    // Gliding shimmering reflection shadow directly on the water surface below the airborne diver
+    if (u <= 1.04) {
+      const hFrac = clamp((surfY - pos.y) / Math.max(1, peakLift + (surfY - deckY)), 0, 1);
+      ctx.fillStyle = `rgba(6, 42, 68, ${(0.34 * (1 - hFrac * 0.65)).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(pos.x, surfY + scale * 0.04, scale * (0.48 - hFrac * 0.16), scale * 0.085, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Silky glowing flight-arc motion ribbon + trailing water-sparkle droplets behind the diver
+    if (scale >= 12 && u > 0.06 && u < 1.12) {
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.42)';
+      ctx.lineWidth = Math.max(1.4, scale * 0.055);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      const trailSteps = 8;
+      for (let i = 0; i <= trailSteps; i++) {
+        const tu = Math.max(0, u - 0.30 + (i / trailSteps) * 0.28);
+        const tp = evalArcPos(tu);
+        if (i === 0) ctx.moveTo(tp.x, tp.y - scale * 0.62);
+        else ctx.lineTo(tp.x, tp.y - scale * 0.62);
+      }
+      ctx.stroke();
+
+      for (let d = 1; d <= 5; d++) {
+        const tu = Math.max(0, u - d * 0.065);
+        const tp = evalArcPos(tu);
+        const alpha = Math.max(0, (1 - d * 0.17) * (u > 1 ? Math.max(0, 1 - (u - 1) * 4) : 0.78));
+        ctx.fillStyle = `rgba(240, 249, 255, ${alpha.toFixed(3)})`;
         ctx.beginPath();
-        ctx.arc(tx, ty, Math.max(1.5, scale * (0.09 - d * 0.02)), 0, Math.PI * 2);
+        ctx.arc(tp.x, tp.y - scale * 0.62 + Math.sin(d * 2.1) * scale * 0.06, Math.max(1.3, scale * (0.075 - d * 0.01)), 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
+    // Clip strictly ABOVE the waterline during water entry so the diver smoothly slices INTO the water!
     ctx.save();
-    ctx.translate(px, arcY - scale * 0.65);
-    ctx.rotate(divePitch);
-    drawTopsidePerson(ctx, 0, scale * 0.78, scale * 0.92, timeSec * 1.3, {
+    if (u > 0.90) {
+      ctx.beginPath();
+      ctx.rect(pos.x - scale * 4, surfY - scale * 6, scale * 8, scale * 6 + scale * 0.06);
+      ctx.clip?.();
+    }
+    ctx.translate(pos.x, pos.y - scale * 0.64);
+    ctx.rotate(pitch);
+    // Subtle aerodynamic stretch at peak glide -> sleek entry
+    const aeroStretch = 1 + Math.sin(Math.min(1, u) * Math.PI) * 0.06;
+    ctx.scale(1 / aeroStretch, aeroStretch);
+    drawTopsidePerson(ctx, 0, scale * 0.78, scale * 0.94, 0.35 + u * 0.65, {
       ...avSpec,
       role: 'party-dance',
-      danceMove: t < 0.45 ? 'ymca' : 'running-man',
+      danceMove: 'tiktok-wave',
       view: 'side',
       facing: dir,
       noShadow: true,
     });
     ctx.restore();
-    drawAvatarYouBadge(ctx, px, arcY - scale * 1.82, scale, 'YOU');
-  } else if (elapsed < runDur + leapDur + splashDur) {
-    // Stage 3: Big joyful multi-droplet splash crown + expanding foam rings + "SPLASH!" pill!
-    const t = (elapsed - runDur - leapDur) / splashDur;
-    const alpha = Math.max(0, 1 - t);
-    const plumeH = Math.sin(t * Math.PI) * scale * 1.92;
-    const plumeW = (0.42 + t * 1.62) * scale;
 
-    // Expanding concentric white foam rings
-    ctx.strokeStyle = `rgba(224, 242, 254, ${(alpha * 0.92).toFixed(3)})`;
-    ctx.lineWidth = Math.max(1.6, scale * 0.09 * (1 - t * 0.45));
-    ctx.beginPath();
-    ctx.ellipse(splashX, surfY + scale * 0.05, plumeW, scale * 0.19, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = `rgba(103, 232, 249, ${(alpha * 0.65).toFixed(3)})`;
-    ctx.lineWidth = Math.max(1.2, scale * 0.06);
-    ctx.beginPath();
-    ctx.ellipse(splashX, surfY + scale * 0.05, plumeW * 0.64, scale * 0.12, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    if (u < 0.96) {
+      drawAvatarYouBadge(ctx, pos.x, pos.y - scale * 1.78, scale, 'YOU');
+    }
+  }
 
-    // Lush spray crown droplets
-    for (let i = -4; i <= 4; i++) {
-      const ang = -Math.PI * 0.5 + i * 0.24;
-      const dist = plumeH * (0.64 + (1 - Math.abs(i) * 0.14) * 0.46);
-      const dx = splashX + Math.cos(ang) * dist * 0.92;
-      const dy = surfY + Math.sin(ang) * dist;
-      const dr = Math.max(1.8, scale * (0.16 - Math.abs(i) * 0.017) * (1 - t * 0.3));
-      ctx.fillStyle = i % 2 === 0
-        ? `rgba(240, 249, 255, ${(alpha * 0.88).toFixed(3)})`
-        : `rgba(125, 211, 252, ${(alpha * 0.78).toFixed(3)})`;
+  // Phase 4b: Multi-layered splash crown + ballistic gravity droplets + 3 staggered foam ripples!
+  // Overlaps seamlessly with water entry (starts right at tAirEnd = 1.92s!) so splash erupts ON impact!
+  if (elapsed >= tAirEnd && elapsed < tSplashEnd + 0.32) {
+    const spDur = tSplashEnd - tAirEnd;
+    const t = clamp((elapsed - tAirEnd) / spDur, 0, 1.38);
+    const mainFade = clamp(1 - Math.max(0, t - 0.15) / 0.85, 0, 1);
+
+    // 3 staggered concentric expanding surface foam rings
+    for (let rIdx = 0; rIdx < 3; rIdx++) {
+      const rt = clamp((t - rIdx * 0.14) / 0.95, 0, 1);
+      if (rt <= 0 || rt >= 1) continue;
+      const rEase = 1 - Math.pow(1 - rt, 2.2);
+      const rAlpha = (1 - rt) * (rIdx === 0 ? 0.92 : 0.68);
+      ctx.strokeStyle = rIdx === 1
+        ? `rgba(103, 232, 249, ${rAlpha.toFixed(3)})`
+        : `rgba(240, 249, 255, ${rAlpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.2, scale * (0.085 - rIdx * 0.018) * (1 - rt * 0.5));
       ctx.beginPath();
-      ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+      ctx.ellipse(splashX, surfY + scale * 0.05, scale * (0.34 + rEase * (1.72 - rIdx * 0.22)), scale * (0.10 + rEase * 0.12), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Translucent turquoise/white water surge crown sheets fanning smoothly outward
+    if (t < 0.95) {
+      const surgeH = Math.sin(clamp(t / 0.90, 0, 1) * Math.PI) * scale * 1.55;
+      const surgeW = scale * (0.36 + smoother(Math.min(1, t)) * 0.95);
+      ctx.fillStyle = `rgba(186, 230, 253, ${(mainFade * 0.58).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(splashX - surgeW, surfY + scale * 0.04);
+      ctx.quadraticCurveTo(splashX - surgeW * 0.55, surfY - surgeH * 1.05, splashX - surgeW * 0.18, surfY - surgeH * 0.42);
+      ctx.quadraticCurveTo(splashX, surfY - surgeH * 1.18, splashX + surgeW * 0.18, surfY - surgeH * 0.42);
+      ctx.quadraticCurveTo(splashX + surgeW * 0.55, surfY - surgeH * 1.05, splashX + surgeW, surfY + scale * 0.04);
+      ctx.closePath();
       ctx.fill();
     }
 
-    if (scale >= 12) {
-      drawAvatarYouBadge(ctx, splashX, surfY - plumeH * 0.88 - scale * 0.25, scale, 'SPLASH! 💦');
+    // 12 ballistic parabolic water droplets arcing under real gravity!
+    if (t < 1.05) {
+      const dtSec = (elapsed - tAirEnd);
+      const grav = scale * 7.8;
+      for (let i = 0; i < 12; i++) {
+        const frac = (i / 11) * 2 - 1; // -1 .. +1
+        const vx = frac * scale * (1.85 + (i % 3) * 0.42);
+        const vy0 = -scale * (3.15 + (1 - Math.abs(frac)) * 1.65 + (i % 2) * 0.45);
+        const dx = splashX + vx * dtSec;
+        const dy = surfY + vy0 * dtSec + 0.5 * grav * dtSec * dtSec;
+        if (dy > surfY + scale * 0.12) continue;
+        const dr = Math.max(1.5, scale * (0.125 - Math.abs(frac) * 0.04) * Math.max(0.2, mainFade));
+        ctx.fillStyle = i % 2 === 0
+          ? `rgba(240, 249, 255, ${(mainFade * 0.92).toFixed(3)})`
+          : `rgba(125, 211, 252, ${(mainFade * 0.82).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-  } else {
-    // Stage 4: Popping back up at the waterline grinning & waving in your exact avatar colors!
-    const t = Math.min(1, (elapsed - runDur - leapDur - splashDur) / waveDur);
-    const emerge = t < 0.25 ? t / 0.25 : t > 0.78 ? Math.max(0, (1 - t) / 0.22) : 1;
-    const bob = Math.sin(timeSec * 6.5) * scale * 0.04;
-    const by = surfY - emerge * scale * 0.42 + bob;
-    const r = scale * 0.16;
 
-    // Shoulders + bathing suit neckline peeking above waterline
+    // Floating elastic "SPLASH! 💦" pill rising gently above the crown
+    if (scale >= 12 && t < 0.92) {
+      const badgeLift = smoother(Math.min(1, t * 1.4)) * scale * 1.42;
+      drawAvatarYouBadge(ctx, splashX, surfY - badgeLift - scale * 0.42, scale, 'SPLASH! 💦');
+    }
+  }
+
+  // Phase 5: Buoyant damped-spring resurface + smiling avatar with fluid 2-segment articulated waving arm!
+  if (elapsed >= tSplashEnd - 0.18) {
+    const waveDur = totalDur - (tSplashEnd - 0.18);
+    const t = clamp((elapsed - (tSplashEnd - 0.18)) / waveDur, 0, 1);
+    // Smooth buoyant damped spring pop-up with gentle overshoot + smooth fade-out settle
+    const popSpring = t < 0.30
+      ? 1 - Math.exp(-t * 14) * Math.cos(t * 22)
+      : t > 0.82
+        ? smoother((1 - t) / 0.18)
+        : 1;
+    const bob = Math.sin(timeSec * 5.2) * scale * 0.036 * popSpring;
+    const sway = Math.sin(timeSec * 3.1) * scale * 0.03 * popSpring;
+    const sx = splashX + sway;
+    const by = surfY - popSpring * scale * 0.22 + bob;
+    const r = scale * 0.165;
+
+    ctx.save();
+    // Clip cleanly right at the waterline so shoulders & swimsuit sit flush IN the water (zero gap!)
+    ctx.beginPath();
+    ctx.rect(sx - scale * 2.5, surfY - scale * 3.0, scale * 5.0, scale * 3.0 + scale * 0.06);
+    ctx.clip?.();
+
+    // Sculpted shoulders + custom bathing suit neckline emerging directly from the waterline
     ctx.fillStyle = skinCol;
     ctx.beginPath();
-    ctx.ellipse(splashX, by + r * 0.45, r * 1.45, r * 0.72, 0, Math.PI, Math.PI * 2);
+    ctx.ellipse(sx, surfY + r * 0.20, r * 1.62, r * 1.15, 0, Math.PI, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = suitCol;
     ctx.beginPath();
-    ctx.ellipse(splashX, by + r * 0.58, r * 1.12, r * 0.48, 0, Math.PI, Math.PI * 2);
+    ctx.ellipse(sx, surfY + r * 0.28, r * 1.24, r * 0.78, 0, Math.PI, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = accentCol;
     ctx.lineWidth = Math.max(1.2, scale * 0.036);
     ctx.beginPath();
-    ctx.moveTo(splashX - r * 0.75, by + r * 0.24);
-    ctx.lineTo(splashX + r * 0.75, by + r * 0.24);
+    ctx.moveTo(sx - r * 0.86, surfY - r * 0.22);
+    ctx.quadraticCurveTo(sx, surfY - r * 0.12, sx + r * 0.86, surfY - r * 0.22);
     ctx.stroke();
 
-    // Head + hair matching player avatar!
+    // Fluid 2-segment articulated waving arm (upper arm -> elbow -> forearm -> hand with smooth phase lag!)
+    const shX = sx + r * 1.18 * dir;
+    const shY = by + r * 0.24;
+    const elWave = Math.sin(timeSec * 10.5) * r * 0.24;
+    const haWave = Math.sin(timeSec * 10.5 - 0.55) * r * 0.58;
+    const elX = shX + dir * r * 0.92 + elWave * 0.4;
+    const elY = shY - r * 0.72;
+    const haX = elX + dir * r * 0.32 + haWave;
+    const haY = elY - r * 1.16 + Math.cos(timeSec * 10.5) * r * 0.12;
+    drawArticulatedArm(ctx, shX, shY, elX, elY, haX, haY, 0.088, scale * 0.95, skinCol, skinCol, skinCol);
+
+    // Head, warm grin & wet-sheen hair matching player's custom avatar!
+    ctx.fillStyle = skinShade;
+    ctx.fillRect(sx - r * 0.24, by - r * 0.06, r * 0.48, r * 0.34);
     ctx.fillStyle = skinCol;
     ctx.beginPath();
-    ctx.arc(splashX, by - r * 0.78, r * 0.92, 0, Math.PI * 2);
+    ctx.arc(sx, by - r * 0.76, r * 0.94, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = hairCol;
     ctx.beginPath();
-    ctx.arc(splashX, by - r * 0.96, r * 0.96, Math.PI * 0.92, Math.PI * 2.08);
+    ctx.arc(sx, by - r * 0.94, r * 0.98, Math.PI * 0.90, Math.PI * 2.10);
     ctx.fill();
+    if (scale >= 16) {
+      // Joyful eyes & bright smile!
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(sx - r * 0.30, by - r * 0.76, Math.max(1.1, r * 0.11), 0, Math.PI * 2);
+      ctx.arc(sx + r * 0.30, by - r * 0.76, Math.max(1.1, r * 0.11), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#7c2d12';
+      ctx.lineWidth = Math.max(1.0, r * 0.12);
+      ctx.beginPath();
+      ctx.arc(sx, by - r * 0.62, r * 0.34, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
 
-    // Enthusiastic waving arm!
-    const waveX = Math.sin(timeSec * 15) * r * 0.48;
-    ctx.strokeStyle = skinCol;
-    ctx.lineWidth = Math.max(1.8, scale * 0.072);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(splashX + r * 1.05 * dir, by + r * 0.1);
-    ctx.lineTo(splashX + (r * 1.95 * dir) + waveX, by - r * 1.65);
-    ctx.stroke();
+    // Calm double expanding water ripple collar hugging the floating swimmer
+    const rip1 = (timeSec * 0.85) % 1;
+    const rip2 = (timeSec * 0.85 + 0.5) % 1;
+    for (const rp of [rip1, rip2]) {
+      ctx.strokeStyle = `rgba(224, 242, 254, ${((1 - rp) * 0.78 * popSpring).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.1, scale * 0.048 * (1 - rp * 0.4));
+      ctx.beginPath();
+      ctx.ellipse(sx, surfY + scale * 0.04, scale * (0.42 + rp * 0.92), scale * (0.09 + rp * 0.07), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
-    // Expanding gentle water ripple collar
-    ctx.strokeStyle = `rgba(224, 242, 254, ${(0.78 * emerge).toFixed(2)})`;
-    ctx.lineWidth = Math.max(1.2, scale * 0.055);
-    ctx.beginPath();
-    ctx.ellipse(splashX, surfY + scale * 0.04, scale * (0.48 + (t % 0.5) * 0.6), scale * 0.11, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    drawAvatarYouBadge(ctx, splashX, by - r * 2.2, scale, 'YOU');
+    if (popSpring > 0.25) {
+      drawAvatarYouBadge(ctx, sx, by - r * 2.15, scale, 'YOU');
+    }
   }
   ctx.restore();
   return true;

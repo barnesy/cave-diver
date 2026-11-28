@@ -14202,7 +14202,7 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
   }
   drawTopsideHypeOverlay(host, mockCtx, (x) => 320 + x * 20, (y) => 180 + y * 20, 22, 22.4);
 
-  assert.equal(VICTORY_DANCE_MOVES.length, 14);
+  assert.ok(VICTORY_DANCE_MOVES.length >= 18);
   for (const mv of VICTORY_DANCE_MOVES) {
     renderVictoryPhotoFrame(mockCtx, 640, 236, {
       level: cenote,
@@ -14234,7 +14234,7 @@ test('v289 co-ed topside cast, 8 varied body types, 6 female top styles, 14 danc
   const fs = await import('node:fs');
   const path = await import('node:path');
 
-  assert.equal(POPULAR_DANCE_MOVES.length, 14);
+  assert.ok(POPULAR_DANCE_MOVES.length >= 18);
   assert.equal(FEMALE_BODY_PROFILES.length, 4);
   assert.equal(MALE_BODY_PROFILES.length, 4);
   assert.equal(FEMALE_TOP_STYLES.length, 6);
@@ -14556,4 +14556,55 @@ test('v298 continuous body- & boob-hugging female tops across all 6 styles in si
   }
   assert.ok(clips >= 24, `Expected body/bust clip passes across all 6 styles in side & back views, got ${clips}`);
   assert.ok(fills >= 120, `Expected rich fitted swimwear draw ops, got ${fills}`);
+});
+
+test('v299 back-view arms-over-boobs layering, contoured underbust hems, K-Pop/TikTok dances & fluid 5-phase jump-in', async () => {
+  const {
+    POPULAR_DANCE_MOVES,
+    drawTopsidePerson,
+    drawPlayerAvatarSiteJump,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  const { VICTORY_DANCE_MOVES } = await import('../public/js/ui/victoryPhotoController.js');
+
+  for (const mv of ['kpop-hip-sway', 'kpop-point', 'tiktok-wave', 'tiktok-hip-dip']) {
+    assert.ok(POPULAR_DANCE_MOVES.includes(mv), `Missing modern dance ${mv} in POPULAR_DANCE_MOVES`);
+    assert.ok(VICTORY_DANCE_MOVES.some((d) => d.id === mv), `Missing modern dance ${mv} in VICTORY_DANCE_MOVES`);
+  }
+
+  let ops = 0;
+  let bezierOps = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {},
+    bezierCurveTo() { bezierOps++; },
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+
+  // Front contoured underbust hems (sporty-crop, wrap-crisscross, triangle-halter) + Back arms-over-boobs
+  for (const style of ['sporty-crop', 'wrap-crisscross', 'triangle-halter']) {
+    for (const view of ['front', 'back']) {
+      drawTopsidePerson(mockCtx, 200, 340, 140, 0.7, {
+        id: 99900 + style.length + (view === 'back' ? 10 : 0),
+        gender: 'female',
+        bodyType: 'voluptuous',
+        role: 'party-dance',
+        danceMove: view === 'back' ? 'hula' : 'kpop-hip-sway',
+        view,
+        topStyle: style,
+        seed: 3,
+        facing: 1,
+      });
+    }
+  }
+  assert.ok(bezierOps >= 40, `Expected contoured double-scallop underbust bezier curves, got ${bezierOps}`);
+
+  // All 5 phases of fluid 4.0s jump-in sequence render cleanly
+  for (const elapsed of [0.35, 0.84, 1.45, 2.08, 3.25]) {
+    const ok = drawPlayerAvatarSiteJump(mockCtx, 70, 170, 260, 290, 1, 56, 4.5, { forcedElapsed: elapsed });
+    assert.equal(ok, true, `Expected fluid 5-phase jump-in at ${elapsed}s to render`);
+  }
+  assert.ok(ops > 150, `Expected rich 5-phase jump-in & dance draw ops, got ${ops}`);
 });

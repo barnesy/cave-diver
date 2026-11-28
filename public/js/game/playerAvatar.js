@@ -172,7 +172,7 @@ const _nowSec = () => (typeof performance !== 'undefined' && performance.now ? p
 const _jumpState = {
   triggeredAt: -99,
   levelId: '',
-  duration: 3.65,
+  duration: 4.0,
   seq: 0,
 };
 
