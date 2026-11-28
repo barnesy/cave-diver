@@ -338,6 +338,122 @@ function drawBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, gTilt, fillCol, 
 }
 
 /**
+ * Resolve natural anatomical viewing angle ('front' | 'back' | 'side') for any topside character (v286).
+ * Prevents front-facing people from showing back glutes (and vice versa) while organically varying
+ * crowd orientation across front, back, and side profiles!
+ */
+export function resolveTopsidePersonView(spec = {}) {
+  if (spec.view === 'front' || spec.view === 'back' || spec.view === 'side') {
+    return spec.view;
+  }
+  const role = spec.role || 'party-dance';
+  const move = spec.danceMove || '';
+  const seed = Math.abs(spec.seed || 0);
+  if (move === 'twerk') return seed % 3 === 0 ? 'side' : 'back';
+  if (move === 'running-man' || move === 'body-roll') return 'side';
+  if (role === 'gear-tank') return 'side';
+  if (role === 'gear-zip') return seed % 2 === 0 ? 'back' : 'side';
+  if (role === 'gear-ready') return seed % 2 === 0 ? 'front' : 'side';
+  if (role === 'party-toast') return seed % 3 === 0 ? 'front' : 'side';
+  const cycle = ['front', 'side', 'back', 'side', 'front'];
+  return cycle[seed % cycle.length];
+}
+
+/**
+ * Trace a true side-profile S-curve curvy torso (facing +x):
+ * Bust projects forward (+x), waist tapers cleanly, and glutes curve backward (-x).
+ */
+function traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestX = 0, hipX = 0, bbx = 0, bby = 0, gbx = 0, gby = 0) {
+  const bStretch = clamp((bby / Math.max(1, s)) * 2.2, -0.18, 0.22);
+  const gStretch = clamp((gby / Math.max(1, s)) * 2.4, -0.2, 0.24);
+  const midX = (chestX + hipX) * 0.5;
+  const frontChest = prof.bust * (0.72 - bStretch * 0.18) * s;
+  const backSh = prof.bust * 0.52 * s;
+  const frontWaist = prof.waist * 0.62 * s;
+  const backWaist = prof.waist * 0.54 * s;
+  const frontHip = prof.hip * 0.56 * s;
+  const backGlute = prof.hip * (0.86 - gStretch * 0.22) * s;
+  const buY = shoulderY + (waistY - shoulderY) * 0.44 + bby * 0.65;
+  const lowHipY = hipY + 0.14 * s + gby * 0.8;
+
+  ctx.beginPath();
+  // Top shoulder ridge
+  ctx.moveTo(chestX - backSh, shoulderY);
+  ctx.quadraticCurveTo(chestX, shoulderY - 0.055 * s, chestX + frontChest * 0.72, shoulderY + 0.02 * s);
+  // Front (+x): bust projection -> tapered tummy/waist -> smooth front thigh line
+  ctx.bezierCurveTo(
+    chestX + frontChest * 1.18 + bbx * 0.55, buY - 0.02 * s,
+    midX + frontWaist * 1.04, waistY - 0.04 * s,
+    midX + frontWaist, waistY
+  );
+  ctx.bezierCurveTo(
+    hipX + frontHip * 1.05, waistY + (hipY - waistY) * 0.45,
+    hipX + frontHip, hipY + 0.04 * s,
+    hipX + frontHip * 0.65, lowHipY
+  );
+  // Lower pelvis base
+  ctx.quadraticCurveTo(hipX - backGlute * 0.12 + gbx * 0.35, lowHipY + 0.065 * s, hipX - backGlute * 0.78 + gbx * 0.7, lowHipY - 0.01 * s);
+  // Back (-x): full curved glute arch -> arched small-of-back -> upper back/shoulder
+  ctx.bezierCurveTo(
+    hipX - backGlute * 1.24 + gbx * 0.85, hipY + 0.02 * s + gby * 0.75,
+    hipX - backGlute * 1.05 + gbx * 0.55, waistY + (hipY - waistY) * 0.42 + gby * 0.3,
+    midX - backWaist, waistY
+  );
+  ctx.bezierCurveTo(
+    midX - backWaist * 0.96, waistY - 0.08 * s,
+    chestX - backSh * 1.1, buY - 0.04 * s,
+    chestX - backSh, shoulderY
+  );
+  ctx.closePath();
+}
+
+/**
+ * Draw sculpted forward-projecting side-profile bust (+x) with independent spring-mass bounce.
+ */
+function drawSideBouncingBust(ctx, chestX, shoulderY, prof, s, bbx, bby, fillCol, rimCol = null) {
+  const stretch = clamp((bby / Math.max(1, s)) * 3.1, -0.24, 0.28);
+  const rx = prof.bust * 0.58 * (1 - stretch * 0.34) * s;
+  const ry = 0.105 * (1 + stretch) * s;
+  const cx = chestX + prof.bust * 0.48 * s + bbx;
+  const cy = shoulderY + 0.175 * s + bby;
+
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0.18 + bby / (s * 1.8), 0, Math.PI * 2);
+  ctx.fill();
+  if (rimCol && s >= 26) {
+    ctx.strokeStyle = rimCol;
+    ctx.lineWidth = Math.max(0.9, 0.026 * s);
+    ctx.beginPath();
+    ctx.ellipse(cx + rx * 0.08, cy - ry * 0.22, rx * 0.62, ry * 0.34, 0.15, Math.PI * 1.15, Math.PI * 1.92);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draw sculpted backward-projecting side-profile glutes (-x) with independent spring-mass bounce.
+ */
+function drawSideBouncingGlutes(ctx, hipX, hipY, prof, s, gbx, gby, fillCol, shadeCol = null) {
+  const stretch = clamp((gby / Math.max(1, s)) * 3.2, -0.24, 0.28);
+  const rx = prof.hip * 0.66 * (1 - stretch * 0.34) * s;
+  const ry = 0.152 * (1 + stretch) * s;
+  const cx = hipX - prof.hip * 0.48 * s + gbx;
+  const cy = hipY + 0.045 * s + gby;
+
+  ctx.fillStyle = fillCol;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, -0.22 + gbx / (s * 2.1), 0, Math.PI * 2);
+  ctx.fill();
+  if (shadeCol && s >= 26) {
+    ctx.strokeStyle = shadeCol;
+    ctx.lineWidth = Math.max(0.9, 0.028 * s);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rx * 0.86, Math.PI * 0.38, Math.PI * 1.18);
+    ctx.stroke();
+  }
+}
+
+/**
  * Draw a sculpted curvy leg (fuller rounded upper thigh tapering naturally into knee & calf).
  */
 function drawCurvyLeg(ctx, hx, hy, kx, ky, fx, fy, prof, s, color) {
@@ -806,6 +922,10 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const danceMove = isDance
     ? (spec.danceMove || POPULAR_DANCE_MOVES[(seed + Math.floor(timeSec / 6.5)) % POPULAR_DANCE_MOVES.length])
     : null;
+  const view = resolveTopsidePersonView({ role, danceMove, seed, view: spec.view });
+  const isFrontView = view === 'front';
+  const isBackView = view === 'back';
+  const isSideView = view === 'side';
 
   // Dance kinematics: hip pop, chest wave, knee bend, foot shuffle, head tilt!
   let bounceY = 0;
@@ -958,120 +1078,306 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const gby = bounceSt.glute.y * s;
   const gTilt = bounceSt.gTilt * s;
 
-  // 4a. Curvy Legs (sculpted fuller thighs tapering down to calves!)
+  // 4a. Curvy Legs (sculpted fuller thighs tapering down to calves — staggered for side profile!)
   const legColor = isGear ? wet.suit : skin;
-  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 - prof.hip * 0.56 * s, hipY + 0.06 * s + gby * 0.35, lKneeX, lKneeY, lFootX, lFootY, prof, s, legColor);
-  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 + prof.hip * 0.56 * s, hipY + 0.06 * s + gby * 0.35, rKneeX, rKneeY, rFootX, rFootY, prof, s, legColor);
+  const hipLegOff = isSideView ? prof.hip * 0.24 * s : prof.hip * 0.56 * s;
+  const legLkx = isSideView ? lKneeX * 0.55 - 0.04 * s : lKneeX;
+  const legRkx = isSideView ? rKneeX * 0.55 + 0.08 * s : rKneeX;
+  const legLfx = isSideView ? lFootX * 0.6 - 0.05 * s : lFootX;
+  const legRfx = isSideView ? rFootX * 0.6 + 0.08 * s : rFootX;
+  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 - hipLegOff, hipY + 0.06 * s + gby * 0.35, legLkx, lKneeY, legLfx, lFootY, prof, s, legColor);
+  drawCurvyLeg(ctx, hipShiftX + gbx * 0.35 + hipLegOff, hipY + 0.06 * s + gby * 0.35, legRkx, rKneeY, legRfx, rFootY, prof, s, legColor);
 
   // Dive booties / fins for geared divers
   if (isGearReady) {
     ctx.fillStyle = wet.fin;
     ctx.beginPath();
-    ctx.ellipse(lFootX + 0.08 * s, lFootY + 0.02 * s, 0.18 * s, 0.055 * s, 0, 0, Math.PI * 2);
-    ctx.ellipse(rFootX + 0.1 * s, rFootY + 0.02 * s, 0.18 * s, 0.055 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(legLfx + 0.08 * s, lFootY + 0.02 * s, 0.18 * s, 0.055 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(legRfx + 0.1 * s, rFootY + 0.02 * s, 0.18 * s, 0.055 * s, 0, 0, Math.PI * 2);
     ctx.fill();
   } else if (isGear) {
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(lFootX - 0.07 * s, lFootY - 0.04 * s, 0.15 * s, 0.09 * s);
-    ctx.fillRect(rFootX - 0.07 * s, rFootY - 0.04 * s, 0.16 * s, 0.09 * s);
+    ctx.fillRect(legLfx - 0.07 * s, lFootY - 0.04 * s, 0.15 * s, 0.09 * s);
+    ctx.fillRect(legRfx - 0.07 * s, rFootY - 0.04 * s, 0.16 * s, 0.09 * s);
   }
 
-  // Scuba cylinder strapped to back for gear-tank & gear-ready
-  if (isGearReady || isGearTank) {
-    const tankLift = isGearTank ? Math.sin(timeSec * 2.6 + ph) * 0.06 * s : 0;
+  // Scuba cylinder strapped to back for gear-tank & gear-ready (behind torso in front/side views!)
+  const tankLift = isGearTank ? Math.sin(timeSec * 2.6 + ph) * 0.06 * s : 0;
+  if ((isGearReady || isGearTank) && !isBackView) {
+    const tankX = isSideView ? chestShiftX - 0.34 * s : chestShiftX - 0.12 * s;
+    const tankW = isSideView ? 0.22 * s : 0.24 * s;
     ctx.fillStyle = wet.tank;
     ctx.beginPath();
-    ctx.roundRect(-0.37 * s + chestShiftX, shoulderY + 0.02 * s + tankLift, 0.22 * s, 0.62 * s, 0.08 * s);
+    ctx.roundRect(tankX, shoulderY + 0.02 * s + tankLift, tankW, 0.62 * s, 0.08 * s);
     ctx.fill();
     ctx.fillStyle = '#334155';
-    ctx.fillRect(-0.3 * s + chestShiftX, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.11 * s);
+    ctx.fillRect(tankX + tankW * 0.32, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.11 * s);
   }
 
-  // 4b. Curvy Sculpted Torso + Independent Spring-Bounce Bust & Glutes!
-  if (isGearReady || isGearTank) {
-    // Full curvy contoured neoprene wetsuit with independent spring-bounce glutes & bust
-    ctx.fillStyle = wet.suit;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
-    ctx.fill();
-    drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
-    drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, wet.suit, wet.trim);
-    // BCD harness straps
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = Math.max(1.2, 0.05 * s);
-    ctx.beginPath();
-    ctx.moveTo(chestShiftX - 0.1 * s, shoulderY + 0.02 * s);
-    ctx.lineTo(hipShiftX - 0.1 * s, hipY + 0.02 * s);
-    ctx.moveTo(chestShiftX + 0.1 * s, shoulderY + 0.02 * s);
-    ctx.lineTo(hipShiftX + 0.1 * s, hipY + 0.02 * s);
-    ctx.stroke();
-  } else if (isGearZip) {
-    // Curvy diver half-in wetsuit: bare upper torso + bouncing bikini/sport top + neoprene hugging bouncing glutes!
-    ctx.fillStyle = skin;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
-    ctx.fill();
-    drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
-    // Wetsuit lower half hugging curvy hips & zipping upward
-    const zipUp = 0.07 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
-    ctx.fillStyle = wet.suit;
-    ctx.beginPath();
-    ctx.moveTo((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
-    ctx.lineTo((chestShiftX + hipShiftX) * 0.5 + prof.waist * 1.08 * s, waistY - zipUp);
-    ctx.bezierCurveTo(hipShiftX + gbx + prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, hipShiftX + gbx + prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx + prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
-    ctx.quadraticCurveTo(hipShiftX + gbx, hipY + 0.22 * s + gby, hipShiftX + gbx - prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
-    ctx.bezierCurveTo(hipShiftX + gbx - prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx - prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, (chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
-    ctx.closePath();
-    ctx.fill();
-    drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
-    ctx.fillStyle = wet.trim;
-    ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.06 * s, waistY - zipUp, prof.waist * 2.12 * s, 0.055 * s);
-  } else {
-    // Curvy bathing-suit partygoers with independent spring-bounce bust & glutes!
-    ctx.fillStyle = skin;
-    traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
-    ctx.fill();
-
-    if (swim.style === 'trunks') {
-      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.22)');
-      ctx.fillStyle = swim.primary;
-      ctx.beginPath();
-      ctx.moveTo(hipShiftX + gbx * 0.7 - prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
-      ctx.lineTo(hipShiftX + gbx * 0.7 + prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
-      ctx.lineTo(hipShiftX + gbx + prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
-      ctx.lineTo(hipShiftX + gbx - prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
-      ctx.closePath();
+  // 4b. Anatomically Accurate Curvy Torso by View ('front' | 'back' | 'side') + Independent Spring Bounce!
+  if (isSideView) {
+    // TRUE SIDE PROFILE (+x front bust, -x back glutes — BOTH visible & bouncing independently!)
+    if (isGearReady || isGearTank) {
+      ctx.fillStyle = wet.suit;
+      traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
       ctx.fill();
-      ctx.fillStyle = swim.accent;
-      ctx.fillRect(hipShiftX + gbx * 0.85 - prof.hip * 0.92 * s, hipY + 0.04 * s + gby * 0.75, prof.hip * 1.84 * s, 0.06 * s);
-    } else if (swim.style === 'bikini') {
-      // Bouncing contoured glutes (skin lower curve + vibrant high-cut bikini bottom riding the bounce!)
-      drawBouncingGlutes(ctx, hipShiftX, hipY + 0.02 * s, prof, s, gbx, gby, gTilt, skin, 'rgba(92, 48, 24, 0.22)');
-      ctx.fillStyle = swim.primary;
+      drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, wet.suit, 'rgba(15, 23, 42, 0.35)');
+      drawSideBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, wet.suit, wet.trim);
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1.2, 0.05 * s);
       ctx.beginPath();
-      ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
-      ctx.quadraticCurveTo(hipShiftX + gbx, hipY - 0.01 * s + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
-      ctx.quadraticCurveTo(hipShiftX + gbx + prof.hip * 0.76 * s, hipY + 0.13 * s + gby, hipShiftX + gbx, hipY + 0.2 * s + gby);
-      ctx.quadraticCurveTo(hipShiftX + gbx - prof.hip * 0.76 * s, hipY + 0.13 * s + gby, hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = swim.accent;
-      ctx.lineWidth = Math.max(1, 0.032 * s);
-      ctx.beginPath();
-      ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
-      ctx.quadraticCurveTo(hipShiftX + gbx, hipY + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
+      ctx.moveTo(chestShiftX + 0.04 * s, shoulderY + 0.03 * s);
+      ctx.lineTo(hipShiftX - 0.04 * s, hipY + 0.02 * s);
       ctx.stroke();
-
-      // Independently bouncing bikini bust!
-      drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
-    } else {
-      // Sculpted hourglass cutout one-piece swimsuit with independent bouncing bust & glutes!
-      ctx.fillStyle = swim.primary;
-      traceCurvyTorso(ctx, shoulderY + 0.07 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+    } else if (isGearZip) {
+      ctx.fillStyle = skin;
+      traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
       ctx.fill();
-      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.2)');
+      drawSideBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, swim.primary, swim.accent);
+      const zipUp = 0.07 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
+      ctx.fillStyle = wet.suit;
+      ctx.beginPath();
+      ctx.roundRect(hipShiftX - prof.hip * 0.82 * s, waistY - zipUp, prof.hip * 1.44 * s, hipY - waistY + 0.2 * s + zipUp, 0.1 * s);
+      ctx.fill();
+      drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, wet.suit, 'rgba(15, 23, 42, 0.35)');
+      ctx.fillStyle = wet.trim;
+      ctx.fillRect(hipShiftX - prof.hip * 0.72 * s, waistY - zipUp, prof.hip * 1.3 * s, 0.05 * s);
+    } else {
+      ctx.fillStyle = skin;
+      traceSideCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+      ctx.fill();
+      if (swim.style === 'trunks') {
+        drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, swim.primary, 'rgba(15, 23, 42, 0.22)');
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.roundRect(hipShiftX - prof.hip * 0.85 * s + gbx * 0.6, hipY - 0.12 * s + gby * 0.5, prof.hip * 1.45 * s, 0.32 * s, 0.06 * s);
+        ctx.fill();
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect(hipShiftX - prof.hip * 0.8 * s + gbx * 0.6, hipY + 0.04 * s + gby * 0.65, prof.hip * 1.38 * s, 0.055 * s);
+      } else if (swim.style === 'bikini') {
+        // Side-profile glutes (-x) with cheeky bikini bottom & side hip strap
+        drawSideBouncingGlutes(ctx, hipShiftX, hipY + 0.01 * s, prof, s, gbx, gby, skin, 'rgba(92, 48, 24, 0.22)');
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX - prof.hip * 0.92 * s + gbx * 0.8, hipY - 0.09 * s + gby * 0.6);
+        ctx.quadraticCurveTo(hipShiftX + gbx * 0.3, hipY - 0.04 * s + gby * 0.5, hipShiftX + prof.hip * 0.62 * s, hipY - 0.08 * s);
+        ctx.quadraticCurveTo(hipShiftX + prof.hip * 0.48 * s, hipY + 0.16 * s, hipShiftX - prof.hip * 0.18 * s + gbx * 0.4, hipY + 0.2 * s + gby * 0.7);
+        ctx.quadraticCurveTo(hipShiftX - prof.hip * 0.88 * s + gbx * 0.85, hipY + 0.14 * s + gby * 0.8, hipShiftX - prof.hip * 0.92 * s + gbx * 0.8, hipY - 0.09 * s + gby * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = swim.accent;
+        ctx.lineWidth = Math.max(1, 0.03 * s);
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX - prof.hip * 0.86 * s + gbx * 0.75, hipY - 0.08 * s + gby * 0.6);
+        ctx.lineTo(hipShiftX + prof.hip * 0.58 * s, hipY - 0.08 * s);
+        ctx.stroke();
+        // Side-profile forward bust (+x) + back bikini strap
+        ctx.strokeStyle = swim.primary;
+        ctx.lineWidth = Math.max(1.2, 0.04 * s);
+        ctx.beginPath();
+        ctx.moveTo(chestShiftX - prof.bust * 0.56 * s, shoulderY + 0.19 * s);
+        ctx.lineTo(chestShiftX + prof.bust * 0.45 * s + bbx * 0.6, shoulderY + 0.19 * s + bby * 0.6);
+        ctx.stroke();
+        drawSideBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, swim.primary, swim.accent);
+      } else {
+        // Side-profile sculpted one-piece swimsuit
+        ctx.fillStyle = swim.primary;
+        traceSideCurvyTorso(ctx, shoulderY + 0.07 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+        ctx.fill();
+        drawSideBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, swim.primary, 'rgba(15, 23, 42, 0.22)');
+        drawSideBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, swim.primary, swim.accent);
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 0.58 * s, waistY - 0.03 * s, prof.waist * 1.24 * s, 0.06 * s);
+      }
+    }
+  } else if (isBackView) {
+    // TRUE BACK VIEW: Full back silhouette + bouncing glutes on back (NO front bust cups!)
+    if (isGearReady || isGearTank) {
+      ctx.fillStyle = wet.suit;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby);
+      ctx.fill();
+      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
+      // Scuba tank strapped cleanly onto back!
+      ctx.fillStyle = wet.tank;
+      ctx.beginPath();
+      ctx.roundRect(chestShiftX - 0.12 * s, shoulderY + 0.02 * s + tankLift, 0.24 * s, 0.58 * s, 0.08 * s);
+      ctx.fill();
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(chestShiftX - 0.04 * s, shoulderY - 0.08 * s + tankLift, 0.08 * s, 0.1 * s);
+    } else if (isGearZip) {
+      ctx.fillStyle = skin;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby);
+      ctx.fill();
+      // Back bikini clasp strap across upper back
+      ctx.strokeStyle = swim.primary;
+      ctx.lineWidth = Math.max(1.4, 0.048 * s);
+      ctx.beginPath();
+      ctx.moveTo(chestShiftX - prof.bust * 0.72 * s, shoulderY + 0.18 * s);
+      ctx.lineTo(chestShiftX + prof.bust * 0.72 * s, shoulderY + 0.18 * s);
+      ctx.stroke();
+      // Wetsuit lower half + vertical back zipper pulling up!
+      const zipUp = 0.07 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
+      ctx.fillStyle = wet.suit;
+      ctx.beginPath();
+      ctx.moveTo((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.lineTo((chestShiftX + hipShiftX) * 0.5 + prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.bezierCurveTo(hipShiftX + gbx + prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, hipShiftX + gbx + prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx + prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
+      ctx.quadraticCurveTo(hipShiftX + gbx, hipY + 0.22 * s + gby, hipShiftX + gbx - prof.hip * 0.72 * s, hipY + 0.16 * s + gby);
+      ctx.bezierCurveTo(hipShiftX + gbx - prof.hip * 1.08 * s, hipY + 0.06 * s + gby, hipShiftX + gbx - prof.hip * 1.15 * s, hipY - 0.08 * s + gby * 0.4, (chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.closePath();
+      ctx.fill();
+      drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, wet.suit, 'rgba(15, 23, 42, 0.35)');
+      // Vertical back wetsuit zipper + pull leash
+      ctx.strokeStyle = wet.trim;
+      ctx.lineWidth = Math.max(1.1, 0.036 * s);
+      ctx.beginPath();
+      ctx.moveTo((chestShiftX + hipShiftX) * 0.5, waistY - zipUp);
+      ctx.lineTo(hipShiftX + gbx * 0.5, hipY + 0.02 * s + gby * 0.5);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = skin;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby);
+      ctx.fill();
+      if (swim.style === 'trunks') {
+        drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.22)');
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.7 - prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
+        ctx.lineTo(hipShiftX + gbx * 0.7 + prof.hip * 0.92 * s, hipY - 0.12 * s + gby * 0.5);
+        ctx.lineTo(hipShiftX + gbx + prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
+        ctx.lineTo(hipShiftX + gbx - prof.hip * 0.96 * s, hipY + 0.2 * s + gby);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect(hipShiftX + gbx * 0.85 - prof.hip * 0.92 * s, hipY + 0.04 * s + gby * 0.75, prof.hip * 1.84 * s, 0.06 * s);
+      } else if (swim.style === 'bikini') {
+        // Back bikini clasp tie + independently bouncing sculpted glutes!
+        ctx.strokeStyle = swim.primary;
+        ctx.lineWidth = Math.max(1.4, 0.048 * s);
+        ctx.beginPath();
+        ctx.moveTo(chestShiftX - prof.bust * 0.74 * s, shoulderY + 0.18 * s);
+        ctx.lineTo(chestShiftX + prof.bust * 0.74 * s, shoulderY + 0.18 * s);
+        ctx.stroke();
+        ctx.fillStyle = swim.accent;
+        ctx.beginPath();
+        ctx.arc(chestShiftX, shoulderY + 0.18 * s, 0.036 * s, 0, Math.PI * 2);
+        ctx.fill();
+        // Full bouncing glutes on back with cheeky bikini bottom riding the bounce
+        drawBouncingGlutes(ctx, hipShiftX, hipY + 0.02 * s, prof, s, gbx, gby, gTilt, skin, 'rgba(92, 48, 24, 0.24)');
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
+        ctx.quadraticCurveTo(hipShiftX + gbx, hipY - 0.01 * s + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
+        ctx.quadraticCurveTo(hipShiftX + gbx + prof.hip * 0.74 * s, hipY + 0.12 * s + gby, hipShiftX + gbx, hipY + 0.18 * s + gby);
+        ctx.quadraticCurveTo(hipShiftX + gbx - prof.hip * 0.74 * s, hipY + 0.12 * s + gby, hipShiftX + gbx * 0.85 - prof.hip * 1.02 * s, hipY - 0.09 * s + gby * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = swim.accent;
+        ctx.lineWidth = Math.max(1, 0.032 * s);
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.85 - prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
+        ctx.quadraticCurveTo(hipShiftX + gbx, hipY + gby * 0.85, hipShiftX + gbx * 0.85 + prof.hip * 0.96 * s, hipY - 0.08 * s + gby * 0.6);
+        ctx.stroke();
+      } else {
+        // Low-back scooped one-piece swimsuit + bouncing back glutes!
+        ctx.fillStyle = swim.primary;
+        traceCurvyTorso(ctx, shoulderY + 0.09 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX, 0, 0, gbx, gby);
+        ctx.fill();
+        // Open low-back scoop showing warm upper back skin
+        ctx.fillStyle = skin;
+        ctx.beginPath();
+        ctx.ellipse(chestShiftX, shoulderY + 0.16 * s, prof.bust * 0.48 * s, 0.14 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        drawBouncingGlutes(ctx, hipShiftX, hipY, prof, s, gbx, gby, gTilt, swim.primary, 'rgba(15, 23, 42, 0.22)');
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.02 * s, waistY - 0.035 * s, prof.waist * 2.04 * s, 0.065 * s);
+      }
+    }
+  } else {
+    // TRUE FRONT VIEW: Clean front hips & V-cut swimsuit front + bouncing bust (NO butt cheeks on front!)
+    if (isGearReady || isGearTank) {
+      ctx.fillStyle = wet.suit;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+      ctx.fill();
+      drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, wet.suit, wet.trim);
+      // Front BCD harness straps & chest buckle
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1.2, 0.05 * s);
+      ctx.beginPath();
+      ctx.moveTo(chestShiftX - 0.1 * s, shoulderY + 0.02 * s);
+      ctx.lineTo(hipShiftX - 0.1 * s, hipY + 0.02 * s);
+      ctx.moveTo(chestShiftX + 0.1 * s, shoulderY + 0.02 * s);
+      ctx.lineTo(hipShiftX + 0.1 * s, hipY + 0.02 * s);
+      ctx.stroke();
+    } else if (isGearZip) {
+      ctx.fillStyle = skin;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+      ctx.fill();
       drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
-      // Cinched accent waist belt highlighting hourglass silhouette
-      ctx.fillStyle = swim.accent;
-      ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.02 * s, waistY - 0.035 * s, prof.waist * 2.04 * s, 0.065 * s);
+      const zipUp = 0.07 * s * (0.5 + 0.5 * Math.sin(timeSec * 3.1 + ph));
+      ctx.fillStyle = wet.suit;
+      ctx.beginPath();
+      ctx.moveTo((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.lineTo((chestShiftX + hipShiftX) * 0.5 + prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.bezierCurveTo(hipShiftX + gbx * 0.55 + prof.hip * 1.12 * s, hipY - 0.06 * s, hipShiftX + gbx * 0.55 + prof.hip * 1.04 * s, hipY + 0.06 * s, hipShiftX + gbx * 0.55 + prof.hip * 0.72 * s, hipY + 0.16 * s);
+      ctx.quadraticCurveTo(hipShiftX + gbx * 0.55, hipY + 0.21 * s, hipShiftX + gbx * 0.55 - prof.hip * 0.72 * s, hipY + 0.16 * s);
+      ctx.bezierCurveTo(hipShiftX + gbx * 0.55 - prof.hip * 1.04 * s, hipY + 0.06 * s, hipShiftX + gbx * 0.55 - prof.hip * 1.12 * s, hipY - 0.06 * s, (chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.08 * s, waistY - zipUp);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = wet.trim;
+      ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.06 * s, waistY - zipUp, prof.waist * 2.12 * s, 0.055 * s);
+    } else {
+      ctx.fillStyle = skin;
+      traceCurvyTorso(ctx, shoulderY, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+      ctx.fill();
+
+      if (swim.style === 'trunks') {
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.5 - prof.hip * 0.94 * s, hipY - 0.12 * s);
+        ctx.lineTo(hipShiftX + gbx * 0.5 + prof.hip * 0.94 * s, hipY - 0.12 * s);
+        ctx.lineTo(hipShiftX + gbx * 0.55 + prof.hip * 0.96 * s, hipY + 0.2 * s);
+        ctx.lineTo(hipShiftX + gbx * 0.55 - prof.hip * 0.96 * s, hipY + 0.2 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect(hipShiftX + gbx * 0.5 - prof.hip * 0.92 * s, hipY + 0.04 * s, prof.hip * 1.84 * s, 0.06 * s);
+      } else if (swim.style === 'bikini') {
+        // Sleek front high-cut V bikini bottom (clean front hip anatomy — NO back cheeks!)
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.55 - prof.hip * 1.0 * s, hipY - 0.09 * s);
+        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55, hipY - 0.01 * s, hipShiftX + gbx * 0.55 + prof.hip * 1.0 * s, hipY - 0.09 * s);
+        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55 + prof.hip * 0.45 * s, hipY + 0.12 * s, hipShiftX + gbx * 0.55, hipY + 0.2 * s);
+        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55 - prof.hip * 0.45 * s, hipY + 0.12 * s, hipShiftX + gbx * 0.55 - prof.hip * 1.0 * s, hipY - 0.09 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = swim.accent;
+        ctx.lineWidth = Math.max(1, 0.032 * s);
+        ctx.beginPath();
+        ctx.moveTo(hipShiftX + gbx * 0.55 - prof.hip * 0.95 * s, hipY - 0.08 * s);
+        ctx.quadraticCurveTo(hipShiftX + gbx * 0.55, hipY, hipShiftX + gbx * 0.55 + prof.hip * 0.95 * s, hipY - 0.08 * s);
+        ctx.stroke();
+
+        // Halter neck straps + independently bouncing front bikini bust!
+        ctx.strokeStyle = swim.accent;
+        ctx.lineWidth = Math.max(0.9, 0.028 * s);
+        ctx.beginPath();
+        ctx.moveTo(chestShiftX - 0.04 * s, shoulderY - 0.04 * s);
+        ctx.lineTo(chestShiftX - prof.bust * 0.44 * s + bbx * 0.6, shoulderY + 0.14 * s + bby * 0.6);
+        ctx.moveTo(chestShiftX + 0.04 * s, shoulderY - 0.04 * s);
+        ctx.lineTo(chestShiftX + prof.bust * 0.44 * s + bbx * 0.6, shoulderY + 0.14 * s + bby * 0.6);
+        ctx.stroke();
+        drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
+      } else {
+        // Sculpted hourglass front one-piece swimsuit with independent bouncing bust!
+        ctx.fillStyle = swim.primary;
+        traceCurvyTorso(ctx, shoulderY + 0.07 * s, waistY, hipY, prof, s, chestShiftX, hipShiftX, bbx, bby, gbx, gby);
+        ctx.fill();
+        drawBouncingBust(ctx, chestShiftX, shoulderY, prof, s, bbx, bby, bTilt, swim.primary, swim.accent);
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect((chestShiftX + hipShiftX) * 0.5 - prof.waist * 1.02 * s, waistY - 0.035 * s, prof.waist * 2.04 * s, 0.065 * s);
+      }
     }
   }
 
@@ -1268,8 +1574,18 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.stroke();
   }
 
-  // 4d. Head, Flowing Bouncy Hair, Sunglasses / Sun Hat / Scuba Dive Mask
+  // 4d. View-Aware Head, Flowing Bouncy Hair, Sunglasses / Sun Hat / Scuba Dive Mask
   const hx = chestShiftX + headTiltX;
+  const hairBounce = isDance ? Math.sin(timeSec * 6.4 + ph) * 0.06 * s : Math.sin(timeSec * 3.2 + ph) * 0.03 * s;
+
+  // Back-side framing hair behind head for front view
+  if (isFrontView && !isGearReady) {
+    ctx.fillStyle = hair;
+    ctx.beginPath();
+    ctx.ellipse(hx, headY + 0.09 * s + hairBounce * 0.35, 0.23 * s, 0.21 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   ctx.fillStyle = skin;
   ctx.beginPath();
   ctx.arc(hx, headY, 0.165 * s, 0, Math.PI * 2);
@@ -1278,34 +1594,106 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   if (isGearReady) {
     ctx.fillStyle = wet.suit;
     ctx.beginPath();
-    ctx.arc(hx, headY - 0.02 * s, 0.175 * s, Math.PI * 0.85, Math.PI * 2.15);
+    ctx.arc(hx, headY - 0.01 * s, 0.175 * s, isBackView ? 0 : Math.PI * 0.85, isBackView ? Math.PI * 2 : Math.PI * 2.15);
     ctx.fill();
-    ctx.fillStyle = '#38bdf8';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = Math.max(1, 0.032 * s);
+    if (!isBackView) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1, 0.032 * s);
+      ctx.beginPath();
+      if (isFrontView) {
+        ctx.roundRect(hx - 0.12 * s, headY - 0.06 * s, 0.24 * s, 0.095 * s, 0.03 * s);
+      } else {
+        ctx.roundRect(hx + 0.02 * s, headY - 0.06 * s, 0.17 * s, 0.095 * s, 0.03 * s);
+      }
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (isBackView) {
+    // BACK VIEW HEAD: Full cascading hair covering the back of the head (NO sunglasses/face!)
+    ctx.fillStyle = hair;
     ctx.beginPath();
-    ctx.roundRect(hx + 0.02 * s, headY - 0.06 * s, 0.17 * s, 0.095 * s, 0.03 * s);
+    ctx.arc(hx, headY - 0.01 * s, 0.18 * s, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    if ((seed % 3) === 0) {
+      // Long wavy beach hair cascading symmetrically down upper back
+      ctx.beginPath();
+      ctx.ellipse(hx, headY + 0.19 * s + hairBounce * 0.5, 0.2 * s, 0.24 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if ((seed % 3) === 1) {
+      // High bouncy dancer ponytail swinging left/right on beat!
+      const sway = Math.sin(timeSec * 6.4 + ph) * 0.07 * s;
+      ctx.beginPath();
+      ctx.ellipse(hx + sway, headY + 0.08 * s + hairBounce, 0.11 * s, 0.2 * s, -sway * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = swim.accent;
+      ctx.beginPath();
+      ctx.arc(hx, headY - 0.09 * s, 0.045 * s, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Twin bouncy curls / space buns from behind!
+      ctx.beginPath();
+      ctx.arc(hx - 0.14 * s, headY - 0.12 * s + hairBounce * 0.4, 0.11 * s, 0, Math.PI * 2);
+      ctx.arc(hx + 0.14 * s, headY - 0.12 * s + hairBounce * 0.4, 0.11 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if ((seed % 4) === 0 && !isGearZip && !isGearTank) {
+      // Sun hat brim viewed cleanly from behind
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.ellipse(hx, headY - 0.13 * s, 0.29 * s, 0.065 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hx, headY - 0.15 * s, 0.14 * s, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = swim.primary;
+      ctx.fillRect(hx - 0.14 * s, headY - 0.17 * s, 0.28 * s, 0.04 * s);
+    }
+  } else if (isFrontView) {
+    // FRONT VIEW HEAD: Symmetrical crown bangs + twin front-facing sunglasses lenses + smile!
+    ctx.fillStyle = hair;
+    ctx.beginPath();
+    ctx.arc(hx, headY - 0.05 * s, 0.178 * s, Math.PI * 0.92, Math.PI * 2.08);
+    ctx.fill();
+    if (isGearZip || isGearTank) {
+      ctx.fillStyle = '#67e8f9';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = Math.max(1, 0.028 * s);
+      ctx.beginPath();
+      ctx.roundRect(hx - 0.11 * s, headY - 0.15 * s, 0.22 * s, 0.08 * s, 0.025 * s);
+      ctx.fill();
+      ctx.stroke();
+    } else if ((seed % 4) === 0) {
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.ellipse(hx, headY - 0.13 * s, 0.29 * s, 0.065 * s, -0.04, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hx, headY - 0.15 * s, 0.14 * s, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = swim.primary;
+      ctx.fillRect(hx - 0.14 * s, headY - 0.17 * s, 0.28 * s, 0.04 * s);
+    }
+    // Twin front-facing sunglasses lenses + bridge
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(hx - 0.12 * s, headY - 0.05 * s, 0.1 * s, 0.055 * s);
+    ctx.fillRect(hx + 0.02 * s, headY - 0.05 * s, 0.1 * s, 0.055 * s);
+    ctx.fillRect(hx - 0.02 * s, headY - 0.04 * s, 0.04 * s, 0.02 * s);
   } else {
-    const hairBounce = isDance ? Math.sin(timeSec * 6.4 + ph) * 0.06 * s : Math.sin(timeSec * 3.2 + ph) * 0.03 * s;
+    // SIDE PROFILE HEAD: Facing +x with flowing hair/ponytail streaming off the -x back!
     ctx.fillStyle = hair;
     ctx.beginPath();
     ctx.arc(hx - 0.02 * s, headY - 0.04 * s, 0.175 * s, Math.PI * 0.85, Math.PI * 2.15);
     ctx.fill();
-    // Expressive flowing wavy hair / high bouncy ponytail / beach curls!
     if ((seed % 3) === 0) {
-      // Long beach waves cascading behind shoulders
       ctx.beginPath();
       ctx.ellipse(hx - 0.16 * s, headY + 0.12 * s + hairBounce * 0.5, 0.11 * s, 0.22 * s, 0.16, 0, Math.PI * 2);
       ctx.fill();
     } else if ((seed % 3) === 1) {
-      // High bouncy dancer ponytail!
       ctx.beginPath();
       ctx.ellipse(hx - 0.19 * s, headY - 0.06 * s + hairBounce, 0.09 * s, 0.15 * s, 0.42, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Voluminous bouncy curls / afro puffs
       ctx.beginPath();
       ctx.arc(hx - 0.15 * s, headY - 0.12 * s + hairBounce * 0.4, 0.105 * s, 0, Math.PI * 2);
       ctx.arc(hx + 0.09 * s, headY - 0.16 * s + hairBounce * 0.4, 0.095 * s, 0, Math.PI * 2);
@@ -1642,22 +2030,24 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         drawPartyGearProps(ctx, toScreenX(rackX), toScreenY(getGroundY(rackX)), scale, timeSec, 'gear');
       }
 
-      // Curvy dance squad busting out Floss, Twerk & Salsa beside the hangout!
-      const p1x = topLeftX - 4.7;
+      // Curvy dance squad busting out Floss, Twerk & Salsa beside the hangout — varied front/back/side profiles & depth!
+      const p1x = topLeftX - 4.75;
       if (!isCompactPerf && inVis(p1x)) {
-        drawTopsidePerson(ctx, toScreenX(p1x), toScreenY(getGroundY(p1x)), scale, timeSec, {
+        drawTopsidePerson(ctx, toScreenX(p1x), toScreenY(getGroundY(p1x) - 0.14), scale * 0.96, timeSec, {
           role: 'party-dance',
           danceMove: 'floss',
+          view: 'front',
           seed: baseSeed + 0,
           facing: 1,
           hypeEnergy,
         });
       }
-      const p2x = topLeftX - 3.95;
+      const p2x = topLeftX - 3.92;
       if (inVis(p2x)) {
-        drawTopsidePerson(ctx, toScreenX(p2x), toScreenY(getGroundY(p2x)), scale, timeSec, {
+        drawTopsidePerson(ctx, toScreenX(p2x), toScreenY(getGroundY(p2x) + 0.08), scale, timeSec, {
           role: 'party-dance',
           danceMove: 'twerk',
+          view: (baseSeed % 2) === 0 ? 'back' : 'side',
           seed: baseSeed + 1,
           facing: 1,
           hypeEnergy,
@@ -1666,18 +2056,20 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       if (!isCompactPerf) {
         const p3x = topLeftX - 2.95;
         if (inVis(p3x)) {
-          drawTopsidePerson(ctx, toScreenX(p3x), toScreenY(getGroundY(p3x)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(p3x), toScreenY(getGroundY(p3x) - 0.18), scale * 0.94, timeSec, {
             role: 'party-dance',
             danceMove: 'salsa',
+            view: 'side',
             seed: baseSeed + 2,
             facing: -1,
             hypeEnergy,
           });
         }
-        const p4x = topLeftX - 2.3;
+        const p4x = topLeftX - 2.25;
         if (inVis(p4x)) {
-          drawTopsidePerson(ctx, toScreenX(p4x), toScreenY(getGroundY(p4x)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(p4x), toScreenY(getGroundY(p4x) + 0.05), scale, timeSec, {
             role: 'party-toast',
+            view: 'front',
             seed: baseSeed + 3,
             facing: -1,
             hypeEnergy,
@@ -1685,11 +2077,12 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         }
       }
 
-      // Curvy divers zipping into wetsuits & strapping scuba tanks!
-      const d1x = topLeftX - 1.65;
+      // Curvy divers zipping into wetsuits (back view!) & strapping scuba tanks (side view!)
+      const d1x = topLeftX - 1.58;
       if (inVis(d1x)) {
-        drawTopsidePerson(ctx, toScreenX(d1x), toScreenY(getGroundY(d1x)), scale, timeSec, {
+        drawTopsidePerson(ctx, toScreenX(d1x), toScreenY(getGroundY(d1x) - 0.08), scale * 0.98, timeSec, {
           role: 'gear-zip',
+          view: 'back',
           seed: baseSeed + 5,
           facing: 1,
           hypeEnergy,
@@ -1698,8 +2091,9 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       if (!isCompactPerf) {
         const d2x = topLeftX - 0.55;
         if (inVis(d2x)) {
-          drawTopsidePerson(ctx, toScreenX(d2x), toScreenY(getGroundY(d2x)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(d2x), toScreenY(getGroundY(d2x) + 0.06), scale, timeSec, {
             role: 'gear-tank',
+            view: 'side',
             seed: baseSeed + 6,
             facing: 1,
             hypeEnergy,
@@ -1708,7 +2102,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       }
     }
 
-    // 3. RIGHT CLIFF-TOP RIM: Packed Popular-Dance Party Overlook + Curvy Sunbather + Diver Prepping!
+    // 3. RIGHT CLIFF-TOP RIM: Packed Popular-Dance Party Overlook (varied front, side & back views!)
     const r0 = topRightX + 0.3;
     const r1 = topRightX + 6.8;
     if (r1 + 2 >= visX0 && r0 - 2 <= visX1) {
@@ -1736,8 +2130,9 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         }
         const rd1 = topRightX + 0.8;
         if (inVis(rd1)) {
-          drawTopsidePerson(ctx, toScreenX(rd1), toScreenY(getGroundY(rd1)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(rd1), toScreenY(getGroundY(rd1) + 0.06), scale, timeSec, {
             role: 'gear-zip',
+            view: 'side',
             seed: baseSeed + 7,
             facing: -1,
             hypeEnergy,
@@ -1747,9 +2142,10 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
 
       const rp1 = topRightX + 1.75;
       if (inVis(rp1)) {
-        drawTopsidePerson(ctx, toScreenX(rp1), toScreenY(getGroundY(rp1)), scale, timeSec, {
+        drawTopsidePerson(ctx, toScreenX(rp1), toScreenY(getGroundY(rp1) - 0.12), scale * 0.97, timeSec, {
           role: 'party-dance',
           danceMove: 'disco',
+          view: 'front',
           seed: baseSeed + 1,
           facing: 1,
           hypeEnergy,
@@ -1758,9 +2154,10 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       if (!isCompactPerf) {
         const rp2 = topRightX + 2.65;
         if (inVis(rp2)) {
-          drawTopsidePerson(ctx, toScreenX(rp2), toScreenY(getGroundY(rp2)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(rp2), toScreenY(getGroundY(rp2) + 0.08), scale, timeSec, {
             role: 'party-dance',
             danceMove: 'dab',
+            view: 'side',
             seed: baseSeed + 2,
             facing: -1,
             hypeEnergy,
@@ -1768,9 +2165,10 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         }
         const rp3 = topRightX + 3.55;
         if (inVis(rp3)) {
-          drawTopsidePerson(ctx, toScreenX(rp3), toScreenY(getGroundY(rp3)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(rp3), toScreenY(getGroundY(rp3) - 0.16), scale * 0.95, timeSec, {
             role: 'party-dance',
             danceMove: 'running-man',
+            view: 'side',
             seed: baseSeed + 5,
             facing: 1,
             hypeEnergy,
@@ -1778,9 +2176,10 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         }
         const rp4 = topRightX + 4.35;
         if (inVis(rp4)) {
-          drawTopsidePerson(ctx, toScreenX(rp4), toScreenY(getGroundY(rp4)), scale, timeSec, {
+          drawTopsidePerson(ctx, toScreenX(rp4), toScreenY(getGroundY(rp4) + 0.05), scale, timeSec, {
             role: 'party-dance',
             danceMove: 'ymca',
+            view: 'back',
             seed: baseSeed + 0,
             facing: -1,
             hypeEnergy,

@@ -14123,6 +14123,7 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
   } = await import('../public/js/game/renderers/topsidePropsRenderer.js');
   const { computeSurfacePartyAudioMix } = await import('../public/js/game/audio.js');
   const { SUIT_LIVERIES, DEFAULT_RIG_LIVERY, isDefaultRigLivery } = await import('../public/js/game/rigLivery.js');
+  const { drawTopsidePerson, resolveTopsidePersonView } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
   const { renderVictoryPhotoFrame, VICTORY_DANCE_MOVES } = await import('../public/js/ui/victoryPhotoController.js');
   const { LEVELS } = await import('../public/js/levels/index.js');
 
@@ -14163,7 +14164,16 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
   assert.equal(isDefaultRigLivery(DEFAULT_RIG_LIVERY), true);
   assert.equal(SUIT_LIVERIES.some((s) => String(s.id).startsWith('resort-') || String(s.id).startsWith('halfzip-')), false);
 
-  // 3. Mock canvas draw verification for Biome Hangouts, Cannonballer, Hype Overlay & Victory Photo
+  // 3. True front, back & side profiles (v286: never draw butt cheeks on front-facing characters!)
+  for (let s = 0; s < 12; s++) {
+    assert.notEqual(resolveTopsidePersonView({ role: 'party-dance', danceMove: 'twerk', seed: s }), 'front');
+  }
+  assert.equal(resolveTopsidePersonView({ role: 'party-dance', danceMove: 'running-man', seed: 1 }), 'side');
+  assert.equal(resolveTopsidePersonView({ view: 'front', role: 'party-dance', seed: 1 }), 'front');
+  assert.equal(resolveTopsidePersonView({ view: 'back', role: 'party-dance', seed: 1 }), 'back');
+  assert.equal(resolveTopsidePersonView({ view: 'side', role: 'party-dance', seed: 1 }), 'side');
+
+  // 4. Mock canvas draw verification for Biome Hangouts, Cannonballer, 3-View Anatomy & Victory Photo
   let ops = 0;
   const mockCtx = {
     canvas: { width: 640, height: 236 },
@@ -14176,6 +14186,12 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
     createLinearGradient: () => ({ addColorStop() {} }),
     createRadialGradient: () => ({ addColorStop() {} }),
   };
+
+  for (const vw of ['front', 'back', 'side']) {
+    for (const rl of ['party-dance', 'gear-zip', 'gear-tank', 'gear-ready']) {
+      drawTopsidePerson(mockCtx, 220, 180, 32, 2.2, { role: rl, danceMove: 'disco', view: vw, seed: 3, facing: 1 });
+    }
+  }
 
   for (const lvl of [cenote, polar, volcanic, quarry]) {
     drawBiomeSurfaceHangout(mockCtx, lvl, 200, 180, 24, 3.2, { facing: 1 });

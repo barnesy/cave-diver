@@ -164,26 +164,27 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
     ctx.stroke();
   }
 
-  // 5. Flanking Cheering Topside Party Crowd (left & right!)
+  // 5. Flanking Cheering Topside Party Crowd (varied front, back & side profiles + depth stagger!)
   const crowdSlots = [
-    { x: w * 0.11, move: danceMove, seed: 2, facing: 1 },
-    { x: w * 0.21, move: 'disco', seed: 5, facing: 1 },
-    { x: w * 0.79, move: 'floss', seed: 3, facing: -1 },
-    { x: w * 0.89, move: danceMove, seed: 1, facing: -1 },
+    { x: w * 0.1, yOff: -4, move: danceMove, view: danceMove === 'twerk' ? 'back' : 'front', seed: 2, facing: 1 },
+    { x: w * 0.2, yOff: 3, move: 'disco', view: 'side', seed: 5, facing: 1 },
+    { x: w * 0.8, yOff: -3, move: 'floss', view: 'side', seed: 3, facing: -1 },
+    { x: w * 0.9, yOff: 4, move: danceMove, view: danceMove === 'twerk' ? 'side' : 'back', seed: 1, facing: -1 },
   ];
   for (let i = 0; i < crowdSlots.length; i++) {
     const cs = crowdSlots[i];
-    drawTopsidePerson(ctx, cs.x, pierY - 2, scale * 0.88, timeSec, {
+    drawTopsidePerson(ctx, cs.x, pierY - 2 + cs.yOff, scale * (0.86 + (cs.yOff > 0 ? 0.04 : 0)), timeSec, {
       id: 9000 + i,
       role: 'party-dance',
       danceMove: cs.move,
+      view: cs.view,
       seed: cs.seed,
       facing: cs.facing,
       hypeEnergy,
     });
   }
 
-  // 6. Hero Diver + Squad / Co-op Buddies Center-Stage!
+  // 6. Hero Diver + Squad / Co-op Buddies Center-Stage (varied natural views by move!)
   const squad = Array.isArray(state?.squad) ? state.squad.slice(0, 3) : [];
   const heroRoster = [
     { name: state?.diverName || 'You', livery: state?.livery || null, isHero: true, seed: 0 },
@@ -200,10 +201,18 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
     const member = heroRoster[i];
     const mx = startX + i * spacing;
     const spec = _liveryToTopsideSpec(member.livery, member.seed);
-    drawTopsidePerson(ctx, mx, pierY + 2, scale * (member.isHero ? 1.12 : 0.98), timeSec, {
+    const memberView =
+      danceMove === 'twerk'
+        ? (i % 2 === 0 ? 'back' : 'side')
+        : danceMove === 'running-man' || danceMove === 'body-roll'
+          ? 'side'
+          : (i === 0 ? 'front' : i === 1 ? 'side' : 'front');
+    const yStagger = i === 1 ? -4 : i === 2 ? 3 : 2;
+    drawTopsidePerson(ctx, mx, pierY + yStagger, scale * (member.isHero ? 1.12 : 0.98), timeSec, {
       id: 9200 + i,
       role: 'party-dance',
       danceMove,
+      view: memberView,
       seed: member.seed,
       facing: i % 2 === 0 ? 1 : -1,
       hypeEnergy,
