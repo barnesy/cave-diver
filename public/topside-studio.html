@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <title>Techno Dive · Topside Dance & Cast Review Studio</title>
+  <style>
+    :root {
+      --bg: #071320;
+      --panel: rgba(15, 23, 42, 0.88);
+      --border: rgba(56, 189, 248, 0.28);
+      --accent: #38bdf8;
+      --pink: #ec4899;
+      --gold: #fde047;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top, #0c2640 0%, var(--bg) 65%);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 16px 28px;
+      gap: 12px;
+    }
+    .studio-header {
+      width: 100%;
+      max-width: 1440px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .studio-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    .studio-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: #bae6fd;
+    }
+    .studio-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-link {
+      text-decoration: none;
+      color: #e2e8f0;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      transition: transform 0.12s ease, border-color 0.12s ease;
+    }
+    .nav-link:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .stage-wrap {
+      width: 100%;
+      max-width: 1440px;
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 55px rgba(2, 6, 23, 0.6);
+      background: #0ea5e9;
+    }
+    #studio-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      cursor: pointer;
+    }
+    .stage-hint {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      background: rgba(2, 6, 23, 0.62);
+      padding: 4px 10px;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+    .controls-panel {
+      width: 100%;
+      max-width: 1440px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      backdrop-filter: blur(8px);
+    }
+    .ctrl-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .ctrl-label {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      min-width: 78px;
+    }
+    .pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex: 1;
+    }
+    .pill {
+      appearance: none;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(15, 23, 42, 0.75);
+      color: #e2e8f0;
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
+    }
+    .pill:hover {
+      transform: translateY(-1px);
+      background: rgba(56, 189, 248, 0.2);
+      border-color: rgba(56, 189, 248, 0.6);
+    }
+    .pill.active {
+      background: linear-gradient(135deg, rgba(236, 72, 153, 0.45), rgba(56, 189, 248, 0.42));
+      border-color: var(--gold);
+      color: #fef9c3;
+    }
+    .pill.action {
+      background: rgba(14, 165, 233, 0.24);
+      border-color: rgba(56, 189, 248, 0.55);
+      color: #e0f2fe;
+    }
+    .speed-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .speed-wrap input[type="range"] {
+      width: 88px;
+      accent-color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <header class="studio-header">
+    <div class="studio-title">
+      <span>🕺 Topside Dance &amp; Cast Review Studio</span>
+      <span class="studio-badge">14 Dances · 8 Body Types · 6 Female Tops · Co-Ed</span>
+    </div>
+    <nav class="studio-nav">
+      <a class="nav-link" href="/">← Back to Techno Dive</a>
+    </nav>
+  </header>
+
+  <main class="stage-wrap">
+    <canvas id="studio-canvas" width="1440" height="620" aria-label="Interactive topside dance review stage"></canvas>
+    <div class="stage-hint">💡 Click any dancer to rotate Front → Side → Back · Shift+Click a lady to cycle her top style</div>
+  </main>
+
+  <section class="controls-panel" aria-label="Studio review controls">
+    <div class="ctrl-row">
+      <span class="ctrl-label">Dances</span>
+      <div id="dance-buttons" class="pill-group"></div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">Scene</span>
+      <div id="scene-buttons" class="pill-group">
+        <button type="button" class="pill active" data-scene="party">🎉 Full Co-Ed Party Scene</button>
+        <button type="button" class="pill" data-scene="ladies">👙 Ladies Close-Up (All 6 Tops &amp; Bust Sizes)</button>
+        <button type="button" class="pill" data-scene="men">🩳 Men Close-Up (All 4 Body Types &amp; Outfits)</button>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">Angles</span>
+      <div id="view-buttons" class="pill-group">
+        <button type="button" class="pill active" data-view="mixed">Mixed (Natural)</button>
+        <button type="button" class="pill" data-view="front">All Front</button>
+        <button type="button" class="pill" data-view="side">All Side</button>
+        <button type="button" class="pill" data-view="back">All Back</button>
+      </div>
+
+      <span class="ctrl-label" style="min-width:64px">Bust Size</span>
+      <div id="bust-buttons" class="pill-group" style="flex:0 1 auto">
+        <button type="button" class="pill active" data-bust="varied">Varied</button>
+        <button type="button" class="pill" data-bust="0.82">Small</button>
+        <button type="button" class="pill" data-bust="0.98">Med</button>
+        <button type="button" class="pill" data-bust="1.14">Full</button>
+        <button type="button" class="pill" data-bust="1.28">Curvy</button>
+        <button type="button" class="pill" data-bust="1.40">Extra</button>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">Playback</span>
+      <div class="pill-group">
+        <button type="button" id="btn-play" class="pill action">⏸ Pause</button>
+        <button type="button" id="btn-step" class="pill">⏭ +0.1s Frame</button>
+        <button type="button" id="btn-hype" class="pill action">🎉 Hype Cheer Burst</button>
+        <button type="button" id="btn-labels" class="pill active">🏷 Labels On</button>
+        <label class="speed-wrap">
+          Speed <input id="speed-slider" type="range" min="0.15" max="1.6" step="0.05" value="1" />
+          <span id="speed-val">1.00×</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <script type="module">
+    import {
+      drawTopsidePerson,
+      drawFestiveStringLights,
+      drawBeachUmbrella,
+      drawPartyGearProps,
+      POPULAR_DANCE_MOVES,
+      FEMALE_TOP_STYLES,
+      resolveTopsidePersonProfile,
+    } from './js/game/renderers/topsidePeopleRenderer.js?v=289';
+
+    const DANCE_META = [
+      { id: 'mixed', icon: '🎲', label: 'Mixed Party (All 14)' },
+      { id: 'floss', icon: '⚡', label: 'Floss' },
+      { id: 'twerk', icon: '🍑', label: 'Twerk' },
+      { id: 'dab', icon: '😎', label: 'Dab' },
+      { id: 'disco', icon: '🕺', label: 'Disco' },
+      { id: 'salsa', icon: '💃', label: 'Salsa' },
+      { id: 'running-man', icon: '👟', label: 'Running Man' },
+      { id: 'body-roll', icon: '🌊', label: 'Body Roll' },
+      { id: 'ymca', icon: '🙌', label: 'YMCA' },
+      { id: 'moonwalk', icon: '🌙', label: 'Moonwalk' },
+      { id: 'shuffle', icon: '🔥', label: 'Shuffle' },
+      { id: 'robot', icon: '🤖', label: 'Robot' },
+      { id: 'hula', icon: '🌺', label: 'Hula' },
+      { id: 'macarena', icon: '🎵', label: 'Macarena' },
+      { id: 'air-guitar', icon: '🎸', label: 'Air Guitar' },
+    ];
+
+    const TOP_LABELS = {
+      'triangle-halter': 'Triangle Halter',
+      'balconette': 'Balconette',
+      'bandeau': 'Bandeau',
+      'plunge-onepiece': 'Plunge 1-Piece',
+      'sporty-crop': 'Sporty Crop',
+      'wrap-crisscross': 'Wrap Keyhole',
+    };
+
+    const PARTY_CAST = [
+      { id: 101, gender: 'female', bodyType: 'petite',      topStyle: 'triangle-halter', bustScale: 0.86, seed: 1,  facing: 1,  defaultMove: 'hula',        defaultView: 'front' },
+      { id: 102, gender: 'male',   bodyType: 'lean-surfer', seed: 0,  facing: 1,  defaultMove: 'moonwalk',    defaultView: 'side' },
+      { id: 103, gender: 'female', bodyType: 'hourglass',   topStyle: 'balconette',      bustScale: 1.24, seed: 3,  facing: 1,  defaultMove: 'salsa',       defaultView: 'front' },
+      { id: 104, gender: 'male',   bodyType: 'muscular',    seed: 5,  facing: -1, defaultMove: 'air-guitar',  defaultView: 'front' },
+      { id: 105, gender: 'female', bodyType: 'voluptuous',  topStyle: 'plunge-onepiece', bustScale: 1.34, seed: 2,  facing: 1,  defaultMove: 'disco',       defaultView: 'front' },
+      { id: 106, gender: 'female', bodyType: 'athletic-f',  topStyle: 'sporty-crop',     bustScale: 0.98, seed: 6,  facing: -1, defaultMove: 'shuffle',     defaultView: 'side' },
+      { id: 107, gender: 'male',   bodyType: 'dad-bod',     seed: 4,  facing: 1,  defaultMove: 'macarena',    defaultView: 'front' },
+      { id: 108, gender: 'female', bodyType: 'hourglass',   topStyle: 'bandeau',         bustScale: 1.16, seed: 8,  facing: 1,  defaultMove: 'twerk',       defaultView: 'back' },
+      { id: 109, gender: 'male',   bodyType: 'athletic-m',  seed: 2,  facing: -1, defaultMove: 'robot',       defaultView: 'front' },
+      { id: 110, gender: 'female', bodyType: 'voluptuous',  topStyle: 'wrap-crisscross', bustScale: 1.30, seed: 9,  facing: -1, defaultMove: 'floss',       defaultView: 'front' },
+      { id: 111, gender: 'female', bodyType: 'athletic-f',  topStyle: 'balconette',      bustScale: 1.12, seed: 11, facing: 1,  defaultMove: 'body-roll',   defaultView: 'side' },
+      { id: 112, gender: 'male',   bodyType: 'muscular',    seed: 7,  facing: -1, defaultMove: 'ymca',        defaultView: 'front' },
+    ];
+
+    const LADIES_CAST = [
+      { id: 201, gender: 'female', bodyType: 'petite',     topStyle: 'triangle-halter', bustScale: 0.84, seed: 1,  facing: 1, defaultMove: 'salsa',      defaultView: 'front' },
+      { id: 202, gender: 'female', bodyType: 'athletic-f', topStyle: 'sporty-crop',     bustScale: 0.96, seed: 4,  facing: 1, defaultMove: 'shuffle',    defaultView: 'front' },
+      { id: 203, gender: 'female', bodyType: 'hourglass',  topStyle: 'bandeau',         bustScale: 1.12, seed: 3,  facing: 1, defaultMove: 'hula',       defaultView: 'front' },
+      { id: 204, gender: 'female', bodyType: 'hourglass',  topStyle: 'balconette',      bustScale: 1.24, seed: 6,  facing: 1, defaultMove: 'disco',      defaultView: 'front' },
+      { id: 205, gender: 'female', bodyType: 'voluptuous', topStyle: 'plunge-onepiece', bustScale: 1.34, seed: 2,  facing: 1, defaultMove: 'macarena',   defaultView: 'front' },
+      { id: 206, gender: 'female', bodyType: 'voluptuous', topStyle: 'wrap-crisscross', bustScale: 1.36, seed: 9,  facing: 1, defaultMove: 'floss',      defaultView: 'front' },
+      { id: 207, gender: 'female', bodyType: 'hourglass',  topStyle: 'balconette',      bustScale: 1.26, seed: 5,  facing: 1, defaultMove: 'body-roll',  defaultView: 'side' },
+      { id: 208, gender: 'female', bodyType: 'voluptuous', topStyle: 'triangle-halter', bustScale: 1.30, seed: 8,  facing: 1, defaultMove: 'twerk',      defaultView: 'side' },
+    ];
+
+    const MEN_CAST = [
+      { id: 301, gender: 'male', bodyType: 'lean-surfer', seed: 0, facing: 1, defaultMove: 'moonwalk',    defaultView: 'side' },
+      { id: 302, gender: 'male', bodyType: 'athletic-m',  seed: 1, facing: 1, defaultMove: 'shuffle',     defaultView: 'front' },
+      { id: 303, gender: 'male', bodyType: 'muscular',    seed: 2, facing: 1, defaultMove: 'air-guitar',  defaultView: 'front' },
+      { id: 304, gender: 'male', bodyType: 'dad-bod',     seed: 3, facing: 1, defaultMove: 'macarena',    defaultView: 'front' },
+      { id: 305, gender: 'male', bodyType: 'athletic-m',  seed: 5, facing: 1, defaultMove: 'robot',       defaultView: 'front' },
+      { id: 306, gender: 'male', bodyType: 'muscular',    seed: 6, facing: 1, defaultMove: 'running-man', defaultView: 'side' },
+      { id: 307, gender: 'male', bodyType: 'dad-bod',     seed: 7, facing: 1, defaultMove: 'disco',       defaultView: 'front' },
+      { id: 308, gender: 'male', bodyType: 'lean-surfer', seed: 4, facing: 1, defaultMove: 'ymca',        defaultView: 'back' },
+    ];
+
+    const state = {
+      dance: 'mixed',
+      scene: 'party',
+      viewMode: 'mixed',
+      bustOverride: 'varied',
+      playing: true,
+      speed: 1.0,
+      showLabels: true,
+      simTime: 0,
+      hypeUntil: 0,
+      customViews: new Map(),
+      customTops: new Map(),
+      hitBoxes: [],
+    };
+
+    const canvas = document.getElementById('studio-canvas');
+    const ctx = canvas.getContext('2d');
+    const danceWrap = document.getElementById('dance-buttons');
+
+    // Render all 15 dance buttons (Mixed + 14 individual dances)
+    danceWrap.innerHTML = DANCE_META.map((d) =>
+      `<button type="button" class="pill${d.id === state.dance ? ' active' : ''}" data-dance="${d.id}">${d.icon} ${d.label}</button>`
+    ).join('');
+
+    danceWrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-dance]');
+      if (!btn) return;
+      state.dance = btn.dataset.dance;
+      danceWrap.querySelectorAll('.pill').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    document.getElementById('scene-buttons').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-scene]');
+      if (!btn) return;
+      state.scene = btn.dataset.scene;
+      document.querySelectorAll('#scene-buttons .pill').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    document.getElementById('view-buttons').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-view]');
+      if (!btn) return;
+      state.viewMode = btn.dataset.view;
+      state.customViews.clear();
+      document.querySelectorAll('#view-buttons .pill').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    document.getElementById('bust-buttons').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-bust]');
+      if (!btn) return;
+      state.bustOverride = btn.dataset.bust;
+      document.querySelectorAll('#bust-buttons .pill').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+
+    const playBtn = document.getElementById('btn-play');
+    playBtn.addEventListener('click', () => {
+      state.playing = !state.playing;
+      playBtn.textContent = state.playing ? '⏸ Pause' : '▶ Play';
+    });
+
+    document.getElementById('btn-step').addEventListener('click', () => {
+      state.playing = false;
+      playBtn.textContent = '▶ Play';
+      state.simTime += 0.1;
+    });
+
+    document.getElementById('btn-hype').addEventListener('click', () => {
+      state.hypeUntil = state.simTime + 3.2;
+    });
+
+    const labelBtn = document.getElementById('btn-labels');
+    labelBtn.addEventListener('click', () => {
+      state.showLabels = !state.showLabels;
+      labelBtn.classList.toggle('active', state.showLabels);
+      labelBtn.textContent = state.showLabels ? '🏷 Labels On' : '🏷 Labels Off';
+    });
+
+    const speedSlider = document.getElementById('speed-slider');
+    const speedVal = document.getElementById('speed-val');
+    speedSlider.addEventListener('input', () => {
+      state.speed = Number(speedSlider.value) || 1;
+      speedVal.textContent = `${state.speed.toFixed(2)}×`;
+    });
+
+    // Click any dancer to rotate view, Shift+Click a lady to cycle topStyle!
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const sy = (e.clientY - rect.top) * (canvas.height / rect.height);
+      for (const box of state.hitBoxes) {
+        if (sx >= box.x0 && sx <= box.x1 && sy >= box.y0 && sy <= box.y1) {
+          if (e.shiftKey && box.member.gender === 'female') {
+            const cur = state.customTops.get(box.member.id) || box.member.topStyle || 'triangle-halter';
+            const next = FEMALE_TOP_STYLES[(FEMALE_TOP_STYLES.indexOf(cur) + 1) % FEMALE_TOP_STYLES.length];
+            state.customTops.set(box.member.id, next);
+          } else {
+            const order = ['front', 'side', 'back'];
+            const cur = box.view;
+            state.customViews.set(box.member.id, order[(order.indexOf(cur) + 1) % order.length]);
+          }
+          break;
+        }
+      }
+    });
+
+    function drawBackground(w, h, t) {
+      const waterY = Math.round(h * 0.50);
+      const pierY = Math.round(h * 0.80);
+
+      // Tropical azure sky
+      const sky = ctx.createLinearGradient(0, 0, 0, waterY);
+      sky.addColorStop(0, '#0284c7');
+      sky.addColorStop(0.62, '#38bdf8');
+      sky.addColorStop(1, '#fef08a');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, waterY);
+
+      // Warm sun halo
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.24)';
+      ctx.beginPath();
+      ctx.arc(w * 0.84, h * 0.17, 92, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(w * 0.84, h * 0.17, 42, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Distant tropical islands
+      ctx.fillStyle = '#0e7490';
+      ctx.beginPath();
+      ctx.moveTo(0, waterY);
+      ctx.quadraticCurveTo(w * 0.16, waterY - 68, w * 0.34, waterY);
+      ctx.quadraticCurveTo(w * 0.64, waterY - 48, w * 0.92, waterY);
+      ctx.lineTo(w, waterY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shimmering turquoise lagoon
+      const sea = ctx.createLinearGradient(0, waterY, 0, pierY);
+      sea.addColorStop(0, '#0891b2');
+      sea.addColorStop(1, '#0c4a6e');
+      ctx.fillStyle = sea;
+      ctx.fillRect(0, waterY, w, pierY - waterY);
+
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.28)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 9; i++) {
+        const wy = waterY + 18 + i * 20;
+        const dx = Math.sin(t * 1.6 + i * 1.3) * 26;
+        ctx.beginPath();
+        ctx.moveTo(w * (0.06 + (i % 4) * 0.24) + dx, wy);
+        ctx.lineTo(w * (0.19 + (i % 4) * 0.24) + dx, wy);
+        ctx.stroke();
+      }
+
+      // Background floaters in the lagoon when in full party scene!
+      if (state.scene === 'party') {
+        drawTopsidePerson(ctx, w * 0.22, waterY + 54, 38, t, {
+          id: 901,
+          role: 'party-float',
+          gender: 'female',
+          topStyle: 'balconette',
+          bustScale: 1.18,
+          seed: 3,
+          facing: 1,
+        });
+        drawTopsidePerson(ctx, w * 0.77, waterY + 58, 38, t, {
+          id: 902,
+          role: 'party-float',
+          gender: 'male',
+          bodyType: 'athletic-m',
+          seed: 0,
+          facing: -1,
+        });
+      }
+
+      // Festive overhead party string lights
+      drawFestiveStringLights(ctx, 24, 52, w - 24, 58, 42, t, 0.45);
+
+      // Sunlit wooden beach pier / dance stage
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(0, pierY - 10, w, h - pierY + 10);
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(0, pierY - 10, w, 14);
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(0, pierY - 10, w, 4);
+      ctx.strokeStyle = 'rgba(41, 18, 5, 0.45)';
+      ctx.lineWidth = 1.6;
+      for (let px = 28; px < w; px += 46) {
+        ctx.beginPath();
+        ctx.moveTo(px, pierY - 10);
+        ctx.lineTo(px - 18, h);
+        ctx.stroke();
+      }
+
+      if (state.scene === 'party') {
+        drawBeachUmbrella(ctx, 72, pierY - 4, 48, 0, -0.08);
+        drawBeachUmbrella(ctx, w - 72, pierY - 4, 48, 2, 0.08);
+        drawPartyGearProps(ctx, w * 0.5, pierY - 6, 44, t, 'party');
+      }
+
+      return pierY;
+    }
+
+    function renderFrame(t) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const pierY = drawBackground(w, h, t);
+      const cast = state.scene === 'ladies' ? LADIES_CAST : state.scene === 'men' ? MEN_CAST : PARTY_CAST;
+      const isCloseUp = state.scene !== 'party';
+      const personScale = isCloseUp ? 112 : 78;
+      const padX = isCloseUp ? 118 : 84;
+      const stepX = (w - padX * 2) / Math.max(1, cast.length - 1);
+      const hypeEnergy = t < state.hypeUntil ? Math.min(1, (state.hypeUntil - t) / 1.4) : 0;
+
+      state.hitBoxes = [];
+
+      for (let i = 0; i < cast.length; i++) {
+        const m = cast[i];
+        const px = padX + i * stepX;
+        const depthY = isCloseUp ? 0 : ((i % 2) === 0 ? -6 : 10);
+        const py = pierY + depthY;
+        const danceMove = state.dance === 'mixed' ? m.defaultMove : state.dance;
+        const view = state.customViews.get(m.id) || (state.viewMode === 'mixed' ? m.defaultView : state.viewMode);
+        const topStyle = state.customTops.get(m.id) || m.topStyle;
+        const bustScale = m.gender === 'female'
+          ? (state.bustOverride === 'varied' ? m.bustScale : Number(state.bustOverride))
+          : undefined;
+
+        const spec = {
+          id: m.id,
+          role: 'party-dance',
+          danceMove,
+          gender: m.gender,
+          bodyType: m.bodyType,
+          topStyle,
+          bustScale,
+          view,
+          seed: m.seed,
+          facing: m.facing,
+          hypeEnergy,
+        };
+
+        drawTopsidePerson(ctx, px, py, personScale, t, spec);
+
+        state.hitBoxes.push({
+          member: m,
+          view,
+          x0: px - personScale * 0.58,
+          x1: px + personScale * 0.58,
+          y0: py - personScale * 1.9,
+          y1: py + 12,
+        });
+
+        if (state.showLabels) {
+          const resolved = resolveTopsidePersonProfile(spec);
+          const line1 = m.gender === 'female'
+            ? (TOP_LABELS[resolved.topStyle] || resolved.topStyle)
+            : resolved.prof.id;
+          const line2 = m.gender === 'female'
+            ? `${resolved.prof.id} · ${resolved.bustScale.toFixed(2)}× · ${view}`
+            : `${danceMove} · ${view}`;
+          const line3 = m.gender === 'female' ? danceMove : '';
+
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.72)';
+          const boxW = isCloseUp ? 148 : 106;
+          const boxH = line3 ? 44 : 32;
+          ctx.beginPath();
+          ctx.roundRect(px - boxW * 0.5, py + 14, boxW, boxH, 7);
+          ctx.fill();
+
+          ctx.font = '800 11px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillStyle = m.gender === 'female' ? '#fbcfe8' : '#bae6fd';
+          ctx.fillText(line1, px, py + 28);
+
+          ctx.font = '700 10px ui-monospace, SFMono-Regular, monospace';
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillText(line2, px, py + 41);
+
+          if (line3) {
+            ctx.fillStyle = '#fde047';
+            ctx.fillText(line3, px, py + 53);
+          }
+          ctx.restore();
+        }
+      }
+    }
+
+    let lastMs = performance.now();
+    function loop(nowMs) {
+      const dt = Math.min(0.05, (nowMs - lastMs) * 0.001);
+      lastMs = nowMs;
+      if (state.playing) {
+        state.simTime += dt * state.speed;
+      }
+      renderFrame(state.simTime);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

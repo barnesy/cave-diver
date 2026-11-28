@@ -14202,7 +14202,7 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
   }
   drawTopsideHypeOverlay(host, mockCtx, (x) => 320 + x * 20, (y) => 180 + y * 20, 22, 22.4);
 
-  assert.equal(VICTORY_DANCE_MOVES.length, 8);
+  assert.equal(VICTORY_DANCE_MOVES.length, 14);
   for (const mv of VICTORY_DANCE_MOVES) {
     renderVictoryPhotoFrame(mockCtx, 640, 236, {
       level: cenote,
@@ -14217,5 +14217,93 @@ test('v284-v285 Built-In Topside Live Hype & Surface Audio Ducking, Biome Hangou
       burstAt: 0,
     }, 1.4);
   }
-  assert.ok(ops > 600, `Expected rich v284-v285 render operations across topside hangouts, hype & victory photo, got ${ops}`);
+  assert.ok(ops > 600, `Expected rich v284-v289 render operations across topside hangouts, hype & victory photo, got ${ops}`);
+});
+
+test('v289 co-ed topside cast, 8 varied body types, 6 female top styles, 14 dances & review studio', async () => {
+  const {
+    drawTopsidePerson,
+    POPULAR_DANCE_MOVES,
+    FEMALE_BODY_PROFILES,
+    MALE_BODY_PROFILES,
+    FEMALE_TOP_STYLES,
+    FEMALE_BUST_SIZES,
+    resolveTopsidePersonProfile,
+    resolveTopsidePersonView,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  assert.equal(POPULAR_DANCE_MOVES.length, 14);
+  assert.equal(FEMALE_BODY_PROFILES.length, 4);
+  assert.equal(MALE_BODY_PROFILES.length, 4);
+  assert.equal(FEMALE_TOP_STYLES.length, 6);
+  assert.equal(FEMALE_BUST_SIZES.length, 5);
+
+  // Co-ed crowd seed distribution yields both men and women + varied body types & top styles
+  const genders = new Set();
+  const bodyIds = new Set();
+  const tops = new Set();
+  for (let s = 0; s < 24; s++) {
+    const p = resolveTopsidePersonProfile({ seed: s, role: 'party-dance', danceMove: 'disco' });
+    genders.add(p.gender);
+    bodyIds.add(p.prof.id);
+    if (p.topStyle) tops.add(p.topStyle);
+  }
+  assert.deepEqual([...genders].sort(), ['female', 'male']);
+  assert.ok(bodyIds.size >= 6, `Expected diverse male & female body types, got ${[...bodyIds].join(',')}`);
+  assert.ok(tops.size >= 5, `Expected varied female top styles, got ${[...tops].join(',')}`);
+
+  // New dance view affinities
+  assert.equal(resolveTopsidePersonView({ role: 'party-dance', danceMove: 'moonwalk', seed: 1 }), 'side');
+  assert.equal(resolveTopsidePersonView({ role: 'party-dance', danceMove: 'macarena', seed: 1 }), 'front');
+
+  // Render every combination of gender, bodyType, topStyle, bustScale, view & dance without error
+  let ops = 0;
+  const mockCtx = {
+    canvas: { width: 800, height: 400 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() { ops++; },
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {},
+  };
+
+  for (const topStyle of FEMALE_TOP_STYLES) {
+    for (const vw of ['front', 'side', 'back']) {
+      drawTopsidePerson(mockCtx, 200, 220, 48, 1.8, {
+        role: 'party-dance',
+        gender: 'female',
+        bodyType: 'hourglass',
+        topStyle,
+        bustScale: 1.24,
+        danceMove: 'hula',
+        view: vw,
+        seed: 3,
+      });
+    }
+  }
+  for (const prof of MALE_BODY_PROFILES) {
+    for (const vw of ['front', 'side', 'back']) {
+      drawTopsidePerson(mockCtx, 200, 220, 48, 2.4, {
+        role: 'party-dance',
+        gender: 'male',
+        bodyType: prof.id,
+        danceMove: 'air-guitar',
+        view: vw,
+        seed: 4,
+      });
+    }
+  }
+  for (let i = 0; i < POPULAR_DANCE_MOVES.length; i++) {
+    drawTopsidePerson(mockCtx, 200, 220, 44, 2.1, {
+      role: 'party-dance',
+      danceMove: POPULAR_DANCE_MOVES[i],
+      seed: i,
+    });
+  }
+  assert.ok(ops > 400, `Expected rich v289 render ops, got ${ops}`);
+
+  // Interactive Dance Review Studio page exists and imports renderer + all 14 moves
+  const studioHtml = fs.readFileSync(path.resolve('public/topside-studio.html'), 'utf8');
+  assert.ok(studioHtml.includes('topsidePeopleRenderer.js') && studioHtml.includes('air-guitar') && studioHtml.includes('plunge-onepiece'));
 });

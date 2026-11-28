@@ -23,6 +23,12 @@ export const VICTORY_DANCE_MOVES = Object.freeze([
   { id: 'running-man', icon: '👟', label: 'Run Man' },
   { id: 'body-roll', icon: '🌊', label: 'Body Roll' },
   { id: 'ymca', icon: '🙌', label: 'YMCA' },
+  { id: 'moonwalk', icon: '🌙', label: 'Moonwalk' },
+  { id: 'shuffle', icon: '🔥', label: 'Shuffle' },
+  { id: 'robot', icon: '🤖', label: 'Robot' },
+  { id: 'hula', icon: '🌺', label: 'Hula' },
+  { id: 'macarena', icon: '🎵', label: 'Macarena' },
+  { id: 'air-guitar', icon: '🎸', label: 'Air Guitar' },
 ]);
 
 const BIOME_SKY = Object.freeze({
@@ -164,12 +170,12 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
     ctx.stroke();
   }
 
-  // 5. Flanking Cheering Topside Party Crowd (varied front, back & side profiles + depth stagger!)
+  // 5. Flanking Cheering Co-Ed Topside Party Crowd (varied front, back & side profiles + depth stagger!)
   const crowdSlots = [
-    { x: w * 0.1, yOff: -4, move: danceMove, view: danceMove === 'twerk' ? 'back' : 'front', seed: 2, facing: 1 },
-    { x: w * 0.2, yOff: 3, move: 'disco', view: 'side', seed: 5, facing: 1 },
-    { x: w * 0.8, yOff: -3, move: 'floss', view: 'side', seed: 3, facing: -1 },
-    { x: w * 0.9, yOff: 4, move: danceMove, view: danceMove === 'twerk' ? 'side' : 'back', seed: 1, facing: -1 },
+    { x: w * 0.1, yOff: -4, move: danceMove, gender: 'female', view: danceMove === 'twerk' ? 'back' : 'front', seed: 2, facing: 1 },
+    { x: w * 0.2, yOff: 3, move: 'shuffle', gender: 'male', view: 'side', seed: 5, facing: 1 },
+    { x: w * 0.8, yOff: -3, move: 'hula', gender: 'female', view: 'front', seed: 3, facing: -1 },
+    { x: w * 0.9, yOff: 4, move: danceMove, gender: 'male', view: danceMove === 'twerk' || danceMove === 'moonwalk' ? 'side' : 'front', seed: 1, facing: -1 },
   ];
   for (let i = 0; i < crowdSlots.length; i++) {
     const cs = crowdSlots[i];
@@ -177,6 +183,7 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
       id: 9000 + i,
       role: 'party-dance',
       danceMove: cs.move,
+      gender: cs.gender,
       view: cs.view,
       seed: cs.seed,
       facing: cs.facing,
@@ -204,9 +211,11 @@ export function renderVictoryPhotoFrame(ctx, w, h, state, timeSec = 0) {
     const memberView =
       danceMove === 'twerk'
         ? (i % 2 === 0 ? 'back' : 'side')
-        : danceMove === 'running-man' || danceMove === 'body-roll'
+        : danceMove === 'running-man' || danceMove === 'body-roll' || danceMove === 'moonwalk'
           ? 'side'
-          : (i === 0 ? 'front' : i === 1 ? 'side' : 'front');
+          : danceMove === 'macarena'
+            ? 'front'
+            : (i === 0 ? 'front' : i === 1 ? 'side' : 'front');
     const yStagger = i === 1 ? -4 : i === 2 ? 3 : 2;
     drawTopsidePerson(ctx, mx, pierY + yStagger, scale * (member.isHero ? 1.12 : 0.98), timeSec, {
       id: 9200 + i,

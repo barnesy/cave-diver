@@ -219,7 +219,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const resolvedPath = urlPath === '/' ? 'index.html' : (urlPath === '/codex' || urlPath === '/codex/') ? 'codex.html' : urlPath;
+  const resolvedPath =
+    urlPath === '/' ? 'index.html'
+      : (urlPath === '/codex' || urlPath === '/codex/') ? 'codex.html'
+        : (urlPath === '/studio' || urlPath === '/studio/') ? 'topside-studio.html'
+          : urlPath;
   let filePath = path.normalize(path.join(PUBLIC_DIR, resolvedPath));
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
