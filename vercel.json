@@ -5,6 +5,7 @@
   "rewrites": [
     { "source": "/join/:code", "destination": "/?room=:code" },
     { "source": "/codex", "destination": "/codex.html" },
+    { "source": "/studio", "destination": "/topside-studio.html" },
     { "source": "/healthz", "destination": "/api/healthz" },
     { "source": "/api/github/:action", "destination": "/api/github?action=:action" }
   ],
