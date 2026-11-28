@@ -14766,3 +14766,29 @@ test('v302 12 selectable hairstyles (6 female + 6 male) in avatar model & Front/
   }
   assert.ok(ops > 700, `Expected rich v302 render ops across all 12 hairstyles x 3 views, got ${ops}`);
 });
+
+test('v303 unified side-view chest & all 6 bathing suit tops (arm-up and arm-forward) render cleanly', async () => {
+  const { FEMALE_TOP_STYLES, drawTopsidePerson } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  let ops = 0;
+  let clipOps = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    clip() { clipOps++; },
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+  for (const mv of ['kpop-point', 'hula', 'disco']) {
+    for (const st of FEMALE_TOP_STYLES) {
+      drawTopsidePerson(mockCtx, 200, 340, 220, 0.35, {
+        id: 99500 + st.length + mv.length,
+        gender: 'female', bodyType: 'hourglass', role: 'party-dance', danceMove: mv,
+        view: 'side', topStyle: st, hairStyle: 'top-knot', seed: 3, facing: 1,
+      });
+    }
+  }
+  assert.ok(clipOps >= 36, `Expected unified torso+bust side clips across all 6 tops, got ${clipOps}`);
+  assert.ok(ops > 500, `Expected rich v303 side-view top render ops, got ${ops}`);
+});
