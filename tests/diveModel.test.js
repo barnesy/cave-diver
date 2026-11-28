@@ -14608,3 +14608,72 @@ test('v299 back-view arms-over-boobs layering, contoured underbust hems, K-Pop/T
   }
   assert.ok(ops > 150, `Expected rich 5-phase jump-in & dance draw ops, got ${ops}`);
 });
+
+test('v300 trimmer bust, thin underwire, proportional twerk arms & 4-beat level-start dive launch transition', async () => {
+  const {
+    FEMALE_BODY_PROFILES,
+    FEMALE_BUST_SIZES,
+    drawTopsidePerson,
+    drawPlayerAvatarDiveLaunch,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+  const {
+    triggerAvatarDiveLaunch,
+    cancelAvatarDiveLaunch,
+    getAvatarDiveLaunchState,
+  } = await import('../public/js/game/playerAvatar.js');
+
+  // Smaller, more natural bust scaling across body profiles & bust presets
+  for (const prof of FEMALE_BODY_PROFILES) {
+    assert.ok(prof.cupScale <= 1.05, `Expected trimmer cupScale <= 1.05 for ${prof.id}, got ${prof.cupScale}`);
+  }
+  assert.ok(Math.max(...FEMALE_BUST_SIZES) <= 1.15, `Expected max bust size <= 1.15, got ${Math.max(...FEMALE_BUST_SIZES)}`);
+
+  // Trigger -> active -> handoff -> cancel lifecycle on level-start dive launch state
+  cancelAvatarDiveLaunch();
+  assert.equal(getAvatarDiveLaunchState().active, false);
+  const seq = triggerAvatarDiveLaunch('cenote-sunwell', { suitId: 'cenote-azure' });
+  assert.ok(seq >= 1);
+  const stNow = getAvatarDiveLaunchState();
+  assert.equal(stNow.active, true);
+  assert.equal(stNow.diverHidden, true);
+  assert.equal(stNow.emergeAlpha, 0);
+  assert.ok(stNow.camLiftM > 0, `Expected upward launch camera framing lift, got ${stNow.camLiftM}`);
+  cancelAvatarDiveLaunch();
+  assert.equal(getAvatarDiveLaunchState().active, false);
+
+  let ops = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+    createRadialGradient() { return { addColorStop() {} }; },
+  };
+
+  // Render twerk in Front, Side, and Back + all 4 beats of level-start dive launch transition!
+  for (const vw of ['front', 'side', 'back']) {
+    drawTopsidePerson(mockCtx, 200, 340, 140, 0.45, {
+      id: 99950 + vw.length,
+      gender: 'female',
+      bodyType: 'voluptuous',
+      role: 'party-dance',
+      danceMove: 'twerk',
+      view: vw,
+      topStyle: 'balconette',
+      seed: 2,
+      facing: 1,
+    });
+  }
+  for (const elapsed of [0.25, 0.78, 1.22, 1.68, 2.22]) {
+    const ok = drawPlayerAvatarDiveLaunch(mockCtx, 70, 165, 255, 285, 1, 56, 3.0, {
+      forcedElapsed: elapsed,
+      livery: { suitId: 'cenote-azure' },
+      targetSplashX: 280,
+    });
+    assert.equal(ok, true, `Expected level-start dive launch beat at ${elapsed}s to render`);
+  }
+  assert.equal(drawPlayerAvatarDiveLaunch(mockCtx, 70, 165, 255, 285, 1, 56, 3.0, { forcedElapsed: 3.0 }), false);
+  assert.ok(ops > 180, `Expected rich v300 twerk & dive-launch render operations, got ${ops}`);
+});

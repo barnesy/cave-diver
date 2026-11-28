@@ -1,4 +1,5 @@
 import { getAscentConfig } from '../levels/index.js';
+import { triggerAvatarDiveLaunch, cancelAvatarDiveLaunch, getAvatarDiveLaunchState } from './playerAvatar.js';
 import { createDiveState, stepDivePhysiology, receiveGasIntoState, computeTissueCompartmentStatus } from '../physics/diveModel.js';
 import { resolveDiverCollision, resolveDiverPeerCollisions, evaluateCaveSDF, evaluateCaveNormal } from './collision.js';
 import { createDynamicHazards, stepDynamicHazards, computeTidalCurrent, evaluateDiverHydrology } from './dynamicHazards.js';
@@ -493,6 +494,10 @@ export function createDiveSession(
   const cleanModifiers = sanitizeExpeditionModifiers(modifiers);
   const spawnX = level.spawn.x + spawnOffsetX;
   const spawnY = level.spawn.y + spawnOffsetY;
+  // Trigger cinematic topside suit-up -> gear pop-on -> jump-in -> diver handoff on browser dive launch (v300)
+  if (typeof window !== 'undefined' && !level?.isProvingGrounds && !isRescueDrill) {
+    triggerAvatarDiveLaunch(level?.id || '', livery || null);
+  }
   const exploreCells = buildExploreCells(level);
   const exploredCells = new Set();
   const exploredGrid = new Set();
@@ -5148,6 +5153,10 @@ export function placeWorldBeacon(session, { x, y, author = 'DIVER', label = '', 
 }
 
 export function stepDiveSession(session, thrust, dt, callbacks = {}) {
+  // Cancel cinematic level-start topside launch transition immediately if player actively steers (v300)
+  if (thrust && Math.hypot(thrust.ax || 0, thrust.ay || 0) > 0.22 && getAvatarDiveLaunchState().active) {
+    cancelAvatarDiveLaunch();
+  }
   // Decay active synced tactical sonar pings in place (v207)
   stepSyncedSonarPings(session, dt);
   // Decay active acoustic world beacons in place (v197)

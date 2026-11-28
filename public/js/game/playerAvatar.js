@@ -166,7 +166,7 @@ export function buildTopsideSpecFromAvatar(avatar = null, overrides = {}) {
   };
 }
 
-// ── Reactive Topside Avatar Site Jump-In Choreography State (v296) ──
+// ── Reactive Topside Avatar Site Jump-In & Level-Start Dive Launch State (v296 / v300) ──
 const _nowSec = () => (typeof performance !== 'undefined' && performance.now ? performance.now() * 0.001 : Date.now() * 0.001);
 
 const _jumpState = {
@@ -176,11 +176,20 @@ const _jumpState = {
   seq: 0,
 };
 
+const _launchState = {
+  triggeredAt: -99,
+  levelId: '',
+  livery: null,
+  duration: 2.65,
+  seq: 0,
+};
+
 /**
  * Trigger the player's custom avatar to run out onto the dock/boat stern and leap into the water!
- * Called whenever a dive site is picked on the Home Screen, when saving a new avatar, or on dive launch.
+ * Called whenever a dive site is picked on the Home Screen or when saving a new avatar.
  */
 export function triggerAvatarSiteJump(levelId = '') {
+  _launchState.triggeredAt = -99;
   _jumpState.triggeredAt = _nowSec();
   _jumpState.levelId = String(levelId || '');
   _jumpState.seq += 1;
@@ -188,7 +197,7 @@ export function triggerAvatarSiteJump(levelId = '') {
 }
 
 /**
- * Inspect whether the player's avatar jump-in animation is currently active (`{ active, elapsed, duration, levelId, seq }`).
+ * Inspect whether the player's avatar site-pick jump-in animation is currently active.
  */
 export function getAvatarSiteJumpState(nowSec = _nowSec()) {
   const elapsed = nowSec - _jumpState.triggeredAt;
@@ -199,5 +208,74 @@ export function getAvatarSiteJumpState(nowSec = _nowSec()) {
     duration: _jumpState.duration,
     levelId: _jumpState.levelId,
     seq: _jumpState.seq,
+  };
+}
+
+/**
+ * Trigger the level-start transition (v300):
+ * Standing avatar makes a ready motion -> scuba gear pops on -> jumps cleanly into the water ->
+ * seamlessly becomes your playable underwater diver!
+ */
+export function triggerAvatarDiveLaunch(levelId = '', livery = null) {
+  _jumpState.triggeredAt = -99;
+  _launchState.triggeredAt = _nowSec();
+  _launchState.levelId = String(levelId || '');
+  _launchState.livery = livery || null;
+  _launchState.seq += 1;
+  return _launchState.seq;
+}
+
+/**
+ * Cancel an in-progress level-start launch transition immediately (e.g. when player steers early).
+ */
+export function cancelAvatarDiveLaunch() {
+  _launchState.triggeredAt = -99;
+}
+
+/**
+ * Inspect live level-start dive launch transition timing & handoff blend values.
+ *   0.00 -> 0.58s : Ready-up motion on dock/boat in bathing suit
+ *   0.58 -> 1.12s : Scuba gear pop-on flash & lock-in
+ *   1.12 -> 2.04s : Geared springboard dive leap into the entry water
+ *   2.04 -> 2.65s : Splashdown plume & smooth underwater diver emerge handoff
+ */
+export function getAvatarDiveLaunchState(nowSec = _nowSec()) {
+  const elapsed = nowSec - _launchState.triggeredAt;
+  const active = elapsed >= 0 && elapsed < _launchState.duration;
+  if (!active) {
+    return {
+      active: false,
+      elapsed: -1,
+      duration: _launchState.duration,
+      levelId: _launchState.levelId,
+      livery: _launchState.livery,
+      diverHidden: false,
+      emergeAlpha: 1,
+      camLiftM: 0,
+      seq: _launchState.seq,
+    };
+  }
+  const diverHidden = elapsed < 2.04;
+  const emergeAlpha = diverHidden ? 0 : Math.min(1, (elapsed - 2.04) / 0.42);
+  let camLiftM = 0;
+  if (elapsed < 0.25) {
+    const u = elapsed / 0.25;
+    camLiftM = 2.6 * (u * u * (3 - 2 * u));
+  } else if (elapsed < 1.85) {
+    camLiftM = 2.6;
+  } else {
+    const u = Math.min(1, (elapsed - 1.85) / 0.72);
+    camLiftM = 2.6 * (1 - u * u * (3 - 2 * u));
+  }
+  return {
+    active: true,
+    elapsed,
+    duration: _launchState.duration,
+    levelId: _launchState.levelId,
+    livery: _launchState.livery,
+    diverHidden,
+    emergeAlpha,
+    camLiftM,
+    seq: _launchState.seq,
   };
 }

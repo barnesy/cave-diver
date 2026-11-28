@@ -1,4 +1,5 @@
 import { evaluateCaveSDF } from './collision.js';
+import { getAvatarDiveLaunchState } from './playerAvatar.js';
 import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
 import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama, preloadDefaultMenuBackdrop } from './renderers/topsideAtmosphereRenderer.js';
 import { syncTopsideHypeFromDive } from './renderers/topsidePropsRenderer.js';
@@ -929,9 +930,12 @@ export class CaveRenderer {
       : targetViewCenterYFrac;
     const viewCenterY = ch * this._viewCenterYFrac;
 
+    const diveLaunch = !isPhotoMode && diver ? getAvatarDiveLaunchState() : null;
     const effCamX = this.camX + narcX;
-    const effCamY = this.camY + narcY;
+    const effCamY = this.camY + narcY - (diveLaunch?.active ? diveLaunch.camLiftM : 0);
     this._lastViewTransform = { viewCenterX, viewCenterY, camX: effCamX, camY: effCamY, scale, dpr };
+    this._activeDiverScreenX = diver ? (viewCenterX + (diver.x - effCamX) * scale) : null;
+    this._isInWaterDive = Boolean(diver && !isPhotoMode && !diveLaunch?.active && (diver.y || 0) > 0.25);
 
     const toScreenX = (wx) => viewCenterX + (wx - effCamX) * scale;
     const toScreenY = (wy) => viewCenterY + (wy - effCamY) * scale;
@@ -1171,22 +1175,56 @@ export class CaveRenderer {
       this._drawSubmergedStories(ctx, stories, visX0 - 8, visX1 + 8, visY0 - 8, visY1 + 8, toScreenX, toScreenY, scale, timeSec, 'world');
     }
 
-    // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams + Hydrodynamic Fin/DPV Wake (v202)
-    this._drawDiverHydroWake?.(ctx, diver, toScreenX, toScreenY, scale, timeSec);
+    // 9. Divers & Active Co-op Rescue Tow Lifelines + Air-Share Octo Hose Beams + Hydrodynamic Fin/DPV Wake (v202 / v300)
+    if (!diveLaunch?.diverHidden) {
+      this._drawDiverHydroWake?.(ctx, diver, toScreenX, toScreenY, scale, timeSec);
+    }
     this._drawBuddyRescueTethers(ctx, diver, peerList, toScreenX, toScreenY, scale, timeSec, airShareBeams);
     const lairArmed = Boolean(secretLair?.combatMode && secretLair?.weaponEquipped && !secretLair?.bossDefeated);
     for (let i = 0; i < peerList.length; i++) {
       this._drawDiver(ctx, peerList[i], toScreenX, toScreenY, scale, timeSec, true, lairArmed ? { hasSpeargun: true } : null);
     }
-    this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, {
-      wreckState,
-      mechFx,
-      reelingActive,
-      drills,
-      hasSpeargun: lairArmed,
-      spearRecoil: secretLair?.recoilSec ? secretLair.recoilSec / 0.12 : 0,
-      muzzleFlash: secretLair?.muzzleFlashSec || 0,
-    });
+    if (!diveLaunch?.diverHidden) {
+      const emergeA = diveLaunch?.active ? diveLaunch.emergeAlpha : 1;
+      if (emergeA < 0.99 && diver) {
+        ctx.save();
+        ctx.globalAlpha = emergeA;
+        this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, {
+          wreckState,
+          mechFx,
+          reelingActive,
+          drills,
+          hasSpeargun: lairArmed,
+          spearRecoil: secretLair?.recoilSec ? secretLair.recoilSec / 0.12 : 0,
+          muzzleFlash: secretLair?.muzzleFlashSec || 0,
+        });
+        // Sparkling underwater splashdown bubble column framing the diver's seamless water entry!
+        const dx = toScreenX(diver.x);
+        const dy = toScreenY(diver.y);
+        const bFade = Math.max(0, 1 - emergeA * 0.9);
+        for (let b = 0; b < 10; b++) {
+          const ang = b * 0.63 + timeSec * 2.5;
+          const rad = (0.28 + emergeA * 0.95 + (b % 3) * 0.22) * scale;
+          const bx = dx + Math.cos(ang) * rad * 0.72;
+          const by = dy - (b * 0.16 + emergeA * 0.65) * scale;
+          ctx.fillStyle = `rgba(224, 242, 254, ${(0.72 * bFade).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(bx, by, Math.max(1.5, (0.095 - (b % 3) * 0.02) * scale), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else {
+        this._drawDiver(ctx, diver, toScreenX, toScreenY, scale, timeSec, false, {
+          wreckState,
+          mechFx,
+          reelingActive,
+          drills,
+          hasSpeargun: lairArmed,
+          spearRecoil: secretLair?.recoilSec ? secretLair.recoilSec / 0.12 : 0,
+          muzzleFlash: secretLair?.muzzleFlashSec || 0,
+        });
+      }
+    }
     if (salvage?.liftBagActive || (salvage?.inflateAnim || 0) > 0.02) {
       this._drawDiverLiftBag(ctx, diver, salvage, toScreenX, toScreenY, scale, timeSec, mechFx, collectedIds, carryingBody);
     }
