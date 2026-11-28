@@ -1,11 +1,12 @@
 import { evaluateCaveSDF } from '../collision.js';
 import { isHatchPressurized } from '../salvagePhysics.js';
 import { computeSurgeWave } from '../diveSession.js';
+import { drawShipwreckTopsideCrowd } from './topsidePeopleRenderer.js';
 
 export const wreckAndInteractivesMethods = {
   _drawWreckSurfaceBoat(ctx, visX0, visX1, toScreenX, toScreenY, scale, timeSec) {
     const boatX = this.level.spawn?.x ?? 0;
-    if (boatX + 14 < visX0 || boatX - 14 > visX1) return;
+    if (boatX + 24 < visX0 || boatX - 24 > visX1) return;
     const bobY = Math.sin(timeSec * 1.7) * 0.14;
     const pitch = Math.sin(timeSec * 1.35 + 0.6) * 0.022;
     const bx = toScreenX(boatX);
@@ -62,6 +63,9 @@ export const wreckAndInteractivesMethods = {
         ctx.stroke();
       }
       ctx.restore();
+
+      // 4. Lively topside boat crew suiting up & bathing-suit partygoers + flanking party rafts (v281)
+      drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, { bw, bh });
       return;
     }
 
@@ -159,6 +163,7 @@ export const wreckAndInteractivesMethods = {
     ctx.stroke();
 
     ctx.restore();
+    drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, null);
   },
 
   _drawWreckShipArchitecture(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {

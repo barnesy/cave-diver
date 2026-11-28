@@ -13991,3 +13991,71 @@ test('v280 Codex Test-in-Water + Saved Mixes, Live Home Biome Preview, Calm Imme
   assert.ok(styleCss.includes('#screen-hud.hud-calm-cruise .hud-top-bar'), 'style.css must fade non-essential HUD panels smoothly in calm-cruise');
   assert.ok(rendererJs.includes('this._viewCenterYFrac') && rendererJs.includes('Batched sunlit surface caustic shimmer ribbon'), 'renderer.js must smooth viewCenterY transitions and batch surface shimmer');
 });
+
+test('v281 Living Topside & Background Crowds: Bathing-Suit Partygoers & Suiting-Up Divers across All Biomes, Wrecks & Menu Backdrop', async () => {
+  const fs = await import('node:fs');
+  const {
+    drawTopsidePerson,
+    drawShipwreckTopsideCrowd,
+    drawAllSiteTopsidePeople,
+    drawDefaultBackdropTopsidePeople,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+
+  const topsideAtmo = fs.readFileSync(new URL('../public/js/game/renderers/topsideAtmosphereRenderer.js', import.meta.url), 'utf8');
+  const wreckRend = fs.readFileSync(new URL('../public/js/game/renderers/wreckAndInteractivesRenderer.js', import.meta.url), 'utf8');
+  const swJs = fs.readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  const indexHtml = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  assert.ok(topsideAtmo.includes('drawAllSiteTopsidePeople') && topsideAtmo.includes('drawDefaultBackdropTopsidePeople'), 'topsideAtmosphereRenderer must wire site & default backdrop crowds');
+  assert.ok(wreckRend.includes('drawShipwreckTopsideCrowd'), 'wreckAndInteractivesRenderer must wire boat & party-raft crowds');
+  assert.ok(swJs.includes('topsidePeopleRenderer.js') && indexHtml.includes('topsidePeopleRenderer.js'), 'PWA shell & importmap must include topsidePeopleRenderer.js');
+
+  // Smoke-render all 8 roles, shipwreck crowd, cenote crowd, polar crowd, and default backdrop on a mock 2D canvas context
+  let drawOps = 0;
+  const noop = () => { drawOps++; };
+  const mockCtx = {
+    canvas: { width: 1280, height: 720 },
+    save: noop,
+    restore: noop,
+    translate: noop,
+    scale: noop,
+    rotate: noop,
+    beginPath: noop,
+    closePath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    quadraticCurveTo: noop,
+    arc: noop,
+    ellipse: noop,
+    rect: noop,
+    roundRect: noop,
+    fillRect: noop,
+    strokeRect: noop,
+    fill: noop,
+    stroke: noop,
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineCap: 'round',
+    lineJoin: 'round',
+    globalAlpha: 1,
+  };
+
+  for (const role of ['party-dance', 'party-toast', 'party-lounge', 'party-float', 'gear-zip', 'gear-fins', 'gear-tank', 'gear-ready']) {
+    drawTopsidePerson(mockCtx, 320, 180, 24, 1.5, { role, seed: 2, facing: 1 });
+  }
+  drawShipwreckTopsideCrowd(mockCtx, 0, -25, 25, (x) => 640 + x * 24, (y) => 240 + y * 24, 24, 2.1, { bw: 290, bh: 130 });
+  drawDefaultBackdropTopsidePeople(mockCtx, 1280, 720, 1.8);
+
+  const cenote = getLevelById('cenote-el-abismo');
+  const polar = getLevelById('scoresby-sund-iceberg');
+  const mockRenderer = (lvl) => ({
+    level: lvl,
+    _reducedMotion: false,
+    _getHorizonGroundY: () => -3.2,
+    _findBasinCliffEdgeX: (b, _y, side) => (side < 0 ? b.xMin + 0.5 : b.xMax - 0.5),
+  });
+  drawAllSiteTopsidePeople(mockRenderer(cenote), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
+  drawAllSiteTopsidePeople(mockRenderer(polar), mockCtx, -30, 60, (x) => 640 + x * 22, (y) => 220 + y * 22, 22, 2.4);
+  assert.ok(drawOps > 400, `Expected rich canvas draw calls for topside crowds, got ${drawOps}`);
+});

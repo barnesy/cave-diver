@@ -1,5 +1,6 @@
 import { evaluateCaveSDF } from '../collision.js';
 import { resolveDiverLiveryPalette, _drawArticulatedPreviewDiver } from '../rigLivery.js';
+import { drawAllSiteTopsidePeople, drawDefaultBackdropTopsidePeople } from './topsidePeopleRenderer.js';
 
 const _topsideLevelMetaCache = new WeakMap();
 
@@ -183,6 +184,7 @@ export function drawTopsideAtmosphereExtras(renderer, ctx, visX0, visX1, toScree
       ctx.closePath();
       ctx.fill();
     }
+    drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX, toScreenY, scale, renderer._reducedMotion ? 0 : timeSec);
     ctx.restore();
     return;
   }
@@ -231,6 +233,7 @@ export function drawTopsideAtmosphereExtras(renderer, ctx, visX0, visX1, toScree
       }
     }
   }
+  drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX, toScreenY, scale, renderer._reducedMotion ? 0 : timeSec);
   ctx.restore();
 }
 
@@ -737,6 +740,9 @@ export function drawMenuBackdropDiorama(renderer, level, timeSec = 0, livery = n
     ctx.stroke();
   }
   ctx.restore();
+
+  // 4b. Animated Topside Partygoers in Bathing Suits & Divers Suiting Up on Cliffs, Dock & Pool (v281)
+  drawDefaultBackdropTopsidePeople(ctx, cw, ch, tAnim);
 
   // 5. Gracefully gliding cenote slider turtle & lively tropical fish school
   ctx.save();
