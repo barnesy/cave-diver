@@ -64,8 +64,8 @@ export const wreckAndInteractivesMethods = {
       }
       ctx.restore();
 
-      // 4. Lively topside boat crew suiting up & bathing-suit partygoers + flanking party rafts (v281)
-      drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, { bw, bh });
+      // 4. Lively topside boat crew suiting up & bathing-suit partygoers + flanking party rafts (v281 / v284)
+      drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, { bw, bh }, this);
       return;
     }
 
@@ -163,7 +163,7 @@ export const wreckAndInteractivesMethods = {
     ctx.stroke();
 
     ctx.restore();
-    drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, null);
+    drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, this._reducedMotion ? 0 : timeSec, null, this);
   },
 
   _drawWreckShipArchitecture(ctx, visX0, visX1, visY0, visY1, toScreenX, toScreenY, scale, timeSec) {

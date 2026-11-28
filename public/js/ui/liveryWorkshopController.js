@@ -224,6 +224,7 @@ export function createLiveryWorkshopController({
   const gearSlotBuybackListEl = document.getElementById('gear-slot-buyback-list');
   const btnGearSlotCloseEl = document.getElementById('btn-gear-slot-close');
   const btnLiverySetsEl = document.getElementById('btn-livery-sets');
+  const btnLiveryBodyTypeEl = document.getElementById('btn-livery-body-type');
   const gearSetsModalEl = document.getElementById('gear-sets-modal');
   const gearSetsModalSubEl = document.getElementById('gear-sets-modal-sub');
   const gearSetsModalBodyEl = document.getElementById('gear-sets-modal-body');
@@ -1857,6 +1858,12 @@ export function createLiveryWorkshopController({
         });
       });
     }
+    if (btnLiveryBodyTypeEl) {
+      const isCurvy = pal.bodyType === 'curvy';
+      btnLiveryBodyTypeEl.classList.toggle('active', isCurvy);
+      btnLiveryBodyTypeEl.setAttribute('aria-pressed', isCurvy ? 'true' : 'false');
+      btnLiveryBodyTypeEl.textContent = isCurvy ? '⏳ Curvy ✓' : '⏳ Curvy';
+    }
     if (btnLiveryTeamUniformEl) {
       btnLiveryTeamUniformEl.classList.toggle('active', aiSquadTeamUniform);
       btnLiveryTeamUniformEl.setAttribute('aria-pressed', aiSquadTeamUniform ? 'true' : 'false');
@@ -2568,6 +2575,20 @@ export function createLiveryWorkshopController({
   }
 
   btnLiverySetsEl?.addEventListener('click', openGearSetsModal);
+  btnLiveryBodyTypeEl?.addEventListener('click', () => {
+    const unlocks = getCurrentLiveryUnlocks();
+    const nextBody = activeRigLivery.bodyType === 'curvy' ? 'athletic' : 'curvy';
+    activeRigLivery = sanitizeRigLivery({ ...activeRigLivery, bodyType: nextBody }, unlocks);
+    saveRigLivery();
+    syncLiveryUi();
+    renderLiveryWorkshopModal();
+    showToast(
+      nextBody === 'curvy'
+        ? '⏳ Curvy silhouette & underwater spring-bounce enabled on your rig!'
+        : '🤿 Classic diver silhouette selected.',
+      2.0
+    );
+  });
   btnGearSetsCloseEl?.addEventListener('click', closeGearSetsModal);
   gearSetsModalEl?.addEventListener('click', (e) => {
     if (e.target === gearSetsModalEl) closeGearSetsModal();

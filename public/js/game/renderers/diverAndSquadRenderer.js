@@ -786,16 +786,27 @@ export const diverAndSquadRendererMethods = {
     const rollScale = Math.abs(body.rollVisual) < 0.15 ? 0.15 : body.rollVisual;
     const facingLeft = body.facingSign < 0;
 
-    // Flexible drysuit spine core
-    this._drawLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, liveryPalette ? liveryPalette.suitMid : '#0f172a');
+    // Flexible spine core (bare warm skin midriff for bikini/cutout swimsuits)
+    const isBareTorso = liveryPalette?.suitCut === 'bikini' || liveryPalette?.suitCut === 'cutout';
+    this._drawLimbSegment(
+      ctx,
+      px,
+      py,
+      sx,
+      sy,
+      (liveryPalette?.bodyType === 'curvy' ? 0.28 : 0.36) * scale,
+      isBareTorso ? (liveryPalette.skinTone || '#e8b68c') : (liveryPalette ? liveryPalette.suitMid : '#0f172a')
+    );
     // Subtle shoulder / hip trim stripe (with live plasma-wave conduit pulse)
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = Math.max(1.5, 0.04 * scale);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(sx, sy);
-    ctx.stroke();
+    if (!isBareTorso) {
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = Math.max(1.5, 0.04 * scale);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(sx, sy);
+      ctx.stroke();
+    }
     if (liveryPalette?.trimFx === 'plasma-wave') {
       const pt = ((timeSec * 1.45) % 1 + 1) % 1;
       ctx.fillStyle = '#e0f2fe';
@@ -818,6 +829,9 @@ export const diverAndSquadRendererMethods = {
       dpvThrusting: diver.dpvThrusting,
       timeSec,
       liveryPalette,
+      vx: diver.vx || 0,
+      vy: diver.vy || 0,
+      bounceKey: diver.id || (isPeer ? 'peer' : 'self'),
     });
     ctx.restore();
 

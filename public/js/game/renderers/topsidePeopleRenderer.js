@@ -10,6 +10,13 @@
  * Zero per-frame heap allocations & zero per-person gradients so the mobile 4x CPU
  * < 15.0 ms performance guard stays rock-solid.
  */
+import {
+  drawBiomeSurfaceHangout,
+  drawPartyDiveBoatEnhancements,
+  drawTopsideCannonballer,
+  drawTopsideHypeOverlay,
+  getTopsideHypeEnergy,
+} from './topsidePropsRenderer.js';
 
 const SKIN_TONES = Object.freeze([
   '#f4cca4',
@@ -542,11 +549,15 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const seed = Math.abs(spec.seed || 0);
   const facing = spec.facing === -1 ? -1 : 1;
   const role = spec.role || 'party-dance';
-  const skin = SKIN_TONES[seed % SKIN_TONES.length];
-  const hair = HAIR_COLORS[(seed * 3 + 1) % HAIR_COLORS.length];
-  const swim = SWIM_PALETTES[seed % SWIM_PALETTES.length];
-  const wet = WETSUIT_PALETTES[seed % WETSUIT_PALETTES.length];
-  const prof = BODY_PROFILES[seed % BODY_PROFILES.length];
+  const skin = spec.skin || SKIN_TONES[seed % SKIN_TONES.length];
+  const hair = spec.hair || HAIR_COLORS[(seed * 3 + 1) % HAIR_COLORS.length];
+  const swim = spec.customSwim || SWIM_PALETTES[seed % SWIM_PALETTES.length];
+  const wet = spec.customWet || WETSUIT_PALETTES[seed % WETSUIT_PALETTES.length];
+  const baseProf = BODY_PROFILES[seed % BODY_PROFILES.length];
+  const prof = spec.bodyType === 'athletic'
+    ? { bust: 0.16, waist: 0.145, hip: 0.21, thigh: 0.12, glute: 0.11 }
+    : baseProf;
+  const hypeEnergy = Math.max(0, Math.min(1, Number(spec.hypeEnergy) || 0));
   const ph = seed * 1.73;
   const hScale = 0.93 + (seed % 3) * 0.065;
   const moveCode = spec.danceMove ? (spec.danceMove.charCodeAt(0) & 15) : 0;
@@ -901,6 +912,13 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     rKneeX = 0.2 * s + hipShiftX * 0.35;
   }
 
+  // Live crowd hype jump-cheer overlay (v284: big spring-mass jump bounce when diver splashes/scores/beats boss!)
+  if (hypeEnergy > 0.04) {
+    const cheerHop = Math.max(0, Math.sin(timeSec * (11.5 + (seed % 3) * 1.1) + ph));
+    bounceY -= cheerHop * (0.19 * hypeEnergy) * s;
+    hipShiftX += Math.sin(timeSec * 7.8 + ph) * 0.055 * hypeEnergy * s;
+  }
+
   // Ground contact shadow
   ctx.fillStyle = 'rgba(6, 16, 26, 0.35)';
   ctx.beginPath();
@@ -912,8 +930,9 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
   const shoulderY = -1.36 * s + bounceY + squatDrop * 0.78;
   const headY = -1.56 * s + bounceY + squatDrop * 0.72;
 
-  // Real-time independent damped spring-damper physics for bust & glutes (v283)!
-  const extraPulse = isDance
+  // Real-time independent damped spring-damper physics for bust & glutes (v283 / v284 hype impulse)!
+  const hypePulse = hypeEnergy > 0.04 ? Math.sin(timeSec * 12.2 + ph) * (2.6 * hypeEnergy) : 0;
+  const extraPulse = (isDance
     ? (danceMove === 'twerk'
         ? Math.sin(timeSec * 10.2 + ph) * 2.2
         : danceMove === 'ymca' || danceMove === 'running-man'
@@ -921,7 +940,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
           : Math.sin(timeSec * 6.0 + ph) * 0.85)
     : isToast
       ? Math.sin(timeSec * 3.8 + ph) * 0.45
-      : 0;
+      : 0) + hypePulse;
   const bounceSt = computeCharacterBounceState(
     charKey,
     chestShiftX / s,
@@ -1381,9 +1400,11 @@ function drawCompanionPartyRaft(ctx, wx, toScreenX, toScreenY, scale, timeSec, s
  * Draw lively curvy crew & popular-dance partygoers directly on the Shipwreck dive charter
  * boat deck (synchronized with swell bob & pitch!), plus flanking party RIB rafts & floaters!
  */
-export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, timeSec, boatGeom = null) {
+export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, toScreenY, scale, timeSec, boatGeom = null, renderer = null) {
   const surfY = toScreenY(0);
   if (surfY < -140 || surfY > ctx.canvas.height + 160) return;
+
+  const hypeEnergy = renderer ? getTopsideHypeEnergy(renderer, timeSec) : 0;
 
   if (boatX + 12 >= visX0 && boatX - 12 <= visX1) {
     const bobY = Math.sin(timeSec * 1.7) * 0.14;
@@ -1402,6 +1423,7 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
     const bowDeckY = boatGeom ? -bh * 0.34 : -0.92 * scale;
     const sternPlatY = boatGeom ? -bh * 0.04 : -0.12 * scale;
 
+    drawPartyDiveBoatEnhancements(ctx, 0, 0, bw, bh, scale, timeSec, hypeEnergy);
     drawFestiveStringLights(ctx, -bw * 0.06, -bh * 0.8, -bw * 0.42, -bh * 0.44, scale, timeSec, 0.32);
     drawFestiveStringLights(ctx, -bw * 0.04, -bh * 0.8, bw * 0.44, -bh * 0.36, scale, timeSec, 0.28);
 
@@ -1410,6 +1432,7 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
       role: 'gear-fins',
       seed: 1,
       facing: -1,
+      hypeEnergy,
     });
 
     // Aft dive deck (by silver tanks): Divers suiting up + curvy salsa dancer!
@@ -1417,17 +1440,20 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
       role: 'gear-zip',
       seed: 2,
       facing: 1,
+      hypeEnergy,
     });
     drawTopsidePerson(ctx, -bw * 0.26, aftDeckY, scale * 0.9, timeSec, {
       role: 'party-dance',
       danceMove: 'salsa',
       seed: 6,
       facing: 1,
+      hypeEnergy,
     });
     drawTopsidePerson(ctx, -bw * 0.17, aftDeckY, scale * 0.92, timeSec, {
       role: 'gear-tank',
       seed: 4,
       facing: -1,
+      hypeEnergy,
     });
 
     // Upper cabin sun-deck: Curvy dance squad busting out Floss, Twerk & Disco!
@@ -1437,18 +1463,21 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
       danceMove: 'floss',
       seed: 0,
       facing: 1,
+      hypeEnergy,
     });
     drawTopsidePerson(ctx, bw * 0.03, roofY, scale * 0.88, timeSec, {
       role: 'party-dance',
       danceMove: 'twerk',
       seed: 1,
       facing: 1,
+      hypeEnergy,
     });
     drawTopsidePerson(ctx, bw * 0.13, roofY, scale * 0.88, timeSec, {
       role: 'party-dance',
       danceMove: 'disco',
       seed: 3,
       facing: -1,
+      hypeEnergy,
     });
 
     // Foredeck / Bow: Dab & YMCA dancers partying on the bow!
@@ -1457,15 +1486,20 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
       danceMove: 'dab',
       seed: 5,
       facing: 1,
+      hypeEnergy,
     });
     drawTopsidePerson(ctx, bw * 0.37, bowDeckY, scale * 0.86, timeSec, {
       role: 'party-dance',
       danceMove: 'ymca',
       seed: 2,
       facing: -1,
+      hypeEnergy,
     });
 
     ctx.restore();
+
+    // Animated stern cannonballer leaping off the party boat!
+    drawTopsideCannonballer(ctx, bx - bw * 0.46, by - bh * 0.18, surfY, -1, scale, timeSec, 7, hypeEnergy);
   }
 
   const leftRaftX = boatX - 11.4;
@@ -1488,7 +1522,11 @@ export function drawShipwreckTopsideCrowd(ctx, boatX, visX0, visX1, toScreenX, t
       role: 'party-float',
       seed: fl.seed,
       facing: fl.facing,
+      hypeEnergy,
     });
+  }
+  if (renderer) {
+    drawTopsideHypeOverlay(renderer, ctx, toScreenX, toScreenY, scale, timeSec);
   }
 }
 
@@ -1509,6 +1547,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
 
   const dpr = renderer._cachedDpr || 1;
   const isCompactPerf = Boolean(renderer.isMobilePerf || (ctx.canvas.width / dpr) <= 540);
+  const hypeEnergy = getTopsideHypeEnergy(renderer, timeSec);
   const inVis = (wx) => wx + 1.6 >= visX0 && wx - 1.6 <= visX1;
   const getGroundY = (wx) =>
     typeof renderer._getHorizonGroundY === 'function' ? renderer._getHorizonGroundY(level, wx) : -3.4;
@@ -1575,10 +1614,17 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       }
     }
 
-    // 2. LEFT CLIFF-TOP RIM: Beach Dance Floor + Dive Prep Hub!
-    const l0 = topLeftX - 6.4;
+    // 2. LEFT CLIFF-TOP RIM: Biome-Specific Surface Hangout + Beach Dance Floor + Dive Prep Hub!
+    const l0 = topLeftX - 6.8;
     const l1 = topLeftX - 0.4;
     if (l1 + 2 >= visX0 && l0 - 2 <= visX1) {
+      const hangoutX = topLeftX - 5.4;
+      if (inVis(hangoutX)) {
+        drawBiomeSurfaceHangout(ctx, level, toScreenX(hangoutX), toScreenY(getGroundY(hangoutX)), scale, timeSec, {
+          compact: isCompactPerf,
+          facing: 1,
+        });
+      }
       if (!isCompactPerf) {
         drawFestiveStringLights(
           ctx,
@@ -1594,11 +1640,9 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         drawPartyGearProps(ctx, toScreenX(boomX), toScreenY(getGroundY(boomX)), scale, timeSec, 'party');
         const rackX = topLeftX - 1.2;
         drawPartyGearProps(ctx, toScreenX(rackX), toScreenY(getGroundY(rackX)), scale, timeSec, 'gear');
-        const umbX = topLeftX - 5.2;
-        drawBeachUmbrella(ctx, toScreenX(umbX), toScreenY(getGroundY(umbX)), scale, baseSeed, -0.09);
       }
 
-      // Curvy dance squad busting out Floss, Twerk & Salsa beside the palapa!
+      // Curvy dance squad busting out Floss, Twerk & Salsa beside the hangout!
       const p1x = topLeftX - 4.7;
       if (!isCompactPerf && inVis(p1x)) {
         drawTopsidePerson(ctx, toScreenX(p1x), toScreenY(getGroundY(p1x)), scale, timeSec, {
@@ -1606,6 +1650,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           danceMove: 'floss',
           seed: baseSeed + 0,
           facing: 1,
+          hypeEnergy,
         });
       }
       const p2x = topLeftX - 3.95;
@@ -1615,6 +1660,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           danceMove: 'twerk',
           seed: baseSeed + 1,
           facing: 1,
+          hypeEnergy,
         });
       }
       if (!isCompactPerf) {
@@ -1625,6 +1671,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             danceMove: 'salsa',
             seed: baseSeed + 2,
             facing: -1,
+            hypeEnergy,
           });
         }
         const p4x = topLeftX - 2.3;
@@ -1633,6 +1680,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             role: 'party-toast',
             seed: baseSeed + 3,
             facing: -1,
+            hypeEnergy,
           });
         }
       }
@@ -1644,6 +1692,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           role: 'gear-zip',
           seed: baseSeed + 5,
           facing: 1,
+          hypeEnergy,
         });
       }
       if (!isCompactPerf) {
@@ -1653,6 +1702,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             role: 'gear-tank',
             seed: baseSeed + 6,
             facing: 1,
+            hypeEnergy,
           });
         }
       }
@@ -1681,6 +1731,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             role: 'party-lounge',
             seed: baseSeed + 4,
             facing: -1,
+            hypeEnergy,
           });
         }
         const rd1 = topRightX + 0.8;
@@ -1689,6 +1740,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             role: 'gear-zip',
             seed: baseSeed + 7,
             facing: -1,
+            hypeEnergy,
           });
         }
       }
@@ -1700,6 +1752,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           danceMove: 'disco',
           seed: baseSeed + 1,
           facing: 1,
+          hypeEnergy,
         });
       }
       if (!isCompactPerf) {
@@ -1710,6 +1763,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             danceMove: 'dab',
             seed: baseSeed + 2,
             facing: -1,
+            hypeEnergy,
           });
         }
         const rp3 = topRightX + 3.55;
@@ -1719,6 +1773,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             danceMove: 'running-man',
             seed: baseSeed + 5,
             facing: 1,
+            hypeEnergy,
           });
         }
         const rp4 = topRightX + 4.35;
@@ -1728,6 +1783,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
             danceMove: 'ymca',
             seed: baseSeed + 0,
             facing: -1,
+            hypeEnergy,
           });
         }
         const rBoom = topRightX + 3.1;
@@ -1735,7 +1791,7 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
       }
     }
 
-    // 4. CALM WATER FLOATER: Curvy swimmer in neon pool floatie
+    // 4. CALM WATER FLOATER + ANIMATED CANNONBALLER leaping into the open basin!
     const basinSpan = waterRight - waterLeft;
     if (basinSpan >= 6.5) {
       const floatWx = isEntry ? waterRight - 2.35 : waterLeft + 2.35;
@@ -1744,7 +1800,24 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
           role: 'party-float',
           seed: baseSeed + 2,
           facing: isEntry ? -1 : 1,
+          hypeEnergy,
         });
+      }
+      if (!isCompactPerf) {
+        const launchWx = isEntry ? waterLeft + 1.8 : waterRight - 1.8;
+        if (inVis(launchWx)) {
+          drawTopsideCannonballer(
+            ctx,
+            toScreenX(launchWx),
+            dockEdgeY - scale * 0.15,
+            surfY,
+            isEntry ? 1 : -1,
+            scale,
+            timeSec,
+            baseSeed + 9,
+            hypeEnergy
+          );
+        }
       }
     }
   }
@@ -1778,9 +1851,13 @@ export function drawAllSiteTopsidePeople(renderer, ctx, visX0, visX1, toScreenX,
         danceMove: POPULAR_DANCE_MOVES[(seed + 3) % POPULAR_DANCE_MOVES.length],
         seed: seed + 3,
         facing: -1,
+        hypeEnergy,
       });
     }
   }
+
+  // 6. Live Crowd Hype Confetti & Comic Cheer Callouts (v284)
+  drawTopsideHypeOverlay(renderer, ctx, toScreenX, toScreenY, scale, timeSec);
 
   ctx.restore();
 }

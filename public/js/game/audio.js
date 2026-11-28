@@ -91,6 +91,26 @@ export function computeGasAcousticProfile(gasId = 'EAN32', ccrActive = false) {
   });
 }
 
+/**
+ * Pure depth-to-lowpass mixer for topside dockside party beats (v284).
+ * Crisp tropical beat at the surface (0m -> ~2200 Hz) smoothly low-passes into
+ * muffled underwater sub-bass as the diver descends, fading cleanly to silence by 8.5m.
+ */
+export function computeSurfacePartyAudioMix(depthM = 0, hypeEnergy = 0) {
+  const d = Math.max(0, Number(depthM) || 0);
+  const hype = Math.max(0, Math.min(1, Number(hypeEnergy) || 0));
+  if (d >= 8.5) {
+    return { active: false, cutoffHz: 140, gain: 0 };
+  }
+  const subFrac = Math.min(1, Math.max(0, (d - 0.35) / 8.15));
+  // Exponential frequency sweep: 2200 Hz at surface -> 140 Hz muffled sub-bass
+  const cutoffHz = Math.round(2200 * Math.pow(140 / 2200, Math.pow(subFrac, 0.72)));
+  const fade = Math.pow(1 - subFrac, 1.35);
+  const baseGain = 0.055 + hype * 0.032;
+  const gain = Math.round(baseGain * fade * 10000) / 10000;
+  return { active: gain > 0.001, cutoffHz, gain };
+}
+
 export class DiveAudio {
   constructor() {
     this.ctx = null;
@@ -1079,6 +1099,123 @@ export class DiveAudio {
   }
 
   /**
+   * Warm topside crowd cheer swell & celebratory pop when splashing in, pinging near surface,
+   * or surfacing with loot / a vanquished boss (v284).
+   */
+  playCrowdCheer(intensity = 0.75) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const now = performance.now();
+    if (now - (this._lastCheerAt || 0) < 2200) return;
+    this._lastCheerAt = now;
+    const noise = this._getNoiseBuffer();
+    if (!noise) return;
+    const t = this.ctx.currentTime;
+    const k = Math.max(0.25, Math.min(1, Number(intensity) || 0.75));
+    const dur = 0.75 + k * 0.35;
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = noise;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(760, t);
+    bp.frequency.exponentialRampToValueAtTime(1180, t + dur * 0.45);
+    bp.frequency.exponentialRampToValueAtTime(680, t + dur);
+    bp.Q.value = 2.1;
+
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.042 * k, t + 0.14);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(bp);
+    bp.connect(g);
+    this._connectSpatial(g, { pan: (Math.random() - 0.5) * 0.35, bus: 'ambience' });
+    src.onended = () => {
+      try { src.disconnect(); } catch {}
+      try { bp.disconnect(); } catch {}
+      try { g.disconnect(); } catch {}
+    };
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + dur + 0.04);
+
+    // Bright celebratory marimba triad sparkle on boss/loot cheers
+    if (k >= 0.85) {
+      this.playTone(523.25, 0.14, 'triangle', 0.028, 0.01);
+      this.playTone(659.25, 0.16, 'triangle', 0.026, 0.08);
+      this.playTone(783.99, 0.22, 'triangle', 0.03, 0.15);
+    }
+  }
+
+  /**
+   * Procedural 116-BPM dockside tropical party groove routed through a depth-responsive lowpass
+   * filter so the beat sounds crisp at the surface and muffles naturally as you submerge (v284).
+   */
+  _stepSurfacePartyBeat(dt, depthM = 0, hypeEnergy = 0) {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const mix = computeSurfacePartyAudioMix(depthM, hypeEnergy);
+    if (!mix.active) return;
+
+    const stepDur = 60 / (116 * 2); // 8th-note groove (~0.2586s)
+    this._partyBeatAccum = (this._partyBeatAccum || 0) + dt;
+    if (this._partyBeatAccum < stepDur) return;
+    this._partyBeatAccum -= stepDur;
+    if (this._partyBeatAccum > stepDur) this._partyBeatAccum = 0;
+
+    const step = ((this._partyBeatStep || 0) % 8);
+    this._partyBeatStep = step + 1;
+    const t = this.ctx.currentTime;
+
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(mix.cutoffHz, t);
+    lp.Q.value = 0.85;
+    const busOut = this._connectSpatial(lp, { pan: 0, bus: 'ambience' });
+
+    // Kick on beats 0, 2, 4, 6 (four-on-the-floor warm dockside sub-kick)
+    if (step % 2 === 0) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(118, t);
+      osc.frequency.exponentialRampToValueAtTime(48, t + 0.14);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(mix.gain * 1.15, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      osc.connect(g);
+      g.connect(lp);
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { lp.disconnect(); } catch {}
+        try { busOut?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 0.2);
+    } else {
+      // Off-beat tropical marimba/kalimba chord stab (C5/E5/G5/A5 pentatonic sun-vibe)
+      const notes = [523.25, 659.25, 587.33, 783.99];
+      const freq = notes[((step >> 1) + (hypeEnergy > 0.35 ? 1 : 0)) % notes.length];
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(mix.gain * 0.52, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+      osc.connect(g);
+      g.connect(lp);
+      osc.onended = () => {
+        try { osc.disconnect(); } catch {}
+        try { g.disconnect(); } catch {}
+        try { lp.disconnect(); } catch {}
+        try { busOut?.disconnect(); } catch {}
+      };
+      osc.start(t);
+      osc.stop(t + 0.15);
+    }
+  }
+
+  /**
    * Distant, ethereal open-ocean humpback whale song (dual-harmonic pitch glide through warm lowpass).
    */
   playWhaleSong(pan = 0) {
@@ -1222,7 +1359,16 @@ export class DiveAudio {
    * - Geothermal / Glacial Iceland & Arctic: mineral vent crackle or crystalline ice-creak chime
    */
   stepAmbience(dt, level, depthM = 0, diver = null, tensionState = null) {
-    if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level || depthM < 2.2) return;
+    if (this.muted || !this.ctx || this.ctx.state !== 'running' || !level) return;
+
+    // Dockside surface party beat smoothly low-passes into muffled sub-bass as you descend (v284)
+    if (depthM < 8.5 && !(tensionState?.bossPhase > 0)) {
+      this._stepSurfacePartyBeat(dt, depthM, tensionState?.topsideHype || 0);
+    }
+    if (tensionState?.topsideCheer > 0) {
+      this.playCrowdCheer(tensionState.topsideCheer);
+    }
+    if (depthM < 2.2) return;
 
     // Adaptive underwater tension pulse when silt-out, tight squeeze, or reserve gas kicks in (v168 / v171 hysteresis)
     if (tensionState) {

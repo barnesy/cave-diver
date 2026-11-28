@@ -36,6 +36,8 @@ import { createSandboxAndProceduralController } from './ui/sandboxAndProceduralC
 import { createGitHubSyncController } from './ui/githubSyncController.js';
 import { createRescueDrillsController } from './ui/rescueDrillsController.js';
 import { createBountiesController } from './ui/bountiesController.js';
+import { createVictoryPhotoController } from './ui/victoryPhotoController.js';
+import { getTopsideHypeEnergy, consumeTopsideCheerSound } from './game/renderers/topsidePropsRenderer.js';
 import { resolveBountyBoardState } from './game/bossBounties.js';
 import { createTrenchController } from './ui/trenchController.js';
 import { applyTrenchPerkToSession } from './game/abyssalTrench.js';
@@ -562,7 +564,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=283',
+  mapRasterUrl: './assets/map-expedition.jpg?v=284',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -2475,6 +2477,7 @@ const rescueDrillsCtrl = createRescueDrillsController({
 const { drillsModal, openDrillsModal, closeDrillsModal } = rescueDrillsCtrl;
 
 const bountiesModal = document.getElementById('bounties-modal');
+const victoryPhotoCtrl = createVictoryPhotoController({ showToast });
 const bountiesCtrl = createBountiesController({
   loadCareerLogbook,
   setHomeMenuOpen: (v) => setHomeMenuOpen(v),
@@ -2791,6 +2794,7 @@ function cancelDebriefAnimations() {
     debriefAnimFrame = 0;
   }
   celebrationParticles.length = 0;
+  victoryPhotoCtrl.stopVictoryPhoto();
 }
 
 function spawnCelebrationConfetti() {
@@ -3208,6 +3212,7 @@ function finishDiveRun(success, title, detail, outcomeScore = null) {
     }
   }
   audio.stopBossMusic?.();
+  victoryPhotoCtrl.showVictoryPhoto({ success, level, score: teamSummary.teamScore, grade: teamSummary.teamRank?.grade || 'S', diverName: diver.name || playerNameInput?.value.trim() || 'You', livery: diver.livery || liveryWorkshop?.getActiveRigLivery?.() || null, squad: [...(session.aiSquad || []), ...(isMultiplayer ? lan.getPeers() : [])], boss: session.secretLair?.bossDefeated ? session.secretLair?.spec?.boss : null, lootCount: diveState.collectiblesFound || 0 });
   const runChallengeCfg = {
     siteId: level.id,
     difficulty: runDiff,
@@ -4109,7 +4114,7 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // v283 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
+  // v284 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
   const triggerBiomeSwapPulse = () => {
     if (!canvas) return;
     canvas.classList.remove('biome-swap');
@@ -6648,6 +6653,8 @@ function stepSimulation(dt) {
         dpvActive: Boolean(session.dpv?.active),
         bossPhase: (session.secretLair?.boss?.active && !session.secretLair?.boss?.defeated) ? session.secretLair.boss.phase : 0,
         bossTheme: session.secretLair?.spec?.boss?.musicTheme || 'kraken',
+        topsideHype: getTopsideHypeEnergy(renderer, session.simTimeSec || 0),
+        topsideCheer: consumeTopsideCheerSound(renderer),
       });
     }
     syncWreckActionHud(session.wreckActionPrompt);
@@ -6898,7 +6905,7 @@ function stepSimulation(dt) {
     dt,
   });
 
-  // v283 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
+  // v284 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
   const isCalmNominalCruise =
     !compactHudEnabled &&
     !session.endedState &&
@@ -7459,7 +7466,7 @@ async function bootGame() {
   initGitHubAuth();
   requestAnimationFrame(frame);
 
-  // v283 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
+  // v284 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
   try {
     const qs = new URLSearchParams(location.search || '');
     if (qs.get('codexTrial') === '1' && !INITIAL_ROOM_CODE) {

@@ -33,6 +33,43 @@ export function renderGearArtworkSvg(slot, item, { suitFallback = null, size = 7
     const gSuit = _uid('gsu');
     const isArmored = item?.id === 'legendary-aegis-exosuit' || item?.id === 'chest-bulwark-shell';
     const hasVeins = Boolean(item?.fx);
+    const suitCut = item?.suitCut || 'drysuit';
+    if (suitCut === 'bikini' || suitCut === 'cutout' || suitCut === 'halfzip') {
+      const skin = item?.skinTone || '#e8b68c';
+      body = `
+      <defs>
+        <linearGradient id="${gSuit}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${escapeHtml(top)}"/>
+          <stop offset="55%" stop-color="${escapeHtml(mid)}"/>
+          <stop offset="100%" stop-color="${escapeHtml(bot)}"/>
+        </linearGradient>
+      </defs>
+      <!-- Curvy hourglass silhouette base -->
+      <path d="M28 14 C23 22 23 30 27 36 C30 41 25 50 25 59 L31 69 L39 58 L41 58 L49 69 L55 59 C55 50 50 41 53 36 C57 30 57 22 52 14 Z"
+        fill="${escapeHtml(skin)}" stroke="rgba(255,244,230,0.32)" stroke-width="1"/>
+      ${suitCut === 'bikini' ? `
+        <!-- Halter bikini top + cheeky bikini bottoms -->
+        <path d="M33 13 L30 24 M47 13 L50 24" stroke="${escapeHtml(trim)}" stroke-width="1.6" stroke-linecap="round"/>
+        <ellipse cx="32.5" cy="27.5" rx="7.6" ry="6.2" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+        <ellipse cx="47.5" cy="27.5" rx="7.6" ry="6.2" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+        <path d="M25 48 Q40 53 55 48 L51 59 Q40 64 29 59 Z" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+        <circle cx="40" cy="28" r="2.2" fill="${escapeHtml(acc)}"/>
+      ` : suitCut === 'cutout' ? `
+        <!-- Sleek cutout monokini -->
+        <path d="M32 13 L30 23 M48 13 L50 23" stroke="${escapeHtml(trim)}" stroke-width="1.6"/>
+        <path d="M25 24 Q40 20 55 24 L51 35 Q40 31 29 35 Z" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+        <path d="M35 33 L45 33 L44 48 L36 48 Z" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1"/>
+        <path d="M25 47 Q40 52 55 47 L51 59 Q40 65 29 59 Z" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+      ` : `
+        <!-- Half-unzipped wetsuit revealing bright swim top -->
+        <ellipse cx="33" cy="27" rx="7.2" ry="5.8" fill="${escapeHtml(acc)}" stroke="${escapeHtml(trim)}" stroke-width="1.1"/>
+        <ellipse cx="47" cy="27" rx="7.2" ry="5.8" fill="${escapeHtml(acc)}" stroke="${escapeHtml(trim)}" stroke-width="1.1"/>
+        <path d="M26 39 Q40 43 54 39 L55 59 L48 69 L41 58 L39 58 L32 69 L25 59 Z" fill="url(#${gSuit})" stroke="${escapeHtml(trim)}" stroke-width="1.2"/>
+        <path d="M25 36 L34 40 L27 45 Z M55 36 L46 40 L53 45 Z" fill="${escapeHtml(top)}" stroke="${escapeHtml(trim)}" stroke-width="1"/>
+        <line x1="40" y1="41" x2="40" y2="57" stroke="${escapeHtml(trim)}" stroke-width="1.5" stroke-dasharray="2 2"/>
+      `}
+      `;
+    } else {
     body = `
       <defs>
         <linearGradient id="${gSuit}" x1="0" y1="0" x2="0" y2="1">
@@ -63,6 +100,7 @@ export function renderGearArtworkSvg(slot, item, { suitFallback = null, size = 7
       <line x1="44" y1="57" x2="50" y2="57" stroke="${escapeHtml(trim)}" stroke-width="1.8" stroke-linecap="round"/>
       ${hasVeins ? `<path d="M32 37 L40 41 L48 37" fill="none" stroke="${escapeHtml(trim)}" stroke-width="1.3" opacity="0.9"/>` : ''}
     `;
+    }
   } else if (slot === 'trim') {
     const useSuit = item?.id === 'suit-default' && suitFallback;
     const cA = useSuit ? suitFallback.accent || '#38bdf8' : item?.swatchA || item?.accent || '#38bdf8';

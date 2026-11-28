@@ -226,6 +226,78 @@ export const SUIT_LIVERIES = Object.freeze([
     isUnlocked: () => true,
   },
   {
+    id: 'resort-bikini-coral',
+    name: 'Coral Reef Bikini',
+    tier: 'common',
+    ladderRank: 3,
+    suitCut: 'bikini',
+    skinTone: '#e8b68c',
+    suitTop: '#fb7185',
+    suitMid: '#f43f5e',
+    suitBot: '#be123c',
+    accent: '#fef08a',
+    trim: '#fde047',
+    finColor: '#f43f5e',
+    finTip: '#fef08a',
+    stageBand: '#fb7185',
+    unlockHint: 'Topside Resort Swimwear Issue',
+    isUnlocked: () => true,
+  },
+  {
+    id: 'resort-bikini-lagoon',
+    name: 'Lagoon Sunset Bikini',
+    tier: 'common',
+    ladderRank: 4,
+    suitCut: 'bikini',
+    skinTone: '#d49a6e',
+    suitTop: '#22d3ee',
+    suitMid: '#06b6d4',
+    suitBot: '#0e7490',
+    accent: '#fb923c',
+    trim: '#fed7aa',
+    finColor: '#0891b2',
+    finTip: '#fb923c',
+    stageBand: '#22d3ee',
+    unlockHint: 'Topside Resort Swimwear Issue',
+    isUnlocked: () => true,
+  },
+  {
+    id: 'resort-cutout-neon',
+    name: 'Cenote Cutout Monokini',
+    tier: 'common',
+    ladderRank: 5,
+    suitCut: 'cutout',
+    skinTone: '#f0c49d',
+    suitTop: '#d946ef',
+    suitMid: '#a21caf',
+    suitBot: '#701a75',
+    accent: '#4ade80',
+    trim: '#67e8f9',
+    finColor: '#86198f',
+    finTip: '#67e8f9',
+    stageBand: '#e879f9',
+    unlockHint: 'Topside Resort Swimwear Issue',
+    isUnlocked: () => true,
+  },
+  {
+    id: 'halfzip-wetsuit-reef',
+    name: 'Half-Zip Reef Wetsuit',
+    tier: 'common',
+    ladderRank: 6,
+    suitCut: 'halfzip',
+    skinTone: '#e3ae82',
+    suitTop: '#1e3a5f',
+    suitMid: '#0f172a',
+    suitBot: '#020617',
+    accent: '#fb7185',
+    trim: '#38bdf8',
+    finColor: '#0f172a',
+    finTip: '#fb7185',
+    stageBand: '#f43f5e',
+    unlockHint: 'Topside Resort Swimwear Issue',
+    isUnlocked: () => true,
+  },
+  {
     id: 'cenote-azure',
     name: 'Cenote Azure',
     tier: 'uncommon',
@@ -1938,6 +2010,7 @@ const DEFAULT_MODULAR_IDS = Object.freeze({
   scooterId: 'none',
   harpoonId: 'pneumatic-mk1',
   dyeId: 'none',
+  bodyType: 'athletic',
 });
 
 const SUIT_BY_ID = new Map(SUIT_LIVERIES.map((s) => [s.id, s]));
@@ -2468,6 +2541,9 @@ export function resolveDiverLiveryPalette(livery = null) {
     suitTop: suit.suitTop,
     suitMid: suit.suitMid,
     suitBot: suit.suitBot,
+    suitCut: suit.suitCut || 'drysuit',
+    skinTone: suit.skinTone || '#e8b68c',
+    bodyType: livery?.bodyType === 'curvy' ? 'curvy' : (suit.suitCut ? 'curvy' : 'athletic'),
     accent: trimSpec.accent || suit.accent,
     trim: trimSpec.trim || suit.trim,
     finColor: suit.finColor,
@@ -2693,6 +2769,7 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   let scooterId = typeof raw?.scooterId === 'string' && SCOOTER_BY_ID.has(raw.scooterId) ? raw.scooterId : DEFAULT_MODULAR_IDS.scooterId;
   let harpoonId = typeof raw?.harpoonId === 'string' && HARPOON_BY_ID.has(raw.harpoonId) ? raw.harpoonId : DEFAULT_MODULAR_IDS.harpoonId;
   let dyeId = typeof raw?.dyeId === 'string' && isValidGearChromaId(raw.dyeId) ? raw.dyeId : DEFAULT_MODULAR_IDS.dyeId;
+  let bodyType = raw?.bodyType === 'curvy' ? 'curvy' : DEFAULT_MODULAR_IDS.bodyType;
 
   if (unlocked) {
     if (unlocked.suits && !unlocked.suits.has(suitId)) suitId = DEFAULT_RIG_LIVERY.suitId;
@@ -2715,6 +2792,7 @@ export function sanitizeRigLivery(raw = null, unlocked = null) {
   if (scooterId !== DEFAULT_MODULAR_IDS.scooterId) out.scooterId = scooterId;
   if (harpoonId !== DEFAULT_MODULAR_IDS.harpoonId) out.harpoonId = harpoonId;
   if (dyeId !== DEFAULT_MODULAR_IDS.dyeId) out.dyeId = dyeId;
+  if (bodyType !== DEFAULT_MODULAR_IDS.bodyType) out.bodyType = bodyType;
   return out;
 }
 
@@ -2730,7 +2808,8 @@ export function isDefaultRigLivery(livery) {
     (livery.visorId || DEFAULT_MODULAR_IDS.visorId) === DEFAULT_MODULAR_IDS.visorId &&
     (livery.scooterId || DEFAULT_MODULAR_IDS.scooterId) === DEFAULT_MODULAR_IDS.scooterId &&
     (livery.harpoonId || DEFAULT_MODULAR_IDS.harpoonId) === DEFAULT_MODULAR_IDS.harpoonId &&
-    (livery.dyeId || DEFAULT_MODULAR_IDS.dyeId) === DEFAULT_MODULAR_IDS.dyeId
+    (livery.dyeId || DEFAULT_MODULAR_IDS.dyeId) === DEFAULT_MODULAR_IDS.dyeId &&
+    (livery.bodyType || DEFAULT_MODULAR_IDS.bodyType) === DEFAULT_MODULAR_IDS.bodyType
   );
 }
 
@@ -3145,8 +3224,17 @@ export function _drawArticulatedPreviewDiver(
     farLeg.finOpen, scale, false, true, pal, timeSec
   );
 
-  // 2. Flexible drysuit spine core + animated trim stripe (identical to CaveRenderer._drawDiver)
-  drawDiverLimbSegment(ctx, px, py, sx, sy, 0.36 * scale, pal.suitMid);
+  // 2. Flexible spine core + animated trim stripe (bare warm skin midriff for bikini/cutout swimsuits)
+  const isBareTorso = pal.suitCut === 'bikini' || pal.suitCut === 'cutout';
+  drawDiverLimbSegment(
+    ctx,
+    px,
+    py,
+    sx,
+    sy,
+    (pal.bodyType === 'curvy' ? 0.28 : 0.36) * scale,
+    isBareTorso ? (pal.skinTone || '#e8b68c') : pal.suitMid
+  );
   let spineTrimColor = pal.trim;
   if (pal.trimFx === 'selenite-prism') {
     spineTrimColor = `hsl(${Math.round((timeSec * 90) % 360)}, 92%, 78%)`;
@@ -3154,13 +3242,15 @@ export function _drawArticulatedPreviewDiver(
     const glow = 58 + Math.round(Math.sin(timeSec * 6.5) * 14);
     spineTrimColor = `hsl(32, 98%, ${glow}%)`;
   }
-  ctx.strokeStyle = spineTrimColor;
-  ctx.lineWidth = Math.max(1.4, 0.04 * scale);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(px, py);
-  ctx.lineTo(sx, sy);
-  ctx.stroke();
+  if (!isBareTorso) {
+    ctx.strokeStyle = spineTrimColor;
+    ctx.lineWidth = Math.max(1.4, 0.04 * scale);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
+  }
   if (pal.trimFx === 'plasma-wave') {
     const pt = ((timeSec * 1.45) % 1 + 1) % 1;
     const wx = sx + (px - sx) * pt;
@@ -3185,6 +3275,8 @@ export function _drawArticulatedPreviewDiver(
     timeSec,
     liveryPalette: pal,
     equipFx,
+    bounceKey: 'preview',
+    vy: animateKick ? Math.sin(timeSec * 2.4) * 0.45 : 0,
   });
   ctx.restore();
 

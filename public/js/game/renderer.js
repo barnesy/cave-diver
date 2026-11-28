@@ -1,6 +1,7 @@
 import { evaluateCaveSDF } from './collision.js';
 import { drawSubmergedStories } from './renderers/submergedStoriesRenderer.js';
 import { drawTopsideAtmosphereExtras, drawMenuBackdropDiorama, preloadDefaultMenuBackdrop } from './renderers/topsideAtmosphereRenderer.js';
+import { syncTopsideHypeFromDive } from './renderers/topsidePropsRenderer.js';
 import {
   CACHE_PX_PER_M,
   MOBILE_CACHE_PX_PER_M,
@@ -1112,6 +1113,11 @@ export class CaveRenderer {
     this._drawInfiniteRockMargin(ctx, viewWorldLeft, viewWorldRight, xMin, xMax, yMin, yMax, toScreenX, toScreenY, scale);
 
     // 8a. Top-Level Surface Environment: Full-width jungle/cypress ridge, cenote rims, stairways & docks
+    if (visY0 < 18 && diver) {
+      const lootN = collectedIds ? (typeof collectedIds.size === 'number' ? collectedIds.size : collectedIds.length || 0) : 0;
+      const sonarList = sonarPulse?.active ? [sonarPulse] : (Array.isArray(syncedSonarPings) ? syncedSonarPings : []);
+      syncTopsideHypeFromDive(this, this.level, diver, { collectiblesFound: lootN }, { simTimeSec: timeSec, sonarPings: sonarList, secretLair }, timeSec);
+    }
     if (visY0 < 4.5) {
       this._drawSurfaceTopEnvironment(ctx, viewWorldLeft, viewWorldRight, toScreenX, toScreenY, scale, timeSec);
     }
