@@ -14710,3 +14710,59 @@ test('v301 neck-under-straps layering, torso-clipped trims, and male resort/rash
   assert.ok(clipOps >= 40, `Expected torso-clipped trims across all 30 views, got ${clipOps}`);
   assert.ok(ops > 600, `Expected rich v301 render ops across all 30 views, got ${ops}`);
 });
+
+test('v302 12 selectable hairstyles (6 female + 6 male) in avatar model & Front/Side/Back renderer', async () => {
+  const {
+    AVATAR_FEMALE_HAIRSTYLES,
+    AVATAR_MALE_HAIRSTYLES,
+    normalizePlayerAvatar,
+    buildTopsideSpecFromAvatar,
+  } = await import('../public/js/game/playerAvatar.js');
+  const {
+    FEMALE_HAIR_STYLES,
+    MALE_HAIR_STYLES,
+    drawTopsidePerson,
+  } = await import('../public/js/game/renderers/topsidePeopleRenderer.js');
+
+  assert.equal(AVATAR_FEMALE_HAIRSTYLES.length, 6);
+  assert.equal(AVATAR_MALE_HAIRSTYLES.length, 6);
+  assert.equal(FEMALE_HAIR_STYLES.length, 6);
+  assert.equal(MALE_HAIR_STYLES.length, 6);
+
+  const femNorm = normalizePlayerAvatar({ gender: 'female', hairStyle: 'twin-braids' });
+  assert.equal(femNorm.hairStyle, 'twin-braids');
+  assert.equal(buildTopsideSpecFromAvatar(femNorm).hairStyle, 'twin-braids');
+
+  const maleFallback = normalizePlayerAvatar({ gender: 'male', hairStyle: 'twin-braids' });
+  assert.equal(maleFallback.hairStyle, 'fade');
+  const maleNorm = normalizePlayerAvatar({ gender: 'male', hairStyle: 'man-bun' });
+  assert.equal(maleNorm.hairStyle, 'man-bun');
+  assert.equal(buildTopsideSpecFromAvatar(maleNorm).hairStyle, 'man-bun');
+
+  let ops = 0;
+  const mockCtx = {
+    canvas: { width: 460, height: 440 },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, clip() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, roundRect() {}, fillRect() { ops++; }, strokeRect() {},
+    fill() { ops++; }, stroke() { ops++; }, setLineDash() {}, fillText() { ops++; },
+    measureText(s) { return { width: String(s || '').length * 6 }; },
+  };
+  for (const vw of ['front', 'side', 'back']) {
+    for (const hs of FEMALE_HAIR_STYLES) {
+      drawTopsidePerson(mockCtx, 200, 340, 140, 0.5, {
+        id: 99300 + hs.length + vw.length,
+        gender: 'female', bodyType: 'hourglass', role: 'party-dance', danceMove: 'kpop-hip-sway',
+        view: vw, topStyle: 'triangle-halter', hairStyle: hs, seed: 3, facing: 1,
+      });
+    }
+    for (const hs of MALE_HAIR_STYLES) {
+      drawTopsidePerson(mockCtx, 200, 340, 140, 0.5, {
+        id: 99400 + hs.length + vw.length,
+        gender: 'male', bodyType: 'athletic-m', role: 'party-dance', danceMove: 'shuffle',
+        view: vw, hairStyle: hs, seed: 2, facing: 1,
+      });
+    }
+  }
+  assert.ok(ops > 700, `Expected rich v302 render ops across all 12 hairstyles x 3 views, got ${ops}`);
+});

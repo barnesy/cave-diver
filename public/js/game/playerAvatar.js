@@ -25,6 +25,24 @@ export const AVATAR_HAIR_PRESETS = Object.freeze([
   { id: 'coral', label: 'Coral Wave', color: '#be185d' },
 ]);
 
+export const AVATAR_FEMALE_HAIRSTYLES = Object.freeze([
+  { id: 'waves', label: 'Beach Waves' },
+  { id: 'ponytail', label: 'High Pony' },
+  { id: 'space-buns', label: 'Space Buns' },
+  { id: 'bob', label: 'Beach Bob' },
+  { id: 'top-knot', label: 'High Bun' },
+  { id: 'twin-braids', label: 'Twin Braids' },
+]);
+
+export const AVATAR_MALE_HAIRSTYLES = Object.freeze([
+  { id: 'fade', label: 'Classic Fade' },
+  { id: 'surfer', label: 'Surfer Flow' },
+  { id: 'curls', label: 'Textured Curls' },
+  { id: 'man-bun', label: 'Top Knot' },
+  { id: 'buzz', label: 'Buzz Cut' },
+  { id: 'cap', label: 'Backwards Cap' },
+]);
+
 export const AVATAR_FEMALE_BODIES = Object.freeze([
   { id: 'petite', label: 'Petite' },
   { id: 'athletic-f', label: 'Athletic' },
@@ -72,6 +90,7 @@ export const DEFAULT_PLAYER_AVATAR = Object.freeze({
   bodyType: 'hourglass',
   skinIdx: 1,
   hairIdx: 1,
+  hairStyle: 'waves',
   topStyle: 'triangle-halter',
   swimIdx: 0,
 });
@@ -90,6 +109,10 @@ export function normalizePlayerAvatar(raw = {}) {
   const bodyType = validBodies.some((b) => b.id === raw?.bodyType)
     ? raw.bodyType
     : (gender === 'male' ? 'athletic-m' : 'hourglass');
+  const validHairs = gender === 'male' ? AVATAR_MALE_HAIRSTYLES : AVATAR_FEMALE_HAIRSTYLES;
+  const hairStyle = validHairs.some((h) => h.id === raw?.hairStyle)
+    ? raw.hairStyle
+    : (gender === 'male' ? 'fade' : 'waves');
   const topStyle = AVATAR_FEMALE_TOP_STYLES.some((t) => t.id === raw?.topStyle)
     ? raw.topStyle
     : 'triangle-halter';
@@ -100,6 +123,7 @@ export function normalizePlayerAvatar(raw = {}) {
     bodyType,
     skinIdx: _clampInt(raw?.skinIdx, 0, AVATAR_SKIN_PRESETS.length - 1, DEFAULT_PLAYER_AVATAR.skinIdx),
     hairIdx: _clampInt(raw?.hairIdx, 0, AVATAR_HAIR_PRESETS.length - 1, DEFAULT_PLAYER_AVATAR.hairIdx),
+    hairStyle,
     topStyle,
     swimIdx: _clampInt(raw?.swimIdx, 0, swimList.length - 1, 0),
   };
@@ -154,6 +178,7 @@ export function buildTopsideSpecFromAvatar(avatar = null, overrides = {}) {
   return {
     gender: av.gender,
     bodyType: av.bodyType,
+    hairStyle: av.hairStyle,
     topStyle: av.gender === 'female' ? av.topStyle : undefined,
     customSkin: { skin: skinPreset.skin, shade: skinPreset.shade },
     customHair: hairPreset.color,

@@ -139,6 +139,27 @@ export const FEMALE_TOP_STYLES = Object.freeze([
 ]);
 
 /**
+ * 12 distinct selectable hairstyles (6 Female + 6 Male) rendered across Front, Side & Back (v302)!
+ */
+export const FEMALE_HAIR_STYLES = Object.freeze([
+  'waves',
+  'ponytail',
+  'space-buns',
+  'bob',
+  'top-knot',
+  'twin-braids',
+]);
+
+export const MALE_HAIR_STYLES = Object.freeze([
+  'fade',
+  'surfer',
+  'curls',
+  'man-bun',
+  'buzz',
+  'cap',
+]);
+
+/**
  * 5 varied bust-size scale tiers (petite -> slim -> medium -> full -> curvy).
  */
 export const FEMALE_BUST_SIZES = Object.freeze([0.74, 0.85, 0.95, 1.05, 1.14]);
@@ -3272,62 +3293,132 @@ function drawTopsideNeck(ctx, hx, headY, shoulderY, s, isMale, isBackView, skin,
   }
 }
 
-function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale, view, skin, skinShade, hair, swim, wet, isGearZip, isGearTank, isGearReady, isDance, skipNeck = false) {
+function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale, view, skin, skinShade, hair, swim, wet, isGearZip, isGearTank, isGearReady, isDance, skipNeck = false, explicitHairStyle = null) {
   const isFrontView = view === 'front';
   const isBackView = view === 'back';
   const hairBounce = isDance ? Math.sin(timeSec * 6.4 + ph - 0.9) * 0.05 * s : Math.sin(timeSec * 3.0 + ph) * 0.022 * s;
   const wearShades = (seed % 5) < 3;
-  const hairStyle = seed % 4;
+  const hairPool = isMale ? MALE_HAIR_STYLES : FEMALE_HAIR_STYLES;
+  const hairStyle = (typeof explicitHairStyle === 'string' && hairPool.includes(explicitHairStyle))
+    ? explicitHairStyle
+    : hairPool[seed % hairPool.length];
+  const allowSunHat = !explicitHairStyle && !isMale && (seed % 5) === 0 && hairStyle === 'waves' && !isGearZip && !isGearTank;
   const hasMaleBeard = isMale && !isGearReady && (seed % 3 === 2);
 
   // Refined 7.5-head editorial oval dimensions (graceful heart-oval on women, crisp jaw on men)
   const hRx = isMale ? 0.136 * s : 0.126 * s;
   const hRy = isMale ? 0.158 * s : 0.150 * s;
 
-  // Female front-view flowing S-curved hair behind OUTER shoulders only (chin & neck stay 100% clean skin!)
-  if (!isMale && isFrontView && !isGearReady) {
+  // Helper: draw one sculpted scalloped braid chain with matching accent hair tie!
+  const drawScallopedBraid = (x0, y0, dx, dy, segs, rad, tieCol) => {
     ctx.fillStyle = hair;
-    if (hairStyle === 0) {
-      // Lush cascading beach waves sweeping past collarbones on left & right
+    for (let i = 0; i < segs; i++) {
+      const f = i / Math.max(1, segs - 1);
+      const bx = x0 + dx * f + Math.sin(i * 1.9) * rad * 0.18;
+      const by = y0 + dy * f;
+      const r = rad * (1 - f * 0.24);
       ctx.beginPath();
-      ctx.moveTo(hx - hRx * 0.92, headY - hRy * 0.25);
-      ctx.bezierCurveTo(hx - hRx * 1.65, headY + 0.08 * s, hx - hRx * 1.25, headY + 0.26 * s + hairBounce * 0.4, hx - hRx * 1.52, headY + 0.36 * s + hairBounce * 0.5);
-      ctx.quadraticCurveTo(hx - hRx * 0.86, headY + 0.32 * s + hairBounce * 0.4, hx - hRx * 0.72, headY + 0.14 * s);
+      ctx.ellipse(bx, by, r * 0.96, r * 1.12, (i & 1) ? 0.22 : -0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const tx = x0 + dx * 0.94;
+    const ty = y0 + dy * 0.94;
+    ctx.strokeStyle = tieCol || swim.accent;
+    ctx.lineWidth = Math.max(1.0, 0.022 * s);
+    ctx.beginPath();
+    ctx.moveTo(tx - rad * 0.85, ty);
+    ctx.lineTo(tx + rad * 0.85, ty);
+    ctx.stroke();
+    // Tapered soft braid tassel tip
+    ctx.fillStyle = hair;
+    ctx.beginPath();
+    ctx.moveTo(tx - rad * 0.55, ty + rad * 0.2);
+    ctx.lineTo(tx + rad * 0.55, ty + rad * 0.2);
+    ctx.lineTo(tx + dx * 0.10, ty + rad * 1.65);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  // Front-view hair falling BEHIND cheeks/outer shoulders (chin & neck stay 100% clean skin!)
+  if (isFrontView && !isGearReady) {
+    ctx.fillStyle = hair;
+    if (!isMale) {
+      if (hairStyle === 'waves') {
+        // Lush cascading beach waves sweeping past collarbones on left & right
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 0.92, headY - hRy * 0.25);
+        ctx.bezierCurveTo(hx - hRx * 1.65, headY + 0.08 * s, hx - hRx * 1.25, headY + 0.26 * s + hairBounce * 0.4, hx - hRx * 1.52, headY + 0.36 * s + hairBounce * 0.5);
+        ctx.quadraticCurveTo(hx - hRx * 0.86, headY + 0.32 * s + hairBounce * 0.4, hx - hRx * 0.72, headY + 0.14 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hx + hRx * 0.92, headY - hRy * 0.25);
+        ctx.bezierCurveTo(hx + hRx * 1.65, headY + 0.08 * s, hx + hRx * 1.25, headY + 0.26 * s + hairBounce * 0.4, hx + hRx * 1.52, headY + 0.36 * s + hairBounce * 0.5);
+        ctx.quadraticCurveTo(hx + hRx * 0.86, headY + 0.32 * s + hairBounce * 0.4, hx + hRx * 0.72, headY + 0.14 * s);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hairStyle === 'ponytail') {
+        // High sleek tapered S-curved ponytail peeking gracefully above right shoulder!
+        ctx.beginPath();
+        ctx.moveTo(hx + hRx * 0.65, headY - hRy * 0.78);
+        ctx.bezierCurveTo(hx + hRx * 1.98, headY - hRy * 0.55 + hairBounce * 0.5, hx + hRx * 1.80, headY + 0.12 * s + hairBounce * 0.8, hx + hRx * 1.36, headY + 0.23 * s + hairBounce * 0.9);
+        ctx.quadraticCurveTo(hx + hRx * 1.25, headY - 0.02 * s + hairBounce * 0.5, hx + hRx * 0.55, headY - hRy * 0.45);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hairStyle === 'space-buns') {
+        // Chic high twin puffs / beach space buns + tiny wispy cheek tendrils
+        ctx.beginPath();
+        ctx.arc(hx - hRx * 1.04, headY - hRy * 0.82 + hairBounce * 0.28, 0.078 * s, 0, Math.PI * 2);
+        ctx.arc(hx + hRx * 1.04, headY - hRy * 0.82 + hairBounce * 0.28, 0.078 * s, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hairStyle === 'bob') {
+        // Sleek chin-framing angled beach bob
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 0.95, headY - hRy * 0.3);
+        ctx.quadraticCurveTo(hx - hRx * 1.48, headY + 0.04 * s, hx - hRx * 1.02, headY + 0.18 * s + hairBounce * 0.25);
+        ctx.lineTo(hx - hRx * 0.75, headY + 0.08 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hx + hRx * 0.95, headY - hRy * 0.3);
+        ctx.quadraticCurveTo(hx + hRx * 1.48, headY + 0.04 * s, hx + hRx * 1.02, headY + 0.18 * s + hairBounce * 0.25);
+        ctx.lineTo(hx + hRx * 0.75, headY + 0.08 * s);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hairStyle === 'top-knot') {
+        // Sculpted high top-knot bun perched right on top of crown + matching accent scrunchie!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 1.18 + hairBounce * 0.22, 0.086 * s, 0.072 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = swim.accent || swim.primary;
+        ctx.lineWidth = Math.max(1.1, 0.026 * s);
+        ctx.beginPath();
+        ctx.moveTo(hx - 0.068 * s, headY - hRy * 0.92 + hairBounce * 0.18);
+        ctx.quadraticCurveTo(hx, headY - hRy * 0.84 + hairBounce * 0.18, hx + 0.068 * s, headY - hRy * 0.92 + hairBounce * 0.18);
+        ctx.stroke();
+      } else if (hairStyle === 'twin-braids') {
+        // Twin sculpted scalloped braids draping gracefully over both front shoulders!
+        drawScallopedBraid(hx - hRx * 1.00, headY + 0.02 * s, -0.045 * s, 0.30 * s + hairBounce * 0.45, 5, 0.040 * s, swim.accent);
+        drawScallopedBraid(hx + hRx * 1.00, headY + 0.02 * s, 0.045 * s, 0.30 * s + hairBounce * 0.45, 5, 0.040 * s, swim.accent);
+      }
+    } else if (hairStyle === 'surfer') {
+      // Shaggy sun-kissed surfer hair locks flaring behind ears/jaw!
+      ctx.beginPath();
+      ctx.moveTo(hx - hRx * 0.96, headY - hRy * 0.22);
+      ctx.quadraticCurveTo(hx - hRx * 1.46, headY + 0.05 * s, hx - hRx * 1.18, headY + 0.18 * s + hairBounce * 0.25);
+      ctx.lineTo(hx - hRx * 0.78, headY + 0.08 * s);
       ctx.closePath();
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(hx + hRx * 0.92, headY - hRy * 0.25);
-      ctx.bezierCurveTo(hx + hRx * 1.65, headY + 0.08 * s, hx + hRx * 1.25, headY + 0.26 * s + hairBounce * 0.4, hx + hRx * 1.52, headY + 0.36 * s + hairBounce * 0.5);
-      ctx.quadraticCurveTo(hx + hRx * 0.86, headY + 0.32 * s + hairBounce * 0.4, hx + hRx * 0.72, headY + 0.14 * s);
+      ctx.moveTo(hx + hRx * 0.96, headY - hRy * 0.22);
+      ctx.quadraticCurveTo(hx + hRx * 1.46, headY + 0.05 * s, hx + hRx * 1.18, headY + 0.18 * s + hairBounce * 0.25);
+      ctx.lineTo(hx + hRx * 0.78, headY + 0.08 * s);
       ctx.closePath();
       ctx.fill();
-    } else if (hairStyle === 1) {
-      // High sleek tapered S-curved ponytail peeking gracefully above right shoulder!
+    } else if (hairStyle === 'man-bun') {
+      // High sculpted top-knot peeking neatly above male crown!
       ctx.beginPath();
-      ctx.moveTo(hx + hRx * 0.65, headY - hRy * 0.78);
-      ctx.bezierCurveTo(hx + hRx * 1.95, headY - hRy * 0.55 + hairBounce * 0.5, hx + hRx * 1.78, headY + 0.12 * s + hairBounce * 0.8, hx + hRx * 1.35, headY + 0.22 * s + hairBounce * 0.9);
-      ctx.quadraticCurveTo(hx + hRx * 1.25, headY - 0.02 * s + hairBounce * 0.5, hx + hRx * 0.55, headY - hRy * 0.45);
-      ctx.closePath();
-      ctx.fill();
-    } else if (hairStyle === 2) {
-      // Chic high twin puffs / beach space buns
-      ctx.beginPath();
-      ctx.arc(hx - hRx * 1.04, headY - hRy * 0.82 + hairBounce * 0.28, 0.075 * s, 0, Math.PI * 2);
-      ctx.arc(hx + hRx * 1.04, headY - hRy * 0.82 + hairBounce * 0.28, 0.075 * s, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // Sleek chin-framing angled beach bob
-      ctx.beginPath();
-      ctx.moveTo(hx - hRx * 0.95, headY - hRy * 0.3);
-      ctx.quadraticCurveTo(hx - hRx * 1.48, headY + 0.04 * s, hx - hRx * 1.02, headY + 0.18 * s + hairBounce * 0.25);
-      ctx.lineTo(hx - hRx * 0.75, headY + 0.08 * s);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(hx + hRx * 0.95, headY - hRy * 0.3);
-      ctx.quadraticCurveTo(hx + hRx * 1.48, headY + 0.04 * s, hx + hRx * 1.02, headY + 0.18 * s + hairBounce * 0.25);
-      ctx.lineTo(hx + hRx * 0.75, headY + 0.08 * s);
-      ctx.closePath();
+      ctx.ellipse(hx, headY - hRy * 1.16 + hairBounce * 0.18, 0.066 * s, 0.052 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -3378,16 +3469,51 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
   if (isBackView) {
     ctx.fillStyle = hair;
     if (isMale) {
-      ctx.beginPath();
-      ctx.ellipse(hx, headY - 0.03 * s, hRx * 1.08, hRy * 0.96, 0, Math.PI * 0.82, Math.PI * 2.18);
-      ctx.fill();
-      ctx.fillRect(hx - hRx * 0.88, headY - 0.04 * s, hRx * 1.76, 0.095 * s);
-      if (hairStyle === 1) {
+      if (hairStyle === 'buzz') {
+        // Tight athletic low buzz cut showing crisp shaved lower nape!
         ctx.beginPath();
-        ctx.arc(hx - 0.055 * s, headY - hRy * 0.94, 0.062 * s, 0, Math.PI * 2);
-        ctx.arc(hx + 0.05 * s, headY - hRy * 0.98, 0.062 * s, 0, Math.PI * 2);
+        ctx.ellipse(hx, headY - 0.036 * s, hRx * 1.02, hRy * 0.86, 0, Math.PI * 0.88, Math.PI * 2.12);
         ctx.fill();
-      } else if (hairStyle === 3 && !isGearZip && !isGearTank) {
+      } else if (hairStyle === 'surfer') {
+        // Full tousled surfer flow draping down the back of the neck!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - 0.018 * s, hRx * 1.16, hRy * 1.02, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 1.18, headY - 0.01 * s);
+        ctx.quadraticCurveTo(hx - hRx * 1.26, headY + 0.16 * s, hx - hRx * 0.72, headY + 0.21 * s + hairBounce * 0.25);
+        ctx.quadraticCurveTo(hx, headY + 0.26 * s + hairBounce * 0.3, hx + hRx * 0.72, headY + 0.21 * s + hairBounce * 0.25);
+        ctx.quadraticCurveTo(hx + hRx * 1.26, headY + 0.16 * s, hx + hRx * 1.18, headY - 0.01 * s);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hairStyle === 'curls') {
+        // Voluminous sculpted curly top fade with tapered nape!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - 0.03 * s, hRx * 1.04, hRy * 0.90, 0, Math.PI * 0.85, Math.PI * 2.15);
+        ctx.fill();
+        const puffs = [[-0.08, -0.96, 0.062], [0.0, -1.04, 0.070], [0.08, -0.96, 0.062], [-0.11, -0.70, 0.056], [0.11, -0.70, 0.056]];
+        for (const [px, py, pr] of puffs) {
+          ctx.beginPath();
+          ctx.arc(hx + px * s, headY + hRy * py, pr * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (hairStyle === 'man-bun') {
+        // Pulled-back undercut + crisp high man-bun knot at upper back crown!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - 0.034 * s, hRx * 1.04, hRy * 0.88, 0, Math.PI * 0.86, Math.PI * 2.14);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(hx, headY - hRy * 0.92 + hairBounce * 0.18, 0.064 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = swim.accent || '#0f172a';
+        ctx.lineWidth = Math.max(1.0, 0.020 * s);
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.72 + hairBounce * 0.15, 0.048 * s, 0.016 * s, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (hairStyle === 'cap' && !isGearZip && !isGearTank) {
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - 0.03 * s, hRx * 1.06, hRy * 0.94, 0, Math.PI * 0.82, Math.PI * 2.18);
+        ctx.fill();
         ctx.fillStyle = swim.primary;
         ctx.beginPath();
         ctx.ellipse(hx, headY - 0.045 * s, hRx * 1.12, hRy * 0.85, 0, Math.PI, 0);
@@ -3396,12 +3522,18 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
         ctx.beginPath();
         ctx.ellipse(hx, headY - 0.035 * s, hRx * 1.12, 0.044 * s, 0, 0, Math.PI * 2);
         ctx.fill();
+      } else {
+        // Classic Fade back view
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - 0.03 * s, hRx * 1.08, hRy * 0.96, 0, Math.PI * 0.82, Math.PI * 2.18);
+        ctx.fill();
+        ctx.fillRect(hx - hRx * 0.86, headY - 0.04 * s, hRx * 1.72, 0.085 * s);
       }
     } else {
       ctx.beginPath();
       ctx.ellipse(hx, headY - 0.01 * s, hRx * 1.12, hRy * 1.04, 0, 0, Math.PI * 2);
       ctx.fill();
-      if (hairStyle === 0) {
+      if (hairStyle === 'waves') {
         // Lush cascading V-tapered beach waves down upper back
         ctx.beginPath();
         ctx.moveTo(hx - hRx * 1.14, headY);
@@ -3409,7 +3541,7 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
         ctx.bezierCurveTo(hx + hRx * 1.05, headY + 0.34 * s + hairBounce * 0.4, hx + hRx * 1.42, headY + 0.16 * s, hx + hRx * 1.14, headY);
         ctx.closePath();
         ctx.fill();
-      } else if (hairStyle === 1) {
+      } else if (hairStyle === 'ponytail') {
         const sway = Math.sin(timeSec * 6.4 + ph - 0.9) * 0.065 * s;
         ctx.beginPath();
         ctx.moveTo(hx - 0.035 * s, headY - 0.02 * s);
@@ -3417,23 +3549,39 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
         ctx.bezierCurveTo(hx + 0.08 * s + sway, headY + 0.24 * s + hairBounce, hx + 0.11 * s + sway * 0.6, headY + 0.10 * s, hx + 0.035 * s, headY - 0.02 * s);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = swim.primary;
+        ctx.strokeStyle = swim.accent || swim.primary;
         ctx.lineWidth = Math.max(1.2, 0.032 * s);
         ctx.beginPath();
         ctx.moveTo(hx - 0.048 * s, headY - 0.02 * s);
         ctx.lineTo(hx + 0.048 * s, headY - 0.02 * s);
         ctx.stroke();
-      } else if (hairStyle === 2) {
+      } else if (hairStyle === 'space-buns') {
         ctx.beginPath();
         ctx.arc(hx - hRx * 1.0, headY - hRy * 0.78 + hairBounce * 0.3, 0.086 * s, 0, Math.PI * 2);
         ctx.arc(hx + hRx * 1.0, headY - hRy * 0.78 + hairBounce * 0.3, 0.086 * s, 0, Math.PI * 2);
         ctx.fill();
+      } else if (hairStyle === 'top-knot') {
+        // High top-knot bun leaving the full sleek nape & halter tie bow cleanly visible!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 1.16 + hairBounce * 0.22, 0.088 * s, 0.072 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = swim.accent || swim.primary;
+        ctx.lineWidth = Math.max(1.2, 0.028 * s);
+        ctx.beginPath();
+        ctx.moveTo(hx - 0.070 * s, headY - hRy * 0.90 + hairBounce * 0.18);
+        ctx.quadraticCurveTo(hx, headY - hRy * 0.80 + hairBounce * 0.18, hx + 0.070 * s, headY - hRy * 0.90 + hairBounce * 0.18);
+        ctx.stroke();
+      } else if (hairStyle === 'twin-braids') {
+        // Symmetrical twin scalloped braids streaming down upper back with matching ties!
+        drawScallopedBraid(hx - hRx * 0.68, headY + 0.05 * s, -0.045 * s, 0.31 * s + hairBounce * 0.45, 5, 0.042 * s, swim.accent);
+        drawScallopedBraid(hx + hRx * 0.68, headY + 0.05 * s, 0.045 * s, 0.31 * s + hairBounce * 0.45, 5, 0.042 * s, swim.accent);
       } else {
+        // Chic Beach Bob back view
         ctx.beginPath();
         ctx.roundRect(hx - hRx * 1.18, headY - 0.04 * s, hRx * 2.36, 0.20 * s, 0.07 * s);
         ctx.fill();
       }
-      if ((seed % 4) === 0 && !isGearZip && !isGearTank) {
+      if (allowSunHat) {
         ctx.fillStyle = '#fde68a';
         ctx.beginPath();
         ctx.ellipse(hx, headY - hRy * 0.80, 0.25 * s, 0.052 * s, 0, 0, Math.PI * 2);
@@ -3452,15 +3600,51 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
     // Crown & parted bangs
     ctx.fillStyle = hair;
     if (isMale) {
-      ctx.beginPath();
-      ctx.ellipse(hx, headY - hRy * 0.35, hRx * 1.08, hRy * 0.76, 0, Math.PI * 0.94, Math.PI * 2.06);
-      ctx.fill();
-      if (hairStyle === 1) {
+      if (hairStyle === 'buzz') {
         ctx.beginPath();
-        ctx.ellipse(hx - 0.04 * s, headY - hRy * 1.02, 0.082 * s, 0.046 * s, -0.22, 0, Math.PI * 2);
-        ctx.ellipse(hx + 0.06 * s, headY - hRy * 0.98, 0.072 * s, 0.042 * s, 0.26, 0, Math.PI * 2);
+        ctx.ellipse(hx, headY - hRy * 0.40, hRx * 1.02, hRy * 0.66, 0, Math.PI * 0.96, Math.PI * 2.04);
         ctx.fill();
-      } else if (hairStyle === 0) {
+      } else if (hairStyle === 'surfer') {
+        // Full tousled surfer crown & side-swept messy beach bangs
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.34, hRx * 1.16, hRy * 0.82, 0, Math.PI * 0.88, Math.PI * 2.12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 1.05, headY - hRy * 0.28);
+        ctx.quadraticCurveTo(hx - 0.02 * s, headY - hRy * 0.62, hx + hRx * 0.96, headY - hRy * 0.18);
+        ctx.quadraticCurveTo(hx + 0.04 * s, headY - hRy * 0.84, hx - hRx * 1.05, headY - hRy * 0.28);
+        ctx.fill();
+      } else if (hairStyle === 'curls') {
+        // Sculpted curly/coily high-top fade!
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.38, hRx * 1.04, hRy * 0.72, 0, Math.PI * 0.96, Math.PI * 2.04);
+        ctx.fill();
+        const puffs = [[-0.08, -0.96, 0.056], [0.0, -1.06, 0.064], [0.08, -0.96, 0.056], [-0.04, -0.82, 0.050], [0.04, -0.82, 0.050]];
+        for (const [px, py, pr] of puffs) {
+          ctx.beginPath();
+          ctx.arc(hx + px * s, headY + hRy * py, pr * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (hairStyle === 'man-bun') {
+        // Sleek pulled-back undercut hairline (bun drawn behind crown above)
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.40, hRx * 1.04, hRy * 0.72, 0, Math.PI * 0.96, Math.PI * 2.04);
+        ctx.fill();
+      } else if (hairStyle === 'cap' && !isGearZip && !isGearTank) {
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.35, hRx * 1.08, hRy * 0.76, 0, Math.PI * 0.94, Math.PI * 2.06);
+        ctx.fill();
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.36, hRx * 1.12, hRy * 0.78, 0, Math.PI * 1.02, Math.PI * 1.98);
+        ctx.fill();
+        ctx.fillStyle = swim.accent;
+        ctx.fillRect(hx - 0.05 * s, headY - hRy * 0.66, 0.10 * s, 0.028 * s);
+      } else {
+        // Classic Fade front view with clean side-swept top wave
+        ctx.beginPath();
+        ctx.ellipse(hx, headY - hRy * 0.35, hRx * 1.08, hRy * 0.76, 0, Math.PI * 0.94, Math.PI * 2.06);
+        ctx.fill();
         ctx.beginPath();
         ctx.ellipse(hx + 0.025 * s, headY - hRy * 0.96, 0.105 * s, 0.044 * s, -0.1, 0, Math.PI * 2);
         ctx.fill();
@@ -3476,16 +3660,8 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
         ctx.closePath();
         ctx.fill();
       }
-      if (hairStyle === 3 && !isGearZip && !isGearTank) {
-        ctx.fillStyle = swim.primary;
-        ctx.beginPath();
-        ctx.ellipse(hx, headY - hRy * 0.36, hRx * 1.12, hRy * 0.78, 0, Math.PI * 1.02, Math.PI * 1.98);
-        ctx.fill();
-        ctx.fillStyle = swim.accent;
-        ctx.fillRect(hx - 0.05 * s, headY - hRy * 0.66, 0.10 * s, 0.028 * s);
-      }
     } else {
-      // Soft side-parted feminine crown & sweeping temple bangs
+      // Soft side-parted feminine crown & sweeping temple bangs (plus wispy tendrils on updos!)
       ctx.beginPath();
       ctx.ellipse(hx, headY - hRy * 0.32, hRx * 1.12, hRy * 0.78, 0, Math.PI * 0.90, Math.PI * 2.10);
       ctx.fill();
@@ -3494,7 +3670,18 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
       ctx.quadraticCurveTo(hx - hRx * 0.25, headY - hRy * 0.88, hx + hRx * 0.92, headY - hRy * 0.38);
       ctx.quadraticCurveTo(hx + hRx * 0.15, headY - hRy * 0.62, hx - hRx * 1.06, headY - hRy * 0.22);
       ctx.fill();
-      if ((seed % 4) === 0 && !isGearZip && !isGearTank) {
+      if ((hairStyle === 'top-knot' || hairStyle === 'space-buns') && s >= 20) {
+        // Soft wispy face-framing strands on high updos
+        ctx.strokeStyle = hair;
+        ctx.lineWidth = Math.max(0.9, 0.018 * s);
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 0.96, headY - hRy * 0.18);
+        ctx.quadraticCurveTo(hx - hRx * 1.12, headY + 0.02 * s, hx - hRx * 0.88, headY + 0.09 * s);
+        ctx.moveTo(hx + hRx * 0.96, headY - hRy * 0.18);
+        ctx.quadraticCurveTo(hx + hRx * 1.12, headY + 0.02 * s, hx + hRx * 0.88, headY + 0.09 * s);
+        ctx.stroke();
+      }
+      if (allowSunHat) {
         ctx.fillStyle = '#fde68a';
         ctx.beginPath();
         ctx.ellipse(hx, headY - hRy * 0.80, 0.25 * s, 0.052 * s, -0.04, 0, Math.PI * 2);
@@ -3586,27 +3773,64 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
   // SIDE PROFILE HEAD (facing +x)
   ctx.fillStyle = hair;
   if (isMale) {
-    ctx.beginPath();
-    ctx.ellipse(hx - 0.018 * s, headY - 0.032 * s, hRx * 1.06, hRy * 0.92, 0, Math.PI * 0.72, Math.PI * 2.02);
-    ctx.quadraticCurveTo(hx - 0.05 * s, headY - 0.01 * s, hx - hRx * 0.88, headY + 0.05 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(hx - hRx * 0.82, headY + 0.008 * s, 0.046 * s, 0.074 * s, 0.18, 0, Math.PI * 2);
-    ctx.fill();
-    if (hairStyle === 1) {
+    if (hairStyle === 'buzz') {
       ctx.beginPath();
-      ctx.ellipse(hx + 0.032 * s, headY - hRy * 1.0, 0.092 * s, 0.046 * s, -0.15, 0, Math.PI * 2);
+      ctx.ellipse(hx - 0.015 * s, headY - 0.036 * s, hRx * 1.02, hRy * 0.86, 0, Math.PI * 0.78, Math.PI * 2.00);
+      ctx.closePath();
       ctx.fill();
-    } else if (hairStyle === 3 && !isGearZip && !isGearTank) {
-      ctx.fillStyle = swim.primary;
+    } else {
       ctx.beginPath();
-      ctx.ellipse(hx - 0.01 * s, headY - 0.04 * s, hRx * 1.12, hRy * 0.85, 0, Math.PI * 0.95, Math.PI * 2.05);
+      ctx.ellipse(hx - 0.018 * s, headY - 0.032 * s, hRx * 1.06, hRy * 0.92, 0, Math.PI * 0.72, Math.PI * 2.02);
+      ctx.quadraticCurveTo(hx - 0.05 * s, headY - 0.01 * s, hx - hRx * 0.88, headY + 0.05 * s);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = swim.accent;
       ctx.beginPath();
-      ctx.roundRect(hx - hRx * 1.65, headY - 0.075 * s, 0.13 * s, 0.038 * s, 0.018 * s);
+      ctx.ellipse(hx - hRx * 0.82, headY + 0.008 * s, 0.046 * s, 0.074 * s, 0.18, 0, Math.PI * 2);
       ctx.fill();
+      if (hairStyle === 'surfer') {
+        // Shaggy surfer flow streaming slightly past nape & tousled brow wave!
+        ctx.beginPath();
+        ctx.ellipse(hx + 0.040 * s, headY - hRy * 0.92, 0.095 * s, 0.044 * s, -0.10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 0.68, headY - 0.04 * s);
+        ctx.quadraticCurveTo(hx - hRx * 1.48, headY + 0.08 * s, hx - hRx * 1.10, headY + 0.22 * s + hairBounce * 0.3);
+        ctx.quadraticCurveTo(hx - hRx * 0.78, headY + 0.14 * s, hx - hRx * 0.72, headY + 0.02 * s);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hairStyle === 'curls') {
+        const puffs = [[-0.06, -0.96, 0.058], [0.02, -1.04, 0.064], [0.09, -0.92, 0.052], [-0.11, -0.68, 0.054]];
+        for (const [px, py, pr] of puffs) {
+          ctx.beginPath();
+          ctx.arc(hx + px * s, headY + hRy * py, pr * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (hairStyle === 'man-bun') {
+        // Sleek swept-back top-knot bun perched at upper-rear crown!
+        ctx.beginPath();
+        ctx.arc(hx - hRx * 0.86, headY - hRy * 0.86 + hairBounce * 0.18, 0.064 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = swim.accent || '#0f172a';
+        ctx.lineWidth = Math.max(0.95, 0.020 * s);
+        ctx.beginPath();
+        ctx.moveTo(hx - hRx * 0.56, headY - hRy * 0.74);
+        ctx.lineTo(hx - hRx * 0.78, headY - hRy * 0.54);
+        ctx.stroke();
+      } else if (hairStyle === 'cap' && !isGearZip && !isGearTank) {
+        ctx.fillStyle = swim.primary;
+        ctx.beginPath();
+        ctx.ellipse(hx - 0.01 * s, headY - 0.04 * s, hRx * 1.12, hRy * 0.85, 0, Math.PI * 0.95, Math.PI * 2.05);
+        ctx.fill();
+        ctx.fillStyle = swim.accent;
+        ctx.beginPath();
+        ctx.roundRect(hx - hRx * 1.65, headY - 0.075 * s, 0.13 * s, 0.038 * s, 0.018 * s);
+        ctx.fill();
+      } else {
+        // Classic Fade swept front quiff
+        ctx.beginPath();
+        ctx.ellipse(hx + 0.032 * s, headY - hRy * 0.98, 0.088 * s, 0.042 * s, -0.14, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     if (hasMaleBeard) {
       ctx.fillStyle = hair;
@@ -3619,7 +3843,7 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
     ctx.beginPath();
     ctx.ellipse(hx - 0.016 * s, headY - 0.032 * s, hRx * 1.10, hRy * 0.94, 0, Math.PI * 0.82, Math.PI * 2.12);
     ctx.fill();
-    if (hairStyle === 0) {
+    if (hairStyle === 'waves') {
       // Sweeping S-curved beach waves flowing behind neck/shoulders!
       ctx.beginPath();
       ctx.moveTo(hx - hRx * 0.55, headY - hRy * 0.65);
@@ -3627,20 +3851,41 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
       ctx.quadraticCurveTo(hx - hRx * 0.82, headY + 0.18 * s + hairBounce * 0.4, hx - hRx * 0.78, headY - 0.02 * s);
       ctx.closePath();
       ctx.fill();
-    } else if (hairStyle === 1) {
-      // Sleek tapered high ponytail streaming back!
+    } else if (hairStyle === 'ponytail') {
+      // Sleek tapered high ponytail streaming back with contrast hair tie!
       ctx.beginPath();
       ctx.moveTo(hx - hRx * 0.88, headY - hRy * 0.52);
-      ctx.bezierCurveTo(hx - hRx * 2.05, headY - hRy * 0.42 + hairBounce, hx - hRx * 2.15, headY + 0.08 * s + hairBounce * 1.1, hx - hRx * 1.62, headY + 0.18 * s + hairBounce * 1.2);
+      ctx.bezierCurveTo(hx - hRx * 2.08, headY - hRy * 0.42 + hairBounce, hx - hRx * 2.18, headY + 0.08 * s + hairBounce * 1.1, hx - hRx * 1.62, headY + 0.18 * s + hairBounce * 1.2);
       ctx.quadraticCurveTo(hx - hRx * 1.38, headY - 0.04 * s + hairBounce * 0.6, hx - hRx * 0.86, headY - hRy * 0.26);
       ctx.closePath();
       ctx.fill();
-    } else if (hairStyle === 2) {
+      ctx.strokeStyle = swim.accent || swim.primary;
+      ctx.lineWidth = Math.max(1.1, 0.026 * s);
+      ctx.beginPath();
+      ctx.moveTo(hx - hRx * 0.84, headY - hRy * 0.54);
+      ctx.lineTo(hx - hRx * 0.98, headY - hRy * 0.26);
+      ctx.stroke();
+    } else if (hairStyle === 'space-buns') {
       ctx.beginPath();
       ctx.arc(hx - hRx * 0.96, headY - hRy * 0.78 + hairBounce * 0.3, 0.082 * s, 0, Math.PI * 2);
       ctx.arc(hx + hRx * 0.56, headY - hRy * 0.96 + hairBounce * 0.3, 0.072 * s, 0, Math.PI * 2);
       ctx.fill();
+    } else if (hairStyle === 'top-knot') {
+      // High sculptural top-knot bun perched cleanly at the upper-rear crown + accent scrunchie!
+      ctx.beginPath();
+      ctx.ellipse(hx - hRx * 0.32, headY - hRy * 1.18 + hairBounce * 0.22, 0.084 * s, 0.070 * s, -0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = swim.accent || swim.primary;
+      ctx.lineWidth = Math.max(1.1, 0.026 * s);
+      ctx.beginPath();
+      ctx.moveTo(hx - hRx * 0.72, headY - hRy * 0.88 + hairBounce * 0.18);
+      ctx.lineTo(hx + hRx * 0.12, headY - hRy * 0.98 + hairBounce * 0.18);
+      ctx.stroke();
+    } else if (hairStyle === 'twin-braids') {
+      // Sculpted scalloped braid draping smoothly down behind ear & shoulder!
+      drawScallopedBraid(hx - hRx * 0.82, headY + 0.02 * s, -0.055 * s, 0.31 * s + hairBounce * 0.5, 5, 0.042 * s, swim.accent);
     } else {
+      // Chic Beach Bob side profile
       ctx.beginPath();
       ctx.ellipse(hx - hRx * 0.82, headY + 0.03 * s + hairBounce * 0.22, 0.078 * s, 0.125 * s, 0.14, 0, Math.PI * 2);
       ctx.fill();
@@ -3655,7 +3900,7 @@ function drawTopsideHead(ctx, hx, headY, shoulderY, s, timeSec, ph, seed, isMale
     ctx.roundRect(hx + 0.01 * s, headY - hRy * 0.92, hRx * 1.02, 0.068 * s, 0.022 * s);
     ctx.fill();
     ctx.stroke();
-  } else if (!isMale && (seed % 4) === 0) {
+  } else if (allowSunHat) {
     ctx.fillStyle = '#fde68a';
     ctx.beginPath();
     ctx.ellipse(hx, headY - hRy * 0.80, 0.25 * s, 0.052 * s, -0.06, 0, Math.PI * 2);
@@ -4142,7 +4387,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
       drawBouncingBust(ctx, 0, 0, -0.56 * s, -0.3 * s, prof, s * 0.94, fBbx, fBby, fBtilt, swim.primary, swim.accent, skin, topStyle, bustScale, false, 0);
     }
 
-    drawTopsideHead(ctx, 0, -0.71 * s, -0.54 * s, s * 0.96, timeSec, ph, seed, isMale, 'front', skin, skinShade, hair, swim, wet, false, false, false, false);
+    drawTopsideHead(ctx, 0, -0.71 * s, -0.54 * s, s * 0.96, timeSec, ph, seed, isMale, 'front', skin, skinShade, hair, swim, wet, false, false, false, false, false, spec.hairStyle || null);
 
     const armC = isMale && swim.style === 'rashguard' ? swim.primary : skin;
     drawArticulatedArm(ctx, -prof.sh * 0.85 * s, -0.46 * s, -0.34 * s, -0.3 * s, -0.44 * s, -0.14 * s, prof.arm, s, armC, skin, skin);
@@ -4240,7 +4485,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     ctx.lineTo(-0.02 * s, -0.73 * s);
     ctx.stroke();
 
-    drawTopsideHead(ctx, -0.56 * s, -0.58 * s, -0.46 * s, s * 0.96, timeSec, ph, seed, isMale, 'side', skin, skinShade, hair, swim, wet, false, false, false, false);
+    drawTopsideHead(ctx, -0.56 * s, -0.58 * s, -0.46 * s, s * 0.96, timeSec, ph, seed, isMale, 'side', skin, skinShade, hair, swim, wet, false, false, false, false, false, spec.hairStyle || null);
     ctx.restore();
     return;
   }
@@ -4313,7 +4558,7 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     const finArmCol = isFullSuit ? wet.suit : (isMale && swim.style === 'rashguard' ? swim.primary : skin);
     drawArticulatedArm(ctx, 0.08 * s, -0.66 * s, 0.35 * s, -0.44 * s + tug * 0.4, 0.56 * s + tug * 0.3, -0.22 * s + tug, prof.arm, s, finArmCol, isFullSuit ? wet.suit : skin, skin);
 
-    drawTopsideHead(ctx, 0.05 * s, -0.95 * s, -0.78 * s, s * 0.96, timeSec, ph, seed, isMale, 'side', skin, skinShade, hair, swim, wet, true, false, false, false);
+    drawTopsideHead(ctx, 0.05 * s, -0.95 * s, -0.78 * s, s * 0.96, timeSec, ph, seed, isMale, 'side', skin, skinShade, hair, swim, wet, true, false, false, false, false, spec.hairStyle || null);
     ctx.restore();
     return;
   }
@@ -5270,7 +5515,8 @@ export function drawTopsidePerson(ctx, x, y, scale, timeSec, spec) {
     isGearTank,
     isGearReady,
     isDance,
-    true
+    true,
+    spec.hairStyle || null
   );
 
   ctx.restore();

@@ -10,6 +10,8 @@
 import {
   AVATAR_SKIN_PRESETS,
   AVATAR_HAIR_PRESETS,
+  AVATAR_FEMALE_HAIRSTYLES,
+  AVATAR_MALE_HAIRSTYLES,
   AVATAR_FEMALE_BODIES,
   AVATAR_MALE_BODIES,
   AVATAR_FEMALE_TOP_STYLES,
@@ -44,6 +46,7 @@ export function createAvatarCreatorController({
   const bodyHost = document.getElementById('avatar-body-pills');
   const skinHost = document.getElementById('avatar-skin-swatches');
   const hairHost = document.getElementById('avatar-hair-swatches');
+  const hairStyleHost = document.getElementById('avatar-hairstyle-pills');
   const topSection = document.getElementById('avatar-top-section');
   const topHost = document.getElementById('avatar-top-pills');
   const swimLabelEl = document.getElementById('avatar-swim-label');
@@ -129,6 +132,14 @@ export function createAvatarCreatorController({
     if (hairHost) {
       hairHost.innerHTML = AVATAR_HAIR_PRESETS
         .map((hr, idx) => `<button type="button" class="av-swatch${draft.hairIdx === idx ? ' active' : ''}" data-av-hair="${idx}" title="${hr.label}" aria-label="${hr.label}" style="background:${hr.color}"></button>`)
+        .join('');
+    }
+
+    // Hairstyle pills (6 Female OR 6 Male styles!)
+    if (hairStyleHost) {
+      const styles = draft.gender === 'male' ? AVATAR_MALE_HAIRSTYLES : AVATAR_FEMALE_HAIRSTYLES;
+      hairStyleHost.innerHTML = styles
+        .map((hs) => `<button type="button" class="av-pill${draft.hairStyle === hs.id ? ' active' : ''}" data-av-hairstyle="${hs.id}">${hs.label}</button>`)
         .join('');
     }
 
@@ -319,6 +330,13 @@ export function createAvatarCreatorController({
     const b = e.target?.closest?.('[data-av-hair]');
     if (!b) return;
     draft = normalizePlayerAvatar({ ...draft, hairIdx: Number(b.getAttribute('data-av-hair')) });
+    renderControls();
+  });
+
+  hairStyleHost?.addEventListener('click', (e) => {
+    const b = e.target?.closest?.('[data-av-hairstyle]');
+    if (!b) return;
+    draft = normalizePlayerAvatar({ ...draft, hairStyle: b.getAttribute('data-av-hairstyle') });
     renderControls();
   });
 
