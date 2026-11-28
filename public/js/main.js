@@ -84,6 +84,7 @@ import {
 import { drawStyledArtifact } from './game/artSprites.js';
 import { formatReplayTime } from './game/diveCard.js';
 import { createCombatHudController } from './ui/combatHudController.js';
+import { sanitizeRigLivery } from './game/rigLivery.js';
 import {
   getCrewRole,
   cycleCrewRoleId,
@@ -561,7 +562,7 @@ const siteBrowser = createSiteBrowserController({
   getLevelDifficultyLabel,
   renderModeBadgeHtml: (...a) => renderModeBadgeHtml(...a),
   formatRunClock: (...a) => formatRunClock(...a),
-  mapRasterUrl: './assets/map-expedition.jpg?v=279',
+  mapRasterUrl: './assets/map-expedition.jpg?v=280',
   els: {
     siteWorldMapEl,
     btnMapZoom,
@@ -4108,9 +4109,26 @@ async function selectAndLoadLevel(chosenId, { focusMap = true } = {}) {
   if (leaderboardPanel && !leaderboardPanel.hidden && lbFilterLevelId !== 'overall') {
     refreshMenuLeaderboard();
   }
-  // Restore immediately if already baked in cache; defer baking other sites until Dive starts (zero browse lag)
+  // v280 Live Biome Preview behind Borderless Home Screen: instant swap if cached, or debounced silent bake after 380ms
+  const triggerBiomeSwapPulse = () => {
+    if (!canvas) return;
+    canvas.classList.remove('biome-swap');
+    void canvas.offsetWidth;
+    canvas.classList.add('biome-swap');
+  };
   if (renderer.isLevelCached(nextLevel.id)) {
     await ensureLevelLoaded(nextLevel.id, { showOverlay: false, silent: true });
+    triggerBiomeSwapPulse();
+  } else {
+    const previewId = nextLevel.id;
+    menuBgBakeTimer = setTimeout(async () => {
+      menuBgBakeTimer = null;
+      if (mode !== 'menu' || joiningRoomCode || !screenMenu || screenMenu.hidden || activeLevel?.id !== previewId) return;
+      try {
+        await ensureLevelLoaded(previewId, { showOverlay: false, silent: true });
+        if (mode === 'menu' && activeLevel?.id === previewId) triggerBiomeSwapPulse();
+      } catch {}
+    }, 380);
   }
 }
 
@@ -4439,6 +4457,14 @@ try {
   compactHudEnabled = localStorage.getItem(COMPACT_HUD_KEY) === '1';
 } catch {}
 const btnHudCompactEl = document.getElementById('btn-hud-compact');
+const hudGasCalloutEl = document.getElementById('hud-gas-callout');
+let hudCalmCruiseSec = 0;
+let hudInteractWakeUntil = 0;
+screenHud?.addEventListener('pointerdown', () => {
+  hudInteractWakeUntil = performance.now() + 3000;
+  hudCalmCruiseSec = 0;
+  screenHud.classList.remove('hud-calm-cruise');
+}, { passive: true });
 function syncCompactHudUi() {
   screenHud?.classList.toggle('hud-compact', compactHudEnabled);
   if (btnHudCompactEl) {
@@ -6872,6 +6898,25 @@ function stepSimulation(dt) {
     dt,
   });
 
+  // v280 Calm Immersion HUD auto-fade when cruising nominally (snaps crisp instantly on alerts, combat, low gas, or HUD touch)
+  const isCalmNominalCruise =
+    !compactHudEnabled &&
+    !session.endedState &&
+    !session.secretLair?.combatMode &&
+    diveState.alive !== false &&
+    (diveState.impairment?.primaryCondition || 'NOMINAL') === 'NOMINAL' &&
+    (diveState.decoCeilingM || 0) <= 0 &&
+    (diveState.o2Tox || 0) < 0.12 &&
+    (diveState.dcsRisk || 0) < 0.12 &&
+    (diveState.narcosisLevel || 0) < 0.15 &&
+    (diveState.activeTankBar ?? 200) >= 70 &&
+    (!hudKitPopoverEl || hudKitPopoverEl.hidden) &&
+    (!hudMenuPopover || hudMenuPopover.hidden) &&
+    (!hudGasCalloutEl || hudGasCalloutEl.hidden) &&
+    performance.now() >= hudInteractWakeUntil;
+  hudCalmCruiseSec = isCalmNominalCruise ? Math.min(5, hudCalmCruiseSec + dt) : 0;
+  screenHud?.classList.toggle('hud-calm-cruise', hudCalmCruiseSec >= 2.6);
+
   if (result.blockedExitDecoDepthM > 0) {
     showToast(`Hold at ${result.blockedExitDecoDepthM}m to clear deco stop before surfacing!`, 2.0);
   }
@@ -7413,6 +7458,24 @@ async function bootGame() {
 
   initGitHubAuth();
   requestAnimationFrame(frame);
+
+  // v280 One-Click Proving Grounds Test Dive handoff from Sets & Legendaries Mixer (/codex -> ?codexTrial=1)
+  try {
+    const qs = new URLSearchParams(location.search || '');
+    if (qs.get('codexTrial') === '1' && !INITIAL_ROOM_CODE) {
+      const rawTrial = sessionStorage.getItem('caveDiverCodexTrial_v1');
+      sessionStorage.removeItem('caveDiverCodexTrial_v1');
+      try { history.replaceState(null, '', `${location.origin}${location.pathname}`); } catch {}
+      const parsed = rawTrial ? JSON.parse(rawTrial) : null;
+      const trialLivery = parsed?.livery ? sanitizeRigLivery(parsed.livery) : null;
+      const trialLabel = typeof parsed?.label === 'string' && parsed.label.trim() ? parsed.label.trim() : 'Codex Hybrid Mix';
+      if (trialLivery && liveryWorkshop?.startFieldTestDive) {
+        setTimeout(() => {
+          liveryWorkshop.startFieldTestDive({ trialLivery, trialLabel });
+        }, 120);
+      }
+    }
+  } catch {}
 }
 
 bootGame();

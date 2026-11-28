@@ -16180,6 +16180,39 @@ body:has(#gear-slot-modal:not([hidden])) #livery-modal .livery-modal-card > * {
 #screen-hud .hud-minimap-wrap::after {
   display: none !important;
 }
+/* ─── v280: LIVE BIOME CROSSFADE & CALM IMMERSION HUD AUTO-FADE ─── */
+@keyframes biomeSwapFade {
+  0% { opacity: 0.58; }
+  100% { opacity: 1; }
+}
+#game-canvas.biome-swap {
+  animation: biomeSwapFade 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#screen-hud .hud-top-bar,
+#screen-hud .hud-subtop-left,
+#screen-hud .dive-telemetry,
+#screen-hud .self-health-card,
+#screen-hud .dc-gas-rack,
+#screen-hud .hud-gear-dock {
+  transition: opacity 0.55s ease;
+}
+#screen-hud.hud-calm-cruise .hud-top-bar,
+#screen-hud.hud-calm-cruise .hud-subtop-left,
+#screen-hud.hud-calm-cruise .dive-telemetry,
+#screen-hud.hud-calm-cruise .self-health-card,
+#screen-hud.hud-calm-cruise .dc-gas-rack,
+#screen-hud.hud-calm-cruise .hud-gear-dock {
+  opacity: 0.54;
+}
+#screen-hud.hud-calm-cruise .hud-top-bar:hover,
+#screen-hud.hud-calm-cruise .hud-subtop-left:hover,
+#screen-hud.hud-calm-cruise .dive-telemetry:hover,
+#screen-hud.hud-calm-cruise .self-health-card:hover,
+#screen-hud.hud-calm-cruise .dc-gas-rack:hover,
+#screen-hud.hud-calm-cruise .hud-gear-dock:hover {
+  opacity: 1;
+  transition: opacity 0.16s ease;
+}
 @media (prefers-reduced-motion: reduce) {
   #screen-menu.overlay-screen,
   #screen-menu > .menu-card,

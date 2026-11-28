@@ -264,6 +264,16 @@ a {
   filter: brightness(1.1);
 }
 
+.codex-btn.emerald {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.92), rgba(6, 182, 212, 0.88));
+  color: #022c22;
+  font-weight: 800;
+}
+
+.codex-btn.emerald:hover {
+  filter: brightness(1.1);
+}
+
 .codex-btn.ghost {
   background: rgba(13, 33, 58, 0.52);
   color: #cbd5e1;
@@ -764,6 +774,77 @@ a {
   display: none;
 }
 
+.codex-saved-builds {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.codex-preview-sidebar.is-compact .codex-saved-builds {
+  display: none;
+}
+
+.codex-build-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.codex-build-save-btn:hover {
+  background: rgba(56, 189, 248, 0.3);
+  color: #fff;
+}
+
+.codex-saved-builds-list {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.codex-build-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(16, 185, 129, 0.14);
+  color: #a7f3d0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.codex-build-chip:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #ecfdf5;
+}
+
+.codex-build-del {
+  opacity: 0.62;
+  font-size: 0.66rem;
+  padding-left: 2px;
+}
+
+.codex-build-del:hover {
+  opacity: 1;
+  color: #fda4af;
+}
+
 .codex-synergies-row {
   display: flex;
   flex-wrap: wrap;
@@ -980,10 +1061,11 @@ a {
   }
   .codex-quick-presets {
     width: 100%;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
   .codex-quick-presets .codex-btn {
-    flex: 1;
     padding: 7px 8px;
     font-size: 0.74rem;
   }

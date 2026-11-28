@@ -918,8 +918,13 @@ export class CaveRenderer {
     }
 
     const viewCenterX = cw * 0.5;
-    // On narrow portrait phones, shift framing slightly higher above the bottom dock — centered cleanly in boss arenas (v262)
-    const viewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? (bossActiveInArena ? ch * 0.48 : ch * 0.39) : ch * 0.46);
+    // On narrow portrait phones, shift framing slightly higher above the bottom dock — smoothly damped into boss arenas (v262/v280)
+    const targetViewCenterY = isPhotoMode ? ch * 0.5 : (cw < ch ? (bossActiveInArena ? ch * 0.48 : ch * 0.39) : ch * 0.46);
+    const targetViewCenterYFrac = targetViewCenterY / Math.max(1, ch);
+    this._viewCenterYFrac = Number.isFinite(this._viewCenterYFrac)
+      ? this._viewCenterYFrac + (targetViewCenterYFrac - this._viewCenterYFrac) * Math.min(1, (dt || 0.016) * 3.2)
+      : targetViewCenterYFrac;
+    const viewCenterY = ch * this._viewCenterYFrac;
 
     const effCamX = this.camX + narcX;
     const effCamY = this.camY + narcY;
@@ -1506,16 +1511,51 @@ export class CaveRenderer {
       }
       ctx.globalAlpha = 1;
 
-      // Drifting sunlit water motes suspended inside the bright upper beam
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.36)';
+      // Batched sunlit surface caustic shimmer ribbon just beneath the waterline (v280)
+      const shimBotY = toScreenY(1.55);
+      const shimGrad = ctx.createLinearGradient(midX, sy0, midX, shimBotY);
+      shimGrad.addColorStop(0, 'rgba(224, 242, 254, 0.30)');
+      shimGrad.addColorStop(0.55, 'rgba(103, 232, 249, 0.12)');
+      shimGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = shimGrad;
+      ctx.beginPath();
+      const shimSteps = Math.max(6, Math.min(14, Math.round(spanW * 0.9)));
+      ctx.moveTo(toScreenX(leftX), sy0);
+      for (let i = 0; i <= shimSteps; i++) {
+        const f = i / shimSteps;
+        const wx = leftX + spanW * f;
+        const wy = 0.72 + Math.sin(timeSec * 2.4 + wx * 1.15) * 0.24 + Math.cos(timeSec * 1.7 - wx * 0.85) * 0.16;
+        ctx.lineTo(toScreenX(wx), toScreenY(wy));
+      }
+      ctx.lineTo(toScreenX(rightX), sy0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Batched sunlit water motes suspended inside the bright upper beam (2 fills instead of 12!)
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.40)';
+      ctx.beginPath();
       for (let m = 0; m < 8; m++) {
         const mx = leftX + ((m * 0.37 + Math.sin(timeSec * 0.25 + m * 1.9) * 0.14 + 1) % 1) * spanW;
-        const my = 1.2 + ((m * 1.95 + timeSec * 0.28) % 13.5);
+        const my = 1.1 + ((m * 1.95 + timeSec * 0.28) % 13.5);
         const mr = Math.max(1.0, (0.032 + (m % 3) * 0.014) * scale);
-        ctx.beginPath();
-        ctx.arc(toScreenX(mx), toScreenY(my), mr, 0, Math.PI * 2);
-        ctx.fill();
+        const sxm = toScreenX(mx);
+        const sym = toScreenY(my);
+        ctx.moveTo(sxm + mr, sym);
+        ctx.arc(sxm, sym, mr, 0, Math.PI * 2);
       }
+      ctx.fill();
+      ctx.fillStyle = 'rgba(186, 250, 236, 0.46)';
+      ctx.beginPath();
+      for (let m = 0; m < 4; m++) {
+        const mx = leftX + (((m * 0.29 + 0.13) + Math.cos(timeSec * 0.32 + m * 2.3) * 0.12 + 1) % 1) * spanW;
+        const my = 1.6 + ((m * 2.75 + timeSec * 0.22) % 11.5);
+        const mr = Math.max(1.2, (0.044 + (m % 2) * 0.016) * scale);
+        const sxm = toScreenX(mx);
+        const sym = toScreenY(my);
+        ctx.moveTo(sxm + mr, sym);
+        ctx.arc(sxm, sym, mr, 0, Math.PI * 2);
+      }
+      ctx.fill();
       ctx.restore();
     }
     ctx.restore();

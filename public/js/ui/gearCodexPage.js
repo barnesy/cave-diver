@@ -25,6 +25,8 @@ import { renderGearArtworkSvg } from './gearArtwork.js';
 
 const CAREER_LOGBOOK_KEY = 'caveDiverLogbook_v1';
 const LIVERY_PREF_KEY = 'caveDiverLivery_v1';
+const CODEX_TRIAL_KEY = 'caveDiverCodexTrial_v1';
+const CODEX_SAVED_BUILDS_KEY = 'caveDiverCodexBuilds_v1';
 const WRECK_LEVEL_ID_SET = new Set(
   LEVELS.filter((l) => Boolean(l.isWreck || l.category === 'wreck')).map((l) => l.id)
 );
@@ -155,10 +157,13 @@ function initGearCodexPage() {
   const previewSynergiesEl = document.getElementById('codex-preview-synergies');
   const previewBarsEl = document.getElementById('codex-preview-bars');
   const previewSlotsEl = document.getElementById('codex-preview-slots');
+  const btnTestDive = document.getElementById('btn-codex-test-dive');
   const btnAllLegendary = document.getElementById('btn-codex-all-legendary');
   const btnEquipRig = document.getElementById('btn-codex-equip-rig');
   const btnResetPreview = document.getElementById('btn-codex-reset-preview');
   const btnClearMix = document.getElementById('btn-codex-clear-mix');
+  const btnSaveBuild = document.getElementById('btn-codex-save-build');
+  const savedBuildsListEl = document.getElementById('codex-saved-builds-list');
   const toastEl = document.getElementById('codex-toast');
 
   // Precompute complete outfitted rig for every Armor Set card
@@ -617,7 +622,91 @@ function initGearCodexPage() {
     commitMixUpdate(next);
   });
 
-  // Top bar presets
+  // Saved Custom Hybrid Builds (localStorage, up to 6 quick-load chips)
+  function loadSavedBuilds() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CODEX_SAVED_BUILDS_KEY) || '[]');
+      if (Array.isArray(raw)) {
+        return raw
+          .filter((b) => b && typeof b.name === 'string' && b.livery && typeof b.livery === 'object')
+          .slice(0, 6)
+          .map((b) => ({ name: b.name.slice(0, 28), livery: sanitizeRigLivery(b.livery) }));
+      }
+    } catch {}
+    return [];
+  }
+
+  let savedBuilds = loadSavedBuilds();
+
+  function persistSavedBuilds() {
+    try {
+      localStorage.setItem(CODEX_SAVED_BUILDS_KEY, JSON.stringify(savedBuilds.slice(0, 6)));
+    } catch {}
+  }
+
+  function renderSavedBuilds() {
+    if (!savedBuildsListEl) return;
+    savedBuildsListEl.innerHTML = savedBuilds
+      .map(
+        (b, idx) =>
+          `<button type="button" class="codex-build-chip" data-load-build="${idx}" title="Load saved mix: ${escapeHtml(b.name)}">${escapeHtml(b.name)}<span class="codex-build-del" data-del-build="${idx}" title="Remove saved mix">✕</span></button>`
+      )
+      .join('');
+  }
+
+  btnSaveBuild?.addEventListener('click', () => {
+    const label = (previewLabelEl?.textContent || 'Custom Mix').trim();
+    const cleanRig = sanitizeRigLivery(previewLivery);
+    const sig = JSON.stringify(cleanRig);
+    const existingIdx = savedBuilds.findIndex((b) => JSON.stringify(b.livery) === sig);
+    if (existingIdx >= 0) {
+      savedBuilds.splice(existingIdx, 1);
+    }
+    savedBuilds.unshift({ name: label.slice(0, 28), livery: cleanRig });
+    if (savedBuilds.length > 6) savedBuilds.length = 6;
+    persistSavedBuilds();
+    renderSavedBuilds();
+    showToast(`⭐ Saved "${label}"`);
+  });
+
+  savedBuildsListEl?.addEventListener('click', (e) => {
+    const delEl = e.target?.closest?.('[data-del-build]');
+    if (delEl) {
+      e.stopPropagation();
+      const idx = Number(delEl.dataset.delBuild);
+      if (Number.isInteger(idx) && idx >= 0 && idx < savedBuilds.length) {
+        const removed = savedBuilds.splice(idx, 1)[0];
+        persistSavedBuilds();
+        renderSavedBuilds();
+        showToast(`Removed ${removed.name}`);
+      }
+      return;
+    }
+    const loadEl = e.target?.closest?.('[data-load-build]');
+    if (loadEl) {
+      const idx = Number(loadEl.dataset.loadBuild);
+      if (Number.isInteger(idx) && savedBuilds[idx]) {
+        commitMixUpdate(savedBuilds[idx].livery, `Loaded ${savedBuilds[idx].name}`);
+      }
+    }
+  });
+
+  // Top bar presets + One-Click Proving Grounds Test Dive
+  btnTestDive?.addEventListener('click', () => {
+    const label = (previewLabelEl?.textContent || 'Codex Mix').trim();
+    try {
+      sessionStorage.setItem(
+        CODEX_TRIAL_KEY,
+        JSON.stringify({
+          livery: sanitizeRigLivery(previewLivery),
+          label,
+          ts: Date.now(),
+        })
+      );
+    } catch {}
+    window.location.href = './index.html?codexTrial=1';
+  });
+
   btnAllLegendary?.addEventListener('click', () => {
     commitMixUpdate(buildAllLegendaryPreviewRig(codexData), '🔥 All 9 Legendaries');
   });
@@ -629,6 +718,8 @@ function initGearCodexPage() {
   btnClearMix?.addEventListener('click', () => {
     commitMixUpdate(DEFAULT_RIG_LIVERY, '📦 Cleared to stock baseline');
   });
+
+  renderSavedBuilds();
 
   btnEquipRig?.addEventListener('click', () => {
     const next = { ...savedLivery };

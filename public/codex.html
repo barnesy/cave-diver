@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#040b18" />
   <meta name="description" content="Mix Armor Sets and Legendaries in Cave Diver to preview live stat effects, set bonuses, and outfitted divers." />
   <title>Cave Diver — Sets &amp; Legendaries Mixer</title>
-  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=279" />
-  <link rel="stylesheet" href="./codex.css?v=279" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg?v=280" />
+  <link rel="stylesheet" href="./codex.css?v=280" />
 </head>
 <body>
   <header class="codex-topbar">
@@ -19,6 +19,7 @@
         <h1 class="codex-title">📖 Sets &amp; Legendaries</h1>
       </div>
       <div class="codex-quick-presets" aria-label="Quick Rig Presets">
+        <button id="btn-codex-test-dive" class="codex-btn emerald" type="button" title="Swim &amp; test this exact build live in Proving Grounds">🏊 Test in Water</button>
         <button id="btn-codex-all-legendary" class="codex-btn gold" type="button" title="Equip all 9 Legendaries in preview">🔥 All 9 Legendaries</button>
         <button id="btn-codex-reset-preview" class="codex-btn ghost" type="button" title="Load your saved dive rig">↺ My Rig</button>
         <button id="btn-codex-clear-mix" class="codex-btn ghost" type="button" title="Reset all slots to stock baseline">✕ Clear</button>
@@ -41,6 +42,10 @@
       <div class="codex-preview-bottom">
         <div id="codex-preview-synergies" class="codex-synergies-row" aria-label="Active Set Bonuses and Powers"></div>
         <div id="codex-preview-slots" class="codex-equipped-slots" aria-label="Active Mixed Gear Slots"></div>
+        <div id="codex-saved-builds" class="codex-saved-builds" aria-label="Saved Custom Hybrid Builds">
+          <button id="btn-codex-save-build" class="codex-build-save-btn" type="button" title="Save current mixed build as a quick preset">⭐ Save Mix</button>
+          <div id="codex-saved-builds-list" class="codex-saved-builds-list"></div>
+        </div>
         <button id="btn-codex-equip-rig" class="codex-btn primary codex-equip-cta" type="button" hidden>⚡ Equip Owned to My Rig</button>
       </div>
     </aside>
@@ -73,6 +78,6 @@
 
   <div id="codex-toast" class="codex-toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="./js/ui/gearCodexPage.js?v=279"></script>
+  <script type="module" src="./js/ui/gearCodexPage.js?v=280"></script>
 </body>
 </html>

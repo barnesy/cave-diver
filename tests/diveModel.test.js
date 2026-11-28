@@ -13967,3 +13967,27 @@ test('v272 Organic Foreground Rock Pillars: Asymmetric Karst Contours, Deep-Cave
   assert.ok(!fgSrc.includes("el.kind === 'wreck-girder' || el.kind === 'rock-pillar'"), 'rock-pillar must not draw the straight wreck-girder needle rim line');
   assert.ok(fgSrc.includes('_applyRockWallFeather(c, renderCtx, 0, -8, spriteBounds)'), 'rock-pillar rock mask must feather tightly at the ceiling/floor lip');
 });
+
+test('v280 Codex Test-in-Water + Saved Mixes, Live Home Biome Preview, Calm Immersion HUD & Shimmer Atmosphere', async () => {
+  const fs = await import('node:fs');
+  const codexHtml = fs.readFileSync(new URL('../public/codex.html', import.meta.url), 'utf8');
+  const codexJs = fs.readFileSync(new URL('../public/js/ui/gearCodexPage.js', import.meta.url), 'utf8');
+  const mainJs = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
+  const rendererJs = fs.readFileSync(new URL('../public/js/game/renderer.js', import.meta.url), 'utf8');
+  const styleCss = fs.readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+
+  // 1. Codex Test-in-Water + Saved Mix Presets + Proving Grounds handoff
+  assert.ok(codexHtml.includes('id="btn-codex-test-dive"'), 'Codex must include Test in Water CTA');
+  assert.ok(codexHtml.includes('id="btn-codex-save-build"') && codexHtml.includes('id="codex-saved-builds-list"'), 'Codex must include Save Mix preset UI');
+  assert.ok(codexJs.includes('caveDiverCodexTrial_v1') && codexJs.includes('./index.html?codexTrial=1'), 'Codex must hand off mixed build via sessionStorage + query flag');
+  assert.ok(mainJs.includes("qs.get('codexTrial') === '1'") && mainJs.includes('liveryWorkshop?.startFieldTestDive'), 'main.js must auto-launch Proving Grounds for Codex trial rigs');
+
+  // 2. Live Biome Preview behind Borderless Home Screen
+  assert.ok(mainJs.includes('triggerBiomeSwapPulse') && mainJs.includes('menuBgBakeTimer = setTimeout'), 'selectAndLoadLevel must schedule debounced silent biome preview');
+  assert.ok(styleCss.includes('#game-canvas.biome-swap'), 'style.css must define smooth biome crossfade pulse');
+
+  // 3. Calm Immersion HUD auto-fade + Smooth camera framing + Batched surface shimmer
+  assert.ok(mainJs.includes('hudCalmCruiseSec') && mainJs.includes("screenHud?.classList.toggle('hud-calm-cruise'"), 'main.js must toggle calm-cruise HUD auto-fade during nominal diving');
+  assert.ok(styleCss.includes('#screen-hud.hud-calm-cruise .hud-top-bar'), 'style.css must fade non-essential HUD panels smoothly in calm-cruise');
+  assert.ok(rendererJs.includes('this._viewCenterYFrac') && rendererJs.includes('Batched sunlit surface caustic shimmer ribbon'), 'renderer.js must smooth viewCenterY transitions and batch surface shimmer');
+});
